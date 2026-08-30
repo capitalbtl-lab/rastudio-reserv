@@ -190,7 +190,7 @@ function Home() {
         <p className="mt-5 max-w-3xl text-muted">{home.paragraphs[2]}</p>
         <div className="mt-8 grid grid-cols-2 gap-3 md:grid-cols-4">
           {teachers.map((t) => (
-            <PageLink key={t.href} to={t.href} className="overflow-hidden rounded-[20px] bg-surface shadow-[var(--shadow-border)] transition-shadow duration-[var(--motion-fast)] ease-[var(--ease-out)] hover:shadow-[var(--shadow-border-hover)]">
+            <PageLink key={t.href + t.name} to={t.href} className="overflow-hidden rounded-[20px] bg-surface shadow-[var(--shadow-border)] transition-shadow duration-[var(--motion-fast)] ease-[var(--ease-out)] hover:shadow-[var(--shadow-border-hover)]">
               <SeoImage src={t.photo} alt={t.alt} filename={t.filename} className="aspect-[3/4]" />
               <div className="p-3">
                 <p className="text-xs font-medium leading-snug">{t.name}</p>
