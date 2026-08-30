@@ -34,16 +34,14 @@ export function ProgrammingCoursePage({ page, course, schedule }: Props) {
     <article>
       <section className="ink relative isolate min-h-[70dvh] overflow-hidden text-header-fg">
         {hero ? (
-          <div className="pointer-events-none absolute inset-0 flex justify-center">
-            <SeoImage
-              src={hero.src}
-              alt={hero.alt || course.name}
-              filename={hero.filename}
-              className="h-full aspect-3/4 max-w-full"
-              imgClassName="h-full w-full object-cover opacity-70"
-              loading="eager"
-            />
-          </div>
+          <SeoImage
+            src={hero.src}
+            alt={hero.alt || course.name}
+            filename={hero.filename}
+            className="absolute inset-0 h-full w-full"
+            imgClassName="h-full w-full object-cover opacity-50"
+            loading="eager"
+          />
         ) : null}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/25" />
         <div className="relative mx-auto flex min-h-[70dvh] max-w-[1180px] flex-col justify-end px-4 pb-28 pt-24 md:px-5 md:pb-16">
