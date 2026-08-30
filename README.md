@@ -31,7 +31,7 @@ npm run build
 
 ## Выкладка на хостинг
 
-CI/CD: GitHub Actions в [capitalbtl-lab/rastudio-reserv](https://github.com/capitalbtl-lab/rastudio-reserv) проверяет сборку на каждый пуш. Выкладка на Vercel — когда заданы секреты `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
+CI/CD: GitHub Actions в [capitalbtl-lab/rastudio-reserv](https://github.com/capitalbtl-lab/rastudio-reserv) проверяет сборку на каждый пуш. Выкладка — на **Beget Cloud VPS** (`npm run build:beget`, PM2).
 
 Подробности: [DEPLOY.md](./DEPLOY.md).
 
