@@ -32,54 +32,55 @@ export function ProgrammingCoursePage({ page, course, schedule }: Props) {
 
   return (
     <article>
-      <section className="ink relative isolate overflow-hidden text-header-fg">
-        <div className="mx-auto grid max-w-[1180px] items-center gap-8 px-4 pb-28 pt-24 md:px-5 md:pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(260px,400px)] lg:gap-14">
-          <div className="order-2 lg:order-1">
-            <p className="text-sm font-medium text-header-fg/80">
-              <PageLink to="/" className="hover:underline">
-                Главная
-              </PageLink>
-              <span className="mx-2 text-header-fg/45">/</span>
-              <PageLink to="/programming-school" className="hover:underline">
-                Школа программирования
-              </PageLink>
-            </p>
-            <div className="mt-6 flex items-end gap-5">
-              {course.logo ? (
-                <CmsImg
-                  image={course.logo}
-                  className="hidden size-20 overflow-hidden bg-bg/10 sm:block md:size-24"
-                  alt={course.name}
-                  loading="eager"
-                />
-              ) : null}
-              <div>
-                <p className="kicker text-header-fg/70">{course.age}</p>
-                <h1 className="hero-title mt-3 max-w-4xl">{course.name}</h1>
-                {course.program ? (
-                  <p className="mt-4 max-w-2xl text-base text-header-fg/80 md:text-lg">{course.program}</p>
-                ) : null}
-              </div>
-            </div>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button asChild size="lg">
-                <a href="#trial">Запись на пробное занятие</a>
-              </Button>
-              <Button asChild size="lg">
-                <a href="#modules">Модули курса</a>
-              </Button>
-            </div>
-          </div>
-          {hero ? (
+      <section className="ink relative isolate min-h-[70dvh] overflow-hidden text-header-fg">
+        {hero ? (
+          <div className="pointer-events-none absolute inset-0 flex justify-center">
             <SeoImage
               src={hero.src}
               alt={hero.alt || course.name}
               filename={hero.filename}
-              className="order-1 mx-auto aspect-3/4 w-full max-w-sm overflow-hidden rounded-2xl bg-black/20 shadow-[0_24px_80px_rgba(0,0,0,0.45)] lg:order-2 lg:max-w-none"
-              imgClassName="h-full w-full object-cover"
+              className="h-full aspect-3/4 max-w-full"
+              imgClassName="h-full w-full object-cover opacity-70"
               loading="eager"
             />
-          ) : null}
+          </div>
+        ) : null}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/25" />
+        <div className="relative mx-auto flex min-h-[70dvh] max-w-[1180px] flex-col justify-end px-4 pb-28 pt-24 md:px-5 md:pb-16">
+          <p className="text-sm font-medium text-header-fg/80">
+            <PageLink to="/" className="hover:underline">
+              Главная
+            </PageLink>
+            <span className="mx-2 text-header-fg/45">/</span>
+            <PageLink to="/programming-school" className="hover:underline">
+              Школа программирования
+            </PageLink>
+          </p>
+          <div className="mt-6 flex items-end gap-5">
+            {course.logo ? (
+              <CmsImg
+                image={course.logo}
+                className="hidden size-20 overflow-hidden bg-bg/10 sm:block md:size-24"
+                alt={course.name}
+                loading="eager"
+              />
+            ) : null}
+            <div>
+              <p className="kicker text-header-fg/70">{course.age}</p>
+              <h1 className="hero-title mt-3 max-w-4xl">{course.name}</h1>
+              {course.program ? (
+                <p className="mt-4 max-w-2xl text-base text-header-fg/80 md:text-lg">{course.program}</p>
+              ) : null}
+            </div>
+          </div>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Button asChild size="lg">
+              <a href="#trial">Запись на пробное занятие</a>
+            </Button>
+            <Button asChild size="lg">
+              <a href="#modules">Модули курса</a>
+            </Button>
+          </div>
         </div>
       </section>
 
