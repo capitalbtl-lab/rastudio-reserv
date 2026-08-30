@@ -1,4 +1,4 @@
-import { forwardRef, type ReactNode } from "react";
+import { forwardRef, type CSSProperties, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 
 type Props = {
@@ -6,22 +6,23 @@ type Props = {
   className?: string;
   children: ReactNode;
   onClick?: () => void;
+  style?: CSSProperties;
 };
 
 export const PageLink = forwardRef<HTMLAnchorElement, Props>(function PageLink(
-  { to, className, children, onClick },
+  { to, className, children, onClick, style },
   ref,
 ) {
   if (/^https?:\/\//i.test(to) || to.startsWith("tel:") || to.startsWith("mailto:")) {
     return (
-      <a ref={ref} href={to} className={className} onClick={onClick}>
+      <a ref={ref} href={to} className={className} style={style} onClick={onClick}>
         {children}
       </a>
     );
   }
   if (to === "/") {
     return (
-      <Link ref={ref} to="/" className={className} onClick={onClick}>
+      <Link ref={ref} to="/" className={className} style={style} onClick={onClick}>
         {children}
       </Link>
     );
@@ -33,6 +34,7 @@ export const PageLink = forwardRef<HTMLAnchorElement, Props>(function PageLink(
       to="/$"
       params={{ _splat: splat }}
       className={className}
+      style={style}
       onClick={onClick}
     >
       {children}

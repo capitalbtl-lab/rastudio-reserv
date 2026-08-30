@@ -1,16 +1,38 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { SITE } from "@/data/site";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { Button } from "@/components/ui/button";
+import { bindIntersection } from "@/lib/intersection";
 
 export function SiteShell({ children }: { children: ReactNode }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!rootRef.current) return;
+    return bindIntersection(rootRef.current);
+  }, []);
+
   return (
-    <div className="min-h-dvh bg-bg text-fg">
+    <div ref={rootRef} className="min-h-dvh bg-bg text-fg">
       <a className="skip-link" href="#content">
         К содержанию
       </a>
       <SiteHeader />
-      <main id="content">{children}</main>
+      <main id="content" className="pb-24 md:pb-0">
+        {children}
+      </main>
       <SiteFooter />
+      <div className="mobile-dock fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-bg/90 px-3 pt-3 backdrop-blur-xl md:hidden">
+        <div className="grid grid-cols-2 gap-2">
+          <Button asChild variant="secondary" className="w-full">
+            <a href={SITE.phoneHref}>{SITE.phone}</a>
+          </Button>
+          <Button asChild className="w-full">
+            <a href="#trial">Пробное занятие</a>
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

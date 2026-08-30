@@ -31,6 +31,8 @@ export const BRANCHES = [
     address: "ул. Октябрьской революции, д. 340, центральный вход, 2 этаж",
     hours: "Ср–Вс, 10:00–19:00",
     map: "https://yandex.ru/maps/-/C-WgM~Q",
+    mapEmbed:
+      "https://yandex.ru/map-widget/v1/?ll=38.7686%2C55.0834&z=16&text=%D0%9A%D0%BE%D0%BB%D0%BE%D0%BC%D0%BD%D0%B0%2C%20%D1%83%D0%BB.%20%D0%9E%D0%BA%D1%82%D1%8F%D0%B1%D1%80%D1%8C%D1%81%D0%BA%D0%BE%D0%B9%20%D1%80%D0%B5%D0%B2%D0%BE%D0%BB%D1%8E%D1%86%D0%B8%D0%B8%2C%20340",
     note: "Филиал работает с администратором. Визиты вне занятий — по согласованию.",
     directions:
       "Художественная школа, робототехника, программирование, науки и инженерия, мастер-классы, летний лагерь.",
@@ -41,6 +43,8 @@ export const BRANCHES = [
     address: "ул. Гражданская, д. 2, ТЦ «Олимпийский», правый торец, 2 этаж",
     hours: "По расписанию занятий",
     map: "https://yandex.ru/maps/-/C-Wgjbb",
+    mapEmbed:
+      "https://yandex.ru/map-widget/v1/?ll=38.7788%2C55.0789&z=16&text=%D0%9A%D0%BE%D0%BB%D0%BE%D0%BC%D0%BD%D0%B0%2C%20%D1%83%D0%BB.%20%D0%93%D1%80%D0%B0%D0%B6%D0%B4%D0%B0%D0%BD%D1%81%D0%BA%D0%B0%D1%8F%2C%202%2C%20%D0%A2%D0%A6%20%D0%9E%D0%BB%D0%B8%D0%BC%D0%BF%D0%B8%D0%B9%D1%81%D0%BA%D0%B8%D0%B9",
     note: "Запись по телефону и на сайте. Визиты вне занятий не предусмотрены.",
     directions:
       "Школа раннего развития, художественная школа и студия, модельная школа, мастер-классы, летний детский клуб.",
@@ -51,6 +55,8 @@ export const BRANCHES = [
     address: "ул. Пушкина, д. 202А, ТЦ «Хороший», правый торец, 3 этаж",
     hours: "По согласованию",
     map: "https://yandex.ru/maps/-/C-WgbnB",
+    mapEmbed:
+      "https://yandex.ru/map-widget/v1/?ll=39.0265%2C54.9652&z=16&text=%D0%9B%D1%83%D1%85%D0%BE%D0%B2%D0%B8%D1%86%D1%8B%2C%20%D1%83%D0%BB.%20%D0%9F%D1%83%D1%88%D0%BA%D0%B8%D0%BD%D0%B0%2C%20202%D0%90",
     note: "Запись по телефону и на сайте. Визиты вне занятий — по согласованию.",
     directions:
       "Робототехника, программирование, науки и инженерия, мастер-классы, летний детский клуб.",
@@ -61,72 +67,105 @@ export const SCHOOLS = [
   {
     href: "/art-studio",
     label: "Художественная школа",
-    kicker: "3–17 лет",
+    kicker: "3-17 лет",
     blurb: "Академический рисунок, живопись, скульптура и digital art.",
-    image:
-      "https://static.wixstatic.com/media/11062b_4402568a97474297baea6f7a1f16a2b2f000.jpg/v1/fill/w_900,h_620,al_c,q_85,enc_avif,quality_auto/11062b_4402568a97474297baea6f7a1f16a2b2f000.jpg",
-    alt: "Художественная школа в Студии Развивайся | Коломна",
-    filename: "11062b_4402568a97474297baea6f7a1f16a2b2f000.jpg",
+    image: "/courses/akadem-art.jpg",
+    alt: "Академическая художественная школа в Коломне",
+    filename: "Развивайся - Академическая художественная школа в Коломне.png",
   },
   {
     href: "/robototehnika-v-kolomne",
     label: "Школа робототехники",
-    kicker: "5–14 лет",
+    kicker: "5-14 лет",
     blurb: "LEGO, Arduino, схемотехника и билингвальные курсы.",
-    image:
-      "https://static.wixstatic.com/media/4e33b6_a89bcf4085864d62aaaca9f499d1b07e~mv2.jpg/v1/fill/w_900,h_620,al_c,q_85,enc_avif,quality_auto/4e33b6_a89bcf4085864d62aaaca9f499d1b07e~mv2.jpg",
-    alt: "Школа робототехники в Коломне",
-    filename: "4e33b6_a89bcf4085864d62aaaca9f499d1b07e~mv2.jpg",
+    image: "/courses/robot-10-14.jpg",
+    alt: "Робототехника 10–14 лет в Коломне",
+    filename: "Развивайся - Робототехника 10-14 лет в Коломне.png",
   },
   {
     href: "/programming-school",
     label: "Школа программирования",
-    kicker: "5–16 лет",
+    kicker: "5-16 лет",
     blurb: "Scratch, Python, C++ и разработка игр на Unity.",
-    image:
-      "https://static.wixstatic.com/media/4e33b6_eb555f99b54f42c982dad487e1515bbf~mv2.jpg/v1/fit/w_960,h_639,q_90,enc_avif,quality_auto/4e33b6_eb555f99b54f42c982dad487e1515bbf~mv2.jpg",
-    alt: "Дети разных возрастов увлеченно программируют в Студии Развивайся в Коломне и Луховицах",
-    filename: "4e33b6_eb555f99b54f42c982dad487e1515bbf~mv2.jpg",
+    image: "/courses/intro-computers.jpg",
+    alt: "Знакомство с компьютером и информационными технологиями",
+    filename: "Развивайся - Знакомство с компьютером и информационными технологиями в Коломне.png",
   },
   {
     href: "/promising-professions",
     label: "Школа наук и инженерии",
-    kicker: "5–16 лет",
+    kicker: "5-16 лет",
     blurb: "Физика, радиотехника, 3D и инженерные проекты.",
-    image:
-      "https://static.wixstatic.com/media/4e33b6_952a165eb9ac4ef1961ab394fc7927d2~mv2.jpg/v1/fit/w_960,h_640,q_90,enc_avif,quality_auto/4e33b6_952a165eb9ac4ef1961ab394fc7927d2~mv2.jpg",
-    alt: "Дети 5-16 лет увлеченно занимаются на инженеерных и научных курсах в Студии Развивайся в Коломне",
-    filename: "4e33b6_952a165eb9ac4ef1961ab394fc7927d2~mv2.jpg",
+    image: "/courses/tesla.jpg",
+    alt: "Научный курс «Физика инноваций» в Коломне",
+    filename: "Развивайся - Научный курс Физика инноваций в Коломне.png",
   },
   {
     href: "/model-school",
     label: "Модельная школа",
-    kicker: "9–14 лет",
+    kicker: "9-14 лет",
     blurb: "Подиум, стиль, этикет и уверенная самопрезентация.",
-    image:
-      "https://static.wixstatic.com/media/4e33b6_529a2f0d0e5d4c9d839a82d9e6b29eaa~mv2.png/v1/fill/w_900,h_620,al_c,q_85,enc_avif,quality_auto/%D0%9C%D0%A1.png",
-    alt: "МС.png",
-    filename: "МС.png",
+    image: "/courses/podium.jpg",
+    alt: "Модельная школа «Подиум» в Коломне",
+    filename: "Развивайся - Модельная школа Подиум в Коломне.png",
   },
   {
     href: "/early-childhood-care",
     label: "Школа раннего развития",
-    kicker: "3–6 лет",
+    kicker: "3-6 лет",
     blurb: "STEAM, лего-математика и подготовка к школе.",
-    image:
-      "https://static.wixstatic.com/media/4e33b6_b130e7f8a84c4fad8559b343833090a0~mv2.png/v1/fill/w_900,h_620,al_c,q_85,enc_avif,quality_auto/%D0%A5%D1%83%D0%B4%D0%BE%D0%B6%D0%B5%D1%81%D1%82%D0%B2%D0%B5%D0%BD%D0%BD%D0%B0%D1%8F%20%D1%81%D1%82%D1%83%D0%B4%D0%B8%D1%8F%205-6%20%D0%BB%D0%B5%D1%82.jpg",
-    alt: "Художественная студия 5-6 лет.jpg",
-    filename: "Художественная студия 5-6 лет.jpg",
+    image: "/courses/prep-school.jpg",
+    alt: "Комплексная подготовка к школе в Коломне",
+    filename: "Развивайся - Комплексная подготовка к школе в Коломне.png",
   },
   {
     href: "/languageschool",
     label: "Школа иностранных языков",
-    kicker: "9–14 лет",
+    kicker: "9-14 лет",
     blurb: "Английский, корейский и японский с носителями.",
     image:
       "https://static.wixstatic.com/media/11062b_e2ae833a8eaa43e38e4aa6d32eb3b8f7f000.jpg/v1/fill/w_900,h_620,al_c,q_85,enc_avif,quality_auto/11062b_e2ae833a8eaa43e38e4aa6d32eb3b8f7f000.jpg",
     alt: "Школа иностранных языков в Студии Развивайся | Коломна",
     filename: "11062b_e2ae833a8eaa43e38e4aa6d32eb3b8f7f000.jpg",
+  },
+] as const;
+
+export const COURSE_GROUPS = [
+  { id: "all", label: "Все курсы", test: (_href: string) => true },
+  {
+    id: "art",
+    label: "Художество",
+    test: (href: string) => /art-studio|sculptural|hudvuz|digitalart/i.test(href),
+  },
+  {
+    id: "robot",
+    label: "Роботы и инженерия",
+    test: (href: string) => /robot|gamedesign|3d-modeling|oge-in/i.test(href),
+  },
+  {
+    id: "prog",
+    label: "Программирование",
+    test: (href: string) => /kursy-shkoly-programmirovaniya|programming-school/i.test(href),
+  },
+  {
+    id: "science",
+    label: "Науки",
+    test: (href: string) => /radio|science|tesla|mental/i.test(href),
+  },
+  {
+    id: "early",
+    label: "Дошколята",
+    test: (href: string) => /preparation|happybricks|kinder/i.test(href),
+  },
+  {
+    id: "model",
+    label: "Мода",
+    test: (href: string) => /model-school/i.test(href),
+  },
+  {
+    id: "lang",
+    label: "Языки",
+    test: (href: string) => /english|japanese|korean|vitamin/i.test(href),
   },
 ] as const;
 
@@ -151,15 +190,101 @@ export const FOOTER_LINKS = [
 
 export const STATS = [
   { value: "2016", label: "год основания" },
-  { value: "3", label: "студии в Коломне и Луховицах" },
-  { value: "7", label: "школ и направлений" },
-  { value: "19", label: "педагогов-наставников" },
+  { value: "3", label: "студии" },
+  { value: "7", label: "школ" },
+  { value: "30+", label: "курсов" },
+] as const;
+
+export const TICKER = [
+  "Робототехника",
+  "Python",
+  "Scratch",
+  "Blender",
+  "Манга и аниме",
+  "Академический рисунок",
+  "Скульптура",
+  "Беспилотники",
+  "Minecraft",
+  "C++",
+  "Подиум",
+  "STEAM",
+  "Компас 3D",
+  "Digital art",
+  "Лего-математика",
+  "Физика инноваций",
+] as const;
+
+export const SHOWCASE = [
+  {
+    href: "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python",
+    title: "Python",
+    age: "10–16 лет",
+    src: "/courses/python.jpg",
+    filename: "Развивайся -  Основы программирования Python в Коломне.png",
+    alt: "Основы программирования Python в Коломне",
+  },
+  {
+    href: "/gamedesign",
+    title: "Game-дизайн в Blender",
+    age: "10–16 лет",
+    src: "/courses/blender.jpg",
+    filename: "Развивайся - Game-дизайн и 3D-анимация в Blender в Коломне.png",
+    alt: "Game-дизайн и 3D-анимация в Blender в Коломне",
+  },
+  {
+    href: "/robototehnika-5-7",
+    title: "Робототехника 5–6",
+    age: "5–6 лет",
+    src: "/courses/robot-5-6.jpg",
+    filename: "Развивайся - Робототехника 5-6 лет в Коломне.png",
+    alt: "Робототехника 5–6 лет в Коломне",
+  },
+  {
+    href: "/digitalartschool",
+    title: "Цифровое искусство",
+    age: "7–16 лет",
+    src: "/courses/digital-art.jpg",
+    filename: "Развивайся - Цифровая художественная школа.png",
+    alt: "Цифровая художественная школа в Коломне",
+  },
+  {
+    href: "/robototehnika-v-kolomne",
+    title: "Беспилотная авиация",
+    age: "10–14 лет",
+    src: "/courses/drones.jpg",
+    filename: "Развивайся - Беспилотная авиация в Коломне.png",
+    alt: "Беспилотная авиация в Коломне",
+  },
+  {
+    href: "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-7-9-лет",
+    title: "Minecraft",
+    age: "7–9 лет",
+    src: "/courses/minecraft.jpg",
+    filename: "Развивайся - Игровое программирование в Майнкрафт.png",
+    alt: "Игровое программирование в Minecraft",
+  },
+  {
+    href: "/teslaphysics",
+    title: "Физика инноваций",
+    age: "9–14 лет",
+    src: "/courses/tesla.jpg",
+    filename: "Развивайся - Научный курс Физика инноваций в Коломне.png",
+    alt: "Научный курс «Физика инноваций» в Коломне",
+  },
+  {
+    href: "/model-school",
+    title: "Модельная школа",
+    age: "9–14 лет",
+    src: "/courses/podium.jpg",
+    filename: "Развивайся - Модельная школа Подиум в Коломне.png",
+    alt: "Модельная школа «Подиум» в Коломне",
+  },
 ] as const;
 
 export const MOMENTS = [
   {
     href: "/charity",
-    title: "Важные дела",
+    title: 'ПРОЕКТ "РАЗВИВАЙСЯ | ВАЖНЫЕ ДЕЛА"',
     blurb: "Бесплатные мастер-классы и благотворительные проекты студии.",
     image:
       "https://static.wixstatic.com/media/4e33b6_d7e3decbbaef4a1e937baa2b83583b7e~mv2.jpg/v1/fill/w_800,h_800,al_c,q_80,enc_avif,quality_auto/4e33b6_d7e3decbbaef4a1e937baa2b83583b7e~mv2.jpg",
@@ -168,7 +293,7 @@ export const MOMENTS = [
   },
   {
     href: "http://www.racamp.ru",
-    title: "Летний городской лагерь 2026",
+    title: "ЛЕТНИЙ ГОРОДСКОЙ ЛАГЕРЬ 2026",
     blurb: "Науки и профориентация, питание по СанПиН, два филиала в Коломне.",
     image:
       "https://static.wixstatic.com/media/4e33b6_6c4462b65d0c4593b30ff3c96f099397~mv2.jpg/v1/fill/w_800,h_800,al_c,q_80,enc_avif,quality_auto/4e33b6_6c4462b65d0c4593b30ff3c96f099397~mv2.jpg",
@@ -177,7 +302,8 @@ export const MOMENTS = [
   },
   {
     href: "/tinkercad2025itogi",
-    title: "Роботы будущего",
+    title:
+      "ВНУТРЕННЕЕ СОРЕВНОВАНИЕ СТУДИИ «РАЗВИВАЙСЯ» ПО 3D-МОДЕЛИРОВАНИЮ В TINKERCAD: «РОБОТЫ БУДУЩЕГО»",
     blurb: "Внутренний конкурс по 3D-моделированию в Tinkercad.",
     image:
       "https://static.wixstatic.com/media/4e33b6_a77d452c2a234db78242e46c3593cf1c~mv2.jpg/v1/fill/w_800,h_800,al_c,q_80,enc_avif,quality_auto/4e33b6_a77d452c2a234db78242e46c3593cf1c~mv2.jpg",

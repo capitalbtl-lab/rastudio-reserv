@@ -90,6 +90,48 @@ function internalHref(href) {
 
 const compiled = [];
 const byPath = new Map();
+const COURSE_HEROES = JSON.parse(
+  fs.readFileSync(path.join(ROOT, "content/course-heroes.json"), "utf8"),
+);
+const COURSE_EXTRAS = {
+  "/digitalartschool": [
+    {
+      src: "/courses/manga.jpg",
+      filename: "Развивайся - Курс Манга и аниме в Коломне.png",
+      alt: "Курс манга и аниме в Коломне",
+    },
+  ],
+  "/robototehnika-v-kolomne": [
+    {
+      src: "/courses/drones.jpg",
+      filename: "Развивайся - Беспилотная авиация в Коломне.png",
+      alt: "Беспилотная авиация в Коломне",
+    },
+  ],
+  "/promising-professions": [
+    {
+      src: "/courses/planet-steam.jpg",
+      filename: "Развивайся - Курс планета-STEAM в Коломне.png",
+      alt: "Курс «Планета STEAM» в Коломне",
+    },
+    {
+      src: "/courses/drones.jpg",
+      filename: "Развивайся - Беспилотная авиация в Коломне.png",
+      alt: "Беспилотная авиация в Коломне",
+    },
+  ],
+  "/science-course": [
+    {
+      src: "/courses/planet-steam.jpg",
+      filename: "Развивайся - Курс планета-STEAM в Коломне.png",
+      alt: "Курс «Планета STEAM» в Коломне",
+    },
+  ],
+};
+
+function heroFor(pathValue, decoded) {
+  return COURSE_HEROES[pathValue] || COURSE_HEROES[decoded] || null;
+}
 
 for (const raw of pages) {
   const p = raw.path || "/";
@@ -127,7 +169,7 @@ for (const raw of pages) {
   for (const img of raw.images || []) {
     const src = img.src || "";
     const alt = cleanText(img.alt || "");
-    if (!src.includes("wixstatic.com")) continue;
+    if (!src.includes("wixstatic.com") && !src.startsWith("/courses/")) continue;
     if (CHROME_ALT.test(alt)) continue;
     if (widthOf(src) && widthOf(src) < 180) continue;
     const filename = filenameFromSrc(src, alt);
@@ -143,7 +185,31 @@ for (const raw of pages) {
 
   const maxImgs =
     p === "/team" || p === "/master-class" || p === "/allcourses" ? 24 : 10;
-  const keptImages = images.slice(0, maxImgs);
+  let keptImages = images.slice(0, maxImgs);
+  const decodedPath = (() => {
+    try {
+      return decodeURIComponent(p);
+    } catch {
+      return p;
+    }
+  })();
+  const hero = heroFor(p, decodedPath);
+  if (hero) {
+    keptImages = [
+      { src: hero.src, alt: hero.alt, filename: hero.filename },
+      ...keptImages.filter((img) => img.src !== hero.src),
+    ].slice(0, maxImgs);
+  }
+  const extras = COURSE_EXTRAS[p] || COURSE_EXTRAS[decodedPath];
+  if (extras) {
+    const have = new Set(keptImages.map((img) => img.src));
+    for (const extra of extras) {
+      if (have.has(extra.src)) continue;
+      keptImages.push(extra);
+      have.add(extra.src);
+    }
+    keptImages = keptImages.slice(0, maxImgs);
+  }
 
   const related = unique(
     (raw.links || [])
@@ -178,18 +244,14 @@ for (const raw of pages) {
 
   const page = {
     path: p,
-    pathDecoded: (() => {
-      try {
-        return decodeURIComponent(p);
-      } catch {
-        return p;
-      }
-    })(),
+    pathDecoded: decodedPath,
     kind: kindOf(p),
     title,
     description,
     ogTitle: cleanText(raw.ogTitle) || title,
-    ogImage: raw.ogImage || "",
+    ogImage: hero
+      ? `https://www.rastudio.org${hero.src}`
+      : raw.ogImage || "",
     canonical: raw.canonical || `https://www.rastudio.org${p === "/" ? "" : p}`,
     h1: displayH1,
     headings,
@@ -269,6 +331,31 @@ for (const fb of FALLBACKS) {
   byPath.set(page.pathDecoded, page);
 }
 
+function applyLocalHeroes(page) {
+  const hero = heroFor(page.path, page.pathDecoded);
+  const extras = COURSE_EXTRAS[page.path] || COURSE_EXTRAS[page.pathDecoded] || [];
+  let images = page.images || [];
+  if (hero) {
+    images = [
+      { src: hero.src, alt: hero.alt, filename: hero.filename },
+      ...images.filter((img) => img.src !== hero.src),
+    ];
+    page.ogImage = `https://www.rastudio.org${hero.src}`;
+  }
+  const have = new Set(images.map((img) => img.src));
+  for (const extra of extras) {
+    if (have.has(extra.src)) continue;
+    images.push(extra);
+    have.add(extra.src);
+  }
+  page.images = images.slice(
+    0,
+    page.path === "/team" || page.path === "/master-class" || page.path === "/allcourses" ? 24 : 10,
+  );
+}
+
+for (const page of compiled) applyLocalHeroes(page);
+
 const teamPage = byPath.get("/team");
 const teachers = [];
 if (teamPage) {
@@ -305,8 +392,32 @@ const COURSE_ORDER = [
   ["/robototehnika-7-9", "Робототехника 7–9 лет"],
   ["/robototehnika-5-7", "Робототехника 5–7 лет"],
   ["/roboticsinenglish", "Робототехника на английском"],
-  ["/gamedesign", "Знакомство с миром IT 7–9 лет"],
-  ["/3d-modeling", "3D-моделирование и 3D-печать"],
+  ["/gamedesign", "Game-дизайн и 3D-анимация в Blender"],
+  ["/3d-modeling", "Инженерное 3D-моделирование в Компас"],
+  [
+    "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-5-7-лет",
+    "StartSchool: программирование в Scratch",
+  ],
+  [
+    "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-7-9-лет",
+    "IT-лаборатория Create: игры и IT-проекты",
+  ],
+  [
+    "/kursy-shkoly-programmirovaniya/it-лаборатория-dev-для-детей-9-10-лет",
+    "JuniorSchool: программирование 3в1",
+  ],
+  [
+    "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python",
+    "Программирование на Python",
+  ],
+  [
+    "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-си",
+    "Программирование на C++",
+  ],
+  [
+    "/kursy-shkoly-programmirovaniya/it-школа-разработка-игр-на-unity",
+    "GameDev 4в1 — Unity",
+  ],
   ["/radioengineering", "Радиоконструирование"],
   ["/science-course", "Увлекательная наука"],
   ["/teslaphysics", "Физика Теслы"],

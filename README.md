@@ -27,15 +27,9 @@ npm run build
 
 ## Выкладка на хостинг
 
-1. Подключите этот репозиторий к [Vercel](https://vercel.com), Timeweb Cloud, Beget Node или любому хосту с Node 22.
-2. Build: `npm install && npm run build`
-3. Старт production: команда, которую выдаёт Nitro после сборки (обычно `node .output/server/index.mjs`).
-4. Когда будете менять DNS `rastudio.org`:
-   - A/CNAME на новый хостинг
-   - Wix не удаляйте сразу — сначала убедитесь, что все 133 URL отвечают 200
-   - canonical уже ведут на `https://www.rastudio.org/...`
+CI/CD: GitHub Actions в [capitalbtl-lab/rastudio-reserv](https://github.com/capitalbtl-lab/rastudio-reserv) проверяет сборку на каждый пуш. Выкладка на Vercel — когда заданы секреты `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
 
-Подробнее: [DEPLOY.md](./DEPLOY.md).
+Подробности: [DEPLOY.md](./DEPLOY.md).
 
 ## Форма записи
 

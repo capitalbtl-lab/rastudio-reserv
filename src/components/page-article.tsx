@@ -1,10 +1,31 @@
 import { useMemo, useState } from "react";
-import { SITE, BRANCHES } from "@/data/site";
-import { allCourses, allPages, allTeachers, type SitePage } from "@/data/catalog";
+import { SITE, BRANCHES, COURSE_GROUPS } from "@/data/site";
+import type { CourseCard, SitePage, TeacherCard } from "@/data/catalog";
+import type { CmsCourse, CmsMaster, CmsSession, CmsTrajectoryStep } from "@/data/cms";
 import { PageLink } from "@/components/page-link";
 import { SeoImage } from "@/components/seo-image";
 import { TrialForm } from "@/components/trial-form";
 import { Button } from "@/components/ui/button";
+import { ProgrammingCoursePage } from "@/components/programming-course";
+import { ProgrammingSchoolPage } from "@/components/programming-school";
+import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
+import { ScheduleBlock } from "@/components/cms-blocks";
+import { cn } from "@/lib/utils";
+
+type MasterCard = { path: string; h1: string };
+
+export type PageArticleProps = {
+  page: SitePage;
+  teachers?: TeacherCard[];
+  courses?: CourseCard[];
+  masters?: MasterCard[];
+  cmsCourse?: CmsCourse | null;
+  cmsMaster?: CmsMaster | null;
+  cmsCourses?: CmsCourse[];
+  cmsMasters?: CmsMaster[];
+  trajectory?: CmsTrajectoryStep[];
+  schedule?: CmsSession[];
+};
 
 function Gallery({ page }: { page: SitePage }) {
   if (!page.images.length) return null;
@@ -16,7 +37,7 @@ function Gallery({ page }: { page: SitePage }) {
           src={img.src}
           alt={img.alt}
           filename={img.filename}
-          className="aspect-[4/3] rounded-[20px] bg-surface-2"
+          className="aspect-4/3 rounded-lg bg-surface-2"
         />
       ))}
     </div>
@@ -33,7 +54,7 @@ function Related({ page }: { page: SitePage }) {
           <li key={link.href + link.text}>
             <PageLink
               to={link.href}
-              className="block rounded-2xl bg-surface px-4 py-3 shadow-[var(--shadow-border)] hover:shadow-[var(--shadow-border-hover)]"
+              className="block rounded-lg bg-surface px-4 py-3 shadow-[var(--shadow-border)] hover:shadow-[var(--shadow-border-hover)]"
             >
               {link.text}
             </PageLink>
@@ -44,100 +65,207 @@ function Related({ page }: { page: SitePage }) {
   );
 }
 
-export function PageArticle({ page }: { page: SitePage }) {
+function Breadcrumb({ page, onDark = false }: { page: SitePage; onDark?: boolean }) {
+  const tone = onDark ? "text-bg/80" : "text-primary";
+  const sep = onDark ? "text-bg/45" : "text-muted";
+  return (
+    <p className={`text-sm font-medium ${tone}`}>
+      <PageLink to="/" className="hover:underline">
+        Главная
+      </PageLink>
+      <span className={`mx-2 ${sep}`}>/</span>
+      {page.kind === "teacher" ? (
+        <PageLink to="/team" className="hover:underline">
+          Педагоги
+        </PageLink>
+      ) : page.kind === "master" ? (
+        <PageLink to="/master-class" className="hover:underline">
+          Мастер-классы
+        </PageLink>
+      ) : (
+        <PageLink to="/allcourses" className="hover:underline">
+          Курсы
+        </PageLink>
+      )}
+    </p>
+  );
+}
+
+export function PageArticle({
+  page,
+  teachers = [],
+  courses = [],
+  masters = [],
+  cmsCourse = null,
+  cmsMaster = null,
+  cmsCourses = [],
+  cmsMasters = [],
+  trajectory = [],
+  schedule = [],
+}: PageArticleProps) {
+  if (cmsCourse) {
+    return <ProgrammingCoursePage page={page} course={cmsCourse} schedule={schedule} />;
+  }
+  if (page.path === "/programming-school" || page.pathDecoded === "/programming-school") {
+    return (
+      <ProgrammingSchoolPage
+        page={page}
+        courses={cmsCourses}
+        trajectory={trajectory}
+        schedule={schedule}
+        teachers={teachers}
+      />
+    );
+  }
+  if (cmsMaster) {
+    return <MasterClassPage page={page} master={cmsMaster} />;
+  }
+  if (page.kind === "team") return <TeamPage page={page} teachers={teachers} />;
+  if (page.kind === "catalog") return <CatalogPage page={page} courses={courses} />;
+  if (page.kind === "contacts") return <ContactsPage page={page} />;
+  if (page.kind === "master-list") {
+    return cmsMasters.length ? (
+      <MasterListPageCms page={page} masters={cmsMasters} />
+    ) : (
+      <MasterListPage page={page} masters={masters} />
+    );
+  }
+
+  const cinematic = ["course", "school", "teacher", "master"].includes(page.kind);
+  if (cinematic) {
+    return <CinematicPage page={page} schedule={schedule} />;
+  }
+
+  return <PlainPage page={page} schedule={schedule} />;
+}
+
+function CinematicPage({ page, schedule }: { page: SitePage; schedule: CmsSession[] }) {
   const hero = page.images[0];
   const body = page.paragraphs;
 
-  if (page.kind === "team") return <TeamPage page={page} />;
-  if (page.kind === "catalog") return <CatalogPage page={page} />;
-  if (page.kind === "contacts") return <ContactsPage page={page} />;
-  if (page.kind === "master-list") return <MasterListPage page={page} />;
+  return (
+    <article>
+      <section className="ink relative isolate min-h-[52dvh] overflow-hidden text-header-fg">
+        {hero ? (
+          <SeoImage
+            src={hero.src}
+            alt={hero.alt}
+            filename={hero.filename}
+            className="absolute inset-0 h-full w-full"
+            imgClassName="h-full w-full object-cover opacity-50"
+            loading="eager"
+          />
+        ) : null}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/20" />
+        <div className="relative mx-auto flex min-h-[52dvh] max-w-[1180px] flex-col justify-end px-4 pb-28 pt-24 md:px-5 md:pb-12">
+          <Breadcrumb page={page} onDark />
+          <h1 className="hero-title mt-4 max-w-4xl">{page.h1}</h1>
+          {page.description ? (
+            <p className="mt-5 max-w-2xl text-base text-header-fg/80 md:text-lg">{page.description}</p>
+          ) : null}
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button asChild>
+              <a href="#trial">Записаться</a>
+            </Button>
+            <Button asChild>
+              <a href={SITE.phoneHref}>{SITE.phone}</a>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
+        <div className="grid gap-10 lg:grid-cols-[1fr_18rem]">
+          <div className="space-y-5 text-lg leading-relaxed text-fg/90">
+            {body.map((p) => (
+              <p key={p.slice(0, 48)}>{p}</p>
+            ))}
+            {page.headings.length ? (
+              <div className="mt-10 rounded-lg bg-surface p-6 shadow-[var(--shadow-border)]">
+                <h2 className="display text-2xl">Программа</h2>
+                <ol className="mt-4 space-y-3">
+                  {page.headings.map((h, i) => (
+                    <li key={h.text} className="flex gap-3 text-sm md:text-base">
+                      <span className="display text-muted">{String(i + 1).padStart(2, "0")}</span>
+                      <span>{h.text}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+            <Gallery page={{ ...page, images: page.images.slice(1) }} />
+            {schedule.length ? (
+              <div className="pt-6">
+                <ScheduleBlock sessions={schedule} />
+              </div>
+            ) : null}
+            <Related page={page} />
+          </div>
+          <aside className="h-fit rounded-lg bg-surface p-5 shadow-[var(--shadow-border)]">
+            <p className="text-sm font-medium">Запись и филиалы</p>
+            <p className="mt-2 text-sm text-muted">
+              {SITE.phone}
+              <br />
+              {SITE.email}
+            </p>
+            <ul className="mt-4 space-y-3 text-sm text-muted">
+              {BRANCHES.map((b) => (
+                <li key={b.address}>
+                  <span className="font-medium text-fg">{b.city}</span>
+                  <br />
+                  {b.address}
+                </li>
+              ))}
+            </ul>
+            <Button asChild className="mt-5 w-full">
+              <a href="#trial">Пробное занятие</a>
+            </Button>
+          </aside>
+        </div>
+        <div className="mt-16">
+          <TrialForm compact />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function PlainPage({ page, schedule }: { page: SitePage; schedule: CmsSession[] }) {
+  const hero = page.images[0];
+  const body = page.paragraphs;
 
   return (
-    <article className="mx-auto max-w-6xl px-4 py-12 md:px-6 md:py-16">
-      <p className="text-sm font-medium text-primary">
-        <PageLink to="/" className="hover:underline">
-          Главная
-        </PageLink>
-        <span className="mx-2 text-muted">/</span>
-        {page.kind === "teacher" ? (
-          <PageLink to="/team" className="hover:underline">
-            Педагоги
-          </PageLink>
-        ) : (
-          <PageLink to="/allcourses" className="hover:underline">
-            Курсы
-          </PageLink>
-        )}
-      </p>
+    <article className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
+      <Breadcrumb page={page} />
       <div className="mt-6 grid items-end gap-8 lg:grid-cols-[1.2fr_0.8fr]">
         <div>
           <h1 className="display text-4xl md:text-5xl">{page.h1}</h1>
           {page.description ? (
             <p className="mt-5 max-w-2xl text-lg text-muted">{page.description}</p>
           ) : null}
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Button asChild>
-              <a href="#trial">Записаться</a>
-            </Button>
-            <Button asChild variant="secondary">
-              <a href={SITE.phoneHref}>{SITE.phone}</a>
-            </Button>
-          </div>
         </div>
         {hero ? (
           <SeoImage
             src={hero.src}
             alt={hero.alt}
             filename={hero.filename}
-            className="aspect-[4/3] rounded-[28px] bg-surface-2"
+            className="aspect-4/3 rounded-lg bg-surface-2"
             loading="eager"
           />
         ) : null}
       </div>
-
-      <div className="mt-12 grid gap-10 lg:grid-cols-[1fr_18rem]">
-        <div className="space-y-5 text-[1.05rem] leading-relaxed text-fg/90">
-          {body.map((p) => (
-            <p key={p.slice(0, 48)}>{p}</p>
-          ))}
-          {page.headings.length ? (
-            <div className="mt-10 rounded-[24px] bg-surface p-6 shadow-[var(--shadow-border)]">
-              <h2 className="display text-2xl">Программа</h2>
-              <ol className="mt-4 space-y-3">
-                {page.headings.map((h, i) => (
-                  <li key={h.text} className="flex gap-3 text-sm md:text-base">
-                    <span className="font-display text-muted">{String(i + 1).padStart(2, "0")}</span>
-                    <span>{h.text}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          ) : null}
-          <Gallery page={page} />
-          <Related page={page} />
-        </div>
-        <aside className="h-fit rounded-[24px] bg-surface p-5 shadow-[var(--shadow-border)]">
-          <p className="text-sm font-medium">Запись и филиалы</p>
-          <p className="mt-2 text-sm text-muted">
-            {SITE.phone}
-            <br />
-            {SITE.email}
-          </p>
-          <ul className="mt-4 space-y-3 text-sm text-muted">
-            {BRANCHES.map((b) => (
-              <li key={b.address}>
-                <span className="font-medium text-fg">{b.city}</span>
-                <br />
-                {b.address}
-              </li>
-            ))}
-          </ul>
-          <Button asChild className="mt-5 w-full">
-            <a href="#trial">Пробное занятие</a>
-          </Button>
-        </aside>
+      <div className="mt-12 max-w-3xl space-y-5 text-lg leading-relaxed text-fg/90">
+        {body.map((p) => (
+          <p key={p.slice(0, 48)}>{p}</p>
+        ))}
       </div>
+      <Gallery page={page} />
+      {schedule.length ? (
+        <div className="mt-12">
+          <ScheduleBlock sessions={schedule} />
+        </div>
+      ) : null}
+      <Related page={page} />
       <div className="mt-16">
         <TrialForm compact />
       </div>
@@ -145,26 +273,24 @@ export function PageArticle({ page }: { page: SitePage }) {
   );
 }
 
-function TeamPage({ page }: { page: SitePage }) {
-  const teachers = allTeachers();
+function TeamPage({ page, teachers }: { page: SitePage; teachers: TeacherCard[] }) {
   return (
-    <article className="mx-auto max-w-6xl px-4 py-12 md:px-6 md:py-16">
-      <h1 className="display text-4xl md:text-5xl">{page.h1}</h1>
-      <p className="mt-5 max-w-2xl text-lg text-muted">
-        {page.paragraphs[0] || page.description}
-      </p>
+    <article className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
+      <h1 className="display section-title">{page.h1}</h1>
+      <p className="mt-5 max-w-2xl text-lg text-muted">{page.paragraphs[0] || page.description}</p>
       <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {teachers.map((t) => (
           <PageLink
             key={t.href + t.name}
             to={t.href}
-            className="group overflow-hidden rounded-[24px] bg-surface shadow-[var(--shadow-border)] transition-shadow duration-[var(--motion-fast)] hover:shadow-[var(--shadow-border-hover)]"
+            className="group overflow-hidden rounded-lg bg-surface shadow-[var(--shadow-border)] transition-shadow duration-[var(--motion-fast)] hover:shadow-[var(--shadow-border-hover)]"
           >
             <SeoImage
               src={t.photo}
               alt={t.alt}
               filename={t.filename}
-              className="aspect-[4/5] bg-surface-2"
+              className="aspect-4/5 bg-surface-2"
+              imgClassName="transition-transform duration-[var(--motion-fast)] ease-[var(--ease-out)] group-hover:scale-105"
             />
             <div className="p-4">
               <p className="font-medium">{t.name}</p>
@@ -180,57 +306,81 @@ function TeamPage({ page }: { page: SitePage }) {
   );
 }
 
-function CatalogPage({ page }: { page: SitePage }) {
-  const courses = allCourses();
+function CatalogPage({ page, courses }: { page: SitePage; courses: CourseCard[] }) {
   const [q, setQ] = useState("");
+  const [group, setGroup] = useState<(typeof COURSE_GROUPS)[number]["id"]>("all");
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return courses;
-    return courses.filter(
-      (c) =>
+    const g = COURSE_GROUPS.find((item) => item.id === group) ?? COURSE_GROUPS[0];
+    return courses.filter((c) => {
+      if (!g.test(c.href)) return false;
+      if (!s) return true;
+      return (
         c.label.toLowerCase().includes(s) ||
         c.title.toLowerCase().includes(s) ||
-        c.description.toLowerCase().includes(s),
-    );
-  }, [q, courses]);
+        c.description.toLowerCase().includes(s)
+      );
+    });
+  }, [q, courses, group]);
 
   return (
-    <article className="mx-auto max-w-6xl px-4 py-12 md:px-6 md:py-16">
-      <h1 className="display text-4xl md:text-5xl">{page.h1}</h1>
+    <article className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
+      <h1 className="display section-title">{page.h1}</h1>
       <p className="mt-5 max-w-2xl text-lg text-muted">{page.description || page.paragraphs[0]}</p>
-      <label className="mt-8 block">
+      <div className="mt-8 flex flex-wrap gap-2">
+        {COURSE_GROUPS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setGroup(item.id)}
+            className={cn(
+              "h-11 rounded-sm px-4 text-sm font-medium",
+              group === item.id
+                ? "bg-fg text-bg"
+                : "bg-surface text-fg shadow-[var(--shadow-border)] hover:shadow-[var(--shadow-border-hover)]",
+            )}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <label className="mt-6 block">
         <span className="sr-only">Поиск курса</span>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Найти курс, возраст или направление"
-          className="h-12 w-full max-w-md rounded-full border border-border bg-surface px-5 text-sm shadow-[var(--shadow-border)] outline-none focus:ring-2 focus:ring-ring"
+          className="h-12 w-full max-w-md rounded-sm border border-border bg-surface px-5 text-sm shadow-[var(--shadow-border)] outline-none focus:ring-2 focus:ring-ring"
         />
       </label>
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="catalog-grid mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((c) => (
           <PageLink
             key={c.href}
             to={c.href}
-            className="overflow-hidden rounded-[24px] bg-surface shadow-[var(--shadow-border)] transition-shadow duration-[var(--motion-fast)] hover:shadow-[var(--shadow-border-hover)]"
+            className="course-card course-reveal group overflow-hidden rounded-2xl bg-surface shadow-[var(--shadow-border)]"
           >
             {c.image ? (
               <SeoImage
                 src={c.image}
                 alt={c.alt}
                 filename={c.filename}
-                className="aspect-[16/10] bg-surface-2"
+                className="course-media aspect-video bg-surface-2"
               />
             ) : (
-              <div className="aspect-[16/10] bg-surface-2" />
+              <div className="course-media aspect-video bg-surface-2" />
             )}
-            <div className="p-4">
+            <div className="course-copy p-4">
               <p className="font-medium">{c.label}</p>
               <p className="mt-2 line-clamp-3 text-sm text-muted">{c.description}</p>
+              <span className="course-cta text-primary">Смотреть курс</span>
             </div>
           </PageLink>
         ))}
       </div>
+      {filtered.length === 0 ? (
+        <p className="mt-10 text-sm text-muted">По этому запросу курсов нет — попробуйте другое слово.</p>
+      ) : null}
       <div className="mt-16">
         <TrialForm compact />
       </div>
@@ -240,23 +390,31 @@ function CatalogPage({ page }: { page: SitePage }) {
 
 function ContactsPage({ page }: { page: SitePage }) {
   return (
-    <article className="mx-auto max-w-6xl px-4 py-12 md:px-6 md:py-16">
-      <h1 className="display text-4xl md:text-5xl">{page.h1}</h1>
+    <article className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
+      <h1 className="display section-title">{page.h1}</h1>
       <p className="mt-5 max-w-2xl text-lg text-muted">
         Три студии в Коломне и Луховицах. Запись: {SITE.phone}, {SITE.email}.
       </p>
       <div className="mt-10 grid gap-4 md:grid-cols-3">
         {BRANCHES.map((b) => (
-          <div key={b.address} className="rounded-[24px] bg-surface p-6 shadow-[var(--shadow-border)]">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted">{b.city}</p>
-            <h2 className="display mt-2 text-2xl">{b.name}</h2>
-            <p className="mt-3 text-sm">{b.address}</p>
-            <p className="mt-2 text-sm text-muted">{b.hours}</p>
-            <p className="mt-3 text-sm text-muted">{b.note}</p>
-            <p className="mt-3 text-sm">{b.directions}</p>
-            <a href={b.map} className="mt-4 inline-block text-sm font-medium text-primary hover:underline">
-              Открыть карту
-            </a>
+          <div key={b.address} className="overflow-hidden rounded-lg bg-surface shadow-[var(--shadow-border)]">
+            <iframe
+              title={`Карта: ${b.name}`}
+              src={b.mapEmbed}
+              className="h-44 w-full border-0"
+              loading="lazy"
+            />
+            <div className="p-6">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted">{b.city}</p>
+              <h2 className="display mt-2 text-2xl">{b.name}</h2>
+              <p className="mt-3 text-sm">{b.address}</p>
+              <p className="mt-2 text-sm text-muted">{b.hours}</p>
+              <p className="mt-3 text-sm text-muted">{b.note}</p>
+              <p className="mt-3 text-sm">{b.directions}</p>
+              <a href={b.map} className="mt-4 inline-block text-sm font-medium text-primary hover:underline">
+                Открыть карту
+              </a>
+            </div>
           </div>
         ))}
       </div>
@@ -267,18 +425,17 @@ function ContactsPage({ page }: { page: SitePage }) {
   );
 }
 
-function MasterListPage({ page }: { page: SitePage }) {
-  const masters = allPages().filter((p) => p.kind === "master");
+function MasterListPage({ page, masters }: { page: SitePage; masters: MasterCard[] }) {
   return (
-    <article className="mx-auto max-w-6xl px-4 py-12 md:px-6 md:py-16">
-      <h1 className="display text-4xl md:text-5xl">{page.h1}</h1>
+    <article className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
+      <h1 className="display section-title">{page.h1}</h1>
       <p className="mt-5 max-w-2xl text-lg text-muted">{page.paragraphs[0] || page.description}</p>
       <div className="mt-8 grid gap-3 sm:grid-cols-2">
         {masters.map((item) => (
           <PageLink
             key={item.path}
             to={item.path}
-            className="rounded-[20px] bg-surface px-4 py-4 shadow-[var(--shadow-border)] hover:shadow-[var(--shadow-border-hover)]"
+            className="rounded-lg bg-surface px-4 py-4 shadow-[var(--shadow-border)] hover:shadow-[var(--shadow-border-hover)]"
           >
             {item.h1}
           </PageLink>

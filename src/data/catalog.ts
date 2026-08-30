@@ -1,6 +1,3 @@
-import raw from "./catalog.json";
-import { pageHead as buildHead } from "./seo";
-
 export type SiteImage = {
   src: string;
   alt: string;
@@ -44,58 +41,13 @@ export type CourseCard = {
   filename: string;
 };
 
-type Catalog = {
+export type Catalog = {
   pages: SitePage[];
   teachers: TeacherCard[];
   courses: CourseCard[];
   homeHero: SiteImage | null;
 };
 
-const catalog = raw as Catalog;
-
-const pageIndex = new Map<string, SitePage>();
-for (const page of catalog.pages) {
-  pageIndex.set(norm(page.path), page);
-  pageIndex.set(norm(page.pathDecoded), page);
-}
-
-function norm(input: string) {
-  let value = input.trim();
-  if (!value.startsWith("/")) value = `/${value}`;
-  if (value.length > 1) value = value.replace(/\/+$/, "");
-  try {
-    value = decodeURIComponent(value);
-  } catch {
-    /* keep */
-  }
-  return value;
-}
-
 export function isPublishedTeacher(t: TeacherCard) {
   return t.href !== "/team" && !/день открытых|дети развивайся/i.test(t.name);
-}
-
-export function getPage(splat?: string | null): SitePage | undefined {
-  if (!splat) return pageIndex.get("/");
-  return pageIndex.get(norm(splat));
-}
-
-export function allPages() {
-  return catalog.pages;
-}
-
-export function allTeachers() {
-  return catalog.teachers.filter(isPublishedTeacher);
-}
-
-export function allCourses() {
-  return catalog.courses;
-}
-
-export function homeHero() {
-  return catalog.homeHero;
-}
-
-export function pageHead(page: SitePage) {
-  return buildHead(page);
 }

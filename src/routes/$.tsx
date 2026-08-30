@@ -1,26 +1,38 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { getPage } from "@/data/catalog";
+import { loadSitePage } from "@/data/load-site-page";
 import { pageHead } from "@/data/seo";
 import { SiteShell } from "@/components/site-shell";
 import { PageArticle } from "@/components/page-article";
 import { PageLink } from "@/components/page-link";
 
 export const Route = createFileRoute("/$")({
-  loader: ({ params }) => {
-    const page = getPage(params._splat);
-    if (!page) throw notFound();
-    return page;
+  loader: async ({ params }) => {
+    const data = await loadSitePage({ data: params._splat });
+    if (!data) throw notFound();
+    return data;
   },
-  head: ({ loaderData }) => (loaderData ? pageHead(loaderData) : { meta: [{ title: "Страница не найдена" }] }),
+  head: ({ loaderData }) =>
+    loaderData ? pageHead(loaderData.page) : { meta: [{ title: "Страница не найдена" }] },
   component: CatchAll,
   notFoundComponent: NotFoundPage,
 });
 
 function CatchAll() {
-  const page = Route.useLoaderData();
+  const data = Route.useLoaderData();
   return (
     <SiteShell>
-      <PageArticle page={page} />
+      <PageArticle
+        page={data.page}
+        teachers={data.teachers}
+        courses={data.courses}
+        masters={data.masters}
+        cmsCourse={data.cmsCourse}
+        cmsMaster={data.cmsMaster}
+        cmsCourses={data.cmsCourses}
+        cmsMasters={data.cmsMasters}
+        trajectory={data.trajectory}
+        schedule={data.schedule}
+      />
     </SiteShell>
   );
 }
@@ -30,7 +42,7 @@ function NotFoundPage() {
     <SiteShell>
       <div className="mx-auto max-w-xl px-4 py-24 text-center">
         <p className="text-sm font-medium text-primary">404</p>
-        <h1 className="display mt-3 text-4xl">Страница не найдена</h1>
+        <h1 className="display mt-3 text-4xl uppercase">Страница не найдена</h1>
         <p className="mt-4 text-muted">
           Этот адрес не входит в карту сайта rastudio.org. Вернитесь на главную или в каталог курсов.
         </p>

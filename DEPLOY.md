@@ -1,41 +1,46 @@
-# Развёртывание новой версии rastudio.org
+# Развёртывание rastudio.org
 
-Сайт собран как TanStack Start (React + Vite). Адреса страниц, title, description, canonical, alt и имена файлов картинок совпадают с текущим rastudio.org.
+Сайт — TanStack Start (React + Vite + Nitro). Репозиторий: [capitalbtl-lab/rastudio-reserv](https://github.com/capitalbtl-lab/rastudio-reserv).
 
-Пока DNS `rastudio.org` смотрит на Wix — эта копия только превью. Canonical уже ведут на `https://www.rastudio.org/...`.
+Пока DNS `rastudio.org` смотрит на Wix, эта копия — превью. Canonical уже ведут на `https://www.rastudio.org/...`.
 
-## Что сохранено для SEO
+## CI/CD
 
-- Те же 133 URL из sitemap: `/art-studio`, `/team/...`, `/master-klassy/...` и остальные.
-- Те же `<title>`, meta description, canonical, og:title / og:image.
-- Те же формулировки H1/H2 главной.
-- Картинки с `static.wixstatic.com` — исходные имена файлов и alt.
-- `public/sitemap.xml` и `public/robots.txt`.
+На каждый пуш в `main` и на pull request GitHub Actions:
 
-## GitHub
+1. **CI** — `npm ci`, проверка типов, production-сборка.
+2. **Deploy** — выкладка на Vercel, если заданы секреты.
 
-Аккаунт [capitalbtl-lab](https://github.com/capitalbtl-lab) подключён, но у приложения Grok **нет права создавать репозитории**.
+### Секреты репозитория
 
-Чтобы я загрузил код в отдельный репозиторий `rastudio-org`, сделайте одно:
+[Settings → Secrets and variables → Actions](https://github.com/capitalbtl-lab/rastudio-reserv/settings/secrets/actions) — три значения из Vercel:
 
-1. На [github.com/new](https://github.com/new) создайте **пустой** приватный репозиторий `rastudio-org` (без README, без .gitignore, без лицензии) и напишите сюда «репозиторий готов» — я запушу код.
-2. Либо в Grok заново подключите GitHub и включите право **Administration** (создание репозиториев), затем напишите «пуш в rastudio-org».
+| Секрет | Где взять |
+|---|---|
+| `VERCEL_TOKEN` | [vercel.com/account/tokens](https://vercel.com/account/tokens) |
+| `VERCEL_ORG_ID` | Vercel → Project → Settings → General |
+| `VERCEL_PROJECT_ID` | там же |
 
-Архив исходников для ручной загрузки: `rastudio-org.zip`.
+Пока секретов нет, деплой просто пропускается, проверка сборки всё равно идёт.
 
-## Как выложить на хостинг
+### Один раз на Vercel
 
-1. Подключите репозиторий (или распакованный архив) к [Vercel](https://vercel.com), Timeweb Cloud, Beget Node или любому хосту с Node 22.
-2. Build: `npm install && npm run build`
-3. Старт production: команда Nitro после сборки (обычно `node .output/server/index.mjs`).
-4. Когда будете готовы заменить Wix:
-   - A/CNAME `rastudio.org` на новый хостинг;
-   - Wix не удаляйте сразу — сначала убедитесь, что все 133 URL отвечают 200;
-   - URL страниц не меняйте.
+1. Создайте проект и привяжите GitHub-репозиторий **или** оставьте деплой только через Actions (не включайте оба сразу — будет двойная выкладка).
+2. Framework: Other, Build: `npm run build`, Node 22.
+3. Скопируйте Org ID и Project ID в секреты выше.
 
-## Форма записи и кабинет
+Ручной запуск: Actions → **Deploy** → Run workflow.
 
-Пробное занятие и личный кабинет остаются на AlfaCRM:
+## Как заменить Wix
+
+1. Убедитесь, что production на Vercel отвечает 200 на все 133 URL из sitemap.
+2. A/CNAME `rastudio.org` на Vercel.
+3. Wix не удаляйте сразу.
+4. URL страниц не меняйте.
+
+## Форма записи
+
+Пробное занятие и кабинет остаются на AlfaCRM:
 
 - `https://studiyarazvivaysya.s20.online/`
 - форма заявки с `lead_source_id=2`

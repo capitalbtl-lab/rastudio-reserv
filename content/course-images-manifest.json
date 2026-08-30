@@ -1,0 +1,426 @@
+[
+  {
+    "src": "/courses/akadem-art.jpg",
+    "filename": "Развивайся - Академическая художественная школа в Коломне.png",
+    "alt": "Академическая художественная школа в Коломне",
+    "slug": "akadem-art",
+    "bytes": 201884,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/art-studio-9-13",
+      "/art-studio"
+    ]
+  },
+  {
+    "src": "/courses/art-7-9.jpg",
+    "filename": "Развивайся - Художественная студия 7-9 лет в Коломне.png",
+    "alt": "Художественная студия 7–9 лет в Коломне",
+    "slug": "art-7-9",
+    "bytes": 220759,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/art-studio-7-8"
+    ]
+  },
+  {
+    "src": "/courses/art-5-6.jpg",
+    "filename": "Развивайся - Художественная студия 5-6 лет в Коломне.png",
+    "alt": "Художественная студия 5–6 лет в Коломне",
+    "slug": "art-5-6",
+    "bytes": 199960,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/art-studio-5-6"
+    ]
+  },
+  {
+    "src": "/courses/art-3-4.jpg",
+    "filename": "Развивайся - Художественная студия 3-4 года в Коломне.png",
+    "alt": "Художественная студия 3–4 года в Коломне",
+    "slug": "art-3-4",
+    "bytes": 243310,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/art-studio-3-4"
+    ]
+  },
+  {
+    "src": "/courses/sculpture.jpg",
+    "filename": "Развивайся - Скульптурная студия в Коломне.png",
+    "alt": "Скульптурная студия в Коломне",
+    "slug": "sculpture",
+    "bytes": 240520,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/sculptural-studio"
+    ]
+  },
+  {
+    "src": "/courses/hudvuz.jpg",
+    "filename": "Развивайся - Подготовка в художественные ВУЗы в Коломне.png",
+    "alt": "Подготовка в художественные вузы в Коломне",
+    "slug": "hudvuz",
+    "bytes": 235059,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/podgotovka-v-hudvuz"
+    ]
+  },
+  {
+    "src": "/courses/digital-art.jpg",
+    "filename": "Развивайся - Цифровая художественная школа.png",
+    "alt": "Цифровая художественная школа в Коломне",
+    "slug": "digital-art",
+    "bytes": 201033,
+    "size": [
+      1536,
+      1024
+    ],
+    "paths": [
+      "/digitalartschool"
+    ]
+  },
+  {
+    "src": "/courses/robot-10-14.jpg",
+    "filename": "Развивайся -  Робототехника 10-14 лет в Коломне.png",
+    "alt": "Робототехника 10–14 лет в Коломне",
+    "slug": "robot-10-14",
+    "bytes": 272408,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/robototehnika-10-14",
+      "/robototehnika-v-kolomne"
+    ]
+  },
+  {
+    "src": "/courses/robot-7-9.jpg",
+    "filename": "Развивайся - Робототехника 7-9 лет в Коломне.png",
+    "alt": "Робототехника 7–9 лет в Коломне",
+    "slug": "robot-7-9",
+    "bytes": 257229,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/robototehnika-7-9"
+    ]
+  },
+  {
+    "src": "/courses/robot-5-6.jpg",
+    "filename": "Развивайся - Робототехника 5-6 лет в Коломне.png",
+    "alt": "Робототехника 5–6 лет в Коломне",
+    "slug": "robot-5-6",
+    "bytes": 235084,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/robototehnika-5-7"
+    ]
+  },
+  {
+    "src": "/courses/robot-english.jpg",
+    "filename": "Развивайся - Робототехника на английском в Коломне.png",
+    "alt": "Робототехника на английском в Коломне",
+    "slug": "robot-english",
+    "bytes": 250500,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/roboticsinenglish"
+    ]
+  },
+  {
+    "src": "/courses/blender.jpg",
+    "filename": "Развивайся - Game-дизайн и 3D-анимация в Blender в Коломне.png",
+    "alt": "Game-дизайн и 3D-анимация в Blender в Коломне",
+    "slug": "blender",
+    "bytes": 248928,
+    "size": [
+      1536,
+      1024
+    ],
+    "paths": [
+      "/gamedesign"
+    ]
+  },
+  {
+    "src": "/courses/kompas.jpg",
+    "filename": "Развивайся - Инженерное 3D моделирование в Компас.png",
+    "alt": "Инженерное 3D-моделирование в Компас в Коломне",
+    "slug": "kompas",
+    "bytes": 224025,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/3d-modeling"
+    ]
+  },
+  {
+    "src": "/courses/radio.jpg",
+    "filename": "Развивайся - Радиотехническое конструирование в Коломне.png",
+    "alt": "Радиотехническое конструирование в Коломне",
+    "slug": "radio",
+    "bytes": 256101,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/radioengineering"
+    ]
+  },
+  {
+    "src": "/courses/science.jpg",
+    "filename": "Развивайся - Развивающий курс Увлекательная наука.png",
+    "alt": "Развивающий курс «Увлекательная наука»",
+    "slug": "science",
+    "bytes": 239708,
+    "size": [
+      1536,
+      1024
+    ],
+    "paths": [
+      "/science-course"
+    ]
+  },
+  {
+    "src": "/courses/tesla.jpg",
+    "filename": "Развивайся - Научный курс Физика инноваций в Коломне.png",
+    "alt": "Научный курс «Физика инноваций» в Коломне",
+    "slug": "tesla",
+    "bytes": 225152,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/teslaphysics",
+      "/promising-professions"
+    ]
+  },
+  {
+    "src": "/courses/prep-school.jpg",
+    "filename": "Развивайся - Комплексная подготовка к школе в Коломне.png",
+    "alt": "Комплексная подготовка к школе в Коломне",
+    "slug": "prep-school",
+    "bytes": 196964,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/preparation-for-school"
+    ]
+  },
+  {
+    "src": "/courses/lego-math.jpg",
+    "filename": "Развивайся - Развивающий курс Лего-Математика в Коломне.png",
+    "alt": "Развивающий курс «Лего-математика» в Коломне",
+    "slug": "lego-math",
+    "bytes": 199844,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/happybricks",
+      "/early-childhood-care"
+    ]
+  },
+  {
+    "src": "/courses/podium.jpg",
+    "filename": "Развивайся - Модельная школа Подиум в Коломне.png",
+    "alt": "Модельная школа «Подиум» в Коломне",
+    "slug": "podium",
+    "bytes": 226027,
+    "size": [
+      1536,
+      1024
+    ],
+    "paths": [
+      "/model-school"
+    ]
+  },
+  {
+    "src": "/courses/handwork.jpg",
+    "filename": "Развивайся - Курс ручного труда в Коломне.png",
+    "alt": "Курс ручного труда в Коломне",
+    "slug": "handwork",
+    "bytes": 238832,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/kinder-master"
+    ]
+  },
+  {
+    "src": "/courses/python.jpg",
+    "filename": "Развивайся -  Основы программирования Python в Коломне.png",
+    "alt": "Основы программирования Python в Коломне",
+    "slug": "python",
+    "bytes": 174045,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python",
+      "/kursy-shkoly-programmirovaniya/it-%D1%88%D0%BA%D0%BE%D0%BB%D0%B0-%D0%BF%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5-%D0%BD%D0%B0-python"
+    ]
+  },
+  {
+    "src": "/courses/cpp.jpg",
+    "filename": "Развивайся - Основы программирования C++ в Коломне.png",
+    "alt": "Основы программирования C++ в Коломне",
+    "slug": "cpp",
+    "bytes": 211803,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-си",
+      "/kursy-shkoly-programmirovaniya/it-%D1%88%D0%BA%D0%BE%D0%BB%D0%B0-%D0%BF%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5-%D0%BD%D0%B0-%D1%81%D0%B8"
+    ]
+  },
+  {
+    "src": "/courses/start-scratch.jpg",
+    "filename": "Развивайся - StartSchool-программирование в Scratch.png",
+    "alt": "StartSchool: программирование в Scratch",
+    "slug": "start-scratch",
+    "bytes": 205297,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-5-7-лет",
+      "/kursy-shkoly-programmirovaniya/it-%D0%BB%D0%B0%D0%B1%D0%BE%D1%80%D0%B0%D1%82%D0%BE%D1%80%D0%B8%D1%8F-create-%D0%B4%D0%BB%D1%8F-%D0%B4%D0%B5%D1%82%D0%B5%D0%B9-5-7-%D0%BB%D0%B5%D1%82"
+    ]
+  },
+  {
+    "src": "/courses/junior-3in1.jpg",
+    "filename": "Развивайся - JuniorSchool-программирование 3в1.png",
+    "alt": "JuniorSchool: программирование 3в1",
+    "slug": "junior-3in1",
+    "bytes": 220070,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/kursy-shkoly-programmirovaniya/it-лаборатория-dev-для-детей-9-10-лет",
+      "/kursy-shkoly-programmirovaniya/it-%D0%BB%D0%B0%D0%B1%D0%BE%D1%80%D0%B0%D1%82%D0%BE%D1%80%D0%B8%D1%8F-dev-%D0%B4%D0%BB%D1%8F-%D0%B4%D0%B5%D1%82%D0%B5%D0%B9-9-10-%D0%BB%D0%B5%D1%82"
+    ]
+  },
+  {
+    "src": "/courses/prog-3in1.jpg",
+    "filename": "Развивайся - Основы программирования 3в1 в Коломне.png",
+    "alt": "Основы программирования 3в1 в Коломне",
+    "slug": "prog-3in1",
+    "bytes": 186873,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/kursy-shkoly-programmirovaniya/it-школа-разработка-игр-на-unity",
+      "/kursy-shkoly-programmirovaniya/it-%D1%88%D0%BA%D0%BE%D0%BB%D0%B0-%D1%80%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B0-%D0%B8%D0%B3%D1%80-%D0%BD%D0%B0-unity"
+    ]
+  },
+  {
+    "src": "/courses/minecraft.jpg",
+    "filename": "Развивайся - Игровое программирование в Майнкрафт.png",
+    "alt": "Игровое программирование в Minecraft",
+    "slug": "minecraft",
+    "bytes": 269581,
+    "size": [
+      1536,
+      1024
+    ],
+    "paths": [
+      "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-7-9-лет",
+      "/kursy-shkoly-programmirovaniya/it-%D0%BB%D0%B0%D0%B1%D0%BE%D1%80%D0%B0%D1%82%D0%BE%D1%80%D0%B8%D1%8F-create-%D0%B4%D0%BB%D1%8F-%D0%B4%D0%B5%D1%82%D0%B5%D0%B9-7-9-%D0%BB%D0%B5%D1%82"
+    ]
+  },
+  {
+    "src": "/courses/drones.jpg",
+    "filename": "Развивайся - Беспилотная авиация в Коломне.png",
+    "alt": "Беспилотная авиация в Коломне",
+    "slug": "drones",
+    "bytes": 251485,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": []
+  },
+  {
+    "src": "/courses/intro-computers.jpg",
+    "filename": "Развивайся - Знакомство с компьютером и информационными технологиями в Коломне.png",
+    "alt": "Знакомство с компьютером и информационными технологиями",
+    "slug": "intro-computers",
+    "bytes": 177699,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": [
+      "/programming-school"
+    ]
+  },
+  {
+    "src": "/courses/manga.jpg",
+    "filename": "Развивайся - Курс Манга и аниме в Коломне.png",
+    "alt": "Курс манга и аниме в Коломне",
+    "slug": "manga",
+    "bytes": 134440,
+    "size": [
+      1274,
+      849
+    ],
+    "paths": []
+  },
+  {
+    "src": "/courses/planet-steam.jpg",
+    "filename": "Развивайся - Курс планета-STEAM в Коломне.png",
+    "alt": "Курс «Планета STEAM» в Коломне",
+    "slug": "planet-steam",
+    "bytes": 209316,
+    "size": [
+      1600,
+      1067
+    ],
+    "paths": []
+  }
+]
