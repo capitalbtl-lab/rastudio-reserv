@@ -52,8 +52,21 @@ jobs:
         run: npx vercel build --prod --token="$VERCEL_TOKEN"
       - if: steps.gate.outputs.skip != 'true'
         name: Deploy
+        id: ship
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        run: |
+          url=$(npx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Выложено: $url"
+      - if: steps.gate.outputs.skip != 'true' && steps.ship.outputs.url != ''
+        name: Smoke
+        env:
+          URL: ${{ steps.ship.outputs.url }}
+        run: |
+          set -euo pipefail
+          code=$(curl -fsS -o /dev/null -w "%{http_code}" --max-time 30 -A "rastudio-monitor" "$URL")
+          echo "GET $URL → $code"
+          test "$code" = "200"

@@ -1,0 +1,61 @@
+name: Monitor
+
+on:
+  workflow_run:
+    workflows: [CI, Deploy]
+    types: [completed]
+  schedule:
+    - cron: "15 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  actions: read
+
+jobs:
+  alert-failure:
+    name: Alert on failed pipeline
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or comment issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          title="Сбой ${WORKFLOW} (${BRANCH})"
+          body="Пайплайн **${WORKFLOW}** упал на \`${BRANCH}\` (\`${SHA:0:7}\`).
+
+          [Открыть логи](${RUN_URL})"
+          number=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title Сбой ${WORKFLOW}" --json number --jq '.[0].number // empty')
+          if [ -n "${number}" ]; then
+            gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi
+
+  health:
+    name: Production health
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe site
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PRODUCTION_URL}" ]; then
+            echo "PRODUCTION_URL не задан — проверка сайта пропущена."
+            echo "Добавьте секрет PRODUCTION_URL (например https://www.rastudio.org/ ), когда Vercel будет готов."
+            exit 0
+          fi
+          url="${PRODUCTION_URL%/}"
+          for path in "/" "/allcourses" "/art-studio"; do
+            code=$(curl -fsS -o /dev/null -w "%{http_code}" --max-time 20 -A "rastudio-monitor" "${url}${path}")
+            echo "${path} → ${code}"
+            test "$code" = "200"
+          done

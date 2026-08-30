@@ -1,5 +1,9 @@
 # Студия «Развивайся» — rastudio.org
 
+[![CI](https://github.com/capitalbtl-lab/rastudio-reserv/actions/workflows/ci.yml/badge.svg)](https://github.com/capitalbtl-lab/rastudio-reserv/actions/workflows/ci.yml)
+[![Deploy](https://github.com/capitalbtl-lab/rastudio-reserv/actions/workflows/deploy.yml/badge.svg)](https://github.com/capitalbtl-lab/rastudio-reserv/actions/workflows/deploy.yml)
+[![Monitor](https://github.com/capitalbtl-lab/rastudio-reserv/actions/workflows/monitor.yml/badge.svg)](https://github.com/capitalbtl-lab/rastudio-reserv/actions/workflows/monitor.yml)
+
 Современная копия сайта [www.rastudio.org](https://www.rastudio.org/) с теми же адресами страниц, title, description, canonical, заголовками, alt и именами файлов картинок.
 
 Это **отдельный репозиторий** для выкладки на ваш хостинг. Пока DNS указывает на Wix, эта версия — превью. Когда будете готовы заменить Wix, направьте домен сюда **без смены URL**.
