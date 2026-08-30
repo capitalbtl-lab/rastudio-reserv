@@ -9,6 +9,7 @@ type Lite = {
     canonical: string;
     h1: string;
     paragraphs: string[];
+    images: Array<{ src: string; alt: string; filename: string }>;
   };
   teachers: Array<{
     name: string;
