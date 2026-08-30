@@ -145,32 +145,33 @@ function CinematicPage({ page, schedule }: { page: SitePage; schedule: CmsSessio
 
   return (
     <article>
-      <section className="ink relative isolate min-h-[52dvh] overflow-hidden text-header-fg">
-        {hero ? (
-          <SeoImage
-            src={hero.src}
-            alt={hero.alt}
-            filename={hero.filename}
-            className="absolute inset-0 h-full w-full"
-            imgClassName="h-full w-full object-cover opacity-50"
-            loading="eager"
-          />
-        ) : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/20" />
-        <div className="relative mx-auto flex min-h-[52dvh] max-w-[1180px] flex-col justify-end px-4 pb-28 pt-24 md:px-5 md:pb-12">
-          <Breadcrumb page={page} onDark />
-          <h1 className="hero-title mt-4 max-w-4xl">{page.h1}</h1>
-          {page.description ? (
-            <p className="mt-5 max-w-2xl text-base text-header-fg/80 md:text-lg">{page.description}</p>
-          ) : null}
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Button asChild>
-              <a href="#trial">Записаться</a>
-            </Button>
-            <Button asChild>
-              <a href={SITE.phoneHref}>{SITE.phone}</a>
-            </Button>
+      <section className="ink relative isolate overflow-hidden text-header-fg">
+        <div className="mx-auto grid max-w-[1180px] items-center gap-8 px-4 pb-28 pt-24 md:px-5 md:pb-12 lg:grid-cols-[minmax(0,1fr)_minmax(260px,400px)] lg:gap-14">
+          <div className="order-2 lg:order-1">
+            <Breadcrumb page={page} onDark />
+            <h1 className="hero-title mt-4 max-w-4xl">{page.h1}</h1>
+            {page.description ? (
+              <p className="mt-5 max-w-2xl text-base text-header-fg/80 md:text-lg">{page.description}</p>
+            ) : null}
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button asChild>
+                <a href="#trial">Записаться</a>
+              </Button>
+              <Button asChild>
+                <a href={SITE.phoneHref}>{SITE.phone}</a>
+              </Button>
+            </div>
           </div>
+          {hero ? (
+            <SeoImage
+              src={hero.src}
+              alt={hero.alt}
+              filename={hero.filename}
+              className="order-1 mx-auto aspect-3/4 w-full max-w-sm overflow-hidden rounded-2xl bg-black/20 shadow-[0_24px_80px_rgba(0,0,0,0.45)] lg:order-2 lg:max-w-none"
+              imgClassName="h-full w-full object-cover"
+              loading="eager"
+            />
+          ) : null}
         </div>
       </section>
 
