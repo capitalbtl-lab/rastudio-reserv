@@ -44,6 +44,7 @@ export function AdminDossiers() {
   const [dob, setDob] = useState("");
   const [phone, setPhone] = useState("");
   const [lastSync, setLastSync] = useState("");
+  const [nextSync, setNextSync] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function load() {
@@ -51,31 +52,24 @@ export function AdminDossiers() {
     if (res.ok && "items" in res) {
       setRows(res.items as Row[]);
       if ("lastCrmSync" in res) setLastSync(String(res.lastCrmSync || ""));
+      if ("nextCrmSync" in res) setNextSync(String(res.nextCrmSync || ""));
     }
   }
 
   async function syncAll() {
     setBusy(true);
-    setMsg("Синхронизация с AlfaCRM…");
+    setMsg("Загружаем данные из AlfaCRM на сайт…");
     const res = await adminDossiers({ data: { token: token(), action: "syncAll" } });
     setBusy(false);
     if (res.ok) {
-      setMsg(`Обновили ${"count" in res ? res.count : ""} карточек из CRM.`);
+      setMsg(`Загружено ${"count" in res ? res.count : ""} карточек. Сайт в CRM ничего не писал.`);
       if ("lastCrmSync" in res) setLastSync(String(res.lastCrmSync || ""));
       void load();
     } else setMsg(res.error || "Ошибка CRM");
   }
 
   useEffect(() => {
-    void (async () => {
-      const res = await adminDossiers({ data: { token: token(), action: "list", q } });
-      if (res.ok && "items" in res) {
-        setRows(res.items as Row[]);
-        const at = "lastCrmSync" in res ? String(res.lastCrmSync || "") : "";
-        setLastSync(at);
-        if (!at) void syncAll();
-      }
-    })();
+    void load();
     const id = window.setInterval(() => void load(), 30000);
     return () => window.clearInterval(id);
   }, []);
@@ -127,7 +121,7 @@ export function AdminDossiers() {
       <div>
         <h2 className="font-display text-3xl">Личные дела</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          AlfaCRM — источник ФИО, пола, даты рождения и новых свойств. Фон обновляет дела каждые 5 минут; открытие карточки тянет её из CRM сразу.
+          Только в одну сторону: AlfaCRM → сайт. Правки в кабинете на сайте в CRM не уходят. Автозагрузка — раз в неделю, плюс кнопка вручную.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -140,11 +134,14 @@ export function AdminDossiers() {
         <Button type="button" onClick={() => void load()}>
           Найти
         </Button>
-        <Button type="button" variant="secondary" disabled={busy} onClick={() => void syncAll()}>
-          Обновить все из CRM
+        <Button type="button" disabled={busy} onClick={() => void syncAll()}>
+          Загрузить из AlfaCRM
         </Button>
       </div>
-      {lastSync ? <p className="text-xs text-muted">Последняя полная синхронизация: {when(lastSync)}</p> : null}
+      <p className="text-xs text-muted">
+        {lastSync ? `Последняя загрузка: ${when(lastSync)}` : "Ещё не загружали из CRM"}
+        {nextSync ? ` · следующая автоматическая: ${when(nextSync)}` : " · авто — раз в неделю"}
+      </p>
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
       <p className="text-sm text-muted">{rows.length} дел</p>
       <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
@@ -232,7 +229,7 @@ export function AdminDossiers() {
               </Button>
               {open.crmId && open.branchId ? (
                 <Button type="button" variant="secondary" disabled={busy} onClick={() => void sync()}>
-                  Обновить из CRM
+                  Подтянуть эту карточку из CRM
                 </Button>
               ) : null}
               {open.url ? (

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Фон: AlfaCRM → личные дела на rastudio.org. CRM важнее локальных ФИО/пола/даты рождения."""
 import json, time, urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 ROOT = Path("/var/www/rastudio")
 FILE = ROOT / "storage" / "dossiers.json"
-EVERY = 5 * 60
+EVERY = 7 * 24 * 3600
 BRANCH_TITLE = {
     1: "Коломна, Гражданская, 2",
     2: "Коломна, ЦМИТ, Октябрьской революции, 340",
@@ -38,12 +38,12 @@ def post(host, path, body, tok=None):
 
 def load():
     if not FILE.exists():
-        return {"items": [], "lastCrmSync": ""}
+        return {"items": [], "lastCrmSync": "", "nextCrmSync": ""}
     try:
         raw = json.loads(FILE.read_text())
-        return {"items": raw.get("items") or [], "lastCrmSync": raw.get("lastCrmSync") or ""}
+        return {"items": raw.get("items") or [], "lastCrmSync": raw.get("lastCrmSync") or "", "nextCrmSync": raw.get("nextCrmSync") or ""}
     except Exception:
-        return {"items": [], "lastCrmSync": ""}
+        return {"items": [], "lastCrmSync": "", "nextCrmSync": ""}
 
 
 def save(store):
@@ -220,14 +220,41 @@ def sync_once(e):
     return n
 
 
+def parse_iso(raw):
+    s = str(raw or "").strip()
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
 def main():
-    print("sync-dossiers start", flush=True)
+    print("sync-dossiers start, weekly CRM → site only", flush=True)
     while True:
-        try:
-            sync_once(env())
-        except Exception as err:
-            print("sync error", err, flush=True)
-        time.sleep(EVERY)
+        store = load()
+        now = datetime.now(timezone.utc)
+        nxt = parse_iso(store.get("nextCrmSync"))
+        last = store.get("lastCrmSync")
+        should = (not last) or (nxt is None) or (now >= nxt)
+        if should:
+            try:
+                sync_once(env())
+            except Exception as err:
+                print("sync error", err, flush=True)
+            store = load()
+            store["nextCrmSync"] = (datetime.now(timezone.utc) + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            save(store)
+            print("next auto", store["nextCrmSync"], flush=True)
+        store = load()
+        nxt = parse_iso(store.get("nextCrmSync"))
+        now = datetime.now(timezone.utc)
+        wait = EVERY
+        if nxt:
+            wait = max(60.0, (nxt - now).total_seconds())
+        wait = min(wait, 3600.0)
+        time.sleep(wait)
 
 
 if __name__ == "__main__":

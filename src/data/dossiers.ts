@@ -38,7 +38,7 @@ export type Dossier = {
   updatedAt: string;
 };
 
-type Store = { items: Dossier[]; lastCrmSync?: string };
+type Store = { items: Dossier[]; lastCrmSync?: string; nextCrmSync?: string };
 
 const MAX = 4000;
 
@@ -50,7 +50,7 @@ function loadStore(): Store {
   try {
     if (!existsSync(fileOf())) return { items: [] };
     const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Store;
-    return { items: Array.isArray(raw.items) ? raw.items : [], lastCrmSync: raw.lastCrmSync };
+    return { items: Array.isArray(raw.items) ? raw.items : [], lastCrmSync: raw.lastCrmSync, nextCrmSync: raw.nextCrmSync };
   } catch {
     return { items: [] };
   }
@@ -58,7 +58,15 @@ function loadStore(): Store {
 
 function saveStore(store: Store) {
   mkdirSync(dirname(fileOf()), { recursive: true });
-  writeFileSync(fileOf(), JSON.stringify({ items: store.items.slice(0, MAX), lastCrmSync: store.lastCrmSync || "" }, null, 0), "utf8");
+  writeFileSync(
+    fileOf(),
+    JSON.stringify(
+      { items: store.items.slice(0, MAX), lastCrmSync: store.lastCrmSync || "", nextCrmSync: store.nextCrmSync || "" },
+      null,
+      0,
+    ),
+    "utf8",
+  );
 }
 
 export function digitsPhone(raw?: string) {
@@ -437,15 +445,8 @@ export const adminDossiers = createServerFn({ method: "POST" })
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
     const store = loadStore();
     if (data.action === "get" && data.id) {
-      let one = store.items.find((d) => d.id === data.id);
+      const one = store.items.find((d) => d.id === data.id);
       if (!one) return { ok: false as const, error: "Дело не найдено." };
-      if (one.crmId && one.branchId) {
-        try {
-          one = (await syncDossierFromCrm(one.crmId, one.branchId)) || one;
-        } catch {
-          /* CRM недоступна — покажем локальное */
-        }
-      }
       return { ok: true as const, dossier: one };
     }
     if (data.action === "syncAll") {
@@ -495,6 +496,7 @@ export const adminDossiers = createServerFn({ method: "POST" })
       ok: true as const,
       total: store.items.length,
       lastCrmSync: store.lastCrmSync || "",
+      nextCrmSync: store.nextCrmSync || "",
       items: items.slice(0, 200).map((d) => ({
         id: d.id,
         crmId: d.crmId || null,
