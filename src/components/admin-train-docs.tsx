@@ -74,6 +74,57 @@ const KIND_RU: Record<DocKind, string> = {
   other: "Прочее",
 };
 
+const CHANNEL_HINT: Record<string, string> = {
+  site: "Чат на rastudio.org. Кнопки, голосовой режим, страница курса.",
+  phone: "Входящие и исходящие звонки Novofon. Без кнопок сайта.",
+  vk: "Личка сообщества ВКонтакте. Комментарии под постом сюда не пишем.",
+  max: "Бот в MAX. Голосовые в MAX не принимаем.",
+  common: "Читают все каналы: правила, филиалы, тон, запреты.",
+  telegram: "Бот Telegram, когда контур подключим.",
+};
+
+function guessId(text: string, ids: string[]) {
+  const t = text.toLowerCase();
+  if (ids.includes("vk") && /вконтакте|\bвк\b|vk\.com|сообществ|комментари/.test(t)) return "vk";
+  if (ids.includes("max") && /\bmax\b|мессенджер макс|в макс/.test(t)) return "max";
+  if (ids.includes("phone") && /телефон|звонк|входящ|исходящ|прозвон|sip|набрать/.test(t)) return "phone";
+  if (ids.includes("site") && /на сайте|чат сайта|кнопк|rastudio|браузер|голосов/.test(t)) return "site";
+  return ids.includes("common") ? "common" : ids[0] || "common";
+}
+
+function columnsOf(d: DocRow, list: AgentChannel[]) {
+  if (d.byChannel && Object.values(d.byChannel).some(Boolean)) return d.byChannel;
+  const bag: Record<string, string[]> = {};
+  for (const c of list) bag[c.id] = [];
+  const chunks = d.items.length
+    ? d.items.filter((it) => it.on).map((it) => [it.title, it.body].filter(Boolean).join("\n"))
+    : d.text
+      ? [d.text]
+      : [];
+  const ids = list.map((c) => c.id);
+  for (const chunk of chunks) {
+    const id = itChannel(d, chunk, ids);
+    (bag[id] ||= []).push(chunk);
+  }
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(bag)) out[k] = v.join("\n\n");
+  return out;
+}
+
+function itChannel(d: DocRow, chunk: string, ids: string[]) {
+  const hit = d.items.find((it) => chunk.startsWith(it.title));
+  if (hit?.channel && ids.includes(hit.channel)) return hit.channel;
+  return guessId(chunk, ids);
+}
+
+const STEPS = [
+  { n: "1", t: "Каналы", d: "4–6 сред. Сейчас живой только сайт." },
+  { n: "2", t: "Файл", d: "Word или PDF. Текст целиком, без сжатия." },
+  { n: "3", t: "Преобразовать", d: "Таблица: было → канал → станет + %." },
+  { n: "4", t: "Применить", d: "Пять столбцов. Агент читает свой и общее." },
+  { n: "5", t: "Противоречия", d: "Сверка скриптов и документов." },
+];
+
 function toB64(file: File) {
   return new Promise<string>((resolve, reject) => {
     const r = new FileReader();
@@ -217,57 +268,60 @@ export function AdminTrainDocs() {
 
   return (
     <div className="space-y-6">
-      <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-7">
+      <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
         <div className="flex items-start gap-2">
           <h3 className="font-display text-2xl">Как устроены документы и каналы</h3>
-          <InfoTip text="Канал — среда, в которой сейчас говорит агент. Чат rastudio.org = «Агент на сайте». Телефония Novofon = «на телефоне». Сообщения сообщества = «в ВК». Бот MAX = «в MAX». «Общее для всех» читают всегда. Агент не видит чужой канал, чтобы не путать кнопки сайта с правилами звонка." />
+          <InfoTip text="Канал — среда, где сейчас говорит агент. Чат rastudio.org = сайт. Novofon = телефон. Сообщество = ВК. Бот MAX = MAX. «Общее» читают всегда. Чужой столбец агент не видит: телефон не рассказывает про кнопки чата." />
         </div>
-        <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed">
-          <li>Каналов от 4 до 6. Пять базовых нельзя удалить, подписи можно поправить. Шестой — например Telegram — добавляется кнопкой ниже.</li>
-          <li>Загрузите файл. Текст сохраняется целиком. Сжатия нет.</li>
-          <li>«Преобразовать» показывает таблицу: кусок оригинала → канал → тот же текст (или ваша правка), комментарий, точность % и расхождение %.</li>
-          <li>«Применить» записывает пять (или шесть) столбцов. Пока не применили — на сайте читается весь документ.</li>
-          <li>«Уточнить противоречия» сверяет скрипты, примеры-правила и все документы. Автоисправление пишет правило в обучение; спорное остаётся вам.</li>
-        </ol>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {STEPS.map((s) => (
+            <div key={s.n} className="rounded-2xl bg-surface-2 p-3">
+              <p className="text-[0.7rem] font-semibold uppercase tracking-wider text-primary">{s.n}. {s.t}</p>
+              <p className="mt-1 text-sm leading-snug">{s.d}</p>
+            </div>
+          ))}
+        </div>
       </article>
 
-      <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
+      <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="font-display text-xl">Каналы коммуникации</h3>
-          <InfoTip text="Сейчас чат на rastudio.org всегда передаёт канал site. Телефон, ВК и MAX подключатся, когда контур заработает — тогда агент получит свой id и прочитает только свой столбец плюс «Общее». Не удаляйте «common»: без него телефонный агент не увидит правила студии." />
+          <InfoTip text="Пять столбцов инструкции. Чат сайта всегда шлёт id=site. Телефон, ВК и MAX подключатся со своим id. Не удаляйте «common» — без него телефон не увидит правила студии. Названия можно поправить под оператора, id не меняется у базовых." />
         </div>
-        <p className="mt-2 text-sm text-muted">Сейчас на сайте агент работает как «Агент на сайте».</p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <p className="mt-2 text-sm text-muted">
+          Сейчас на rastudio.org агент в канале <span className="font-semibold text-fg">«Агент на сайте»</span>. Остальные столбцы хранятся и ждут свой контур.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {channels.map((c, i) => (
-            <label key={c.id} className="text-sm">
-              <span className="flex items-center gap-2">
-                {c.label}
-                <InfoTip text={c.locked ? "Базовый канал. Id менять нельзя, название — можно, чтобы в кабинете было привычно оператору." : "Дополнительный канал. Можно удалить, если ещё не используете."} />
-              </span>
-              <div className="mt-1 flex gap-2">
-                <input
-                  value={c.label}
-                  onChange={(e) => setChannels((list) => list.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
-                  className="h-11 flex-1 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                />
-                {c.locked ? null : (
-                  <button type="button" className="text-xs font-semibold text-primary" onClick={() => setChannels((list) => list.filter((_, j) => j !== i))}>
-                    Убрать
-                  </button>
-                )}
+            <div key={c.id} className={cn("rounded-2xl p-3 ring-1", c.id === "site" ? "bg-primary/5 ring-primary/30" : "bg-surface-2 ring-transparent")}>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">{c.id}</p>
+                <InfoTip text={CHANNEL_HINT[c.id] || (c.locked ? "Базовый канал. Id не меняется." : "Дополнительный канал. Можно убрать, если не используете.")} />
               </div>
-              <p className="mt-1 text-[0.7rem] text-muted">id: {c.id}</p>
-            </label>
+              {c.id === "site" ? <p className="mt-1 text-[0.7rem] font-semibold text-primary">сейчас на сайте</p> : null}
+              <input
+                value={c.label}
+                onChange={(e) => setChannels((list) => list.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                className="mt-2 h-10 w-full rounded-xl bg-white px-3 text-sm ring-1 ring-black/10"
+              />
+              {c.locked ? null : (
+                <button type="button" className="mt-2 text-xs font-semibold text-primary" onClick={() => setChannels((list) => list.filter((_, j) => j !== i))}>
+                  Убрать
+                </button>
+              )}
+            </div>
           ))}
         </div>
         {channels.length < 6 ? (
           <div className="mt-4 flex flex-wrap items-end gap-2">
             <label className="text-sm">
               id
+              <InfoTip className="ml-1" text="Латиницей, без пробелов: telegram, alice. Это то, что придёт в чат как channel." />
               <input value={newCh.id} onChange={(e) => setNewCh({ ...newCh, id: e.target.value })} className="mt-1 block h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
             </label>
             <label className="text-sm">
               Название
+              <InfoTip className="ml-1" text="Как столбец видит оператор. Например: «Агент в Telegram»." />
               <input value={newCh.label} onChange={(e) => setNewCh({ ...newCh, label: e.target.value })} className="mt-1 block h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
             </label>
             <Button
@@ -280,12 +334,15 @@ export function AdminTrainDocs() {
             >
               Добавить канал
             </Button>
-            <InfoTip text="Максимум 6 каналов. Новый появится как столбец после «Преобразовать». Пока контур не подключён, столбец просто хранится." />
+            <InfoTip text="Максимум 6. Новый столбец появится у каждого документа. Пока контур не подключён, текст просто лежит." />
           </div>
         ) : null}
-        <Button className="mt-4" type="button" disabled={busy} onClick={() => void saveChannels()}>
-          Сохранить каналы
-        </Button>
+        <div className="mt-4 flex items-center gap-2">
+          <Button type="button" disabled={busy} onClick={() => void saveChannels()}>
+            Сохранить каналы
+          </Button>
+          <InfoTip text="Пишет список в storage/agent-channels.json. Ассистент на сайте после сохранения по-прежнему канал site — меняются только подписи и лишние столбцы." />
+        </div>
       </article>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -437,25 +494,25 @@ export function AdminTrainDocs() {
               ) : null}
 
               <button type="button" className="mt-3 text-sm font-semibold text-primary" onClick={() => setOpen(open === d.id ? "" : d.id)}>
-                {open === d.id ? "Скрыть текст и столбцы" : "Показать текст и столбцы каналов"}
+                {open === d.id ? "Скрыть оригинал" : "Показать оригинал файла"}
               </button>
-              {open === d.id ? (
-                <div className="mt-3 space-y-3">
-                  {d.text ? (
-                    <pre className="max-h-[20rem] overflow-auto whitespace-pre-wrap rounded-2xl bg-surface-2 p-4 text-[0.82rem] leading-relaxed">{d.text}</pre>
-                  ) : null}
-                  <div className="grid gap-3 overflow-x-auto md:grid-cols-2 xl:grid-cols-5">
-                    {channels.map((c) => (
-                      <div key={c.id} className="min-w-[14rem] rounded-2xl bg-surface-2 p-3">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-muted">{c.label}</p>
-                        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-[0.78rem] leading-relaxed">
-                          {d.byChannel?.[c.id] || "Пока пусто — нажмите «Преобразовать»."}
-                        </pre>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              <InfoTip className="ml-2" text="Полный текст Word/PDF, как извлекли. Столбцы ниже — черновик по маркерам канала или уже применённое преобразование." />
+              {open === d.id && d.text ? (
+                <pre className="mt-3 max-h-[20rem] overflow-auto whitespace-pre-wrap rounded-2xl bg-surface-2 p-4 text-[0.82rem] leading-relaxed">{d.text}</pre>
               ) : null}
+              <div className="mt-4 grid gap-3 overflow-x-auto sm:grid-cols-2 xl:grid-cols-5">
+                {channels.map((c) => {
+                  const body = columnsOf(d, channels)[c.id] || "";
+                  return (
+                    <div key={c.id} className={cn("min-w-[14rem] rounded-2xl p-3", c.id === "site" ? "bg-primary/5 ring-1 ring-primary/20" : "bg-surface-2")}>
+                      <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">{c.label}</p>
+                      <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap text-[0.78rem] leading-relaxed">
+                        {body || "Пусто. «Преобразовать» разложит оригинал по столбцам."}
+                      </pre>
+                    </div>
+                  );
+                })}
+              </div>
             </article>
           );
         })}
