@@ -163,13 +163,15 @@ function branchRank(session: CmsSession) {
   return 9;
 }
 
-function branchLabel(session: CmsSession) {
+function branchMeta(session: CmsSession) {
   const blob = `${session.city} ${session.branch}`;
-  if (/октябрьск/i.test(blob)) return "Коломна · Октябрьской революции, 340";
-  if (/гражданск/i.test(blob)) return "Коломна · Гражданская, 2";
-  if (/пушкин|луховиц/i.test(blob)) return "Луховицы · Пушкина, 202А";
-  if (session.city && session.branch) return `${session.city} · ${session.branch}`;
-  return session.branch || session.city || "Филиал";
+  if (/октябрьск/i.test(blob)) return { city: "Коломна", address: "ул. Октябрьской революции, 340" };
+  if (/гражданск/i.test(blob)) return { city: "Коломна", address: "ул. Гражданская, 2" };
+  if (/пушкин|луховиц/i.test(blob)) return { city: "Луховицы", address: "ул. Пушкина, 202А" };
+  return {
+    city: session.city || "Филиал",
+    address: session.branch || "",
+  };
 }
 
 function ageRank(age: string) {
@@ -186,47 +188,66 @@ export function ScheduleBlock({ sessions }: { sessions: CmsSession[] }) {
     if (age) return age;
     return compactWhen(a.when).localeCompare(compactWhen(b.when), "ru");
   });
-  const groups: { label: string; items: CmsSession[] }[] = [];
+  const groups: { city: string; address: string; items: CmsSession[] }[] = [];
   for (const session of ordered) {
-    const label = branchLabel(session);
+    const meta = branchMeta(session);
     const last = groups[groups.length - 1];
-    if (last && last.label === label) last.items.push(session);
-    else groups.push({ label, items: [session] });
+    if (last && last.city === meta.city && last.address === meta.address) last.items.push(session);
+    else groups.push({ ...meta, items: [session] });
   }
 
   return (
     <section className="mt-10">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="display text-xl md:text-2xl">Расписание</h2>
-        <p className="text-xs text-muted">филиалы · возраста</p>
-      </div>
-      <div className="mt-4 space-y-4">
+      <p className="kicker">Расписание</p>
+      <h2 className="display mt-2 text-xl md:text-2xl">Группы по филиалам</h2>
+      <div className="mt-5 space-y-3">
         {groups.map((group) => (
-          <div key={group.label}>
-            <p className="flex items-center gap-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-muted">
-              <MapPin className="size-3.5" />
-              {group.label}
-            </p>
-            <ul className="mt-2 overflow-hidden rounded-xl bg-surface shadow-[var(--shadow-border)]">
-              {group.items.map((s, i) => (
-                <li
-                  key={s.id}
-                  className={cn(
-                    "grid grid-cols-[5.5rem_1fr_auto] items-center gap-2 px-3 py-2 text-sm md:grid-cols-[6.5rem_1fr_auto] md:gap-3 md:px-4",
-                    i ? "border-t border-border/80" : "",
-                  )}
-                >
-                  <span className="text-[0.78rem] font-semibold leading-tight">{s.age || "группа"}</span>
-                  <span className="min-w-0 truncate text-[0.82rem] text-muted">{compactWhen(s.when)}</span>
-                  {s.signup ? (
-                    <a href={s.signup} className="text-[0.72rem] font-semibold text-primary hover:underline">
-                      Запись
-                    </a>
-                  ) : (
-                    <span />
-                  )}
-                </li>
-              ))}
+          <div
+            key={`${group.city}-${group.address}`}
+            className="overflow-hidden rounded-[1.35rem] bg-surface shadow-[var(--shadow-border)]"
+          >
+            <div className="flex items-center gap-3 px-3.5 pb-2 pt-3.5 md:px-4">
+              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                <MapPin className="size-4" strokeWidth={2} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted">
+                  {group.city}
+                </p>
+                {group.address ? (
+                  <p className="text-sm font-semibold leading-tight">{group.address}</p>
+                ) : null}
+              </div>
+            </div>
+            <ul>
+              {group.items.map((s) => {
+                const row = (
+                  <span className="flex items-center gap-3 px-3.5 py-2.5 md:gap-4 md:px-4">
+                    <span className="inline-flex min-w-[4.75rem] justify-center rounded-full bg-primary/10 px-2 py-1 text-[0.68rem] font-semibold text-primary">
+                      {s.age || "группа"}
+                    </span>
+                    <span className="min-w-0 flex-1 text-[0.95rem] font-medium leading-snug">
+                      {compactWhen(s.when)}
+                    </span>
+                    {s.signup ? (
+                      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-fg text-bg transition-colors duration-[var(--motion-fast)] group-hover:bg-primary">
+                        <ArrowUpRight className="size-3.5" strokeWidth={2.2} />
+                      </span>
+                    ) : null}
+                  </span>
+                );
+                return (
+                  <li key={s.id} className="border-t border-border/70">
+                    {s.signup ? (
+                      <a href={s.signup} className="group block transition-colors hover:bg-[#f3f5f8]">
+                        {row}
+                      </a>
+                    ) : (
+                      row
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ))}
