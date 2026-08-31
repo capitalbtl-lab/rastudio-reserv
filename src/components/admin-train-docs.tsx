@@ -267,6 +267,25 @@ export function AdminTrainDocs() {
     });
   }
 
+  function patchCell(docId: string, rowId: string, channel: string, text: string) {
+    setDraftRows((prev) => {
+      const list = (prev[docId] || []).map((r) => {
+        if (r.id !== rowId) return r;
+        const byChannel = { ...(r.byChannel || {}), [channel]: text };
+        const filled = Object.values(byChannel).find((v) => String(v || "").trim()) || r.toText;
+        return { ...r, byChannel, toText: filled, toChannel: channel };
+      });
+      return { ...prev, [docId]: list };
+    });
+  }
+
+  function cellsOf(r: TransformRow, list: AgentChannel[]) {
+    const bag: Record<string, string> = {};
+    for (const c of list) bag[c.id] = r.byChannel?.[c.id] || "";
+    if (!Object.values(bag).some(Boolean) && r.toText) bag[r.toChannel || list[0]?.id || "common"] = r.toText;
+    return bag;
+  }
+
   return (
     <div className="space-y-6">
       <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
@@ -495,47 +514,67 @@ export function AdminTrainDocs() {
                 <div className="mt-4 space-y-3">
                   <p className="text-sm font-semibold">
                     Превью преобразования
-                    <InfoTip className="ml-2" text="Каждая строка — фрагмент оригинала. Поле «в канал» решает, в какой столбец попадёт. Поле «станет» можно править; если меняете смысл, вырастет расхождение %. Снимите галочку — фрагмент не пойдёт ни в один канал." />
+                    <InfoTip className="ml-2" text="Строка — тема из инструкции. Пять столбцов — каналы. Пустая ячейка значит: эта тема в канале не звучит. Правите текст в ячейке. Снимите галочку у темы — она не пойдёт никуда. «Применить» соберёт столбцы в документы агента." />
                   </p>
-                  {rows.map((r) => (
-                    <div key={r.id} className="rounded-2xl bg-surface-2 p-3 text-sm">
-                      <label className="flex items-center gap-2 text-xs font-semibold">
-                        <input type="checkbox" checked={r.on} onChange={(e) => patchRow(d.id, r.id, { on: e.target.checked })} />
-                        Включить фрагмент
-                      </label>
-                      <p className="mt-2 text-xs uppercase tracking-wider text-muted">Было</p>
-                      <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-[0.8rem]">{r.from}</pre>
-                      <div className="mt-2 grid gap-2 md:grid-cols-2">
-                        <label>
-                          Станет в канале
-                          <select
-                            value={r.toChannel}
-                            onChange={(e) => patchRow(d.id, r.id, { toChannel: e.target.value })}
-                            className="mt-1 block h-11 w-full rounded-xl bg-white px-3 ring-1 ring-black/10"
-                          >
-                            {channels.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <p className="self-end text-xs text-muted">
-                          Точность {r.accuracy}% · расхождение {r.drift}%
-                        </p>
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[70rem] space-y-3">
+                      <div
+                        className="grid gap-2"
+                        style={{ gridTemplateColumns: `minmax(11rem,14rem) repeat(${Math.max(channels.length, 1)}, minmax(12rem,1fr))` }}
+                      >
+                        <p className="self-end text-[0.68rem] font-semibold uppercase tracking-wider text-muted">Тема</p>
+                        {channels.map((c) => (
+                          <div key={c.id} className={cn("rounded-xl px-3 py-2", c.id === "site" ? "bg-primary/10" : "bg-white ring-1 ring-black/8")}>
+                            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted">{c.id}</p>
+                            <p className="text-sm font-semibold leading-tight">{c.label}</p>
+                          </div>
+                        ))}
                       </div>
-                      <label className="mt-2 block">
-                        Станет (редактируйте, если нужно иначе для канала)
-                        <textarea
-                          value={r.toText}
-                          onChange={(e) => patchRow(d.id, r.id, { toText: e.target.value })}
-                          rows={5}
-                          className="mt-1 w-full rounded-xl bg-white px-3 py-2 ring-1 ring-black/10"
-                        />
-                      </label>
-                      <p className="mt-1 text-xs text-muted">{r.comment}</p>
+                      {rows.map((r) => {
+                        const cells = cellsOf(r, channels);
+                        return (
+                          <div key={r.id} className="rounded-2xl bg-surface-2 p-3">
+                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                              <label className="flex items-center gap-2 text-xs font-semibold">
+                                <input type="checkbox" checked={r.on} onChange={(e) => patchRow(d.id, r.id, { on: e.target.checked })} />
+                                В теме
+                              </label>
+                              <input
+                                value={r.title || ""}
+                                onChange={(e) => patchRow(d.id, r.id, { title: e.target.value })}
+                                className="h-9 min-w-[12rem] flex-1 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/10"
+                              />
+                              <span className="text-[0.7rem] text-muted">точность {r.accuracy}% · расхождение {r.drift}%</span>
+                            </div>
+                            <details className="mb-2">
+                              <summary className="cursor-pointer text-[0.7rem] font-semibold uppercase tracking-wider text-muted">Было в оригинале</summary>
+                              <pre className="mt-1 max-h-28 overflow-auto whitespace-pre-wrap rounded-xl bg-white p-2 text-[0.75rem]">{r.from}</pre>
+                            </details>
+                            <div
+                              className="grid items-stretch gap-2"
+                              style={{ gridTemplateColumns: `repeat(${Math.max(channels.length, 1)}, minmax(12rem,1fr))` }}
+                            >
+                              {channels.map((c) => (
+                                <label key={c.id} className="flex h-44 flex-col">
+                                  <span className="sr-only">{c.label}</span>
+                                  <textarea
+                                    value={cells[c.id] || ""}
+                                    onChange={(e) => patchCell(d.id, r.id, c.id, e.target.value)}
+                                    placeholder={r.on ? `Нет в «${c.label}»` : "Тема выключена"}
+                                    className={cn(
+                                      "h-full w-full resize-none overflow-auto rounded-xl px-3 py-2 text-[0.78rem] leading-relaxed ring-1 ring-black/10",
+                                      c.id === "site" ? "bg-[#f4f7ff]" : "bg-white",
+                                    )}
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                            {r.comment ? <p className="mt-2 text-[0.7rem] text-muted">{r.comment}</p> : null}
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
+                  </div>
                   <Button type="button" disabled={busy} onClick={() => void apply(d.id)}>
                     Применить преобразование
                   </Button>

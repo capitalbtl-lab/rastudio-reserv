@@ -21,9 +21,11 @@ export type DocItem = {
 
 export type TransformRow = {
   id: string;
+  title: string;
   from: string;
   toChannel: string;
   toText: string;
+  byChannel: Record<string, string>;
   comment: string;
   accuracy: number;
   drift: number;
@@ -169,9 +171,14 @@ function assembleChannels(rows: TransformRow[]) {
   const bag: Record<string, string[]> = {};
   for (const r of rows) {
     if (!r.on) continue;
-    const id = r.toChannel || "common";
-    if (!bag[id]) bag[id] = [];
-    bag[id].push(r.toText.trim());
+    const title = r.title ? `## ${r.title}\n` : "";
+    const cells = r.byChannel && Object.keys(r.byChannel).length ? r.byChannel : { [r.toChannel || "common"]: r.toText };
+    for (const [id, text] of Object.entries(cells)) {
+      const body = String(text || "").trim();
+      if (!body) continue;
+      if (!bag[id]) bag[id] = [];
+      bag[id].push(`${title}${body}`);
+    }
   }
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(bag)) out[k] = v.join("\n\n");
@@ -179,9 +186,26 @@ function assembleChannels(rows: TransformRow[]) {
 }
 
 function scoreRows(rows: TransformRow[]) {
-  if (!rows.length) return { accuracy: 100, drift: 0 };
-  const accuracy = Math.round(rows.reduce((s, r) => s + r.accuracy, 0) / rows.length);
+  const cells: { accuracy: number }[] = [];
+  for (const r of rows) {
+    const bag = r.byChannel && Object.keys(r.byChannel).length ? r.byChannel : { x: r.toText };
+    for (const text of Object.values(bag)) {
+      if (!String(text || "").trim()) continue;
+      cells.push(driftOf(r.from, String(text)));
+    }
+  }
+  if (!cells.length) return { accuracy: 100, drift: 0 };
+  const accuracy = Math.round(cells.reduce((s, c) => s + c.accuracy, 0) / cells.length);
   return { accuracy, drift: 100 - accuracy };
+}
+
+function titleOf(from: string, fallback = "Тема") {
+  const line = from.split("\n").map((s) => s.trim()).find(Boolean) || fallback;
+  return line.replace(/^#+\s*/, "").slice(0, 140);
+}
+
+function emptyCells(ids: string[]): Record<string, string> {
+  return Object.fromEntries(ids.map((id) => [id, ""]));
 }
 
 async function buildTransform(doc: AgentDoc, percent = 0): Promise<TransformRow[]> {
@@ -191,49 +215,60 @@ async function buildTransform(doc: AgentDoc, percent = 0): Promise<TransformRow[
   const p = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
   const rows: TransformRow[] = items.map((it, i) => {
     const from = [it.title, it.body].filter(Boolean).join("\n");
-    const toChannel = it.channel && ids.includes(it.channel) ? it.channel : guessChannel(from, ids);
-    const toText = from;
-    const d = driftOf(from, toText);
+    const title = it.title || titleOf(from, `Тема ${i + 1}`);
+    const guess = it.channel && ids.includes(it.channel) ? it.channel : guessChannel(from, ids);
+    const byChannel = emptyCells(ids);
+    byChannel[guess] = from;
+    if (guess !== "common" && ids.includes("common") && /агент студии|не выдумывай|источник|телефон|филиал|оферт|правил оказан|факта нет/i.test(from)) {
+      byChannel.common = from;
+    }
+    const d = driftOf(from, from);
     return {
       id: it.id || `t${i + 1}`,
+      title,
       from,
-      toChannel,
-      toText,
-      comment:
-        toChannel === "common"
-          ? p
-            ? `Общее. Адаптация ${p}% по правилам канала.`
-            : "Нет маркера канала — в «Общее для всех»."
-          : p
-            ? `Канал «${channels.find((c) => c.id === toChannel)?.label}», адаптация ${p}%.`
-            : `Маркер канала: ${channels.find((c) => c.id === toChannel)?.label}. Текст не сокращали.`,
+      toChannel: guess,
+      toText: from,
+      byChannel,
+      comment: p ? `Тема «${title}». Адаптация ${p}% по правилам каждого канала.` : `Тема «${title}». Пока дословно, колонка «${channels.find((c) => c.id === guess)?.label || guess}».`,
       accuracy: d.accuracy,
       drift: d.drift,
       on: it.on !== false,
     };
   });
-  const llm = await yandexJson<{ rows?: { id?: string; channel?: string; toText?: string; comment?: string }[] }>(
+  const llm = await yandexJson<{
+    topics?: { id?: string; title?: string; comment?: string; cells?: Record<string, string> }[];
+  }>(
     p
-      ? "Ты методист студии «Развивайся». Распредели фрагменты по каналам и адаптируй текст под правила канала. Факты, запреты, телефоны и адреса не выкидывай. Ответ — только JSON."
-      : "Ты методист студии. Не переписывай текст. Только распредели фрагменты по каналам. Ответ — JSON.",
+      ? "Ты методист студии «Развивайся». Для каждой темы заполни ячейки ВСЕХ каналов. Если тема каналу не нужна — пустая строка. Не копируй один и тот же абзац во все столбцы, если процент > 0: сайт — кнопки, телефон — вслух без «нажмите», ВК — личка, MAX — текст/ссылка, общее — факты для всех. Факты, телефоны, адреса и запреты не выкидывай. Ответ — JSON."
+      : "Ты методист. Не переписывай текст. Для каждой темы укажи, в какие каналы она входит (текст дословно или пусто). Общие факты дублируй в common. Ответ — JSON.",
     `Каналы и правила:
 ${channels.map((c) => `### ${c.id} ${c.label}\n${c.rules}`).join("\n\n")}
-Процент адаптации: ${p}. 0 = копируй дословно. 100 = максимально под правила канала, смысл тот же. Цель расхождения с оригиналом ≈ ${p}%.
-JSON: {"rows":[{"id":"как в списке","channel":"id канала","toText":"текст для канала","comment":"что сделали"}]}
-Фрагменты:
+Процент адаптации: ${p}. 0 = дословно. 100 = максимально под правила канала, смысл тот же.
+JSON: {"topics":[{"id":"как в списке","title":"коротко","cells":{"${ids.join('":"...","')}":"..."},"comment":"что сделали"}]}
+Темы:
 ${rows
-  .map((r) => `--- ${r.id} ---\n${r.from.slice(0, p ? 900 : 1200)}`)
+  .map((r) => `--- ${r.id} | ${r.title} ---\n${r.from.slice(0, p ? 800 : 1100)}`)
   .join("\n")
-  .slice(0, p ? 18000 : 22000)}`,
-    p ? 5500 : 3500,
+  .slice(0, p ? 17000 : 21000)}`,
+    p ? 7000 : 4000,
   );
-  if (llm?.rows?.length) {
-    for (const hint of llm.rows) {
+  if (llm?.topics?.length) {
+    for (const hint of llm.topics) {
       const row = rows.find((r) => r.id === hint.id);
       if (!row) continue;
-      if (hint.channel && ids.includes(hint.channel)) row.toChannel = hint.channel;
-      if (p && hint.toText && hint.toText.trim()) row.toText = String(hint.toText);
+      if (hint.title) row.title = String(hint.title).slice(0, 140);
       if (hint.comment) row.comment = String(hint.comment).slice(0, 400);
+      if (hint.cells) {
+        for (const id of ids) {
+          if (hint.cells[id] == null) continue;
+          const text = String(hint.cells[id] || "");
+          row.byChannel[id] = p ? text : text || row.byChannel[id];
+        }
+      }
+      const filled = Object.values(row.byChannel).filter((t) => t.trim());
+      row.toText = filled[0] || row.from;
+      row.toChannel = ids.find((id) => row.byChannel[id]?.trim()) || row.toChannel;
       const d = driftOf(row.from, row.toText);
       row.accuracy = d.accuracy;
       row.drift = d.drift;
@@ -432,8 +467,19 @@ export const adminAgentDocs = createServerFn({ method: "POST" })
       const hit = store.docs.find((d) => d.id === data.id);
       if (!hit) return { ok: false as const, error: "Документ не найден." };
       const rows = (data.rows || hit.transformRows || []).map((r) => {
-        const d = driftOf(r.from || "", r.toText || "");
-        return { ...r, accuracy: d.accuracy, drift: d.drift, toText: String(r.toText || ""), from: String(r.from || "") };
+        const byChannel = { ...(r.byChannel || {}) };
+        if (!Object.keys(byChannel).length && r.toText) byChannel[r.toChannel || "common"] = r.toText;
+        const filled = Object.values(byChannel).find((t) => String(t || "").trim()) || r.toText || "";
+        const d = driftOf(r.from || "", String(filled));
+        return {
+          ...r,
+          title: r.title || titleOf(r.from || r.toText || ""),
+          byChannel,
+          toText: String(filled),
+          from: String(r.from || ""),
+          accuracy: d.accuracy,
+          drift: d.drift,
+        };
       });
       const score = scoreRows(rows);
       hit.transformRows = rows;
@@ -441,16 +487,13 @@ export const adminAgentDocs = createServerFn({ method: "POST" })
       hit.transformAt = new Date().toISOString();
       hit.transformAccuracy = score.accuracy;
       hit.transformDrift = score.drift;
-      hit.items = rows.map((r) => {
-        const nl = r.toText.indexOf("\n");
-        return {
-          id: r.id,
-          title: (nl >= 0 ? r.toText.slice(0, nl) : r.toText).slice(0, 200),
-          body: nl >= 0 ? r.toText.slice(nl + 1) : r.toText,
-          on: r.on,
-          channel: r.toChannel,
-        };
-      });
+      hit.items = rows.map((r) => ({
+        id: r.id,
+        title: r.title || titleOf(r.toText || r.from),
+        body: r.toText || r.from,
+        on: r.on,
+        channel: r.toChannel,
+      }));
       saveStore(store);
       logAdmin(`Преобразование применено: ${hit.name}, точность ${score.accuracy}%`);
       return pack();
