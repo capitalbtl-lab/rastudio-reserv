@@ -456,7 +456,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     const { knowledgeForAgent } = await import("./call-knowledge");
     const { codewordInText, logAdmin } = await import("./admin-settings");
     const { factsFromMessages, factsPrompt } = await import("./agent-facts");
-    const { buildSessionNote, notePrompt } = await import("./session-note");
+    const { buildSessionNote, notePrompt, guardReply } = await import("./session-note");
     const { findDossier, dossierPrompt, upsertDossier, dossierFromNote } = await import("./dossiers");
     const { agentPromptAddons } = await import("./agent-config");
     let admin = tokenOk(data.token);
@@ -509,7 +509,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     const system = admin
       ? ADMIN_SYSTEM + adminHint
       : clientSystem(soloWho, facts, note.next) +
-        agentPromptAddons() +
+        agentPromptAddons(facts) +
         knowledgeForAgent() +
         factsPrompt(facts) +
         notePrompt(note) +
@@ -792,7 +792,7 @@ export const chatAgent = createServerFn({ method: "POST" })
           }
           continue;
         }
-        const reply = (msg.content || "").trim();
+        const reply = guardReply((msg.content || "").trim(), facts);
         if (reply) return { ok: true as const, reply, token: granted, reload, open: open || undefined, signup: signup || undefined, groups: groups.length ? groups : undefined };
       }
       return {

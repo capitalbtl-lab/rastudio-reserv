@@ -75,8 +75,8 @@ function takeAge(text: string) {
 }
 
 function takeCity(text: string) {
-  if (/луховиц|луховец|лухавиц|луховицк/i.test(text)) return "Луховицы";
-  if (/коломн|коломен|каломн|коломенск/i.test(text)) return "Коломна";
+  if (/луховиц|луховец|лухавиц|луговиц|луховниц/i.test(text)) return "Луховицы";
+  if (/коломн|коломен|каломн|колумн|калумн|колонн[аеуы]/i.test(text)) return "Коломна";
   return "";
 }
 

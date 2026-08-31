@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { isAdminRequest } from "./admin-auth";
 import { logAdmin } from "./admin-settings";
 import { DEFAULT_SCRIPTS, playbookPrompt, type ScriptSection } from "./agent-playbook";
+import type { SessionFacts } from "./agent-facts";
 
 export type AgentSettings = {
   updatedAt: string;
@@ -90,11 +91,11 @@ const STYLE: Record<AgentSettings["style"], string> = {
   detailed: "Стиль: чуть подробнее, но без простыни. Главное — в первых двух фразах.",
 };
 
-export function agentPromptAddons() {
+export function agentPromptAddons(facts?: SessionFacts) {
   const brain = loadBrain();
   const s = brain.settings;
   const parts: string[] = ["", STYLE[s.style] || STYLE.warm];
-  parts.push(playbookPrompt(brain.scripts));
+  parts.push(playbookPrompt(brain.scripts, facts));
   if (s.askOnce) {
     parts.push(
       "Память сессии обязательна: не повторяй вопросы, на которые уже есть ответ. Не переспрашивай возраст, город, филиал, направление, имя и телефон.",
