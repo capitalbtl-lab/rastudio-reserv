@@ -222,7 +222,7 @@ function CinematicPage({
         age={heading.age}
         title={heading.title}
         description={page.description}
-        images={galleryPhotos(page.images, page.pathDecoded || page.path)}
+        images={galleryPhotos(page.images, page.pathDecoded || page.path, "hero")}
         video={page.video}
         facts={
           page.kind === "course" || page.kind === "school"
@@ -258,7 +258,7 @@ function CinematicPage({
               }
             />
             {page.kind === "school" || page.kind === "course" ? (
-              <PhotoSlider images={galleryPhotos(page.images, page.pathDecoded || page.path)} />
+              <PhotoSlider images={galleryPhotos(page.images, page.pathDecoded || page.path, "gallery")} />
             ) : (
               <Gallery page={{ ...page, images: page.images.slice(Math.min(3, page.images.length)) }} />
             )}

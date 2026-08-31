@@ -104,7 +104,7 @@ function mediaImages(path?: string, alt = "Занятия в Студии Раз
 
 type Shot = { src: string; filename: string; alt?: string };
 
-export function galleryPhotos(images: Shot[], path?: string) {
+export function galleryPhotos(images: Shot[], path?: string, mode: "hero" | "gallery" = "gallery") {
   const seen = new Set<string>();
   const out: SiteImage[] = [];
 
@@ -120,9 +120,15 @@ export function galleryPhotos(images: Shot[], path?: string) {
     out.push({ src: img.src, filename: img.filename, alt: img.alt || "Занятия в Студии Развивайся" });
   }
 
-  const extras = mediaImages(path);
-  for (const img of extras) add(img);
-  if (extras.length) return out;
+  const heroes = mediaImages(path);
+  if (mode === "hero") {
+    for (const img of heroes) add(img);
+    for (const img of images) add(img);
+    return out.slice(0, 6);
+  }
   for (const img of images) add(img);
-  return out;
+  if (out.length < 4) {
+    for (const img of heroes) add(img);
+  }
+  return out.slice(0, 16);
 }

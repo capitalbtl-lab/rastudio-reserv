@@ -1,589 +1,1488 @@
 {
-  "/gamedesign": [
-    {
-      "src": "/media/courses/gamedesign/01.jpg",
-      "filename": "3D моделирование в Blender в Студии Развививайся в Коломне и Луховицах (1).jpeg",
-      "alt": "3D моделирование в Blender в Студии Развививайся в Коломне и Луховицах (1)"
-    },
-    {
-      "src": "/media/courses/gamedesign/02.jpg",
-      "filename": "3D моделирование в Blender в Студии Развививайся в Коломне и Луховицах (1).jpg",
-      "alt": "3D моделирование в Blender в Студии Развививайся в Коломне и Луховицах (1)"
-    },
-    {
-      "src": "/media/courses/gamedesign/03.jpg",
-      "filename": "3D моделирование в Blender в Студии Развививайся в Коломне и Луховицах (2).jpg",
-      "alt": "3D моделирование в Blender в Студии Развививайся в Коломне и Луховицах (2)"
-    },
-    {
-      "src": "/media/courses/gamedesign/04.jpg",
-      "filename": "3D моделирование в Blender в Студии Развививайся в Коломне и Луховицах (0).png",
-      "alt": "3D моделирование в Blender в Студии Развививайся в Коломне и Луховицах (0)"
-    },
-    {
-      "src": "/media/courses/gamedesign/05.jpg",
-      "filename": "3D моделирование в Blender в Студии Развививайся в Коломне и Луховицах (1).png",
-      "alt": "3D моделирование в Blender в Студии Развививайся в Коломне и Луховицах (1)"
-    }
-  ],
   "/3d-modeling": [
     {
       "src": "/media/courses/3d-modeling/01.jpg",
-      "filename": "Инженерное 3D моделирование в Компас в Студии Развивайся в Коломне.jpeg",
-      "alt": "Инженерное 3D моделирование в Компас в Студии Развивайся в Коломне"
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/3d-modeling/02.jpg",
-      "filename": "Инженерное 3D моделирование в Компас в Студии Развивайся в Коломне.png",
-      "alt": "Инженерное 3D моделирование в Компас в Студии Развивайся в Коломне"
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ],
-  "/sculptural-studio": [
+  "/art-studio": [
     {
-      "src": "/media/courses/sculptural-studio/01.jpg",
-      "filename": "Скульптурная студия в Коломне (1).jpg",
-      "alt": "Скульптурная студия в Коломне (1)"
+      "src": "/media/courses/art-studio/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/sculptural-studio/02.jpg",
-      "filename": "Скульптурная студия в Коломне (2).jpg",
-      "alt": "Скульптурная студия в Коломне (2)"
+      "src": "/media/courses/art-studio/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/sculptural-studio/03.jpg",
-      "filename": "Скульптурная студия в Коломне (3).jpg",
-      "alt": "Скульптурная студия в Коломне (3)"
+      "src": "/media/courses/art-studio/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/sculptural-studio/04.jpg",
-      "filename": "Скульптурная студия в Коломне (4).jpg",
-      "alt": "Скульптурная студия в Коломне (4)"
+      "src": "/media/courses/art-studio/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/sculptural-studio/05.jpg",
-      "filename": "Скульптурная студия в Коломне (5).jpg",
-      "alt": "Скульптурная студия в Коломне (5)"
+      "src": "/media/courses/art-studio/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio/13.jpg",
+      "filename": "13.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio/14.jpg",
+      "filename": "14.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio/15.jpg",
+      "filename": "15.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio/16.jpg",
+      "filename": "16.jpg",
+      "alt": "Художественная школа студии «Развивайся» в Коломне"
+    }
+  ],
+  "/art-studio-3-4": [
+    {
+      "src": "/media/courses/art-studio-3-4/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Художественная студия 3–4 года в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-3-4/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Художественная студия 3–4 года в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-3-4/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Художественная студия 3–4 года в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-3-4/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Художественная студия 3–4 года в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-3-4/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Художественная студия 3–4 года в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-3-4/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Художественная студия 3–4 года в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-3-4/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Художественная студия 3–4 года в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-3-4/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Художественная студия 3–4 года в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-3-4/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Художественная студия 3–4 года в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-3-4/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Художественная студия 3–4 года в Коломне"
+    }
+  ],
+  "/art-studio-5-6": [
+    {
+      "src": "/media/courses/art-studio-5-6/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Художественная студия 5–6 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-5-6/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Художественная студия 5–6 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-5-6/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Художественная студия 5–6 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-5-6/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Художественная студия 5–6 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-5-6/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Художественная студия 5–6 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-5-6/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Художественная студия 5–6 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-5-6/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Художественная студия 5–6 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-5-6/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Художественная студия 5–6 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-5-6/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Художественная студия 5–6 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-5-6/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Художественная студия 5–6 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-5-6/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Художественная студия 5–6 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-5-6/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Художественная студия 5–6 лет в Коломне"
+    }
+  ],
+  "/art-studio-7-8": [
+    {
+      "src": "/media/courses/art-studio-7-8/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Художественная студия 7–9 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-7-8/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Художественная студия 7–9 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-7-8/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Художественная студия 7–9 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-7-8/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Художественная студия 7–9 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-7-8/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Художественная студия 7–9 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-7-8/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Художественная студия 7–9 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-7-8/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Художественная студия 7–9 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-7-8/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Художественная студия 7–9 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-7-8/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Художественная студия 7–9 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-7-8/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Художественная студия 7–9 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-7-8/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Художественная студия 7–9 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-7-8/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Художественная студия 7–9 лет в Коломне"
     }
   ],
   "/art-studio-9-13": [
     {
       "src": "/media/courses/art-studio-9-13/01.jpg",
-      "filename": "Художественная школа в Коломне в Студии Развивайся (10).jpg",
-      "alt": "Художественная школа в Коломне в Студии Развивайся (10)"
+      "filename": "01.jpg",
+      "alt": "Художественная студия 9–13 лет в Коломне"
     },
     {
       "src": "/media/courses/art-studio-9-13/02.jpg",
-      "filename": "Художественная школа в Коломне в Студии Развивайся (11).jpg",
-      "alt": "Художественная школа в Коломне в Студии Развивайся (11)"
+      "filename": "02.jpg",
+      "alt": "Художественная студия 9–13 лет в Коломне"
     },
     {
       "src": "/media/courses/art-studio-9-13/03.jpg",
-      "filename": "Художественная школа в Коломне в Студии Развивайся (12).jpg",
-      "alt": "Художественная школа в Коломне в Студии Развивайся (12)"
+      "filename": "03.jpg",
+      "alt": "Художественная студия 9–13 лет в Коломне"
     },
     {
       "src": "/media/courses/art-studio-9-13/04.jpg",
-      "filename": "Художественная школа в Коломне в Студии Развивайся (13).jpg",
-      "alt": "Художественная школа в Коломне в Студии Развивайся (13)"
+      "filename": "04.jpg",
+      "alt": "Художественная студия 9–13 лет в Коломне"
     },
     {
       "src": "/media/courses/art-studio-9-13/05.jpg",
-      "filename": "Художественная школа в Коломне в Студии Развивайся (14).jpg",
-      "alt": "Художественная школа в Коломне в Студии Развивайся (14)"
-    }
-  ],
-  "/tinkercad2025itogi": [
-    {
-      "src": "/media/courses/tinkercad2025itogi/01.jpg",
-      "filename": "Конкурс по 3D моделированию в Тинкеркад (Коломна) (1).png",
-      "alt": "Конкурс по 3D моделированию в Тинкеркад (Коломна) (1)"
+      "filename": "05.jpg",
+      "alt": "Художественная студия 9–13 лет в Коломне"
     },
     {
-      "src": "/media/courses/tinkercad2025itogi/02.jpg",
-      "filename": "Конкурс по 3D моделированию в Тинкеркад (Коломна) (2).png",
-      "alt": "Конкурс по 3D моделированию в Тинкеркад (Коломна) (2)"
+      "src": "/media/courses/art-studio-9-13/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Художественная студия 9–13 лет в Коломне"
     },
     {
-      "src": "/media/courses/tinkercad2025itogi/03.jpg",
-      "filename": "Конкурс по 3D моделированию в Тинкеркад (Коломна) (3).png",
-      "alt": "Конкурс по 3D моделированию в Тинкеркад (Коломна) (3)"
+      "src": "/media/courses/art-studio-9-13/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Художественная студия 9–13 лет в Коломне"
     },
     {
-      "src": "/media/courses/tinkercad2025itogi/04.jpg",
-      "filename": "Конкурс по 3D моделированию в Тинкеркад (Коломна) (4).png",
-      "alt": "Конкурс по 3D моделированию в Тинкеркад (Коломна) (4)"
+      "src": "/media/courses/art-studio-9-13/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Художественная студия 9–13 лет в Коломне"
     },
     {
-      "src": "/media/courses/tinkercad2025itogi/05.jpg",
-      "filename": "Конкурс по 3D моделированию в Тинкеркад (Коломна) (5).png",
-      "alt": "Конкурс по 3D моделированию в Тинкеркад (Коломна) (5)"
+      "src": "/media/courses/art-studio-9-13/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Художественная студия 9–13 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-9-13/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Художественная студия 9–13 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-9-13/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Художественная студия 9–13 лет в Коломне"
+    },
+    {
+      "src": "/media/courses/art-studio-9-13/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Художественная студия 9–13 лет в Коломне"
     }
   ],
   "/digitalartschool": [
     {
       "src": "/media/courses/digitalartschool/01.jpg",
-      "filename": "Цифровая художественная школа в Студии Развивайся в Коломне и Луховицах (1).png",
-      "alt": "Цифровая художественная школа в Студии Развивайся в Коломне и Луховицах (1)"
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/digitalartschool/02.jpg",
-      "filename": "Цифровая художественная школа в Студии Развивайся в Коломне и Луховицах (2).png",
-      "alt": "Цифровая художественная школа в Студии Развивайся в Коломне и Луховицах (2)"
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/digitalartschool/03.jpg",
-      "filename": "Цифровая художественная школа в Студии Развивайся в Коломне и Луховицах (3).png",
-      "alt": "Цифровая художественная школа в Студии Развивайся в Коломне и Луховицах (3)"
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/digitalartschool/04.jpg",
-      "filename": "Цифровая художественная школа в Студии Развивайся в Коломне и Луховицах (4).png",
-      "alt": "Цифровая художественная школа в Студии Развивайся в Коломне и Луховицах (4)"
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/digitalartschool/05.jpg",
-      "filename": "Цифровая художественная школа в Студии Развивайся в Коломне и Луховицах (5).png",
-      "alt": "Цифровая художественная школа в Студии Развивайся в Коломне и Луховицах (5)"
-    }
-  ],
-  "/happybricks": [
-    {
-      "src": "/media/courses/happybricks/01.jpg",
-      "filename": "Курс Лего математика в Студии Развивайся 1.png",
-      "alt": "Курс Лего математика в Студии Развивайся 1"
+      "filename": "05.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/happybricks/02.jpg",
-      "filename": "Курс Лего математика в Студии Развивайся 2.png.png",
-      "alt": "Курс Лего математика в Студии Развивайся 2.png"
+      "src": "/media/courses/digitalartschool/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ],
   "/englishlanguagegg": [
     {
       "src": "/media/courses/englishlanguagegg/01.jpg",
-      "filename": "Английский язык 9-11 лет в Коломне в Студии Развивайся.jpg",
-      "alt": "Английский язык 9-11 лет в Коломне в Студии Развивайся"
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/englishlanguagegg/02.jpg",
-      "filename": "Lunchtime — Обеденное время.jpg",
-      "alt": "Lunchtime — Обеденное время"
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/englishlanguagegg/03.jpg",
-      "filename": "Школа иностранных языков в Коломне в Студии Развивайся.jpg",
-      "alt": "Школа иностранных языков в Коломне в Студии Развивайся"
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/englishlanguagegg/04.jpg",
-      "filename": "At School — В школе.png",
-      "alt": "At School — В школе"
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/englishlanguagegg/05.jpg",
-      "filename": "At the Beach — На пляже.png",
-      "alt": "At the Beach — На пляже"
-    }
-  ],
-  "/roboticsinenglish": [
-    {
-      "src": "/media/courses/roboticsinenglish/01.jpg",
-      "filename": "The Robot — Части тела.jpg",
-      "alt": "The Robot — Части тела"
-    },
-    {
-      "src": "/media/courses/roboticsinenglish/02.jpg",
-      "filename": "Робототехника на английском языыке в Коломне.jpg",
-      "alt": "Робототехника на английском языыке в Коломне"
-    },
-    {
-      "src": "/media/courses/roboticsinenglish/03.jpg",
-      "filename": "Нейросеть обои для Билингвальной робототехники в Коломне.png",
-      "alt": "Нейросеть обои для Билингвальной робототехники в Коломне"
-    },
-    {
-      "src": "/media/courses/roboticsinenglish/04.jpg",
-      "filename": "Робототехника на английском языыке в Коломне - Заставка для интервью.png",
-      "alt": "Робототехника на английском языыке в Коломне - Заставка для интервью"
+      "filename": "05.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ],
   "/englishlanguagesm": [
     {
       "src": "/media/courses/englishlanguagesm/01.jpg",
-      "filename": "Английский язык 6-8 лет в Коломне в Студии Развивайся.jpg",
-      "alt": "Английский язык 6-8 лет в Коломне в Студии Развивайся"
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ],
-  "/japanese": [
+  "/gamedesign": [
     {
-      "src": "/media/courses/japanese/01.jpg",
-      "filename": "Японский язык в Коломне в Студии Развивайся.jpg",
-      "alt": "Японский язык в Коломне в Студии Развивайся"
+      "src": "/media/courses/gamedesign/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/gamedesign/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/gamedesign/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/gamedesign/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/gamedesign/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ],
-  "/vitaminkorean": [
+  "/happybricks": [
     {
-      "src": "/media/courses/vitaminkorean/01.jpg",
-      "filename": "Корейский язык в Коломне в Студии Развивайся.jpg",
-      "alt": "Корейский язык в Коломне в Студии Развивайся"
-    }
-  ],
-  "/kinder-master": [
-    {
-      "src": "/media/courses/kinder-master/01.jpg",
-      "filename": "Курс Киндер-мастер для детей 10-16 лет в Студии Развивайся (10).jpg",
-      "alt": "Курс Киндер-мастер для детей 10-16 лет в Студии Развивайся (10)"
+      "src": "/media/courses/happybricks/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/kinder-master/02.jpg",
-      "filename": "Курс Киндер-мастер для детей 10-16 лет в Студии Развивайся (11).jpg",
-      "alt": "Курс Киндер-мастер для детей 10-16 лет в Студии Развивайся (11)"
-    },
-    {
-      "src": "/media/courses/kinder-master/03.jpg",
-      "filename": "Курс Киндер-мастер для детей 10-16 лет в Студии Развивайся (12).jpg",
-      "alt": "Курс Киндер-мастер для детей 10-16 лет в Студии Развивайся (12)"
-    },
-    {
-      "src": "/media/courses/kinder-master/04.jpg",
-      "filename": "Курс Киндер-мастер для детей 10-16 лет в Студии Развивайся (13).jpg",
-      "alt": "Курс Киндер-мастер для детей 10-16 лет в Студии Развивайся (13)"
-    },
-    {
-      "src": "/media/courses/kinder-master/05.jpg",
-      "filename": "Курс Киндер-мастер для детей 10-16 лет в Студии Развивайся (14).jpg",
-      "alt": "Курс Киндер-мастер для детей 10-16 лет в Студии Развивайся (14)"
-    }
-  ],
-  "/mentalarithmetic": [
-    {
-      "src": "/media/courses/mentalarithmetic/01.jpg",
-      "filename": "Ментальная арифметика в Коломне в Студии Развивайся (1).png",
-      "alt": "Ментальная арифметика в Коломне в Студии Развивайся (1)"
-    }
-  ],
-  "/model-school": [
-    {
-      "src": "/media/courses/model-school/01.jpg",
-      "filename": "Модельная школа в Студии Развивайся в Коломне (10).jpg",
-      "alt": "Модельная школа в Студии Развивайся в Коломне (10)"
-    },
-    {
-      "src": "/media/courses/model-school/02.jpg",
-      "filename": "Модельная школа в Студии Развивайся в Коломне (11).jpg",
-      "alt": "Модельная школа в Студии Развивайся в Коломне (11)"
-    },
-    {
-      "src": "/media/courses/model-school/03.jpg",
-      "filename": "Модельная школа в Студии Развивайся в Коломне (12).jpg",
-      "alt": "Модельная школа в Студии Развивайся в Коломне (12)"
-    },
-    {
-      "src": "/media/courses/model-school/04.jpg",
-      "filename": "Модельная школа в Студии Развивайся в Коломне (13).jpg",
-      "alt": "Модельная школа в Студии Развивайся в Коломне (13)"
-    },
-    {
-      "src": "/media/courses/model-school/05.jpg",
-      "filename": "Модельная школа в Студии Развивайся в Коломне (14).jpg",
-      "alt": "Модельная школа в Студии Развивайся в Коломне (14)"
-    }
-  ],
-  "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-7-9-лет": [
-    {
-      "src": "/media/courses/it-лаборатория-create-для-детей-7-9-лет/01.jpg",
-      "filename": "IT лаборатория Create для детей в Коломне (1).png",
-      "alt": "IT лаборатория Create для детей в Коломне (1)"
-    },
-    {
-      "src": "/media/courses/it-лаборатория-create-для-детей-7-9-лет/02.jpg",
-      "filename": "IT лаборатория Create для детей в Коломне (2).png",
-      "alt": "IT лаборатория Create для детей в Коломне (2)"
-    },
-    {
-      "src": "/media/courses/it-лаборатория-create-для-детей-7-9-лет/03.jpg",
-      "filename": "IT лаборатория Create для детей в Коломне (3).png",
-      "alt": "IT лаборатория Create для детей в Коломне (3)"
-    },
-    {
-      "src": "/media/courses/it-лаборатория-create-для-детей-7-9-лет/04.jpg",
-      "filename": "IT лаборатория Create для детей в Коломне (4).png",
-      "alt": "IT лаборатория Create для детей в Коломне (4)"
-    },
-    {
-      "src": "/media/courses/it-лаборатория-create-для-детей-7-9-лет/05.jpg",
-      "filename": "Фото для IT-Лаборатория Create (1).png",
-      "alt": "Фото для IT-Лаборатория Create (1)"
-    }
-  ],
-  "/kursy-shkoly-programmirovaniya/it-лаборатория-dev-для-детей-9-10-лет": [
-    {
-      "src": "/media/courses/it-лаборатория-dev-для-детей-9-10-лет/01.jpg",
-      "filename": "IT лаборатория Dev для детей 9-10 лет в Студии Развивайся (1).png",
-      "alt": "IT лаборатория Dev для детей 9-10 лет в Студии Развивайся (1)"
-    },
-    {
-      "src": "/media/courses/it-лаборатория-dev-для-детей-9-10-лет/02.jpg",
-      "filename": "IT лаборатория Dev для детей 9-10 лет в Студии Развивайся (2).png",
-      "alt": "IT лаборатория Dev для детей 9-10 лет в Студии Развивайся (2)"
-    },
-    {
-      "src": "/media/courses/it-лаборатория-dev-для-детей-9-10-лет/03.jpg",
-      "filename": "IT лаборатория Dev для детей 9-10 лет в Студии Развивайся (3).png",
-      "alt": "IT лаборатория Dev для детей 9-10 лет в Студии Развивайся (3)"
-    },
-    {
-      "src": "/media/courses/it-лаборатория-dev-для-детей-9-10-лет/04.jpg",
-      "filename": "IT лаборатория Dev для детей 9-10 лет в Студии Развивайся (4).png",
-      "alt": "IT лаборатория Dev для детей 9-10 лет в Студии Развивайся (4)"
-    },
-    {
-      "src": "/media/courses/it-лаборатория-dev-для-детей-9-10-лет/05.jpg",
-      "filename": "IT лаборатория Dev для детей 9-10 лет в Студии Развивайся (5).png",
-      "alt": "IT лаборатория Dev для детей 9-10 лет в Студии Развивайся (5)"
+      "src": "/media/courses/happybricks/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ],
   "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-5-7-лет": [
     {
       "src": "/media/courses/it-лаборатория-create-для-детей-5-7-лет/01.jpg",
-      "filename": "IT лаборатория Start в Студии Развивайся в Коломне (1).png",
-      "alt": "IT лаборатория Start в Студии Развивайся в Коломне (1)"
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/it-лаборатория-create-для-детей-5-7-лет/02.jpg",
-      "filename": "IT лаборатория Start для детей 5-7 лет в Студии Развивайся  (1).png",
-      "alt": "IT лаборатория Start для детей 5-7 лет в Студии Развивайся  (1)"
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/it-лаборатория-create-для-детей-5-7-лет/03.jpg",
-      "filename": "IT лаборатория Start для детей 5-7 лет в Студии Развивайся  (2).png",
-      "alt": "IT лаборатория Start для детей 5-7 лет в Студии Развивайся  (2)"
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/it-лаборатория-create-для-детей-5-7-лет/04.jpg",
-      "filename": "IT лаборатория Start для детей 5-7 лет в Студии Развивайся  (3).png",
-      "alt": "IT лаборатория Start для детей 5-7 лет в Студии Развивайся  (3)"
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/it-лаборатория-create-для-детей-5-7-лет/05.jpg",
-      "filename": "IT лаборатория Start для детей 5-7 лет в Студии Развивайся  (4).png",
-      "alt": "IT лаборатория Start для детей 5-7 лет в Студии Развивайся  (4)"
+      "filename": "05.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-лаборатория-create-для-детей-5-7-лет/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-лаборатория-create-для-детей-5-7-лет/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-лаборатория-create-для-детей-5-7-лет/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-лаборатория-create-для-детей-5-7-лет/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-лаборатория-create-для-детей-5-7-лет/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ],
-  "/kursy-shkoly-programmirovaniya/it-школа-разработка-игр-на-unity": [
+  "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-7-9-лет": [
     {
-      "src": "/media/courses/it-школа-разработка-игр-на-unity/01.jpg",
-      "filename": "IT-Школа GameDev 4в1 - разработка игр на Unity (1).png",
-      "alt": "IT-Школа GameDev 4в1 - разработка игр на Unity (1)"
+      "src": "/media/courses/it-лаборатория-create-для-детей-7-9-лет/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/it-школа-разработка-игр-на-unity/02.jpg",
-      "filename": "IT-Школа GameDev 4в1 - разработка игр на Unity (2).png",
-      "alt": "IT-Школа GameDev 4в1 - разработка игр на Unity (2)"
+      "src": "/media/courses/it-лаборатория-create-для-детей-7-9-лет/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/it-школа-разработка-игр-на-unity/03.jpg",
-      "filename": "IT-Школа GameDev 4в1 - разработка игр на Unity (3).png",
-      "alt": "IT-Школа GameDev 4в1 - разработка игр на Unity (3)"
+      "src": "/media/courses/it-лаборатория-create-для-детей-7-9-лет/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/it-школа-разработка-игр-на-unity/04.jpg",
-      "filename": "IT-Школа GameDev 4в1 - разработка игр на Unity (4).png",
-      "alt": "IT-Школа GameDev 4в1 - разработка игр на Unity (4)"
+      "src": "/media/courses/it-лаборатория-create-для-детей-7-9-лет/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/it-школа-разработка-игр-на-unity/05.jpg",
-      "filename": "IT-Школа GameDev 4в1 - разработка игр на Unity (5).png",
-      "alt": "IT-Школа GameDev 4в1 - разработка игр на Unity (5)"
+      "src": "/media/courses/it-лаборатория-create-для-детей-7-9-лет/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-лаборатория-create-для-детей-7-9-лет/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-лаборатория-create-для-детей-7-9-лет/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ],
-  "/programming-school": [
+  "/kursy-shkoly-programmirovaniya/it-лаборатория-dev-для-детей-9-10-лет": [
     {
-      "src": "/media/courses/programming-school/01.jpg",
-      "filename": "Программирование в Скретч в Студии Развивайся (1).jpg",
-      "alt": "Программирование в Скретч в Студии Развивайся (1)"
+      "src": "/media/courses/it-лаборатория-dev-для-детей-9-10-лет/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/programming-school/02.jpg",
-      "filename": "Программирование в Скретч в Студии Развивайся (2).jpg",
-      "alt": "Программирование в Скретч в Студии Развивайся (2)"
+      "src": "/media/courses/it-лаборатория-dev-для-детей-9-10-лет/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/programming-school/03.jpg",
-      "filename": "Программирование в Скретч в Студии Развивайся (3).jpg",
-      "alt": "Программирование в Скретч в Студии Развивайся (3)"
+      "src": "/media/courses/it-лаборатория-dev-для-детей-9-10-лет/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/programming-school/04.jpg",
-      "filename": "Фон кнонки 1.jpg",
-      "alt": "Фон кнонки 1"
+      "src": "/media/courses/it-лаборатория-dev-для-детей-9-10-лет/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/programming-school/05.jpg",
-      "filename": "Фон кнонки 2.jpg",
-      "alt": "Фон кнонки 2"
+      "src": "/media/courses/it-лаборатория-dev-для-детей-9-10-лет/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-лаборатория-dev-для-детей-9-10-лет/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-лаборатория-dev-для-детей-9-10-лет/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-лаборатория-dev-для-детей-9-10-лет/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ],
   "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python": [
     {
       "src": "/media/courses/it-школа-программирование-на-python/01.jpg",
-      "filename": "IT-Школа Программирование на Python с CodeBOOK (11).jpg",
-      "alt": "IT-Школа Программирование на Python с CodeBOOK (11)"
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/it-школа-программирование-на-python/02.jpg",
-      "filename": "IT-Школа Программирование на Python с CodeBOOK (13).jpg",
-      "alt": "IT-Школа Программирование на Python с CodeBOOK (13)"
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/it-школа-программирование-на-python/03.jpg",
-      "filename": "IT-Школа Программирование на Python с CodeBOOK (1).jpg",
-      "alt": "IT-Школа Программирование на Python с CodeBOOK (1)"
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/it-школа-программирование-на-python/04.jpg",
-      "filename": "IT-Школа Программирование на Python с CodeBOOK (2).jpg",
-      "alt": "IT-Школа Программирование на Python с CodeBOOK (2)"
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/it-школа-программирование-на-python/05.jpg",
-      "filename": "IT-Школа Программирование на Python с CodeBOOK (3).jpg",
-      "alt": "IT-Школа Программирование на Python с CodeBOOK (3)"
+      "filename": "05.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-программирование-на-python/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-программирование-на-python/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-программирование-на-python/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-программирование-на-python/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-программирование-на-python/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-программирование-на-python/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-программирование-на-python/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ],
   "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-си": [
     {
       "src": "/media/courses/it-школа-программирование-на-си/01.jpg",
-      "filename": "IT-Школа Программирование на С++ 10.png",
-      "alt": "IT-Школа Программирование на С++ 10"
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/it-школа-программирование-на-си/02.jpg",
-      "filename": "IT-Школа Программирование на С++ 11.png",
-      "alt": "IT-Школа Программирование на С++ 11"
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/it-школа-программирование-на-си/03.jpg",
-      "filename": "IT-Школа Программирование на С++ 2.png",
-      "alt": "IT-Школа Программирование на С++ 2"
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/it-школа-программирование-на-си/04.jpg",
-      "filename": "IT-Школа Программирование на С++ 3.png",
-      "alt": "IT-Школа Программирование на С++ 3"
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
       "src": "/media/courses/it-школа-программирование-на-си/05.jpg",
-      "filename": "IT-Школа Программирование на С++ 4.png",
-      "alt": "IT-Школа Программирование на С++ 4"
+      "filename": "05.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-программирование-на-си/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-программирование-на-си/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-программирование-на-си/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-программирование-на-си/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-программирование-на-си/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-программирование-на-си/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ],
-  "/radioengineering": [
+  "/kursy-shkoly-programmirovaniya/it-школа-разработка-игр-на-unity": [
     {
-      "src": "/media/courses/radioengineering/01.jpg",
-      "filename": "Радиотехника для детей в Коломне в Студии Развивайся (10).JPG",
-      "alt": "Радиотехника для детей в Коломне в Студии Развивайся (10)"
+      "src": "/media/courses/it-школа-разработка-игр-на-unity/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/radioengineering/02.jpg",
-      "filename": "Радиотехника для детей в Коломне в Студии Развивайся (11).JPG",
-      "alt": "Радиотехника для детей в Коломне в Студии Развивайся (11)"
+      "src": "/media/courses/it-школа-разработка-игр-на-unity/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/radioengineering/03.jpg",
-      "filename": "Радиотехника для детей в Коломне в Студии Развивайся (12).JPG",
-      "alt": "Радиотехника для детей в Коломне в Студии Развивайся (12)"
+      "src": "/media/courses/it-школа-разработка-игр-на-unity/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/radioengineering/04.jpg",
-      "filename": "Радиотехника для детей в Коломне в Студии Развивайся (13).JPG",
-      "alt": "Радиотехника для детей в Коломне в Студии Развивайся (13)"
+      "src": "/media/courses/it-школа-разработка-игр-на-unity/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     },
     {
-      "src": "/media/courses/radioengineering/05.jpg",
-      "filename": "Радиотехника для детей в Коломне в Студии Развивайся (1).JPG",
-      "alt": "Радиотехника для детей в Коломне в Студии Развивайся (1)"
+      "src": "/media/courses/it-школа-разработка-игр-на-unity/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-разработка-игр-на-unity/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/it-школа-разработка-игр-на-unity/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ],
-  "/teslaphysics": [
+  "/japanese": [
     {
-      "src": "/media/courses/teslaphysics/01.jpg",
-      "filename": "Инженерные и научные курсы для детей 5-16 лет в Студии Развивайся (18).jpg",
-      "alt": "Инженерные и научные курсы для детей 5-16 лет в Студии Развивайся (18)"
+      "src": "/media/courses/japanese/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    }
+  ],
+  "/kinder-master": [
+    {
+      "src": "/media/courses/kinder-master/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Курс Киндер-мастер в Коломне"
     },
     {
-      "src": "/media/courses/teslaphysics/02.jpg",
-      "filename": "Инженерные и научные курсы для детей 5-16 лет в Студии Развивайся (19).JPG",
-      "alt": "Инженерные и научные курсы для детей 5-16 лет в Студии Развивайся (19)"
+      "src": "/media/courses/kinder-master/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Курс Киндер-мастер в Коломне"
     },
     {
-      "src": "/media/courses/teslaphysics/03.jpg",
-      "filename": "инженерные и научные курсы для детей 5-16 лет в Студии Развивайся (1).jpg",
-      "alt": "инженерные и научные курсы для детей 5-16 лет в Студии Развивайся (1)"
+      "src": "/media/courses/kinder-master/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Курс Киндер-мастер в Коломне"
     },
     {
-      "src": "/media/courses/teslaphysics/04.jpg",
-      "filename": "Инженерные и научные курсы для детей 5-16 лет в Студии Развивайся (20).jpg",
-      "alt": "Инженерные и научные курсы для детей 5-16 лет в Студии Развивайся (20)"
+      "src": "/media/courses/kinder-master/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Курс Киндер-мастер в Коломне"
     },
     {
-      "src": "/media/courses/teslaphysics/05.jpg",
-      "filename": "Инженерные и научные курсы для детей 5-16 лет в Студии Развивайся (21).jpg",
-      "alt": "Инженерные и научные курсы для детей 5-16 лет в Студии Развивайся (21)"
+      "src": "/media/courses/kinder-master/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Курс Киндер-мастер в Коломне"
+    },
+    {
+      "src": "/media/courses/kinder-master/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Курс Киндер-мастер в Коломне"
+    },
+    {
+      "src": "/media/courses/kinder-master/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Курс Киндер-мастер в Коломне"
+    },
+    {
+      "src": "/media/courses/kinder-master/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Курс Киндер-мастер в Коломне"
+    },
+    {
+      "src": "/media/courses/kinder-master/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Курс Киндер-мастер в Коломне"
+    },
+    {
+      "src": "/media/courses/kinder-master/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Курс Киндер-мастер в Коломне"
+    },
+    {
+      "src": "/media/courses/kinder-master/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Курс Киндер-мастер в Коломне"
+    },
+    {
+      "src": "/media/courses/kinder-master/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Курс Киндер-мастер в Коломне"
     }
   ],
   "/master-class": [
     {
       "src": "/media/courses/master-class/01.jpg",
-      "filename": "Мастер-класс _Живопись волокном_ в Студии Развивайся в Коломне.jpg",
-      "alt": "Мастер-класс  Живопись волокном  в Студии Развивайся в Коломне"
+      "filename": "01.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
     },
     {
       "src": "/media/courses/master-class/02.jpg",
-      "filename": "Фото мастер-классов в Студии Развивайся в Коломне (10).jpg",
-      "alt": "Фото мастер-классов в Студии Развивайся в Коломне (10)"
+      "filename": "02.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
     },
     {
       "src": "/media/courses/master-class/03.jpg",
-      "filename": "Фото мастер-классов в Студии Развивайся в Коломне (11).jpg",
-      "alt": "Фото мастер-классов в Студии Развивайся в Коломне (11)"
+      "filename": "03.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
     },
     {
       "src": "/media/courses/master-class/04.jpg",
-      "filename": "Фото мастер-классов в Студии Развивайся в Коломне (12).jpg",
-      "alt": "Фото мастер-классов в Студии Развивайся в Коломне (12)"
+      "filename": "04.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
     },
     {
       "src": "/media/courses/master-class/05.jpg",
-      "filename": "Фото мастер-классов в Студии Развивайся в Коломне (14).jpg",
-      "alt": "Фото мастер-классов в Студии Развивайся в Коломне (14)"
+      "filename": "05.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/master-class/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/master-class/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/master-class/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/master-class/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/master-class/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/master-class/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/master-class/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/master-class/13.jpg",
+      "filename": "13.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/master-class/14.jpg",
+      "filename": "14.jpg",
+      "alt": "Мастер-классы студии «Развивайся»"
+    }
+  ],
+  "/mentalarithmetic": [
+    {
+      "src": "/media/courses/mentalarithmetic/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    }
+  ],
+  "/model-school": [
+    {
+      "src": "/media/courses/model-school/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/13.jpg",
+      "filename": "13.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/14.jpg",
+      "filename": "14.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/15.jpg",
+      "filename": "15.jpg",
+      "alt": "Модельная школа в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/16.jpg",
+      "filename": "16.jpg",
+      "alt": "Модельная школа в Коломне"
+    }
+  ],
+  "/podgotovka-v-hudvuz": [
+    {
+      "src": "/media/courses/podgotovka-v-hudvuz/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/podgotovka-v-hudvuz/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/podgotovka-v-hudvuz/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/podgotovka-v-hudvuz/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/podgotovka-v-hudvuz/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/podgotovka-v-hudvuz/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/podgotovka-v-hudvuz/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/podgotovka-v-hudvuz/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/podgotovka-v-hudvuz/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/podgotovka-v-hudvuz/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    }
+  ],
+  "/programming-school": [
+    {
+      "src": "/media/courses/programming-school/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Школа программирования в Коломне"
+    },
+    {
+      "src": "/media/courses/programming-school/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Школа программирования в Коломне"
+    },
+    {
+      "src": "/media/courses/programming-school/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Школа программирования в Коломне"
+    },
+    {
+      "src": "/media/courses/programming-school/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Школа программирования в Коломне"
+    },
+    {
+      "src": "/media/courses/programming-school/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Школа программирования в Коломне"
+    },
+    {
+      "src": "/media/courses/programming-school/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Школа программирования в Коломне"
+    },
+    {
+      "src": "/media/courses/programming-school/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Школа программирования в Коломне"
+    },
+    {
+      "src": "/media/courses/programming-school/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Школа программирования в Коломне"
+    },
+    {
+      "src": "/media/courses/programming-school/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Школа программирования в Коломне"
+    },
+    {
+      "src": "/media/courses/programming-school/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Школа программирования в Коломне"
+    },
+    {
+      "src": "/media/courses/programming-school/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Школа программирования в Коломне"
+    }
+  ],
+  "/promising-professions": [
+    {
+      "src": "/media/courses/promising-professions/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/promising-professions/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/promising-professions/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/promising-professions/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/promising-professions/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/promising-professions/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/promising-professions/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/promising-professions/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/promising-professions/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/promising-professions/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/promising-professions/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/promising-professions/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    }
+  ],
+  "/radioengineering": [
+    {
+      "src": "/media/courses/radioengineering/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Радиотехника для детей в Коломне"
+    },
+    {
+      "src": "/media/courses/radioengineering/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Радиотехника для детей в Коломне"
+    },
+    {
+      "src": "/media/courses/radioengineering/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Радиотехника для детей в Коломне"
+    },
+    {
+      "src": "/media/courses/radioengineering/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Радиотехника для детей в Коломне"
+    },
+    {
+      "src": "/media/courses/radioengineering/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Радиотехника для детей в Коломне"
+    },
+    {
+      "src": "/media/courses/radioengineering/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Радиотехника для детей в Коломне"
+    },
+    {
+      "src": "/media/courses/radioengineering/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Радиотехника для детей в Коломне"
+    },
+    {
+      "src": "/media/courses/radioengineering/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Радиотехника для детей в Коломне"
+    },
+    {
+      "src": "/media/courses/radioengineering/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Радиотехника для детей в Коломне"
+    },
+    {
+      "src": "/media/courses/radioengineering/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Радиотехника для детей в Коломне"
+    },
+    {
+      "src": "/media/courses/radioengineering/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Радиотехника для детей в Коломне"
+    },
+    {
+      "src": "/media/courses/radioengineering/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Радиотехника для детей в Коломне"
+    }
+  ],
+  "/roboticsinenglish": [
+    {
+      "src": "/media/courses/roboticsinenglish/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/roboticsinenglish/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/roboticsinenglish/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/roboticsinenglish/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    }
+  ],
+  "/science-course": [
+    {
+      "src": "/media/courses/science-course/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Научный курс в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/science-course/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Научный курс в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/science-course/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Научный курс в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/science-course/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Научный курс в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/science-course/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Научный курс в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/science-course/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Научный курс в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/science-course/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Научный курс в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/science-course/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Научный курс в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/science-course/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Научный курс в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/science-course/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Научный курс в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/science-course/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Научный курс в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/science-course/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Научный курс в студии «Развивайся»"
+    }
+  ],
+  "/sculptural-studio": [
+    {
+      "src": "/media/courses/sculptural-studio/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/sculptural-studio/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/sculptural-studio/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/sculptural-studio/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/sculptural-studio/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ],
   "/team": [
     {
       "src": "/media/courses/team/01.jpg",
-      "filename": "Педагоги Студии Развивайся (10).jpg",
-      "alt": "Педагоги Студии Развивайся (10)"
+      "filename": "01.jpg",
+      "alt": "Педагоги студии «Развивайся»"
     },
     {
       "src": "/media/courses/team/02.jpg",
-      "filename": "Педагоги Студии Развивайся (11).jpg",
-      "alt": "Педагоги Студии Развивайся (11)"
+      "filename": "02.jpg",
+      "alt": "Педагоги студии «Развивайся»"
     },
     {
       "src": "/media/courses/team/03.jpg",
-      "filename": "Педагоги Студии Развивайся (13).jpg",
-      "alt": "Педагоги Студии Развивайся (13)"
+      "filename": "03.jpg",
+      "alt": "Педагоги студии «Развивайся»"
     },
     {
       "src": "/media/courses/team/04.jpg",
-      "filename": "Педагоги Студии Развивайся (14).jpg",
-      "alt": "Педагоги Студии Развивайся (14)"
+      "filename": "04.jpg",
+      "alt": "Педагоги студии «Развивайся»"
     },
     {
       "src": "/media/courses/team/05.jpg",
-      "filename": "Педагоги Студии Развивайся (15).JPG",
-      "alt": "Педагоги Студии Развивайся (15)"
+      "filename": "05.jpg",
+      "alt": "Педагоги студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/team/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Педагоги студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/team/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Педагоги студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/team/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Педагоги студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/team/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Педагоги студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/team/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Педагоги студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/team/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Педагоги студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/team/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Педагоги студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/team/13.jpg",
+      "filename": "13.jpg",
+      "alt": "Педагоги студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/team/14.jpg",
+      "filename": "14.jpg",
+      "alt": "Педагоги студии «Развивайся»"
+    }
+  ],
+  "/teslaphysics": [
+    {
+      "src": "/media/courses/teslaphysics/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/13.jpg",
+      "filename": "13.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/14.jpg",
+      "filename": "14.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/15.jpg",
+      "filename": "15.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    },
+    {
+      "src": "/media/courses/teslaphysics/16.jpg",
+      "filename": "16.jpg",
+      "alt": "Курс «Физика инноваций» в Коломне"
+    }
+  ],
+  "/tinkercad2025itogi": [
+    {
+      "src": "/media/courses/tinkercad2025itogi/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/tinkercad2025itogi/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/tinkercad2025itogi/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/tinkercad2025itogi/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    },
+    {
+      "src": "/media/courses/tinkercad2025itogi/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
+    }
+  ],
+  "/vitaminkorean": [
+    {
+      "src": "/media/courses/vitaminkorean/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Занятия в студии «Развивайся» в Коломне"
     }
   ]
 }

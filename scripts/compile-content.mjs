@@ -198,7 +198,7 @@ for (const raw of pages) {
   }
 
   const maxImgs =
-    p === "/team" || p === "/master-class" || p === "/allcourses" ? 24 : 10;
+    p === "/team" || p === "/master-class" || p === "/allcourses" ? 24 : 16;
   let keptImages = images.slice(0, maxImgs);
   const decodedPath = (() => {
     try {
@@ -360,7 +360,7 @@ function applyLocalHeroes(page) {
   const rest = hero ? images.slice(1) : images;
   page.images = [...head, ...fresh, ...rest].slice(
     0,
-    page.path === "/team" || page.path === "/master-class" || page.path === "/allcourses" ? 24 : 10,
+    page.path === "/team" || page.path === "/master-class" || page.path === "/allcourses" ? 24 : 16,
   );
   page.video =
     COURSE_VIDEOS[page.path] || COURSE_VIDEOS[page.pathDecoded] || null;

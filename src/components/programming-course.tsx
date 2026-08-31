@@ -66,7 +66,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
         age={course.age}
         title={course.name}
         description={course.program}
-        images={galleryPhotos(images, course.pathDecoded || course.path || page.path)}
+        images={galleryPhotos(images, course.pathDecoded || course.path || page.path, "hero")}
         video={page.video}
         facts={courseOfferFacts(course.pathDecoded || course.path || page.path, course.age)}
       />
@@ -135,7 +135,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
 
         <WhyNow items={why?.items} title={why?.heading} />
 
-        <PhotoSlider images={galleryPhotos(course.gallery, course.pathDecoded || course.path || page.path)} />
+        <PhotoSlider images={galleryPhotos(images, course.pathDecoded || course.path || page.path, "gallery")} />
 
         <CourseSellAfterWhy path={course.pathDecoded || course.path || page.path} />
 
