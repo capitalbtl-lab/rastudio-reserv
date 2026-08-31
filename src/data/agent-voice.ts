@@ -1,23 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
-function env(key: string) {
-  const dyn = String((globalThis as { process?: { env?: Record<string, string> } }).process?.env?.[key] || "").trim();
-  if (dyn) return dyn;
-  for (const file of [join(process.cwd(), ".env"), "/var/www/rastudio/.env"]) {
-    try {
-      for (const line of readFileSync(file, "utf8").split("\n")) {
-        const t = line.trim();
-        if (!t || t.startsWith("#") || !t.startsWith(`${key}=`)) continue;
-        return t.slice(key.length + 1).trim().replace(/^["']|["']$/g, "");
-      }
-    } catch {
-      /* next */
-    }
-  }
-  return "";
-}
+import { serverEnv } from "./server-env";
 
 function speakRu(text: string) {
   return text
@@ -46,55 +28,58 @@ function clean(text: string) {
     .slice(0, 800);
 }
 
-function toSsml(text: string) {
-  const escaped = clean(text)
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/>/g, ">");
-  const body = escaped
-    .replace(/\s*\.{2,}\s*/g, ", ")
-    .replace(/([.!?])(\s+|$)/g, '<break time="90ms"/>')
-    .replace(/:\s+/g, '<break time="50ms"/>')
-    .replace(/,\s+/g, '<break time="35ms"/>')
-    .replace(/\s+[—–]\s+/g, '<break time="45ms"/>');
-  return `<speak>${body}</speak>`;
+function audioFromV3(raw: string) {
+  const parts: Buffer[] = [];
+  const push = (obj: unknown) => {
+    const rec = obj as { result?: { audioChunk?: { data?: string } }; audioChunk?: { data?: string } };
+    const b64 = rec?.result?.audioChunk?.data || rec?.audioChunk?.data;
+    if (b64) parts.push(Buffer.from(b64, "base64"));
+  };
+  try {
+    push(JSON.parse(raw));
+  } catch {
+    for (const line of raw.split("\n")) {
+      const t = line.trim();
+      if (!t) continue;
+      try {
+        push(JSON.parse(t));
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  if (!parts.length) return null;
+  return Buffer.concat(parts);
 }
 
 export const speakAgent = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { text: string; voice?: "filipp" | "alena" })
+  .validator((data: unknown) => data as { text: string; voice?: "filipp" | "alena" | "zahar" })
   .handler(async ({ data }) => {
-    const key = env("YANDEX_API_KEY");
-    const folder = env("YANDEX_FOLDER_ID");
+    const key = serverEnv("YANDEX_API_KEY");
+    const folder = serverEnv("YANDEX_FOLDER_ID");
     const text = clean(data.text || "");
     if (!key || !folder || !text) return { ok: false as const, error: "no-voice" };
-    const voice = data.voice === "alena" ? "alena" : data.voice === "zahar" ? "zahar" : "filipp";
-    const attempts: { voice: string; extra?: Record<string, string> }[] = [
-      { voice, extra: { emotion: "good" } },
-      { voice },
-      { voice: voice === "alena" ? "alena" : "filipp" },
-    ];
-    let res: Response | null = null;
-    for (const attempt of attempts) {
-      const payload: Record<string, string> = {
-        text,
-        lang: "ru-RU",
-        voice: attempt.voice,
-        speed: "1.18",
-        format: "mp3",
-        folderId: folder,
-        ...(attempt.extra || {}),
-      };
-      res = await fetch("https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize", {
+    const voice = data.voice === "alena" ? "alena" : "zahar";
+    const auths = [`Bearer ${key}`, `Api-Key ${key}`];
+    for (const auth of auths) {
+      const res = await fetch("https://tts.api.cloud.yandex.net/tts/v3/utteranceSynthesis", {
         method: "POST",
         headers: {
-          Authorization: `Api-Key ${key}`,
-          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: auth,
+          "Content-Type": "application/json",
+          "x-folder-id": folder,
         },
-        body: new URLSearchParams(payload),
+        body: JSON.stringify({
+          text,
+          voice,
+          folderId: folder,
+        }),
       });
-      if (res.ok) break;
+      if (!res.ok) continue;
+      const buf = audioFromV3(await res.text());
+      if (!buf || buf.length < 200) continue;
+      const mime = buf.slice(0, 4).toString("ascii") === "RIFF" ? "audio/wav" : "audio/mpeg";
+      return { ok: true as const, audio: `data:${mime};base64,${buf.toString("base64")}` };
     }
-    if (!res || !res.ok) return { ok: false as const, error: "tts" };
-    const buf = Buffer.from(await res.arrayBuffer());
-    return { ok: true as const, audio: `data:audio/mpeg;base64,${buf.toString("base64")}` };
+    return { ok: false as const, error: "tts" };
   });

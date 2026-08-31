@@ -218,7 +218,7 @@ export function AgentChat() {
         if (gen !== genRef.current) return;
         try {
           const res = await speakAgent({
-            data: { text: turn.text, voice: turn.who === "olga" ? "alena" : "filipp" },
+            data: { text: turn.text, voice: turn.who === "olga" ? "alena" : "zahar" },
           });
           if (res.ok && "audio" in res && gen === genRef.current) {
             spokenRef.current = turn.text;

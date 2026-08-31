@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { SITE } from "@/data/site";
 import { coursePrice } from "@/data/ages";
 import { saveTrialLead, TRIAL_BRANCHES, TRIAL_COURSES } from "@/data/trial";
+import { serverEnv } from "./server-env";
 
 const SYSTEM = `Вы — два администратора студии «Развивайся»: Олег и Ольга. Говорите по-русски с родителем. Не называйте себя роботами или нейросетью. Не выдумывайте день и свободные места. Цены: «от … / 4 недели». Пробное без обязательства.
 
@@ -197,35 +198,41 @@ function normalizeDob(dob: string) {
 }
 
 async function yandexChat(messages: ChatMsg[], tools: unknown) {
-  const key = process.env.YANDEX_API_KEY?.trim();
-  const folder = process.env.YANDEX_FOLDER_ID?.trim();
+  const key = serverEnv("YANDEX_API_KEY");
+  const folder = serverEnv("YANDEX_FOLDER_ID");
   if (!key || !folder) return null;
-  const res = await fetch("https://ai.api.cloud.yandex.net/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Api-Key ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: `gpt://${folder}/yandexgpt/latest`,
-      temperature: 0.3,
-      max_tokens: 700,
-      messages,
-      tools,
-      tool_choice: "auto",
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`yandex ${res.status} ${text.slice(0, 200)}`);
+  const model = `gpt://${folder}/yandexgpt/latest`;
+  const auths = [`Bearer ${key}`, `Api-Key ${key}`];
+  let last = "";
+  for (const auth of auths) {
+    const res = await fetch("https://ai.api.cloud.yandex.net/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: auth,
+        "Content-Type": "application/json",
+        "x-folder-id": folder,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.3,
+        max_tokens: 700,
+        messages,
+        tools,
+        tool_choice: "auto",
+      }),
+    });
+    if (res.ok) {
+      return (await res.json()) as {
+        choices: { message: { role: string; content?: string | null; tool_calls?: { id: string; function: { name: string; arguments: string } }[] } }[];
+      };
+    }
+    last = await res.text();
   }
-  return (await res.json()) as {
-    choices: { message: { role: string; content?: string | null; tool_calls?: { id: string; function: { name: string; arguments: string } }[] } }[];
-  };
+  throw new Error(`yandex ${last.slice(0, 200)}`);
 }
 
 async function deepseekChat(messages: ChatMsg[], tools: unknown) {
-  const key = process.env.DEEPSEEK_API_KEY?.trim();
+  const key = serverEnv("DEEPSEEK_API_KEY");
   if (!key) return null;
   const res = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
