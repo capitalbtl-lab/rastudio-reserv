@@ -5,12 +5,15 @@ import { pageHead, SEO_ORIGIN } from "@/data/seo";
 
 export const Route = createFileRoute("/admin")({
   head: () =>
-    pageHead({
-      title: "Кабинет администратора | Студия «Развивайся»",
-      description: "Цены курсов студии.",
-      canonical: `${SEO_ORIGIN}/admin`,
-      path: "/admin",
-    }),
+    pageHead(
+      {
+        title: "Кабинет администратора | Студия «Развивайся»",
+        description: "Кабинет администратора студии.",
+        canonical: `${SEO_ORIGIN}/admin`,
+        path: "/admin",
+      },
+      { noindex: true },
+    ),
   component: AdminPage,
 });
 
