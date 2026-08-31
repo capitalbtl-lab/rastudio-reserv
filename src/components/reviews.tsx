@@ -80,7 +80,7 @@ function FeaturedReview() {
 
 export function Reviews() {
   return (
-    <section className="page-wrap pb-16 pt-4 md:pb-20 md:pt-6">
+    <section className="page-wrap pb-12 pt-2 md:pb-16">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="kicker text-primary">Яндекс Карты · {YANDEX_RATING.score}</p>

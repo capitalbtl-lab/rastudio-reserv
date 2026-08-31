@@ -146,14 +146,14 @@ function Home() {
         </div>
       </div>
 
-      <section className="page-wrap py-10 md:py-14">
+      <section className="page-wrap pt-8 pb-2 md:pt-10">
         <p className="kicker text-primary">Подбор за 10 секунд</p>
         <h2 className="section-title mt-3">Сколько лет ребёнку?</h2>
         <p className="mt-3 max-w-xl text-muted">Школы остаются как были — это быстрый вход по возрасту.</p>
         <AgeChips className="mt-5" />
       </section>
 
-      <section className="page-wrap py-16 md:py-24">
+      <section className="page-wrap pt-8 pb-12 md:pt-10 md:pb-16">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="kicker text-primary">Семь школ одной сети</p>
@@ -197,7 +197,7 @@ function Home() {
         </div>
       </section>
 
-      <section className="page-wrap pb-16 md:pb-24">
+      <section className="page-wrap pb-12 md:pb-16">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="kicker text-primary">Каталог</p>
@@ -232,7 +232,7 @@ function Home() {
         </div>
       </section>
 
-      <section className="page-wrap pb-16 md:pb-24">
+      <section className="page-wrap pb-12 md:pb-16">
         <div className="grid items-center gap-8 overflow-hidden rounded-[2rem] bg-surface p-6 shadow-[var(--shadow-border)] md:grid-cols-2 md:gap-12 md:p-10">
           <div>
             <p className="kicker text-primary">О студии</p>
@@ -281,7 +281,7 @@ function Home() {
 
       <Reviews />
 
-      <section className="page-wrap pb-16 md:pb-24">
+      <section className="page-wrap pb-12 md:pb-16">
         <p className="kicker text-primary">Жизнь студии</p>
         <h2 className="section-title mt-3">Проекты и события</h2>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -310,7 +310,7 @@ function Home() {
         </div>
       </section>
 
-      <section className="ink overflow-hidden py-16 text-header-fg md:py-24">
+      <section className="ink overflow-hidden py-12 text-header-fg md:py-16">
         <div className="page-wrap">
           <p className="kicker text-header-fg/45">Три студии</p>
           <h2 className="section-title mt-3">Сеть в Коломне и Луховицах</h2>
@@ -346,7 +346,7 @@ function Home() {
         </div>
       </section>
 
-      <section className="page-wrap py-16 md:py-20">
+      <section className="page-wrap py-12 md:py-16">
         <TrialForm />
       </section>
     </SiteShell>
