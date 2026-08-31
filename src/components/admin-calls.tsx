@@ -208,7 +208,7 @@ export function AdminCalls() {
               ["Связаны с CRM", info.matched],
               ["Учатся", info.studying],
               ["Архив / ушли", info.archived],
-              ["Ошибки", info.failed],
+              ["Нет файла у Novofon", info.failed],
             ].map(([label, n]) => (
               <div key={String(label)} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
                 <p className="text-sm text-muted">{label}</p>
