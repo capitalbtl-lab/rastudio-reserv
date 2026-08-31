@@ -22,7 +22,7 @@ export const loadSitePage = createServerFn({ method: "GET" })
     return {
       page,
       teachers: page.kind === "team" || page.path === "/programming-school" ? allTeachers() : [],
-      courses: page.kind === "catalog" ? allCourses() : [],
+      courses: allCourses(),
       masters:
         page.kind === "master-list"
           ? allPages()

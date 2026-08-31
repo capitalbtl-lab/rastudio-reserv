@@ -445,6 +445,51 @@ const COURSE_ORDER = [
   ["/oge-ininformatics", "Подготовка к ОГЭ по информатике"],
 ];
 
+const AGE_HINTS = {
+  "/art-studio-3-4": "3–4 года",
+  "/art-studio-5-6": "5–6 лет",
+  "/art-studio-7-8": "7–9 лет",
+  "/art-studio-9-13": "9–13 лет",
+  "/art-studio": "3–17 лет",
+  "/sculptural-studio": "5–14 лет",
+  "/podgotovka-v-hudvuz": "14+",
+  "/digitalartschool": "7–16 лет",
+  "/robototehnika-10-14": "10–14 лет",
+  "/robototehnika-7-9": "7–9 лет",
+  "/robototehnika-5-7": "5–7 лет",
+  "/roboticsinenglish": "7–12 лет",
+  "/gamedesign": "10–16 лет",
+  "/3d-modeling": "10–16 лет",
+  "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-5-7-лет": "5–7 лет",
+  "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-7-9-лет": "7–9 лет",
+  "/kursy-shkoly-programmirovaniya/it-лаборатория-dev-для-детей-9-10-лет": "9–10 лет",
+  "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python": "10–16 лет",
+  "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-си": "11–16 лет",
+  "/kursy-shkoly-programmirovaniya/it-школа-разработка-игр-на-unity": "10–16 лет",
+  "/radioengineering": "9–16 лет",
+  "/science-course": "5–9 лет",
+  "/teslaphysics": "11–15 лет",
+  "/mentalarithmetic": "5–12 лет",
+  "/preparation-for-school": "5–7 лет",
+  "/happybricks": "3–6 лет",
+  "/kinder-master": "10–16 лет",
+  "/model-school": "9–14 лет",
+  "/englishlanguagegg": "9–14 лет",
+  "/englishlanguagesm": "6–8 лет",
+  "/japanese": "9–16 лет",
+  "/vitaminkorean": "9–16 лет",
+  "/oge-ininformatics": "14–16 лет",
+};
+
+function ageFromPage(page, href) {
+  const blob = `${page?.h1 || ""} ${page?.description || ""}`;
+  const found = blob.match(
+    /(\d+\s*[-–—]\s*\d+\s*(?:лет|года)?|\d+\+|для детей\s+[^.!]{0,40}лет)/i,
+  );
+  if (found) return found[0].replace(/\s+/g, " ").trim();
+  return AGE_HINTS[href] || "";
+}
+
 const courses = COURSE_ORDER.map(([href, label]) => {
   const page = byPath.get(href);
   const img = page?.images?.[0];
@@ -456,6 +501,7 @@ const courses = COURSE_ORDER.map(([href, label]) => {
     image: img?.src || "",
     alt: img?.alt || label,
     filename: img?.filename || "",
+    age: ageFromPage(page, href),
   };
 });
 

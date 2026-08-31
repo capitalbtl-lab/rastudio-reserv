@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ProgrammingCoursePage } from "@/components/programming-course";
 import { ProgrammingSchoolPage } from "@/components/programming-school";
 import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
-import { ScheduleBlock, CoursePageHero, CourseStory } from "@/components/cms-blocks";
+import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses } from "@/components/cms-blocks";
 import { cn } from "@/lib/utils";
 
 type MasterCard = { path: string; h1: string };
@@ -44,24 +44,15 @@ function Gallery({ page }: { page: SitePage }) {
   );
 }
 
-function Related({ page }: { page: SitePage }) {
-  if (!page.related.length) return null;
+function Related({ page, courses }: { page: SitePage; courses: CourseCard[] }) {
+  const heading = splitCourseHeading(page.h1);
+  const current = courses.find((c) => c.href === page.path || c.href === page.pathDecoded);
   return (
-    <div className="mt-12">
-      <h2 className="display text-2xl">Ещё по теме</h2>
-      <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-        {page.related.map((link) => (
-          <li key={link.href + link.text}>
-            <PageLink
-              to={link.href}
-              className="block rounded-lg bg-surface px-4 py-3 shadow-[var(--shadow-border)] hover:shadow-[var(--shadow-border-hover)]"
-            >
-              {link.text}
-            </PageLink>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <RelatedAgeCourses
+      currentPath={current?.href || page.pathDecoded || page.path}
+      currentAge={heading.age || current?.age}
+      courses={courses}
+    />
   );
 }
 
@@ -104,7 +95,7 @@ export function PageArticle({
   schedule = [],
 }: PageArticleProps) {
   if (cmsCourse) {
-    return <ProgrammingCoursePage page={page} course={cmsCourse} schedule={schedule} />;
+    return <ProgrammingCoursePage page={page} course={cmsCourse} schedule={schedule} courses={courses} />;
   }
   if (page.path === "/programming-school" || page.pathDecoded === "/programming-school") {
     return (
@@ -133,10 +124,10 @@ export function PageArticle({
 
   const cinematic = ["course", "school", "teacher", "master"].includes(page.kind);
   if (cinematic) {
-    return <CinematicPage page={page} schedule={schedule} />;
+    return <CinematicPage page={page} schedule={schedule} courses={courses} />;
   }
 
-  return <PlainPage page={page} schedule={schedule} />;
+  return <PlainPage page={page} schedule={schedule} courses={courses} />;
 }
 
 function splitCourseHeading(h1: string) {
@@ -146,7 +137,15 @@ function splitCourseHeading(h1: string) {
   return { title: cleaned, age: null as string | null };
 }
 
-function CinematicPage({ page, schedule }: { page: SitePage; schedule: CmsSession[] }) {
+function CinematicPage({
+  page,
+  schedule,
+  courses,
+}: {
+  page: SitePage;
+  schedule: CmsSession[];
+  courses: CourseCard[];
+}) {
   const body = page.paragraphs;
   const heading = splitCourseHeading(page.h1);
 
@@ -181,7 +180,7 @@ function CinematicPage({ page, schedule }: { page: SitePage; schedule: CmsSessio
                 <ScheduleBlock sessions={schedule} />
               </div>
             ) : null}
-            <Related page={page} />
+            <Related page={page} courses={courses} />
           </div>
           <aside className="h-fit rounded-xl bg-surface p-5 shadow-[var(--shadow-border)] lg:sticky lg:top-24">
             <p className="text-sm font-medium">Запись и филиалы</p>
@@ -212,7 +211,15 @@ function CinematicPage({ page, schedule }: { page: SitePage; schedule: CmsSessio
   );
 }
 
-function PlainPage({ page, schedule }: { page: SitePage; schedule: CmsSession[] }) {
+function PlainPage({
+  page,
+  schedule,
+  courses = [],
+}: {
+  page: SitePage;
+  schedule: CmsSession[];
+  courses?: CourseCard[];
+}) {
   const hero = page.images[0];
   const body = page.paragraphs;
 
@@ -247,7 +254,7 @@ function PlainPage({ page, schedule }: { page: SitePage; schedule: CmsSession[] 
           <ScheduleBlock sessions={schedule} />
         </div>
       ) : null}
-      <Related page={page} />
+      <Related page={page} courses={courses} />
       <div className="mt-16">
         <TrialForm compact />
       </div>

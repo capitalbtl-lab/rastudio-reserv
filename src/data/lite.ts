@@ -27,6 +27,7 @@ type Lite = {
     image: string;
     alt: string;
     filename: string;
+    age?: string;
   }>;
 };
 

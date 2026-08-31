@@ -40,6 +40,7 @@ export type CourseCard = {
   image: string;
   alt: string;
   filename: string;
+  age?: string;
 };
 
 export type Catalog = {

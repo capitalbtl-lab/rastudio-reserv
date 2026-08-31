@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { Check, ChevronDown, FlaskConical, MapPin, Sparkles, Users } from "lucide-react";
 import type { CmsImage, CmsSession, CmsTrajectoryStep } from "@/data/cms";
+import type { CourseCard } from "@/data/catalog";
 import { courseKey } from "@/data/cms";
 import { SITE } from "@/data/site";
 import { SeoImage } from "@/components/seo-image";
@@ -528,5 +529,72 @@ export function ExpandableProse({ text, extra }: { text: string; extra?: string 
       rest={<ProseBlocks text={rest} />}
       moreLabel="Читать полностью"
     />
+  );
+}
+
+function ageRanges(text: string): [number, number][] {
+  if (!text) return [];
+  const t = text.replace(/[–—]/g, "-");
+  const out: [number, number][] = [];
+  for (const m of t.matchAll(/(\d+)\s*-\s*(\d+)/g)) out.push([Number(m[1]), Number(m[2])]);
+  for (const m of t.matchAll(/(\d+)\s*\+/g)) out.push([Number(m[1]), 18]);
+  if (!out.length) {
+    const years = [...t.matchAll(/\d+/g)].map((m) => Number(m[0])).filter((n) => n >= 2 && n <= 18);
+    if (years.length === 1) out.push([years[0], years[0]]);
+    else if (years.length >= 2) out.push([Math.min(...years), Math.max(...years)]);
+  }
+  return out;
+}
+
+function agesOverlap(a: string, b: string) {
+  const left = ageRanges(a);
+  const right = ageRanges(b);
+  if (!left.length || !right.length) return false;
+  return left.some(([x1, x2]) => right.some(([y1, y2]) => x1 <= y2 && y1 <= x2));
+}
+
+export function RelatedAgeCourses({
+  currentPath,
+  currentAge,
+  courses,
+}: {
+  currentPath: string;
+  currentAge?: string | null;
+  courses: CourseCard[];
+}) {
+  const mine = currentAge || courses.find((c) => c.href === currentPath)?.age || "";
+  const peers = courses
+    .filter((c) => c.href !== currentPath && c.image && agesOverlap(mine, c.age || ""))
+    .slice(0, 8);
+  if (!peers.length) return null;
+  const heading = mine ? `Курсы для детей ${mine.replace(/^для детей\s+/i, "")}` : "Курсы этого возраста";
+
+  return (
+    <div className="mt-12">
+      <p className="kicker">По возрасту</p>
+      <h2 className="display mt-2 text-2xl md:text-3xl">{heading}</h2>
+      <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+        {peers.map((course) => (
+          <li key={course.href}>
+            <PageLink
+              to={course.href}
+              className="flex items-center gap-3 rounded-xl bg-surface p-2 pr-4 shadow-[var(--shadow-border)] transition-shadow hover:shadow-[var(--shadow-border-hover)]"
+            >
+              <SeoImage
+                src={course.image}
+                alt={course.alt}
+                filename={course.filename}
+                className="size-16 shrink-0 overflow-hidden rounded-lg bg-surface-2"
+                imgClassName="h-full w-full object-cover"
+              />
+              <span>
+                <span className="block text-sm font-semibold leading-snug">{course.label}</span>
+                {course.age ? <span className="mt-0.5 block text-xs text-muted">{course.age}</span> : null}
+              </span>
+            </PageLink>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

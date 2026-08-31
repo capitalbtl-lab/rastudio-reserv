@@ -1,4 +1,4 @@
-import type { SitePage } from "@/data/catalog";
+import type { CourseCard, SitePage } from "@/data/catalog";
 import type { CmsCourse, CmsSession } from "@/data/cms";
 import { inkOn } from "@/data/cms";
 import { SITE } from "@/data/site";
@@ -13,15 +13,17 @@ import {
   Trajectory,
   CoursePageHero,
   ExpandableProse,
+  RelatedAgeCourses,
 } from "@/components/cms-blocks";
 
 type Props = {
   page: SitePage;
   course: CmsCourse;
   schedule: CmsSession[];
+  courses?: CourseCard[];
 };
 
-export function ProgrammingCoursePage({ page, course, schedule }: Props) {
+export function ProgrammingCoursePage({ page, course, schedule, courses = [] }: Props) {
   const accent = course.accent || "#205EDC";
   const images = [];
   const seen = new Set<string>();
@@ -213,7 +215,14 @@ export function ProgrammingCoursePage({ page, course, schedule }: Props) {
       </div>
 
       <section className="mx-auto max-w-[1180px] px-4 pb-16 md:px-5">
-        <TrialForm />
+        <RelatedAgeCourses
+          currentPath={course.pathDecoded || course.path}
+          currentAge={course.age}
+          courses={courses}
+        />
+        <div className="mt-12">
+          <TrialForm />
+        </div>
       </section>
     </article>
   );
