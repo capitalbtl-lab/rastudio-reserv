@@ -80,13 +80,33 @@ function readChat(): Msg[] {
   }
 }
 
+function siteAdminToken() {
+  try {
+    return localStorage.getItem("ra_site_admin") || "";
+  } catch {
+    return "";
+  }
+}
+
 function adminLeft() {
   try {
-    const t = localStorage.getItem("ra_admin") || "";
+    const t = siteAdminToken();
     const exp = Number(t.split(".")[1] || 0);
     return Math.max(0, exp - Date.now());
   } catch {
     return 0;
+  }
+}
+
+function setSiteAdmin(token: string) {
+  localStorage.setItem("ra_site_admin", token);
+}
+
+function clearSiteAdmin() {
+  try {
+    localStorage.removeItem("ra_site_admin");
+  } catch {
+    /* */
   }
 }
 
@@ -394,15 +414,14 @@ export function AgentChat() {
         data: {
           messages: history,
           with: adminLeft() > 0 ? "olga" : partner,
-          token: typeof localStorage !== "undefined" ? localStorage.getItem("ra_admin") || undefined : undefined,
+          token: siteAdminToken() || undefined,
           path: typeof window !== "undefined" ? window.location.pathname : "/",
         },
       });
       if (res.ok) {
         reply = adminLeft() > 0 || res.token ? olgaReply(res.reply) : res.reply;
         if (res.token) {
-          localStorage.setItem("ra_admin", res.token);
-          document.cookie = `ra_admin=${encodeURIComponent(res.token)}; path=/; max-age=${30 * 60}; samesite=lax`;
+          setSiteAdmin(res.token);
           setAdminMs(adminLeft());
           setPartner("olga");
         }
@@ -679,12 +698,23 @@ export function AgentChat() {
                 type="button"
                 className="shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-semibold text-primary hover:bg-primary/10"
                 onClick={() => {
+                  if (adminLeft() > 0) {
+                    clearSiteAdmin();
+                    setAdminMs(0);
+                    setPartner("both");
+                    const bye =
+                      "Ольга: Вы вышли из режима редактирования сайта. Снова на связи Олег и я — обычная консультация.";
+                    setMessages((m) => [...m, { role: "assistant", content: bye }]);
+                    if (voiceOnRef.current) void speak(bye);
+                    return;
+                  }
                   setPartner("olga");
-                  if (adminLeft() > 0) return;
-                  void send("Я администратор сайта. Спроси кодовое слово один раз. Дальше говорит только Ольга.");
+                  const ask = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
+                  setMessages((m) => [...m, { role: "assistant", content: ask }]);
+                  if (voiceOnRef.current) void speak(ask);
                 }}
               >
-                Вход администратора
+                {adminMs > 0 ? "Выход администратора" : "Вход администратора"}
               </button>
             </div>
           </form>

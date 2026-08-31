@@ -411,9 +411,9 @@ export const chatAgent = createServerFn({ method: "POST" })
       .map((m) => ({ role: m.role, content: String(m.content).slice(0, 2000) }));
     if (!trimmed.length) return { ok: false as const, error: "Напишите вопрос." };
 
-    const { isAdminRequest, makeAdminToken } = await import("./admin-auth");
+    const { tokenOk, makeAdminToken } = await import("./admin-auth");
     const { knowledgeForAgent } = await import("./call-knowledge");
-    let admin = isAdminRequest(data.token);
+    let admin = tokenOk(data.token);
     let granted: string | undefined;
     let reload = false;
     let open = "";
