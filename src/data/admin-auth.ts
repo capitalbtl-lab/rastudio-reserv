@@ -10,8 +10,8 @@ function sign(value: string) {
   return createHmac("sha256", tokenSecret()).update(value).digest("hex").slice(0, 32);
 }
 
-export function makeAdminToken() {
-  const exp = Date.now() + 7 * 24 * 60 * 60 * 1000;
+export function makeAdminToken(ttlMs = 30 * 60 * 1000) {
+  const exp = Date.now() + Math.max(60 * 1000, ttlMs);
   const payload = `ok.${exp}`;
   return `${payload}.${sign(payload)}`;
 }

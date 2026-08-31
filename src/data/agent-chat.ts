@@ -46,7 +46,8 @@ id курсов: ${TRIAL_COURSES.map((c) => `${c.id} ${c.name}`).join("; ")}.
 Правки сайта. Если просят изменить сайт, цены, «я администратор», «хочу внести изменения», «открой режим управления», «вход администратора»:
 ведёт Ольга. Сразу спроси кодовое слово, без длинного вступления. Само слово не называй и не угадывай.
 Когда назвали слово — вызови verify_admin_code с этой фразой. В ответе слово не повторяй.
-Если код верный: «доступ к изменению сайта открыт, что меняем?» Дальше set_price / set_prices_group.
+Если код верный: «доступ открыт на 30 минут, что меняем?» Дальше set_price / set_prices_group / set_site_text / set_voice_settings.
+Если доступ уже открыт — не переспрашивай слово, даже при переходе на другую страницу.
 После правки коротко подтверди: курс и новая цена. Если просят обновить страницу — reload_page.
 Без верного кода сайт не меняй.
 
@@ -57,10 +58,10 @@ path: «главная», имя курса или текущая страниц
 clear_site_text — вернуть исходный текст поля.
 После текстовой правки вызови reload_page.
 
-Голоса. После кода можно менять голоса Олега и Ольги: set_voice_settings.
-Олег — только мужской (filipp, zahar, ermil). Ольга — только женский (alena, jane, marina, masha).
-speed от 0.9 до 1.5, чем больше — тем меньше паузы между словами. faster/slower — чуть быстрее/медленнее.
-role: good (приятный), friendly, neutral.
+Голоса. После кода set_voice_settings.
+Олег — только мужской (zahar, filipp, ermil). Ольга — только женский (alena, jane, marina).
+speed 1.0 — нормальный темп слов. pause 0–1 — чем меньше, тем короче паузы.
+mood: good радостный позитивный, friendly, calm спокойный, quiet тихий.
 После смены голоса скажи, что сохранено. Страницу перезагружать не обязательно.
 `;
 
@@ -160,17 +161,19 @@ const ADMIN_TOOLS = [
     type: "function" as const,
     function: {
       name: "set_voice_settings",
-      description: "Настроить голоса Олега и Ольги: тембр, скорость, характер. Только администратор.",
+      description: "Настроить голоса: Олег мужской, Ольга женский, темп, пауза, интонация.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
           who: { type: "string", description: "oleg | olga | оба" },
-          voice: { type: "string", description: "filipp, zahar, ermil, alena, jane, marina, masha" },
-          speed: { type: "number", description: "0.9–1.5, больше — быстрее, меньше пауз" },
+          voice: { type: "string", description: "zahar, filipp, ermil, alena, jane, marina" },
+          speed: { type: "number", description: "Темп слов 0.9–1.2, 1.0 нормальный" },
+          pause: { type: "number", description: "Пауза 0–1, меньше — короче паузы" },
           faster: { type: "boolean" },
           slower: { type: "boolean" },
-          role: { type: "string", description: "good | friendly | neutral" },
+          mood: { type: "string", description: "good радостный | friendly | calm спокойный | quiet тихий" },
+          role: { type: "string" },
         },
       },
     },
@@ -374,7 +377,7 @@ export const chatAgent = createServerFn({ method: "POST" })
           ? "\n\nСейчас родитель говорит только с Ольгой. Отвечай исключительно строками «Ольга:». Олег молчит. Женский род: согласна, готова, поняла."
           : "";
     const adminHint = admin
-      ? `\n\nСобеседник уже администратор. Сейчас страница: ${data.path || "/"}. Меняй цены и тексты инструментами. После правки подтверди. По просьбе — reload_page.`
+      ? `\n\nСобеседник УЖЕ администратор, доступ открыт на 30 минут. Сейчас страница: ${data.path || "/"}. НИКОГДА не проси кодовое слово снова. Не говори «назовите кодовое слово». Сразу работай с правками: цены, тексты, голоса. Если спрашивают войти — ответь: «режим управления уже открыт, что меняем?»`
       : "";
     const messages: ChatMsg[] = [{ role: "system", content: SYSTEM + solo + adminHint }, ...trimmed];
     try {
@@ -435,7 +438,7 @@ export const chatAgent = createServerFn({ method: "POST" })
               const ok = checkCodeword(String(args.word || ""));
               if (ok) {
                 admin = true;
-                granted = makeAdminToken();
+                granted = makeAdminToken(30 * 60 * 1000);
                 logAdmin("Вход по кодовому слову");
                 messages.push({
                   role: "tool",
@@ -550,12 +553,14 @@ export const chatAgent = createServerFn({ method: "POST" })
                   args.speed != null ? Number(args.speed) : undefined,
                   Boolean(args.faster),
                   Boolean(args.slower),
+                  args.mood ? String(args.mood) : args.role ? String(args.role) : undefined,
+                  args.pause != null ? Number(args.pause) : undefined,
                 );
               }
               if (args.speed != null && !args.faster && !args.slower) {
                 settings = saveVoiceSettings({ speed: Number(args.speed) });
               }
-              if (args.role) settings = saveVoiceSettings({ role: String(args.role) });
+              if (args.role || args.mood) settings = saveVoiceSettings({ mood: String(args.mood || args.role) });
               logAdmin(`Голоса: Олег ${settings.oleg}, Ольга ${settings.olga}, ${settings.speed}`);
               messages.push({
                 role: "tool",

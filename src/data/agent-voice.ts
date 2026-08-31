@@ -1,6 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { serverEnv } from "./server-env";
-import { loadVoiceSettings } from "./voice-settings";
+import { loadVoiceSettings, type VoiceSettings } from "./voice-settings";
+
+const MALE = ["zahar", "filipp", "ermil"];
+const FEMALE = ["alena", "jane", "marina"];
 
 function speakRu(text: string) {
   return text
@@ -20,13 +23,16 @@ function speakRu(text: string) {
     .replace(/\bSTEAM\b/g, "стим");
 }
 
-function clean(text: string) {
-  return speakRu(text)
+function clean(text: string, pause: number) {
+  let t = speakRu(text)
     .replace(/https?:\/\/\S+/g, "")
     .replace(/[#*_`>]+/g, "")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 800);
+    .trim();
+  if (pause < 0.45) {
+    t = t.replace(/\s+[—–]\s+/g, ", ").replace(/\s*\.{2,}\s*/g, ". ").replace(/;\s+/g, ", ");
+  }
+  return t.slice(0, 800);
 }
 
 function audioFromV3(raw: string) {
@@ -53,15 +59,24 @@ function audioFromV3(raw: string) {
   return Buffer.concat(parts);
 }
 
-async function synthesize(text: string, voice: string, role: string, speed: number, key: string, folder: string) {
+function roleOf(mood: string) {
+  if (mood === "calm" || mood === "quiet" || mood === "neutral") return "neutral";
+  if (mood === "friendly") return "friendly";
+  return "good";
+}
+
+async function synthesize(text: string, voice: string, role: string, speed: number, pause: number, key: string, folder: string) {
   const auths = [`Bearer ${key}`, `Api-Key ${key}`];
+  const breakMs = Math.round(20 + pause * 90);
+  const ssml = `<speak>${text
+    .replace(/&/g, "&")
+    .replace(/</g, "<")
+    .replace(/([.!?])\s+/g, `$1<break time="${breakMs}ms"/> `)}</speak>`;
   const bodies = [
-    {
-      text,
-      hints: [{ voice }, { role }, { speed: String(speed) }],
-      folderId: folder,
-    },
-    { text, voice, folderId: folder },
+    { text, hints: [{ voice }, { role }, { speed }] },
+    { text, hints: [{ voice }, { speed }] },
+    { ssml, hints: [{ voice }] },
+    { text, voice, hints: [{ voice }] },
   ];
   for (const auth of auths) {
     for (const body of bodies) {
@@ -72,7 +87,7 @@ async function synthesize(text: string, voice: string, role: string, speed: numb
           "Content-Type": "application/json",
           "x-folder-id": folder,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, folderId: folder }),
       });
       if (!res.ok) continue;
       const buf = audioFromV3(await res.text());
@@ -85,17 +100,37 @@ async function synthesize(text: string, voice: string, role: string, speed: numb
 }
 
 export const speakAgent = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { text: string; who?: "oleg" | "olga" })
+  .validator(
+    (data: unknown) =>
+      data as {
+        text: string;
+        who?: "oleg" | "olga";
+        preview?: Partial<VoiceSettings>;
+      },
+  )
   .handler(async ({ data }) => {
     const key = serverEnv("YANDEX_API_KEY");
     const folder = serverEnv("YANDEX_FOLDER_ID");
-    const text = clean(data.text || "");
+    const settings = { ...loadVoiceSettings(), ...(data.preview || {}) };
+    const who = data.who === "olga" ? "olga" : "oleg";
+    const preferred = who === "olga" ? settings.olga : settings.oleg;
+    const list = who === "olga" ? [preferred, ...FEMALE.filter((v) => v !== preferred)] : [preferred, ...MALE.filter((v) => v !== preferred)];
+    const text = clean(data.text || "", settings.pause);
     if (!key || !folder || !text) return { ok: false as const, error: "no-voice" };
-    const settings = loadVoiceSettings();
-    const voice = data.who === "olga" ? settings.olga : settings.oleg;
-    const audio = await synthesize(text, voice, settings.role, settings.speed, key, folder);
-    if (!audio) return { ok: false as const, error: "tts" };
-    return { ok: true as const, audio, speed: settings.speed };
+    const mood = settings.mood || settings.role || "good";
+    for (const voice of list) {
+      const audio = await synthesize(text, voice, roleOf(mood), settings.speed, settings.pause, key, folder);
+      if (audio) {
+        return {
+          ok: true as const,
+          audio,
+          speed: 1,
+          volume: mood === "quiet" ? 0.72 : 1,
+          voice,
+        };
+      }
+    }
+    return { ok: false as const, error: "tts" };
   });
 
 export const publicVoiceSettings = createServerFn({ method: "GET" }).handler(async () => loadVoiceSettings());

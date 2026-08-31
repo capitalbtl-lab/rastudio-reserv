@@ -67,6 +67,29 @@ function Duo({ size, mood }: { size: number; mood: Mood }) {
   );
 }
 
+const CHAT_KEY = "ra_chat";
+
+function readChat(): Msg[] {
+  try {
+    const raw = sessionStorage.getItem(CHAT_KEY);
+    if (!raw) return [{ role: "assistant", content: HELLO }];
+    const parsed = JSON.parse(raw) as Msg[];
+    return parsed?.length ? parsed : [{ role: "assistant", content: HELLO }];
+  } catch {
+    return [{ role: "assistant", content: HELLO }];
+  }
+}
+
+function adminLeft() {
+  try {
+    const t = localStorage.getItem("ra_admin") || "";
+    const exp = Number(t.split(".")[1] || 0);
+    return Math.max(0, exp - Date.now());
+  } catch {
+    return 0;
+  }
+}
+
 export function AgentChat() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -77,6 +100,7 @@ export function AgentChat() {
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
+  const [adminMs, setAdminMs] = useState(0);
   const [box, setBox] = useState({ w: 400, h: 608 });
   const dragRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -95,6 +119,21 @@ export function AgentChat() {
   const offer = nextChips(messages);
   voiceOnRef.current = voiceOn;
   partnerRef.current = partner;
+
+  useEffect(() => {
+    setMessages(readChat());
+    setAdminMs(adminLeft());
+    const id = window.setInterval(() => setAdminMs(adminLeft()), 10000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(CHAT_KEY, JSON.stringify(messages.slice(-24)));
+    } catch {
+      /* */
+    }
+  }, [messages]);
 
   useEffect(() => {
     const node = lastMsgRef.current;
@@ -139,7 +178,7 @@ export function AgentChat() {
       );
     }
     return (
-      pool.find((v) => /pavel|zahar|dmitri|filipp|ermil|male|мужск/i.test(v.name)) ||
+      pool.find((v) => /pavel|zahar|dmitri|filipp|ermil|yuri|male|мужск/i.test(v.name)) ||
       pool.find((v) => /microsoft/i.test(v.name) && !/irina/i.test(v.name)) ||
       pool[pool.length - 1] ||
       pool[0]
@@ -153,8 +192,8 @@ export function AgentChat() {
       const start = () => {
         const u = new SpeechSynthesisUtterance(text);
         u.lang = "ru-RU";
-        u.rate = who === "olga" ? 1.22 : 1.2;
-        u.pitch = who === "olga" ? 1.06 : 0.88;
+        u.rate = 1.05;
+        u.pitch = who === "olga" ? 1.05 : 0.68;
         u.volume = 1;
         const voice = pickVoice(who, synth.getVoices());
         if (voice) u.voice = voice;
@@ -173,7 +212,7 @@ export function AgentChat() {
     });
   }
 
-  async function playClip(dataUrl: string, rate = 1.2) {
+  async function playClip(dataUrl: string, volume = 1) {
     const el = audioElRef.current || new Audio();
     audioElRef.current = el;
     await new Promise<void>((resolve, reject) => {
@@ -187,9 +226,9 @@ export function AgentChat() {
         else resolve();
       };
       el.preload = "auto";
-      el.volume = 1;
+      el.volume = Math.min(1, Math.max(0.4, volume));
       el.muted = false;
-      el.playbackRate = Math.min(1.6, Math.max(0.85, rate));
+      el.playbackRate = 1;
       el.onended = () => done(false);
       el.onerror = () => done(true);
       audioRef.current = {
@@ -223,7 +262,7 @@ export function AgentChat() {
           });
           if (res.ok && "audio" in res && gen === genRef.current) {
             spokenRef.current = turn.text;
-            await playClip(res.audio, "speed" in res ? Number(res.speed) : 1.2);
+            await playClip(res.audio, "volume" in res ? Number(res.volume) : 1);
             continue;
           }
         } catch {
@@ -328,7 +367,8 @@ export function AgentChat() {
         reply = res.reply;
         if (res.token) {
           localStorage.setItem("ra_admin", res.token);
-          document.cookie = `ra_admin=${encodeURIComponent(res.token)}; path=/; max-age=${7 * 24 * 3600}; samesite=lax`;
+          document.cookie = `ra_admin=${encodeURIComponent(res.token)}; path=/; max-age=${30 * 60}; samesite=lax`;
+          setAdminMs(adminLeft());
         }
         shouldReload = Boolean(res.reload);
         if (res.open) {
@@ -599,11 +639,14 @@ export function AgentChat() {
                 type="button"
                 className="shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-semibold text-primary hover:bg-primary/10"
                 onClick={() => {
-                  setPartner("olga");
-                  void send("Я администратор сайта. Открой режим управления сайтом и спроси кодовое слово.");
+                  if (adminLeft() > 0) {
+                    void send("Режим управления уже открыт. Не спрашивай кодовое слово. Что меняем на сайте?");
+                  } else {
+                    void send("Я администратор сайта. Спроси кодовое слово один раз и открой режим управления на 30 минут.");
+                  }
                 }}
               >
-                Вход администратора
+                {adminMs > 0 ? `Управление · ${Math.max(1, Math.round(adminMs / 60000))} мин` : "Вход администратора"}
               </button>
             </div>
           </form>

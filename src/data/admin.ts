@@ -25,7 +25,7 @@ export const adminLogin = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Неверный пароль." };
     }
     logAdmin("Вход в кабинет");
-    return { ok: true as const, token: makeAdminToken() };
+    return { ok: true as const, token: makeAdminToken(7 * 24 * 60 * 60 * 1000) };
   });
 
 export const adminPrices = createServerFn({ method: "POST" })
@@ -125,22 +125,29 @@ export const adminVoice = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string })
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
-    const { loadVoiceSettings, MALE_VOICES, FEMALE_VOICES, VOICE_ROLES } = await import("./voice-settings");
+    const { loadVoiceSettings, MALE_VOICES, FEMALE_VOICES, VOICE_MOODS } = await import("./voice-settings");
     return {
       ok: true as const,
       settings: loadVoiceSettings(),
       male: [...MALE_VOICES],
       female: [...FEMALE_VOICES],
-      roles: [...VOICE_ROLES],
+      roles: [...VOICE_MOODS],
     };
   });
 
 export const adminSaveVoice = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { token?: string; oleg?: string; olga?: string; speed?: number; role?: string })
+  .validator((data: unknown) => data as { token?: string; oleg?: string; olga?: string; speed?: number; role?: string; mood?: string; pause?: number })
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
     const { saveVoiceSettings } = await import("./voice-settings");
-    const settings = saveVoiceSettings({ oleg: data.oleg, olga: data.olga, speed: data.speed, role: data.role });
-    logAdmin(`Голоса: Олег ${settings.oleg}, Ольга ${settings.olga}, ${settings.speed}`);
+    const settings = saveVoiceSettings({
+      oleg: data.oleg,
+      olga: data.olga,
+      speed: data.speed,
+      role: data.mood || data.role,
+      mood: data.mood || data.role,
+      pause: data.pause,
+    });
+    logAdmin(`Голоса: Олег ${settings.oleg}, Ольга ${settings.olga}, ${settings.speed}, пауза ${settings.pause}`);
     return { ok: true as const, settings };
   });

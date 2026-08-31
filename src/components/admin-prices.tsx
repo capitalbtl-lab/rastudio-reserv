@@ -16,15 +16,17 @@ import {
 } from "@/data/admin";
 import { fieldLabel } from "@/data/edits-core";
 import { PRICE_DIRECTIONS, hydratePrices, type PriceRow } from "@/data/prices-core";
+import { speakAgent } from "@/data/agent-voice";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const KEY = "ra_admin";
-type Tab = "prices" | "voice" | "access";
+type Tab = "prices" | "voice" | "access" | "voices";
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: "prices", label: "Цены курсов", hint: "Прайс на сайте" },
-  { id: "voice", label: "Изменение сайта голосом", hint: "Тексты и настройки" },
+  { id: "voice", label: "Изменение сайта голосом", hint: "Тексты" },
+  { id: "voices", label: "Настройки голосов", hint: "Олег и Ольга" },
   { id: "access", label: "Голосовой доступ", hint: "Кодовое слово" },
 ];
 
@@ -60,7 +62,7 @@ export function AdminPrices() {
   const [log, setLog] = useState<{ at: string; text: string }[]>([]);
   const [savedWord, setSavedWord] = useState("");
   const [edits, setEdits] = useState<{ path: string; fields: Record<string, string> }[]>([]);
-  const [voice, setVoice] = useState({ oleg: "filipp", olga: "alena", speed: 1.28, role: "good" });
+  const [voice, setVoice] = useState({ oleg: "zahar", olga: "alena", speed: 1.05, pause: 0.2, mood: "good", role: "good" });
   const [male, setMale] = useState<{ id: string; label: string }[]>([]);
   const [female, setFemale] = useState<{ id: string; label: string }[]>([]);
   const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
@@ -84,7 +86,14 @@ export function AdminPrices() {
     if (ed.ok) setEdits(ed.edits || []);
     const vo = await adminVoice({ data: { token: t } });
     if (vo.ok) {
-      setVoice(vo.settings);
+      setVoice({
+        oleg: vo.settings.oleg,
+        olga: vo.settings.olga,
+        speed: vo.settings.speed,
+        pause: vo.settings.pause ?? 0.2,
+        mood: vo.settings.mood || vo.settings.role || "good",
+        role: vo.settings.role || "good",
+      });
       setMale(vo.male);
       setFemale(vo.female);
       setRoles(vo.roles);
@@ -145,6 +154,38 @@ export function AdminPrices() {
     else await load();
   }
 
+  async function listen(who: "oleg" | "olga") {
+    setBusy(true);
+    try {
+      const sample =
+        who === "olga"
+          ? "Здравствуйте, я Ольга. Подберём курс, который подойдёт вашему ребёнку."
+          : "Здравствуйте, я Олег. Расскажу про робототехнику и программирование.";
+      const res = await speakAgent({
+        data: {
+          text: sample,
+          who,
+          preview: {
+            oleg: voice.oleg,
+            olga: voice.olga,
+            speed: voice.speed,
+            pause: voice.pause,
+            mood: voice.mood || voice.role,
+            role: voice.mood || voice.role,
+          },
+        },
+      });
+      if (res.ok && "audio" in res) {
+        const el = new Audio(res.audio);
+        el.volume = "volume" in res ? Number(res.volume) : 1;
+        await el.play();
+      } else setErr("Не удалось проиграть голос.");
+    } catch {
+      setErr("Не удалось проиграть голос.");
+    }
+    setBusy(false);
+  }
+
   function patch(path: string, key: "all" | "kbm" | "tmx", value: string) {
     const n = Number(value.replace(/\s/g, ""));
     setRows((prev) => prev.map((r) => (r.path === path ? { ...r, [key]: Number.isFinite(n) ? n : 0 } : r)));
@@ -193,7 +234,7 @@ export function AdminPrices() {
         </button>
       </div>
 
-      <div className="mt-8 grid gap-3 md:grid-cols-3">
+      <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {TABS.map((item) => (
           <button
             key={item.id}
@@ -394,37 +435,35 @@ export function AdminPrices() {
         </section>
       ) : null}
 
-      {tab === "access" ? (
+      {tab === "voices" ? (
         <section className="mt-10 space-y-6">
           <div>
-            <h2 className="font-display text-3xl">Голосовой доступ</h2>
+            <h2 className="font-display text-3xl">Настройки голосов</h2>
             <p className="mt-2 max-w-2xl text-sm text-muted">
-              Кодовое слово открывает правки. Здесь же — голоса Олега и Ольги.
+              Олег — только мужской, Ольга — только женский. Темп речи нормальный, пауза между словами регулируется отдельно. Прослушайте и сохраните.
             </p>
           </div>
-
           <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-            <p className="text-sm font-semibold">Голоса Олега и Ольги</p>
-            <p className="mt-1 text-sm text-muted">
-              Олег говорит мужским, Ольга — женским. Скорость больше 1.2 — меньше пауз между словами. Можно сказать в чате: «Олегу голос Филипп», «говорите быстрее».
-            </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               <label className="text-sm">
-                Олег
+                Олег, мужской
                 <select
                   className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
                   value={voice.oleg}
                   onChange={(e) => setVoice((v) => ({ ...v, oleg: e.target.value }))}
                 >
-                  {(male.length ? male : [{ id: "filipp", label: "Филипп" }]).map((item) => (
+                  {(male.length ? male : [{ id: "zahar", label: "Захар" }]).map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.label}
                     </option>
                   ))}
                 </select>
+                <button type="button" className="mt-2 text-sm font-semibold text-primary" onClick={() => void listen("oleg")}>
+                  Слушать Олега
+                </button>
               </label>
               <label className="text-sm">
-                Ольга
+                Ольга, женский
                 <select
                   className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
                   value={voice.olga}
@@ -436,15 +475,18 @@ export function AdminPrices() {
                     </option>
                   ))}
                 </select>
+                <button type="button" className="mt-2 text-sm font-semibold text-primary" onClick={() => void listen("olga")}>
+                  Слушать Ольгу
+                </button>
               </label>
               <label className="text-sm">
-                Характер
+                Интонация
                 <select
                   className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                  value={voice.role}
-                  onChange={(e) => setVoice((v) => ({ ...v, role: e.target.value }))}
+                  value={voice.mood || voice.role}
+                  onChange={(e) => setVoice((v) => ({ ...v, mood: e.target.value, role: e.target.value }))}
                 >
-                  {(roles.length ? roles : [{ id: "good", label: "Доброжелательный" }]).map((item) => (
+                  {(roles.length ? roles : [{ id: "good", label: "Радостный, позитивный" }]).map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.label}
                     </option>
@@ -452,29 +494,45 @@ export function AdminPrices() {
                 </select>
               </label>
               <label className="text-sm">
-                Скорость {voice.speed.toFixed(2)}
+                Темп речи {voice.speed.toFixed(2)}
                 <input
                   type="range"
                   min="0.9"
-                  max="1.5"
-                  step="0.02"
+                  max="1.2"
+                  step="0.01"
                   value={voice.speed}
                   onChange={(e) => setVoice((v) => ({ ...v, speed: Number(e.target.value) }))}
                   className="mt-3 block w-full"
                 />
+                <span className="text-xs text-muted">1.00 — обычная скорость слов</span>
+              </label>
+              <label className="text-sm md:col-span-2">
+                Пауза между словами {Number(voice.pause ?? 0.2).toFixed(2)}
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={voice.pause ?? 0.2}
+                  onChange={(e) => setVoice((v) => ({ ...v, pause: Number(e.target.value) }))}
+                  className="mt-3 block w-full"
+                />
+                <span className="text-xs text-muted">Левее — короче паузы, правее — спокойнее, с воздухом</span>
               </label>
             </div>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="mt-5 flex flex-wrap items-center gap-3">
               <Button
                 type="button"
                 disabled={busy}
                 onClick={async () => {
                   setBusy(true);
-                  const res = await adminSaveVoice({ data: { token: token(), ...voice } });
+                  const res = await adminSaveVoice({
+                    data: { token: token(), oleg: voice.oleg, olga: voice.olga, speed: voice.speed, pause: voice.pause, mood: voice.mood || voice.role },
+                  });
                   setBusy(false);
                   if (!res.ok) setErr(res.error);
                   else {
-                    setVoice(res.settings);
+                    setVoice({ ...res.settings, mood: res.settings.mood || res.settings.role });
                     setSavedVoice("Голоса сохранены");
                   }
                 }}
@@ -483,6 +541,17 @@ export function AdminPrices() {
               </Button>
               {savedVoice ? <p className="text-sm text-primary">{savedVoice}</p> : null}
             </div>
+          </div>
+        </section>
+      ) : null}
+
+      {tab === "access" ? (
+        <section className="mt-10 space-y-6">
+          <div>
+            <h2 className="font-display text-3xl">Голосовой доступ</h2>
+            <p className="mt-2 max-w-2xl text-sm text-muted">
+              Кодовое слово открывает правки на 30 минут. Голоса настраиваются в разделе «Настройки голосов».
+            </p>
           </div>
 
           <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
