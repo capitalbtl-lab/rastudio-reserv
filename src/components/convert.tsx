@@ -13,74 +13,68 @@ export function TrialPromise({ light = false }: { light?: boolean }) {
   );
 }
 
-export function TrialSlots({ sessions }: { sessions: CmsSession[] }) {
-  const slots = nextSlots(sessions, 3);
-  if (!slots.length) return null;
-  return (
-    <div>
-      <p className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-primary">Ближайшие группы</p>
-      <ul className="mt-3 space-y-2">
-        {slots.map((slot) => {
-          const meta = branchMeta(slot.session);
-          return (
-            <li key={slot.id}>
-              <a
-                href="#trial"
-                className="flex items-center justify-between gap-3 rounded-xl bg-surface px-3 py-2.5 shadow-[var(--shadow-border)] hover:shadow-[var(--shadow-border-hover)]"
-              >
-                <span>
-                  <span className="block text-sm font-semibold">
-                    {slot.day || "День"} {slot.time}
-                  </span>
-                  <span className="text-xs text-muted">{meta.short}</span>
-                </span>
-                <span className="text-xs font-semibold text-primary">Занять →</span>
-              </a>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-export function Objections() {
-  return (
-    <div className="grid gap-2 sm:grid-cols-2">
-      {OBJECTIONS.map((item) => (
-        <article key={item.title} className="rounded-xl bg-surface px-4 py-3 shadow-[var(--shadow-border)]">
-          <p className="text-sm font-semibold">{item.title}</p>
-          <p className="mt-1 text-xs leading-relaxed text-muted">{item.text}</p>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-export function HeroReview({ path }: { path: string }) {
-  const item = reviewsForPath(path)[0];
-  if (!item) return null;
-  return (
-    <figure className="rounded-xl bg-surface p-4 shadow-[var(--shadow-border)]">
-      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-primary">
-        Яндекс · {YANDEX_RATING.score}
-      </p>
-      <blockquote className="mt-2 text-sm leading-relaxed text-fg/90">«{item.text.slice(0, 180)}{item.text.length > 180 ? "…" : ""}»</blockquote>
-      <figcaption className="mt-2 text-xs text-muted">
-        {item.name} · {item.course}
-      </figcaption>
-    </figure>
-  );
-}
-
 export function ConvertBand({ path, sessions }: { path: string; sessions: CmsSession[] }) {
+  const slots = nextSlots(sessions, 3);
+  const review = reviewsForPath(path)[0];
+
   return (
-    <section className="border-b border-border bg-bg">
-      <div className="page-wrap grid gap-6 py-8 md:grid-cols-2 md:items-start">
-        <TrialSlots sessions={sessions} />
-        <div className="space-y-4">
-          <Objections />
-          <HeroReview path={path} />
+    <section className="border-b border-border">
+      <div className="page-wrap py-8 md:py-10">
+        <div className="overflow-hidden rounded-[1.75rem] bg-surface p-5 shadow-[var(--shadow-border)] md:p-8">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="kicker text-primary">Пробное занятие</p>
+              <h2 className="display mt-2 text-2xl md:text-3xl">Приходите посмотреть — решите после</h2>
+            </div>
+            {review ? (
+              <p className="text-sm font-semibold text-muted">Яндекс · {YANDEX_RATING.score}</p>
+            ) : null}
+          </div>
+
+          {slots.length ? (
+            <ul className="mt-6 grid gap-3 sm:grid-cols-3">
+              {slots.map((slot) => {
+                const meta = branchMeta(slot.session);
+                return (
+                  <li key={slot.id}>
+                    <a
+                      href="#trial"
+                      className="flex h-full flex-col rounded-2xl bg-bg px-4 py-4 transition-shadow hover:shadow-[var(--shadow-border-hover)]"
+                    >
+                      <span className="display text-[1.35rem] leading-none">
+                        {slot.day || "День"}
+                      </span>
+                      <span className="mt-2 text-sm font-semibold">{slot.time}</span>
+                      <span className="mt-1 text-sm text-muted">{meta.short}</span>
+                      <span className="mt-auto pt-4 text-sm font-semibold text-primary">Занять место →</span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+
+          <ul className="mt-6 grid gap-4 border-t border-border pt-6 sm:grid-cols-2 lg:grid-cols-4">
+            {OBJECTIONS.map((item, i) => (
+              <li key={item.title}>
+                <p className="display text-[0.7rem] text-primary/50">0{i + 1}</p>
+                <p className="mt-2 text-[0.95rem] font-semibold leading-snug">{item.title}</p>
+                <p className="mt-1 text-sm leading-relaxed text-muted">{item.text}</p>
+              </li>
+            ))}
+          </ul>
+
+          {review ? (
+            <figure className="mt-6 border-t border-border pt-6">
+              <blockquote className="display max-w-3xl text-lg leading-snug md:text-xl">
+                «{review.text.slice(0, 220)}
+                {review.text.length > 220 ? "…" : ""}»
+              </blockquote>
+              <figcaption className="mt-3 text-sm text-muted">
+                {review.name} · {review.course} · Яндекс Карты
+              </figcaption>
+            </figure>
+          ) : null}
         </div>
       </div>
     </section>
