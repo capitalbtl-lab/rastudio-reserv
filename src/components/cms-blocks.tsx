@@ -462,7 +462,7 @@ export function CourseStory({
           {leftover.length ? (
             <Expandable
               preview={null}
-              more={
+              rest={
                 <div className="space-y-4 text-[0.98rem] leading-relaxed text-fg/80">
                   {leftover.map((p) => (
                     <p key={p.slice(0, 40)}>{p}</p>
