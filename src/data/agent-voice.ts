@@ -19,9 +19,9 @@ export const speakAgent = createServerFn({ method: "POST" })
     const body = new URLSearchParams({
       text,
       lang: "ru-RU",
-      voice: "alena",
+      voice: "filipp",
       emotion: "good",
-      speed: "1.05",
+      speed: "1.3",
       format: "mp3",
       folderId: folder,
     });

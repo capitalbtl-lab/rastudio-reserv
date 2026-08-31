@@ -201,7 +201,7 @@ export function AgentChat() {
                   voiceOn ? "bg-white text-primary" : "bg-black/15 hover:bg-black/25",
                 )}
                 onClick={() => void toggleVoice()}
-                aria-label={voiceOn ? "Выключить голос Алисы" : "Включить голос Алисы"}
+                aria-label={voiceOn ? "Выключить голос" : "Включить голос"}
               >
                 <Volume2 className="size-4" />
               </button>
@@ -226,7 +226,7 @@ export function AgentChat() {
               <div className="min-w-0 pb-1">
                 <p className="font-display text-[1.15rem] leading-tight">Олег</p>
                 <p className="text-[0.78rem] text-white/85">
-                  {speaking ? "Говорит голосом Алисы" : listening ? "Слушает вас" : "Администратор студии · онлайн"}
+                  {speaking ? "Говорит" : listening ? "Слушает вас" : "Администратор студии · онлайн"}
                 </p>
               </div>
             </div>
@@ -338,7 +338,7 @@ export function AgentChat() {
               </button>
             </div>
             <p className="px-3 pt-1.5 text-[0.65rem] text-muted">
-              {voiceOn ? "Голосовой режим · Алиса" : `Пробное без обязательств · ${SITE.phone}`}
+              {voiceOn ? "Голосовой режим включён" : `Пробное без обязательств · ${SITE.phone}`}
             </p>
           </form>
         </div>
