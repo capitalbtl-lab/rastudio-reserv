@@ -7,6 +7,7 @@ import { publicAgentUi, type AgentUiFlags } from "@/data/agent-config";
 import { speakAgent } from "@/data/agent-voice";
 import { saveChatLog } from "@/data/chat-logs";
 import { nextChips } from "@/data/agent-chips";
+import { debugEmit } from "@/data/debug-mode";
 import { parseTurns, faceOf, type Who } from "@/data/agent-turns";
 import { PageLink } from "@/components/page-link";
 import { SITE } from "@/data/site";
@@ -21,7 +22,7 @@ type Rec = {
   stop: () => void;
   onresult: ((e: { results: { length: number; [i: number]: { isFinal?: boolean; 0: { transcript: string } } } }) => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((e?: { error?: string }) => void) | null;
 };
 
 function speechCtor() {
@@ -30,29 +31,15 @@ function speechCtor() {
 }
 type Msg = { role: "user" | "assistant"; content: string };
 type Mood = "hello" | "think" | "happy" | "sorry";
+const SILENCE = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
 function greeting(who: "oleg" | "olga", _voice = false) {
   const name = who === "olga" ? "Ольга" : "Олег";
-  return `${name}: Подскажу программу, которая подойдёт именно вашему ребёнку. Скажите, сколько лет ребёнку — сразу подберу то, что зайдёт именно ему.`;
+  return `${name}: Здравствуйте. Рады приветствовать вас на сайте студии «Развивайся». С удовольствием проконсультирую и подберу программу, которая подойдёт именно вашему ребёнку.`;
 }
-const DUAL_HELLO = /Олег: Подскажу программу[\s\S]*Ольга:/;
+const DUAL_HELLO = /Олег: Здравствуйте[\s\S]*Ольга:/;
 const ADMIN_ASK = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
 const ADMIN_HELLO = "Ольга: Доступ открыт на 30 минут. Цены, тексты страниц или голоса — что меняем?";
-
-function sameAsk(prev: string, next: string, exactOnly = true) {
-  const a = prev.replace(/^(Ольга|Олег):\s*/gi, "").replace(/\s+/g, " ").trim().toLowerCase();
-  const b = next.replace(/^(Ольга|Олег):\s*/gi, "").replace(/\s+/g, " ").trim().toLowerCase();
-  if (!b) return true;
-  if (a === b) return true;
-  if (exactOnly) return false;
-  const age = /сколько.{0,24}лет|возраст|кнопки ниже/i;
-  const city = /коломна или луховиц|удобнее коломн/i;
-  const branch = /цмит|гражданская, 2|какой ближе/i;
-  if (age.test(a) && age.test(b)) return true;
-  if (city.test(a) && city.test(b)) return true;
-  if (branch.test(a) && branch.test(b)) return true;
-  return false;
-}
 
 function moodOf(messages: Msg[], busy: boolean): Mood {
   if (busy) return "think";
@@ -234,6 +221,12 @@ export function AgentChat() {
   const listenWantedRef = useRef(false);
   const partnerRef = useRef(partner);
   const awaitingCodeRef = useRef(false);
+  const clientMsgsRef = useRef(clientMsgs);
+  const adminMsgsRef = useRef(adminMsgs);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const chatGenRef = useRef(0);
+  clientMsgsRef.current = clientMsgs;
+  adminMsgsRef.current = adminMsgs;
   const inAdminUi = awaitingCode || adminMs > 0;
   const messages = inAdminUi ? (adminMsgs.length ? adminMsgs : [{ role: "assistant" as const, content: awaitingCode ? ADMIN_ASK : ADMIN_HELLO }]) : clientMsgs;
   const mood = moodOf(messages, busy);
@@ -314,6 +307,14 @@ export function AgentChat() {
       /* */
     }
   }, [adminMsgs]);
+
+  useEffect(() => {
+    debugEmit("chat", messages);
+  }, [messages]);
+
+  useEffect(() => {
+    debugEmit("voice", { voiceOn, listening, speaking, busy });
+  }, [voiceOn, listening, speaking, busy]);
 
   useEffect(() => {
     const node = lastMsgRef.current;
@@ -415,9 +416,13 @@ export function AgentChat() {
   }
 
   async function playClip(dataUrl: string, volume = 1) {
-    const el = new Audio();
-    el.preload = "auto";
-    el.playsInline = true;
+    let el = audioElRef.current;
+    if (!el) {
+      el = new Audio();
+      el.preload = "auto";
+      el.playsInline = true;
+      audioElRef.current = el;
+    }
     let objectUrl = "";
     try {
       const b64 = dataUrl.split(",")[1] || "";
@@ -452,7 +457,6 @@ export function AgentChat() {
       audioRef.current = {
         stop: () => {
           el.pause();
-          el.removeAttribute("src");
           done(false);
         },
       };
@@ -460,6 +464,35 @@ export function AgentChat() {
       const play = el.play();
       if (play && typeof play.catch === "function") play.catch(() => done(true));
     });
+  }
+
+  async function unlockAudio() {
+    try {
+      let el = audioElRef.current;
+      if (!el) {
+        el = new Audio();
+        el.playsInline = true;
+        audioElRef.current = el;
+      }
+      el.src = SILENCE;
+      el.volume = 0.01;
+      await el.play();
+      el.pause();
+    } catch {
+      /* iOS may still unlock after click */
+    }
+  }
+
+  async function ensureMic() {
+    if (micStreamRef.current?.active) return true;
+    if (!navigator.mediaDevices?.getUserMedia) return true;
+    try {
+      micStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      return true;
+    } catch (e) {
+      debugEmit("voice", { voiceOn: true, error: e instanceof Error ? e.message : "микрофон" });
+      return false;
+    }
   }
 
   async function yandexClip(text: string, who: Who) {
@@ -533,17 +566,26 @@ export function AgentChat() {
       .replace(/\s+/g, " ")
       .trim();
     const words = a.split(" ").filter((w) => w.length > 2);
-    if (a.length < 8 || words.length < 2) return true;
+    if (!a || !spokenRef.current) return false;
     const b = spokenRef.current.toLowerCase();
+    if (words.length < 2) return b.includes(a) && a.length > 10;
     const hits = words.filter((w) => b.includes(w)).length;
-    return hits / words.length >= 0.55;
+    return hits / words.length >= 0.7;
   }
 
-  function stopListen() {
+  function stopListen(keepMic = true) {
     listenWantedRef.current = false;
-    recRef.current?.stop();
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* */
+    }
     recRef.current = null;
     setListening(false);
+    if (!keepMic && micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+    }
   }
 
   function startListen() {
@@ -551,31 +593,44 @@ export function AgentChat() {
     const SR = speechCtor();
     if (!SR) return;
     listenWantedRef.current = true;
-    try {
-      recRef.current?.stop();
-    } catch {
-      /* not running */
+    if (recRef.current) {
+      try {
+        recRef.current.start();
+        setListening(true);
+      } catch {
+        /* already started */
+      }
+      return;
     }
     const rec = new SR();
     rec.lang = "ru-RU";
-    rec.continuous = false;
+    rec.continuous = true;
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
       if (busyRef.current || speakingRef.current) return;
       const last = e.results[e.results.length - 1];
+      if (last && "isFinal" in last && last.isFinal === false) return;
       const said = last?.[0]?.transcript?.trim();
-      if (said) void send(said);
+      if (!said || isEcho(said)) return;
+      void send(said);
     };
     rec.onend = () => {
       if (recRef.current && recRef.current !== rec) return;
       recRef.current = null;
       setListening(false);
       if (listenWantedRef.current && voiceOnRef.current && !busyRef.current && !speakingRef.current) {
-        startListen();
+        window.setTimeout(() => {
+          if (listenWantedRef.current && voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
+        }, 700);
       }
     };
-    rec.onerror = () => {
+    rec.onerror = (ev?: { error?: string }) => {
+      const err = String(ev?.error || "");
+      if (err === "not-allowed" || err === "service-not-allowed") {
+        listenWantedRef.current = false;
+        debugEmit("voice", { error: "микрофон запрещён" });
+      }
       recRef.current = null;
       setListening(false);
     };
@@ -598,30 +653,34 @@ export function AgentChat() {
       .replace(/\bлухавиц\w*/gi, "Луховицы")
       .replace(/\bлуховицк\w*/gi, "Луховицы");
     if (!next || busyRef.current) return;
-    const sendId = ++sendIdRef.current;
+    const gen = chatGenRef.current;
     setText("");
     cancelSpeech();
-    stopListen();
+    stopListen(true);
     const gate = awaitingCodeRef.current;
     const adminThread = gate || adminLeft() > 0;
     const shown = gate ? "••••" : next;
-    const base = adminThread ? (adminMsgs.length ? adminMsgs : [{ role: "assistant" as const, content: gate ? ADMIN_ASK : ADMIN_HELLO }]) : clientMsgs;
-    const history = [...base, { role: "user" as const, content: shown }].filter(
-      (m) => m.role !== "user" || !noisyAdmin(m.content),
-    );
-    if (adminThread) setAdminMsgs(history);
-    else setClientMsgs(history);
+    const userMsg: Msg = { role: "user", content: shown };
+    if (adminThread) {
+      const base = adminMsgsRef.current.length ? adminMsgsRef.current : [{ role: "assistant" as const, content: gate ? ADMIN_ASK : ADMIN_HELLO }];
+      adminMsgsRef.current = [...base, userMsg];
+      setAdminMsgs(adminMsgsRef.current);
+    } else {
+      clientMsgsRef.current = [...clientMsgsRef.current, userMsg];
+      setClientMsgs(clientMsgsRef.current);
+    }
     setGroupChips([]);
     busyRef.current = true;
     setBusy(true);
     let reply = `Не отправилось. Позвоните ${SITE.phone}.`;
     let shouldReload = false;
-    let skipBubble = false;
+    const t0 = Date.now();
     try {
+      const history = adminThread ? adminMsgsRef.current : clientMsgsRef.current;
       const res = await chatAgent({
         data: {
           messages: history,
-          with: adminThread ? "olga" : partner,
+          with: adminThread ? "olga" : partnerRef.current,
           token: siteAdminToken() || undefined,
           path: typeof window !== "undefined" ? window.location.pathname : "/",
           gate,
@@ -630,9 +689,9 @@ export function AgentChat() {
           channel: "site",
         },
       });
-      if (sendId !== sendIdRef.current) return;
+      debugEmit("net", { ok: res.ok, ms: Date.now() - t0, error: res.ok ? "" : (res as { error?: string }).error });
+      if (gen !== chatGenRef.current) return;
       if (res.ok) {
-        if ("silent" in res && res.silent) skipBubble = true;
         reply = adminThread || res.token ? olgaReply(res.reply) : res.reply;
         if (res.token) {
           awaitingCodeRef.current = false;
@@ -640,43 +699,47 @@ export function AgentChat() {
           setSiteAdmin(res.token);
           setAdminMs(adminLeft());
           setPartner("olga");
-          setAdminMsgs([{ role: "assistant", content: ADMIN_HELLO }]);
+          adminMsgsRef.current = [{ role: "assistant", content: ADMIN_HELLO }];
+          setAdminMsgs(adminMsgsRef.current);
           reply = ADMIN_HELLO;
         }
         shouldReload = Boolean(res.reload);
         if ("groups" in res && Array.isArray(res.groups) && res.groups.length) {
           setGroupChips((prev) => {
-            const next = [...prev];
+            const nextChipsList = [...prev];
             for (const chip of res.groups as typeof prev) {
-              const i = next.findIndex((c) => c.label === chip.label || (chip.href && c.href === chip.href));
-              if (i >= 0) next[i] = chip;
-              else next.push(chip);
+              const i = nextChipsList.findIndex((c) => c.label === chip.label || (chip.href && c.href === chip.href));
+              if (i >= 0) nextChipsList[i] = chip;
+              else nextChipsList.push(chip);
             }
-            return next;
+            return nextChipsList;
           });
         }
         if ("signup" in res && res.signup) {
           window.open(String(res.signup), "_blank", "noopener,noreferrer");
         }
       } else reply = res.error;
-    } catch {
-      if (sendId !== sendIdRef.current) return;
+    } catch (e) {
+      debugEmit("net", { ok: false, ms: Date.now() - t0, error: e instanceof Error ? e.message : "сеть" });
+      if (gen !== chatGenRef.current) return;
     }
-    if (sendId !== sendIdRef.current) return;
-    if (!reply.trim()) skipBubble = true;
-    const lastAs = [...history].reverse().find((m) => m.role === "assistant")?.content || "";
-    const dup = sameAsk(lastAs, reply, ui.keepAssistantReplies !== false);
-    if (!skipBubble && dup) skipBubble = true;
-    if (!skipBubble && !(gate && reply === ADMIN_HELLO)) {
-      const nextMsgs = [...history, { role: "assistant" as const, content: reply }];
-      if (adminThread) setAdminMsgs(nextMsgs);
-      else setClientMsgs(nextMsgs);
+    if (gen !== chatGenRef.current) return;
+    if (reply.trim() && !(gate && reply === ADMIN_HELLO && adminMsgsRef.current.some((m) => m.content === ADMIN_HELLO))) {
+      const live = adminThread ? adminMsgsRef.current : clientMsgsRef.current;
+      const nextMsgs = [...live, { role: "assistant" as const, content: reply }];
+      if (adminThread) {
+        adminMsgsRef.current = nextMsgs;
+        setAdminMsgs(nextMsgs);
+      } else {
+        clientMsgsRef.current = nextMsgs;
+        setClientMsgs(nextMsgs);
+      }
     }
     busyRef.current = false;
     setBusy(false);
-    if (voiceOnRef.current && reply.trim() && (!dup || ui.speakEveryReply)) {
+    if (voiceOnRef.current && reply.trim()) {
       await speak(reply);
-      if (sendId !== sendIdRef.current) return;
+      if (gen !== chatGenRef.current) return;
     }
     if (voiceOnRef.current && !speakingRef.current) startListen();
     if (shouldReload) window.setTimeout(() => window.location.reload(), voiceOnRef.current ? 600 : 200);
@@ -733,22 +796,20 @@ export function AgentChat() {
     if (voiceOn) {
       setVoiceOn(false);
       voiceOnRef.current = false;
-      stopListen();
+      stopListen(false);
       cancelSpeech();
       return;
     }
     voiceOnRef.current = true;
     setVoiceOn(true);
+    await unlockAudio();
+    await ensureMic();
     try {
       window.speechSynthesis?.getVoices();
     } catch {
       /* */
     }
-    const onlyHello =
-      !inAdminUi &&
-      clientMsgs.length === 1 &&
-      clientMsgs[0].role === "assistant";
-    const spoken = [...messages].reverse().find((m) => m.role === "assistant")?.content;
+    const spoken = [...(inAdminUi ? adminMsgsRef.current : clientMsgsRef.current)].reverse().find((m) => m.role === "assistant")?.content;
     if (spoken) await speak(spoken);
     if (voiceOnRef.current) startListen();
   }
@@ -819,6 +880,7 @@ export function AgentChat() {
                   cancelSpeech();
                   stopListen();
                   sendIdRef.current += 1;
+                  chatGenRef.current += 1;
                   busyRef.current = false;
                   setBusy(false);
                   const useful = messages.some((m) => m.role === "user" && !noisyAdmin(m.content));
@@ -839,7 +901,10 @@ export function AgentChat() {
                   awaitingCodeRef.current = false;
                   setAwaitingCode(false);
                   if (adminLeft() > 0) setAdminMsgs([{ role: "assistant", content: ADMIN_HELLO }]);
-                  else setClientMsgs([{ role: "assistant", content: greeting(partner, voiceOnRef.current) }]);
+                  else {
+                    clientMsgsRef.current = [{ role: "assistant", content: greeting(partner, voiceOnRef.current) }];
+                    setClientMsgs(clientMsgsRef.current);
+                  }
                   setGroupChips([]);
                   setText("");
                 }}
@@ -912,88 +977,84 @@ export function AgentChat() {
             ) : null}
           </div>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-[#eef1f7] px-3 py-2.5 sm:px-3.5 sm:py-3">
-            {messages.filter((m) => m.role !== "user" || !noisyAdmin(m.content)).map((m, i) =>
-              m.role === "user" ? (
-                <div key={i} className="flex justify-end">
+            {messages.filter((m) => m.role !== "user" || !noisyAdmin(m.content)).map((m, i, list) => {
+              const lastAs = [...list].map((x, idx) => (x.role === "assistant" ? idx : -1)).filter((n) => n >= 0).pop();
+              const mode = inAdminUi ? "olga" : partner;
+              const turnsRaw = parseTurns(m.content, mode);
+              const turns = (inAdminUi ? turnsRaw.filter((t) => t.who === "olga") : turnsRaw.filter((t) => t.who === partner));
+              const view = turns.length ? turns : [{ who: mode as Who, text: m.content.replace(/^(Олег|Ольга):\s*/i, "") }];
+              const chipBar =
+                i === lastAs && !busy && ui.showChips && offer.chips.length ? (
+                  <div className="pl-11">
+                    {offer.hint ? (
+                      <p className="mb-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">{offer.hint}</p>
+                    ) : null}
+                    <div className="flex flex-wrap gap-1.5">
+                      {offer.chips.map((chip) =>
+                        chip.href ? (
+                          chip.href.startsWith("/") ? (
+                            <PageLink
+                              key={chip.label}
+                              to={chip.href}
+                              className={cn(
+                                "rounded-full px-3 py-1.5 text-[0.78rem] font-semibold",
+                                chip.primary ? "bg-primary text-primary-foreground" : "bg-white text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground",
+                              )}
+                            >
+                              {chip.label}
+                            </PageLink>
+                          ) : (
+                            <a
+                              key={chip.label}
+                              href={chip.href}
+                              className={cn(
+                                "rounded-full px-3 py-1.5 text-[0.78rem] font-semibold",
+                                chip.primary ? "bg-primary text-primary-foreground" : "bg-white text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground",
+                              )}
+                            >
+                              {chip.label}
+                            </a>
+                          )
+                        ) : (
+                          <button
+                            key={chip.label}
+                            type="button"
+                            onClick={() => void send(chip.send || chip.label)}
+                            className={cn(
+                              "rounded-full px-3 py-1.5 text-[0.78rem] font-semibold",
+                              chip.primary ? "bg-primary text-primary-foreground" : "bg-white text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground",
+                            )}
+                          >
+                            {chip.label}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                ) : null;
+              return m.role === "user" ? (
+                <div key={`u-${i}`} className="flex justify-end">
                   <div className="max-w-[78%] rounded-2xl rounded-br-md bg-header px-3.5 py-2.5 text-[0.92rem] leading-relaxed text-header-fg">
                     {m.content}
                   </div>
                 </div>
               ) : (
-                <div key={i} ref={i === messages.length - 1 ? lastMsgRef : undefined} className="space-y-3">
-                  {(adminMs > 0 || inAdminUi
-                    ? parseTurns(m.content).filter((t) => t.who === "olga")
-                    : parseTurns(m.content).filter((t) => t.who === partner)
-                  ).map((turn, t) => (
+                <div key={`a-${i}`} ref={i === list.length - 1 ? lastMsgRef : undefined} className="space-y-3">
+                  {view.map((turn, t) => (
                     <div key={`${i}-${t}`} className="flex items-end gap-2">
-                      <Face who={turn.who} mood={i === messages.length - 1 ? mood : "hello"} size={36} />
+                      <Face who={turn.who} mood={i === list.length - 1 ? mood : "hello"} size={36} />
                       <div className="max-w-[78%]">
-                        <p className="mb-0.5 pl-1 text-[0.65rem] font-semibold text-muted">
-                          {turn.who === "olga" ? "Ольга" : "Олег"}
-                        </p>
+                        <p className="mb-0.5 pl-1 text-[0.65rem] font-semibold text-muted">{turn.who === "olga" ? "Ольга" : "Олег"}</p>
                         <div className="rounded-2xl rounded-bl-md bg-white px-3.5 py-2.5 text-[0.92rem] leading-relaxed text-fg shadow-[0_8px_24px_-16px_rgba(18,20,26,0.4)]">
                           {turn.text}
                         </div>
                       </div>
                     </div>
                   ))}
+                  {chipBar}
                 </div>
-              ),
-            )}
-            {messages.length && !busy && ui.showChips && offer.chips.length ? (
-              <div className="pl-11">
-                {offer.hint ? (
-                  <p className="mb-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">{offer.hint}</p>
-                ) : null}
-                <div className="flex flex-wrap gap-1.5">
-                  {offer.chips.map((chip) =>
-                    chip.href ? (
-                      chip.href.startsWith("/") ? (
-                        <PageLink
-                          key={chip.label}
-                          to={chip.href}
-                          className={cn(
-                            "rounded-full px-3 py-1.5 text-[0.78rem] font-semibold",
-                            chip.primary
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-white text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground",
-                          )}
-                        >
-                          {chip.label}
-                        </PageLink>
-                      ) : (
-                        <a
-                          key={chip.label}
-                          href={chip.href}
-                          className={cn(
-                            "rounded-full px-3 py-1.5 text-[0.78rem] font-semibold",
-                            chip.primary
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-white text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground",
-                          )}
-                        >
-                          {chip.label}
-                        </a>
-                      )
-                    ) : (
-                      <button
-                        key={chip.label}
-                        type="button"
-                        onClick={() => void send(chip.send || chip.label)}
-                        className={cn(
-                          "rounded-full px-3 py-1.5 text-[0.78rem] font-semibold",
-                          chip.primary
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-white text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground",
-                        )}
-                      >
-                        {chip.label}
-                      </button>
-                    ),
-                  )}
-                </div>
-              </div>
-            ) : null}
+              );
+            })}
             {busy ? <p className="pl-11 text-xs font-medium text-muted">{partner === "oleg" ? "Олег подбирает…" : "Ольга подбирает…"}</p> : null}
             <div ref={endRef} />
           </div>

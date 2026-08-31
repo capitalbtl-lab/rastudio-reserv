@@ -81,6 +81,13 @@ export function SiteFooter() {
             >
               Кабинет
             </PageLink>
+            <button
+              type="button"
+              className="inline-flex h-8 items-center rounded-full bg-white/10 px-3.5 text-[0.72rem] font-semibold text-header-fg hover:bg-white/16"
+              onClick={() => window.dispatchEvent(new Event("ra-debug-open"))}
+            >
+              Режим отладки
+            </button>
           </p>
         </div>
       </div>

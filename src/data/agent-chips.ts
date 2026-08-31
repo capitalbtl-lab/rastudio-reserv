@@ -69,6 +69,9 @@ export function chipsForReply(
       ],
     };
   }
+  if (/здравствуйте|рады приветствовать|подберу программу|проконсультирую/.test(t) && !slotsFromMessages(messages).age) {
+    return { hint: "Сколько лет ребёнку", chips: AGES };
+  }
   if (/сколько.{0,28}лет|возраст|цифрой или кнопк|кнопки ниже/.test(t)) {
     return { hint: "Сколько лет ребёнку", chips: AGES };
   }

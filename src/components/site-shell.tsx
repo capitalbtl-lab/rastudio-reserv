@@ -7,6 +7,7 @@ import { bindIntersection } from "@/lib/intersection";
 import { organizationJsonLd } from "@/data/seo";
 import { JsonLd } from "@/components/json-ld";
 import { AgentChat } from "@/components/agent-chat";
+import { DebugDock } from "@/components/debug-dock";
 
 export function SiteShell({ children }: { children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -44,6 +45,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
         </div>
       </div>
       <AgentChat />
+      <DebugDock />
     </div>
   );
 }

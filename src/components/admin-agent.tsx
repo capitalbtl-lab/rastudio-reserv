@@ -7,7 +7,7 @@ import { AdminChats } from "@/components/admin-chats";
 import { AdminVoices } from "@/components/admin-voices";
 import { AdminVoiceEdits } from "@/components/admin-voice-edits";
 import { AdminTrain } from "@/components/admin-train";
-import { AdminAccess } from "@/components/admin-access";
+import { AdminDebug } from "@/components/admin-debug";
 import { InfoTip } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,7 @@ function token() {
   return m ? decodeURIComponent(m[1]) : localStorage.getItem("ra_admin") || "";
 }
 
-type Pane = "window" | "dialog" | "voices" | "edits" | "chats" | "train" | "access";
+type Pane = "window" | "dialog" | "voices" | "edits" | "chats" | "train" | "access" | "debug";
 
 const PANES: { id: Pane; label: string }[] = [
   { id: "window", label: "Окно и кнопки" },
@@ -27,6 +27,7 @@ const PANES: { id: Pane; label: string }[] = [
   { id: "chats", label: "Диалоги сайта" },
   { id: "train", label: "Обучение" },
   { id: "access", label: "Голосовой доступ" },
+  { id: "debug", label: "Отладка" },
 ];
 
 function Toggle({
@@ -268,6 +269,7 @@ export function AdminAgent() {
       {pane === "chats" ? <AdminChats /> : null}
       {pane === "train" ? <AdminTrain /> : null}
       {pane === "access" ? <AdminAccess /> : null}
+      {pane === "debug" ? <AdminDebug /> : null}
     </section>
   );
 }
