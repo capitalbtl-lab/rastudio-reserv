@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { adminAgentBrain, type TrainExample, type ScriptSection } from "@/data/agent-config";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { InfoTip } from "@/components/info-tip";
+import { InfoTip, TipWrap } from "@/components/info-tip";
 import { AdminTrainDocs } from "@/components/admin-train-docs";
 
 function token() {
@@ -284,15 +284,17 @@ export function AdminTrain() {
 
       {pane === "scripts" ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" disabled={busy} onClick={() => void systematize()}>
-              Систематизировать по диалогам
-            </Button>
-            <InfoTip text="Берёт последние диалоги сайта, считает, где родители застревают, и дописывает блок «наблюдения». Воронку не ломает. Запускайте раз в неделю." />
-            <Button type="button" variant="secondary" disabled={busy} onClick={() => void resetScripts()}>
-              Вернуть эталон
-            </Button>
-            <InfoTip text="Стирает правки шагов возраст / город / филиал / направление и возвращает заводской скрипт. Документы и примеры не трогает." />
+          <div className="flex flex-wrap items-start gap-2">
+            <TipWrap text="Берёт последние диалоги сайта, считает, где родители застревают, и дописывает блок «наблюдения». Воронку не ломает. Запускайте раз в неделю.">
+              <Button type="button" disabled={busy} onClick={() => void systematize()}>
+                Систематизировать по диалогам
+              </Button>
+            </TipWrap>
+            <TipWrap text="Стирает правки шагов возраст / город / филиал / направление и возвращает заводской скрипт. Документы и примеры не трогает.">
+              <Button type="button" variant="secondary" disabled={busy} onClick={() => void resetScripts()}>
+                Вернуть эталон
+              </Button>
+            </TipWrap>
             {lastSys ? <p className="self-center text-xs text-muted">Последний раз: {when(lastSys)}</p> : null}
           </div>
           {msg ? <p className="text-sm text-primary">{msg}</p> : null}
@@ -315,21 +317,23 @@ export function AdminTrain() {
 
       {pane === "examples" ? (
         <div className="space-y-6">
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="secondary" onClick={exportJson} disabled={!rows.length && !scripts.length}>
-              Экспорт JSON
-            </Button>
-            <InfoTip text="Скачивает скрипты и примеры одним файлом. Удобно сохранить копию или перенести на другого агента." />
-            <Button type="button" variant="secondary" onClick={exportJsonl} disabled={!rows.length}>
-              Экспорт JSONL
-            </Button>
-            <InfoTip text="Формат для дообучения модели: каждая строка — диалог system / user / assistant. Правила (kind=rule) сюда не входят." />
-            <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-surface px-4 text-sm font-semibold shadow-[var(--shadow-border)]">
-              Импорт JSON / JSONL
-              <InfoTip text="Добавляет примеры из файла. Дубликаты (тот же вопрос и ответ) пропускаются. Скрипты из файла не перезаписываются." />
-              <input
-                type="file"
-                accept=".json,.jsonl,application/json"
+          <div className="flex flex-wrap items-start gap-2">
+            <TipWrap text="Скачивает скрипты и примеры одним файлом. Удобно сохранить копию или перенести на другого агента.">
+              <Button type="button" variant="secondary" onClick={exportJson} disabled={!rows.length && !scripts.length}>
+                Экспорт JSON
+              </Button>
+            </TipWrap>
+            <TipWrap text="Формат для дообучения модели: каждая строка — диалог system / user / assistant. Правила (kind=rule) сюда не входят.">
+              <Button type="button" variant="secondary" onClick={exportJsonl} disabled={!rows.length}>
+                Экспорт JSONL
+              </Button>
+            </TipWrap>
+            <TipWrap text="Добавляет примеры из файла. Дубликаты (тот же вопрос и ответ) пропускаются. Скрипты из файла не перезаписываются.">
+              <label className="inline-flex h-10 cursor-pointer items-center rounded-full bg-surface px-4 text-sm font-semibold shadow-[var(--shadow-border)]">
+                Импорт JSON / JSONL
+                <input
+                  type="file"
+                  accept=".json,.jsonl,application/json"
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
@@ -338,6 +342,7 @@ export function AdminTrain() {
                 }}
               />
             </label>
+            </TipWrap>
             <p className="self-center text-sm text-muted">{rows.length} записей</p>
           </div>
 

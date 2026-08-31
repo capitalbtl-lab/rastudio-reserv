@@ -9,7 +9,7 @@ import {
 } from "@/data/agent-docs";
 import type { AgentChannel } from "@/data/agent-channels";
 import { Button } from "@/components/ui/button";
-import { InfoTip } from "@/components/info-tip";
+import { InfoTip, TipWrap } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
 
 function token() {
@@ -380,22 +380,25 @@ export function AdminTrainDocs() {
               </Button>
             </>
           ) : null}
-          <Button type="button" disabled={busy} onClick={() => void saveChannels()}>
-            Сохранить каналы
-          </Button>
-          <InfoTip text="Пишет названия и правила в storage/agent-channels.json. Без этой кнопки «Преобразовать» читает предыдущую сохранённую версию правил." />
+          <TipWrap text="Пишет названия и правила в storage/agent-channels.json. Без этой кнопки «Преобразовать» читает предыдущую сохранённую версию правил.">
+            <Button type="button" disabled={busy} onClick={() => void saveChannels()}>
+              Сохранить каналы
+            </Button>
+          </TipWrap>
         </div>
       </article>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" disabled={busy} onClick={() => void findConflicts()}>
-          Уточнить противоречия
-        </Button>
-        <InfoTip text="Читает скрипты воронки, доп. инструкцию, правила из примеров и все включённые документы. Ищет, где одно место разрешает то, что другое запрещает (цены, возврат, запись, филиалы). Не меняет файлы само. Результат — список: автоматически (станет правилом в обучении) или вручную." />
-        <Button type="button" variant="secondary" disabled={busy || !contradictions.some((c) => c.autoFix && !c.needManual && c.status === "open")} onClick={() => void applyFixes()}>
-          Применить автоисправления
-        </Button>
-        <InfoTip text="Берёт только пункты с готовым autoFix и без пометки «нужно вручную». Записывает их как правила в «Примеры». Документы Word не переписывает — это сделаете вы, если примете формулировку." />
+      <div className="flex flex-wrap items-start gap-2">
+        <TipWrap text="Читает скрипты воронки, доп. инструкцию, правила из примеров и все включённые документы. Ищет, где одно место разрешает то, что другое запрещает (цены, возврат, запись, филиалы). Не меняет файлы само. Результат — список: автоматически (станет правилом в обучении) или вручную.">
+          <Button type="button" disabled={busy} onClick={() => void findConflicts()}>
+            Уточнить противоречия
+          </Button>
+        </TipWrap>
+        <TipWrap text="Берёт только пункты с готовым autoFix и без пометки «нужно вручную». Записывает их как правила в «Примеры». Документы Word не переписывает — это сделаете вы, если примете формулировку.">
+          <Button type="button" variant="secondary" disabled={busy || !contradictions.some((c) => c.autoFix && !c.needManual && c.status === "open")} onClick={() => void applyFixes()}>
+            Применить автоисправления
+          </Button>
+        </TipWrap>
       </div>
 
       {contradictions.length ? (
@@ -423,21 +426,22 @@ export function AdminTrainDocs() {
               <InfoTip text={z.tip} />
             </div>
             <p className="mt-2 text-sm text-muted">{z.help}</p>
-            <label className={cn("mt-4 inline-flex h-11 cursor-pointer items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground", busy && "opacity-60")}>
-              Загрузить
-              <input
-                type="file"
-                accept={z.accept}
-                className="hidden"
-                disabled={busy}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void upload(z.kind, f);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-            <InfoTip className="ml-2" text="Файл уходит на сервер, текст извлекается скриптом (PDF/Word), оригинал лежит в storage/agent-docs. 8 МБ максимум." />
+            <TipWrap text="Файл уходит на сервер, текст извлекается скриптом (PDF/Word), оригинал лежит в storage/agent-docs. 8 МБ максимум.">
+              <label className={cn("mt-4 inline-flex h-11 cursor-pointer items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground", busy && "opacity-60")}>
+                Загрузить
+                <input
+                  type="file"
+                  accept={z.accept}
+                  className="hidden"
+                  disabled={busy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void upload(z.kind, f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </TipWrap>
           </article>
         ))}
       </div>
@@ -461,20 +465,18 @@ export function AdminTrainDocs() {
                     {d.transformAccuracy != null ? ` · точность ${d.transformAccuracy}% · расхождение ${d.transformDrift}%` : ""}
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    className={cn("rounded-full px-3 py-1.5 text-xs font-semibold", d.active ? "bg-primary text-primary-foreground" : "bg-surface-2")}
-                    onClick={() => void run("toggle", d.id, { on: !d.active })}
-                  >
-                    {d.active ? "В ответах" : "Выключен"}
-                  </button>
-                  <InfoTip text="Выключенный документ не попадает ни в один канал. Файл остаётся в кабинете." />
+                <div className="flex flex-wrap items-start gap-2">
+                  <TipWrap text="Выключенный документ не попадает ни в один канал. Файл остаётся в кабинете.">
+                    <button
+                      type="button"
+                      className={cn("rounded-full px-3 py-1.5 text-xs font-semibold", d.active ? "bg-primary text-primary-foreground" : "bg-surface-2")}
+                      onClick={() => void run("toggle", d.id, { on: !d.active })}
+                    >
+                      {d.active ? "В ответах" : "Выключен"}
+                    </button>
+                  </TipWrap>
                   <label className="flex items-center gap-2 rounded-full bg-surface-2 px-3 py-1.5 text-xs font-semibold">
-                    <span className="inline-flex items-center gap-1">
-                      %
-                      <InfoTip text="0% — полный текст во все каналы, без переписывания. 20–40% — только манера: кнопки на сайте, вслух на телефоне, личка в ВК. Факты, телефоны, запреты не трогаем. Если модель сожмёт текст, система вернёт оригинал." />
-                    </span>
+                    %
                     <input
                       type="number"
                       min={0}
@@ -483,15 +485,18 @@ export function AdminTrainDocs() {
                       onChange={(e) => setPercent(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
                       className="h-8 w-14 rounded-lg bg-white text-center text-sm ring-1 ring-black/10"
                     />
+                    <InfoTip text="0% — полный текст во все каналы, без переписывания. 20–40% — только манера: кнопки на сайте, вслух на телефоне, личка в ВК. Факты не трогаем." />
                   </label>
-                  <Button type="button" disabled={busy} onClick={() => void preview(d.id)}>
-                    Преобразовать
-                  </Button>
-                  <InfoTip text="Раскладывает инструкцию по тематикам (строки) и каналам (столбцы). 0% копирует оригинал. Выше 0% подкручивает только общение. Затем «Применить»." />
-                  <Button type="button" variant="secondary" disabled={busy} onClick={() => void run("reparse", d.id)}>
-                    Переразобрать
-                  </Button>
-                  <InfoTip text="Снова читает файл и режет по разделам 1. 2. 3. Каналы не трогает, пока снова не нажмёте «Преобразовать»." />
+                  <TipWrap text="Раскладывает инструкцию по тематикам и каналам. 0% копирует оригинал. Выше 0% подкручивает только общение.">
+                    <Button type="button" disabled={busy} onClick={() => void preview(d.id)}>
+                      Преобразовать
+                    </Button>
+                  </TipWrap>
+                  <TipWrap text="Снова читает файл и режет по разделам 1. 2. 3. Каналы не трогает, пока снова не нажмёте «Преобразовать».">
+                    <Button type="button" variant="secondary" disabled={busy} onClick={() => void run("reparse", d.id)}>
+                      Переразобрать
+                    </Button>
+                  </TipWrap>
                   <button type="button" className="text-xs font-semibold text-primary" onClick={() => void run("remove", d.id)}>
                     Удалить
                   </button>

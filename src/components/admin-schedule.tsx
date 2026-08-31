@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
-import { SCHOOL_ORDER, type CrmSlot } from "@/data/crm-slots-core";
+import { type CrmSlot } from "@/data/crm-slots-core";
 import { Button } from "@/components/ui/button";
-import { InfoTip } from "@/components/info-tip";
+import { InfoTip, TipWrap } from "@/components/info-tip";
+import { SCHOOLS } from "@/data/site";
 import { cn } from "@/lib/utils";
 
 function token() {
@@ -38,6 +39,7 @@ export function AdminSchedule() {
   const [msg, setMsg] = useState("");
   const [openSchool, setOpenSchool] = useState("");
   const [openCourse, setOpenCourse] = useState("");
+  const [openAll, setOpenAll] = useState(false);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [versions, setVersions] = useState<Ver[]>([]);
   const [aiOpen, setAiOpen] = useState(false);
@@ -83,21 +85,23 @@ export function AdminSchedule() {
 
   const tree = useMemo(() => {
     const map = new Map<string, Map<string, CrmSlot[]>>();
+    const names = [...SCHOOLS.map((s) => s.label), "Прочее"];
+    for (const name of names) map.set(name, new Map());
     for (const s of slots) {
-      const school = s.school || "Прочее";
-      const course = s.course || s.subject || s.groupName;
-      if (!map.has(school)) map.set(school, new Map());
+      const school = names.includes(s.school) ? s.school : "Прочее";
+      const course = s.course || s.subject || s.groupName || "Без названия";
       const bag = map.get(school)!;
       if (!bag.has(course)) bag.set(course, []);
       bag.get(course)!.push(s);
     }
-    const schools = [...map.keys()].sort((a, b) => SCHOOL_ORDER.indexOf(a) - SCHOOL_ORDER.indexOf(b) || a.localeCompare(b, "ru"));
-    return schools.map((school) => ({
-      school,
-      courses: [...(map.get(school)?.entries() || [])]
-        .sort((a, b) => a[0].localeCompare(b[0], "ru"))
-        .map(([course, items]) => ({ course, items })),
-    }));
+    return names
+      .filter((school) => school !== "Прочее" || (map.get(school)?.size || 0) > 0)
+      .map((school) => ({
+        school,
+        courses: [...(map.get(school)?.entries() || [])]
+          .sort((a, b) => a[0].localeCompare(b[0], "ru"))
+          .map(([course, items]) => ({ course, items })),
+      }));
   }, [slots]);
 
   return (
@@ -112,51 +116,60 @@ export function AdminSchedule() {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" disabled={busy} onClick={async () => { setMsg("Читаю группы, уроки и педагогов…"); await run("pull"); setDirty(new Set()); setMsg("Снимок с AlfaCRM на сайте."); }}>
-          Загрузить из AlfaCRM
-        </Button>
-        <InfoTip text="group/index + regular-lesson/index + teacher/index по филиалам 1–3. Пишет снимок и версию для отката." />
-        <Button type="button" disabled={busy || !slots.length} onClick={async () => { const res = await run("save", { slots }); if (res.ok) setMsg("Сохранено на сайте. Страницы курсов обновятся сразу. В CRM — отдельной кнопкой."); }}>
-          Сохранить на сайте
-        </Button>
-        <InfoTip text="Пишет storage/crm-schedule.json. Посетитель видит новое расписание без выгрузки в CRM." />
-        <Button type="button" variant="secondary" disabled={busy || !slots.length} onClick={async () => { const res = await run("push", { slots, dirtyIds: [...dirty] }); const r = res as { pushed?: number }; setDirty(new Set()); setMsg(res.ok ? `В AlfaCRM ушло ${r.pushed ?? 0} групп (имя, день, время, педагог, лимит).` : ""); }}>
-          Выгрузить в AlfaCRM
-        </Button>
-        <InfoTip text="Пишет group/update и regular-lesson/update. Если CRM отклонит поле — строка в ответе, остальные продолжат. Сначала сохраните на сайте." />
+      <div className="flex flex-wrap items-start gap-2">
+        <TipWrap text="group/index + regular-lesson/index + teacher/index по филиалам. Пишет снимок и версию для отката.">
+          <Button type="button" disabled={busy} onClick={async () => { setMsg("Читаю группы, уроки и педагогов…"); await run("pull"); setDirty(new Set()); setMsg("Снимок с AlfaCRM на сайте."); }}>
+            Загрузить из AlfaCRM
+          </Button>
+        </TipWrap>
+        <TipWrap text="Пишет storage/crm-schedule.json. Посетитель видит новое расписание без выгрузки в CRM.">
+          <Button type="button" disabled={busy || !slots.length} onClick={async () => { const res = await run("save", { slots }); if (res.ok) setMsg("Сохранено на сайте. Страницы курсов обновятся сразу. В CRM — отдельной кнопкой."); }}>
+            Сохранить на сайте
+          </Button>
+        </TipWrap>
+        <TipWrap text="Пишет group/update и regular-lesson/update. Если CRM отклонит поле — строка в ответе, остальные продолжат. Сначала сохраните на сайте.">
+          <Button type="button" variant="secondary" disabled={busy || !slots.length} onClick={async () => { const res = await run("push", { slots, dirtyIds: [...dirty] }); const r = res as { pushed?: number }; setDirty(new Set()); setMsg(res.ok ? `В AlfaCRM ушло ${r.pushed ?? 0} групп (имя, день, время, педагог, лимит).` : ""); }}>
+            Выгрузить в AlfaCRM
+          </Button>
+        </TipWrap>
         <Button type="button" variant="secondary" disabled={busy} onClick={async () => { const res = await run("exportXls"); if (res.ok && "text" in res) download(String(res.filename), String(res.mime), String(res.text)); }}>
           Excel
         </Button>
-        <Button type="button" variant="secondary" disabled={busy} onClick={async () => { const res = await run("exportCsv"); if (res.ok && "text" in res) download(String(res.filename), String(res.mime), String(res.text)); }}>
-          CSV
+        <TipWrap text="Excel — SpreadsheetML. CSV — точка с запятой, UTF-8. Колонки: группа, предмет, возраст, день, время, филиал, ссылка записи, педагог.">
+          <Button type="button" variant="secondary" disabled={busy} onClick={async () => { const res = await run("exportCsv"); if (res.ok && "text" in res) download(String(res.filename), String(res.mime), String(res.text)); }}>
+            CSV
+          </Button>
+        </TipWrap>
+        <TipWrap text="Из Excel: «Сохранить как» → CSV UTF-8, либо загрузите наш .xls обратно. Строки стыкуются по id.">
+          <label className="inline-flex h-11 cursor-pointer items-center rounded-full bg-surface px-4 text-sm font-semibold shadow-[var(--shadow-border)]">
+            Импорт Excel/CSV
+            <input
+              type="file"
+              accept=".csv,.xls,.txt,text/csv"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (!f) return;
+                const text = await f.text();
+                setBusy(true);
+                const res = await adminSchedule({ data: { token: token(), action: "import", text } });
+                take(res as never);
+                setBusy(false);
+                setDirty(new Set());
+                if (res.ok) setMsg(`Импортировано. Проверьте школы и нажмите «Выгрузить в AlfaCRM», если нужно отдать в CRM.`);
+              }}
+            />
+          </label>
+        </TipWrap>
+        <TipWrap text="Опишите правку обычным языком. Сначала превью, потом применить. Создаётся версия — можно откатиться.">
+          <Button type="button" disabled={busy} onClick={() => setAiOpen((v) => !v)}>
+            Изменить через ИИ
+          </Button>
+        </TipWrap>
+        <Button type="button" variant="secondary" onClick={() => setOpenAll((v) => !v)}>
+          {openAll ? "Свернуть всё" : "Раскрыть всё"}
         </Button>
-        <InfoTip text="Excel — SpreadsheetML, открывается в Excel и Numbers. CSV — точка с запятой, UTF-8. Колонки: группа, предмет, возраст, день, время, раз в неделю, филиал, ссылка записи, номер группы, педагог и остальные поля CRM." />
-        <label className="inline-flex h-11 cursor-pointer items-center rounded-full bg-surface px-4 text-sm font-semibold shadow-[var(--shadow-border)]">
-          Импорт Excel/CSV
-          <input
-            type="file"
-            accept=".csv,.xls,.txt,text/csv"
-            className="hidden"
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (!f) return;
-              const text = await f.text();
-              setBusy(true);
-              const res = await adminSchedule({ data: { token: token(), action: "import", text } });
-              take(res as never);
-              setBusy(false);
-              setDirty(new Set());
-              if (res.ok) setMsg(`Импортировано. Проверьте школы и нажмите «Выгрузить в AlfaCRM», если нужно отдать в CRM.`);
-            }}
-          />
-        </label>
-        <InfoTip text="Из Excel: «Сохранить как» → CSV UTF-8, либо загрузите наш .xls обратно. Строки стыкуются по id. Новые id добавятся. xlsx-бинарник без CSV Excel не читаем — сохраните CSV." />
-        <Button type="button" disabled={busy} onClick={() => setAiOpen((v) => !v)}>
-          Изменить через ИИ
-        </Button>
-        <InfoTip text="Опишите правку обычным языком: «робототехнику 7–9 на Гражданской сдвинь на 16:00». Сначала превью, потом применить. Создаётся версия — можно откатиться." />
       </div>
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
 
@@ -215,18 +228,23 @@ export function AdminSchedule() {
       <div className="space-y-3">
         {tree.map((sch) => (
           <article key={sch.school} className="overflow-hidden rounded-3xl bg-surface shadow-[var(--shadow-border)]">
-            <button type="button" className="flex w-full items-center justify-between px-5 py-4 text-left" onClick={() => setOpenSchool((v) => (v === sch.school ? "" : sch.school))}>
+            <button type="button" className="flex w-full items-center justify-between px-5 py-4 text-left" onClick={() => { setOpenAll(false); setOpenSchool((v) => (v === sch.school ? "" : sch.school)); }}>
               <span className="font-display text-xl">{sch.school}</span>
-              <span className="text-sm text-muted">{sch.courses.reduce((n, c) => n + c.items.length, 0)} слотов · {sch.courses.length} курсов</span>
+              <span className="text-sm text-muted">
+                {sch.courses.length
+                  ? `${sch.courses.reduce((n, c) => n + c.items.length, 0)} слотов · ${sch.courses.length} курсов`
+                  : "не заполнено"}
+              </span>
             </button>
-            {openSchool === sch.school
-              ? sch.courses.map((c) => (
+            {openAll || openSchool === sch.school ? (
+              sch.courses.length ? (
+                sch.courses.map((c) => (
                   <div key={c.course} className="border-t border-black/6">
                     <button type="button" className="flex w-full items-center justify-between bg-surface-2 px-5 py-3 text-left" onClick={() => setOpenCourse((v) => (v === c.course ? "" : c.course))}>
                       <span className="font-medium">{c.course}</span>
                       <span className="text-xs text-muted">{c.items.length}</span>
                     </button>
-                    {openCourse === c.course ? (
+                    {openAll || openCourse === c.course ? (
                       <div className="overflow-x-auto">
                         <table className="w-full min-w-[1100px] text-left text-sm">
                           <thead className="text-[0.68rem] uppercase tracking-wider text-muted">
@@ -296,7 +314,10 @@ export function AdminSchedule() {
                     ) : null}
                   </div>
                 ))
-              : null}
+              ) : (
+                <p className="border-t border-black/6 px-5 py-4 text-sm text-muted">Расписание не заполнено.</p>
+              )
+            ) : null}
           </article>
         ))}
         {slots.length ? null : <p className="text-sm text-muted">Пока пусто — нажмите «Загрузить из AlfaCRM».</p>}

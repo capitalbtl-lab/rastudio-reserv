@@ -16,7 +16,7 @@ import { AdminDossiers } from "@/components/admin-dossiers";
 import { AdminSchedule } from "@/components/admin-schedule";
 import { AdminIntegrations } from "@/components/admin-integrations";
 import { adminPriceFormulas, type CorpFormulas } from "@/data/price-formulas";
-import { InfoTip } from "@/components/info-tip";
+import { InfoTip, TipWrap } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
 
 const KEY = "ra_admin";
@@ -317,21 +317,22 @@ export function AdminPrices() {
                 Колонка «Все» на сайте. КБМ и ТМХ — корпоративные. Формула считает их от «Все»: плюс сумма или умножение на процент.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  const res = await adminPriceFormulas({ data: { token: token(), action: "crmStub" } });
-                  setBusy(false);
-                  setErr(res.ok ? "" : res.error || "CRM пока не отдаёт абонементы.");
-                }}
-              >
-                Загрузить цены из CRM
-              </Button>
-              <InfoTip text="Когда в AlfaCRM появятся абонементы, эта кнопка заберёт их из tariff/index в колонку «Все». КБМ и ТМХ посчитаются по формуле ниже. Сейчас абонементы ещё не выложены — специально ничего не тянем." />
+            <div className="flex items-start gap-1">
+              <TipWrap text="Когда в AlfaCRM появятся абонементы, эта кнопка заберёт их из tariff/index в колонку «Все». КБМ и ТМХ посчитаются по формуле ниже. Сейчас абонементы ещё не выложены — специально ничего не тянем.">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    const res = await adminPriceFormulas({ data: { token: token(), action: "crmStub" } });
+                    setBusy(false);
+                    setErr(res.ok ? "" : res.error || "CRM пока не отдаёт абонементы.");
+                  }}
+                >
+                  Загрузить цены из CRM
+                </Button>
+              </TipWrap>
             </div>
           </div>
 
