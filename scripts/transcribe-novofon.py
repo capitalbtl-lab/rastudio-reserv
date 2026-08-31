@@ -84,17 +84,18 @@ def stt_file(path):
     body = Path(path).read_bytes()
     if len(body) < 400:
         return ""
-    req = urllib.request.Request(
-        "https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?lang=ru-RU&topic=general&format=mp3",
-        data=body,
-        headers={"Authorization": f"Api-Key {YKEY}", "x-folder-id": FOLDER},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return json.loads(r.read().decode()).get("result") or ""
-    except Exception as e:
-        print("stt", e)
-        return ""
+    url = "https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?lang=ru-RU&topic=general&format=oggopus"
+    last = ""
+    for auth in (f"Api-Key {YKEY}", f"Bearer {YKEY}"):
+        req = urllib.request.Request(url, data=body, headers={"Authorization": auth, "x-folder-id": FOLDER})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.loads(r.read().decode()).get("result") or ""
+        except urllib.error.HTTPError as e:
+            last = e.read().decode(errors="replace")[:200]
+            continue
+    print("stt", last, flush=True)
+    return ""
 
 def transcribe(call):
     cid = str(call.get("pbx_call_id") or call["call_id"])
@@ -108,11 +109,11 @@ def transcribe(call):
     chunks = work / "chunks"
     chunks.mkdir(exist_ok=True)
     subprocess.run(
-        ["ffmpeg", "-y", "-i", str(mp3), "-ac", "1", "-ar", "16000", "-f", "segment", "-segment_time", "25",
-         "-c:a", "libmp3lame", "-q:a", "6", str(chunks / "p-%03d.mp3")],
+        ["ffmpeg", "-y", "-i", str(mp3), "-ac", "1", "-ar", "48000", "-f", "segment", "-segment_time", "25",
+         "-c:a", "libopus", "-b:a", "48k", str(chunks / "p-%03d.ogg")],
         check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
-    parts = sorted(chunks.glob("p-*.mp3")) or [mp3]
+    parts = sorted(chunks.glob("p-*.ogg")) or [mp3]
     texts = []
     for p in parts:
         t = stt_file(p)
