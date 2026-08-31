@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import { X, Send, Mic, Volume2, RotateCcw } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
 import { speakAgent } from "@/data/agent-voice";
@@ -31,8 +30,12 @@ function speechCtor() {
 type Msg = { role: "user" | "assistant"; content: string };
 type Mood = "hello" | "think" | "happy" | "sorry";
 
-const HELLO = `Олег: Подберём курс за минуту. Сначала возраст — так не предложим слишком сложное.
-Ольга: Я рядом. Нажмите, сколько лет ребёнку — сразу скажу, что зайдёт именно ему.`;
+function greeting(who: "oleg" | "olga") {
+  return who === "olga"
+    ? "Ольга: Подберём курс за минуту. Нажмите, сколько лет ребёнку — сразу скажу, что зайдёт именно ему."
+    : "Олег: Подберём курс за минуту. Сначала возраст — так не предложим слишком сложное.";
+}
+const DUAL_HELLO = /Олег: Подберём курс[\s\S]*Ольга: Я рядом/;
 const ADMIN_ASK = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
 const ADMIN_HELLO = "Ольга: Доступ открыт на 30 минут. Цены, тексты страниц или голоса — что меняем?";
 
@@ -73,6 +76,25 @@ function Duo({ size, mood }: { size: number; mood: Mood }) {
 const CHAT_KEY = "ra_chat";
 const ADMIN_CHAT_KEY = "ra_admin_chat";
 const SID_KEY = "ra_chat_sid";
+const PARTNER_KEY = "ra_chat_who";
+
+function readPartner(): "oleg" | "olga" {
+  try {
+    const v = sessionStorage.getItem(PARTNER_KEY);
+    if (v === "oleg" || v === "olga") return v;
+  } catch {
+    /* */
+  }
+  return "olga";
+}
+
+function writePartner(who: "oleg" | "olga") {
+  try {
+    sessionStorage.setItem(PARTNER_KEY, who);
+  } catch {
+    /* */
+  }
+}
 
 function chatSid(reset = false) {
   try {
@@ -88,14 +110,17 @@ function chatSid(reset = false) {
   }
 }
 
-function readChat(): Msg[] {
+function readChat(who: "oleg" | "olga"): Msg[] {
   try {
     const raw = sessionStorage.getItem(CHAT_KEY);
-    if (!raw) return [{ role: "assistant", content: HELLO }];
+    if (!raw) return [{ role: "assistant", content: greeting(who) }];
     const parsed = JSON.parse(raw) as Msg[];
-    return parsed?.length ? parsed : [{ role: "assistant", content: HELLO }];
+    if (!parsed?.length) return [{ role: "assistant", content: greeting(who) }];
+    const onlyHello = parsed.length === 1 && parsed[0].role === "assistant" && !parsed.some((m) => m.role === "user");
+    if (onlyHello && DUAL_HELLO.test(parsed[0].content)) return [{ role: "assistant", content: greeting(who) }];
+    return parsed;
   } catch {
-    return [{ role: "assistant", content: HELLO }];
+    return [{ role: "assistant", content: greeting(who) }];
   }
 }
 
@@ -153,15 +178,14 @@ function noisyAdmin(text: string) {
 }
 
 export function AgentChat() {
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [partner, setPartner] = useState<"both" | "oleg" | "olga">("both");
+  const [partner, setPartner] = useState<"oleg" | "olga">("olga");
   const [voiceOn, setVoiceOn] = useState(false);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
-  const [clientMsgs, setClientMsgs] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
+  const [clientMsgs, setClientMsgs] = useState<Msg[]>([{ role: "assistant", content: greeting("olga") }]);
   const [adminMsgs, setAdminMsgs] = useState<Msg[]>([]);
   const [adminMs, setAdminMs] = useState(0);
   const [awaitingCode, setAwaitingCode] = useState(false);
@@ -204,7 +228,9 @@ export function AgentChat() {
   partnerRef.current = partner;
 
   useEffect(() => {
-    setClientMsgs(readChat());
+    const who = readPartner();
+    setPartner(who);
+    setClientMsgs(readChat(who));
     const savedAdmin = readAdminChat();
     const left = adminLeft();
     setAdminMs(left);
@@ -407,7 +433,7 @@ export function AgentChat() {
     await new Promise((r) => window.setTimeout(r, 40));
     try {
       const mode = adminLeft() > 0 ? "olga" : partnerRef.current;
-      const turns = parseTurns(phrase).filter((t) => mode === "both" || t.who === mode);
+      const turns = parseTurns(phrase).filter((t) => t.who === mode);
       for (let i = 0; i < turns.length; i += 1) {
         const turn = turns[i];
         if (gen !== genRef.current) return;
@@ -538,13 +564,19 @@ export function AgentChat() {
           reply = ADMIN_HELLO;
         }
         shouldReload = Boolean(res.reload);
-        if ("groups" in res && Array.isArray(res.groups)) setGroupChips(res.groups);
+        if ("groups" in res && Array.isArray(res.groups) && res.groups.length) {
+          setGroupChips((prev) => {
+            const next = [...prev];
+            for (const chip of res.groups as typeof prev) {
+              const i = next.findIndex((c) => c.label === chip.label || (chip.href && c.href === chip.href));
+              if (i >= 0) next[i] = chip;
+              else next.push(chip);
+            }
+            return next;
+          });
+        }
         if ("signup" in res && res.signup) {
           window.open(String(res.signup), "_blank", "noopener,noreferrer");
-        }
-        if (res.open) {
-          void navigate({ to: res.open });
-          window.setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
         }
       } else reply = res.error;
     } catch {
@@ -577,7 +609,8 @@ export function AgentChat() {
     setAwaitingCode(false);
     clearSiteAdmin();
     setAdminMs(0);
-    setPartner("both");
+    setPartner("olga");
+    writePartner("olga");
     setAdminMsgs([]);
     setGroupChips([]);
     setText("");
@@ -632,6 +665,18 @@ export function AgentChat() {
     if (voiceOnRef.current) startListen();
   }
 
+  function pickPartner(next: "oleg" | "olga") {
+    if (inAdminUi) return;
+    cancelSpeech();
+    writePartner(next);
+    setPartner(next);
+    setClientMsgs((prev) => {
+      const onlyHello = prev.length <= 1 && !prev.some((m) => m.role === "user");
+      if (onlyHello) return [{ role: "assistant", content: greeting(next) }];
+      return prev;
+    });
+  }
+
   function onResizeStart(e: PointerEvent<HTMLButtonElement>) {
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -657,7 +702,7 @@ export function AgentChat() {
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] md:inset-auto md:bottom-6 md:right-6">
       {open ? (
         <div
-          className="agent-panel pointer-events-auto relative mx-3 mb-[4.75rem] flex h-[min(46rem,86dvh)] w-auto flex-col overflow-hidden rounded-[1.85rem] bg-white ring-[3px] ring-white shadow-[0_28px_70px_-18px_rgba(9,12,18,0.55)] md:mx-0 md:mb-0 md:h-[var(--agent-h)] md:w-[var(--agent-w)]"
+          className="agent-panel pointer-events-auto relative mx-2 mb-[4.85rem] flex h-[calc(100dvh-5.7rem)] w-auto flex-col overflow-hidden rounded-[1.6rem] bg-white ring-[3px] ring-white shadow-[0_28px_70px_-18px_rgba(9,12,18,0.55)] md:mx-0 md:mb-0 md:h-[var(--agent-h)] md:w-[var(--agent-w)]"
           style={{ ["--agent-w" as string]: `${box.w}px`, ["--agent-h" as string]: `${box.h}px` }}
         >
           <audio ref={audioElRef} className="hidden" playsInline preload="auto" />
@@ -703,7 +748,7 @@ export function AgentChat() {
                   awaitingCodeRef.current = false;
                   setAwaitingCode(false);
                   if (adminLeft() > 0) setAdminMsgs([{ role: "assistant", content: ADMIN_HELLO }]);
-                  else setClientMsgs([{ role: "assistant", content: HELLO }]);
+                  else setClientMsgs([{ role: "assistant", content: greeting(partner) }]);
                   setGroupChips([]);
                   setText("");
                 }}
@@ -726,11 +771,11 @@ export function AgentChat() {
             </div>
             <div className="flex items-end gap-3 pr-20">
               <div className="shrink-0">
-                <Duo size={64} mood={mood} />
+                {inAdminUi ? <Face who="olga" mood={mood} size={64} /> : <Face who={partner} mood={mood} size={64} />}
               </div>
               <div className="min-w-0 pb-1">
                 <p className="font-display text-[1.15rem] leading-tight">
-                  {inAdminUi ? "Ольга · управление" : partner === "oleg" ? "Олег" : partner === "olga" ? "Ольга" : "Олег и Ольга"}
+                  {inAdminUi ? "Ольга · управление" : partner === "oleg" ? "Олег" : "Ольга"}
                 </p>
                 <p className="text-[0.78rem] text-white/85">
                   {inAdminUi
@@ -738,36 +783,37 @@ export function AgentChat() {
                       ? "Назовите кодовое слово"
                       : "Правки сайта · 30 минут"
                     : speaking
-                      ? partner === "both"
-                        ? "Говорят"
-                        : "Говорит"
-                      : listening
+                      ? "Говорит"
+                      : listening && voiceOn
                         ? "Слушает вас"
-                        : partner === "both"
-                          ? "Администраторы студии · онлайн"
-                          : "Администратор студии · онлайн"}
+                        : "Администратор студии · онлайн"}
                 </p>
-                {inAdminUi ? null : (
-                <p className="mt-1.5 flex flex-nowrap items-center gap-1.5 whitespace-nowrap text-[0.68rem] font-medium leading-none">
-                  <button
-                    type="button"
-                    className={cn("underline-offset-2", partner === "olga" ? "underline" : "text-white/80 hover:text-white")}
-                    onClick={() => setPartner(partner === "olga" ? "both" : "olga")}
-                  >
-                    Говорить с Ольгой
-                  </button>
-                  <span className="text-white/40">·</span>
-                  <button
-                    type="button"
-                    className={cn("underline-offset-2", partner === "oleg" ? "underline" : "text-white/80 hover:text-white")}
-                    onClick={() => setPartner(partner === "oleg" ? "both" : "oleg")}
-                  >
-                    Говорить с Олегом
-                  </button>
-                </p>
-                )}
               </div>
             </div>
+            {inAdminUi ? null : (
+              <div className="mt-3 grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  className={cn(
+                    "h-9 rounded-full text-[0.78rem] font-semibold",
+                    partner === "olga" ? "bg-white text-primary" : "bg-white/15 text-white hover:bg-white/25",
+                  )}
+                  onClick={() => pickPartner("olga")}
+                >
+                  Говорить с Ольгой
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "h-9 rounded-full text-[0.78rem] font-semibold",
+                    partner === "oleg" ? "bg-white text-primary" : "bg-white/15 text-white hover:bg-white/25",
+                  )}
+                  onClick={() => pickPartner("oleg")}
+                >
+                  Говорить с Олегом
+                </button>
+              </div>
+            )}
           </div>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#eef1f7] px-3.5 py-3">
             {messages.filter((m) => m.role !== "user" || !noisyAdmin(m.content)).map((m, i) =>
@@ -779,7 +825,10 @@ export function AgentChat() {
                 </div>
               ) : (
                 <div key={i} ref={i === messages.length - 1 ? lastMsgRef : undefined} className="space-y-3">
-                  {(adminMs > 0 ? parseTurns(m.content).filter((t) => t.who === "olga") : parseTurns(m.content)).map((turn, t) => (
+                  {(adminMs > 0 || inAdminUi
+                    ? parseTurns(m.content).filter((t) => t.who === "olga")
+                    : parseTurns(m.content).filter((t) => t.who === partner)
+                  ).map((turn, t) => (
                     <div key={`${i}-${t}`} className="flex items-end gap-2">
                       <Face who={turn.who} mood={i === messages.length - 1 ? mood : "hello"} size={36} />
                       <div className="max-w-[78%]">
@@ -847,7 +896,7 @@ export function AgentChat() {
                 </div>
               </div>
             ) : null}
-            {busy ? <p className="pl-11 text-xs font-medium text-muted">Олег и Ольга подбирают…</p> : null}
+            {busy ? <p className="pl-11 text-xs font-medium text-muted">{partner === "oleg" ? "Олег подбирает…" : "Ольга подбирает…"}</p> : null}
             <div ref={endRef} />
           </div>
           <form
@@ -861,19 +910,20 @@ export function AgentChat() {
               type="button"
               onClick={() => void toggleVoice()}
               className={cn(
-                "mb-2 flex h-11 w-full items-center justify-center gap-2 rounded-full text-[0.92rem] font-semibold",
-                voiceOn ? "bg-[#e8f0ff] text-primary ring-1 ring-primary/20" : "bg-primary text-primary-foreground",
+                "flex h-11 w-full items-center justify-center gap-2 rounded-full text-[0.92rem] font-semibold",
+                voiceOn ? "mb-0 bg-[#e8f0ff] text-primary ring-1 ring-primary/20" : "mb-2 bg-primary text-primary-foreground",
               )}
             >
               {voiceOn ? <Mic className="size-4" /> : <Volume2 className="size-4" />}
               {voiceOn ? (listening ? "Слушаю… нажмите, чтобы выключить" : speaking ? "Говорю… нажмите, чтобы выключить" : "Выключить голосовой режим") : "Включить голосовой режим"}
             </button>
+            {voiceOn ? null : (
             <div className="flex items-center gap-2 rounded-full bg-[#eef1f7] p-1 ring-1 ring-black/8 focus-within:ring-2 focus-within:ring-primary/40">
               <input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="Возраст и город — подберём курс"
-                className="h-10 flex-1 bg-transparent px-3.5 text-sm outline-none"
+                className="h-10 flex-1 bg-transparent px-3.5 text-base outline-none md:text-sm"
                 maxLength={1000}
               />
               <button
@@ -896,6 +946,7 @@ export function AgentChat() {
                 <Send className="size-4" />
               </button>
             </div>
+            )}
             <div className="flex items-center justify-between gap-2 px-3 pt-1.5">
               <p className="min-w-0 truncate text-[0.65rem] text-muted">
                 {voiceOn ? (speaking ? "Сейчас говорят" : "Голосовой режим включён") : `Пробное · ${SITE.phone}`}
