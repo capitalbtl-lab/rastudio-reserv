@@ -160,9 +160,18 @@ export async function saveTrialLead(data: TrialPayload) {
       kind: data.kind || "trial",
     });
     return { ok: true as const, id: saved.id, duplicate: saved.duplicate, branch: saved.branch };
-  } catch {
+  } catch (err) {
+    console.error("saveTrialLead", err);
     try {
-      const form = await saveLeadForm({ parent, child, dobRu: dobRu || "", phone, email, branch, course: data.course });
+      const form = await saveLeadForm({
+        parent,
+        child,
+        dobRu: dobRu || dobFromAge(data.age) || "01.09.2017",
+        phone,
+        email: email || `lead+${phone.replace(/\D/g, "").slice(-10)}@rastudio.org`,
+        branch,
+        course: data.course,
+      });
       if (form.ok) return { ok: true as const, id: 0, duplicate: false, branch: Number(branch) || 2 };
       return form;
     } catch {

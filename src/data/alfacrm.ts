@@ -122,27 +122,29 @@ export async function upsertAlfaLead(lead: AlfaLead) {
   if (existing) {
     const prev = existing.customer.note ? `${existing.customer.note}\n\n` : "";
     const upd = await request<{ success?: boolean; errors?: unknown; model?: Customer }>(
-      `/v2api/${existing.branch}/customer/update`,
+      `/v2api/${existing.branch}/customer/update?id=${existing.customer.id}`,
       {
         id: existing.customer.id,
+        legal_type: 1,
         ...(lead.email ? { email: [lead.email] } : {}),
         note: `${prev}${noteLine}`,
         ...(groupIds ? { group_ids: groupIds } : {}),
       },
       t,
     );
-    if (upd.success === false) throw new Error("alfacrm-update");
+    if (upd.success === false) throw new Error(`alfacrm-update ${JSON.stringify(upd.errors || upd)}`);
     await request(`/v2api/${existing.branch}/task/create`, {
       customer_id: existing.customer.id,
       text: taskText,
     }, t).catch(() => null);
     return { ok: true as const, id: existing.customer.id, duplicate: true, branch: existing.branch };
   }
-  const created = await request<{ success?: boolean; model?: Customer }>(
+  const created = await request<{ success?: boolean; errors?: unknown; model?: Customer }>(
     `/v2api/${branch}/customer/create`,
     {
       name: lead.child || lead.parent,
       legal_name: lead.parent,
+      legal_type: 1,
       phone: [phone],
       ...(lead.email ? { email: [lead.email] } : {}),
       ...(lead.dobRu ? { dob: lead.dobRu } : {}),
@@ -157,7 +159,9 @@ export async function upsertAlfaLead(lead: AlfaLead) {
     t,
   );
   const id = created.model?.id;
-  if (created.success === false || !id) throw new Error("alfacrm-create");
+  if (created.success === false || !id) {
+    throw new Error(`alfacrm-create ${JSON.stringify(created.errors || created)}`);
+  }
   await request(`/v2api/${branch}/task/create`, {
     customer_id: id,
     text: taskText,
