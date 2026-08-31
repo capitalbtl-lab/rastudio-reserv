@@ -636,6 +636,10 @@
   animation-play-state: paused;
 }
 
+.marquee-track.partner-logos {
+  gap: 2.25rem;
+}
+
 .marquee-track.is-running {
   animation-play-state: running;
   will-change: transform;

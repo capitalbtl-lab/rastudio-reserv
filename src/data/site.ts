@@ -13,7 +13,7 @@ export const SITE = {
   camp: "http://www.racamp.ru",
   vk: "https://vk.ru/rastudio",
   logo: {
-    src: "https://static.wixstatic.com/media/4e33b6_562c01970b714565ac3c564af8248290~mv2.jpg/v1/fill/w_160,h_160,al_c,q_80,enc_avif,quality_auto/4e33b6_562c01970b714565ac3c564af8248290~mv2.jpg",
+    src: "https://static.wixstatic.com/media/4e33b6_562c01970b714565ac3c564af8248290~mv2.jpg/v1/fill/w_400,h_400,al_c,q_80,enc_avif,quality_auto/4e33b6_562c01970b714565ac3c564af8248290~mv2.jpg",
     filename: "4e33b6_562c01970b714565ac3c564af8248290~mv2.jpg",
     alt: "Логотип студии Развивайся",
   },
@@ -332,32 +332,32 @@ export const MOMENTS = [
 
 export const PARTNER_LOGOS = [
   {
-    src: "https://static.wixstatic.com/media/4e33b6_5f0212bb908f42c2b022b4aa05ce2980~mv2.png/v1/fill/w_160,h_160,al_c,q_85,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(4).png",
+    src: "https://static.wixstatic.com/media/4e33b6_5f0212bb908f42c2b022b4aa05ce2980~mv2.png/v1/fill/w_400,h_400,al_c,q_85,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(4).png",
     alt: "Логотипы на главную Студия Развивайся (4).png",
     filename: "Логотипы на главную Студия Развивайся (4).png",
   },
   {
-    src: "https://static.wixstatic.com/media/4e33b6_284d58a7c14b4d50bc03394b5b87ad45~mv2.png/v1/fill/w_160,h_160,al_c,q_85,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(3).png",
+    src: "https://static.wixstatic.com/media/4e33b6_284d58a7c14b4d50bc03394b5b87ad45~mv2.png/v1/fill/w_400,h_400,al_c,q_85,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(3).png",
     alt: "Логотипы на главную Студия Развивайся (3).png",
     filename: "Логотипы на главную Студия Развивайся (3).png",
   },
   {
-    src: "https://static.wixstatic.com/media/4e33b6_920386da915e419e8380eef5d8b302af~mv2.jpg/v1/fill/w_160,h_160,al_c,q_80,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(2).jpg",
+    src: "https://static.wixstatic.com/media/4e33b6_920386da915e419e8380eef5d8b302af~mv2.jpg/v1/fill/w_400,h_400,al_c,q_80,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(2).jpg",
     alt: "Логотипы на главную Студия Развивайся (2).jpg",
     filename: "Логотипы на главную Студия Развивайся (2).jpg",
   },
   {
-    src: "https://static.wixstatic.com/media/4e33b6_d9ab0d6feca64ece8d498d9b0275b293~mv2.jpg/v1/fill/w_160,h_160,al_c,q_80,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(1).jpg",
+    src: "https://static.wixstatic.com/media/4e33b6_d9ab0d6feca64ece8d498d9b0275b293~mv2.jpg/v1/fill/w_400,h_400,al_c,q_80,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(1).jpg",
     alt: "Логотипы на главную Студия Развивайся (1).jpg",
     filename: "Логотипы на главную Студия Развивайся (1).jpg",
   },
   {
-    src: "https://static.wixstatic.com/media/4e33b6_5b4eed978be64bd494a3b78b27ccfd70~mv2.jpg/v1/fill/w_160,h_160,al_c,q_80,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(3).jpg",
+    src: "https://static.wixstatic.com/media/4e33b6_5b4eed978be64bd494a3b78b27ccfd70~mv2.jpg/v1/fill/w_400,h_400,al_c,q_80,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(3).jpg",
     alt: "Логотипы на главную Студия Развивайся (3).jpg",
     filename: "Логотипы на главную Студия Развивайся (3).jpg",
   },
   {
-    src: "https://static.wixstatic.com/media/4e33b6_a30da1df107748559ac545bcd3f89c00~mv2.png/v1/fill/w_160,h_160,al_c,q_85,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(6).png",
+    src: "https://static.wixstatic.com/media/4e33b6_a30da1df107748559ac545bcd3f89c00~mv2.png/v1/fill/w_400,h_400,al_c,q_85,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(6).png",
     alt: "Логотипы на главную Студия Развивайся (6).png",
     filename: "Логотипы на главную Студия Развивайся (6).png",
   },

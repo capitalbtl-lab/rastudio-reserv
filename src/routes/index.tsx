@@ -341,15 +341,15 @@ function Home() {
           <p className="mt-10 max-w-3xl text-sm leading-relaxed text-header-fg/55">{home.paragraphs[12]}</p>
         </div>
         <div className="marquee mt-12">
-          <div className="marquee-track items-center">
+          <div className="marquee-track partner-logos items-center">
             {[...PARTNER_LOGOS, ...PARTNER_LOGOS].map((logo, i) => (
               <SeoImage
                 key={logo.src + i}
                 src={logo.src}
                 alt={logo.alt}
                 filename={logo.filename}
-                className="size-16 overflow-hidden rounded-xl bg-white md:size-[4.5rem]"
-                imgClassName="object-contain p-1"
+                className="size-28 overflow-hidden rounded-full bg-white md:size-36"
+                imgClassName="object-contain p-2.5"
               />
             ))}
           </div>
