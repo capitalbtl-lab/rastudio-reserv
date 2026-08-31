@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { Check, ChevronDown, FlaskConical, MapPin, Sparkles, Users } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, FlaskConical, MapPin, Sparkles, Users } from "lucide-react";
 import type { CmsImage, CmsSession, CmsTrajectoryStep } from "@/data/cms";
 import type { CourseCard } from "@/data/catalog";
 import { courseKey } from "@/data/cms";
@@ -662,7 +662,6 @@ export function RelatedAgeCourses({
 export function SchoolCourseList({
   schoolPath,
   courses,
-  wide = false,
 }: {
   schoolPath: string;
   courses: CourseCard[];
@@ -674,29 +673,32 @@ export function SchoolCourseList({
     <div>
       <p className="kicker">Курсы школы</p>
       <h2 className="display mt-2 text-xl md:text-2xl">Программы этого направления</h2>
-      <ul className={cn("mt-5 grid gap-2", wide && "lg:grid-cols-2 lg:gap-3")}>
-        {list.map((course) => (
-          <li key={course.href}>
+      <ul className="mt-5 overflow-hidden rounded-[1.35rem] bg-surface shadow-[var(--shadow-border)]">
+        {list.map((course, i) => (
+          <li key={course.href} className={i ? "border-t border-border/70" : ""}>
             <PageLink
               to={course.href}
-              className="flex items-center gap-3 rounded-2xl bg-surface p-1.5 pr-4 shadow-[var(--shadow-border)] transition-shadow hover:shadow-[var(--shadow-border-hover)] md:gap-4 md:pr-5"
+              className="group flex items-center gap-3.5 p-2.5 pr-3.5 transition-colors hover:bg-[#f3f5f8] md:gap-4 md:p-3 md:pr-4"
             >
               <SeoImage
                 src={course.image}
                 alt={course.alt}
                 filename={course.filename}
-                className="size-[4.5rem] shrink-0 overflow-hidden rounded-xl bg-surface-2 md:size-24"
-                imgClassName="h-full w-full object-cover"
+                className="size-[4.75rem] shrink-0 overflow-hidden rounded-[1.05rem] bg-surface-2 md:size-[5.35rem]"
+                imgClassName="h-full w-full object-cover transition-transform duration-[var(--motion-slow)] ease-[var(--ease-out)] group-hover:scale-[1.04]"
               />
-              <span className="min-w-0">
+              <span className="min-w-0 flex-1">
                 {course.age ? (
-                  <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <span className="inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[0.65rem] font-semibold tracking-[0.04em] text-primary">
                     {course.age}
                   </span>
                 ) : null}
-                <span className="display mt-0.5 block text-lg leading-snug md:text-[1.35rem]">
+                <span className="display mt-1 block text-[1.12rem] leading-[1.2] md:text-[1.32rem]">
                   {course.label}
                 </span>
+              </span>
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-fg text-bg transition-colors duration-[var(--motion-fast)] group-hover:bg-primary">
+                <ArrowUpRight className="size-4" strokeWidth={2.2} />
               </span>
             </PageLink>
           </li>
