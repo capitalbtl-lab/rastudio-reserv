@@ -21,12 +21,14 @@ export function SeoImage({
   height,
   loading = "lazy",
 }: Props) {
+  const title =
+    filename && !/empty-state|placeholder|image-empty/i.test(filename) ? filename : alt;
   return (
     <figure className={cn("overflow-hidden", className)}>
       <img
         src={src}
         alt={alt}
-        title={filename || alt}
+        title={title}
         width={width}
         height={height}
         loading={loading}

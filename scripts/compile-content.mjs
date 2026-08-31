@@ -399,17 +399,24 @@ function roleFromPage(page) {
   return first || "Педагог студии «Развивайся»";
 }
 
+function isJunkFile(name) {
+  return /empty-state|placeholder|image-empty/i.test(String(name || ""));
+}
+
 if (teamPage) {
   for (const img of teamPage.images) {
     const name = img.alt.replace(/\s*\(педагог\)\s*/i, "").trim();
     if (!name || name.length < 6) continue;
     const page = findTeacherPage(name);
+    const pagePhoto = (page?.images || []).find((item) => !isJunkFile(item.filename));
+    const photo = isJunkFile(img.filename) && pagePhoto ? pagePhoto : img;
+    const display = page ? page.h1.replace(/\s*\(педагог\)\s*/i, "").trim() : name;
     teachers.push({
-      name: page ? page.h1.replace(/\s*\(педагог\)\s*/i, "").trim() : name,
+      name: display,
       role: roleFromPage(page),
-      photo: img.src,
-      alt: img.alt,
-      filename: img.filename,
+      photo: photo.src,
+      alt: display,
+      filename: isJunkFile(photo.filename) ? `${display}.jpg` : photo.filename,
       href: page?.pathDecoded || page?.path || "/team",
     });
   }
