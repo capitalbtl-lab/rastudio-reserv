@@ -4,6 +4,8 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { Button } from "@/components/ui/button";
 import { bindIntersection } from "@/lib/intersection";
+import { organizationJsonLd } from "@/data/seo";
+import { JsonLd } from "@/components/json-ld";
 
 export function SiteShell({ children }: { children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -15,6 +17,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
 
   return (
     <div ref={rootRef} className="min-h-dvh bg-bg text-fg">
+      <JsonLd data={organizationJsonLd()} />
       <a className="skip-link" href="#content">
         К содержанию
       </a>
