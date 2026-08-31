@@ -624,7 +624,6 @@ export function AdminPrices() {
             </div>
           </div>
         </section>
-        </section>
       ) : null}
 
       {tab === "calls" ? (
