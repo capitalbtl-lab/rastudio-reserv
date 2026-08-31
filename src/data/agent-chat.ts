@@ -501,7 +501,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     const facts = factsFromMessages(all);
     const note = buildSessionNote(all);
     if (!admin) {
-      const locked = lockedFunnelReply(soloWho, facts, note);
+      const locked = lockedFunnelReply(soloWho, facts, note, all);
       if (locked) {
         return { ok: true as const, reply: locked, token: granted, reload: false };
       }
