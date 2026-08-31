@@ -131,6 +131,7 @@ export function nextChips(messages: { role: string; content: string }[]): { hint
   const blob = blobOf(messages);
   const age = ageBand(blob);
   if (!age) return { hint: "Сколько лет ребёнку", chips: AGES };
+  if (!hasCity(blob)) return { hint: "Какой филиал удобнее", chips: PLACES };
   if (!hasCourse(blob)) {
     const years = ageYears(blob);
     if (years) {
@@ -144,7 +145,6 @@ export function nextChips(messages: { role: string; content: string }[]): { hint
     }
     return { hint: "Что откликается", chips: COURSES[age] || COURSES["7-9"] };
   }
-  if (!hasCity(blob)) return { hint: "Какой филиал удобнее", chips: PLACES };
   const page = courseHint(`${blob} ${messages.map((m) => m.content).slice(-3).join(" ")}`);
   return {
     hint: "Следующий шаг",

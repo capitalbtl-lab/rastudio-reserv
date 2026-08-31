@@ -48,7 +48,7 @@ const BRANCH: Record<number, { city: string; branch: string; short: string }> = 
   3: { city: "Луховицы", branch: "ул. Пушкина, 202А", short: "Луховицы" },
 };
 
-type Group = { id: number; name: string; note?: string };
+type Group = { id: number; name: string; note?: string; limit?: number; status_id?: number };
 type Lesson = {
   id: number;
   related_id?: number | null;
@@ -60,9 +60,53 @@ type Lesson = {
   teacher_ids?: number[];
 };
 type Subject = { id: number; name: string };
+type CrmLesson = { group_ids?: number[]; customer_ids?: number[]; date?: string };
 
-let cache: { at: number; sessions: CmsSession[] } | null = null;
+type SeatInfo = { limit: number; taken: number };
+type CacheBag = { at: number; sessions: CmsSession[]; seats: Map<string, SeatInfo> };
+
+let cache: CacheBag | null = null;
 const TTL = 10 * 60 * 1000;
+
+function iso(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
+function seatKey(branch: number, gid: string | number) {
+  return `${branch}:${gid}`;
+}
+
+function waitDays(crmDay?: number) {
+  const today = ((new Date().getDay() + 6) % 7) + 1;
+  const day = Number(crmDay) || 1;
+  return (day - today + 7) % 7;
+}
+
+function crmDayOf(when: string) {
+  const i = DAYS.findIndex((d) => when.startsWith(d));
+  return i >= 0 ? i + 1 : 1;
+}
+
+async function loadSeats(branch: number, t: string) {
+  const taken = new Map<number, number>();
+  const from = iso(new Date(Date.now() - 100 * 86400000));
+  const to = iso(new Date(Date.now() + 50 * 86400000));
+  for (let page = 0; page < 5; page++) {
+    const res = await request<{ items?: CrmLesson[] }>(
+      `/v2api/${branch}/lesson/index`,
+      { page, pageSize: 100, date_from: from, date_to: to },
+      t,
+    );
+    for (const lesson of res.items || []) {
+      const gid = Number(lesson.group_ids?.[0] || 0);
+      if (!gid) continue;
+      const n = (lesson.customer_ids || []).length;
+      taken.set(gid, Math.max(taken.get(gid) || 0, n));
+    }
+    if ((res.items || []).length < 100) break;
+  }
+  return taken;
+}
 
 function ageOf(name: string) {
   const m = name.match(/(\d+\s*[–-]\s*\d+\s*(?:лет|года)?|\d+\s*\+\s*|от\s*\d+\s*лет|\d+\s*лет)/i);
@@ -81,15 +125,25 @@ export function signupUrl(branch: number, gid: string | number) {
 }
 
 export async function sessionsFromCrm(): Promise<CmsSession[]> {
-  if (cache && Date.now() - cache.at < TTL) return cache.sessions;
+  const bag = await loadCrm();
+  return bag.sessions;
+}
+
+async function loadCrm(): Promise<CacheBag> {
+  if (cache && Date.now() - cache.at < TTL) return cache;
   const t = await token();
   const sessions: CmsSession[] = [];
+  const seats = new Map<string, SeatInfo>();
   const subjects = new Map<number, string>();
   const sub = await request<{ items?: Subject[] }>("/v2api/2/subject/index", { page: 0, pageSize: 200 }, t);
   for (const s of sub.items || []) subjects.set(s.id, s.name);
   for (const branch of [1, 2, 3]) {
     const groups = await request<{ items?: Group[] }>(`/v2api/${branch}/group/index`, { page: 0, pageSize: 200 }, t);
     const groupMap = new Map((groups.items || []).map((g) => [g.id, g]));
+    const taken = await loadSeats(branch, t).catch(() => new Map<number, number>());
+    for (const g of groups.items || []) {
+      seats.set(seatKey(branch, g.id), { limit: Number(g.limit) || 0, taken: taken.get(g.id) || 0 });
+    }
     const lessons = await request<{ items?: Lesson[] }>(
       `/v2api/${branch}/regular-lesson/index`,
       { page: 0, pageSize: 200 },
@@ -100,7 +154,7 @@ export async function sessionsFromCrm(): Promise<CmsSession[]> {
       const sid = Number(lesson.subject_id);
       if (!sid || SKIP_SUBJECT.has(sid)) continue;
       const group = lesson.related_id ? groupMap.get(lesson.related_id) : undefined;
-      if (group && /отложен/i.test(group.name)) continue;
+      if (group && (/отложен/i.test(group.name) || group.status_id === 2)) continue;
       const subjectName = subjects.get(sid) || group?.name || "Курс";
       const age = ageOf(group?.name || "") || ageOf(subjectName);
       const path = SUBJECT_PATH[sid] || "";
@@ -122,8 +176,8 @@ export async function sessionsFromCrm(): Promise<CmsSession[]> {
       });
     }
   }
-  cache = { at: Date.now(), sessions };
-  return sessions;
+  cache = { at: Date.now(), sessions, seats };
+  return cache;
 }
 
 export function filterCrmSessions(sessions: CmsSession[], splat?: string | null) {
@@ -166,7 +220,93 @@ export type LiveGroup = {
   path: string;
   signup: string;
   chip: string;
+  limit: number;
+  taken: number;
+  seats: string;
+  wait: number;
 };
+
+function seatsText(limit: number, taken: number) {
+  if (!limit) return taken ? `в группе ${taken}` : "места уточним";
+  const free = Math.max(0, limit - taken);
+  if (!taken) return `набор, до ${limit} мест`;
+  if (!free) return "мест нет";
+  return `свободно ${free} из ${limit}`;
+}
+
+function chipLabel(session: CmsSession, branchId: number, seats: string) {
+  let when = session.when;
+  DAYS.forEach((d, i) => {
+    when = when.replace(d, DAY_SHORT[i]);
+  });
+  when = when.replace(" с ", " ").replace(" до ", "–");
+  const short = BRANCH[branchId]?.short || session.city;
+  const seatBit = seats.startsWith("свободно") ? seats.replace(" из ", "/") : seats.startsWith("набор") ? "набор" : seats === "мест нет" ? "нет мест" : "";
+  return seatBit ? `${when} · ${short} · ${seatBit}` : `${when} · ${short}`;
+}
+
+export async function groupsForQuery(q: { age?: number; branch?: string; course?: string }) {
+  const bag = await loadCrm();
+  const bid = branchIdOf(q.branch || "");
+  const kolomnaOnly = /коломн/.test((q.branch || "").toLowerCase()) && !bid;
+  const seen = new Set<string>();
+  const out: LiveGroup[] = [];
+  for (const session of bag.sessions) {
+    const gid = session.signup.match(/gid=(\d+)/)?.[1];
+    const branchId = Number(session.signup.match(/common\/(\d+)\//)?.[1] || 0);
+    if (!gid || !branchId) continue;
+    if (bid && branchId !== bid) continue;
+    if (kolomnaOnly && branchId === 3) continue;
+    if (q.age) {
+      if (session.age && !agesOverlap(session.age, q.age, q.age)) continue;
+      if (!session.age) continue;
+    }
+    if (q.course && !courseMatch(session, q.course)) continue;
+    const key = `${gid}-${session.when}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const seat = bag.seats.get(seatKey(branchId, gid)) || { limit: 0, taken: 0 };
+    const seats = seatsText(seat.limit, seat.taken);
+    out.push({
+      gid,
+      branchId,
+      name: session.group,
+      age: session.age,
+      when: session.when,
+      city: session.city,
+      branch: session.branch,
+      short: BRANCH[branchId]?.short || session.city,
+      path: session.path || "",
+      signup: session.signup,
+      chip: chipLabel(session, branchId, seats),
+      limit: seat.limit,
+      taken: seat.taken,
+      seats,
+      wait: waitDays(crmDayOf(session.when)),
+    });
+  }
+  out.sort((a, b) => a.wait - b.wait || a.when.localeCompare(b.when, "ru"));
+  const open = out.filter((g) => g.seats !== "мест нет");
+  const full = out.filter((g) => g.seats === "мест нет");
+  return [...open, ...full].slice(0, 12);
+}
+
+export function formatGroups(list: LiveGroup[], age?: number) {
+  if (!list.length) {
+    return age
+      ? `Живых групп на ${age} лет с этими фильтрами сейчас нет. Предложи заявку на пробное или телефон 8 (800) 511-34-01.`
+      : "Группы не найдены. Спроси возраст и филиал.";
+  }
+  const lines = list.map(
+    (g, i) =>
+      `${i + 1}. gid=${g.gid} филиал=${g.branchId} · ${g.name} · ${g.short} · ${g.when} · ${g.seats} · через ${g.wait} дн.`,
+  );
+  return [
+    `Живое расписание, ${list.length} слотов, сначала ближайшие. Назови 5–8: день, время, филиал, места. Не выдумывай.`,
+    "Если мест нет — скажи честно и предложи другой слот. Когда выбрал — open_group.",
+    ...lines,
+  ].join("\n");
+}
 
 function branchIdOf(raw: string) {
   const s = (raw || "").toLowerCase();
@@ -191,70 +331,6 @@ function courseMatch(session: CmsSession, course: string) {
   const words = decoded.split(/[^a-zа-яё0-9+]+/i).filter((w) => w.length > 3);
   if (words.length && words.every((w) => hay.includes(w))) return true;
   return words.filter((w) => hay.includes(w)).length >= 2;
-}
-
-function chipLabel(session: CmsSession, branchId: number) {
-  let when = session.when;
-  DAYS.forEach((d, i) => {
-    when = when.replace(d, DAY_SHORT[i]);
-  });
-  when = when.replace(" с ", " ").replace(" до ", "–");
-  const short = BRANCH[branchId]?.short || session.city;
-  return `${when} · ${short}`;
-}
-
-export async function groupsForQuery(q: { age?: number; branch?: string; course?: string }) {
-  const sessions = await sessionsFromCrm();
-  const bid = branchIdOf(q.branch || "");
-  const kolomnaOnly = /коломн/.test((q.branch || "").toLowerCase()) && !bid;
-  const seen = new Set<string>();
-  const out: LiveGroup[] = [];
-  for (const session of sessions) {
-    const gid = session.signup.match(/gid=(\d+)/)?.[1];
-    const branchId = Number(session.signup.match(/common\/(\d+)\//)?.[1] || 0);
-    if (!gid || !branchId) continue;
-    if (bid && branchId !== bid) continue;
-    if (kolomnaOnly && branchId === 3) continue;
-    if (q.age) {
-      if (session.age && !agesOverlap(session.age, q.age, q.age)) continue;
-      if (!session.age) continue;
-    }
-    if (q.course && !courseMatch(session, q.course)) continue;
-    const key = `${gid}-${session.when}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({
-      gid,
-      branchId,
-      name: session.group,
-      age: session.age,
-      when: session.when,
-      city: session.city,
-      branch: session.branch,
-      short: BRANCH[branchId]?.short || session.city,
-      path: session.path || "",
-      signup: session.signup,
-      chip: chipLabel(session, branchId),
-    });
-  }
-  return out.slice(0, 16);
-}
-
-export function formatGroups(list: LiveGroup[], age?: number) {
-  if (!list.length) {
-    return age
-      ? `Живых групп на ${age} лет с этими фильтрами сейчас нет. Предложи заявку на пробное или телефон 8 (800) 511-34-01.`
-      : "Группы не найдены. Уточни возраст и филиал.";
-  }
-  const lines = list.map(
-    (g, i) =>
-      `${i + 1}. gid=${g.gid} филиал=${g.branchId} · ${g.name} · ${g.age || "возраст в названии"} · ${g.short} · ${g.when}`,
-  );
-  return [
-    `Найдено ${list.length} живых групп. Перечисли родителю слоты: день, время, филиал, название. Не выдумывай другие.`,
-    "Когда выбрал слот — вызови open_group с gid и branch.",
-    ...lines,
-  ].join("\n");
 }
 
 export function groupSignup(gid: string, branch?: string) {
