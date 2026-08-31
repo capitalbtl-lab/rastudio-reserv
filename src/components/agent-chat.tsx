@@ -90,6 +90,18 @@ function adminLeft() {
   }
 }
 
+function olgaReply(text: string) {
+  const clean = text.replace(/режим управления уже открыт[^.!?]*[.!?]?/gi, "").trim();
+  const turns = parseTurns(clean).filter((t) => t.who === "olga");
+  if (turns.length) return turns.map((t) => `Ольга: ${t.text}`).join("\n");
+  const body = clean.replace(/^(олег|ольга):\s*/gim, "").trim();
+  return body ? `Ольга: ${body}` : "Ольга: Готово. Что ещё меняем?";
+}
+
+function noisyAdmin(text: string) {
+  return /режим управления уже открыт|не спрашивай кодовое слово/i.test(text);
+}
+
 export function AgentChat() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -116,7 +128,17 @@ export function AgentChat() {
   const listenWantedRef = useRef(false);
   const partnerRef = useRef(partner);
   const mood = moodOf(messages, busy);
-  const offer = nextChips(messages);
+  const offer =
+    adminMs > 0
+      ? {
+          hint: "Что меняем",
+          chips: [
+            { label: "Цены", send: "Покажи текущие цены" },
+            { label: "Тексты страницы", send: "Покажи тексты этой страницы" },
+            { label: "Голоса", send: "Какие сейчас настройки голосов" },
+          ],
+        }
+      : nextChips(messages);
   voiceOnRef.current = voiceOn;
   partnerRef.current = partner;
 
@@ -128,6 +150,10 @@ export function AgentChat() {
     const id = window.setInterval(() => setAdminMs(adminLeft()), 10000);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (adminMs > 0 && partner !== "olga") setPartner("olga");
+  }, [adminMs, partner]);
 
   useEffect(() => {
     try {
@@ -351,7 +377,9 @@ export function AgentChat() {
     setText("");
     cancelSpeech();
     stopListen();
-    const history = [...messages, { role: "user" as const, content: next }];
+    const history = [...messages, { role: "user" as const, content: next }].filter(
+      (m) => m.role !== "user" || !noisyAdmin(m.content),
+    );
     setMessages(history);
     busyRef.current = true;
     setBusy(true);
@@ -367,7 +395,7 @@ export function AgentChat() {
         },
       });
       if (res.ok) {
-        reply = res.reply;
+        reply = adminLeft() > 0 || res.token ? olgaReply(res.reply) : res.reply;
         if (res.token) {
           localStorage.setItem("ra_admin", res.token);
           document.cookie = `ra_admin=${encodeURIComponent(res.token)}; path=/; max-age=${30 * 60}; samesite=lax`;
@@ -509,7 +537,7 @@ export function AgentChat() {
             </div>
           </div>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#eef1f7] px-3.5 py-3">
-            {messages.map((m, i) =>
+            {messages.filter((m) => m.role !== "user" || !noisyAdmin(m.content)).map((m, i) =>
               m.role === "user" ? (
                 <div key={i} className="flex justify-end">
                   <div className="max-w-[78%] rounded-2xl rounded-br-md bg-header px-3.5 py-2.5 text-[0.92rem] leading-relaxed text-header-fg">
@@ -518,7 +546,7 @@ export function AgentChat() {
                 </div>
               ) : (
                 <div key={i} ref={i === messages.length - 1 ? lastMsgRef : undefined} className="space-y-3">
-                  {parseTurns(m.content).map((turn, t) => (
+                  {(adminMs > 0 ? parseTurns(m.content).filter((t) => t.who === "olga") : parseTurns(m.content)).map((turn, t) => (
                     <div key={`${i}-${t}`} className="flex items-end gap-2">
                       <Face who={turn.who} mood={i === messages.length - 1 ? mood : "hello"} size={36} />
                       <div className="max-w-[78%]">
@@ -644,11 +672,8 @@ export function AgentChat() {
                 className="shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-semibold text-primary hover:bg-primary/10"
                 onClick={() => {
                   setPartner("olga");
-                  if (adminLeft() > 0) {
-                    void send("Режим управления уже открыт. Не спрашивай кодовое слово. Говорит только Ольга. Что меняем на сайте?");
-                  } else {
-                    void send("Я администратор сайта. Спроси кодовое слово один раз. Дальше говорит только Ольга.");
-                  }
+                  if (adminLeft() > 0) return;
+                  void send("Я администратор сайта. Спроси кодовое слово один раз. Дальше говорит только Ольга.");
                 }}
               >
                 Вход администратора
