@@ -122,7 +122,9 @@ export function AgentChat() {
 
   useEffect(() => {
     setMessages(readChat());
-    setAdminMs(adminLeft());
+    const left = adminLeft();
+    setAdminMs(left);
+    if (left > 0) setPartner("olga");
     const id = window.setInterval(() => setAdminMs(adminLeft()), 10000);
     return () => window.clearInterval(id);
   }, []);
@@ -253,7 +255,8 @@ export function AgentChat() {
     stopListen();
     await new Promise((r) => window.setTimeout(r, 80));
     try {
-      const turns = parseTurns(phrase).filter((t) => partnerRef.current === "both" || t.who === partnerRef.current);
+      const mode = adminLeft() > 0 ? "olga" : partnerRef.current;
+      const turns = parseTurns(phrase).filter((t) => mode === "both" || t.who === mode);
       for (const turn of turns) {
         if (gen !== genRef.current) return;
         try {
@@ -358,7 +361,7 @@ export function AgentChat() {
       const res = await chatAgent({
         data: {
           messages: history,
-          with: partner,
+          with: adminLeft() > 0 ? "olga" : partner,
           token: typeof localStorage !== "undefined" ? localStorage.getItem("ra_admin") || undefined : undefined,
           path: typeof window !== "undefined" ? window.location.pathname : "/",
         },
@@ -369,6 +372,7 @@ export function AgentChat() {
           localStorage.setItem("ra_admin", res.token);
           document.cookie = `ra_admin=${encodeURIComponent(res.token)}; path=/; max-age=${30 * 60}; samesite=lax`;
           setAdminMs(adminLeft());
+          setPartner("olga");
         }
         shouldReload = Boolean(res.reload);
         if (res.open) {
@@ -639,14 +643,15 @@ export function AgentChat() {
                 type="button"
                 className="shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-semibold text-primary hover:bg-primary/10"
                 onClick={() => {
+                  setPartner("olga");
                   if (adminLeft() > 0) {
-                    void send("Режим управления уже открыт. Не спрашивай кодовое слово. Что меняем на сайте?");
+                    void send("Режим управления уже открыт. Не спрашивай кодовое слово. Говорит только Ольга. Что меняем на сайте?");
                   } else {
-                    void send("Я администратор сайта. Спроси кодовое слово один раз и открой режим управления на 30 минут.");
+                    void send("Я администратор сайта. Спроси кодовое слово один раз. Дальше говорит только Ольга.");
                   }
                 }}
               >
-                {adminMs > 0 ? `Управление · ${Math.max(1, Math.round(adminMs / 60000))} мин` : "Вход администратора"}
+                Вход администратора
               </button>
             </div>
           </form>
