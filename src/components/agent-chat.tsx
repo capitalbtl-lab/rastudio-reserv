@@ -12,11 +12,12 @@ import { cn } from "@/lib/utils";
 
 type Rec = {
   lang: string;
+  continuous: boolean;
   interimResults: boolean;
   maxAlternatives: number;
   start: () => void;
   stop: () => void;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onresult: ((e: { results: { length: number; [i: number]: { isFinal?: boolean; 0: { transcript: string } } } }) => void) | null;
   onend: (() => void) | null;
   onerror: (() => void) | null;
 };
@@ -78,6 +79,11 @@ export function AgentChat() {
   const recRef = useRef<Rec | null>(null);
   const audioRef = useRef<{ stop: () => void } | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const genRef = useRef(0);
+  const spokenRef = useRef("");
+  const speakingRef = useRef(false);
+  const busyRef = useRef(false);
+  const listenWantedRef = useRef(false);
   const mood = moodOf(messages, busy);
   const offer = nextChips(messages);
   voiceOnRef.current = voiceOn;
@@ -93,7 +99,29 @@ export function AgentChat() {
     };
   }, []);
 
+  function cancelSpeech() {
+    genRef.current += 1;
+    audioRef.current?.stop();
+    speakingRef.current = false;
+    setSpeaking(false);
+  }
+
+  function isEcho(said: string) {
+    const a = said
+      .toLowerCase()
+      .replace(/[^\p{L}\d\s]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const words = a.split(" ").filter((w) => w.length > 2);
+    if (speakingRef.current && (a.length < 8 || words.length < 2)) return true;
+    const b = spokenRef.current.toLowerCase();
+    if (!words.length) return true;
+    const hits = words.filter((w) => b.includes(w)).length;
+    return hits / words.length >= 0.55;
+  }
+
   function stopListen() {
+    listenWantedRef.current = false;
     recRef.current?.stop();
     recRef.current = null;
     setListening(false);
@@ -138,8 +166,13 @@ export function AgentChat() {
   }
 
   async function speak(phrase: string) {
-    stopListen();
+    const gen = ++genRef.current;
+    speakingRef.current = true;
+    spokenRef.current = parseTurns(phrase)
+      .map((t) => t.text)
+      .join(" ");
     setSpeaking(true);
+    startListen();
     try {
       const turns = parseTurns(phrase);
       const clips = await Promise.all(
@@ -147,51 +180,79 @@ export function AgentChat() {
           const res = await speakAgent({
             data: { text: turn.text, voice: turn.who === "olga" ? "alena" : "filipp" },
           });
-          return res.ok && "audio" in res ? res.audio : null;
+          return res.ok && "audio" in res ? { audio: res.audio, text: turn.text } : null;
         }),
       );
       for (const clip of clips) {
-        if (!clip || !voiceOnRef.current) break;
-        await playClip(clip);
+        if (!clip || gen !== genRef.current || !voiceOnRef.current) return;
+        spokenRef.current = clip.text;
+        await playClip(clip.audio);
       }
     } finally {
-      setSpeaking(false);
-      audioRef.current = null;
+      if (gen === genRef.current) {
+        speakingRef.current = false;
+        setSpeaking(false);
+      }
     }
   }
 
   function startListen() {
     const SR = speechCtor();
     if (!SR) return;
-    stopListen();
+    listenWantedRef.current = true;
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* not running */
+    }
     const rec = new SR();
     rec.lang = "ru-RU";
-    rec.interimResults = false;
+    rec.continuous = true;
+    rec.interimResults = true;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
-      const said = e.results[0]?.[0]?.transcript?.trim();
-      if (said) void send(said);
+      const last = e.results[e.results.length - 1];
+      const said = last?.[0]?.transcript?.trim();
+      if (!said) return;
+      const done = Boolean(last?.isFinal);
+      if (speakingRef.current) {
+        if (isEcho(said)) return;
+        if (!done && said.split(/\s+/).length < 2) return;
+        cancelSpeech();
+        stopListen();
+        void send(said);
+        return;
+      }
+      if (done) void send(said);
     };
     rec.onend = () => {
-      setListening(false);
+      if (recRef.current && recRef.current !== rec) return;
       recRef.current = null;
+      setListening(false);
+      if (listenWantedRef.current && voiceOnRef.current && !busyRef.current) startListen();
     };
     rec.onerror = () => {
-      setListening(false);
       recRef.current = null;
+      setListening(false);
     };
     recRef.current = rec;
     setListening(true);
-    rec.start();
+    try {
+      rec.start();
+    } catch {
+      /* already started */
+    }
   }
 
   async function send(value?: string) {
     const next = (value ?? text).trim();
-    if (!next || busy) return;
+    if (!next || busyRef.current) return;
     setText("");
+    cancelSpeech();
     stopListen();
     const history = [...messages, { role: "user" as const, content: next }];
     setMessages(history);
+    busyRef.current = true;
     setBusy(true);
     let reply = `Не отправилось. Позвоните ${SITE.phone}.`;
     try {
@@ -201,10 +262,11 @@ export function AgentChat() {
       /* keep */
     }
     setMessages([...history, { role: "assistant", content: reply }]);
+    busyRef.current = false;
     setBusy(false);
     if (voiceOnRef.current) {
       await speak(reply);
-      if (voiceOnRef.current) startListen();
+      if (voiceOnRef.current && genRef.current) startListen();
     }
   }
 
@@ -251,7 +313,7 @@ export function AgentChat() {
               <div className="min-w-0 pb-1">
                 <p className="font-display text-[1.15rem] leading-tight">Олег и Ольга</p>
                 <p className="text-[0.78rem] text-white/85">
-                  {speaking ? "Говорят с вами" : listening ? "Слушают вас" : "Администраторы студии · онлайн"}
+                  {speaking ? "Говорят — можно перебить" : listening ? "Слушают вас" : "Администраторы студии · онлайн"}
                 </p>
               </div>
             </div>
@@ -367,7 +429,10 @@ export function AgentChat() {
                   "grid size-10 place-items-center rounded-full",
                   listening ? "bg-primary text-primary-foreground" : "text-muted hover:bg-black/5",
                 )}
-                onClick={() => (listening ? stopListen() : startListen())}
+                onClick={() => {
+                  if (speakingRef.current) cancelSpeech();
+                  listening ? stopListen() : startListen();
+                }}
                 aria-label="Голосовой ввод"
               >
                 <Mic className="size-4" />
@@ -382,7 +447,11 @@ export function AgentChat() {
               </button>
             </div>
             <p className="px-3 pt-1.5 text-[0.65rem] text-muted">
-              {voiceOn ? "Голосовой режим включён" : `Пробное без обязательств · ${SITE.phone}`}
+              {voiceOn
+                ? speaking
+                  ? "Скажите вопрос — Олег и Ольга остановятся"
+                  : "Голосовой режим включён"
+                : `Пробное без обязательств · ${SITE.phone}`}
             </p>
           </form>
         </div>
