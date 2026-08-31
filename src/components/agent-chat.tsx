@@ -30,10 +30,13 @@ function speechCtor() {
 type Msg = { role: "user" | "assistant"; content: string };
 type Mood = "hello" | "think" | "happy" | "sorry";
 
-function greeting(who: "oleg" | "olga") {
+function greeting(who: "oleg" | "olga", voice = false) {
+  const ask = voice
+    ? "Скажите, сколько лет ребёнку — сразу скажу, что зайдёт именно ему."
+    : "Нажмите, сколько лет ребёнку — сразу скажу, что зайдёт именно ему.";
   return who === "olga"
-    ? "Ольга: Подберём курс за минуту. Нажмите, сколько лет ребёнку — сразу скажу, что зайдёт именно ему."
-    : "Олег: Подберём курс за минуту. Сначала возраст — так не предложим слишком сложное.";
+    ? `Ольга: Подберём курс за минуту. ${ask}`
+    : `Олег: Подберём курс за минуту. ${voice ? ask : "Сначала возраст — так не предложим слишком сложное."}`;
 }
 const DUAL_HELLO = /Олег: Подберём курс[\s\S]*Ольга: Я рядом/;
 const ADMIN_ASK = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
@@ -689,8 +692,14 @@ export function AgentChat() {
     } catch {
       /* */
     }
-    const last = [...messages].reverse().find((m) => m.role === "assistant")?.content;
-    if (last) await speak(last);
+    const onlyHello =
+      !inAdminUi &&
+      clientMsgs.length === 1 &&
+      clientMsgs[0].role === "assistant" &&
+      /Подберём курс за минуту/.test(clientMsgs[0].content);
+    const spoken = onlyHello ? greeting(partner, true) : [...messages].reverse().find((m) => m.role === "assistant")?.content;
+    if (onlyHello) setClientMsgs([{ role: "assistant", content: spoken || greeting(partner, true) }]);
+    if (spoken) await speak(spoken);
     if (voiceOnRef.current) startListen();
   }
 
@@ -701,7 +710,7 @@ export function AgentChat() {
     setPartner(next);
     setClientMsgs((prev) => {
       const onlyHello = prev.length <= 1 && !prev.some((m) => m.role === "user");
-      if (onlyHello) return [{ role: "assistant", content: greeting(next) }];
+      if (onlyHello) return [{ role: "assistant", content: greeting(next, voiceOnRef.current) }];
       return prev;
     });
   }
@@ -777,7 +786,7 @@ export function AgentChat() {
                   awaitingCodeRef.current = false;
                   setAwaitingCode(false);
                   if (adminLeft() > 0) setAdminMsgs([{ role: "assistant", content: ADMIN_HELLO }]);
-                  else setClientMsgs([{ role: "assistant", content: greeting(partner) }]);
+                  else setClientMsgs([{ role: "assistant", content: greeting(partner, voiceOnRef.current) }]);
                   setGroupChips([]);
                   setText("");
                 }}
