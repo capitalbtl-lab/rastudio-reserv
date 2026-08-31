@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Расшифровывает лучшие звонки Novofon и собирает базу знаний."""
-import base64, hashlib, hmac, json, os, subprocess, time, urllib.request
+import base64, hashlib, hmac, json, os, subprocess, time, urllib.error, urllib.request
 from urllib.parse import urlencode
 from pathlib import Path
 
@@ -22,11 +22,29 @@ TARGET = 50
 def rest(path, params):
     qs = urlencode(sorted((k, str(v)) for k, v in params.items())).replace("%20", "+")
     md5 = hashlib.md5(qs.encode()).hexdigest()
-    sign = base64.b64encode(hmac.new(SECRET.encode(), (path + qs + md5).encode(), hashlib.sha1).digest()).decode()
+    payload = path + qs + md5
+    signs = [
+        base64.b64encode(hmac.new(SECRET.encode(), payload.encode(), hashlib.sha1).digest()).decode(),
+        base64.b64encode(hmac.new(SECRET.encode(), payload.encode(), hashlib.sha1).hexdigest().encode()).decode(),
+    ]
     url = HOST + path + (("?" + qs) if qs else "")
-    req = urllib.request.Request(url, headers={"Authorization": f"{USER}:{sign}"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.loads(r.read().decode())
+    last = None
+    for sign in signs:
+        req = urllib.request.Request(url, headers={"Authorization": f"{USER}:{sign}"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                js = json.loads(r.read().decode())
+        except urllib.error.HTTPError as e:
+            raw = e.read().decode(errors="replace")
+            try:
+                js = json.loads(raw)
+            except Exception:
+                last = raw
+                continue
+        if js.get("status") != "error":
+            return js
+        last = js.get("message") or js
+    raise RuntimeError(str(last))
 
 def load():
     return json.loads(STORE.read_text())
