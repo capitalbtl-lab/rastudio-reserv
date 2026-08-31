@@ -83,6 +83,21 @@ const CHANNEL_HINT: Record<string, string> = {
   telegram: "Запасной канал. Появится в промпте, когда бот начнёт передавать channel=telegram.",
 };
 
+function FieldHead({ label, tip }: { label: string; tip: string }) {
+  return (
+    <div className="mb-1 flex h-6 items-center justify-between gap-2">
+      <span className="text-xs font-semibold text-muted">{label}</span>
+      <InfoTip text={tip} />
+    </div>
+  );
+}
+
+function rowsFor(text: string) {
+  const lines = String(text || "").split("\n").length;
+  const wrap = Math.ceil(String(text || "").length / 32);
+  return Math.min(28, Math.max(8, lines, wrap));
+}
+
 function guessId(text: string, ids: string[]) {
   const t = text.toLowerCase();
   if (ids.includes("vk") && /вконтакте|\bвк\b|vk\.com|сообществ|комментари/.test(t)) return "vk";
@@ -313,50 +328,41 @@ export function AdminTrainDocs() {
             Сейчас на сайте говорит <span className="font-semibold text-fg">Агент на сайте</span>. Остальные каналы хранят свой столбец, пока не подключится телефон, ВК или MAX.
           </p>
         </div>
-        <div className="grid gap-0 lg:grid-cols-5 lg:items-stretch">
+        <div className="grid gap-0 lg:grid-cols-5 lg:items-start">
           {channels.map((c, i) => (
             <div
               key={c.id}
               className={cn(
-                "flex h-full min-h-[22rem] flex-col border-black/6 p-4 lg:border-r lg:last:border-r-0",
+                "flex flex-col border-black/6 p-4 lg:border-r lg:last:border-r-0",
                 i > 0 ? "border-t lg:border-t-0" : "",
                 c.id === "site" ? "bg-[#f4f7ff]" : "bg-white",
               )}
             >
-              <div className="flex h-12 shrink-0 items-start justify-between gap-2">
-                <div>
-                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted">{c.id}</p>
-                  <span
-                    className={cn(
-                      "mt-1 inline-flex rounded-full bg-primary px-2 py-0.5 text-[0.65rem] font-semibold text-white",
-                      c.id === "site" ? "" : "invisible",
-                    )}
-                  >
-                    сейчас на сайте
-                  </span>
-                </div>
-                <InfoTip text={CHANNEL_HINT[c.id] || "Дополнительный канал. Правила внизу карточки — как говорить в этой среде."} />
-              </div>
-              <label className="mt-3 shrink-0 text-xs font-semibold text-muted">
-                Название
-                <input
-                  value={c.label}
-                  onChange={(e) => setChannels((list) => list.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
-                  className="mt-1 h-10 w-full rounded-xl bg-surface-2 px-3 text-sm font-medium text-fg ring-1 ring-black/8"
-                />
-              </label>
-              <label className="mt-3 flex min-h-0 flex-1 flex-col text-xs font-semibold text-muted">
-                <span className="inline-flex items-center gap-1">
-                  Правила канала
-                  <InfoTip text="Этот текст видит модель, когда процент адаптации больше 0. Пишите манеру канала: длина реплики, кнопки или без, что запрещено. Не дублируйте оферту." />
-                </span>
+              <FieldHead
+                label={c.id}
+                tip={CHANNEL_HINT[c.id] || "Дополнительный канал. Правила внизу карточки — как говорить в этой среде."}
+              />
+              {c.id === "site" ? (
+                <span className="mb-3 inline-flex w-fit rounded-full bg-primary px-2 py-0.5 text-[0.65rem] font-semibold text-white">сейчас на сайте</span>
+              ) : (
+                <span className="mb-3 block h-5" />
+              )}
+              <FieldHead label="Название" tip="Как канал называется в кабинете и в преобразовании." />
+              <input
+                value={c.label}
+                onChange={(e) => setChannels((list) => list.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                className="h-10 w-full rounded-xl bg-surface-2 px-3 text-sm font-medium text-fg ring-1 ring-black/8"
+              />
+              <div className="mt-3">
+                <FieldHead label="Правила канала" tip="Этот текст видит модель, когда процент адаптации больше 0. Пишите манеру канала: длина реплики, кнопки или без, что запрещено. Не дублируйте оферту." />
                 <textarea
                   value={c.rules || ""}
                   onChange={(e) => setChannels((list) => list.map((x, j) => (j === i ? { ...x, rules: e.target.value } : x)))}
-                  className="mt-1 min-h-[12rem] w-full flex-1 resize-none overflow-auto rounded-xl bg-surface-2 px-3 py-2 text-[0.8rem] leading-relaxed text-fg ring-1 ring-black/8"
+                  rows={rowsFor(c.rules || "")}
+                  className="w-full resize-y rounded-xl bg-surface-2 px-3 py-2 text-[0.8rem] leading-relaxed text-fg ring-1 ring-black/8"
                 />
-              </label>
-              <div className="mt-2 h-6 shrink-0">
+              </div>
+              <div className="mt-2 h-6">
                 {c.locked ? null : (
                   <button type="button" className="text-xs font-semibold text-primary" onClick={() => setChannels((list) => list.filter((_, j) => j !== i))}>
                     Убрать канал
@@ -369,17 +375,14 @@ export function AdminTrainDocs() {
         <div className="flex flex-wrap items-end gap-3 border-t border-black/6 px-5 py-4 md:px-6">
           {channels.length < 6 ? (
             <>
-              <label className="text-sm">
-                <span className="inline-flex items-center gap-1">
-                  id
-                  <InfoTip text="Латиница без пробелов: telegram, alice. Это значение придёт в чат как channel." />
-                </span>
-                <input value={newCh.id} onChange={(e) => setNewCh({ ...newCh, id: e.target.value })} className="mt-1 block h-11 w-36 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
-              </label>
-              <label className="text-sm">
-                Название
-                <input value={newCh.label} onChange={(e) => setNewCh({ ...newCh, label: e.target.value })} className="mt-1 block h-11 w-52 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
-              </label>
+              <div className="w-36">
+                <FieldHead label="id" tip="Латиница без пробелов: telegram, alice. Это значение придёт в чат как channel." />
+                <input value={newCh.id} onChange={(e) => setNewCh({ ...newCh, id: e.target.value })} className="block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+              </div>
+              <div className="w-52">
+                <FieldHead label="Название" tip="Подпись канала в кабинете. Например: Агент в Telegram." />
+                <input value={newCh.label} onChange={(e) => setNewCh({ ...newCh, label: e.target.value })} className="block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+              </div>
               <Button
                 type="button"
                 variant="secondary"
