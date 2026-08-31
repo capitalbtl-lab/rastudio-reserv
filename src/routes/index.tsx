@@ -320,7 +320,7 @@ function Home() {
         </div>
       </section>
 
-      <section className="ink overflow-hidden py-12 text-header-fg md:py-16">
+      <section className="ink overflow-x-hidden py-12 pb-16 text-header-fg md:py-16 md:pb-24">
         <div className="page-wrap">
           <p className="kicker text-header-fg/45">Три студии</p>
           <h2 className="section-title mt-3">Сеть в Коломне и Луховицах</h2>
@@ -340,7 +340,7 @@ function Home() {
           </div>
           <p className="mt-10 max-w-3xl text-sm leading-relaxed text-header-fg/55">{home.paragraphs[12]}</p>
         </div>
-        <div className="marquee mt-12">
+        <div className="marquee mt-12 py-5">
           <div className="marquee-track partner-logos items-center">
             {[...PARTNER_LOGOS, ...PARTNER_LOGOS].map((logo, i) => (
               <SeoImage
@@ -348,8 +348,8 @@ function Home() {
                 src={logo.src}
                 alt={logo.alt}
                 filename={logo.filename}
-                className="size-28 overflow-hidden rounded-full bg-white md:size-36"
-                imgClassName="object-contain p-2.5"
+                className="m-0 size-28 shrink-0 overflow-hidden rounded-full bg-white md:size-36"
+                imgClassName="object-cover"
               />
             ))}
           </div>
