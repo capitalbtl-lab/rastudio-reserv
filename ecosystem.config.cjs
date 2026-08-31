@@ -3,8 +3,10 @@ module.exports = {
     {
       name: "rastudio",
       script: ".output/server/index.mjs",
-      instances: 1,
-      exec_mode: "fork",
+      instances: 2,
+      exec_mode: "cluster",
+      kill_timeout: 8000,
+      listen_timeout: 12000,
       env: {
         NODE_ENV: "production",
         HOST: "0.0.0.0",
