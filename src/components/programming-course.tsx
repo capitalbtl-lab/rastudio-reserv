@@ -66,7 +66,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
         age={course.age}
         title={course.name}
         description={course.program}
-        images={images}
+        images={galleryPhotos(images, course.pathDecoded || course.path || page.path)}
         video={page.video}
         facts={courseOfferFacts(course.pathDecoded || course.path || page.path, course.age)}
       />

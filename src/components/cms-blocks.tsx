@@ -177,12 +177,13 @@ export function CoursePageHero({
   const shots: HeroShot[] = [];
   const seen = new Set<string>();
   for (const img of srcs) {
-    const key = img.src.split("?")[0];
+    const key = img.src.split("?")[0].toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     shots.push(img);
-    if (shots.length === 3) break;
   }
+  const stills = shots.filter((s) => !s.src.startsWith("/courses/"));
+  const stack = (stills.length ? stills : shots).slice(0, 3);
 
   function ShotMedia({ shot, className, imgClassName }: { shot: HeroShot; className?: string; imgClassName?: string }) {
     return (
@@ -237,12 +238,12 @@ export function CoursePageHero({
         {shots.length || video ? (
           <div className="relative">
             <div className="photo-stack hidden lg:block">
-              {shots.slice(0, video ? 2 : 3).map((shot, i) => (
-                <div key={`${shot.src}-${i}`} className="shot bg-header">
+              {stack.map((shot) => (
+                <div key={shot.src} className="shot bg-header">
                   <ShotMedia shot={shot} className="h-full w-full" imgClassName="h-full w-full object-cover" />
                 </div>
               ))}
-              {video ? (
+              {video && stack.length < 2 ? (
                 <div className="shot bg-header">
                   <video
                     src={video}
