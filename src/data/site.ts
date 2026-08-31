@@ -135,8 +135,8 @@ export const SCHOOL_COURSE_MATCH: Record<string, (href: string) => boolean> = {
   "/robototehnika-v-kolomne": (href) => /robototehnika-\d|roboticsinenglish/i.test(href),
   "/programming-school": (href) => href.includes("kursy-shkoly-programmirovaniya"),
   "/promising-professions": (href) =>
-    /radioengineering|science-course|teslaphysics|3d-modeling|gamedesign|mentalarithmetic/i.test(href),
-  "/early-childhood-care": (href) => /preparation-for-school|happybricks|kinder-master/i.test(href),
+    /radioengineering|science-course|teslaphysics|3d-modeling|gamedesign|mentalarithmetic|kinder-master/i.test(href),
+  "/early-childhood-care": (href) => /preparation-for-school|happybricks/i.test(href),
   "/languageschool": (href) => /englishlanguage|japanese|vitaminkorean/i.test(href),
 };
 
@@ -171,7 +171,7 @@ export const COURSE_GROUPS = [
   {
     id: "early",
     label: "Дошколята",
-    test: (href: string) => /preparation|happybricks|kinder/i.test(href),
+    test: (href: string) => /preparation-for-school|happybricks/i.test(href),
   },
   {
     id: "model",
