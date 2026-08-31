@@ -71,6 +71,7 @@ export function AgentChat() {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [partner, setPartner] = useState<"both" | "oleg" | "olga">("both");
+  const [voiceOn, setVoiceOn] = useState(false);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
