@@ -1,5 +1,6 @@
 import { SITE } from "@/data/site";
 import { courseHint } from "@/data/agent-courses";
+import { coursesForAge } from "@/data/ages";
 
 export type AgentChip = {
   label: string;
@@ -57,6 +58,24 @@ const COURSES: Record<string, AgentChip[]> = {
   ],
 };
 
+function ageYears(blob: string) {
+  const n = blob.match(/(\d{1,2})\s*(?:лет|года)/) || blob.match(/ребёнк\w*[^\d]{0,12}(\d{1,2})/);
+  return Number(n?.[1] || 0);
+}
+
+function chipLabel(name: string) {
+  return name
+    .replace(/^курс\s+/i, "")
+    .replace(/^IT-лаборатория\s*/i, "")
+    .replace(/^IT-школа:\s*/i, "")
+    .replace(/^Научный курс\s*/i, "")
+    .replace(/^Развивающий курс\s*/i, "")
+    .replace(/^Производственный бизнес-курс\s*/i, "")
+    .replace(/[«»"]/g, "")
+    .trim()
+    .slice(0, 42);
+}
+
 function blobOf(messages: { role: string; content: string }[]) {
   return messages
     .filter((m) => m.role === "user")
@@ -112,10 +131,20 @@ export function nextChips(messages: { role: string; content: string }[]): { hint
   const blob = blobOf(messages);
   const age = ageBand(blob);
   if (!age) return { hint: "Сколько лет ребёнку", chips: AGES };
-  if (!hasCity(blob)) return { hint: "Какой филиал удобнее", chips: PLACES };
   if (!hasCourse(blob)) {
+    const years = ageYears(blob);
+    if (years) {
+      const chips = coursesForAge(years).flatMap((g) =>
+        g.items.map((item) => ({
+          label: chipLabel(item.name),
+          send: `Расскажите подробнее про «${item.name}»`,
+        })),
+      );
+      if (chips.length) return { hint: `Все курсы для ${years} лет`, chips };
+    }
     return { hint: "Что откликается", chips: COURSES[age] || COURSES["7-9"] };
   }
+  if (!hasCity(blob)) return { hint: "Какой филиал удобнее", chips: PLACES };
   const page = courseHint(`${blob} ${messages.map((m) => m.content).slice(-3).join(" ")}`);
   return {
     hint: "Следующий шаг",

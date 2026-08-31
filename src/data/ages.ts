@@ -1,4 +1,4 @@
-import { publicPriceLabel } from "./prices-core";
+import { publicPriceLabel, listPriceRows } from "./prices-core";
 
 export const AGE_BANDS = [
   { id: "3-4", label: "3–4 года", min: 3, max: 4 },
@@ -17,8 +17,13 @@ export function parseAgeRanges(text: string): [number, number][] {
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) out.push([Number(m[1]), Number(m[2])]);
   if (!out.length) {
-    const one = text.match(/(?:от\s*)?(\d+)\s*\+/i) || text.match(/\b(\d+)\s*(?:лет|года)/i);
-    if (one) out.push([Number(one[1]), Number(one[1]) + 3]);
+    const from = text.match(/от\s*(\d+)/i);
+    const plus = text.match(/(\d+)\s*\+/);
+    if (from || plus) out.push([Number((from || plus)![1]), 18]);
+    else {
+      const one = text.match(/\b(\d+)\s*(?:лет|года)/i);
+      if (one) out.push([Number(one[1]), Number(one[1])]);
+    }
   }
   return out;
 }
@@ -62,4 +67,27 @@ export function courseFacts(href: string, age?: string) {
 
 export function courseOfferFacts(path: string, age?: string | null) {
   return [ageShort(age), courseLength(path), coursePlace(path)].filter(Boolean);
+}
+
+export function coursesForAge(age: number) {
+  const n = Math.round(Number(age));
+  const map = new Map<string, { name: string; age: string; path: string }[]>();
+  if (!Number.isFinite(n) || n < 2 || n > 20) return [];
+  for (const row of listPriceRows()) {
+    if (!agesOverlap(row.age, n, n)) continue;
+    const list = map.get(row.direction) || [];
+    list.push({ name: row.name, age: row.age, path: row.path });
+    map.set(row.direction, list);
+  }
+  return [...map.entries()].map(([direction, items]) => ({ direction, items }));
+}
+
+export function formatCoursesForAge(age: number) {
+  const groups = coursesForAge(age);
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
+  if (!total) return `В каталоге нет курсов на ${age} лет. Уточните возраст.`;
+  return [
+    `Все курсы для ${age} лет — ${total} программ. Перечисли родителю ВСЕ, по школам, без сокращения до двух.`,
+    ...groups.map((g) => `${g.direction}: ${g.items.map((i) => i.name).join("; ")}.`),
+  ].join("\n");
 }

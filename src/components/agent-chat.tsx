@@ -101,7 +101,7 @@ export function AgentChat() {
   const [speaking, setSpeaking] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
   const [adminMs, setAdminMs] = useState(0);
-  const [box, setBox] = useState({ w: 400, h: 608 });
+  const [box, setBox] = useState({ w: 520, h: 740 });
   const dragRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const lastMsgRef = useRef<HTMLDivElement>(null);
@@ -434,7 +434,7 @@ export function AgentChat() {
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] md:inset-auto md:bottom-6 md:right-6">
       {open ? (
         <div
-          className="agent-panel pointer-events-auto relative mx-3 mb-[4.75rem] flex h-[min(38rem,76dvh)] w-auto flex-col overflow-hidden rounded-[1.85rem] bg-white ring-[3px] ring-white shadow-[0_28px_70px_-18px_rgba(9,12,18,0.55)] md:mx-0 md:mb-0 md:h-[var(--agent-h)] md:w-[var(--agent-w)]"
+          className="agent-panel pointer-events-auto relative mx-3 mb-[4.75rem] flex h-[min(46rem,86dvh)] w-auto flex-col overflow-hidden rounded-[1.85rem] bg-white ring-[3px] ring-white shadow-[0_28px_70px_-18px_rgba(9,12,18,0.55)] md:mx-0 md:mb-0 md:h-[var(--agent-h)] md:w-[var(--agent-w)]"
           style={{ ["--agent-w" as string]: `${box.w}px`, ["--agent-h" as string]: `${box.h}px` }}
         >
           <audio ref={audioElRef} className="hidden" playsInline preload="auto" />
