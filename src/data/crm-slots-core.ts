@@ -1,0 +1,44 @@
+export const SCHOOL_ORDER = [
+  "Художественная школа",
+  "Школа робототехники",
+  "Школа программирования",
+  "Школа наук и инженерии",
+  "Школа раннего развития",
+  "Школа иностранных языков",
+  "Модельная школа",
+  "Прочее",
+];
+
+export type CrmSlot = {
+  id: string;
+  lessonId: number;
+  groupId: number;
+  groupName: string;
+  groupNote: string;
+  statusId: number;
+  limit: number;
+  taken: number;
+  subjectId: number;
+  subject: string;
+  school: string;
+  course: string;
+  path: string;
+  age: string;
+  day: number;
+  dayLabel: string;
+  timeFrom: string;
+  timeTo: string;
+  timesPerWeek: number;
+  branchId: number;
+  city: string;
+  branch: string;
+  signup: string;
+  teacherId: number;
+  teacherIds: number[];
+  teacher: string;
+  roomId: number;
+  bDate: string;
+  eDate: string;
+};
+
+export type SlotVersion = { at: string; reason: string; count: number; slots: CrmSlot[] };

@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import type { CmsSession } from "@/data/cms";
 import { request, token } from "@/data/alfacrm";
 import { agesOverlap } from "@/data/ages";
+import { courseOf, dayLabel, schoolOf, slotFromSession, stampTimes, toSession, type CrmSlot } from "@/data/crm-slots";
 
 const SKIP_SUBJECT = new Set([7, 54, 104, 85, 81, 1, 77, 106, 82, 105, 83, 90, 84, 88, 87]);
 const DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
@@ -51,7 +52,17 @@ const BRANCH: Record<number, { city: string; branch: string; short: string }> = 
   4: { city: "Коломна", branch: "летние программы", short: "Лето" },
 };
 
-type Group = { id: number; name: string; note?: string; limit?: number; status_id?: number };
+type Group = {
+  id: number;
+  name: string;
+  note?: string;
+  limit?: number;
+  status_id?: number;
+  teacher_ids?: number[];
+  b_date?: string;
+  e_date?: string;
+  subject_id?: number;
+};
 type Lesson = {
   id: number;
   related_id?: number | null;
@@ -60,13 +71,17 @@ type Lesson = {
   day?: number;
   time_from_v?: string;
   time_to_v?: string;
+  time_from?: string;
+  time_to?: string;
   teacher_ids?: number[];
+  room_id?: number;
 };
 type Subject = { id: number; name: string };
+type Teacher = { id: number; name?: string };
 type CrmLesson = { group_ids?: number[]; customer_ids?: number[]; date?: string };
 
 type SeatInfo = { limit: number; taken: number };
-type CacheBag = { at: number; sessions: CmsSession[]; seats: Map<string, SeatInfo> };
+type CacheBag = { at: number; sessions: CmsSession[]; seats: Map<string, SeatInfo>; slots: CrmSlot[] };
 
 let cache: CacheBag | null = null;
 const TTL = 10 * 60 * 1000;
@@ -84,6 +99,7 @@ function writeSnap(bag: CacheBag) {
         at: bag.at,
         sessions: bag.sessions,
         seats: [...bag.seats.entries()],
+        slots: bag.slots,
       },
       null,
       0,
@@ -99,12 +115,14 @@ function readSnap(): CacheBag | null {
       at?: number;
       sessions?: CmsSession[];
       seats?: [string, SeatInfo][];
+      slots?: CrmSlot[];
     };
     if (!Array.isArray(raw.sessions) || !raw.sessions.length) return null;
     return {
       at: Number(raw.at) || 0,
       sessions: raw.sessions,
       seats: new Map(raw.seats || []),
+      slots: Array.isArray(raw.slots) ? raw.slots : [],
     };
   } catch {
     return null;
@@ -178,8 +196,9 @@ export async function refreshCrmSchedule() {
   writeSnap(bag);
   return {
     at: new Date(bag.at).toISOString(),
-    count: bag.sessions.length,
+    count: bag.slots.length || bag.sessions.length,
     sessions: bag.sessions,
+    slots: bag.slots,
   };
 }
 
@@ -187,8 +206,25 @@ export function crmScheduleMeta() {
   const snap = cache || readSnap();
   return {
     at: snap?.at ? new Date(snap.at).toISOString() : "",
-    count: snap?.sessions.length || 0,
+    count: snap?.slots?.length || snap?.sessions.length || 0,
   };
+}
+
+export function listAdminSlots(): CrmSlot[] {
+  const snap = cache || readSnap();
+  if (snap?.slots?.length) return snap.slots;
+  return (snap?.sessions || []).map(slotFromSession);
+}
+
+export function saveAdminSlots(slots: CrmSlot[]) {
+  const stamped = stampTimes(slots.map((s) => ({ ...s })));
+  const sessions = stamped
+    .filter((s) => s.school !== "Прочее" && s.statusId !== 2 && !/отложен/i.test(s.groupName))
+    .map(toSession);
+  const seats = cache?.seats || readSnap()?.seats || new Map();
+  cache = { at: Date.now(), sessions, seats, slots: stamped };
+  writeSnap(cache);
+  return cache;
 }
 
 async function loadCrm(force = false): Promise<CacheBag> {
@@ -202,11 +238,15 @@ async function loadCrm(force = false): Promise<CacheBag> {
   }
   const t = await token();
   const sessions: CmsSession[] = [];
+  const slots: CrmSlot[] = [];
   const seats = new Map<string, SeatInfo>();
   const subjects = new Map<number, string>();
+  const teachers = new Map<number, string>();
   const sub = await request<{ items?: Subject[] }>("/v2api/2/subject/index", { page: 0, pageSize: 200 }, t);
   for (const s of sub.items || []) subjects.set(s.id, s.name);
   for (const branch of [1, 2, 3]) {
+    const tr = await request<{ items?: Teacher[] }>(`/v2api/${branch}/teacher/index`, { page: 0, pageSize: 200 }, t).catch(() => ({ items: [] as Teacher[] }));
+    for (const p of tr.items || []) if (p.id) teachers.set(p.id, p.name || String(p.id));
     const groups = await request<{ items?: Group[] }>(`/v2api/${branch}/group/index`, { page: 0, pageSize: 200 }, t);
     const groupMap = new Map((groups.items || []).map((g) => [g.id, g]));
     const taken = await loadSeats(branch, t).catch(() => new Map<number, number>());
@@ -221,31 +261,57 @@ async function loadCrm(force = false): Promise<CacheBag> {
     const meta = BRANCH[branch];
     for (const lesson of lessons.items || []) {
       const sid = Number(lesson.subject_id);
-      if (!sid || SKIP_SUBJECT.has(sid)) continue;
       const group = lesson.related_id ? groupMap.get(lesson.related_id) : undefined;
-      if (group && (/отложен/i.test(group.name) || group.status_id === 2)) continue;
       const subjectName = subjects.get(sid) || group?.name || "Курс";
       const age = ageOf(group?.name || "") || ageOf(subjectName);
       const path = SUBJECT_PATH[sid] || "";
-      const gid = group?.id || lesson.related_id;
-      sessions.push({
+      const gid = Number(group?.id || lesson.related_id || 0);
+      const tIds = (lesson.teacher_ids || group?.teacher_ids || []).map(Number).filter(Boolean);
+      const teacherId = tIds[0] || 0;
+      const from = String(lesson.time_from_v || lesson.time_from || "").slice(0, 5);
+      const to = String(lesson.time_to_v || lesson.time_to || "").slice(0, 5);
+      const day = Number(lesson.day) || 1;
+      const school = schoolOf(path, subjectName, group?.name || "");
+      const seat = gid ? seats.get(seatKey(branch, gid)) : undefined;
+      const slot: CrmSlot = {
         id: `crm-${lesson.id}`,
-        group: group?.name || subjectName,
+        lessonId: Number(lesson.id),
+        groupId: gid,
+        groupName: group?.name || subjectName,
+        groupNote: String(group?.note || ""),
+        statusId: Number(group?.status_id || 0),
+        limit: seat?.limit || Number(group?.limit) || 0,
+        taken: seat?.taken || 0,
+        subjectId: sid,
+        subject: subjectName,
+        school,
+        course: courseOf(subjectName, group?.name || "", path),
+        path,
         age,
-        when: whenOf(lesson.day, lesson.time_from_v, lesson.time_to_v),
-        teacherId: String(lesson.teacher_ids?.[0] || ""),
-        signup: gid ? signupUrl(branch, gid) : path,
+        day,
+        dayLabel: dayLabel(day),
+        timeFrom: from,
+        timeTo: to,
+        timesPerWeek: 1,
+        branchId: branch,
         city: meta.city,
         branch: meta.branch,
-        directionId: String(sid),
-        courseId: String(sid),
-        ageTag: age,
-        courseFilter: subjectName,
-        path,
-      });
+        signup: gid ? signupUrl(branch, gid) : path,
+        teacherId,
+        teacherIds: tIds,
+        teacher: tIds.map((id) => teachers.get(id) || String(id)).join(", "),
+        roomId: Number(lesson.room_id) || 0,
+        bDate: String(group?.b_date || ""),
+        eDate: String(group?.e_date || ""),
+      };
+      slots.push(slot);
+      if (!sid || SKIP_SUBJECT.has(sid)) continue;
+      if (group && (/отложен/i.test(group.name) || group.status_id === 2)) continue;
+      sessions.push(toSession(slot));
     }
   }
-  cache = { at: Date.now(), sessions, seats };
+  stampTimes(slots);
+  cache = { at: Date.now(), sessions, seats, slots };
   try {
     writeSnap(cache);
   } catch {
