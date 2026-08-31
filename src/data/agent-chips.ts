@@ -1,6 +1,7 @@
 import { SITE } from "@/data/site";
 import { courseHint } from "@/data/agent-courses";
 import { factsFromMessages } from "@/data/agent-facts";
+import { nextSlot, slotsFromMessages } from "@/data/funnel-state";
 import { summerSeason } from "@/data/agent-playbook";
 
 export type AgentChip = {
@@ -11,11 +12,11 @@ export type AgentChip = {
 };
 
 const AGES: AgentChip[] = [
-  { label: "3–4 года", send: "Ребёнку 3–4 года" },
-  { label: "5–6 лет", send: "Ребёнку 5–6 лет" },
-  { label: "7–9 лет", send: "Ребёнку 7–9 лет" },
-  { label: "10–14 лет", send: "Ребёнку 10–14 лет" },
-  { label: "15+", send: "Подросток 15 лет и старше" },
+  { label: "3–4 года", send: "Ребёнку 4 года" },
+  { label: "5–6 лет", send: "Ребёнку 6 лет" },
+  { label: "7–9 лет", send: "Ребёнку 8 лет" },
+  { label: "10–14 лет", send: "Ребёнку 12 лет" },
+  { label: "15+", send: "Ребёнку 15 лет" },
 ];
 
 const CITIES: AgentChip[] = [
@@ -59,20 +60,22 @@ export function nextChips(messages: { role: string; content: string }[]): { hint
       ],
     };
   }
+  const slots = slotsFromMessages(messages);
+  const open = nextSlot(slots);
+  if (open === "age") return { hint: "", chips: AGES };
+  if (open === "city") return { hint: "", chips: CITIES };
+  if (open === "branch") return { hint: "", chips: KOLOMNA };
   const facts = factsFromMessages(messages);
-  if (!facts.age) return { hint: "Возраст", chips: AGES };
-  if (!facts.city) return { hint: "Город", chips: CITIES };
-  if (facts.city === "Коломна" && !facts.branchId) return { hint: "Филиал", chips: KOLOMNA };
-  if (!facts.school) return { hint: "Направление", chips: schoolsFor(facts.age) };
+  if (!facts.school) return { hint: "", chips: schoolsFor(slots.age) };
   if (!facts.briefed) {
     return {
-      hint: "Когда программа ясна",
+      hint: "",
       chips: [{ label: "Понятно, к записи", send: "Понятно. Давайте к пробному или в группу", primary: true }],
     };
   }
   const page = courseHint(messages.map((m) => m.content).slice(-4).join(" "));
   return {
-    hint: "Как удобнее начать",
+    hint: "",
     chips: [
       { label: "Пробное в группе", send: "Хочу пробное на ближайшем занятии группы", primary: true },
       { label: "Пробное в свободный день", send: "Хочу пробное в свободный день, дату согласуем" },

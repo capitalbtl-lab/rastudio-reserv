@@ -12,7 +12,7 @@ function clientSystem(who: "oleg" | "olga", facts?: SessionFacts, stepOverride?:
     who === "olga"
       ? "женский род: согласна, готова, поняла. Никогда «согласен»."
       : "мужской род: согласен, готов, понял. Никогда «согласна».";
-  const step = stepOverride || (facts ? nextStepOf(facts) : "спросить ТОЛЬКО возраст. Город не упоминай.");
+  const step = stepOverride || (facts ? nextStepOf(facts) : "не спрашивай возраст и город — работают кнопки.");
   return `Вы — ${name}, администратор студии «Развивайся». Говорите по-русски с родителем. Не называйте себя роботом или нейросетью. Не выдумывайте день и свободные места. Цены: «от … / 4 недели». Пробное без обязательства.
 
 Формат КАЖДОГО ответа строго:
@@ -502,7 +502,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     const facts = factsFromMessages(all);
     const note = buildSessionNote(all);
     if (!admin) {
-      const locked = lockedFunnelReply(soloWho, facts, note, all, Boolean(data.voice));
+      const locked = lockedFunnelReply(soloWho, all, Boolean(data.voice));
       if (locked) {
         if ("silent" in locked) {
           return { ok: true as const, reply: "", silent: true as const, token: granted, reload: false };

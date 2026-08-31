@@ -174,7 +174,7 @@ export function factsFromMessages(messages: { role: string; content: string }[])
 }
 
 export function nextStepOf(facts: SessionFacts) {
-  if (!facts.age) return "спросить ТОЛЬКО возраст. Город и филиал не упоминай.";
+  if (!facts.age) return "не спрашивай возраст — его уже спрашивают кнопки. Город не упоминай.";
   if (!facts.city) return "спросить ТОЛЬКО город: Коломна или Луховицы. Возраст не спрашивай.";
   if (facts.city === "Коломна" && !facts.branchId) {
     return "спросить филиал в Коломне: ЦМИТ, Октябрьской революции 340 или Гражданская 2. Город и возраст НЕ спрашивай — город уже Коломна.";

@@ -1,41 +1,34 @@
-import type { SessionFacts } from "./agent-facts";
-import type { SessionNote } from "./session-note";
+import { nextSlot, PROMPT, slotsFromMessages, type Slots } from "./funnel-state";
 
-const CITY = "Вам удобнее Коломна или Луховицы?";
-const BRANCH = "В Коломне два адреса: ЦМИТ на Октябрьской революции, 340 и Гражданская, 2. Какой ближе?";
+export type FunnelHit = { reply: string } | { silent: true };
 
 function said(messages: { role: string; content: string }[], re: RegExp) {
   return messages.some((m) => m.role === "assistant" && re.test(m.content));
 }
 
-export type FunnelHit = { reply: string } | { silent: true };
-
-/** Один слот — один канал. Текст: только кнопки. Голос: фраза слота один раз. */
+/** До направления модель молчит. Один слот — либо кнопки, либо одна голосовая фраза. */
 export function lockedFunnelReply(
   who: "oleg" | "olga",
-  facts: SessionFacts,
-  note: SessionNote,
-  messages: { role: string; content: string }[] = [],
+  messages: { role: string; content: string }[],
   voice = false,
+  slots?: Slots,
 ): FunnelHit | null {
   const n = who === "olga" ? "Ольга" : "Олег";
   const ok = who === "olga" ? "Запомнила" : "Запомнил";
-  const askedCity = note.asked.city || said(messages, /коломна или луховиц|удобнее коломн/i);
-  const askedBranch = note.asked.branch || said(messages, /цмит|гражданская, 2|какой ближе/i);
+  const s = slots || slotsFromMessages(messages);
+  const open = nextSlot(s);
 
-  if (!facts.age) {
-    if (facts.city && !said(messages, /запомнил[аи]/i)) {
-      return { reply: `${n}: ${ok}: ${facts.city}.` };
-    }
+  if (open === "age") {
+    if (s.city && !said(messages, /запомнил[аи]/i)) return { reply: `${n}: ${ok}: ${s.city}.` };
     return { silent: true };
   }
-  if (!facts.city) {
-    if (askedCity) return { silent: true };
-    return voice ? { reply: `${n}: ${CITY}` } : { silent: true };
+  if (open === "city") {
+    if (!voice || said(messages, /коломна или луховиц|удобнее коломн/i)) return { silent: true };
+    return { reply: `${n}: ${PROMPT.city}` };
   }
-  if (facts.city === "Коломна" && !facts.branchId) {
-    if (askedBranch) return { silent: true };
-    return voice ? { reply: `${n}: ${BRANCH}` } : { silent: true };
+  if (open === "branch") {
+    if (!voice || said(messages, /цмит|гражданская, 2|какой ближе/i)) return { silent: true };
+    return { reply: `${n}: ${PROMPT.branch}` };
   }
   return null;
 }

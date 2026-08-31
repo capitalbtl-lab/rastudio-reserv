@@ -130,7 +130,7 @@ function readChat(who: "oleg" | "olga"): Msg[] {
     const parsed = JSON.parse(raw) as Msg[];
     if (!parsed?.length) return [{ role: "assistant", content: greeting(who) }];
     const onlyHello = parsed.length === 1 && parsed[0].role === "assistant" && !parsed.some((m) => m.role === "user");
-    if (onlyHello && DUAL_HELLO.test(parsed[0].content)) return [{ role: "assistant", content: greeting(who) }];
+    if (onlyHello) return [{ role: "assistant", content: greeting(who) }];
     return parsed;
   } catch {
     return [{ role: "assistant", content: greeting(who) }];
@@ -711,10 +711,12 @@ export function AgentChat() {
     const onlyHello =
       !inAdminUi &&
       clientMsgs.length === 1 &&
-      clientMsgs[0].role === "assistant" &&
-      /Подскажу программу, которая подойдёт/.test(clientMsgs[0].content);
-    const spoken = onlyHello ? greeting(partner, true) : [...messages].reverse().find((m) => m.role === "assistant")?.content;
-    if (onlyHello) setClientMsgs([{ role: "assistant", content: spoken || greeting(partner, true) }]);
+      clientMsgs[0].role === "assistant";
+    if (onlyHello) {
+      if (voiceOnRef.current) startListen();
+      return;
+    }
+    const spoken = [...messages].reverse().find((m) => m.role === "assistant")?.content;
     if (spoken) await speak(spoken);
     if (voiceOnRef.current) startListen();
   }
@@ -898,9 +900,11 @@ export function AgentChat() {
                 </div>
               ),
             )}
-            {messages.length && !busy ? (
+            {messages.length && !busy && offer.chips.length ? (
               <div className="pl-11">
-                <p className="mb-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">{offer.hint}</p>
+                {offer.hint ? (
+                  <p className="mb-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">{offer.hint}</p>
+                ) : null}
                 <div className="flex flex-wrap gap-1.5">
                   {offer.chips.map((chip) =>
                     chip.href ? (
@@ -976,7 +980,7 @@ export function AgentChat() {
               <input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="Возраст и город — подберём курс"
+                placeholder="Напишите или нажмите кнопку"
                 className="h-10 flex-1 bg-transparent px-3.5 text-base outline-none md:text-sm"
                 maxLength={1000}
               />

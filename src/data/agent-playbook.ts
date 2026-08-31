@@ -153,7 +153,7 @@ export function playbookPrompt(scripts: ScriptSection[], facts?: SessionFacts, n
   if (facts?.branchId) skip.add("branch");
   const live = [
     "Воронка: один новый вопрос. Закрытые шаги не повторяй даже другими словами.",
-    facts ? `Сейчас: ${nextStepOf(facts)}` : "Сейчас: спросить только возраст.",
+    facts ? `Сейчас: ${nextStepOf(facts)}` : "Воронка на кнопках. Возраст и город не спрашивай.",
     closed.length ? `Уже есть, ЗАПРЕЩЕНО спрашивать: ${closed.join(", ")}.` : "",
     facts?.city ? `Город уже ${facts.city}. Фразы «Коломна или Луховицы», «какой город» — запрещены.` : "",
   ]
