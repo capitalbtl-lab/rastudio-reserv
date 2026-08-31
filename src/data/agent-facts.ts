@@ -201,36 +201,3 @@ ${lines.map((l) => `— ${l}`).join("\n")}
 Сейчас ${next}${ban}
 Если в скрипте ниже написано «спроси город», а город уже есть — игнорируй скрипт.`;
 }
-  const lines: string[] = [];
-  if (facts.age) lines.push(`возраст ребёнка: ${facts.age} лет${facts.band ? ` (группа ${facts.band})` : ""}`);
-  if (facts.city) lines.push(`город: ${facts.city}`);
-  if (facts.branch) lines.push(`филиал: ${facts.branch}${facts.branchId ? ` (id ${facts.branchId})` : ""}`);
-  if (facts.school) lines.push(`направление: ${facts.school}`);
-  if (facts.course) lines.push(`курс: ${facts.course}`);
-  if (facts.briefed) lines.push("программу направления уже рассказали");
-  if (facts.child) lines.push(`ребёнок: ${facts.child}`);
-  if (facts.parent) lines.push(`родитель: ${facts.parent}`);
-  if (facts.phone) lines.push(`телефон: ${facts.phone}`);
-  if (facts.intent) lines.push(`намерение: ${facts.intent}`);
-  const next = !facts.age
-    ? "следующий шаг: возраст"
-    : !facts.city
-      ? "следующий шаг: город (Коломна или Луховицы)"
-      : facts.city === "Коломна" && !facts.branchId
-        ? "следующий шаг: филиал в Коломне (ЦМИТ или Гражданская)"
-        : !facts.school
-          ? "следующий шаг: направление / школа"
-          : !facts.briefed
-            ? "следующий шаг: рассказать программу направления и про последовательность ступеней. К записи не переходи в этой реплике."
-            : "следующий шаг: пробное в группе / пробное в свободный день / сразу в группу. Здесь можно list_groups.";
-  if (!lines.length) {
-    return `
-
-Факты сессии пустые. ${next}. Один вопрос. Курсы и адреса не называй.`;
-  }
-  return `
-
-УЖЕ ИЗВЕСТНО В ЭТОЙ СЕССИИ — не спрашивай снова:
-${lines.map((l) => `— ${l}`).join("\n")}
-Сейчас ${next}. Не начинай диалог заново.`;
-}
