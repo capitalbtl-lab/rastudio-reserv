@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Расшифровывает лучшие звонки Novofon и собирает базу знаний."""
 import base64, hashlib, hmac, json, os, subprocess, time, urllib.request
-from urllib.parse import quote
+from urllib.parse import urlencode
 from pathlib import Path
 
 ROOT = Path("/var/www/rastudio")
@@ -20,7 +20,7 @@ HOST = "https://api.novofon.com"
 TARGET = 50
 
 def rest(path, params):
-    qs = "&".join(f"{k}={quote(str(params[k]), safe='')}" for k in sorted(params)).replace("%20", "+")
+    qs = urlencode(sorted((k, str(v)) for k, v in params.items())).replace("%20", "+")
     md5 = hashlib.md5(qs.encode()).hexdigest()
     sign = base64.b64encode(hmac.new(SECRET.encode(), (path + qs + md5).encode(), hashlib.sha1).digest()).decode()
     url = HOST + path + (("?" + qs) if qs else "")
@@ -44,14 +44,22 @@ def pending(data):
     return rows
 
 def record_link(call):
-    for params in ({"call_id": call["call_id"], "lifetime": "3600"}, {"pbx_call_id": call.get("pbx_call_id") or call["call_id"], "lifetime": "3600"}):
+    last = ""
+    for params in (
+        {"call_id": str(call["call_id"]), "lifetime": "3600"},
+        {"pbx_call_id": str(call.get("pbx_call_id") or call["call_id"]), "lifetime": "3600"},
+    ):
         try:
             js = rest("/v1/pbx/record/request/", params)
             links = (js.get("links") or []) + [js.get("link") or ""]
-            if any(links):
-                return next(x for x in links if x)
-        except Exception:
+            hit = next((x for x in links if x), "")
+            if hit:
+                return hit
+            last = str(js)
+        except Exception as e:
+            last = str(e)
             continue
+    print("nolink", call.get("call_id"), last[:180], flush=True)
     return ""
 
 def stt_file(path):
