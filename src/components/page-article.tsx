@@ -139,31 +139,40 @@ export function PageArticle({
   return <PlainPage page={page} schedule={schedule} />;
 }
 
+function splitCourseHeading(h1: string) {
+  const cleaned = h1.replace(/\u200b/g, " ").replace(/\s+/g, " ").trim();
+  const match = cleaned.match(/^(.*?)\s+(Для детей\b.*)$/i);
+  if (match) return { title: match[1], age: match[2] };
+  return { title: cleaned, age: null as string | null };
+}
+
 function CinematicPage({ page, schedule }: { page: SitePage; schedule: CmsSession[] }) {
   const hero = page.images[0];
   const body = page.paragraphs;
+  const heading = splitCourseHeading(page.h1);
 
   return (
     <article>
-      <section className="ink relative isolate min-h-[52dvh] overflow-hidden text-header-fg">
+      <section className="ink relative isolate overflow-hidden text-header-fg">
         {hero ? (
           <SeoImage
             src={hero.src}
             alt={hero.alt}
             filename={hero.filename}
             className="absolute inset-0 h-full w-full"
-            imgClassName="h-full w-full object-cover opacity-50"
+            imgClassName="h-full w-full object-cover"
             loading="eager"
           />
         ) : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/20" />
-        <div className="relative mx-auto flex min-h-[52dvh] max-w-[1180px] flex-col justify-end px-4 pb-28 pt-24 md:px-5 md:pb-12">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/20" />
+        <div className="relative mx-auto flex min-h-[26dvh] max-w-[1180px] flex-col justify-end px-4 pb-6 pt-20 md:px-5 md:min-h-[26dvh] md:pb-8">
           <Breadcrumb page={page} onDark />
-          <h1 className="hero-title mt-4 max-w-4xl">{page.h1}</h1>
+          {heading.age ? <p className="kicker mt-3 text-header-fg/75">{heading.age}</p> : null}
+          <h1 className="display mt-2 max-w-4xl text-[clamp(1.35rem,0.9rem+2vw,2.35rem)] leading-tight">{heading.title}</h1>
           {page.description ? (
-            <p className="mt-5 max-w-2xl text-base text-header-fg/80 md:text-lg">{page.description}</p>
+            <p className="mt-3 max-w-2xl text-sm text-header-fg/90 md:text-base">{page.description}</p>
           ) : null}
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-4 flex flex-wrap gap-3">
             <Button asChild>
               <a href="#trial">Записаться</a>
             </Button>

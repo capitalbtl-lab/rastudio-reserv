@@ -32,19 +32,19 @@ export function ProgrammingCoursePage({ page, course, schedule }: Props) {
 
   return (
     <article>
-      <section className="ink relative isolate min-h-[70dvh] overflow-hidden text-header-fg">
+      <section className="ink relative isolate overflow-hidden text-header-fg">
         {hero ? (
           <SeoImage
             src={hero.src}
             alt={hero.alt || course.name}
             filename={hero.filename}
             className="absolute inset-0 h-full w-full"
-            imgClassName="h-full w-full object-cover opacity-50"
+            imgClassName="h-full w-full object-cover"
             loading="eager"
           />
         ) : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/25" />
-        <div className="relative mx-auto flex min-h-[70dvh] max-w-[1180px] flex-col justify-end px-4 pb-28 pt-24 md:px-5 md:pb-16">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/20" />
+        <div className="relative mx-auto flex min-h-[35dvh] max-w-[1180px] flex-col justify-end px-4 pb-6 pt-20 md:px-5 md:pb-8">
           <p className="text-sm font-medium text-header-fg/80">
             <PageLink to="/" className="hover:underline">
               Главная
@@ -54,29 +54,29 @@ export function ProgrammingCoursePage({ page, course, schedule }: Props) {
               Школа программирования
             </PageLink>
           </p>
-          <div className="mt-6 flex items-end gap-5">
+          <div className="mt-4 flex items-end gap-4">
             {course.logo ? (
               <CmsImg
                 image={course.logo}
-                className="hidden size-20 overflow-hidden bg-bg/10 sm:block md:size-24"
+                className="hidden size-14 overflow-hidden bg-bg/10 sm:block"
                 alt={course.name}
                 loading="eager"
               />
             ) : null}
             <div>
-              <p className="kicker text-header-fg/70">{course.age}</p>
-              <h1 className="hero-title mt-3 max-w-4xl">{course.name}</h1>
+              <p className="kicker text-header-fg/75">{course.age}</p>
+              <h1 className="display mt-2 max-w-4xl text-[clamp(1.35rem,0.9rem+2vw,2.35rem)] leading-tight">{course.name}</h1>
               {course.program ? (
-                <p className="mt-4 max-w-2xl text-base text-header-fg/80 md:text-lg">{course.program}</p>
+                <p className="mt-3 max-w-2xl text-sm text-header-fg/90 md:text-base">{course.program}</p>
               ) : null}
             </div>
           </div>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Button asChild size="lg">
-              <a href="#trial">Запись на пробное занятие</a>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button asChild>
+              <a href="#trial">Записаться</a>
             </Button>
-            <Button asChild size="lg">
-              <a href="#modules">Модули курса</a>
+            <Button asChild>
+              <a href={SITE.phoneHref}>{SITE.phone}</a>
             </Button>
           </div>
         </div>
