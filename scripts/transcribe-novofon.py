@@ -84,7 +84,7 @@ def stt_file(path):
     body = Path(path).read_bytes()
     if len(body) < 400:
         return ""
-    url = "https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?lang=ru-RU&topic=general&format=oggopus"
+    url = "https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?lang=ru-RU&topic=general&format=lpcm&sampleRateHertz=16000"
     last = ""
     for auth in (f"Api-Key {YKEY}", f"Bearer {YKEY}"):
         req = urllib.request.Request(url, data=body, headers={"Authorization": auth, "x-folder-id": FOLDER})
@@ -108,12 +108,18 @@ def transcribe(call):
     urllib.request.urlretrieve(link, mp3)
     chunks = work / "chunks"
     chunks.mkdir(exist_ok=True)
+    wav = work / "full.wav"
     subprocess.run(
-        ["ffmpeg", "-y", "-i", str(mp3), "-ac", "1", "-ar", "48000", "-f", "segment", "-segment_time", "25",
-         "-c:a", "libopus", "-b:a", "48k", str(chunks / "p-%03d.ogg")],
+        ["ffmpeg", "-y", "-i", str(mp3), "-ac", "1", "-ar", "16000", str(wav)],
         check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
-    parts = sorted(chunks.glob("p-*.ogg")) or [mp3]
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", str(wav), "-f", "segment", "-segment_time", "25", "-c", "copy", str(chunks / "p-%03d.wav")],
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    parts = sorted(chunks.glob("p-*.wav"))
+    if not parts and wav.exists():
+        parts = [wav]
     texts = []
     for p in parts:
         t = stt_file(p)
