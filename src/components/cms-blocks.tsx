@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { ArrowUpRight, Check, ChevronDown, FlaskConical, MapPin, Sparkles, Users } from "lucide-react";
-import type { CmsImage, CmsSession, CmsTrajectoryStep } from "@/data/cms";
+import { ArrowUpRight, Check, ChevronDown, FlaskConical, Sparkles, Users } from "lucide-react";
+import type { CmsImage, CmsTrajectoryStep } from "@/data/cms";
 import type { CourseCard } from "@/data/catalog";
 import { courseKey } from "@/data/cms";
 import { SITE, coursesForSchool } from "@/data/site";
@@ -10,6 +10,7 @@ import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+export { ScheduleBlock } from "@/components/schedule-block";
 
 export function Kicker({ children, className }: { children: string; className?: string }) {
   return <p className={cn("kicker", className)}>{children}</p>;
@@ -134,128 +135,6 @@ export function Trajectory({
   );
 }
 
-const WEEKDAYS: [RegExp, string][] = [
-  [/понедельник/i, "Пн"],
-  [/вторник/i, "Вт"],
-  [/сред/i, "Ср"],
-  [/четверг/i, "Чт"],
-  [/пятниц/i, "Пт"],
-  [/суббот/i, "Сб"],
-  [/воскресень/i, "Вс"],
-];
-
-function compactWhen(when: string) {
-  if (!when) return "";
-  const days = WEEKDAYS.filter(([re]) => re.test(when)).map(([, d]) => d);
-  const times = [...when.matchAll(/(\d{1,2}:\d{2})\s*до\s*(\d{1,2}:\d{2})/gi)].map(
-    (m) => `${m[1]}–${m[2]}`,
-  );
-  const twice = /2\s*раза/i.test(when);
-  if (days.length && times.length) return `${twice ? "2× " : ""}${days.join("/")} ${times.join(", ")}`;
-  if (days.length) return `${twice ? "2× " : ""}${days.join("/")}`;
-  return when.replace(/^Занятия\s+/i, "");
-}
-
-function branchRank(session: CmsSession) {
-  const blob = `${session.city} ${session.branch}`;
-  if (/октябрьск/i.test(blob)) return 0;
-  if (/гражданск/i.test(blob)) return 1;
-  if (/луховиц|пушкин/i.test(blob)) return 2;
-  return 9;
-}
-
-function branchMeta(session: CmsSession) {
-  const blob = `${session.city} ${session.branch}`;
-  if (/октябрьск/i.test(blob)) return { city: "Коломна", address: "ул. Октябрьской революции, 340" };
-  if (/гражданск/i.test(blob)) return { city: "Коломна", address: "ул. Гражданская, 2" };
-  if (/пушкин|луховиц/i.test(blob)) return { city: "Луховицы", address: "ул. Пушкина, 202А" };
-  return {
-    city: session.city || "Филиал",
-    address: session.branch || "",
-  };
-}
-
-function ageRank(age: string) {
-  const n = age.match(/\d+/);
-  return n ? Number(n[0]) : 99;
-}
-
-export function ScheduleBlock({ sessions }: { sessions: CmsSession[] }) {
-  if (!sessions.length) return null;
-  const ordered = [...sessions].sort((a, b) => {
-    const br = branchRank(a) - branchRank(b);
-    if (br) return br;
-    const age = ageRank(a.age) - ageRank(b.age);
-    if (age) return age;
-    return compactWhen(a.when).localeCompare(compactWhen(b.when), "ru");
-  });
-  const groups: { city: string; address: string; items: CmsSession[] }[] = [];
-  for (const session of ordered) {
-    const meta = branchMeta(session);
-    const last = groups[groups.length - 1];
-    if (last && last.city === meta.city && last.address === meta.address) last.items.push(session);
-    else groups.push({ ...meta, items: [session] });
-  }
-
-  return (
-    <section className="mt-10">
-      <p className="kicker">Расписание</p>
-      <h2 className="display mt-2 text-xl md:text-2xl">Группы по филиалам</h2>
-      <div className="mt-5 space-y-3">
-        {groups.map((group) => (
-          <div
-            key={`${group.city}-${group.address}`}
-            className="overflow-hidden rounded-[1.35rem] bg-surface shadow-[var(--shadow-border)]"
-          >
-            <div className="flex items-center gap-3 px-3.5 pb-2 pt-3.5 md:px-4">
-              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                <MapPin className="size-4" strokeWidth={2} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted">
-                  {group.city}
-                </p>
-                {group.address ? (
-                  <p className="text-sm font-semibold leading-tight">{group.address}</p>
-                ) : null}
-              </div>
-            </div>
-            <ul>
-              {group.items.map((s) => {
-                const row = (
-                  <span className="flex items-center gap-3 px-3.5 py-2.5 md:gap-4 md:px-4">
-                    <span className="inline-flex min-w-[4.75rem] justify-center rounded-full bg-primary/10 px-2 py-1 text-[0.68rem] font-semibold text-primary">
-                      {s.age || "группа"}
-                    </span>
-                    <span className="min-w-0 flex-1 text-[0.95rem] font-medium leading-snug">
-                      {compactWhen(s.when)}
-                    </span>
-                    {s.signup ? (
-                      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-fg text-bg transition-colors duration-[var(--motion-fast)] group-hover:bg-primary">
-                        <ArrowUpRight className="size-3.5" strokeWidth={2.2} />
-                      </span>
-                    ) : null}
-                  </span>
-                );
-                return (
-                  <li key={s.id} className="border-t border-border/70">
-                    {s.signup ? (
-                      <a href={s.signup} className="group block transition-colors hover:bg-[#f3f5f8]">
-                        {row}
-                      </a>
-                    ) : (
-                      row
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
 
 export function ProseBlocks({ text, className }: { text: string; className?: string }) {
   if (!text) return null;
