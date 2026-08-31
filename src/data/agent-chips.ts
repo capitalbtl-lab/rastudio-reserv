@@ -149,8 +149,8 @@ export function nextChips(messages: { role: string; content: string }[]): { hint
   return {
     hint: "Следующий шаг",
     chips: [
-      ...(page ? [{ label: "Страница курса", href: page.path, primary: true }] : []),
-      { label: "Записать на пробное", send: "Да, запишите на пробное занятие", primary: !page },
+      { label: "Пробное занятие", send: "Хочу записаться на пробное занятие", primary: true },
+      ...(page ? [{ label: "Страница курса", href: page.path }] : []),
       { label: "Смотреть расписание", href: "/schedule" },
     ],
   };

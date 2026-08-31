@@ -113,7 +113,7 @@ export function AgentChat() {
   const [speaking, setSpeaking] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
   const [adminMs, setAdminMs] = useState(0);
-  const [groupChips, setGroupChips] = useState<{ label: string; href: string }[]>([]);
+  const [groupChips, setGroupChips] = useState<{ label: string; href?: string; send?: string; primary?: boolean }[]>([]);
   const [box, setBox] = useState({ w: 520, h: 740 });
   const dragRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -140,7 +140,7 @@ export function AgentChat() {
           ],
         }
       : groupChips.length
-        ? { hint: "Запись в группу", chips: groupChips.map((g) => ({ label: g.label, href: g.href, primary: true })) }
+        ? { hint: "Пробное или в группу", chips: groupChips }
         : nextChips(messages);
   voiceOnRef.current = voiceOn;
   partnerRef.current = partner;

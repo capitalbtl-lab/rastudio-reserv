@@ -86,6 +86,8 @@ export type TrialPayload = {
   email: string;
   course: string;
   branch: string;
+  gid?: string;
+  groupName?: string;
 };
 
 function courseName(id: string) {
@@ -143,7 +145,9 @@ export async function saveTrialLead(data: TrialPayload) {
       email,
       dobRu,
       branchId: branch,
-      courseName: courseName(data.course),
+      courseName: courseName(data.course) || data.groupName || "",
+      gid: data.gid,
+      groupName: data.groupName,
     });
     return { ok: true as const };
   } catch {

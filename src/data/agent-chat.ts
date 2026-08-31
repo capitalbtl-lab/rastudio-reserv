@@ -32,8 +32,10 @@ const SYSTEM = `Вы — два администратора студии «Ра
 Когда есть возраст и филиал — сразу вызови list_groups. Назови ближайшие слоты (сначала которые раньше на этой неделе) и свободные места. Курс не обязателен.
 Если родитель назвал ещё и курс — передай его в list_groups.
 Нельзя называть только 2–3 курса, если спросили «что есть для N лет» без филиала — тогда list_courses_by_age, все программы, и спроси филиал.
-Когда родитель выбрал слот — open_group. Не выдумывай день и места.
-submit_trial — только если групп нет или родитель просит «просто заявку без группы».
+Когда родитель выбрал слот — спроси: пробное занятие или сразу в группу.
+Пробное — без абонемента, первый визит. Собери родителя, ребёнка, дату рождения, телефон, email и вызови submit_trial (можно передать gid группы).
+Запись в группу — open_group, форма этой группы в AlfaCRM.
+Всегда предлагай оба варианта, не подменяй одно другим.
 id курсов для заявки: ${TRIAL_COURSES.map((c) => `${c.id} ${c.name}`).join("; ")}.
 Когда родитель просит подробности курса или вы уже называете конкретный курс по имени — вызови open_course (path или название). Страница курса откроется, чат останется. В речи не читай URL. Скажи, что открыли страницу курса, и коротко по сути. Кнопка «Страница курса» появится сама.
 Не открывай страницу курса, пока курс не выбран.
@@ -182,7 +184,7 @@ const TOOLS = [
     function: {
       name: "submit_trial",
       description:
-        "Создать заявку на пробное занятие в AlfaCRM. Только после явного согласия родителя и при заполненных полях.",
+        "Заявка на пробное занятие (не абонемент) в AlfaCRM. После согласия родителя. Можно привязать к группе через gid.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -194,6 +196,8 @@ const TOOLS = [
           email: { type: "string" },
           course_id: { type: "string", description: "ID курса из списка, например 37" },
           branch_id: { type: "string", description: "1 Гражданская, 2 Октябрьской революции, 3 Луховицы" },
+          gid: { type: "string", description: "Номер группы, если пробное в конкретный слот" },
+          group_name: { type: "string", description: "Название группы" },
         },
         required: ["parent", "child", "dob", "phone", "email", "branch_id"],
       },
@@ -413,7 +417,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     let reload = false;
     let open = "";
     let signup = "";
-    let groups: { label: string; href: string }[] = [];
+    let groups: { label: string; href?: string; send?: string; primary?: boolean }[] = [];
     const solo =
       data.with === "oleg"
         ? "\n\nСейчас родитель говорит только с Олегом. Отвечай исключительно строками «Олег:». Ольга молчит. Мужской род."
@@ -455,12 +459,14 @@ export const chatAgent = createServerFn({ method: "POST" })
                 email: String(args.email || ""),
                 course: resolveCourse(String(args.course_id || "")),
                 branch: resolveBranch(String(args.branch_id || "")),
+                gid: args.gid ? String(args.gid) : "",
+                groupName: args.group_name ? String(args.group_name) : "",
               });
               messages.push({
                 role: "tool",
                 tool_call_id: call.id,
                 content: saved.ok
-                  ? "Заявка принята. Администратор свяжется для подтверждения времени."
+                  ? "Заявка на пробное принята. Администратор подтвердит время. Это не абонемент."
                   : `Ошибка: ${saved.error}`,
               });
             } else if (call.function.name === "list_courses_by_age") {
@@ -480,7 +486,10 @@ export const chatAgent = createServerFn({ method: "POST" })
                   branch: String(args.branch || ""),
                   course: String(args.course || ""),
                 });
-                groups = list.map((g) => ({ label: g.chip, href: g.signup }));
+                groups = [
+                  { label: "Пробное занятие", send: "Хочу записаться на пробное занятие", primary: true },
+                  ...list.map((g) => ({ label: `В группу · ${g.chip}`, href: g.signup })),
+                ];
                 messages.push({
                   role: "tool",
                   tool_call_id: call.id,

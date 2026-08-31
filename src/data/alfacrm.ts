@@ -96,6 +96,8 @@ export type AlfaLead = {
   dobRu: string;
   branchId: string;
   courseName?: string;
+  gid?: string;
+  groupName?: string;
 };
 
 export async function upsertAlfaLead(lead: AlfaLead) {
@@ -105,10 +107,15 @@ export async function upsertAlfaLead(lead: AlfaLead) {
     "Источник: ИИ-администратор rastudio.org",
     `Родитель: ${lead.parent}`,
     `Курс: ${lead.courseName || "не указан"}`,
-    `Пробное, филиал ${branch}`,
-  ].join("\n");
+    lead.groupName ? `Группа: ${lead.groupName}` : "",
+    lead.gid ? `gid=${lead.gid}` : "",
+    `Пробное занятие, филиал ${branch}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
   const t = await token();
   const existing = await findByPhone(phone);
+  const groupIds = lead.gid && /^\d+$/.test(lead.gid) ? [Number(lead.gid)] : undefined;
   if (existing) {
     const prev = existing.customer.note ? `${existing.customer.note}\n\n` : "";
     const upd = await request<{ success?: boolean; errors?: unknown; model?: Customer }>(
@@ -117,13 +124,14 @@ export async function upsertAlfaLead(lead: AlfaLead) {
         id: existing.customer.id,
         email: [lead.email],
         note: `${prev}${noteLine}`,
+        ...(groupIds ? { group_ids: groupIds } : {}),
       },
       t,
     );
     if (upd.success === false) throw new Error("alfacrm-update");
     await request(`/v2api/${existing.branch}/task/create`, {
       customer_id: existing.customer.id,
-      text: `Сайт: заявка на пробное. ${lead.child}, ${lead.courseName || "курс не указан"}. Перезвоните.`,
+      text: `Сайт: заявка на пробное. ${lead.child}, ${lead.courseName || "курс не указан"}${lead.gid ? `, группа ${lead.gid}` : ""}. Перезвоните.`,
     }, t).catch(() => null);
     return { ok: true as const, id: existing.customer.id, duplicate: true };
   }
@@ -141,6 +149,7 @@ export async function upsertAlfaLead(lead: AlfaLead) {
       pipeline_id: PIPELINE,
       branch_ids: [branch],
       note: noteLine,
+      ...(groupIds ? { group_ids: groupIds } : {}),
     },
     t,
   );
