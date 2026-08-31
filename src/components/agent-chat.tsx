@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Send } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
+import { nextChips } from "@/data/agent-chips";
+import { PageLink } from "@/components/page-link";
 import { SITE } from "@/data/site";
 import { cn } from "@/lib/utils";
 
@@ -10,9 +12,7 @@ type Msg = { role: "user" | "assistant"; content: string };
 type Mood = "hello" | "think" | "happy" | "sorry";
 
 const HELLO =
-  "Привет! Я робот-администратор студии. Напишите возраст ребёнка и город — подберу курс и запишу на пробное.";
-
-const CHIPS = ["5 лет, Коломна", "8 лет, робототехника", "Художка 7–9", "Луховицы"];
+  "Подберу курс за минуту. Сначала возраст — так не предложим слишком сложное и не обидим младших.";
 
 const ROBOT: Record<Mood, { src: string; alt: string }> = {
   hello: { src: "/brand/agent/hello.webp", alt: "Робот-администратор улыбается" },
@@ -63,6 +63,7 @@ export function AgentChat() {
   const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
   const endRef = useRef<HTMLDivElement>(null);
   const mood = moodOf(messages, busy);
+  const offer = nextChips(messages);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -113,7 +114,7 @@ export function AgentChat() {
               </div>
               <div className="min-w-0 pb-1">
                 <p className="font-display text-[1.15rem] leading-tight">Олег</p>
-                <p className="text-[0.78rem] text-white/85">Робот-администратор · онлайн</p>
+                <p className="text-[0.78rem] text-white/85">Администратор студии · онлайн</p>
               </div>
             </div>
           </div>
@@ -133,18 +134,56 @@ export function AgentChat() {
                 </div>
               </div>
             ))}
-            {messages.length === 1 && !busy ? (
-              <div className="flex flex-wrap gap-1.5 pl-11">
-                {CHIPS.map((chip) => (
-                  <button
-                    key={chip}
-                    type="button"
-                    onClick={() => void send(chip)}
-                    className="rounded-full bg-white px-3 py-1.5 text-[0.78rem] font-semibold text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground"
-                  >
-                    {chip}
-                  </button>
-                ))}
+            {messages.length && !busy ? (
+              <div className="pl-11">
+                <p className="mb-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">{offer.hint}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {offer.chips.map((chip) =>
+                    chip.href ? (
+                      chip.href.startsWith("/") ? (
+                        <PageLink
+                          key={chip.label}
+                          to={chip.href}
+                          className={cn(
+                            "rounded-full px-3 py-1.5 text-[0.78rem] font-semibold",
+                            chip.primary
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-white text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground",
+                          )}
+                        >
+                          {chip.label}
+                        </PageLink>
+                      ) : (
+                        <a
+                          key={chip.label}
+                          href={chip.href}
+                          className={cn(
+                            "rounded-full px-3 py-1.5 text-[0.78rem] font-semibold",
+                            chip.primary
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-white text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground",
+                          )}
+                        >
+                          {chip.label}
+                        </a>
+                      )
+                    ) : (
+                      <button
+                        key={chip.label}
+                        type="button"
+                        onClick={() => void send(chip.send || chip.label)}
+                        className={cn(
+                          "rounded-full px-3 py-1.5 text-[0.78rem] font-semibold",
+                          chip.primary
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-white text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground",
+                        )}
+                      >
+                        {chip.label}
+                      </button>
+                    ),
+                  )}
+                </div>
               </div>
             ) : null}
             {busy ? <p className="pl-11 text-xs font-medium text-muted">Олег думает…</p> : null}
@@ -193,7 +232,7 @@ export function AgentChat() {
             </span>
             <span className="relative pr-1 text-left leading-tight">
               <span className="block font-display text-[0.95rem] font-semibold md:text-[1.05rem]">Подобрать курс</span>
-              <span className="block text-[0.7rem] font-medium text-muted">Олег онлайн</span>
+              <span className="block text-[0.7rem] font-medium text-muted">Администратор онлайн</span>
             </span>
           </button>
         </div>
