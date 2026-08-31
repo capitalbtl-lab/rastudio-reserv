@@ -1,4 +1,5 @@
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearch } from "@tanstack/react-router";
 import { SITE, BRANCHES, COURSE_GROUPS } from "@/data/site";
 import type { CourseCard, SitePage, TeacherCard } from "@/data/catalog";
 import type { CmsCourse, CmsMaster, CmsSession, CmsTrajectoryStep } from "@/data/cms";
@@ -327,16 +328,15 @@ function TeamPage({ page, teachers }: { page: SitePage; teachers: TeacherCard[] 
 }
 
 function CatalogPage({ page, courses }: { page: SitePage; courses: CourseCard[] }) {
+  const search = useSearch({ strict: false }) as { age?: string; city?: string };
   const [q, setQ] = useState("");
   const [group, setGroup] = useState<(typeof COURSE_GROUPS)[number]["id"]>("all");
-  const [age, setAge] = useState("");
-  const [city, setCity] = useState("");
+  const [age, setAge] = useState(search.age || "");
+  const [city, setCity] = useState(search.city || "");
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const next = params.get("age") || "";
-    if (next) setAge(next);
-  }, []);
+    if (search.age) setAge(search.age);
+  }, [search.age]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();

@@ -9,6 +9,11 @@ type Props = {
   style?: CSSProperties;
 };
 
+function searchFrom(query?: string) {
+  if (!query) return undefined;
+  return Object.fromEntries(new URLSearchParams(query));
+}
+
 export const PageLink = forwardRef<HTMLAnchorElement, Props>(function PageLink(
   { to, className, children, onClick, style },
   ref,
@@ -20,19 +25,33 @@ export const PageLink = forwardRef<HTMLAnchorElement, Props>(function PageLink(
       </a>
     );
   }
-  if (to === "/") {
+
+  const [pathname, query] = to.split("?");
+  const search = searchFrom(query);
+
+  if (pathname === "/") {
     return (
       <Link ref={ref} to="/" className={className} style={style} onClick={onClick}>
         {children}
       </Link>
     );
   }
-  const splat = to.replace(/^\/+/, "");
+
+  if (pathname === "/schedule") {
+    return (
+      <Link ref={ref} to="/schedule" className={className} style={style} onClick={onClick}>
+        {children}
+      </Link>
+    );
+  }
+
+  const splat = pathname.replace(/^\/+/, "");
   return (
     <Link
       ref={ref}
       to="/$"
       params={{ _splat: splat }}
+      search={search}
       className={className}
       style={style}
       onClick={onClick}

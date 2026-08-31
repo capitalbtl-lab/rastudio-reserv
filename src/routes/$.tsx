@@ -6,6 +6,10 @@ import { PageArticle } from "@/components/page-article";
 import { PageLink } from "@/components/page-link";
 
 export const Route = createFileRoute("/$")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    age: typeof search.age === "string" ? search.age : undefined,
+    city: typeof search.city === "string" ? search.city : undefined,
+  }),
   loader: async ({ params }) => {
     const data = await loadSitePage({ data: params._splat });
     if (!data) throw notFound();
