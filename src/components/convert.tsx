@@ -45,7 +45,9 @@ export function ConvertBand({ path, sessions }: { path: string; sessions: CmsSes
                         {slot.day || "День"}
                       </span>
                       <span className="mt-2 text-sm font-semibold">{slot.time}</span>
-                      <span className="mt-1 text-sm text-muted">{meta.short}</span>
+                      <span className="mt-1 text-sm text-muted">
+                        {meta.city} · {meta.short}
+                      </span>
                       <span className="mt-auto pt-4 text-sm font-semibold text-primary">Занять место →</span>
                     </a>
                   </li>
