@@ -189,13 +189,13 @@ function CinematicPage({
               program={SCHOOL_PROGRAMS[page.pathDecoded || page.path]}
               why={
                 page.kind === "school"
-                  ? SCHOOL_WHY[page.pathDecoded || page.path] ?? null
-                  : whyForPath(page.pathDecoded || page.path)
+                  ? SCHOOL_WHY[page.pathDecoded || page.path]?.items ?? null
+                  : whyForPath(page.pathDecoded || page.path)?.items ?? null
               }
               whyTitle={
                 page.kind === "school"
-                  ? "Зачем эта школа"
-                  : "Курс, который чувствуется, а не зубрится"
+                  ? SCHOOL_WHY[page.pathDecoded || page.path]?.heading
+                  : whyForPath(page.pathDecoded || page.path)?.heading
               }
               afterLead={
                 page.kind === "school" ? (

@@ -41,6 +41,8 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [] }: 
     images.push(img);
   }
 
+  const why = whyForPath(course.pathDecoded || course.path || page.path);
+
   return (
     <article>
       <CoursePageHero
@@ -123,7 +125,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [] }: 
           <p className="max-w-3xl text-muted">{course.audienceNote}</p>
         ) : null}
 
-        <WhyNow items={whyForPath(course.pathDecoded || course.path || page.path)} />
+        <WhyNow items={why?.items} title={why?.heading} />
 
         {course.programText ? (
           <section>

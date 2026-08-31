@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { ArrowUpRight, Check, ChevronDown, FlaskConical, Sparkles, Users } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown } from "lucide-react";
 import type { CmsImage, CmsTrajectoryStep } from "@/data/cms";
 import type { CourseCard } from "@/data/catalog";
 import { courseKey } from "@/data/cms";
@@ -336,27 +336,9 @@ function AccordionItems({ items }: { items: { title: string; body: string }[] })
   );
 }
 
-const WHY_NOW = [
-  {
-    icon: Sparkles,
-    title: "Результат с первого занятия",
-    text: "Не конспект в тетради — проект, опыт или работа, которую можно показать дома.",
-  },
-  {
-    icon: FlaskConical,
-    title: "Навык 2026: делать",
-    text: "Ребёнок пробует руками, думает и собирает портфолио. Это то, что остаётся.",
-  },
-  {
-    icon: Users,
-    title: "Пробное без риска",
-    text: "Группы до 10 человек. Приходите на пробное — и решаете, ваше ли это.",
-  },
-] as const;
-
 export function WhyNow({
   items,
-  title = "Курс, который чувствуется, а не зубрится",
+  title,
 }: {
   items?: { title: string; text: string }[] | null;
   title?: string;
@@ -365,18 +347,18 @@ export function WhyNow({
   return (
     <section>
       <p className="kicker">Почему сейчас</p>
-      <h2 className="display section-title mt-2">{title}</h2>
+      <h2 className="display section-title mt-2 max-w-3xl">{title || "Что получит ребёнок — и зачем это сейчас"}</h2>
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
-        {items.map((item, i) => {
-          const Icon = WHY_NOW[i % WHY_NOW.length].icon;
-          return (
-            <article key={item.title} className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
-              <Icon className="size-5 text-primary" strokeWidth={1.8} />
-              <h3 className="display mt-3 text-lg leading-snug">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted">{item.text}</p>
-            </article>
-          );
-        })}
+        {items.map((item, i) => (
+          <article
+            key={item.title}
+            className="relative overflow-hidden rounded-2xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6"
+          >
+            <p className="display text-[1.65rem] leading-none text-primary/35">0{i + 1}</p>
+            <h3 className="display mt-3 text-xl leading-snug">{item.title}</h3>
+            <p className="mt-2 text-[0.95rem] leading-relaxed text-muted">{item.text}</p>
+          </article>
+        ))}
       </div>
     </section>
   );
