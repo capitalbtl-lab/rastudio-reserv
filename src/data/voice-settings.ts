@@ -34,8 +34,8 @@ export type VoiceSettings = {
 const DEFAULT: VoiceSettings = {
   oleg: "zahar",
   olga: "alena",
-  speed: 1.05,
-  pause: 0.2,
+  speed: 1.18,
+  pause: 0.08,
   mood: "good",
   role: "good",
 };
@@ -65,11 +65,17 @@ export function loadVoiceSettings(): VoiceSettings {
     if (existsSync(filePath())) {
       const raw = JSON.parse(readFileSync(filePath(), "utf8")) as Partial<VoiceSettings>;
       const mood = String(raw.mood || raw.role || DEFAULT.mood);
+      let speed = clamp(Number(raw.speed), 0.95, 1.35, DEFAULT.speed);
+      let pause = clamp(Number(raw.pause), 0, 0.6, DEFAULT.pause);
+      if ((raw.speed == null || Number(raw.speed) <= 1.06) && (raw.pause == null || Number(raw.pause) >= 0.18)) {
+        speed = DEFAULT.speed;
+        pause = DEFAULT.pause;
+      }
       return {
         oleg: maleOf(raw.oleg),
         olga: femaleOf(raw.olga),
-        speed: clamp(Number(raw.speed), 0.9, 1.25, DEFAULT.speed),
-        pause: clamp(Number(raw.pause), 0, 1, DEFAULT.pause),
+        speed,
+        pause,
         mood,
         role: mood === "calm" || mood === "quiet" ? "neutral" : mood === "friendly" ? "friendly" : "good",
       };
@@ -86,8 +92,8 @@ export function saveVoiceSettings(patch: Partial<VoiceSettings>) {
   const next: VoiceSettings = {
     oleg: patch.oleg ? maleOf(patch.oleg) : cur.oleg,
     olga: patch.olga ? femaleOf(patch.olga) : cur.olga,
-    speed: patch.speed != null ? clamp(Number(patch.speed), 0.9, 1.25, cur.speed) : cur.speed,
-    pause: patch.pause != null ? clamp(Number(patch.pause), 0, 1, cur.pause) : cur.pause,
+    speed: patch.speed != null ? clamp(Number(patch.speed), 0.95, 1.35, cur.speed) : cur.speed,
+    pause: patch.pause != null ? clamp(Number(patch.pause), 0, 0.6, cur.pause) : cur.pause,
     mood,
     role: mood === "calm" || mood === "quiet" ? "neutral" : mood === "friendly" ? "friendly" : "good",
   };

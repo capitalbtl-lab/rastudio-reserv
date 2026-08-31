@@ -3,7 +3,7 @@ import { serverEnv } from "./server-env";
 import { loadVoiceSettings, type VoiceSettings } from "./voice-settings";
 
 const MALE = ["zahar", "filipp", "ermil"];
-const FEMALE = ["alena", "jane", "marina"];
+const FEMALE = ["alena", "jane", "marina", "oksana"];
 
 function speakRu(text: string) {
   return text
@@ -23,16 +23,27 @@ function speakRu(text: string) {
     .replace(/\bSTEAM\b/g, "стим");
 }
 
-function clean(text: string, pause: number) {
-  let t = speakRu(text)
+function clean(text: string) {
+  return speakRu(text)
     .replace(/https?:\/\/\S+/g, "")
     .replace(/[#*_`>]+/g, "")
+    .replace(/\s*[—–]\s*/g, ", ")
+    .replace(/\s*\.{2,}\s*/g, ". ")
+    .replace(/;\s+/g, ", ")
     .replace(/\s+/g, " ")
-    .trim();
-  if (pause < 0.45) {
-    t = t.replace(/\s+[—–]\s+/g, ", ").replace(/\s*\.{2,}\s*/g, ". ").replace(/;\s+/g, ", ");
-  }
-  return t.slice(0, 800);
+    .trim()
+    .slice(0, 900);
+}
+
+function emotionOf(mood: string) {
+  if (mood === "calm" || mood === "quiet" || mood === "neutral") return "neutral";
+  return "good";
+}
+
+function pace(speed: number, pause: number) {
+  const n = Number(speed) || 1.15;
+  const p = Number.isFinite(pause) ? pause : 0.1;
+  return Math.min(1.4, Math.max(0.95, n + (0.18 - p) * 0.35));
 }
 
 function audioFromV3(raw: string) {
@@ -59,44 +70,60 @@ function audioFromV3(raw: string) {
   return Buffer.concat(parts);
 }
 
-function roleOf(mood: string) {
-  if (mood === "calm" || mood === "quiet" || mood === "neutral") return "neutral";
-  if (mood === "friendly") return "friendly";
-  return "good";
-}
-
-async function synthesize(text: string, voice: string, role: string, speed: number, pause: number, key: string, folder: string) {
-  const auths = [`Bearer ${key}`, `Api-Key ${key}`];
-  const breakMs = Math.round(20 + pause * 90);
-  const ssml = `<speak>${text
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/([.!?])\s+/g, `$1<break time="${breakMs}ms"/> `)}</speak>`;
-  const bodies = [
-    { text, hints: [{ voice }, { role }, { speed }] },
-    { text, hints: [{ voice }, { speed }] },
-    { ssml, hints: [{ voice }] },
-    { text, voice, hints: [{ voice }] },
-  ];
-  for (const auth of auths) {
-    for (const body of bodies) {
-      const res = await fetch("https://tts.api.cloud.yandex.net/tts/v3/utteranceSynthesis", {
-        method: "POST",
-        headers: {
-          Authorization: auth,
-          "Content-Type": "application/json",
-          "x-folder-id": folder,
-        },
-        body: JSON.stringify({ ...body, folderId: folder }),
-      });
-      if (!res.ok) continue;
-      const buf = audioFromV3(await res.text());
-      if (!buf || buf.length < 200) continue;
-      const mime = buf.slice(0, 4).toString("ascii") === "RIFF" ? "audio/wav" : "audio/mpeg";
-      return `data:${mime};base64,${buf.toString("base64")}`;
-    }
+async function synthV1(text: string, voice: string, emotion: string, speed: number, key: string, folder: string) {
+  const body = new URLSearchParams({
+    lang: "ru-RU",
+    voice,
+    emotion,
+    speed: String(Math.round(speed * 100) / 100),
+    format: "mp3",
+    sampleRateHertz: "48000",
+    text,
+    folderId: folder,
+  });
+  for (const auth of [`Api-Key ${key}`, `Bearer ${key}`]) {
+    const res = await fetch("https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize", {
+      method: "POST",
+      headers: { Authorization: auth, "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    if (!res.ok) continue;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length < 400) continue;
+    return `data:audio/mpeg;base64,${buf.toString("base64")}`;
   }
   return "";
+}
+
+async function synthV3(text: string, voice: string, emotion: string, speed: number, key: string, folder: string) {
+  const hints: Record<string, unknown>[] = [{ voice }, { speed }];
+  if (voice === "alena" || voice === "zahar" || voice === "jane") hints.splice(1, 0, { role: emotion === "neutral" ? "neutral" : "good" });
+  const body = {
+    text,
+    hints,
+    outputAudioSpec: { containerAudio: { containerAudioType: "MP3" } },
+    folderId: folder,
+  };
+  for (const auth of [`Api-Key ${key}`, `Bearer ${key}`]) {
+    const res = await fetch("https://tts.api.cloud.yandex.net/tts/v3/utteranceSynthesis", {
+      method: "POST",
+      headers: {
+        Authorization: auth,
+        "Content-Type": "application/json",
+        "x-folder-id": folder,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) continue;
+    const buf = audioFromV3(await res.text());
+    if (!buf || buf.length < 400) continue;
+    return `data:audio/mpeg;base64,${buf.toString("base64")}`;
+  }
+  return "";
+}
+
+async function synthesize(text: string, voice: string, emotion: string, speed: number, key: string, folder: string) {
+  return (await synthV1(text, voice, emotion, speed, key, folder)) || (await synthV3(text, voice, emotion, speed, key, folder));
 }
 
 export const speakAgent = createServerFn({ method: "POST" })
@@ -114,18 +141,22 @@ export const speakAgent = createServerFn({ method: "POST" })
     const settings = { ...loadVoiceSettings(), ...(data.preview || {}) };
     const who = data.who === "olga" ? "olga" : "oleg";
     const preferred = who === "olga" ? settings.olga : settings.oleg;
-    const list = who === "olga" ? [preferred, ...FEMALE.filter((v) => v !== preferred)] : [preferred, ...MALE.filter((v) => v !== preferred)];
-    const text = clean(data.text || "", settings.pause);
+    const list =
+      who === "olga"
+        ? [preferred, ...FEMALE.filter((v) => v !== preferred)]
+        : [preferred, ...MALE.filter((v) => v !== preferred)];
+    const text = clean(data.text || "");
     if (!key || !folder || !text) return { ok: false as const, error: "no-voice" };
-    const mood = settings.mood || settings.role || "good";
+    const emotion = emotionOf(settings.mood || settings.role || "good");
+    const speed = pace(settings.speed, settings.pause);
     for (const voice of list) {
-      const audio = await synthesize(text, voice, roleOf(mood), settings.speed, settings.pause, key, folder);
+      const audio = await synthesize(text, voice, emotion, speed, key, folder);
       if (audio) {
         return {
           ok: true as const,
           audio,
           speed: 1,
-          volume: mood === "quiet" ? 0.72 : 1,
+          volume: settings.mood === "quiet" ? 0.78 : 1,
           voice,
         };
       }

@@ -62,7 +62,7 @@ export function AdminPrices() {
   const [log, setLog] = useState<{ at: string; text: string }[]>([]);
   const [savedWord, setSavedWord] = useState("");
   const [edits, setEdits] = useState<{ path: string; fields: Record<string, string> }[]>([]);
-  const [voice, setVoice] = useState({ oleg: "zahar", olga: "alena", speed: 1.05, pause: 0.2, mood: "good", role: "good" });
+  const [voice, setVoice] = useState({ oleg: "zahar", olga: "alena", speed: 1.18, pause: 0.08, mood: "good", role: "good" });
   const [male, setMale] = useState<{ id: string; label: string }[]>([]);
   const [female, setFemale] = useState<{ id: string; label: string }[]>([]);
   const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
@@ -101,7 +101,7 @@ export function AdminPrices() {
         oleg: vo.settings.oleg,
         olga: vo.settings.olga,
         speed: vo.settings.speed,
-        pause: vo.settings.pause ?? 0.2,
+        pause: vo.settings.pause ?? 0.08,
         mood: vo.settings.mood || vo.settings.role || "good",
         role: vo.settings.role || "good",
       });
@@ -538,27 +538,27 @@ export function AdminPrices() {
                 Темп речи {voice.speed.toFixed(2)}
                 <input
                   type="range"
-                  min="0.9"
-                  max="1.2"
+                  min="1"
+                  max="1.35"
                   step="0.01"
                   value={voice.speed}
                   onChange={(e) => setVoice((v) => ({ ...v, speed: Number(e.target.value) }))}
                   className="mt-3 block w-full"
                 />
-                <span className="text-xs text-muted">1.00 — обычная скорость слов</span>
+                <span className="text-xs text-muted">1.18 — живой темп, без растягивания</span>
               </label>
               <label className="text-sm md:col-span-2">
-                Пауза между словами {Number(voice.pause ?? 0.2).toFixed(2)}
+                Пауза между словами {Number(voice.pause ?? 0.08).toFixed(2)}
                 <input
                   type="range"
                   min="0"
-                  max="1"
-                  step="0.05"
-                  value={voice.pause ?? 0.2}
+                  max="0.4"
+                  step="0.02"
+                  value={voice.pause ?? 0.08}
                   onChange={(e) => setVoice((v) => ({ ...v, pause: Number(e.target.value) }))}
                   className="mt-3 block w-full"
                 />
-                <span className="text-xs text-muted">Левее — короче паузы, правее — спокойнее, с воздухом</span>
+                <span className="text-xs text-muted">Левее — короче паузы. Для продакшена держите около 0.08</span>
               </label>
             </div>
             <p className="mt-5 text-sm text-muted">
