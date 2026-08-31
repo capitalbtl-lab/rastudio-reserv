@@ -7,7 +7,6 @@ import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 import { TrialForm } from "@/components/trial-form";
 import { Button } from "@/components/ui/button";
-import { RobotEnglishVideos } from "@/components/robot-videos";
 import { HeroCollage } from "@/components/hero-collage";
 import { AgeChips } from "@/components/age-chips";
 import { Reviews } from "@/components/reviews";
@@ -246,22 +245,6 @@ function Home() {
             filename="Развивайся - Знакомство с компьютером и информационными технологиями в Коломне.png"
             className="aspect-4/3 rounded-3xl bg-surface-2"
           />
-        </div>
-      </section>
-
-      <section className="ink relative isolate mb-16 overflow-hidden text-header-fg md:mb-24">
-        <div className="page-wrap relative grid items-center gap-10 py-16 md:grid-cols-2 md:gap-12 md:py-24">
-          <div>
-            <p className="kicker text-header-fg/55">Билингвальный курс</p>
-            <h2 className="section-title mt-3">Робототехника на английском</h2>
-            <p className="mt-5 max-w-md text-[0.98rem] leading-relaxed text-header-fg/75">
-              {home.paragraphs[1]}
-            </p>
-            <Button asChild className="mt-8">
-              <PageLink to="/roboticsinenglish">Подробнее о курсе</PageLink>
-            </Button>
-          </div>
-          <RobotEnglishVideos />
         </div>
       </section>
 
