@@ -1,13 +1,29 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, Send } from "lucide-react";
+import { X, Send, Mic, Volume2 } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
+import { speakAgent } from "@/data/agent-voice";
 import { nextChips } from "@/data/agent-chips";
 import { PageLink } from "@/components/page-link";
 import { SITE } from "@/data/site";
 import { cn } from "@/lib/utils";
 
+type Rec = {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+};
+
+function speechCtor() {
+  const w = window as unknown as { SpeechRecognition?: new () => Rec; webkitSpeechRecognition?: new () => Rec };
+  return w.SpeechRecognition || w.webkitSpeechRecognition;
+}
 type Msg = { role: "user" | "assistant"; content: string };
 type Mood = "hello" | "think" | "happy" | "sorry";
 
@@ -60,38 +76,115 @@ export function AgentChat() {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
   const endRef = useRef<HTMLDivElement>(null);
+  const voiceOnRef = useRef(false);
+  const recRef = useRef<Rec | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const mood = moodOf(messages, busy);
   const offer = nextChips(messages);
+  voiceOnRef.current = voiceOn;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, open, mood]);
+  }, [messages, open, mood, listening]);
+
+  useEffect(() => {
+    return () => {
+      recRef.current?.stop();
+      audioRef.current?.pause();
+    };
+  }, []);
+
+  function stopListen() {
+    recRef.current?.stop();
+    recRef.current = null;
+    setListening(false);
+  }
+
+  async function speak(phrase: string) {
+    stopListen();
+    setSpeaking(true);
+    try {
+      const res = await speakAgent({ data: { text: phrase } });
+      if (!res.ok || !("audio" in res) || !res.audio) return;
+      await new Promise<void>((resolve) => {
+        const audio = new Audio(res.audio);
+        audioRef.current = audio;
+        audio.onended = () => resolve();
+        audio.onerror = () => resolve();
+        void audio.play().catch(() => resolve());
+      });
+    } finally {
+      setSpeaking(false);
+      audioRef.current = null;
+    }
+  }
+
+  function startListen() {
+    const SR = speechCtor();
+    if (!SR) return;
+    stopListen();
+    const rec = new SR();
+    rec.lang = "ru-RU";
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = (e) => {
+      const said = e.results[0]?.[0]?.transcript?.trim();
+      if (said) void send(said);
+    };
+    rec.onend = () => {
+      setListening(false);
+      recRef.current = null;
+    };
+    rec.onerror = () => {
+      setListening(false);
+      recRef.current = null;
+    };
+    recRef.current = rec;
+    setListening(true);
+    rec.start();
+  }
 
   async function send(value?: string) {
     const next = (value ?? text).trim();
     if (!next || busy) return;
     setText("");
+    stopListen();
     const history = [...messages, { role: "user" as const, content: next }];
     setMessages(history);
     setBusy(true);
+    let reply = `Не отправилось. Позвоните ${SITE.phone}.`;
     try {
       const res = await chatAgent({ data: { messages: history } });
-      setMessages([
-        ...history,
-        {
-          role: "assistant",
-          content: res.ok ? res.reply : res.error,
-        },
-      ]);
+      reply = res.ok ? res.reply : res.error;
     } catch {
-      setMessages([
-        ...history,
-        { role: "assistant", content: `Не отправилось. Позвоните ${SITE.phone}.` },
-      ]);
-    } finally {
-      setBusy(false);
+      /* keep */
+    }
+    setMessages([...history, { role: "assistant", content: reply }]);
+    setBusy(false);
+    if (voiceOnRef.current) {
+      await speak(reply);
+      if (voiceOnRef.current) startListen();
+    }
+  }
+
+  async function toggleVoice() {
+    if (voiceOn) {
+      setVoiceOn(false);
+      stopListen();
+      audioRef.current?.pause();
+      return;
+    }
+    setVoiceOn(true);
+    const last = [...messages].reverse().find((m) => m.role === "assistant")?.content;
+    if (last) await speak(last);
+    if (voiceOnRef.current || true) {
+      voiceOnRef.current = true;
+      startListen();
     }
   }
 
@@ -100,21 +193,41 @@ export function AgentChat() {
       {open ? (
         <div className="pointer-events-auto mx-3 mb-[4.75rem] flex h-[min(38rem,76dvh)] flex-col overflow-hidden rounded-[1.85rem] bg-white ring-[3px] ring-white shadow-[0_28px_70px_-18px_rgba(9,12,18,0.55)] md:mx-0 md:mb-0 md:h-[38rem] md:w-[25rem]">
           <div className="relative bg-primary px-4 pb-5 pt-3.5 text-primary-foreground">
-            <button
-              type="button"
-              className="absolute right-3 top-3 grid size-9 place-items-center rounded-full bg-black/15 hover:bg-black/25"
-              onClick={() => setOpen(false)}
-              aria-label="Закрыть чат"
-            >
-              <X className="size-5" />
-            </button>
-            <div className="flex items-end gap-3 pr-10">
+            <div className="absolute right-3 top-3 flex gap-1">
+              <button
+                type="button"
+                className={cn(
+                  "grid size-9 place-items-center rounded-full",
+                  voiceOn ? "bg-white text-primary" : "bg-black/15 hover:bg-black/25",
+                )}
+                onClick={() => void toggleVoice()}
+                aria-label={voiceOn ? "Выключить голос Алисы" : "Включить голос Алисы"}
+              >
+                <Volume2 className="size-4" />
+              </button>
+              <button
+                type="button"
+                className="grid size-9 place-items-center rounded-full bg-black/15 hover:bg-black/25"
+                onClick={() => {
+                  setOpen(false);
+                  setVoiceOn(false);
+                  stopListen();
+                  audioRef.current?.pause();
+                }}
+                aria-label="Закрыть чат"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            <div className="flex items-end gap-3 pr-20">
               <div className="-mb-10 shrink-0">
                 <Robot mood={mood} size={88} live />
               </div>
               <div className="min-w-0 pb-1">
                 <p className="font-display text-[1.15rem] leading-tight">Олег</p>
-                <p className="text-[0.78rem] text-white/85">Администратор студии · онлайн</p>
+                <p className="text-[0.78rem] text-white/85">
+                  {speaking ? "Говорит голосом Алисы" : listening ? "Слушает вас" : "Администратор студии · онлайн"}
+                </p>
               </div>
             </div>
           </div>
@@ -205,6 +318,17 @@ export function AgentChat() {
                 maxLength={1000}
               />
               <button
+                type="button"
+                className={cn(
+                  "grid size-10 place-items-center rounded-full",
+                  listening ? "bg-primary text-primary-foreground" : "text-muted hover:bg-black/5",
+                )}
+                onClick={() => (listening ? stopListen() : startListen())}
+                aria-label="Голосовой ввод"
+              >
+                <Mic className="size-4" />
+              </button>
+              <button
                 type="submit"
                 disabled={busy || !text.trim()}
                 className="grid size-10 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
@@ -213,7 +337,9 @@ export function AgentChat() {
                 <Send className="size-4" />
               </button>
             </div>
-            <p className="px-3 pt-1.5 text-[0.65rem] text-muted">Пробное без обязательств · {SITE.phone}</p>
+            <p className="px-3 pt-1.5 text-[0.65rem] text-muted">
+              {voiceOn ? "Голосовой режим · Алиса" : `Пробное без обязательств · ${SITE.phone}`}
+            </p>
           </form>
         </div>
       ) : null}
