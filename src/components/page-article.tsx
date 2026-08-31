@@ -169,7 +169,7 @@ function CinematicPage({
         age={heading.age}
         title={heading.title}
         description={page.description}
-        images={page.images}
+        images={page.kind === "school" ? galleryPhotos(page.images) : page.images}
         video={page.video}
       />
 
