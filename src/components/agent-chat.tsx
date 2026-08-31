@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { X, Send, Mic, Volume2 } from "lucide-react";
+import { X, Send, Mic, Volume2, RotateCcw } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
 import { speakAgent } from "@/data/agent-voice";
+import { saveChatLog } from "@/data/chat-logs";
 import { nextChips } from "@/data/agent-chips";
 import { parseTurns, faceOf, type Who } from "@/data/agent-turns";
 import { PageLink } from "@/components/page-link";
@@ -68,6 +69,21 @@ function Duo({ size, mood }: { size: number; mood: Mood }) {
 }
 
 const CHAT_KEY = "ra_chat";
+const SID_KEY = "ra_chat_sid";
+
+function chatSid(reset = false) {
+  try {
+    if (!reset) {
+      const cur = sessionStorage.getItem(SID_KEY);
+      if (cur) return cur;
+    }
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    sessionStorage.setItem(SID_KEY, id);
+    return id;
+  } catch {
+    return String(Date.now());
+  }
+}
 
 function readChat(): Msg[] {
   try {
@@ -185,7 +201,19 @@ export function AgentChat() {
     } catch {
       /* */
     }
-  }, [messages]);
+    const useful = messages.filter((m) => m.role === "user" && !noisyAdmin(m.content));
+    if (!useful.length) return;
+    void saveChatLog({
+      data: {
+        id: chatSid(),
+        path: typeof window !== "undefined" ? window.location.pathname : "/",
+        partner,
+        voice: voiceOn,
+        admin: adminLeft() > 0,
+        messages: messages.filter((m) => m.role !== "user" || !noisyAdmin(m.content)),
+      },
+    });
+  }, [messages, partner, voiceOn]);
 
   useEffect(() => {
     const node = lastMsgRef.current;
@@ -530,7 +558,40 @@ export function AgentChat() {
             <span className="absolute left-0.5 top-0.5 h-2.5 w-2.5 rounded-[2px] border-l-2 border-t-2 border-white/70" />
           </button>
           <div className="relative shrink-0 bg-primary px-4 pb-3.5 pt-3.5 text-primary-foreground">
-            <div className="absolute right-3 top-3">
+            <div className="absolute right-3 top-3 flex items-center gap-1.5">
+              <button
+                type="button"
+                className="grid size-9 place-items-center rounded-full bg-black/15 hover:bg-black/25"
+                title="Сбросить диалог"
+                aria-label="Сбросить диалог"
+                onClick={() => {
+                  cancelSpeech();
+                  stopListen();
+                  sendIdRef.current += 1;
+                  busyRef.current = false;
+                  setBusy(false);
+                  const useful = messages.some((m) => m.role === "user" && !noisyAdmin(m.content));
+                  if (useful) {
+                    void saveChatLog({
+                      data: {
+                        id: chatSid(),
+                        path: window.location.pathname,
+                        partner,
+                        voice: voiceOn,
+                        admin: adminLeft() > 0,
+                        closed: true,
+                        messages: messages.filter((m) => m.role !== "user" || !noisyAdmin(m.content)),
+                      },
+                    });
+                  }
+                  chatSid(true);
+                  setMessages([{ role: "assistant", content: HELLO }]);
+                  setGroupChips([]);
+                  setText("");
+                }}
+              >
+                <RotateCcw className="size-4" />
+              </button>
               <button
                 type="button"
                 className="grid size-9 place-items-center rounded-full bg-black/15 hover:bg-black/25"
@@ -545,7 +606,7 @@ export function AgentChat() {
                 <X className="size-5" />
               </button>
             </div>
-            <div className="flex items-end gap-3 pr-12">
+            <div className="flex items-end gap-3 pr-20">
               <div className="shrink-0">
                 <Duo size={64} mood={mood} />
               </div>
