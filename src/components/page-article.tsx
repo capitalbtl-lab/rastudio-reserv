@@ -11,6 +11,7 @@ import { ProgrammingCoursePage } from "@/components/programming-course";
 import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
 import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses, SchoolCourseList, Trajectory } from "@/components/cms-blocks";
 import { PhotoSlider } from "@/components/photo-slider";
+import { PageReviews } from "@/components/reviews";
 import { CourseSellAfterWhy, CourseSellAfterProgram } from "@/components/course-sell";
 import { galleryPhotos } from "@/lib/gallery";
 import { SCHOOL_PROGRAMS, SCHOOL_WHY } from "@/data/school-programs";
