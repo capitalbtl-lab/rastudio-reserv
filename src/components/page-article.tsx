@@ -10,6 +10,8 @@ import { ProgrammingCoursePage } from "@/components/programming-course";
 import { ProgrammingSchoolPage } from "@/components/programming-school";
 import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
 import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses, SchoolCourseList } from "@/components/cms-blocks";
+import { PhotoSlider } from "@/components/photo-slider";
+import { galleryPhotos } from "@/lib/gallery";
 import { cn } from "@/lib/utils";
 
 type MasterCard = { path: string; h1: string };
@@ -94,7 +96,7 @@ export function PageArticle({
   trajectory = [],
   schedule = [],
 }: PageArticleProps) {
-  if (cmsCourse) {
+      if (cmsCourse) {
     return <ProgrammingCoursePage page={page} course={cmsCourse} schedule={schedule} courses={courses} />;
   }
   if (page.path === "/programming-school" || page.pathDecoded === "/programming-school") {
@@ -102,6 +104,7 @@ export function PageArticle({
       <ProgrammingSchoolPage
         page={page}
         courses={cmsCourses}
+        catalogCourses={courses}
         trajectory={trajectory}
         schedule={schedule}
         teachers={teachers}
@@ -182,7 +185,11 @@ function CinematicPage({
                 ) : null
               }
             />
-            <Gallery page={{ ...page, images: page.images.slice(Math.min(3, page.images.length)) }} />
+            {page.kind === "school" ? (
+              <PhotoSlider images={galleryPhotos(page.images)} />
+            ) : (
+              <Gallery page={{ ...page, images: page.images.slice(Math.min(3, page.images.length)) }} />
+            )}
             {schedule.length ? (
               <div className="pt-10">
                 <ScheduleBlock sessions={schedule} />

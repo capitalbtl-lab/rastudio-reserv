@@ -173,6 +173,36 @@
   display: none;
 }
 
+.gallery-slider {
+  display: flex;
+  gap: 0.85rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding-bottom: 0.35rem;
+}
+
+.gallery-slider::-webkit-scrollbar {
+  display: none;
+}
+
+.gallery-slide {
+  scroll-snap-align: start;
+  flex: 0 0 86%;
+}
+
+@media (min-width: 640px) {
+  .gallery-slide {
+    flex-basis: 58%;
+  }
+}
+
+@media (min-width: 960px) {
+  .gallery-slide {
+    flex-basis: 48%;
+  }
+}
+
 .snap-card {
   scroll-snap-align: start;
   flex: 0 0 72%;

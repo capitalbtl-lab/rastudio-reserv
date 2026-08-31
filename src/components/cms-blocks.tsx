@@ -606,9 +606,11 @@ export function RelatedAgeCourses({
 export function SchoolCourseList({
   schoolPath,
   courses,
+  wide = false,
 }: {
   schoolPath: string;
   courses: CourseCard[];
+  wide?: boolean;
 }) {
   const list = coursesForSchool(schoolPath, courses);
   if (!list.length) return null;
@@ -616,24 +618,26 @@ export function SchoolCourseList({
     <div>
       <p className="kicker">Курсы школы</p>
       <h2 className="display mt-2 text-2xl md:text-3xl">Программы этого направления</h2>
-      <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+      <ul className={cn("mt-6 grid grid-cols-2 gap-3 md:gap-4", wide && "lg:grid-cols-3")}>
         {list.map((course) => (
           <li key={course.href}>
             <PageLink
               to={course.href}
-              className="flex items-center gap-3 rounded-xl bg-surface p-2 pr-4 shadow-[var(--shadow-border)] transition-shadow hover:shadow-[var(--shadow-border-hover)]"
+              className="course-card course-reveal group overflow-hidden rounded-3xl bg-header text-header-fg shadow-[var(--shadow-border)]"
             >
               <SeoImage
                 src={course.image}
                 alt={course.alt}
                 filename={course.filename}
-                className="size-16 shrink-0 overflow-hidden rounded-lg bg-surface-2"
-                imgClassName="h-full w-full object-cover"
+                className="course-media aspect-[4/5]"
               />
-              <span>
-                <span className="block text-sm font-semibold leading-snug">{course.label}</span>
-                {course.age ? <span className="mt-0.5 block text-xs text-muted">{course.age}</span> : null}
-              </span>
+              <div className="course-copy relative -mt-20 bg-gradient-to-t from-header via-header/85 to-transparent px-3 pb-3 pt-12 md:px-4 md:pb-4">
+                {course.age ? (
+                  <p className="text-[0.68rem] font-semibold text-header-fg/65">{course.age}</p>
+                ) : null}
+                <p className="display mt-1 text-[0.95rem] leading-tight md:text-lg">{course.label}</p>
+                <span className="course-cta text-header-fg">Смотреть курс</span>
+              </div>
             </PageLink>
           </li>
         ))}

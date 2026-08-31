@@ -1,21 +1,30 @@
-import type { SitePage, TeacherCard } from "@/data/catalog";
+import type { CourseCard, SitePage, TeacherCard } from "@/data/catalog";
 import type { CmsCourse, CmsSession, CmsTrajectoryStep } from "@/data/cms";
 import { isPublishedTeacher } from "@/data/catalog";
 import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 import { TrialForm } from "@/components/trial-form";
 import { Button } from "@/components/ui/button";
-import { CmsImg, Kicker, ScheduleBlock, Trajectory } from "@/components/cms-blocks";
+import { Kicker, ScheduleBlock, Trajectory, SchoolCourseList } from "@/components/cms-blocks";
+import { PhotoSlider } from "@/components/photo-slider";
+import { galleryPhotos } from "@/lib/gallery";
 
 type Props = {
   page: SitePage;
   courses: CmsCourse[];
+  catalogCourses?: CourseCard[];
   trajectory: CmsTrajectoryStep[];
   schedule: CmsSession[];
   teachers: TeacherCard[];
 };
 
-export function ProgrammingSchoolPage({ page, courses, trajectory, schedule, teachers }: Props) {
+export function ProgrammingSchoolPage({
+  page,
+  catalogCourses = [],
+  trajectory,
+  schedule,
+  teachers,
+}: Props) {
   const hero = page.images[0];
   const itTeachers = teachers
     .filter(isPublishedTeacher)
@@ -66,6 +75,10 @@ export function ProgrammingSchoolPage({ page, courses, trajectory, schedule, tea
           </p>
         </section>
 
+        <section id="courses">
+          <SchoolCourseList schoolPath="/programming-school" courses={catalogCourses} wide />
+        </section>
+
         {trajectory.length ? (
           <section>
             <Kicker>6 ступеней</Kicker>
@@ -75,42 +88,6 @@ export function ProgrammingSchoolPage({ page, courses, trajectory, schedule, tea
             </div>
           </section>
         ) : null}
-
-        <section id="courses">
-          <Kicker>Курсы школы</Kicker>
-          <h2 className="display section-title mt-2">Программы школы программирования</h2>
-          <div className="mt-8 grid gap-4 lg:grid-cols-2">
-            {courses.map((c, i) => (
-              <PageLink
-                key={c.id}
-                to={c.pathDecoded}
-                className="course-card course-reveal group grid overflow-hidden rounded-2xl bg-surface shadow-[var(--shadow-border)] md:grid-cols-[16rem_1fr]"
-              >
-                <div className="course-media relative min-h-36 bg-fg">
-                  {c.banner ? (
-                    <CmsImg image={c.banner} className="h-full" alt={c.name} />
-                  ) : c.logo ? (
-                    <CmsImg image={c.logo} className="h-full" alt={c.name} />
-                  ) : c.gallery[0] ? (
-                    <CmsImg image={c.gallery[0]} className="h-full" alt={c.name} />
-                  ) : null}
-                  <span className="absolute left-3 top-3 font-display text-xs tracking-widest text-bg">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                </div>
-                <div className="course-copy p-5">
-                  <p className="text-xs font-medium uppercase tracking-wider text-muted">{c.age}</p>
-                  <h3 className="display mt-1 text-xl leading-snug md:text-2xl">{c.name}</h3>
-                  {c.program ? <p className="mt-2 text-sm text-muted">{c.program}</p> : null}
-                  {c.resultLevel ? (
-                    <p className="mt-3 line-clamp-2 text-sm">{c.resultLevel}</p>
-                  ) : null}
-                  <span className="course-cta text-primary">Подробности</span>
-                </div>
-              </PageLink>
-            ))}
-          </div>
-        </section>
 
         {itTeachers.length ? (
           <section>
@@ -140,6 +117,8 @@ export function ProgrammingSchoolPage({ page, courses, trajectory, schedule, tea
             </div>
           </section>
         ) : null}
+
+        <PhotoSlider images={galleryPhotos(page.images)} />
 
         <ScheduleBlock sessions={schedule} />
       </div>
