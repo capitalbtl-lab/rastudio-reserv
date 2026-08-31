@@ -5,7 +5,8 @@ import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 import { TrialForm } from "@/components/trial-form";
 import { Button } from "@/components/ui/button";
-import { Kicker, ScheduleBlock, Trajectory, SchoolCourseList } from "@/components/cms-blocks";
+import { Kicker, ScheduleBlock, Trajectory, SchoolCourseList, ProgramSteps } from "@/components/cms-blocks";
+import { SCHOOL_PROGRAMS } from "@/data/school-programs";
 import { PhotoSlider } from "@/components/photo-slider";
 import { galleryPhotos } from "@/lib/gallery";
 
@@ -78,6 +79,8 @@ export function ProgrammingSchoolPage({
         <section id="courses">
           <SchoolCourseList schoolPath="/programming-school" courses={catalogCourses} wide />
         </section>
+
+        <ProgramSteps items={SCHOOL_PROGRAMS["/programming-school"] ?? []} />
 
         {trajectory.length ? (
           <section>

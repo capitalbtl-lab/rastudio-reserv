@@ -12,6 +12,7 @@ import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
 import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses, SchoolCourseList } from "@/components/cms-blocks";
 import { PhotoSlider } from "@/components/photo-slider";
 import { galleryPhotos } from "@/lib/gallery";
+import { SCHOOL_PROGRAMS } from "@/data/school-programs";
 import { cn } from "@/lib/utils";
 
 type MasterCard = { path: string; h1: string };
@@ -179,6 +180,7 @@ function CinematicPage({
             <CourseStory
               paragraphs={body}
               headings={page.headings}
+              program={SCHOOL_PROGRAMS[page.pathDecoded || page.path]}
               afterLead={
                 page.kind === "school" ? (
                   <SchoolCourseList schoolPath={page.pathDecoded || page.path} courses={courses} />

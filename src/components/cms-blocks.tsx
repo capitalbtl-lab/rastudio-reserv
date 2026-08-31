@@ -5,6 +5,7 @@ import type { CmsImage, CmsSession, CmsTrajectoryStep } from "@/data/cms";
 import type { CourseCard } from "@/data/catalog";
 import { courseKey } from "@/data/cms";
 import { SITE, coursesForSchool } from "@/data/site";
+import type { ProgramStep } from "@/data/school-programs";
 import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 import { Button } from "@/components/ui/button";
@@ -474,14 +475,32 @@ const WHY_NOW = [
   },
 ] as const;
 
+export function ProgramSteps({ items }: { items: ProgramStep[] }) {
+  if (!items.length) return null;
+  return (
+    <section>
+      <p className="kicker">Программа</p>
+      <h2 className="display section-title mt-2">Что внутри — по шагам</h2>
+      <p className="mt-3 max-w-2xl text-sm text-muted">
+        Ступени школы — по возрастам и форматам. Откройте блок, чтобы увидеть подробности.
+      </p>
+      <div className="mt-6 w-full">
+        <AccordionItems items={items} />
+      </div>
+    </section>
+  );
+}
+
 export function CourseStory({
   paragraphs,
   headings,
   afterLead,
+  program,
 }: {
   paragraphs: string[];
   headings: { tag: string; text: string }[];
   afterLead?: ReactNode;
+  program?: ProgramStep[];
 }) {
   const clean = paragraphs.filter((p) => p && !SKIP_COPY.test(p));
   const price = clean.find((p) => PRICE_COPY.test(p));
@@ -498,21 +517,23 @@ export function CourseStory({
   const folded = story.slice(2);
 
   const accordion =
-    lessons.length > 0
-      ? lessons.map((body) => {
-          const match = body.match(/^Урок\s*(\d+)\s*[:.—-]?\s*(.*)$/i);
-          const detail = match?.[2]?.split(".")[0]?.trim();
-          return {
-            title: match ? (detail ? `Урок ${match[1]}. ${detail}` : `Урок ${match[1]}`) : body.slice(0, 72),
-            body,
-          };
-        })
-      : chapters.slice(0, Math.max(folded.length, chapters.length)).map((title, i) => ({
-          title,
-          body: folded[i] || "Разберём это на занятии — с практикой, а не только в теории.",
-        }));
+    program && program.length
+      ? program
+      : lessons.length > 0
+        ? lessons.map((body) => {
+            const match = body.match(/^Урок\s*(\d+)\s*[:.—-]?\s*(.*)$/i);
+            const detail = match?.[2]?.split(".")[0]?.trim();
+            return {
+              title: match ? (detail ? `Урок ${match[1]}. ${detail}` : `Урок ${match[1]}`) : body.slice(0, 72),
+              body,
+            };
+          })
+        : chapters.slice(0, Math.max(folded.length, chapters.length)).map((title, i) => ({
+            title,
+            body: folded[i] || "Разберём это на занятии — с практикой, а не только в теории.",
+          }));
 
-  const leftover = lessons.length ? folded : folded.slice(chapters.length);
+  const leftover = program?.length ? [] : lessons.length ? folded : folded.slice(chapters.length);
 
   return (
     <div className="space-y-12">
@@ -543,7 +564,9 @@ export function CourseStory({
         </div>
       </section>
 
-      {accordion.length ? (
+      {program?.length ? (
+        <ProgramSteps items={program} />
+      ) : accordion.length ? (
         <section>
           <p className="kicker">Программа</p>
           <h2 className="display section-title mt-2">Что внутри — по шагам</h2>
