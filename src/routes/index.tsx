@@ -290,15 +290,7 @@ function Home() {
       </section>
 
       <section className="ink relative isolate mb-16 overflow-hidden text-header-fg md:mb-24">
-        <SeoImage
-          src="/courses/robot-english.jpg"
-          alt="Робототехника на английском в Коломне"
-          filename="Развивайся - Робототехника на английском в Коломне.png"
-          className="absolute inset-0 h-full w-full"
-          imgClassName="h-full w-full object-cover opacity-40"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-header via-header/80 to-header/30" />
-        <div className="page-wrap relative grid min-h-[28rem] items-center py-16 md:grid-cols-2 md:py-24">
+        <div className="page-wrap relative grid items-center gap-10 py-16 md:grid-cols-2 md:gap-12 md:py-24">
           <div>
             <p className="kicker text-header-fg/55">Билингвальный курс</p>
             <h2 className="section-title mt-3">Робототехника на английском</h2>
@@ -308,6 +300,18 @@ function Home() {
             <Button asChild className="mt-8">
               <PageLink to="/roboticsinenglish">Подробнее о курсе</PageLink>
             </Button>
+          </div>
+          <div className="overflow-hidden rounded-[2rem] bg-header shadow-[var(--shadow-border)]">
+            <video
+              src="/media/home/robot-english.mp4"
+              className="aspect-video w-full object-cover"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              aria-label="Робототехника на английском в Студии Развивайся"
+            />
           </div>
         </div>
       </section>
