@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { bindIntersection } from "@/lib/intersection";
 import { organizationJsonLd } from "@/data/seo";
 import { JsonLd } from "@/components/json-ld";
+import { AgentChat } from "@/components/agent-chat";
 
 export function SiteShell({ children }: { children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -42,6 +43,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
           </Button>
         </div>
       </div>
+      <AgentChat />
     </div>
   );
 }

@@ -87,42 +87,44 @@ export type TrialPayload = {
   branch: string;
 };
 
+export async function saveTrialLead(data: TrialPayload) {
+  const parent = data.parent.trim();
+  const child = data.child.trim();
+  const phone = data.phone.trim();
+  const email = data.email.trim();
+  const dob = data.dob.trim();
+  const branch = data.branch.trim();
+  if (!parent || !child || !phone || !email || !dob || !branch) {
+    return { ok: false as const, error: "Заполните все обязательные поля." };
+  }
+  const [y, m, d] = dob.split("-");
+  const dobRu = d && m && y ? `${d}.${m}.${y}` : dob;
+  const body = {
+    LeadForm: { id: 20, lead_source_id: 2 },
+    LeadFormForm: {
+      field1763751875: parent,
+      field1763751902: child,
+      field1763751955: dobRu,
+      field1763751913: phone,
+      field1763751923: email,
+      field1763755924: branch,
+      ...(data.course ? { field1763755942: data.course } : {}),
+    },
+  };
+  try {
+    const res = await fetch("https://studiyarazvivaysya.s20.online/v2api/2/lead-form/save?id=20", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = (await res.json()) as { success?: boolean; message?: string };
+    if (json.success) return { ok: true as const };
+    return { ok: false as const, error: json.message || "Не удалось отправить заявку. Позвоните нам." };
+  } catch {
+    return { ok: false as const, error: "Сеть недоступна. Позвоните 8 (800) 511-34-01." };
+  }
+}
+
 export const sendTrial = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as TrialPayload)
-  .handler(async ({ data }) => {
-    const parent = data.parent.trim();
-    const child = data.child.trim();
-    const phone = data.phone.trim();
-    const email = data.email.trim();
-    const dob = data.dob.trim();
-    const branch = data.branch.trim();
-    if (!parent || !child || !phone || !email || !dob || !branch) {
-      return { ok: false as const, error: "Заполните все обязательные поля." };
-    }
-    const [y, m, d] = dob.split("-");
-    const dobRu = d && m && y ? `${d}.${m}.${y}` : dob;
-    const body = {
-      LeadForm: { id: 20, lead_source_id: 2 },
-      LeadFormForm: {
-        field1763751875: parent,
-        field1763751902: child,
-        field1763751955: dobRu,
-        field1763751913: phone,
-        field1763751923: email,
-        field1763755924: branch,
-        ...(data.course ? { field1763755942: data.course } : {}),
-      },
-    };
-    try {
-      const res = await fetch("https://studiyarazvivaysya.s20.online/v2api/2/lead-form/save?id=20", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(body),
-      });
-      const json = (await res.json()) as { success?: boolean; message?: string; errors?: unknown };
-      if (json.success) return { ok: true as const };
-      return { ok: false as const, error: json.message || "Не удалось отправить заявку. Позвоните нам." };
-    } catch {
-      return { ok: false as const, error: "Сеть недоступна. Позвоните 8 (800) 511-34-01." };
-    }
-  });
+  .handler(async ({ data }) => saveTrialLead(data));
