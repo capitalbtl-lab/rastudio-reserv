@@ -477,7 +477,7 @@ function ContactsPage({ page }: { page: SitePage }) {
             <iframe
               title={`Карта: ${b.name}`}
               src={b.mapEmbed}
-              className="h-44 w-full border-0"
+              className="h-64 w-full border-0 md:h-72"
               loading="lazy"
             />
             <div className="p-6">
