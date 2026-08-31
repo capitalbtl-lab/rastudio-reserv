@@ -219,7 +219,7 @@ function Home() {
             <PageLink
               key={course.href}
               to={course.href}
-              className="course-card course-reveal group overflow-hidden rounded-3xl bg-header text-header-fg shadow-[var(--shadow-border)]"
+              className="course-card course-reveal group relative isolate overflow-hidden rounded-3xl bg-surface-2 text-header-fg shadow-[var(--shadow-border)]"
             >
               <SeoImage
                 src={course.src}
@@ -227,12 +227,12 @@ function Home() {
                 filename={course.filename}
                 className="course-media aspect-4/5"
               />
-              <div className="course-copy relative -mt-16 bg-gradient-to-t from-header via-header/80 to-transparent px-4 pb-4 pt-10">
-                <p className="text-[0.7rem] font-semibold text-header-fg/65">
+              <div className="absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t from-black/75 via-black/35 to-transparent px-4 pb-4 pt-28">
+                <p className="text-[0.68rem] font-medium leading-snug text-white/75">
                   {courseFacts(course.href, course.age)}
                 </p>
-                <p className="display mt-1 text-lg leading-tight">{course.title}</p>
-                <span className="course-cta text-header-fg">Смотреть курс</span>
+                <p className="display mt-1 text-[1.15rem] leading-tight text-white">{course.title}</p>
+                <span className="course-cta text-white">Смотреть курс</span>
               </div>
             </PageLink>
           ))}
