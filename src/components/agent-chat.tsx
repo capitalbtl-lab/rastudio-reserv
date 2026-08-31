@@ -149,6 +149,7 @@ export function AgentChat() {
   const [speaking, setSpeaking] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
   const [adminMs, setAdminMs] = useState(0);
+  const [awaitingCode, setAwaitingCode] = useState(false);
   const [groupChips, setGroupChips] = useState<{ label: string; href?: string; send?: string; primary?: boolean }[]>([]);
   const [box, setBox] = useState({ w: 520, h: 740 });
   const dragRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -165,9 +166,12 @@ export function AgentChat() {
   const busyRef = useRef(false);
   const listenWantedRef = useRef(false);
   const partnerRef = useRef(partner);
+  const awaitingCodeRef = useRef(false);
   const mood = moodOf(messages, busy);
   const offer =
-    adminMs > 0
+    awaitingCode
+      ? { hint: "Назовите кодовое слово", chips: [] as { label: string; send?: string; href?: string; primary?: boolean }[] }
+      : adminMs > 0
       ? {
           hint: "Что меняем",
           chips: [
@@ -460,7 +464,9 @@ export function AgentChat() {
     setText("");
     cancelSpeech();
     stopListen();
-    const history = [...messages, { role: "user" as const, content: next }].filter(
+    const gate = awaitingCodeRef.current;
+    const shown = gate ? "••••" : next;
+    const history = [...messages, { role: "user" as const, content: shown }].filter(
       (m) => m.role !== "user" || !noisyAdmin(m.content),
     );
     setMessages(history);
@@ -473,15 +479,19 @@ export function AgentChat() {
       const res = await chatAgent({
         data: {
           messages: history,
-          with: adminLeft() > 0 ? "olga" : partner,
+          with: adminLeft() > 0 || gate ? "olga" : partner,
           token: siteAdminToken() || undefined,
           path: typeof window !== "undefined" ? window.location.pathname : "/",
+          gate,
+          gateWord: gate ? next : undefined,
         },
       });
       if (sendId !== sendIdRef.current) return;
       if (res.ok) {
-        reply = adminLeft() > 0 || res.token ? olgaReply(res.reply) : res.reply;
+        reply = adminLeft() > 0 || res.token || gate ? olgaReply(res.reply) : res.reply;
         if (res.token) {
+          awaitingCodeRef.current = false;
+          setAwaitingCode(false);
           setSiteAdmin(res.token);
           setAdminMs(adminLeft());
           setPartner("olga");
@@ -599,6 +609,8 @@ export function AgentChat() {
                     });
                   }
                   chatSid(true);
+                  awaitingCodeRef.current = false;
+                  setAwaitingCode(false);
                   setMessages([{ role: "assistant", content: HELLO }]);
                   setGroupChips([]);
                   setText("");
@@ -800,6 +812,8 @@ export function AgentChat() {
                   cancelSpeech();
                   stopListen();
                   if (adminLeft() > 0) {
+                    awaitingCodeRef.current = false;
+                    setAwaitingCode(false);
                     clearSiteAdmin();
                     setAdminMs(0);
                     setPartner("both");
@@ -813,6 +827,8 @@ export function AgentChat() {
                     }
                     return;
                   }
+                  awaitingCodeRef.current = true;
+                  setAwaitingCode(true);
                   setPartner("olga");
                   const ask = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
                   setMessages((m) => [...m, { role: "assistant", content: ask }]);

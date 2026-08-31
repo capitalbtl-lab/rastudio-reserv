@@ -400,7 +400,18 @@ async function complete(messages: ChatMsg[], tools: unknown) {
 }
 
 export const chatAgent = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { messages: { role: "user" | "assistant"; content: string }[]; ip?: string; with?: "oleg" | "olga" | "both"; token?: string; path?: string })
+  .validator(
+    (data: unknown) =>
+      data as {
+        messages: { role: "user" | "assistant"; content: string }[];
+        ip?: string;
+        with?: "oleg" | "olga" | "both";
+        token?: string;
+        path?: string;
+        gate?: boolean;
+        gateWord?: string;
+      },
+  )
   .handler(async ({ data }) => {
     const ip = data.ip || "anon";
     if (limited(ip)) {
@@ -410,16 +421,44 @@ export const chatAgent = createServerFn({ method: "POST" })
       .filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content)
       .slice(-16)
       .map((m) => ({ role: m.role, content: String(m.content).slice(0, 2000) }));
-    if (!trimmed.length) return { ok: false as const, error: "Напишите вопрос." };
+    if (!trimmed.length && !data.gate) return { ok: false as const, error: "Напишите вопрос." };
 
     const { tokenOk, makeAdminToken } = await import("./admin-auth");
     const { knowledgeForAgent } = await import("./call-knowledge");
+    const { codewordInText, logAdmin } = await import("./admin-settings");
     let admin = tokenOk(data.token);
     let granted: string | undefined;
     let reload = false;
     let open = "";
     let signup = "";
     let groups: { label: string; href?: string; send?: string; primary?: boolean }[] = [];
+
+    const lastUser = String(data.gateWord || [...trimmed].reverse().find((m) => m.role === "user")?.content || "");
+    const askedCode = trimmed.some((m) => m.role === "assistant" && /кодовое слово/i.test(m.content));
+    const wantAdmin =
+      Boolean(data.gate) ||
+      askedCode ||
+      /вход администратора|я администратор|хочу внести изменения|открой режим управления/i.test(
+        trimmed.map((m) => m.content).join(" "),
+      );
+    if (!admin && wantAdmin && lastUser && codewordInText(lastUser)) {
+      admin = true;
+      granted = makeAdminToken(30 * 60 * 1000);
+      logAdmin("Вход по кодовому слову");
+      return {
+        ok: true as const,
+        reply: "Ольга: Доступ открыт на 30 минут. Что меняем — цены, тексты страниц или голоса?",
+        token: granted,
+        reload: false,
+      };
+    }
+    if (!admin && data.gate) {
+      return {
+        ok: true as const,
+        reply: "Ольга: Слово не подошло. Назовите кодовое слово ещё раз, одним словом.",
+      };
+    }
+
     const solo =
       data.with === "oleg"
         ? "\n\nСейчас родитель говорит только с Олегом. Отвечай исключительно строками «Олег:». Ольга молчит. Мужской род."

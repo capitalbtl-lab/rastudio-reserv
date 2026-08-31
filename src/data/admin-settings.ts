@@ -101,6 +101,14 @@ export function checkCodeword(word: string) {
   return timingSafeEqual(got, exp);
 }
 
+export function codewordInText(text: string) {
+  const raw = String(text || "");
+  const words = raw.split(/[\s,.;:!?«»"'()-]+/).filter((w) => w.length >= 4);
+  const stripped = raw.replace(/пароль|кодов\w*|слово|это|вот|называю|слушай|повторяю/gi, " ");
+  const parts = [raw, stripped, ...words];
+  return parts.some((p) => checkCodeword(p));
+}
+
 export function checkPassword(pass: string) {
   const settings = loadAdminSettings();
   const got = Buffer.from(hashPass(pass || "", settings.salt));
