@@ -9,6 +9,7 @@ import {
   updateOnePrice,
   type PriceRow,
 } from "./prices";
+import { listAdminLog, loadAdminSettings, logAdmin, setCodeword } from "./admin-settings";
 
 function secret() {
   return process.env.ADMIN_PASSWORD?.trim() || "";
@@ -39,7 +40,9 @@ export const adminSavePrice = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string; path: string; all?: number; kbm?: number; tmx?: number })
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
-    return updateOnePrice(data.path, { all: data.all, kbm: data.kbm, tmx: data.tmx });
+    const saved = updateOnePrice(data.path, { all: data.all, kbm: data.kbm, tmx: data.tmx });
+    if (saved.ok) logAdmin(`Цена: ${saved.row.name} → ${saved.row.all} ₽`);
+    return saved;
   });
 
 export const adminSaveGroup = createServerFn({ method: "POST" })
@@ -56,13 +59,15 @@ export const adminSaveGroup = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
-    return updateGroupPrice({
+    const saved = updateGroupPrice({
       direction: data.direction,
       query: data.query,
       field: data.field,
       set: data.set,
       delta: data.delta,
     });
+    if (saved.ok) logAdmin(`Группа: ${data.direction || data.query} · ${saved.count} курсов`);
+    return saved;
   });
 
 export const adminSaveAll = createServerFn({ method: "POST" })
@@ -70,4 +75,21 @@ export const adminSaveAll = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
     return { ok: true as const, rows: savePriceRows(data.rows || []) };
+  });
+
+export const adminMeta = createServerFn({ method: "POST" })
+  .validator((data: unknown) => data as { token?: string })
+  .handler(async ({ data }) => {
+    if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
+    loadAdminSettings();
+    return { ok: true as const, hasCodeword: true, log: listAdminLog() };
+  });
+
+export const adminSetCodeword = createServerFn({ method: "POST" })
+  .validator((data: unknown) => data as { token?: string; word: string })
+  .handler(async ({ data }) => {
+    if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
+    const saved = setCodeword(data.word || "");
+    if (saved.ok) logAdmin("Сменено кодовое слово");
+    return saved;
   });

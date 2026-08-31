@@ -267,6 +267,7 @@ export function AgentChat() {
     busyRef.current = true;
     setBusy(true);
     let reply = `Не отправилось. Позвоните ${SITE.phone}.`;
+    let shouldReload = false;
     try {
       const res = await chatAgent({
         data: {
@@ -275,7 +276,14 @@ export function AgentChat() {
           token: typeof localStorage !== "undefined" ? localStorage.getItem("ra_admin") || undefined : undefined,
         },
       });
-      reply = res.ok ? res.reply : res.error;
+      if (res.ok) {
+        reply = res.reply;
+        if (res.token) {
+          localStorage.setItem("ra_admin", res.token);
+          document.cookie = `ra_admin=${encodeURIComponent(res.token)}; path=/; max-age=${7 * 24 * 3600}; samesite=lax`;
+        }
+        shouldReload = Boolean(res.reload);
+      } else reply = res.error;
     } catch {
       /* keep */
     }
@@ -286,6 +294,7 @@ export function AgentChat() {
       await speak(reply);
       if (voiceOnRef.current && genRef.current) startListen();
     }
+    if (shouldReload) window.setTimeout(() => window.location.reload(), voiceOnRef.current ? 600 : 200);
   }
 
   async function toggleVoice() {

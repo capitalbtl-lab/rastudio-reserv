@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { adminLogin, adminPrices, adminSaveGroup, adminSavePrice } from "@/data/admin";
+import { adminLogin, adminMeta, adminPrices, adminSaveGroup, adminSavePrice, adminSetCodeword } from "@/data/admin";
 import { PRICE_DIRECTIONS, hydratePrices, type PriceRow } from "@/data/prices-core";
 import { Button } from "@/components/ui/button";
 
@@ -28,6 +28,9 @@ export function AdminPrices() {
   const [mode, setMode] = useState<"set" | "delta">("set");
   const [amount, setAmount] = useState("0");
   const [busy, setBusy] = useState(false);
+  const [word, setWord] = useState("");
+  const [log, setLog] = useState<{ at: string; text: string }[]>([]);
+  const [savedWord, setSavedWord] = useState("");
 
   async function load(t = token()) {
     if (!t) return;
@@ -41,6 +44,8 @@ export function AdminPrices() {
     hydratePrices(res.rows);
     setIn(true);
     setErr("");
+    const meta = await adminMeta({ data: { token: t } });
+    if (meta.ok) setLog(meta.log || []);
   }
 
   useEffect(() => {
@@ -129,10 +134,57 @@ export function AdminPrices() {
   return (
     <article className="page-wrap py-10 md:py-14">
       <p className="kicker">Кабинет администратора</p>
-      <h1 className="display mt-3 text-4xl">Цены курсов</h1>
+      <h1 className="display mt-3 text-4xl">Кабинет администратора</h1>
       <p className="mt-3 max-w-2xl text-muted">
-        «Все» — цена на сайте. КБМ и ТМХ — внутренние. Можно править строку, всю школу сразу или сказать Олегу и Ольге: «подними цены художественной школы на 200».
+        Цены на сайте — колонка «все». Менять можно здесь, группой или голосом: «хочу внести изменения» → кодовое слово → что правим.
       </p>
+
+      <div className="mt-8 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
+        <p className="text-sm font-semibold">Голосовой доступ</p>
+        <p className="mt-1 text-sm text-muted">
+          В чате Ольга спросит кодовое слово. Сейчас слово задано. Чтобы сменить — введите новое (от 4 букв) и сохраните.
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            Новое кодовое слово
+            <input
+              type="password"
+              value={word}
+              onChange={(e) => setWord(e.target.value)}
+              className="mt-1 block h-11 w-56 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+            />
+          </label>
+          <Button
+            type="button"
+            disabled={busy || word.trim().length < 4}
+            onClick={async () => {
+              setBusy(true);
+              const res = await adminSetCodeword({ data: { token: token(), word } });
+              setBusy(false);
+              if (!res.ok) setErr(res.error);
+              else {
+                setSavedWord("Слово обновлено");
+                setWord("");
+                await load();
+              }
+            }}
+          >
+            Сохранить слово
+          </Button>
+          {savedWord ? <p className="text-sm text-primary">{savedWord}</p> : null}
+        </div>
+        {log.length ? (
+          <ul className="mt-4 space-y-1 text-xs text-muted">
+            {log.slice(0, 8).map((item) => (
+              <li key={item.at}>
+                {new Date(item.at).toLocaleString("ru-RU")} — {item.text}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+
+      <h2 className="mt-10 font-display text-2xl">Цены курсов</h2>
 
       <div className="mt-8 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
         <p className="text-sm font-semibold">Группой</p>

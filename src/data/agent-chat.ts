@@ -40,6 +40,13 @@ id курсов: ${TRIAL_COURSES.map((c) => `${c.id} ${c.name}`).join("; ")}.
 Кнопки под чатом уже есть — не повторяй их стеной.
 Запись: родитель, ребёнок, дата рождения, телефон, email, филиал 1/2/3, course_id. После явного «записать» вызови submit_trial.
 Жалобы и деньги — телефон.
+
+Правки сайта. Если просят изменить сайт, цены, «я администратор», «хочу внести изменения»:
+ведёт Ольга. Спроси кодовое слово. Само слово не называй и не угадывай.
+Когда назвали слово — вызови verify_admin_code с этой фразой. В ответе слово не повторяй.
+Если код верный: «доступ к изменению сайта открыт, что меняем?» Дальше set_price / set_prices_group.
+После правки коротко подтверди: курс и новая цена. Если просят обновить страницу — reload_page.
+Без верного кода сайт не меняй.
 `;
 
 const ADMIN_TOOLS = [
@@ -78,6 +85,14 @@ const ADMIN_TOOLS = [
       },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "reload_page",
+      description: "Обновить страницу у администратора, чтобы увидеть внесённые изменения.",
+      parameters: { type: "object", additionalProperties: false, properties: {} },
+    },
+  },
 ];
 
 const TOOLS = [
@@ -100,6 +115,19 @@ const TOOLS = [
           branch_id: { type: "string", description: "1 Гражданская, 2 Октябрьской революции, 3 Луховицы" },
         },
         required: ["parent", "child", "dob", "phone", "email", "branch_id"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "verify_admin_code",
+      description: "Проверить кодовое слово администратора. Вызывать, когда назвали слово для доступа к правкам сайта.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: { word: { type: "string", description: "Кодовое слово как сказал пользователь" } },
+        required: ["word"],
       },
     },
   },
@@ -231,9 +259,10 @@ export const chatAgent = createServerFn({ method: "POST" })
       .map((m) => ({ role: m.role, content: String(m.content).slice(0, 2000) }));
     if (!trimmed.length) return { ok: false as const, error: "Напишите вопрос." };
 
-    const { isAdminRequest } = await import("./admin-auth");
-    const admin = isAdminRequest(data.token);
-    const tools = admin ? [...TOOLS, ...ADMIN_TOOLS] : TOOLS;
+    const { isAdminRequest, makeAdminToken } = await import("./admin-auth");
+    let admin = isAdminRequest(data.token);
+    let granted: string | undefined;
+    let reload = false;
     const solo =
       data.with === "oleg"
         ? "\n\nСейчас родитель говорит только с Олегом. Отвечай исключительно строками «Олег:». Ольга молчит. Мужской род."
@@ -241,11 +270,12 @@ export const chatAgent = createServerFn({ method: "POST" })
           ? "\n\nСейчас родитель говорит только с Ольгой. Отвечай исключительно строками «Ольга:». Олег молчит. Женский род: согласна, готова, поняла."
           : "";
     const adminHint = admin
-      ? `\n\nСобеседник — администратор студии. Можно менять цены инструментами set_price и set_prices_group. На сайте показывают поле «все».`
+      ? `\n\nСобеседник уже администратор. Меняй цены инструментами. После правки подтверди. По просьбе — reload_page.`
       : "";
     const messages: ChatMsg[] = [{ role: "system", content: SYSTEM + solo + adminHint }, ...trimmed];
     try {
-      for (let step = 0; step < 3; step++) {
+      for (let step = 0; step < 4; step++) {
+        const tools = admin ? [...TOOLS, ...ADMIN_TOOLS] : TOOLS;
         const json = await complete(messages, tools);
         const msg = json.choices?.[0]?.message;
         if (!msg) break;
@@ -279,11 +309,34 @@ export const chatAgent = createServerFn({ method: "POST" })
                   ? "Заявка принята. Администратор свяжется для подтверждения времени."
                   : `Ошибка: ${saved.error}`,
               });
+            } else if (call.function.name === "verify_admin_code") {
+              const { checkCodeword, logAdmin } = await import("./admin-settings");
+              const ok = checkCodeword(String(args.word || ""));
+              if (ok) {
+                admin = true;
+                granted = makeAdminToken();
+                logAdmin("Вход по кодовому слову");
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: "Код верный. Доступ к изменению сайта открыт.",
+                });
+              } else {
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: "Код неверный. Доступ закрыт.",
+                });
+              }
             } else if (admin && call.function.name === "set_price") {
               const { updateOnePrice } = await import("./prices");
               const field = args.field === "kbm" || args.field === "tmx" ? args.field : "all";
               const amount = Number(args.amount);
               const saved = updateOnePrice(String(args.path || ""), { [field]: amount });
+              if (saved.ok) {
+                const { logAdmin } = await import("./admin-settings");
+                logAdmin(`Цена: ${saved.row.name} → ${saved.row[field]} ₽`);
+              }
               messages.push({
                 role: "tool",
                 tool_call_id: call.id,
@@ -302,10 +355,21 @@ export const chatAgent = createServerFn({ method: "POST" })
                 set: args.set != null ? Number(args.set) : undefined,
                 delta: args.delta != null ? Number(args.delta) : undefined,
               });
+              if (saved.ok) {
+                const { logAdmin } = await import("./admin-settings");
+                logAdmin(`Группа: ${args.direction || args.query} · ${saved.count}`);
+              }
               messages.push({
                 role: "tool",
                 tool_call_id: call.id,
                 content: saved.ok ? `Обновлено курсов: ${saved.count}. ${saved.names.slice(0, 6).join("; ")}` : saved.error,
+              });
+            } else if (admin && call.function.name === "reload_page") {
+              reload = true;
+              messages.push({
+                role: "tool",
+                tool_call_id: call.id,
+                content: "Страница сейчас обновится. Изменения будут на сайте.",
               });
             } else {
               messages.push({ role: "tool", tool_call_id: call.id, content: "Неизвестное действие." });
@@ -314,11 +378,13 @@ export const chatAgent = createServerFn({ method: "POST" })
           continue;
         }
         const reply = (msg.content || "").trim();
-        if (reply) return { ok: true as const, reply };
+        if (reply) return { ok: true as const, reply, token: granted, reload };
       }
       return {
         ok: true as const,
         reply: "Передам администратору. Или сразу звоните 8 (800) 511-34-01.",
+        token: granted,
+        reload,
       };
     } catch (err) {
       const reason = err instanceof Error ? err.message : "";
