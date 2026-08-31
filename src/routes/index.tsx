@@ -7,6 +7,7 @@ import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 import { TrialForm } from "@/components/trial-form";
 import { Button } from "@/components/ui/button";
+import { RobotEnglishVideos } from "@/components/robot-videos";
 import { cn } from "@/lib/utils";
 
 const home = homePage;
@@ -301,18 +302,7 @@ function Home() {
               <PageLink to="/roboticsinenglish">Подробнее о курсе</PageLink>
             </Button>
           </div>
-          <div className="overflow-hidden rounded-[2rem] bg-header shadow-[var(--shadow-border)]">
-            <video
-              src="/media/home/robot-english.mp4"
-              className="aspect-video w-full object-cover"
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="metadata"
-              aria-label="Робототехника на английском в Студии Развивайся"
-            />
-          </div>
+          <RobotEnglishVideos />
         </div>
       </section>
 
