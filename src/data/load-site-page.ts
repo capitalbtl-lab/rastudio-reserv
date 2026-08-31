@@ -14,6 +14,7 @@ import {
 } from "./catalog.server";
 import { sessionsFromCrm, filterCrmSessions } from "./alfacrm-schedule";
 import { ensureLivePrices } from "./prices";
+import { ensureLiveEdits, snapshotEdits } from "./edits";
 
 export const loadSitePage = createServerFn({ method: "GET" })
   .validator((splat: unknown) => (typeof splat === "string" ? splat : undefined))
@@ -43,6 +44,7 @@ export const loadSitePage = createServerFn({ method: "GET" })
           ? canonicalTrajectory()
           : [],
       schedule: await scheduleWithCrm(data),
+      edits: snapshotEdits(),
     };
   });
 
@@ -66,4 +68,9 @@ export const loadFullSchedule = createServerFn({ method: "GET" }).handler(async 
     /* CMS fallback */
   }
   return { sessions: allSchedule() };
+});
+
+export const loadPublicEdits = createServerFn({ method: "GET" }).handler(async () => {
+  ensureLiveEdits();
+  return snapshotEdits();
 });

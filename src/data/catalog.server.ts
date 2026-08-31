@@ -10,6 +10,7 @@ import {
   type CmsPayload,
   type CmsSession,
 } from "./cms";
+import { applyPageEdits, applyCmsEdits } from "./edits";
 
 const catalog = raw as Catalog;
 const cms = cmsRaw as CmsPayload;
@@ -41,8 +42,8 @@ function norm(input: string) {
 }
 
 export function getPage(splat?: string | null): SitePage | undefined {
-  if (!splat) return pageIndex.get("/");
-  return pageIndex.get(norm(splat));
+  const page = splat ? pageIndex.get(norm(splat)) : pageIndex.get("/");
+  return page ? applyPageEdits(page) : undefined;
 }
 
 export function allPages() {
@@ -59,7 +60,8 @@ export function allCourses() {
 
 export function getCmsCourse(splat?: string | null) {
   if (!splat) return undefined;
-  return courseByPath.get(norm(splat));
+  const course = courseByPath.get(norm(splat));
+  return course ? applyCmsEdits(course) : undefined;
 }
 
 export function getCmsMaster(splat?: string | null) {

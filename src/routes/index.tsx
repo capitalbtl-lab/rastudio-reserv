@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { HeroCollage } from "@/components/hero-collage";
 import { AgeChips } from "@/components/age-chips";
 import { Reviews } from "@/components/reviews";
+import { loadPublicEdits } from "@/data/load-site-page";
+import { hydrateEdits, pageEdit } from "@/data/edits-core";
 import { priceShort } from "@/data/prices-core";
 import { cn } from "@/lib/utils";
 
@@ -73,11 +75,15 @@ const STRIPS = [
 ] as const;
 
 export const Route = createFileRoute("/")({
+  loader: () => loadPublicEdits(),
   head: () => pageHead({ ...home, path: "/" }),
   component: Home,
 });
 
 function Home() {
+  const edits = Route.useLoaderData();
+  if (edits) hydrateEdits(edits);
+  const hero = pageEdit("/");
   return (
     <SiteShell>
       <section className="ink relative isolate overflow-hidden text-header-fg">
@@ -85,10 +91,11 @@ function Home() {
           <div className="relative z-10 max-w-xl">
             <p className="hero-in kicker text-header-fg/55">Сеть школ · Коломна · Луховицы</p>
             <h1 className="hero-in hero-in-2 mt-5 text-[clamp(2.1rem,1.2rem+3vw,3.8rem)] leading-[1.05]">
-              Ребёнок не просто учится — он создаёт, думает и развивается
+              {hero.hero_title || "Ребёнок не просто учится — он создаёт, думает и развивается"}
             </h1>
             <p className="hero-in hero-in-3 mt-5 max-w-md text-[1.02rem] leading-relaxed text-header-fg/70">
-              Семь школ искусств, инженерии и IT в одной сети. Пробное занятие — чтобы выбрать направление вместе.
+              {hero.hero_text ||
+                "Семь школ искусств, инженерии и IT в одной сети. Пробное занятие — чтобы выбрать направление вместе."}
             </p>
             <div className="hero-in hero-in-3 mt-8 flex flex-wrap gap-3">
               <Button asChild size="lg">

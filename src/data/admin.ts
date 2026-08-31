@@ -102,3 +102,21 @@ export const adminSetPassword = createServerFn({ method: "POST" })
     if (saved.ok) logAdmin("Сменён пароль кабинета");
     return saved;
   });
+
+export const adminEdits = createServerFn({ method: "POST" })
+  .validator((data: unknown) => data as { token?: string })
+  .handler(async ({ data }) => {
+    if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
+    const { listPageEdits } = await import("./edits");
+    return { ok: true as const, edits: listPageEdits() };
+  });
+
+export const adminClearEdit = createServerFn({ method: "POST" })
+  .validator((data: unknown) => data as { token?: string; path: string; field: string })
+  .handler(async ({ data }) => {
+    if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
+    const { clearPageField } = await import("./edits");
+    const saved = clearPageField(data.path, data.field);
+    if (saved.ok) logAdmin(`Сброс текста: ${saved.path} · ${saved.field}`);
+    return saved;
+  });

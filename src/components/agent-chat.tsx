@@ -320,6 +320,7 @@ export function AgentChat() {
           messages: history,
           with: partner,
           token: typeof localStorage !== "undefined" ? localStorage.getItem("ra_admin") || undefined : undefined,
+          path: typeof window !== "undefined" ? window.location.pathname : "/",
         },
       });
       if (res.ok) {

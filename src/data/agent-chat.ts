@@ -49,6 +49,13 @@ id курсов: ${TRIAL_COURSES.map((c) => `${c.id} ${c.name}`).join("; ")}.
 Если код верный: «доступ к изменению сайта открыт, что меняем?» Дальше set_price / set_prices_group.
 После правки коротко подтверди: курс и новая цена. Если просят обновить страницу — reload_page.
 Без верного кода сайт не меняй.
+
+После кода можно менять любые тексты сайта, не только цены.
+Сначала list_page_fields (path пустой = текущая страница), потом set_site_text.
+Поля: h1 (заголовок), description (краткое описание под заголовком), about (текст «о курсе»), why_heading, why (карточки «Почему сейчас»: каждая с новой строки «Заголовок. Текст»), hero_title и hero_text (только главная, path="/").
+path: «главная», имя курса или текущая страница.
+clear_site_text — вернуть исходный текст поля.
+После текстовой правки вызови reload_page.
 `;
 
 const ADMIN_TOOLS = [
@@ -93,6 +100,54 @@ const ADMIN_TOOLS = [
       name: "reload_page",
       description: "Обновить страницу у администратора, чтобы увидеть внесённые изменения.",
       parameters: { type: "object", additionalProperties: false, properties: {} },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "list_page_fields",
+      description: "Показать, какие тексты сейчас на странице и что уже переопределено.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: { path: { type: "string", description: "Путь, название курса или пусто для текущей страницы" } },
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "set_site_text",
+      description: "Заменить текст на сайте: заголовок, описание, о курсе, почему сейчас, герой главной.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          path: { type: "string", description: "Путь, название курса, главная, или пусто = текущая страница" },
+          field: {
+            type: "string",
+            description: "h1 | description | about | why_heading | why | hero_title | hero_text",
+          },
+          value: { type: "string", description: "Новый текст" },
+        },
+        required: ["field", "value"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "clear_site_text",
+      description: "Вернуть исходный текст поля на сайте.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          path: { type: "string" },
+          field: { type: "string" },
+        },
+        required: ["field"],
+      },
     },
   },
 ];
@@ -270,7 +325,7 @@ async function complete(messages: ChatMsg[], tools: unknown) {
 }
 
 export const chatAgent = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { messages: { role: "user" | "assistant"; content: string }[]; ip?: string; with?: "oleg" | "olga" | "both"; token?: string })
+  .validator((data: unknown) => data as { messages: { role: "user" | "assistant"; content: string }[]; ip?: string; with?: "oleg" | "olga" | "both"; token?: string; path?: string })
   .handler(async ({ data }) => {
     const ip = data.ip || "anon";
     if (limited(ip)) {
@@ -294,7 +349,7 @@ export const chatAgent = createServerFn({ method: "POST" })
           ? "\n\nСейчас родитель говорит только с Ольгой. Отвечай исключительно строками «Ольга:». Олег молчит. Женский род: согласна, готова, поняла."
           : "";
     const adminHint = admin
-      ? `\n\nСобеседник уже администратор. Меняй цены инструментами. После правки подтверди. По просьбе — reload_page.`
+      ? `\n\nСобеседник уже администратор. Сейчас страница: ${data.path || "/"}. Меняй цены и тексты инструментами. После правки подтверди. По просьбе — reload_page.`
       : "";
     const messages: ChatMsg[] = [{ role: "system", content: SYSTEM + solo + adminHint }, ...trimmed];
     try {
@@ -412,6 +467,53 @@ export const chatAgent = createServerFn({ method: "POST" })
                 tool_call_id: call.id,
                 content: "Страница сейчас обновится. Изменения будут на сайте.",
               });
+            } else if (admin && call.function.name === "list_page_fields") {
+              const { previewPage, listPageEdits } = await import("./edits");
+              const { fieldLabel } = await import("./edits-core");
+              const shown = previewPage(String(args.path || ""), String(data.path || ""));
+              const all = listPageEdits();
+              messages.push({
+                role: "tool",
+                tool_call_id: call.id,
+                content: JSON.stringify({
+                  page: shown.path,
+                  fields: Object.fromEntries(
+                    Object.entries(shown.fields).map(([k, v]) => [fieldLabel(k), v]),
+                  ),
+                  edited_pages: all.map((x) => x.path),
+                }),
+              });
+            } else if (admin && call.function.name === "set_site_text") {
+              const { setPageField } = await import("./edits");
+              const { fieldLabel } = await import("./edits-core");
+              const saved = setPageField(String(args.path || ""), String(args.field || ""), String(args.value || ""), String(data.path || ""));
+              if (saved.ok) {
+                reload = true;
+                const { logAdmin } = await import("./admin-settings");
+                logAdmin(`Текст: ${saved.path} · ${saved.field}`);
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: `Сохранено: ${saved.path} — ${fieldLabel(saved.field)}. Страница обновится.`,
+                });
+              } else {
+                messages.push({ role: "tool", tool_call_id: call.id, content: saved.error });
+              }
+            } else if (admin && call.function.name === "clear_site_text") {
+              const { clearPageField } = await import("./edits");
+              const saved = clearPageField(String(args.path || ""), String(args.field || ""), String(data.path || ""));
+              if (saved.ok) {
+                reload = true;
+                const { logAdmin } = await import("./admin-settings");
+                logAdmin(`Сброс текста: ${saved.path} · ${saved.field}`);
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: `Вернули исходный текст: ${saved.path} / ${saved.field}.`,
+                });
+              } else {
+                messages.push({ role: "tool", tool_call_id: call.id, content: saved.error });
+              }
             } else {
               messages.push({ role: "tool", tool_call_id: call.id, content: "Неизвестное действие." });
             }

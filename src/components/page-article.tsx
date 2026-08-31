@@ -23,7 +23,7 @@ import { AGE_BANDS, agesOverlap, coursePlace } from "@/data/ages";
 import { AgeChips } from "@/components/age-chips";
 import { CoursePrice } from "@/components/course-price";
 import { trialCourseForPath } from "@/data/trial";
-import { cn } from "@/lib/utils";
+import { hydrateEdits, pageEdit, type EditsStore } from "@/data/edits-core";
 
 type MasterCard = { path: string; h1: string };
 
@@ -38,6 +38,7 @@ export type PageArticleProps = {
   cmsMasters?: CmsMaster[];
   trajectory?: CmsTrajectoryStep[];
   schedule?: CmsSession[];
+  edits?: EditsStore;
 };
 
 function Gallery({ page }: { page: SitePage }) {
@@ -106,7 +107,9 @@ export function PageArticle({
   cmsMasters = [],
   trajectory = [],
   schedule = [],
+  edits,
 }: PageArticleProps) {
+  if (edits) hydrateEdits(edits);
   const path = page.pathDecoded || page.path;
   const seo = (
     <>
@@ -204,7 +207,8 @@ function CinematicPage({
 }) {
   const heading = splitCourseHeading(page.h1);
   const path = page.pathDecoded || page.path;
-  const body = COURSE_STORY[path] ?? page.paragraphs;
+  const edit = pageEdit(path);
+  const body = edit.about ? [edit.about] : COURSE_STORY[path] ?? page.paragraphs;
 
   return (
     <article>
@@ -243,16 +247,8 @@ function CinematicPage({
               paragraphs={body}
               headings={page.headings}
               program={SCHOOL_PROGRAMS[path]}
-              why={
-                page.kind === "school"
-                  ? SCHOOL_WHY[page.pathDecoded || page.path]?.items ?? null
-                  : whyForPath(page.pathDecoded || page.path)?.items ?? null
-              }
-              whyTitle={
-                page.kind === "school"
-                  ? SCHOOL_WHY[page.pathDecoded || page.path]?.heading
-                  : whyForPath(page.pathDecoded || page.path)?.heading
-              }
+              why={(whyForPath(path) || SCHOOL_WHY[path])?.items ?? null}
+              whyTitle={(whyForPath(path) || SCHOOL_WHY[path])?.heading}
               afterLead={
                 page.kind === "school" ? (
                   <SchoolCourseList schoolPath={page.pathDecoded || page.path} courses={courses} />

@@ -50,6 +50,7 @@ function CatchAll() {
         cmsMasters={data.cmsMasters}
         trajectory={data.trajectory}
         schedule={data.schedule}
+        edits={data.edits}
       />
     </SiteShell>
   );

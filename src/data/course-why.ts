@@ -1,3 +1,5 @@
+import { pageEdit, parseWhyItems } from "./edits-core";
+
 export type WhyCard = { title: string; text: string };
 export type WhyBlock = { heading: string; items: WhyCard[] };
 
@@ -263,12 +265,19 @@ export const COURSE_WHY: Record<string, WhyBlock> = {
 export function whyForPath(path: string): WhyBlock | null {
   if (!path) return null;
   const clean = path.startsWith("/") ? path : `/${path}`;
-  if (COURSE_WHY[clean]) return COURSE_WHY[clean];
+  let base = COURSE_WHY[clean] || null;
   try {
     const decoded = decodeURIComponent(clean);
-    if (COURSE_WHY[decoded]) return COURSE_WHY[decoded];
+    if (!base) base = COURSE_WHY[decoded] || null;
   } catch {
     /* ignore */
   }
-  return null;
+  const edit = pageEdit(clean);
+  if (!edit.why && !edit.why_heading) return base;
+  const items = parseWhyItems(edit.why) || base?.items || [];
+  if (!items.length && !edit.why_heading) return base;
+  return {
+    heading: edit.why_heading || base?.heading || "Почему сейчас",
+    items,
+  };
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { adminLogin, adminMeta, adminPrices, adminSaveGroup, adminSavePrice, adminSetCodeword, adminSetPassword } from "@/data/admin";
+import { adminClearEdit, adminEdits, adminLogin, adminMeta, adminPrices, adminSaveGroup, adminSavePrice, adminSetCodeword, adminSetPassword } from "@/data/admin";
+import { fieldLabel } from "@/data/edits-core";
 import { PRICE_DIRECTIONS, hydratePrices, type PriceRow } from "@/data/prices-core";
 import { Button } from "@/components/ui/button";
 
@@ -32,6 +33,7 @@ export function AdminPrices() {
   const [newPass, setNewPass] = useState("");
   const [log, setLog] = useState<{ at: string; text: string }[]>([]);
   const [savedWord, setSavedWord] = useState("");
+  const [edits, setEdits] = useState<{ path: string; fields: Record<string, string> }[]>([]);
 
   async function load(t = token()) {
     if (!t) return;
@@ -47,6 +49,8 @@ export function AdminPrices() {
     setErr("");
     const meta = await adminMeta({ data: { token: t } });
     if (meta.ok) setLog(meta.log || []);
+    const ed = await adminEdits({ data: { token: t } });
+    if (ed.ok) setEdits(ed.edits || []);
   }
 
   useEffect(() => {
@@ -137,7 +141,7 @@ export function AdminPrices() {
       <p className="kicker">Кабинет администратора</p>
       <h1 className="display mt-3 text-4xl">Кабинет администратора</h1>
       <p className="mt-3 max-w-2xl text-muted">
-        Цены на сайте — колонка «все». Менять можно здесь, группой или голосом: «хочу внести изменения» → кодовое слово → что правим.
+        Цены и тексты на сайте. Менять здесь, группой или голосом: «хочу внести изменения» → кодовое слово → что правим.
       </p>
 
       <div className="mt-8 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
@@ -210,6 +214,41 @@ export function AdminPrices() {
             ))}
           </ul>
         ) : null}
+      </div>
+
+      <div className="mt-8 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
+        <p className="text-sm font-semibold">Тексты, изменённые голосом</p>
+        {edits.length ? (
+          <ul className="mt-3 space-y-3">
+            {edits.map((item) => (
+              <li key={item.path} className="rounded-2xl bg-surface-2 p-3">
+                <p className="text-sm font-semibold">{item.path}</p>
+                {Object.entries(item.fields).map(([key, value]) => (
+                  <p key={key} className="mt-2 flex items-start justify-between gap-3 text-sm">
+                    <span>
+                      <span className="font-medium">{fieldLabel(key)}:</span> {value.slice(0, 180)}
+                      {value.length > 180 ? "…" : ""}
+                    </span>
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs font-semibold text-primary"
+                      onClick={async () => {
+                        setBusy(true);
+                        await adminClearEdit({ data: { token: token(), path: item.path, field: key } });
+                        await load();
+                        setBusy(false);
+                      }}
+                    >
+                      Вернуть
+                    </button>
+                  </p>
+                ))}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-muted">Пока нет правок текстов — только исходный сайт.</p>
+        )}
       </div>
 
       <h2 className="mt-10 font-display text-2xl">Цены курсов</h2>
