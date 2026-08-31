@@ -347,33 +347,41 @@ export function AdminPrices() {
               <section key={name}>
                 <h3 className="font-display text-xl">{name}</h3>
                 <div className="mt-3 overflow-x-auto rounded-2xl ring-1 ring-black/8">
-                  <table className="w-full min-w-[44rem] text-left text-sm">
+                  <table className="w-full min-w-[52rem] table-fixed text-left text-sm">
+                    <colgroup>
+                      <col className="w-[46%]" />
+                      <col className="w-[13%]" />
+                      <col className="w-[13%]" />
+                      <col className="w-[13%]" />
+                      <col className="w-[15%]" />
+                    </colgroup>
                     <thead className="bg-surface-2 text-[0.72rem] uppercase tracking-wider text-muted">
                       <tr>
-                        <th className="px-3 py-2 font-semibold">Курс</th>
-                        <th className="px-3 py-2 font-semibold">Все</th>
-                        <th className="px-3 py-2 font-semibold">КБМ</th>
-                        <th className="px-3 py-2 font-semibold">ТМХ</th>
-                        <th className="px-3 py-2" />
+                        <th className="px-4 py-3 font-semibold">Курс</th>
+                        <th className="px-3 py-3 text-right font-semibold">Все</th>
+                        <th className="px-3 py-3 text-right font-semibold">КБМ</th>
+                        <th className="px-3 py-3 text-right font-semibold">ТМХ</th>
+                        <th className="px-3 py-3" />
                       </tr>
                     </thead>
                     <tbody>
                       {list.map((row) => (
                         <tr key={row.path} className="border-t border-black/6">
-                          <td className="px-3 py-2">
-                            <p className="font-medium">{row.name}</p>
-                            <p className="text-xs text-muted">{row.age}</p>
+                          <td className="px-4 py-3 align-middle">
+                            <p className="font-medium leading-snug">{row.name}</p>
+                            <p className="mt-0.5 text-xs text-muted">{row.age}</p>
                           </td>
                           {(["all", "kbm", "tmx"] as const).map((k) => (
-                            <td key={k} className="px-3 py-2">
+                            <td key={k} className="px-3 py-3 align-middle">
                               <input
                                 value={row[k]}
+                                inputMode="numeric"
                                 onChange={(e) => patch(row.path, k, e.target.value)}
-                                className="h-10 w-24 rounded-lg bg-surface-2 px-2 ring-1 ring-black/10"
+                                className="h-10 w-full rounded-lg bg-surface-2 px-2 text-right tabular-nums ring-1 ring-black/10"
                               />
                             </td>
                           ))}
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-3 align-middle text-right">
                             <button
                               type="button"
                               disabled={busy}
