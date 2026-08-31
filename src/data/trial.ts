@@ -2,9 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { upsertAlfaLead } from "@/data/alfacrm";
 
 export const TRIAL_BRANCHES = [
-  { id: "2", name: "Коломна · Октябрьской революции, 340" },
+  { id: "2", name: "ЦМИТ · Коломна, Октябрьской революции, 340" },
   { id: "1", name: "Коломна · Гражданская, 2" },
   { id: "3", name: "Луховицы · Пушкина, 202А" },
+  { id: "4", name: "Летние программы" },
 ] as const;
 
 export const TRIAL_COURSES = [
@@ -90,6 +91,9 @@ export type TrialPayload = {
   groupName?: string;
   age?: number;
   kind?: "trial" | "group" | "consult";
+  date?: string;
+  time?: string;
+  duration?: number;
 };
 
 function courseName(id: string) {
@@ -155,11 +159,22 @@ export async function saveTrialLead(data: TrialPayload) {
       dobRu,
       branchId: branch,
       courseName: courseName(data.course) || data.groupName || "",
+      courseId: data.course,
       gid: data.gid,
       groupName: data.groupName,
       kind: data.kind || "trial",
+      date: data.date,
+      time: data.time,
+      duration: data.duration,
     });
-    return { ok: true as const, id: saved.id, duplicate: saved.duplicate, branch: saved.branch };
+    return {
+      ok: true as const,
+      id: saved.id,
+      duplicate: saved.duplicate,
+      branch: saved.branch,
+      url: saved.url,
+      lesson: saved.lesson,
+    };
   } catch (err) {
     console.error("saveTrialLead", err);
     try {

@@ -44,8 +44,9 @@ const SUBJECT_PATH: Record<number, string> = {
 
 const BRANCH: Record<number, { city: string; branch: string; short: string }> = {
   1: { city: "Коломна", branch: "ул. Гражданская, 2", short: "Гражданская" },
-  2: { city: "Коломна", branch: "ул. Октябрьской революции, 340", short: "Октябрьской" },
+  2: { city: "Коломна", branch: "ЦМИТ, ул. Октябрьской революции, 340", short: "ЦМИТ / Октябрьской" },
   3: { city: "Луховицы", branch: "ул. Пушкина, 202А", short: "Луховицы" },
+  4: { city: "Коломна", branch: "летние программы", short: "Лето" },
 };
 
 type Group = { id: number; name: string; note?: string; limit?: number; status_id?: number };
