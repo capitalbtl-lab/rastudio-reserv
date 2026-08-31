@@ -143,6 +143,7 @@ export function AgentChat() {
   const audioRef = useRef<{ stop: () => void } | null>(null);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const genRef = useRef(0);
+  const sendIdRef = useRef(0);
   const spokenRef = useRef("");
   const speakingRef = useRef(false);
   const busyRef = useRef(false);
@@ -295,14 +296,15 @@ export function AgentChat() {
   }
 
   async function speak(phrase: string) {
-    const gen = ++genRef.current;
+    cancelSpeech();
+    const gen = genRef.current;
     speakingRef.current = true;
     spokenRef.current = parseTurns(phrase)
       .map((t) => t.text)
       .join(" ");
     setSpeaking(true);
     stopListen();
-    await new Promise((r) => window.setTimeout(r, 80));
+    await new Promise((r) => window.setTimeout(r, 60));
     try {
       const mode = adminLeft() > 0 ? "olga" : partnerRef.current;
       const turns = parseTurns(phrase).filter((t) => mode === "both" || t.who === mode);
@@ -312,7 +314,8 @@ export function AgentChat() {
           const res = await speakAgent({
             data: { text: turn.text, who: turn.who === "olga" ? "olga" : "oleg" },
           });
-          if (res.ok && "audio" in res && gen === genRef.current) {
+          if (gen !== genRef.current) return;
+          if (res.ok && "audio" in res) {
             spokenRef.current = turn.text;
             await playClip(res.audio, "volume" in res ? Number(res.volume) : 1);
             continue;
@@ -397,6 +400,7 @@ export function AgentChat() {
   async function send(value?: string) {
     const next = (value ?? text).trim();
     if (!next || busyRef.current) return;
+    const sendId = ++sendIdRef.current;
     setText("");
     cancelSpeech();
     stopListen();
@@ -418,6 +422,7 @@ export function AgentChat() {
           path: typeof window !== "undefined" ? window.location.pathname : "/",
         },
       });
+      if (sendId !== sendIdRef.current) return;
       if (res.ok) {
         reply = adminLeft() > 0 || res.token ? olgaReply(res.reply) : res.reply;
         if (res.token) {
@@ -436,14 +441,16 @@ export function AgentChat() {
         }
       } else reply = res.error;
     } catch {
-      /* keep */
+      if (sendId !== sendIdRef.current) return;
     }
+    if (sendId !== sendIdRef.current) return;
     setMessages([...history, { role: "assistant", content: reply }]);
     busyRef.current = false;
     setBusy(false);
     if (voiceOnRef.current) {
       await speak(reply);
-      if (voiceOnRef.current && genRef.current) startListen();
+      if (sendId !== sendIdRef.current) return;
+      if (voiceOnRef.current && !speakingRef.current) startListen();
     }
     if (shouldReload) window.setTimeout(() => window.location.reload(), voiceOnRef.current ? 600 : 200);
   }
@@ -698,6 +705,11 @@ export function AgentChat() {
                 type="button"
                 className="shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-semibold text-primary hover:bg-primary/10"
                 onClick={() => {
+                  sendIdRef.current += 1;
+                  busyRef.current = false;
+                  setBusy(false);
+                  cancelSpeech();
+                  stopListen();
                   if (adminLeft() > 0) {
                     clearSiteAdmin();
                     setAdminMs(0);
@@ -705,13 +717,21 @@ export function AgentChat() {
                     const bye =
                       "Ольга: Вы вышли из режима редактирования сайта. Снова на связи Олег и я — обычная консультация.";
                     setMessages((m) => [...m, { role: "assistant", content: bye }]);
-                    if (voiceOnRef.current) void speak(bye);
+                    if (voiceOnRef.current) {
+                      void speak(bye).then(() => {
+                        if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
+                      });
+                    }
                     return;
                   }
                   setPartner("olga");
                   const ask = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
                   setMessages((m) => [...m, { role: "assistant", content: ask }]);
-                  if (voiceOnRef.current) void speak(ask);
+                  if (voiceOnRef.current) {
+                    void speak(ask).then(() => {
+                      if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
+                    });
+                  }
                 }}
               >
                 {adminMs > 0 ? "Выход администратора" : "Вход администратора"}
