@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Menu, X, ChevronDown, ChevronRight } from "lucide-react";
+import { Menu, X, ChevronDown } from "lucide-react";
 import { SITE, SCHOOLS } from "@/data/site";
 import { AGE_BANDS } from "@/data/ages";
 import { Button } from "@/components/ui/button";
@@ -19,33 +19,43 @@ const LINKS = [
 const UTILITY = [
   {
     href: SITE.maxBot,
-    label: "Подключиться к админ-боту",
-    short: "Админ-бот",
-    className: "bg-[#7b3d9e] hover:bg-[#6c348c]",
+    label: "Админ-бот",
+    full: "Админ-бот",
+    kind: "ghost" as const,
     external: true,
+    hide: "hidden lg:inline-flex",
   },
   {
     href: SITE.telegram,
-    label: "Telegram канал",
-    short: "Telegram",
-    className: "bg-[#2eb8b0] hover:bg-[#269ea7]",
+    label: "Telegram",
+    full: "Telegram",
+    kind: "ghost" as const,
     external: true,
-  },
-  {
-    href: "#trial",
-    label: "Запись на пробное",
-    short: "Запись",
-    className: "bg-[#2eb8b0] hover:bg-[#269ea7]",
-    external: false,
+    hide: "hidden lg:inline-flex",
   },
   {
     href: SITE.cabinet,
-    label: "Личный кабинет",
-    short: "Кабинет",
-    className: "bg-[#2eb8b0] hover:bg-[#269ea7]",
+    label: "Кабинет",
+    full: "Личный кабинет",
+    kind: "ghost" as const,
     external: true,
+    hide: "inline-flex",
+  },
+  {
+    href: "#trial",
+    label: "Запись",
+    full: "Запись",
+    kind: "primary" as const,
+    external: false,
+    hide: "inline-flex",
   },
 ] as const;
+
+const pill = {
+  ghost:
+    "bg-white/8 text-header-fg ring-1 ring-white/16 hover:bg-white/14",
+  primary: "bg-primary text-primary-foreground hover:bg-primary-hover",
+};
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
@@ -53,26 +63,6 @@ export function SiteHeader() {
 
   return (
     <header className="ink sticky top-0 z-40 border-b border-white/10 bg-header/90 text-header-fg backdrop-blur-xl">
-      <div className="border-b border-white/10 bg-header">
-        <div className="page-wrap flex h-10 items-center justify-end gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {UTILITY.map((item) => (
-            <a
-              key={item.label}
-              href={item.href}
-              target={item.external ? "_blank" : undefined}
-              rel={item.external ? "noreferrer" : undefined}
-              className={cn(
-                "inline-flex h-7 shrink-0 items-center gap-0.5 rounded-full px-3 text-[0.72rem] font-semibold text-white transition-colors sm:h-8 sm:px-3.5 sm:text-[0.8rem]",
-                item.className,
-              )}
-            >
-              <span className="sm:hidden">{item.short}</span>
-              <span className="hidden sm:inline">{item.label}</span>
-              <ChevronRight className="size-3.5 opacity-80" />
-            </a>
-          ))}
-        </div>
-      </div>
       <div className="page-wrap flex h-[4.25rem] items-center gap-3 md:h-[4.75rem]">
         <PageLink to="/" className="flex shrink-0 items-center" onClick={() => setOpen(false)}>
           <img
@@ -141,13 +131,29 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <a
             href={SITE.phoneHref}
-            className="hidden tabular-nums text-sm font-medium text-header-fg/70 hover:text-header-fg lg:inline"
+            className="mr-1 hidden tabular-nums text-sm font-medium text-header-fg/70 hover:text-header-fg xl:inline"
           >
             {SITE.phone}
           </a>
+          {UTILITY.map((item) => (
+            <a
+              key={item.label}
+              href={item.href}
+              target={item.external ? "_blank" : undefined}
+              rel={item.external ? "noreferrer" : undefined}
+              className={cn(
+                "h-9 items-center rounded-full px-3 text-[0.8rem] font-semibold transition-colors xl:px-3.5",
+                item.hide,
+                pill[item.kind],
+              )}
+            >
+              <span className="xl:hidden">{item.label}</span>
+              <span className="hidden xl:inline">{item.full}</span>
+            </a>
+          ))}
           <button
             type="button"
             className="inline-flex size-11 items-center justify-center rounded-full hover:bg-white/10 lg:hidden"
