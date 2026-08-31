@@ -8,9 +8,8 @@ import { SeoImage } from "@/components/seo-image";
 import { TrialForm } from "@/components/trial-form";
 import { Button } from "@/components/ui/button";
 import { ProgrammingCoursePage } from "@/components/programming-course";
-import { ProgrammingSchoolPage } from "@/components/programming-school";
 import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
-import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses, SchoolCourseList } from "@/components/cms-blocks";
+import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses, SchoolCourseList, Trajectory } from "@/components/cms-blocks";
 import { PhotoSlider } from "@/components/photo-slider";
 import { PageReviews } from "@/components/reviews";
 import { galleryPhotos } from "@/lib/gallery";
@@ -103,20 +102,8 @@ export function PageArticle({
   trajectory = [],
   schedule = [],
 }: PageArticleProps) {
-      if (cmsCourse) {
+  if (cmsCourse) {
     return <ProgrammingCoursePage page={page} course={cmsCourse} schedule={schedule} courses={courses} />;
-  }
-  if (page.path === "/programming-school" || page.pathDecoded === "/programming-school") {
-    return (
-      <ProgrammingSchoolPage
-        page={page}
-        courses={cmsCourses}
-        catalogCourses={courses}
-        trajectory={trajectory}
-        schedule={schedule}
-        teachers={teachers}
-      />
-    );
   }
   if (cmsMaster) {
     return <MasterClassPage page={page} master={cmsMaster} />;
@@ -134,7 +121,7 @@ export function PageArticle({
 
   const cinematic = ["course", "school", "teacher", "master"].includes(page.kind);
   if (cinematic) {
-    return <CinematicPage page={page} schedule={schedule} courses={courses} />;
+    return <CinematicPage page={page} schedule={schedule} courses={courses} trajectory={trajectory} />;
   }
 
   return <PlainPage page={page} schedule={schedule} courses={courses} />;
@@ -151,10 +138,12 @@ function CinematicPage({
   page,
   schedule,
   courses,
+  trajectory = [],
 }: {
   page: SitePage;
   schedule: CmsSession[];
   courses: CourseCard[];
+  trajectory?: CmsTrajectoryStep[];
 }) {
   const body = page.paragraphs;
   const heading = splitCourseHeading(page.h1);
@@ -203,6 +192,15 @@ function CinematicPage({
                 ) : null
               }
             />
+            {trajectory.length ? (
+              <section className="pt-12">
+                <p className="kicker">Траектория</p>
+                <h2 className="display mt-2 text-2xl md:text-3xl">Ребёнок последовательно проходит путь</h2>
+                <div className="mt-8">
+                  <Trajectory steps={trajectory} />
+                </div>
+              </section>
+            ) : null}
             {page.kind === "school" || page.kind === "course" ? (
               <PhotoSlider images={galleryPhotos(page.images)} />
             ) : (
