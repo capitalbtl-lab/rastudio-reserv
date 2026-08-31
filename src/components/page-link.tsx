@@ -26,12 +26,14 @@ export const PageLink = forwardRef<HTMLAnchorElement, Props>(function PageLink(
     );
   }
 
-  const [pathname, query] = to.split("?");
+  const [pathAndHash, hashPart] = to.split("#");
+  const [pathname, query] = (pathAndHash || "/").split("?");
   const search = searchFrom(query);
+  const hash = hashPart ? { hash: hashPart } : {};
 
   if (pathname === "/") {
     return (
-      <Link ref={ref} to="/" className={className} style={style} onClick={onClick}>
+      <Link ref={ref} to="/" className={className} style={style} onClick={onClick} {...hash}>
         {children}
       </Link>
     );
@@ -39,7 +41,7 @@ export const PageLink = forwardRef<HTMLAnchorElement, Props>(function PageLink(
 
   if (pathname === "/schedule") {
     return (
-      <Link ref={ref} to="/schedule" className={className} style={style} onClick={onClick}>
+      <Link ref={ref} to="/schedule" className={className} style={style} onClick={onClick} {...hash}>
         {children}
       </Link>
     );
@@ -52,6 +54,7 @@ export const PageLink = forwardRef<HTMLAnchorElement, Props>(function PageLink(
       to="/$"
       params={{ _splat: splat }}
       search={search}
+      {...hash}
       className={className}
       style={style}
       onClick={onClick}

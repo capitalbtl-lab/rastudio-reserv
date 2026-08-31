@@ -205,15 +205,23 @@ export function ScheduleFinder({ sessions }: { sessions: CmsSession[] }) {
                             {` · ${meta.city}, ${meta.short}`}
                           </span>
                         </span>
-                        {slot.session.signup ? (
-                          <a
-                            href={slot.session.signup}
+                        {href ? (
+                          <PageLink
+                            to={`${href}#trial`}
                             className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-fg px-3 text-xs font-semibold text-bg hover:bg-primary"
                           >
                             Запись
                             <ArrowUpRight className="size-3.5" strokeWidth={2.2} />
-                          </a>
-                        ) : null}
+                          </PageLink>
+                        ) : (
+                          <PageLink
+                            to="/allcourses"
+                            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-fg px-3 text-xs font-semibold text-bg hover:bg-primary"
+                          >
+                            Запись
+                            <ArrowUpRight className="size-3.5" strokeWidth={2.2} />
+                          </PageLink>
+                        )}
                       </div>
                     </li>
                   );
