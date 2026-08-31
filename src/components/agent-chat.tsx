@@ -84,9 +84,11 @@ export function AgentChat() {
   const speakingRef = useRef(false);
   const busyRef = useRef(false);
   const listenWantedRef = useRef(false);
+  const partnerRef = useRef(partner);
   const mood = moodOf(messages, busy);
   const offer = nextChips(messages);
   voiceOnRef.current = voiceOn;
+  partnerRef.current = partner;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -104,6 +106,19 @@ export function AgentChat() {
     audioRef.current?.stop();
     speakingRef.current = false;
     setSpeaking(false);
+  }
+
+  function isEcho(said: string) {
+    const a = said
+      .toLowerCase()
+      .replace(/[^\p{L}\d\s]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const words = a.split(" ").filter((w) => w.length > 2);
+    if (a.length < 8 || words.length < 2) return true;
+    const b = spokenRef.current.toLowerCase();
+    const hits = words.filter((w) => b.includes(w)).length;
+    return hits / words.length >= 0.55;
   }
 
   function stopListen() {
@@ -158,7 +173,8 @@ export function AgentChat() {
       .map((t) => t.text)
       .join(" ");
     setSpeaking(true);
-    stopListen();
+    if (partnerRef.current === "both") stopListen();
+    else startListen();
     try {
       const turns = parseTurns(phrase).filter((t) => partner === "both" || t.who === partner);
       const clips = await Promise.all(
@@ -183,7 +199,8 @@ export function AgentChat() {
   }
 
   function startListen() {
-    if (speakingRef.current || busyRef.current) return;
+    if (busyRef.current) return;
+    if (speakingRef.current && partnerRef.current === "both") return;
     const SR = speechCtor();
     if (!SR) return;
     listenWantedRef.current = true;
@@ -193,21 +210,33 @@ export function AgentChat() {
       /* not running */
     }
     const rec = new SR();
+    const barge = partnerRef.current !== "both";
     rec.lang = "ru-RU";
-    rec.continuous = false;
-    rec.interimResults = false;
+    rec.continuous = barge;
+    rec.interimResults = barge;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
-      if (speakingRef.current || busyRef.current) return;
+      if (busyRef.current) return;
       const last = e.results[e.results.length - 1];
       const said = last?.[0]?.transcript?.trim();
-      if (said) void send(said);
+      if (!said) return;
+      const done = Boolean(last?.isFinal);
+      if (speakingRef.current) {
+        if (partnerRef.current === "both") return;
+        if (isEcho(said)) return;
+        if (!done && said.split(/\s+/).length < 2) return;
+        cancelSpeech();
+        stopListen();
+        void send(said);
+        return;
+      }
+      if (done) void send(said);
     };
     rec.onend = () => {
       if (recRef.current && recRef.current !== rec) return;
       recRef.current = null;
       setListening(false);
-      if (listenWantedRef.current && voiceOnRef.current && !busyRef.current && !speakingRef.current) {
+      if (listenWantedRef.current && voiceOnRef.current && !busyRef.current && (partnerRef.current !== "both" || !speakingRef.current)) {
         startListen();
       }
     };
@@ -298,7 +327,7 @@ export function AgentChat() {
                   {speaking
                     ? partner === "both"
                       ? "Говорят"
-                      : "Говорит"
+                      : "Говорит — можно перебить"
                     : listening
                       ? "Слушает вас"
                       : partner === "both"
@@ -435,7 +464,10 @@ export function AgentChat() {
                   "grid size-10 place-items-center rounded-full",
                   listening ? "bg-primary text-primary-foreground" : "text-muted hover:bg-black/5",
                 )}
-                onClick={() => (listening ? stopListen() : startListen())}
+                onClick={() => {
+                  if (speakingRef.current && partnerRef.current !== "both") cancelSpeech();
+                  listening && !speakingRef.current ? stopListen() : startListen();
+                }}
                 aria-label="Голосовой ввод"
               >
                 <Mic className="size-4" />
