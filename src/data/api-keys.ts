@@ -14,14 +14,15 @@ export type ApiConn = {
   fields: ApiField[];
 };
 
-type Catalog = { id: string; kind: ApiKind; name: string; hint: string; fields: Omit<ApiField, "value">[] };
+type Catalog = { id: string; kind: ApiKind; name: string; hint: string; note?: string; fields: Omit<ApiField, "value">[] };
 
 export const API_CATALOG: Catalog[] = [
   {
     id: "yandex",
     kind: "llm",
     name: "YandexGPT",
-    hint: "Основная модель Олега и Ольги. Ключ из console.yandex.cloud, Folder ID каталога.",
+    hint: "Основная модель, если в диалоге есть персональные данные.",
+    note: "Используйте, когда передаются персональные данные: ФИО, телефон, дата рождения, запись в группу или пробное, личное дело. Яндекс — российский контур, заявки и CRM идут через него. Ключ: console.yandex.cloud, Folder ID каталога.",
     fields: [
       { key: "YANDEX_API_KEY", label: "API-ключ", secret: true },
       { key: "YANDEX_FOLDER_ID", label: "Folder ID" },
@@ -30,8 +31,9 @@ export const API_CATALOG: Catalog[] = [
   {
     id: "deepseek",
     kind: "llm",
-    name: "DeepSeek (запасной)",
-    hint: "Если Yandex не ответил — чат уходит сюда. Ключ с platform.deepseek.com.",
+    name: "DeepSeek",
+    hint: "Общие вопросы без персональных данных. Если Yandex не ответил — чат тоже уходит сюда.",
+    note: "Используйте, когда вопрос не касается персональных данных: какие курсы, возраст, филиал, программа, расписание. ФИО, телефон и запись в CRM сюда не отправляем. Ключ: platform.deepseek.com. Если Yandex молчит — запасной путь.",
     fields: [{ key: "DEEPSEEK_API_KEY", label: "API-ключ", secret: true }],
   },
   {
@@ -141,6 +143,7 @@ function publicConns() {
     ...c,
     fields: c.fields.map((f) => ({ ...f, value: mask(f.value, f.secret), set: Boolean(f.value) })),
     hint: API_CATALOG.find((x) => x.id === c.id)?.hint || "",
+    note: API_CATALOG.find((x) => x.id === c.id)?.note || "",
   }));
 }
 

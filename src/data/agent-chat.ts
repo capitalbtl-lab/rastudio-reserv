@@ -438,17 +438,22 @@ async function deepseekChat(messages: ChatMsg[], tools: unknown) {
 }
 
 async function complete(messages: ChatMsg[], tools: unknown) {
-  try {
-    const y = await yandexChat(messages, tools);
-    if (y) return y;
-  } catch {
-    /* fallback */
-  }
-  try {
-    const d = await deepseekChat(messages, tools);
-    if (d) return d;
-  } catch {
-    /* */
+  const blob = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => String(m.content || ""))
+    .join("\n");
+  const personal =
+    /(?:\+7|8)[\s(.-]*\d{3}|фамилия|отчество|\bфио\b|\d{2}[./]\d{2}[./]\d{4}|паспорт|снилс|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(?:меня зовут|ребёнк\w+)\s+[А-ЯЁ][а-яё]{2,}/i.test(
+      blob,
+    );
+  const order = personal ? [yandexChat, deepseekChat] : [deepseekChat, yandexChat];
+  for (const fn of order) {
+    try {
+      const hit = await fn(messages, tools);
+      if (hit) return hit;
+    } catch {
+      /* next */
+    }
   }
   return null;
 }

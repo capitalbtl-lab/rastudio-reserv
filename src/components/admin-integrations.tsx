@@ -20,13 +20,13 @@ const KIND_RU: Record<ApiKind, string> = {
 };
 
 const GROUPS: { kind: ApiKind; title: string; tip: string }[] = [
-  { kind: "llm", title: "Модели ИИ", tip: "YandexGPT отвечает первым. DeepSeek — запасной, если Яндекс молчит или кончился баланс. Выключите слот — ключ не используется, даже если заполнен." },
+  { kind: "llm", title: "Модели ИИ", tip: "YandexGPT — если в диалоге персональные данные (ФИО, телефон, запись). DeepSeek — общие вопросы без ПДн. Если выбранная модель молчит, чат пробует вторую." },
   { kind: "telephony", title: "Телефония", tip: "Novofon тянет записи разговоров в «Базу звонков». Сюда же можно добавить вторую АТС: имя, ключ, секрет." },
   { kind: "crm", title: "CRM", tip: "AlfaCRM: хост s20.online, почта роли API, ключ v2api. Без этого нет живых групп, записи на пробное и личных дел." },
   { kind: "other", title: "Другие сервисы", tip: "MAX, VK, Telegram, почта — любой ключ, который потом подхватит интеграция. Пока хранится и ждёт контур." },
 ];
 
-type Row = ApiConn & { hint?: string; fields: (ApiConn["fields"][number] & { set?: boolean })[] };
+type Row = ApiConn & { hint?: string; note?: string; fields: (ApiConn["fields"][number] & { set?: boolean })[] };
 
 export function AdminIntegrations() {
   const [conns, setConns] = useState<Row[]>([]);
@@ -74,6 +74,93 @@ export function AdminIntegrations() {
     if (res.ok) setMsg(`Сохранено: ${conn.name}`);
   }
 
+  function Card({ c }: { c: Row }) {
+    const d = draft[c.id] || c;
+    return (
+      <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="font-display text-lg">{d.name}</p>
+            <p className="text-xs text-muted">
+              {KIND_RU[c.kind]} · {c.id}
+            </p>
+          </div>
+          <button
+            type="button"
+            className={cn("rounded-full px-3 py-1 text-xs font-semibold", d.enabled ? "bg-primary text-primary-foreground" : "bg-surface-2")}
+            onClick={async () => {
+              setBusy(true);
+              const res = await adminApiKeys({ data: { token: token(), action: "toggle", id: c.id } });
+              take(res);
+              setBusy(false);
+            }}
+          >
+            {d.enabled ? "включён" : "выключен"}
+          </button>
+        </div>
+        {c.hint ? <p className="mt-2 text-sm text-muted">{c.hint}</p> : null}
+        {c.note ? (
+          <p className="mt-3 rounded-2xl bg-surface-2 px-3 py-2.5 text-[0.82rem] leading-relaxed text-fg">{c.note}</p>
+        ) : null}
+        <div className="mt-4 space-y-3">
+          {d.fields.map((f, i) => (
+            <label key={f.key} className="block text-sm">
+              {f.label}
+              {f.set ? <span className="ml-2 text-xs text-muted">задан</span> : null}
+              <input
+                type={f.secret ? "password" : "text"}
+                value={f.value}
+                placeholder={f.secret && f.set ? "оставьте •••• чтобы не менять" : ""}
+                onChange={(e) =>
+                  setDraft((prev) => {
+                    const cur = prev[c.id] || c;
+                    const fields = cur.fields.map((x, j) => (j === i ? { ...x, value: e.target.value } : x));
+                    return { ...prev, [c.id]: { ...cur, fields } };
+                  })
+                }
+                className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+              />
+            </label>
+          ))}
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button type="button" disabled={busy} onClick={() => void save(c.id)}>
+            Сохранить
+          </Button>
+          {c.id.startsWith("custom-") ? (
+            <button
+              type="button"
+              className="text-xs font-semibold text-primary"
+              onClick={async () => {
+                setBusy(true);
+                const res = await adminApiKeys({ data: { token: token(), action: "remove", id: c.id } });
+                take(res);
+                setBusy(false);
+              }}
+            >
+              Удалить
+            </button>
+          ) : null}
+        </div>
+      </article>
+    );
+  }
+
+  function KindCol({ kind }: { kind: ApiKind }) {
+    const g = GROUPS.find((x) => x.kind === kind);
+    const list = conns.filter((c) => c.kind === kind);
+    if (!g) return null;
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h3 className="font-display text-xl">{g.title}</h3>
+          <InfoTip text={g.tip} />
+        </div>
+        {list.length ? list.map((c) => <Card key={c.id} c={c} />) : <p className="rounded-3xl bg-surface px-5 py-8 text-sm text-muted shadow-[var(--shadow-border)]">Пока пусто</p>}
+      </div>
+    );
+  }
+
   return (
     <section className="mt-10 space-y-6">
       <div>
@@ -84,86 +171,36 @@ export function AdminIntegrations() {
         <p className="mt-2 max-w-2xl text-sm text-muted">Yandex, DeepSeek, Novofon, AlfaCRM и любые другие ключи — здесь, без правки файлов сервера.</p>
       </div>
 
-      {GROUPS.map((g) => {
-        const list = conns.filter((c) => c.kind === g.kind);
-        if (!list.length && g.kind !== "other") return null;
-        return (
-          <div key={g.kind} className="space-y-3">
-            <div className="flex items-center gap-2">
-              <h3 className="font-display text-xl">{g.title}</h3>
-              <InfoTip text={g.tip} />
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              {list.map((c) => {
-                const d = draft[c.id] || c;
-                return (
-                  <article key={c.id} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="font-display text-lg">{d.name}</p>
-                        <p className="text-xs text-muted">{KIND_RU[c.kind]} · {c.id}</p>
-                      </div>
-                      <button
-                        type="button"
-                        className={cn("rounded-full px-3 py-1 text-xs font-semibold", d.enabled ? "bg-primary text-primary-foreground" : "bg-surface-2")}
-                        onClick={async () => {
-                          setBusy(true);
-                          const res = await adminApiKeys({ data: { token: token(), action: "toggle", id: c.id } });
-                          take(res);
-                          setBusy(false);
-                        }}
-                      >
-                        {d.enabled ? "включён" : "выключен"}
-                      </button>
-                    </div>
-                    {c.hint ? <p className="mt-2 text-sm text-muted">{c.hint}</p> : null}
-                    <div className="mt-4 space-y-3">
-                      {d.fields.map((f, i) => (
-                        <label key={f.key} className="block text-sm">
-                          {f.label}
-                          {f.set ? <span className="ml-2 text-xs text-muted">задан</span> : null}
-                          <input
-                            type={f.secret ? "password" : "text"}
-                            value={f.value}
-                            placeholder={f.secret && f.set ? "оставьте •••• чтобы не менять" : ""}
-                            onChange={(e) =>
-                              setDraft((prev) => {
-                                const cur = prev[c.id] || c;
-                                const fields = cur.fields.map((x, j) => (j === i ? { ...x, value: e.target.value } : x));
-                                return { ...prev, [c.id]: { ...cur, fields } };
-                              })
-                            }
-                            className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                          />
-                        </label>
-                      ))}
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Button type="button" disabled={busy} onClick={() => void save(c.id)}>
-                        Сохранить
-                      </Button>
-                      {c.id.startsWith("custom-") ? (
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-primary"
-                          onClick={async () => {
-                            setBusy(true);
-                            const res = await adminApiKeys({ data: { token: token(), action: "remove", id: c.id } });
-                            take(res);
-                            setBusy(false);
-                          }}
-                        >
-                          Удалить
-                        </button>
-                      ) : null}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h3 className="font-display text-xl">Модели ИИ</h3>
+          <InfoTip text={GROUPS[0].tip} />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {conns.filter((c) => c.kind === "llm").map((c) => (
+            <Card key={c.id} c={c} />
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        <KindCol kind="telephony" />
+        <KindCol kind="crm" />
+      </div>
+
+      {conns.some((c) => c.kind === "other") ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <h3 className="font-display text-xl">Другие сервисы</h3>
+            <InfoTip text={GROUPS[3].tip} />
           </div>
-        );
-      })}
+          <div className="grid gap-4 md:grid-cols-2">
+            {conns.filter((c) => c.kind === "other").map((c) => (
+              <Card key={c.id} c={c} />
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
         <div className="flex items-center gap-2">
