@@ -351,25 +351,6 @@ function Home() {
       <section className="page-wrap py-12 md:py-16">
         <TrialForm />
       </section>
-
-      <section className="relative isolate overflow-hidden bg-primary py-10 text-primary-foreground md:py-14">
-        <div className="page-wrap flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
-          <div>
-            <p className="kicker text-white/70">Только для сотрудников студии</p>
-            <h2 className="display mt-2 text-3xl md:text-4xl">Вход администратора сайта</h2>
-            <p className="mt-2 max-w-xl text-sm text-white/80 md:text-[0.95rem]">
-              Цены, тексты и голосовой доступ Олега и Ольги. Посетителям эта кнопка не нужна.
-            </p>
-          </div>
-          <Button
-            asChild
-            size="lg"
-            className="h-14 min-w-[16rem] bg-white px-8 text-base text-primary shadow-[0_10px_30px_rgba(0,0,0,0.18)] hover:bg-white/92"
-          >
-            <PageLink to="/admin">Войти в кабинет</PageLink>
-          </Button>
-        </div>
-      </section>
     </SiteShell>
   );
 }

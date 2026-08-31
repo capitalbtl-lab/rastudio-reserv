@@ -67,14 +67,20 @@ export function SiteFooter() {
       </div>
 
       <div className="border-t border-white/10">
-        <div className="page-wrap flex flex-col gap-2 py-5 text-xs text-header-fg/50 md:flex-row md:items-center md:justify-between">
+        <div className="page-wrap flex flex-col gap-3 py-5 text-xs text-header-fg/50 md:flex-row md:items-center md:justify-between">
           <p>© 2016–{new Date().getFullYear()} Студия «Развивайся». Все права защищены.</p>
-          <p>
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <a href={SITE.telegram}>Telegram</a>
-            <span className="mx-2">·</span>
+            <span>·</span>
             <a href={SITE.vk}>ВКонтакте</a>
-            <span className="mx-2">·</span>
+            <span>·</span>
             <a href={SITE.maxBot}>MAX-бот</a>
+            <PageLink
+              to="/admin"
+              className="ml-1 inline-flex h-8 items-center rounded-full bg-primary px-3.5 text-[0.72rem] font-semibold text-primary-foreground hover:bg-primary-hover"
+            >
+              Кабинет
+            </PageLink>
           </p>
         </div>
       </div>
