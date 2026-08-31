@@ -60,7 +60,11 @@ export function saveTranscript(id: string, transcript: string, error?: string) {
 
 export function nextWithoutTranscript(limit = 8) {
   return loadCallStore()
-    .calls.filter((c) => c.is_recorded && !c.transcript && !c.error)
+    .calls.filter((c) => {
+      const sec = Number(c.seconds || 0);
+      return c.is_recorded && !c.transcript && !c.error && sec >= 60 && sec <= 900;
+    })
+    .sort((a, b) => Number(b.seconds || 0) - Number(a.seconds || 0))
     .slice(0, limit);
 }
 

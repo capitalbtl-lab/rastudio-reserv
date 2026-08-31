@@ -1,7 +1,8 @@
+import { createHmac, createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-const DATA_API = "https://dataapi-jsonrpc.novofon.ru/v2.0";
+const HOST = "https://api.novofon.com";
 
 export type NovofonKeys = { userKey: string; secret: string };
 export type NovofonCall = {
@@ -40,94 +41,77 @@ export function saveNovofonKeys(keys: NovofonKeys) {
   writeFileSync(keysPath(), JSON.stringify({ userKey: keys.userKey.trim(), secret: keys.secret.trim() }, null, 2));
 }
 
-async function rpc<T>(method: string, params: Record<string, unknown>): Promise<T> {
-  const res = await fetch(DATA_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json; charset=UTF-8" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: "1", method, params }),
-  });
-  const json = (await res.json()) as {
-    result?: T;
-    error?: { message?: string; data?: { mnemonic?: string; params?: { ip?: string } } };
-  };
-  if (json.error) {
-    const mnemonic = json.error.data?.mnemonic || "";
-    if (mnemonic === "ip_not_whitelisted") {
-      throw new Error("IP 83.222.25.109 не в белом списке Novofon. Настройки → Правила и настройки безопасности → API — добавьте этот адрес.");
-    }
-    if (mnemonic === "access_token_invalid") {
-      throw new Error("Ключ Novofon не принят. Проверьте Secret от техподдержки.");
-    }
-    throw new Error(json.error.message || mnemonic || "novofon");
-  }
-  if (!json.result) throw new Error("novofon пустой ответ");
-  return json.result;
+function queryString(params: Record<string, string>) {
+  return Object.keys(params)
+    .sort()
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`.replace(/%20/g, "+"))
+    .join("&");
 }
 
-type ReportRow = {
-  communication_id?: number | string;
-  start_time?: string;
-  contact_phone_number?: string;
-  destination?: string | number;
-  direction?: string;
-  talk_duration?: number;
-  total_duration?: number;
-  call_records?: string[];
-  full_record_file_link?: string;
-  is_lost?: boolean;
-};
+function signRaw(method: string, qs: string, secret: string) {
+  const md5 = createHash("md5").update(qs).digest("hex");
+  return createHmac("sha1", secret).update(method + qs + md5).digest("base64");
+}
+
+export async function novofonGet<T>(path: string, params: Record<string, string>, keys: NovofonKeys): Promise<T> {
+  const qs = queryString(params);
+  const url = `${HOST}${path}${qs ? `?${qs}` : ""}`;
+  const sign = signRaw(path, qs, keys.secret);
+  const res = await fetch(url, { headers: { Authorization: `${keys.userKey}:${sign}` } });
+  const text = await res.text();
+  const json = JSON.parse(text) as T & { status?: string; message?: string };
+  if (!json || json.status === "error") throw new Error(json?.message || text.slice(0, 180) || "novofon");
+  return json;
+}
 
 export async function listRecordedCalls(start: string, end: string, keys: NovofonKeys) {
   const out: NovofonCall[] = [];
-  for (let offset = 0; offset < 20000; offset += 500) {
-    const result = await rpc<{ data?: ReportRow[] }>("get.calls_report", {
-      access_token: keys.secret,
-      date_from: start,
-      date_till: end,
-      limit: 500,
-      offset,
-      fields: [
-        "communication_id",
-        "start_time",
-        "contact_phone_number",
-        "destination",
-        "direction",
-        "talk_duration",
-        "call_records",
-        "full_record_file_link",
-      ],
-    });
-    const rows = result.data || [];
+  for (let skip = 0; skip < 20000; skip += 1000) {
+    const json = await novofonGet<{ stats?: Record<string, unknown>[] }>("/v1/statistics/pbx/", {
+      start,
+      end,
+      version: "2",
+      skip: String(skip),
+      limit: "1000",
+    }, keys);
+    const rows = json.stats || [];
     for (const row of rows) {
-      const seconds = Number(row.talk_duration || 0);
-      const recId = row.call_records?.[0] || "";
-      const file =
-        row.full_record_file_link ||
-        (row.communication_id && recId
-          ? `https://app.novofon.ru/system/media/talk/${row.communication_id}/${recId}/`
-          : "");
-      if (!file || seconds < 15) continue;
-      const id = String(row.communication_id || recId);
+      const rec = String(row.is_recorded) === "true" || row.is_recorded === true;
+      const seconds = Number(row.seconds || 0);
+      if (!rec || seconds < 15) continue;
       out.push({
-        call_id: id,
-        pbx_call_id: id,
-        callstart: String(row.start_time || start),
-        clid: String(row.contact_phone_number || ""),
+        call_id: String(row.call_id || ""),
+        pbx_call_id: String(row.pbx_call_id || row.call_id || ""),
+        callstart: String(row.callstart || ""),
+        clid: String(row.clid || ""),
         destination: String(row.destination || ""),
-        disposition: "answered",
+        disposition: String(row.disposition || ""),
         seconds,
         is_recorded: true,
-        sip: String(row.direction || ""),
-        file,
+        sip: String(row.sip || ""),
       });
     }
-    if (rows.length < 500) break;
+    if (rows.length < 1000) break;
   }
   return out;
 }
 
-export async function recordLink(call: NovofonCall, _keys: NovofonKeys) {
-  return call.file || "";
+export async function recordLink(call: NovofonCall, keys: NovofonKeys) {
+  if (call.file) return call.file;
+  const tries = [
+    { call_id: call.call_id, lifetime: "3600" },
+    { pbx_call_id: call.pbx_call_id || call.call_id, lifetime: "3600" },
+  ];
+  for (const params of tries) {
+    try {
+      const json = await novofonGet<{ link?: string; links?: string[] }>("/v1/pbx/record/request/", params, keys);
+      const link = [...(json.links || []), json.link || ""].find(Boolean);
+      if (link) return link;
+    } catch {
+      /* next */
+    }
+  }
+  return "";
 }
 
 export function monthWindows(monthsBack = 24) {

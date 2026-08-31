@@ -710,7 +710,7 @@ export function AdminPrices() {
                 })();
               }}
             >
-              2. Расшифровать ещё 4
+              2. Расшифровать ещё 8
             </Button>
             <Button
               disabled={busy || callInfo.transcribed === 0}

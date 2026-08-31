@@ -179,7 +179,7 @@ export const adminCalls = createServerFn({ method: "POST" })
         return { ok: true as const, connected: true, stats };
       }
       if (data.action === "transcribe") {
-        const stats = await transcribeBatch(4);
+        const stats = await transcribeBatch(8);
         logAdmin(`Расшифровка: ${stats.done} из ${stats.batch}, всего ${stats.transcribed}`);
         return { ok: true as const, connected: true, stats };
       }

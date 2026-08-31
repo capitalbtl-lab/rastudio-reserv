@@ -15,7 +15,7 @@ export async function scanNovofon(months = 24) {
   return callStats();
 }
 
-export async function transcribeBatch(limit = 4) {
+export async function transcribeBatch(limit = 8) {
   const keys = loadNovofonKeys();
   if (!keys) throw new Error("no-keys");
   const batch = nextWithoutTranscript(limit);
