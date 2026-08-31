@@ -391,6 +391,13 @@
   box-shadow: 0 24px 50px -28px rgba(0, 0, 0, 0.7);
 }
 
+.photo-stack .shot-card {
+  display: block;
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
 .photo-stack .shot:nth-child(1) {
   top: 0;
   left: 2%;
@@ -398,6 +405,7 @@
   width: 56%;
   aspect-ratio: 4 / 5;
   transform: rotate(-7deg);
+  animation: collage-float 7.5s var(--ease-smooth-out) infinite;
 }
 
 .photo-stack .shot:nth-child(2) {
@@ -407,6 +415,7 @@
   width: 50%;
   aspect-ratio: 4 / 5;
   transform: rotate(6deg);
+  animation: collage-float 8.4s var(--ease-smooth-out) 0.5s infinite;
 }
 
 .photo-stack .shot:nth-child(3) {
@@ -416,6 +425,34 @@
   width: 64%;
   aspect-ratio: 5 / 4;
   transform: rotate(-2.5deg);
+  animation: collage-float 6.8s var(--ease-smooth-out) 1s infinite;
+}
+
+.shot-fade {
+  position: absolute;
+  inset: 0;
+  animation: collage-crossfade 780ms var(--ease-smooth-out) both;
+}
+
+@keyframes collage-crossfade {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes collage-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -8px;
+  }
 }
 
 @media (hover: hover) {
@@ -426,6 +463,7 @@
   .photo-stack .shot:hover {
     z-index: 5;
     transform: rotate(0deg) scale(1.03);
+    animation: none;
   }
 }
 
@@ -590,9 +628,15 @@
   }
 
   .photo-stack .shot,
+  .photo-stack .shot-card,
   .course-card,
   .course-media {
     transform: none !important;
     transition: none;
+    animation: none !important;
+  }
+
+  .shot-fade {
+    animation: none;
   }
 }

@@ -8,6 +8,7 @@ import { PageLink } from "@/components/page-link";
 import { TrialForm } from "@/components/trial-form";
 import { Button } from "@/components/ui/button";
 import { RobotEnglishVideos } from "@/components/robot-videos";
+import { HeroCollage } from "@/components/hero-collage";
 import { cn } from "@/lib/utils";
 
 const home = homePage;
@@ -16,28 +17,7 @@ const teachers = liteTeachers
   .filter((t) => t.href !== "/team" && !/день открытых|дети развивайся/i.test(t.name))
   .slice(0, 8);
 
-const COLLAGE = [
-  {
-    href: "/art-studio",
-    src: "/media/home/shot-art.jpg",
-    alt: "Художественная школа в Студии Развивайся в Коломне",
-    filename: "shot-art.jpg",
-  },
-  {
-    href: "/sculptural-studio",
-    src: "/media/home/shot-sculpt.jpg",
-    alt: "Скульптурная студия в Студии Развивайся в Коломне",
-    filename: "shot-sculpt.jpg",
-  },
-  {
-    href: "/robototehnika-5-7",
-    src: "/media/home/shot-robot.jpg",
-    alt: "Робототехника для детей в Студии Развивайся в Коломне",
-    filename: "shot-robot.jpg",
-  },
-] as const;
-
-const STRIPS = [
+const teachers = liteTeachers
   {
     href: "/parenttesting",
     title: "Тесты для родителей",
@@ -151,36 +131,7 @@ function Home() {
             </div>
           </div>
 
-          <div className="relative hidden lg:block">
-            <div className="photo-stack">
-              {COLLAGE.map((shot) => (
-                <PageLink key={shot.src} to={shot.href} className="shot bg-header">
-                  <SeoImage
-                    src={shot.src}
-                    alt={shot.alt}
-                    filename={shot.filename}
-                    className="h-full w-full"
-                    imgClassName="h-full w-full object-cover"
-                    loading="eager"
-                  />
-                </PageLink>
-              ))}
-            </div>
-          </div>
-
-          <div className="snap-row lg:hidden">
-            {COLLAGE.map((shot) => (
-              <PageLink key={shot.src} to={shot.href} className="snap-card overflow-hidden rounded-3xl">
-                <SeoImage
-                  src={shot.src}
-                  alt={shot.alt}
-                  filename={shot.filename}
-                  className="aspect-4/5"
-                  loading="eager"
-                />
-              </PageLink>
-            ))}
-          </div>
+          <HeroCollage />
         </div>
       </section>
 
