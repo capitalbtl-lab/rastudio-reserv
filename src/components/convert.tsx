@@ -42,24 +42,27 @@ export function ConvertBand({ path, sessions }: { path: string; sessions: CmsSes
                       </span>
                       <span className="mt-1 block text-xs text-muted">{meta.short}</span>
                     </span>
-                    <Button asChild size="sm" className="shrink-0">
-                      <a href="#trial">Записаться</a>
-                    </Button>
+                    <a
+                      href="#trial"
+                      className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-fg/65 transition-colors hover:border-fg/25 hover:text-fg"
+                    >
+                      Записаться
+                    </a>
                   </div>
                 </li>
               );
             })}
           </ul>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-3 border-t border-border/70 px-5 py-3 md:px-6">
-          <Button asChild>
-            <a href="#trial">Записаться на пробное</a>
-          </Button>
-          <Button asChild variant="outline">
-            <a href={SITE.phoneHref}>{SITE.phone}</a>
-          </Button>
-        </div>
+        ) : (
+          <div className="border-t border-border/70 px-5 py-3 md:px-6">
+            <a
+              href="#trial"
+              className="inline-flex rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-fg/65 transition-colors hover:border-fg/25 hover:text-fg"
+            >
+              Записаться на пробное
+            </a>
+          </div>
+        )}
 
         <ul className="grid gap-3 border-t border-border/70 px-5 py-3.5 sm:grid-cols-2 lg:grid-cols-4 md:px-6">
           {OBJECTIONS.map((item) => (
