@@ -673,27 +673,31 @@ export function SchoolCourseList({
   return (
     <div>
       <p className="kicker">Курсы школы</p>
-      <h2 className="display mt-2 text-2xl md:text-3xl">Программы этого направления</h2>
-      <ul className={cn("mt-6 grid grid-cols-2 gap-3 md:gap-4", wide && "lg:grid-cols-3")}>
+      <h2 className="display mt-2 text-xl md:text-2xl">Программы этого направления</h2>
+      <ul className={cn("mt-5 grid gap-2", wide && "lg:grid-cols-2 lg:gap-3")}>
         {list.map((course) => (
           <li key={course.href}>
             <PageLink
               to={course.href}
-              className="course-card course-reveal group overflow-hidden rounded-3xl bg-header text-header-fg shadow-[var(--shadow-border)]"
+              className="flex items-center gap-3 rounded-2xl bg-surface p-1.5 pr-4 shadow-[var(--shadow-border)] transition-shadow hover:shadow-[var(--shadow-border-hover)] md:gap-4 md:pr-5"
             >
               <SeoImage
                 src={course.image}
                 alt={course.alt}
                 filename={course.filename}
-                className="course-media aspect-[4/5]"
+                className="size-[4.5rem] shrink-0 overflow-hidden rounded-xl bg-surface-2 md:size-24"
+                imgClassName="h-full w-full object-cover"
               />
-              <div className="course-copy relative -mt-20 bg-gradient-to-t from-header via-header/85 to-transparent px-3 pb-3 pt-12 md:px-4 md:pb-4">
+              <span className="min-w-0">
                 {course.age ? (
-                  <p className="text-[0.68rem] font-semibold text-header-fg/65">{course.age}</p>
+                  <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">
+                    {course.age}
+                  </span>
                 ) : null}
-                <p className="display mt-1 text-[0.95rem] leading-tight md:text-lg">{course.label}</p>
-                <span className="course-cta text-header-fg">Смотреть курс</span>
-              </div>
+                <span className="display mt-0.5 block text-lg leading-snug md:text-[1.35rem]">
+                  {course.label}
+                </span>
+              </span>
             </PageLink>
           </li>
         ))}
