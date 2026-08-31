@@ -29,6 +29,15 @@ type Row = {
   closed: boolean;
   turns: number;
   preview: string;
+  essence?: string;
+  details?: string[];
+  next?: string;
+  age?: number | null;
+  city?: string;
+  branch?: string;
+  school?: string;
+  course?: string;
+  service?: string;
 };
 
 export function AdminChats() {
@@ -55,7 +64,7 @@ export function AdminChats() {
   }
 
   const shown = rows.filter((r) => {
-    const hay = `${r.path} ${r.preview} ${r.partner}`.toLowerCase();
+    const hay = `${r.path} ${r.preview} ${r.partner} ${r.essence || ""} ${r.city || ""} ${r.school || ""}`.toLowerCase();
     return !q || hay.includes(q.toLowerCase());
   });
 
@@ -64,7 +73,7 @@ export function AdminChats() {
       <div>
         <h2 className="font-display text-3xl">Диалоги с сайта</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Все разговоры с Олегом и Ольгой: дата, страница, голосовой режим. Сброс в чате начинает новую сессию — старая остаётся здесь.
+          Карточка сессии: возраст, город, филиал, школа, курс, услуга. Ассистент смотрит в эту заметку и не спрашивает повторно.
         </p>
       </div>
       <input
@@ -90,8 +99,21 @@ export function AdminChats() {
                   {r.voice ? <span className="rounded-full bg-black/5 px-2.5 py-1 text-[0.72rem] font-medium">голос</span> : null}
                   {r.admin ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[0.72rem] font-medium text-amber-900">админ</span> : null}
                   {r.closed ? <span className="rounded-full bg-black/5 px-2.5 py-1 text-[0.72rem] font-medium">сброшен</span> : null}
+                  {r.age ? <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[0.72rem] font-semibold text-primary">{r.age} лет</span> : null}
+                  {r.city ? <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[0.72rem] font-semibold text-primary">{r.city}</span> : null}
+                  {r.branch ? <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[0.72rem] font-semibold text-primary">{r.branch.replace(/^Коломна,\s*/, "")}</span> : null}
+                  {r.school ? <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[0.72rem] font-semibold text-primary">{r.school}</span> : null}
+                  {r.course ? <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[0.72rem] font-semibold text-primary">{r.course}</span> : null}
+                  {r.service ? <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[0.72rem] font-semibold text-primary">{r.service}</span> : null}
                 </div>
-                <p className="mt-2 text-sm">{r.preview || "—"}</p>
+                <p className="mt-2 text-sm font-medium">{r.essence || r.preview || "—"}</p>
+                {r.details?.length ? (
+                  <ul className="mt-2 space-y-0.5 text-xs text-muted">
+                    {r.details.map((d) => (
+                      <li key={d}>{d}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </button>
               {open === r.id && full ? (
                 <div className="mt-4 space-y-2 border-t border-black/5 pt-4">

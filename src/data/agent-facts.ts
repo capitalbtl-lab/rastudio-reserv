@@ -59,6 +59,18 @@ function takeAge(text: string) {
     const y = Number(m[1]);
     if (y >= 3 && y <= 18) return y;
   }
+  const bareWord = text.match(
+    /^\s*(три|четыре|пять|шесть|семь|восемь|девять|десять|одиннадцать|двенадцать|тринадцать|четырнадцать|пятнадцать|шестнадцать|семнадцать)\s*(?:лет|года|год)?\s*[.!?]*\s*$/i,
+  );
+  if (bareWord) {
+    const y = AGE_WORDS[bareWord[1].toLowerCase()];
+    if (y) return y;
+  }
+  const bareNum = text.match(/^\s*(\d{1,2})\s*(?:лет|года|год)?\s*[.!?]*\s*$/i);
+  if (bareNum) {
+    const y = Number(bareNum[1]);
+    if (y >= 3 && y <= 18) return y;
+  }
   return 0;
 }
 
@@ -147,6 +159,14 @@ export function factsFromMessages(messages: { role: string; content: string }[])
   if (/свободн\w+ день|согласуем|пустую дату/i.test(user)) facts.intent = "пробное-свободный-день";
   else if (/пробн/i.test(user)) facts.intent = "пробное";
   else if (/в группу|абонемент|сразу в/i.test(user)) facts.intent = "группа";
+  const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
+  if (!facts.age) {
+    const loose = takeAge(lastUser);
+    if (loose) {
+      facts.age = loose;
+      facts.band = bandOf(loose);
+    }
+  }
   facts.briefed =
     /последовательн|ступен|проходят на занят|материал дет|от младшего/i.test(assistant) ||
     /понятно|к пробному|к записи|давайте к/i.test(user);

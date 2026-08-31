@@ -5,14 +5,14 @@ import { LESSON_TYPES } from "@/data/alfacrm";
 import { serverEnv } from "./server-env";
 import { type SessionFacts, nextStepOf } from "./agent-facts";
 
-function clientSystem(who: "oleg" | "olga", facts?: SessionFacts) {
+function clientSystem(who: "oleg" | "olga", facts?: SessionFacts, stepOverride?: string) {
   const name = who === "olga" ? "Ольга" : "Олег";
   const other = who === "olga" ? "Олег" : "Ольга";
   const gender =
     who === "olga"
       ? "женский род: согласна, готова, поняла. Никогда «согласен»."
       : "мужской род: согласен, готов, понял. Никогда «согласна».";
-  const step = facts ? nextStepOf(facts) : "спросить ТОЛЬКО возраст. Город не упоминай.";
+  const step = stepOverride || (facts ? nextStepOf(facts) : "спросить ТОЛЬКО возраст. Город не упоминай.");
   return `Вы — ${name}, администратор студии «Развивайся». Говорите по-русски с родителем. Не называйте себя роботом или нейросетью. Не выдумывайте день и свободные места. Цены: «от … / 4 недели». Пробное без обязательства.
 
 Формат КАЖДОГО ответа строго:
@@ -456,6 +456,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     const { knowledgeForAgent } = await import("./call-knowledge");
     const { codewordInText, logAdmin } = await import("./admin-settings");
     const { factsFromMessages, factsPrompt } = await import("./agent-facts");
+    const { buildSessionNote, notePrompt } = await import("./session-note");
     const { agentPromptAddons } = await import("./agent-config");
     let admin = tokenOk(data.token);
     let granted: string | undefined;
@@ -495,9 +496,10 @@ export const chatAgent = createServerFn({ method: "POST" })
       ? `\nСтраница сейчас: ${data.path || "/"}.`
       : "";
     const facts = factsFromMessages(all);
+    const note = buildSessionNote(all);
     const system = admin
       ? ADMIN_SYSTEM + adminHint
-      : clientSystem(soloWho, facts) + agentPromptAddons() + knowledgeForAgent() + factsPrompt(facts);
+      : clientSystem(soloWho, facts, note.next) + agentPromptAddons() + knowledgeForAgent() + factsPrompt(facts) + notePrompt(note);
     const messages: ChatMsg[] = [{ role: "system", content: system }, ...trimmed];
     try {
       for (let step = 0; step < 4; step++) {

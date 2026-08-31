@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createServerFn } from "@tanstack/react-start";
 import { isAdminRequest } from "./admin-auth";
+import { buildSessionNote, type SessionNote } from "./session-note";
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
 export type ChatSession = {
@@ -14,6 +15,7 @@ export type ChatSession = {
   admin: boolean;
   closed?: boolean;
   messages: ChatTurn[];
+  note?: SessionNote;
 };
 
 const MAX = 400;
@@ -73,6 +75,7 @@ export function upsertSession(patch: {
     admin: Boolean(patch.admin ?? prev?.admin),
     closed: Boolean(patch.closed ?? prev?.closed),
     messages,
+    note: buildSessionNote(messages),
   };
   if (idx >= 0) all[idx] = next;
   else all.unshift(next);
@@ -121,7 +124,9 @@ export const adminChatLogs = createServerFn({ method: "POST" })
     return {
       ok: true as const,
       total: all.length,
-      sessions: all.slice(0, 120).map((s) => ({
+      sessions: all.slice(0, 120).map((s) => {
+        const note = s.note || buildSessionNote(s.messages);
+        return {
         id: s.id,
         started: s.started,
         updated: s.updated,
@@ -132,6 +137,16 @@ export const adminChatLogs = createServerFn({ method: "POST" })
         closed: Boolean(s.closed),
         turns: s.messages.length,
         preview: previewOf(s.messages),
-      })),
+        essence: note.essence || "",
+        details: note.details || [],
+        next: note.next || "",
+        age: note.age || null,
+        city: note.city || "",
+        branch: note.branch || "",
+        school: note.school || "",
+        course: note.course || "",
+        service: note.service || "",
+      };
+      }),
     };
   });
