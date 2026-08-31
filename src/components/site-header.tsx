@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Menu, X, ChevronDown, ChevronRight } from "lucide-react";
 import { SITE, SCHOOLS } from "@/data/site";
 import { AGE_BANDS } from "@/data/ages";
 import { Button } from "@/components/ui/button";
@@ -16,12 +16,63 @@ const LINKS = [
   { href: "/contacts", label: "Контакты" },
 ] as const;
 
+const UTILITY = [
+  {
+    href: SITE.maxBot,
+    label: "Подключиться к админ-боту",
+    short: "Админ-бот",
+    className: "bg-[#7b3d9e] hover:bg-[#6c348c]",
+    external: true,
+  },
+  {
+    href: SITE.telegram,
+    label: "Telegram канал",
+    short: "Telegram",
+    className: "bg-[#2eb8b0] hover:bg-[#269ea7]",
+    external: true,
+  },
+  {
+    href: "#trial",
+    label: "Запись на пробное",
+    short: "Запись",
+    className: "bg-[#2eb8b0] hover:bg-[#269ea7]",
+    external: false,
+  },
+  {
+    href: SITE.cabinet,
+    label: "Личный кабинет",
+    short: "Кабинет",
+    className: "bg-[#2eb8b0] hover:bg-[#269ea7]",
+    external: true,
+  },
+] as const;
+
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const [schoolsOpen, setSchoolsOpen] = useState(false);
 
   return (
     <header className="ink sticky top-0 z-40 border-b border-white/10 bg-header/90 text-header-fg backdrop-blur-xl">
+      <div className="border-b border-white/10 bg-header">
+        <div className="page-wrap flex h-10 items-center justify-end gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {UTILITY.map((item) => (
+            <a
+              key={item.label}
+              href={item.href}
+              target={item.external ? "_blank" : undefined}
+              rel={item.external ? "noreferrer" : undefined}
+              className={cn(
+                "inline-flex h-7 shrink-0 items-center gap-0.5 rounded-full px-3 text-[0.72rem] font-semibold text-white transition-colors sm:h-8 sm:px-3.5 sm:text-[0.8rem]",
+                item.className,
+              )}
+            >
+              <span className="sm:hidden">{item.short}</span>
+              <span className="hidden sm:inline">{item.label}</span>
+              <ChevronRight className="size-3.5 opacity-80" />
+            </a>
+          ))}
+        </div>
+      </div>
       <div className="page-wrap flex h-[4.25rem] items-center gap-3 md:h-[4.75rem]">
         <PageLink to="/" className="flex shrink-0 items-center" onClick={() => setOpen(false)}>
           <img
@@ -93,19 +144,10 @@ export function SiteHeader() {
         <div className="ml-auto flex items-center gap-2">
           <a
             href={SITE.phoneHref}
-            className="hidden tabular-nums text-sm font-medium text-header-fg/70 hover:text-header-fg xl:inline"
+            className="hidden tabular-nums text-sm font-medium text-header-fg/70 hover:text-header-fg lg:inline"
           >
             {SITE.phone}
           </a>
-          <Button asChild size="sm" variant="outline">
-            <a href={SITE.cabinet} target="_blank" rel="noreferrer">
-              <span className="sm:hidden">Кабинет</span>
-              <span className="hidden sm:inline">Личный кабинет</span>
-            </a>
-          </Button>
-          <Button asChild size="sm" className="hidden md:inline-flex">
-            <a href="#trial">Запись</a>
-          </Button>
           <button
             type="button"
             className="inline-flex size-11 items-center justify-center rounded-full hover:bg-white/10 lg:hidden"
