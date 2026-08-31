@@ -248,8 +248,7 @@ function Home() {
         </div>
       </section>
 
-      <section className="page-wrap pb-16 md:pb-24">
-        <p className="kicker text-primary">Педагоги</p>
+      <section className="page-wrap pb-6 md:pb-8">
         <h2 className="section-title mt-3 max-w-3xl">Команда сильной сети школ</h2>
         <p className="mt-5 max-w-3xl text-[0.98rem] leading-relaxed text-muted">{home.paragraphs[2]}</p>
         <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-4">
