@@ -90,7 +90,7 @@ export type TrialPayload = {
   gid?: string;
   groupName?: string;
   age?: number;
-  kind?: "trial" | "group" | "consult";
+  kind?: string;
   date?: string;
   time?: string;
   duration?: number;

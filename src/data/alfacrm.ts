@@ -6,7 +6,89 @@ const SOURCE_SITE = 2;
 const STATUS_NEW = 1;
 const PIPELINE = 1;
 const BRANCHES = [1, 2, 3, 4];
-const LESSON_TRIAL = 3;
+
+/** Типы занятий AlfaCRM — как в справочнике студии. */
+export const LESSON_TYPES = [
+  { id: 1, key: "individual", name: "Индивидуальное" },
+  { id: 2, key: "group", name: "Групповое" },
+  { id: 3, key: "trial", name: "Пробное" },
+  { id: 4, key: "makeup", name: "Отработка" },
+  { id: 5, key: "intro", name: "Вводное" },
+  { id: 6, key: "master", name: "Мастер-класс" },
+  { id: 7, key: "open", name: "Открытый урок" },
+  { id: 8, key: "excursion", name: "Экскурсия" },
+  { id: 9, key: "camp", name: "Летний лагерь" },
+  { id: 10, key: "extra", name: "Дополнительное" },
+  { id: 11, key: "overtime", name: "Сверхурочное" },
+  { id: 12, key: "event", name: "Мероприятие" },
+  { id: 13, key: "interview", name: "Собеседование" },
+  { id: 14, key: "aftercare", name: "Продленка" },
+  { id: 15, key: "summer", name: "Летняя программа" },
+] as const;
+
+export type LessonTypeKey = (typeof LESSON_TYPES)[number]["key"];
+
+const LESSON_ALIASES: Record<string, LessonTypeKey> = {
+  "1": "individual",
+  индивидуальное: "individual",
+  индивидуал: "individual",
+  individual: "individual",
+  "2": "group",
+  групповое: "group",
+  группа: "group",
+  group: "group",
+  "3": "trial",
+  пробное: "trial",
+  проба: "trial",
+  trial: "trial",
+  "4": "makeup",
+  отработка: "makeup",
+  "групповая отработка": "makeup",
+  makeup: "makeup",
+  "5": "intro",
+  вводное: "intro",
+  intro: "intro",
+  "6": "master",
+  "мастер-класс": "master",
+  мастеркласс: "master",
+  master: "master",
+  "7": "open",
+  "открытый урок": "open",
+  open: "open",
+  "8": "excursion",
+  экскурсия: "excursion",
+  excursion: "excursion",
+  "9": "camp",
+  лагерь: "camp",
+  "летний лагерь": "camp",
+  camp: "camp",
+  "10": "extra",
+  дополнительное: "extra",
+  extra: "extra",
+  "11": "overtime",
+  сверхурочное: "overtime",
+  overtime: "overtime",
+  "12": "event",
+  мероприятие: "event",
+  event: "event",
+  "13": "interview",
+  собеседование: "interview",
+  interview: "interview",
+  "14": "aftercare",
+  продленка: "aftercare",
+  aftercare: "aftercare",
+  "15": "summer",
+  "летняя программа": "summer",
+  лето: "summer",
+  summer: "summer",
+};
+
+export function resolveLessonType(raw?: string) {
+  const s = String(raw || "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (!s || s === "consult" || s === "консультация") return null;
+  const key = LESSON_ALIASES[s] || (LESSON_TYPES.some((t) => t.key === s) ? (s as LessonTypeKey) : "trial");
+  return LESSON_TYPES.find((t) => t.key === key) || LESSON_TYPES.find((t) => t.key === "trial")!;
+}
 
 type TokenCache = { token: string; exp: number };
 let cache: TokenCache | null = null;
@@ -158,9 +240,10 @@ async function slotFromGid(branch: number, gid: number, t: string): Promise<Regu
   return list.find((item) => Number(item.related_id) === gid) || null;
 }
 
-async function createTrialLesson(opts: {
+export async function createAlfaLesson(opts: {
   branch: number;
   customerId: number;
+  type?: string;
   subjectId?: number;
   gid?: string;
   date?: string;
@@ -169,6 +252,7 @@ async function createTrialLesson(opts: {
   note?: string;
 }) {
   const t = await token();
+  const type = resolveLessonType(opts.type) || resolveLessonType("trial")!;
   let subjectId = Number(opts.subjectId) || 0;
   let date = formatRuDob(opts.date);
   let time = String(opts.time || "").replace(".", ":").slice(0, 5);
@@ -189,19 +273,20 @@ async function createTrialLesson(opts: {
   }
   if (!date) date = nextDateForCrmDay(moscowParts().day === 7 ? 1 : moscowParts().day + 1);
   if (!time) time = "16:00";
-  if (!subjectId) return { ok: false as const, error: "no-subject" };
+  if (!subjectId) return { ok: false as const, error: "no-subject" as const };
   const created = await request<{ success?: boolean; errors?: unknown; model?: { id?: number } }>(
     `/v2api/${opts.branch}/lesson/create`,
     {
-      lesson_type_id: LESSON_TRIAL,
+      lesson_type_id: type.id,
       lesson_date: date,
       time_from: time,
       duration,
       subject_id: subjectId,
       customer_ids: [opts.customerId],
+      ...(gid ? { group_ids: [gid] } : {}),
       ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
       ...(roomId ? { room_id: roomId } : {}),
-      note: opts.note || "Пробное с сайта rastudio.org",
+      note: opts.note || `${type.name} с сайта rastudio.org`,
     },
     t,
   );
@@ -209,7 +294,7 @@ async function createTrialLesson(opts: {
   if (created.success === false || !id) {
     throw new Error(`alfacrm-lesson ${JSON.stringify(created.errors || created)}`);
   }
-  return { ok: true as const, id, date, time, duration };
+  return { ok: true as const, id, date, time, duration, type: type.name, typeId: type.id };
 }
 
 export type AlfaLead = {
@@ -223,7 +308,7 @@ export type AlfaLead = {
   courseId?: string;
   gid?: string;
   groupName?: string;
-  kind?: "trial" | "group" | "consult";
+  kind?: string;
   date?: string;
   time?: string;
   duration?: number;
@@ -232,14 +317,15 @@ export type AlfaLead = {
 export async function upsertAlfaLead(lead: AlfaLead) {
   const phone = formatRuPhone(lead.phone);
   const branch = Number(lead.branchId) || 2;
-  const kind = lead.kind === "group" ? "запись в группу" : lead.kind === "consult" ? "консультация" : "пробное";
+  const lessonType = resolveLessonType(lead.kind);
+  const kindLabel = lessonType ? lessonType.name.toLowerCase() : "консультация";
   const child = (lead.child || "").trim() || lead.parent;
   const parent = lead.parent.trim();
   const dob = formatRuDob(lead.dobRu);
   const noteLine = [
     `Заказчик: ${parent}`,
     `Ребёнок: ${child}`,
-    kind === "пробное" ? "Тип: пробное занятие" : `Тип: ${kind}`,
+    `Тип: ${kindLabel}`,
     lead.courseName ? `Курс: ${lead.courseName}` : "",
     lead.groupName ? `Группа: ${lead.groupName}` : "",
     lead.gid ? `gid=${lead.gid}` : "",
@@ -251,7 +337,7 @@ export async function upsertAlfaLead(lead: AlfaLead) {
   const t = await token();
   const existing = await findByPhone(phone);
   const groupIds = lead.gid && /^\d+$/.test(lead.gid) ? [Number(lead.gid)] : undefined;
-  const taskText = `Сайт rastudio.org: ${kind}. ${child}${lead.courseName ? `, ${lead.courseName}` : ""}${lead.gid ? `, группа ${lead.gid}` : ""}.`;
+  const taskText = `Сайт rastudio.org: ${kindLabel}. ${child}${lead.courseName ? `, ${lead.courseName}` : ""}${lead.gid ? `, группа ${lead.gid}` : ""}.`;
   let customerId = 0;
   let usedBranch = branch;
   let duplicate = false;
@@ -307,18 +393,19 @@ export async function upsertAlfaLead(lead: AlfaLead) {
       customer_ids: [customerId],
       branch_ids: [usedBranch],
       user_id: 1,
-      title: `Сайт: ${kind}`,
+      title: `Сайт: ${kindLabel}`,
       text: taskText,
     },
     t,
   ).catch(() => null);
 
-  let lesson: { id?: number; date?: string; time?: string } | null = null;
-  if (lead.kind !== "consult") {
+  let lesson: { id?: number; date?: string; time?: string; type?: string } | null = null;
+  if (lessonType) {
     try {
-      const booked = await createTrialLesson({
+      const booked = await createAlfaLesson({
         branch: usedBranch,
         customerId,
+        type: lessonType.key,
         subjectId: Number(lead.courseId) || undefined,
         gid: lead.gid,
         date: lead.date,
@@ -326,9 +413,9 @@ export async function upsertAlfaLead(lead: AlfaLead) {
         duration: lead.duration,
         note: noteLine,
       });
-      if (booked.ok) lesson = { id: booked.id, date: booked.date, time: booked.time };
+      if (booked.ok) lesson = { id: booked.id, date: booked.date, time: booked.time, type: booked.type };
     } catch (err) {
-      console.error("trial-lesson", err);
+      console.error("alfa-lesson", err);
     }
   }
   return {

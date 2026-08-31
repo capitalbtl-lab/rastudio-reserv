@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { SITE } from "@/data/site";
 import { saveTrialLead, TRIAL_BRANCHES, TRIAL_COURSES } from "@/data/trial";
+import { LESSON_TYPES } from "@/data/alfacrm";
 import { serverEnv } from "./server-env";
 
 const SYSTEM = `Вы — два администратора студии «Развивайся»: Олег и Ольга. Говорите по-русски с родителем. Не называйте себя роботами или нейросетью. Не выдумывайте день и свободные места. Цены: «от … / 4 недели». Пробное без обязательства.
@@ -32,12 +33,14 @@ const SYSTEM = `Вы — два администратора студии «Ра
 Когда есть возраст и филиал — сразу вызови list_groups. Назови ближайшие слоты (сначала которые раньше на этой неделе) и свободные места. Курс не обязателен.
 Если родитель назвал ещё и курс — передай его в list_groups.
 Нельзя называть только 2–3 курса, если спросили «что есть для N лет» без филиала — тогда list_courses_by_age, все программы, и спроси филиал.
-Когда родитель выбрал слот — спроси: пробное занятие или сразу в группу.
-На пробное нужны: ФИО ребёнка, ФИО родителя (заказчика), телефон, филиал. Дата рождения — целиком, как 01.01.2021. Возраст подойдёт, если даты нет: подставим 01.09 года рождения.
-Когда есть имя родителя, ФИО ребёнка, телефон и филиал — сразу вызови submit_trial. Передай course_id, gid слота, дату и время если уже выбрали. Не жди почту.
-Не говори «мы перезвоним» и не отправляй на форму, если заявка уже ушла в CRM. Скажи: заявку приняли, лид в системе, пробное занятие поставлено на дату и время. Не читай URL.
-Пробное — без абонемента, первый визит, тип занятия «пробное». Если есть gid группы — передай его, чтобы взять день, время и предмет из расписания.
-Запись в группу — open_group, форма этой группы в AlfaCRM.
+Когда родитель выбрал слот — спроси: пробное или сразу в группу (групповое).
+На запись нужны: ФИО ребёнка, ФИО родителя (заказчика), телефон, филиал. Дата рождения — целиком, как 01.01.2021. Возраст подойдёт, если даты нет: подставим 01.09 года рождения.
+Когда есть имя родителя, ФИО ребёнка, телефон и филиал — сразу вызови book_lesson (или submit_trial для первого визита). Передай course_id, gid слота, дату и время если уже выбрали. Не жди почту.
+Типы занятий AlfaCRM: ${LESSON_TYPES.map((t) => `${t.id} ${t.name} (${t.key})`).join("; ")}.
+Первый визит — пробное (trial). Постоянная группа — групповое (group). Пропуск — отработка (makeup). Ещё бывают: вводное, дополнительное, сверхурочное, индивидуальное, собеседование, открытый урок, мастер-класс, экскурсия, мероприятие, летний лагерь, продленка, летняя программа. Не ставь пробное, если родитель явно просит другой тип.
+Не говори «мы перезвоним» и не отправляй на форму, если заявка уже ушла в CRM. Скажи: заявку приняли, занятие поставили на дату и время. Не читай URL.
+Если есть gid группы — передай его, чтобы взять день, время и предмет из расписания.
+Запись в группу без урока — open_group, форма этой группы в AlfaCRM.
 id курсов для заявки: ${TRIAL_COURSES.map((c) => `${c.id} ${c.name}`).join("; ")}.
 Когда родитель просит подробности курса или вы уже называете конкретный курс по имени — вызови open_course (path или название). Страница курса откроется, чат останется. В речи не читай URL. Скажи, что открыли страницу курса, и коротко по сути. Кнопка «Страница курса» появится сама.
 Не открывай страницу курса, пока курс не выбран.
@@ -200,9 +203,42 @@ const TOOLS = [
           date: { type: "string", description: "Дата пробного ДД.ММ.ГГГГ" },
           time: { type: "string", description: "Время начала ЧЧ:ММ" },
           duration: { type: "number", description: "Длительность минут, обычно 90" },
-          kind: { type: "string", description: "trial | group | consult" },
+          kind: { type: "string", description: "trial по умолчанию. Или group, makeup, intro, extra, overtime, individual, master, open, excursion, camp, event, interview, aftercare, summer, consult" },
         },
         required: ["parent", "child", "phone", "branch_id"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "book_lesson",
+      description:
+        "Поставить занятие нужного типа в AlfaCRM (лид + урок). Для отработки, дополнительного, сверхурочного, вводного, индивидуального, группового, мастер-класса и остальных типов. Те же данные, что для пробного, плюс lesson_type.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          parent: { type: "string", description: "ФИО заказчика" },
+          child: { type: "string", description: "ФИО ребёнка" },
+          dob: { type: "string" },
+          age: { type: "number" },
+          phone: { type: "string" },
+          email: { type: "string" },
+          course_id: { type: "string" },
+          branch_id: { type: "string", description: "1 Гражданская, 2 ЦМИТ, 3 Луховицы, 4 лето" },
+          gid: { type: "string" },
+          group_name: { type: "string" },
+          date: { type: "string", description: "ДД.ММ.ГГГГ" },
+          time: { type: "string", description: "ЧЧ:ММ" },
+          duration: { type: "number" },
+          lesson_type: {
+            type: "string",
+            description:
+              "trial | group | makeup отработка | intro вводное | extra дополнительное | overtime сверхурочное | individual индивидуальное | master | open | excursion | camp | event | interview | aftercare продленка | summer",
+          },
+        },
+        required: ["parent", "child", "phone", "branch_id", "lesson_type"],
       },
     },
   },
@@ -482,7 +518,7 @@ export const chatAgent = createServerFn({ method: "POST" })
             } catch {
               args = {};
             }
-            if (call.function.name === "submit_trial") {
+            if (call.function.name === "submit_trial" || call.function.name === "book_lesson") {
               const saved = await saveTrialLead({
                 parent: String(args.parent || ""),
                 child: String(args.child || ""),
@@ -494,16 +530,17 @@ export const chatAgent = createServerFn({ method: "POST" })
                 gid: args.gid ? String(args.gid) : "",
                 groupName: args.group_name ? String(args.group_name) : "",
                 age: args.age != null ? Number(args.age) : undefined,
-                kind: args.kind === "group" || args.kind === "consult" ? args.kind : "trial",
+                kind: String(args.lesson_type || args.kind || "trial"),
                 date: args.date ? String(args.date) : "",
                 time: args.time ? String(args.time) : "",
                 duration: args.duration != null ? Number(args.duration) : undefined,
               });
+              const lessonName = saved.ok && saved.lesson?.type ? saved.lesson.type : "занятие";
               messages.push({
                 role: "tool",
                 tool_call_id: call.id,
                 content: saved.ok
-                  ? `Лид в AlfaCRM id=${"id" in saved ? saved.id : ""} филиал=${saved.branch}${saved.duplicate ? ", карточка уже была — обновили" : ", новая карточка"}${saved.lesson ? `, пробное занятие id=${saved.lesson.id} на ${saved.lesson.date} ${saved.lesson.time}` : ", урок пробного не создался — лид есть"}. Ссылка для администратора: ${"url" in saved ? saved.url : ""}. Родителю URL не читай. Скажи: заявку приняли, пробное поставили.`
+                  ? `Лид в AlfaCRM id=${"id" in saved ? saved.id : ""} филиал=${saved.branch}${saved.duplicate ? ", карточка уже была — обновили" : ", новая карточка"}${saved.lesson ? `, ${lessonName} id=${saved.lesson.id} на ${saved.lesson.date} ${saved.lesson.time}` : ", урок не создался — лид есть"}. Ссылка для администратора: ${"url" in saved ? saved.url : ""}. Родителю URL не читай. Скажи: заявку приняли, ${lessonName.toLowerCase()} поставили.`
                   : `Ошибка: ${saved.error}`,
               });
             } else if (call.function.name === "list_courses_by_age") {
