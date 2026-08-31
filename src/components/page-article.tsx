@@ -168,6 +168,7 @@ function CinematicPage({ page, schedule }: { page: SitePage; schedule: CmsSessio
         title={heading.title}
         description={page.description}
         images={page.images}
+        video={page.video}
       />
 
       <div className="page-wrap py-12 md:py-16">

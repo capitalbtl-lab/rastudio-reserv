@@ -197,12 +197,14 @@ export function CoursePageHero({
   title,
   description,
   images,
+  video,
 }: {
   kicker: ReactNode;
   age?: string | null;
   title: string;
   description?: string | null;
   images: HeroShot[];
+  video?: string | null;
 }) {
   const srcs = images.filter((img) => img?.src);
   const shots: HeroShot[] = [];
@@ -214,6 +216,19 @@ export function CoursePageHero({
       i += 1;
     }
     shots.splice(3);
+  }
+
+  function ShotMedia({ shot, className, imgClassName }: { shot: HeroShot; className?: string; imgClassName?: string }) {
+    return (
+      <SeoImage
+        src={shot.src}
+        alt={shot.alt || title}
+        filename={shot.filename}
+        className={className}
+        imgClassName={imgClassName}
+        loading="eager"
+      />
+    );
   }
 
   return (
@@ -240,34 +255,49 @@ export function CoursePageHero({
           </div>
         </div>
 
-        {shots.length ? (
+        {shots.length || video ? (
           <>
             <div className="relative hidden lg:block">
               <div className="photo-stack">
-                {shots.map((shot, i) => (
+                {shots.slice(0, video ? 2 : 3).map((shot, i) => (
                   <div key={`${shot.src}-${i}`} className="shot bg-header">
-                    <SeoImage
-                      src={shot.src}
-                      alt={shot.alt || title}
-                      filename={shot.filename}
-                      className="h-full w-full"
-                      imgClassName="h-full w-full object-cover"
-                      loading="eager"
-                    />
+                    <ShotMedia shot={shot} className="h-full w-full" imgClassName="h-full w-full object-cover" />
                   </div>
                 ))}
+                {video ? (
+                  <div className="shot bg-header">
+                    <video
+                      src={video}
+                      className="h-full w-full object-cover"
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      preload="metadata"
+                      aria-label={title}
+                    />
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="snap-row lg:hidden">
+              {video ? (
+                <div className="snap-card overflow-hidden rounded-3xl">
+                  <video
+                    src={video}
+                    className="aspect-4/5 w-full object-cover"
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                    aria-label={title}
+                  />
+                </div>
+              ) : null}
               {shots.map((shot, i) => (
                 <div key={`${shot.src}-m-${i}`} className="snap-card overflow-hidden rounded-3xl">
-                  <SeoImage
-                    src={shot.src}
-                    alt={shot.alt || title}
-                    filename={shot.filename}
-                    className="aspect-4/5"
-                    loading="eager"
-                  />
+                  <ShotMedia shot={shot} className="aspect-4/5" />
                 </div>
               ))}
             </div>

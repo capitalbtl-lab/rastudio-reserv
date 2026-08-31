@@ -93,6 +93,9 @@ const byPath = new Map();
 const COURSE_HEROES = JSON.parse(
   fs.readFileSync(path.join(ROOT, "content/course-heroes.json"), "utf8"),
 );
+const COURSE_VIDEOS = JSON.parse(
+  fs.readFileSync(path.join(ROOT, "content/course-videos.json"), "utf8"),
+);
 const FILE_EXTRAS = JSON.parse(
   fs.readFileSync(path.join(ROOT, "content/course-extras.json"), "utf8"),
 );
@@ -359,6 +362,8 @@ function applyLocalHeroes(page) {
     0,
     page.path === "/team" || page.path === "/master-class" || page.path === "/allcourses" ? 24 : 10,
   );
+  page.video =
+    COURSE_VIDEOS[page.path] || COURSE_VIDEOS[page.pathDecoded] || null;
 }
 
 for (const page of compiled) applyLocalHeroes(page);

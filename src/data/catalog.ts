@@ -20,6 +20,7 @@ export type SitePage = {
   paragraphs: string[];
   images: SiteImage[];
   related: RelatedLink[];
+  video?: string | null;
 };
 
 export type TeacherCard = {

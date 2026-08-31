@@ -53,6 +53,7 @@ export function ProgrammingCoursePage({ page, course, schedule }: Props) {
         title={course.name}
         description={course.program}
         images={images}
+        video={page.video}
       />
 
       {course.aboutLead ? (
