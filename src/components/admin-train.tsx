@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { adminAgentBrain, type TrainExample, type ScriptSection } from "@/data/agent-config";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { InfoTip } from "@/components/info-tip";
+import { AdminTrainDocs } from "@/components/admin-train-docs";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -35,7 +37,7 @@ function download(name: string, text: string, type: string) {
 }
 
 export function AdminTrain() {
-  const [pane, setPane] = useState<"scripts" | "examples">("scripts");
+  const [pane, setPane] = useState<"scripts" | "docs" | "examples">("scripts");
   const [rows, setRows] = useState<TrainExample[]>([]);
   const [scripts, setScripts] = useState<ScriptSection[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -196,7 +198,7 @@ export function AdminTrain() {
       <div>
         <h2 className="font-display text-3xl">Обучение ассистента</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Скрипты воронки — как говорить с родителем. Примеры — живые реплики. Систематизация разбирает диалоги сайта и дописывает наблюдения.
+          Скрипты — как вести разговор. Документы — оферта, правила, методички. Примеры — живые реплики. Ассистент берёт это в ответы, пока запись включена.
         </p>
       </div>
 
@@ -210,6 +212,13 @@ export function AdminTrain() {
         </button>
         <button
           type="button"
+          onClick={() => setPane("docs")}
+          className={cn("rounded-full px-4 py-2 text-sm font-semibold", pane === "docs" ? "bg-primary text-primary-foreground" : "bg-surface")}
+        >
+          Документы
+        </button>
+        <button
+          type="button"
           onClick={() => setPane("examples")}
           className={cn("rounded-full px-4 py-2 text-sm font-semibold", pane === "examples" ? "bg-primary text-primary-foreground" : "bg-surface")}
         >
@@ -217,15 +226,19 @@ export function AdminTrain() {
         </button>
       </div>
 
+      {pane === "docs" ? <AdminTrainDocs /> : null}
+
       {pane === "scripts" ? (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
             <Button type="button" disabled={busy} onClick={() => void systematize()}>
               Систематизировать по диалогам
             </Button>
+            <InfoTip text="Берёт последние диалоги сайта, считает, где родители застревают, и дописывает блок «наблюдения». Воронку не ломает. Запускайте раз в неделю." />
             <Button type="button" variant="secondary" disabled={busy} onClick={() => void resetScripts()}>
               Вернуть эталон
             </Button>
+            <InfoTip text="Стирает правки шагов возраст / город / филиал / направление и возвращает заводской скрипт. Документы и примеры не трогает." />
             {lastSys ? <p className="self-center text-xs text-muted">Последний раз: {when(lastSys)}</p> : null}
           </div>
           {msg ? <p className="text-sm text-primary">{msg}</p> : null}
@@ -233,7 +246,10 @@ export function AdminTrain() {
             <article key={s.id} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="font-display text-xl">{s.title}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-display text-xl">{s.title}</p>
+                    <InfoTip text="Текст этого шага попадает в системный промпт, пока слот не закрыт. Пишите коротко, одним вопросом. Не просите спрашивать возраст и город — это делают кнопки." />
+                  </div>
                   <p className="text-xs text-muted">
                     {s.step}
                     {s.auto ? " · из диалогов" : ""}
@@ -259,11 +275,14 @@ export function AdminTrain() {
             <Button type="button" variant="secondary" onClick={exportJson} disabled={!rows.length && !scripts.length}>
               Экспорт JSON
             </Button>
+            <InfoTip text="Скачивает скрипты и примеры одним файлом. Удобно сохранить копию или перенести на другого агента." />
             <Button type="button" variant="secondary" onClick={exportJsonl} disabled={!rows.length}>
               Экспорт JSONL
             </Button>
-            <label className="inline-flex h-10 cursor-pointer items-center rounded-full bg-surface px-4 text-sm font-semibold shadow-[var(--shadow-border)]">
+            <InfoTip text="Формат для дообучения модели: каждая строка — диалог system / user / assistant. Правила (kind=rule) сюда не входят." />
+            <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-surface px-4 text-sm font-semibold shadow-[var(--shadow-border)]">
               Импорт JSON / JSONL
+              <InfoTip text="Добавляет примеры из файла. Дубликаты (тот же вопрос и ответ) пропускаются. Скрипты из файла не перезаписываются." />
               <input
                 type="file"
                 accept=".json,.jsonl,application/json"
@@ -279,7 +298,9 @@ export function AdminTrain() {
           </div>
 
           <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-            <p className="text-sm font-semibold">Новая запись</p>
+            <p className="text-sm font-semibold">
+              Новая запись <InfoTip text="Ручной пример. Вопрос родителя и эталонный ответ. Тип «правило» — запрет или установка без реплики. Заметка в модель не уходит." />
+            </p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <label className="text-sm">
                 Тип

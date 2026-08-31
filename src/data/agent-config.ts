@@ -5,6 +5,7 @@ import { isAdminRequest } from "./admin-auth";
 import { logAdmin } from "./admin-settings";
 import { DEFAULT_SCRIPTS, playbookPrompt, type ScriptSection } from "./agent-playbook";
 import type { SessionFacts } from "./agent-facts";
+import { docsPrompt } from "./agent-docs";
 
 export type AgentSettings = {
   updatedAt: string;
@@ -115,6 +116,8 @@ export function agentPromptAddons(facts?: SessionFacts) {
       else parts.push(`Пример.\nРодитель: ${ex.input.slice(0, 400)}\nОтвет: ${ex.output.slice(0, 600)}`);
     }
   }
+  const docs = docsPrompt();
+  if (docs.trim()) parts.push(docs);
   return `\n${parts.join("\n")}\n`;
 }
 

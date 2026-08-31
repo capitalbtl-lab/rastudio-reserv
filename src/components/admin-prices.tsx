@@ -35,7 +35,7 @@ const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: "voice", label: "Изменение сайта голосом", hint: "Тексты" },
   { id: "voices", label: "Настройки голосов", hint: "Олег и Ольга" },
   { id: "agent", label: "Ассистент ИИ", hint: "Как ведёт диалог" },
-  { id: "train", label: "Обучение", hint: "Примеры и экспорт" },
+  { id: "train", label: "Обучение", hint: "Скрипты, документы, примеры" },
   { id: "calls", label: "База звонков", hint: "Novofon → знания" },
   { id: "dossiers", label: "Личные дела", hint: "Клиенты AlfaCRM" },
   { id: "chats", label: "Диалоги сайта", hint: "Олег и Ольга" },
