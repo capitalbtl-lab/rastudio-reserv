@@ -605,14 +605,24 @@ export const chatAgent = createServerFn({ method: "POST" })
                   branch: String(args.branch || ""),
                   course: String(args.course || ""),
                 });
+                const fallback =
+                  !list.length && args.course
+                    ? await groupsForQuery({
+                        age: Number.isFinite(age) ? age : undefined,
+                        branch: String(args.branch || ""),
+                      })
+                    : [];
+                const shown = list.length ? list : fallback;
                 groups = [
                   { label: "Пробное занятие", send: "Хочу записаться на пробное занятие", primary: true },
-                  ...list.map((g) => ({ label: `В группу · ${g.chip}`, href: g.signup })),
+                  ...shown.map((g) => ({ label: `В группу · ${g.chip}`, href: g.signup })),
                 ];
                 messages.push({
                   role: "tool",
                   tool_call_id: call.id,
-                  content: formatGroups(list, age),
+                  content:
+                    (!list.length && fallback.length ? "По точному названию не нашли, ниже группы на этот возраст.\n" : "") +
+                    formatGroups(shown, age),
                 });
               } catch {
                 messages.push({

@@ -295,16 +295,19 @@ export async function groupsForQuery(q: { age?: number; branch?: string; course?
 export function formatGroups(list: LiveGroup[], age?: number) {
   if (!list.length) {
     return age
-      ? `Живых групп на ${age} лет с этими фильтрами сейчас нет. Предложи заявку на пробное или телефон 8 (800) 511-34-01.`
+      ? `По фильтру живых групп на ${age} лет сейчас не видно. Это НЕ «мест нет». Не говори, что набор закрыт. Предложи заявку на пробное (дату согласуем) и другие направления на этот возраст. Телефон 8 (800) 511-34-01.`
       : "Группы не найдены. Спроси возраст и филиал.";
   }
+  const open = list.filter((g) => g.seats !== "мест нет");
   const lines = list.map(
     (g, i) =>
       `${i + 1}. gid=${g.gid} филиал=${g.branchId} · ${g.name} · ${g.short} · ${g.when} · ${g.seats} · через ${g.wait} дн.`,
   );
   return [
-    `Живое расписание, ${list.length} слотов, сначала ближайшие. Назови 5–8: день, время, филиал, места. Не выдумывай.`,
-    "Если мест нет — скажи честно и предложи другой слот. Когда выбрал — open_group.",
+    `Живое расписание, ${list.length} слотов (${open.length} со свободными местами), сначала ближайшие. Назови 5–8: день, время, филиал, места. Не выдумывай.`,
+    open.length
+      ? "Есть места — предложи конкретные слоты и open_group."
+      : "Во всех найденных группах мест сейчас нет. Скажи это честно и предложи пробное в свободный день или другой филиал.",
     ...lines,
   ].join("\n");
 }
@@ -315,6 +318,22 @@ function branchIdOf(raw: string) {
   if (/^2$|октябрь|340/.test(s)) return 2;
   if (/^3$|луховиц|пушкин/.test(s)) return 3;
   return 0;
+}
+
+const COURSE_ALIAS: { ask: RegExp; hay: RegExp }[] = [
+  { ask: /робот/, hay: /робот|robot/ },
+  { ask: /худож|рисов|живопис|лепк|скульпт|манг|аним/, hay: /худож|рисов|живопис|лепк|скульпт|манг|аним|art-studio|sculptural|hudvuz|digitalart/ },
+  { ask: /програм|питон|скретч|python|scratch|айти|\bit\b|create|криэйт|джуниор/, hay: /програм|python|scratch|питон|скретч|create|junior|gamedev|unity|blender|codebook/ },
+  { ask: /наук|физик|steam|радио|беспилот|дрон/, hay: /наук|физик|steam|радио|tesla|science|radio|беспилот|дрон/ },
+  { ask: /модельн|подиум/, hay: /модельн|подиум|model/ },
+  { ask: /англий|язык|япон|коре/, hay: /англий|язык|english|japanese|vitamin|япон|коре/ },
+  { ask: /подготовк|школ/, hay: /подготовк|preparation|happybricks|лего-матем/ },
+];
+
+function stemRu(word: string) {
+  const w = word.toLowerCase();
+  if (w.length <= 5) return w;
+  return w.replace(/(ами|ями|ах|ях|ов|ев|ом|ем|ой|ый|ий|ая|ое|ые|ие|ия|ию|ью|ии|[аеёиоуыэюяь])$/i, "");
 }
 
 function courseMatch(session: CmsSession, course: string) {
@@ -329,9 +348,14 @@ function courseMatch(session: CmsSession, course: string) {
   const path = (session.path || "").toLowerCase();
   const hay = `${path} ${session.group} ${session.courseFilter}`.toLowerCase();
   if (path && (decoded === path || decoded.endsWith(path) || path.endsWith(decoded))) return true;
+  for (const a of COURSE_ALIAS) {
+    if (a.ask.test(decoded) && a.hay.test(hay)) return true;
+  }
   const words = decoded.split(/[^a-zа-яё0-9+]+/i).filter((w) => w.length > 3);
-  if (words.length && words.every((w) => hay.includes(w))) return true;
-  return words.filter((w) => hay.includes(w)).length >= 2;
+  if (!words.length) return true;
+  const hit = (w: string) => hay.includes(w) || hay.includes(stemRu(w));
+  if (words.every(hit)) return true;
+  return words.filter(hit).length >= Math.min(2, words.length);
 }
 
 export function groupSignup(gid: string, branch?: string) {
