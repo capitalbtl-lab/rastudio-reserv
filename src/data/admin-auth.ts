@@ -1,27 +1,13 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { getRequest } from "@tanstack/react-start/server";
+import { checkPassword } from "./admin-settings";
 
-function readDotEnv(key: string) {
-  try {
-    for (const line of readFileSync(join(process.cwd(), ".env"), "utf8").split("\n")) {
-      const t = line.trim();
-      if (!t || t.startsWith("#") || !t.startsWith(`${key}=`)) continue;
-      return t.slice(key.length + 1).trim().replace(/^["']|["']$/g, "");
-    }
-  } catch {
-    /* no file */
-  }
-  return "";
-}
-
-export function adminSecret() {
-  return process.env.ADMIN_PASSWORD?.trim() || readDotEnv("ADMIN_PASSWORD");
+function tokenSecret() {
+  return "rastudio-admin-token";
 }
 
 function sign(value: string) {
-  return createHmac("sha256", adminSecret() || "off").update(value).digest("hex").slice(0, 32);
+  return createHmac("sha256", tokenSecret()).update(value).digest("hex").slice(0, 32);
 }
 
 export function makeAdminToken() {
@@ -31,7 +17,7 @@ export function makeAdminToken() {
 }
 
 export function tokenOk(token?: string | null) {
-  if (!adminSecret() || !token) return false;
+  if (!token) return false;
   const parts = token.split(".");
   if (parts.length < 3) return false;
   const exp = Number(parts[1]);
@@ -61,3 +47,9 @@ function cookieToken() {
 export function isAdminRequest(token?: string) {
   return tokenOk(token) || tokenOk(cookieToken());
 }
+
+export function adminSecret() {
+  return tokenSecret();
+}
+
+export { checkPassword };

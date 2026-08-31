@@ -1,6 +1,5 @@
-import { timingSafeEqual } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
-import { isAdminRequest, makeAdminToken, adminSecret } from "./admin-auth";
+import { isAdminRequest, makeAdminToken } from "./admin-auth";
 import {
   ensureLivePrices,
   listPriceRows,
@@ -9,22 +8,23 @@ import {
   updateOnePrice,
   type PriceRow,
 } from "./prices";
-import { listAdminLog, loadAdminSettings, logAdmin, setCodeword } from "./admin-settings";
-
-function secret() {
-  return adminSecret();
-}
+import {
+  checkPassword,
+  listAdminLog,
+  loadAdminSettings,
+  logAdmin,
+  setAdminPassword,
+  setCodeword,
+} from "./admin-settings";
 
 export const adminLogin = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { password: string })
   .handler(async ({ data }) => {
-    const pass = secret();
-    if (!pass) return { ok: false as const, error: "Пароль администратора не задан на сервере." };
-    const a = Buffer.from(data.password || "");
-    const b = Buffer.from(pass);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    loadAdminSettings();
+    if (!checkPassword(data.password || "")) {
       return { ok: false as const, error: "Неверный пароль." };
     }
+    logAdmin("Вход в кабинет");
     return { ok: true as const, token: makeAdminToken() };
   });
 
@@ -91,5 +91,14 @@ export const adminSetCodeword = createServerFn({ method: "POST" })
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
     const saved = setCodeword(data.word || "");
     if (saved.ok) logAdmin("Сменено кодовое слово");
+    return saved;
+  });
+
+export const adminSetPassword = createServerFn({ method: "POST" })
+  .validator((data: unknown) => data as { token?: string; password: string })
+  .handler(async ({ data }) => {
+    if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
+    const saved = setAdminPassword(data.password || "");
+    if (saved.ok) logAdmin("Сменён пароль кабинета");
     return saved;
   });

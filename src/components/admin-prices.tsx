@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { adminLogin, adminMeta, adminPrices, adminSaveGroup, adminSavePrice, adminSetCodeword } from "@/data/admin";
+import { adminLogin, adminMeta, adminPrices, adminSaveGroup, adminSavePrice, adminSetCodeword, adminSetPassword } from "@/data/admin";
 import { PRICE_DIRECTIONS, hydratePrices, type PriceRow } from "@/data/prices-core";
 import { Button } from "@/components/ui/button";
 
@@ -29,6 +29,7 @@ export function AdminPrices() {
   const [amount, setAmount] = useState("0");
   const [busy, setBusy] = useState(false);
   const [word, setWord] = useState("");
+  const [newPass, setNewPass] = useState("");
   const [log, setLog] = useState<{ at: string; text: string }[]>([]);
   const [savedWord, setSavedWord] = useState("");
 
@@ -172,6 +173,33 @@ export function AdminPrices() {
             Сохранить слово
           </Button>
           {savedWord ? <p className="text-sm text-primary">{savedWord}</p> : null}
+        </div>
+        <div className="mt-5 flex flex-wrap items-end gap-3 border-t border-black/6 pt-4">
+          <label className="text-sm">
+            Новый пароль кабинета
+            <input
+              type="password"
+              value={newPass}
+              onChange={(e) => setNewPass(e.target.value)}
+              className="mt-1 block h-11 w-56 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+            />
+          </label>
+          <Button
+            type="button"
+            disabled={busy || newPass.trim().length < 6}
+            onClick={async () => {
+              setBusy(true);
+              const res = await adminSetPassword({ data: { token: token(), password: newPass } });
+              setBusy(false);
+              if (!res.ok) setErr(res.error);
+              else {
+                setSavedWord("Пароль кабинета обновлён");
+                setNewPass("");
+              }
+            }}
+          >
+            Сохранить пароль
+          </Button>
         </div>
         {log.length ? (
           <ul className="mt-4 space-y-1 text-xs text-muted">
