@@ -9,6 +9,20 @@ function clean(text: string) {
     .slice(0, 800);
 }
 
+function toSsml(text: string) {
+  const escaped = clean(text)
+    .replace(/&/g, "&")
+    .replace(/</g, "<")
+    .replace(/>/g, ">");
+  const body = escaped
+    .replace(/\s*\.{2,}\s*/g, ", ")
+    .replace(/([.!?])(\s+|$)/g, '<break time="140ms"/>')
+    .replace(/:\s+/g, '<break time="80ms"/>')
+    .replace(/,\s+/g, '<break time="50ms"/>')
+    .replace(/\s+[—–]\s+/g, '<break time="70ms"/>');
+  return `<speak>${body}</speak>`;
+}
+
 export const speakAgent = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { text: string; voice?: "filipp" | "alena" })
   .handler(async ({ data }) => {
@@ -18,15 +32,15 @@ export const speakAgent = createServerFn({ method: "POST" })
     if (!key || !folder || !text) return { ok: false as const, error: "no-voice" };
     const voice = data.voice === "alena" ? "alena" : "filipp";
     const body = new URLSearchParams({
-      text,
+      ssml: toSsml(text),
       lang: "ru-RU",
       voice,
       emotion: "good",
-      speed: voice === "alena" ? "1.25" : "1.3",
+      speed: "1.0",
       format: "mp3",
       folderId: folder,
     });
-    const res = await fetch("https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize", {
+    let res = await fetch("https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize", {
       method: "POST",
       headers: {
         Authorization: `Api-Key ${key}`,
@@ -34,6 +48,25 @@ export const speakAgent = createServerFn({ method: "POST" })
       },
       body,
     });
+    if (!res.ok) {
+      const fallback = new URLSearchParams({
+        text,
+        lang: "ru-RU",
+        voice,
+        emotion: "good",
+        speed: "1.0",
+        format: "mp3",
+        folderId: folder,
+      });
+      res = await fetch("https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize", {
+        method: "POST",
+        headers: {
+          Authorization: `Api-Key ${key}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: fallback,
+      });
+    }
     if (!res.ok) return { ok: false as const, error: "tts" };
     const buf = Buffer.from(await res.arrayBuffer());
     return { ok: true as const, audio: `data:audio/mpeg;base64,${buf.toString("base64")}` };

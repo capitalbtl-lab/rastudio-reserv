@@ -76,7 +76,8 @@ export function AgentChat() {
   const endRef = useRef<HTMLDivElement>(null);
   const voiceOnRef = useRef(false);
   const recRef = useRef<Rec | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioRef = useRef<{ stop: () => void } | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
   const mood = moodOf(messages, busy);
   const offer = nextChips(messages);
   voiceOnRef.current = voiceOn;
@@ -88,7 +89,7 @@ export function AgentChat() {
   useEffect(() => {
     return () => {
       recRef.current?.stop();
-      audioRef.current?.pause();
+      audioRef.current?.stop();
     };
   }, []);
 
@@ -98,23 +99,60 @@ export function AgentChat() {
     setListening(false);
   }
 
+  async function playClip(dataUrl: string) {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = audioCtxRef.current || new Ctx();
+    audioCtxRef.current = ctx;
+    if (ctx.state === "suspended") await ctx.resume();
+    const raw = await fetch(dataUrl).then((r) => r.arrayBuffer());
+    const buf = await ctx.decodeAudioData(raw);
+    const data = buf.getChannelData(0);
+    const thr = 0.016;
+    let a = 0;
+    let b = data.length - 1;
+    while (a < b && Math.abs(data[a]) < thr) a += 1;
+    while (b > a && Math.abs(data[b]) < thr) b -= 1;
+    a = Math.max(0, a - 80);
+    b = Math.min(data.length - 1, b + 160);
+    const len = Math.max(1, b - a);
+    const sliced = ctx.createBuffer(buf.numberOfChannels, len, buf.sampleRate);
+    for (let ch = 0; ch < buf.numberOfChannels; ch += 1) {
+      sliced.copyToChannel(buf.getChannelData(ch).subarray(a, a + len), ch);
+    }
+    await new Promise<void>((resolve) => {
+      const src = ctx.createBufferSource();
+      src.buffer = sliced;
+      src.connect(ctx.destination);
+      const stop = () => {
+        try {
+          src.stop();
+        } catch {
+          /* already stopped */
+        }
+        resolve();
+      };
+      audioRef.current = { stop };
+      src.onended = () => resolve();
+      src.start();
+    });
+  }
+
   async function speak(phrase: string) {
     stopListen();
     setSpeaking(true);
     try {
-      for (const turn of parseTurns(phrase)) {
-        if (!voiceOnRef.current) break;
-        const res = await speakAgent({
-          data: { text: turn.text, voice: turn.who === "olga" ? "alena" : "filipp" },
-        });
-        if (!res.ok || !("audio" in res) || !res.audio) continue;
-        await new Promise<void>((resolve) => {
-          const audio = new Audio(res.audio);
-          audioRef.current = audio;
-          audio.onended = () => resolve();
-          audio.onerror = () => resolve();
-          void audio.play().catch(() => resolve());
-        });
+      const turns = parseTurns(phrase);
+      const clips = await Promise.all(
+        turns.map(async (turn) => {
+          const res = await speakAgent({
+            data: { text: turn.text, voice: turn.who === "olga" ? "alena" : "filipp" },
+          });
+          return res.ok && "audio" in res ? res.audio : null;
+        }),
+      );
+      for (const clip of clips) {
+        if (!clip || !voiceOnRef.current) break;
+        await playClip(clip);
       }
     } finally {
       setSpeaking(false);
@@ -174,7 +212,7 @@ export function AgentChat() {
     if (voiceOn) {
       setVoiceOn(false);
       stopListen();
-      audioRef.current?.pause();
+      audioRef.current?.stop();
       return;
     }
     setVoiceOn(true);
@@ -199,7 +237,7 @@ export function AgentChat() {
                   setOpen(false);
                   setVoiceOn(false);
                   stopListen();
-                  audioRef.current?.pause();
+                  audioRef.current?.stop();
                 }}
                 aria-label="Закрыть чат"
               >
