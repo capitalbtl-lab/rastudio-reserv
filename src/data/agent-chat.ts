@@ -94,9 +94,37 @@ function normalizeDob(dob: string) {
   return s;
 }
 
-async function deepseek(messages: ChatMsg[]) {
+async function yandexChat(messages: ChatMsg[]) {
+  const key = process.env.YANDEX_API_KEY?.trim();
+  const folder = process.env.YANDEX_FOLDER_ID?.trim();
+  if (!key || !folder) return null;
+  const res = await fetch("https://ai.api.cloud.yandex.net/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Api-Key ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: `gpt://${folder}/yandexgpt/latest`,
+      temperature: 0.3,
+      max_tokens: 700,
+      messages,
+      tools: TOOLS,
+      tool_choice: "auto",
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`yandex ${res.status} ${text.slice(0, 200)}`);
+  }
+  return (await res.json()) as {
+    choices: { message: { role: string; content?: string | null; tool_calls?: { id: string; function: { name: string; arguments: string } }[] } }[];
+  };
+}
+
+async function deepseekChat(messages: ChatMsg[]) {
   const key = process.env.DEEPSEEK_API_KEY?.trim();
-  if (!key) throw new Error("no-key");
+  if (!key) return null;
   const res = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: {
@@ -120,6 +148,18 @@ async function deepseek(messages: ChatMsg[]) {
   };
 }
 
+async function complete(messages: ChatMsg[]) {
+  try {
+    const y = await yandexChat(messages);
+    if (y) return y;
+  } catch {
+    /* fallback */
+  }
+  const d = await deepseekChat(messages);
+  if (d) return d;
+  throw new Error("no-key");
+}
+
 export const chatAgent = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { messages: { role: "user" | "assistant"; content: string }[]; ip?: string })
   .handler(async ({ data }) => {
@@ -136,7 +176,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     const messages: ChatMsg[] = [{ role: "system", content: SYSTEM }, ...trimmed];
     try {
       for (let step = 0; step < 3; step++) {
-        const json = await deepseek(messages);
+        const json = await complete(messages);
         const msg = json.choices?.[0]?.message;
         if (!msg) break;
         if (msg.tool_calls?.length) {
