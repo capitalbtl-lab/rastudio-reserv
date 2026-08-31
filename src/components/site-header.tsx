@@ -138,7 +138,7 @@ export function SiteHeader() {
             Telegram
           </a>
           <a href={SITE.cabinet} target="_blank" rel="noreferrer" className={actionBtn}>
-            Кабинет
+            Личный кабинет
           </a>
           <a
             href="#trial"
