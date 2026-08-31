@@ -28,9 +28,7 @@ export function ProgrammingCoursePage({ page, course, schedule }: Props) {
   for (const img of [
     course.banner,
     ...course.gallery,
-    page.images[0]
-      ? { src: page.images[0].src, filename: page.images[0].filename, alt: page.images[0].alt }
-      : null,
+    ...page.images,
   ]) {
     if (!img?.src || seen.has(img.src)) continue;
     seen.add(img.src);

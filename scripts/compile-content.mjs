@@ -93,7 +93,10 @@ const byPath = new Map();
 const COURSE_HEROES = JSON.parse(
   fs.readFileSync(path.join(ROOT, "content/course-heroes.json"), "utf8"),
 );
-const COURSE_EXTRAS = {
+const FILE_EXTRAS = JSON.parse(
+  fs.readFileSync(path.join(ROOT, "content/course-extras.json"), "utf8"),
+);
+const MANUAL_EXTRAS = {
   "/digitalartschool": [
     {
       src: "/courses/manga.jpg",
@@ -128,6 +131,14 @@ const COURSE_EXTRAS = {
     },
   ],
 };
+const COURSE_EXTRAS = { ...FILE_EXTRAS };
+for (const [key, arr] of Object.entries(MANUAL_EXTRAS)) {
+  const have = new Set((COURSE_EXTRAS[key] || []).map((i) => i.src));
+  COURSE_EXTRAS[key] = [
+    ...(COURSE_EXTRAS[key] || []),
+    ...arr.filter((i) => !have.has(i.src)),
+  ];
+}
 
 function heroFor(pathValue, decoded) {
   return COURSE_HEROES[pathValue] || COURSE_HEROES[decoded] || null;
@@ -203,12 +214,10 @@ for (const raw of pages) {
   const extras = COURSE_EXTRAS[p] || COURSE_EXTRAS[decodedPath];
   if (extras) {
     const have = new Set(keptImages.map((img) => img.src));
-    for (const extra of extras) {
-      if (have.has(extra.src)) continue;
-      keptImages.push(extra);
-      have.add(extra.src);
-    }
-    keptImages = keptImages.slice(0, maxImgs);
+    const fresh = extras.filter((img) => !have.has(img.src));
+    const head = hero ? keptImages.slice(0, 1) : [];
+    const rest = hero ? keptImages.slice(1) : keptImages;
+    keptImages = [...head, ...fresh, ...rest].slice(0, maxImgs);
   }
 
   const related = unique(
@@ -343,12 +352,10 @@ function applyLocalHeroes(page) {
     page.ogImage = `https://www.rastudio.org${hero.src}`;
   }
   const have = new Set(images.map((img) => img.src));
-  for (const extra of extras) {
-    if (have.has(extra.src)) continue;
-    images.push(extra);
-    have.add(extra.src);
-  }
-  page.images = images.slice(
+  const fresh = extras.filter((img) => !have.has(img.src));
+  const head = hero ? images.slice(0, 1) : [];
+  const rest = hero ? images.slice(1) : images;
+  page.images = [...head, ...fresh, ...rest].slice(
     0,
     page.path === "/team" || page.path === "/master-class" || page.path === "/allcourses" ? 24 : 10,
   );
