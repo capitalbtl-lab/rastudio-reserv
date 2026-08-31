@@ -133,48 +133,104 @@ export function Trajectory({
   );
 }
 
+const WEEKDAYS: [RegExp, string][] = [
+  [/понедельник/i, "Пн"],
+  [/вторник/i, "Вт"],
+  [/сред/i, "Ср"],
+  [/четверг/i, "Чт"],
+  [/пятниц/i, "Пт"],
+  [/суббот/i, "Сб"],
+  [/воскресень/i, "Вс"],
+];
+
+function compactWhen(when: string) {
+  if (!when) return "";
+  const days = WEEKDAYS.filter(([re]) => re.test(when)).map(([, d]) => d);
+  const times = [...when.matchAll(/(\d{1,2}:\d{2})\s*до\s*(\d{1,2}:\d{2})/gi)].map(
+    (m) => `${m[1]}–${m[2]}`,
+  );
+  const twice = /2\s*раза/i.test(when);
+  if (days.length && times.length) return `${twice ? "2× " : ""}${days.join("/")} ${times.join(", ")}`;
+  if (days.length) return `${twice ? "2× " : ""}${days.join("/")}`;
+  return when.replace(/^Занятия\s+/i, "");
+}
+
+function branchRank(session: CmsSession) {
+  const blob = `${session.city} ${session.branch}`;
+  if (/октябрьск/i.test(blob)) return 0;
+  if (/гражданск/i.test(blob)) return 1;
+  if (/луховиц|пушкин/i.test(blob)) return 2;
+  return 9;
+}
+
+function branchLabel(session: CmsSession) {
+  const blob = `${session.city} ${session.branch}`;
+  if (/октябрьск/i.test(blob)) return "Коломна · Октябрьской революции, 340";
+  if (/гражданск/i.test(blob)) return "Коломна · Гражданская, 2";
+  if (/пушкин|луховиц/i.test(blob)) return "Луховицы · Пушкина, 202А";
+  if (session.city && session.branch) return `${session.city} · ${session.branch}`;
+  return session.branch || session.city || "Филиал";
+}
+
+function ageRank(age: string) {
+  const n = age.match(/\d+/);
+  return n ? Number(n[0]) : 99;
+}
+
 export function ScheduleBlock({ sessions }: { sessions: CmsSession[] }) {
   if (!sessions.length) return null;
-  const cities = [...new Set(sessions.map((s) => s.city).filter(Boolean))];
+  const ordered = [...sessions].sort((a, b) => {
+    const br = branchRank(a) - branchRank(b);
+    if (br) return br;
+    const age = ageRank(a.age) - ageRank(b.age);
+    if (age) return age;
+    return compactWhen(a.when).localeCompare(compactWhen(b.when), "ru");
+  });
+  const groups: { label: string; items: CmsSession[] }[] = [];
+  for (const session of ordered) {
+    const label = branchLabel(session);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(session);
+    else groups.push({ label, items: [session] });
+  }
+
   return (
-    <section>
-      <Kicker>Расписание</Kicker>
-      <h2 className="display section-title mt-2">Расписание занятий</h2>
-      <p className="mt-3 max-w-2xl text-muted">
-        Актуальные группы в Коломне и Луховицах. Место можно уточнить при записи — администратор
-        подберёт филиал и время.
-      </p>
-      <div className="mt-6 space-y-3">
-        {sessions.map((s) => (
-          <div
-            key={s.id}
-            className="flex flex-col gap-3 rounded-lg bg-surface p-4 shadow-[var(--shadow-border)] md:flex-row md:items-center md:justify-between md:p-5"
-          >
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-muted">
-                {s.group}
-                {s.city ? ` · ${s.city}` : ""}
-                {s.age ? ` · ${s.age}` : ""}
-              </p>
-              <p className="mt-1 text-sm font-medium md:text-base">{s.when}</p>
-              {s.branch ? (
-                <p className="mt-1 flex items-start gap-1.5 text-xs text-muted">
-                  <MapPin className="mt-0.5 size-3.5 shrink-0" />
-                  {s.branch}
-                </p>
-              ) : null}
-            </div>
-            {s.signup ? (
-              <Button asChild size="sm" className="shrink-0">
-                <a href={s.signup}>Записаться</a>
-              </Button>
-            ) : null}
+    <section className="mt-10">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="display text-xl md:text-2xl">Расписание</h2>
+        <p className="text-xs text-muted">филиалы · возраста</p>
+      </div>
+      <div className="mt-4 space-y-4">
+        {groups.map((group) => (
+          <div key={group.label}>
+            <p className="flex items-center gap-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-muted">
+              <MapPin className="size-3.5" />
+              {group.label}
+            </p>
+            <ul className="mt-2 overflow-hidden rounded-xl bg-surface shadow-[var(--shadow-border)]">
+              {group.items.map((s, i) => (
+                <li
+                  key={s.id}
+                  className={cn(
+                    "grid grid-cols-[5.5rem_1fr_auto] items-center gap-2 px-3 py-2 text-sm md:grid-cols-[6.5rem_1fr_auto] md:gap-3 md:px-4",
+                    i ? "border-t border-border/80" : "",
+                  )}
+                >
+                  <span className="text-[0.78rem] font-semibold leading-tight">{s.age || "группа"}</span>
+                  <span className="min-w-0 truncate text-[0.82rem] text-muted">{compactWhen(s.when)}</span>
+                  {s.signup ? (
+                    <a href={s.signup} className="text-[0.72rem] font-semibold text-primary hover:underline">
+                      Запись
+                    </a>
+                  ) : (
+                    <span />
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         ))}
       </div>
-      {cities.length ? (
-        <p className="mt-4 text-xs text-muted">Филиалы: {cities.join(" · ")}</p>
-      ) : null}
     </section>
   );
 }
