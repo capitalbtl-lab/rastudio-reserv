@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Star } from "lucide-react";
 import { REVIEWS, YANDEX_RATING, YANDEX_REVIEWS } from "@/data/reviews";
 import { Button } from "@/components/ui/button";
@@ -10,6 +13,69 @@ function initials(name: string) {
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+}
+
+function FeaturedReview() {
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (paused) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = window.setInterval(() => {
+      setIndex((i) => (i + 1) % REVIEWS.length);
+    }, 7000);
+    return () => window.clearInterval(id);
+  }, [paused]);
+
+  const item = REVIEWS[index];
+
+  return (
+    <article
+      className="review-ink relative flex min-h-[22rem] flex-col overflow-hidden rounded-3xl p-5 text-header-fg sm:col-span-2 sm:min-h-[26rem] lg:row-span-2 lg:p-8"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      <div key={item.name + item.date} className="review-fade relative z-1 flex min-h-0 flex-1 flex-col">
+        <div className="flex items-center justify-between gap-3">
+          <span className="rounded-full bg-white/12 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-header-fg">
+            {item.course}
+          </span>
+          <span className="flex gap-0.5">
+            {Array.from({ length: 5 }).map((_, s) => (
+              <Star key={s} className="size-3 fill-white/80 text-white/80" strokeWidth={0} />
+            ))}
+          </span>
+        </div>
+        <p className="display mt-5 text-xl leading-snug text-header-fg md:text-2xl md:leading-snug">
+          {item.text}
+        </p>
+        <div className="mt-auto flex items-center gap-3 pt-6">
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white/12 text-sm font-semibold">
+            {initials(item.name)}
+          </span>
+          <span>
+            <span className="block text-sm font-semibold">{item.name}</span>
+            <span className="text-xs text-header-fg/55">{item.date}</span>
+          </span>
+        </div>
+      </div>
+      <div className="relative z-1 mt-5 flex gap-1.5">
+        {REVIEWS.map((review, i) => (
+          <button
+            key={review.name + review.date}
+            type="button"
+            aria-label={review.name}
+            className={cn(
+              "h-1.5 rounded-full transition-all",
+              i === index ? "w-6 bg-white" : "w-1.5 bg-white/30 hover:bg-white/55",
+            )}
+            onClick={() => setIndex(i)}
+          />
+        ))}
+      </div>
+    </article>
+  );
 }
 
 export function Reviews() {
@@ -35,73 +101,40 @@ export function Reviews() {
       </div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {REVIEWS.map((item, i) => {
-          const featured = i === 0;
-          return (
-            <article
-              key={item.name + item.date}
-              className={cn(
-                "group relative flex flex-col overflow-hidden rounded-3xl p-5 shadow-[var(--shadow-border)] transition-shadow duration-[var(--motion-fast)] hover:shadow-[var(--shadow-border-hover)]",
-                featured
-                  ? "bg-header text-header-fg sm:col-span-2 lg:row-span-2 lg:p-8"
-                  : "bg-surface",
-              )}
+        <FeaturedReview />
+        {REVIEWS.slice(1).map((item) => (
+          <article
+            key={item.name + item.date}
+            className="group relative flex flex-col overflow-hidden rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] transition-shadow duration-[var(--motion-fast)] hover:shadow-[var(--shadow-border-hover)]"
+          >
+            <span
+              className="pointer-events-none absolute -top-4 right-3 select-none font-display text-[6.5rem] leading-none text-primary/10"
+              aria-hidden
             >
-              <span
-                className={cn(
-                  "pointer-events-none absolute -top-4 right-3 select-none font-display text-[6.5rem] leading-none",
-                  featured ? "text-white/10" : "text-primary/10",
-                )}
-                aria-hidden
-              >
-                “
+              “
+            </span>
+            <div className="relative flex items-center justify-between gap-3">
+              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-primary">
+                {item.course}
               </span>
-              <div className="relative flex items-center justify-between gap-3">
-                <span
-                  className={cn(
-                    "rounded-full px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em]",
-                    featured ? "bg-white/12 text-header-fg" : "bg-primary/10 text-primary",
-                  )}
-                >
-                  {item.course}
-                </span>
-                <span className="flex gap-0.5">
-                  {Array.from({ length: 5 }).map((_, s) => (
-                    <Star
-                      key={s}
-                      className={cn("size-3", featured ? "fill-white/80 text-white/80" : "fill-primary text-primary")}
-                      strokeWidth={0}
-                    />
-                  ))}
-                </span>
-              </div>
-              <p
-                className={cn(
-                  "relative mt-4 leading-relaxed",
-                  featured
-                    ? "display text-xl text-header-fg/90 md:text-2xl md:leading-snug"
-                    : "text-[0.95rem] text-fg/85",
-                )}
-              >
-                {item.text}
-              </p>
-              <div className="relative mt-auto flex items-center gap-3 pt-5">
-                <span
-                  className={cn(
-                    "grid size-10 shrink-0 place-items-center rounded-full text-sm font-semibold",
-                    featured ? "bg-white/12 text-header-fg" : "bg-primary/10 text-primary",
-                  )}
-                >
-                  {initials(item.name)}
-                </span>
-                <span>
-                  <span className="block text-sm font-semibold">{item.name}</span>
-                  <span className={cn("text-xs", featured ? "text-header-fg/55" : "text-muted")}>{item.date}</span>
-                </span>
-              </div>
-            </article>
-          );
-        })}
+              <span className="flex gap-0.5">
+                {Array.from({ length: 5 }).map((_, s) => (
+                  <Star key={s} className="size-3 fill-primary text-primary" strokeWidth={0} />
+                ))}
+              </span>
+            </div>
+            <p className="relative mt-4 text-[0.95rem] leading-relaxed text-fg/85">{item.text}</p>
+            <div className="relative mt-auto flex items-center gap-3 pt-5">
+              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                {initials(item.name)}
+              </span>
+              <span>
+                <span className="block text-sm font-semibold">{item.name}</span>
+                <span className="text-xs text-muted">{item.date}</span>
+              </span>
+            </div>
+          </article>
+        ))}
       </div>
 
       <div className="mt-6">
