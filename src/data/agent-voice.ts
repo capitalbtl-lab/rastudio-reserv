@@ -1,7 +1,25 @@
 import { createServerFn } from "@tanstack/react-start";
 
-function clean(text: string) {
+function speakRu(text: string) {
   return text
+    .replace(/IT-лаборатория Create/gi, "айти-лаборатория криэйт")
+    .replace(/IT-лаборатория/gi, "айти-лаборатория")
+    .replace(/\bCreate\b/g, "криэйт")
+    .replace(/StartSchool/gi, "старт скул")
+    .replace(/JuniorSchool/gi, "джуниор скул")
+    .replace(/Super Minds/gi, "супер майндс")
+    .replace(/Go Getter/gi, "гоу геттер")
+    .replace(/GameDev/gi, "геймдев")
+    .replace(/\bScratch\b/g, "скретч")
+    .replace(/\bPython\b/g, "пайтон")
+    .replace(/C\+\+/g, "си плюс плюс")
+    .replace(/\bUnity\b/g, "юнити")
+    .replace(/\bBlender\b/g, "блендер")
+    .replace(/\bSTEAM\b/g, "стим");
+}
+
+function clean(text: string) {
+  return speakRu(text)
     .replace(/https?:\/\/\S+/g, "")
     .replace(/[#*_`>]+/g, "")
     .replace(/\s+/g, " ")
