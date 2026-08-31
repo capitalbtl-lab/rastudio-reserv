@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { serverEnv } from "./server-env";
 import { loadVoiceSettings, type VoiceSettings } from "./voice-settings";
 
-const MALE = ["zahar", "filipp", "ermil"];
+const MALE = ["zahar", "filipp", "ermil", "madirus"];
 const FEMALE = ["alena", "jane", "marina", "oksana"];
 
 function speakRu(text: string) {

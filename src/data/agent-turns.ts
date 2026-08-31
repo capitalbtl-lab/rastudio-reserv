@@ -1,11 +1,26 @@
 export type Who = "oleg" | "olga";
 
+function genderFix(who: Who, text: string) {
+  if (who === "oleg") {
+    return text
+      .replace(/\bсогласна\b/gi, "согласен")
+      .replace(/\bготова\b/gi, "готов")
+      .replace(/\bпоняла\b/gi, "понял")
+      .replace(/\bрада\b/gi, "рад");
+  }
+  return text
+    .replace(/\bсогласен\b/gi, "согласна")
+    .replace(/\bготов\b(?!а)/gi, "готова")
+    .replace(/\bпонял\b(?!а)/gi, "поняла")
+    .replace(/\bрад\b(?!а)/gi, "рада");
+}
+
 export function parseTurns(raw: string): { who: Who; text: string }[] {
   const out: { who: Who; text: string }[] = [];
   let who: Who = "oleg";
   let buf: string[] = [];
   const flush = () => {
-    const text = buf.join(" ").trim();
+    const text = genderFix(who, buf.join(" ").trim());
     if (text) out.push({ who, text });
     buf = [];
   };

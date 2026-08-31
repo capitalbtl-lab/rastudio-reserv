@@ -265,8 +265,9 @@ export function AgentChat() {
   }
 
   async function playClip(dataUrl: string, volume = 1) {
-    const el = audioElRef.current || new Audio();
-    audioElRef.current = el;
+    const el = new Audio();
+    el.preload = "auto";
+    el.playsInline = true;
     await new Promise<void>((resolve, reject) => {
       let finished = false;
       const done = (err?: boolean) => {
@@ -274,10 +275,14 @@ export function AgentChat() {
         finished = true;
         el.onended = null;
         el.onerror = null;
+        try {
+          el.pause();
+        } catch {
+          /* */
+        }
         if (err) reject(new Error("audio"));
         else resolve();
       };
-      el.preload = "auto";
       el.volume = Math.min(1, Math.max(0.4, volume));
       el.muted = false;
       el.playbackRate = 1;
@@ -286,6 +291,7 @@ export function AgentChat() {
       audioRef.current = {
         stop: () => {
           el.pause();
+          el.removeAttribute("src");
           done(false);
         },
       };
@@ -293,6 +299,20 @@ export function AgentChat() {
       const play = el.play();
       if (play && typeof play.catch === "function") play.catch(() => done(true));
     });
+  }
+
+  async function yandexClip(text: string, who: Who) {
+    for (let i = 0; i < 2; i += 1) {
+      try {
+        const res = await speakAgent({
+          data: { text, who: who === "olga" ? "olga" : "oleg" },
+        });
+        if (res.ok && "audio" in res && res.audio) return { audio: res.audio, volume: "volume" in res ? Number(res.volume) : 1 };
+      } catch {
+        /* retry */
+      }
+    }
+    return null;
   }
 
   async function speak(phrase: string) {
@@ -304,28 +324,22 @@ export function AgentChat() {
       .join(" ");
     setSpeaking(true);
     stopListen();
-    await new Promise((r) => window.setTimeout(r, 60));
+    await new Promise((r) => window.setTimeout(r, 40));
     try {
       const mode = adminLeft() > 0 ? "olga" : partnerRef.current;
       const turns = parseTurns(phrase).filter((t) => mode === "both" || t.who === mode);
-      for (const turn of turns) {
+      const clips = await Promise.all(turns.map((turn) => yandexClip(turn.text, turn.who)));
+      if (gen !== genRef.current) return;
+      for (let i = 0; i < turns.length; i += 1) {
         if (gen !== genRef.current) return;
+        const clip = clips[i];
+        if (!clip) continue;
+        spokenRef.current = turns[i].text;
         try {
-          const res = await speakAgent({
-            data: { text: turn.text, who: turn.who === "olga" ? "olga" : "oleg" },
-          });
-          if (gen !== genRef.current) return;
-          if (res.ok && "audio" in res) {
-            spokenRef.current = turn.text;
-            await playClip(res.audio, "volume" in res ? Number(res.volume) : 1);
-            continue;
-          }
+          await playClip(clip.audio, clip.volume);
         } catch {
-          /* browser voice */
+          /* skip broken clip, never Windows TTS */
         }
-        if (gen !== genRef.current) return;
-        spokenRef.current = turn.text;
-        await speakBrowser(turn.text, turn.who);
       }
     } finally {
       if (gen === genRef.current) {
