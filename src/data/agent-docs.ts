@@ -184,10 +184,11 @@ function scoreRows(rows: TransformRow[]) {
   return { accuracy, drift: 100 - accuracy };
 }
 
-async function buildTransform(doc: AgentDoc): Promise<TransformRow[]> {
+async function buildTransform(doc: AgentDoc, percent = 0): Promise<TransformRow[]> {
   const channels = loadChannels();
   const ids = channels.map((c) => c.id);
   const items = doc.items.length ? doc.items : await interpret(doc.kind, doc.text);
+  const p = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
   const rows: TransformRow[] = items.map((it, i) => {
     const from = [it.title, it.body].filter(Boolean).join("\n");
     const toChannel = it.channel && ids.includes(it.channel) ? it.channel : guessChannel(from, ids);
@@ -198,26 +199,44 @@ async function buildTransform(doc: AgentDoc): Promise<TransformRow[]> {
       from,
       toChannel,
       toText,
-      comment: toChannel === "common" ? "Нет маркера канала — в «Общее для всех», чтобы видели все агенты." : `Маркер канала: ${channels.find((c) => c.id === toChannel)?.label}. Текст не сокращали.`,
+      comment:
+        toChannel === "common"
+          ? p
+            ? `Общее. Адаптация ${p}% по правилам канала.`
+            : "Нет маркера канала — в «Общее для всех»."
+          : p
+            ? `Канал «${channels.find((c) => c.id === toChannel)?.label}», адаптация ${p}%.`
+            : `Маркер канала: ${channels.find((c) => c.id === toChannel)?.label}. Текст не сокращали.`,
       accuracy: d.accuracy,
       drift: d.drift,
       on: it.on !== false,
     };
   });
-  const llm = await yandexJson<{ rows?: { id?: string; channel?: string; comment?: string }[] }>(
-    "Ты методист студии. Не переписывай текст. Только распредели фрагменты по каналам. Ответ — JSON.",
-    `Каналы: ${channels.map((c) => `${c.id} = ${c.label}`).join("; ")}.
-JSON: {"rows":[{"id":"как в списке","channel":"id канала","comment":"почему этот канал"}]}
+  const llm = await yandexJson<{ rows?: { id?: string; channel?: string; toText?: string; comment?: string }[] }>(
+    p
+      ? "Ты методист студии «Развивайся». Распредели фрагменты по каналам и адаптируй текст под правила канала. Факты, запреты, телефоны и адреса не выкидывай. Ответ — только JSON."
+      : "Ты методист студии. Не переписывай текст. Только распредели фрагменты по каналам. Ответ — JSON.",
+    `Каналы и правила:
+${channels.map((c) => `### ${c.id} ${c.label}\n${c.rules}`).join("\n\n")}
+Процент адаптации: ${p}. 0 = копируй дословно. 100 = максимально под правила канала, смысл тот же. Цель расхождения с оригиналом ≈ ${p}%.
+JSON: {"rows":[{"id":"как в списке","channel":"id канала","toText":"текст для канала","comment":"что сделали"}]}
 Фрагменты:
-${rows.map((r) => `--- ${r.id} ---\n${r.from.slice(0, 1200)}`).join("\n").slice(0, 22000)}`,
-    3500,
+${rows
+  .map((r) => `--- ${r.id} ---\n${r.from.slice(0, p ? 900 : 1200)}`)
+  .join("\n")
+  .slice(0, p ? 18000 : 22000)}`,
+    p ? 5500 : 3500,
   );
   if (llm?.rows?.length) {
     for (const hint of llm.rows) {
       const row = rows.find((r) => r.id === hint.id);
       if (!row) continue;
       if (hint.channel && ids.includes(hint.channel)) row.toChannel = hint.channel;
+      if (p && hint.toText && hint.toText.trim()) row.toText = String(hint.toText);
       if (hint.comment) row.comment = String(hint.comment).slice(0, 400);
+      const d = driftOf(row.from, row.toText);
+      row.accuracy = d.accuracy;
+      row.drift = d.drift;
     }
   }
   return rows;
@@ -276,6 +295,7 @@ export const adminAgentDocs = createServerFn({ method: "POST" })
         channels?: AgentChannel[];
         rows?: TransformRow[];
         fixIds?: string[];
+        percent?: number;
       },
   )
   .handler(async ({ data }) => {
@@ -398,7 +418,7 @@ export const adminAgentDocs = createServerFn({ method: "POST" })
     if (data.action === "previewTransform" && data.id) {
       const hit = store.docs.find((d) => d.id === data.id);
       if (!hit) return { ok: false as const, error: "Документ не найден." };
-      const rows = await buildTransform(hit);
+      const rows = await buildTransform(hit, Number(data.percent) || 0);
       const score = scoreRows(rows);
       hit.transformRows = rows;
       hit.transformAt = new Date().toISOString();

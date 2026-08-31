@@ -75,12 +75,12 @@ const KIND_RU: Record<DocKind, string> = {
 };
 
 const CHANNEL_HINT: Record<string, string> = {
-  site: "Чат на rastudio.org. Кнопки, голосовой режим, страница курса.",
-  phone: "Входящие и исходящие звонки Novofon. Без кнопок сайта.",
-  vk: "Личка сообщества ВКонтакте. Комментарии под постом сюда не пишем.",
-  max: "Бот в MAX. Голосовые в MAX не принимаем.",
-  common: "Читают все каналы: правила, филиалы, тон, запреты.",
-  telegram: "Бот Telegram, когда контур подключим.",
+  site: "Живой канал прямо сейчас. Чат rastudio.org шлёт id=site. Сюда — кнопки возраста, кнопка курса, голос на сайте. Не пишите «продиктуйте адрес» — это для телефона.",
+  phone: "Novofon: входящие и исходящие. Кнопок нет, один вопрос за реплику. Сюда — как называть филиалы вслух и что нельзя собирать по звонку.",
+  vk: "Личка сообщества. Комментарий под постом — не место для ФИО и телефона: сначала в сообщения. Ссылки можно, голосовые кружки — нет.",
+  max: "Бот MAX. Голосовые вложения просим текстом или звонком на 8 800. Ссылки пишем целиком.",
+  common: "Этот столбец читает каждый канал. Правила студии, запреты, адреса, учебный год. Не кладите сюда «нажмите кнопку».",
+  telegram: "Запасной канал. Появится в промпте, когда бот начнёт передавать channel=telegram.",
 };
 
 function guessId(text: string, ids: string[]) {
@@ -147,6 +147,7 @@ export function AdminTrainDocs() {
   const [previewOf, setPreviewOf] = useState("");
   const [draftRows, setDraftRows] = useState<Record<string, TransformRow[]>>({});
   const [newCh, setNewCh] = useState({ id: "telegram", label: "Агент в Telegram" });
+  const [percent, setPercent] = useState(0);
 
   async function load() {
     const res = await adminAgentDocs({ data: { token: token(), action: "list" } });
@@ -205,7 +206,7 @@ export function AdminTrainDocs() {
   async function preview(id: string) {
     setBusy(true);
     setMsg("Раскладываю оригинал по каналам, без сжатия…");
-    const res = await adminAgentDocs({ data: { token: token(), action: "previewTransform", id } });
+    const res = await adminAgentDocs({ data: { token: token(), action: "previewTransform", id, percent } });
     take(res);
     setBusy(false);
     if (res.ok && "docs" in res) {
@@ -215,7 +216,7 @@ export function AdminTrainDocs() {
       setOpen(id);
       setMsg(
         doc
-          ? `Превью готово. Точность ${doc.transformAccuracy ?? "—"}%, расхождение ${doc.transformDrift ?? "—"}%. Проверьте строки и нажмите «Применить преобразование».`
+          ? `Превью готово. Точность ${doc.transformAccuracy ?? "—"}%, расхождение ${doc.transformDrift ?? "—"}% (цель адаптации ${percent}%). Проверьте строки и нажмите «Применить преобразование».`
           : "Превью готово.",
       );
     }
@@ -283,65 +284,93 @@ export function AdminTrainDocs() {
         </div>
       </article>
 
-      <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="font-display text-xl">Каналы коммуникации</h3>
-          <InfoTip text="Пять столбцов инструкции. Чат сайта всегда шлёт id=site. Телефон, ВК и MAX подключатся со своим id. Не удаляйте «common» — без него телефон не увидит правила студии. Названия можно поправить под оператора, id не меняется у базовых." />
+      <article className="overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border)]">
+        <div className="border-b border-black/6 px-5 py-5 md:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-display text-xl">Каналы коммуникации</h3>
+            <InfoTip text="Каждая карточка — отдельный агент. Поле «Правила канала» попадает в преобразование: при проценте выше 0 текст инструкции переписывается под эти правила (кнопки на сайте, один вопрос на телефоне, личка в ВК). Чат rastudio.org всегда id=site. Не удаляйте «Общее» — его читают все. После правок нажмите «Сохранить каналы», иначе преобразование возьмёт старые правила." />
+          </div>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted">
+            Сейчас на сайте говорит <span className="font-semibold text-fg">Агент на сайте</span>. Остальные каналы хранят свой столбец, пока не подключится телефон, ВК или MAX.
+          </p>
         </div>
-        <p className="mt-2 text-sm text-muted">
-          Сейчас на rastudio.org агент в канале <span className="font-semibold text-fg">«Агент на сайте»</span>. Остальные столбцы хранятся и ждут свой контур.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-0 lg:grid-cols-5">
           {channels.map((c, i) => (
-            <div key={c.id} className={cn("rounded-2xl p-3 ring-1", c.id === "site" ? "bg-primary/5 ring-primary/30" : "bg-surface-2 ring-transparent")}>
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">{c.id}</p>
-                <InfoTip text={CHANNEL_HINT[c.id] || (c.locked ? "Базовый канал. Id не меняется." : "Дополнительный канал. Можно убрать, если не используете.")} />
+            <div
+              key={c.id}
+              className={cn(
+                "flex flex-col border-black/6 p-4 lg:border-r lg:last:border-r-0",
+                i > 0 ? "border-t lg:border-t-0" : "",
+                c.id === "site" ? "bg-[#f4f7ff]" : "bg-white",
+              )}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted">{c.id}</p>
+                  {c.id === "site" ? (
+                    <span className="mt-1 inline-flex rounded-full bg-primary px-2 py-0.5 text-[0.65rem] font-semibold text-white">сейчас на сайте</span>
+                  ) : null}
+                </div>
+                <InfoTip text={CHANNEL_HINT[c.id] || "Дополнительный канал. Правила внизу карточки — как говорить в этой среде."} />
               </div>
-              {c.id === "site" ? <p className="mt-1 text-[0.7rem] font-semibold text-primary">сейчас на сайте</p> : null}
-              <input
-                value={c.label}
-                onChange={(e) => setChannels((list) => list.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
-                className="mt-2 h-10 w-full rounded-xl bg-white px-3 text-sm ring-1 ring-black/10"
-              />
+              <label className="mt-3 text-xs font-semibold text-muted">
+                Название
+                <input
+                  value={c.label}
+                  onChange={(e) => setChannels((list) => list.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                  className="mt-1 h-10 w-full rounded-xl bg-surface-2 px-3 text-sm font-medium text-fg ring-1 ring-black/8"
+                />
+              </label>
+              <label className="mt-3 flex-1 text-xs font-semibold text-muted">
+                <span className="inline-flex items-center gap-1">
+                  Правила канала
+                  <InfoTip text="Этот текст видит модель, когда процент адаптации больше 0. Пишите манеру канала: длина реплики, кнопки или без, что запрещено. Не дублируйте оферту." />
+                </span>
+                <textarea
+                  value={c.rules || ""}
+                  onChange={(e) => setChannels((list) => list.map((x, j) => (j === i ? { ...x, rules: e.target.value } : x)))}
+                  rows={8}
+                  className="mt-1 w-full resize-y rounded-xl bg-surface-2 px-3 py-2 text-[0.8rem] leading-relaxed text-fg ring-1 ring-black/8"
+                />
+              </label>
               {c.locked ? null : (
-                <button type="button" className="mt-2 text-xs font-semibold text-primary" onClick={() => setChannels((list) => list.filter((_, j) => j !== i))}>
-                  Убрать
+                <button type="button" className="mt-2 self-start text-xs font-semibold text-primary" onClick={() => setChannels((list) => list.filter((_, j) => j !== i))}>
+                  Убрать канал
                 </button>
               )}
             </div>
           ))}
         </div>
-        {channels.length < 6 ? (
-          <div className="mt-4 flex flex-wrap items-end gap-2">
-            <label className="text-sm">
-              id
-              <InfoTip className="ml-1" text="Латиницей, без пробелов: telegram, alice. Это то, что придёт в чат как channel." />
-              <input value={newCh.id} onChange={(e) => setNewCh({ ...newCh, id: e.target.value })} className="mt-1 block h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
-            </label>
-            <label className="text-sm">
-              Название
-              <InfoTip className="ml-1" text="Как столбец видит оператор. Например: «Агент в Telegram»." />
-              <input value={newCh.label} onChange={(e) => setNewCh({ ...newCh, label: e.target.value })} className="mt-1 block h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
-            </label>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                if (!newCh.id.trim() || channels.some((c) => c.id === newCh.id)) return;
-                setChannels((list) => [...list, { id: newCh.id.trim(), label: newCh.label.trim() || newCh.id, locked: false }]);
-              }}
-            >
-              Добавить канал
-            </Button>
-            <InfoTip text="Максимум 6. Новый столбец появится у каждого документа. Пока контур не подключён, текст просто лежит." />
-          </div>
-        ) : null}
-        <div className="mt-4 flex items-center gap-2">
+        <div className="flex flex-wrap items-end gap-3 border-t border-black/6 px-5 py-4 md:px-6">
+          {channels.length < 6 ? (
+            <>
+              <label className="text-sm">
+                <span className="inline-flex items-center gap-1">
+                  id
+                  <InfoTip text="Латиница без пробелов: telegram, alice. Это значение придёт в чат как channel." />
+                </span>
+                <input value={newCh.id} onChange={(e) => setNewCh({ ...newCh, id: e.target.value })} className="mt-1 block h-11 w-36 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+              </label>
+              <label className="text-sm">
+                Название
+                <input value={newCh.label} onChange={(e) => setNewCh({ ...newCh, label: e.target.value })} className="mt-1 block h-11 w-52 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+              </label>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  if (!newCh.id.trim() || channels.some((c) => c.id === newCh.id)) return;
+                  setChannels((list) => [...list, { id: newCh.id.trim(), label: newCh.label.trim() || newCh.id, locked: false, rules: "" }]);
+                }}
+              >
+                Добавить канал
+              </Button>
+            </>
+          ) : null}
           <Button type="button" disabled={busy} onClick={() => void saveChannels()}>
             Сохранить каналы
           </Button>
-          <InfoTip text="Пишет список в storage/agent-channels.json. Ассистент на сайте после сохранения по-прежнему канал site — меняются только подписи и лишние столбцы." />
+          <InfoTip text="Пишет названия и правила в storage/agent-channels.json. Без этой кнопки «Преобразовать» читает предыдущую сохранённую версию правил." />
         </div>
       </article>
 
@@ -428,6 +457,20 @@ export function AdminTrainDocs() {
                     {d.active ? "В ответах" : "Выключен"}
                   </button>
                   <InfoTip text="Выключенный документ не попадает ни в один канал. Файл остаётся в кабинете." />
+                  <label className="flex items-center gap-2 rounded-full bg-surface-2 px-3 py-1.5 text-xs font-semibold">
+                    <span className="inline-flex items-center gap-1">
+                      %
+                      <InfoTip text="0% — разложить по каналам дословно, ничего не переписывая. 30–50% — убрать чужое каналу (кнопки с телефона, «нажмите» из ВК) и чуть подстроить тон. 80–100% — сильная адаптация под правила карточки канала. Факты и запреты сохраняются. После превью смотрите «расхождение %»: оно должно быть близко к числу, которое вы поставили. Сначала сохраните правила каналов." />
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={percent}
+                      onChange={(e) => setPercent(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                      className="h-8 w-14 rounded-lg bg-white text-center text-sm ring-1 ring-black/10"
+                    />
+                  </label>
                   <Button type="button" disabled={busy} onClick={() => void preview(d.id)}>
                     Преобразовать
                   </Button>

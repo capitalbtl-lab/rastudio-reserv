@@ -6,39 +6,84 @@ export type AgentChannel = {
   id: string;
   label: string;
   locked?: boolean;
+  rules: string;
+};
+
+export const DEFAULT_RULES: Record<string, string> = {
+  site: `Чат на rastudio.org.
+Можно опираться на кнопки возраста, города, филиала и «пробное». Не проси «нажмите», если кнопки уже на экране — просто веди диалог.
+Не читай URL вслух. Страницу курса не открывай сам: дай кнопку open_course.
+В тексте до двух вопросов за реплику, в голосе — один.
+Факты о группах и местах — только из AlfaCRM. Цены — только с сайта/абонемента.
+На «вы», коротко, без иронии.`,
+  phone: `Голосовой звонок Novofon. Кнопок нет.
+Один вопрос за реплику. Говори адресами филиалов, не «первым филиалом».
+Не проси нажать на сайте, пока человек на линии — продиктуй телефон 8 (800) 511-34-01 или пообещай ссылку в SMS, если так принято.
+Если не расслышал имя или телефон — переспроси. Паспорт, CVV, пароль кабинета не собирай.
+Не назначай время, которого нет в расписании CRM.`,
+  vk: `Личные сообщения сообщества ВКонтакте.
+В комментарии под постом персональные данные не собирай — переведи в личку сообщества.
+Можно дать ссылку https://www.rastudio.org и телефон.
+Без голосовых кружков: если прислали голосовое — попроси текстом или позвонить.
+Не спорь в комментариях. Тон спокойный, на «вы».`,
+  max: `Мессенджер MAX.
+Голосовые в MAX не принимай: попроси написать текстом или позвонить 8 (800) 511-34-01.
+Ссылки пиши полностью, без укорочения.
+Кнопок сайта нет — всё текстом: возраст, город, филиал по очереди.
+Не выдумывай слоты.`,
+  common: `Общее для всех каналов студии «Развивайся».
+Говори от имени студии, на «вы». Клиент — родитель, ученик — ребёнок.
+Источник фактов: AlfaCRM и rastudio.org. Нет факта — не выдумывай.
+Не называй цену вне абонемента CRM/сайта. Не обещай «верну весь месяц».
+Не разбирай конфликты детей и не оценивай педагога.
+Официальные данные можно называть всегда: сайт, кабинет, телефон, почта, адреса трёх филиалов.
+Учебный год групповых: 1 сентября — 30 июня.`,
+  telegram: `Бот Telegram, когда контур подключим.
+Короткие сообщения, ссылки полные. Без сбора паспорта. Воронка: возраст → город → филиал → направление.`,
 };
 
 export const DEFAULT_CHANNELS: AgentChannel[] = [
-  { id: "site", label: "Агент на сайте", locked: true },
-  { id: "phone", label: "Агент на телефоне", locked: true },
-  { id: "vk", label: "Агент в ВК", locked: true },
-  { id: "max", label: "Агент в MAX", locked: true },
-  { id: "common", label: "Общее для всех", locked: true },
+  { id: "site", label: "Агент на сайте", locked: true, rules: DEFAULT_RULES.site },
+  { id: "phone", label: "Агент на телефоне", locked: true, rules: DEFAULT_RULES.phone },
+  { id: "vk", label: "Агент в ВК", locked: true, rules: DEFAULT_RULES.vk },
+  { id: "max", label: "Агент в MAX", locked: true, rules: DEFAULT_RULES.max },
+  { id: "common", label: "Общее для всех", locked: true, rules: DEFAULT_RULES.common },
 ];
 
 function fileOf() {
   return join(process.cwd(), "storage", "agent-channels.json");
 }
 
+function asChannel(raw: Partial<AgentChannel>, fallback?: AgentChannel): AgentChannel | null {
+  const id = String(raw.id || fallback?.id || "")
+    .replace(/[^\w-]+/g, "")
+    .slice(0, 24);
+  if (!id) return null;
+  const locked = DEFAULT_CHANNELS.some((d) => d.id === id);
+  return {
+    id,
+    label: String(raw.label || fallback?.label || id).slice(0, 80),
+    locked,
+    rules: String(raw.rules || fallback?.rules || DEFAULT_RULES[id] || "").slice(0, 4000),
+  };
+}
+
 export function loadChannels(): AgentChannel[] {
   try {
     if (!existsSync(fileOf())) return DEFAULT_CHANNELS.map((c) => ({ ...c }));
-    const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as { channels?: AgentChannel[] };
+    const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as { channels?: Partial<AgentChannel>[] };
     const have = Array.isArray(raw.channels) ? raw.channels : [];
-    const byId = new Map(have.map((c) => [c.id, c]));
-    const out: AgentChannel[] = DEFAULT_CHANNELS.map((d) => ({
-      ...d,
-      label: byId.get(d.id)?.label || d.label,
-      locked: true,
-    }));
+    const byId = new Map(have.map((c) => [String(c.id), c]));
+    const out: AgentChannel[] = [];
+    for (const d of DEFAULT_CHANNELS) {
+      out.push(asChannel(byId.get(d.id) || {}, d)!);
+    }
     for (const c of have) {
-      if (out.some((x) => x.id === c.id)) continue;
+      const id = String(c.id || "");
+      if (!id || out.some((x) => x.id === id)) continue;
       if (out.length >= 6) break;
-      const id = String(c.id || "")
-        .replace(/[^\w-]+/g, "")
-        .slice(0, 24);
-      if (!id) continue;
-      out.push({ id, label: String(c.label || id).slice(0, 60), locked: false });
+      const next = asChannel(c);
+      if (next) out.push(next);
     }
     return out.slice(0, 6);
   } catch {
@@ -49,12 +94,9 @@ export function loadChannels(): AgentChannel[] {
 export function saveChannels(list: AgentChannel[]) {
   const clean: AgentChannel[] = [];
   for (const c of list) {
-    const id = String(c.id || "")
-      .replace(/[^\w-]+/g, "")
-      .slice(0, 24);
-    if (!id || clean.some((x) => x.id === id)) continue;
-    const locked = DEFAULT_CHANNELS.some((d) => d.id === id);
-    clean.push({ id, label: String(c.label || id).slice(0, 60), locked });
+    const next = asChannel(c);
+    if (!next || clean.some((x) => x.id === next.id)) continue;
+    clean.push(next);
     if (clean.length >= 6) break;
   }
   for (const d of DEFAULT_CHANNELS) {

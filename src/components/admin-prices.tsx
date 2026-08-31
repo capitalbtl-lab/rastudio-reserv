@@ -17,13 +17,15 @@ import { AdminCalls } from "@/components/admin-calls";
 import { AdminAgent } from "@/components/admin-agent";
 import { AdminTrain } from "@/components/admin-train";
 import { AdminDossiers } from "@/components/admin-dossiers";
+import { AdminSchedule } from "@/components/admin-schedule";
 import { cn } from "@/lib/utils";
 
 const KEY = "ra_admin";
-type Tab = "prices" | "access" | "calls" | "agent" | "train" | "dossiers";
+type Tab = "prices" | "schedule" | "access" | "calls" | "agent" | "train" | "dossiers";
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: "prices", label: "Цены курсов", hint: "Прайс на сайте" },
+  { id: "schedule", label: "Расписание CRM", hint: "Группы из AlfaCRM" },
   { id: "agent", label: "Ассистент ИИ", hint: "Окно, голоса, диалоги" },
   { id: "train", label: "Обучение", hint: "Скрипты, документы, примеры" },
   { id: "calls", label: "База звонков", hint: "Novofon → знания" },
@@ -430,6 +432,7 @@ export function AdminPrices() {
         </section>
       ) : null}
 
+      {tab === "schedule" ? <AdminSchedule /> : null}
       {tab === "calls" ? <AdminCalls /> : null}
       {tab === "dossiers" ? <AdminDossiers /> : null}
       {tab === "agent" ? <AdminAgent /> : null}

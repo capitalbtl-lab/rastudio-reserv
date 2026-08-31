@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { CmsSession } from "@/data/cms";
 import { request, token } from "@/data/alfacrm";
 import { agesOverlap } from "@/data/ages";
@@ -69,6 +71,46 @@ type CacheBag = { at: number; sessions: CmsSession[]; seats: Map<string, SeatInf
 let cache: CacheBag | null = null;
 const TTL = 10 * 60 * 1000;
 
+function snapFile() {
+  return join(process.cwd(), "storage", "crm-schedule.json");
+}
+
+function writeSnap(bag: CacheBag) {
+  mkdirSync(dirname(snapFile()), { recursive: true });
+  writeFileSync(
+    snapFile(),
+    JSON.stringify(
+      {
+        at: bag.at,
+        sessions: bag.sessions,
+        seats: [...bag.seats.entries()],
+      },
+      null,
+      0,
+    ),
+    "utf8",
+  );
+}
+
+function readSnap(): CacheBag | null {
+  try {
+    if (!existsSync(snapFile())) return null;
+    const raw = JSON.parse(readFileSync(snapFile(), "utf8")) as {
+      at?: number;
+      sessions?: CmsSession[];
+      seats?: [string, SeatInfo][];
+    };
+    if (!Array.isArray(raw.sessions) || !raw.sessions.length) return null;
+    return {
+      at: Number(raw.at) || 0,
+      sessions: raw.sessions,
+      seats: new Map(raw.seats || []),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function iso(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -130,8 +172,34 @@ export async function sessionsFromCrm(): Promise<CmsSession[]> {
   return bag.sessions;
 }
 
-async function loadCrm(): Promise<CacheBag> {
-  if (cache && Date.now() - cache.at < TTL) return cache;
+export async function refreshCrmSchedule() {
+  cache = null;
+  const bag = await loadCrm(true);
+  writeSnap(bag);
+  return {
+    at: new Date(bag.at).toISOString(),
+    count: bag.sessions.length,
+    sessions: bag.sessions,
+  };
+}
+
+export function crmScheduleMeta() {
+  const snap = cache || readSnap();
+  return {
+    at: snap?.at ? new Date(snap.at).toISOString() : "",
+    count: snap?.sessions.length || 0,
+  };
+}
+
+async function loadCrm(force = false): Promise<CacheBag> {
+  if (!force && cache && Date.now() - cache.at < TTL) return cache;
+  if (!force) {
+    const snap = readSnap();
+    if (snap && Date.now() - snap.at < TTL) {
+      cache = snap;
+      return snap;
+    }
+  }
   const t = await token();
   const sessions: CmsSession[] = [];
   const seats = new Map<string, SeatInfo>();
@@ -178,6 +246,11 @@ async function loadCrm(): Promise<CacheBag> {
     }
   }
   cache = { at: Date.now(), sessions, seats };
+  try {
+    writeSnap(cache);
+  } catch {
+    /* */
+  }
   return cache;
 }
 
