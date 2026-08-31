@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Check, MapPin } from "lucide-react";
+import { useState } from "react";
+import { Check, ChevronDown, FlaskConical, MapPin, Sparkles, Users } from "lucide-react";
 import type { CmsImage, CmsSession, CmsTrajectoryStep } from "@/data/cms";
 import { courseKey } from "@/data/cms";
 import { SITE } from "@/data/site";
@@ -274,5 +275,228 @@ export function CoursePageHero({
         ) : null}
       </div>
     </section>
+  );
+}
+
+const SKIP_COPY =
+  /договор оферты|хотите посетить пробное|интересует другое расписание|плоды моих трудов|служба по мере сил|фабрика или завод|выбирайте педагога, который будет соответствовать|размещены здесь/i;
+const SKIP_HEADING = /педагог курса|онлайн-запись|и это только начало/i;
+const PRICE_COPY = /стоимость занятий|\d[\d\s]*руб/i;
+const LESSON_COPY = /^урок\s*\d+/i;
+
+function firstSentence(text: string) {
+  const match = text.match(/^[^.!?]+[.!?]/);
+  return (match ? match[0] : text).trim();
+}
+
+export function Expandable({
+  preview,
+  rest,
+  moreLabel = "Читать полностью",
+}: {
+  preview: ReactNode;
+  rest?: ReactNode;
+  moreLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!rest) return <>{preview}</>;
+  return (
+    <div>
+      {preview}
+      {open ? <div className="mt-4">{rest}</div> : null}
+      <button
+        type="button"
+        className="mt-5 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-primary"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        {open ? "Свернуть" : moreLabel}
+        <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
+      </button>
+    </div>
+  );
+}
+
+function AccordionItems({ items }: { items: { title: string; body: string }[] }) {
+  const [open, setOpen] = useState(0);
+  if (!items.length) return null;
+  return (
+    <div className="divide-y divide-border overflow-hidden rounded-xl bg-surface shadow-[var(--shadow-border)]">
+      {items.map((item, i) => {
+        const active = open === i;
+        return (
+          <div key={item.title + i}>
+            <button
+              type="button"
+              className="flex min-h-12 w-full items-center justify-between gap-3 px-5 py-4 text-left"
+              aria-expanded={active}
+              onClick={() => setOpen(active ? -1 : i)}
+            >
+              <span className="flex items-baseline gap-3">
+                <span className="display text-sm text-muted">{String(i + 1).padStart(2, "0")}</span>
+                <span className="font-medium leading-snug">{item.title}</span>
+              </span>
+              <ChevronDown className={cn("size-4 shrink-0 text-muted transition-transform", active && "rotate-180")} />
+            </button>
+            {active ? (
+              <p className="px-5 pb-5 text-sm leading-relaxed text-muted md:text-[0.95rem]">{item.body}</p>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const WHY_NOW = [
+  {
+    icon: Sparkles,
+    title: "Результат с первого занятия",
+    text: "Не конспект в тетради — проект, опыт или работа, которую можно показать дома.",
+  },
+  {
+    icon: FlaskConical,
+    title: "Навык 2026: делать",
+    text: "Ребёнок пробует руками, думает и собирает портфолио. Это то, что остаётся.",
+  },
+  {
+    icon: Users,
+    title: "Пробное без риска",
+    text: "Группы до 10 человек. Приходите на пробное — и решаете, ваше ли это.",
+  },
+] as const;
+
+export function CourseStory({
+  paragraphs,
+  headings,
+}: {
+  paragraphs: string[];
+  headings: { tag: string; text: string }[];
+}) {
+  const clean = paragraphs.filter((p) => p && !SKIP_COPY.test(p));
+  const price = clean.find((p) => PRICE_COPY.test(p));
+  const lessons = clean.filter((p) => LESSON_COPY.test(p));
+  const story = clean.filter((p) => p !== price && !LESSON_COPY.test(p));
+  const chapters = headings
+    .map((h) => h.text)
+    .filter((t) => t && !SKIP_HEADING.test(t));
+
+  const lead = story[0] || "";
+  const quote = lead ? firstSentence(lead) : "";
+  const leadRest = lead.slice(quote.length).trim();
+  const teaser = story[1];
+  const folded = story.slice(2);
+
+  const accordion =
+    lessons.length > 0
+      ? lessons.map((body) => {
+          const match = body.match(/^Урок\s*(\d+)\s*[:.—-]?\s*(.*)$/i);
+          const detail = match?.[2]?.split(".")[0]?.trim();
+          return {
+            title: match ? (detail ? `Урок ${match[1]}. ${detail}` : `Урок ${match[1]}`) : body.slice(0, 72),
+            body,
+          };
+        })
+      : chapters.slice(0, Math.max(folded.length, chapters.length)).map((title, i) => ({
+          title,
+          body: folded[i] || "Разберём это на занятии — с практикой, а не только в теории.",
+        }));
+
+  const leftover = lessons.length ? folded : folded.slice(chapters.length);
+
+  return (
+    <div className="space-y-12">
+      {lead ? (
+        <section>
+          <p className="kicker">О курсе</p>
+          <blockquote className="display mt-3 max-w-3xl text-2xl leading-snug md:text-3xl">
+            {quote}
+          </blockquote>
+          {leadRest ? <p className="mt-4 max-w-3xl text-[1.02rem] leading-relaxed text-fg/80">{leadRest}</p> : null}
+          {teaser ? <p className="mt-4 max-w-3xl text-[1.02rem] leading-relaxed text-fg/80">{teaser}</p> : null}
+        </section>
+      ) : null}
+
+      <section>
+        <p className="kicker">Почему сейчас</p>
+        <h2 className="display section-title mt-2">Курс, который чувствуется, а не зубрится</h2>
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          {WHY_NOW.map((item) => (
+            <article key={item.title} className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
+              <item.icon className="size-5 text-primary" strokeWidth={1.8} />
+              <h3 className="display mt-3 text-lg leading-snug">{item.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">{item.text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {accordion.length ? (
+        <section>
+          <p className="kicker">Программа</p>
+          <h2 className="display section-title mt-2">Что внутри — по шагам</h2>
+          <p className="mt-3 max-w-2xl text-sm text-muted">Откройте блок, чтобы увидеть подробности. На пробном покажем живьём.</p>
+          <div className="mt-6">
+            <AccordionItems items={accordion} />
+          </div>
+          {leftover.length ? (
+            <Expandable
+              preview={null}
+              more={
+                <div className="space-y-4 text-[0.98rem] leading-relaxed text-fg/80">
+                  {leftover.map((p) => (
+                    <p key={p.slice(0, 40)}>{p}</p>
+                  ))}
+                </div>
+              }
+              moreLabel="Ещё о программе"
+            />
+          ) : null}
+        </section>
+      ) : leftover.length ? (
+        <section>
+          <p className="kicker">Подробнее</p>
+          <Expandable
+            preview={
+              <p className="mt-3 max-w-3xl text-[1.02rem] leading-relaxed text-fg/80">{leftover[0]}</p>
+            }
+            rest={
+              leftover.length > 1 ? (
+                <div className="space-y-4 text-[0.98rem] leading-relaxed text-fg/80">
+                  {leftover.slice(1).map((p) => (
+                    <p key={p.slice(0, 40)}>{p}</p>
+                  ))}
+                </div>
+              ) : null
+            }
+          />
+        </section>
+      ) : null}
+
+      {price ? (
+        <section className="rounded-xl bg-ink px-5 py-6 text-header-fg md:px-8">
+          <p className="kicker text-header-fg/55">Формат и стоимость</p>
+          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-header-fg/80 md:text-base">{price}</p>
+          <Button asChild className="mt-5">
+            <a href="#trial">Записаться на пробное</a>
+          </Button>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+export function ExpandableProse({ text, extra }: { text: string; extra?: string }) {
+  if (!text) return extra ? <ProseBlocks text={extra} /> : null;
+  const chunks = text.split(/\n{2,}/).filter(Boolean);
+  const preview = chunks[0];
+  const rest = [...chunks.slice(1), extra].filter(Boolean).join("\n\n");
+  if (!rest) return <ProseBlocks text={text} />;
+  return (
+    <Expandable
+      preview={<p className="text-[0.98rem] leading-relaxed text-fg/90">{preview}</p>}
+      rest={<ProseBlocks text={rest} />}
+      moreLabel="Читать полностью"
+    />
   );
 }

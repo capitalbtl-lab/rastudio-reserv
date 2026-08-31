@@ -12,6 +12,7 @@ import {
   ScheduleBlock,
   Trajectory,
   CoursePageHero,
+  ExpandableProse,
 } from "@/components/cms-blocks";
 
 type Props = {
@@ -71,8 +72,9 @@ export function ProgrammingCoursePage({ page, course, schedule }: Props) {
         <section>
           <Kicker>О курсе</Kicker>
           <h2 className="display section-title mt-2">{course.aboutTitle}</h2>
-          <ProseBlocks text={course.aboutBody} className="mt-6 max-w-3xl" />
-          {course.aboutBody2 ? <ProseBlocks text={course.aboutBody2} className="mt-4 max-w-3xl" /> : null}
+          <div className="mt-6 max-w-3xl">
+            <ExpandableProse text={course.aboutBody} extra={course.aboutBody2} />
+          </div>
         </section>
 
         {course.trajectory.length ? (
@@ -120,7 +122,9 @@ export function ProgrammingCoursePage({ page, course, schedule }: Props) {
           <section>
             <Kicker>Программа</Kicker>
             <h2 className="display section-title mt-2">{course.programTitle}</h2>
-            <ProseBlocks text={course.programText} className="mt-6 max-w-3xl" />
+            <div className="mt-6 max-w-3xl">
+              <ExpandableProse text={course.programText} />
+            </div>
           </section>
         ) : null}
 

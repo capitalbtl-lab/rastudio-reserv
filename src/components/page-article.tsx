@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ProgrammingCoursePage } from "@/components/programming-course";
 import { ProgrammingSchoolPage } from "@/components/programming-school";
 import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
-import { ScheduleBlock, CoursePageHero } from "@/components/cms-blocks";
+import { ScheduleBlock, CoursePageHero, CourseStory } from "@/components/cms-blocks";
 import { cn } from "@/lib/utils";
 
 type MasterCard = { path: string; h1: string };
@@ -172,26 +172,11 @@ function CinematicPage({ page, schedule }: { page: SitePage; schedule: CmsSessio
 
       <div className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
         <div className="grid gap-10 lg:grid-cols-[1fr_18rem]">
-          <div className="space-y-5 text-lg leading-relaxed text-fg/90">
-            {body.map((p) => (
-              <p key={p.slice(0, 48)}>{p}</p>
-            ))}
-            {page.headings.length ? (
-              <div className="mt-10 rounded-lg bg-surface p-6 shadow-[var(--shadow-border)]">
-                <h2 className="display text-2xl">Программа</h2>
-                <ol className="mt-4 space-y-3">
-                  {page.headings.map((h, i) => (
-                    <li key={h.text} className="flex gap-3 text-sm md:text-base">
-                      <span className="display text-muted">{String(i + 1).padStart(2, "0")}</span>
-                      <span>{h.text}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            ) : null}
-            <Gallery page={{ ...page, images: page.images.slice(1) }} />
+          <div>
+            <CourseStory paragraphs={body} headings={page.headings} />
+            <Gallery page={{ ...page, images: page.images.slice(Math.min(3, page.images.length)) }} />
             {schedule.length ? (
-              <div className="pt-6">
+              <div className="pt-10">
                 <ScheduleBlock sessions={schedule} />
               </div>
             ) : null}
