@@ -49,10 +49,15 @@ function fileOf() {
 
 function seedScripts(list?: ScriptSection[]) {
   const have = Array.isArray(list) ? list : [];
+  const locked = new Set(["funnel", "age", "city", "branch"]);
   if (!have.length) return DEFAULT_SCRIPTS.map((s) => ({ ...s, updatedAt: s.updatedAt || new Date().toISOString() }));
   const byId = new Map(have.map((s) => [s.id, s]));
   for (const def of DEFAULT_SCRIPTS) {
     if (!byId.has(def.id)) have.push({ ...def, updatedAt: new Date().toISOString() });
+    else if (locked.has(def.id)) {
+      const i = have.findIndex((s) => s.id === def.id);
+      if (i >= 0) have[i] = { ...def, updatedAt: new Date().toISOString() };
+    }
   }
   return have;
 }

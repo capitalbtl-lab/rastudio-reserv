@@ -60,10 +60,10 @@ export function nextChips(messages: { role: string; content: string }[]): { hint
     };
   }
   const facts = factsFromMessages(messages);
-  if (!facts.age) return { hint: "Сколько лет ребёнку", chips: AGES };
-  if (!facts.city) return { hint: "Какой город удобнее", chips: CITIES };
-  if (facts.city === "Коломна" && !facts.branchId) return { hint: "Какой филиал в Коломне", chips: KOLOMNA };
-  if (!facts.school) return { hint: "Какое направление ближе", chips: schoolsFor(facts.age) };
+  if (!facts.age) return { hint: "Возраст", chips: AGES };
+  if (!facts.city) return { hint: "Город", chips: CITIES };
+  if (facts.city === "Коломна" && !facts.branchId) return { hint: "Филиал", chips: KOLOMNA };
+  if (!facts.school) return { hint: "Направление", chips: schoolsFor(facts.age) };
   if (!facts.briefed) {
     return {
       hint: "Когда программа ясна",

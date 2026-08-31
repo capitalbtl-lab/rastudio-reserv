@@ -440,6 +440,7 @@ export const chatAgent = createServerFn({ method: "POST" })
         path?: string;
         gate?: boolean;
         gateWord?: string;
+        voice?: boolean;
       },
   )
   .handler(async ({ data }) => {
@@ -501,7 +502,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     const facts = factsFromMessages(all);
     const note = buildSessionNote(all);
     if (!admin) {
-      const locked = lockedFunnelReply(soloWho, facts, note, all);
+      const locked = lockedFunnelReply(soloWho, facts, note, all, Boolean(data.voice));
       if (locked) {
         if ("silent" in locked) {
           return { ok: true as const, reply: "", silent: true as const, token: granted, reload: false };

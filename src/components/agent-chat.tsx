@@ -32,7 +32,7 @@ type Mood = "hello" | "think" | "happy" | "sorry";
 
 function greeting(who: "oleg" | "olga", _voice = false) {
   const name = who === "olga" ? "Ольга" : "Олег";
-  return `${name}: Подскажу программу, которая подойдёт именно вашему ребёнку. Сколько ему лет?`;
+  return `${name}: Подскажу программу, которая подойдёт именно вашему ребёнку.`;
 }
 const DUAL_HELLO = /Олег: Подскажу программу[\s\S]*Ольга:/;
 const ADMIN_ASK = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
@@ -592,6 +592,7 @@ export function AgentChat() {
           path: typeof window !== "undefined" ? window.location.pathname : "/",
           gate,
           gateWord: gate ? next : undefined,
+          voice: voiceOnRef.current,
         },
       });
       if (sendId !== sendIdRef.current) return;

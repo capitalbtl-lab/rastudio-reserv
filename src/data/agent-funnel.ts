@@ -10,12 +10,13 @@ function said(messages: { role: string; content: string }[], re: RegExp) {
 
 export type FunnelHit = { reply: string } | { silent: true };
 
-/** Возраст спрашивает только приветствие и кнопки. Повторных реплик нет. */
+/** Один слот — один канал. Текст: только кнопки. Голос: фраза слота один раз. */
 export function lockedFunnelReply(
   who: "oleg" | "olga",
   facts: SessionFacts,
   note: SessionNote,
   messages: { role: string; content: string }[] = [],
+  voice = false,
 ): FunnelHit | null {
   const n = who === "olga" ? "Ольга" : "Олег";
   const ok = who === "olga" ? "Запомнила" : "Запомнил";
@@ -30,11 +31,11 @@ export function lockedFunnelReply(
   }
   if (!facts.city) {
     if (askedCity) return { silent: true };
-    return { reply: `${n}: ${CITY}` };
+    return voice ? { reply: `${n}: ${CITY}` } : { silent: true };
   }
   if (facts.city === "Коломна" && !facts.branchId) {
     if (askedBranch) return { silent: true };
-    return { reply: `${n}: ${BRANCH}` };
+    return voice ? { reply: `${n}: ${BRANCH}` } : { silent: true };
   }
   return null;
 }
