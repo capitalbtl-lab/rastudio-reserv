@@ -33,6 +33,8 @@ type Mood = "hello" | "think" | "happy" | "sorry";
 
 const HELLO = `Олег: Подберём курс за минуту. Сначала возраст — так не предложим слишком сложное.
 Ольга: Я рядом. Нажмите, сколько лет ребёнку — сразу скажу, что зайдёт именно ему.`;
+const ADMIN_ASK = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
+const ADMIN_HELLO = "Ольга: Доступ открыт на 30 минут. Цены, тексты страниц или голоса — что меняем?";
 
 function moodOf(messages: Msg[], busy: boolean): Mood {
   if (busy) return "think";
@@ -69,6 +71,7 @@ function Duo({ size, mood }: { size: number; mood: Mood }) {
 }
 
 const CHAT_KEY = "ra_chat";
+const ADMIN_CHAT_KEY = "ra_admin_chat";
 const SID_KEY = "ra_chat_sid";
 
 function chatSid(reset = false) {
@@ -96,7 +99,16 @@ function readChat(): Msg[] {
   }
 }
 
-function siteAdminToken() {
+function readAdminChat(): Msg[] {
+  try {
+    const raw = sessionStorage.getItem(ADMIN_CHAT_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Msg[];
+    return parsed?.length ? parsed : [];
+  } catch {
+    return [];
+  }
+}
   try {
     return localStorage.getItem("ra_site_admin") || "";
   } catch {
@@ -147,7 +159,8 @@ export function AgentChat() {
   const [voiceOn, setVoiceOn] = useState(false);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
-  const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
+  const [clientMsgs, setClientMsgs] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
+  const [adminMsgs, setAdminMsgs] = useState<Msg[]>([]);
   const [adminMs, setAdminMs] = useState(0);
   const [awaitingCode, setAwaitingCode] = useState(false);
   const [groupChips, setGroupChips] = useState<{ label: string; href?: string; send?: string; primary?: boolean }[]>([]);
@@ -167,6 +180,8 @@ export function AgentChat() {
   const listenWantedRef = useRef(false);
   const partnerRef = useRef(partner);
   const awaitingCodeRef = useRef(false);
+  const inAdminUi = awaitingCode || adminMs > 0;
+  const messages = inAdminUi ? (adminMsgs.length ? adminMsgs : [{ role: "assistant" as const, content: awaitingCode ? ADMIN_ASK : ADMIN_HELLO }]) : clientMsgs;
   const mood = moodOf(messages, busy);
   const offer =
     awaitingCode
@@ -187,10 +202,14 @@ export function AgentChat() {
   partnerRef.current = partner;
 
   useEffect(() => {
-    setMessages(readChat());
+    setClientMsgs(readChat());
+    const savedAdmin = readAdminChat();
     const left = adminLeft();
     setAdminMs(left);
-    if (left > 0) setPartner("olga");
+    if (left > 0) {
+      setAdminMsgs(savedAdmin.length ? savedAdmin : [{ role: "assistant", content: ADMIN_HELLO }]);
+      setPartner("olga");
+    }
     const id = window.setInterval(() => setAdminMs(adminLeft()), 10000);
     return () => window.clearInterval(id);
   }, []);
@@ -201,11 +220,11 @@ export function AgentChat() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(CHAT_KEY, JSON.stringify(messages.slice(-24)));
+      sessionStorage.setItem(CHAT_KEY, JSON.stringify(clientMsgs.slice(-24)));
     } catch {
       /* */
     }
-    const useful = messages.filter((m) => m.role === "user" && !noisyAdmin(m.content));
+    const useful = clientMsgs.filter((m) => m.role === "user");
     if (!useful.length) return;
     void saveChatLog({
       data: {
@@ -213,11 +232,19 @@ export function AgentChat() {
         path: typeof window !== "undefined" ? window.location.pathname : "/",
         partner,
         voice: voiceOn,
-        admin: adminLeft() > 0,
-        messages: messages.filter((m) => m.role !== "user" || !noisyAdmin(m.content)),
+        admin: false,
+        messages: clientMsgs,
       },
     });
-  }, [messages, partner, voiceOn]);
+  }, [clientMsgs, partner, voiceOn]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(ADMIN_CHAT_KEY, JSON.stringify(adminMsgs.slice(-24)));
+    } catch {
+      /* */
+    }
+  }, [adminMsgs]);
 
   useEffect(() => {
     const node = lastMsgRef.current;
@@ -465,11 +492,14 @@ export function AgentChat() {
     cancelSpeech();
     stopListen();
     const gate = awaitingCodeRef.current;
+    const adminThread = gate || adminLeft() > 0;
     const shown = gate ? "••••" : next;
-    const history = [...messages, { role: "user" as const, content: shown }].filter(
+    const base = adminThread ? (adminMsgs.length ? adminMsgs : [{ role: "assistant" as const, content: gate ? ADMIN_ASK : ADMIN_HELLO }]) : clientMsgs;
+    const history = [...base, { role: "user" as const, content: shown }].filter(
       (m) => m.role !== "user" || !noisyAdmin(m.content),
     );
-    setMessages(history);
+    if (adminThread) setAdminMsgs(history);
+    else setClientMsgs(history);
     setGroupChips([]);
     busyRef.current = true;
     setBusy(true);
@@ -479,7 +509,7 @@ export function AgentChat() {
       const res = await chatAgent({
         data: {
           messages: history,
-          with: adminLeft() > 0 || gate ? "olga" : partner,
+          with: adminThread ? "olga" : partner,
           token: siteAdminToken() || undefined,
           path: typeof window !== "undefined" ? window.location.pathname : "/",
           gate,
@@ -488,13 +518,15 @@ export function AgentChat() {
       });
       if (sendId !== sendIdRef.current) return;
       if (res.ok) {
-        reply = adminLeft() > 0 || res.token || gate ? olgaReply(res.reply) : res.reply;
+        reply = adminThread || res.token ? olgaReply(res.reply) : res.reply;
         if (res.token) {
           awaitingCodeRef.current = false;
           setAwaitingCode(false);
           setSiteAdmin(res.token);
           setAdminMs(adminLeft());
           setPartner("olga");
+          setAdminMsgs([{ role: "assistant", content: ADMIN_HELLO }]);
+          reply = ADMIN_HELLO;
         }
         shouldReload = Boolean(res.reload);
         if ("groups" in res && Array.isArray(res.groups)) setGroupChips(res.groups);
@@ -510,7 +542,11 @@ export function AgentChat() {
       if (sendId !== sendIdRef.current) return;
     }
     if (sendId !== sendIdRef.current) return;
-    setMessages([...history, { role: "assistant", content: reply }]);
+    if (!(gate && reply === ADMIN_HELLO)) {
+      const nextMsgs = [...history, { role: "assistant" as const, content: reply }];
+      if (adminThread) setAdminMsgs(nextMsgs);
+      else setClientMsgs(nextMsgs);
+    }
     busyRef.current = false;
     setBusy(false);
     if (voiceOnRef.current) {
@@ -581,7 +617,7 @@ export function AgentChat() {
           >
             <span className="absolute left-0.5 top-0.5 h-2.5 w-2.5 rounded-[2px] border-l-2 border-t-2 border-white/70" />
           </button>
-          <div className="relative shrink-0 bg-primary px-4 pb-3.5 pt-3.5 text-primary-foreground">
+          <div className={cn("relative shrink-0 px-4 pb-3.5 pt-3.5 text-primary-foreground", inAdminUi ? "bg-ink" : "bg-primary")}>
             <div className="absolute right-3 top-3 flex items-center gap-1.5">
               <button
                 type="button"
@@ -611,7 +647,8 @@ export function AgentChat() {
                   chatSid(true);
                   awaitingCodeRef.current = false;
                   setAwaitingCode(false);
-                  setMessages([{ role: "assistant", content: HELLO }]);
+                  if (adminLeft() > 0) setAdminMsgs([{ role: "assistant", content: ADMIN_HELLO }]);
+                  else setClientMsgs([{ role: "assistant", content: HELLO }]);
                   setGroupChips([]);
                   setText("");
                 }}
@@ -638,19 +675,24 @@ export function AgentChat() {
               </div>
               <div className="min-w-0 pb-1">
                 <p className="font-display text-[1.15rem] leading-tight">
-                  {partner === "oleg" ? "Олег" : partner === "olga" ? "Ольга" : "Олег и Ольга"}
+                  {inAdminUi ? "Ольга · управление" : partner === "oleg" ? "Олег" : partner === "olga" ? "Ольга" : "Олег и Ольга"}
                 </p>
                 <p className="text-[0.78rem] text-white/85">
-                  {speaking
-                    ? partner === "both"
-                      ? "Говорят"
-                      : "Говорит"
-                    : listening
-                      ? "Слушает вас"
-                      : partner === "both"
-                        ? "Администраторы студии · онлайн"
-                        : "Администратор студии · онлайн"}
+                  {inAdminUi
+                    ? awaitingCode
+                      ? "Назовите кодовое слово"
+                      : "Правки сайта · 30 минут"
+                    : speaking
+                      ? partner === "both"
+                        ? "Говорят"
+                        : "Говорит"
+                      : listening
+                        ? "Слушает вас"
+                        : partner === "both"
+                          ? "Администраторы студии · онлайн"
+                          : "Администратор студии · онлайн"}
                 </p>
+                {inAdminUi ? null : (
                 <p className="mt-1.5 flex flex-nowrap items-center gap-1.5 whitespace-nowrap text-[0.68rem] font-medium leading-none">
                   <button
                     type="button"
@@ -668,6 +710,7 @@ export function AgentChat() {
                     Говорить с Олегом
                   </button>
                 </p>
+                )}
               </div>
             </div>
           </div>
@@ -817,11 +860,10 @@ export function AgentChat() {
                     clearSiteAdmin();
                     setAdminMs(0);
                     setPartner("both");
-                    const bye =
-                      "Ольга: Вы вышли из режима редактирования сайта. Снова на связи Олег и я — обычная консультация.";
-                    setMessages((m) => [...m, { role: "assistant", content: bye }]);
+                    setAdminMsgs([]);
                     if (voiceOnRef.current) {
-                      void speak(bye).then(() => {
+                      const back = "Ольга: Вернулись к консультации для родителей.";
+                      void speak(back).then(() => {
                         if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
                       });
                     }
@@ -830,10 +872,9 @@ export function AgentChat() {
                   awaitingCodeRef.current = true;
                   setAwaitingCode(true);
                   setPartner("olga");
-                  const ask = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
-                  setMessages((m) => [...m, { role: "assistant", content: ask }]);
+                  setAdminMsgs([{ role: "assistant", content: ADMIN_ASK }]);
                   if (voiceOnRef.current) {
-                    void speak(ask).then(() => {
+                    void speak(ADMIN_ASK).then(() => {
                       if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
                     });
                   }
