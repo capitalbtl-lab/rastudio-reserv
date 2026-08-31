@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ProgrammingCoursePage } from "@/components/programming-course";
 import { ProgrammingSchoolPage } from "@/components/programming-school";
 import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
-import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses } from "@/components/cms-blocks";
+import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses, SchoolCourseList } from "@/components/cms-blocks";
 import { cn } from "@/lib/utils";
 
 type MasterCard = { path: string; h1: string };
@@ -180,7 +180,11 @@ function CinematicPage({
                 <ScheduleBlock sessions={schedule} />
               </div>
             ) : null}
-            <Related page={page} courses={courses} />
+            {page.kind === "school" ? (
+              <SchoolCourseList schoolPath={page.pathDecoded || page.path} courses={courses} />
+            ) : (
+              <Related page={page} courses={courses} />
+            )}
           </div>
           <aside className="h-fit rounded-xl bg-surface p-5 shadow-[var(--shadow-border)] lg:sticky lg:top-24">
             <p className="text-sm font-medium">Запись и филиалы</p>

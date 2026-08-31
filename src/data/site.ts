@@ -130,6 +130,22 @@ export const SCHOOLS = [
   },
 ] as const;
 
+export const SCHOOL_COURSE_MATCH: Record<string, (href: string) => boolean> = {
+  "/art-studio": (href) => /art-studio-|sculptural|hudvuz|digitalart/i.test(href),
+  "/robototehnika-v-kolomne": (href) => /robototehnika-\d|roboticsinenglish/i.test(href),
+  "/programming-school": (href) => href.includes("kursy-shkoly-programmirovaniya"),
+  "/promising-professions": (href) =>
+    /radioengineering|science-course|teslaphysics|3d-modeling|gamedesign|mentalarithmetic/i.test(href),
+  "/early-childhood-care": (href) => /preparation-for-school|happybricks|kinder-master/i.test(href),
+  "/languageschool": (href) => /englishlanguage|japanese|vitaminkorean/i.test(href),
+};
+
+export function coursesForSchool<T extends { href: string }>(schoolPath: string, courses: T[]) {
+  const test = SCHOOL_COURSE_MATCH[schoolPath];
+  if (!test) return [];
+  return courses.filter((course) => course.href !== schoolPath && test(course.href));
+}
+
 export const COURSE_GROUPS = [
   { id: "all", label: "Все курсы", test: (_href: string) => true },
   {

@@ -4,7 +4,7 @@ import { Check, ChevronDown, FlaskConical, MapPin, Sparkles, Users } from "lucid
 import type { CmsImage, CmsSession, CmsTrajectoryStep } from "@/data/cms";
 import type { CourseCard } from "@/data/catalog";
 import { courseKey } from "@/data/cms";
-import { SITE } from "@/data/site";
+import { SITE, coursesForSchool } from "@/data/site";
 import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 import { Button } from "@/components/ui/button";
@@ -575,6 +575,45 @@ export function RelatedAgeCourses({
       <h2 className="display mt-2 text-2xl md:text-3xl">{heading}</h2>
       <ul className="mt-6 grid gap-3 sm:grid-cols-2">
         {peers.map((course) => (
+          <li key={course.href}>
+            <PageLink
+              to={course.href}
+              className="flex items-center gap-3 rounded-xl bg-surface p-2 pr-4 shadow-[var(--shadow-border)] transition-shadow hover:shadow-[var(--shadow-border-hover)]"
+            >
+              <SeoImage
+                src={course.image}
+                alt={course.alt}
+                filename={course.filename}
+                className="size-16 shrink-0 overflow-hidden rounded-lg bg-surface-2"
+                imgClassName="h-full w-full object-cover"
+              />
+              <span>
+                <span className="block text-sm font-semibold leading-snug">{course.label}</span>
+                {course.age ? <span className="mt-0.5 block text-xs text-muted">{course.age}</span> : null}
+              </span>
+            </PageLink>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function SchoolCourseList({
+  schoolPath,
+  courses,
+}: {
+  schoolPath: string;
+  courses: CourseCard[];
+}) {
+  const list = coursesForSchool(schoolPath, courses);
+  if (!list.length) return null;
+  return (
+    <div className="mt-12">
+      <p className="kicker">Курсы школы</p>
+      <h2 className="display mt-2 text-2xl md:text-3xl">Программы этого направления</h2>
+      <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+        {list.map((course) => (
           <li key={course.href}>
             <PageLink
               to={course.href}
