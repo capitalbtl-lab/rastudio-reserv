@@ -29,11 +29,12 @@ const SYSTEM = `Вы — два администратора студии «Ра
 
 Курсы называй ТОЧНО как на сайте, не обобщай до «школы».
 Если родитель назвал возраст («10 лет», «ребёнку 7») — СРАЗУ вызови list_courses_by_age с этим числом и в ответе перечисли ВСЕ курсы из инструмента, сгруппировав по школам. Нельзя называть только 2–3: родитель решит, что остальных нет. После полного списка спроси, что ближе: творчество, техника, языки или модель.
+Когда курс уже выбран — вызови list_groups (возраст, филиал если сказали, курс). Покажи живые слоты из CRM: день, время, филиал. Не выдумывай расписание.
+Когда родитель выбрал слот — open_group (gid и branch из списка). Откроется форма записи именно в эту группу AlfaCRM.
+submit_trial — только если групп нет или родитель просит «просто заявку без группы».
 id курсов для заявки: ${TRIAL_COURSES.map((c) => `${c.id} ${c.name}`).join("; ")}.
-Когда курс уже выбран — коротко по сути и спроси филиал или пробное.
 Когда родитель просит подробности курса или вы уже называете конкретный курс по имени — вызови open_course (path или название). Страница курса откроется, чат останется. В речи не читай URL. Скажи, что открыли страницу курса, и коротко по сути. Кнопка «Страница курса» появится сама.
-Не открывай страницу, пока курс не выбран.
-Запись: родитель, ребёнок, дата рождения, телефон, email, филиал 1/2/3, course_id. После явного «записать» вызови submit_trial.
+Не открывай страницу курса, пока курс не выбран.
 Жалобы и деньги — телефон.
 
 Правки сайта. Если просят изменить сайт, цены, «я администратор», «хочу внести изменения», «открой режим управления», «вход администратора»:
@@ -212,6 +213,39 @@ const TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "list_groups",
+      description: "Живые группы AlfaCRM: филиал, возраст, слот. Вызывать, когда известен возраст. Если филиал или курс названы — передать.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          age: { type: "number", description: "Возраст ребёнка" },
+          branch: { type: "string", description: "1 Гражданская, 2 Октябрьской, 3 Луховицы, или Коломна" },
+          course: { type: "string", description: "Название курса или путь страницы" },
+        },
+        required: ["age"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "open_group",
+      description: "Открыть форму записи в конкретную группу AlfaCRM по gid.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          gid: { type: "string", description: "Номер группы из list_groups" },
+          branch: { type: "string", description: "1, 2 или 3" },
+        },
+        required: ["gid"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "open_course",
       description: "Открыть страницу курса на сайте, чтобы родитель увидел полное описание. Вызывать, когда речь о конкретном курсе и нужны подробности.",
       parameters: {
@@ -376,6 +410,8 @@ export const chatAgent = createServerFn({ method: "POST" })
     let granted: string | undefined;
     let reload = false;
     let open = "";
+    let signup = "";
+    let groups: { label: string; href: string }[] = [];
     const solo =
       data.with === "oleg"
         ? "\n\nСейчас родитель говорит только с Олегом. Отвечай исключительно строками «Олег:». Ольга молчит. Мужской род."
@@ -433,6 +469,51 @@ export const chatAgent = createServerFn({ method: "POST" })
                 tool_call_id: call.id,
                 content: formatCoursesForAge(age),
               });
+            } else if (call.function.name === "list_groups") {
+              try {
+                const { groupsForQuery, formatGroups } = await import("./alfacrm-schedule");
+                const age = Number(args.age);
+                const list = await groupsForQuery({
+                  age: Number.isFinite(age) ? age : undefined,
+                  branch: String(args.branch || ""),
+                  course: String(args.course || ""),
+                });
+                groups = list.map((g) => ({ label: g.chip, href: g.signup }));
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: formatGroups(list, age),
+                });
+              } catch {
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: "Расписание CRM сейчас недоступно. Предложи позвонить 8 (800) 511-34-01 или заявку на пробное.",
+                });
+              }
+            } else if (call.function.name === "open_group") {
+              const { groupSignup, groupsForQuery } = await import("./alfacrm-schedule");
+              const gid = String(args.gid || "");
+              let hit = groupSignup(gid, String(args.branch || ""));
+              if (!hit) {
+                const list = await groupsForQuery({}).catch(() => []);
+                const found = list.find((g) => g.gid === gid.replace(/\D/g, ""));
+                if (found) hit = { gid: found.gid, branchId: found.branchId, signup: found.signup };
+              }
+              if (hit) {
+                signup = hit.signup;
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: `Открыли форму записи в группу ${hit.gid}, филиал ${hit.branchId}. Скажи родителю заполнить форму на экране. URL не читай.`,
+                });
+              } else {
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: "Группа не найдена. Вызови list_groups ещё раз.",
+                });
+              }
             } else if (call.function.name === "open_course") {
               const { findCoursePage } = await import("./agent-courses");
               const hit = findCoursePage(String(args.path || args.name || ""));
@@ -591,7 +672,7 @@ export const chatAgent = createServerFn({ method: "POST" })
           continue;
         }
         const reply = (msg.content || "").trim();
-        if (reply) return { ok: true as const, reply, token: granted, reload, open: open || undefined };
+        if (reply) return { ok: true as const, reply, token: granted, reload, open: open || undefined, signup: signup || undefined, groups: groups.length ? groups : undefined };
       }
       return {
         ok: true as const,
@@ -599,6 +680,8 @@ export const chatAgent = createServerFn({ method: "POST" })
         token: granted,
         reload,
         open: open || undefined,
+        signup: signup || undefined,
+        groups: groups.length ? groups : undefined,
       };
     } catch (err) {
       const reason = err instanceof Error ? err.message : "";

@@ -1,8 +1,10 @@
 import type { CmsSession } from "@/data/cms";
 import { request, token } from "@/data/alfacrm";
+import { agesOverlap } from "@/data/ages";
 
 const SKIP_SUBJECT = new Set([7, 54, 104, 85, 81, 1, 77, 106, 82, 105, 83, 90, 84, 88, 87]);
 const DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
+const DAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 const SUBJECT_PATH: Record<number, string> = {
   12: "/art-studio-3-4",
@@ -40,10 +42,10 @@ const SUBJECT_PATH: Record<number, string> = {
   113: "/japanese",
 };
 
-const BRANCH: Record<number, { city: string; branch: string }> = {
-  1: { city: "Коломна", branch: "ул. Гражданская, 2" },
-  2: { city: "Коломна", branch: "ул. Октябрьской революции, 340" },
-  3: { city: "Луховицы", branch: "ул. Пушкина, 202А" },
+const BRANCH: Record<number, { city: string; branch: string; short: string }> = {
+  1: { city: "Коломна", branch: "ул. Гражданская, 2", short: "Гражданская" },
+  2: { city: "Коломна", branch: "ул. Октябрьской революции, 340", short: "Октябрьской" },
+  3: { city: "Луховицы", branch: "ул. Пушкина, 202А", short: "Луховицы" },
 };
 
 type Group = { id: number; name: string; note?: string };
@@ -63,14 +65,19 @@ let cache: { at: number; sessions: CmsSession[] } | null = null;
 const TTL = 10 * 60 * 1000;
 
 function ageOf(name: string) {
-  const m = name.match(/(\d+\s*[–-]\s*\d+\s*(?:лет|года)?|\d+\s*\+\s*|\d+\s*лет)/i);
+  const m = name.match(/(\d+\s*[–-]\s*\d+\s*(?:лет|года)?|\d+\s*\+\s*|от\s*\d+\s*лет|\d+\s*лет)/i);
   return m ? m[1].replace(/\s+/g, " ").trim() : "";
 }
 
 function whenOf(day?: number, from?: string, to?: string) {
   const label = DAYS[(Number(day) || 1) - 1] || "День уточняется";
   if (from && to) return `${label} с ${from} до ${to}`;
+  if (from) return `${label} в ${from}`;
   return label;
+}
+
+export function signupUrl(branch: number, gid: string | number) {
+  return `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`;
 }
 
 export async function sessionsFromCrm(): Promise<CmsSession[]> {
@@ -104,9 +111,7 @@ export async function sessionsFromCrm(): Promise<CmsSession[]> {
         age,
         when: whenOf(lesson.day, lesson.time_from_v, lesson.time_to_v),
         teacherId: String(lesson.teacher_ids?.[0] || ""),
-        signup: gid
-          ? `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`
-          : path,
+        signup: gid ? signupUrl(branch, gid) : path,
         city: meta.city,
         branch: meta.branch,
         directionId: String(sid),
@@ -147,4 +152,114 @@ export function filterCrmSessions(sessions: CmsSession[], splat?: string | null)
     return sessions.filter((s) => /tesla|science|radio|3d-modeling/.test(hrefOf(s)));
   }
   return sessions.filter((s) => hrefOf(s) === decoded);
+}
+
+export type LiveGroup = {
+  gid: string;
+  branchId: number;
+  name: string;
+  age: string;
+  when: string;
+  city: string;
+  branch: string;
+  short: string;
+  path: string;
+  signup: string;
+  chip: string;
+};
+
+function branchIdOf(raw: string) {
+  const s = (raw || "").toLowerCase();
+  if (/^1$|гражданск/.test(s)) return 1;
+  if (/^2$|октябрь|340/.test(s)) return 2;
+  if (/^3$|луховиц|пушкин/.test(s)) return 3;
+  return 0;
+}
+
+function courseMatch(session: CmsSession, course: string) {
+  const q = course.trim().toLowerCase();
+  if (!q || q === "/") return true;
+  let decoded = q;
+  try {
+    decoded = decodeURIComponent(q);
+  } catch {
+    /* keep */
+  }
+  const path = (session.path || "").toLowerCase();
+  const hay = `${path} ${session.group} ${session.courseFilter}`.toLowerCase();
+  if (path && (decoded === path || decoded.endsWith(path) || path.endsWith(decoded))) return true;
+  const words = decoded.split(/[^a-zа-яё0-9+]+/i).filter((w) => w.length > 3);
+  if (words.length && words.every((w) => hay.includes(w))) return true;
+  return words.filter((w) => hay.includes(w)).length >= 2;
+}
+
+function chipLabel(session: CmsSession, branchId: number) {
+  let when = session.when;
+  DAYS.forEach((d, i) => {
+    when = when.replace(d, DAY_SHORT[i]);
+  });
+  when = when.replace(" с ", " ").replace(" до ", "–");
+  const short = BRANCH[branchId]?.short || session.city;
+  return `${when} · ${short}`;
+}
+
+export async function groupsForQuery(q: { age?: number; branch?: string; course?: string }) {
+  const sessions = await sessionsFromCrm();
+  const bid = branchIdOf(q.branch || "");
+  const kolomnaOnly = /коломн/.test((q.branch || "").toLowerCase()) && !bid;
+  const seen = new Set<string>();
+  const out: LiveGroup[] = [];
+  for (const session of sessions) {
+    const gid = session.signup.match(/gid=(\d+)/)?.[1];
+    const branchId = Number(session.signup.match(/common\/(\d+)\//)?.[1] || 0);
+    if (!gid || !branchId) continue;
+    if (bid && branchId !== bid) continue;
+    if (kolomnaOnly && branchId === 3) continue;
+    if (q.age) {
+      if (session.age && !agesOverlap(session.age, q.age, q.age)) continue;
+      if (!session.age) continue;
+    }
+    if (q.course && !courseMatch(session, q.course)) continue;
+    const key = `${gid}-${session.when}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      gid,
+      branchId,
+      name: session.group,
+      age: session.age,
+      when: session.when,
+      city: session.city,
+      branch: session.branch,
+      short: BRANCH[branchId]?.short || session.city,
+      path: session.path || "",
+      signup: session.signup,
+      chip: chipLabel(session, branchId),
+    });
+  }
+  return out.slice(0, 16);
+}
+
+export function formatGroups(list: LiveGroup[], age?: number) {
+  if (!list.length) {
+    return age
+      ? `Живых групп на ${age} лет с этими фильтрами сейчас нет. Предложи заявку на пробное или телефон 8 (800) 511-34-01.`
+      : "Группы не найдены. Уточни возраст и филиал.";
+  }
+  const lines = list.map(
+    (g, i) =>
+      `${i + 1}. gid=${g.gid} филиал=${g.branchId} · ${g.name} · ${g.age || "возраст в названии"} · ${g.short} · ${g.when}`,
+  );
+  return [
+    `Найдено ${list.length} живых групп. Перечисли родителю слоты: день, время, филиал, название. Не выдумывай другие.`,
+    "Когда выбрал слот — вызови open_group с gid и branch.",
+    ...lines,
+  ].join("\n");
+}
+
+export function groupSignup(gid: string, branch?: string) {
+  const n = String(gid).replace(/\D/g, "");
+  const b = branchIdOf(branch || "") || Number(branch) || 0;
+  if (n && b) return { gid: n, branchId: b, signup: signupUrl(b, n) };
+  return null;
 }

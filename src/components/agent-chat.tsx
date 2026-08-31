@@ -113,6 +113,7 @@ export function AgentChat() {
   const [speaking, setSpeaking] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
   const [adminMs, setAdminMs] = useState(0);
+  const [groupChips, setGroupChips] = useState<{ label: string; href: string }[]>([]);
   const [box, setBox] = useState({ w: 520, h: 740 });
   const dragRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -138,7 +139,9 @@ export function AgentChat() {
             { label: "Голоса", send: "Какие сейчас настройки голосов" },
           ],
         }
-      : nextChips(messages);
+      : groupChips.length
+        ? { hint: "Запись в группу", chips: groupChips.map((g) => ({ label: g.label, href: g.href, primary: true })) }
+        : nextChips(messages);
   voiceOnRef.current = voiceOn;
   partnerRef.current = partner;
 
@@ -381,6 +384,7 @@ export function AgentChat() {
       (m) => m.role !== "user" || !noisyAdmin(m.content),
     );
     setMessages(history);
+    setGroupChips([]);
     busyRef.current = true;
     setBusy(true);
     let reply = `Не отправилось. Позвоните ${SITE.phone}.`;
@@ -403,6 +407,10 @@ export function AgentChat() {
           setPartner("olga");
         }
         shouldReload = Boolean(res.reload);
+        if ("groups" in res && Array.isArray(res.groups)) setGroupChips(res.groups);
+        if ("signup" in res && res.signup) {
+          window.open(String(res.signup), "_blank", "noopener,noreferrer");
+        }
         if (res.open) {
           void navigate({ to: res.open });
           window.setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
