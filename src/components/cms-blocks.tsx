@@ -164,16 +164,21 @@ export function CoursePageHero({
   images: HeroShot[];
   video?: string | null;
 }) {
-  const srcs = images.filter((img) => img?.src);
+  const srcs = images.filter((img) => {
+    if (!img?.src) return false;
+    const blob = `${img.filename || ""} ${img.alt || ""}`;
+    if (/^11062b_/i.test(img.filename || "")) return false;
+    if (/empty-state|обои|wallpaper/i.test(blob)) return false;
+    return true;
+  });
   const shots: HeroShot[] = [];
-  if (srcs.length) {
-    shots.push(...srcs);
-    let i = 0;
-    while (shots.length < 3) {
-      shots.push(srcs[i % srcs.length]);
-      i += 1;
-    }
-    shots.splice(3);
+  const seen = new Set<string>();
+  for (const img of srcs) {
+    const key = img.src.split("?")[0];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    shots.push(img);
+    if (shots.length === 3) break;
   }
 
   function ShotMedia({ shot, className, imgClassName }: { shot: HeroShot; className?: string; imgClassName?: string }) {
@@ -191,19 +196,19 @@ export function CoursePageHero({
 
   return (
     <section className="ink relative isolate overflow-hidden text-header-fg">
-      <div className="page-wrap grid items-center gap-10 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[88dvh] lg:gap-8 lg:py-8">
+      <div className="page-wrap grid items-center gap-8 py-10 md:py-12 lg:grid-cols-[1.1fr_0.9fr] lg:gap-10 lg:py-10">
         <div className="relative z-10 max-w-xl">
           <div className="hero-in kicker text-header-fg/55">{kicker}</div>
-          {age ? <p className="hero-in mt-4 text-sm font-medium text-header-fg/70">{age}</p> : null}
-          <h1 className="hero-in hero-in-2 mt-5 text-[clamp(2.1rem,1.2rem+3vw,3.8rem)] leading-[1.05]">
+          {age ? <p className="hero-in mt-3 text-sm font-medium text-header-fg/70">{age}</p> : null}
+          <h1 className="hero-in hero-in-2 mt-4 text-[clamp(2rem,1.15rem+2.6vw,3.4rem)] leading-[1.05]">
             {title}
           </h1>
           {description ? (
-            <p className="hero-in hero-in-3 mt-5 max-w-md text-[1.02rem] leading-relaxed text-header-fg/70">
+            <p className="hero-in hero-in-3 mt-4 max-w-md text-[1.02rem] leading-relaxed text-header-fg/70">
               {description}
             </p>
           ) : null}
-          <div className="hero-in hero-in-3 mt-8 flex flex-wrap gap-3">
+          <div className="hero-in hero-in-3 mt-6 flex flex-wrap gap-3">
             <Button asChild size="lg">
               <a href="#trial">Записаться</a>
             </Button>
@@ -214,36 +219,18 @@ export function CoursePageHero({
         </div>
 
         {shots.length || video ? (
-          <>
-            <div className="relative hidden lg:block">
-              <div className="photo-stack">
-                {shots.slice(0, video ? 2 : 3).map((shot, i) => (
-                  <div key={`${shot.src}-${i}`} className="shot bg-header">
-                    <ShotMedia shot={shot} className="h-full w-full" imgClassName="h-full w-full object-cover" />
-                  </div>
-                ))}
-                {video ? (
-                  <div className="shot bg-header">
-                    <video
-                      src={video}
-                      className="h-full w-full object-cover"
-                      autoPlay
-                      muted
-                      loop
-                      playsInline
-                      preload="metadata"
-                      aria-label={title}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            <div className="snap-row lg:hidden">
+          <div className="relative">
+            <div className="photo-stack hidden lg:block">
+              {shots.slice(0, video ? 2 : 3).map((shot, i) => (
+                <div key={`${shot.src}-${i}`} className="shot bg-header">
+                  <ShotMedia shot={shot} className="h-full w-full" imgClassName="h-full w-full object-cover" />
+                </div>
+              ))}
               {video ? (
-                <div className="snap-card overflow-hidden rounded-3xl">
+                <div className="shot bg-header">
                   <video
                     src={video}
-                    className="aspect-4/5 w-full object-cover"
+                    className="h-full w-full object-cover"
                     autoPlay
                     muted
                     loop
@@ -253,13 +240,24 @@ export function CoursePageHero({
                   />
                 </div>
               ) : null}
-              {shots.map((shot, i) => (
-                <div key={`${shot.src}-m-${i}`} className="snap-card overflow-hidden rounded-3xl">
-                  <ShotMedia shot={shot} className="aspect-4/5" />
-                </div>
-              ))}
             </div>
-          </>
+            <div className="overflow-hidden rounded-3xl lg:hidden">
+              {video ? (
+                <video
+                  src={video}
+                  className="aspect-[4/5] w-full object-cover"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  aria-label={title}
+                />
+              ) : shots[0] ? (
+                <ShotMedia shot={shots[0]} className="aspect-[4/5]" />
+              ) : null}
+            </div>
+          </div>
         ) : null}
       </div>
     </section>
