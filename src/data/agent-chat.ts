@@ -441,6 +441,7 @@ export const chatAgent = createServerFn({ method: "POST" })
         gate?: boolean;
         gateWord?: string;
         voice?: boolean;
+        channel?: string;
       },
   )
   .handler(async ({ data }) => {
@@ -521,7 +522,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     const system = admin
       ? ADMIN_SYSTEM + adminHint
       : clientSystem(soloWho, facts, note.next) +
-        agentPromptAddons(facts) +
+        agentPromptAddons(facts, data.channel || "site") +
         knowledgeForAgent() +
         factsPrompt(facts) +
         notePrompt(note) +

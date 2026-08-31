@@ -12,7 +12,7 @@ export function InfoTip({ text, className }: { text: string; className?: string 
       >
         i
       </button>
-      <span className="pointer-events-none absolute left-1/2 top-7 z-50 hidden w-72 -translate-x-1/2 rounded-2xl bg-[#12141a] px-3.5 py-3 text-left text-[0.78rem] font-normal leading-relaxed text-white shadow-xl peer-hover:block peer-focus:block md:w-80">
+      <span className="pointer-events-none absolute left-1/2 top-7 z-50 hidden w-[22rem] -translate-x-1/2 rounded-2xl bg-[#12141a] px-3.5 py-3 text-left text-[0.78rem] font-normal leading-relaxed text-white shadow-xl peer-hover:block peer-focus:block md:w-[26rem]">
         {text}
       </span>
     </span>

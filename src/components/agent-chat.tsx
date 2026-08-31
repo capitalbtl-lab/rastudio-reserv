@@ -593,6 +593,7 @@ export function AgentChat() {
           gate,
           gateWord: gate ? next : undefined,
           voice: voiceOnRef.current,
+          channel: "site",
         },
       });
       if (sendId !== sendIdRef.current) return;

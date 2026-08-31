@@ -97,7 +97,7 @@ const STYLE: Record<AgentSettings["style"], string> = {
   detailed: "Стиль: чуть подробнее, но без простыни. Главное — в первых двух фразах.",
 };
 
-export function agentPromptAddons(facts?: SessionFacts) {
+export function agentPromptAddons(facts?: SessionFacts, channel = "site") {
   const brain = loadBrain();
   const s = brain.settings;
   const parts: string[] = ["", STYLE[s.style] || STYLE.warm];
@@ -116,7 +116,7 @@ export function agentPromptAddons(facts?: SessionFacts) {
       else parts.push(`Пример.\nРодитель: ${ex.input.slice(0, 400)}\nОтвет: ${ex.output.slice(0, 600)}`);
     }
   }
-  const docs = docsPrompt();
+  const docs = docsPrompt(channel);
   if (docs.trim()) parts.push(docs);
   return `\n${parts.join("\n")}\n`;
 }

@@ -196,9 +196,12 @@ export function AdminTrain() {
   return (
     <section className="mt-10 space-y-6">
       <div>
-        <h2 className="font-display text-3xl">Обучение ассистента</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="font-display text-3xl">Обучение ассистента</h2>
+          <InfoTip text="Три вкладки. Скрипты — порядок разговора (возраст → город → филиал → школа). Документы — Word/PDF: инструкция, правила, оферта, разложенные по каналам. Примеры — эталонные реплики. Ассистент читает всё включённое, но на сайте только канал «Агент на сайте» плюс «Общее»." />
+        </div>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Скрипты — как вести разговор. Документы — оферта, правила, методички. Примеры — живые реплики. Ассистент берёт это в ответы, пока запись включена.
+          Скрипты, документы по каналам и примеры. Подсказка «i» у каждого поля — как пользоваться, без сюрпризов.
         </p>
       </div>
 
@@ -206,24 +209,27 @@ export function AdminTrain() {
         <button
           type="button"
           onClick={() => setPane("scripts")}
-          className={cn("rounded-full px-4 py-2 text-sm font-semibold", pane === "scripts" ? "bg-primary text-primary-foreground" : "bg-surface")}
+          className={cn("inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold", pane === "scripts" ? "bg-primary text-primary-foreground" : "bg-surface")}
         >
           Скрипты воронки
         </button>
+        <InfoTip text="Воронка записи. Не пишите сюда оферту и не дублируйте Word. Если скрипт спорит с документом — кнопка «Уточнить противоречия» на вкладке Документы." />
         <button
           type="button"
           onClick={() => setPane("docs")}
-          className={cn("rounded-full px-4 py-2 text-sm font-semibold", pane === "docs" ? "bg-primary text-primary-foreground" : "bg-surface")}
+          className={cn("inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold", pane === "docs" ? "bg-primary text-primary-foreground" : "bg-surface")}
         >
           Документы
         </button>
+        <InfoTip text="Загрузка PDF/Word, каналы, преобразование в столбцы, противоречия. Это главный архив правил студии." />
         <button
           type="button"
           onClick={() => setPane("examples")}
-          className={cn("rounded-full px-4 py-2 text-sm font-semibold", pane === "examples" ? "bg-primary text-primary-foreground" : "bg-surface")}
+          className={cn("inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold", pane === "examples" ? "bg-primary text-primary-foreground" : "bg-surface")}
         >
           Примеры
         </button>
+        <InfoTip text="Живые пары «родитель сказал — ассистент ответил» и короткие правила. Экспорт JSONL — для другого агента. Не кладите сюда многостраничные договоры." />
       </div>
 
       {pane === "docs" ? <AdminTrainDocs /> : null}
@@ -256,9 +262,10 @@ export function AdminTrain() {
                     {s.updatedAt ? ` · ${when(s.updatedAt)}` : ""}
                   </p>
                 </div>
-                <Button type="button" disabled={busy} onClick={() => void saveScript(s.id)}>
-                  Сохранить
-                </Button>
+            <Button type="button" disabled={busy} onClick={() => void saveScript(s.id)}>
+              Сохранить
+            </Button>
+            <InfoTip text="Записывает текст шага на сервер сразу. Пока не сохранили, ассистент читает старую версию. После сохранения новый чат уже идёт по этой формулировке; открытый диалог — после сброса круглой кнопкой." />
               </div>
               <textarea
                 value={draft[s.id] ?? s.body}
@@ -269,7 +276,9 @@ export function AdminTrain() {
             </article>
           ))}
         </div>
-      ) : (
+      ) : null}
+
+      {pane === "examples" ? (
         <div className="space-y-6">
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="secondary" onClick={exportJson} disabled={!rows.length && !scripts.length}>
@@ -303,7 +312,10 @@ export function AdminTrain() {
             </p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <label className="text-sm">
-                Тип
+                <span className="inline-flex items-center gap-2">
+                  Тип
+                  <InfoTip text="Вопрос→ответ — эталонная реплика. Правило — запрет или установка без ответа. Исправление — как надо говорить вместо ошибки. Диалог — кусок с сайта, обычно после систематизации." />
+                </span>
                 <select
                   value={kind}
                   onChange={(e) => setKind(e.target.value as TrainExample["kind"])}
@@ -316,7 +328,10 @@ export function AdminTrain() {
                 </select>
               </label>
               <label className="text-sm">
-                Заметка (не уходит в модель)
+                <span className="inline-flex items-center gap-2">
+                  Заметка (не уходит в модель)
+                  <InfoTip text="Для оператора: зачем запись. Ассистент эту строку не видит." />
+                </span>
                 <input
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
@@ -325,7 +340,10 @@ export function AdminTrain() {
               </label>
             </div>
             <label className="mt-3 block text-sm">
-              {kind === "rule" ? "Правило" : "Реплика родителя"}
+              <span className="inline-flex items-center gap-2">
+                {kind === "rule" ? "Правило" : "Реплика родителя"}
+                <InfoTip text={kind === "rule" ? "Формулируйте как приказ: «Не называй цену, которой нет в CRM». Одно правило — одна мысль." : "Как родитель пишет в чате, своими словами. Не надо литературно."} />
+              </span>
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -335,7 +353,10 @@ export function AdminTrain() {
             </label>
             {kind === "rule" ? null : (
               <label className="mt-3 block text-sm">
-                Как должен ответить ассистент
+                <span className="inline-flex items-center gap-2">
+                  Как должен ответить ассистент
+                  <InfoTip text="Эталон. Коротко, на «вы», без выдуманного слота. Если нужен курс — точное имя с сайта." />
+                </span>
                 <textarea
                   value={output}
                   onChange={(e) => setOutput(e.target.value)}
@@ -344,9 +365,12 @@ export function AdminTrain() {
                 />
               </label>
             )}
-            <Button className="mt-4" type="button" disabled={busy || (!input.trim() && !output.trim())} onClick={() => void add()}>
-              Записать в обучение
-            </Button>
+            <span className="mt-4 inline-flex items-center gap-2">
+              <Button className="" type="button" disabled={busy || (!input.trim() && !output.trim())} onClick={() => void add()}>
+                Записать в обучение
+              </Button>
+              <InfoTip text="Попадает в промпт, если в «Ассистент ИИ» включено подмешивание примеров. Чем запись свежее, тем выше в списке. Лимит — 400 записей." />
+            </span>
             {msg && pane === "examples" ? <p className="mt-2 text-sm text-primary">{msg}</p> : null}
           </div>
 
@@ -377,7 +401,7 @@ export function AdminTrain() {
             {rows.length ? null : <p className="text-sm text-muted">Пока пусто — добавьте правило или пример ответа.</p>}
           </div>
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
