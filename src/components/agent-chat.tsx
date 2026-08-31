@@ -81,7 +81,7 @@ export function AgentChat() {
   const voiceOnRef = useRef(false);
   const recRef = useRef<Rec | null>(null);
   const audioRef = useRef<{ stop: () => void } | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
   const genRef = useRef(0);
   const spokenRef = useRef("");
   const speakingRef = useRef(false);
@@ -107,8 +107,67 @@ export function AgentChat() {
   function cancelSpeech() {
     genRef.current += 1;
     audioRef.current?.stop();
+    if (audioElRef.current) {
+      audioElRef.current.pause();
+      audioElRef.current.removeAttribute("src");
+    }
     speakingRef.current = false;
     setSpeaking(false);
+  }
+
+  async function playClip(dataUrl: string) {
+    await new Promise<void>((resolve) => {
+      const el = audioElRef.current || new Audio();
+      audioElRef.current = el;
+      let finished = false;
+      const done = () => {
+        if (finished) return;
+        finished = true;
+        el.onended = null;
+        el.onerror = null;
+        resolve();
+      };
+      el.preload = "auto";
+      el.volume = 1;
+      el.onended = done;
+      el.onerror = done;
+      audioRef.current = {
+        stop: () => {
+          el.pause();
+          done();
+        },
+      };
+      el.src = dataUrl;
+      const play = el.play();
+      if (play && typeof play.catch === "function") play.catch(() => done());
+    });
+  }
+
+  async function speak(phrase: string) {
+    const gen = ++genRef.current;
+    speakingRef.current = true;
+    spokenRef.current = parseTurns(phrase)
+      .map((t) => t.text)
+      .join(" ");
+    setSpeaking(true);
+    stopListen();
+    try {
+      const turns = parseTurns(phrase).filter((t) => partnerRef.current === "both" || t.who === partnerRef.current);
+      for (const turn of turns) {
+        if (gen !== genRef.current) return;
+        const res = await speakAgent({
+          data: { text: turn.text, voice: turn.who === "olga" ? "alena" : "zahar" },
+        });
+        if (!res.ok || !("audio" in res) || gen !== genRef.current) continue;
+        spokenRef.current = turn.text;
+        await playClip(res.audio);
+      }
+    } finally {
+      if (gen === genRef.current) {
+        speakingRef.current = false;
+        setSpeaking(false);
+      }
+    }
   }
 
   function isEcho(said: string) {
@@ -129,75 +188,6 @@ export function AgentChat() {
     recRef.current?.stop();
     recRef.current = null;
     setListening(false);
-  }
-
-  async function playClip(dataUrl: string) {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = audioCtxRef.current || new Ctx();
-    audioCtxRef.current = ctx;
-    if (ctx.state === "suspended") await ctx.resume();
-    const raw = await fetch(dataUrl).then((r) => r.arrayBuffer());
-    const buf = await ctx.decodeAudioData(raw);
-    const data = buf.getChannelData(0);
-    const thr = 0.016;
-    let a = 0;
-    let b = data.length - 1;
-    while (a < b && Math.abs(data[a]) < thr) a += 1;
-    while (b > a && Math.abs(data[b]) < thr) b -= 1;
-    a = Math.max(0, a - 80);
-    b = Math.min(data.length - 1, b + 160);
-    const len = Math.max(1, b - a);
-    const sliced = ctx.createBuffer(buf.numberOfChannels, len, buf.sampleRate);
-    for (let ch = 0; ch < buf.numberOfChannels; ch += 1) {
-      sliced.copyToChannel(buf.getChannelData(ch).subarray(a, a + len), ch);
-    }
-    await new Promise<void>((resolve) => {
-      const src = ctx.createBufferSource();
-      src.buffer = sliced;
-      src.connect(ctx.destination);
-      const stop = () => {
-        try {
-          src.stop();
-        } catch {
-          /* already stopped */
-        }
-        resolve();
-      };
-      audioRef.current = { stop };
-      src.onended = () => resolve();
-      src.start();
-    });
-  }
-
-  async function speak(phrase: string) {
-    const gen = ++genRef.current;
-    speakingRef.current = true;
-    spokenRef.current = parseTurns(phrase)
-      .map((t) => t.text)
-      .join(" ");
-    setSpeaking(true);
-    stopListen();
-    try {
-      const turns = parseTurns(phrase).filter((t) => partner === "both" || t.who === partner);
-      const clips = await Promise.all(
-        turns.map(async (turn) => {
-          const res = await speakAgent({
-            data: { text: turn.text, voice: turn.who === "olga" ? "alena" : "filipp" },
-          });
-          return res.ok && "audio" in res ? { audio: res.audio, text: turn.text } : null;
-        }),
-      );
-      for (const clip of clips) {
-        if (!clip || gen !== genRef.current || !voiceOnRef.current) return;
-        spokenRef.current = clip.text;
-        await playClip(clip.audio);
-      }
-    } finally {
-      if (gen === genRef.current) {
-        speakingRef.current = false;
-        setSpeaking(false);
-      }
-    }
   }
 
   function startListen() {
@@ -286,17 +276,16 @@ export function AgentChat() {
   async function toggleVoice() {
     if (voiceOn) {
       setVoiceOn(false);
+      voiceOnRef.current = false;
       stopListen();
-      audioRef.current?.stop();
+      cancelSpeech();
       return;
     }
+    voiceOnRef.current = true;
     setVoiceOn(true);
     const last = [...messages].reverse().find((m) => m.role === "assistant")?.content;
     if (last) await speak(last);
-    if (voiceOnRef.current || true) {
-      voiceOnRef.current = true;
-      startListen();
-    }
+    if (voiceOnRef.current) startListen();
   }
 
   function onResizeStart(e: PointerEvent<HTMLButtonElement>) {

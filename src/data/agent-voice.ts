@@ -1,4 +1,23 @@
 import { createServerFn } from "@tanstack/react-start";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+function env(key: string) {
+  const dyn = String((globalThis as { process?: { env?: Record<string, string> } }).process?.env?.[key] || "").trim();
+  if (dyn) return dyn;
+  for (const file of [join(process.cwd(), ".env"), "/var/www/rastudio/.env"]) {
+    try {
+      for (const line of readFileSync(file, "utf8").split("\n")) {
+        const t = line.trim();
+        if (!t || t.startsWith("#") || !t.startsWith(`${key}=`)) continue;
+        return t.slice(key.length + 1).trim().replace(/^["']|["']$/g, "");
+      }
+    } catch {
+      /* next */
+    }
+  }
+  return "";
+}
 
 function speakRu(text: string) {
   return text
@@ -44,8 +63,8 @@ function toSsml(text: string) {
 export const speakAgent = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { text: string; voice?: "filipp" | "alena" })
   .handler(async ({ data }) => {
-    const key = process.env.YANDEX_API_KEY?.trim();
-    const folder = process.env.YANDEX_FOLDER_ID?.trim();
+    const key = env("YANDEX_API_KEY");
+    const folder = env("YANDEX_FOLDER_ID");
     const text = clean(data.text || "");
     if (!key || !folder || !text) return { ok: false as const, error: "no-voice" };
     const voice = data.voice === "alena" ? "alena" : "zahar";
