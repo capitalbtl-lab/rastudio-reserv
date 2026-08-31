@@ -1,4 +1,5 @@
 import { SITE } from "@/data/site";
+import { courseHint } from "@/data/agent-courses";
 
 export type AgentChip = {
   label: string;
@@ -115,12 +116,13 @@ export function nextChips(messages: { role: string; content: string }[]): { hint
   if (!hasCourse(blob)) {
     return { hint: "Что откликается", chips: COURSES[age] || COURSES["7-9"] };
   }
+  const page = courseHint(`${blob} ${messages.map((m) => m.content).slice(-3).join(" ")}`);
   return {
     hint: "Следующий шаг",
     chips: [
-      { label: "Записать на пробное", send: "Да, запишите на пробное занятие", primary: true },
+      ...(page ? [{ label: "Страница курса", href: page.path, primary: true }] : []),
+      { label: "Записать на пробное", send: "Да, запишите на пробное занятие", primary: !page },
       { label: "Смотреть расписание", href: "/schedule" },
-      { label: "Позвонить", href: "tel:+78005113401" },
     ],
   };
 }

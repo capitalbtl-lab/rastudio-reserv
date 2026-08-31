@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { X, Send, Mic, Volume2 } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
 import { speakAgent } from "@/data/agent-voice";
@@ -67,6 +68,7 @@ function Duo({ size, mood }: { size: number; mood: Mood }) {
 }
 
 export function AgentChat() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -265,6 +267,10 @@ export function AgentChat() {
           document.cookie = `ra_admin=${encodeURIComponent(res.token)}; path=/; max-age=${7 * 24 * 3600}; samesite=lax`;
         }
         shouldReload = Boolean(res.reload);
+        if (res.open) {
+          void navigate({ to: res.open });
+          window.setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
+        }
       } else reply = res.error;
     } catch {
       /* keep */

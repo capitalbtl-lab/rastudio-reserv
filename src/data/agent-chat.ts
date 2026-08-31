@@ -37,7 +37,8 @@ id курсов: ${TRIAL_COURSES.map((c) => `${c.id} ${c.name}`).join("; ")}.
 Цена ориентир от ${coursePrice("/")} / 4 нед, художественная школа 10–14 — 6 450 ₽.
 
 Назови 2–3 курса точными именами. Спроси одно: филиал, какой курс или записать на пробное.
-Кнопки под чатом уже есть — не повторяй их стеной.
+Когда родитель просит подробности курса или вы уже называете конкретный курс по имени — вызови open_course (path или название). Страница курса откроется, чат останется. В речи не читай URL. Скажи, что открыли страницу курса, и коротко по сути. Кнопка «Страница курса» появится сама.
+Не открывай страницу, пока курс не выбран.
 Запись: родитель, ребёнок, дата рождения, телефон, email, филиал 1/2/3, course_id. После явного «записать» вызови submit_trial.
 Жалобы и деньги — телефон.
 
@@ -115,6 +116,21 @@ const TOOLS = [
           branch_id: { type: "string", description: "1 Гражданская, 2 Октябрьской революции, 3 Луховицы" },
         },
         required: ["parent", "child", "dob", "phone", "email", "branch_id"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "open_course",
+      description: "Открыть страницу курса на сайте, чтобы родитель увидел полное описание. Вызывать, когда речь о конкретном курсе и нужны подробности.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          path: { type: "string", description: "Путь, например /teslaphysics, или точное название курса" },
+        },
+        required: ["path"],
       },
     },
   },
@@ -263,6 +279,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     let admin = isAdminRequest(data.token);
     let granted: string | undefined;
     let reload = false;
+    let open = "";
     const solo =
       data.with === "oleg"
         ? "\n\nСейчас родитель говорит только с Олегом. Отвечай исключительно строками «Олег:». Ольга молчит. Мужской род."
@@ -309,6 +326,23 @@ export const chatAgent = createServerFn({ method: "POST" })
                   ? "Заявка принята. Администратор свяжется для подтверждения времени."
                   : `Ошибка: ${saved.error}`,
               });
+            } else if (call.function.name === "open_course") {
+              const { findCoursePage } = await import("./agent-courses");
+              const hit = findCoursePage(String(args.path || args.name || ""));
+              if (hit) {
+                open = hit.path;
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: `Страница открыта: ${hit.name} (${hit.path}). Скажи родителю, что открыли карточку курса, и продолжи коротко по сути.`,
+                });
+              } else {
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: "Курс не найден. Уточни название.",
+                });
+              }
             } else if (call.function.name === "verify_admin_code") {
               const { checkCodeword, logAdmin } = await import("./admin-settings");
               const ok = checkCodeword(String(args.word || ""));
@@ -378,13 +412,14 @@ export const chatAgent = createServerFn({ method: "POST" })
           continue;
         }
         const reply = (msg.content || "").trim();
-        if (reply) return { ok: true as const, reply, token: granted, reload };
+        if (reply) return { ok: true as const, reply, token: granted, reload, open: open || undefined };
       }
       return {
         ok: true as const,
         reply: "Передам администратору. Или сразу звоните 8 (800) 511-34-01.",
         token: granted,
         reload,
+        open: open || undefined,
       };
     } catch (err) {
       const reason = err instanceof Error ? err.message : "";
