@@ -29,18 +29,31 @@ function moodOf(messages: Msg[], busy: boolean): Mood {
   return "hello";
 }
 
-function Robot({ mood, size }: { mood: Mood; size: number }) {
+function Robot({ mood, size, live }: { mood: Mood; size: number; live?: boolean }) {
   const r = ROBOT[mood];
-  return (
-    <img
-      src={r.src}
-      alt={r.alt}
-      width={size}
-      height={size}
-      className="rounded-full bg-[#f3efe6] object-cover shadow-[0_8px_20px_-8px_rgba(18,20,26,0.45)]"
-      style={{ width: size, height: size }}
-    />
+  const cls = cn(
+    "robot-face overflow-hidden rounded-full bg-[#f3efe6] object-cover shadow-[0_8px_20px_-8px_rgba(18,20,26,0.45)]",
+    !(live && mood === "hello") && `robot-${mood}`,
   );
+  const style = { width: size, height: size };
+  if (live && mood === "hello") {
+    return (
+      <video
+        src="/brand/agent/idle.mp4"
+        autoPlay
+        loop
+        muted
+        playsInline
+        poster={r.src}
+        width={size}
+        height={size}
+        className={cls}
+        style={style}
+        aria-label={r.alt}
+      />
+    );
+  }
+  return <img src={r.src} alt={r.alt} width={size} height={size} className={cls} style={style} />;
 }
 
 export function AgentChat() {
@@ -96,7 +109,7 @@ export function AgentChat() {
             </button>
             <div className="flex items-end gap-3 pr-10">
               <div className="-mb-10 shrink-0">
-                <Robot mood={mood} size={88} />
+                <Robot mood={mood} size={88} live />
               </div>
               <div className="min-w-0 pb-1">
                 <p className="font-display text-[1.15rem] leading-tight">Олег</p>
@@ -175,7 +188,7 @@ export function AgentChat() {
           >
             <span className="agent-fab-ring pointer-events-none absolute inset-0 rounded-full bg-primary/25" aria-hidden />
             <span className="relative">
-              <Robot mood="hello" size={52} />
+              <Robot mood="hello" size={52} live />
               <span className="absolute bottom-0.5 right-0.5 size-2.5 rounded-full bg-[#6BDB03] ring-2 ring-white" />
             </span>
             <span className="relative pr-1 text-left leading-tight">
