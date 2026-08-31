@@ -19,7 +19,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
         К содержанию
       </a>
       <SiteHeader />
-      <main id="content" className="pb-24 md:pb-0">
+      <main id="content" className="pt-[4.25rem] pb-24 md:pt-[4.75rem] md:pb-0">
         {children}
       </main>
       <SiteFooter />

@@ -19,11 +19,11 @@ const LINKS = [
 const UTILITY = [
   {
     href: SITE.maxBot,
-    label: "Админ-бот",
+    label: "Бот",
     full: "Админ-бот",
     kind: "ghost" as const,
     external: true,
-    hide: "hidden lg:inline-flex",
+    hide: "inline-flex",
   },
   {
     href: SITE.telegram,
@@ -31,7 +31,7 @@ const UTILITY = [
     full: "Telegram",
     kind: "ghost" as const,
     external: true,
-    hide: "hidden lg:inline-flex",
+    hide: "inline-flex",
   },
   {
     href: SITE.cabinet,
@@ -62,7 +62,7 @@ export function SiteHeader() {
   const [schoolsOpen, setSchoolsOpen] = useState(false);
 
   return (
-    <header className="ink sticky top-0 z-40 border-b border-white/10 bg-header/90 text-header-fg backdrop-blur-xl">
+    <header className="ink fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-header/95 text-header-fg backdrop-blur-xl">
       <div className="page-wrap flex h-[4.25rem] items-center gap-3 md:h-[4.75rem]">
         <PageLink to="/" className="flex shrink-0 items-center" onClick={() => setOpen(false)}>
           <img
@@ -145,7 +145,7 @@ export function SiteHeader() {
               target={item.external ? "_blank" : undefined}
               rel={item.external ? "noreferrer" : undefined}
               className={cn(
-                "h-9 items-center rounded-full px-3 text-[0.8rem] font-semibold transition-colors xl:px-3.5",
+                "h-8 items-center rounded-full px-2.5 text-[0.75rem] font-semibold transition-colors sm:h-9 sm:px-3 sm:text-[0.8rem] xl:px-3.5",
                 item.hide,
                 pill[item.kind],
               )}
