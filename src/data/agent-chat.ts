@@ -503,7 +503,10 @@ export const chatAgent = createServerFn({ method: "POST" })
     if (!admin) {
       const locked = lockedFunnelReply(soloWho, facts, note, all);
       if (locked) {
-        return { ok: true as const, reply: locked, token: granted, reload: false };
+        if ("silent" in locked) {
+          return { ok: true as const, reply: "", silent: true as const, token: granted, reload: false };
+        }
+        return { ok: true as const, reply: locked.reply, token: granted, reload: false };
       }
     }
     if (!admin && (facts.phone || facts.child || facts.parent)) {

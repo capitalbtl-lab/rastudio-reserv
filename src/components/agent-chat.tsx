@@ -38,6 +38,20 @@ const DUAL_HELLO = /Олег: Подскажу программу[\s\S]*Ольг
 const ADMIN_ASK = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
 const ADMIN_HELLO = "Ольга: Доступ открыт на 30 минут. Цены, тексты страниц или голоса — что меняем?";
 
+function sameAsk(prev: string, next: string) {
+  const a = prev.replace(/^(Ольга|Олег):\s*/i, "");
+  const b = next.replace(/^(Ольга|Олег):\s*/i, "");
+  if (!b.trim()) return true;
+  if (a.trim() === b.trim()) return true;
+  const age = /сколько.{0,24}лет|возраст — кнопк|кнопки ниже/i;
+  const city = /коломна или луховиц|удобнее коломн/i;
+  const branch = /цмит|гражданская, 2|какой ближе/i;
+  if (age.test(a) && age.test(b)) return true;
+  if (city.test(a) && city.test(b)) return true;
+  if (branch.test(a) && branch.test(b)) return true;
+  return false;
+}
+
 function moodOf(messages: Msg[], busy: boolean): Mood {
   if (busy) return "think";
   const last = [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
@@ -568,6 +582,7 @@ export function AgentChat() {
     setBusy(true);
     let reply = `Не отправилось. Позвоните ${SITE.phone}.`;
     let shouldReload = false;
+    let skipBubble = false;
     try {
       const res = await chatAgent({
         data: {
@@ -581,6 +596,7 @@ export function AgentChat() {
       });
       if (sendId !== sendIdRef.current) return;
       if (res.ok) {
+        if ("silent" in res && res.silent) skipBubble = true;
         reply = adminThread || res.token ? olgaReply(res.reply) : res.reply;
         if (res.token) {
           awaitingCodeRef.current = false;
@@ -611,18 +627,21 @@ export function AgentChat() {
       if (sendId !== sendIdRef.current) return;
     }
     if (sendId !== sendIdRef.current) return;
-    if (!(gate && reply === ADMIN_HELLO)) {
+    if (!reply.trim()) skipBubble = true;
+    const lastAs = [...history].reverse().find((m) => m.role === "assistant")?.content || "";
+    if (!skipBubble && sameAsk(lastAs, reply)) skipBubble = true;
+    if (!skipBubble && !(gate && reply === ADMIN_HELLO)) {
       const nextMsgs = [...history, { role: "assistant" as const, content: reply }];
       if (adminThread) setAdminMsgs(nextMsgs);
       else setClientMsgs(nextMsgs);
     }
     busyRef.current = false;
     setBusy(false);
-    if (voiceOnRef.current) {
+    if (voiceOnRef.current && !skipBubble && reply.trim()) {
       await speak(reply);
       if (sendId !== sendIdRef.current) return;
-      if (voiceOnRef.current && !speakingRef.current) startListen();
     }
+    if (voiceOnRef.current && !speakingRef.current) startListen();
     if (shouldReload) window.setTimeout(() => window.location.reload(), voiceOnRef.current ? 600 : 200);
   }
 
