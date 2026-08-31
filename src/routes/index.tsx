@@ -29,10 +29,10 @@ const COLLAGE = [
     filename: "shot-sculpt.jpg",
   },
   {
-    href: "/programming-school",
-    src: "/media/home/shot-code.jpg",
-    alt: "Компьютерный класс школы программирования в Студии Развивайся",
-    filename: "shot-code.jpg",
+    href: "/robototehnika-5-7",
+    src: "/media/home/shot-robot.jpg",
+    alt: "Робототехника для детей в Студии Развивайся в Коломне",
+    filename: "shot-robot.jpg",
   },
 ] as const;
 
