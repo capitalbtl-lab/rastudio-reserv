@@ -23,7 +23,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
         К содержанию
       </a>
       <SiteHeader />
-      <div className="h-[4.75rem] bg-header md:h-[5.25rem]" aria-hidden />
+      <div className="h-[3.75rem] bg-header sm:h-[4.75rem] md:h-[5.25rem]" aria-hidden />
       <main id="content" className="pb-24 md:pb-0">
         {children}
       </main>

@@ -284,9 +284,31 @@ export function AgentChat() {
   }, [messages, open, busy]);
 
   useEffect(() => {
+    const apply = () => {
+      const h = window.visualViewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty("--agent-vvh", `${Math.round(h)}px`);
+    };
+    apply();
+    window.visualViewport?.addEventListener("resize", apply);
+    window.visualViewport?.addEventListener("scroll", apply);
+    window.addEventListener("resize", apply);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", apply);
+      window.visualViewport?.removeEventListener("scroll", apply);
+      window.removeEventListener("resize", apply);
+    };
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle("agent-open", open);
+    return () => document.body.classList.remove("agent-open");
+  }, [open]);
+
+  useEffect(() => {
     return () => {
       recRef.current?.stop();
       audioRef.current?.stop();
+      document.body.classList.remove("agent-open");
     };
   }, []);
 
@@ -702,7 +724,7 @@ export function AgentChat() {
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] md:inset-auto md:bottom-6 md:right-6">
       {open ? (
         <div
-          className="agent-panel pointer-events-auto relative mx-2 mb-[4.85rem] flex h-[calc(100dvh-5.7rem)] w-auto flex-col overflow-hidden rounded-[1.6rem] bg-white ring-[3px] ring-white shadow-[0_28px_70px_-18px_rgba(9,12,18,0.55)] md:mx-0 md:mb-0 md:h-[var(--agent-h)] md:w-[var(--agent-w)]"
+          className="agent-panel pointer-events-auto relative flex w-auto flex-col overflow-hidden rounded-[1.6rem] bg-white ring-[3px] ring-white shadow-[0_28px_70px_-18px_rgba(9,12,18,0.55)] md:h-[var(--agent-h)] md:w-[var(--agent-w)]"
           style={{ ["--agent-w" as string]: `${box.w}px`, ["--agent-h" as string]: `${box.h}px` }}
         >
           <audio ref={audioElRef} className="hidden" playsInline preload="auto" />
@@ -717,11 +739,11 @@ export function AgentChat() {
           >
             <span className="absolute left-0.5 top-0.5 h-2.5 w-2.5 rounded-[2px] border-l-2 border-t-2 border-white/70" />
           </button>
-          <div className={cn("relative shrink-0 px-4 pb-3.5 pt-3.5 text-primary-foreground", inAdminUi ? "bg-ink" : "bg-primary")}>
-            <div className="absolute right-3 top-3 flex items-center gap-1.5">
+          <div className={cn("relative shrink-0 px-3 pb-2.5 pt-2.5 text-primary-foreground sm:px-4 sm:pb-3.5 sm:pt-3.5", inAdminUi ? "bg-ink" : "bg-primary")}>
+            <div className="absolute right-2 top-2 flex items-center gap-1 sm:right-3 sm:top-3 sm:gap-1.5">
               <button
                 type="button"
-                className="grid size-9 place-items-center rounded-full bg-black/15 hover:bg-black/25"
+                className="grid size-8 place-items-center rounded-full bg-black/15 hover:bg-black/25 sm:size-9"
                 title="Сбросить диалог"
                 aria-label="Сбросить диалог"
                 onClick={() => {
@@ -757,7 +779,7 @@ export function AgentChat() {
               </button>
               <button
                 type="button"
-                className="grid size-9 place-items-center rounded-full bg-black/15 hover:bg-black/25"
+                className="grid size-8 place-items-center rounded-full bg-black/15 hover:bg-black/25 sm:size-9"
                 onClick={() => {
                   setOpen(false);
                   setVoiceOn(false);
@@ -769,15 +791,15 @@ export function AgentChat() {
                 <X className="size-5" />
               </button>
             </div>
-            <div className="flex items-end gap-3 pr-20">
+            <div className="flex items-end gap-2 pr-16 sm:gap-3 sm:pr-20">
               <div className="shrink-0">
-                {inAdminUi ? <Face who="olga" mood={mood} size={64} /> : <Face who={partner} mood={mood} size={64} />}
+                {inAdminUi ? <Face who="olga" mood={mood} size={48} /> : <Face who={partner} mood={mood} size={48} />}
               </div>
-              <div className="min-w-0 pb-1">
-                <p className="font-display text-[1.15rem] leading-tight">
+              <div className="min-w-0 pb-0.5">
+                <p className="font-display text-[1.02rem] leading-tight sm:text-[1.15rem]">
                   {inAdminUi ? "Ольга · управление" : partner === "oleg" ? "Олег" : "Ольга"}
                 </p>
-                <p className="text-[0.78rem] text-white/85">
+                <p className="truncate text-[0.72rem] text-white/85 sm:text-[0.78rem]">
                   {inAdminUi
                     ? awaitingCode
                       ? "Назовите кодовое слово"
@@ -791,31 +813,31 @@ export function AgentChat() {
               </div>
             </div>
             {inAdminUi ? null : (
-              <div className="mt-3 grid grid-cols-2 gap-1.5">
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
                   className={cn(
-                    "h-9 rounded-full text-[0.78rem] font-semibold",
+                    "h-8 rounded-full text-[0.72rem] font-semibold sm:h-9 sm:text-[0.78rem]",
                     partner === "olga" ? "bg-white text-primary" : "bg-white/15 text-white hover:bg-white/25",
                   )}
                   onClick={() => pickPartner("olga")}
                 >
-                  Говорить с Ольгой
+                  <span className="hidden min-[400px]:inline">Говорить с </span>Ольгой
                 </button>
                 <button
                   type="button"
                   className={cn(
-                    "h-9 rounded-full text-[0.78rem] font-semibold",
+                    "h-8 rounded-full text-[0.72rem] font-semibold sm:h-9 sm:text-[0.78rem]",
                     partner === "oleg" ? "bg-white text-primary" : "bg-white/15 text-white hover:bg-white/25",
                   )}
                   onClick={() => pickPartner("oleg")}
                 >
-                  Говорить с Олегом
+                  <span className="hidden min-[400px]:inline">Говорить с </span>Олегом
                 </button>
               </div>
             )}
           </div>
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#eef1f7] px-3.5 py-3">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-[#eef1f7] px-3 py-2.5 sm:px-3.5 sm:py-3">
             {messages.filter((m) => m.role !== "user" || !noisyAdmin(m.content)).map((m, i) =>
               m.role === "user" ? (
                 <div key={i} className="flex justify-end">
@@ -900,7 +922,7 @@ export function AgentChat() {
             <div ref={endRef} />
           </div>
           <form
-            className="shrink-0 border-t border-black/5 bg-white px-3 pb-3 pt-2"
+            className="shrink-0 border-t border-black/5 bg-white px-3 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2"
             onSubmit={(e) => {
               e.preventDefault();
               void send();
@@ -963,20 +985,20 @@ export function AgentChat() {
         </div>
       ) : null}
       {open ? null : (
-        <div className="pointer-events-auto absolute bottom-[4.85rem] right-3 md:static">
+        <div className="agent-fab-wrap pointer-events-auto absolute bottom-[4.85rem] right-3 md:static">
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="agent-fab relative inline-flex h-[3.65rem] items-center gap-2 overflow-visible rounded-full bg-white py-1 pl-1 pr-4 text-fg ring-[3px] ring-white shadow-[0_16px_40px_-12px_rgba(32,94,220,0.55)] md:h-[4.1rem] md:pr-5"
+            className="agent-fab relative inline-flex h-[3.15rem] max-w-[calc(100vw-1.25rem)] items-center gap-1.5 overflow-visible rounded-full bg-white py-1 pl-1 pr-3 text-fg ring-[3px] ring-white shadow-[0_16px_40px_-12px_rgba(32,94,220,0.55)] md:h-[4.1rem] md:pr-5"
             aria-label="Написать администраторам студии"
           >
             <span className="agent-fab-ring pointer-events-none absolute inset-0 rounded-full bg-primary/25" aria-hidden />
-            <span className="relative pl-1">
-              <Duo size={48} mood="hello" />
+            <span className="relative pl-0.5">
+              <Duo size={40} mood="hello" />
             </span>
-            <span className="relative pr-1 text-left leading-tight">
-              <span className="block font-display text-[0.95rem] font-semibold md:text-[1.05rem]">Подобрать курс</span>
-              <span className="block text-[0.7rem] font-medium text-muted">Олег и Ольга онлайн</span>
+            <span className="relative min-w-0 pr-1 text-left leading-tight">
+              <span className="block font-display text-[0.88rem] font-semibold md:text-[1.05rem]">Подобрать курс</span>
+              <span className="agent-fab-sub block text-[0.68rem] font-medium text-muted">Олег и Ольга онлайн</span>
             </span>
           </button>
         </div>

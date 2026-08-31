@@ -168,6 +168,47 @@
   animation: agent-ring 2.4s var(--ease-smooth-out) infinite;
 }
 
+@media (max-width: 767px) {
+  .agent-panel {
+    width: auto !important;
+    margin-inline: 0.4rem;
+    margin-bottom: calc(4.35rem + env(safe-area-inset-bottom, 0px));
+    height: calc(var(--agent-vvh, 100svh) - 4.55rem - env(safe-area-inset-bottom, 0px));
+    max-height: calc(var(--agent-vvh, 100svh) - 4.55rem - env(safe-area-inset-bottom, 0px));
+    border-radius: 1.15rem;
+  }
+  .agent-fab-wrap {
+    bottom: calc(4.35rem + env(safe-area-inset-bottom, 0px));
+    right: 0.5rem;
+  }
+  body.agent-open {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body.agent-open .mobile-dock {
+    transform: translateY(110%);
+    pointer-events: none;
+  }
+  body.agent-open .agent-panel {
+    margin-inline: 0;
+    margin-bottom: 0;
+    border-radius: 1.05rem 1.05rem 0 0;
+    height: var(--agent-vvh, 100svh);
+    max-height: var(--agent-vvh, 100svh);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+@media (max-width: 390px) {
+  .agent-fab {
+    height: 3rem;
+    padding-right: 0.7rem;
+  }
+  .agent-fab-sub {
+    display: none;
+  }
+}
+
 @keyframes agent-pulse {
   0%,
   100% {

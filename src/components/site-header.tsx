@@ -32,14 +32,14 @@ export function SiteHeader() {
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 bg-header/95 text-header-fg backdrop-blur-xl">
-      <div className="page-wrap flex h-[4.75rem] items-center gap-4 md:h-[5.25rem]">
-        <PageLink to="/" className="flex shrink-0 items-center" onClick={() => setOpen(false)}>
+      <div className="page-wrap flex h-[3.75rem] items-center gap-2 sm:h-[4.75rem] sm:gap-4 md:h-[5.25rem]">
+        <PageLink to="/" className="flex min-w-0 shrink items-center" onClick={() => setOpen(false)}>
           <img
             src="/brand/logo-white.png"
             alt="Студия Развивайся — искусства и интеллектуальное развитие"
             width={1200}
             height={289}
-            className="h-11 w-auto max-w-[16rem] object-contain object-left outline-none sm:h-12 sm:max-w-[18rem] md:h-[3.35rem] md:max-w-[20rem]"
+            className="h-8 w-auto max-w-[10.25rem] object-contain object-left outline-none sm:h-11 sm:max-w-[16rem] md:h-[3.35rem] md:max-w-[20rem]"
             loading="eager"
             decoding="async"
           />
@@ -142,13 +142,13 @@ export function SiteHeader() {
           </a>
           <a
             href="#trial"
-            className="inline-flex h-9 items-center rounded-full bg-primary px-3.5 text-[0.8rem] font-semibold text-primary-foreground hover:bg-primary-hover"
+            className="inline-flex h-8 items-center rounded-full bg-primary px-2.5 text-[0.72rem] font-semibold text-primary-foreground hover:bg-primary-hover sm:h-9 sm:px-3.5 sm:text-[0.8rem]"
           >
             Запись
           </a>
           <button
             type="button"
-            className="inline-flex size-10 items-center justify-center rounded-full hover:bg-white/10 lg:hidden"
+            className="inline-flex size-9 items-center justify-center rounded-full hover:bg-white/10 sm:size-10 lg:hidden"
             aria-label={open ? "Закрыть меню" : "Открыть меню"}
             onClick={() => setOpen((v) => !v)}
           >
@@ -158,7 +158,7 @@ export function SiteHeader() {
       </div>
 
       {open ? (
-        <div className="max-h-[min(80dvh,calc(100dvh-4.75rem))] overflow-y-auto border-t border-white/10 bg-header px-4 py-4 lg:hidden">
+        <div className="max-h-[min(80dvh,calc(100dvh-3.75rem))] overflow-y-auto border-t border-white/10 bg-header px-4 py-4 lg:hidden">
           <p className="mb-2 px-3 text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-header-fg/45">
             Возраст ребёнка
           </p>

@@ -8,7 +8,7 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: SITE.homeTitle },
       { name: "theme-color", content: "#090c12" },
       { name: "yandex-verification", content: "b026a633d1f7af3e" },
