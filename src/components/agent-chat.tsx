@@ -109,6 +109,8 @@ function readAdminChat(): Msg[] {
     return [];
   }
 }
+
+function siteAdminToken() {
   try {
     return localStorage.getItem("ra_site_admin") || "";
   } catch {
