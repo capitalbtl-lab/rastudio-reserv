@@ -248,34 +248,37 @@ function Home() {
         </div>
       </section>
 
-      <section className="page-wrap pb-6 md:pb-8">
-        <h2 className="section-title mt-3 max-w-3xl">Команда сильной сети школ</h2>
-        <p className="mt-5 max-w-3xl text-[0.98rem] leading-relaxed text-muted">{home.paragraphs[2]}</p>
+      <section className="page-wrap pb-12 md:pb-16">
+        <p className="kicker text-primary">Педагоги</p>
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+          <h2 className="section-title max-w-2xl">Команда сильной сети школ</h2>
+          <PageLink to="/team" className="text-sm font-semibold text-primary">
+            Все педагоги
+          </PageLink>
+        </div>
+        <p className="mt-4 max-w-2xl text-[0.98rem] leading-relaxed text-muted">{home.paragraphs[2]}</p>
         <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-4">
           {teachers.map((t) => (
             <PageLink
               key={t.href + t.name}
               to={t.href}
-              className="group relative isolate overflow-hidden rounded-3xl bg-header"
+              className="group overflow-hidden rounded-[1.6rem] bg-surface shadow-[var(--shadow-border)] transition-shadow duration-[var(--motion-fast)] hover:shadow-[var(--shadow-border-hover)]"
             >
               <SeoImage
                 src={t.photo}
-                alt={t.alt}
-                filename={t.filename}
-                className="aspect-3/4"
-                imgClassName="transition-transform duration-[var(--motion-fast)] ease-[var(--ease-out)] group-hover:scale-105"
+                alt={t.name}
+                filename={t.name}
+                className="aspect-[4/5] bg-surface-2"
+                imgClassName="object-top transition-transform duration-[var(--motion-slow)] ease-[var(--ease-out)] group-hover:scale-[1.04]"
               />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-header via-header/70 to-transparent p-4">
-                <p className="text-sm font-semibold leading-snug text-header-fg">{t.name}</p>
-                {t.role ? <p className="mt-1 line-clamp-2 text-xs text-header-fg/65">{t.role}</p> : null}
+              <div className="p-4 md:px-5 md:pb-5 md:pt-4">
+                <p className="display text-[1.05rem] leading-snug text-fg md:text-[1.35rem]">{t.name}</p>
+                {t.role ? (
+                  <p className="mt-2 line-clamp-3 text-[0.86rem] leading-relaxed text-muted md:text-[0.95rem]">{t.role}</p>
+                ) : null}
               </div>
             </PageLink>
           ))}
-        </div>
-        <div className="mt-7">
-          <Button asChild variant="secondary">
-            <PageLink to="/team">Все педагоги</PageLink>
-          </Button>
         </div>
       </section>
 
