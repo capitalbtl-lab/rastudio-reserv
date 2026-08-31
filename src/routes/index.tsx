@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SITE, SCHOOLS, PARTNER_LOGOS, BRANCHES, STATS, SHOWCASE, TICKER } from "@/data/site";
 import { homePage, liteTeachers } from "@/data/lite";
-import { pageHead } from "@/data/seo";
+import { pageHead, organizationJsonLd } from "@/data/seo";
+import { JsonLd } from "@/components/json-ld";
 import { SiteShell } from "@/components/site-shell";
 import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
@@ -73,33 +74,14 @@ const STRIPS = [
 ] as const;
 
 export const Route = createFileRoute("/")({
-  head: () => pageHead(home),
+  head: () => pageHead({ ...home, path: "/" }),
   component: Home,
 });
 
 function Home() {
   return (
     <SiteShell>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "EducationalOrganization",
-            name: SITE.name,
-            url: SITE.domain,
-            email: SITE.email,
-            telephone: "+78005113401",
-            image: SITE.logo.src,
-            address: BRANCHES.map((b) => ({
-              "@type": "PostalAddress",
-              addressLocality: b.city,
-              streetAddress: b.address,
-              addressCountry: "RU",
-            })),
-          }),
-        }}
-      />
+      <JsonLd data={organizationJsonLd()} />
 
       <section className="ink relative isolate overflow-hidden text-header-fg">
         <div className="page-wrap grid items-center gap-10 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[88dvh] lg:gap-8 lg:py-8">

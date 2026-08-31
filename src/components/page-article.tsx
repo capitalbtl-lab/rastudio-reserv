@@ -17,6 +17,8 @@ import { courseOfferFacts } from "@/data/ages";
 import { galleryPhotos } from "@/lib/gallery";
 import { SCHOOL_PROGRAMS, SCHOOL_WHY, COURSE_STORY } from "@/data/school-programs";
 import { whyForPath } from "@/data/course-why";
+import { breadcrumbJsonLd, courseJsonLd } from "@/data/seo";
+import { JsonLd } from "@/components/json-ld";
 import { AGE_BANDS, agesOverlap, courseFacts, coursePlace } from "@/data/ages";
 import { AgeChips } from "@/components/age-chips";
 import { trialCourseForPath } from "@/data/trial";
@@ -104,29 +106,79 @@ export function PageArticle({
   trajectory = [],
   schedule = [],
 }: PageArticleProps) {
+  const path = page.pathDecoded || page.path;
+  const seo = (
+    <>
+      <JsonLd data={breadcrumbJsonLd(path, page.h1 || page.title)} />
+      <JsonLd data={courseJsonLd({ ...page, path, h1: page.h1 })} />
+    </>
+  );
   if (cmsCourse) {
-    return <ProgrammingCoursePage page={page} course={cmsCourse} schedule={schedule} courses={courses} teachers={teachers} />;
+    return (
+      <>
+        {seo}
+        <ProgrammingCoursePage page={page} course={cmsCourse} schedule={schedule} courses={courses} teachers={teachers} />
+      </>
+    );
   }
   if (cmsMaster) {
-    return <MasterClassPage page={page} master={cmsMaster} />;
+    return (
+      <>
+        {seo}
+        <MasterClassPage page={page} master={cmsMaster} />
+      </>
+    );
   }
-  if (page.kind === "team") return <TeamPage page={page} teachers={teachers} />;
-  if (page.kind === "catalog") return <CatalogPage page={page} courses={courses} />;
-  if (page.kind === "contacts") return <ContactsPage page={page} />;
+  if (page.kind === "team")
+    return (
+      <>
+        {seo}
+        <TeamPage page={page} teachers={teachers} />
+      </>
+    );
+  if (page.kind === "catalog")
+    return (
+      <>
+        {seo}
+        <CatalogPage page={page} courses={courses} />
+      </>
+    );
+  if (page.kind === "contacts")
+    return (
+      <>
+        {seo}
+        <ContactsPage page={page} />
+      </>
+    );
   if (page.kind === "master-list") {
-    return cmsMasters.length ? (
-      <MasterListPageCms page={page} masters={cmsMasters} />
-    ) : (
-      <MasterListPage page={page} masters={masters} />
+    return (
+      <>
+        {seo}
+        {cmsMasters.length ? (
+          <MasterListPageCms page={page} masters={cmsMasters} />
+        ) : (
+          <MasterListPage page={page} masters={masters} />
+        )}
+      </>
     );
   }
 
   const cinematic = ["course", "school", "teacher", "master"].includes(page.kind);
   if (cinematic) {
-    return <CinematicPage page={page} schedule={schedule} courses={courses} trajectory={trajectory} teachers={teachers} />;
+    return (
+      <>
+        {seo}
+        <CinematicPage page={page} schedule={schedule} courses={courses} trajectory={trajectory} teachers={teachers} />
+      </>
+    );
   }
 
-  return <PlainPage page={page} schedule={schedule} courses={courses} />;
+  return (
+    <>
+      {seo}
+      <PlainPage page={page} schedule={schedule} courses={courses} />
+    </>
+  );
 }
 
 function splitCourseHeading(h1: string) {

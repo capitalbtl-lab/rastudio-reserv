@@ -1,4 +1,7 @@
 User-agent: *
 Allow: /
+Disallow: /__grok/
+Disallow: /api/
 
+Host: www.rastudio.org
 Sitemap: https://www.rastudio.org/sitemap.xml

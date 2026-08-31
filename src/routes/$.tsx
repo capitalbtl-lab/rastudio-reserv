@@ -16,7 +16,21 @@ export const Route = createFileRoute("/$")({
     return data;
   },
   head: ({ loaderData }) =>
-    loaderData ? pageHead(loaderData.page) : { meta: [{ title: "Страница не найдена" }] },
+    loaderData
+      ? pageHead({
+          ...loaderData.page,
+          path: loaderData.page.pathDecoded || loaderData.page.path,
+        })
+      : {
+          meta: [
+            { title: "Страница не найдена | Студия «Развивайся»" },
+            { name: "robots", content: "noindex, follow" },
+            {
+              name: "description",
+              content: "Страница не найдена. Откройте каталог курсов студии «Развивайся» в Коломне.",
+            },
+          ],
+        },
   component: CatchAll,
   notFoundComponent: NotFoundPage,
 });
