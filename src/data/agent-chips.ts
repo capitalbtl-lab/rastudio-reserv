@@ -1,6 +1,7 @@
 import { SITE } from "@/data/site";
 import { courseHint } from "@/data/agent-courses";
 import { coursesForAge } from "@/data/ages";
+import { factsFromMessages } from "@/data/agent-facts";
 
 export type AgentChip = {
   label: string;
@@ -129,11 +130,22 @@ export function nextChips(messages: { role: string; content: string }[]): { hint
     };
   }
   const blob = blobOf(messages);
-  const age = ageBand(blob);
-  if (!age) return { hint: "Сколько лет ребёнку", chips: AGES };
-  if (!hasCity(blob)) return { hint: "Какой филиал удобнее", chips: PLACES };
-  if (!hasCourse(blob)) {
-    const years = ageYears(blob);
+  const facts = factsFromMessages(messages);
+  const ageKey = facts.age
+    ? facts.age <= 4
+      ? "3-4"
+      : facts.age <= 6
+        ? "5-6"
+        : facts.age <= 9
+          ? "7-9"
+          : facts.age <= 14
+            ? "10-14"
+            : "15+"
+    : ageBand(blob);
+  if (!ageKey) return { hint: "Сколько лет ребёнку", chips: AGES };
+  if (!facts.branch && !hasCity(blob)) return { hint: "Какой филиал удобнее", chips: PLACES };
+  if (!hasCourse(blob) && !facts.course) {
+    const years = facts.age || ageYears(blob);
     if (years) {
       const chips = coursesForAge(years).flatMap((g) =>
         g.items.map((item) => ({
@@ -143,7 +155,7 @@ export function nextChips(messages: { role: string; content: string }[]): { hint
       );
       if (chips.length) return { hint: `Все курсы для ${years} лет`, chips };
     }
-    return { hint: "Что откликается", chips: COURSES[age] || COURSES["7-9"] };
+    return { hint: "Что откликается", chips: COURSES[ageKey] || COURSES["7-9"] };
   }
   const page = courseHint(`${blob} ${messages.map((m) => m.content).slice(-3).join(" ")}`);
   return {

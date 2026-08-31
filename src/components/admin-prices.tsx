@@ -22,15 +22,19 @@ import { DEFAULT_VOICE, type VoiceSettings } from "@/data/voices-core";
 import { Button } from "@/components/ui/button";
 import { AdminCalls } from "@/components/admin-calls";
 import { AdminChats } from "@/components/admin-chats";
+import { AdminAgent } from "@/components/admin-agent";
+import { AdminTrain } from "@/components/admin-train";
 import { cn } from "@/lib/utils";
 
 const KEY = "ra_admin";
-type Tab = "prices" | "voice" | "access" | "voices" | "calls" | "chats";
+type Tab = "prices" | "voice" | "access" | "voices" | "calls" | "chats" | "agent" | "train";
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: "prices", label: "Цены курсов", hint: "Прайс на сайте" },
   { id: "voice", label: "Изменение сайта голосом", hint: "Тексты" },
   { id: "voices", label: "Настройки голосов", hint: "Олег и Ольга" },
+  { id: "agent", label: "Ассистент ИИ", hint: "Как ведёт диалог" },
+  { id: "train", label: "Обучение", hint: "Примеры и экспорт" },
   { id: "calls", label: "База звонков", hint: "Novofon → знания" },
   { id: "chats", label: "Диалоги сайта", hint: "Олег и Ольга" },
   { id: "access", label: "Голосовой доступ", hint: "Кодовое слово" },
@@ -365,7 +369,7 @@ export function AdminPrices() {
         </button>
       </div>
 
-      <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {TABS.map((item) => (
           <button
             key={item.id}
@@ -762,6 +766,8 @@ export function AdminPrices() {
 
       {tab === "calls" ? <AdminCalls /> : null}
       {tab === "chats" ? <AdminChats /> : null}
+      {tab === "agent" ? <AdminAgent /> : null}
+      {tab === "train" ? <AdminTrain /> : null}
 
       {tab === "access" ? (
         <section className="mt-10 space-y-6">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { adminChatLogs } from "@/data/chat-logs";
+import { adminAgentBrain } from "@/data/agent-config";
 import { parseTurns } from "@/data/agent-turns";
 import { cn } from "@/lib/utils";
 
@@ -107,6 +108,29 @@ export function AdminChats() {
                             {t.text}
                           </p>
                         ))}
+                        {full[i - 1]?.role === "user" ? (
+                          <button
+                            type="button"
+                            className="text-[0.7rem] font-semibold text-primary"
+                            onClick={() =>
+                              void adminAgentBrain({
+                                data: {
+                                  token: token(),
+                                  action: "add",
+                                  example: {
+                                    kind: "dialog",
+                                    input: full[i - 1].content,
+                                    output: m.content,
+                                    source: `chat:${r.id}`,
+                                    note: r.path,
+                                  },
+                                },
+                              })
+                            }
+                          >
+                            В обучение
+                          </button>
+                        ) : null}
                       </div>
                     ),
                   )}

@@ -248,7 +248,7 @@ export function AgentChat() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(CHAT_KEY, JSON.stringify(clientMsgs.slice(-24)));
+      sessionStorage.setItem(CHAT_KEY, JSON.stringify(clientMsgs.slice(-80)));
     } catch {
       /* */
     }
@@ -268,7 +268,7 @@ export function AgentChat() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(ADMIN_CHAT_KEY, JSON.stringify(adminMsgs.slice(-24)));
+      sessionStorage.setItem(ADMIN_CHAT_KEY, JSON.stringify(adminMsgs.slice(-80)));
     } catch {
       /* */
     }

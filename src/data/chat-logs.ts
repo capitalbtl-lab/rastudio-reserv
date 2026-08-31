@@ -17,7 +17,7 @@ export type ChatSession = {
 };
 
 const MAX = 400;
-const MAX_MSG = 80;
+const MAX_MSG = 200;
 
 function filePath() {
   return join(process.cwd(), "storage", "chat-logs.json");

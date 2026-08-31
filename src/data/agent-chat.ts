@@ -32,6 +32,7 @@ ${who === "oleg" ? "Вы хорошо рассказываете про техн
 Когда есть возраст и филиал — сразу вызови list_groups. Назови ближайшие слоты (сначала которые раньше на этой неделе) и свободные места. Курс не обязателен.
 Если родитель назвал ещё и курс — передай его в list_groups.
 Нельзя называть только 2–3 курса, если спросили «что есть для N лет» без филиала — тогда list_courses_by_age, все программы, и спроси филиал.
+История сессии полная: помни всё, что родитель уже сказал, до сброса диалога. Никогда не переспрашивай возраст, город, филиал, курс, имя или телефон, если они уже звучали — даже если это было несколько реплик назад.
 Когда родитель выбрал слот — спроси: пробное или сразу в группу (групповое).
 На запись нужны: ФИО ребёнка, ФИО родителя (заказчика), телефон, филиал. Дата рождения — целиком, как 01.01.2021. Возраст подойдёт, если даты нет: подставим 01.09 года рождения.
 Когда есть имя родителя, ФИО ребёнка, телефон и филиал — сразу вызови book_lesson (или submit_trial для первого визита). Передай course_id, gid слота, дату и время если уже выбрали. Не жди почту.
@@ -444,15 +445,17 @@ export const chatAgent = createServerFn({ method: "POST" })
     if (limited(ip)) {
       return { ok: false as const, error: "Слишком много сообщений. Позвоните 8 (800) 511-34-01." };
     }
-    const trimmed = (data.messages || [])
+    const all = (data.messages || [])
       .filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content)
-      .slice(-16)
-      .map((m) => ({ role: m.role, content: String(m.content).slice(0, 2000) }));
-    if (!trimmed.length && !data.gate) return { ok: false as const, error: "Напишите вопрос." };
+      .map((m) => ({ role: m.role, content: String(m.content).slice(0, 2500) }));
+    if (!all.length && !data.gate) return { ok: false as const, error: "Напишите вопрос." };
+    const trimmed = all.slice(-40);
 
     const { tokenOk, makeAdminToken } = await import("./admin-auth");
     const { knowledgeForAgent } = await import("./call-knowledge");
     const { codewordInText, logAdmin } = await import("./admin-settings");
+    const { factsFromMessages, factsPrompt } = await import("./agent-facts");
+    const { agentPromptAddons } = await import("./agent-config");
     let admin = tokenOk(data.token);
     let granted: string | undefined;
     let reload = false;
@@ -490,7 +493,9 @@ export const chatAgent = createServerFn({ method: "POST" })
     const adminHint = admin
       ? `\nСтраница сейчас: ${data.path || "/"}.`
       : "";
-    const system = admin ? ADMIN_SYSTEM + adminHint : clientSystem(soloWho) + knowledgeForAgent();
+    const system = admin
+      ? ADMIN_SYSTEM + adminHint
+      : clientSystem(soloWho) + factsPrompt(factsFromMessages(all)) + agentPromptAddons() + knowledgeForAgent();
     const messages: ChatMsg[] = [{ role: "system", content: system }, ...trimmed];
     try {
       for (let step = 0; step < 4; step++) {
