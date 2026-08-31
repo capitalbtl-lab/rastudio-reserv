@@ -70,7 +70,7 @@ export function AgentChat() {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [voiceOn, setVoiceOn] = useState(false);
+  const [partner, setPartner] = useState<"both" | "oleg" | "olga">("both");
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
@@ -160,7 +160,7 @@ export function AgentChat() {
     setSpeaking(true);
     stopListen();
     try {
-      const turns = parseTurns(phrase);
+      const turns = parseTurns(phrase).filter((t) => partner === "both" || t.who === partner);
       const clips = await Promise.all(
         turns.map(async (turn) => {
           const res = await speakAgent({
@@ -236,7 +236,7 @@ export function AgentChat() {
     setBusy(true);
     let reply = `Не отправилось. Позвоните ${SITE.phone}.`;
     try {
-      const res = await chatAgent({ data: { messages: history } });
+      const res = await chatAgent({ data: { messages: history, with: partner } });
       reply = res.ok ? res.reply : res.error;
     } catch {
       /* keep */
@@ -291,9 +291,35 @@ export function AgentChat() {
                 <Duo size={78} mood={mood} />
               </div>
               <div className="min-w-0 pb-1">
-                <p className="font-display text-[1.15rem] leading-tight">Олег и Ольга</p>
+                <p className="font-display text-[1.15rem] leading-tight">
+                  {partner === "oleg" ? "Олег" : partner === "olga" ? "Ольга" : "Олег и Ольга"}
+                </p>
                 <p className="text-[0.78rem] text-white/85">
-                  {speaking ? "Говорят" : listening ? "Слушают вас" : "Администраторы студии · онлайн"}
+                  {speaking
+                    ? partner === "both"
+                      ? "Говорят"
+                      : "Говорит"
+                    : listening
+                      ? "Слушает вас"
+                      : partner === "both"
+                        ? "Администраторы студии · онлайн"
+                        : "Администратор студии · онлайн"}
+                </p>
+                <p className="mt-1.5 flex flex-wrap gap-x-3 text-[0.78rem] font-semibold">
+                  <button
+                    type="button"
+                    className={cn("underline-offset-2", partner === "olga" ? "underline" : "text-white/80 hover:text-white")}
+                    onClick={() => setPartner(partner === "olga" ? "both" : "olga")}
+                  >
+                    Говорить с Ольгой
+                  </button>
+                  <button
+                    type="button"
+                    className={cn("underline-offset-2", partner === "oleg" ? "underline" : "text-white/80 hover:text-white")}
+                    onClick={() => setPartner(partner === "oleg" ? "both" : "oleg")}
+                  >
+                    Говорить с Олегом
+                  </button>
                 </p>
               </div>
             </div>

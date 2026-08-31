@@ -181,7 +181,7 @@ async function complete(messages: ChatMsg[]) {
 }
 
 export const chatAgent = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { messages: { role: "user" | "assistant"; content: string }[]; ip?: string })
+  .validator((data: unknown) => data as { messages: { role: "user" | "assistant"; content: string }[]; ip?: string; with?: "oleg" | "olga" | "both" })
   .handler(async ({ data }) => {
     const ip = data.ip || "anon";
     if (limited(ip)) {
@@ -193,7 +193,13 @@ export const chatAgent = createServerFn({ method: "POST" })
       .map((m) => ({ role: m.role, content: String(m.content).slice(0, 2000) }));
     if (!trimmed.length) return { ok: false as const, error: "Напишите вопрос." };
 
-    const messages: ChatMsg[] = [{ role: "system", content: SYSTEM }, ...trimmed];
+    const solo =
+      data.with === "oleg"
+        ? "\n\nСейчас родитель говорит только с Олегом. Отвечай исключительно строками «Олег:». Ольга молчит. Мужской род."
+        : data.with === "olga"
+          ? "\n\nСейчас родитель говорит только с Ольгой. Отвечай исключительно строками «Ольга:». Олег молчит. Женский род: согласна, готова, поняла."
+          : "";
+    const messages: ChatMsg[] = [{ role: "system", content: SYSTEM + solo }, ...trimmed];
     try {
       for (let step = 0; step < 3; step++) {
         const json = await complete(messages);
