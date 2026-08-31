@@ -11,10 +11,10 @@ const LINKS = [
   { href: "/allcourses", label: "Курсы" },
   { href: "/schedule", label: "Расписание" },
   { href: "/team", label: "Педагоги" },
+  { href: "/master-class", label: "Мастер-классы" },
 ] as const;
 
 const MORE = [
-  { href: "/master-class", label: "Мастер-классы" },
   { href: "/o-nas", label: "О студии" },
   { href: "/contacts", label: "Контакты" },
 ] as const;
