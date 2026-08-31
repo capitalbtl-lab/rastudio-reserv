@@ -412,6 +412,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     if (!trimmed.length) return { ok: false as const, error: "Напишите вопрос." };
 
     const { isAdminRequest, makeAdminToken } = await import("./admin-auth");
+    const { knowledgeForAgent } = await import("./call-knowledge");
     let admin = isAdminRequest(data.token);
     let granted: string | undefined;
     let reload = false;
@@ -430,7 +431,7 @@ export const chatAgent = createServerFn({ method: "POST" })
 Не пиши «режим управления уже открыт», не проси кодовое слово, не напоминай про доступ.
 Сразу делай правку инструментами и коротко подтверди, что сохранено. Без вступлений.`
       : "";
-    const messages: ChatMsg[] = [{ role: "system", content: SYSTEM + solo + adminHint }, ...trimmed];
+    const messages: ChatMsg[] = [{ role: "system", content: SYSTEM + solo + adminHint + knowledgeForAgent() }, ...trimmed];
     try {
       for (let step = 0; step < 4; step++) {
         const tools = admin ? [...TOOLS, ...ADMIN_TOOLS] : TOOLS;

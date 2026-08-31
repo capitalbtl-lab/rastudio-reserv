@@ -151,3 +151,48 @@ export const adminSaveVoice = createServerFn({ method: "POST" })
     logAdmin(`Голоса: Олег ${settings.oleg}, Ольга ${settings.olga}, ${settings.speed}, пауза ${settings.pause}`);
     return { ok: true as const, settings };
   });
+
+export const adminCalls = createServerFn({ method: "POST" })
+  .validator(
+    (data: unknown) =>
+      data as {
+        token?: string;
+        action: "status" | "connect" | "scan" | "transcribe" | "knowledge";
+        userKey?: string;
+        secret?: string;
+        months?: number;
+      },
+  )
+  .handler(async ({ data }) => {
+    if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
+    const { callStats, connectNovofon, loadNovofonKeys, scanNovofon, transcribeBatch, buildKnowledge } = await import("./call-import");
+    try {
+      if (data.action === "connect") {
+        if (!data.userKey || !data.secret) return { ok: false as const, error: "Нужны ключ и секрет Novofon." };
+        connectNovofon({ userKey: data.userKey, secret: data.secret });
+        logAdmin("Novofon: ключи сохранены");
+        return { ok: true as const, connected: true, stats: callStats() };
+      }
+      if (data.action === "scan") {
+        const stats = await scanNovofon(data.months || 24);
+        logAdmin(`Novofon: найдено записей ${stats.total}`);
+        return { ok: true as const, connected: true, stats };
+      }
+      if (data.action === "transcribe") {
+        const stats = await transcribeBatch(4);
+        logAdmin(`Расшифровка: ${stats.done} из ${stats.batch}, всего ${stats.transcribed}`);
+        return { ok: true as const, connected: true, stats };
+      }
+      if (data.action === "knowledge") {
+        const knowledge = await buildKnowledge();
+        logAdmin(`База знаний: ${knowledge.faq.length} вопросов с ${knowledge.transcribed} звонков`);
+        return { ok: true as const, connected: true, stats: callStats(), knowledge };
+      }
+      return { ok: true as const, connected: Boolean(loadNovofonKeys()), stats: callStats() };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "ошибка";
+      if (message === "no-keys") return { ok: false as const, error: "Сначала сохраните ключи Novofon." };
+      if (message === "no-transcripts") return { ok: false as const, error: "Сначала расшифруйте хотя бы несколько звонков." };
+      return { ok: false as const, error: message.slice(0, 220) };
+    }
+  });

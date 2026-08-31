@@ -13,6 +13,7 @@ import {
   adminSetCodeword,
   adminSetPassword,
   adminVoice,
+  adminCalls,
 } from "@/data/admin";
 import { fieldLabel } from "@/data/edits-core";
 import { PRICE_DIRECTIONS, hydratePrices, type PriceRow } from "@/data/prices-core";
@@ -21,12 +22,13 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const KEY = "ra_admin";
-type Tab = "prices" | "voice" | "access" | "voices";
+type Tab = "prices" | "voice" | "access" | "voices" | "calls";
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: "prices", label: "Цены курсов", hint: "Прайс на сайте" },
   { id: "voice", label: "Изменение сайта голосом", hint: "Тексты" },
   { id: "voices", label: "Настройки голосов", hint: "Олег и Ольга" },
+  { id: "calls", label: "База звонков", hint: "Novofon → знания" },
   { id: "access", label: "Голосовой доступ", hint: "Кодовое слово" },
 ];
 
@@ -68,6 +70,11 @@ export function AdminPrices() {
   const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
   const [savedVoice, setSavedVoice] = useState("");
   const [playing, setPlaying] = useState("");
+  const [novoKey, setNovoKey] = useState("");
+  const [novoSecret, setNovoSecret] = useState("");
+  const [callsConnected, setCallsConnected] = useState(false);
+  const [callInfo, setCallInfo] = useState({ total: 0, transcribed: 0, failed: 0, pending: 0, scannedAt: "" });
+  const [knowledge, setKnowledge] = useState<{ summary: string; faq: { q: string; a: string }[]; rules: string[] } | null>(null);
   const previewRef = useRef<HTMLAudioElement | null>(null);
 
   function stopPreview() {
@@ -108,6 +115,26 @@ export function AdminPrices() {
       setMale(vo.male);
       setFemale(vo.female);
       setRoles(vo.roles);
+    }
+    const calls = await adminCalls({ data: { token: t, action: "status" } });
+    if (calls.ok) {
+      setCallsConnected(Boolean(calls.connected));
+      if (calls.stats) {
+        setCallInfo({
+          total: calls.stats.total,
+          transcribed: calls.stats.transcribed,
+          failed: calls.stats.failed,
+          pending: calls.stats.pending,
+          scannedAt: calls.stats.scannedAt || "",
+        });
+        if (calls.stats.knowledge) {
+          setKnowledge({
+            summary: calls.stats.knowledge.summary,
+            faq: calls.stats.knowledge.faq,
+            rules: calls.stats.knowledge.rules,
+          });
+        }
+      }
     }
   }
 
@@ -263,7 +290,7 @@ export function AdminPrices() {
         </button>
       </div>
 
-      <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {TABS.map((item) => (
           <button
             key={item.id}
@@ -596,6 +623,133 @@ export function AdminPrices() {
               {savedVoice ? <p className="text-sm text-primary">{savedVoice}</p> : null}
             </div>
           </div>
+        </section>
+        </section>
+      ) : null}
+
+      {tab === "calls" ? (
+        <section className="mt-10 space-y-6">
+          <div>
+            <h2 className="font-display text-3xl">База знаний со звонков</h2>
+            <p className="mt-2 max-w-2xl text-sm text-muted">
+              Novofon: все записи разговоров → расшифровка → Ольга говорит так, как живые администраторы. Ключ: кабинет Novofon → Пользователи → API. Белый IP сервера: 83.222.25.109.
+            </p>
+          </div>
+          <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+            <p className="text-sm font-semibold">{callsConnected ? "Novofon подключён" : "Ключи API"}</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <input
+                placeholder="User key"
+                value={novoKey}
+                onChange={(e) => setNovoKey(e.target.value)}
+                className="h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+              />
+              <input
+                type="password"
+                placeholder="Secret"
+                value={novoSecret}
+                onChange={(e) => setNovoSecret(e.target.value)}
+                className="h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+              />
+            </div>
+            <Button
+              className="mt-4"
+              disabled={busy || !novoKey || !novoSecret}
+              onClick={() => {
+                void (async () => {
+                  setBusy(true);
+                  const res = await adminCalls({ data: { token: token(), action: "connect", userKey: novoKey, secret: novoSecret } });
+                  setBusy(false);
+                  if (!res.ok) return setErr(res.error);
+                  setCallsConnected(true);
+                  setErr("");
+                })();
+              }}
+            >
+              Сохранить ключи
+            </Button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-4">
+            {[
+              ["Записей", callInfo.total],
+              ["Расшифровано", callInfo.transcribed],
+              ["В очереди", callInfo.pending],
+              ["Ошибки", callInfo.failed],
+            ].map(([label, n]) => (
+              <div key={String(label)} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
+                <p className="text-sm text-muted">{label}</p>
+                <p className="mt-1 font-display text-3xl">{n}</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              disabled={busy || !callsConnected}
+              onClick={() => {
+                void (async () => {
+                  setBusy(true);
+                  setErr("");
+                  const res = await adminCalls({ data: { token: token(), action: "scan", months: 24 } });
+                  setBusy(false);
+                  if (!res.ok) return setErr(res.error);
+                  if (res.stats) setCallInfo({ ...res.stats, scannedAt: res.stats.scannedAt || "" });
+                })();
+              }}
+            >
+              1. Скачать список записей
+            </Button>
+            <Button
+              disabled={busy || !callsConnected || callInfo.pending === 0}
+              onClick={() => {
+                void (async () => {
+                  setBusy(true);
+                  setErr("");
+                  const res = await adminCalls({ data: { token: token(), action: "transcribe" } });
+                  setBusy(false);
+                  if (!res.ok) return setErr(res.error);
+                  if (res.stats) setCallInfo({ ...res.stats, scannedAt: res.stats.scannedAt || "" });
+                })();
+              }}
+            >
+              2. Расшифровать ещё 4
+            </Button>
+            <Button
+              disabled={busy || callInfo.transcribed === 0}
+              onClick={() => {
+                void (async () => {
+                  setBusy(true);
+                  setErr("");
+                  const res = await adminCalls({ data: { token: token(), action: "knowledge" } });
+                  setBusy(false);
+                  if (!res.ok) return setErr(res.error);
+                  if (res.stats) setCallInfo({ ...res.stats, scannedAt: res.stats.scannedAt || "" });
+                  if (res.knowledge) setKnowledge({ summary: res.knowledge.summary, faq: res.knowledge.faq, rules: res.knowledge.rules });
+                })();
+              }}
+            >
+              3. Собрать базу знаний
+            </Button>
+          </div>
+          <p className="text-xs text-muted">Расшифровка идёт пачками, чтобы не оборвать связь. Нажимайте «ещё 6», пока очередь не станет нулевой. Потом — база знаний. Ольга подхватит её сама.</p>
+          {knowledge ? (
+            <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+              <p className="text-sm font-semibold">Как говорят на линии</p>
+              <p className="mt-3 text-sm leading-relaxed">{knowledge.summary}</p>
+              {knowledge.rules.length ? (
+                <ul className="mt-4 list-disc space-y-1 pl-5 text-sm">
+                  {knowledge.rules.map((r) => (
+                    <li key={r}>{r}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {knowledge.faq.slice(0, 8).map((item) => (
+                <div key={item.q} className="mt-4 border-t border-black/5 pt-4">
+                  <p className="text-sm font-semibold">{item.q}</p>
+                  <p className="mt-1 text-sm text-muted">{item.a}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </section>
       ) : null}
 
