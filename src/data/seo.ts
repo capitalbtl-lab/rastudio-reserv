@@ -25,8 +25,45 @@ function absUrl(href: string) {
   return `${SEO_ORIGIN}${href.startsWith("/") ? href : `/${href}`}`;
 }
 
+const NOINDEX_PREFIXES = ["/hs-2-", "/eventschedule", "/roboticsinenglish1", "/roboticsinenglish2", "/roboticsinenglish3", "/roboticsinenglish4"];
+const NOINDEX_PATHS = new Set([
+  "/parenttesting",
+  "/kbmprof",
+  "/tmxprof",
+  "/sborbojcamsvo",
+  "/sbordetyampalestiny",
+]);
+const CANONICAL_MAP: Record<string, string> = {
+  "/roboticsinenglish1": "/roboticsinenglish",
+  "/roboticsinenglish2": "/roboticsinenglish",
+  "/roboticsinenglish3": "/roboticsinenglish",
+  "/roboticsinenglish4": "/roboticsinenglish",
+};
+
+export function shouldNoindex(path = "") {
+  let decoded = path;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    /* keep */
+  }
+  if (NOINDEX_PATHS.has(decoded) || NOINDEX_PATHS.has(path)) return true;
+  return NOINDEX_PREFIXES.some((p) => decoded.startsWith(p) || path.startsWith(p));
+}
+
 function canonicalOf(page: HeadPage) {
-  const raw = page.canonical || `${SEO_ORIGIN}${page.path === "/" || !page.path ? "" : page.path}`;
+  const path = page.path || "";
+  let decoded = path;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    /* keep */
+  }
+  const mapped = CANONICAL_MAP[decoded] || CANONICAL_MAP[path];
+  const raw =
+    mapped != null
+      ? `${SEO_ORIGIN}${mapped}`
+      : page.canonical || `${SEO_ORIGIN}${path === "/" || !path ? "" : path}`;
   return raw.replace("https://rastudio.org", SEO_ORIGIN).replace(/\/$/, "") || SEO_ORIGIN;
 }
 
@@ -57,11 +94,12 @@ export function enrichPage(page: HeadPage): HeadPage {
 export function pageHead(page: HeadPage, opts?: { noindex?: boolean }) {
   const p = enrichPage(page);
   const ogTitle = p.ogTitle || p.title;
+  const noindex = opts?.noindex || shouldNoindex(page.path);
   return {
     meta: [
       { title: p.title },
       { name: "description", content: p.description },
-      { name: "robots", content: opts?.noindex ? "noindex, follow" : "index, follow" },
+      { name: "robots", content: noindex ? "noindex, follow" : "index, follow" },
       { name: "geo.region", content: "RU-MOS" },
       { name: "geo.placename", content: "Коломна" },
       { name: "geo.position", content: "55.0834;38.7686" },

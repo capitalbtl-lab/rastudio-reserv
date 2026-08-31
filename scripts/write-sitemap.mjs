@@ -7,7 +7,20 @@ const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "src/data/catalog.jso
 const lastmod = new Date().toISOString().slice(0, 10);
 
 const extra = ["/schedule"];
-const skip = new Set(["/eventschedule-c", "/eventschedule-s"]);
+const skip = new Set([
+  "/eventschedule-c",
+  "/eventschedule-s",
+  "/parenttesting",
+  "/kbmprof",
+  "/tmxprof",
+  "/sborbojcamsvo",
+  "/sbordetyampalestiny",
+  "/roboticsinenglish1",
+  "/roboticsinenglish2",
+  "/roboticsinenglish3",
+  "/roboticsinenglish4",
+]);
+const skipPrefix = ["/hs-2-", "/master-klassy/"];
 
 function loc(p) {
   if (!p || p === "/") return ORIGIN;
@@ -37,6 +50,7 @@ const seen = new Set();
 for (const page of catalog.pages) {
   const p = page.pathDecoded || page.path;
   if (!p || skip.has(p) || seen.has(p)) continue;
+  if (skipPrefix.some((pre) => p.startsWith(pre))) continue;
   seen.add(p);
   urls.push({ loc: loc(p), lastmod, changefreq: freq(page.kind, p), priority: priority(page.kind, p) });
 }

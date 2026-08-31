@@ -1,7 +1,14 @@
 User-agent: *
 Allow: /
-Disallow: /__grok/
 Disallow: /api/
+Disallow: /__grok/
+Clean-param: age&city&utm_source&utm_medium&utm_campaign&utm_content&utm_term&yclid&ysclid&fbclid
 
+User-agent: Yandex
+Allow: /
+Disallow: /api/
+Disallow: /__grok/
+Clean-param: age&city&utm_source&utm_medium&utm_campaign&utm_content&utm_term&yclid&ysclid
 Host: www.rastudio.org
+
 Sitemap: https://www.rastudio.org/sitemap.xml
