@@ -193,17 +193,13 @@ function CinematicPage({
                   <SchoolCourseList schoolPath={page.pathDecoded || page.path} courses={courses} />
                 ) : null
               }
-              afterWhy={
-                page.kind === "course" ? (
-                  <CourseSellAfterWhy path={page.pathDecoded || page.path} />
-                ) : null
-              }
-              afterProgram={
-                page.kind === "course" ? (
-                  <CourseSellAfterProgram path={page.pathDecoded || page.path} teachers={teachers} />
-                ) : null
-              }
             />
+            {page.kind === "course" ? (
+              <div className="mt-12 space-y-12">
+                <CourseSellAfterWhy path={page.pathDecoded || page.path} />
+                <CourseSellAfterProgram path={page.pathDecoded || page.path} teachers={teachers} />
+              </div>
+            ) : null}
             {trajectory.length ? (
               <section className="pt-12">
                 <p className="kicker">Траектория</p>
