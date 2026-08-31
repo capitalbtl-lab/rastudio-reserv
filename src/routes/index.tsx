@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { RobotEnglishVideos } from "@/components/robot-videos";
 import { HeroCollage } from "@/components/hero-collage";
 import { AgeChips } from "@/components/age-chips";
+import { Reviews } from "@/components/reviews";
 import { courseFacts } from "@/data/ages";
 import { cn } from "@/lib/utils";
 
@@ -295,6 +296,8 @@ function Home() {
           </Button>
         </div>
       </section>
+
+      <Reviews />
 
       <section className="page-wrap pb-16 md:pb-24">
         <p className="kicker text-primary">Жизнь студии</p>
