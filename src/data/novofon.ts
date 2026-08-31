@@ -78,7 +78,7 @@ export async function listRecordedCalls(start: string, end: string, keys: Novofo
     for (const row of rows) {
       const rec = String(row.is_recorded) === "true" || row.is_recorded === true;
       const seconds = Number(row.seconds || 0);
-      if (!rec || seconds < 15) continue;
+      if (!rec || seconds < 30) continue;
       out.push({
         call_id: String(row.call_id || ""),
         pbx_call_id: String(row.pbx_call_id || row.call_id || ""),

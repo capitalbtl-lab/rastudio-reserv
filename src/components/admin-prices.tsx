@@ -74,7 +74,16 @@ export function AdminPrices() {
   const [novoSecret, setNovoSecret] = useState("");
   const [callsConnected, setCallsConnected] = useState(false);
   const [callInfo, setCallInfo] = useState({ total: 0, transcribed: 0, failed: 0, pending: 0, scannedAt: "" });
-  const [knowledge, setKnowledge] = useState<{ summary: string; faq: { q: string; a: string }[]; rules: string[] } | null>(null);
+  const [knowledge, setKnowledge] = useState<{
+    summary: string;
+    faq: { q: string; a: string }[];
+    rules: string[];
+    objections?: { q: string; a: string }[];
+    scripts?: { name: string; steps: string[] }[];
+    siteRecommendations?: string[];
+    instructions?: string[];
+  } | null>(null);
+  const [worker, setWorker] = useState<{ last?: string; updated?: string } | null>(null);
   const previewRef = useRef<HTMLAudioElement | null>(null);
 
   function stopPreview() {
@@ -132,8 +141,13 @@ export function AdminPrices() {
             summary: calls.stats.knowledge.summary,
             faq: calls.stats.knowledge.faq,
             rules: calls.stats.knowledge.rules,
+            objections: calls.stats.knowledge.objections,
+            scripts: calls.stats.knowledge.scripts,
+            siteRecommendations: calls.stats.knowledge.siteRecommendations,
+            instructions: calls.stats.knowledge.instructions,
           });
         }
+        if (calls.stats.worker) setWorker(calls.stats.worker);
       }
     }
   }
@@ -160,8 +174,13 @@ export function AdminPrices() {
             summary: calls.stats.knowledge.summary,
             faq: calls.stats.knowledge.faq,
             rules: calls.stats.knowledge.rules,
+            objections: calls.stats.knowledge.objections,
+            scripts: calls.stats.knowledge.scripts,
+            siteRecommendations: calls.stats.knowledge.siteRecommendations,
+            instructions: calls.stats.knowledge.instructions,
           });
         }
+        if (calls.stats.worker) setWorker(calls.stats.worker);
       })();
     }, 8000);
     return () => window.clearInterval(id);
@@ -656,11 +675,12 @@ export function AdminPrices() {
           <div>
             <h2 className="font-display text-3xl">База знаний со звонков</h2>
             <p className="mt-2 max-w-2xl text-sm text-muted">
-              Novofon: все записи разговоров → расшифровка → Ольга говорит так, как живые администраторы. Ключ: кабинет Novofon → Пользователи → API. Белый IP сервера: 83.222.25.109.
+              Фон сам забирает из Novofon все записи дольше 30 секунд, расшифровывает и собирает FAQ, скрипты, рекомендации сайту и инструкции для Олега и Ольги.
             </p>
           </div>
           <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-            <p className="text-sm font-semibold">{callsConnected ? "Novofon подключён" : "Ключи API"}</p>
+            <p className="text-sm font-semibold">{callsConnected ? "Novofon подключён · фон работает" : "Ключи API"}</p>
+            <p className="mt-2 text-sm text-muted">{worker?.last ? `Сейчас: ${worker.last}` : "Очередь идёт автоматически, без ручных кнопок."}</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <input
                 placeholder="User key"
@@ -695,7 +715,7 @@ export function AdminPrices() {
           </div>
           <div className="grid gap-3 sm:grid-cols-4">
             {[
-              ["Записей", callInfo.total],
+              ["Записей > 30 сек", callInfo.total],
               ["Расшифровано", callInfo.transcribed],
               ["В очереди", callInfo.pending],
               ["Ошибки", callInfo.failed],
@@ -706,76 +726,77 @@ export function AdminPrices() {
               </div>
             ))}
           </div>
-          <div className="flex flex-wrap gap-3">
-            <Button
-              disabled={busy || !callsConnected}
-              onClick={() => {
-                void (async () => {
-                  setBusy(true);
-                  setErr("");
-                  const res = await adminCalls({ data: { token: token(), action: "scan", months: 24 } });
-                  setBusy(false);
-                  if (!res.ok) return setErr(res.error);
-                  if (res.stats) setCallInfo({ ...res.stats, scannedAt: res.stats.scannedAt || "" });
-                })();
-              }}
-            >
-              1. Скачать список записей
-            </Button>
-            <Button
-              disabled={busy || !callsConnected || callInfo.pending === 0}
-              onClick={() => {
-                void (async () => {
-                  setBusy(true);
-                  setErr("");
-                  const res = await adminCalls({ data: { token: token(), action: "transcribe" } });
-                  setBusy(false);
-                  if (!res.ok) return setErr(res.error);
-                  if (res.stats) setCallInfo({ ...res.stats, scannedAt: res.stats.scannedAt || "" });
-                })();
-              }}
-            >
-              2. Расшифровать ещё 8
-            </Button>
-            <Button
-              disabled={busy || callInfo.transcribed === 0}
-              onClick={() => {
-                void (async () => {
-                  setBusy(true);
-                  setErr("");
-                  const res = await adminCalls({ data: { token: token(), action: "knowledge" } });
-                  setBusy(false);
-                  if (!res.ok) return setErr(res.error);
-                  if (res.stats) setCallInfo({ ...res.stats, scannedAt: res.stats.scannedAt || "" });
-                  if (res.knowledge) setKnowledge({ summary: res.knowledge.summary, faq: res.knowledge.faq, rules: res.knowledge.rules });
-                })();
-              }}
-            >
-              3. Собрать базу знаний
-            </Button>
-          </div>
-          <p className="text-xs text-muted">
-            Расшифровка лучших звонков (1–15 минут) идёт сама на сервере. Цифры обновляются каждые несколько секунд. Все 4361 подряд не гоняем — для базы знаний хватает живых консультаций.
-          </p>
-          {knowledge ? (
-            <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-              <p className="text-sm font-semibold">Как говорят на линии</p>
-              <p className="mt-3 text-sm leading-relaxed">{knowledge.summary}</p>
-              {knowledge.rules.length ? (
-                <ul className="mt-4 list-disc space-y-1 pl-5 text-sm">
-                  {knowledge.rules.map((r) => (
-                    <li key={r}>{r}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {knowledge.faq.slice(0, 8).map((item) => (
-                <div key={item.q} className="mt-4 border-t border-black/5 pt-4">
-                  <p className="text-sm font-semibold">{item.q}</p>
-                  <p className="mt-1 text-sm text-muted">{item.a}</p>
-                </div>
-              ))}
+          {callInfo.total ? (
+            <div className="h-2 overflow-hidden rounded-full bg-black/10">
+              <div
+                className="h-full rounded-full bg-brand"
+                style={{ width: `${Math.min(100, Math.round((callInfo.transcribed / Math.max(1, callInfo.total)) * 100))}%` }}
+              />
             </div>
           ) : null}
+          <p className="text-xs text-muted">
+            Новые звонки подтягиваются каждые 6 часов. База знаний пересобирается каждые 8 расшифровок. Цифры на странице обновляются сами.
+          </p>
+          {knowledge ? (
+            <div className="space-y-4">
+              <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+                <p className="text-sm font-semibold">Как говорят на линии</p>
+                <p className="mt-3 text-sm leading-relaxed">{knowledge.summary}</p>
+              </div>
+              {knowledge.instructions?.length ? (
+                <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+                  <p className="text-sm font-semibold">Инструкции ИИ-администратору</p>
+                  <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+                    {knowledge.instructions.map((r) => (
+                      <li key={r}>{r}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {knowledge.scripts?.length ? (
+                <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+                  <p className="text-sm font-semibold">Скрипты</p>
+                  {knowledge.scripts.map((s) => (
+                    <div key={s.name} className="mt-3">
+                      <p className="text-sm font-semibold">{s.name}</p>
+                      <p className="mt-1 text-sm text-muted">{(s.steps || []).join(" → ")}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {knowledge.siteRecommendations?.length ? (
+                <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+                  <p className="text-sm font-semibold">Рекомендации сайту</p>
+                  <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+                    {knowledge.siteRecommendations.map((r) => (
+                      <li key={r}>{r}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {knowledge.rules.length ? (
+                <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+                  <p className="text-sm font-semibold">Правила линии</p>
+                  <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+                    {knowledge.rules.map((r) => (
+                      <li key={r}>{r}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+                <p className="text-sm font-semibold">Частые вопросы</p>
+                {knowledge.faq.slice(0, 12).map((item) => (
+                  <div key={item.q} className="mt-4 border-t border-black/5 pt-4">
+                    <p className="text-sm font-semibold">{item.q}</p>
+                    <p className="mt-1 text-sm text-muted">{item.a}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted">Первая база знаний появится после нескольких расшифрованных консультаций.</p>
+          )}
         </section>
       ) : null}
 

@@ -34,5 +34,18 @@ module.exports = {
         ...loadEnvFile(),
       },
     },
+    {
+      name: "rastudio-calls",
+      script: "scripts/transcribe-novofon.py",
+      interpreter: "python3",
+      instances: 1,
+      exec_mode: "fork",
+      autorestart: true,
+      max_restarts: 20,
+      restart_delay: 8000,
+      env: {
+        PYTHONUNBUFFERED: "1",
+      },
+    },
   ],
 };

@@ -1,36 +1,48 @@
 #!/usr/bin/env python3
-"""Расшифровывает лучшие звонки Novofon и собирает базу знаний."""
-import base64, hashlib, hmac, json, os, subprocess, time, urllib.error, urllib.request
-from urllib.parse import urlencode
+"""Фон: Novofon → mp3 → расшифровка → база знаний для Ольги."""
+import base64, hashlib, hmac, json, subprocess, time, urllib.error, urllib.request
+from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlencode
 
 ROOT = Path("/var/www/rastudio")
 STORE = ROOT / "storage" / "call-knowledge.json"
-KEYS = json.loads((ROOT / "storage" / "novofon.json").read_text())
-ENV = {}
-for line in (ROOT / ".env").read_text().splitlines():
-    if "=" in line and not line.strip().startswith("#"):
-        k, v = line.split("=", 1)
-        ENV[k.strip()] = v.strip()
-YKEY = ENV.get("YANDEX_API_KEY", "")
-FOLDER = ENV.get("YANDEX_FOLDER_ID", "")
-SECRET = KEYS["secret"]
-USER = KEYS["userKey"]
+STATUS = ROOT / "storage" / "transcribe-status.json"
+KEYS_PATH = ROOT / "storage" / "novofon.json"
 HOST = "https://api.novofon.com"
-TARGET = 50
+SCAN_EVERY = 6 * 3600
+KB_EVERY = 8
+
+
+def env():
+    out = {}
+    p = ROOT / ".env"
+    if p.exists():
+        for line in p.read_text().splitlines():
+            if "=" in line and not line.strip().startswith("#"):
+                k, v = line.split("=", 1)
+                out[k.strip()] = v.strip()
+    return out
+
+
+def keys():
+    raw = json.loads(KEYS_PATH.read_text())
+    return raw["userKey"], raw["secret"]
+
 
 def rest(path, params):
+    user, secret = keys()
     qs = urlencode(sorted((k, str(v)) for k, v in params.items())).replace("%20", "+")
     md5 = hashlib.md5(qs.encode()).hexdigest()
     payload = path + qs + md5
     signs = [
-        base64.b64encode(hmac.new(SECRET.encode(), payload.encode(), hashlib.sha1).digest()).decode(),
-        base64.b64encode(hmac.new(SECRET.encode(), payload.encode(), hashlib.sha1).hexdigest().encode()).decode(),
+        base64.b64encode(hmac.new(secret.encode(), payload.encode(), hashlib.sha1).digest()).decode(),
+        base64.b64encode(hmac.new(secret.encode(), payload.encode(), hashlib.sha1).hexdigest().encode()).decode(),
     ]
     url = HOST + path + (("?" + qs) if qs else "")
     last = None
     for sign in signs:
-        req = urllib.request.Request(url, headers={"Authorization": f"{USER}:{sign}"})
+        req = urllib.request.Request(url, headers={"Authorization": f"{user}:{sign}"})
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
                 js = json.loads(r.read().decode())
@@ -46,26 +58,111 @@ def rest(path, params):
         last = js.get("message") or js
     raise RuntimeError(str(last))
 
+
 def load():
+    if not STORE.exists():
+        return {"calls": [], "knowledge": None}
     return json.loads(STORE.read_text())
 
+
 def save(data):
-    STORE.write_text(json.dumps(data, ensure_ascii=False))
+    tmp = STORE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False))
+    tmp.replace(STORE)
+
+
+def write_status(**kw):
+    STATUS.parent.mkdir(parents=True, exist_ok=True)
+    cur = {}
+    if STATUS.exists():
+        try:
+            cur = json.loads(STATUS.read_text())
+        except Exception:
+            cur = {}
+    cur.update(kw)
+    cur["updated"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    cur["running"] = True
+    STATUS.write_text(json.dumps(cur, ensure_ascii=False))
+
+
+def months(n=24):
+    now = datetime.now()
+    out = []
+    for i in range(n):
+        start = (now.replace(day=1) - timedelta(days=32 * i)).replace(day=1, hour=0, minute=0, second=0)
+        if start.month == 12:
+            end = start.replace(year=start.year + 1, month=1, day=1) - timedelta(seconds=1)
+        else:
+            end = start.replace(month=start.month + 1, day=1) - timedelta(seconds=1)
+        fmt = lambda d: d.strftime("%Y-%m-%d %H:%M:%S")
+        out.append((fmt(start), fmt(end)))
+    return out
+
+
+def scan():
+    data = load()
+    map_ = {str(c.get("pbx_call_id") or c.get("call_id")): c for c in data.get("calls") or []}
+    added = 0
+    for start, end in months(24):
+        skip = 0
+        while skip < 20000:
+            js = rest("/v1/statistics/pbx/", {"start": start, "end": end, "version": "2", "skip": str(skip), "limit": "1000"})
+            rows = js.get("stats") or []
+            for row in rows:
+                rec = str(row.get("is_recorded")) == "true" or row.get("is_recorded") is True
+                seconds = int(row.get("seconds") or 0)
+                if not rec or seconds < 30:
+                    continue
+                cid = str(row.get("pbx_call_id") or row.get("call_id") or "")
+                prev = map_.get(cid) or {}
+                map_[cid] = {
+                    **prev,
+                    "call_id": str(row.get("call_id") or cid),
+                    "pbx_call_id": cid,
+                    "callstart": str(row.get("callstart") or ""),
+                    "clid": str(row.get("clid") or ""),
+                    "destination": str(row.get("destination") or ""),
+                    "disposition": str(row.get("disposition") or ""),
+                    "seconds": seconds,
+                    "is_recorded": True,
+                    "sip": str(row.get("sip") or ""),
+                }
+                if not prev:
+                    added += 1
+            if len(rows) < 1000:
+                break
+            skip += 1000
+    data["calls"] = list(map_.values())
+    data["scannedAt"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    save(data)
+    write_status(last=f"скан +{added}", total=len(data["calls"]))
+    print("scan", len(data["calls"]), "new", added, flush=True)
+
 
 def pending(data):
     rows = [
-        c for c in data["calls"]
+        c for c in data.get("calls") or []
         if c.get("is_recorded") and not c.get("transcript") and not c.get("error")
-        and 60 <= int(c.get("seconds") or 0) <= 900
+        and int(c.get("seconds") or 0) >= 30
     ]
-    rows.sort(key=lambda c: -int(c.get("seconds") or 0))
+
+    def rank(c):
+        s = int(c.get("seconds") or 0)
+        if 90 <= s <= 720:
+            return (0, -s)
+        if 30 <= s < 90:
+            return (1, -s)
+        return (2, -s)
+
+    rows.sort(key=rank)
     return rows
+
 
 def record_link(call):
     last = ""
     for params in (
-        {"call_id": str(call["call_id"]), "lifetime": "3600"},
-        {"pbx_call_id": str(call.get("pbx_call_id") or call["call_id"]), "lifetime": "3600"},
+        {"call_id": str(call["call_id"]), "lifetime": "7200"},
+        {"pbx_call_id": str(call.get("pbx_call_id") or call["call_id"]), "lifetime": "7200"},
     ):
         try:
             js = rest("/v1/pbx/record/request/", params)
@@ -76,107 +173,122 @@ def record_link(call):
             last = str(js)
         except Exception as e:
             last = str(e)
-            continue
-    print("nolink", call.get("call_id"), last[:180], flush=True)
+    print("nolink", call.get("call_id"), last[:160], flush=True)
     return ""
 
-def stt_file(path):
-    body = Path(path).read_bytes()
+
+def stt_file(path: Path, e):
+    body = path.read_bytes()
     if len(body) < 400 or len(body) > 900000:
         return ""
     url = "https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?lang=ru-RU&topic=general&format=lpcm&sampleRateHertz=16000"
-    last = ""
-    for auth in (f"Api-Key {YKEY}", f"Bearer {YKEY}"):
-        req = urllib.request.Request(url, data=body, headers={"Authorization": auth, "x-folder-id": FOLDER})
-        try:
-            with urllib.request.urlopen(req, timeout=35) as r:
-                return json.loads(r.read().decode()).get("result") or ""
-        except urllib.error.HTTPError as e:
-            last = e.read().decode(errors="replace")[:200]
-            continue
-    print("stt", last, flush=True)
-    return ""
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={"Authorization": f"Api-Key {e['YANDEX_API_KEY']}", "x-folder-id": e.get("YANDEX_FOLDER_ID", "")},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=35) as r:
+            return json.loads(r.read().decode()).get("result") or ""
+    except Exception as err:
+        print("stt", err, flush=True)
+        return ""
 
-def transcribe(call):
+
+def transcribe(call, e):
     cid = str(call.get("pbx_call_id") or call["call_id"])
-    link = record_link(call)
-    if not link:
-        return "", "нет файла записи"
     work = ROOT / "storage" / "calls" / cid.replace("/", "_")
     work.mkdir(parents=True, exist_ok=True)
     mp3 = work / "call.mp3"
-    urllib.request.urlretrieve(link, mp3)
+    if not mp3.exists() or mp3.stat().st_size < 1000:
+        link = record_link(call)
+        if not link:
+            return "", "нет файла записи"
+        urllib.request.urlretrieve(link, mp3)
+    wav = work / "full.wav"
     chunks = work / "chunks"
     chunks.mkdir(exist_ok=True)
-    wav = work / "full.wav"
+    for old in chunks.glob("*"):
+        old.unlink(missing_ok=True)
     subprocess.run(
         ["ffmpeg", "-y", "-i", str(mp3), "-ac", "1", "-ar", "16000", str(wav)],
-        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120,
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180,
     )
     subprocess.run(
-        [
-            "ffmpeg", "-y", "-i", str(wav),
-            "-f", "segment", "-segment_time", "20",
-            "-ac", "1", "-ar", "16000", "-acodec", "pcm_s16le",
-            str(chunks / "p-%03d.wav"),
-        ],
-        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120,
+        ["ffmpeg", "-y", "-i", str(wav), "-f", "segment", "-segment_time", "20",
+         "-ac", "1", "-ar", "16000", "-acodec", "pcm_s16le", str(chunks / "p-%03d.wav")],
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180,
     )
     parts = sorted(p for p in chunks.glob("p-*.wav") if p.stat().st_size > 1000)
     if not parts and wav.exists():
-        # запасной нарез: сырой PCM по 20 секундам
         raw = work / "full.raw"
         subprocess.run(
             ["ffmpeg", "-y", "-i", str(wav), "-ac", "1", "-ar", "16000", "-f", "s16le", str(raw)],
-            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120,
+            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180,
         )
         data = raw.read_bytes() if raw.exists() else b""
         step = 16000 * 2 * 20
-        parts = []
         for i in range(0, len(data), step):
             piece = data[i:i + step]
             if len(piece) < 4000:
                 continue
-            dest = chunks / f"p-{i:05d}.raw"
+            dest = chunks / f"r-{i:07d}.raw"
             dest.write_bytes(piece)
             parts.append(dest)
     texts = []
     for p in parts:
-        t = stt_file(p)
+        t = stt_file(p, e)
         if t.strip():
             texts.append(t.strip())
     for p in chunks.glob("*"):
         p.unlink(missing_ok=True)
+    if wav.exists():
+        wav.unlink(missing_ok=True)
     return " ".join(texts), ("" if texts else "пусто")
 
-def mark(data, call, text, err):
+
+def mark(call, text, err):
+    data = load()
     cid = str(call.get("pbx_call_id") or call["call_id"])
     for c in data["calls"]:
         if str(c.get("pbx_call_id") or c.get("call_id")) == cid:
             c["transcript"] = text
             if err:
                 c["error"] = err
-            elif "error" in c:
-                del c["error"]
+            else:
+                c.pop("error", None)
             break
     save(data)
 
-def build_knowledge(data):
-    texts = [c for c in data["calls"] if (c.get("transcript") or "") and len(c["transcript"]) > 80][-60:]
-    if len(texts) < 8:
+
+def build_knowledge(data, e):
+    texts = [c for c in data["calls"] if (c.get("transcript") or "") and len(c["transcript"]) > 80]
+    texts.sort(key=lambda c: -int(c.get("seconds") or 0))
+    texts = texts[:70]
+    if len(texts) < 4:
         return
     blob = "\n".join(
         f"--- {c.get('callstart')} {c.get('seconds')}с ---\n{c['transcript']}" for c in texts
     )[:28000]
     prompt = (
-        "По расшифровкам звонков администраторов студии «Развивайся» (Коломна, Луховицы) собери JSON базу знаний. "
-        "Убери ФИО и телефоны. Формат: {\"summary\":\"\",\"faq\":[{\"q\":\"\",\"a\":\"\"}],"
-        "\"objections\":[{\"q\":\"\",\"a\":\"\"}],\"phrases\":[],\"rules\":[]}. "
-        "Не больше 18 faq, 10 objections, 12 phrases, 10 rules.\n\n" + blob
+        "По расшифровкам звонков администраторов студии «Развивайся» (Коломна и Луховицы) "
+        "собери JSON для ИИ-администраторов Олега и Ольги, чтобы заменить живого администратора. "
+        "Убери ФИО, телефоны родителей, адреса домов. Оставь рабочие формулировки.\n"
+        "Формат:\n"
+        '{"summary":"как говорят на линии",'
+        '"faq":[{"q":"","a":""}],'
+        '"objections":[{"q":"","a":""}],'
+        '"scripts":[{"name":"сценарий","steps":["шаг"]}],'
+        '"phrases":["живая фраза"],'
+        '"rules":["правило линии"],'
+        '"siteRecommendations":["что поправить на сайте, чтобы меньше звонили с одним и тем же"],'
+        '"instructions":["инструкция ИИ: как вести родителя от вопроса до записи"]}\n'
+        "faq до 20, objections до 12, scripts до 8, phrases 14, rules 12, siteRecommendations 8, instructions 10.\n\n"
+        + blob
     )
     body = json.dumps({
-        "modelUri": f"gpt://{FOLDER}/yandexgpt/latest",
-        "completionOptions": {"stream": False, "temperature": 0.2, "maxTokens": 3000},
+        "modelUri": f"gpt://{e.get('YANDEX_FOLDER_ID')}/yandexgpt/latest",
+        "completionOptions": {"stream": False, "temperature": 0.2, "maxTokens": 3500},
         "messages": [
             {"role": "system", "text": "Отвечай только валидным JSON без markdown."},
             {"role": "user", "text": prompt},
@@ -185,51 +297,75 @@ def build_knowledge(data):
     req = urllib.request.Request(
         "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
         data=body,
-        headers={"Authorization": f"Api-Key {YKEY}", "Content-Type": "application/json", "x-folder-id": FOLDER},
+        headers={
+            "Authorization": f"Api-Key {e['YANDEX_API_KEY']}",
+            "Content-Type": "application/json",
+            "x-folder-id": e.get("YANDEX_FOLDER_ID", ""),
+        },
     )
     with urllib.request.urlopen(req, timeout=90) as r:
         text = json.loads(r.read().decode())["result"]["alternatives"][0]["message"]["text"]
     start, end = text.find("{"), text.rfind("}")
     raw = json.loads(text[start:end + 1])
     data["knowledge"] = {
-        "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "updated": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
         "calls": len(data["calls"]),
         "transcribed": sum(1 for c in data["calls"] if c.get("transcript")),
         "summary": raw.get("summary") or "",
         "faq": (raw.get("faq") or [])[:20],
         "objections": (raw.get("objections") or [])[:12],
-        "phrases": [str(x) for x in (raw.get("phrases") or [])][:16],
+        "scripts": (raw.get("scripts") or [])[:8],
+        "phrases": [str(x) for x in (raw.get("phrases") or [])][:14],
         "rules": [str(x) for x in (raw.get("rules") or [])][:12],
+        "siteRecommendations": [str(x) for x in (raw.get("siteRecommendations") or [])][:8],
+        "instructions": [str(x) for x in (raw.get("instructions") or [])][:10],
     }
     save(data)
-    print("knowledge", len(data["knowledge"]["faq"]))
+    write_status(knowledgeAt=data["knowledge"]["updated"], faq=len(data["knowledge"]["faq"]))
+    print("knowledge", len(data["knowledge"]["faq"]), flush=True)
+
 
 def main():
-    done0 = sum(1 for c in load()["calls"] if c.get("transcript"))
-    print("start transcribed", done0)
+    e = env()
+    last_scan = 0
+    since_kb = 0
+    write_status(last="старт фона", transcribed=0)
     while True:
-        data = load()
-        done = sum(1 for c in data["calls"] if c.get("transcript"))
-        if done >= TARGET:
-            break
-        rows = pending(data)
-        if not rows:
-            break
-        call = rows[0]
-        print("do", call.get("call_id"), call.get("seconds"), flush=True)
         try:
-            text, err = transcribe(call)
-            mark(load(), call, text, err)
-            print(" ok", len(text), err)
-        except Exception as e:
-            mark(load(), call, "", str(e)[:180])
-            print(" err", e)
-        time.sleep(0.4)
-    try:
-        build_knowledge(load())
-    except Exception as e:
-        print("kb", e)
-    print("done", sum(1 for c in load()["calls"] if c.get("transcript")))
+            if time.time() - last_scan > SCAN_EVERY or not load().get("calls"):
+                scan()
+                last_scan = time.time()
+            data = load()
+            rows = pending(data)
+            done = sum(1 for c in data.get("calls") or [] if c.get("transcript"))
+            write_status(
+                transcribed=done,
+                pending=len(rows),
+                total=len(data.get("calls") or []),
+                last=f"очередь {len(rows)}",
+            )
+            if not rows:
+                time.sleep(120)
+                continue
+            call = rows[0]
+            print("do", call.get("call_id"), call.get("seconds"), flush=True)
+            write_status(last=f"расшифровка {call.get('call_id')} {call.get('seconds')}с")
+            text, err = transcribe(call, e)
+            mark(call, text, err)
+            print(" ok", len(text), err, flush=True)
+            if text and not err:
+                since_kb += 1
+                if since_kb >= KB_EVERY:
+                    try:
+                        build_knowledge(load(), e)
+                    except Exception as kb_err:
+                        print("kb", kb_err, flush=True)
+                    since_kb = 0
+        except Exception as err:
+            print("loop", err, flush=True)
+            write_status(last=f"ошибка {err}"[:180])
+            time.sleep(8)
+
 
 if __name__ == "__main__":
     main()

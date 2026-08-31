@@ -5,6 +5,7 @@ import type { NovofonCall } from "./novofon";
 
 export type CallRecord = NovofonCall & { transcript?: string; error?: string };
 export type FaqItem = { q: string; a: string };
+export type ScriptItem = { name: string; steps: string[] };
 export type Knowledge = {
   updated: string;
   calls: number;
@@ -14,6 +15,9 @@ export type Knowledge = {
   objections: FaqItem[];
   phrases: string[];
   rules: string[];
+  scripts?: ScriptItem[];
+  siteRecommendations?: string[];
+  instructions?: string[];
 };
 
 type Store = {
@@ -62,7 +66,7 @@ export function nextWithoutTranscript(limit = 8) {
   return loadCallStore()
     .calls.filter((c) => {
       const sec = Number(c.seconds || 0);
-      return c.is_recorded && !c.transcript && !c.error && sec >= 60 && sec <= 900;
+      return c.is_recorded && !c.transcript && !c.error && sec >= 30;
     })
     .sort((a, b) => Number(b.seconds || 0) - Number(a.seconds || 0))
     .slice(0, limit);
@@ -77,7 +81,25 @@ export function callStats() {
     pending: store.calls.filter((c) => c.is_recorded && !c.transcript && !c.error).length,
     scannedAt: store.scannedAt || "",
     knowledge: store.knowledge,
+    worker: workerStatus(),
   };
+}
+
+function workerStatus() {
+  try {
+    const p = join(process.cwd(), "storage", "transcribe-status.json");
+    if (!existsSync(p)) return null;
+    return JSON.parse(readFileSync(p, "utf8")) as {
+      running?: boolean;
+      updated?: string;
+      last?: string;
+      transcribed?: number;
+      pending?: number;
+      total?: number;
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function yandexJson(prompt: string) {
@@ -120,10 +142,13 @@ export async function buildKnowledge() {
 JSON:
 {
   "summary": "кратко как говорят живые администраторы",
-  "faq": [{"q":"вопрос родителя","a":"как отвечали, нормализованный ответ"}],
+  "faq": [{"q":"вопрос родителя","a":"как отвечали"}],
   "objections": [{"q":"сомнение","a":"как снимали"}],
-  "phrases": ["живые фразы, которые можно говорить"],
-  "rules": ["правила: чего не обещать, как уточнять филиал, пробное, цены"]
+  "scripts": [{"name":"запись на пробное","steps":["шаг"]}],
+  "phrases": ["живые фразы"],
+  "rules": ["правила линии"],
+  "siteRecommendations": ["что поправить на сайте"],
+  "instructions": ["как ИИ вести родителя до записи"]
 }
 Не больше 18 faq, 10 objections, 12 phrases, 10 rules.
 
@@ -138,6 +163,9 @@ ${texts.join("\n").slice(0, 28000)}`);
     objections: Array.isArray(raw.objections) ? raw.objections.slice(0, 12) : [],
     phrases: Array.isArray(raw.phrases) ? raw.phrases.map(String).slice(0, 16) : [],
     rules: Array.isArray(raw.rules) ? raw.rules.map(String).slice(0, 12) : [],
+    scripts: Array.isArray(raw.scripts) ? (raw.scripts as ScriptItem[]).slice(0, 8) : [],
+    siteRecommendations: Array.isArray(raw.siteRecommendations) ? raw.siteRecommendations.map(String).slice(0, 8) : [],
+    instructions: Array.isArray(raw.instructions) ? raw.instructions.map(String).slice(0, 10) : [],
   };
   store.knowledge = knowledge;
   saveCallStore(store);
@@ -155,14 +183,21 @@ export function knowledgeForAgent() {
     .slice(0, 8)
     .map((x) => `Сомнение: ${x.q} → ${x.a}`)
     .join("\n");
+  const scripts = (kb.scripts || [])
+    .slice(0, 6)
+    .map((s) => `${s.name}: ${(s.steps || []).join(" → ")}`)
+    .join("\n");
   return `
 
 База знаний с реальных звонков администраторов студии (говори в этом духе, не цитируй как «из базы»):
 ${kb.summary}
 Правила с линии: ${kb.rules.join("; ")}
+Инструкции ИИ: ${(kb.instructions || []).join("; ")}
+Скрипты: ${scripts}
 Живые формулировки: ${kb.phrases.slice(0, 8).join(" / ")}
 Частые вопросы:
 ${faq}
 Возражения:
-${obj}`;
+${obj}
+Что хотят видеть на сайте (если спрашивают — отвечай по факту, не обещай несуществующее): ${(kb.siteRecommendations || []).slice(0, 5).join("; ")}`;
 }
