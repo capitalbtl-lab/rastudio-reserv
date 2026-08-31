@@ -29,6 +29,12 @@ const KOLOMNA: AgentChip[] = [
   { label: "Гражданская, 2", send: "Удобен филиал на Гражданской, 2" },
 ];
 
+const TRIAL: AgentChip[] = [
+  { label: "Пробное в группе", send: "Хочу пробное на ближайшем занятии группы", primary: true },
+  { label: "Пробное в свободный день", send: "Хочу пробное в свободный день, дату согласуем" },
+  { label: "Сразу в группу", send: "Хочу сразу в действующую группу" },
+];
+
 function schoolsFor(age?: number): AgentChip[] {
   const y = age || 8;
   const out: AgentChip[] = [];
@@ -44,13 +50,16 @@ function schoolsFor(age?: number): AgentChip[] {
   return out;
 }
 
-function booked(messages: { role: string; content: string }[]) {
-  const last = [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
-  return /заявк|записал|принял|готово/.test(last);
-}
-
-export function nextChips(messages: { role: string; content: string }[]): { hint: string; chips: AgentChip[] } {
-  if (booked(messages)) {
+/** Кнопки строго под последнюю фразу ассистента. Не показываем возраст, если в тексте не спрашивают возраст. */
+export function chipsForReply(
+  last: string,
+  messages: { role: string; content: string }[],
+  groups: AgentChip[] = [],
+): { hint: string; chips: AgentChip[] } {
+  const t = last.toLowerCase();
+  if (!t.trim()) return { hint: "", chips: [] };
+  if (/кодовое слово/.test(t)) return { hint: "Назовите кодовое слово", chips: [] };
+  if (/заявк|записал|принял заявку|готово, заявк/.test(t)) {
     return {
       hint: "Полезно сразу",
       chips: [
@@ -60,27 +69,44 @@ export function nextChips(messages: { role: string; content: string }[]): { hint
       ],
     };
   }
-  const slots = slotsFromMessages(messages);
-  const open = nextSlot(slots);
-  if (open === "age") return { hint: "", chips: AGES };
-  if (open === "city") return { hint: "", chips: CITIES };
-  if (open === "branch") return { hint: "", chips: KOLOMNA };
-  const facts = factsFromMessages(messages);
-  if (!facts.school) return { hint: "", chips: schoolsFor(slots.age) };
-  if (!facts.briefed) {
-    return {
-      hint: "",
-      chips: [{ label: "Понятно, к записи", send: "Понятно. Давайте к пробному или в группу", primary: true }],
-    };
+  if (/сколько.{0,28}лет|возраст|цифрой или кнопк|кнопки ниже/.test(t)) {
+    return { hint: "Сколько лет ребёнку", chips: AGES };
   }
-  const page = courseHint(messages.map((m) => m.content).slice(-4).join(" "));
-  return {
-    hint: "",
-    chips: [
-      { label: "Пробное в группе", send: "Хочу пробное на ближайшем занятии группы", primary: true },
-      { label: "Пробное в свободный день", send: "Хочу пробное в свободный день, дату согласуем" },
-      { label: "Сразу в группу", send: "Хочу сразу в действующую группу" },
-      ...(page ? [{ label: "Подробнее о курсе", href: page.path }] : []),
-    ],
-  };
+  if (/коломна или луховиц|удобнее коломн/.test(t)) {
+    return { hint: "Город", chips: CITIES };
+  }
+  if (/цмит|октябрьской революции|гражданская, 2|какой ближе/.test(t)) {
+    return { hint: "Филиал", chips: KOLOMNA };
+  }
+  if (groups.length && /групп|пробн|слот|свободн.{0,12}мест|ближайш/.test(t)) {
+    return { hint: "Группы", chips: groups };
+  }
+  if (/пробн|сразу в групп|запис/.test(t)) {
+    const page = courseHint(messages.map((m) => m.content).slice(-6).join(" "));
+    return { hint: "Запись", chips: [...TRIAL, ...(page ? [{ label: "Подробнее о курсе", href: page.path }] : [])] };
+  }
+  const facts = factsFromMessages(messages);
+  const slots = slotsFromMessages(messages);
+  const allSchools = schoolsFor(slots.age);
+  const named = allSchools.filter((c) => {
+    const key = c.label.toLowerCase();
+    return t.includes(key) || (c.send && t.includes(c.send.toLowerCase().replace("интересна ", "").replace("интересны ", "")));
+  });
+  if (named.length >= 2) return { hint: "Направление", chips: named };
+  if (/школ|направлен|что ближе|чем заняться/.test(t) && !facts.school) {
+    return { hint: "Направление", chips: allSchools };
+  }
+  if (/понятно|к записи|рассказать подробнее/.test(t)) {
+    return { hint: "", chips: [{ label: "Понятно, к записи", send: "Понятно. Давайте к пробному или в группу", primary: true }] };
+  }
+  return { hint: "", chips: [] };
+}
+
+export function nextChips(messages: { role: string; content: string }[], groups: AgentChip[] = []) {
+  const last = [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
+  const fromText = chipsForReply(last, messages, groups);
+  if (fromText.chips.length) return fromText;
+  const open = nextSlot(slotsFromMessages(messages));
+  if (open === "age" && /лет|возраст/.test(last)) return { hint: "Сколько лет ребёнку", chips: AGES };
+  return { hint: "", chips: [] };
 }

@@ -15,9 +15,9 @@ function genderFix(who: Who, text: string) {
     .replace(/\bрад\b(?!а)/gi, "рада");
 }
 
-export function parseTurns(raw: string): { who: Who; text: string }[] {
+export function parseTurns(raw: string, fallback: Who = "olga"): { who: Who; text: string }[] {
   const out: { who: Who; text: string }[] = [];
-  let who: Who = "oleg";
+  let who: Who = fallback;
   let buf: string[] = [];
   const flush = () => {
     const text = genderFix(who, buf.join(" ").trim());
@@ -35,7 +35,7 @@ export function parseTurns(raw: string): { who: Who; text: string }[] {
     }
   }
   flush();
-  return out.length ? out : [{ who: "oleg", text: raw.trim() }];
+  return out.length ? out : [{ who: fallback, text: raw.trim() }];
 }
 
 export function faceOf(who: Who, mood: "hello" | "think" | "happy" | "sorry") {

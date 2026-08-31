@@ -1,33 +1,43 @@
 import { nextSlot, PROMPT, slotsFromMessages, type Slots } from "./funnel-state";
 
-export type FunnelHit = { reply: string } | { silent: true };
+export type FunnelHit = { reply: string };
 
-function said(messages: { role: string; content: string }[], re: RegExp) {
-  return messages.some((m) => m.role === "assistant" && re.test(m.content));
+function lastAssistant(messages: { role: string; content: string }[]) {
+  return [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
 }
 
-/** До направления модель молчит. Один слот — либо кнопки, либо одна голосовая фраза. */
+/** Один слот — всегда видимая и озвучиваемая фраза. Молчание запрещено: ответ не удаляется. */
 export function lockedFunnelReply(
   who: "oleg" | "olga",
   messages: { role: string; content: string }[],
-  voice = false,
+  _voice = false,
   slots?: Slots,
 ): FunnelHit | null {
   const n = who === "olga" ? "Ольга" : "Олег";
-  const ok = who === "olga" ? "Запомнила" : "Запомнил";
   const s = slots || slotsFromMessages(messages);
   const open = nextSlot(s);
+  const last = lastAssistant(messages);
+  const asked = (re: RegExp) => re.test(last);
 
   if (open === "age") {
-    if (s.city && !said(messages, /запомнил[аи]/i)) return { reply: `${n}: ${ok}: ${s.city}.` };
-    return { silent: true };
+    if (asked(/цифрой или кнопк|кнопку ниже/i)) {
+      return { reply: `${n}: Направление запомним. Сначала возраст — цифра или кнопка.` };
+    }
+    if (asked(/сколько.{0,28}лет|возраст/i)) {
+      return { reply: `${n}: Чтобы не предложить слишком сложное, напишите возраст цифрой или нажмите кнопку.` };
+    }
+    return { reply: `${n}: ${PROMPT.age}` };
   }
   if (open === "city") {
-    if (!voice || said(messages, /коломна или луховиц|удобнее коломн/i)) return { silent: true };
+    if (asked(/коломна или луховиц|удобнее коломн/i)) {
+      return { reply: `${n}: Коломна или Луховицы — нажмите кнопку или скажите город.` };
+    }
     return { reply: `${n}: ${PROMPT.city}` };
   }
   if (open === "branch") {
-    if (!voice || said(messages, /цмит|гражданская, 2|какой ближе/i)) return { silent: true };
+    if (asked(/цмит|гражданская, 2|какой ближе/i)) {
+      return { reply: `${n}: Какой филиал ближе: ЦМИТ на Октябрьской, 340 или Гражданская, 2?` };
+    }
     return { reply: `${n}: ${PROMPT.branch}` };
   }
   return null;

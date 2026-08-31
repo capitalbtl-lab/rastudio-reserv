@@ -158,6 +158,27 @@ export function AdminAgent() {
               hint="Круглая кнопка сброса в шапке окна."
               tip="Без неё история сессии не сбрасывается с сайта. Новый посетитель всё равно начинает с чистого чата."
             />
+            <Toggle
+              on={settings.matchChipsToMessage !== false}
+              set={(v) => setSettings({ ...settings, matchChipsToMessage: v })}
+              title="Кнопки только под текст"
+              hint="Подсказки совпадают с последней фразой. Не показываем возраст, если спросили город."
+              tip="Выключите — кнопки снова по воронке, даже если в сообщении другой вопрос. Обычно оставляют включённым."
+            />
+            <Toggle
+              on={settings.keepAssistantReplies !== false}
+              set={(v) => setSettings({ ...settings, keepAssistantReplies: v })}
+              title="Не удалять ответы ассистента"
+              hint="Каждая реплика Олега и Ольги остаётся в ленте."
+              tip="Раньше похожий вопрос глотался и казалось, что ответ стёрли. Выключите только если лента дублируется."
+            />
+            <Toggle
+              on={settings.speakEveryReply !== false}
+              set={(v) => setSettings({ ...settings, speakEveryReply: v })}
+              title="Озвучивать каждый вопрос"
+              hint="Голосовой режим читает всю фразу, включая вопрос в конце."
+              tip="Если Yandex SpeechKit не ответил — фраза всё равно прозвучит запасным голосом. Первое приветствие тоже озвучивается."
+            />
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button type="button" disabled={busy} onClick={() => void save()}>

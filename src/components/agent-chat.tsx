@@ -33,18 +33,19 @@ type Mood = "hello" | "think" | "happy" | "sorry";
 
 function greeting(who: "oleg" | "olga", _voice = false) {
   const name = who === "olga" ? "Ольга" : "Олег";
-  return `${name}: Подскажу программу, которая подойдёт именно вашему ребёнку.`;
+  return `${name}: Подскажу программу, которая подойдёт именно вашему ребёнку. Скажите, сколько лет ребёнку — сразу подберу то, что зайдёт именно ему.`;
 }
 const DUAL_HELLO = /Олег: Подскажу программу[\s\S]*Ольга:/;
 const ADMIN_ASK = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
 const ADMIN_HELLO = "Ольга: Доступ открыт на 30 минут. Цены, тексты страниц или голоса — что меняем?";
 
-function sameAsk(prev: string, next: string) {
-  const a = prev.replace(/^(Ольга|Олег):\s*/i, "");
-  const b = next.replace(/^(Ольга|Олег):\s*/i, "");
-  if (!b.trim()) return true;
-  if (a.trim() === b.trim()) return true;
-  const age = /сколько.{0,24}лет|возраст — кнопк|кнопки ниже/i;
+function sameAsk(prev: string, next: string, exactOnly = true) {
+  const a = prev.replace(/^(Ольга|Олег):\s*/gi, "").replace(/\s+/g, " ").trim().toLowerCase();
+  const b = next.replace(/^(Ольга|Олег):\s*/gi, "").replace(/\s+/g, " ").trim().toLowerCase();
+  if (!b) return true;
+  if (a === b) return true;
+  if (exactOnly) return false;
+  const age = /сколько.{0,24}лет|возраст|кнопки ниже/i;
   const city = /коломна или луховиц|удобнее коломн/i;
   const branch = /цмит|гражданская, 2|какой ближе/i;
   if (age.test(a) && age.test(b)) return true;
@@ -214,6 +215,9 @@ export function AgentChat() {
     allowOleg: true,
     allowReset: true,
     defaultPartner: "olga",
+    matchChipsToMessage: true,
+    keepAssistantReplies: true,
+    speakEveryReply: true,
   });
   const dragRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -245,9 +249,7 @@ export function AgentChat() {
             { label: "Голоса", send: "Какие сейчас настройки голосов" },
           ],
         }
-      : groupChips.length
-        ? { hint: "Пробное или в группу", chips: groupChips }
-        : nextChips(messages);
+      : nextChips(messages, groupChips);
   voiceOnRef.current = voiceOn;
   partnerRef.current = partner;
 
@@ -494,20 +496,26 @@ export function AgentChat() {
     await new Promise((r) => window.setTimeout(r, 40));
     try {
       const mode = adminLeft() > 0 ? "olga" : partnerRef.current;
-      const turns = parseTurns(phrase).filter((t) => t.who === mode);
-      for (let i = 0; i < turns.length; i += 1) {
-        const turn = turns[i];
+      const turns = parseTurns(phrase, mode);
+      const mine = turns.filter((t) => t.who === mode);
+      const play = mine.length ? mine : turns.map((t) => ({ ...t, who: mode }));
+      for (let i = 0; i < play.length; i += 1) {
+        const turn = play[i];
         if (gen !== genRef.current) return;
         const clip = await yandexClip(turn.text, turn.who);
         if (gen !== genRef.current) return;
-        if (!clip) continue;
-        if (i > 0) await new Promise((r) => window.setTimeout(r, Math.round((clip.gap || 0.18) * 1000)));
+        if (i > 0) await new Promise((r) => window.setTimeout(r, Math.round((clip?.gap || 0.18) * 1000)));
         if (gen !== genRef.current) return;
         spokenRef.current = turn.text;
         try {
-          await playClip(clip.audio, clip.volume);
+          if (clip) await playClip(clip.audio, clip.volume);
+          else await speakBrowser(turn.text, turn.who);
         } catch {
-          /* never Windows TTS */
+          try {
+            await speakBrowser(turn.text, turn.who);
+          } catch {
+            /* */
+          }
         }
       }
     } finally {
@@ -657,7 +665,8 @@ export function AgentChat() {
     if (sendId !== sendIdRef.current) return;
     if (!reply.trim()) skipBubble = true;
     const lastAs = [...history].reverse().find((m) => m.role === "assistant")?.content || "";
-    if (!skipBubble && sameAsk(lastAs, reply)) skipBubble = true;
+    const dup = sameAsk(lastAs, reply, ui.keepAssistantReplies !== false);
+    if (!skipBubble && dup) skipBubble = true;
     if (!skipBubble && !(gate && reply === ADMIN_HELLO)) {
       const nextMsgs = [...history, { role: "assistant" as const, content: reply }];
       if (adminThread) setAdminMsgs(nextMsgs);
@@ -665,7 +674,7 @@ export function AgentChat() {
     }
     busyRef.current = false;
     setBusy(false);
-    if (voiceOnRef.current && !skipBubble && reply.trim()) {
+    if (voiceOnRef.current && reply.trim() && (!dup || ui.speakEveryReply)) {
       await speak(reply);
       if (sendId !== sendIdRef.current) return;
     }
@@ -739,10 +748,6 @@ export function AgentChat() {
       !inAdminUi &&
       clientMsgs.length === 1 &&
       clientMsgs[0].role === "assistant";
-    if (onlyHello) {
-      if (voiceOnRef.current) startListen();
-      return;
-    }
     const spoken = [...messages].reverse().find((m) => m.role === "assistant")?.content;
     if (spoken) await speak(spoken);
     if (voiceOnRef.current) startListen();

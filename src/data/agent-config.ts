@@ -22,11 +22,24 @@ export type AgentSettings = {
   allowOlga: boolean;
   allowOleg: boolean;
   allowReset: boolean;
+  matchChipsToMessage: boolean;
+  keepAssistantReplies: boolean;
+  speakEveryReply: boolean;
 };
 
 export type AgentUiFlags = Pick<
   AgentSettings,
-  "showChat" | "allowVoice" | "allowAdminMode" | "showChips" | "allowOlga" | "allowOleg" | "allowReset" | "defaultPartner"
+  | "showChat"
+  | "allowVoice"
+  | "allowAdminMode"
+  | "showChips"
+  | "allowOlga"
+  | "allowOleg"
+  | "allowReset"
+  | "defaultPartner"
+  | "matchChipsToMessage"
+  | "keepAssistantReplies"
+  | "speakEveryReply"
 >;
 
 export type TrainExample = {
@@ -61,6 +74,9 @@ const DEFAULT_SETTINGS: AgentSettings = {
   allowOlga: true,
   allowOleg: true,
   allowReset: true,
+  matchChipsToMessage: true,
+  keepAssistantReplies: true,
+  speakEveryReply: true,
 };
 
 function fileOf() {
@@ -365,6 +381,9 @@ export function uiFlagsOf(s: AgentSettings): AgentUiFlags {
     allowOlga: s.allowOlga !== false,
     allowOleg: s.allowOleg !== false,
     allowReset: s.allowReset !== false,
+    matchChipsToMessage: s.matchChipsToMessage !== false,
+    keepAssistantReplies: s.keepAssistantReplies !== false,
+    speakEveryReply: s.speakEveryReply !== false,
     defaultPartner: s.defaultPartner === "oleg" ? "oleg" : "olga",
   };
 }
