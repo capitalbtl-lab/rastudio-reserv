@@ -566,6 +566,52 @@ export function AgentChat() {
     if (shouldReload) window.setTimeout(() => window.location.reload(), voiceOnRef.current ? 600 : 200);
   }
 
+  function leaveAdmin() {
+    const wasIn = adminLeft() > 0;
+    sendIdRef.current += 1;
+    busyRef.current = false;
+    setBusy(false);
+    cancelSpeech();
+    stopListen();
+    awaitingCodeRef.current = false;
+    setAwaitingCode(false);
+    clearSiteAdmin();
+    setAdminMs(0);
+    setPartner("both");
+    setAdminMsgs([]);
+    setGroupChips([]);
+    setText("");
+    if (wasIn && voiceOnRef.current) {
+      const back = "Ольга: Вернулись к консультации для родителей.";
+      void speak(back).then(() => {
+        if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
+      });
+    } else if (voiceOnRef.current) {
+      window.setTimeout(() => {
+        if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
+      }, 200);
+    }
+  }
+
+  function enterAdmin() {
+    sendIdRef.current += 1;
+    busyRef.current = false;
+    setBusy(false);
+    cancelSpeech();
+    stopListen();
+    awaitingCodeRef.current = true;
+    setAwaitingCode(true);
+    setPartner("olga");
+    setAdminMsgs([{ role: "assistant", content: ADMIN_ASK }]);
+    setGroupChips([]);
+    setText("");
+    if (voiceOnRef.current) {
+      void speak(ADMIN_ASK).then(() => {
+        if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
+      });
+    }
+  }
+
   async function toggleVoice() {
     if (voiceOn) {
       setVoiceOn(false);
@@ -856,40 +902,10 @@ export function AgentChat() {
               </p>
               <button
                 type="button"
-                className="shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-semibold text-primary hover:bg-primary/10"
-                onClick={() => {
-                  sendIdRef.current += 1;
-                  busyRef.current = false;
-                  setBusy(false);
-                  cancelSpeech();
-                  stopListen();
-                  if (adminLeft() > 0) {
-                    awaitingCodeRef.current = false;
-                    setAwaitingCode(false);
-                    clearSiteAdmin();
-                    setAdminMs(0);
-                    setPartner("both");
-                    setAdminMsgs([]);
-                    if (voiceOnRef.current) {
-                      const back = "Ольга: Вернулись к консультации для родителей.";
-                      void speak(back).then(() => {
-                        if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
-                      });
-                    }
-                    return;
-                  }
-                  awaitingCodeRef.current = true;
-                  setAwaitingCode(true);
-                  setPartner("olga");
-                  setAdminMsgs([{ role: "assistant", content: ADMIN_ASK }]);
-                  if (voiceOnRef.current) {
-                    void speak(ADMIN_ASK).then(() => {
-                      if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
-                    });
-                  }
-                }}
+                className="shrink-0 text-[0.62rem] font-semibold text-primary underline-offset-2 hover:underline"
+                onClick={() => (inAdminUi ? leaveAdmin() : enterAdmin())}
               >
-                {adminMs > 0 ? "Выход администратора" : "Вход администратора"}
+                {inAdminUi ? "вернуться в клиентский режим" : "войти в административный режим"}
               </button>
             </div>
           </form>
