@@ -17,7 +17,8 @@ export type CallCrm = {
   dropped?: boolean;
   comms?: string[];
 };
-export type CallRecord = NovofonCall & { transcript?: string; error?: string; crm?: CallCrm };
+export type CallTurn = { who: "admin" | "client" | "mixed"; t?: number; text: string };
+export type CallRecord = NovofonCall & { transcript?: string; error?: string; crm?: CallCrm; turns?: CallTurn[] };
 export type FaqItem = { q: string; a: string; on?: boolean };
 export type ScriptItem = { name: string; steps: string[]; on?: boolean };
 export type LineItem = { text: string; on?: boolean };
@@ -176,6 +177,7 @@ export function listTranscripts(limit = 40) {
       callstart: c.callstart,
       seconds: c.seconds,
       preview: String(c.transcript || "").slice(0, 420),
+      turns: (c.turns || []).slice(0, 24).map((t) => ({ who: t.who, text: String(t.text || "").slice(0, 400) })),
       crm: c.crm
         ? {
             age: c.crm.age,
@@ -354,7 +356,7 @@ export function knowledgeForAgent() {
   if (!faq && !obj && !scripts && !rules.length && !instructions.length) return "";
   return `
 
-База знаний с реальных звонков администраторов студии (говори в этом духе, не цитируй как «из базы»):
+База знаний с реальных звонков (Клиент / Администратор — говори как администратор студии, не цитируй «из базы»):
 ${kb.summary}
 Правила с линии: ${rules.join("; ")}
 Инструкции ИИ: ${instructions.join("; ")}

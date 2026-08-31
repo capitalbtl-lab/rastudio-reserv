@@ -377,14 +377,27 @@ def scan():
 
 def pending(data):
     min_s = int(load_settings().get("minSeconds") or 30)
-    rows = [
-        c for c in data.get("calls") or []
-        if c.get("is_recorded") and not c.get("transcript") and not c.get("error")
-        and int(c.get("seconds") or 0) >= min_s
-    ]
+    rows = []
+    for c in data.get("calls") or []:
+        if not c.get("is_recorded"):
+            continue
+        if int(c.get("seconds") or 0) < min_s:
+            continue
+        if c.get("turns"):
+            continue
+        cid = str(c.get("pbx_call_id") or c.get("call_id") or "").replace("/", "_")
+        mp3 = ROOT / "storage" / "calls" / cid / "call.mp3"
+        has = mp3.exists() and mp3.stat().st_size > 1000
+        if c.get("transcript") and not has:
+            continue
+        if c.get("error") and not has:
+            continue
+        rows.append(c)
 
     def rank(c):
         s = int(c.get("seconds") or 0)
+        if c.get("transcript") and not c.get("turns"):
+            return (-1, -s)
         if 90 <= s <= 720:
             return (0, -s)
         if 30 <= s < 90:
@@ -432,6 +445,51 @@ def stt_file(path: Path, e):
         return ""
 
 
+ADMIN_MARK = (
+    "филиал", "пробное", "запишу", "записать вас", "гражданск", "октябрьск", "луховиц",
+    "развивайся", "не расслыш", "сколько лет", "абонемент", "занятие", "группа",
+    "мастер-класс", "ещё раз куда", "алло здравствуйте",
+)
+CLIENT_MARK = (
+    "хотел", "ребенк", "ребёнк", "сколько стоит", "подскажите", "можно записа",
+    "мне бы", "у нас", "мы хотели", "сколько стоит",
+)
+
+
+def is_studio_num(raw):
+    d = digits(raw)
+    return "5113401" in d or d.startswith("800") or d.startswith("7800")
+
+
+def score_side(text, marks):
+    t = (text or "").lower()
+    return sum(1 for w in marks if w in t)
+
+
+def split_channel(mp3: Path, ch: int, wav: Path):
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", str(mp3), "-af", f"pan=mono|c0=c{ch}", "-ac", "1", "-ar", "16000", str(wav)],
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180,
+    )
+
+
+def chunk_stt(wav: Path, chunks: Path, prefix: str, e):
+    for old in chunks.glob(f"{prefix}-*"):
+        old.unlink(missing_ok=True)
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", str(wav), "-f", "segment", "-segment_time", "20",
+         "-ac", "1", "-ar", "16000", "-acodec", "pcm_s16le", str(chunks / f"{prefix}-%03d.wav")],
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180,
+    )
+    parts = sorted(p for p in chunks.glob(f"{prefix}-*.wav") if p.stat().st_size > 1000)
+    out = []
+    for i, p in enumerate(parts):
+        t = stt_file(p, e).strip()
+        out.append((i * 20, t))
+        p.unlink(missing_ok=True)
+    return out
+
+
 def transcribe(call, e):
     cid = str(call.get("pbx_call_id") or call["call_id"])
     work = ROOT / "storage" / "calls" / cid.replace("/", "_")
@@ -440,61 +498,85 @@ def transcribe(call, e):
     if not mp3.exists() or mp3.stat().st_size < 1000:
         link = record_link(call)
         if not link:
-            return "", "нет файла записи"
+            return "", "нет файла записи", []
         urllib.request.urlretrieve(link, mp3)
-    wav = work / "full.wav"
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "stream=channels", "-of", "csv=p=0", str(mp3)],
+        capture_output=True, text=True, timeout=30,
+    )
+    nch = 1
+    try:
+        nch = int((probe.stdout or "1").splitlines()[0].split(",")[0] or 1)
+    except Exception:
+        nch = 1
     chunks = work / "chunks"
     chunks.mkdir(exist_ok=True)
-    for old in chunks.glob("*"):
-        old.unlink(missing_ok=True)
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", str(mp3), "-ac", "1", "-ar", "16000", str(wav)],
-        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180,
-    )
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", str(wav), "-f", "segment", "-segment_time", "20",
-         "-ac", "1", "-ar", "16000", "-acodec", "pcm_s16le", str(chunks / "p-%03d.wav")],
-        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180,
-    )
-    parts = sorted(p for p in chunks.glob("p-*.wav") if p.stat().st_size > 1000)
-    if not parts and wav.exists():
-        raw = work / "full.raw"
+    turns = []
+    if nch >= 2:
+        left_w, right_w = work / "left.wav", work / "right.wav"
+        split_channel(mp3, 0, left_w)
+        split_channel(mp3, 1, right_w)
+        left = chunk_stt(left_w, chunks, "L", e)
+        right = chunk_stt(right_w, chunks, "R", e)
+        for p in (left_w, right_w):
+            if p.exists():
+                p.unlink()
+        left_all = " ".join(t for _, t in left if t)
+        right_all = " ".join(t for _, t in right if t)
+        inbound = is_studio_num(call.get("destination")) and not is_studio_num(call.get("clid"))
+        mapping = {"left": "client", "right": "admin"} if inbound or not is_studio_num(call.get("clid")) else {"left": "admin", "right": "client"}
+        if score_side(left_all, ADMIN_MARK) > score_side(left_all, CLIENT_MARK) and score_side(right_all, CLIENT_MARK) >= score_side(right_all, ADMIN_MARK):
+            mapping = {"left": "admin", "right": "client"}
+        elif score_side(right_all, ADMIN_MARK) > score_side(right_all, CLIENT_MARK) and score_side(left_all, CLIENT_MARK) >= score_side(left_all, ADMIN_MARK):
+            mapping = {"left": "client", "right": "admin"}
+        by_t = {}
+        for t, text in left:
+            if text:
+                by_t.setdefault(t, []).append((mapping["left"], text))
+        for t, text in right:
+            if text:
+                by_t.setdefault(t, []).append((mapping["right"], text))
+        order = {"client": 0, "admin": 1}
+        for t in sorted(by_t):
+            for who, text in sorted(by_t[t], key=lambda x: order.get(x[0], 9)):
+                if turns and turns[-1]["who"] == who:
+                    turns[-1]["text"] = (turns[-1]["text"] + " " + text).strip()
+                else:
+                    turns.append({"who": who, "t": t, "text": text})
+    else:
+        wav = work / "full.wav"
         subprocess.run(
-            ["ffmpeg", "-y", "-i", str(wav), "-ac", "1", "-ar", "16000", "-f", "s16le", str(raw)],
+            ["ffmpeg", "-y", "-i", str(mp3), "-ac", "1", "-ar", "16000", str(wav)],
             check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180,
         )
-        data = raw.read_bytes() if raw.exists() else b""
-        step = 16000 * 2 * 20
-        for i in range(0, len(data), step):
-            piece = data[i:i + step]
-            if len(piece) < 4000:
-                continue
-            dest = chunks / f"r-{i:07d}.raw"
-            dest.write_bytes(piece)
-            parts.append(dest)
-    texts = []
-    for p in parts:
-        t = stt_file(p, e)
-        if t.strip():
-            texts.append(t.strip())
+        mono = chunk_stt(wav, chunks, "M", e)
+        if wav.exists():
+            wav.unlink()
+        text = " ".join(t for _, t in mono if t).strip()
+        if text:
+            turns = [{"who": "mixed", "t": 0, "text": text}]
     for p in chunks.glob("*"):
         p.unlink(missing_ok=True)
-    if wav.exists():
-        wav.unlink(missing_ok=True)
-    return " ".join(texts), ("" if texts else "пусто")
+    label = {"client": "Клиент", "admin": "Администратор", "mixed": "Разговор"}
+    lines = [f"{label.get(x['who'], x['who'])}: {x['text']}" for x in turns if x.get("text")]
+    text = "\n".join(lines)
+    return text, ("" if text else "пусто"), turns
 
 
-def mark(call, text, err, crm=None):
+def mark(call, text, err, crm=None, turns=None):
     data = load()
     cid = str(call.get("pbx_call_id") or call["call_id"])
     for c in data["calls"]:
         if str(c.get("pbx_call_id") or c.get("call_id")) == cid:
-            c["transcript"] = text
+            if text:
+                c["transcript"] = text
+            if turns:
+                c["turns"] = turns
             if crm:
                 c["crm"] = crm
-            if err:
+            if err and not text:
                 c["error"] = err
-            else:
+            elif text:
                 c.pop("error", None)
             break
     save(data)
@@ -555,9 +637,10 @@ def build_knowledge(data, e):
         f"--- {c.get('callstart')} {c.get('seconds')}с ---\n{crm_line(c)}\n{c['transcript']}" for c in texts
     )[:28000]
     prompt = (
-        "По расшифровкам звонков и карточкам AlfaCRM студии «Развивайся» (Коломна, Луховицы) "
-        "собери JSON для ИИ Олега и Ольги. Учитывай возраст, курс, учится/бросил/архив, переписку. "
-        "Убери ФИО и телефоны.\n"
+        "По расшифровкам звонков студии «Развивайся» (Коломна, Луховицы) собери JSON для ИИ Олега и Ольги. "
+        "В расшифровке есть роли: «Клиент:» — родитель, «Администратор:» — сотрудник студии. "
+        "FAQ: вопрос клиента → ответ администратора. Скрипты — как ведёт администратор. "
+        "Учитывай возраст, курс, учится/бросил/архив. Убери ФИО и телефоны.\n"
         "Формат:\n"
         '{"summary":"как говорят на линии",'
         '"faq":[{"q":"","a":""}],'
@@ -652,15 +735,15 @@ def main():
             call = rows[0]
             print("do", call.get("call_id"), call.get("seconds"), flush=True)
             write_status(last=f"расшифровка {call.get('call_id')} {call.get('seconds')}с")
-            text, err = transcribe(call, e)
+            text, err, turns = transcribe(call, e)
             crm = None
             if text and not err:
                 try:
                     crm = crm_for_call(call, load_crm_phones() or build_crm_index(e), e)
                 except Exception as crm_err:
                     print("crm-one", crm_err, flush=True)
-            mark(call, text, err, crm)
-            print(" ok", len(text), err, flush=True)
+            mark(call, text, err, crm, turns)
+            print(" ok", len(text), err, "turns", len(turns or []), flush=True)
             if text and not err:
                 since_kb += 1
                 if since_kb >= KB_EVERY and load_settings().get("autoKnowledge", True):

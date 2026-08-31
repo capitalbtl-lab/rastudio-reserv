@@ -19,7 +19,7 @@ type Crm = {
   branch?: string;
   comms?: string[];
 };
-type Row = { id: string; callstart: string; seconds: number; preview: string; crm?: Crm | null };
+type Row = { id: string; callstart: string; seconds: number; preview: string; crm?: Crm | null; turns?: { who: string; text: string }[] };
 type Knowledge = {
   summary: string;
   faq: { q: string; a: string; on?: boolean }[];
@@ -47,6 +47,30 @@ function Chip({ children, tone = "mute" }: { children: string; tone?: "mute" | "
           ? "bg-rose-50 text-rose-800"
           : "bg-black/5 text-fg";
   return <span className={cn("rounded-full px-2.5 py-1 text-[0.72rem] font-medium", cls)}>{children}</span>;
+}
+
+function Dialogue({ turns, preview }: { turns?: { who: string; text: string }[]; preview: string }) {
+  if (turns?.length) {
+    return (
+      <div className="mt-3 space-y-2">
+        {turns.map((t, i) => (
+          <p
+            key={`${t.who}-${i}`}
+            className={cn(
+              "rounded-2xl px-3 py-2 text-sm leading-relaxed",
+              t.who === "client" ? "bg-black/[0.04]" : t.who === "admin" ? "bg-brand/10" : "text-muted",
+            )}
+          >
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+              {t.who === "client" ? "Клиент" : t.who === "admin" ? "Администратор" : "Разговор"} ·{" "}
+            </span>
+            {t.text}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return <p className="mt-3 text-sm leading-relaxed text-muted">{preview}</p>;
 }
 
 function crmChips(c: Crm) {
@@ -174,7 +198,7 @@ export function AdminCalls() {
               ["1. Novofon", "Записи дольше 30 сек"],
               ["2. Расшифровка", "Текст звонка"],
               ["3. AlfaCRM", "Возраст, курс, статус, переписка"],
-              ["4. Ольга", "Говорит как живой администратор"],
+              ["4. Ольга", "Говорит как живой администратор, отличая запрос клиента от ответа студии"],
             ].map(([t, d]) => (
               <div key={t} className="rounded-3xl bg-ink px-5 py-4 text-white">
                 <p className="text-sm font-semibold">{t}</p>
@@ -293,7 +317,7 @@ export function AdminCalls() {
                       </ul>
                     </div>
                   ) : null}
-                  <p className="mt-3 text-sm leading-relaxed text-muted">{t.preview}</p>
+                  <Dialogue turns={t.turns} preview={t.preview} />
                 </article>
               ))
             ) : (
@@ -319,7 +343,7 @@ export function AdminCalls() {
                   <p className="mt-2 text-sm text-muted">В AlfaCRM по телефону не найден</p>
                 )}
                 {t.crm?.comms?.length ? <p className="mt-2 text-sm text-muted">Переписка: {t.crm.comms.join(" / ")}</p> : null}
-                <p className="mt-2 text-sm leading-relaxed">{t.preview}</p>
+                <Dialogue turns={t.turns} preview={t.preview} />
               </div>
             ))
           ) : (
