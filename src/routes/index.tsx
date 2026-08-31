@@ -17,7 +17,7 @@ const teachers = liteTeachers
   .filter((t) => t.href !== "/team" && !/день открытых|дети развивайся/i.test(t.name))
   .slice(0, 8);
 
-const teachers = liteTeachers
+const STRIPS = [
   {
     href: "/parenttesting",
     title: "Тесты для родителей",
