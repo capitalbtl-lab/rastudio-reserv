@@ -10,6 +10,7 @@ import {
   getCmsMaster,
   getPage,
   scheduleFor,
+  allSchedule,
 } from "./catalog.server";
 
 export const loadSitePage = createServerFn({ method: "GET" })
@@ -41,3 +42,7 @@ export const loadSitePage = createServerFn({ method: "GET" })
       schedule: scheduleFor(data),
     };
   });
+
+export const loadFullSchedule = createServerFn({ method: "GET" }).handler(async () => {
+  return { sessions: allSchedule() };
+});

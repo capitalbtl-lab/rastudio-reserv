@@ -102,6 +102,10 @@ export function canonicalTrajectory() {
   return cms.canonicalTrajectory;
 }
 
+export function allSchedule() {
+  return cms.schedule;
+}
+
 export function scheduleFor(splat?: string | null): CmsSession[] {
   if (!splat) return [];
   const decoded = norm(splat);

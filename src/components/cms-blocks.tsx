@@ -375,11 +375,13 @@ export function CourseStory({
   headings,
   afterLead,
   program,
+  why,
 }: {
   paragraphs: string[];
   headings: { tag: string; text: string }[];
   afterLead?: ReactNode;
   program?: ProgramStep[];
+  why?: { title: string; text: string }[] | null;
 }) {
   const clean = paragraphs.filter((p) => p && !SKIP_COPY.test(p));
   const price = clean.find((p) => PRICE_COPY.test(p));
@@ -392,8 +394,8 @@ export function CourseStory({
   const lead = story[0] || "";
   const quote = lead ? firstSentence(lead) : "";
   const leadRest = lead.slice(quote.length).trim();
-  const teaser = story[1];
-  const folded = story.slice(2);
+  const teaser = program?.length ? "" : story[1];
+  const folded = program?.length ? [] : story.slice(2);
 
   const accordion =
     program && program.length
@@ -429,19 +431,24 @@ export function CourseStory({
 
       {afterLead}
 
-      <section>
-        <p className="kicker">Почему сейчас</p>
-        <h2 className="display section-title mt-2">Курс, который чувствуется, а не зубрится</h2>
-        <div className="mt-6 grid gap-3 sm:grid-cols-3">
-          {WHY_NOW.map((item) => (
-            <article key={item.title} className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
-              <item.icon className="size-5 text-primary" strokeWidth={1.8} />
-              <h3 className="display mt-3 text-lg leading-snug">{item.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted">{item.text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+      {why?.length ? (
+        <section>
+          <p className="kicker">Почему сейчас</p>
+          <h2 className="display section-title mt-2">Зачем эта школа</h2>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            {why.map((item, i) => {
+              const Icon = WHY_NOW[i % WHY_NOW.length].icon;
+              return (
+                <article key={item.title} className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
+                  <Icon className="size-5 text-primary" strokeWidth={1.8} />
+                  <h3 className="display mt-3 text-lg leading-snug">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted">{item.text}</p>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {program?.length ? (
         <ProgramSteps items={program} />

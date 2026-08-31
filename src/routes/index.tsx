@@ -9,6 +9,8 @@ import { TrialForm } from "@/components/trial-form";
 import { Button } from "@/components/ui/button";
 import { RobotEnglishVideos } from "@/components/robot-videos";
 import { HeroCollage } from "@/components/hero-collage";
+import { AgeChips } from "@/components/age-chips";
+import { courseFacts } from "@/data/ages";
 import { cn } from "@/lib/utils";
 
 const home = homePage;
@@ -148,6 +150,13 @@ function Home() {
         </div>
       </div>
 
+      <section className="page-wrap py-10 md:py-14">
+        <p className="kicker text-primary">Подбор за 10 секунд</p>
+        <h2 className="section-title mt-3">Сколько лет ребёнку?</h2>
+        <p className="mt-3 max-w-xl text-muted">Школы остаются как были — это быстрый вход по возрасту.</p>
+        <AgeChips className="mt-5" />
+      </section>
+
       <section className="page-wrap py-16 md:py-24">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -216,7 +225,9 @@ function Home() {
                 className="course-media aspect-4/5"
               />
               <div className="course-copy relative -mt-16 bg-gradient-to-t from-header via-header/80 to-transparent px-4 pb-4 pt-10">
-                <p className="text-[0.7rem] font-semibold text-header-fg/65">{course.age}</p>
+                <p className="text-[0.7rem] font-semibold text-header-fg/65">
+                  {courseFacts(course.href, course.age)}
+                </p>
                 <p className="display mt-1 text-lg leading-tight">{course.title}</p>
                 <span className="course-cta text-header-fg">Смотреть курс</span>
               </div>

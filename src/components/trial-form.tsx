@@ -23,7 +23,15 @@ function Field({
   );
 }
 
-export function TrialForm({ compact = false }: { compact?: boolean }) {
+export function TrialForm({
+  compact = false,
+  courseId = "",
+  branchId = "",
+}: {
+  compact?: boolean;
+  courseId?: string;
+  branchId?: string;
+}) {
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
@@ -93,7 +101,7 @@ export function TrialForm({ compact = false }: { compact?: boolean }) {
               <input name="email" type="email" required autoComplete="email" className={`${fieldClass} sm:col-span-1`} />
             </Field>
             <Field label="Филиал *">
-              <select name="branch" required defaultValue="" className={fieldClass}>
+              <select name="branch" required defaultValue={branchId} className={fieldClass}>
                 <option value="" disabled>
                   Выберите филиал
                 </option>
@@ -106,7 +114,7 @@ export function TrialForm({ compact = false }: { compact?: boolean }) {
             </Field>
             <div className="sm:col-span-2">
               <Field label="Курс">
-                <select name="course" defaultValue="" className={fieldClass}>
+                <select name="course" defaultValue={courseId} className={fieldClass}>
                   <option value="">Помочь выбрать</option>
                   {TRIAL_COURSES.map((c) => (
                     <option key={c.id} value={c.id}>

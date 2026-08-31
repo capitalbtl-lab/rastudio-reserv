@@ -187,6 +187,7 @@ export const COURSE_GROUPS = [
 
 export const NAV = [
   { href: "/allcourses", label: "Курсы" },
+  { href: "/schedule", label: "Расписание" },
   { href: "/team", label: "Педагоги" },
   { href: "/master-class", label: "Мастер-классы" },
   { href: "/o-nas", label: "О студии" },
@@ -198,6 +199,7 @@ export const FOOTER_LINKS = [
   { href: "/contacts", label: "Контакты" },
   { href: "/team", label: "Педагоги" },
   { href: "/allcourses", label: "Все курсы" },
+  { href: "/schedule", label: "Расписание" },
   { href: "/master-class", label: "Мастер-классы" },
   { href: "/servicerules", label: "Правила оказания услуг" },
   { href: "/legal-information", label: "Правовая информация" },

@@ -39,6 +39,44 @@ export const TRIAL_COURSES = [
   { id: "113", name: "Японский язык" },
 ] as const;
 
+const COURSE_BY_PATH: { test: RegExp; id: string }[] = [
+  { test: /art-studio-3-4/, id: "12" },
+  { test: /art-studio-5-6/, id: "13" },
+  { test: /art-studio-7-8/, id: "14" },
+  { test: /art-studio-9-13/, id: "92" },
+  { test: /sculptural/, id: "11" },
+  { test: /hudvuz/, id: "5" },
+  { test: /digitalart/, id: "97" },
+  { test: /robototehnika-5/, id: "36" },
+  { test: /robototehnika-7/, id: "37" },
+  { test: /robototehnika-10/, id: "35" },
+  { test: /roboticsinenglish/, id: "114" },
+  { test: /create-для-детей-5-7|startschool|scratch/i, id: "43" },
+  { test: /create-для-детей-7-9/, id: "98" },
+  { test: /dev-для-детей|juniorschool/i, id: "15" },
+  { test: /python/, id: "46" },
+  { test: /программирование-на-с|си\+\+|c\+\+/i, id: "48" },
+  { test: /unity|gamedev/i, id: "52" },
+  { test: /blender|gamedesign/, id: "107" },
+  { test: /3d-modeling|компас/, id: "39" },
+  { test: /science-course/, id: "27" },
+  { test: /tesla/, id: "89" },
+  { test: /radio/, id: "67" },
+  { test: /беспилот|drone/, id: "25" },
+  { test: /preparation-for-school/, id: "16" },
+  { test: /happybricks/, id: "108" },
+  { test: /model-school/, id: "4" },
+  { test: /englishlanguagesm|super minds/i, id: "110" },
+  { test: /englishlanguagegg|go getter/i, id: "111" },
+  { test: /vitamin|korean/, id: "112" },
+  { test: /japanese/, id: "113" },
+];
+
+export function trialCourseForPath(path: string) {
+  const hit = COURSE_BY_PATH.find((item) => item.test.test(path));
+  return hit?.id ?? "";
+}
+
 export type TrialPayload = {
   parent: string;
   child: string;

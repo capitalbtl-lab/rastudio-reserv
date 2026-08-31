@@ -50,7 +50,7 @@ function ageRank(age: string) {
 
 type SortKey = "branch" | "age" | "city";
 
-export function ScheduleBlock({ sessions }: { sessions: CmsSession[] }) {
+export function ScheduleBlock({ sessions, heading = true }: { sessions: CmsSession[]; heading?: boolean }) {
   const cities = useMemo(
     () => [...new Set(sessions.map((s) => branchMeta(s).city).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru")),
     [sessions],
@@ -115,8 +115,12 @@ export function ScheduleBlock({ sessions }: { sessions: CmsSession[] }) {
 
   return (
     <section className="mt-10">
-      <p className="kicker">Расписание</p>
-      <h2 className="display mt-2 text-xl md:text-2xl">Группы по филиалам</h2>
+      {heading ? (
+        <>
+          <p className="kicker">Расписание</p>
+          <h2 className="display mt-2 text-xl md:text-2xl">Группы по филиалам</h2>
+        </>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <label className="block min-w-[10.5rem] flex-1">

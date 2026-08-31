@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { SITE, BRANCHES, COURSE_GROUPS } from "@/data/site";
 import type { CourseCard, SitePage, TeacherCard } from "@/data/catalog";
 import type { CmsCourse, CmsMaster, CmsSession, CmsTrajectoryStep } from "@/data/cms";
@@ -12,7 +12,10 @@ import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
 import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses, SchoolCourseList } from "@/components/cms-blocks";
 import { PhotoSlider } from "@/components/photo-slider";
 import { galleryPhotos } from "@/lib/gallery";
-import { SCHOOL_PROGRAMS } from "@/data/school-programs";
+import { SCHOOL_PROGRAMS, SCHOOL_WHY } from "@/data/school-programs";
+import { AGE_BANDS, agesOverlap, courseFacts, coursePlace } from "@/data/ages";
+import { AgeChips } from "@/components/age-chips";
+import { trialCourseForPath } from "@/data/trial";
 import { cn } from "@/lib/utils";
 
 type MasterCard = { path: string; h1: string };
@@ -181,6 +184,7 @@ function CinematicPage({
               paragraphs={body}
               headings={page.headings}
               program={SCHOOL_PROGRAMS[page.pathDecoded || page.path]}
+              why={page.kind === "school" ? SCHOOL_WHY[page.pathDecoded || page.path] ?? null : null}
               afterLead={
                 page.kind === "school" ? (
                   <SchoolCourseList schoolPath={page.pathDecoded || page.path} courses={courses} />
@@ -221,7 +225,7 @@ function CinematicPage({
           </aside>
         </div>
         <div className="mt-16">
-          <TrialForm compact />
+          <TrialForm compact courseId={trialCourseForPath(page.pathDecoded || page.path)} />
         </div>
       </div>
     </article>
@@ -315,25 +319,68 @@ function TeamPage({ page, teachers }: { page: SitePage; teachers: TeacherCard[] 
 function CatalogPage({ page, courses }: { page: SitePage; courses: CourseCard[] }) {
   const [q, setQ] = useState("");
   const [group, setGroup] = useState<(typeof COURSE_GROUPS)[number]["id"]>("all");
+  const [age, setAge] = useState("");
+  const [city, setCity] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const next = params.get("age") || "";
+    if (next) setAge(next);
+  }, []);
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     const g = COURSE_GROUPS.find((item) => item.id === group) ?? COURSE_GROUPS[0];
+    const band = AGE_BANDS.find((item) => item.id === age);
     return courses.filter((c) => {
       if (!g.test(c.href)) return false;
+      if (band && !agesOverlap(`${c.age || ""} ${c.label} ${c.title}`, band.min, band.max)) return false;
+      if (city && !coursePlace(c.href).includes(city)) return false;
       if (!s) return true;
       return (
         c.label.toLowerCase().includes(s) ||
         c.title.toLowerCase().includes(s) ||
-        c.description.toLowerCase().includes(s)
+        c.description.toLowerCase().includes(s) ||
+        (c.age || "").toLowerCase().includes(s)
       );
     });
-  }, [q, courses, group]);
+  }, [q, courses, group, age, city]);
 
   return (
     <article className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
       <h1 className="display section-title">{page.h1}</h1>
       <p className="mt-5 max-w-2xl text-lg text-muted">{page.description || page.paragraphs[0]}</p>
-      <div className="mt-8 flex flex-wrap gap-2">
+      <p className="mt-8 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted">Возраст</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setAge("")}
+          className={cn(
+            "inline-flex h-10 items-center rounded-full px-4 text-sm font-semibold",
+            !age ? "bg-fg text-bg" : "bg-surface shadow-[var(--shadow-border)]",
+          )}
+        >
+          Все
+        </button>
+        <AgeChips active={age} />
+      </div>
+      <p className="mt-6 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted">Город</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {["", "Коломна", "Луховицы"].map((item) => (
+          <button
+            key={item || "all"}
+            type="button"
+            onClick={() => setCity(item)}
+            className={cn(
+              "inline-flex h-10 items-center rounded-full px-4 text-sm font-semibold",
+              city === item ? "bg-fg text-bg" : "bg-surface shadow-[var(--shadow-border)]",
+            )}
+          >
+            {item || "Все города"}
+          </button>
+        ))}
+      </div>
+      <div className="mt-6 flex flex-wrap gap-2">
         {COURSE_GROUPS.map((item) => (
           <button
             key={item.id}
@@ -377,7 +424,8 @@ function CatalogPage({ page, courses }: { page: SitePage; courses: CourseCard[] 
               <div className="course-media aspect-video bg-surface-2" />
             )}
             <div className="course-copy p-4">
-              <p className="font-medium">{c.label}</p>
+              <p className="text-xs font-semibold text-muted">{courseFacts(c.href, c.age)}</p>
+              <p className="mt-1 font-medium">{c.label}</p>
               <p className="mt-2 line-clamp-3 text-sm text-muted">{c.description}</p>
               <span className="course-cta text-primary">Смотреть курс</span>
             </div>

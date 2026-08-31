@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { SITE, SCHOOLS } from "@/data/site";
+import { AGE_BANDS } from "@/data/ages";
 import { Button } from "@/components/ui/button";
 import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
@@ -8,6 +9,7 @@ import { cn } from "@/lib/utils";
 
 const LINKS = [
   { href: "/allcourses", label: "Курсы" },
+  { href: "/schedule", label: "Расписание" },
   { href: "/team", label: "Педагоги" },
   { href: "/master-class", label: "Мастер-классы" },
   { href: "/o-nas", label: "О студии" },
@@ -90,6 +92,12 @@ export function SiteHeader() {
 
         <div className="ml-auto flex items-center gap-2">
           <a
+            href={SITE.cabinet}
+            className="hidden text-sm font-medium text-header-fg/70 hover:text-header-fg xl:inline"
+          >
+            Для родителей
+          </a>
+          <a
             href={SITE.phoneHref}
             className="hidden tabular-nums text-sm font-medium text-header-fg/70 hover:text-header-fg xl:inline"
           >
@@ -111,6 +119,21 @@ export function SiteHeader() {
 
       {open ? (
         <div className="max-h-[min(80dvh,calc(100dvh-4rem))] overflow-y-auto border-t border-white/10 bg-header px-4 py-4 lg:hidden">
+          <p className="mb-2 px-3 text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-header-fg/45">
+            Возраст ребёнка
+          </p>
+          <div className="mb-3 flex flex-wrap gap-2 px-1">
+            {AGE_BANDS.map((band) => (
+              <PageLink
+                key={band.id}
+                to={`/allcourses?age=${band.id}`}
+                className="inline-flex h-9 items-center rounded-full bg-white/10 px-3 text-sm font-medium hover:bg-white/16"
+                onClick={() => setOpen(false)}
+              >
+                {band.label}
+              </PageLink>
+            ))}
+          </div>
           <p className="mb-2 px-3 text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-header-fg/45">
             Школы
           </p>
@@ -146,7 +169,7 @@ export function SiteHeader() {
               {SITE.phone}
             </a>
             <a href={SITE.cabinet} className="text-sm text-header-fg/70">
-              Личный кабинет
+              Для родителей · кабинет
             </a>
             <Button asChild>
               <a href="#trial" onClick={() => setOpen(false)}>

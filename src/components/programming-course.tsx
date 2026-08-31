@@ -4,6 +4,7 @@ import { inkOn } from "@/data/cms";
 import { SITE } from "@/data/site";
 import { PageLink } from "@/components/page-link";
 import { TrialForm } from "@/components/trial-form";
+import { trialCourseForPath } from "@/data/trial";
 import {
   BulletList,
   CmsImg,
@@ -221,7 +222,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [] }: 
           courses={courses}
         />
         <div className="mt-12">
-          <TrialForm />
+          <TrialForm courseId={trialCourseForPath(page.pathDecoded || page.path)} />
         </div>
       </section>
     </article>
