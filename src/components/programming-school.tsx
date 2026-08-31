@@ -115,7 +115,7 @@ export function ProgrammingSchoolPage({
               ))}
             </div>
             <div className="mt-5">
-              <Button asChild variant="secondary">
+              <Button asChild size="lg">
                 <PageLink to="/team">Все педагоги</PageLink>
               </Button>
             </div>

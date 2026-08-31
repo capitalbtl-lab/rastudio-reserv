@@ -108,7 +108,7 @@ export function Reviews() {
       </div>
 
       <div className="mt-6">
-        <Button asChild variant="secondary">
+        <Button asChild size="lg">
           <a href={YANDEX_REVIEWS} target="_blank" rel="noreferrer">
             Все {YANDEX_RATING.reviews} отзыва на Яндекс Картах
           </a>

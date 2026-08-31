@@ -159,9 +159,9 @@ function Home() {
             <p className="kicker text-primary">Семь школ одной сети</p>
             <h2 className="section-title mt-3">Выберите направление</h2>
           </div>
-          <PageLink to="/allcourses" className="text-sm font-semibold text-primary">
-            Все курсы
-          </PageLink>
+          <Button asChild size="lg">
+            <PageLink to="/allcourses">Все курсы</PageLink>
+          </Button>
         </div>
         <div className="bento-schools mt-8">
           {SCHOOLS.map((school, i) => (
@@ -203,9 +203,9 @@ function Home() {
             <p className="kicker text-primary">Каталог</p>
             <h2 className="section-title mt-3">Курсы сети «Развивайся»</h2>
           </div>
-          <PageLink to="/allcourses" className="text-sm font-semibold text-primary">
-            Открыть каталог
-          </PageLink>
+          <Button asChild size="lg">
+            <PageLink to="/allcourses">Открыть каталог</PageLink>
+          </Button>
         </div>
         <div className="catalog-grid mt-8 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
           {SHOWCASE.map((course) => (
@@ -252,9 +252,9 @@ function Home() {
         <p className="kicker text-primary">Педагоги</p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <h2 className="section-title max-w-2xl">Команда сильной сети школ</h2>
-          <PageLink to="/team" className="text-sm font-semibold text-primary">
-            Все педагоги
-          </PageLink>
+          <Button asChild size="lg">
+            <PageLink to="/team">Все педагоги</PageLink>
+          </Button>
         </div>
         <p className="mt-4 max-w-2xl text-[0.98rem] leading-relaxed text-muted">{home.paragraphs[2]}</p>
         <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-4">
