@@ -81,16 +81,33 @@ function asKind(raw: string): DocKind {
 function splitHeuristic(text: string): DocItem[] {
   const cleaned = text.replace(/\r/g, "").trim();
   if (!cleaned) return [];
+  const numbered = cleaned.split(/\n(?=\d{1,2}\.\s+\S[^\n]{2,90}\s*$)/m);
+  if (numbered.length >= 2) {
+    return numbered
+      .map((chunk, i) => {
+        const lines = chunk.trim().split("\n");
+        const head = lines[0].replace(/^\d{1,2}\.\s*/, "").trim();
+        const body = (lines.length > 1 ? lines.slice(1).join("\n") : chunk).trim();
+        return {
+          id: `i${i + 1}`,
+          title: (head || `Раздел ${i + 1}`).slice(0, 160),
+          body: (body || chunk.trim()).slice(0, 12000),
+          on: true,
+        };
+      })
+      .filter((it) => it.body.length > 20)
+      .slice(0, 80);
+  }
   const chunks = cleaned
-    .split(/\n(?=(?:\d+[.)]\s+|\d+\.\d+\.?\s+|Статья\s+\d+|§\s*\d+|#{1,3}\s+|[А-ЯЁ][А-ЯЁ0-9 «»"„-]{8,}\n))/)
+    .split(/\n(?=(?:Статья\s+\d+|§\s*\d+|#{1,3}\s+|[А-ЯЁ][А-ЯЁ0-9 «»"„-]{10,}\n))/)
     .map((c) => c.trim())
-    .filter((c) => c.length > 24);
-  const source = chunks.length > 1 ? chunks : cleaned.split(/\n{2,}/).map((c) => c.trim()).filter((c) => c.length > 24);
-  return source.slice(0, 60).map((chunk, i) => {
+    .filter((c) => c.length > 40);
+  const source = chunks.length > 1 ? chunks : cleaned.split(/\n{2,}/).map((c) => c.trim()).filter((c) => c.length > 40);
+  return source.slice(0, 80).map((chunk, i) => {
     const lines = chunk.split("\n");
-    const title = lines[0].replace(/^#+\s*/, "").replace(/^\d+[.)]\s*/, "").slice(0, 120) || `Пункт ${i + 1}`;
-    const body = (lines.length > 1 ? lines.slice(1).join("\n") : chunk).trim().slice(0, 1800);
-    return { id: `i${i + 1}`, title, body: body || chunk.slice(0, 1800), on: true };
+    const title = lines[0].replace(/^#+\s*/, "").replace(/^\d+[.)]\s*/, "").slice(0, 160) || `Пункт ${i + 1}`;
+    const body = (lines.length > 1 ? lines.slice(1).join("\n") : chunk).trim();
+    return { id: `i${i + 1}`, title, body: (body || chunk).slice(0, 12000), on: true };
   });
 }
 
@@ -140,7 +157,7 @@ ${text.slice(0, 18000)}`,
         .map((it, i) => ({
           id: `i${i + 1}`,
           title: String(it.title || `Пункт ${i + 1}`).slice(0, 120),
-          body: String(it.body || "").trim().slice(0, 1800),
+          body: String(it.body || "").trim().slice(0, 12000),
           on: true,
         }))
         .filter((it) => it.body.length > 8)
@@ -159,9 +176,11 @@ async function extractText(filePath: string) {
   return String(stdout || "").trim();
 }
 
-async function interpret(kind: DocKind, text: string) {
-  const llm = await llmItems(kind, text);
-  return llm && llm.length ? llm : splitHeuristic(text);
+async function interpret(_kind: DocKind, text: string) {
+  const split = splitHeuristic(text);
+  if (split.length >= 2) return split;
+  if (split.length === 1 && split[0].body.length > 200) return split;
+  return split.length ? split : [{ id: "i1", title: "Документ", body: text.slice(0, 12000), on: true }];
 }
 
 function publicDoc(d: AgentDoc) {
@@ -179,14 +198,14 @@ export function docsPrompt() {
   ];
   for (const d of live) {
     parts.push(`### ${KIND_LABEL[d.kind]} «${d.name}»`);
-    const on = d.items.filter((i) => i.on).slice(0, 24);
+    const on = d.items.filter((i) => i.on).slice(0, 40);
     if (on.length) {
-      for (const it of on) parts.push(`- ${it.title}: ${it.body.slice(0, 500)}`);
+      for (const it of on) parts.push(`- ${it.title}:\n${it.body.slice(0, 4000)}`);
     } else {
-      parts.push(d.text.slice(0, 2500));
+      parts.push(d.text.slice(0, 8000));
     }
   }
-  return `\n${parts.join("\n").slice(0, 12000)}\n`;
+  return `\n${parts.join("\n").slice(0, 24000)}\n`;
 }
 
 export const adminAgentDocs = createServerFn({ method: "POST" })
