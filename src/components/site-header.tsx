@@ -11,18 +11,19 @@ const LINKS = [
   { href: "/allcourses", label: "Курсы" },
   { href: "/schedule", label: "Расписание" },
   { href: "/team", label: "Педагоги" },
-  { href: "/master-class", label: "Мастер-классы" },
 ] as const;
 
 const MORE = [
+  { href: "/master-class", label: "Мастер-классы" },
   { href: "/o-nas", label: "О студии" },
   { href: "/contacts", label: "Контакты" },
-  { href: SITE.maxBot, label: "Админ-бот", external: true },
-  { href: SITE.telegram, label: "Telegram", external: true },
 ] as const;
 
 const navItem =
   "inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-sm font-medium text-header-fg/80 transition-colors hover:bg-white/10 hover:text-header-fg";
+
+const actionBtn =
+  "hidden h-9 items-center rounded-full px-3.5 text-[0.8rem] font-semibold text-header-fg/90 ring-1 ring-white/16 hover:bg-white/10 sm:inline-flex";
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
@@ -115,44 +116,33 @@ export function SiteHeader() {
               )}
             >
               <div className="grid gap-0.5 rounded-2xl bg-surface p-1.5 text-fg shadow-[var(--shadow-border-hover)]">
-                {MORE.map((item) =>
-                  "external" in item && item.external ? (
-                    <a
-                      key={item.href}
-                      href={item.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-surface-2"
-                    >
-                      {item.label}
-                    </a>
-                  ) : (
-                    <PageLink
-                      key={item.href}
-                      to={item.href}
-                      className="rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-surface-2"
-                    >
-                      {item.label}
-                    </PageLink>
-                  ),
-                )}
+                {MORE.map((item) => (
+                  <PageLink
+                    key={item.href}
+                    to={item.href}
+                    className="rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-surface-2"
+                  >
+                    {item.label}
+                  </PageLink>
+                ))}
               </div>
             </div>
           </div>
         </nav>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <a
-            href={SITE.cabinet}
-            target="_blank"
-            rel="noreferrer"
-            className="hidden h-10 items-center rounded-full px-4 text-sm font-semibold text-header-fg/85 ring-1 ring-white/16 hover:bg-white/10 sm:inline-flex"
-          >
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <a href={SITE.maxBot} target="_blank" rel="noreferrer" className={actionBtn}>
+            Админ-бот
+          </a>
+          <a href={SITE.telegram} target="_blank" rel="noreferrer" className={actionBtn}>
+            Telegram
+          </a>
+          <a href={SITE.cabinet} target="_blank" rel="noreferrer" className={actionBtn}>
             Кабинет
           </a>
           <a
             href="#trial"
-            className="inline-flex h-10 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-hover"
+            className="inline-flex h-9 items-center rounded-full bg-primary px-3.5 text-[0.8rem] font-semibold text-primary-foreground hover:bg-primary-hover"
           >
             Запись
           </a>
@@ -203,7 +193,7 @@ export function SiteHeader() {
             ))}
           </div>
           <div className="mt-3 grid gap-0.5 border-t border-white/10 pt-3">
-            {LINKS.map((item) => (
+            {[...LINKS, ...MORE].map((item) => (
               <PageLink
                 key={item.href}
                 to={item.href}
@@ -213,32 +203,16 @@ export function SiteHeader() {
                 {item.label}
               </PageLink>
             ))}
-            {MORE.map((item) =>
-              "external" in item && item.external ? (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-xl px-3 py-3 text-sm font-medium hover:bg-white/10"
-                >
-                  {item.label}
-                </a>
-              ) : (
-                <PageLink
-                  key={item.href}
-                  to={item.href}
-                  className="rounded-xl px-3 py-3 text-sm font-medium hover:bg-white/10"
-                  onClick={() => setOpen(false)}
-                >
-                  {item.label}
-                </PageLink>
-              ),
-            )}
           </div>
           <div className="mt-4 flex flex-col gap-3 px-1">
             <a href={SITE.phoneHref} className="text-sm font-semibold">
               {SITE.phone}
+            </a>
+            <a href={SITE.maxBot} target="_blank" rel="noreferrer" className="text-sm font-semibold">
+              Админ-бот
+            </a>
+            <a href={SITE.telegram} target="_blank" rel="noreferrer" className="text-sm font-semibold">
+              Telegram
             </a>
             <a href={SITE.cabinet} className="text-sm font-semibold">
               Личный кабинет
