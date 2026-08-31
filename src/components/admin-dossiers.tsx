@@ -175,6 +175,7 @@ export function AdminDossiers() {
           )}
         </div>
         {open ? (
+          <div className="lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100svh-7rem)] lg:overflow-y-auto lg:overscroll-contain">
           <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
             <p className="text-xs text-muted">
               {open.crmId ? `AlfaCRM ${open.crmId}` : "ещё без номера CRM"} · обновлено {when(open.updatedAt)}
@@ -251,8 +252,9 @@ export function AdminDossiers() {
               </div>
             ) : null}
           </article>
+          </div>
         ) : (
-          <p className="self-start text-sm text-muted">Выберите дело слева.</p>
+          <p className="lg:sticky lg:top-24 self-start text-sm text-muted">Выберите дело слева.</p>
         )}
       </div>
     </section>
