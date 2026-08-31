@@ -20,6 +20,8 @@ import {
 import { whyForPath } from "@/data/course-why";
 import { PageReviews } from "@/components/reviews";
 import { ConvertBand } from "@/components/convert";
+import { PhotoSlider } from "@/components/photo-slider";
+import { galleryPhotos } from "@/lib/gallery";
 import { CourseSellAfterWhy, CourseSellAfterProgram } from "@/components/course-sell";
 import { courseOfferFacts } from "@/data/ages";
 
@@ -132,6 +134,8 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
         ) : null}
 
         <WhyNow items={why?.items} title={why?.heading} />
+
+        <PhotoSlider images={galleryPhotos(course.gallery, course.pathDecoded || course.path || page.path)} />
 
         <CourseSellAfterWhy path={course.pathDecoded || course.path || page.path} />
 

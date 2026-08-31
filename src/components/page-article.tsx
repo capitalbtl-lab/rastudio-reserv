@@ -169,7 +169,7 @@ function CinematicPage({
         age={heading.age}
         title={heading.title}
         description={page.description}
-        images={page.kind === "school" ? galleryPhotos(page.images) : page.images}
+        images={page.kind === "school" ? galleryPhotos(page.images, page.pathDecoded || page.path) : page.images}
         video={page.video}
         facts={
           page.kind === "course" || page.kind === "school"
@@ -204,6 +204,11 @@ function CinematicPage({
                 ) : null
               }
             />
+            {page.kind === "school" || page.kind === "course" ? (
+              <PhotoSlider images={galleryPhotos(page.images, page.pathDecoded || page.path)} />
+            ) : (
+              <Gallery page={{ ...page, images: page.images.slice(Math.min(3, page.images.length)) }} />
+            )}
             {page.kind === "course" ? (
               <div className="mt-12 space-y-12">
                 <CourseSellAfterWhy path={page.pathDecoded || page.path} />
@@ -219,11 +224,6 @@ function CinematicPage({
                 </div>
               </section>
             ) : null}
-            {page.kind === "school" || page.kind === "course" ? (
-              <PhotoSlider images={galleryPhotos(page.images)} />
-            ) : (
-              <Gallery page={{ ...page, images: page.images.slice(Math.min(3, page.images.length)) }} />
-            )}
             {page.kind === "school" || page.kind === "course" ? (
               <PageReviews path={page.pathDecoded || page.path} />
             ) : null}
