@@ -43,15 +43,41 @@ export function AdminDossiers() {
   const [parentFio, setParentFio] = useState("");
   const [dob, setDob] = useState("");
   const [phone, setPhone] = useState("");
+  const [lastSync, setLastSync] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function load() {
     const res = await adminDossiers({ data: { token: token(), action: "list", q } });
-    if (res.ok && "items" in res) setRows(res.items as Row[]);
+    if (res.ok && "items" in res) {
+      setRows(res.items as Row[]);
+      if ("lastCrmSync" in res) setLastSync(String(res.lastCrmSync || ""));
+    }
+  }
+
+  async function syncAll() {
+    setBusy(true);
+    setMsg("Синхронизация с AlfaCRM…");
+    const res = await adminDossiers({ data: { token: token(), action: "syncAll" } });
+    setBusy(false);
+    if (res.ok) {
+      setMsg(`Обновили ${"count" in res ? res.count : ""} карточек из CRM.`);
+      if ("lastCrmSync" in res) setLastSync(String(res.lastCrmSync || ""));
+      void load();
+    } else setMsg(res.error || "Ошибка CRM");
   }
 
   useEffect(() => {
-    void load();
+    void (async () => {
+      const res = await adminDossiers({ data: { token: token(), action: "list", q } });
+      if (res.ok && "items" in res) {
+        setRows(res.items as Row[]);
+        const at = "lastCrmSync" in res ? String(res.lastCrmSync || "") : "";
+        setLastSync(at);
+        if (!at) void syncAll();
+      }
+    })();
+    const id = window.setInterval(() => void load(), 30000);
+    return () => window.clearInterval(id);
   }, []);
 
   async function openOne(id: string) {
@@ -101,7 +127,7 @@ export function AdminDossiers() {
       <div>
         <h2 className="font-display text-3xl">Личные дела</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Карточка клиента по номеру в AlfaCRM: ФИО, дата рождения, курсы, абонемент. Короткое имя само заменяется на полное, когда клиент его назвал.
+          AlfaCRM — источник ФИО, пола, даты рождения и новых свойств. Фон обновляет дела каждые 5 минут; открытие карточки тянет её из CRM сразу.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -114,7 +140,11 @@ export function AdminDossiers() {
         <Button type="button" onClick={() => void load()}>
           Найти
         </Button>
+        <Button type="button" variant="secondary" disabled={busy} onClick={() => void syncAll()}>
+          Обновить все из CRM
+        </Button>
       </div>
+      {lastSync ? <p className="text-xs text-muted">Последняя полная синхронизация: {when(lastSync)}</p> : null}
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
       <p className="text-sm text-muted">{rows.length} дел</p>
       <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
@@ -181,6 +211,21 @@ export function AdminDossiers() {
               {open.tariff ? <li>абонемент: {open.tariff}</li> : null}
               {open.status ? <li>статус: {open.status}</li> : null}
             </ul>
+            {Object.keys(open.extras || {}).length ? (
+              <div className="mt-4 max-h-56 overflow-auto rounded-2xl bg-surface-2 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Все свойства CRM</p>
+                <ul className="mt-2 space-y-1 text-xs">
+                  {Object.entries(open.extras)
+                    .filter(([, v]) => v)
+                    .map(([k, v]) => (
+                      <li key={k}>
+                        <span className="text-muted">{k}: </span>
+                        {v}
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            ) : null}
             <div className="mt-4 flex flex-wrap gap-2">
               <Button type="button" disabled={busy} onClick={() => void save()}>
                 Сохранить

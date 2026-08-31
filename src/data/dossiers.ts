@@ -38,9 +38,9 @@ export type Dossier = {
   updatedAt: string;
 };
 
-type Store = { items: Dossier[] };
+type Store = { items: Dossier[]; lastCrmSync?: string };
 
-const MAX = 2000;
+const MAX = 4000;
 
 function fileOf() {
   return join(process.cwd(), "storage", "dossiers.json");
@@ -50,7 +50,7 @@ function loadStore(): Store {
   try {
     if (!existsSync(fileOf())) return { items: [] };
     const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Store;
-    return { items: Array.isArray(raw.items) ? raw.items : [] };
+    return { items: Array.isArray(raw.items) ? raw.items : [], lastCrmSync: raw.lastCrmSync };
   } catch {
     return { items: [] };
   }
@@ -58,7 +58,7 @@ function loadStore(): Store {
 
 function saveStore(store: Store) {
   mkdirSync(dirname(fileOf()), { recursive: true });
-  writeFileSync(fileOf(), JSON.stringify({ items: store.items.slice(0, MAX) }, null, 0), "utf8");
+  writeFileSync(fileOf(), JSON.stringify({ items: store.items.slice(0, MAX), lastCrmSync: store.lastCrmSync || "" }, null, 0), "utf8");
 }
 
 export function digitsPhone(raw?: string) {
@@ -123,9 +123,63 @@ function emptyDossier(partial: Partial<Dossier> & { id: string }): Dossier {
   };
 }
 
-function mergePerson(prev: PersonName, incoming?: string): PersonName {
-  const fio = preferName(prev.fio, incoming || "");
+function mergePerson(prev: PersonName, incoming?: string, crmWins = false): PersonName {
+  const next = (incoming || "").trim();
+  if (!next) return prev;
+  if (crmWins) return { ...prev, ...splitFio(next), fio: next };
+  const fio = preferName(prev.fio, next);
   return { ...prev, ...splitFio(fio), fio };
+}
+
+const BRANCH_TITLE: Record<number, string> = {
+  1: "Коломна, Гражданская, 2",
+  2: "Коломна, ЦМИТ, Октябрьской революции, 340",
+  3: "Луховицы, Пушкина, 202А",
+  4: "Летние программы",
+};
+
+function genderFromCrm(g: unknown): "мальчик" | "девочка" | "" | undefined {
+  if (g === 1 || g === "1") return "мальчик";
+  if (g === 2 || g === "2") return "девочка";
+  return undefined;
+}
+
+function asList(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map((x) => String(x || "").trim()).filter(Boolean);
+  if (v == null || v === "") return [];
+  return [String(v).trim()].filter(Boolean);
+}
+
+function stringifyVal(v: unknown): string {
+  if (v == null || v === "") return "";
+  if (Array.isArray(v)) return v.map((x) => stringifyVal(x)).filter(Boolean).join(", ");
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
+function extrasFromCrm(item: Record<string, unknown>) {
+  const extras: Record<string, string> = {};
+  for (const [k, v] of Object.entries(item)) {
+    extras[k] = stringifyVal(v);
+  }
+  return extras;
+}
+
+function addressFromCrm(item: Record<string, unknown>) {
+  const addr = asList(item.addr).join(", ");
+  const custom = String(item.custom_adresprozhivaniya || "").trim();
+  if (addr) return addr;
+  if (custom && !/введите адрес/i.test(custom)) return custom;
+  return "";
+}
+
+function statusFromCrm(item: Record<string, unknown>, archived = false) {
+  if (archived) return "архив";
+  const study = Number(item.is_study);
+  if (study === 1) return "учится";
+  if (study === 2) return "архив";
+  if (study === 0) return "лид";
+  return item.study_status_id != null ? `статус ${item.study_status_id}` : "";
 }
 
 export function upsertDossier(patch: {
@@ -148,7 +202,9 @@ export function upsertDossier(patch: {
   chatId?: string;
   source: string;
   note?: string;
+  crmWins?: boolean;
 }) {
+  const crm = patch.source === "alfacrm" || Boolean(patch.crmWins);
   const digits = digitsPhone(patch.phone);
   const store = loadStore();
   const byCrm = patch.crmId
@@ -162,10 +218,11 @@ export function upsertDossier(patch: {
     child: cur.child.fio,
     parent: cur.parent.fio,
     dob: cur.child.dob,
+    gender: cur.child.gender,
     city: cur.city,
   });
-  const childFio = mergePerson(cur.child, patch.child);
-  const parentFio = mergePerson(cur.parent, patch.parent);
+  const childFio = mergePerson(cur.child, patch.child, crm);
+  const parentFio = mergePerson(cur.parent, patch.parent, crm);
   const next: Dossier = {
     ...cur,
     id,
@@ -176,18 +233,18 @@ export function upsertDossier(patch: {
     phoneDigits: digits || cur.phoneDigits,
     child: {
       ...childFio,
-      gender: patch.gender || cur.child.gender || "",
-      dob: patch.dob || cur.child.dob || "",
+      gender: patch.gender !== undefined && patch.gender !== "" ? patch.gender : cur.child.gender || "",
+      dob: crm && patch.dob ? patch.dob : patch.dob || cur.child.dob || "",
     },
     parent: parentFio,
-    address: patch.address || cur.address,
+    address: crm && patch.address ? patch.address : patch.address || cur.address,
     city: patch.city || cur.city,
-    branch: patch.branch || cur.branch,
+    branch: crm && patch.branch ? patch.branch : patch.branch || cur.branch,
     coursesNow: uniq([...cur.coursesNow, patch.course || ""]),
     coursesPast: uniq([...cur.coursesPast, patch.coursePast || ""]),
     services: uniq([...cur.services, patch.service || ""]),
-    tariff: patch.tariff || cur.tariff,
-    status: patch.status || cur.status,
+    tariff: crm && patch.tariff ? patch.tariff : patch.tariff || cur.tariff,
+    status: crm && patch.status ? patch.status : patch.status || cur.status,
     extras: { ...cur.extras, ...(patch.extras || {}) },
     chatIds: uniq([...cur.chatIds, patch.chatId || ""]),
     updatedAt: new Date().toISOString(),
@@ -269,6 +326,12 @@ export function dossierPrompt(d: Dossier | null) {
     d.services.length ? `услуги: ${d.services.join(", ")}` : "",
     d.tariff ? `абонемент: ${d.tariff}` : "",
     d.status ? `статус: ${d.status}` : "",
+    d.child.dob ? `дата рождения: ${d.child.dob}` : "",
+    Object.entries(d.extras)
+      .filter(([k, v]) => v && /custom_|osobennost|addr|paid_till|balance|email|last_attend/i.test(k))
+      .slice(0, 8)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("\n") || "",
   ].filter(Boolean);
   if (!lines.length) return "";
   return `
@@ -279,6 +342,33 @@ ${lines.map((l) => `— ${l}`).join("\n")}
 `;
 }
 
+export function applyCrmCustomer(item: Record<string, unknown>, branchId: number, archived = false) {
+  const id = Number(item.id);
+  if (!id) return null;
+  const phones = asList(item.phone);
+  const gender = genderFromCrm(item.gender);
+  const paid = item.paid_till ? `оплачено до ${item.paid_till}` : "";
+  const extraTariff = Number(item.paid_count) ? `занятий по абонементу: ${item.paid_count}` : "";
+  return upsertDossier({
+    crmId: id,
+    branchId,
+    phone: phones[0] || "",
+    child: String(item.name || ""),
+    parent: String(item.legal_name || ""),
+    gender,
+    dob: String(item.dob || ""),
+    address: addressFromCrm(item),
+    branch: BRANCH_TITLE[branchId] || String(branchId),
+    city: branchId === 3 ? "Луховицы" : branchId === 4 ? "лето" : "Коломна",
+    tariff: [paid, extraTariff].filter(Boolean).join(" · "),
+    status: statusFromCrm(item, archived),
+    extras: extrasFromCrm(item),
+    source: "alfacrm",
+    crmWins: true,
+    note: `CRM ${id}: ${item.name || ""}`,
+  });
+}
+
 export async function syncDossierFromCrm(crmId: number, branchId: number) {
   const t = await alfaToken();
   const data = await request<{ items?: Record<string, unknown>[] }>(
@@ -286,25 +376,48 @@ export async function syncDossierFromCrm(crmId: number, branchId: number) {
     { page: 0, pageSize: 1, id: crmId },
     t,
   );
-  const item = data.items?.[0] || {};
-  const phoneRaw = Array.isArray(item.phone) ? String(item.phone[0] || "") : String(item.phone || "");
-  const isStudy = Number(item.is_study);
-  return upsertDossier({
-    crmId,
-    branchId,
-    phone: phoneRaw,
-    child: String(item.name || ""),
-    parent: String(item.legal_name || ""),
-    dob: String(item.dob || ""),
-    tariff: item.paid_till ? `оплачено до ${item.paid_till}` : undefined,
-    status: isStudy === 1 ? "учится" : isStudy === 0 ? "лид" : String(item.study_status_id || ""),
-    extras: {
-      email: Array.isArray(item.email) ? String(item.email[0] || "") : String(item.email || ""),
-      balance: item.balance != null ? String(item.balance) : "",
-    },
-    source: "alfacrm",
-    note: "Синхронизация из AlfaCRM",
-  });
+  const item = data.items?.[0];
+  if (!item) throw new Error("В AlfaCRM нет такой карточки.");
+  return applyCrmCustomer(item, branchId);
+}
+
+export async function syncAllFromCrm() {
+  const t = await alfaToken();
+  let n = 0;
+  for (const branch of [1, 2, 3, 4]) {
+    for (const study of [0, 1, 2]) {
+      for (let page = 0; page < 40; page += 1) {
+        const data = await request<{ items?: Record<string, unknown>[] }>(
+          `/v2api/${branch}/customer/index`,
+          { page, pageSize: 50, is_study: study },
+          t,
+        );
+        const items = data.items || [];
+        for (const item of items) {
+          applyCrmCustomer(item, branch, study === 2);
+          n += 1;
+        }
+        if (items.length < 50) break;
+      }
+    }
+    for (let page = 0; page < 20; page += 1) {
+      const data = await request<{ items?: Record<string, unknown>[] }>(
+        `/v2api/${branch}/customer/index`,
+        { page, pageSize: 50, removed: 1 },
+        t,
+      ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+      const items = data.items || [];
+      for (const item of items) {
+        applyCrmCustomer(item, branch, true);
+        n += 1;
+      }
+      if (items.length < 50) break;
+    }
+  }
+  const store = loadStore();
+  store.lastCrmSync = new Date().toISOString();
+  saveStore(store);
+  return { ok: true as const, count: n, lastCrmSync: store.lastCrmSync };
 }
 
 export const adminDossiers = createServerFn({ method: "POST" })
@@ -312,7 +425,7 @@ export const adminDossiers = createServerFn({ method: "POST" })
     (data: unknown) =>
       data as {
         token?: string;
-        action?: "list" | "get" | "save" | "sync";
+        action?: "list" | "get" | "save" | "sync" | "syncAll";
         id?: string;
         crmId?: number;
         branchId?: number;
@@ -324,9 +437,24 @@ export const adminDossiers = createServerFn({ method: "POST" })
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
     const store = loadStore();
     if (data.action === "get" && data.id) {
-      const one = store.items.find((d) => d.id === data.id);
+      let one = store.items.find((d) => d.id === data.id);
       if (!one) return { ok: false as const, error: "Дело не найдено." };
+      if (one.crmId && one.branchId) {
+        try {
+          one = (await syncDossierFromCrm(one.crmId, one.branchId)) || one;
+        } catch {
+          /* CRM недоступна — покажем локальное */
+        }
+      }
       return { ok: true as const, dossier: one };
+    }
+    if (data.action === "syncAll") {
+      try {
+        const res = await syncAllFromCrm();
+        return { ok: true as const, ...res };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "CRM" };
+      }
     }
     if (data.action === "sync" && data.crmId && data.branchId) {
       try {
@@ -366,6 +494,7 @@ export const adminDossiers = createServerFn({ method: "POST" })
     return {
       ok: true as const,
       total: store.items.length,
+      lastCrmSync: store.lastCrmSync || "",
       items: items.slice(0, 200).map((d) => ({
         id: d.id,
         crmId: d.crmId || null,
