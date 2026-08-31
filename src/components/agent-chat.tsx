@@ -1,17 +1,47 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, X, Send } from "lucide-react";
+import { X, Send } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
 import { SITE } from "@/data/site";
 import { cn } from "@/lib/utils";
 
 type Msg = { role: "user" | "assistant"; content: string };
+type Mood = "hello" | "think" | "happy" | "sorry";
 
 const HELLO =
-  "Здравствуйте! Я администратор студии. Подберу курс по возрасту и филиалу и запишу на пробное.";
+  "Привет! Я робот-администратор студии. Напишите возраст ребёнка и город — подберу курс и запишу на пробное.";
 
 const CHIPS = ["5 лет, Коломна", "8 лет, робототехника", "Художка 7–9", "Луховицы"];
+
+const ROBOT: Record<Mood, { src: string; alt: string }> = {
+  hello: { src: "/brand/agent/hello.webp", alt: "Робот-администратор улыбается" },
+  think: { src: "/brand/agent/think.webp", alt: "Робот-администратор думает" },
+  happy: { src: "/brand/agent/happy.webp", alt: "Робот-администратор радуется" },
+  sorry: { src: "/brand/agent/sorry.webp", alt: "Робот-администратор извиняется" },
+};
+
+function moodOf(messages: Msg[], busy: boolean): Mood {
+  if (busy) return "think";
+  const last = [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
+  if (/заявк|записал|принял|готово|свяжется/i.test(last)) return "happy";
+  if (/позвоните|ошиб|не удалось|не отвеч|сеть/i.test(last)) return "sorry";
+  return "hello";
+}
+
+function Robot({ mood, size }: { mood: Mood; size: number }) {
+  const r = ROBOT[mood];
+  return (
+    <img
+      src={r.src}
+      alt={r.alt}
+      width={size}
+      height={size}
+      className="rounded-full bg-[#f3efe6] object-cover shadow-[0_8px_20px_-8px_rgba(18,20,26,0.45)]"
+      style={{ width: size, height: size }}
+    />
+  );
+}
 
 export function AgentChat() {
   const [open, setOpen] = useState(false);
@@ -19,10 +49,11 @@ export function AgentChat() {
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
   const endRef = useRef<HTMLDivElement>(null);
+  const mood = moodOf(messages, busy);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, open]);
+  }, [messages, open, mood]);
 
   async function send(value?: string) {
     const next = (value ?? text).trim();
@@ -53,77 +84,67 @@ export function AgentChat() {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] md:inset-auto md:bottom-6 md:right-6">
       {open ? (
-        <div className="pointer-events-auto mx-3 mb-[4.75rem] flex h-[min(36rem,74dvh)] flex-col overflow-hidden rounded-[1.75rem] bg-[#f7f8fb] shadow-[0_24px_60px_-24px_rgba(9,12,18,0.55)] md:mx-0 md:mb-0 md:h-[36rem] md:w-[24.5rem]">
-          <div className="relative overflow-hidden bg-header px-4 py-3.5 text-header-fg">
-            <span className="pointer-events-none absolute -right-8 -top-10 size-32 rounded-full bg-primary/35 blur-2xl" />
-            <span className="pointer-events-none absolute -bottom-12 left-10 size-24 rounded-full bg-white/10 blur-xl" />
-            <div className="relative flex items-center gap-3">
-              <span className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-primary text-sm font-bold">
-                Р
-                <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-[#6BDB03] ring-2 ring-header" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-display text-[1.08rem] leading-tight">Администратор</p>
-                <p className="text-[0.72rem] text-header-fg/65">Студия «Развивайся» · онлайн</p>
+        <div className="pointer-events-auto mx-3 mb-[4.75rem] flex h-[min(38rem,76dvh)] flex-col overflow-hidden rounded-[1.85rem] bg-white ring-[3px] ring-white shadow-[0_28px_70px_-18px_rgba(9,12,18,0.55)] md:mx-0 md:mb-0 md:h-[38rem] md:w-[25rem]">
+          <div className="relative bg-primary px-4 pb-5 pt-3.5 text-primary-foreground">
+            <button
+              type="button"
+              className="absolute right-3 top-3 grid size-9 place-items-center rounded-full bg-black/15 hover:bg-black/25"
+              onClick={() => setOpen(false)}
+              aria-label="Закрыть чат"
+            >
+              <X className="size-5" />
+            </button>
+            <div className="flex items-end gap-3 pr-10">
+              <div className="-mb-10 shrink-0">
+                <Robot mood={mood} size={88} />
               </div>
-              <button
-                type="button"
-                className="grid size-9 place-items-center rounded-full bg-white/8 hover:bg-white/14"
-                onClick={() => setOpen(false)}
-                aria-label="Закрыть чат"
-              >
-                <X className="size-5" />
-              </button>
+              <div className="min-w-0 pb-1">
+                <p className="font-display text-[1.15rem] leading-tight">Олег</p>
+                <p className="text-[0.78rem] text-white/85">Робот-администратор · онлайн</p>
+              </div>
             </div>
           </div>
-          <div className="flex-1 space-y-3 overflow-y-auto px-3.5 py-4">
+          <div className="flex-1 space-y-3 overflow-y-auto bg-[#eef1f7] px-3.5 pb-4 pt-12">
             {messages.map((m, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "max-w-[88%] px-3.5 py-2.5 text-[0.92rem] leading-relaxed",
-                  m.role === "assistant"
-                    ? "rounded-2xl rounded-tl-md bg-white text-fg shadow-[0_1px_0_rgba(18,20,26,0.04),0_8px_24px_-16px_rgba(18,20,26,0.35)]"
-                    : "ml-auto rounded-2xl rounded-tr-md bg-primary text-primary-foreground",
-                )}
-              >
-                {m.content}
+              <div key={i} className={cn("flex items-end gap-2", m.role === "user" && "justify-end")}>
+                {m.role === "assistant" ? <Robot mood={i === messages.length - 1 ? mood : "hello"} size={36} /> : null}
+                <div
+                  className={cn(
+                    "max-w-[78%] px-3.5 py-2.5 text-[0.92rem] leading-relaxed",
+                    m.role === "assistant"
+                      ? "rounded-2xl rounded-bl-md bg-white text-fg shadow-[0_8px_24px_-16px_rgba(18,20,26,0.4)]"
+                      : "rounded-2xl rounded-br-md bg-header text-header-fg",
+                  )}
+                >
+                  {m.content}
+                </div>
               </div>
             ))}
             {messages.length === 1 && !busy ? (
-              <div className="flex flex-wrap gap-1.5 pt-1">
+              <div className="flex flex-wrap gap-1.5 pl-11">
                 {CHIPS.map((chip) => (
                   <button
                     key={chip}
                     type="button"
                     onClick={() => void send(chip)}
-                    className="rounded-full bg-white px-3 py-1.5 text-[0.78rem] font-semibold text-fg shadow-[var(--shadow-border)] hover:shadow-[var(--shadow-border-hover)]"
+                    className="rounded-full bg-white px-3 py-1.5 text-[0.78rem] font-semibold text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground"
                   >
                     {chip}
                   </button>
                 ))}
               </div>
             ) : null}
-            {busy ? (
-              <p className="text-xs font-medium text-muted">
-                <span className="inline-flex gap-1">
-                  <span className="size-1.5 animate-pulse rounded-full bg-primary" />
-                  <span className="size-1.5 animate-pulse rounded-full bg-primary delay-100" />
-                  <span className="size-1.5 animate-pulse rounded-full bg-primary delay-200" />
-                </span>
-                <span className="ml-2">Печатает</span>
-              </p>
-            ) : null}
+            {busy ? <p className="pl-11 text-xs font-medium text-muted">Олег думает…</p> : null}
             <div ref={endRef} />
           </div>
           <form
-            className="bg-white/80 px-3 pb-3 pt-2 backdrop-blur-sm"
+            className="border-t border-black/5 bg-white px-3 pb-3 pt-2"
             onSubmit={(e) => {
               e.preventDefault();
               void send();
             }}
           >
-            <div className="flex items-center gap-2 rounded-full bg-white p-1 shadow-[var(--shadow-border)] focus-within:shadow-[var(--shadow-border-hover)]">
+            <div className="flex items-center gap-2 rounded-full bg-[#eef1f7] p-1 ring-1 ring-black/8 focus-within:ring-2 focus-within:ring-primary/40">
               <input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -149,17 +170,17 @@ export function AgentChat() {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="agent-fab relative inline-flex h-14 items-center gap-2.5 overflow-visible rounded-full bg-primary px-4 text-primary-foreground shadow-[0_12px_32px_-8px_rgba(32,94,220,0.7)] md:h-16 md:px-5"
-            aria-label="Написать администратору — подберём курс"
+            className="agent-fab relative inline-flex h-[3.65rem] items-center gap-2 overflow-visible rounded-full bg-white py-1 pl-1 pr-4 text-fg ring-[3px] ring-white shadow-[0_16px_40px_-12px_rgba(32,94,220,0.55)] md:h-[4.1rem] md:pr-5"
+            aria-label="Написать роботу-администратору"
           >
-            <span className="agent-fab-ring pointer-events-none absolute inset-0 rounded-full bg-primary/35" aria-hidden />
-            <span className="relative grid size-10 place-items-center rounded-full bg-white/20 md:size-11">
-              <span className="absolute right-0.5 top-0.5 size-2.5 rounded-full bg-[#6BDB03] ring-2 ring-primary" />
-              <MessageCircle className="size-5 md:size-6" />
+            <span className="agent-fab-ring pointer-events-none absolute inset-0 rounded-full bg-primary/25" aria-hidden />
+            <span className="relative">
+              <Robot mood="hello" size={52} />
+              <span className="absolute bottom-0.5 right-0.5 size-2.5 rounded-full bg-[#6BDB03] ring-2 ring-white" />
             </span>
             <span className="relative pr-1 text-left leading-tight">
               <span className="block font-display text-[0.95rem] font-semibold md:text-[1.05rem]">Подобрать курс</span>
-              <span className="block text-[0.7rem] font-medium text-white/80">Ответим сейчас</span>
+              <span className="block text-[0.7rem] font-medium text-muted">Олег онлайн</span>
             </span>
           </button>
         </div>
