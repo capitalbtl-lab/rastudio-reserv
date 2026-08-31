@@ -11,72 +11,38 @@ const LINKS = [
   { href: "/allcourses", label: "Курсы" },
   { href: "/schedule", label: "Расписание" },
   { href: "/team", label: "Педагоги" },
+] as const;
+
+const MORE = [
   { href: "/master-class", label: "Мастер-классы" },
   { href: "/o-nas", label: "О студии" },
   { href: "/contacts", label: "Контакты" },
 ] as const;
 
-const UTILITY = [
-  {
-    href: SITE.maxBot,
-    label: "Бот",
-    full: "Админ-бот",
-    kind: "ghost" as const,
-    external: true,
-    hide: "inline-flex",
-  },
-  {
-    href: SITE.telegram,
-    label: "Telegram",
-    full: "Telegram",
-    kind: "ghost" as const,
-    external: true,
-    hide: "inline-flex",
-  },
-  {
-    href: SITE.cabinet,
-    label: "Кабинет",
-    full: "Личный кабинет",
-    kind: "ghost" as const,
-    external: true,
-    hide: "inline-flex",
-  },
-  {
-    href: "#trial",
-    label: "Запись",
-    full: "Запись",
-    kind: "primary" as const,
-    external: false,
-    hide: "inline-flex",
-  },
-] as const;
-
-const pill = {
-  ghost:
-    "bg-white/8 text-header-fg ring-1 ring-white/16 hover:bg-white/14",
-  primary: "bg-primary text-primary-foreground hover:bg-primary-hover",
-};
+const navItem =
+  "inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-full px-2.5 text-sm font-medium text-header-fg/75 hover:bg-white/10 hover:text-header-fg xl:px-3";
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const [schoolsOpen, setSchoolsOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   return (
     <header className="ink fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-header/95 text-header-fg backdrop-blur-xl">
-      <div className="page-wrap flex h-[4.25rem] items-center gap-3 md:h-[4.75rem]">
+      <div className="page-wrap flex h-[4.25rem] items-center gap-2 md:h-[4.75rem] md:gap-3">
         <PageLink to="/" className="flex shrink-0 items-center" onClick={() => setOpen(false)}>
           <img
             src="/brand/logo-white.png"
             alt="Студия Развивайся — искусства и интеллектуальное развитие"
             width={1200}
             height={289}
-            className="h-9 w-auto max-w-[11rem] object-contain object-left outline-none sm:h-10 sm:max-w-[13.5rem] md:h-11 md:max-w-[16rem] lg:h-12 lg:max-w-[18rem]"
+            className="h-8 w-auto max-w-[9.5rem] object-contain object-left outline-none sm:h-9 sm:max-w-[12rem] md:h-10 md:max-w-[13.5rem]"
             loading="eager"
             decoding="async"
           />
         </PageLink>
 
-        <nav className="ml-4 hidden min-w-0 flex-1 items-center gap-0.5 lg:flex">
+        <nav className="ml-1 hidden min-w-0 flex-1 items-center lg:flex">
           <div
             className="relative"
             onMouseEnter={() => setSchoolsOpen(true)}
@@ -84,11 +50,11 @@ export function SiteHeader() {
           >
             <button
               type="button"
-              className="inline-flex h-11 items-center gap-1 rounded-full px-3 text-sm font-medium text-header-fg/75 hover:bg-white/10 hover:text-header-fg"
+              className={navItem}
               aria-expanded={schoolsOpen}
               onClick={() => setSchoolsOpen((v) => !v)}
             >
-              Школы <ChevronDown className="size-3.5 opacity-70" />
+              Школы <ChevronDown className="ml-0.5 size-3.5 opacity-70" />
             </button>
             <div
               className={cn(
@@ -121,42 +87,80 @@ export function SiteHeader() {
             </div>
           </div>
           {LINKS.map((item) => (
-            <PageLink
-              key={item.href}
-              to={item.href}
-              className="inline-flex h-11 items-center rounded-full px-3 text-sm font-medium text-header-fg/75 hover:bg-white/10 hover:text-header-fg"
-            >
+            <PageLink key={item.href} to={item.href} className={navItem}>
               {item.label}
             </PageLink>
           ))}
+          <div
+            className="relative"
+            onMouseEnter={() => setMoreOpen(true)}
+            onMouseLeave={() => setMoreOpen(false)}
+          >
+            <button
+              type="button"
+              className={navItem}
+              aria-expanded={moreOpen}
+              onClick={() => setMoreOpen((v) => !v)}
+            >
+              Ещё <ChevronDown className="ml-0.5 size-3.5 opacity-70" />
+            </button>
+            <div
+              className={cn(
+                "absolute left-0 top-full z-50 min-w-[12rem] origin-top pt-2 transition-[opacity,transform] duration-[var(--motion-fast)] ease-[var(--ease-smooth-out)]",
+                moreOpen
+                  ? "visible translate-y-0 opacity-100"
+                  : "invisible -translate-y-1 opacity-0",
+              )}
+            >
+              <div className="grid gap-0.5 rounded-2xl bg-surface p-1.5 text-fg shadow-[var(--shadow-border-hover)]">
+                {MORE.map((item) => (
+                  <PageLink
+                    key={item.href}
+                    to={item.href}
+                    className="rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-surface-2"
+                  >
+                    {item.label}
+                  </PageLink>
+                ))}
+              </div>
+            </div>
+          </div>
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <a
-            href={SITE.phoneHref}
-            className="mr-1 hidden tabular-nums text-sm font-medium text-header-fg/70 hover:text-header-fg xl:inline"
+            href={SITE.maxBot}
+            target="_blank"
+            rel="noreferrer"
+            className="hidden h-9 items-center rounded-full bg-white/8 px-3 text-[0.8rem] font-semibold ring-1 ring-white/16 hover:bg-white/14 sm:inline-flex"
           >
-            {SITE.phone}
+            Админ-бот
           </a>
-          {UTILITY.map((item) => (
-            <a
-              key={item.label}
-              href={item.href}
-              target={item.external ? "_blank" : undefined}
-              rel={item.external ? "noreferrer" : undefined}
-              className={cn(
-                "h-8 items-center rounded-full px-2.5 text-[0.75rem] font-semibold transition-colors sm:h-9 sm:px-3 sm:text-[0.8rem] xl:px-3.5",
-                item.hide,
-                pill[item.kind],
-              )}
-            >
-              <span className="xl:hidden">{item.label}</span>
-              <span className="hidden xl:inline">{item.full}</span>
-            </a>
-          ))}
+          <a
+            href={SITE.telegram}
+            target="_blank"
+            rel="noreferrer"
+            className="hidden h-9 items-center rounded-full bg-white/8 px-3 text-[0.8rem] font-semibold ring-1 ring-white/16 hover:bg-white/14 sm:inline-flex"
+          >
+            Telegram
+          </a>
+          <a
+            href={SITE.cabinet}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-9 items-center rounded-full bg-white/8 px-3 text-[0.8rem] font-semibold ring-1 ring-white/16 hover:bg-white/14"
+          >
+            Кабинет
+          </a>
+          <a
+            href="#trial"
+            className="inline-flex h-9 items-center rounded-full bg-primary px-3.5 text-[0.8rem] font-semibold text-primary-foreground hover:bg-primary-hover"
+          >
+            Запись
+          </a>
           <button
             type="button"
-            className="inline-flex size-11 items-center justify-center rounded-full hover:bg-white/10 lg:hidden"
+            className="inline-flex size-10 items-center justify-center rounded-full hover:bg-white/10 lg:hidden"
             aria-label={open ? "Закрыть меню" : "Открыть меню"}
             onClick={() => setOpen((v) => !v)}
           >
@@ -201,7 +205,7 @@ export function SiteHeader() {
             ))}
           </div>
           <div className="mt-3 grid gap-0.5 border-t border-white/10 pt-3">
-            {LINKS.map((item) => (
+            {[...LINKS, ...MORE].map((item) => (
               <PageLink
                 key={item.href}
                 to={item.href}
@@ -215,6 +219,12 @@ export function SiteHeader() {
           <div className="mt-4 flex flex-col gap-3 px-1">
             <a href={SITE.phoneHref} className="text-sm font-semibold">
               {SITE.phone}
+            </a>
+            <a href={SITE.maxBot} target="_blank" rel="noreferrer" className="text-sm font-semibold">
+              Админ-бот
+            </a>
+            <a href={SITE.telegram} target="_blank" rel="noreferrer" className="text-sm font-semibold">
+              Telegram
             </a>
             <a href={SITE.cabinet} className="text-sm font-semibold">
               Личный кабинет
