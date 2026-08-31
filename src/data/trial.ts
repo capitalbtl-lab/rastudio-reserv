@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { upsertAlfaLead } from "@/data/alfacrm";
 
 export const TRIAL_BRANCHES = [
   { id: "2", name: "Коломна · Октябрьской революции, 340" },
@@ -87,6 +88,41 @@ export type TrialPayload = {
   branch: string;
 };
 
+function courseName(id: string) {
+  return TRIAL_COURSES.find((c) => c.id === id)?.name || "";
+}
+
+async function saveLeadForm(data: {
+  parent: string;
+  child: string;
+  dobRu: string;
+  phone: string;
+  email: string;
+  branch: string;
+  course: string;
+}) {
+  const body = {
+    LeadForm: { id: 20, lead_source_id: 2 },
+    LeadFormForm: {
+      field1763751875: data.parent,
+      field1763751902: data.child,
+      field1763751955: data.dobRu,
+      field1763751913: data.phone,
+      field1763751923: data.email,
+      field1763755924: data.branch,
+      ...(data.course ? { field1763755942: data.course } : {}),
+    },
+  };
+  const res = await fetch("https://studiyarazvivaysya.s20.online/v2api/2/lead-form/save?id=20", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json()) as { success?: boolean; message?: string };
+  if (json.success) return { ok: true as const };
+  return { ok: false as const, error: json.message || "Не удалось отправить заявку. Позвоните нам." };
+}
+
 export async function saveTrialLead(data: TrialPayload) {
   const parent = data.parent.trim();
   const child = data.child.trim();
@@ -99,29 +135,23 @@ export async function saveTrialLead(data: TrialPayload) {
   }
   const [y, m, d] = dob.split("-");
   const dobRu = d && m && y ? `${d}.${m}.${y}` : dob;
-  const body = {
-    LeadForm: { id: 20, lead_source_id: 2 },
-    LeadFormForm: {
-      field1763751875: parent,
-      field1763751902: child,
-      field1763751955: dobRu,
-      field1763751913: phone,
-      field1763751923: email,
-      field1763755924: branch,
-      ...(data.course ? { field1763755942: data.course } : {}),
-    },
-  };
   try {
-    const res = await fetch("https://studiyarazvivaysya.s20.online/v2api/2/lead-form/save?id=20", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(body),
+    await upsertAlfaLead({
+      parent,
+      child,
+      phone,
+      email,
+      dobRu,
+      branchId: branch,
+      courseName: courseName(data.course),
     });
-    const json = (await res.json()) as { success?: boolean; message?: string };
-    if (json.success) return { ok: true as const };
-    return { ok: false as const, error: json.message || "Не удалось отправить заявку. Позвоните нам." };
+    return { ok: true as const };
   } catch {
-    return { ok: false as const, error: "Сеть недоступна. Позвоните 8 (800) 511-34-01." };
+    try {
+      return await saveLeadForm({ parent, child, dobRu, phone, email, branch, course: data.course });
+    } catch {
+      return { ok: false as const, error: "Сеть недоступна. Позвоните 8 (800) 511-34-01." };
+    }
   }
 }
 
