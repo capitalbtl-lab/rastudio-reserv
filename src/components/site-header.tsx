@@ -20,7 +20,10 @@ const MORE = [
 ] as const;
 
 const navItem =
-  "inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-full px-2.5 text-sm font-medium text-header-fg/75 hover:bg-white/10 hover:text-header-fg xl:px-3";
+  "inline-flex h-11 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-[0.95rem] font-medium text-header-fg/78 transition-colors hover:bg-white/10 hover:text-header-fg";
+
+const ghostBtn =
+  "inline-flex h-8 items-center rounded-full bg-white/[0.07] px-3.5 text-[0.78rem] font-semibold tracking-wide text-header-fg ring-1 ring-inset ring-white/14 transition-colors hover:bg-white/14";
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
@@ -29,20 +32,48 @@ export function SiteHeader() {
 
   return (
     <header className="ink fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-header/95 text-header-fg backdrop-blur-xl">
-      <div className="page-wrap flex h-[4.25rem] items-center gap-2 md:h-[4.75rem] md:gap-3">
+      <div className="border-b border-white/8">
+        <div className="page-wrap flex h-10 items-center justify-between gap-3">
+          <a
+            href={SITE.phoneHref}
+            className="hidden text-[0.8rem] font-medium tabular-nums tracking-wide text-header-fg/65 hover:text-header-fg sm:inline"
+          >
+            {SITE.phone}
+          </a>
+          <div className="ml-auto flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <a href={SITE.maxBot} target="_blank" rel="noreferrer" className={ghostBtn}>
+              Админ-бот
+            </a>
+            <a href={SITE.telegram} target="_blank" rel="noreferrer" className={ghostBtn}>
+              Telegram
+            </a>
+            <a href={SITE.cabinet} target="_blank" rel="noreferrer" className={ghostBtn}>
+              Личный кабинет
+            </a>
+            <a
+              href="#trial"
+              className="inline-flex h-8 items-center rounded-full bg-primary px-3.5 text-[0.78rem] font-semibold text-primary-foreground hover:bg-primary-hover"
+            >
+              Запись
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div className="page-wrap flex h-[4.6rem] items-center gap-4 md:h-[5.35rem] md:gap-6">
         <PageLink to="/" className="flex shrink-0 items-center" onClick={() => setOpen(false)}>
           <img
             src="/brand/logo-white.png"
             alt="Студия Развивайся — искусства и интеллектуальное развитие"
             width={1200}
             height={289}
-            className="h-8 w-auto max-w-[9.5rem] object-contain object-left outline-none sm:h-9 sm:max-w-[12rem] md:h-10 md:max-w-[13.5rem]"
+            className="h-11 w-auto max-w-[16rem] object-contain object-left outline-none sm:h-12 sm:max-w-[18rem] md:h-14 md:max-w-[22rem] lg:h-[3.9rem] lg:max-w-[24rem]"
             loading="eager"
             decoding="async"
           />
         </PageLink>
 
-        <nav className="ml-1 hidden min-w-0 flex-1 items-center lg:flex">
+        <nav className="hidden min-w-0 flex-1 items-center justify-end gap-0.5 lg:flex">
           <div
             className="relative"
             onMouseEnter={() => setSchoolsOpen(true)}
@@ -54,7 +85,7 @@ export function SiteHeader() {
               aria-expanded={schoolsOpen}
               onClick={() => setSchoolsOpen((v) => !v)}
             >
-              Школы <ChevronDown className="ml-0.5 size-3.5 opacity-70" />
+              Школы <ChevronDown className="ml-1 size-3.5 opacity-70" />
             </button>
             <div
               className={cn(
@@ -102,11 +133,11 @@ export function SiteHeader() {
               aria-expanded={moreOpen}
               onClick={() => setMoreOpen((v) => !v)}
             >
-              Ещё <ChevronDown className="ml-0.5 size-3.5 opacity-70" />
+              Ещё <ChevronDown className="ml-1 size-3.5 opacity-70" />
             </button>
             <div
               className={cn(
-                "absolute left-0 top-full z-50 min-w-[12rem] origin-top pt-2 transition-[opacity,transform] duration-[var(--motion-fast)] ease-[var(--ease-smooth-out)]",
+                "absolute right-0 top-full z-50 min-w-[13rem] origin-top pt-2 transition-[opacity,transform] duration-[var(--motion-fast)] ease-[var(--ease-smooth-out)]",
                 moreOpen
                   ? "visible translate-y-0 opacity-100"
                   : "invisible -translate-y-1 opacity-0",
@@ -127,50 +158,18 @@ export function SiteHeader() {
           </div>
         </nav>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          <a
-            href={SITE.maxBot}
-            target="_blank"
-            rel="noreferrer"
-            className="hidden h-9 items-center rounded-full bg-white/8 px-3 text-[0.8rem] font-semibold ring-1 ring-white/16 hover:bg-white/14 sm:inline-flex"
-          >
-            Админ-бот
-          </a>
-          <a
-            href={SITE.telegram}
-            target="_blank"
-            rel="noreferrer"
-            className="hidden h-9 items-center rounded-full bg-white/8 px-3 text-[0.8rem] font-semibold ring-1 ring-white/16 hover:bg-white/14 sm:inline-flex"
-          >
-            Telegram
-          </a>
-          <a
-            href={SITE.cabinet}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-9 items-center rounded-full bg-white/8 px-3 text-[0.8rem] font-semibold ring-1 ring-white/16 hover:bg-white/14"
-          >
-            Кабинет
-          </a>
-          <a
-            href="#trial"
-            className="inline-flex h-9 items-center rounded-full bg-primary px-3.5 text-[0.8rem] font-semibold text-primary-foreground hover:bg-primary-hover"
-          >
-            Запись
-          </a>
-          <button
-            type="button"
-            className="inline-flex size-10 items-center justify-center rounded-full hover:bg-white/10 lg:hidden"
-            aria-label={open ? "Закрыть меню" : "Открыть меню"}
-            onClick={() => setOpen((v) => !v)}
-          >
-            {open ? <X className="size-5" /> : <Menu className="size-5" />}
-          </button>
-        </div>
+        <button
+          type="button"
+          className="ml-auto inline-flex size-11 items-center justify-center rounded-full hover:bg-white/10 lg:hidden"
+          aria-label={open ? "Закрыть меню" : "Открыть меню"}
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? <X className="size-5" /> : <Menu className="size-5" />}
+        </button>
       </div>
 
       {open ? (
-        <div className="max-h-[min(80dvh,calc(100dvh-4rem))] overflow-y-auto border-t border-white/10 bg-header px-4 py-4 lg:hidden">
+        <div className="max-h-[min(80dvh,calc(100dvh-7rem))] overflow-y-auto border-t border-white/10 bg-header px-4 py-4 lg:hidden">
           <p className="mb-2 px-3 text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-header-fg/45">
             Возраст ребёнка
           </p>
@@ -219,15 +218,6 @@ export function SiteHeader() {
           <div className="mt-4 flex flex-col gap-3 px-1">
             <a href={SITE.phoneHref} className="text-sm font-semibold">
               {SITE.phone}
-            </a>
-            <a href={SITE.maxBot} target="_blank" rel="noreferrer" className="text-sm font-semibold">
-              Админ-бот
-            </a>
-            <a href={SITE.telegram} target="_blank" rel="noreferrer" className="text-sm font-semibold">
-              Telegram
-            </a>
-            <a href={SITE.cabinet} className="text-sm font-semibold">
-              Личный кабинет
             </a>
             <Button asChild>
               <a href="#trial" onClick={() => setOpen(false)}>
