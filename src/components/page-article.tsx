@@ -185,7 +185,7 @@ function CinematicPage({
                 ) : null
               }
             />
-            {page.kind === "school" ? (
+            {page.kind === "school" || page.kind === "course" ? (
               <PhotoSlider images={galleryPhotos(page.images)} />
             ) : (
               <Gallery page={{ ...page, images: page.images.slice(Math.min(3, page.images.length)) }} />
