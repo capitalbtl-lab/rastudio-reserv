@@ -42,6 +42,44 @@ id курсов: ${TRIAL_COURSES.map((c) => `${c.id} ${c.name}`).join("; ")}.
 Жалобы и деньги — телефон.
 `;
 
+const ADMIN_TOOLS = [
+  {
+    type: "function" as const,
+    function: {
+      name: "set_price",
+      description: "Изменить цену одного курса. Только администратор. path или точное имя, сумма в рублях за 4 недели.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          path: { type: "string", description: "Путь или название курса" },
+          field: { type: "string", description: "all | kbm | tmx, по умолчанию all" },
+          amount: { type: "number", description: "Новая цена в рублях" },
+        },
+        required: ["path", "amount"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "set_prices_group",
+      description: "Изменить цены группы курсов: школа/направление или поиск. set — поставить, delta — прибавить (можно минус).",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          direction: { type: "string", description: "Например Художественная школа, Школа робототехники" },
+          query: { type: "string", description: "Поиск по названию, если не школа" },
+          field: { type: "string", description: "all | kbm | tmx | all-three" },
+          set: { type: "number" },
+          delta: { type: "number" },
+        },
+      },
+    },
+  },
+];
+
 const TOOLS = [
   {
     type: "function" as const,
@@ -114,7 +152,7 @@ function normalizeDob(dob: string) {
   return s;
 }
 
-async function yandexChat(messages: ChatMsg[]) {
+async function yandexChat(messages: ChatMsg[], tools: unknown) {
   const key = process.env.YANDEX_API_KEY?.trim();
   const folder = process.env.YANDEX_FOLDER_ID?.trim();
   if (!key || !folder) return null;
@@ -129,7 +167,7 @@ async function yandexChat(messages: ChatMsg[]) {
       temperature: 0.3,
       max_tokens: 700,
       messages,
-      tools: TOOLS,
+      tools,
       tool_choice: "auto",
     }),
   });
@@ -142,7 +180,7 @@ async function yandexChat(messages: ChatMsg[]) {
   };
 }
 
-async function deepseekChat(messages: ChatMsg[]) {
+async function deepseekChat(messages: ChatMsg[], tools: unknown) {
   const key = process.env.DEEPSEEK_API_KEY?.trim();
   if (!key) return null;
   const res = await fetch("https://api.deepseek.com/chat/completions", {
@@ -155,7 +193,7 @@ async function deepseekChat(messages: ChatMsg[]) {
       model: "deepseek-chat",
       temperature: 0.3,
       messages,
-      tools: TOOLS,
+      tools,
       tool_choice: "auto",
     }),
   });
@@ -168,20 +206,20 @@ async function deepseekChat(messages: ChatMsg[]) {
   };
 }
 
-async function complete(messages: ChatMsg[]) {
+async function complete(messages: ChatMsg[], tools: unknown) {
   try {
-    const y = await yandexChat(messages);
+    const y = await yandexChat(messages, tools);
     if (y) return y;
   } catch {
     /* fallback */
   }
-  const d = await deepseekChat(messages);
+  const d = await deepseekChat(messages, tools);
   if (d) return d;
   throw new Error("no-key");
 }
 
 export const chatAgent = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { messages: { role: "user" | "assistant"; content: string }[]; ip?: string; with?: "oleg" | "olga" | "both" })
+  .validator((data: unknown) => data as { messages: { role: "user" | "assistant"; content: string }[]; ip?: string; with?: "oleg" | "olga" | "both"; token?: string })
   .handler(async ({ data }) => {
     const ip = data.ip || "anon";
     if (limited(ip)) {
@@ -193,16 +231,22 @@ export const chatAgent = createServerFn({ method: "POST" })
       .map((m) => ({ role: m.role, content: String(m.content).slice(0, 2000) }));
     if (!trimmed.length) return { ok: false as const, error: "Напишите вопрос." };
 
+    const { isAdminRequest } = await import("./admin-auth");
+    const admin = isAdminRequest(data.token);
+    const tools = admin ? [...TOOLS, ...ADMIN_TOOLS] : TOOLS;
     const solo =
       data.with === "oleg"
         ? "\n\nСейчас родитель говорит только с Олегом. Отвечай исключительно строками «Олег:». Ольга молчит. Мужской род."
         : data.with === "olga"
           ? "\n\nСейчас родитель говорит только с Ольгой. Отвечай исключительно строками «Ольга:». Олег молчит. Женский род: согласна, готова, поняла."
           : "";
-    const messages: ChatMsg[] = [{ role: "system", content: SYSTEM + solo }, ...trimmed];
+    const adminHint = admin
+      ? `\n\nСобеседник — администратор студии. Можно менять цены инструментами set_price и set_prices_group. На сайте показывают поле «все».`
+      : "";
+    const messages: ChatMsg[] = [{ role: "system", content: SYSTEM + solo + adminHint }, ...trimmed];
     try {
       for (let step = 0; step < 3; step++) {
-        const json = await complete(messages);
+        const json = await complete(messages, tools);
         const msg = json.choices?.[0]?.message;
         if (!msg) break;
         if (msg.tool_calls?.length) {
@@ -212,7 +256,7 @@ export const chatAgent = createServerFn({ method: "POST" })
             tool_calls: msg.tool_calls,
           } as ChatMsg);
           for (const call of msg.tool_calls) {
-            let args: Record<string, string> = {};
+            let args: Record<string, unknown> = {};
             try {
               args = JSON.parse(call.function.arguments || "{}");
             } catch {
@@ -220,13 +264,13 @@ export const chatAgent = createServerFn({ method: "POST" })
             }
             if (call.function.name === "submit_trial") {
               const saved = await saveTrialLead({
-                parent: args.parent || "",
-                child: args.child || "",
-                dob: normalizeDob(args.dob || ""),
-                phone: args.phone || "",
-                email: args.email || "",
-                course: resolveCourse(args.course_id),
-                branch: resolveBranch(args.branch_id),
+                parent: String(args.parent || ""),
+                child: String(args.child || ""),
+                dob: normalizeDob(String(args.dob || "")),
+                phone: String(args.phone || ""),
+                email: String(args.email || ""),
+                course: resolveCourse(String(args.course_id || "")),
+                branch: resolveBranch(String(args.branch_id || "")),
               });
               messages.push({
                 role: "tool",
@@ -234,6 +278,34 @@ export const chatAgent = createServerFn({ method: "POST" })
                 content: saved.ok
                   ? "Заявка принята. Администратор свяжется для подтверждения времени."
                   : `Ошибка: ${saved.error}`,
+              });
+            } else if (admin && call.function.name === "set_price") {
+              const { updateOnePrice } = await import("./prices");
+              const field = args.field === "kbm" || args.field === "tmx" ? args.field : "all";
+              const amount = Number(args.amount);
+              const saved = updateOnePrice(String(args.path || ""), { [field]: amount });
+              messages.push({
+                role: "tool",
+                tool_call_id: call.id,
+                content: saved.ok
+                  ? `Цена обновлена: ${saved.row.name} — ${field} ${saved.row[field]} ₽ / 4 нед.`
+                  : saved.error,
+              });
+            } else if (admin && call.function.name === "set_prices_group") {
+              const { updateGroupPrice } = await import("./prices");
+              const field =
+                args.field === "kbm" || args.field === "tmx" || args.field === "all-three" ? args.field : "all";
+              const saved = updateGroupPrice({
+                direction: args.direction ? String(args.direction) : undefined,
+                query: args.query ? String(args.query) : undefined,
+                field,
+                set: args.set != null ? Number(args.set) : undefined,
+                delta: args.delta != null ? Number(args.delta) : undefined,
+              });
+              messages.push({
+                role: "tool",
+                tool_call_id: call.id,
+                content: saved.ok ? `Обновлено курсов: ${saved.count}. ${saved.names.slice(0, 6).join("; ")}` : saved.error,
               });
             } else {
               messages.push({ role: "tool", tool_call_id: call.id, content: "Неизвестное действие." });

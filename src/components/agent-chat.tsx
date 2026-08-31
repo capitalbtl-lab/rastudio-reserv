@@ -266,7 +266,13 @@ export function AgentChat() {
     setBusy(true);
     let reply = `Не отправилось. Позвоните ${SITE.phone}.`;
     try {
-      const res = await chatAgent({ data: { messages: history, with: partner } });
+      const res = await chatAgent({
+        data: {
+          messages: history,
+          with: partner,
+          token: typeof localStorage !== "undefined" ? localStorage.getItem("ra_admin") || undefined : undefined,
+        },
+      });
       reply = res.ok ? res.reply : res.error;
     } catch {
       /* keep */

@@ -13,10 +13,12 @@ import {
   allSchedule,
 } from "./catalog.server";
 import { sessionsFromCrm, filterCrmSessions } from "./alfacrm-schedule";
+import { ensureLivePrices } from "./prices";
 
 export const loadSitePage = createServerFn({ method: "GET" })
   .validator((splat: unknown) => (typeof splat === "string" ? splat : undefined))
   .handler(async ({ data }) => {
+    ensureLivePrices();
     const page = getPage(data);
     if (!page) return null;
     const cmsCourse = getCmsCourse(data);
@@ -56,6 +58,7 @@ async function scheduleWithCrm(splat?: string) {
 }
 
 export const loadFullSchedule = createServerFn({ method: "GET" }).handler(async () => {
+  ensureLivePrices();
   try {
     const crm = await sessionsFromCrm();
     if (crm.length) return { sessions: crm };

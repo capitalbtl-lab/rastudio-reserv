@@ -32,6 +32,7 @@ const NOINDEX_PATHS = new Set([
   "/tmxprof",
   "/sborbojcamsvo",
   "/sbordetyampalestiny",
+  "/admin",
 ]);
 const CANONICAL_MAP: Record<string, string> = {
   "/roboticsinenglish1": "/roboticsinenglish",
