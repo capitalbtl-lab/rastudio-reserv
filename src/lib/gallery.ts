@@ -1,49 +1,76 @@
 import type { SiteImage } from "@/data/catalog";
 
 const SKIP =
-  /фон\s*кнон|робошкола|мс\.png|кнопк|планета-steam|беспилотная авиация/i;
-const SKIP_IDS = /11062b_4402568a97474297baea6f7a1f16a2b2f000/i;
+  /фон\s*кнон|робошкола|мс\.png|кнопк|логотип|обои|нейросеть/i;
+const SKIP_IDS = /11062b_/i;
 
 const MEDIA: Record<string, string[]> = {
-  "3d-modeling": ["01.jpg", "02.jpg"],
-  "art-studio-9-13": ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  digitalartschool: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  englishlanguagegg: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  englishlanguagesm: ["01.jpg"],
-  gamedesign: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  happybricks: ["01.jpg", "02.jpg"],
-  "it-лаборатория-create-для-детей-5-7-лет": ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  "it-лаборатория-create-для-детей-7-9-лет": ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  "it-лаборатория-dev-для-детей-9-10-лет": ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  "it-школа-программирование-на-python": ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  "it-школа-программирование-на-си": ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  "it-школа-разработка-игр-на-unity": ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  japanese: ["01.jpg"],
-  "kinder-master": ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  "master-class": ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  mentalarithmetic: ["01.jpg"],
-  "model-school": ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  "programming-school": ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  radioengineering: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  roboticsinenglish: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"],
-  "sculptural-studio": ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  teslaphysics: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  tinkercad2025itogi: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg"],
-  vitaminkorean: ["01.jpg"],
+  "art-3-4": ["01.jpg"],
+  "art-5-6": ["01.jpg"],
+  "art-7-9": ["01.jpg"],
+  "art-9-13": ["01.jpg"],
+  blender: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"],
+  cpp: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"],
+  "create-5-7": ["01.jpg", "02.jpg", "03.jpg", "04.jpg"],
+  "create-7-9": ["01.jpg", "02.jpg", "03.jpg", "04.jpg"],
+  "dev-9-10": ["01.jpg", "02.jpg", "03.jpg", "04.jpg"],
+  "digital-art": ["01.jpg", "02.jpg", "03.jpg", "04.jpg"],
+  drones: ["01.jpg"],
+  hudvuz: ["01.jpg"],
+  "intro-pc": ["01.jpg"],
+  kinder: ["01.jpg", "02.jpg", "03.jpg"],
+  kompas: ["01.jpg", "02.jpg"],
+  lego: ["01.jpg", "02.jpg", "03.jpg"],
+  manga: ["01.jpg"],
+  minecraft: ["01.jpg"],
+  model: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"],
+  "prep-school": ["01.jpg"],
+  "prog-3in1": ["01.jpg", "02.jpg"],
+  python: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"],
+  radio: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"],
+  "robot-10-14": ["01.jpg"],
+  "robot-5-6": ["01.jpg"],
+  "robot-7-9": ["01.jpg"],
+  "robot-en": ["01.jpg", "02.jpg"],
+  science: ["01.jpg"],
+  sculpture: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"],
+  steam: ["01.jpg"],
+  tesla: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"],
+  unity: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"],
 };
 
 const FOLDER_FOR_PATH: Record<string, string> = {
-  "/art-studio": "art-studio-9-13",
-  "/art-studio-3-4": "art-studio-9-13",
-  "/art-studio-5-6": "art-studio-9-13",
-  "/art-studio-7-8": "art-studio-9-13",
-  "/art-studio-9-13": "art-studio-9-13",
-  "/preparation-for-school": "happybricks",
-  "/robototehnika-5-7": "roboticsinenglish",
-  "/robototehnika-7-9": "roboticsinenglish",
-  "/robototehnika-10-14": "roboticsinenglish",
-  "/robototehnika-v-kolomne": "roboticsinenglish",
-  "/podgotovka-v-hudvuz": "art-studio-9-13",
+  "/art-studio": "art-9-13",
+  "/art-studio-3-4": "art-3-4",
+  "/art-studio-5-6": "art-5-6",
+  "/art-studio-7-8": "art-7-9",
+  "/art-studio-9-13": "art-9-13",
+  "/digitalartschool": "digital-art",
+  "/gamedesign": "blender",
+  "/3d-modeling": "kompas",
+  "/happybricks": "lego",
+  "/kinder-master": "kinder",
+  "/model-school": "model",
+  "/sculptural-studio": "sculpture",
+  "/podgotovka-v-hudvuz": "hudvuz",
+  "/preparation-for-school": "prep-school",
+  "/science-course": "science",
+  "/teslaphysics": "tesla",
+  "/radioengineering": "radio",
+  "/robototehnika-5-7": "robot-5-6",
+  "/robototehnika-7-9": "robot-7-9",
+  "/robototehnika-10-14": "robot-10-14",
+  "/robototehnika-v-kolomne": "robot-7-9",
+  "/roboticsinenglish": "robot-en",
+  "/programming-school": "python",
+  "/promising-professions": "tesla",
+  "/early-childhood-care": "prep-school",
+  "/kursy-shkoly-programmirovaniya/it-школа-разработка-игр-на-unity": "unity",
+  "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python": "python",
+  "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-си": "cpp",
+  "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-5-7-лет": "create-5-7",
+  "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-7-9-лет": "create-7-9",
+  "/kursy-shkoly-programmirovaniya/it-лаборатория-dev-для-детей-9-10-лет": "dev-9-10",
 };
 
 function decodePath(path: string) {
@@ -59,6 +86,7 @@ function folderFor(path: string) {
   if (FOLDER_FOR_PATH[clean]) return FOLDER_FOR_PATH[clean];
   const slug = clean.split("/").filter(Boolean).pop() || "";
   if (MEDIA[slug]) return slug;
+  if (FOLDER_FOR_PATH[`/${slug}`]) return FOLDER_FOR_PATH[`/${slug}`];
   return "";
 }
 
@@ -68,7 +96,7 @@ function mediaImages(path?: string, alt = "Занятия в Студии Раз
   const files = folder ? MEDIA[folder] : undefined;
   if (!files?.length) return [];
   return files.map((name) => ({
-    src: `/media/courses/${folder}/${name}`,
+    src: `/media/heroes/${folder}/${name}`,
     filename: name,
     alt,
   }));
@@ -87,11 +115,14 @@ export function galleryPhotos(images: Shot[], path?: string) {
     const blob = `${img.filename || ""} ${img.alt || ""} ${img.src}`;
     if (SKIP.test(blob) || SKIP_IDS.test(blob)) return;
     if (img.src.startsWith("/courses/")) return;
+    if (/wixstatic|11062b_/i.test(img.src)) return;
     seen.add(key);
     out.push({ src: img.src, filename: img.filename, alt: img.alt || "Занятия в Студии Развивайся" });
   }
 
-  for (const img of mediaImages(path)) add(img);
+  const extras = mediaImages(path);
+  for (const img of extras) add(img);
+  if (extras.length) return out;
   for (const img of images) add(img);
   return out;
 }
