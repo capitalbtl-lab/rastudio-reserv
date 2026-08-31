@@ -15,7 +15,19 @@ export type AgentSettings = {
   askOnce: boolean;
   injectTraining: boolean;
   maxExamples: number;
+  showChat: boolean;
+  allowVoice: boolean;
+  allowAdminMode: boolean;
+  showChips: boolean;
+  allowOlga: boolean;
+  allowOleg: boolean;
+  allowReset: boolean;
 };
+
+export type AgentUiFlags = Pick<
+  AgentSettings,
+  "showChat" | "allowVoice" | "allowAdminMode" | "showChips" | "allowOlga" | "allowOleg" | "allowReset" | "defaultPartner"
+>;
 
 export type TrainExample = {
   id: string;
@@ -42,6 +54,13 @@ const DEFAULT_SETTINGS: AgentSettings = {
   askOnce: true,
   injectTraining: true,
   maxExamples: 40,
+  showChat: true,
+  allowVoice: true,
+  allowAdminMode: true,
+  showChips: true,
+  allowOlga: true,
+  allowOleg: true,
+  allowReset: true,
 };
 
 function fileOf() {
@@ -89,6 +108,12 @@ function saveBrain(brain: Brain) {
 
 function nid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function flag(v: boolean | undefined, fallback: boolean) {
+  if (v === true) return true;
+  if (v === false) return false;
+  return fallback !== false;
 }
 
 const STYLE: Record<AgentSettings["style"], string> = {
@@ -160,6 +185,13 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
         askOnce: data.settings?.askOnce !== false,
         injectTraining: data.settings?.injectTraining !== false,
         maxExamples: Math.max(4, Math.min(80, Number(data.settings?.maxExamples || brain.settings.maxExamples || 40))),
+        showChat: flag(data.settings?.showChat, brain.settings.showChat),
+        allowVoice: flag(data.settings?.allowVoice, brain.settings.allowVoice),
+        allowAdminMode: flag(data.settings?.allowAdminMode, brain.settings.allowAdminMode),
+        showChips: flag(data.settings?.showChips, brain.settings.showChips),
+        allowOlga: flag(data.settings?.allowOlga, brain.settings.allowOlga),
+        allowOleg: flag(data.settings?.allowOleg, brain.settings.allowOleg),
+        allowReset: flag(data.settings?.allowReset, brain.settings.allowReset),
         updatedAt: new Date().toISOString(),
       };
       saveBrain(brain);
@@ -323,3 +355,21 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
     }
     return { ok: false as const, error: "Неизвестное действие." };
   });
+
+export function uiFlagsOf(s: AgentSettings): AgentUiFlags {
+  return {
+    showChat: s.showChat !== false,
+    allowVoice: s.allowVoice !== false,
+    allowAdminMode: s.allowAdminMode !== false,
+    showChips: s.showChips !== false,
+    allowOlga: s.allowOlga !== false,
+    allowOleg: s.allowOleg !== false,
+    allowReset: s.allowReset !== false,
+    defaultPartner: s.defaultPartner === "oleg" ? "oleg" : "olga",
+  };
+}
+
+export const publicAgentUi = createServerFn({ method: "GET" }).handler(async () => {
+  const s = loadBrain().settings;
+  return { ok: true as const, ui: uiFlagsOf(s) };
+});

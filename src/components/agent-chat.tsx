@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { X, Send, Mic, Volume2, RotateCcw } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
+import { publicAgentUi, type AgentUiFlags } from "@/data/agent-config";
 import { speakAgent } from "@/data/agent-voice";
 import { saveChatLog } from "@/data/chat-logs";
 import { nextChips } from "@/data/agent-chips";
@@ -204,6 +205,16 @@ export function AgentChat() {
   const [awaitingCode, setAwaitingCode] = useState(false);
   const [groupChips, setGroupChips] = useState<{ label: string; href?: string; send?: string; primary?: boolean }[]>([]);
   const [box, setBox] = useState({ w: 520, h: 740 });
+  const [ui, setUi] = useState<AgentUiFlags>({
+    showChat: true,
+    allowVoice: true,
+    allowAdminMode: true,
+    showChips: true,
+    allowOlga: true,
+    allowOleg: true,
+    allowReset: true,
+    defaultPartner: "olga",
+  });
   const dragRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const lastMsgRef = useRef<HTMLDivElement>(null);
@@ -253,6 +264,21 @@ export function AgentChat() {
     }
     const id = window.setInterval(() => setAdminMs(adminLeft()), 10000);
     return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    void publicAgentUi().then((res) => {
+      if (!res.ok || !("ui" in res)) return;
+      const next = res.ui;
+      setUi(next);
+      if (!next.allowOlga && next.allowOleg) setPartner("oleg");
+      else if (!next.allowOleg && next.allowOlga) setPartner("olga");
+      else setPartner(next.defaultPartner);
+      if (!next.allowVoice) {
+        setVoiceOn(false);
+        voiceOnRef.current = false;
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -755,6 +781,8 @@ export function AgentChat() {
     dragRef.current = null;
   }
 
+  if (!ui.showChat) return null;
+
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] md:inset-auto md:bottom-6 md:right-6">
       {open ? (
@@ -776,6 +804,7 @@ export function AgentChat() {
           </button>
           <div className={cn("relative shrink-0 px-3 pb-2.5 pt-2.5 text-primary-foreground sm:px-4 sm:pb-3.5 sm:pt-3.5", inAdminUi ? "bg-ink" : "bg-primary")}>
             <div className="absolute right-2 top-2 flex items-center gap-1 sm:right-3 sm:top-3 sm:gap-1.5">
+              {ui.allowReset ? (
               <button
                 type="button"
                 className="grid size-8 place-items-center rounded-full bg-black/15 hover:bg-black/25 sm:size-9"
@@ -812,6 +841,7 @@ export function AgentChat() {
               >
                 <RotateCcw className="size-4" />
               </button>
+              ) : null}
               <button
                 type="button"
                 className="grid size-8 place-items-center rounded-full bg-black/15 hover:bg-black/25 sm:size-9"
@@ -847,8 +877,9 @@ export function AgentChat() {
                 </p>
               </div>
             </div>
-            {inAdminUi ? null : (
-              <div className="mt-2 grid grid-cols-2 gap-1.5">
+            {inAdminUi ? null : ui.allowOlga || ui.allowOleg ? (
+              <div className={cn("mt-2 grid gap-1.5", ui.allowOlga && ui.allowOleg ? "grid-cols-2" : "grid-cols-1")}>
+                {ui.allowOlga ? (
                 <button
                   type="button"
                   className={cn(
@@ -859,6 +890,8 @@ export function AgentChat() {
                 >
                   <span className="hidden min-[400px]:inline">Говорить с </span>Ольгой
                 </button>
+                ) : null}
+                {ui.allowOleg ? (
                 <button
                   type="button"
                   className={cn(
@@ -869,8 +902,9 @@ export function AgentChat() {
                 >
                   <span className="hidden min-[400px]:inline">Говорить с </span>Олегом
                 </button>
+                ) : null}
               </div>
-            )}
+            ) : null}
           </div>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-[#eef1f7] px-3 py-2.5 sm:px-3.5 sm:py-3">
             {messages.filter((m) => m.role !== "user" || !noisyAdmin(m.content)).map((m, i) =>
@@ -901,7 +935,7 @@ export function AgentChat() {
                 </div>
               ),
             )}
-            {messages.length && !busy && offer.chips.length ? (
+            {messages.length && !busy && ui.showChips && offer.chips.length ? (
               <div className="pl-11">
                 {offer.hint ? (
                   <p className="mb-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">{offer.hint}</p>
@@ -965,6 +999,7 @@ export function AgentChat() {
               void send();
             }}
           >
+            {ui.allowVoice ? (
             <button
               type="button"
               onClick={() => void toggleVoice()}
@@ -976,7 +1011,8 @@ export function AgentChat() {
               {voiceOn ? <Mic className="size-4" /> : <Volume2 className="size-4" />}
               {voiceOn ? (listening ? "Слушаю… нажмите, чтобы выключить" : speaking ? "Говорю… нажмите, чтобы выключить" : "Выключить голосовой режим") : "Включить голосовой режим"}
             </button>
-            {voiceOn ? null : (
+            ) : null}
+            {voiceOn && ui.allowVoice ? null : (
             <div className="flex items-center gap-2 rounded-full bg-[#eef1f7] p-1 ring-1 ring-black/8 focus-within:ring-2 focus-within:ring-primary/40">
               <input
                 value={text}
@@ -1010,6 +1046,7 @@ export function AgentChat() {
               <p className="min-w-0 truncate text-[0.65rem] text-muted">
                 {voiceOn ? (speaking ? "Сейчас говорят" : "Голосовой режим включён") : `Пробное · ${SITE.phone}`}
               </p>
+              {ui.allowAdminMode ? (
               <button
                 type="button"
                 className="shrink-0 text-[0.62rem] font-semibold text-primary underline-offset-2 hover:underline"
@@ -1017,6 +1054,9 @@ export function AgentChat() {
               >
                 {inAdminUi ? "вернуться в клиентский режим" : "войти в административный режим"}
               </button>
+              ) : (
+                <span />
+              )}
             </div>
           </form>
         </div>

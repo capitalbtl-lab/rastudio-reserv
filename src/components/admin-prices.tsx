@@ -1,44 +1,33 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  adminClearEdit,
-  adminEdits,
   adminLogin,
   adminMeta,
   adminPrices,
   adminSaveGroup,
   adminSavePrice,
-  adminSaveVoice,
   adminSetCodeword,
   adminSetPassword,
-  adminVoice,
   adminCalls,
 } from "@/data/admin";
-import { fieldLabel } from "@/data/edits-core";
 import { PRICE_DIRECTIONS, hydratePrices, type PriceRow } from "@/data/prices-core";
-import { speakAgent } from "@/data/agent-voice";
-import { DEFAULT_VOICE, type VoiceSettings } from "@/data/voices-core";
 import { Button } from "@/components/ui/button";
 import { AdminCalls } from "@/components/admin-calls";
-import { AdminChats } from "@/components/admin-chats";
 import { AdminAgent } from "@/components/admin-agent";
 import { AdminTrain } from "@/components/admin-train";
 import { AdminDossiers } from "@/components/admin-dossiers";
 import { cn } from "@/lib/utils";
 
 const KEY = "ra_admin";
-type Tab = "prices" | "voice" | "access" | "voices" | "calls" | "chats" | "agent" | "train" | "dossiers";
+type Tab = "prices" | "access" | "calls" | "agent" | "train" | "dossiers";
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: "prices", label: "Цены курсов", hint: "Прайс на сайте" },
-  { id: "voice", label: "Изменение сайта голосом", hint: "Тексты" },
-  { id: "voices", label: "Настройки голосов", hint: "Олег и Ольга" },
-  { id: "agent", label: "Ассистент ИИ", hint: "Как ведёт диалог" },
+  { id: "agent", label: "Ассистент ИИ", hint: "Окно, голоса, диалоги" },
   { id: "train", label: "Обучение", hint: "Скрипты, документы, примеры" },
   { id: "calls", label: "База звонков", hint: "Novofon → знания" },
   { id: "dossiers", label: "Личные дела", hint: "Клиенты AlfaCRM" },
-  { id: "chats", label: "Диалоги сайта", hint: "Олег и Ольга" },
   { id: "access", label: "Голосовой доступ", hint: "Кодовое слово" },
 ];
 
@@ -73,13 +62,6 @@ export function AdminPrices() {
   const [newPass, setNewPass] = useState("");
   const [log, setLog] = useState<{ at: string; text: string }[]>([]);
   const [savedWord, setSavedWord] = useState("");
-  const [edits, setEdits] = useState<{ path: string; fields: Record<string, string> }[]>([]);
-  const [voice, setVoice] = useState<VoiceSettings>({ ...DEFAULT_VOICE });
-  const [male, setMale] = useState<{ id: string; label: string }[]>([]);
-  const [female, setFemale] = useState<{ id: string; label: string }[]>([]);
-  const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
-  const [savedVoice, setSavedVoice] = useState("");
-  const [playing, setPlaying] = useState("");
   const [novoKey, setNovoKey] = useState("");
   const [novoSecret, setNovoSecret] = useState("");
   const [callsConnected, setCallsConnected] = useState(false);
@@ -123,16 +105,6 @@ export function AdminPrices() {
     }[]
   >([]);
   const [callView, setCallView] = useState<"overview" | "settings" | "knowledge" | "texts">("overview");
-  const previewRef = useRef<HTMLAudioElement | null>(null);
-
-  function stopPreview() {
-    const el = previewRef.current;
-    if (el) {
-      el.pause();
-      el.removeAttribute("src");
-    }
-    setPlaying("");
-  }
 
   async function load(t = token()) {
     if (!t) return;
@@ -148,15 +120,6 @@ export function AdminPrices() {
     setErr("");
     const meta = await adminMeta({ data: { token: t } });
     if (meta.ok) setLog(meta.log || []);
-    const ed = await adminEdits({ data: { token: t } });
-    if (ed.ok) setEdits(ed.edits || []);
-    const vo = await adminVoice({ data: { token: t } });
-    if (vo.ok) {
-      setVoice({ ...DEFAULT_VOICE, ...vo.settings });
-      setMale(vo.male);
-      setFemale(vo.female);
-      setRoles(vo.roles);
-    }
     const calls = await adminCalls({ data: { token: t, action: "status" } });
     if (calls.ok) {
       setCallsConnected(Boolean(calls.connected));
@@ -278,49 +241,6 @@ export function AdminPrices() {
     setBusy(false);
     if (!res.ok) setErr(res.error);
     else await load();
-  }
-
-  async function listen(who: "oleg" | "olga" | "both") {
-    stopPreview();
-    const el = previewRef.current || new Audio();
-    previewRef.current = el;
-    el.muted = false;
-    el.volume = 1;
-    const people = who === "both" ? (["oleg", "olga"] as const) : [who];
-    setPlaying(who === "both" ? "Олег и Ольга" : who === "olga" ? "Ольга" : "Олег");
-    try {
-      for (const person of people) {
-        const sample =
-          person === "olga"
-            ? voice.sampleOlga || DEFAULT_VOICE.sampleOlga
-            : voice.sampleOleg || DEFAULT_VOICE.sampleOleg;
-        const res = await speakAgent({
-          data: {
-            text: sample,
-            who: person,
-            preview: voice,
-          },
-        });
-        if (!res.ok || !("audio" in res)) {
-          setErr("Не удалось проиграть голос. Проверьте баланс Yandex SpeechKit.");
-          setPlaying("");
-          return;
-        }
-        await new Promise<void>((resolve, reject) => {
-          el.onended = () => resolve();
-          el.onerror = () => reject(new Error("audio"));
-          el.playbackRate = 1;
-          el.volume = "volume" in res ? Number(res.volume) : 1;
-          el.src = res.audio;
-          const play = el.play();
-          if (play && typeof play.catch === "function") play.catch(() => reject(new Error("play")));
-        });
-        if (who === "both") await new Promise((r) => setTimeout(r, 80 + (voice.turnGap || 0) * 1000));
-      }
-    } catch {
-      setErr("Браузер не дал включить звук. Нажмите «Прослушать» ещё раз.");
-    }
-    setPlaying("");
   }
 
   function patch(path: string, key: "all" | "kbm" | "tmx", value: string) {
@@ -510,265 +430,8 @@ export function AdminPrices() {
         </section>
       ) : null}
 
-      {tab === "voice" ? (
-        <section className="mt-10 space-y-6">
-          <div>
-            <h2 className="font-display text-3xl">Изменение сайта голосом</h2>
-            <p className="mt-2 max-w-2xl text-sm text-muted">
-              Олег и Ольга правят тексты и цены, когда открыт голосовой доступ. Ниже — как говорить и что уже изменено.
-            </p>
-          </div>
-
-          <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-            <p className="text-sm font-semibold">Настройки сценария</p>
-            <ol className="mt-3 space-y-2 text-sm leading-relaxed">
-              <li>1. Откройте нужную страницу сайта и включите голосовой режим в чате.</li>
-              <li>2. Скажите: «хочу внести изменения на сайт».</li>
-              <li>3. Назовите кодовое слово из раздела «Голосовой доступ».</li>
-              <li>4. Скажите, что менять. Страница обновится сама.</li>
-            </ol>
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              <p className="rounded-2xl bg-surface-2 p-4 text-sm">
-                <span className="font-semibold">Главная:</span> «заголовок», «текст под заголовком».
-              </p>
-              <p className="rounded-2xl bg-surface-2 p-4 text-sm">
-                <span className="font-semibold">Курс:</span> «заголовок», «описание», «текст о курсе», «почему сейчас».
-              </p>
-              <p className="rounded-2xl bg-surface-2 p-4 text-sm">
-                <span className="font-semibold">Цена:</span> «поставь художественной студии 3–4 3200» или «всей школе плюс 200».
-              </p>
-              <p className="rounded-2xl bg-surface-2 p-4 text-sm">
-                <span className="font-semibold">Сброс:</span> «верни исходный заголовок». Кнопка «Вернуть» ниже делает то же.
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-            <p className="text-sm font-semibold">Что уже изменено голосом</p>
-            {edits.length ? (
-              <ul className="mt-3 space-y-3">
-                {edits.map((item) => (
-                  <li key={item.path} className="rounded-2xl bg-surface-2 p-3">
-                    <p className="text-sm font-semibold">{item.path}</p>
-                    {Object.entries(item.fields).map(([key, value]) => (
-                      <p key={key} className="mt-2 flex items-start justify-between gap-3 text-sm">
-                        <span>
-                          <span className="font-medium">{fieldLabel(key)}:</span> {value.slice(0, 180)}
-                          {value.length > 180 ? "…" : ""}
-                        </span>
-                        <button
-                          type="button"
-                          className="shrink-0 text-xs font-semibold text-primary"
-                          onClick={async () => {
-                            setBusy(true);
-                            await adminClearEdit({ data: { token: token(), path: item.path, field: key } });
-                            await load();
-                            setBusy(false);
-                          }}
-                        >
-                          Вернуть
-                        </button>
-                      </p>
-                    ))}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2 text-sm text-muted">Пока нет правок текстов — на сайте исходные формулировки.</p>
-            )}
-          </div>
-        </section>
-      ) : null}
-
-      {tab === "voices" ? (
-        <section className="mt-10 space-y-6">
-          <div>
-            <h2 className="font-display text-3xl">Настройки голосов</h2>
-            <p className="mt-2 max-w-2xl text-sm text-muted">
-              У Олега и Ольги свои тембр, интонация, темп и громкость. Двигайте ползунки и сразу слушайте — сохранять не обязательно, пока не решите.
-            </p>
-          </div>
-          <div className="grid gap-5 lg:grid-cols-2">
-            {(
-              [
-                {
-                  who: "oleg" as const,
-                  title: "Олег",
-                  sub: "Мужской голос, техника и инженерия",
-                  voiceKey: "oleg" as const,
-                  speedKey: "olegSpeed" as const,
-                  moodKey: "olegMood" as const,
-                  volumeKey: "olegVolume" as const,
-                  sampleKey: "sampleOleg" as const,
-                  options: male.length ? male : [{ id: "zahar", label: "Захар" }],
-                },
-                {
-                  who: "olga" as const,
-                  title: "Ольга",
-                  sub: "Женский голос, запись и творчество",
-                  voiceKey: "olga" as const,
-                  speedKey: "olgaSpeed" as const,
-                  moodKey: "olgaMood" as const,
-                  volumeKey: "olgaVolume" as const,
-                  sampleKey: "sampleOlga" as const,
-                  options: female.length ? female : [{ id: "alena", label: "Алёна" }],
-                },
-              ]
-            ).map((card) => (
-              <div key={card.who} className="rounded-[1.8rem] bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-display text-2xl">{card.title}</p>
-                    <p className="mt-1 text-sm text-muted">{card.sub}</p>
-                  </div>
-                  <Button type="button" variant="secondary" onClick={() => void listen(card.who)}>
-                    Слушать
-                  </Button>
-                </div>
-                <label className="mt-5 block text-sm">
-                  Тембр
-                  <select
-                    className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                    value={voice[card.voiceKey]}
-                    onChange={(e) => setVoice((v) => ({ ...v, [card.voiceKey]: e.target.value }))}
-                  >
-                    {card.options.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="mt-4 block text-sm">
-                  Интонация
-                  <select
-                    className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                    value={voice[card.moodKey]}
-                    onChange={(e) => setVoice((v) => ({ ...v, [card.moodKey]: e.target.value }))}
-                  >
-                    {(roles.length ? roles : [{ id: "good", label: "Радостный" }]).map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="mt-4 block text-sm">
-                  Темп {Number(voice[card.speedKey]).toFixed(2)}
-                  <input
-                    type="range"
-                    min="0.9"
-                    max="1.4"
-                    step="0.01"
-                    value={voice[card.speedKey]}
-                    onChange={(e) => setVoice((v) => ({ ...v, [card.speedKey]: Number(e.target.value) }))}
-                    className="mt-3 block w-full"
-                  />
-                  <span className="text-xs text-muted">0.9 медленнее · 1.16 живо · 1.4 быстрее</span>
-                </label>
-                <label className="mt-4 block text-sm">
-                  Громкость {Math.round(Number(voice[card.volumeKey]) * 100)}%
-                  <input
-                    type="range"
-                    min="0.45"
-                    max="1"
-                    step="0.05"
-                    value={voice[card.volumeKey]}
-                    onChange={(e) => setVoice((v) => ({ ...v, [card.volumeKey]: Number(e.target.value) }))}
-                    className="mt-3 block w-full"
-                  />
-                </label>
-                <label className="mt-4 block text-sm">
-                  Фраза для прослушивания
-                  <textarea
-                    rows={3}
-                    className="mt-1 w-full rounded-xl bg-surface-2 px-3 py-2 text-sm ring-1 ring-black/10"
-                    value={voice[card.sampleKey]}
-                    onChange={(e) => setVoice((v) => ({ ...v, [card.sampleKey]: e.target.value }))}
-                  />
-                </label>
-              </div>
-            ))}
-          </div>
-          <div className="rounded-[1.8rem] bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-            <p className="font-display text-xl">Как они говорят вместе</p>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <label className="text-sm">
-                Пауза внутри фразы {Number(voice.pause).toFixed(2)}
-                <input
-                  type="range"
-                  min="0"
-                  max="0.4"
-                  step="0.02"
-                  value={voice.pause}
-                  onChange={(e) => setVoice((v) => ({ ...v, pause: Number(e.target.value) }))}
-                  className="mt-3 block w-full"
-                />
-                <span className="text-xs text-muted">Левее — слова ближе, речь плотнее</span>
-              </label>
-              <label className="text-sm">
-                Пауза между Олегом и Ольгой {Number(voice.turnGap).toFixed(2)} с
-                <input
-                  type="range"
-                  min="0"
-                  max="0.7"
-                  step="0.02"
-                  value={voice.turnGap}
-                  onChange={(e) => setVoice((v) => ({ ...v, turnGap: Number(e.target.value) }))}
-                  className="mt-3 block w-full"
-                />
-                <span className="text-xs text-muted">Сколько тишины между их репликами вдвоём</span>
-              </label>
-            </div>
-            {playing ? <p className="mt-4 text-sm font-semibold text-primary">Играет: {playing}</p> : null}
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              <Button type="button" onClick={() => void listen("both")}>
-                Прослушать обоих
-              </Button>
-              {playing ? (
-                <Button type="button" variant="secondary" onClick={stopPreview}>
-                  Стоп
-                </Button>
-              ) : null}
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  const res = await adminSaveVoice({
-                    data: { token: token(), ...voice },
-                  });
-                  setBusy(false);
-                  if (!res.ok) setErr(res.error);
-                  else {
-                    setVoice({ ...DEFAULT_VOICE, ...res.settings });
-                    setSavedVoice("Голоса сохранены");
-                  }
-                }}
-              >
-                Сохранить
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={busy}
-                onClick={() => {
-                  setVoice({ ...DEFAULT_VOICE });
-                  setSavedVoice("Сброшено к заводским. Нажмите «Сохранить», чтобы применить.");
-                }}
-              >
-                Сбросить
-              </Button>
-              {savedVoice ? <p className="text-sm text-primary">{savedVoice}</p> : null}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
       {tab === "calls" ? <AdminCalls /> : null}
       {tab === "dossiers" ? <AdminDossiers /> : null}
-      {tab === "chats" ? <AdminChats /> : null}
       {tab === "agent" ? <AdminAgent /> : null}
       {tab === "train" ? <AdminTrain /> : null}
 
