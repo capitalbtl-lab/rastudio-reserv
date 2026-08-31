@@ -184,6 +184,7 @@ export function listTranscripts(limit = 40) {
             courseNote: c.crm.courseNote,
             archived: c.crm.archived,
             dropped: c.crm.dropped,
+            isStudy: c.crm.isStudy,
             months: c.crm.months,
             lastAttend: c.crm.lastAttend,
             branch: c.crm.branch,
