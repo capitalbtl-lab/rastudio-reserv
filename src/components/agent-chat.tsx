@@ -51,7 +51,7 @@ export function AgentChat() {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] md:inset-auto md:bottom-6 md:right-6">
       {open ? (
-        <div className="pointer-events-auto mx-3 mb-[4.75rem] flex h-[min(32rem,70dvh)] flex-col overflow-hidden rounded-3xl bg-surface shadow-[var(--shadow-border-hover)] md:mx-0 md:mb-0 md:h-[32rem] md:w-[22.5rem]">
+        <div className="pointer-events-auto mx-3 mb-[4.75rem] flex h-[min(34rem,72dvh)] flex-col overflow-hidden rounded-3xl bg-surface shadow-[var(--shadow-border-hover)] md:mx-0 md:mb-0 md:h-[34rem] md:w-[24rem]">
           <div className="flex items-center justify-between bg-header px-4 py-3 text-header-fg">
             <div>
               <p className="text-[0.72rem] uppercase tracking-[0.12em] text-header-fg/55">Студия «Развивайся»</p>
@@ -106,14 +106,26 @@ export function AgentChat() {
           </form>
         </div>
       ) : null}
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="pointer-events-auto absolute bottom-[4.6rem] right-3 grid size-14 place-items-center rounded-full bg-header text-header-fg shadow-[var(--shadow-border-hover)] md:static md:size-14"
-        aria-label={open ? "Закрыть чат администратора" : "Написать администратору"}
-      >
-        {open ? <X className="size-6" /> : <MessageCircle className="size-6" />}
-      </button>
+      {open ? null : (
+        <div className="pointer-events-auto absolute bottom-[4.85rem] right-3 md:static">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="agent-fab relative inline-flex h-14 items-center gap-2.5 overflow-visible rounded-full bg-primary px-4 text-primary-foreground shadow-[0_12px_32px_-8px_rgba(32,94,220,0.7)] md:h-16 md:px-5"
+            aria-label="Написать администратору — подберём курс"
+          >
+            <span className="agent-fab-ring pointer-events-none absolute inset-0 rounded-full bg-primary/35" aria-hidden />
+            <span className="relative grid size-10 place-items-center rounded-full bg-white/20 md:size-11">
+              <span className="absolute right-0.5 top-0.5 size-2.5 rounded-full bg-[#6BDB03] ring-2 ring-primary" />
+              <MessageCircle className="size-5 md:size-6" />
+            </span>
+            <span className="relative pr-1 text-left leading-tight">
+              <span className="block font-display text-[0.95rem] font-semibold md:text-[1.05rem]">Подобрать курс</span>
+              <span className="block text-[0.7rem] font-medium text-white/80">Ответим сейчас</span>
+            </span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

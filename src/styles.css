@@ -160,6 +160,39 @@
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
+.agent-fab {
+  animation: agent-pulse 2.4s var(--ease-smooth-out) infinite;
+}
+
+.agent-fab-ring {
+  animation: agent-ring 2.4s var(--ease-smooth-out) infinite;
+}
+
+@keyframes agent-pulse {
+  0%,
+  100% {
+    transform: translateZ(0) scale(1);
+  }
+  50% {
+    transform: translateZ(0) scale(1.035);
+  }
+}
+
+@keyframes agent-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
 .snap-row {
   display: flex;
   gap: 0.85rem;
@@ -663,7 +696,9 @@
 .is-page-hidden .ink::after,
 .is-page-hidden .review-ink::before,
 .is-page-hidden .review-ink::after,
-.is-page-hidden .marquee-track {
+.is-page-hidden .marquee-track,
+.is-page-hidden .agent-fab,
+.is-page-hidden .agent-fab-ring {
   animation-play-state: paused !important;
   will-change: auto;
 }
@@ -672,7 +707,9 @@
   .marquee-track,
   .hero-in,
   .hero-in-2,
-  .hero-in-3 {
+  .hero-in-3,
+  .agent-fab,
+  .agent-fab-ring {
     animation: none;
     opacity: 1;
     transform: none;
