@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ProgrammingCoursePage } from "@/components/programming-course";
 import { ProgrammingSchoolPage } from "@/components/programming-school";
 import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
-import { ScheduleBlock } from "@/components/cms-blocks";
+import { ScheduleBlock, CoursePageHero } from "@/components/cms-blocks";
 import { cn } from "@/lib/utils";
 
 type MasterCard = { path: string; h1: string };
@@ -147,41 +147,28 @@ function splitCourseHeading(h1: string) {
 }
 
 function CinematicPage({ page, schedule }: { page: SitePage; schedule: CmsSession[] }) {
-  const hero = page.images[0];
   const body = page.paragraphs;
   const heading = splitCourseHeading(page.h1);
 
   return (
     <article>
-      <section className="ink relative isolate overflow-hidden text-header-fg">
-        {hero ? (
-          <SeoImage
-            src={hero.src}
-            alt={hero.alt}
-            filename={hero.filename}
-            className="absolute inset-0 h-full w-full"
-            imgClassName="h-full w-full object-cover"
-            loading="eager"
-          />
-        ) : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/20" />
-        <div className="relative mx-auto flex min-h-[26dvh] max-w-[1180px] flex-col justify-end px-4 pb-6 pt-20 md:px-5 md:min-h-[26dvh] md:pb-8">
-          <Breadcrumb page={page} onDark />
-          {heading.age ? <p className="kicker mt-3 text-header-fg/75">{heading.age}</p> : null}
-          <h1 className="display mt-2 max-w-4xl text-[clamp(1.35rem,0.9rem+2vw,2.35rem)] leading-tight">{heading.title}</h1>
-          {page.description ? (
-            <p className="mt-3 max-w-2xl text-sm text-header-fg/90 md:text-base">{page.description}</p>
-          ) : null}
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Button asChild>
-              <a href="#trial">Записаться</a>
-            </Button>
-            <Button asChild>
-              <a href={SITE.phoneHref}>{SITE.phone}</a>
-            </Button>
-          </div>
-        </div>
-      </section>
+      <CoursePageHero
+        kicker={
+          <>
+            <PageLink to="/" className="hover:underline">
+              Главная
+            </PageLink>
+            <span className="mx-2 text-header-fg/35">/</span>
+            <PageLink to="/allcourses" className="hover:underline">
+              Курсы
+            </PageLink>
+          </>
+        }
+        age={heading.age}
+        title={heading.title}
+        description={page.description}
+        images={page.images}
+      />
 
       <div className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
         <div className="grid gap-10 lg:grid-cols-[1fr_18rem]">

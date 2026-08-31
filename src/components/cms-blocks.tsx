@@ -1,6 +1,8 @@
+import type { ReactNode } from "react";
 import { Check, MapPin } from "lucide-react";
 import type { CmsImage, CmsSession, CmsTrajectoryStep } from "@/data/cms";
 import { courseKey } from "@/data/cms";
+import { SITE } from "@/data/site";
 import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 import { Button } from "@/components/ui/button";
@@ -183,5 +185,94 @@ export function ProseBlocks({ text, className }: { text: string; className?: str
         <p key={p.slice(0, 48)}>{p}</p>
       ))}
     </div>
+  );
+}
+
+type HeroShot = { src: string; filename?: string; alt?: string };
+
+export function CoursePageHero({
+  kicker,
+  age,
+  title,
+  description,
+  images,
+}: {
+  kicker: ReactNode;
+  age?: string | null;
+  title: string;
+  description?: string | null;
+  images: HeroShot[];
+}) {
+  const srcs = images.filter((img) => img?.src);
+  const shots: HeroShot[] = [];
+  if (srcs.length) {
+    shots.push(...srcs);
+    let i = 0;
+    while (shots.length < 3) {
+      shots.push(srcs[i % srcs.length]);
+      i += 1;
+    }
+    shots.splice(3);
+  }
+
+  return (
+    <section className="ink relative isolate overflow-hidden text-header-fg">
+      <div className="page-wrap grid items-center gap-10 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[88dvh] lg:gap-8 lg:py-8">
+        <div className="relative z-10 max-w-xl">
+          <div className="hero-in kicker text-header-fg/55">{kicker}</div>
+          {age ? <p className="hero-in mt-4 text-sm font-medium text-header-fg/70">{age}</p> : null}
+          <h1 className="hero-in hero-in-2 mt-5 text-[clamp(2.1rem,1.2rem+3vw,3.8rem)] leading-[1.05]">
+            {title}
+          </h1>
+          {description ? (
+            <p className="hero-in hero-in-3 mt-5 max-w-md text-[1.02rem] leading-relaxed text-header-fg/70">
+              {description}
+            </p>
+          ) : null}
+          <div className="hero-in hero-in-3 mt-8 flex flex-wrap gap-3">
+            <Button asChild size="lg">
+              <a href="#trial">Записаться</a>
+            </Button>
+            <Button asChild size="lg" variant="outline">
+              <a href={SITE.phoneHref}>{SITE.phone}</a>
+            </Button>
+          </div>
+        </div>
+
+        {shots.length ? (
+          <>
+            <div className="relative hidden lg:block">
+              <div className="photo-stack">
+                {shots.map((shot, i) => (
+                  <div key={`${shot.src}-${i}`} className="shot bg-header">
+                    <SeoImage
+                      src={shot.src}
+                      alt={shot.alt || title}
+                      filename={shot.filename}
+                      className="h-full w-full"
+                      imgClassName="h-full w-full object-cover"
+                      loading="eager"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="snap-row lg:hidden">
+              {shots.map((shot, i) => (
+                <div key={`${shot.src}-m-${i}`} className="snap-card overflow-hidden rounded-3xl">
+                  <SeoImage
+                    src={shot.src}
+                    alt={shot.alt || title}
+                    filename={shot.filename}
+                    className="aspect-4/5"
+                    loading="eager"
+                  />
+                </div>
+              ))}
+            </div>
+          </>
+        ) : null}
+      </div>
+    </section>
   );
 }

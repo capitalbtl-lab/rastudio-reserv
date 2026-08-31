@@ -2,10 +2,8 @@ import type { SitePage } from "@/data/catalog";
 import type { CmsCourse, CmsSession } from "@/data/cms";
 import { inkOn } from "@/data/cms";
 import { SITE } from "@/data/site";
-import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 import { TrialForm } from "@/components/trial-form";
-import { Button } from "@/components/ui/button";
 import {
   BulletList,
   CmsImg,
@@ -13,6 +11,7 @@ import {
   ProseBlocks,
   ScheduleBlock,
   Trajectory,
+  CoursePageHero,
 } from "@/components/cms-blocks";
 
 type Props = {
@@ -22,65 +21,40 @@ type Props = {
 };
 
 export function ProgrammingCoursePage({ page, course, schedule }: Props) {
-  const hero =
-    course.banner ||
-    course.gallery[0] ||
-    (page.images[0]
-      ? { src: page.images[0].src, filename: page.images[0].filename, alt: page.images[0].alt }
-      : null);
   const accent = course.accent || "#205EDC";
+  const images = [];
+  const seen = new Set<string>();
+  for (const img of [
+    course.banner,
+    ...course.gallery,
+    page.images[0]
+      ? { src: page.images[0].src, filename: page.images[0].filename, alt: page.images[0].alt }
+      : null,
+  ]) {
+    if (!img?.src || seen.has(img.src)) continue;
+    seen.add(img.src);
+    images.push(img);
+  }
 
   return (
     <article>
-      <section className="ink relative isolate overflow-hidden text-header-fg">
-        {hero ? (
-          <SeoImage
-            src={hero.src}
-            alt={hero.alt || course.name}
-            filename={hero.filename}
-            className="absolute inset-0 h-full w-full"
-            imgClassName="h-full w-full object-cover"
-            loading="eager"
-          />
-        ) : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/20" />
-        <div className="relative mx-auto flex min-h-[35dvh] max-w-[1180px] flex-col justify-end px-4 pb-6 pt-20 md:px-5 md:pb-8">
-          <p className="text-sm font-medium text-header-fg/80">
+      <CoursePageHero
+        kicker={
+          <>
             <PageLink to="/" className="hover:underline">
               Главная
             </PageLink>
-            <span className="mx-2 text-header-fg/45">/</span>
+            <span className="mx-2 text-header-fg/35">/</span>
             <PageLink to="/programming-school" className="hover:underline">
               Школа программирования
             </PageLink>
-          </p>
-          <div className="mt-4 flex items-end gap-4">
-            {course.logo ? (
-              <CmsImg
-                image={course.logo}
-                className="hidden size-14 overflow-hidden bg-bg/10 sm:block"
-                alt={course.name}
-                loading="eager"
-              />
-            ) : null}
-            <div>
-              <p className="kicker text-header-fg/75">{course.age}</p>
-              <h1 className="display mt-2 max-w-4xl text-[clamp(1.35rem,0.9rem+2vw,2.35rem)] leading-tight">{course.name}</h1>
-              {course.program ? (
-                <p className="mt-3 max-w-2xl text-sm text-header-fg/90 md:text-base">{course.program}</p>
-              ) : null}
-            </div>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Button asChild>
-              <a href="#trial">Записаться</a>
-            </Button>
-            <Button asChild>
-              <a href={SITE.phoneHref}>{SITE.phone}</a>
-            </Button>
-          </div>
-        </div>
-      </section>
+          </>
+        }
+        age={course.age}
+        title={course.name}
+        description={course.program}
+        images={images}
+      />
 
       {course.aboutLead ? (
         <section className="border-b border-border bg-surface">
