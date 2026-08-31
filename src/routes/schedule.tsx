@@ -29,7 +29,7 @@ function SchedulePage() {
         <p className="kicker">Коломна · Луховицы</p>
         <h1 className="display mt-3 text-4xl md:text-5xl">Расписание</h1>
         <p className="mt-4 max-w-2xl text-muted">
-          Сначала город и возраст, затем день. В списке — курс, время и филиал.
+          Город, возраст, день — группы как в AlfaCRM. Время обновляется с расписания студии.
         </p>
         <ScheduleFinder sessions={sessions} />
       </article>

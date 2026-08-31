@@ -12,6 +12,7 @@ import {
   scheduleFor,
   allSchedule,
 } from "./catalog.server";
+import { sessionsFromCrm, filterCrmSessions } from "./alfacrm-schedule";
 
 export const loadSitePage = createServerFn({ method: "GET" })
   .validator((splat: unknown) => (typeof splat === "string" ? splat : undefined))
@@ -39,10 +40,27 @@ export const loadSitePage = createServerFn({ method: "GET" })
         : page.path === "/programming-school"
           ? canonicalTrajectory()
           : [],
-      schedule: scheduleFor(data),
+      schedule: await scheduleWithCrm(data),
     };
   });
 
+async function scheduleWithCrm(splat?: string) {
+  try {
+    const crm = await sessionsFromCrm();
+    const filtered = filterCrmSessions(crm, splat ? (splat.startsWith("/") ? splat : `/${splat}`) : splat);
+    if (filtered.length) return filtered;
+  } catch {
+    /* CMS fallback */
+  }
+  return scheduleFor(splat);
+}
+
 export const loadFullSchedule = createServerFn({ method: "GET" }).handler(async () => {
+  try {
+    const crm = await sessionsFromCrm();
+    if (crm.length) return { sessions: crm };
+  } catch {
+    /* CMS fallback */
+  }
   return { sessions: allSchedule() };
 });

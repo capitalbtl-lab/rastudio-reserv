@@ -41,6 +41,7 @@ export function courseTitle(session: CmsSession) {
 }
 
 export function courseHref(session: CmsSession) {
+  if (session.signup?.startsWith("/")) return session.signup;
   return hrefForCourseFilter(courseKey(session), session.age);
 }
 

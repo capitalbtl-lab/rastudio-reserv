@@ -31,13 +31,13 @@ export function formatRuPhone(raw: string) {
   return raw.trim();
 }
 
-async function request<T>(path: string, body: unknown, token?: string): Promise<T> {
+export async function request<T>(path: string, body: unknown, tok?: string): Promise<T> {
   await throttle();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
   };
-  if (token) headers["X-ALFACRM-TOKEN"] = token;
+  if (tok) headers["X-ALFACRM-TOKEN"] = tok;
   const res = await fetch(`${HOST()}${path}`, {
     method: "POST",
     headers,
@@ -56,7 +56,7 @@ async function request<T>(path: string, body: unknown, token?: string): Promise<
   return json as T;
 }
 
-async function token() {
+export async function token() {
   if (cache && cache.exp > Date.now()) return cache.token;
   const email = EMAIL();
   const apiKey = API_KEY();
