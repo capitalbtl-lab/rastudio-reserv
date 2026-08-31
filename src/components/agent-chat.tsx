@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { X, Send, Mic, Volume2 } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
 import { speakAgent } from "@/data/agent-voice";
@@ -75,6 +75,8 @@ export function AgentChat() {
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([{ role: "assistant", content: HELLO }]);
+  const [box, setBox] = useState({ w: 400, h: 608 });
+  const dragRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const voiceOnRef = useRef(false);
   const recRef = useRef<Rec | null>(null);
@@ -302,10 +304,45 @@ export function AgentChat() {
     }
   }
 
+  function onResizeStart(e: PointerEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragRef.current = { x: e.clientX, y: e.clientY, w: box.w, h: box.h };
+  }
+
+  function onResizeMove(e: PointerEvent<HTMLButtonElement>) {
+    const start = dragRef.current;
+    if (!start) return;
+    const maxW = Math.min(760, window.innerWidth - 32);
+    const maxH = Math.min(860, window.innerHeight - 32);
+    setBox({
+      w: Math.max(340, Math.min(maxW, start.w + (start.x - e.clientX))),
+      h: Math.max(460, Math.min(maxH, start.h + (start.y - e.clientY))),
+    });
+  }
+
+  function onResizeEnd() {
+    dragRef.current = null;
+  }
+
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] md:inset-auto md:bottom-6 md:right-6">
       {open ? (
-        <div className="pointer-events-auto mx-3 mb-[4.75rem] flex h-[min(38rem,76dvh)] flex-col overflow-hidden rounded-[1.85rem] bg-white ring-[3px] ring-white shadow-[0_28px_70px_-18px_rgba(9,12,18,0.55)] md:mx-0 md:mb-0 md:h-[38rem] md:w-[25rem]">
+        <div
+          className="agent-panel pointer-events-auto relative mx-3 mb-[4.75rem] flex h-[min(38rem,76dvh)] w-auto flex-col overflow-hidden rounded-[1.85rem] bg-white ring-[3px] ring-white shadow-[0_28px_70px_-18px_rgba(9,12,18,0.55)] md:mx-0 md:mb-0 md:h-[var(--agent-h)] md:w-[var(--agent-w)]"
+          style={{ ["--agent-w" as string]: `${box.w}px`, ["--agent-h" as string]: `${box.h}px` }}
+        >
+          <button
+            type="button"
+            className="absolute left-1.5 top-1.5 z-10 hidden h-4 w-4 cursor-nwse-resize rounded-sm md:block"
+            aria-label="Изменить размер окна"
+            onPointerDown={onResizeStart}
+            onPointerMove={onResizeMove}
+            onPointerUp={onResizeEnd}
+            onPointerCancel={onResizeEnd}
+          >
+            <span className="absolute left-0.5 top-0.5 h-2.5 w-2.5 rounded-[2px] border-l-2 border-t-2 border-white/70" />
+          </button>
           <div className="relative bg-primary px-4 pb-5 pt-3.5 text-primary-foreground">
             <div className="absolute right-3 top-3">
               <button
@@ -341,7 +378,7 @@ export function AgentChat() {
                         ? "Администраторы студии · онлайн"
                         : "Администратор студии · онлайн"}
                 </p>
-                <p className="mt-1.5 flex flex-wrap gap-x-3 text-[0.78rem] font-semibold">
+                <p className="mt-1.5 flex flex-nowrap items-center gap-1.5 whitespace-nowrap text-[0.68rem] font-medium leading-none">
                   <button
                     type="button"
                     className={cn("underline-offset-2", partner === "olga" ? "underline" : "text-white/80 hover:text-white")}
@@ -349,6 +386,7 @@ export function AgentChat() {
                   >
                     Говорить с Ольгой
                   </button>
+                  <span className="text-white/40">·</span>
                   <button
                     type="button"
                     className={cn("underline-offset-2", partner === "oleg" ? "underline" : "text-white/80 hover:text-white")}
