@@ -244,7 +244,7 @@ function Home() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="kicker text-primary">Каталог</p>
-            <h2 className="section-title mt-3">Курсы, как в большой сети</h2>
+            <h2 className="section-title mt-3">Курсы сети «Развивайся»</h2>
           </div>
           <PageLink to="/allcourses" className="text-sm font-semibold text-primary">
             Открыть каталог
