@@ -5,6 +5,7 @@ import { X, Send, Mic, Volume2 } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
 import { speakAgent } from "@/data/agent-voice";
 import { nextChips } from "@/data/agent-chips";
+import { parseTurns, faceOf, type Who } from "@/data/agent-turns";
 import { PageLink } from "@/components/page-link";
 import { SITE } from "@/data/site";
 import { cn } from "@/lib/utils";
@@ -27,15 +28,8 @@ function speechCtor() {
 type Msg = { role: "user" | "assistant"; content: string };
 type Mood = "hello" | "think" | "happy" | "sorry";
 
-const HELLO =
-  "Подберу курс за минуту. Сначала возраст — так не предложим слишком сложное и не обидим младших.";
-
-const ROBOT: Record<Mood, { src: string; alt: string }> = {
-  hello: { src: "/brand/agent/hello.webp", alt: "Робот-администратор улыбается" },
-  think: { src: "/brand/agent/think.webp", alt: "Робот-администратор думает" },
-  happy: { src: "/brand/agent/happy.webp", alt: "Робот-администратор радуется" },
-  sorry: { src: "/brand/agent/sorry.webp", alt: "Робот-администратор извиняется" },
-};
+const HELLO = `Олег: Подберём курс за минуту. Сначала возраст — так не предложим слишком сложное.
+Ольга: Я рядом. Нажмите, сколько лет ребёнку — сразу скажу, что зайдёт именно ему.`;
 
 function moodOf(messages: Msg[], busy: boolean): Mood {
   if (busy) return "think";
@@ -45,31 +39,30 @@ function moodOf(messages: Msg[], busy: boolean): Mood {
   return "hello";
 }
 
-function Robot({ mood, size, live }: { mood: Mood; size: number; live?: boolean }) {
-  const r = ROBOT[mood];
-  const cls = cn(
-    "robot-face overflow-hidden rounded-full bg-[#f3efe6] object-cover shadow-[0_8px_20px_-8px_rgba(18,20,26,0.45)]",
-    !(live && mood === "hello") && `robot-${mood}`,
+function Face({ who, mood, size }: { who: Who; mood: Mood; size: number }) {
+  return (
+    <img
+      src={faceOf(who, mood)}
+      alt={who === "olga" ? "Ольга" : "Олег"}
+      width={size}
+      height={size}
+      className={cn("robot-face overflow-hidden rounded-full bg-[#f3efe6] object-cover shadow-[0_8px_20px_-8px_rgba(18,20,26,0.45)]", `robot-${mood}`)}
+      style={{ width: size, height: size }}
+    />
   );
-  const style = { width: size, height: size };
-  if (live && mood === "hello") {
-    return (
-      <video
-        src="/brand/agent/idle.mp4"
-        autoPlay
-        loop
-        muted
-        playsInline
-        poster={r.src}
-        width={size}
-        height={size}
-        className={cls}
-        style={style}
-        aria-label={r.alt}
-      />
-    );
-  }
-  return <img src={r.src} alt={r.alt} width={size} height={size} className={cls} style={style} />;
+}
+
+function Duo({ size, mood }: { size: number; mood: Mood }) {
+  return (
+    <div className="relative shrink-0" style={{ width: size * 1.62, height: size }}>
+      <div className="absolute left-0 top-0">
+        <Face who="oleg" mood={mood} size={size} />
+      </div>
+      <div className="absolute top-0" style={{ left: size * 0.58 }}>
+        <Face who="olga" mood={mood === "sorry" ? "hello" : mood} size={size} />
+      </div>
+    </div>
+  );
 }
 
 export function AgentChat() {
@@ -109,15 +102,20 @@ export function AgentChat() {
     stopListen();
     setSpeaking(true);
     try {
-      const res = await speakAgent({ data: { text: phrase } });
-      if (!res.ok || !("audio" in res) || !res.audio) return;
-      await new Promise<void>((resolve) => {
-        const audio = new Audio(res.audio);
-        audioRef.current = audio;
-        audio.onended = () => resolve();
-        audio.onerror = () => resolve();
-        void audio.play().catch(() => resolve());
-      });
+      for (const turn of parseTurns(phrase)) {
+        if (!voiceOnRef.current) break;
+        const res = await speakAgent({
+          data: { text: turn.text, voice: turn.who === "olga" ? "alena" : "filipp" },
+        });
+        if (!res.ok || !("audio" in res) || !res.audio) continue;
+        await new Promise<void>((resolve) => {
+          const audio = new Audio(res.audio);
+          audioRef.current = audio;
+          audio.onended = () => resolve();
+          audio.onerror = () => resolve();
+          void audio.play().catch(() => resolve());
+        });
+      }
     } finally {
       setSpeaking(false);
       audioRef.current = null;
@@ -210,32 +208,40 @@ export function AgentChat() {
             </div>
             <div className="flex items-end gap-3 pr-12">
               <div className="-mb-10 shrink-0">
-                <Robot mood={mood} size={88} live />
+                <Duo size={78} mood={mood} />
               </div>
               <div className="min-w-0 pb-1">
-                <p className="font-display text-[1.15rem] leading-tight">Олег</p>
+                <p className="font-display text-[1.15rem] leading-tight">Олег и Ольга</p>
                 <p className="text-[0.78rem] text-white/85">
-                  {speaking ? "Говорит" : listening ? "Слушает вас" : "Администратор студии · онлайн"}
+                  {speaking ? "Говорят с вами" : listening ? "Слушают вас" : "Администраторы студии · онлайн"}
                 </p>
               </div>
             </div>
           </div>
           <div className="flex-1 space-y-3 overflow-y-auto bg-[#eef1f7] px-3.5 pb-4 pt-12">
-            {messages.map((m, i) => (
-              <div key={i} className={cn("flex items-end gap-2", m.role === "user" && "justify-end")}>
-                {m.role === "assistant" ? <Robot mood={i === messages.length - 1 ? mood : "hello"} size={36} /> : null}
-                <div
-                  className={cn(
-                    "max-w-[78%] px-3.5 py-2.5 text-[0.92rem] leading-relaxed",
-                    m.role === "assistant"
-                      ? "rounded-2xl rounded-bl-md bg-white text-fg shadow-[0_8px_24px_-16px_rgba(18,20,26,0.4)]"
-                      : "rounded-2xl rounded-br-md bg-header text-header-fg",
-                  )}
-                >
-                  {m.content}
+            {messages.map((m, i) =>
+              m.role === "user" ? (
+                <div key={i} className="flex justify-end">
+                  <div className="max-w-[78%] rounded-2xl rounded-br-md bg-header px-3.5 py-2.5 text-[0.92rem] leading-relaxed text-header-fg">
+                    {m.content}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ) : (
+                parseTurns(m.content).map((turn, t) => (
+                  <div key={`${i}-${t}`} className="flex items-end gap-2">
+                    <Face who={turn.who} mood={i === messages.length - 1 ? mood : "hello"} size={36} />
+                    <div className="max-w-[78%]">
+                      <p className="mb-0.5 pl-1 text-[0.65rem] font-semibold text-muted">
+                        {turn.who === "olga" ? "Ольга" : "Олег"}
+                      </p>
+                      <div className="rounded-2xl rounded-bl-md bg-white px-3.5 py-2.5 text-[0.92rem] leading-relaxed text-fg shadow-[0_8px_24px_-16px_rgba(18,20,26,0.4)]">
+                        {turn.text}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ),
+            )}
             {messages.length && !busy ? (
               <div className="pl-11">
                 <p className="mb-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">{offer.hint}</p>
@@ -288,7 +294,7 @@ export function AgentChat() {
                 </div>
               </div>
             ) : null}
-            {busy ? <p className="pl-11 text-xs font-medium text-muted">Олег думает…</p> : null}
+            {busy ? <p className="pl-11 text-xs font-medium text-muted">Олег и Ольга подбирают…</p> : null}
             <div ref={endRef} />
           </div>
           <form
@@ -349,16 +355,15 @@ export function AgentChat() {
             type="button"
             onClick={() => setOpen(true)}
             className="agent-fab relative inline-flex h-[3.65rem] items-center gap-2 overflow-visible rounded-full bg-white py-1 pl-1 pr-4 text-fg ring-[3px] ring-white shadow-[0_16px_40px_-12px_rgba(32,94,220,0.55)] md:h-[4.1rem] md:pr-5"
-            aria-label="Написать роботу-администратору"
+            aria-label="Написать администраторам студии"
           >
             <span className="agent-fab-ring pointer-events-none absolute inset-0 rounded-full bg-primary/25" aria-hidden />
-            <span className="relative">
-              <Robot mood="hello" size={52} live />
-              <span className="absolute bottom-0.5 right-0.5 size-2.5 rounded-full bg-[#6BDB03] ring-2 ring-white" />
+            <span className="relative pl-1">
+              <Duo size={48} mood="hello" />
             </span>
             <span className="relative pr-1 text-left leading-tight">
               <span className="block font-display text-[0.95rem] font-semibold md:text-[1.05rem]">Подобрать курс</span>
-              <span className="block text-[0.7rem] font-medium text-muted">Администратор онлайн</span>
+              <span className="block text-[0.7rem] font-medium text-muted">Олег и Ольга онлайн</span>
             </span>
           </button>
         </div>

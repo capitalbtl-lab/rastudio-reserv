@@ -10,18 +10,19 @@ function clean(text: string) {
 }
 
 export const speakAgent = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { text: string })
+  .validator((data: unknown) => data as { text: string; voice?: "filipp" | "alena" })
   .handler(async ({ data }) => {
     const key = process.env.YANDEX_API_KEY?.trim();
     const folder = process.env.YANDEX_FOLDER_ID?.trim();
     const text = clean(data.text || "");
     if (!key || !folder || !text) return { ok: false as const, error: "no-voice" };
+    const voice = data.voice === "alena" ? "alena" : "filipp";
     const body = new URLSearchParams({
       text,
       lang: "ru-RU",
-      voice: "filipp",
+      voice,
       emotion: "good",
-      speed: "1.3",
+      speed: voice === "alena" ? "1.25" : "1.3",
       format: "mp3",
       folderId: folder,
     });
