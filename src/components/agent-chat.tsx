@@ -193,18 +193,7 @@ export function AgentChat() {
       {open ? (
         <div className="pointer-events-auto mx-3 mb-[4.75rem] flex h-[min(38rem,76dvh)] flex-col overflow-hidden rounded-[1.85rem] bg-white ring-[3px] ring-white shadow-[0_28px_70px_-18px_rgba(9,12,18,0.55)] md:mx-0 md:mb-0 md:h-[38rem] md:w-[25rem]">
           <div className="relative bg-primary px-4 pb-5 pt-3.5 text-primary-foreground">
-            <div className="absolute right-3 top-3 flex gap-1">
-              <button
-                type="button"
-                className={cn(
-                  "grid size-9 place-items-center rounded-full",
-                  voiceOn ? "bg-white text-primary" : "bg-black/15 hover:bg-black/25",
-                )}
-                onClick={() => void toggleVoice()}
-                aria-label={voiceOn ? "Выключить голос" : "Включить голос"}
-              >
-                <Volume2 className="size-4" />
-              </button>
+            <div className="absolute right-3 top-3">
               <button
                 type="button"
                 className="grid size-9 place-items-center rounded-full bg-black/15 hover:bg-black/25"
@@ -219,7 +208,7 @@ export function AgentChat() {
                 <X className="size-5" />
               </button>
             </div>
-            <div className="flex items-end gap-3 pr-20">
+            <div className="flex items-end gap-3 pr-12">
               <div className="-mb-10 shrink-0">
                 <Robot mood={mood} size={88} live />
               </div>
@@ -309,6 +298,17 @@ export function AgentChat() {
               void send();
             }}
           >
+            <button
+              type="button"
+              onClick={() => void toggleVoice()}
+              className={cn(
+                "mb-2 flex h-11 w-full items-center justify-center gap-2 rounded-full text-[0.92rem] font-semibold",
+                voiceOn ? "bg-[#e8f0ff] text-primary ring-1 ring-primary/20" : "bg-primary text-primary-foreground",
+              )}
+            >
+              {voiceOn ? <Mic className="size-4" /> : <Volume2 className="size-4" />}
+              {voiceOn ? (listening ? "Слушаю… нажмите, чтобы выключить" : speaking ? "Говорю… нажмите, чтобы выключить" : "Выключить голосовой режим") : "Включить голосовой режим"}
+            </button>
             <div className="flex items-center gap-2 rounded-full bg-[#eef1f7] p-1 ring-1 ring-black/8 focus-within:ring-2 focus-within:ring-primary/40">
               <input
                 value={text}
