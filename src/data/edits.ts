@@ -10,6 +10,15 @@ import {
   type PageEdit,
 } from "./edits-core";
 import { findCoursePage } from "./agent-courses";
+export {
+  hydrateEdits,
+  snapshotEdits,
+  normEditPath,
+  EDIT_FIELDS,
+  type EditField,
+  type EditsStore,
+  type PageEdit,
+} from "./edits-core";
 
 function filePath() {
   return join(process.cwd(), "storage", "site-edits.json");
