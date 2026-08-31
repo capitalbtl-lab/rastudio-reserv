@@ -134,7 +134,10 @@ export async function upsertAlfaLead(lead: AlfaLead) {
     );
     if (upd.success === false) throw new Error(`alfacrm-update ${JSON.stringify(upd.errors || upd)}`);
     await request(`/v2api/${existing.branch}/task/create`, {
-      customer_id: existing.customer.id,
+      customer_ids: [existing.customer.id],
+      branch_ids: [existing.branch],
+      user_id: 1,
+      title: `Сайт: ${kind}`,
       text: taskText,
     }, t).catch(() => null);
     return { ok: true as const, id: existing.customer.id, duplicate: true, branch: existing.branch };
@@ -163,7 +166,10 @@ export async function upsertAlfaLead(lead: AlfaLead) {
     throw new Error(`alfacrm-create ${JSON.stringify(created.errors || created)}`);
   }
   await request(`/v2api/${branch}/task/create`, {
-    customer_id: id,
+    customer_ids: [id],
+    branch_ids: [branch],
+    user_id: 1,
+    title: `Сайт: ${kind}`,
     text: taskText,
   }, t).catch(() => null);
   return { ok: true as const, id, duplicate: false, branch };
