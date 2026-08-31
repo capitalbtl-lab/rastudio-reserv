@@ -282,29 +282,42 @@ ${batch.map((r) => `--- ${r.id} | ${r.title} ---\n${r.from}`).join("\n\n")}`,
   return rows;
 }
 
-export function docsPrompt(channel = "site") {
+export function docsPrompt(channel = "site", query = "") {
   const store = loadStore();
   const live = store.docs.filter((d) => d.active && d.status === "ok");
   if (!live.length) return "";
   const channels = loadChannels();
   const label = channels.find((c) => c.id === channel)?.label || channel;
+  const q = query.toLowerCase();
   const parts: string[] = [
-    "",
-    `ОФИЦИАЛЬНЫЕ ДОКУМЕНТЫ. Сейчас канал: ${label} (id=${channel}). Читай ТОЛЬКО блоки «Общее для всех» и «${label}». Другие каналы не используй. Текст полный, без сокращений. Не выдумывай условия.`,
+    `ОФИЦИАЛЬНЫЕ ДОКУМЕНТЫ. Канал: ${label} (id=${channel}). Читай свой столбец и факты. Не выдумывай условия.`,
   ];
   for (const d of live) {
     parts.push(`### ${KIND_LABEL[d.kind]} «${d.name}»`);
     const bag = d.byChannel || {};
     const mine = channel === "common" ? "" : bag[channel] || "";
     const common = bag.common || "";
-    if (mine.trim()) parts.push(`${label}:\n${mine}`);
-    else if (common.trim()) parts.push(`Общее для всех:\n${common}`);
-    else {
-      const on = d.items.filter((i) => i.on);
-      parts.push(d.text || on.map((it) => `${it.title}\n${it.body}`).join("\n\n"));
+    const raw = (mine.trim() || common.trim() || d.text || d.items.filter((i) => i.on).map((it) => `${it.title}\n${it.body}`).join("\n\n")).trim();
+    if (!raw) continue;
+    if (d.items.length && q) {
+      const scored = d.items
+        .filter((i) => i.on)
+        .map((it) => {
+          const blob = `${it.title}\n${it.body}`;
+          const hit = q.split(/\s+/).filter((w) => w.length > 3).reduce((n, w) => n + (blob.toLowerCase().includes(w) ? 1 : 0), 0);
+          return { blob, hit, title: it.title };
+        })
+        .sort((a, b) => b.hit - a.hit);
+      const picked = scored.filter((x) => x.hit > 0).slice(0, 6);
+      const use = picked.length ? picked : scored.slice(0, 4);
+      parts.push(use.map((x) => x.blob).join("\n\n"));
+    } else {
+      parts.push(raw);
     }
   }
-  return `\n${parts.join("\n\n")}\n`;
+  let text = parts.join("\n\n");
+  if (text.length > 4800) text = `${text.slice(0, 4800)}\n…`;
+  return `\n${text}\n`;
 }
 
 export const adminAgentDocs = createServerFn({ method: "POST" })

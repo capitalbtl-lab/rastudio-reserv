@@ -173,3 +173,20 @@ ${live}
 ${body}
 `;
 }
+
+export function programPitch(school: string, scripts: ScriptSection[] = DEFAULT_SCRIPTS) {
+  const t = school.toLowerCase();
+  const id = /худож|рисун|живопис|скульпт|манг/.test(t)
+    ? "program-art"
+    : /робот/.test(t)
+      ? "program-robot"
+      : /программ|scratch|python|код/.test(t)
+        ? "program-code"
+        : /наук|физик|инженер|радио/.test(t)
+          ? "program-science"
+          : /ранн|подготовк|лего|steam/.test(t)
+            ? "program-early"
+            : "program-other";
+  const s = scripts.find((x) => x.id === id) || scripts.find((x) => x.id === "program-other");
+  return (s?.body || "").trim();
+}

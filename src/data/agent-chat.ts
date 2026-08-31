@@ -4,6 +4,24 @@ import { saveTrialLead, TRIAL_BRANCHES, TRIAL_COURSES } from "@/data/trial";
 import { LESSON_TYPES } from "@/data/alfacrm";
 import { serverEnv } from "./server-env";
 import { type SessionFacts, nextStepOf } from "./agent-facts";
+import { programPitch } from "./agent-playbook";
+
+function fallbackTalk(who: "oleg" | "olga", facts: SessionFacts) {
+  const n = who === "olga" ? "Ольга" : "Олег";
+  if (facts.school) {
+    const pitch = programPitch(facts.school);
+    if (pitch) return `${n}: ${pitch}\nОбучение идёт от младших к старшим. Пробное занятие или сразу в группу?`;
+  }
+  if (!facts.age) return `${n}: Напишите, сколько лет ребёнку — подберу программу.`;
+  if (!facts.city) return `${n}: Вам удобнее Коломна или Луховицы?`;
+  if (facts.city === "Коломна" && !facts.branchId) {
+    return `${n}: В Коломне два адреса: ЦМИТ на Октябрьской революции, 340 и Гражданская, 2. Какой ближе?`;
+  }
+  if (!facts.school) {
+    return `${n}: Какое направление ближе — художественная школа, робототехника, программирование, науки и инженерия, раннее развитие, модельная школа или иностранные языки?`;
+  }
+  return `${n}: Могу записать на пробное или сразу в группу. Что удобнее?`;
+}
 
 function clientSystem(who: "oleg" | "olga", facts?: SessionFacts, stepOverride?: string) {
   const name = who === "olga" ? "Ольга" : "Олег";
@@ -372,6 +390,7 @@ async function yandexChat(messages: ChatMsg[], tools: unknown) {
         "Content-Type": "application/json",
         "x-folder-id": folder,
       },
+      signal: AbortSignal.timeout(12000),
       body: JSON.stringify({
         model,
         temperature: 0.3,
@@ -400,6 +419,7 @@ async function deepseekChat(messages: ChatMsg[], tools: unknown) {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
+    signal: AbortSignal.timeout(12000),
     body: JSON.stringify({
       model: "deepseek-chat",
       temperature: 0.3,
@@ -424,9 +444,13 @@ async function complete(messages: ChatMsg[], tools: unknown) {
   } catch {
     /* fallback */
   }
-  const d = await deepseekChat(messages, tools);
-  if (d) return d;
-  throw new Error("no-key");
+  try {
+    const d = await deepseekChat(messages, tools);
+    if (d) return d;
+  } catch {
+    /* */
+  }
+  return null;
 }
 
 export const chatAgent = createServerFn({ method: "POST" })
@@ -461,7 +485,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     const { factsFromMessages, factsPrompt } = await import("./agent-facts");
     const { buildSessionNote, notePrompt, guardReply } = await import("./session-note");
     const { findDossier, dossierPrompt, upsertDossier, dossierFromNote } = await import("./dossiers");
-    const { agentPromptAddons } = await import("./agent-config");
+    const { agentPromptAddons, loadBrain } = await import("./agent-config");
     const { lockedFunnelReply } = await import("./agent-funnel");
     let admin = tokenOk(data.token);
     let granted: string | undefined;
@@ -507,6 +531,20 @@ export const chatAgent = createServerFn({ method: "POST" })
       if (locked?.reply) {
         return { ok: true as const, reply: locked.reply, token: granted, reload: false };
       }
+      if (facts.school && !facts.briefed) {
+        const pitch = programPitch(facts.school, loadBrain().scripts);
+        const name = soloWho === "olga" ? "Ольга" : "Олег";
+        return {
+          ok: true as const,
+          reply: `${name}: ${pitch}\nОбучение выстроено последовательно: от младших к старшим. Записать на пробное или сразу в группу?`,
+          token: granted,
+          reload: false,
+          groups: [
+            { label: "Пробное занятие", send: "Хочу пробное занятие", primary: true },
+            { label: "В действующую группу", send: "Записать в действующую группу" },
+          ],
+        };
+      }
     }
     if (!admin && (facts.phone || facts.child || facts.parent)) {
       try {
@@ -529,6 +567,7 @@ export const chatAgent = createServerFn({ method: "POST" })
       for (let step = 0; step < 4; step++) {
         const tools = admin ? ADMIN_TOOLS : TOOLS;
         const json = await complete(messages, tools);
+        if (!json) break;
         const msg = json.choices?.[0]?.message;
         if (!msg) break;
         if (msg.tool_calls?.length) {
@@ -817,18 +856,19 @@ export const chatAgent = createServerFn({ method: "POST" })
       }
       return {
         ok: true as const,
-        reply: "Передам администратору. Или сразу звоните 8 (800) 511-34-01.",
+        reply: fallbackTalk(soloWho, facts),
         token: granted,
         reload,
         open: open || undefined,
         signup: signup || undefined,
         groups: groups.length ? groups : undefined,
       };
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : "";
-      if (reason === "no-key") {
-        return { ok: false as const, error: "Напишите нам в Telegram или позвоните 8 (800) 511-34-01." };
-      }
-      return { ok: false as const, error: "Сейчас не отвечаю. Позвоните 8 (800) 511-34-01." };
+    } catch {
+      return {
+        ok: true as const,
+        reply: fallbackTalk(soloWho, facts),
+        token: granted,
+        reload,
+      };
     }
   });

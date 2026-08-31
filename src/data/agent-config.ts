@@ -98,7 +98,7 @@ function seedScripts(list?: ScriptSection[]) {
   return have;
 }
 
-function loadBrain(): Brain {
+export function loadBrain(): Brain {
   try {
     if (!existsSync(fileOf())) {
       const fresh: Brain = { settings: { ...DEFAULT_SETTINGS }, examples: [], scripts: seedScripts() };
@@ -157,12 +157,12 @@ export function agentPromptAddons(facts?: SessionFacts, channel = "site") {
       else parts.push(`Пример.\nРодитель: ${ex.input.slice(0, 400)}\nОтвет: ${ex.output.slice(0, 600)}`);
     }
   }
-  const docs = docsPrompt(channel);
+  const docs = docsPrompt(channel, [facts?.school, facts?.course, facts?.intent].filter(Boolean).join(" "));
   if (docs.trim()) parts.push(docs);
   return `\n${parts.join("\n")}\n`;
 }
 
-export type { ScriptSection } from "./agent-playbook";
+export { programPitch, type ScriptSection } from "./agent-playbook";
 
 export const adminAgentBrain = createServerFn({ method: "POST" })
   .validator(

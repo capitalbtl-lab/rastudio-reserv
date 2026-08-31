@@ -672,23 +672,26 @@ export function AgentChat() {
     setGroupChips([]);
     busyRef.current = true;
     setBusy(true);
-    let reply = `Не отправилось. Позвоните ${SITE.phone}.`;
+    let reply = "";
     let shouldReload = false;
     const t0 = Date.now();
     try {
       const history = adminThread ? adminMsgsRef.current : clientMsgsRef.current;
-      const res = await chatAgent({
-        data: {
-          messages: history,
-          with: adminThread ? "olga" : partnerRef.current,
-          token: siteAdminToken() || undefined,
-          path: typeof window !== "undefined" ? window.location.pathname : "/",
-          gate,
-          gateWord: gate ? next : undefined,
-          voice: voiceOnRef.current,
-          channel: "site",
-        },
-      });
+      const payload = {
+        messages: history,
+        with: adminThread ? "olga" : partnerRef.current,
+        token: siteAdminToken() || undefined,
+        path: typeof window !== "undefined" ? window.location.pathname : "/",
+        gate,
+        gateWord: gate ? next : undefined,
+        voice: voiceOnRef.current,
+        channel: "site",
+      };
+      let res = await chatAgent({ data: payload });
+      if (!res.ok) {
+        await new Promise((r) => setTimeout(r, 400));
+        res = await chatAgent({ data: payload });
+      }
       debugEmit("net", { ok: res.ok, ms: Date.now() - t0, error: res.ok ? "" : (res as { error?: string }).error });
       if (gen !== chatGenRef.current) return;
       if (res.ok) {
@@ -718,10 +721,11 @@ export function AgentChat() {
         if ("signup" in res && res.signup) {
           window.open(String(res.signup), "_blank", "noopener,noreferrer");
         }
-      } else reply = res.error;
+      } else reply = res.error || "Повторите, пожалуйста — я на связи.";
     } catch (e) {
       debugEmit("net", { ok: false, ms: Date.now() - t0, error: e instanceof Error ? e.message : "сеть" });
       if (gen !== chatGenRef.current) return;
+      reply = "Повторите, пожалуйста — я на связи.";
     }
     if (gen !== chatGenRef.current) return;
     if (reply.trim() && !(gate && reply === ADMIN_HELLO && adminMsgsRef.current.some((m) => m.content === ADMIN_HELLO))) {
