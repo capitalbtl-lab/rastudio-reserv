@@ -29,6 +29,10 @@ export type Dossier = {
   coursesNow: string[];
   coursesPast: string[];
   services: string[];
+  teachers: string[];
+  schools: string[];
+  age?: number;
+  ageBand?: string;
   tariff?: string;
   status?: string;
   extras: Record<string, string>;
@@ -40,7 +44,7 @@ export type Dossier = {
 
 type Store = { items: Dossier[]; lastCrmSync?: string; nextCrmSync?: string };
 
-const MAX = 4000;
+const MAX = 8000;
 
 function fileOf() {
   return join(process.cwd(), "storage", "dossiers.json");
@@ -122,6 +126,8 @@ function emptyDossier(partial: Partial<Dossier> & { id: string }): Dossier {
     coursesNow: [],
     coursesPast: [],
     services: [],
+    teachers: [],
+    schools: [],
     extras: {},
     chatIds: [],
     log: [],
@@ -140,11 +146,60 @@ function mergePerson(prev: PersonName, incoming?: string, crmWins = false): Pers
 }
 
 const BRANCH_TITLE: Record<number, string> = {
-  1: "Коломна, Гражданская, 2",
-  2: "Коломна, ЦМИТ, Октябрьской революции, 340",
+  1: "Коломна, ЦМИТ, Октябрьской революции, 340",
+  2: "Коломна, Гражданская, 2",
   3: "Луховицы, Пушкина, 202А",
   4: "Летние программы",
 };
+
+export function ageFromDob(dob?: string) {
+  const s = String(dob || "").trim();
+  let y = 0;
+  let mo = 0;
+  let da = 0;
+  const ru = s.match(/^(\d{1,2})[.](\d{1,2})[.](\d{4})$/);
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ru) {
+    da = Number(ru[1]);
+    mo = Number(ru[2]);
+    y = Number(ru[3]);
+  } else if (iso) {
+    y = Number(iso[1]);
+    mo = Number(iso[2]);
+    da = Number(iso[3]);
+  }
+  if (!y || y < 1990 || y > 2026) return undefined;
+  const born = new Date(y, mo - 1, da || 1);
+  const now = new Date();
+  let age = now.getFullYear() - born.getFullYear();
+  const m = now.getMonth() - born.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < born.getDate())) age -= 1;
+  if (age < 0 || age > 25) return undefined;
+  return age;
+}
+
+export function ageBandOf(age?: number) {
+  if (age == null) return "";
+  if (age <= 4) return "3-4";
+  if (age <= 6) return "5-6";
+  if (age <= 9) return "7-9";
+  if (age <= 14) return "10-14";
+  return "15+";
+}
+
+export function schoolOfText(text: string) {
+  const t = text.toLowerCase();
+  if (/худ|рис|живоп|скульп|манг|аним|digital|давинч|наследие|акварель|гуашь|подготовк.{0,12}вуз|арт-програм/.test(t)) return "Художественная школа";
+  if (/робот|arduino|wedo|\blego\b/.test(t)) return "Школа робототехники";
+  if (/программ|scratch|python|c\+\+|unity|компьютер|gamedev|startschool|juniorschool|майнкрафт/.test(t)) return "Школа программирования";
+  if (/физик|радио|беспил|steam|наук|инженер|компас|3d|фиджитал/.test(t)) return "Школа наук и инженерии";
+  if (/модел|подиум|beauty|бьюти/.test(t)) return "Модельная школа";
+  if (/английск|язык|super minds|go getter/.test(t)) return "Иностранные языки";
+  if (/подготовк.{0,12}школ|лего-матем|ранн/.test(t)) return "Раннее развитие";
+  if (/мастер/.test(t)) return "Мастер-классы";
+  if (/лагер|смен|летн/.test(t)) return "Летние программы";
+  return "";
+}
 
 function genderFromCrm(g: unknown): "мальчик" | "девочка" | "" | undefined {
   if (g === 1 || g === "1") return "мальчик";
@@ -182,12 +237,43 @@ function addressFromCrm(item: Record<string, unknown>) {
 }
 
 function statusFromCrm(item: Record<string, unknown>, archived = false) {
-  if (archived) return "архив";
   const study = Number(item.is_study);
   if (study === 1) return "учится";
-  if (study === 2) return "архив";
+  if (study === 2 || archived) return "архив";
   if (study === 0) return "лид";
   return item.study_status_id != null ? `статус ${item.study_status_id}` : "";
+}
+
+function parseJsonish(raw?: string) {
+  const s = String(raw || "").trim();
+  if (!s || s === "null") return null;
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
+function namesFromGroup(raw?: string) {
+  const courses: string[] = [];
+  const teachers: string[] = [];
+  const g = parseJsonish(raw);
+  const list = Array.isArray(g) ? g : g ? [g] : [];
+  for (const one of list) {
+    if (!one || typeof one !== "object") continue;
+    const rec = one as { name?: string; teachers?: { name?: string }[]; teacher_ids?: unknown };
+    if (rec.name) courses.push(String(rec.name));
+    for (const t of rec.teachers || []) if (t?.name) teachers.push(String(t.name));
+  }
+  return { courses, teachers };
+}
+
+function idList(raw?: string) {
+  const s = String(raw || "").trim();
+  if (!s) return [] as number[];
+  const parsed = parseJsonish(s);
+  const arr = Array.isArray(parsed) ? parsed : parsed != null ? [parsed] : s.split(/[,\s]+/);
+  return arr.map((x) => Number(x)).filter((n) => n > 0);
 }
 
 export function upsertDossier(patch: {
@@ -204,6 +290,9 @@ export function upsertDossier(patch: {
   course?: string;
   coursePast?: string;
   service?: string;
+  teacher?: string;
+  teachers?: string[];
+  school?: string;
   tariff?: string;
   status?: string;
   extras?: Record<string, string>;
@@ -248,9 +337,13 @@ export function upsertDossier(patch: {
     address: crm && patch.address ? patch.address : patch.address || cur.address,
     city: patch.city || cur.city,
     branch: crm && patch.branch ? patch.branch : patch.branch || cur.branch,
-    coursesNow: uniq([...cur.coursesNow, patch.course || ""]),
-    coursesPast: uniq([...cur.coursesPast, patch.coursePast || ""]),
-    services: uniq([...cur.services, patch.service || ""]),
+    coursesNow: uniq([...(cur.coursesNow || []), patch.course || ""]),
+    coursesPast: uniq([...(cur.coursesPast || []), patch.coursePast || ""]),
+    services: uniq([...(cur.services || []), patch.service || ""]),
+    teachers: uniq([...(cur.teachers || []), patch.teacher || "", ...(patch.teachers || [])]),
+    schools: uniq([...(cur.schools || []), patch.school || "", schoolOfText(patch.course || ""), schoolOfText(patch.coursePast || "")]),
+    age: ageFromDob(crm && patch.dob ? patch.dob : patch.dob || cur.child.dob || "") || cur.age,
+    ageBand: "",
     tariff: crm && patch.tariff ? patch.tariff : patch.tariff || cur.tariff,
     status: crm && patch.status ? patch.status : patch.status || cur.status,
     extras: { ...cur.extras, ...(patch.extras || {}) },
@@ -259,6 +352,7 @@ export function upsertDossier(patch: {
     createdAt: cur.createdAt,
     log: cur.log,
   };
+  next.ageBand = ageBandOf(next.age);
   const after = JSON.stringify({
     child: next.child.fio,
     parent: next.parent.fio,
@@ -350,13 +444,23 @@ ${lines.map((l) => `— ${l}`).join("\n")}
 `;
 }
 
-export function applyCrmCustomer(item: Record<string, unknown>, branchId: number, archived = false) {
+export function applyCrmCustomer(item: Record<string, unknown>, branchId: number, archived = false, teacherMap: Record<string, string> = {}) {
   const id = Number(item.id);
   if (!id) return null;
   const phones = asList(item.phone);
   const gender = genderFromCrm(item.gender);
   const paid = item.paid_till ? `оплачено до ${item.paid_till}` : "";
   const extraTariff = Number(item.paid_count) ? `занятий по абонементу: ${item.paid_count}` : "";
+  const extras = extrasFromCrm(item);
+  const fromGroup = namesFromGroup(extras.groups);
+  const study = Number(item.is_study);
+  const reallyArchived = study === 2 || (archived && study !== 1);
+  const courseName = fromGroup.courses[0] || "";
+  const teacherFromIds = idList(extras.teacher_ids)
+    .map((n) => teacherMap[String(n)] || "")
+    .filter(Boolean);
+  const teachers = uniq([...fromGroup.teachers, ...teacherFromIds]);
+  const school = schoolOfText(courseName);
   return upsertDossier({
     crmId: id,
     branchId,
@@ -368,9 +472,14 @@ export function applyCrmCustomer(item: Record<string, unknown>, branchId: number
     address: addressFromCrm(item),
     branch: BRANCH_TITLE[branchId] || String(branchId),
     city: branchId === 3 ? "Луховицы" : branchId === 4 ? "лето" : "Коломна",
+    course: reallyArchived ? "" : courseName,
+    coursePast: reallyArchived ? courseName : "",
+    teacher: teachers[0] || "",
+    teachers,
+    school,
     tariff: [paid, extraTariff].filter(Boolean).join(" · "),
-    status: statusFromCrm(item, archived),
-    extras: extrasFromCrm(item),
+    status: statusFromCrm(item, reallyArchived),
+    extras,
     source: "alfacrm",
     crmWins: true,
     note: `CRM ${id}: ${item.name || ""}`,
@@ -391,10 +500,17 @@ export async function syncDossierFromCrm(crmId: number, branchId: number) {
 
 export async function syncAllFromCrm() {
   const t = await alfaToken();
+  const teacherMap: Record<string, string> = {};
+  for (const branch of [1, 2, 3, 4]) {
+    const tr = await request<{ items?: { id?: number; name?: string }[] }>(`/v2api/${branch}/teacher/index`, { page: 0, pageSize: 200 }, t).catch(
+      () => ({ items: [] as { id?: number; name?: string }[] }),
+    );
+    for (const p of tr.items || []) if (p.id && p.name) teacherMap[String(p.id)] = p.name;
+  }
   let n = 0;
   for (const branch of [1, 2, 3, 4]) {
     for (const study of [0, 1, 2]) {
-      for (let page = 0; page < 40; page += 1) {
+      for (let page = 0; page < 80; page += 1) {
         const data = await request<{ items?: Record<string, unknown>[] }>(
           `/v2api/${branch}/customer/index`,
           { page, pageSize: 50, is_study: study },
@@ -402,13 +518,13 @@ export async function syncAllFromCrm() {
         );
         const items = data.items || [];
         for (const item of items) {
-          applyCrmCustomer(item, branch, study === 2);
+          applyCrmCustomer(item, branch, study === 2, teacherMap);
           n += 1;
         }
         if (items.length < 50) break;
       }
     }
-    for (let page = 0; page < 20; page += 1) {
+    for (let page = 0; page < 40; page += 1) {
       const data = await request<{ items?: Record<string, unknown>[] }>(
         `/v2api/${branch}/customer/index`,
         { page, pageSize: 50, removed: 1 },
@@ -416,7 +532,11 @@ export async function syncAllFromCrm() {
       ).catch(() => ({ items: [] as Record<string, unknown>[] }));
       const items = data.items || [];
       for (const item of items) {
-        applyCrmCustomer(item, branch, true);
+        if (Number(item.is_study) === 1) {
+          applyCrmCustomer(item, branch, false, teacherMap);
+        } else {
+          applyCrmCustomer(item, branch, true, teacherMap);
+        }
         n += 1;
       }
       if (items.length < 50) break;
@@ -426,6 +546,46 @@ export async function syncAllFromCrm() {
   store.lastCrmSync = new Date().toISOString();
   saveStore(store);
   return { ok: true as const, count: n, lastCrmSync: store.lastCrmSync };
+}
+
+function viewOf(d: Dossier) {
+  const ex = d.extras || {};
+  const fromGroup = namesFromGroup(ex.groups);
+  const study = Number(ex.is_study);
+  const status = d.status && d.status !== "архив" ? d.status : statusFromCrm({ is_study: ex.is_study, study_status_id: ex.study_status_id }, study === 2);
+  const coursesNow = uniq([...(d.coursesNow || []), ...(status === "учится" ? fromGroup.courses : [])]);
+  const coursesPast = uniq([...(d.coursesPast || []), ...(status !== "учится" ? fromGroup.courses : [])]);
+  const teachers = uniq([...(d.teachers || []), ...fromGroup.teachers]);
+  const schools = uniq([
+    ...(d.schools || []),
+    ...coursesNow.map(schoolOfText),
+    ...coursesPast.map(schoolOfText),
+  ].filter(Boolean));
+  const age = d.age || ageFromDob(d.child.dob);
+  return {
+    id: d.id,
+    crmId: d.crmId || null,
+    branchId: d.branchId || null,
+    url: d.url || "",
+    child: d.child.fio,
+    gender: d.child.gender || "",
+    dob: d.child.dob || "",
+    age: age ?? null,
+    ageBand: ageBandOf(age),
+    parent: d.parent.fio,
+    phone: d.phones[0] || d.phoneDigits,
+    city: d.city || "",
+    branch: d.branch || "",
+    courses: uniq([...coursesNow, ...coursesPast]),
+    coursesNow,
+    coursesPast,
+    schools,
+    teachers,
+    tariff: d.tariff || "",
+    status,
+    archived: status === "архив",
+    updatedAt: d.updatedAt,
+  };
 }
 
 export const adminDossiers = createServerFn({ method: "POST" })
@@ -487,32 +647,43 @@ export const adminDossiers = createServerFn({ method: "POST" })
       return { ok: true as const, dossier: next };
     }
     const q = String(data.q || "").toLowerCase();
-    const items = store.items.filter((d) => {
+    const views = store.items.map(viewOf).filter((d) => {
       if (!q) return true;
-      const hay = `${d.child.fio} ${d.parent.fio} ${d.phoneDigits} ${d.phones.join(" ")} ${d.city} ${d.coursesNow.join(" ")} ${d.crmId || ""}`.toLowerCase();
+      const hay = `${d.child} ${d.parent} ${d.phone} ${d.city} ${d.courses.join(" ")} ${d.schools.join(" ")} ${d.teachers.join(" ")} ${d.crmId || ""}`.toLowerCase();
       return hay.includes(q);
     });
+    views.sort((a, b) => {
+      const rank = (s: string) => (s === "учится" ? 0 : s === "лид" ? 1 : 2);
+      const r = rank(a.status) - rank(b.status);
+      if (r) return r;
+      const sa = a.schools[0] || "";
+      const sb = b.schools[0] || "";
+      if (sa !== sb) return sa.localeCompare(sb, "ru");
+      const ca = a.courses[0] || "";
+      const cb = b.courses[0] || "";
+      if (ca !== cb) return ca.localeCompare(cb, "ru");
+      return (a.child || "").localeCompare(b.child || "", "ru");
+    });
+    const facet = (key: (d: (typeof views)[0]) => string[]) => {
+      const bag: Record<string, number> = {};
+      for (const d of views) for (const v of key(d)) if (v) bag[v] = (bag[v] || 0) + 1;
+      return Object.entries(bag)
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ru"))
+        .map(([name, n]) => ({ name, n }));
+    };
     return {
       ok: true as const,
       total: store.items.length,
       lastCrmSync: store.lastCrmSync || "",
       nextCrmSync: store.nextCrmSync || "",
-      items: items.slice(0, 200).map((d) => ({
-        id: d.id,
-        crmId: d.crmId || null,
-        branchId: d.branchId || null,
-        url: d.url || "",
-        child: d.child.fio,
-        gender: d.child.gender || "",
-        dob: d.child.dob || "",
-        parent: d.parent.fio,
-        phone: d.phones[0] || d.phoneDigits,
-        city: d.city || "",
-        branch: d.branch || "",
-        courses: d.coursesNow,
-        tariff: d.tariff || "",
-        status: d.status || "",
-        updatedAt: d.updatedAt,
-      })),
+      items: views,
+      facets: {
+        status: facet((d) => [d.status]),
+        ageBand: facet((d) => [d.ageBand]),
+        school: facet((d) => d.schools),
+        course: facet((d) => d.courses),
+        teacher: facet((d) => d.teachers),
+        city: facet((d) => [d.city]),
+      },
     };
   });
