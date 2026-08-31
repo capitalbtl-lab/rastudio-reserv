@@ -12,6 +12,17 @@ KEYS_PATH = ROOT / "storage" / "novofon.json"
 HOST = "https://api.novofon.com"
 SCAN_EVERY = 6 * 3600
 KB_EVERY = 8
+SETTINGS = ROOT / "storage" / "call-settings.json"
+
+
+def load_settings():
+    d = {"minSeconds": 30, "scanHours": 6, "paused": False, "autoKnowledge": True}
+    if SETTINGS.exists():
+        try:
+            d.update(json.loads(SETTINGS.read_text()))
+        except Exception:
+            pass
+    return d
 
 
 def env():
@@ -102,6 +113,7 @@ def months(n=24):
 def scan():
     data = load()
     map_ = {str(c.get("pbx_call_id") or c.get("call_id")): c for c in data.get("calls") or []}
+    min_s = int(load_settings().get("minSeconds") or 30)
     added = 0
     for start, end in months(24):
         skip = 0
@@ -111,7 +123,7 @@ def scan():
             for row in rows:
                 rec = str(row.get("is_recorded")) == "true" or row.get("is_recorded") is True
                 seconds = int(row.get("seconds") or 0)
-                if not rec or seconds < 30:
+                if not rec or seconds < min_s:
                     continue
                 cid = str(row.get("pbx_call_id") or row.get("call_id") or "")
                 prev = map_.get(cid) or {}
@@ -140,10 +152,11 @@ def scan():
 
 
 def pending(data):
+    min_s = int(load_settings().get("minSeconds") or 30)
     rows = [
         c for c in data.get("calls") or []
         if c.get("is_recorded") and not c.get("transcript") and not c.get("error")
-        and int(c.get("seconds") or 0) >= 30
+        and int(c.get("seconds") or 0) >= min_s
     ]
 
     def rank(c):
@@ -332,7 +345,13 @@ def main():
     write_status(last="старт фона", transcribed=0)
     while True:
         try:
-            if time.time() - last_scan > SCAN_EVERY or not load().get("calls"):
+            cfg = load_settings()
+            if cfg.get("paused"):
+                write_status(last="пауза в настройках")
+                time.sleep(20)
+                continue
+            scan_every = max(1, int(cfg.get("scanHours") or 6)) * 3600
+            if time.time() - last_scan > scan_every or not load().get("calls"):
                 scan()
                 last_scan = time.time()
             data = load()
@@ -355,7 +374,7 @@ def main():
             print(" ok", len(text), err, flush=True)
             if text and not err:
                 since_kb += 1
-                if since_kb >= KB_EVERY:
+                if since_kb >= KB_EVERY and load_settings().get("autoKnowledge", True):
                     try:
                         build_knowledge(load(), e)
                     except Exception as kb_err:

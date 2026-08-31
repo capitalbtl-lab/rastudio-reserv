@@ -4,8 +4,9 @@ import { serverEnv } from "./server-env";
 import type { NovofonCall } from "./novofon";
 
 export type CallRecord = NovofonCall & { transcript?: string; error?: string };
-export type FaqItem = { q: string; a: string };
-export type ScriptItem = { name: string; steps: string[] };
+export type FaqItem = { q: string; a: string; on?: boolean };
+export type ScriptItem = { name: string; steps: string[]; on?: boolean };
+export type LineItem = { text: string; on?: boolean };
 export type Knowledge = {
   updated: string;
   calls: number;
@@ -13,22 +14,59 @@ export type Knowledge = {
   summary: string;
   faq: FaqItem[];
   objections: FaqItem[];
-  phrases: string[];
-  rules: string[];
+  phrases: LineItem[] | string[];
+  rules: LineItem[] | string[];
   scripts?: ScriptItem[];
-  siteRecommendations?: string[];
-  instructions?: string[];
+  siteRecommendations?: LineItem[] | string[];
+  instructions?: LineItem[] | string[];
+};
+
+export type CallSettings = {
+  minSeconds: number;
+  scanHours: number;
+  paused: boolean;
+  autoKnowledge: boolean;
+  inject: {
+    faq: boolean;
+    objections: boolean;
+    scripts: boolean;
+    phrases: boolean;
+    rules: boolean;
+    instructions: boolean;
+    siteRecommendations: boolean;
+  };
 };
 
 type Store = {
   calls: CallRecord[];
   knowledge: Knowledge | null;
   scannedAt?: string;
+  settings?: CallSettings;
 };
 
 function storePath() {
   return join(process.cwd(), "storage", "call-knowledge.json");
 }
+
+function settingsPath() {
+  return join(process.cwd(), "storage", "call-settings.json");
+}
+
+export const defaultCallSettings = (): CallSettings => ({
+  minSeconds: 30,
+  scanHours: 6,
+  paused: false,
+  autoKnowledge: true,
+  inject: {
+    faq: true,
+    objections: true,
+    scripts: true,
+    phrases: true,
+    rules: true,
+    instructions: true,
+    siteRecommendations: false,
+  },
+});
 
 export function loadCallStore(): Store {
   try {
@@ -42,6 +80,28 @@ export function loadCallStore(): Store {
 function saveCallStore(store: Store) {
   mkdirSync(dirname(storePath()), { recursive: true });
   writeFileSync(storePath(), JSON.stringify(store), "utf8");
+}
+
+export function loadCallSettings(): CallSettings {
+  try {
+    if (existsSync(settingsPath())) {
+      return { ...defaultCallSettings(), ...JSON.parse(readFileSync(settingsPath(), "utf8")) };
+    }
+  } catch {
+    /* none */
+  }
+  return loadCallStore().settings || defaultCallSettings();
+}
+
+export function saveCallSettings(patch: Partial<CallSettings>) {
+  const next = {
+    ...loadCallSettings(),
+    ...patch,
+    inject: { ...loadCallSettings().inject, ...(patch.inject || {}) },
+  };
+  mkdirSync(dirname(settingsPath()), { recursive: true });
+  writeFileSync(settingsPath(), JSON.stringify(next, null, 2), "utf8");
+  return next;
 }
 
 export function upsertCalls(rows: CallRecord[]) {
@@ -63,10 +123,11 @@ export function saveTranscript(id: string, transcript: string, error?: string) {
 }
 
 export function nextWithoutTranscript(limit = 8) {
+  const min = loadCallSettings().minSeconds || 30;
   return loadCallStore()
     .calls.filter((c) => {
       const sec = Number(c.seconds || 0);
-      return c.is_recorded && !c.transcript && !c.error && sec >= 30;
+      return c.is_recorded && !c.transcript && !c.error && sec >= min;
     })
     .sort((a, b) => Number(b.seconds || 0) - Number(a.seconds || 0))
     .slice(0, limit);
@@ -74,15 +135,56 @@ export function nextWithoutTranscript(limit = 8) {
 
 export function callStats() {
   const store = loadCallStore();
+  const min = loadCallSettings().minSeconds || 30;
+  const eligible = store.calls.filter((c) => Number(c.seconds || 0) >= min);
   return {
-    total: store.calls.length,
-    transcribed: store.calls.filter((c) => c.transcript).length,
-    failed: store.calls.filter((c) => c.error && !c.transcript).length,
-    pending: store.calls.filter((c) => c.is_recorded && !c.transcript && !c.error).length,
+    total: eligible.length,
+    transcribed: eligible.filter((c) => c.transcript).length,
+    failed: eligible.filter((c) => c.error && !c.transcript).length,
+    pending: eligible.filter((c) => c.is_recorded && !c.transcript && !c.error).length,
     scannedAt: store.scannedAt || "",
     knowledge: store.knowledge,
     worker: workerStatus(),
+    settings: loadCallSettings(),
   };
+}
+
+export function listTranscripts(limit = 40) {
+  return loadCallStore()
+    .calls.filter((c) => c.transcript)
+    .sort((a, b) => String(b.callstart).localeCompare(String(a.callstart)))
+    .slice(0, limit)
+    .map((c) => ({
+      id: c.pbx_call_id || c.call_id,
+      callstart: c.callstart,
+      seconds: c.seconds,
+      preview: String(c.transcript || "").slice(0, 420),
+    }));
+}
+
+export function toggleKnowledge(kind: string, index: number, on: boolean) {
+  const store = loadCallStore();
+  const kb = store.knowledge;
+  if (!kb) throw new Error("no-knowledge");
+  const mark = <T extends { on?: boolean }>(arr: T[] | undefined) => {
+    if (!arr || !arr[index]) return arr;
+    arr[index] = { ...arr[index], on };
+    return arr;
+  };
+  if (kind === "faq") kb.faq = mark(kb.faq) || [];
+  if (kind === "objections") kb.objections = mark(kb.objections) || [];
+  if (kind === "scripts") kb.scripts = mark(kb.scripts);
+  if (kind === "phrases") kb.phrases = mark(asLines(kb.phrases));
+  if (kind === "rules") kb.rules = mark(asLines(kb.rules));
+  if (kind === "instructions") kb.instructions = mark(asLines(kb.instructions));
+  if (kind === "siteRecommendations") kb.siteRecommendations = mark(asLines(kb.siteRecommendations));
+  store.knowledge = kb;
+  saveCallStore(store);
+  return kb;
+}
+
+function asLines(items: Array<string | LineItem> | undefined): LineItem[] {
+  return (items || []).map((x) => (typeof x === "string" ? { text: x, on: true } : { text: x.text, on: x.on !== false }));
 }
 
 function workerStatus() {
@@ -130,8 +232,19 @@ async function yandexJson(prompt: string) {
   throw new Error("gpt");
 }
 
+function keepOff(prev: FaqItem[] | undefined, next: FaqItem[]) {
+  const off = new Set((prev || []).filter((x) => x.on === false).map((x) => x.q));
+  return next.map((x) => ({ ...x, on: !off.has(x.q) }));
+}
+
+function keepOffLine(prev: Array<string | LineItem> | undefined, next: string[]) {
+  const off = new Set(asLines(prev).filter((x) => x.on === false).map((x) => x.text));
+  return next.map((text) => ({ text, on: !off.has(text) }));
+}
+
 export async function buildKnowledge() {
   const store = loadCallStore();
+  const prev = store.knowledge;
   const texts = store.calls
     .filter((c) => c.transcript && c.transcript.length > 80)
     .slice(-80)
@@ -159,45 +272,65 @@ ${texts.join("\n").slice(0, 28000)}`);
     calls: store.calls.length,
     transcribed: store.calls.filter((c) => c.transcript).length,
     summary: String(raw.summary || ""),
-    faq: Array.isArray(raw.faq) ? raw.faq.slice(0, 20) : [],
-    objections: Array.isArray(raw.objections) ? raw.objections.slice(0, 12) : [],
-    phrases: Array.isArray(raw.phrases) ? raw.phrases.map(String).slice(0, 16) : [],
-    rules: Array.isArray(raw.rules) ? raw.rules.map(String).slice(0, 12) : [],
-    scripts: Array.isArray(raw.scripts) ? (raw.scripts as ScriptItem[]).slice(0, 8) : [],
-    siteRecommendations: Array.isArray(raw.siteRecommendations) ? raw.siteRecommendations.map(String).slice(0, 8) : [],
-    instructions: Array.isArray(raw.instructions) ? raw.instructions.map(String).slice(0, 10) : [],
+    faq: keepOff(prev?.faq, Array.isArray(raw.faq) ? raw.faq.slice(0, 20) : []),
+    objections: keepOff(prev?.objections, Array.isArray(raw.objections) ? raw.objections.slice(0, 12) : []),
+    phrases: keepOffLine(prev?.phrases, Array.isArray(raw.phrases) ? raw.phrases.map(String).slice(0, 16) : []),
+    rules: keepOffLine(prev?.rules, Array.isArray(raw.rules) ? raw.rules.map(String).slice(0, 12) : []),
+    scripts: Array.isArray(raw.scripts)
+      ? (raw.scripts as ScriptItem[]).slice(0, 8).map((s) => ({
+          ...s,
+          on: prev?.scripts?.find((p) => p.name === s.name)?.on !== false,
+        }))
+      : [],
+    siteRecommendations: keepOffLine(
+      prev?.siteRecommendations,
+      Array.isArray(raw.siteRecommendations) ? raw.siteRecommendations.map(String).slice(0, 8) : [],
+    ),
+    instructions: keepOffLine(
+      prev?.instructions,
+      Array.isArray(raw.instructions) ? raw.instructions.map(String).slice(0, 10) : [],
+    ),
   };
   store.knowledge = knowledge;
   saveCallStore(store);
   return knowledge;
 }
 
+function onItem(x: { on?: boolean } | string) {
+  if (typeof x === "string") return true;
+  return x.on !== false;
+}
+
 export function knowledgeForAgent() {
   const kb = loadCallStore().knowledge;
-  if (!kb || (!kb.faq.length && !kb.rules.length)) return "";
-  const faq = kb.faq
-    .slice(0, 12)
-    .map((x) => `В: ${x.q}\nО: ${x.a}`)
-    .join("\n");
-  const obj = kb.objections
-    .slice(0, 8)
-    .map((x) => `Сомнение: ${x.q} → ${x.a}`)
-    .join("\n");
-  const scripts = (kb.scripts || [])
-    .slice(0, 6)
-    .map((s) => `${s.name}: ${(s.steps || []).join(" → ")}`)
-    .join("\n");
+  const set = loadCallSettings();
+  if (!kb) return "";
+  const inj = set.inject;
+  const faq = inj.faq
+    ? kb.faq.filter(onItem).slice(0, 12).map((x) => `В: ${x.q}\nО: ${x.a}`).join("\n")
+    : "";
+  const obj = inj.objections
+    ? kb.objections.filter(onItem).slice(0, 8).map((x) => `Сомнение: ${x.q} → ${x.a}`).join("\n")
+    : "";
+  const scripts = inj.scripts
+    ? (kb.scripts || []).filter(onItem).slice(0, 6).map((s) => `${s.name}: ${(s.steps || []).join(" → ")}`).join("\n")
+    : "";
+  const rules = inj.rules ? asLines(kb.rules).filter(onItem).map((x) => x.text) : [];
+  const instructions = inj.instructions ? asLines(kb.instructions).filter(onItem).map((x) => x.text) : [];
+  const phrases = inj.phrases ? asLines(kb.phrases).filter(onItem).map((x) => x.text) : [];
+  const site = inj.siteRecommendations ? asLines(kb.siteRecommendations).filter(onItem).map((x) => x.text) : [];
+  if (!faq && !obj && !scripts && !rules.length && !instructions.length) return "";
   return `
 
 База знаний с реальных звонков администраторов студии (говори в этом духе, не цитируй как «из базы»):
 ${kb.summary}
-Правила с линии: ${kb.rules.join("; ")}
-Инструкции ИИ: ${(kb.instructions || []).join("; ")}
+Правила с линии: ${rules.join("; ")}
+Инструкции ИИ: ${instructions.join("; ")}
 Скрипты: ${scripts}
-Живые формулировки: ${kb.phrases.slice(0, 8).join(" / ")}
+Живые формулировки: ${phrases.slice(0, 8).join(" / ")}
 Частые вопросы:
 ${faq}
 Возражения:
 ${obj}
-Что хотят видеть на сайте (если спрашивают — отвечай по факту, не обещай несуществующее): ${(kb.siteRecommendations || []).slice(0, 5).join("; ")}`;
+${site.length ? `Замечания к сайту (не обещай несуществующее): ${site.slice(0, 5).join("; ")}` : ""}`;
 }

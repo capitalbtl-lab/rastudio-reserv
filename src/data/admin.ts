@@ -157,21 +157,50 @@ export const adminCalls = createServerFn({ method: "POST" })
     (data: unknown) =>
       data as {
         token?: string;
-        action: "status" | "connect" | "scan" | "transcribe" | "knowledge";
+        action: "status" | "connect" | "scan" | "transcribe" | "knowledge" | "settings" | "toggle" | "list";
         userKey?: string;
         secret?: string;
         months?: number;
+        settings?: {
+          minSeconds?: number;
+          scanHours?: number;
+          paused?: boolean;
+          autoKnowledge?: boolean;
+          inject?: Record<string, boolean>;
+        };
+        kind?: string;
+        index?: number;
+        on?: boolean;
       },
   )
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
     const { callStats, connectNovofon, loadNovofonKeys, scanNovofon, transcribeBatch, buildKnowledge } = await import("./call-import");
+    const { saveCallSettings, toggleKnowledge, listTranscripts, loadCallSettings } = await import("./call-knowledge");
     try {
       if (data.action === "connect") {
         if (!data.userKey || !data.secret) return { ok: false as const, error: "Нужны ключ и секрет Novofon." };
         connectNovofon({ userKey: data.userKey, secret: data.secret });
         logAdmin("Novofon: ключи сохранены");
         return { ok: true as const, connected: true, stats: callStats() };
+      }
+      if (data.action === "settings") {
+        const settings = saveCallSettings(data.settings || {});
+        logAdmin("Настройки базы звонков сохранены");
+        return { ok: true as const, connected: true, stats: callStats(), settings };
+      }
+      if (data.action === "toggle") {
+        const knowledge = toggleKnowledge(String(data.kind || ""), Number(data.index || 0), Boolean(data.on));
+        return { ok: true as const, connected: true, stats: callStats(), knowledge };
+      }
+      if (data.action === "list") {
+        return {
+          ok: true as const,
+          connected: Boolean(loadNovofonKeys()),
+          stats: callStats(),
+          transcripts: listTranscripts(50),
+          settings: loadCallSettings(),
+        };
       }
       if (data.action === "scan") {
         const stats = await scanNovofon(data.months || 24);

@@ -76,14 +76,24 @@ export function AdminPrices() {
   const [callInfo, setCallInfo] = useState({ total: 0, transcribed: 0, failed: 0, pending: 0, scannedAt: "" });
   const [knowledge, setKnowledge] = useState<{
     summary: string;
-    faq: { q: string; a: string }[];
-    rules: string[];
-    objections?: { q: string; a: string }[];
-    scripts?: { name: string; steps: string[] }[];
-    siteRecommendations?: string[];
-    instructions?: string[];
+    faq: { q: string; a: string; on?: boolean }[];
+    rules: Array<string | { text: string; on?: boolean }>;
+    objections?: { q: string; a: string; on?: boolean }[];
+    scripts?: { name: string; steps: string[]; on?: boolean }[];
+    siteRecommendations?: Array<string | { text: string; on?: boolean }>;
+    instructions?: Array<string | { text: string; on?: boolean }>;
+    phrases?: Array<string | { text: string; on?: boolean }>;
   } | null>(null);
-  const [worker, setWorker] = useState<{ last?: string; updated?: string } | null>(null);
+  const [worker, setWorker] = useState<{ last?: string; updated?: string; running?: boolean } | null>(null);
+  const [callSet, setCallSet] = useState({
+    minSeconds: 30,
+    scanHours: 6,
+    paused: false,
+    autoKnowledge: true,
+    inject: { faq: true, objections: true, scripts: true, phrases: true, rules: true, instructions: true, siteRecommendations: false },
+  });
+  const [transcripts, setTranscripts] = useState<{ id: string; callstart: string; seconds: number; preview: string }[]>([]);
+  const [callView, setCallView] = useState<"overview" | "settings" | "knowledge" | "texts">("overview");
   const previewRef = useRef<HTMLAudioElement | null>(null);
 
   function stopPreview() {
@@ -148,6 +158,7 @@ export function AdminPrices() {
           });
         }
         if (calls.stats.worker) setWorker(calls.stats.worker);
+        if (calls.stats.settings) setCallSet({ ...callSet, ...calls.stats.settings, inject: { ...callSet.inject, ...(calls.stats.settings.inject || {}) } });
       }
     }
   }
@@ -181,6 +192,7 @@ export function AdminPrices() {
           });
         }
         if (calls.stats.worker) setWorker(calls.stats.worker);
+        if (calls.stats.settings) setCallSet({ ...callSet, ...calls.stats.settings, inject: { ...callSet.inject, ...(calls.stats.settings.inject || {}) } });
       })();
     }, 8000);
     return () => window.clearInterval(id);
@@ -675,128 +687,243 @@ export function AdminPrices() {
           <div>
             <h2 className="font-display text-3xl">База знаний со звонков</h2>
             <p className="mt-2 max-w-2xl text-sm text-muted">
-              Фон сам забирает из Novofon все записи дольше 30 секунд, расшифровывает и собирает FAQ, скрипты, рекомендации сайту и инструкции для Олега и Ольги.
+              Фон качает записи дольше порога, расшифровывает и собирает знания. Здесь можно смотреть, что берёт ИИ, и отключать лишнее.
             </p>
           </div>
-          <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-            <p className="text-sm font-semibold">{callsConnected ? "Novofon подключён · фон работает" : "Ключи API"}</p>
-            <p className="mt-2 text-sm text-muted">{worker?.last ? `Сейчас: ${worker.last}` : "Очередь идёт автоматически, без ручных кнопок."}</p>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <input
-                placeholder="User key"
-                value={novoKey}
-                onChange={(e) => setNovoKey(e.target.value)}
-                className="h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-              />
-              <input
-                type="password"
-                placeholder="Secret"
-                value={novoSecret}
-                onChange={(e) => setNovoSecret(e.target.value)}
-                className="h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-              />
-            </div>
-            <Button
-              className="mt-4"
-              disabled={busy || !novoKey || !novoSecret}
-              onClick={() => {
-                void (async () => {
-                  setBusy(true);
-                  const res = await adminCalls({ data: { token: token(), action: "connect", userKey: novoKey, secret: novoSecret } });
-                  setBusy(false);
-                  if (!res.ok) return setErr(res.error);
-                  setCallsConnected(true);
-                  setErr("");
-                })();
-              }}
-            >
-              Сохранить ключи
-            </Button>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-4">
-            {[
-              ["Записей > 30 сек", callInfo.total],
-              ["Расшифровано", callInfo.transcribed],
-              ["В очереди", callInfo.pending],
-              ["Ошибки", callInfo.failed],
-            ].map(([label, n]) => (
-              <div key={String(label)} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
-                <p className="text-sm text-muted">{label}</p>
-                <p className="mt-1 font-display text-3xl">{n}</p>
-              </div>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["overview", "Обзор"],
+                ["settings", "Настройки"],
+                ["knowledge", "Знания"],
+                ["texts", "Расшифровки"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setCallView(id);
+                  if (id === "texts") {
+                    void adminCalls({ data: { token: token(), action: "list" } }).then((res) => {
+                      if (res.ok && res.transcripts) setTranscripts(res.transcripts);
+                    });
+                  }
+                }}
+                className={cn("rounded-full px-4 py-2 text-sm", callView === id ? "bg-ink text-white" : "bg-surface")}
+              >
+                {label}
+              </button>
             ))}
           </div>
-          {callInfo.total ? (
-            <div className="h-2 overflow-hidden rounded-full bg-black/10">
-              <div
-                className="h-full rounded-full bg-brand"
-                style={{ width: `${Math.min(100, Math.round((callInfo.transcribed / Math.max(1, callInfo.total)) * 100))}%` }}
-              />
-            </div>
-          ) : null}
-          <p className="text-xs text-muted">
-            Новые звонки подтягиваются каждые 6 часов. База знаний пересобирается каждые 8 расшифровок. Цифры на странице обновляются сами.
-          </p>
-          {knowledge ? (
-            <div className="space-y-4">
+
+          {callView === "overview" ? (
+            <>
               <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-                <p className="text-sm font-semibold">Как говорят на линии</p>
-                <p className="mt-3 text-sm leading-relaxed">{knowledge.summary}</p>
+                <p className="text-sm font-semibold">{callSet.paused ? "Фон на паузе" : "Фон работает"}</p>
+                <p className="mt-2 text-sm text-muted">{worker?.last || "Очередь Novofon → расшифровка → база знаний."}</p>
+                <Button
+                  className="mt-4"
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => {
+                    void (async () => {
+                      setBusy(true);
+                      const res = await adminCalls({ data: { token: token(), action: "settings", settings: { paused: !callSet.paused } } });
+                      setBusy(false);
+                      if (res.ok && res.settings) setCallSet({ ...callSet, ...res.settings });
+                    })();
+                  }}
+                >
+                  {callSet.paused ? "Снять паузу" : "Пауза"}
+                </Button>
               </div>
-              {knowledge.instructions?.length ? (
-                <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-                  <p className="text-sm font-semibold">Инструкции ИИ-администратору</p>
-                  <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
-                    {knowledge.instructions.map((r) => (
-                      <li key={r}>{r}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              {knowledge.scripts?.length ? (
-                <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-                  <p className="text-sm font-semibold">Скрипты</p>
-                  {knowledge.scripts.map((s) => (
-                    <div key={s.name} className="mt-3">
-                      <p className="text-sm font-semibold">{s.name}</p>
-                      <p className="mt-1 text-sm text-muted">{(s.steps || []).join(" → ")}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              {knowledge.siteRecommendations?.length ? (
-                <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-                  <p className="text-sm font-semibold">Рекомендации сайту</p>
-                  <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
-                    {knowledge.siteRecommendations.map((r) => (
-                      <li key={r}>{r}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              {knowledge.rules.length ? (
-                <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-                  <p className="text-sm font-semibold">Правила линии</p>
-                  <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
-                    {knowledge.rules.map((r) => (
-                      <li key={r}>{r}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-                <p className="text-sm font-semibold">Частые вопросы</p>
-                {knowledge.faq.slice(0, 12).map((item) => (
-                  <div key={item.q} className="mt-4 border-t border-black/5 pt-4">
-                    <p className="text-sm font-semibold">{item.q}</p>
-                    <p className="mt-1 text-sm text-muted">{item.a}</p>
+              <div className="grid gap-3 sm:grid-cols-4">
+                {[
+                  ["Записей", callInfo.total],
+                  ["Расшифровано", callInfo.transcribed],
+                  ["В очереди", callInfo.pending],
+                  ["Ошибки", callInfo.failed],
+                ].map(([label, n]) => (
+                  <div key={String(label)} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
+                    <p className="text-sm text-muted">{label}</p>
+                    <p className="mt-1 font-display text-3xl">{n}</p>
                   </div>
                 ))}
               </div>
+              {callInfo.total ? (
+                <div className="h-2 overflow-hidden rounded-full bg-black/10">
+                  <div className="h-full rounded-full bg-brand" style={{ width: `${Math.min(100, Math.round((callInfo.transcribed / Math.max(1, callInfo.total)) * 100))}%` }} />
+                </div>
+              ) : null}
+            </>
+          ) : null}
+
+          {callView === "settings" ? (
+            <div className="space-y-4">
+              <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+                <p className="text-sm font-semibold">{callsConnected ? "Novofon подключён" : "Ключи API"}</p>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <input placeholder="User key" value={novoKey} onChange={(e) => setNovoKey(e.target.value)} className="h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+                  <input type="password" placeholder="Secret" value={novoSecret} onChange={(e) => setNovoSecret(e.target.value)} className="h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+                </div>
+                <Button className="mt-4" disabled={busy || !novoKey || !novoSecret} onClick={() => {
+                  void (async () => {
+                    setBusy(true);
+                    const res = await adminCalls({ data: { token: token(), action: "connect", userKey: novoKey, secret: novoSecret } });
+                    setBusy(false);
+                    if (!res.ok) return setErr(res.error);
+                    setCallsConnected(true);
+                  })();
+                }}>Сохранить ключи</Button>
+              </div>
+              <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+                <p className="text-sm font-semibold">Параметры фона</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="text-sm">Минимум секунд
+                    <input type="number" min={10} max={600} value={callSet.minSeconds} onChange={(e) => setCallSet({ ...callSet, minSeconds: Number(e.target.value) || 30 })} className="mt-1 h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+                  </label>
+                  <label className="text-sm">Скан новых звонков, часов
+                    <input type="number" min={1} max={24} value={callSet.scanHours} onChange={(e) => setCallSet({ ...callSet, scanHours: Number(e.target.value) || 6 })} className="mt-1 h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+                  </label>
+                </div>
+                <label className="mt-4 flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={callSet.autoKnowledge} onChange={(e) => setCallSet({ ...callSet, autoKnowledge: e.target.checked })} />
+                  Самой собирать базу знаний
+                </label>
+                <p className="mt-6 text-sm font-semibold">Что отдавать ИИ-администратору</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {([
+                    ["faq", "FAQ"],
+                    ["objections", "Возражения"],
+                    ["scripts", "Скрипты"],
+                    ["phrases", "Фразы"],
+                    ["rules", "Правила"],
+                    ["instructions", "Инструкции"],
+                    ["siteRecommendations", "Рекомендации сайту"],
+                  ] as const).map(([k, label]) => (
+                    <label key={k} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={Boolean(callSet.inject[k])} onChange={(e) => setCallSet({ ...callSet, inject: { ...callSet.inject, [k]: e.target.checked } })} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <Button className="mt-5" disabled={busy} onClick={() => {
+                  void (async () => {
+                    setBusy(true);
+                    const res = await adminCalls({ data: { token: token(), action: "settings", settings: callSet } });
+                    setBusy(false);
+                    if (!res.ok) setErr(res.error);
+                    else if (res.settings) setCallSet({ ...callSet, ...res.settings });
+                  })();
+                }}>Сохранить настройки</Button>
+              </div>
             </div>
-          ) : (
-            <p className="text-sm text-muted">Первая база знаний появится после нескольких расшифрованных консультаций.</p>
-          )}
+          ) : null}
+
+          {callView === "knowledge" ? (
+            knowledge ? (
+              <div className="space-y-4">
+                <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+                  <p className="text-sm font-semibold">Как говорят на линии</p>
+                  <p className="mt-3 text-sm leading-relaxed">{knowledge.summary}</p>
+                </div>
+                {([
+                  ["instructions", "Инструкции ИИ", knowledge.instructions],
+                  ["rules", "Правила", knowledge.rules],
+                  ["siteRecommendations", "Рекомендации сайту", knowledge.siteRecommendations],
+                  ["phrases", "Фразы", knowledge.phrases],
+                ] as const).map(([kind, title, items]) =>
+                  items?.length ? (
+                    <div key={kind} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+                      <p className="text-sm font-semibold">{title}</p>
+                      <ul className="mt-3 space-y-2">
+                        {items.map((item, i) => {
+                          const text = typeof item === "string" ? item : item.text;
+                          const on = typeof item === "string" ? true : item.on !== false;
+                          return (
+                            <li key={`${kind}-${i}`} className="flex items-start gap-3 text-sm">
+                              <input type="checkbox" checked={on} onChange={() => {
+                                void adminCalls({ data: { token: token(), action: "toggle", kind, index: i, on: !on } }).then((res) => {
+                                  if (res.ok && res.knowledge) setKnowledge({ ...knowledge, ...res.knowledge });
+                                });
+                              }} />
+                              <span className={on ? "" : "text-muted line-through"}>{text}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ) : null,
+                )}
+                {knowledge.scripts?.length ? (
+                  <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+                    <p className="text-sm font-semibold">Скрипты</p>
+                    {knowledge.scripts.map((s, i) => (
+                      <label key={s.name} className="mt-3 flex items-start gap-3">
+                        <input type="checkbox" checked={s.on !== false} onChange={() => {
+                          void adminCalls({ data: { token: token(), action: "toggle", kind: "scripts", index: i, on: s.on === false } }).then((res) => {
+                            if (res.ok && res.knowledge) setKnowledge({ ...knowledge, ...res.knowledge });
+                          });
+                        }} />
+                        <span className={s.on === false ? "text-muted" : ""}>
+                          <span className="text-sm font-semibold">{s.name}</span>
+                          <span className="mt-1 block text-sm text-muted">{(s.steps || []).join(" → ")}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+                  <p className="text-sm font-semibold">FAQ</p>
+                  {knowledge.faq.map((item, i) => (
+                    <label key={item.q} className="mt-4 flex items-start gap-3 border-t border-black/5 pt-4">
+                      <input type="checkbox" checked={item.on !== false} onChange={() => {
+                        void adminCalls({ data: { token: token(), action: "toggle", kind: "faq", index: i, on: item.on === false } }).then((res) => {
+                          if (res.ok && res.knowledge) setKnowledge({ ...knowledge, ...res.knowledge });
+                        });
+                      }} />
+                      <span>
+                        <span className="block text-sm font-semibold">{item.q}</span>
+                        <span className="mt-1 block text-sm text-muted">{item.a}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {knowledge.objections?.length ? (
+                  <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+                    <p className="text-sm font-semibold">Возражения</p>
+                    {knowledge.objections.map((item, i) => (
+                      <label key={item.q} className="mt-4 flex items-start gap-3 border-t border-black/5 pt-4">
+                        <input type="checkbox" checked={item.on !== false} onChange={() => {
+                          void adminCalls({ data: { token: token(), action: "toggle", kind: "objections", index: i, on: item.on === false } }).then((res) => {
+                            if (res.ok && res.knowledge) setKnowledge({ ...knowledge, ...res.knowledge });
+                          });
+                        }} />
+                        <span>
+                          <span className="block text-sm font-semibold">{item.q}</span>
+                          <span className="mt-1 block text-sm text-muted">{item.a}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-sm text-muted">База появится после нескольких расшифрованных консультаций. Пока можно настроить, что ИИ будет брать.</p>
+            )
+          ) : null}
+
+          {callView === "texts" ? (
+            <div className="space-y-3">
+              {transcripts.length ? transcripts.map((t) => (
+                <div key={t.id} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
+                  <p className="text-sm text-muted">{t.callstart} · {t.seconds} сек</p>
+                  <p className="mt-2 text-sm leading-relaxed">{t.preview}</p>
+                </div>
+              )) : <p className="text-sm text-muted">Расшифровок пока нет — фон только начал очередь.</p>}
+            </div>
+          ) : null}
         </section>
       ) : null}
 
