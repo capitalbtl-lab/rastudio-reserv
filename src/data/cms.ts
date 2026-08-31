@@ -88,6 +88,7 @@ export type CmsSession = {
   courseId: string;
   ageTag: string;
   courseFilter: string;
+  path?: string;
 };
 
 export type CmsMaster = {

@@ -9,7 +9,9 @@ import { cn } from "@/lib/utils";
 type Msg = { role: "user" | "assistant"; content: string };
 
 const HELLO =
-  "Здравствуйте! Подберу курс и запишу на пробное. Сколько лет ребёнку и какой филиал удобнее — Коломна или Луховицы?";
+  "Здравствуйте! Я администратор студии. Подберу курс по возрасту и филиалу и запишу на пробное.";
+
+const CHIPS = ["5 лет, Коломна", "8 лет, робототехника", "Художка 7–9", "Луховицы"];
 
 export function AgentChat() {
   const [open, setOpen] = useState(false);
@@ -22,8 +24,8 @@ export function AgentChat() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
 
-  async function send() {
-    const next = text.trim();
+  async function send(value?: string) {
+    const next = (value ?? text).trim();
     if (!next || busy) return;
     setText("");
     const history = [...messages, { role: "user" as const, content: next }];
@@ -51,58 +53,94 @@ export function AgentChat() {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] md:inset-auto md:bottom-6 md:right-6">
       {open ? (
-        <div className="pointer-events-auto mx-3 mb-[4.75rem] flex h-[min(34rem,72dvh)] flex-col overflow-hidden rounded-3xl bg-surface shadow-[var(--shadow-border-hover)] md:mx-0 md:mb-0 md:h-[34rem] md:w-[24rem]">
-          <div className="flex items-center justify-between bg-header px-4 py-3 text-header-fg">
-            <div>
-              <p className="text-[0.72rem] uppercase tracking-[0.12em] text-header-fg/55">Студия «Развивайся»</p>
-              <p className="font-display text-[1.05rem]">Администратор</p>
+        <div className="pointer-events-auto mx-3 mb-[4.75rem] flex h-[min(36rem,74dvh)] flex-col overflow-hidden rounded-[1.75rem] bg-[#f7f8fb] shadow-[0_24px_60px_-24px_rgba(9,12,18,0.55)] md:mx-0 md:mb-0 md:h-[36rem] md:w-[24.5rem]">
+          <div className="relative overflow-hidden bg-header px-4 py-3.5 text-header-fg">
+            <span className="pointer-events-none absolute -right-8 -top-10 size-32 rounded-full bg-primary/35 blur-2xl" />
+            <span className="pointer-events-none absolute -bottom-12 left-10 size-24 rounded-full bg-white/10 blur-xl" />
+            <div className="relative flex items-center gap-3">
+              <span className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-primary text-sm font-bold">
+                Р
+                <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-[#6BDB03] ring-2 ring-header" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-display text-[1.08rem] leading-tight">Администратор</p>
+                <p className="text-[0.72rem] text-header-fg/65">Студия «Развивайся» · онлайн</p>
+              </div>
+              <button
+                type="button"
+                className="grid size-9 place-items-center rounded-full bg-white/8 hover:bg-white/14"
+                onClick={() => setOpen(false)}
+                aria-label="Закрыть чат"
+              >
+                <X className="size-5" />
+              </button>
             </div>
-            <button
-              type="button"
-              className="grid size-9 place-items-center rounded-full hover:bg-white/10"
-              onClick={() => setOpen(false)}
-              aria-label="Закрыть чат"
-            >
-              <X className="size-5" />
-            </button>
           </div>
-          <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+          <div className="flex-1 space-y-3 overflow-y-auto px-3.5 py-4">
             {messages.map((m, i) => (
               <div
                 key={i}
                 className={cn(
-                  "max-w-[92%] rounded-2xl px-3.5 py-2.5 text-[0.92rem] leading-relaxed",
-                  m.role === "assistant" ? "bg-surface-2 text-fg" : "ml-auto bg-header text-header-fg",
+                  "max-w-[88%] px-3.5 py-2.5 text-[0.92rem] leading-relaxed",
+                  m.role === "assistant"
+                    ? "rounded-2xl rounded-tl-md bg-white text-fg shadow-[0_1px_0_rgba(18,20,26,0.04),0_8px_24px_-16px_rgba(18,20,26,0.35)]"
+                    : "ml-auto rounded-2xl rounded-tr-md bg-primary text-primary-foreground",
                 )}
               >
                 {m.content}
               </div>
             ))}
-            {busy ? <p className="text-xs text-muted">Печатает…</p> : null}
+            {messages.length === 1 && !busy ? (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {CHIPS.map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => void send(chip)}
+                    className="rounded-full bg-white px-3 py-1.5 text-[0.78rem] font-semibold text-fg shadow-[var(--shadow-border)] hover:shadow-[var(--shadow-border-hover)]"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {busy ? (
+              <p className="text-xs font-medium text-muted">
+                <span className="inline-flex gap-1">
+                  <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+                  <span className="size-1.5 animate-pulse rounded-full bg-primary delay-100" />
+                  <span className="size-1.5 animate-pulse rounded-full bg-primary delay-200" />
+                </span>
+                <span className="ml-2">Печатает</span>
+              </p>
+            ) : null}
             <div ref={endRef} />
           </div>
           <form
-            className="flex gap-2 border-t border-border px-3 py-3"
+            className="bg-white/80 px-3 pb-3 pt-2 backdrop-blur-sm"
             onSubmit={(e) => {
               e.preventDefault();
               void send();
             }}
           >
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Напишите возраст и город"
-              className="h-11 flex-1 rounded-full bg-bg px-4 text-sm outline-none ring-1 ring-border focus:ring-2 focus:ring-primary/40"
-              maxLength={1000}
-            />
-            <button
-              type="submit"
-              disabled={busy || !text.trim()}
-              className="grid size-11 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
-              aria-label="Отправить"
-            >
-              <Send className="size-4" />
-            </button>
+            <div className="flex items-center gap-2 rounded-full bg-white p-1 shadow-[var(--shadow-border)] focus-within:shadow-[var(--shadow-border-hover)]">
+              <input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Возраст и город — подберём курс"
+                className="h-10 flex-1 bg-transparent px-3.5 text-sm outline-none"
+                maxLength={1000}
+              />
+              <button
+                type="submit"
+                disabled={busy || !text.trim()}
+                className="grid size-10 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
+                aria-label="Отправить"
+              >
+                <Send className="size-4" />
+              </button>
+            </div>
+            <p className="px-3 pt-1.5 text-[0.65rem] text-muted">Пробное без обязательств · {SITE.phone}</p>
           </form>
         </div>
       ) : null}

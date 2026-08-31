@@ -96,19 +96,24 @@ export async function sessionsFromCrm(): Promise<CmsSession[]> {
       if (group && /отложен/i.test(group.name)) continue;
       const subjectName = subjects.get(sid) || group?.name || "Курс";
       const age = ageOf(group?.name || "") || ageOf(subjectName);
+      const path = SUBJECT_PATH[sid] || "";
+      const gid = group?.id || lesson.related_id;
       sessions.push({
         id: `crm-${lesson.id}`,
         group: group?.name || subjectName,
         age,
         when: whenOf(lesson.day, lesson.time_from_v, lesson.time_to_v),
         teacherId: String(lesson.teacher_ids?.[0] || ""),
-        signup: SUBJECT_PATH[sid] || "",
+        signup: gid
+          ? `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`
+          : path,
         city: meta.city,
         branch: meta.branch,
         directionId: String(sid),
         courseId: String(sid),
         ageTag: age,
         courseFilter: subjectName,
+        path,
       });
     }
   }
@@ -124,21 +129,22 @@ export function filterCrmSessions(sessions: CmsSession[], splat?: string | null)
   } catch {
     /* keep */
   }
+  const hrefOf = (s: CmsSession) => s.path || (s.signup.startsWith("/") ? s.signup : "");
   if (decoded === "/" || decoded === "/schedule" || decoded === "/allcourses") return sessions;
   if (decoded === "/art-studio") {
-    return sessions.filter((s) => /art-studio|hudvuz|sculptural|digitalart/.test(s.signup));
+    return sessions.filter((s) => /art-studio|hudvuz|sculptural|digitalart/.test(hrefOf(s)));
   }
   if (decoded === "/robototehnika-v-kolomne") {
-    return sessions.filter((s) => /robot/.test(s.signup));
+    return sessions.filter((s) => /robot/.test(hrefOf(s)));
   }
   if (decoded === "/programming-school") {
-    return sessions.filter((s) => s.signup.includes("kursy-shkoly-programmirovaniya") || s.signup === "/gamedesign" || s.signup === "/3d-modeling");
+    return sessions.filter((s) => /kursy-shkoly-programmirovaniya|gamedesign|3d-modeling/.test(hrefOf(s)));
   }
   if (decoded === "/languageschool") {
-    return sessions.filter((s) => /english|vitamin|japanese/.test(s.signup));
+    return sessions.filter((s) => /english|vitamin|japanese/.test(hrefOf(s)));
   }
   if (decoded === "/promising-professions") {
-    return sessions.filter((s) => /tesla|science|radio|3d-modeling/.test(s.signup));
+    return sessions.filter((s) => /tesla|science|radio|3d-modeling/.test(hrefOf(s)));
   }
-  return sessions.filter((s) => s.signup === decoded);
+  return sessions.filter((s) => hrefOf(s) === decoded);
 }
