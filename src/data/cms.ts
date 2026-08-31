@@ -189,6 +189,67 @@ const PATH_FILTERS: { test: RegExp; filter: string }[] = [
   { test: /digitalart|цифров/i, filter: "Цифровая ХШ" },
 ];
 
+export function prettyCourseName(filter: string) {
+  const n = (filter || "").replace(/\s+/g, " ").trim();
+  if (!n) return "Курс";
+  const known: Record<string, string> = {
+    Робототехника: "Робототехника",
+    "Билингвальная робототехника": "Робототехника на английском",
+    "Английский язык": "Английский язык",
+    "Японский язык": "Японский язык",
+    "Корейский язык": "Корейский язык",
+    Радиотехника: "Радиотехника",
+    Физика: "Физика инноваций",
+    Blender: "Blender и 3D-анимация",
+    Компас: "Компас 3D",
+    "Беспилотная авиация": "Беспилотная авиация",
+    "Лего-курс": "Лего-математика",
+    "Цифровая ХШ": "Цифровая художественная школа",
+  };
+  if (known[n]) return known[n];
+  const quoted = n.match(/"([^"]+)"/);
+  if (quoted) return quoted[1];
+  return n;
+}
+
+const FILTER_HREF: Record<string, string> = {
+  "Билингвальная робототехника": "/roboticsinenglish",
+  "Японский язык": "/japanese",
+  "Корейский язык": "/vitaminkorean",
+  Радиотехника: "/radioengineering",
+  Физика: "/teslaphysics",
+  Blender: "/gamedesign",
+  Компас: "/3d-modeling",
+  "Лего-курс": "/happybricks",
+  "Цифровая ХШ": "/digitalartschool",
+  'IT-Школа: "Программирование на Python с CodeBOOK"':
+    "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python",
+  'IT-Школа: "Программирование на С++"':
+    "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-си",
+  'IT-Школа: "GameDev 4в1 - разработка игр на Unity"':
+    "/kursy-shkoly-programmirovaniya/it-школа-разработка-игр-на-unity",
+  'IT-Лаборатория Create: "Создатель игр и IT-проектов"':
+    "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-7-9-лет",
+  'IT-Лаборатория Start: "Первые шаги в мир цифры и STEAM"':
+    "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-5-7-лет",
+  'IT-Лаборатория Dev: "Юный разработчик в сфере IT"':
+    "/kursy-shkoly-programmirovaniya/it-лаборатория-dev-для-детей-9-10-лет",
+};
+
+export function hrefForCourseFilter(filter: string, age = "") {
+  const n = (filter || "").replace(/\s+/g, " ").trim();
+  if (n === "Робототехника") {
+    if (/5\s*[-–]\s*[67]/.test(age)) return "/robototehnika-5-7";
+    if (/7\s*[-–]\s*9/.test(age)) return "/robototehnika-7-9";
+    return "/robototehnika-10-14";
+  }
+  if (n === "Английский язык") {
+    if (/6\s*[-–]\s*8/.test(age)) return "/englishlanguagesm";
+    return "/englishlanguagegg";
+  }
+  return FILTER_HREF[n] || null;
+}
+
 export function scheduleFilterForPath(path: string) {
   const decoded = normPath(path);
   const hit = PATH_FILTERS.find((item) => item.test.test(decoded));
