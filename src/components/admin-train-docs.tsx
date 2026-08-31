@@ -19,11 +19,11 @@ type DocRow = {
   name: string;
   mime: string;
   chars: number;
+  text?: string;
   items: { id: string; title: string; body: string; on: boolean }[];
   active: boolean;
   status: "ok" | "empty" | "error";
   error?: string;
-  preview?: string;
 };
 
 const ZONES: { kind: DocKind; title: string; accept: string; tip: string; help: string }[] = [
@@ -217,24 +217,29 @@ export function AdminTrainDocs() {
               {open === d.id ? "Скрыть пункты" : "Показать пункты"}
             </button>
             {open === d.id ? (
-              <div className="mt-3 space-y-2">
+              <div className="mt-3 space-y-3">
+                {d.text ? (
+                  <pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-2xl bg-surface-2 p-4 text-[0.82rem] leading-relaxed text-fg">
+                    {d.text}
+                  </pre>
+                ) : null}
                 {d.items.length ? (
                   d.items.map((it) => (
                     <label key={it.id} className="flex gap-3 rounded-2xl bg-surface-2 p-3 text-sm">
                       <input
                         type="checkbox"
-                        className="mt-1"
+                        className="mt-1 shrink-0"
                         checked={it.on}
                         onChange={(e) => void run("toggleItem", d.id, { itemId: it.id, on: e.target.checked })}
                       />
-                      <span>
+                      <span className="min-w-0">
                         <span className="font-semibold">{it.title}</span>
-                        <span className="mt-1 block text-muted">{it.body}</span>
+                        <span className="mt-1 block whitespace-pre-wrap text-muted">{it.body}</span>
                       </span>
                     </label>
                   ))
                 ) : (
-                  <p className="text-sm text-muted">{d.preview || "Пунктов нет — загрузите текстовый файл или нажмите «Переразобрать»."}</p>
+                  <p className="text-sm text-muted">Пунктов нет — загрузите текстовый файл или нажмите «Переразобрать».</p>
                 )}
               </div>
             ) : null}

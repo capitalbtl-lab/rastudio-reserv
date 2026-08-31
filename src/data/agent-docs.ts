@@ -5,7 +5,6 @@ import { promisify } from "node:util";
 import { createServerFn } from "@tanstack/react-start";
 import { isAdminRequest } from "./admin-auth";
 import { logAdmin } from "./admin-settings";
-import { serverEnv } from "./server-env";
 
 const execFileAsync = promisify(execFile);
 
@@ -90,84 +89,24 @@ function splitHeuristic(text: string): DocItem[] {
         const body = (lines.length > 1 ? lines.slice(1).join("\n") : chunk).trim();
         return {
           id: `i${i + 1}`,
-          title: (head || `Раздел ${i + 1}`).slice(0, 160),
-          body: (body || chunk.trim()).slice(0, 12000),
+          title: (head || `Раздел ${i + 1}`).slice(0, 200),
+          body: body || chunk.trim(),
           on: true,
         };
       })
-      .filter((it) => it.body.length > 20)
-      .slice(0, 80);
+      .filter((it) => it.body.length > 20);
   }
   const chunks = cleaned
     .split(/\n(?=(?:Статья\s+\d+|§\s*\d+|#{1,3}\s+|[А-ЯЁ][А-ЯЁ0-9 «»"„-]{10,}\n))/)
     .map((c) => c.trim())
     .filter((c) => c.length > 40);
   const source = chunks.length > 1 ? chunks : cleaned.split(/\n{2,}/).map((c) => c.trim()).filter((c) => c.length > 40);
-  return source.slice(0, 80).map((chunk, i) => {
+  return source.map((chunk, i) => {
     const lines = chunk.split("\n");
-    const title = lines[0].replace(/^#+\s*/, "").replace(/^\d+[.)]\s*/, "").slice(0, 160) || `Пункт ${i + 1}`;
+    const title = lines[0].replace(/^#+\s*/, "").replace(/^\d+[.)]\s*/, "").slice(0, 200) || `Пункт ${i + 1}`;
     const body = (lines.length > 1 ? lines.slice(1).join("\n") : chunk).trim();
-    return { id: `i${i + 1}`, title, body: (body || chunk).slice(0, 12000), on: true };
+    return { id: `i${i + 1}`, title, body: body || chunk, on: true };
   });
-}
-
-async function llmItems(kind: DocKind, text: string): Promise<DocItem[] | null> {
-  const key = serverEnv("YANDEX_API_KEY");
-  const folder = serverEnv("YANDEX_FOLDER_ID");
-  if (!key || !folder) return null;
-  const prompt =
-    kind === "instruction"
-      ? "Разбей инструкцию для ИИ-администратора студии «Развивайся» на отдельные команды."
-      : kind === "rules"
-        ? "Разбей правила оказания услуг на пункты, которыми агент отвечает родителю."
-        : kind === "offer"
-          ? "Выдели из договора оферты пункты, которые агент может коротко объяснить родителю: оплата, отказ, пробное, возврат, персональные данные."
-          : "Разбей документ на рабочие пункты для консультации родителя.";
-  const body = {
-    modelUri: `gpt://${folder}/yandexgpt/latest`,
-    completionOptions: { stream: false, temperature: 0.1, maxTokens: 4000 },
-    messages: [
-      { role: "system", text: "Отвечай только валидным JSON без markdown." },
-      {
-        role: "user",
-        text: `${prompt}
-JSON: {"items":[{"title":"короткий заголовок","body":"текст пункта"}]}
-Не больше 40 пунктов. Без ФИО и лишней воды.
-
-Документ:
-${text.slice(0, 18000)}`,
-      },
-    ],
-  };
-  try {
-    for (const auth of [`Api-Key ${key}`, `Bearer ${key}`]) {
-      const res = await fetch("https://llm.api.cloud.yandex.net/foundationModels/v1/completion", {
-        method: "POST",
-        headers: { Authorization: auth, "Content-Type": "application/json", "x-folder-id": folder },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) continue;
-      const json = (await res.json()) as { result?: { alternatives?: { message?: { text?: string } }[] } };
-      const raw = json.result?.alternatives?.[0]?.message?.text || "";
-      const start = raw.indexOf("{");
-      const end = raw.lastIndexOf("}");
-      if (start < 0 || end <= start) continue;
-      const parsed = JSON.parse(raw.slice(start, end + 1)) as { items?: { title?: string; body?: string }[] };
-      const items = (parsed.items || [])
-        .map((it, i) => ({
-          id: `i${i + 1}`,
-          title: String(it.title || `Пункт ${i + 1}`).slice(0, 120),
-          body: String(it.body || "").trim().slice(0, 12000),
-          on: true,
-        }))
-        .filter((it) => it.body.length > 8)
-        .slice(0, 40);
-      if (items.length) return items;
-    }
-  } catch {
-    /* heuristic */
-  }
-  return null;
 }
 
 async function extractText(filePath: string) {
@@ -178,14 +117,13 @@ async function extractText(filePath: string) {
 
 async function interpret(_kind: DocKind, text: string) {
   const split = splitHeuristic(text);
-  if (split.length >= 2) return split;
-  if (split.length === 1 && split[0].body.length > 200) return split;
-  return split.length ? split : [{ id: "i1", title: "Документ", body: text.slice(0, 12000), on: true }];
+  if (split.length) return split;
+  return [{ id: "i1", title: "Документ", body: text, on: true }];
 }
 
 function publicDoc(d: AgentDoc) {
-  const { text, file, ...rest } = d;
-  return { ...rest, chars: d.chars, preview: text.slice(0, 400) };
+  const { file, ...rest } = d;
+  return rest;
 }
 
 export function docsPrompt() {
@@ -194,18 +132,18 @@ export function docsPrompt() {
   if (!live.length) return "";
   const parts: string[] = [
     "",
-    "ОФИЦИАЛЬНЫЕ ДОКУМЕНТЫ СТУДИИ. Если родитель спрашивает про договор, оплату, отказ, правила — опирайся на них. Не выдумывай условия, которых нет в тексте. Не читай документ целиком, дай суть пункта.",
+    "ОФИЦИАЛЬНЫЕ ДОКУМЕНТЫ СТУДИИ — полный текст, без сокращений. Если родитель спрашивает про договор, оплату, отказ, правила — опирайся на них дословно по смыслу. Не выдумывай условия, которых нет. Родителю отвечай коротко, но суть пункта не меняй.",
   ];
   for (const d of live) {
     parts.push(`### ${KIND_LABEL[d.kind]} «${d.name}»`);
-    const on = d.items.filter((i) => i.on).slice(0, 40);
-    if (on.length) {
-      for (const it of on) parts.push(`- ${it.title}:\n${it.body.slice(0, 4000)}`);
+    const on = d.items.filter((i) => i.on);
+    if (on.length && on.length < d.items.length) {
+      for (const it of on) parts.push(`${it.title}\n${it.body}`);
     } else {
-      parts.push(d.text.slice(0, 8000));
+      parts.push(d.text || on.map((it) => `${it.title}\n${it.body}`).join("\n\n"));
     }
   }
-  return `\n${parts.join("\n").slice(0, 24000)}\n`;
+  return `\n${parts.join("\n\n")}\n`;
 }
 
 export const adminAgentDocs = createServerFn({ method: "POST" })
@@ -266,7 +204,7 @@ export const adminAgentDocs = createServerFn({ method: "POST" })
           hit.error = "Текст не извлечён";
           hit.items = [];
         } else {
-          hit.text = text.slice(0, 80000);
+          hit.text = text;
           hit.chars = hit.text.length;
           hit.items = await interpret(hit.kind, hit.text);
           hit.status = hit.items.length ? "ok" : "empty";
@@ -316,7 +254,7 @@ export const adminAgentDocs = createServerFn({ method: "POST" })
           doc.status = "empty";
           doc.error = "В файле нет текста. Если это скан — загрузите текстовый PDF или Word.";
         } else {
-          doc.text = text.slice(0, 80000);
+          doc.text = text;
           doc.chars = doc.text.length;
           doc.items = await interpret(kind, doc.text);
           doc.status = doc.items.length ? "ok" : "empty";
