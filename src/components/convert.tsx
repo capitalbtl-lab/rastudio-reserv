@@ -32,10 +32,7 @@ export function ConvertBand({ path, sessions }: { path: string; sessions: CmsSes
               const meta = branchMeta(slot.session);
               return (
                 <li key={slot.id} className={cn(i > 0 && "border-t border-border/70 md:border-t-0 md:border-l")}>
-                  <a
-                    href="#trial"
-                    className="flex h-full items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-bg/70 md:px-6"
-                  >
+                  <div className="flex h-full items-center justify-between gap-3 px-5 py-3.5 md:px-6">
                     <span>
                       <span className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted">
                         {meta.city}
@@ -45,13 +42,24 @@ export function ConvertBand({ path, sessions }: { path: string; sessions: CmsSes
                       </span>
                       <span className="mt-1 block text-xs text-muted">{meta.short}</span>
                     </span>
-                    <span className="shrink-0 text-sm font-semibold text-primary">Занять</span>
-                  </a>
+                    <Button asChild size="sm" className="shrink-0">
+                      <a href="#trial">Записаться</a>
+                    </Button>
+                  </div>
                 </li>
               );
             })}
           </ul>
         ) : null}
+
+        <div className="flex flex-wrap items-center gap-3 border-t border-border/70 px-5 py-3 md:px-6">
+          <Button asChild>
+            <a href="#trial">Записаться на пробное</a>
+          </Button>
+          <Button asChild variant="outline">
+            <a href={SITE.phoneHref}>{SITE.phone}</a>
+          </Button>
+        </div>
 
         <ul className="grid gap-3 border-t border-border/70 px-5 py-3.5 sm:grid-cols-2 lg:grid-cols-4 md:px-6">
           {OBJECTIONS.map((item) => (
