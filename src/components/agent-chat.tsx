@@ -106,20 +106,6 @@ export function AgentChat() {
     setSpeaking(false);
   }
 
-  function isEcho(said: string) {
-    const a = said
-      .toLowerCase()
-      .replace(/[^\p{L}\d\s]/gu, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    const words = a.split(" ").filter((w) => w.length > 2);
-    if (speakingRef.current && (a.length < 8 || words.length < 2)) return true;
-    const b = spokenRef.current.toLowerCase();
-    if (!words.length) return true;
-    const hits = words.filter((w) => b.includes(w)).length;
-    return hits / words.length >= 0.55;
-  }
-
   function stopListen() {
     listenWantedRef.current = false;
     recRef.current?.stop();
@@ -172,7 +158,7 @@ export function AgentChat() {
       .map((t) => t.text)
       .join(" ");
     setSpeaking(true);
-    startListen();
+    stopListen();
     try {
       const turns = parseTurns(phrase);
       const clips = await Promise.all(
@@ -197,6 +183,7 @@ export function AgentChat() {
   }
 
   function startListen() {
+    if (speakingRef.current || busyRef.current) return;
     const SR = speechCtor();
     if (!SR) return;
     listenWantedRef.current = true;
@@ -207,29 +194,22 @@ export function AgentChat() {
     }
     const rec = new SR();
     rec.lang = "ru-RU";
-    rec.continuous = true;
-    rec.interimResults = true;
+    rec.continuous = false;
+    rec.interimResults = false;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
+      if (speakingRef.current || busyRef.current) return;
       const last = e.results[e.results.length - 1];
       const said = last?.[0]?.transcript?.trim();
-      if (!said) return;
-      const done = Boolean(last?.isFinal);
-      if (speakingRef.current) {
-        if (isEcho(said)) return;
-        if (!done && said.split(/\s+/).length < 2) return;
-        cancelSpeech();
-        stopListen();
-        void send(said);
-        return;
-      }
-      if (done) void send(said);
+      if (said) void send(said);
     };
     rec.onend = () => {
       if (recRef.current && recRef.current !== rec) return;
       recRef.current = null;
       setListening(false);
-      if (listenWantedRef.current && voiceOnRef.current && !busyRef.current) startListen();
+      if (listenWantedRef.current && voiceOnRef.current && !busyRef.current && !speakingRef.current) {
+        startListen();
+      }
     };
     rec.onerror = () => {
       recRef.current = null;
@@ -313,7 +293,7 @@ export function AgentChat() {
               <div className="min-w-0 pb-1">
                 <p className="font-display text-[1.15rem] leading-tight">Олег и Ольга</p>
                 <p className="text-[0.78rem] text-white/85">
-                  {speaking ? "Говорят — можно перебить" : listening ? "Слушают вас" : "Администраторы студии · онлайн"}
+                  {speaking ? "Говорят" : listening ? "Слушают вас" : "Администраторы студии · онлайн"}
                 </p>
               </div>
             </div>
@@ -429,10 +409,7 @@ export function AgentChat() {
                   "grid size-10 place-items-center rounded-full",
                   listening ? "bg-primary text-primary-foreground" : "text-muted hover:bg-black/5",
                 )}
-                onClick={() => {
-                  if (speakingRef.current) cancelSpeech();
-                  listening ? stopListen() : startListen();
-                }}
+                onClick={() => (listening ? stopListen() : startListen())}
                 aria-label="Голосовой ввод"
               >
                 <Mic className="size-4" />
@@ -447,11 +424,7 @@ export function AgentChat() {
               </button>
             </div>
             <p className="px-3 pt-1.5 text-[0.65rem] text-muted">
-              {voiceOn
-                ? speaking
-                  ? "Скажите вопрос — Олег и Ольга остановятся"
-                  : "Голосовой режим включён"
-                : `Пробное без обязательств · ${SITE.phone}`}
+              {voiceOn ? (speaking ? "Сейчас говорят" : "Голосовой режим включён") : `Пробное без обязательств · ${SITE.phone}`}
             </p>
           </form>
         </div>

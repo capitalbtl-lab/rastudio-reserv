@@ -16,10 +16,10 @@ function toSsml(text: string) {
     .replace(/>/g, ">");
   const body = escaped
     .replace(/\s*\.{2,}\s*/g, ", ")
-    .replace(/([.!?])(\s+|$)/g, '<break time="140ms"/>')
-    .replace(/:\s+/g, '<break time="80ms"/>')
-    .replace(/,\s+/g, '<break time="50ms"/>')
-    .replace(/\s+[—–]\s+/g, '<break time="70ms"/>');
+    .replace(/([.!?])(\s+|$)/g, '<break time="90ms"/>')
+    .replace(/:\s+/g, '<break time="50ms"/>')
+    .replace(/,\s+/g, '<break time="35ms"/>')
+    .replace(/\s+[—–]\s+/g, '<break time="45ms"/>');
   return `<speak>${body}</speak>`;
 }
 
@@ -36,7 +36,7 @@ export const speakAgent = createServerFn({ method: "POST" })
       lang: "ru-RU",
       voice,
       emotion: "good",
-      speed: "1.0",
+      speed: "1.18",
       format: "mp3",
       folderId: folder,
     });
@@ -54,7 +54,7 @@ export const speakAgent = createServerFn({ method: "POST" })
         lang: "ru-RU",
         voice,
         emotion: "good",
-        speed: "1.0",
+        speed: "1.18",
         format: "mp3",
         folderId: folder,
       });
