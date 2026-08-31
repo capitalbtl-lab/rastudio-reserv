@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   adminClearEdit,
   adminEdits,
@@ -67,6 +67,17 @@ export function AdminPrices() {
   const [female, setFemale] = useState<{ id: string; label: string }[]>([]);
   const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
   const [savedVoice, setSavedVoice] = useState("");
+  const [playing, setPlaying] = useState("");
+  const previewRef = useRef<HTMLAudioElement | null>(null);
+
+  function stopPreview() {
+    const el = previewRef.current;
+    if (el) {
+      el.pause();
+      el.removeAttribute("src");
+    }
+    setPlaying("");
+  }
 
   async function load(t = token()) {
     if (!t) return;
@@ -154,36 +165,54 @@ export function AdminPrices() {
     else await load();
   }
 
-  async function listen(who: "oleg" | "olga") {
-    setBusy(true);
+  async function listen(who: "oleg" | "olga" | "both") {
+    stopPreview();
+    const el = previewRef.current || new Audio();
+    previewRef.current = el;
+    el.muted = false;
+    el.volume = 1;
+    const people = who === "both" ? (["oleg", "olga"] as const) : [who];
+    setPlaying(who === "both" ? "Олег и Ольга с текущими настройками" : who === "olga" ? "Ольга" : "Олег");
     try {
-      const sample =
-        who === "olga"
-          ? "Здравствуйте, я Ольга. Подберём курс, который подойдёт вашему ребёнку."
-          : "Здравствуйте, я Олег. Расскажу про робототехнику и программирование.";
-      const res = await speakAgent({
-        data: {
-          text: sample,
-          who,
-          preview: {
-            oleg: voice.oleg,
-            olga: voice.olga,
-            speed: voice.speed,
-            pause: voice.pause,
-            mood: voice.mood || voice.role,
-            role: voice.mood || voice.role,
+      for (const person of people) {
+        const sample =
+          person === "olga"
+            ? "Здравствуйте, я Ольга. Подберём курс, который подойдёт вашему ребёнку."
+            : "Здравствуйте, я Олег. Расскажу про робототехнику и программирование.";
+        const res = await speakAgent({
+          data: {
+            text: sample,
+            who: person,
+            preview: {
+              oleg: voice.oleg,
+              olga: voice.olga,
+              speed: voice.speed,
+              pause: voice.pause,
+              mood: voice.mood || voice.role,
+              role: voice.mood || voice.role,
+            },
           },
-        },
-      });
-      if (res.ok && "audio" in res) {
-        const el = new Audio(res.audio);
-        el.volume = "volume" in res ? Number(res.volume) : 1;
-        await el.play();
-      } else setErr("Не удалось проиграть голос.");
+        });
+        if (!res.ok || !("audio" in res)) {
+          setErr("Не удалось проиграть голос. Проверьте баланс Yandex SpeechKit.");
+          setPlaying("");
+          return;
+        }
+        await new Promise<void>((resolve, reject) => {
+          el.onended = () => resolve();
+          el.onerror = () => reject(new Error("audio"));
+          el.playbackRate = Math.min(1.25, Math.max(0.9, voice.speed || 1));
+          el.volume = "volume" in res ? Number(res.volume) : 1;
+          el.src = res.audio;
+          const play = el.play();
+          if (play && typeof play.catch === "function") play.catch(() => reject(new Error("play")));
+        });
+        if (who === "both") await new Promise((r) => setTimeout(r, 80 + (voice.pause || 0) * 220));
+      }
     } catch {
-      setErr("Не удалось проиграть голос.");
+      setErr("Браузер не дал включить звук. Нажмите «Прослушать» ещё раз.");
     }
-    setBusy(false);
+    setPlaying("");
   }
 
   function patch(path: string, key: "all" | "kbm" | "tmx", value: string) {
@@ -445,40 +474,44 @@ export function AdminPrices() {
           </div>
           <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="text-sm">
-                Олег, мужской
-                <select
-                  className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                  value={voice.oleg}
-                  onChange={(e) => setVoice((v) => ({ ...v, oleg: e.target.value }))}
-                >
-                  {(male.length ? male : [{ id: "zahar", label: "Захар" }]).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-                <button type="button" className="mt-2 text-sm font-semibold text-primary" onClick={() => void listen("oleg")}>
-                  Слушать Олега
-                </button>
-              </label>
-              <label className="text-sm">
-                Ольга, женский
-                <select
-                  className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                  value={voice.olga}
-                  onChange={(e) => setVoice((v) => ({ ...v, olga: e.target.value }))}
-                >
-                  {(female.length ? female : [{ id: "alena", label: "Алёна" }]).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-                <button type="button" className="mt-2 text-sm font-semibold text-primary" onClick={() => void listen("olga")}>
-                  Слушать Ольгу
-                </button>
-              </label>
+              <div>
+                <label className="text-sm">
+                  Олег, мужской
+                  <select
+                    className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+                    value={voice.oleg}
+                    onChange={(e) => setVoice((v) => ({ ...v, oleg: e.target.value }))}
+                  >
+                    {(male.length ? male : [{ id: "zahar", label: "Захар" }]).map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button type="button" variant="secondary" className="mt-3" onClick={() => void listen("oleg")}>
+                  Прослушать Олега
+                </Button>
+              </div>
+              <div>
+                <label className="text-sm">
+                  Ольга, женский
+                  <select
+                    className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+                    value={voice.olga}
+                    onChange={(e) => setVoice((v) => ({ ...v, olga: e.target.value }))}
+                  >
+                    {(female.length ? female : [{ id: "alena", label: "Алёна" }]).map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button type="button" variant="secondary" className="mt-3" onClick={() => void listen("olga")}>
+                  Прослушать Ольгу
+                </Button>
+              </div>
               <label className="text-sm">
                 Интонация
                 <select
@@ -520,9 +553,22 @@ export function AdminPrices() {
                 <span className="text-xs text-muted">Левее — короче паузы, правее — спокойнее, с воздухом</span>
               </label>
             </div>
-            <div className="mt-5 flex flex-wrap items-center gap-3">
+            <p className="mt-5 text-sm text-muted">
+              Сдвиньте темп, паузу или интонацию и нажмите «Прослушать» — услышите голос уже с новыми настройками, сохранять не обязательно.
+            </p>
+            {playing ? <p className="mt-2 text-sm font-semibold text-primary">Играет: {playing}</p> : null}
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Button type="button" onClick={() => void listen("both")}>
+                Прослушать изменения
+              </Button>
+              {playing ? (
+                <Button type="button" variant="secondary" onClick={stopPreview}>
+                  Стоп
+                </Button>
+              ) : null}
               <Button
                 type="button"
+                variant="secondary"
                 disabled={busy}
                 onClick={async () => {
                   setBusy(true);
