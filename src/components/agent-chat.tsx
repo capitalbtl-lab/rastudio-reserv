@@ -542,7 +542,14 @@ export function AgentChat() {
   }
 
   async function send(value?: string) {
-    const next = (value ?? text).trim();
+    const next = (value ?? text)
+      .trim()
+      .replace(/\bкаломн\w*/gi, "Коломна")
+      .replace(/\bколоменск\w*/gi, "Коломна")
+      .replace(/\bколомен\w*/gi, "Коломна")
+      .replace(/\bлуховец\w*/gi, "Луховицы")
+      .replace(/\bлухавиц\w*/gi, "Луховицы")
+      .replace(/\bлуховицк\w*/gi, "Луховицы");
     if (!next || busyRef.current) return;
     const sendId = ++sendIdRef.current;
     setText("");

@@ -63,15 +63,20 @@ function takeAge(text: string) {
 }
 
 function takeCity(text: string) {
-  if (/луховиц/i.test(text)) return "Луховицы";
-  if (/коломн|октябрьск|гражданск|цмит|олимп|революц/i.test(text)) return "Коломна";
+  if (/луховиц|луховец|лухавиц|луховицк/i.test(text)) return "Луховицы";
+  if (/коломн|коломен|каломн|коломенск/i.test(text)) return "Коломна";
   return "";
 }
 
 function takeBranch(text: string): { branch: string; branchId: number } | null {
-  if (/луховиц/i.test(text)) return { branch: "Луховицы, Пушкина, 202А", branchId: 3 };
   if (/гражданск|олимп/i.test(text)) return { branch: "Коломна, Гражданская, 2", branchId: 1 };
   if (/октябрьск|цмит|революц/i.test(text)) return { branch: "Коломна, ЦМИТ, Октябрьской революции, 340", branchId: 2 };
+  if (/луховиц|луховец|лухавиц|пушкин/i.test(text) && /филиал|пушкин|хорош|202/i.test(text)) {
+    return { branch: "Луховицы, Пушкина, 202А", branchId: 3 };
+  }
+  if (/луховиц|луховец|лухавиц/i.test(text) && !/коломн|коломен/i.test(text)) {
+    return { branch: "Луховицы, Пушкина, 202А", branchId: 3 };
+  }
   return null;
 }
 
@@ -101,7 +106,6 @@ function takeCourse(text: string) {
 }
 
 export function factsFromMessages(messages: { role: string; content: string }[]): SessionFacts {
-  const all = messages.map((m) => m.content).join("\n");
   const user = messages
     .filter((m) => m.role === "user")
     .map((m) => m.content)
@@ -111,20 +115,24 @@ export function factsFromMessages(messages: { role: string; content: string }[])
     .map((m) => m.content)
     .join("\n");
   const facts: SessionFacts = {};
-  const age = takeAge(all);
+  const age = takeAge(user) || takeAge(assistant);
   if (age) {
     facts.age = age;
     facts.band = bandOf(age);
   }
-  const city = takeCity(all);
+  const city = takeCity(user);
   if (city) facts.city = city;
-  const br = takeBranch(all);
+  const br = takeBranch(user);
   if (br) {
     facts.branch = br.branch;
     facts.branchId = br.branchId;
     if (!facts.city) facts.city = br.branchId === 3 ? "Луховицы" : "Коломна";
   }
-  const school = takeSchool(user) || takeSchool(all);
+  if (facts.city === "Луховицы" && !facts.branchId) {
+    facts.branch = "Луховицы, Пушкина, 202А";
+    facts.branchId = 3;
+  }
+  const school = takeSchool(user);
   if (school) facts.school = school;
   const phone = takePhone(user);
   if (phone) facts.phone = phone;
@@ -136,16 +144,63 @@ export function factsFromMessages(messages: { role: string; content: string }[])
   if (child) facts.child = child[1];
   const parent = user.match(/(?:меня зовут|я\s+)\s*([А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+){0,2})/);
   if (parent) facts.parent = parent[1];
-  if (/свободн\w+ день|согласуем|пустую дату/i.test(all)) facts.intent = "пробное-свободный-день";
-  else if (/пробн/i.test(all)) facts.intent = "пробное";
-  else if (/в группу|абонемент|сразу в/i.test(all)) facts.intent = "группа";
+  if (/свободн\w+ день|согласуем|пустую дату/i.test(user)) facts.intent = "пробное-свободный-день";
+  else if (/пробн/i.test(user)) facts.intent = "пробное";
+  else if (/в группу|абонемент|сразу в/i.test(user)) facts.intent = "группа";
   facts.briefed =
     /последовательн|ступен|проходят на занят|материал дет|от младшего/i.test(assistant) ||
     /понятно|к пробному|к записи|давайте к/i.test(user);
   return facts;
 }
 
+export function nextStepOf(facts: SessionFacts) {
+  if (!facts.age) return "спросить ТОЛЬКО возраст. Город и филиал не упоминай.";
+  if (!facts.city) return "спросить ТОЛЬКО город: Коломна или Луховицы. Возраст не спрашивай.";
+  if (facts.city === "Коломна" && !facts.branchId) {
+    return "спросить филиал в Коломне: ЦМИТ, Октябрьской революции 340 или Гражданская 2. Город и возраст НЕ спрашивай — город уже Коломна.";
+  }
+  if (!facts.school) {
+    return "спросить направление / школу. Город, филиал и возраст НЕ спрашивай.";
+  }
+  if (!facts.briefed) {
+    return "рассказать программу выбранного направления и что обучение последовательное, от младшего к старшему. Город не спрашивай. К записи не переходи в этой реплике.";
+  }
+  return "предложить пробное в группе, пробное в свободный день или сразу в группу. Город не спрашивай.";
+}
+
 export function factsPrompt(facts: SessionFacts) {
+  const lines: string[] = [];
+  if (facts.age) lines.push(`возраст ребёнка: ${facts.age} лет${facts.band ? ` (группа ${facts.band})` : ""}`);
+  if (facts.city) lines.push(`город: ${facts.city}`);
+  if (facts.branch) lines.push(`филиал: ${facts.branch}${facts.branchId ? ` (id ${facts.branchId})` : ""}`);
+  if (facts.school) lines.push(`направление: ${facts.school}`);
+  if (facts.course) lines.push(`курс: ${facts.course}`);
+  if (facts.briefed) lines.push("программу направления уже рассказали");
+  if (facts.child) lines.push(`ребёнок: ${facts.child}`);
+  if (facts.parent) lines.push(`родитель: ${facts.parent}`);
+  if (facts.phone) lines.push(`телефон: ${facts.phone}`);
+  if (facts.intent) lines.push(`намерение: ${facts.intent}`);
+  const next = nextStepOf(facts);
+  const forbid: string[] = [];
+  if (facts.age) forbid.push("возраст");
+  if (facts.city) forbid.push("город");
+  if (facts.branchId) forbid.push("филиал");
+  if (facts.school) forbid.push("направление");
+  const ban = forbid.length
+    ? `\nЗАПРЕЩЕНО спрашивать: ${forbid.join(", ")}. Эти слова в вопросе к родителю не используй.`
+    : "";
+  if (!lines.length) {
+    return `
+
+Факты сессии пустые. Сейчас ${next}${ban}`;
+  }
+  return `
+
+УЖЕ ИЗВЕСТНО — это сказал родитель, не ты. Скрипт воронки здесь не важнее:
+${lines.map((l) => `— ${l}`).join("\n")}
+Сейчас ${next}${ban}
+Если в скрипте ниже написано «спроси город», а город уже есть — игнорируй скрипт.`;
+}
   const lines: string[] = [];
   if (facts.age) lines.push(`возраст ребёнка: ${facts.age} лет${facts.band ? ` (группа ${facts.band})` : ""}`);
   if (facts.city) lines.push(`город: ${facts.city}`);
