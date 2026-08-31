@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Star } from "lucide-react";
-import { REVIEWS, YANDEX_RATING, YANDEX_REVIEWS } from "@/data/reviews";
+import { REVIEWS, YANDEX_RATING, YANDEX_REVIEWS, reviewsForPath, type Review } from "@/data/reviews";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -103,37 +103,7 @@ export function Reviews() {
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <FeaturedReview />
         {REVIEWS.slice(1).map((item) => (
-          <article
-            key={item.name + item.date}
-            className="group relative flex flex-col overflow-hidden rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] transition-shadow duration-[var(--motion-fast)] hover:shadow-[var(--shadow-border-hover)]"
-          >
-            <span
-              className="pointer-events-none absolute -top-4 right-3 select-none font-display text-[6.5rem] leading-none text-primary/10"
-              aria-hidden
-            >
-              “
-            </span>
-            <div className="relative flex items-center justify-between gap-3">
-              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-primary">
-                {item.course}
-              </span>
-              <span className="flex gap-0.5">
-                {Array.from({ length: 5 }).map((_, s) => (
-                  <Star key={s} className="size-3 fill-primary text-primary" strokeWidth={0} />
-                ))}
-              </span>
-            </div>
-            <p className="relative mt-4 text-[0.95rem] leading-relaxed text-fg/85">{item.text}</p>
-            <div className="relative mt-auto flex items-center gap-3 pt-5">
-              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                {initials(item.name)}
-              </span>
-              <span>
-                <span className="block text-sm font-semibold">{item.name}</span>
-                <span className="text-xs text-muted">{item.date}</span>
-              </span>
-            </div>
-          </article>
+          <ReviewCard key={item.name + item.date} item={item} />
         ))}
       </div>
 
@@ -141,6 +111,63 @@ export function Reviews() {
         <Button asChild variant="secondary">
           <a href={YANDEX_REVIEWS} target="_blank" rel="noreferrer">
             Все {YANDEX_RATING.reviews} отзыва на Яндекс Картах
+          </a>
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function ReviewCard({ item }: { item: Review }) {
+  return (
+    <article className="group relative flex flex-col overflow-hidden rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] transition-shadow duration-[var(--motion-fast)] hover:shadow-[var(--shadow-border-hover)]">
+      <span
+        className="pointer-events-none absolute -top-4 right-3 select-none font-display text-[6.5rem] leading-none text-primary/10"
+        aria-hidden
+      >
+        “
+      </span>
+      <div className="relative flex items-center justify-between gap-3">
+        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-primary">
+          {item.course}
+        </span>
+        <span className="flex gap-0.5">
+          {Array.from({ length: 5 }).map((_, s) => (
+            <Star key={s} className="size-3 fill-primary text-primary" strokeWidth={0} />
+          ))}
+        </span>
+      </div>
+      <p className="relative mt-4 text-[0.95rem] leading-relaxed text-fg/85">{item.text}</p>
+      <div className="relative mt-auto flex items-center gap-3 pt-5">
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+          {initials(item.name)}
+        </span>
+        <span>
+          <span className="block text-sm font-semibold">{item.name}</span>
+          <span className="text-xs text-muted">{item.date}</span>
+        </span>
+      </div>
+    </article>
+  );
+}
+
+export function PageReviews({ path }: { path: string }) {
+  const items = reviewsForPath(path);
+  if (!items.length) return null;
+
+  return (
+    <section className="mt-12">
+      <p className="kicker text-primary">Яндекс Карты · {YANDEX_RATING.score}</p>
+      <h2 className="display mt-2 text-2xl md:text-3xl">Родители об этом направлении</h2>
+      <div className={cn("mt-6 grid gap-3", items.length > 1 ? "sm:grid-cols-2" : "")}>
+        {items.map((item) => (
+          <ReviewCard key={item.name + item.date} item={item} />
+        ))}
+      </div>
+      <div className="mt-5">
+        <Button asChild variant="secondary">
+          <a href={YANDEX_REVIEWS} target="_blank" rel="noreferrer">
+            Все отзывы на Яндекс Картах
           </a>
         </Button>
       </div>

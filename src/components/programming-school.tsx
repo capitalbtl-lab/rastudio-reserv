@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Kicker, ScheduleBlock, Trajectory, SchoolCourseList, ProgramSteps } from "@/components/cms-blocks";
 import { SCHOOL_PROGRAMS } from "@/data/school-programs";
 import { PhotoSlider } from "@/components/photo-slider";
+import { PageReviews } from "@/components/reviews";
 import { galleryPhotos } from "@/lib/gallery";
 
 type Props = {
@@ -122,6 +123,8 @@ export function ProgrammingSchoolPage({
         ) : null}
 
         <PhotoSlider images={galleryPhotos(page.images)} />
+
+        <PageReviews path="/programming-school" />
 
         <ScheduleBlock sessions={schedule} />
       </div>

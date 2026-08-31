@@ -12,6 +12,7 @@ import { ProgrammingSchoolPage } from "@/components/programming-school";
 import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
 import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses, SchoolCourseList } from "@/components/cms-blocks";
 import { PhotoSlider } from "@/components/photo-slider";
+import { PageReviews } from "@/components/reviews";
 import { galleryPhotos } from "@/lib/gallery";
 import { SCHOOL_PROGRAMS, SCHOOL_WHY } from "@/data/school-programs";
 import { whyForPath } from "@/data/course-why";
@@ -207,6 +208,9 @@ function CinematicPage({
             ) : (
               <Gallery page={{ ...page, images: page.images.slice(Math.min(3, page.images.length)) }} />
             )}
+            {page.kind === "school" || page.kind === "course" ? (
+              <PageReviews path={page.pathDecoded || page.path} />
+            ) : null}
             {schedule.length ? (
               <div className="pt-10">
                 <ScheduleBlock sessions={schedule} />

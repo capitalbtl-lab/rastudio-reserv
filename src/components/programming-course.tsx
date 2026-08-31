@@ -18,6 +18,7 @@ import {
   WhyNow,
 } from "@/components/cms-blocks";
 import { whyForPath } from "@/data/course-why";
+import { PageReviews } from "@/components/reviews";
 
 type Props = {
   page: SitePage;
@@ -208,6 +209,8 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [] }: 
             ) : null}
           </section>
         )}
+
+        <PageReviews path={course.pathDecoded || course.path || page.path} />
 
         <ScheduleBlock sessions={schedule} />
 
