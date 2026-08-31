@@ -29,10 +29,10 @@ const COLLAGE = [
     filename: "shot-sculpt.jpg",
   },
   {
-    href: "/teslaphysics",
-    src: "/media/home/shot-science.jpg",
-    alt: "Научные и инженерные курсы в Студии Развивайся",
-    filename: "shot-science.jpg",
+    href: "/programming-school",
+    src: "/media/home/shot-code.jpg",
+    alt: "Компьютерный класс школы программирования в Студии Развивайся",
+    filename: "shot-code.jpg",
   },
 ] as const;
 
@@ -152,7 +152,7 @@ function Home() {
 
           <div className="relative hidden lg:block">
             <div className="photo-stack">
-              {COLLAGE.slice(0, 2).map((shot) => (
+              {COLLAGE.map((shot) => (
                 <PageLink key={shot.src} to={shot.href} className="shot bg-header">
                   <SeoImage
                     src={shot.src}
@@ -164,34 +164,10 @@ function Home() {
                   />
                 </PageLink>
               ))}
-              <div className="shot bg-header">
-                <video
-                  src="/media/home/hero.mp4"
-                  className="h-full w-full object-cover"
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  preload="metadata"
-                  aria-label="Видео студии Развивайся"
-                />
-              </div>
             </div>
           </div>
 
           <div className="snap-row lg:hidden">
-            <div className="snap-card overflow-hidden rounded-3xl">
-              <video
-                src="/media/home/hero.mp4"
-                className="aspect-4/5 w-full object-cover"
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                aria-label="Видео студии Развивайся"
-              />
-            </div>
             {COLLAGE.map((shot) => (
               <PageLink key={shot.src} to={shot.href} className="snap-card overflow-hidden rounded-3xl">
                 <SeoImage
