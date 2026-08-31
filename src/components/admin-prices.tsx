@@ -155,12 +155,15 @@ export function AdminPrices() {
             scripts: calls.stats.knowledge.scripts,
             siteRecommendations: calls.stats.knowledge.siteRecommendations,
             instructions: calls.stats.knowledge.instructions,
+            phrases: calls.stats.knowledge.phrases,
           });
         }
         if (calls.stats.worker) setWorker(calls.stats.worker);
         if (calls.stats.settings) setCallSet({ ...callSet, ...calls.stats.settings, inject: { ...callSet.inject, ...(calls.stats.settings.inject || {}) } });
       }
     }
+    const listed = await adminCalls({ data: { token: t, action: "list" } });
+    if (listed.ok && listed.transcripts) setTranscripts(listed.transcripts);
   }
 
   useEffect(() => {
@@ -189,6 +192,7 @@ export function AdminPrices() {
             scripts: calls.stats.knowledge.scripts,
             siteRecommendations: calls.stats.knowledge.siteRecommendations,
             instructions: calls.stats.knowledge.instructions,
+            phrases: calls.stats.knowledge.phrases,
           });
         }
         if (calls.stats.worker) setWorker(calls.stats.worker);
@@ -704,7 +708,8 @@ export function AdminPrices() {
                 type="button"
                 onClick={() => {
                   setCallView(id);
-                  if (id === "texts") {
+                  document.getElementById(`call-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  if (id === "texts" || id === "overview") {
                     void adminCalls({ data: { token: token(), action: "list" } }).then((res) => {
                       if (res.ok && res.transcripts) setTranscripts(res.transcripts);
                     });
@@ -717,8 +722,7 @@ export function AdminPrices() {
             ))}
           </div>
 
-          {callView === "overview" ? (
-            <>
+          <div id="call-overview" className="space-y-4">
               <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
                 <p className="text-sm font-semibold">{callSet.paused ? "Фон на паузе" : "Фон работает"}</p>
                 <p className="mt-2 text-sm text-muted">{worker?.last || "Очередь Novofon → расшифровка → база знаний."}</p>
@@ -756,11 +760,10 @@ export function AdminPrices() {
                   <div className="h-full rounded-full bg-brand" style={{ width: `${Math.min(100, Math.round((callInfo.transcribed / Math.max(1, callInfo.total)) * 100))}%` }} />
                 </div>
               ) : null}
-            </>
-          ) : null}
+          </div>
 
-          {callView === "settings" ? (
-            <div className="space-y-4">
+          <div id="call-settings" className="space-y-4">
+              <h3 className="font-display text-2xl">Настройки</h3>
               <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
                 <p className="text-sm font-semibold">{callsConnected ? "Novofon подключён" : "Ключи API"}</p>
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -818,11 +821,11 @@ export function AdminPrices() {
                   })();
                 }}>Сохранить настройки</Button>
               </div>
-            </div>
-          ) : null}
+          </div>
 
-          {callView === "knowledge" ? (
-            knowledge ? (
+          <div id="call-knowledge">
+              <h3 className="mb-4 font-display text-2xl">Знания для ИИ</h3>
+            {knowledge ? (
               <div className="space-y-4">
                 <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
                   <p className="text-sm font-semibold">Как говорят на линии</p>
@@ -911,19 +914,18 @@ export function AdminPrices() {
               </div>
             ) : (
               <p className="text-sm text-muted">База появится после нескольких расшифрованных консультаций. Пока можно настроить, что ИИ будет брать.</p>
-            )
-          ) : null}
+            )}
+          </div>
 
-          {callView === "texts" ? (
-            <div className="space-y-3">
+          <div id="call-texts" className="space-y-3">
+              <h3 className="font-display text-2xl">Расшифровки</h3>
               {transcripts.length ? transcripts.map((t) => (
                 <div key={t.id} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
                   <p className="text-sm text-muted">{t.callstart} · {t.seconds} сек</p>
                   <p className="mt-2 text-sm leading-relaxed">{t.preview}</p>
                 </div>
               )) : <p className="text-sm text-muted">Расшифровок пока нет — фон только начал очередь.</p>}
-            </div>
-          ) : null}
+          </div>
         </section>
       ) : null}
 
