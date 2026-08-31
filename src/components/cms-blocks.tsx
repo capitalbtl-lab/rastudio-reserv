@@ -425,7 +425,7 @@ export function CourseStory({
   const lead = story[0] || "";
   const quote = lead ? firstSentence(lead) : "";
   const leadRest = lead.slice(quote.length).trim();
-  const teaser = program?.length ? "" : story[1];
+  const teaser = story[1];
   const folded = program?.length ? [] : story.slice(2);
 
   const accordion =
@@ -457,6 +457,13 @@ export function CourseStory({
           </blockquote>
           {leadRest ? <p className="mt-4 max-w-3xl text-[1.02rem] leading-relaxed text-fg/80">{leadRest}</p> : null}
           {teaser ? <p className="mt-4 max-w-3xl text-[1.02rem] leading-relaxed text-fg/80">{teaser}</p> : null}
+          {program?.length
+            ? story.slice(2).map((p) => (
+                <p key={p.slice(0, 40)} className="mt-4 max-w-3xl text-[1.02rem] leading-relaxed text-fg/80">
+                  {p}
+                </p>
+              ))
+            : null}
         </section>
       ) : null}
 

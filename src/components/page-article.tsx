@@ -15,7 +15,7 @@ import { ConvertBand, ConvertAside } from "@/components/convert";
 import { CourseSellAfterWhy, CourseSellAfterProgram } from "@/components/course-sell";
 import { courseOfferFacts } from "@/data/ages";
 import { galleryPhotos } from "@/lib/gallery";
-import { SCHOOL_PROGRAMS, SCHOOL_WHY } from "@/data/school-programs";
+import { SCHOOL_PROGRAMS, SCHOOL_WHY, COURSE_STORY } from "@/data/school-programs";
 import { whyForPath } from "@/data/course-why";
 import { AGE_BANDS, agesOverlap, courseFacts, coursePlace } from "@/data/ages";
 import { AgeChips } from "@/components/age-chips";
@@ -149,8 +149,9 @@ function CinematicPage({
   trajectory?: CmsTrajectoryStep[];
   teachers?: TeacherCard[];
 }) {
-  const body = page.paragraphs;
   const heading = splitCourseHeading(page.h1);
+  const path = page.pathDecoded || page.path;
+  const body = COURSE_STORY[path] ?? page.paragraphs;
 
   return (
     <article>
@@ -187,7 +188,7 @@ function CinematicPage({
             <CourseStory
               paragraphs={body}
               headings={page.headings}
-              program={SCHOOL_PROGRAMS[page.pathDecoded || page.path]}
+              program={SCHOOL_PROGRAMS[path]}
               why={
                 page.kind === "school"
                   ? SCHOOL_WHY[page.pathDecoded || page.path]?.items ?? null
