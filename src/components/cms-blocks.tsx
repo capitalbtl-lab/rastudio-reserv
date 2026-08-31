@@ -586,23 +586,23 @@ export function RelatedAgeCourses({
     <div className="mt-12">
       <p className="kicker">По возрасту</p>
       <h2 className="display mt-2 text-2xl md:text-3xl">{heading}</h2>
-      <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+      <ul className="mt-6 grid gap-4 sm:grid-cols-2">
         {peers.map((course) => (
           <li key={course.href}>
             <PageLink
               to={course.href}
-              className="flex items-center gap-3 rounded-xl bg-surface p-2 pr-4 shadow-[var(--shadow-border)] transition-shadow hover:shadow-[var(--shadow-border-hover)]"
+              className="group overflow-hidden rounded-2xl bg-surface shadow-[var(--shadow-border)] transition-shadow hover:shadow-[var(--shadow-border-hover)]"
             >
               <SeoImage
                 src={course.image}
                 alt={course.alt}
                 filename={course.filename}
-                className="size-16 shrink-0 overflow-hidden rounded-lg bg-surface-2"
-                imgClassName="h-full w-full object-cover"
+                className="aspect-[16/10] overflow-hidden bg-surface-2"
+                imgClassName="h-full w-full object-cover transition-transform duration-[var(--motion-fast)] group-hover:scale-[1.04]"
               />
-              <span>
-                <span className="block text-sm font-semibold leading-snug">{course.label}</span>
-                {course.age ? <span className="mt-0.5 block text-xs text-muted">{course.age}</span> : null}
+              <span className="block px-4 py-3">
+                <span className="block text-[0.98rem] font-semibold leading-snug">{course.label}</span>
+                {course.age ? <span className="mt-1 block text-xs text-muted">{course.age}</span> : null}
               </span>
             </PageLink>
           </li>
