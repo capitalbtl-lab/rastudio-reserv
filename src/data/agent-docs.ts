@@ -5,7 +5,7 @@ import { promisify } from "node:util";
 import { createServerFn } from "@tanstack/react-start";
 import { isAdminRequest } from "./admin-auth";
 import { logAdmin } from "./admin-settings";
-import { driftOf, guessChannel, loadChannels, saveChannels, yandexJson, type AgentChannel } from "./agent-channels";
+import { driftOf, loadChannels, saveChannels, yandexJson, type AgentChannel } from "./agent-channels";
 
 const execFileAsync = promisify(execFile);
 
@@ -204,8 +204,12 @@ function titleOf(from: string, fallback = "Тема") {
   return line.replace(/^#+\s*/, "").slice(0, 140);
 }
 
-function emptyCells(ids: string[]): Record<string, string> {
-  return Object.fromEntries(ids.map((id) => [id, ""]));
+function keepSubstance(from: string, next: string) {
+  const a = String(from || "").trim();
+  const b = String(next || "").trim();
+  if (!b) return a;
+  if (a.length > 80 && b.length < Math.round(a.length * 0.85)) return a;
+  return b;
 }
 
 async function buildTransform(doc: AgentDoc, percent = 0): Promise<TransformRow[]> {
@@ -214,64 +218,65 @@ async function buildTransform(doc: AgentDoc, percent = 0): Promise<TransformRow[
   const items = doc.items.length ? doc.items : await interpret(doc.kind, doc.text);
   const p = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
   const rows: TransformRow[] = items.map((it, i) => {
-    const from = [it.title, it.body].filter(Boolean).join("\n");
-    const title = it.title || titleOf(from, `Тема ${i + 1}`);
-    const guess = it.channel && ids.includes(it.channel) ? it.channel : guessChannel(from, ids);
-    const byChannel = emptyCells(ids);
-    byChannel[guess] = from;
-    if (guess !== "common" && ids.includes("common") && /агент студии|не выдумывай|источник|телефон|филиал|оферт|правил оказан|факта нет/i.test(from)) {
-      byChannel.common = from;
-    }
-    const d = driftOf(from, from);
+    const from = [it.title, it.body].filter(Boolean).join("\n").trim();
+    const title = (it.title || titleOf(from, `Тема ${i + 1}`)).slice(0, 160);
+    const byChannel = Object.fromEntries(ids.map((id) => [id, from]));
     return {
       id: it.id || `t${i + 1}`,
       title,
       from,
-      toChannel: guess,
+      toChannel: "common",
       toText: from,
       byChannel,
-      comment: p ? `Тема «${title}». Адаптация ${p}% по правилам каждого канала.` : `Тема «${title}». Пока дословно, колонка «${channels.find((c) => c.id === guess)?.label || guess}».`,
-      accuracy: d.accuracy,
-      drift: d.drift,
+      comment: p
+        ? `Тема «${title}»: факты как в оригинале, манера канала ${p}%.`
+        : `Тема «${title}»: полный текст во всех каналах, без сокращения.`,
+      accuracy: 100,
+      drift: 0,
       on: it.on !== false,
     };
   });
-  const llm = await yandexJson<{
-    topics?: { id?: string; title?: string; comment?: string; cells?: Record<string, string> }[];
-  }>(
-    p
-      ? "Ты методист студии «Развивайся». Для каждой темы заполни ячейки ВСЕХ каналов. Если тема каналу не нужна — пустая строка. Не копируй один и тот же абзац во все столбцы, если процент > 0: сайт — кнопки, телефон — вслух без «нажмите», ВК — личка, MAX — текст/ссылка, общее — факты для всех. Факты, телефоны, адреса и запреты не выкидывай. Ответ — JSON."
-      : "Ты методист. Не переписывай текст. Для каждой темы укажи, в какие каналы она входит (текст дословно или пусто). Общие факты дублируй в common. Ответ — JSON.",
-    `Каналы и правила:
+  if (!p || !rows.length) return rows;
+
+  const sys = `Ты методист студии «Развивайся».
+На вход — темы инструкции агента целиком.
+Верни JSON: для каждой темы текст каждого канала.
+ЖЁСТКО:
+1) Сохрани все факты, списки, телефоны, адреса, запреты, сценарии, названия курсов. Ничего не выкидывай и не сжимай.
+2) Меняй ТОЛЬКО манеру общения под канал:
+   site — можно опираться на кнопки на экране, не читай URL вслух;
+   phone — вслух, без «нажмите», один вопрос за реплику;
+   vk — личка сообщества, персональные данные не в комментарии;
+   max — текст и полные ссылки, голосовые не принимай;
+   common — факты без манеры конкретного канала.
+3) Если адаптировать нечего — верни исходный текст темы без изменений.
+4) Длина каждого столбца не короче 90% исходной темы.
+JSON: {"topics":[{"id":"...","cells":{${ids.map((id) => `"${id}":"..."`).join(",")}}}]}`;
+
+  for (let i = 0; i < rows.length; i += 3) {
+    const batch = rows.slice(i, i + 3);
+    const llm = await yandexJson<{ topics?: { id?: string; cells?: Record<string, string> }[] }>(
+      sys,
+      `Процент адаптации МАНЕРЫ (не содержания): ${p}.
+Правила каналов:
 ${channels.map((c) => `### ${c.id} ${c.label}\n${c.rules}`).join("\n\n")}
-Процент адаптации: ${p}. 0 = дословно. 100 = максимально под правила канала, смысл тот же.
-JSON: {"topics":[{"id":"как в списке","title":"коротко","cells":{"${ids.join('":"...","')}":"..."},"comment":"что сделали"}]}
 Темы:
-${rows
-  .map((r) => `--- ${r.id} | ${r.title} ---\n${r.from.slice(0, p ? 800 : 1100)}`)
-  .join("\n")
-  .slice(0, p ? 17000 : 21000)}`,
-    p ? 7000 : 4000,
-  );
-  if (llm?.topics?.length) {
+${batch.map((r) => `--- ${r.id} | ${r.title} ---\n${r.from}`).join("\n\n")}`,
+      8000,
+    );
+    if (!llm?.topics?.length) continue;
     for (const hint of llm.topics) {
-      const row = rows.find((r) => r.id === hint.id);
-      if (!row) continue;
-      if (hint.title) row.title = String(hint.title).slice(0, 140);
-      if (hint.comment) row.comment = String(hint.comment).slice(0, 400);
-      if (hint.cells) {
-        for (const id of ids) {
-          if (hint.cells[id] == null) continue;
-          const text = String(hint.cells[id] || "");
-          row.byChannel[id] = p ? text : text || row.byChannel[id];
-        }
+      const row = batch.find((r) => r.id === hint.id) || rows.find((r) => r.id === hint.id);
+      if (!row || !hint.cells) continue;
+      for (const id of ids) {
+        if (hint.cells[id] == null) continue;
+        row.byChannel[id] = keepSubstance(row.from, String(hint.cells[id] || ""));
       }
-      const filled = Object.values(row.byChannel).filter((t) => t.trim());
-      row.toText = filled[0] || row.from;
-      row.toChannel = ids.find((id) => row.byChannel[id]?.trim()) || row.toChannel;
-      const d = driftOf(row.from, row.toText);
+      const sample = row.byChannel.site || row.byChannel.common || row.from;
+      const d = driftOf(row.from, sample);
       row.accuracy = d.accuracy;
       row.drift = d.drift;
+      row.toText = sample;
     }
   }
   return rows;
@@ -290,12 +295,11 @@ export function docsPrompt(channel = "site") {
   for (const d of live) {
     parts.push(`### ${KIND_LABEL[d.kind]} «${d.name}»`);
     const bag = d.byChannel || {};
-    const common = bag.common || "";
     const mine = channel === "common" ? "" : bag[channel] || "";
-    if (common || mine) {
-      if (common) parts.push(`Общее для всех:\n${common}`);
-      if (mine) parts.push(`${label}:\n${mine}`);
-    } else {
+    const common = bag.common || "";
+    if (mine.trim()) parts.push(`${label}:\n${mine}`);
+    else if (common.trim()) parts.push(`Общее для всех:\n${common}`);
+    else {
       const on = d.items.filter((i) => i.on);
       parts.push(d.text || on.map((it) => `${it.title}\n${it.body}`).join("\n\n"));
     }

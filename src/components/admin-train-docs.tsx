@@ -98,40 +98,6 @@ function rowsFor(text: string) {
   return Math.min(28, Math.max(8, lines, wrap));
 }
 
-function guessId(text: string, ids: string[]) {
-  const t = text.toLowerCase();
-  if (ids.includes("vk") && /вконтакте|\bвк\b|vk\.com|сообществ|комментари/.test(t)) return "vk";
-  if (ids.includes("max") && /\bmax\b|мессенджер макс|в макс/.test(t)) return "max";
-  if (ids.includes("phone") && /телефон|звонк|входящ|исходящ|прозвон|sip|набрать/.test(t)) return "phone";
-  if (ids.includes("site") && /на сайте|чат сайта|кнопк|rastudio|браузер|голосов/.test(t)) return "site";
-  return ids.includes("common") ? "common" : ids[0] || "common";
-}
-
-function columnsOf(d: DocRow, list: AgentChannel[]) {
-  if (d.byChannel && Object.values(d.byChannel).some(Boolean)) return d.byChannel;
-  const bag: Record<string, string[]> = {};
-  for (const c of list) bag[c.id] = [];
-  const chunks = d.items.length
-    ? d.items.filter((it) => it.on).map((it) => [it.title, it.body].filter(Boolean).join("\n"))
-    : d.text
-      ? [d.text]
-      : [];
-  const ids = list.map((c) => c.id);
-  for (const chunk of chunks) {
-    const id = itChannel(d, chunk, ids);
-    (bag[id] ||= []).push(chunk);
-  }
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(bag)) out[k] = v.join("\n\n");
-  return out;
-}
-
-function itChannel(d: DocRow, chunk: string, ids: string[]) {
-  const hit = d.items.find((it) => chunk.startsWith(it.title));
-  if (hit?.channel && ids.includes(hit.channel)) return hit.channel;
-  return guessId(chunk, ids);
-}
-
 const STEPS = [
   { n: "1", t: "Каналы", d: "4–6 сред. Сейчас живой только сайт." },
   { n: "2", t: "Файл", d: "Word или PDF. Текст целиком, без сжатия." },
@@ -159,7 +125,6 @@ export function AdminTrainDocs() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [open, setOpen] = useState("");
-  const [previewOf, setPreviewOf] = useState("");
   const [draftRows, setDraftRows] = useState<Record<string, TransformRow[]>>({});
   const [newCh, setNewCh] = useState({ id: "telegram", label: "Агент в Telegram" });
   const [percent, setPercent] = useState(0);
@@ -227,7 +192,6 @@ export function AdminTrainDocs() {
     if (res.ok && "docs" in res) {
       const doc = (res.docs as DocRow[]).find((d) => d.id === id);
       setDraftRows((p) => ({ ...p, [id]: doc?.transformRows || [] }));
-      setPreviewOf(id);
       setOpen(id);
       setMsg(
         doc
@@ -237,16 +201,16 @@ export function AdminTrainDocs() {
     }
   }
 
-  async function apply(id: string) {
+  async function apply(id: string, rows?: TransformRow[]) {
     setBusy(true);
+    const list = (rows && rows.length ? rows : draftRows[id]) || [];
     const res = await adminAgentDocs({
-      data: { token: token(), action: "applyTransform", id, rows: draftRows[id] || [] },
+      data: { token: token(), action: "applyTransform", id, rows: list },
     });
     take(res);
     setBusy(false);
     if (res.ok) {
-      setPreviewOf("");
-      setMsg("Преобразование записано. На сайте агент читает только «Общее» и «Агент на сайте».");
+      setMsg("Преобразование записано. На сайте агент читает столбец своего канала.");
     }
   }
 
@@ -296,9 +260,30 @@ export function AdminTrainDocs() {
 
   function cellsOf(r: TransformRow, list: AgentChannel[]) {
     const bag: Record<string, string> = {};
-    for (const c of list) bag[c.id] = r.byChannel?.[c.id] || "";
+    for (const c of list) bag[c.id] = r.byChannel?.[c.id] || r.from || "";
     if (!Object.values(bag).some(Boolean) && r.toText) bag[r.toChannel || list[0]?.id || "common"] = r.toText;
     return bag;
+  }
+
+  function topicRows(d: DocRow): TransformRow[] {
+    if (draftRows[d.id]?.length) return draftRows[d.id];
+    if (d.transformRows?.length) return d.transformRows;
+    const ids = channels.map((c) => c.id);
+    return (d.items || []).map((it, i) => {
+      const from = [it.title, it.body].filter(Boolean).join("\n");
+      return {
+        id: it.id || `t${i + 1}`,
+        title: it.title,
+        from,
+        toChannel: "common",
+        toText: from,
+        byChannel: Object.fromEntries(ids.map((id) => [id, from])),
+        comment: "",
+        accuracy: 100,
+        drift: 0,
+        on: it.on !== false,
+      };
+    });
   }
 
   return (
@@ -461,18 +446,18 @@ export function AdminTrainDocs() {
 
       <div className="space-y-4">
         {docs.map((d) => {
-          const rows = draftRows[d.id] || d.transformRows || [];
-          const showPreview = previewOf === d.id && rows.length;
+          const rows = topicRows(d);
           return (
             <article key={d.id} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-display text-lg">{d.name}</p>
-                    <InfoTip text={`${KIND_RU[d.kind]}. ${d.chars} знаков оригинала. ${d.byChannel ? "Разложен по каналам." : "Ещё не преобразован — агент на сайте читает весь текст."} Точность последнего преобразования: ${d.transformAccuracy ?? "—"}%, расхождение ${d.transformDrift ?? "—"}%.`} />
+                    <InfoTip text={`${KIND_RU[d.kind]}. ${d.chars} знаков оригинала. Строк-тематик: ${rows.length}. Преобразование меняет только манеру канала, факты не сокращает.`} />
                   </div>
                   <p className="mt-1 text-xs text-muted">
-                    {KIND_RU[d.kind]} · {d.chars} зн. · {d.byChannel ? "каналы записаны" : "не преобразован"}
+                    {KIND_RU[d.kind]} · {d.chars} зн. · {rows.length} тем
+                    {d.byChannel ? " · каналы записаны" : " · ещё не применяли"}
                     {d.transformAccuracy != null ? ` · точность ${d.transformAccuracy}% · расхождение ${d.transformDrift}%` : ""}
                   </p>
                 </div>
@@ -488,7 +473,7 @@ export function AdminTrainDocs() {
                   <label className="flex items-center gap-2 rounded-full bg-surface-2 px-3 py-1.5 text-xs font-semibold">
                     <span className="inline-flex items-center gap-1">
                       %
-                      <InfoTip text="0% — разложить по каналам дословно, ничего не переписывая. 30–50% — убрать чужое каналу (кнопки с телефона, «нажмите» из ВК) и чуть подстроить тон. 80–100% — сильная адаптация под правила карточки канала. Факты и запреты сохраняются. После превью смотрите «расхождение %»: оно должно быть близко к числу, которое вы поставили. Сначала сохраните правила каналов." />
+                      <InfoTip text="0% — полный текст во все каналы, без переписывания. 20–40% — только манера: кнопки на сайте, вслух на телефоне, личка в ВК. Факты, телефоны, запреты не трогаем. Если модель сожмёт текст, система вернёт оригинал." />
                     </span>
                     <input
                       type="number"
@@ -502,108 +487,79 @@ export function AdminTrainDocs() {
                   <Button type="button" disabled={busy} onClick={() => void preview(d.id)}>
                     Преобразовать
                   </Button>
-                  <InfoTip text="Строит таблицу: слева оригинал фрагмента, справа канал и текст (по умолчанию тот же). Можно править до «Применить». Проценты считают, сколько смысла оригинала сохранилось. 100% / 0% — текст не трогали." />
+                  <InfoTip text="Раскладывает инструкцию по тематикам (строки) и каналам (столбцы). 0% копирует оригинал. Выше 0% подкручивает только общение. Затем «Применить»." />
                   <Button type="button" variant="secondary" disabled={busy} onClick={() => void run("reparse", d.id)}>
                     Переразобрать
                   </Button>
-                  <InfoTip text="Снова читает файл с диска и режет по разделам 1. 2. 3. Каналы не трогает, пока снова не нажмёте «Преобразовать»." />
+                  <InfoTip text="Снова читает файл и режет по разделам 1. 2. 3. Каналы не трогает, пока снова не нажмёте «Преобразовать»." />
                   <button type="button" className="text-xs font-semibold text-primary" onClick={() => void run("remove", d.id)}>
                     Удалить
                   </button>
                 </div>
               </div>
 
-              {showPreview ? (
-                <div className="mt-4 space-y-3">
-                  <p className="text-sm font-semibold">
-                    Превью преобразования
-                    <InfoTip className="ml-2" text="Строка — тема из инструкции. Пять столбцов — каналы. Пустая ячейка значит: эта тема в канале не звучит. Правите текст в ячейке. Снимите галочку у темы — она не пойдёт никуда. «Применить» соберёт столбцы в документы агента." />
-                  </p>
-                  <div className="overflow-x-auto">
-                    <div className="min-w-[70rem] space-y-3">
-                      <div
-                        className="grid gap-2"
-                        style={{ gridTemplateColumns: `minmax(11rem,14rem) repeat(${Math.max(channels.length, 1)}, minmax(12rem,1fr))` }}
-                      >
-                        <p className="self-end text-[0.68rem] font-semibold uppercase tracking-wider text-muted">Тема</p>
+              <div className="mt-4 space-y-3">
+                <p className="text-sm font-semibold">
+                  {rows.length} тем · 5 каналов
+                  <InfoTip className="ml-2" text="Строка — тема из документа. Столбец — канал. Текст должен совпадать с оригиналом; отличия только в том, как говорить в этом канале." />
+                </p>
+                {rows.map((r) => {
+                  const cells = cellsOf(r, channels);
+                  return (
+                    <div key={r.id} className="rounded-2xl bg-surface-2 p-3">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <label className="flex items-center gap-2 text-xs font-semibold">
+                          <input type="checkbox" checked={r.on} onChange={(e) => {
+                            if (!draftRows[d.id]?.length) setDraftRows((p) => ({ ...p, [d.id]: rows }));
+                            patchRow(d.id, r.id, { on: e.target.checked });
+                          }} />
+                          Тема
+                        </label>
+                        <input
+                          value={r.title || ""}
+                          onChange={(e) => {
+                            if (!draftRows[d.id]?.length) setDraftRows((p) => ({ ...p, [d.id]: rows }));
+                            patchRow(d.id, r.id, { title: e.target.value });
+                          }}
+                          className="h-9 min-w-[12rem] flex-1 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/10"
+                        />
+                        <span className="text-[0.7rem] text-muted">точность {r.accuracy}% · расхождение {r.drift}%</span>
+                      </div>
+                      <div className="grid gap-2 lg:grid-cols-5">
                         {channels.map((c) => (
-                          <div key={c.id} className={cn("rounded-xl px-3 py-2", c.id === "site" ? "bg-primary/10" : "bg-white ring-1 ring-black/8")}>
-                            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted">{c.id}</p>
-                            <p className="text-sm font-semibold leading-tight">{c.label}</p>
+                          <div key={c.id}>
+                            <FieldHead label={c.label} tip={`Как эта тема звучит в канале «${c.label}». Факты те же, что в оригинале.`} />
+                            <textarea
+                              value={cells[c.id] || ""}
+                              onChange={(e) => {
+                                if (!draftRows[d.id]?.length) setDraftRows((p) => ({ ...p, [d.id]: rows }));
+                                patchCell(d.id, r.id, c.id, e.target.value);
+                              }}
+                              rows={rowsFor(cells[c.id] || r.from)}
+                              className={cn(
+                                "w-full resize-y rounded-xl px-3 py-2 text-[0.78rem] leading-relaxed ring-1 ring-black/10",
+                                c.id === "site" ? "bg-[#f4f7ff]" : "bg-white",
+                              )}
+                            />
                           </div>
                         ))}
                       </div>
-                      {rows.map((r) => {
-                        const cells = cellsOf(r, channels);
-                        return (
-                          <div key={r.id} className="rounded-2xl bg-surface-2 p-3">
-                            <div className="mb-2 flex flex-wrap items-center gap-2">
-                              <label className="flex items-center gap-2 text-xs font-semibold">
-                                <input type="checkbox" checked={r.on} onChange={(e) => patchRow(d.id, r.id, { on: e.target.checked })} />
-                                В теме
-                              </label>
-                              <input
-                                value={r.title || ""}
-                                onChange={(e) => patchRow(d.id, r.id, { title: e.target.value })}
-                                className="h-9 min-w-[12rem] flex-1 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/10"
-                              />
-                              <span className="text-[0.7rem] text-muted">точность {r.accuracy}% · расхождение {r.drift}%</span>
-                            </div>
-                            <details className="mb-2">
-                              <summary className="cursor-pointer text-[0.7rem] font-semibold uppercase tracking-wider text-muted">Было в оригинале</summary>
-                              <pre className="mt-1 max-h-28 overflow-auto whitespace-pre-wrap rounded-xl bg-white p-2 text-[0.75rem]">{r.from}</pre>
-                            </details>
-                            <div
-                              className="grid items-stretch gap-2"
-                              style={{ gridTemplateColumns: `repeat(${Math.max(channels.length, 1)}, minmax(12rem,1fr))` }}
-                            >
-                              {channels.map((c) => (
-                                <label key={c.id} className="flex h-44 flex-col">
-                                  <span className="sr-only">{c.label}</span>
-                                  <textarea
-                                    value={cells[c.id] || ""}
-                                    onChange={(e) => patchCell(d.id, r.id, c.id, e.target.value)}
-                                    placeholder={r.on ? `Нет в «${c.label}»` : "Тема выключена"}
-                                    className={cn(
-                                      "h-full w-full resize-none overflow-auto rounded-xl px-3 py-2 text-[0.78rem] leading-relaxed ring-1 ring-black/10",
-                                      c.id === "site" ? "bg-[#f4f7ff]" : "bg-white",
-                                    )}
-                                  />
-                                </label>
-                              ))}
-                            </div>
-                            {r.comment ? <p className="mt-2 text-[0.7rem] text-muted">{r.comment}</p> : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <Button type="button" disabled={busy} onClick={() => void apply(d.id)}>
-                    Применить преобразование
-                  </Button>
-                </div>
-              ) : null}
-
-              <button type="button" className="mt-3 text-sm font-semibold text-primary" onClick={() => setOpen(open === d.id ? "" : d.id)}>
-                {open === d.id ? "Скрыть оригинал" : "Показать оригинал файла"}
-              </button>
-              <InfoTip className="ml-2" text="Полный текст Word/PDF, как извлекли. Столбцы ниже — черновик по маркерам канала или уже применённое преобразование." />
-              {open === d.id && d.text ? (
-                <pre className="mt-3 max-h-[20rem] overflow-auto whitespace-pre-wrap rounded-2xl bg-surface-2 p-4 text-[0.82rem] leading-relaxed">{d.text}</pre>
-              ) : null}
-              <div className="mt-4 grid gap-3 overflow-x-auto sm:grid-cols-2 xl:grid-cols-5 xl:items-stretch">
-                {channels.map((c) => {
-                  const body = columnsOf(d, channels)[c.id] || "";
-                  return (
-                    <div key={c.id} className={cn("flex h-80 min-w-[14rem] flex-col rounded-2xl p-3", c.id === "site" ? "bg-primary/5 ring-1 ring-primary/20" : "bg-surface-2")}>
-                      <p className="shrink-0 text-[0.68rem] font-semibold uppercase tracking-wider text-muted">{c.label}</p>
-                      <pre className="mt-2 min-h-0 flex-1 overflow-auto whitespace-pre-wrap text-[0.78rem] leading-relaxed">
-                        {body || "Пусто. «Преобразовать» разложит оригинал по столбцам."}
-                      </pre>
+                      {r.comment ? <p className="mt-2 text-[0.7rem] text-muted">{r.comment}</p> : null}
                     </div>
                   );
                 })}
+                <Button type="button" disabled={busy || !rows.length} onClick={() => void apply(d.id, draftRows[d.id]?.length ? draftRows[d.id] : rows)}>
+                  Применить преобразование
+                </Button>
               </div>
+
+              <button type="button" className="mt-3 text-sm font-semibold text-primary" onClick={() => setOpen(open === d.id ? "" : d.id)}>
+                {open === d.id ? "Скрыть оригинал файла" : "Показать оригинал файла"}
+              </button>
+              <InfoTip className="ml-2" text="Полный текст Word/PDF, как извлекли, без нарезки." />
+              {open === d.id && d.text ? (
+                <pre className="mt-3 max-h-[20rem] overflow-auto whitespace-pre-wrap rounded-2xl bg-surface-2 p-4 text-[0.82rem] leading-relaxed">{d.text}</pre>
+              ) : null}
             </article>
           );
         })}
