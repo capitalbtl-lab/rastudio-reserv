@@ -73,7 +73,7 @@ export function AdminPrices() {
   const [novoKey, setNovoKey] = useState("");
   const [novoSecret, setNovoSecret] = useState("");
   const [callsConnected, setCallsConnected] = useState(false);
-  const [callInfo, setCallInfo] = useState({ total: 0, transcribed: 0, failed: 0, pending: 0, scannedAt: "" });
+  const [callInfo, setCallInfo] = useState({ total: 0, transcribed: 0, failed: 0, pending: 0, scannedAt: "", matched: 0, studying: 0, archived: 0 });
   const [knowledge, setKnowledge] = useState<{
     summary: string;
     faq: { q: string; a: string; on?: boolean }[];
@@ -92,7 +92,26 @@ export function AdminPrices() {
     autoKnowledge: true,
     inject: { faq: true, objections: true, scripts: true, phrases: true, rules: true, instructions: true, siteRecommendations: false },
   });
-  const [transcripts, setTranscripts] = useState<{ id: string; callstart: string; seconds: number; preview: string }[]>([]);
+  const [transcripts, setTranscripts] = useState<
+    {
+      id: string;
+      callstart: string;
+      seconds: number;
+      preview: string;
+      crm?: {
+        age?: number | null;
+        studyStatus?: string;
+        groups?: string[];
+        courseNote?: string;
+        archived?: boolean;
+        dropped?: boolean;
+        months?: number;
+        lastAttend?: string;
+        branch?: string;
+        comms?: string[];
+      } | null;
+    }[]
+  >([]);
   const [callView, setCallView] = useState<"overview" | "settings" | "knowledge" | "texts">("overview");
   const previewRef = useRef<HTMLAudioElement | null>(null);
 
@@ -145,6 +164,9 @@ export function AdminPrices() {
           failed: calls.stats.failed,
           pending: calls.stats.pending,
           scannedAt: calls.stats.scannedAt || "",
+          matched: calls.stats.matched || 0,
+          studying: calls.stats.studying || 0,
+          archived: calls.stats.archived || 0,
         });
         if (calls.stats.knowledge) {
           setKnowledge({
@@ -182,6 +204,9 @@ export function AdminPrices() {
           failed: calls.stats.failed,
           pending: calls.stats.pending,
           scannedAt: calls.stats.scannedAt || "",
+          matched: calls.stats.matched || 0,
+          studying: calls.stats.studying || 0,
+          archived: calls.stats.archived || 0,
         });
         if (calls.stats.knowledge) {
           setKnowledge({
@@ -742,11 +767,13 @@ export function AdminPrices() {
                   {callSet.paused ? "Снять паузу" : "Пауза"}
                 </Button>
               </div>
-              <div className="grid gap-3 sm:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 {[
                   ["Записей", callInfo.total],
                   ["Расшифровано", callInfo.transcribed],
-                  ["В очереди", callInfo.pending],
+                  ["Связаны с CRM", callInfo.matched],
+                  ["Учатся", callInfo.studying],
+                  ["Архив / ушли", callInfo.archived],
                   ["Ошибки", callInfo.failed],
                 ].map(([label, n]) => (
                   <div key={String(label)} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
@@ -922,6 +949,22 @@ export function AdminPrices() {
               {transcripts.length ? transcripts.map((t) => (
                 <div key={t.id} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
                   <p className="text-sm text-muted">{t.callstart} · {t.seconds} сек</p>
+                  {t.crm ? (
+                    <p className="mt-2 text-sm">
+                      {[
+                        t.crm.age ? `${t.crm.age} лет` : "",
+                        t.crm.studyStatus,
+                        t.crm.dropped ? "бросил / не ходит" : "",
+                        t.crm.archived ? "архив CRM" : "",
+                        t.crm.months ? `~${t.crm.months} мес.` : "",
+                        (t.crm.groups || []).join(", ") || t.crm.courseNote,
+                        t.crm.branch,
+                      ].filter(Boolean).join(" · ")}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted">В AlfaCRM по телефону не найден</p>
+                  )}
+                  {t.crm?.comms?.length ? <p className="mt-2 text-sm text-muted">Переписка: {t.crm.comms.join(" / ")}</p> : null}
                   <p className="mt-2 text-sm leading-relaxed">{t.preview}</p>
                 </div>
               )) : <p className="text-sm text-muted">Расшифровок пока нет — фон только начал очередь.</p>}

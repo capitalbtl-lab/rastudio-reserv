@@ -3,7 +3,21 @@ import { dirname, join } from "node:path";
 import { serverEnv } from "./server-env";
 import type { NovofonCall } from "./novofon";
 
-export type CallRecord = NovofonCall & { transcript?: string; error?: string };
+export type CallCrm = {
+  id?: number;
+  age?: number | null;
+  branch?: string;
+  isStudy?: boolean;
+  archived?: boolean;
+  studyStatus?: string;
+  groups?: string[];
+  courseNote?: string;
+  lastAttend?: string;
+  months?: number;
+  dropped?: boolean;
+  comms?: string[];
+};
+export type CallRecord = NovofonCall & { transcript?: string; error?: string; crm?: CallCrm };
 export type FaqItem = { q: string; a: string; on?: boolean };
 export type ScriptItem = { name: string; steps: string[]; on?: boolean };
 export type LineItem = { text: string; on?: boolean };
@@ -142,6 +156,9 @@ export function callStats() {
     transcribed: eligible.filter((c) => c.transcript).length,
     failed: eligible.filter((c) => c.error && !c.transcript).length,
     pending: eligible.filter((c) => c.is_recorded && !c.transcript && !c.error).length,
+    matched: store.calls.filter((c) => c.crm).length,
+    studying: store.calls.filter((c) => c.crm?.isStudy && !c.crm?.dropped).length,
+    archived: store.calls.filter((c) => c.crm?.archived || c.crm?.dropped).length,
     scannedAt: store.scannedAt || "",
     knowledge: store.knowledge,
     worker: workerStatus(),
@@ -159,6 +176,20 @@ export function listTranscripts(limit = 40) {
       callstart: c.callstart,
       seconds: c.seconds,
       preview: String(c.transcript || "").slice(0, 420),
+      crm: c.crm
+        ? {
+            age: c.crm.age,
+            studyStatus: c.crm.studyStatus,
+            groups: c.crm.groups,
+            courseNote: c.crm.courseNote,
+            archived: c.crm.archived,
+            dropped: c.crm.dropped,
+            months: c.crm.months,
+            lastAttend: c.crm.lastAttend,
+            branch: c.crm.branch,
+            comms: (c.crm.comms || []).slice(0, 3),
+          }
+        : null,
     }));
 }
 

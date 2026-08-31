@@ -13,6 +13,21 @@ HOST = "https://api.novofon.com"
 SCAN_EVERY = 6 * 3600
 KB_EVERY = 8
 SETTINGS = ROOT / "storage" / "call-settings.json"
+CRM_INDEX = ROOT / "storage" / "crm-index.json"
+STUDY = {
+    1: "обучается",
+    2: "завершил / ушёл",
+    4: "ожидает старта",
+    5: "должник",
+    7: "пропустил 1 занятие",
+    8: "ждём на занятиях",
+    9: "без статуса",
+    10: "пропустил 2 занятия",
+    11: "пропустил 3 занятия",
+}
+LEAD = {1: "разбирается", 2: "ожидает старта", 4: "оплатил", 7: "отложен"}
+BRANCH_NAME = {1: "Гражданская", 2: "Октябрьской", 3: "Луховицы"}
+_last_alfa = 0.0
 
 
 def load_settings():
@@ -23,6 +38,215 @@ def load_settings():
         except Exception:
             pass
     return d
+
+
+def digits(s):
+    d = "".join(ch for ch in str(s or "") if ch.isdigit())
+    if d.startswith("8") and len(d) == 11:
+        d = "7" + d[1:]
+    return d[-10:] if len(d) >= 10 else d
+
+
+def age_from_dob(dob):
+    try:
+        day, month, year = [int(x) for x in str(dob).replace("/", ".").split(".")[:3]]
+        today = datetime.now()
+        age = today.year - year - ((today.month, today.day) < (month, day))
+        return age if 1 <= age <= 18 else None
+    except Exception:
+        return None
+
+
+def alfa_post(path, body, tok=None, qs=""):
+    global _last_alfa
+    wait = 0.22 - (time.time() - _last_alfa)
+    if wait > 0:
+        time.sleep(wait)
+    _last_alfa = time.time()
+    host = (env().get("ALFACRM_HOST") or "https://studiyarazvivaysya.s20.online").rstrip("/")
+    url = host + path + (("?" + qs) if qs else "")
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json", "Accept": "application/json", **({"X-ALFACRM-TOKEN": tok} if tok else {})},
+    )
+    with urllib.request.urlopen(req, timeout=40) as r:
+        return json.loads(r.read().decode())
+
+
+def alfa_token(e):
+    js = alfa_post("/v2api/auth/login", {"email": e.get("ALFACRM_EMAIL") or "", "api_key": e.get("ALFACRM_API_KEY") or ""})
+    return js.get("token") or ""
+
+
+def parse_course_note(note):
+    if not note:
+        return ""
+    for line in str(note).splitlines():
+        if "курс" in line.lower() or "наименование" in line.lower():
+            part = line.split(":", 1)[-1].strip() if ":" in line else line.strip()
+            if part:
+                return part[:80]
+    return ""
+
+
+def build_crm_index(e):
+    tok = alfa_token(e)
+    if not tok:
+        print("crm no token", flush=True)
+        return {}
+    subjects = {}
+    try:
+        js = alfa_post("/v2api/2/subject/index", {"page": 0, "pageSize": 200}, tok)
+        for s in js.get("items") or []:
+            subjects[int(s.get("id") or 0)] = s.get("name") or ""
+    except Exception as err:
+        print("subjects", err, flush=True)
+    groups = {}
+    for branch in (1, 2, 3):
+        try:
+            js = alfa_post(f"/v2api/{branch}/group/index", {"page": 0, "pageSize": 200}, tok)
+            for g in js.get("items") or []:
+                groups[int(g.get("id") or 0)] = g.get("name") or ""
+        except Exception as err:
+            print("groups", branch, err, flush=True)
+    cust_groups = {}
+    for branch in (1, 2, 3):
+        for page in range(6):
+            try:
+                js = alfa_post(
+                    f"/v2api/{branch}/lesson/index",
+                    {
+                        "page": page,
+                        "pageSize": 100,
+                        "date_from": (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d"),
+                        "date_to": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"),
+                    },
+                    tok,
+                )
+            except Exception:
+                break
+            items = js.get("items") or []
+            for les in items:
+                gname = groups.get(int((les.get("group_ids") or [0])[0] or 0)) or subjects.get(int(les.get("subject_id") or 0)) or ""
+                if not gname:
+                    continue
+                for cid in les.get("customer_ids") or []:
+                    cust_groups.setdefault(int(cid), set()).add(gname)
+            if len(items) < 100:
+                break
+    phones = {}
+    for branch in (1, 2, 3):
+        for extra in ({}, {"removed": 1}):
+            page = 0
+            while page < 30:
+                payload = {"page": page, "pageSize": 50, **extra}
+                js = alfa_post(f"/v2api/{branch}/customer/index", payload, tok)
+                items = js.get("items") or []
+                for c in items:
+                    archived = extra.get("removed") == 1
+                    status = "архив" if archived else (
+                        STUDY.get(int(c.get("study_status_id") or 0), "")
+                        if int(c.get("is_study") or 0) == 1
+                        else ("лид / не учится" if int(c.get("is_study") or 0) == 0 else "")
+                    )
+                    profile = {
+                        "id": c.get("id"),
+                        "age": age_from_dob(c.get("dob") or ""),
+                        "branch": BRANCH_NAME.get(branch, str(branch)),
+                        "branchId": branch,
+                        "isStudy": int(c.get("is_study") or 0) == 1,
+                        "archived": archived,
+                        "studyStatus": status,
+                        "leadStatus": LEAD.get(int(c.get("lead_status_id") or 0), ""),
+                        "groups": sorted(cust_groups.get(int(c.get("id") or 0), []))[:4],
+                        "courseNote": parse_course_note(c.get("note") or ""),
+                        "lastAttend": c.get("last_attend_date") or "",
+                        "startedAt": (c.get("b_date") or "")[:10],
+                        "paidTill": c.get("paid_till") or "",
+                        "paidCount": c.get("paid_count") or 0,
+                        "months": 0,
+                        "dropped": False,
+                    }
+                    last = profile["lastAttend"]
+                    profile["dropped"] = (not archived and profile["studyStatus"] in ("завершил / ушёл",)) or (
+                        bool(profile["isStudy"]) and bool(last) and last < (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
+                    )
+                    if archived:
+                        profile["dropped"] = True
+                    try:
+                        if profile["startedAt"]:
+                            start = datetime.strptime(profile["startedAt"][:10], "%Y-%m-%d")
+                            profile["months"] = max(0, (datetime.now() - start).days // 30)
+                    except Exception:
+                        profile["months"] = 0
+                    for ph in c.get("phone") or []:
+                        d = digits(ph)
+                        if len(d) >= 10 and (d not in phones or archived is False):
+                            phones[d] = profile
+                if len(items) < 50:
+                    break
+                page += 1
+    CRM_INDEX.write_text(json.dumps({"at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), "phones": phones}, ensure_ascii=False))
+    print("crm index", len(phones), flush=True)
+    return phones
+
+
+def load_crm_phones():
+    if CRM_INDEX.exists():
+        try:
+            return json.loads(CRM_INDEX.read_text()).get("phones") or {}
+        except Exception:
+            return {}
+    return {}
+
+
+STUDIO_TAIL = {"8005113401", "9681999399"}
+
+
+def phones_of_call(call):
+    out = []
+    for raw in (call.get("clid"), call.get("destination")):
+        d = digits(raw)
+        if len(d) >= 10 and d[-10:] not in STUDIO_TAIL:
+            out.append(d[-10:])
+    return out
+
+
+def fetch_comms(profile, e):
+    try:
+        tok = alfa_token(e)
+        br = profile.get("branchId") or 2
+        cid = profile.get("id")
+        if not cid:
+            return []
+        js = alfa_post(
+            f"/v2api/{br}/communication/index",
+            {"page": 0, "pageSize": 12},
+            tok,
+            qs=f"class=Customer&related_id={cid}",
+        )
+        out = []
+        for it in js.get("items") or []:
+            t = str(it.get("comment") or "").strip()
+            if t:
+                out.append(t[:180])
+        return out[:10]
+    except Exception as err:
+        print("comms", err, flush=True)
+        return []
+
+
+def crm_for_call(call, phones, e=None):
+    for d in phones_of_call(call):
+        profile = phones.get(d) or phones.get(d[-10:])
+        if not profile:
+            continue
+        snap = {k: v for k, v in profile.items()}
+        if e:
+            snap["comms"] = fetch_comms(profile, e)
+        return snap
+    return None
 
 
 def env():
@@ -260,18 +484,65 @@ def transcribe(call, e):
     return " ".join(texts), ("" if texts else "пусто")
 
 
-def mark(call, text, err):
+def mark(call, text, err, crm=None):
     data = load()
     cid = str(call.get("pbx_call_id") or call["call_id"])
     for c in data["calls"]:
         if str(c.get("pbx_call_id") or c.get("call_id")) == cid:
             c["transcript"] = text
+            if crm:
+                c["crm"] = crm
             if err:
                 c["error"] = err
             else:
                 c.pop("error", None)
             break
     save(data)
+
+
+def enrich_transcripts(e):
+    phones = load_crm_phones()
+    if not phones:
+        phones = build_crm_index(e)
+    data = load()
+    n = 0
+    for c in data.get("calls") or []:
+        if not c.get("transcript") or c.get("crm"):
+            continue
+        crm = crm_for_call(c, phones, e)
+        if crm:
+            c["crm"] = crm
+            n += 1
+    if n:
+        save(data)
+        print("crm attached", n, flush=True)
+    write_status(crmMatched=sum(1 for c in data.get("calls") or [] if c.get("crm")))
+
+
+def crm_line(c):
+    crm = c.get("crm") or {}
+    if not crm:
+        return "CRM: не найден"
+    bits = []
+    if crm.get("age"):
+        bits.append(f"{crm['age']} лет")
+    bits.append(crm.get("studyStatus") or ("архив" if crm.get("archived") else "неизвестно"))
+    if crm.get("dropped"):
+        bits.append("бросил / не ходит")
+    if crm.get("months"):
+        bits.append(f"в студии ~{crm['months']} мес")
+    course = ", ".join(crm.get("groups") or []) or crm.get("courseNote") or ""
+    if course:
+        bits.append(course)
+    if crm.get("lastAttend"):
+        bits.append(f"последнее занятие {crm['lastAttend']}")
+    if crm.get("branch"):
+        bits.append(crm["branch"])
+    comm = " | ".join((crm.get("comms") or [])[:4])
+    line = "CRM: " + "; ".join(bits)
+    if comm:
+        line += f"\nПереписка: {comm[:400]}"
+    return line
 
 
 def build_knowledge(data, e):
@@ -281,12 +552,12 @@ def build_knowledge(data, e):
     if len(texts) < 4:
         return
     blob = "\n".join(
-        f"--- {c.get('callstart')} {c.get('seconds')}с ---\n{c['transcript']}" for c in texts
+        f"--- {c.get('callstart')} {c.get('seconds')}с ---\n{crm_line(c)}\n{c['transcript']}" for c in texts
     )[:28000]
     prompt = (
-        "По расшифровкам звонков администраторов студии «Развивайся» (Коломна и Луховицы) "
-        "собери JSON для ИИ-администраторов Олега и Ольги, чтобы заменить живого администратора. "
-        "Убери ФИО, телефоны родителей, адреса домов. Оставь рабочие формулировки.\n"
+        "По расшифровкам звонков и карточкам AlfaCRM студии «Развивайся» (Коломна, Луховицы) "
+        "собери JSON для ИИ Олега и Ольги. Учитывай возраст, курс, учится/бросил/архив, переписку. "
+        "Убери ФИО и телефоны.\n"
         "Формат:\n"
         '{"summary":"как говорят на линии",'
         '"faq":[{"q":"","a":""}],'
@@ -343,6 +614,12 @@ def main():
     last_scan = 0
     since_kb = 0
     write_status(last="старт фона", transcribed=0)
+    try:
+        write_status(last="индекс AlfaCRM")
+        build_crm_index(e)
+        enrich_transcripts(e)
+    except Exception as crm_err:
+        print("crm-start", crm_err, flush=True)
     while True:
         try:
             cfg = load_settings()
@@ -353,6 +630,12 @@ def main():
             scan_every = max(1, int(cfg.get("scanHours") or 6)) * 3600
             if time.time() - last_scan > scan_every or not load().get("calls"):
                 scan()
+                try:
+                    write_status(last="индекс AlfaCRM")
+                    build_crm_index(e)
+                    enrich_transcripts(e)
+                except Exception as crm_err:
+                    print("crm", crm_err, flush=True)
                 last_scan = time.time()
             data = load()
             rows = pending(data)
@@ -370,7 +653,13 @@ def main():
             print("do", call.get("call_id"), call.get("seconds"), flush=True)
             write_status(last=f"расшифровка {call.get('call_id')} {call.get('seconds')}с")
             text, err = transcribe(call, e)
-            mark(call, text, err)
+            crm = None
+            if text and not err:
+                try:
+                    crm = crm_for_call(call, load_crm_phones() or build_crm_index(e), e)
+                except Exception as crm_err:
+                    print("crm-one", crm_err, flush=True)
+            mark(call, text, err, crm)
             print(" ok", len(text), err, flush=True)
             if text and not err:
                 since_kb += 1
