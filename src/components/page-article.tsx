@@ -170,9 +170,9 @@ function CinematicPage({ page, schedule }: { page: SitePage; schedule: CmsSessio
         images={page.images}
       />
 
-      <div className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
-        <div className="grid gap-10 lg:grid-cols-[1fr_18rem]">
-          <div>
+      <div className="page-wrap py-12 md:py-16">
+        <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="min-w-0">
             <CourseStory paragraphs={body} headings={page.headings} />
             <Gallery page={{ ...page, images: page.images.slice(Math.min(3, page.images.length)) }} />
             {schedule.length ? (
@@ -182,7 +182,7 @@ function CinematicPage({ page, schedule }: { page: SitePage; schedule: CmsSessio
             ) : null}
             <Related page={page} />
           </div>
-          <aside className="h-fit rounded-lg bg-surface p-5 shadow-[var(--shadow-border)]">
+          <aside className="h-fit rounded-xl bg-surface p-5 shadow-[var(--shadow-border)] lg:sticky lg:top-24">
             <p className="text-sm font-medium">Запись и филиалы</p>
             <p className="mt-2 text-sm text-muted">
               {SITE.phone}

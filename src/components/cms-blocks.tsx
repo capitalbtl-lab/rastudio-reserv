@@ -321,7 +321,7 @@ function AccordionItems({ items }: { items: { title: string; body: string }[] })
   const [open, setOpen] = useState(0);
   if (!items.length) return null;
   return (
-    <div className="divide-y divide-border overflow-hidden rounded-xl bg-surface shadow-[var(--shadow-border)]">
+    <div className="divide-y divide-border w-full overflow-hidden rounded-xl bg-surface shadow-[var(--shadow-border)]">
       {items.map((item, i) => {
         const active = open === i;
         return (
@@ -436,7 +436,7 @@ export function CourseStory({
           <p className="kicker">Программа</p>
           <h2 className="display section-title mt-2">Что внутри — по шагам</h2>
           <p className="mt-3 max-w-2xl text-sm text-muted">Откройте блок, чтобы увидеть подробности. На пробном покажем живьём.</p>
-          <div className="mt-6">
+          <div className="mt-6 w-full">
             <AccordionItems items={accordion} />
           </div>
           {leftover.length ? (
@@ -474,7 +474,7 @@ export function CourseStory({
       ) : null}
 
       {price ? (
-        <section className="rounded-xl bg-ink px-5 py-6 text-header-fg md:px-8">
+        <section className="w-full rounded-xl bg-ink px-5 py-6 text-header-fg md:px-8">
           <p className="kicker text-header-fg/55">Формат и стоимость</p>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-header-fg/80 md:text-base">{price}</p>
           <Button asChild className="mt-5">
