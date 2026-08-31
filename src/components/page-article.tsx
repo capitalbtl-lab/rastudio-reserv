@@ -460,8 +460,16 @@ function ContactsPage({ page }: { page: SitePage }) {
   return (
     <article className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
       <h1 className="display section-title">{page.h1}</h1>
-      <p className="mt-5 max-w-2xl text-lg text-muted">
-        Три студии в Коломне и Луховицах. Запись: {SITE.phone}, {SITE.email}.
+      <p className="mt-5 max-w-3xl text-lg text-muted">
+        Три студии в Коломне и Луховицах. Запись:{" "}
+        <a href={SITE.phoneHref} className="whitespace-nowrap text-fg">
+          {SITE.phone}
+        </a>
+        ,{" "}
+        <a href={`mailto:${SITE.email}`} className="whitespace-nowrap">
+          {SITE.email}
+        </a>
+        .
       </p>
       <div className="mt-10 grid gap-4 md:grid-cols-3">
         {BRANCHES.map((b) => (
