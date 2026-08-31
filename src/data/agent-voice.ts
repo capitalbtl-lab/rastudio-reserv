@@ -30,7 +30,7 @@ export const speakAgent = createServerFn({ method: "POST" })
     const folder = process.env.YANDEX_FOLDER_ID?.trim();
     const text = clean(data.text || "");
     if (!key || !folder || !text) return { ok: false as const, error: "no-voice" };
-    const voice = data.voice === "alena" ? "alena" : "filipp";
+    const voice = data.voice === "alena" ? "alena" : "zahar";
     const body = new URLSearchParams({
       ssml: toSsml(text),
       lang: "ru-RU",
