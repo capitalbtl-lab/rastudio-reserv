@@ -15,5 +15,18 @@ export function serverEnv(key: string) {
       /* next */
     }
   }
+  try {
+    const raw = JSON.parse(readFileSync(join(process.cwd(), "storage", "api-keys.json"), "utf8")) as {
+      conns?: { enabled?: boolean; fields?: { key?: string; value?: string }[] }[];
+    };
+    for (const c of raw.conns || []) {
+      if (c.enabled === false) continue;
+      for (const f of c.fields || []) {
+        if (f.key === key && String(f.value || "").trim()) return String(f.value).trim();
+      }
+    }
+  } catch {
+    /* none */
+  }
   return "";
 }

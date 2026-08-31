@@ -1,6 +1,7 @@
 import { createHmac, createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { serverEnv } from "./server-env";
 
 const HOST = "https://api.novofon.com";
 
@@ -23,8 +24,8 @@ function keysPath() {
 }
 
 export function loadNovofonKeys(): NovofonKeys | null {
-  const envKey = String(process.env.NOVOFON_USER_KEY || "").trim();
-  const envSecret = String(process.env.NOVOFON_SECRET || "").trim();
+  const envKey = serverEnv("NOVOFON_USER_KEY");
+  const envSecret = serverEnv("NOVOFON_SECRET");
   if (envKey && envSecret) return { userKey: envKey, secret: envSecret };
   try {
     if (!existsSync(keysPath())) return null;

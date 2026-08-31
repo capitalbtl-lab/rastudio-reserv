@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { AdminChats } from "@/components/admin-chats";
 import { AdminVoices } from "@/components/admin-voices";
 import { AdminVoiceEdits } from "@/components/admin-voice-edits";
+import { AdminTrain } from "@/components/admin-train";
+import { AdminAccess } from "@/components/admin-access";
 import { InfoTip } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +17,7 @@ function token() {
   return m ? decodeURIComponent(m[1]) : localStorage.getItem("ra_admin") || "";
 }
 
-type Pane = "window" | "dialog" | "voices" | "edits" | "chats";
+type Pane = "window" | "dialog" | "voices" | "edits" | "chats" | "train" | "access";
 
 const PANES: { id: Pane; label: string }[] = [
   { id: "window", label: "Окно и кнопки" },
@@ -23,6 +25,8 @@ const PANES: { id: Pane; label: string }[] = [
   { id: "voices", label: "Голоса" },
   { id: "edits", label: "Изменение сайта" },
   { id: "chats", label: "Диалоги сайта" },
+  { id: "train", label: "Обучение" },
+  { id: "access", label: "Голосовой доступ" },
 ];
 
 function Toggle({
@@ -85,7 +89,7 @@ export function AdminAgent() {
       <div>
         <h2 className="font-display text-3xl">Ассистент ИИ</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Окно чата, голоса, правки сайта и история диалогов — всё здесь. Выключили пункт — на сайте его нет.
+          Окно чата, обучение, голоса, доступ и история диалогов — всё здесь.
         </p>
       </div>
 
@@ -241,6 +245,8 @@ export function AdminAgent() {
       {pane === "voices" ? <AdminVoices /> : null}
       {pane === "edits" ? <AdminVoiceEdits /> : null}
       {pane === "chats" ? <AdminChats /> : null}
+      {pane === "train" ? <AdminTrain /> : null}
+      {pane === "access" ? <AdminAccess /> : null}
     </section>
   );
 }

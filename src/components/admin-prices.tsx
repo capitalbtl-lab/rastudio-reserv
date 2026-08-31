@@ -3,34 +3,32 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   adminLogin,
-  adminMeta,
   adminPrices,
   adminSaveGroup,
   adminSavePrice,
-  adminSetCodeword,
-  adminSetPassword,
   adminCalls,
 } from "@/data/admin";
 import { PRICE_DIRECTIONS, hydratePrices, type PriceRow } from "@/data/prices-core";
 import { Button } from "@/components/ui/button";
 import { AdminCalls } from "@/components/admin-calls";
 import { AdminAgent } from "@/components/admin-agent";
-import { AdminTrain } from "@/components/admin-train";
 import { AdminDossiers } from "@/components/admin-dossiers";
 import { AdminSchedule } from "@/components/admin-schedule";
+import { AdminIntegrations } from "@/components/admin-integrations";
+import { adminPriceFormulas, type CorpFormulas } from "@/data/price-formulas";
+import { InfoTip } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
 
 const KEY = "ra_admin";
-type Tab = "prices" | "schedule" | "access" | "calls" | "agent" | "train" | "dossiers";
+type Tab = "prices" | "schedule" | "agent" | "calls" | "dossiers" | "apis";
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
-  { id: "prices", label: "Цены курсов", hint: "Прайс на сайте" },
+  { id: "prices", label: "Цены курсов", hint: "Прайс, КБМ и ТМХ" },
   { id: "schedule", label: "Расписание CRM", hint: "Группы из AlfaCRM" },
-  { id: "agent", label: "Ассистент ИИ", hint: "Окно, голоса, диалоги" },
-  { id: "train", label: "Обучение", hint: "Скрипты, документы, примеры" },
+  { id: "agent", label: "Ассистент ИИ", hint: "Окно, обучение, доступ" },
   { id: "calls", label: "База звонков", hint: "Novofon → знания" },
   { id: "dossiers", label: "Личные дела", hint: "Клиенты AlfaCRM" },
-  { id: "access", label: "Голосовой доступ", hint: "Кодовое слово" },
+  { id: "apis", label: "API и интеграции", hint: "Yandex, CRM, телефония" },
 ];
 
 function token() {
@@ -60,10 +58,6 @@ export function AdminPrices() {
   const [mode, setMode] = useState<"set" | "delta">("set");
   const [amount, setAmount] = useState("0");
   const [busy, setBusy] = useState(false);
-  const [word, setWord] = useState("");
-  const [newPass, setNewPass] = useState("");
-  const [log, setLog] = useState<{ at: string; text: string }[]>([]);
-  const [savedWord, setSavedWord] = useState("");
   const [novoKey, setNovoKey] = useState("");
   const [novoSecret, setNovoSecret] = useState("");
   const [callsConnected, setCallsConnected] = useState(false);
@@ -107,6 +101,8 @@ export function AdminPrices() {
     }[]
   >([]);
   const [callView, setCallView] = useState<"overview" | "settings" | "knowledge" | "texts">("overview");
+  const [formulas, setFormulas] = useState<CorpFormulas>({ kbm: { mode: "percent", value: 100 }, tmx: { mode: "percent", value: 100 } });
+  const [corpDir, setCorpDir] = useState("");
 
   async function load(t = token()) {
     if (!t) return;
@@ -120,8 +116,6 @@ export function AdminPrices() {
     hydratePrices(res.rows);
     setIn(true);
     setErr("");
-    const meta = await adminMeta({ data: { token: t } });
-    if (meta.ok) setLog(meta.log || []);
     const calls = await adminCalls({ data: { token: t, action: "status" } });
     if (calls.ok) {
       setCallsConnected(Boolean(calls.connected));
@@ -154,6 +148,8 @@ export function AdminPrices() {
     }
     const listed = await adminCalls({ data: { token: t, action: "list" } });
     if (listed.ok && listed.transcripts) setTranscripts(listed.transcripts);
+    const form = await adminPriceFormulas({ data: { token: t, action: "get" } });
+    if (form.ok && "formulas" in form && form.formulas) setFormulas(form.formulas);
   }
 
   useEffect(() => {
@@ -314,10 +310,111 @@ export function AdminPrices() {
 
       {tab === "prices" ? (
         <section className="mt-10">
-          <h2 className="font-display text-3xl">Цены курсов</h2>
-          <p className="mt-2 max-w-2xl text-sm text-muted">
-            Колонка «все» показывается на сайте. Можно править строку или всю школу сразу.
-          </p>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="font-display text-3xl">Цены курсов</h2>
+              <p className="mt-2 max-w-2xl text-sm text-muted">
+                Колонка «Все» на сайте. КБМ и ТМХ — корпоративные. Формула считает их от «Все»: плюс сумма или умножение на процент.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  const res = await adminPriceFormulas({ data: { token: token(), action: "crmStub" } });
+                  setBusy(false);
+                  setErr(res.ok ? "" : res.error || "CRM пока не отдаёт абонементы.");
+                }}
+              >
+                Загрузить цены из CRM
+              </Button>
+              <InfoTip text="Когда в AlfaCRM появятся абонементы, эта кнопка заберёт их из tariff/index в колонку «Все». КБМ и ТМХ посчитаются по формуле ниже. Сейчас абонементы ещё не выложены — специально ничего не тянем." />
+            </div>
+          </div>
+
+          <div className="mt-8 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold">КБМ и ТМХ от колонки «Все»</p>
+              <InfoTip text="Наценка суммой: 500 → корпоративная = публичная + 500 ₽ (минус — скидка). Умножение на процент: 90 → 90% от публичной, 100 → как есть, 110 → плюс 10%. Сначала сохраните формулу, потом «Пересчитать». Можно на все курсы или на одну школу." />
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {(["kbm", "tmx"] as const).map((who) => (
+                <div key={who} className="rounded-2xl bg-surface-2 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted">{who === "kbm" ? "КБМ" : "ТМХ"}</p>
+                  <div className="mt-3 flex flex-wrap items-end gap-3">
+                    <label className="text-sm">
+                      Как считать
+                      <select
+                        value={formulas[who].mode}
+                        onChange={(e) => setFormulas((f) => ({ ...f, [who]: { ...f[who], mode: e.target.value === "add" ? "add" : "percent" } }))}
+                        className="mt-1 block h-11 rounded-xl bg-white px-3 ring-1 ring-black/10"
+                      >
+                        <option value="add">Наценка суммой, ₽</option>
+                        <option value="percent">Умножить на процент</option>
+                      </select>
+                    </label>
+                    <label className="text-sm">
+                      {formulas[who].mode === "add" ? "Сумма, ₽" : "Процент"}
+                      <input
+                        value={formulas[who].value}
+                        inputMode="numeric"
+                        onChange={(e) => setFormulas((f) => ({ ...f, [who]: { ...f[who], value: Number(e.target.value) || 0 } }))}
+                        className="mt-1 block h-11 w-28 rounded-xl bg-white px-3 ring-1 ring-black/10"
+                      />
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap items-end gap-3">
+              <label className="text-sm">
+                Область
+                <select
+                  value={corpDir}
+                  onChange={(e) => setCorpDir(e.target.value)}
+                  className="mt-1 block h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+                >
+                  <option value="">Все курсы</option>
+                  {PRICE_DIRECTIONS.map((d) => (
+                    <option key={d}>{d}</option>
+                  ))}
+                </select>
+              </label>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  const res = await adminPriceFormulas({ data: { token: token(), action: "save", formulas } });
+                  setBusy(false);
+                  setErr(res.ok ? "" : res.error || "Ошибка");
+                  if (res.ok) setErr("Формула сохранена.");
+                }}
+              >
+                Сохранить формулу
+              </Button>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  const res = await adminPriceFormulas({ data: { token: token(), action: "apply", formulas, direction: corpDir || undefined } });
+                  setBusy(false);
+                  if (res.ok && "rows" in res && res.rows) {
+                    setRows(res.rows);
+                    hydratePrices(res.rows);
+                    setErr("КБМ и ТМХ пересчитаны.");
+                  } else setErr(res.ok ? "" : res.error || "Ошибка");
+                }}
+              >
+                Пересчитать КБМ и ТМХ
+              </Button>
+            </div>
+          </div>
 
           <div className="mt-8 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
             <p className="text-sm font-semibold">Группой</p>
@@ -436,99 +533,7 @@ export function AdminPrices() {
       {tab === "calls" ? <AdminCalls /> : null}
       {tab === "dossiers" ? <AdminDossiers /> : null}
       {tab === "agent" ? <AdminAgent /> : null}
-      {tab === "train" ? <AdminTrain /> : null}
-
-      {tab === "access" ? (
-        <section className="mt-10 space-y-6">
-          <div>
-            <h2 className="font-display text-3xl">Голосовой доступ</h2>
-            <p className="mt-2 max-w-2xl text-sm text-muted">
-              Кодовое слово открывает правки на 30 минут. Голоса настраиваются в разделе «Настройки голосов».
-            </p>
-          </div>
-
-          <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-            <p className="text-sm font-semibold">Кодовое слово</p>
-            <p className="mt-1 text-sm text-muted">
-              Ольга спросит его, когда попросите изменить сайт. Слово в чат не произносится. Минимум 4 буквы.
-            </p>
-            <div className="mt-4 flex flex-wrap items-end gap-3">
-              <label className="text-sm">
-                Новое кодовое слово
-                <input
-                  type="password"
-                  value={word}
-                  onChange={(e) => setWord(e.target.value)}
-                  className="mt-1 block h-11 w-56 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                />
-              </label>
-              <Button
-                type="button"
-                disabled={busy || word.trim().length < 4}
-                onClick={async () => {
-                  setBusy(true);
-                  const res = await adminSetCodeword({ data: { token: token(), word } });
-                  setBusy(false);
-                  if (!res.ok) setErr(res.error);
-                  else {
-                    setSavedWord("Слово обновлено");
-                    setWord("");
-                    await load();
-                  }
-                }}
-              >
-                Сохранить слово
-              </Button>
-              {savedWord ? <p className="text-sm text-primary">{savedWord}</p> : null}
-            </div>
-          </div>
-
-          <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-            <p className="text-sm font-semibold">Пароль кабинета</p>
-            <p className="mt-1 text-sm text-muted">Им входите на эту страницу. Минимум 6 символов.</p>
-            <div className="mt-4 flex flex-wrap items-end gap-3">
-              <label className="text-sm">
-                Новый пароль кабинета
-                <input
-                  type="password"
-                  value={newPass}
-                  onChange={(e) => setNewPass(e.target.value)}
-                  className="mt-1 block h-11 w-56 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                />
-              </label>
-              <Button
-                type="button"
-                disabled={busy || newPass.trim().length < 6}
-                onClick={async () => {
-                  setBusy(true);
-                  const res = await adminSetPassword({ data: { token: token(), password: newPass } });
-                  setBusy(false);
-                  if (!res.ok) setErr(res.error);
-                  else {
-                    setSavedWord("Пароль кабинета обновлён");
-                    setNewPass("");
-                  }
-                }}
-              >
-                Сохранить пароль
-              </Button>
-            </div>
-          </div>
-
-          {log.length ? (
-            <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-              <p className="text-sm font-semibold">Журнал</p>
-              <ul className="mt-3 space-y-1 text-xs text-muted">
-                {log.slice(0, 12).map((item) => (
-                  <li key={item.at}>
-                    {new Date(item.at).toLocaleString("ru-RU")} — {item.text}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </section>
-      ) : null}
+      {tab === "apis" ? <AdminIntegrations /> : null}
     </article>
   );
 }
