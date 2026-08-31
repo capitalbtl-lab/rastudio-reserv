@@ -1,5 +1,4 @@
 import { SITE, BRANCHES, FOOTER_LINKS, SCHOOLS } from "@/data/site";
-import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 
 export function SiteFooter() {
@@ -7,16 +6,15 @@ export function SiteFooter() {
     <footer className="ink mt-8 overflow-hidden text-header-fg md:mt-12">
       <div className="page-wrap grid gap-10 py-14 md:grid-cols-4 md:py-16">
         <div>
-          <PageLink to="/" className="flex items-center gap-3">
-            <SeoImage
-              src={SITE.logo.src}
-              alt={SITE.logo.alt}
-              filename={SITE.logo.filename}
-              className="size-11 overflow-hidden rounded-lg"
-              width={88}
-              height={88}
+          <PageLink to="/" className="inline-flex items-center">
+            <img
+              src="/brand/logo-white.png"
+              alt="Студия Развивайся — искусства и интеллектуальное развитие"
+              width={1200}
+              height={289}
+              className="h-12 w-auto max-w-[17rem] object-contain object-left outline-none"
+              decoding="async"
             />
-            <span className="display text-lg">Развивайся</span>
           </PageLink>
           <p className="mt-4 text-sm leading-relaxed text-header-fg/65">
             Студия искусств и интеллектуального развития. Коломна и Луховицы, с 2016 года.

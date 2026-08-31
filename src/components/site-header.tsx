@@ -20,19 +20,17 @@ export function SiteHeader() {
 
   return (
     <header className="ink sticky top-0 z-40 border-b border-white/10 bg-header/90 text-header-fg backdrop-blur-xl">
-      <div className="page-wrap flex h-16 items-center gap-3 md:h-[4.25rem]">
-        <PageLink to="/" className="flex shrink-0 items-center gap-3" onClick={() => setOpen(false)}>
-          <SeoImage
-            src={SITE.logo.src}
-            alt={SITE.logo.alt}
-            filename={SITE.logo.filename}
-            className="size-10 overflow-hidden rounded-md bg-header md:size-11"
-            imgClassName="object-cover"
-            width={88}
-            height={88}
+      <div className="page-wrap flex h-[4.25rem] items-center gap-3 md:h-[4.75rem]">
+        <PageLink to="/" className="flex shrink-0 items-center" onClick={() => setOpen(false)}>
+          <img
+            src="/brand/logo-white.png"
+            alt="Студия Развивайся — искусства и интеллектуальное развитие"
+            width={1200}
+            height={289}
+            className="h-9 w-auto max-w-[11rem] object-contain object-left outline-none sm:h-10 sm:max-w-[13.5rem] md:h-11 md:max-w-[16rem] lg:h-12 lg:max-w-[18rem]"
             loading="eager"
+            decoding="async"
           />
-          <span className="display text-[1.05rem] tracking-tight md:text-lg">Развивайся</span>
         </PageLink>
 
         <nav className="ml-4 hidden min-w-0 flex-1 items-center gap-0.5 lg:flex">
