@@ -136,7 +136,27 @@ export const adminVoice = createServerFn({ method: "POST" })
   });
 
 export const adminSaveVoice = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { token?: string; oleg?: string; olga?: string; speed?: number; role?: string; mood?: string; pause?: number })
+  .validator(
+    (data: unknown) =>
+      data as {
+        token?: string;
+        oleg?: string;
+        olga?: string;
+        speed?: number;
+        role?: string;
+        mood?: string;
+        pause?: number;
+        olegSpeed?: number;
+        olgaSpeed?: number;
+        olegMood?: string;
+        olgaMood?: string;
+        olegVolume?: number;
+        olgaVolume?: number;
+        turnGap?: number;
+        sampleOleg?: string;
+        sampleOlga?: string;
+      },
+  )
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
     const { saveVoiceSettings } = await import("./voice-settings");
@@ -147,8 +167,17 @@ export const adminSaveVoice = createServerFn({ method: "POST" })
       role: data.mood || data.role,
       mood: data.mood || data.role,
       pause: data.pause,
+      olegSpeed: data.olegSpeed,
+      olgaSpeed: data.olgaSpeed,
+      olegMood: data.olegMood,
+      olgaMood: data.olgaMood,
+      olegVolume: data.olegVolume,
+      olgaVolume: data.olgaVolume,
+      turnGap: data.turnGap,
+      sampleOleg: data.sampleOleg,
+      sampleOlga: data.sampleOlga,
     });
-    logAdmin(`Голоса: Олег ${settings.oleg}, Ольга ${settings.olga}, ${settings.speed}, пауза ${settings.pause}`);
+    logAdmin(`Голоса: Олег ${settings.oleg}/${settings.olegMood} ${settings.olegSpeed}, Ольга ${settings.olga}/${settings.olgaMood} ${settings.olgaSpeed}`);
     return { ok: true as const, settings };
   });
 

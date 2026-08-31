@@ -381,9 +381,13 @@ export function AgentChat() {
         });
         if (!res.ok || !("audio" in res) || !res.audio) continue;
         const voice = "voice" in res ? String(res.voice || "") : "";
-        if (who === "oleg" && /alena|jane|marina|oksana/i.test(voice)) continue;
+        if (who === "oleg" && /alena|jane|marina|oksana|omazh/i.test(voice)) continue;
         if (who === "olga" && /zahar|filipp|ermil|madirus/i.test(voice)) continue;
-        return { audio: res.audio, volume: "volume" in res ? Number(res.volume) : 1 };
+        return {
+          audio: res.audio,
+          volume: "volume" in res ? Number(res.volume) : 1,
+          gap: "turnGap" in res ? Number(res.turnGap) : 0.18,
+        };
       } catch {
         /* retry */
       }
@@ -404,11 +408,14 @@ export function AgentChat() {
     try {
       const mode = adminLeft() > 0 ? "olga" : partnerRef.current;
       const turns = parseTurns(phrase).filter((t) => mode === "both" || t.who === mode);
-      for (const turn of turns) {
+      for (let i = 0; i < turns.length; i += 1) {
+        const turn = turns[i];
         if (gen !== genRef.current) return;
         const clip = await yandexClip(turn.text, turn.who);
         if (gen !== genRef.current) return;
         if (!clip) continue;
+        if (i > 0) await new Promise((r) => window.setTimeout(r, Math.round((clip.gap || 0.18) * 1000)));
+        if (gen !== genRef.current) return;
         spokenRef.current = turn.text;
         try {
           await playClip(clip.audio, clip.volume);
