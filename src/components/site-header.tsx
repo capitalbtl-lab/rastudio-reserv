@@ -92,17 +92,17 @@ export function SiteHeader() {
 
         <div className="ml-auto flex items-center gap-2">
           <a
-            href={SITE.cabinet}
-            className="hidden text-sm font-medium text-header-fg/70 hover:text-header-fg xl:inline"
-          >
-            Для родителей
-          </a>
-          <a
             href={SITE.phoneHref}
             className="hidden tabular-nums text-sm font-medium text-header-fg/70 hover:text-header-fg xl:inline"
           >
             {SITE.phone}
           </a>
+          <Button asChild size="sm" variant="outline">
+            <a href={SITE.cabinet} target="_blank" rel="noreferrer">
+              <span className="sm:hidden">Кабинет</span>
+              <span className="hidden sm:inline">Личный кабинет</span>
+            </a>
+          </Button>
           <Button asChild size="sm" className="hidden md:inline-flex">
             <a href="#trial">Запись</a>
           </Button>
@@ -168,8 +168,8 @@ export function SiteHeader() {
             <a href={SITE.phoneHref} className="text-sm font-semibold">
               {SITE.phone}
             </a>
-            <a href={SITE.cabinet} className="text-sm text-header-fg/70">
-              Для родителей · кабинет
+            <a href={SITE.cabinet} className="text-sm font-semibold">
+              Личный кабинет
             </a>
             <Button asChild>
               <a href="#trial" onClick={() => setOpen(false)}>
