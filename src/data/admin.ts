@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
-import { isAdminRequest, makeAdminToken } from "./admin-auth";
+import { isAdminRequest, makeAdminToken, adminSecret } from "./admin-auth";
 import {
   ensureLivePrices,
   listPriceRows,
@@ -12,7 +12,7 @@ import {
 import { listAdminLog, loadAdminSettings, logAdmin, setCodeword } from "./admin-settings";
 
 function secret() {
-  return process.env.ADMIN_PASSWORD?.trim() || "";
+  return adminSecret();
 }
 
 export const adminLogin = createServerFn({ method: "POST" })

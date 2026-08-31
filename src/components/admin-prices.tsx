@@ -111,7 +111,7 @@ export function AdminPrices() {
     return (
       <article className="page-wrap py-16">
         <p className="kicker">Только для администратора студии</p>
-        <h1 className="display mt-3 text-4xl">Кабинет цен</h1>
+        <h1 className="display mt-3 text-4xl">Кабинет администратора</h1>
         <form className="mt-8 max-w-md space-y-4" onSubmit={login}>
           <label className="block text-sm font-medium">
             Пароль

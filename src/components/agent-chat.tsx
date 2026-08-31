@@ -176,8 +176,7 @@ export function AgentChat() {
       .map((t) => t.text)
       .join(" ");
     setSpeaking(true);
-    if (partnerRef.current === "both") stopListen();
-    else startListen();
+    stopListen();
     try {
       const turns = parseTurns(phrase).filter((t) => partner === "both" || t.who === partner);
       const clips = await Promise.all(
@@ -202,8 +201,7 @@ export function AgentChat() {
   }
 
   function startListen() {
-    if (busyRef.current) return;
-    if (speakingRef.current && partnerRef.current === "both") return;
+    if (busyRef.current || speakingRef.current) return;
     const SR = speechCtor();
     if (!SR) return;
     listenWantedRef.current = true;
@@ -213,33 +211,21 @@ export function AgentChat() {
       /* not running */
     }
     const rec = new SR();
-    const barge = partnerRef.current !== "both";
     rec.lang = "ru-RU";
-    rec.continuous = barge;
-    rec.interimResults = barge;
+    rec.continuous = false;
+    rec.interimResults = false;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
-      if (busyRef.current) return;
+      if (busyRef.current || speakingRef.current) return;
       const last = e.results[e.results.length - 1];
       const said = last?.[0]?.transcript?.trim();
-      if (!said) return;
-      const done = Boolean(last?.isFinal);
-      if (speakingRef.current) {
-        if (partnerRef.current === "both") return;
-        if (isEcho(said)) return;
-        if (!done && said.split(/\s+/).length < 2) return;
-        cancelSpeech();
-        stopListen();
-        void send(said);
-        return;
-      }
-      if (done) void send(said);
+      if (said) void send(said);
     };
     rec.onend = () => {
       if (recRef.current && recRef.current !== rec) return;
       recRef.current = null;
       setListening(false);
-      if (listenWantedRef.current && voiceOnRef.current && !busyRef.current && (partnerRef.current !== "both" || !speakingRef.current)) {
+      if (listenWantedRef.current && voiceOnRef.current && !busyRef.current && !speakingRef.current) {
         startListen();
       }
     };
@@ -380,7 +366,7 @@ export function AgentChat() {
                   {speaking
                     ? partner === "both"
                       ? "Говорят"
-                      : "Говорит — можно перебить"
+                      : "Говорит"
                     : listening
                       ? "Слушает вас"
                       : partner === "both"
@@ -518,10 +504,7 @@ export function AgentChat() {
                   "grid size-10 place-items-center rounded-full",
                   listening ? "bg-primary text-primary-foreground" : "text-muted hover:bg-black/5",
                 )}
-                onClick={() => {
-                  if (speakingRef.current && partnerRef.current !== "both") cancelSpeech();
-                  listening && !speakingRef.current ? stopListen() : startListen();
-                }}
+                onClick={() => (listening ? stopListen() : startListen())}
                 aria-label="Голосовой ввод"
               >
                 <Mic className="size-4" />
