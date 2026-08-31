@@ -81,6 +81,18 @@ export function upsertSession(patch: {
   return { ok: true as const };
 }
 
+export function recentChatsForTrain(limit = 40) {
+  return loadAll()
+    .filter((s) => !s.admin)
+    .slice(0, limit)
+    .map((s) => ({
+      id: s.id,
+      updated: s.updated,
+      path: s.path,
+      messages: s.messages.slice(-24),
+    }));
+}
+
 export const saveChatLog = createServerFn({ method: "POST" })
   .validator(
     (data: unknown) =>

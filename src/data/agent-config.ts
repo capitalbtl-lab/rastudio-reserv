@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { createServerFn } from "@tanstack/react-start";
 import { isAdminRequest } from "./admin-auth";
 import { logAdmin } from "./admin-settings";
+import { DEFAULT_SCRIPTS, playbookPrompt, type ScriptSection } from "./agent-playbook";
 
 export type AgentSettings = {
   updatedAt: string;
@@ -24,7 +25,12 @@ export type TrainExample = {
   source: string;
 };
 
-type Brain = { settings: AgentSettings; examples: TrainExample[] };
+type Brain = {
+  settings: AgentSettings;
+  examples: TrainExample[];
+  scripts: ScriptSection[];
+  lastSystematized?: string;
+};
 
 const DEFAULT_SETTINGS: AgentSettings = {
   updatedAt: "",
@@ -40,16 +46,32 @@ function fileOf() {
   return join(process.cwd(), "storage", "agent-brain.json");
 }
 
+function seedScripts(list?: ScriptSection[]) {
+  const have = Array.isArray(list) ? list : [];
+  if (!have.length) return DEFAULT_SCRIPTS.map((s) => ({ ...s, updatedAt: s.updatedAt || new Date().toISOString() }));
+  const byId = new Map(have.map((s) => [s.id, s]));
+  for (const def of DEFAULT_SCRIPTS) {
+    if (!byId.has(def.id)) have.push({ ...def, updatedAt: new Date().toISOString() });
+  }
+  return have;
+}
+
 function loadBrain(): Brain {
   try {
-    if (!existsSync(fileOf())) return { settings: { ...DEFAULT_SETTINGS }, examples: [] };
+    if (!existsSync(fileOf())) {
+      const fresh: Brain = { settings: { ...DEFAULT_SETTINGS }, examples: [], scripts: seedScripts() };
+      saveBrain(fresh);
+      return fresh;
+    }
     const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Partial<Brain>;
     return {
       settings: { ...DEFAULT_SETTINGS, ...(raw.settings || {}) },
       examples: Array.isArray(raw.examples) ? raw.examples : [],
+      scripts: seedScripts(raw.scripts),
+      lastSystematized: raw.lastSystematized,
     };
   } catch {
-    return { settings: { ...DEFAULT_SETTINGS }, examples: [] };
+    return { settings: { ...DEFAULT_SETTINGS }, examples: [], scripts: seedScripts() };
   }
 }
 
@@ -72,15 +94,16 @@ export function agentPromptAddons() {
   const brain = loadBrain();
   const s = brain.settings;
   const parts: string[] = ["", STYLE[s.style] || STYLE.warm];
+  parts.push(playbookPrompt(brain.scripts));
   if (s.askOnce) {
     parts.push(
-      "Память сессии обязательна: не повторяй вопросы, на которые уже есть ответ. Не переспрашивай возраст, город, филиал, курс, имя и телефон.",
+      "Память сессии обязательна: не повторяй вопросы, на которые уже есть ответ. Не переспрашивай возраст, город, филиал, направление, имя и телефон.",
     );
   }
   if (s.extra.trim()) parts.push(`Доп. инструкция администратора студии:\n${s.extra.trim().slice(0, 2500)}`);
   if (s.injectTraining && brain.examples.length) {
     const take = brain.examples.slice(0, Math.max(4, Math.min(60, s.maxExamples || 40)));
-    parts.push("ОБУЧЕНИЕ (эти примеры и правила важнее общих фраз):");
+    parts.push("ОБУЧЕНИЕ (эти примеры и правила важнее общих фраз, но не ломают воронку):");
     for (const ex of take) {
       if (ex.kind === "rule") parts.push(`Правило: ${ex.output || ex.input}`);
       else parts.push(`Пример.\nРодитель: ${ex.input.slice(0, 400)}\nОтвет: ${ex.output.slice(0, 600)}`);
@@ -89,25 +112,34 @@ export function agentPromptAddons() {
   return `\n${parts.join("\n")}\n`;
 }
 
+export type { ScriptSection } from "./agent-playbook";
+
 export const adminAgentBrain = createServerFn({ method: "POST" })
   .validator(
     (data: unknown) =>
       data as {
         token?: string;
-        action: "get" | "saveSettings" | "add" | "update" | "remove" | "import";
+        action: "get" | "saveSettings" | "add" | "update" | "remove" | "import" | "saveScript" | "resetScripts" | "systematize";
         settings?: Partial<AgentSettings>;
         example?: Partial<TrainExample> & { id?: string };
         examples?: TrainExample[];
+        script?: Partial<ScriptSection> & { id?: string };
       },
   )
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
     const brain = loadBrain();
-    if (data.action === "get") {
-      return { ok: true as const, settings: brain.settings, examples: brain.examples, total: brain.examples.length };
-    }
+    const pack = () => ({
+      ok: true as const,
+      settings: brain.settings,
+      examples: brain.examples,
+      scripts: brain.scripts,
+      total: brain.examples.length,
+      lastSystematized: brain.lastSystematized || "",
+    });
+    if (data.action === "get") return pack();
     if (data.action === "saveSettings") {
-      const next: AgentSettings = {
+      brain.settings = {
         ...brain.settings,
         ...(data.settings || {}),
         defaultPartner: data.settings?.defaultPartner === "oleg" ? "oleg" : "olga",
@@ -121,9 +153,9 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
         maxExamples: Math.max(4, Math.min(80, Number(data.settings?.maxExamples || brain.settings.maxExamples || 40))),
         updatedAt: new Date().toISOString(),
       };
-      saveBrain({ ...brain, settings: next });
+      saveBrain(brain);
       logAdmin("Настройки ассистента сохранены");
-      return { ok: true as const, settings: next, examples: brain.examples, total: brain.examples.length };
+      return pack();
     }
     if (data.action === "add") {
       const ex: TrainExample = {
@@ -139,13 +171,13 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
         source: String(data.example?.source || "manual").slice(0, 80),
       };
       if (!ex.input && !ex.output) return { ok: false as const, error: "Нужен текст примера." };
-      const examples = [ex, ...brain.examples].slice(0, 400);
-      saveBrain({ ...brain, examples });
+      brain.examples = [ex, ...brain.examples].slice(0, 400);
+      saveBrain(brain);
       logAdmin("Обучение: добавлен пример");
-      return { ok: true as const, settings: brain.settings, examples, total: examples.length };
+      return pack();
     }
     if (data.action === "update" && data.example?.id) {
-      const examples = brain.examples.map((e) =>
+      brain.examples = brain.examples.map((e) =>
         e.id === data.example?.id
           ? {
               ...e,
@@ -156,14 +188,14 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
             }
           : e,
       );
-      saveBrain({ ...brain, examples });
-      return { ok: true as const, settings: brain.settings, examples, total: examples.length };
+      saveBrain(brain);
+      return pack();
     }
     if (data.action === "remove" && data.example?.id) {
-      const examples = brain.examples.filter((e) => e.id !== data.example?.id);
-      saveBrain({ ...brain, examples });
+      brain.examples = brain.examples.filter((e) => e.id !== data.example?.id);
+      saveBrain(brain);
       logAdmin("Обучение: пример удалён");
-      return { ok: true as const, settings: brain.settings, examples, total: examples.length };
+      return pack();
     }
     if (data.action === "import") {
       const incoming = (data.examples || [])
@@ -179,10 +211,106 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
         .filter((e) => e.input || e.output);
       const seen = new Set(brain.examples.map((e) => `${e.input}||${e.output}`));
       const extra = incoming.filter((e) => !seen.has(`${e.input}||${e.output}`));
-      const examples = [...extra, ...brain.examples].slice(0, 400);
-      saveBrain({ ...brain, examples });
+      brain.examples = [...extra, ...brain.examples].slice(0, 400);
+      saveBrain(brain);
       logAdmin(`Обучение: импорт ${extra.length}`);
-      return { ok: true as const, settings: brain.settings, examples, total: examples.length, added: extra.length };
+      return { ...pack(), added: extra.length };
+    }
+    if (data.action === "saveScript" && data.script?.id) {
+      const now = new Date().toISOString();
+      const idx = brain.scripts.findIndex((s) => s.id === data.script?.id);
+      if (idx >= 0) {
+        brain.scripts[idx] = {
+          ...brain.scripts[idx],
+          title: data.script.title != null ? String(data.script.title).slice(0, 120) : brain.scripts[idx].title,
+          body: data.script.body != null ? String(data.script.body).slice(0, 8000) : brain.scripts[idx].body,
+          updatedAt: now,
+        };
+      } else {
+        brain.scripts.push({
+          id: String(data.script.id).slice(0, 40),
+          step: (data.script.step as ScriptSection["step"]) || "general",
+          title: String(data.script.title || "Скрипт").slice(0, 120),
+          body: String(data.script.body || "").slice(0, 8000),
+          updatedAt: now,
+        });
+      }
+      saveBrain(brain);
+      logAdmin(`Скрипт: ${data.script.id}`);
+      return pack();
+    }
+    if (data.action === "resetScripts") {
+      brain.scripts = seedScripts([]);
+      saveBrain(brain);
+      logAdmin("Скрипты сброшены к эталону");
+      return pack();
+    }
+    if (data.action === "systematize") {
+      const { recentChatsForTrain } = await import("./chat-logs");
+      const { factsFromMessages } = await import("./agent-facts");
+      const chats = recentChatsForTrain(50);
+      const counts: Record<string, number> = {};
+      const phrases: Record<string, string[]> = { age: [], city: [], school: [], trial: [] };
+      for (const c of chats) {
+        const f = factsFromMessages(c.messages);
+        const key = !f.age ? "stuck-age" : !f.city ? "stuck-city" : !f.branchId ? "stuck-branch" : !f.school ? "stuck-school" : f.briefed ? "reached-offer" : "stuck-program";
+        counts[key] = (counts[key] || 0) + 1;
+        const user = c.messages.filter((m) => m.role === "user").map((m) => m.content);
+        if (f.age) phrases.age.push(user[0] || "");
+        if (f.school) phrases.school.push(f.school);
+      }
+      const note = [
+        `Диалогов: ${chats.length}.`,
+        `Дошли до записи: ${counts["reached-offer"] || 0}.`,
+        `Застряли на возрасте: ${counts["stuck-age"] || 0}, городе: ${counts["stuck-city"] || 0}, филиале: ${counts["stuck-branch"] || 0}, направлении: ${counts["stuck-school"] || 0}, программе: ${counts["stuck-program"] || 0}.`,
+        phrases.school.length ? `Частые направления: ${[...new Set(phrases.school)].slice(0, 8).join(", ")}.` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const now = new Date().toISOString();
+      const obsId = "observe";
+      const obs = brain.scripts.find((s) => s.id === obsId);
+      const body = `Наблюдения из живых диалогов (${now.slice(0, 10)}):\n${note}\n\nИспользуй это, чтобы короче вести застрявший шаг. Воронку не ломай.`;
+      if (obs) {
+        obs.body = body;
+        obs.updatedAt = now;
+        obs.auto = true;
+      } else {
+        brain.scripts.push({
+          id: obsId,
+          step: "general",
+          title: "Наблюдения из диалогов",
+          body,
+          updatedAt: now,
+          auto: true,
+        });
+      }
+      const useful = chats.flatMap((c) => {
+        const out: TrainExample[] = [];
+        for (let i = 1; i < c.messages.length; i += 1) {
+          const prev = c.messages[i - 1];
+          const cur = c.messages[i];
+          if (prev.role === "user" && cur.role === "assistant" && prev.content.length > 8 && cur.content.length > 20) {
+            out.push({
+              id: nid(),
+              at: now,
+              kind: "dialog",
+              input: prev.content.slice(0, 2000),
+              output: cur.content.slice(0, 2500),
+              note: "авто из диалога",
+              source: `chat:${c.id}`,
+            });
+          }
+        }
+        return out;
+      });
+      const seen = new Set(brain.examples.map((e) => `${e.input}||${e.output}`));
+      const extra = useful.filter((e) => !seen.has(`${e.input}||${e.output}`)).slice(0, 25);
+      brain.examples = [...extra, ...brain.examples].slice(0, 400);
+      brain.lastSystematized = now;
+      saveBrain(brain);
+      logAdmin(`Обучение: систематизация, +${extra.length} примеров`);
+      return { ...pack(), added: extra.length, note };
     }
     return { ok: false as const, error: "Неизвестное действие." };
   });

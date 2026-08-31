@@ -1,13 +1,16 @@
 export type SessionFacts = {
   age?: number;
   band?: string;
+  city?: string;
   branch?: string;
   branchId?: number;
+  school?: string;
   course?: string;
   child?: string;
   parent?: string;
   phone?: string;
   intent?: string;
+  briefed?: boolean;
 };
 
 const AGE_WORDS: Record<string, number> = {
@@ -59,12 +62,30 @@ function takeAge(text: string) {
   return 0;
 }
 
+function takeCity(text: string) {
+  if (/луховиц/i.test(text)) return "Луховицы";
+  if (/коломн|октябрьск|гражданск|цмит|олимп|революц/i.test(text)) return "Коломна";
+  return "";
+}
+
 function takeBranch(text: string): { branch: string; branchId: number } | null {
   if (/луховиц/i.test(text)) return { branch: "Луховицы, Пушкина, 202А", branchId: 3 };
-  if (/гражданск/i.test(text)) return { branch: "Коломна, Гражданская, 2", branchId: 1 };
+  if (/гражданск|олимп/i.test(text)) return { branch: "Коломна, Гражданская, 2", branchId: 1 };
   if (/октябрьск|цмит|революц/i.test(text)) return { branch: "Коломна, ЦМИТ, Октябрьской революции, 340", branchId: 2 };
-  if (/коломн/i.test(text)) return { branch: "Коломна (филиал: ЦМИТ или Гражданская — уточнить только если ещё не выбран)", branchId: 0 };
   return null;
+}
+
+function takeSchool(text: string) {
+  if (/робот/i.test(text)) return "робототехника";
+  if (/худож|рисун|живопис|скульпт|манг|digital/i.test(text)) return "художественная школа";
+  if (/программ|scratch|python|unity|код|gamedev| scratch/i.test(text)) return "программирование";
+  if (/наук|физик|инженер|радио|беспил|3d|компас/i.test(text)) return "науки и инженерия";
+  if (/подготовк\w* к школе|ранн(ее|его) развит|лего-матем|steam/i.test(text)) return "раннее развитие";
+  if (/модельн|подиум/i.test(text)) return "модельная школа";
+  if (/англий|япон|коре|язык/i.test(text)) return "языки";
+  if (/мастер-класс|мастер класс/i.test(text)) return "мастер-классы";
+  if (/летн(ий|яя|ие)|лагер/i.test(text)) return "летние программы";
+  return "";
 }
 
 function takePhone(text: string) {
@@ -85,20 +106,29 @@ export function factsFromMessages(messages: { role: string; content: string }[])
     .filter((m) => m.role === "user")
     .map((m) => m.content)
     .join("\n");
+  const assistant = messages
+    .filter((m) => m.role === "assistant")
+    .map((m) => m.content)
+    .join("\n");
   const facts: SessionFacts = {};
   const age = takeAge(all);
   if (age) {
     facts.age = age;
     facts.band = bandOf(age);
   }
+  const city = takeCity(all);
+  if (city) facts.city = city;
   const br = takeBranch(all);
   if (br) {
     facts.branch = br.branch;
-    if (br.branchId) facts.branchId = br.branchId;
+    facts.branchId = br.branchId;
+    if (!facts.city) facts.city = br.branchId === 3 ? "Луховицы" : "Коломна";
   }
+  const school = takeSchool(user) || takeSchool(all);
+  if (school) facts.school = school;
   const phone = takePhone(user);
   if (phone) facts.phone = phone;
-  const course = takeCourse(user) || takeCourse(all);
+  const course = takeCourse(user);
   if (course) facts.course = course;
   const child = user.match(
     /(?:ребёнк\w*|сына?|дочку?|дочь)\s+(?:зовут\s+)?([А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+){0,2})/,
@@ -106,28 +136,46 @@ export function factsFromMessages(messages: { role: string; content: string }[])
   if (child) facts.child = child[1];
   const parent = user.match(/(?:меня зовут|я\s+)\s*([А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+){0,2})/);
   if (parent) facts.parent = parent[1];
-  if (/пробн/i.test(all)) facts.intent = "пробное";
+  if (/свободн\w+ день|согласуем|пустую дату/i.test(all)) facts.intent = "пробное-свободный-день";
+  else if (/пробн/i.test(all)) facts.intent = "пробное";
   else if (/в группу|абонемент|сразу в/i.test(all)) facts.intent = "группа";
+  facts.briefed =
+    /последовательн|ступен|проходят на занят|материал дет|от младшего/i.test(assistant) ||
+    /понятно|к пробному|к записи|давайте к/i.test(user);
   return facts;
 }
 
 export function factsPrompt(facts: SessionFacts) {
   const lines: string[] = [];
   if (facts.age) lines.push(`возраст ребёнка: ${facts.age} лет${facts.band ? ` (группа ${facts.band})` : ""}`);
-  if (facts.branch) lines.push(`филиал / город: ${facts.branch}${facts.branchId ? ` (id ${facts.branchId})` : ""}`);
-  if (facts.course) lines.push(`курс / интерес: ${facts.course}`);
+  if (facts.city) lines.push(`город: ${facts.city}`);
+  if (facts.branch) lines.push(`филиал: ${facts.branch}${facts.branchId ? ` (id ${facts.branchId})` : ""}`);
+  if (facts.school) lines.push(`направление: ${facts.school}`);
+  if (facts.course) lines.push(`курс: ${facts.course}`);
+  if (facts.briefed) lines.push("программу направления уже рассказали");
   if (facts.child) lines.push(`ребёнок: ${facts.child}`);
   if (facts.parent) lines.push(`родитель: ${facts.parent}`);
   if (facts.phone) lines.push(`телефон: ${facts.phone}`);
   if (facts.intent) lines.push(`намерение: ${facts.intent}`);
+  const next = !facts.age
+    ? "следующий шаг: возраст"
+    : !facts.city
+      ? "следующий шаг: город (Коломна или Луховицы)"
+      : facts.city === "Коломна" && !facts.branchId
+        ? "следующий шаг: филиал в Коломне (ЦМИТ или Гражданская)"
+        : !facts.school
+          ? "следующий шаг: направление / школа"
+          : !facts.briefed
+            ? "следующий шаг: рассказать программу направления и про последовательность ступеней. К записи не переходи в этой реплике."
+            : "следующий шаг: пробное в группе / пробное в свободный день / сразу в группу. Здесь можно list_groups.";
   if (!lines.length) {
     return `
 
-Факты сессии пока пустые. Спроси только следующее недостающее поле — сначала возраст, потом филиал. Один вопрос за реплику. Не повторяй вопрос, если родитель уже ответил.`;
+Факты сессии пустые. ${next}. Один вопрос. Курсы и адреса не называй.`;
   }
   return `
 
-УЖЕ ИЗВЕСТНО В ЭТОЙ СЕССИИ. Родитель это уже сказал. ЗАПРЕЩЕНО спрашивать снова:
+УЖЕ ИЗВЕСТНО В ЭТОЙ СЕССИИ — не спрашивай снова:
 ${lines.map((l) => `— ${l}`).join("\n")}
-Не начинай диалог заново. Не пиши «сколько лет» и «какой филиал / город», если они есть выше. Спрашивай только то, чего здесь нет. Один новый вопрос за реплику.`;
+Сейчас ${next}. Не начинай диалог заново.`;
 }

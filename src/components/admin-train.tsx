@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { adminAgentBrain, type TrainExample } from "@/data/agent-config";
+import { adminAgentBrain, type TrainExample, type ScriptSection } from "@/data/agent-config";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -34,17 +35,30 @@ function download(name: string, text: string, type: string) {
 }
 
 export function AdminTrain() {
+  const [pane, setPane] = useState<"scripts" | "examples">("scripts");
   const [rows, setRows] = useState<TrainExample[]>([]);
+  const [scripts, setScripts] = useState<ScriptSection[]>([]);
+  const [draft, setDraft] = useState<Record<string, string>>({});
   const [kind, setKind] = useState<TrainExample["kind"]>("qa");
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [lastSys, setLastSys] = useState("");
 
   async function load() {
     const res = await adminAgentBrain({ data: { token: token(), action: "get" } });
-    if (res.ok && "examples" in res) setRows(res.examples);
+    if (res.ok && "examples" in res) {
+      setRows(res.examples);
+      if ("scripts" in res && res.scripts) {
+        setScripts(res.scripts);
+        const d: Record<string, string> = {};
+        for (const s of res.scripts) d[s.id] = s.body;
+        setDraft(d);
+      }
+      if ("lastSystematized" in res) setLastSys(String(res.lastSystematized || ""));
+    }
   }
 
   useEffect(() => {
@@ -72,11 +86,55 @@ export function AdminTrain() {
     if (res.ok && "examples" in res) setRows(res.examples);
   }
 
+  async function saveScript(id: string) {
+    setBusy(true);
+    const res = await adminAgentBrain({
+      data: { token: token(), action: "saveScript", script: { id, body: draft[id] || "" } },
+    });
+    setBusy(false);
+    if (res.ok && "scripts" in res && res.scripts) {
+      setScripts(res.scripts);
+      setMsg("Скрипт сохранён — ассистент уже идёт по нему.");
+    } else setMsg(res.ok ? "" : res.error || "Ошибка");
+  }
+
+  async function resetScripts() {
+    if (!window.confirm("Вернуть эталон воронки? Правки скриптов сотрутся.")) return;
+    setBusy(true);
+    const res = await adminAgentBrain({ data: { token: token(), action: "resetScripts" } });
+    setBusy(false);
+    if (res.ok && "scripts" in res && res.scripts) {
+      setScripts(res.scripts);
+      const d: Record<string, string> = {};
+      for (const s of res.scripts) d[s.id] = s.body;
+      setDraft(d);
+      setMsg("Эталон воронки восстановлен.");
+    }
+  }
+
+  async function systematize() {
+    setBusy(true);
+    const res = await adminAgentBrain({ data: { token: token(), action: "systematize" } });
+    setBusy(false);
+    if (res.ok) {
+      if ("scripts" in res && res.scripts) {
+        setScripts(res.scripts);
+        const d: Record<string, string> = {};
+        for (const s of res.scripts) d[s.id] = s.body;
+        setDraft(d);
+      }
+      if ("examples" in res) setRows(res.examples);
+      if ("lastSystematized" in res) setLastSys(String(res.lastSystematized || ""));
+      setMsg(("note" in res && res.note ? String(res.note) : "Готово") + (`added` in res && res.added ? ` · +${res.added} примеров` : ""));
+    } else setMsg(res.error || "Ошибка");
+  }
+
   function exportJson() {
     const payload = {
       studio: "Развивайся",
       exportedAt: new Date().toISOString(),
       format: "rastudio-agent-training.v1",
+      scripts,
       examples: rows,
     };
     download(`rastudio-agent-training-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(payload, null, 2), "application/json");
@@ -88,26 +146,15 @@ export function AdminTrain() {
       .map((e) =>
         JSON.stringify({
           messages: [
-            { role: "system", content: "Администратор студии «Развивайся». Говори по-русски. Не повторяй известные факты." },
+            { role: "system", content: "Администратор студии «Развивайся». Воронка: возраст → город → филиал → направление → программа → запись." },
             { role: "user", content: e.input },
             { role: "assistant", content: e.output },
           ],
         }),
       );
-    const rules = rows
-      .filter((e) => e.kind === "rule")
-      .map((e) =>
-        JSON.stringify({
-          messages: [
-            { role: "system", content: e.output || e.input },
-            { role: "user", content: "Правило студии" },
-            { role: "assistant", content: e.output || e.input },
-          ],
-        }),
-      );
     download(
       `rastudio-agent-training-${new Date().toISOString().slice(0, 10)}.jsonl`,
-      [...lines, ...rules].join("\n"),
+      lines.join("\n"),
       "application/jsonl",
     );
   }
@@ -149,110 +196,167 @@ export function AdminTrain() {
       <div>
         <h2 className="font-display text-3xl">Обучение ассистента</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Примеры, правила и исправления. Они пишутся в базу и подмешиваются в Олега и Ольгу. Экспорт — чтобы перенести в другого агента.
+          Скрипты воронки — как говорить с родителем. Примеры — живые реплики. Систематизация разбирает диалоги сайта и дописывает наблюдения.
         </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="secondary" onClick={exportJson} disabled={!rows.length}>
-          Экспорт JSON
-        </Button>
-        <Button type="button" variant="secondary" onClick={exportJsonl} disabled={!rows.length}>
-          Экспорт JSONL
-        </Button>
-        <label className="inline-flex h-10 cursor-pointer items-center rounded-full bg-surface px-4 text-sm font-semibold shadow-[var(--shadow-border)]">
-          Импорт JSON / JSONL
-          <input
-            type="file"
-            accept=".json,.jsonl,application/json"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void onImport(f);
-              e.target.value = "";
-            }}
-          />
-        </label>
-        <p className="self-center text-sm text-muted">{rows.length} записей</p>
+        <button
+          type="button"
+          onClick={() => setPane("scripts")}
+          className={cn("rounded-full px-4 py-2 text-sm font-semibold", pane === "scripts" ? "bg-primary text-primary-foreground" : "bg-surface")}
+        >
+          Скрипты воронки
+        </button>
+        <button
+          type="button"
+          onClick={() => setPane("examples")}
+          className={cn("rounded-full px-4 py-2 text-sm font-semibold", pane === "examples" ? "bg-primary text-primary-foreground" : "bg-surface")}
+        >
+          Примеры
+        </button>
       </div>
 
-      <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
-        <p className="text-sm font-semibold">Новая запись</p>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <label className="text-sm">
-            Тип
-            <select
-              value={kind}
-              onChange={(e) => setKind(e.target.value as TrainExample["kind"])}
-              className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-            >
-              <option value="qa">Вопрос → ответ</option>
-              <option value="rule">Правило</option>
-              <option value="correction">Исправление</option>
-              <option value="dialog">Диалог</option>
-            </select>
-          </label>
-          <label className="text-sm">
-            Заметка (не уходит в модель)
-            <input
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-            />
-          </label>
+      {pane === "scripts" ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" disabled={busy} onClick={() => void systematize()}>
+              Систематизировать по диалогам
+            </Button>
+            <Button type="button" variant="secondary" disabled={busy} onClick={() => void resetScripts()}>
+              Вернуть эталон
+            </Button>
+            {lastSys ? <p className="self-center text-xs text-muted">Последний раз: {when(lastSys)}</p> : null}
+          </div>
+          {msg ? <p className="text-sm text-primary">{msg}</p> : null}
+          {scripts.map((s) => (
+            <article key={s.id} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-display text-xl">{s.title}</p>
+                  <p className="text-xs text-muted">
+                    {s.step}
+                    {s.auto ? " · из диалогов" : ""}
+                    {s.updatedAt ? ` · ${when(s.updatedAt)}` : ""}
+                  </p>
+                </div>
+                <Button type="button" disabled={busy} onClick={() => void saveScript(s.id)}>
+                  Сохранить
+                </Button>
+              </div>
+              <textarea
+                value={draft[s.id] ?? s.body}
+                onChange={(e) => setDraft((d) => ({ ...d, [s.id]: e.target.value }))}
+                rows={s.id === "funnel" ? 12 : 7}
+                className="mt-3 w-full rounded-xl bg-surface-2 px-3 py-2 text-sm leading-relaxed ring-1 ring-black/10"
+              />
+            </article>
+          ))}
         </div>
-        <label className="mt-3 block text-sm">
-          {kind === "rule" ? "Правило" : "Реплика родителя"}
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            rows={3}
-            className="mt-1 w-full rounded-xl bg-surface-2 px-3 py-2 ring-1 ring-black/10"
-          />
-        </label>
-        {kind === "rule" ? null : (
-          <label className="mt-3 block text-sm">
-            Как должен ответить ассистент
-            <textarea
-              value={output}
-              onChange={(e) => setOutput(e.target.value)}
-              rows={3}
-              className="mt-1 w-full rounded-xl bg-surface-2 px-3 py-2 ring-1 ring-black/10"
-            />
-          </label>
-        )}
-        <Button className="mt-4" type="button" disabled={busy || (!input.trim() && !output.trim())} onClick={() => void add()}>
-          Записать в обучение
-        </Button>
-        {msg ? <p className="mt-2 text-sm text-primary">{msg}</p> : null}
-      </div>
+      ) : (
+        <div className="space-y-6">
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" onClick={exportJson} disabled={!rows.length && !scripts.length}>
+              Экспорт JSON
+            </Button>
+            <Button type="button" variant="secondary" onClick={exportJsonl} disabled={!rows.length}>
+              Экспорт JSONL
+            </Button>
+            <label className="inline-flex h-10 cursor-pointer items-center rounded-full bg-surface px-4 text-sm font-semibold shadow-[var(--shadow-border)]">
+              Импорт JSON / JSONL
+              <input
+                type="file"
+                accept=".json,.jsonl,application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void onImport(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            <p className="self-center text-sm text-muted">{rows.length} записей</p>
+          </div>
 
-      <div className="space-y-3">
-        {rows.map((e) => (
-          <article key={e.id} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-muted">
-                {when(e.at)} · {KIND[e.kind]} · {e.source}
-              </p>
-              <button type="button" className="text-xs font-semibold text-primary" onClick={() => void remove(e.id)}>
-                Удалить
-              </button>
+          <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+            <p className="text-sm font-semibold">Новая запись</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <label className="text-sm">
+                Тип
+                <select
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value as TrainExample["kind"])}
+                  className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+                >
+                  <option value="qa">Вопрос → ответ</option>
+                  <option value="rule">Правило</option>
+                  <option value="correction">Исправление</option>
+                  <option value="dialog">Диалог</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                Заметка (не уходит в модель)
+                <input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+                />
+              </label>
             </div>
-            {e.note ? <p className="mt-1 text-xs text-muted">{e.note}</p> : null}
-            <p className="mt-2 text-sm">
-              <span className="text-muted">{e.kind === "rule" ? "Правило: " : "Родитель: "}</span>
-              {e.input || "—"}
-            </p>
-            {e.kind === "rule" ? null : (
-              <p className="mt-1 text-sm">
-                <span className="text-muted">Ассистент: </span>
-                {e.output || "—"}
-              </p>
+            <label className="mt-3 block text-sm">
+              {kind === "rule" ? "Правило" : "Реплика родителя"}
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                rows={3}
+                className="mt-1 w-full rounded-xl bg-surface-2 px-3 py-2 ring-1 ring-black/10"
+              />
+            </label>
+            {kind === "rule" ? null : (
+              <label className="mt-3 block text-sm">
+                Как должен ответить ассистент
+                <textarea
+                  value={output}
+                  onChange={(e) => setOutput(e.target.value)}
+                  rows={3}
+                  className="mt-1 w-full rounded-xl bg-surface-2 px-3 py-2 ring-1 ring-black/10"
+                />
+              </label>
             )}
-          </article>
-        ))}
-        {rows.length ? null : <p className="text-sm text-muted">Пока пусто — добавьте правило или пример ответа.</p>}
-      </div>
+            <Button className="mt-4" type="button" disabled={busy || (!input.trim() && !output.trim())} onClick={() => void add()}>
+              Записать в обучение
+            </Button>
+            {msg && pane === "examples" ? <p className="mt-2 text-sm text-primary">{msg}</p> : null}
+          </div>
+
+          <div className="space-y-3">
+            {rows.map((e) => (
+              <article key={e.id} className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-muted">
+                    {when(e.at)} · {KIND[e.kind]} · {e.source}
+                  </p>
+                  <button type="button" className="text-xs font-semibold text-primary" onClick={() => void remove(e.id)}>
+                    Удалить
+                  </button>
+                </div>
+                {e.note ? <p className="mt-1 text-xs text-muted">{e.note}</p> : null}
+                <p className="mt-2 text-sm">
+                  <span className="text-muted">{e.kind === "rule" ? "Правило: " : "Родитель: "}</span>
+                  {e.input || "—"}
+                </p>
+                {e.kind === "rule" ? null : (
+                  <p className="mt-1 text-sm">
+                    <span className="text-muted">Ассистент: </span>
+                    {e.output || "—"}
+                  </p>
+                )}
+              </article>
+            ))}
+            {rows.length ? null : <p className="text-sm text-muted">Пока пусто — добавьте правило или пример ответа.</p>}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -1,7 +1,7 @@
 import { SITE } from "@/data/site";
 import { courseHint } from "@/data/agent-courses";
-import { coursesForAge } from "@/data/ages";
 import { factsFromMessages } from "@/data/agent-facts";
+import { summerSeason } from "@/data/agent-playbook";
 
 export type AgentChip = {
   label: string;
@@ -18,99 +18,29 @@ const AGES: AgentChip[] = [
   { label: "15+", send: "Подросток 15 лет и старше" },
 ];
 
-const PLACES: AgentChip[] = [
-  { label: "Коломна · Октябрьской", send: "Удобен филиал в Коломне на Октябрьской революции, 340" },
-  { label: "Коломна · Гражданская", send: "Удобен филиал в Коломне на Гражданской, 2" },
-  { label: "Луховицы", send: "Удобен филиал в Луховицах" },
+const CITIES: AgentChip[] = [
+  { label: "Коломна", send: "Нас интересует Коломна" },
+  { label: "Луховицы", send: "Нас интересуют Луховицы" },
 ];
 
-const COURSES: Record<string, AgentChip[]> = {
-  "3-4": [
-    { label: "Художественная студия 3–4", send: "Интересна художественная студия 3–4 года" },
-    { label: "Лего-математика", send: "Интересна Лего-математика" },
-    { label: "К школе", send: "Интересна подготовка к школе" },
-  ],
-  "5-6": [
-    { label: "Художественная студия 5–6", send: "Интересна художественная студия 5–6 лет" },
-    { label: "Робототехника", send: "Интересна робототехника 5–6 лет" },
-    { label: "Наука", send: "Интересен курс «Увлекательная наука»" },
-    { label: "Английский", send: "Интересен английский Super Minds" },
-    { label: "К школе", send: "Интересна подготовка к школе" },
-  ],
-  "7-9": [
-    { label: "Художка 7–9", send: "Интересна художественная студия 7–9 лет" },
-    { label: "Робототехника", send: "Интересна робототехника 7–9 лет" },
-    { label: "Программирование", send: "Интересно программирование для 7–9 лет" },
-    { label: "Наука", send: "Интересен курс «Увлекательная наука»" },
-    { label: "Английский", send: "Интересен английский" },
-  ],
-  "10-14": [
-    { label: "Художественная школа", send: "Интересна художественная школа 10–14" },
-    { label: "Робототехника", send: "Интересна робототехника 10–14 лет" },
-    { label: "Python", send: "Интересно программирование на Python" },
-    { label: "Игры / Unity", send: "Интересен GameDev и Unity" },
-    { label: "Физика", send: "Интересна физика инноваций" },
-  ],
-  "15+": [
-    { label: "Подготовка в вуз", send: "Интересна подготовка в художественный вуз" },
-    { label: "Модельная школа", send: "Интересна модельная школа" },
-    { label: "Python / C++", send: "Интересно программирование Python или C++" },
-    { label: "Blender / Unity", send: "Интересны Blender и разработка игр" },
-  ],
-};
+const KOLOMNA: AgentChip[] = [
+  { label: "ЦМИТ · Октябрьской, 340", send: "Удобен филиал ЦМИТ на Октябрьской революции, 340" },
+  { label: "Гражданская, 2", send: "Удобен филиал на Гражданской, 2" },
+];
 
-function ageYears(blob: string) {
-  const n = blob.match(/(\d{1,2})\s*(?:лет|года)/) || blob.match(/ребёнк\w*[^\d]{0,12}(\d{1,2})/);
-  return Number(n?.[1] || 0);
-}
-
-function chipLabel(name: string) {
-  return name
-    .replace(/^курс\s+/i, "")
-    .replace(/^IT-лаборатория\s*/i, "")
-    .replace(/^IT-школа:\s*/i, "")
-    .replace(/^Научный курс\s*/i, "")
-    .replace(/^Развивающий курс\s*/i, "")
-    .replace(/^Производственный бизнес-курс\s*/i, "")
-    .replace(/[«»"]/g, "")
-    .trim()
-    .slice(0, 42);
-}
-
-function blobOf(messages: { role: string; content: string }[]) {
-  return messages
-    .filter((m) => m.role === "user")
-    .map((m) => m.content)
-    .join(" \n ")
-    .toLowerCase();
-}
-
-function ageBand(blob: string) {
-  if (/15\+|старше|подростк|15 лет/.test(blob)) return "15+";
-  if (/10\s*[-–]?\s*14|11 лет|12 лет|13 лет|14 лет/.test(blob)) return "10-14";
-  if (/7\s*[-–]?\s*9|7 лет|8 лет|9 лет/.test(blob)) return "7-9";
-  if (/5\s*[-–]?\s*6|5 лет|6 лет/.test(blob)) return "5-6";
-  if (/3\s*[-–]?\s*4|3 года|4 года/.test(blob)) return "3-4";
-  const n = blob.match(/(?:ребёнк\w*|лет|года)[^\d]{0,8}(\d{1,2})|(\d{1,2})\s*лет/);
-  const y = Number(n?.[1] || n?.[2] || 0);
-  if (y) {
-    if (y <= 4) return "3-4";
-    if (y <= 6) return "5-6";
-    if (y <= 9) return "7-9";
-    if (y <= 14) return "10-14";
-    return "15+";
-  }
-  return "";
-}
-
-function hasCity(blob: string) {
-  return /коломн|луховиц|октябрьск|гражданск|филиал/.test(blob);
-}
-
-function hasCourse(blob: string) {
-  return /худож|робот|лего|наук|англий|python|программ|unity|blender|физик|вуз|модельн|scratch|подготовк|gamedev|игр/.test(
-    blob,
-  );
+function schoolsFor(age?: number): AgentChip[] {
+  const y = age || 8;
+  const out: AgentChip[] = [];
+  if (y <= 6) out.push({ label: "Раннее развитие", send: "Интересна школа раннего развития" });
+  out.push({ label: "Художественная", send: "Интересна художественная школа" });
+  if (y >= 5) out.push({ label: "Робототехника", send: "Интересна школа робототехники" });
+  if (y >= 5) out.push({ label: "Программирование", send: "Интересна школа программирования" });
+  if (y >= 5) out.push({ label: "Науки и инженерия", send: "Интересна школа наук и инженерии" });
+  if (y >= 9) out.push({ label: "Модельная", send: "Интересна модельная школа" });
+  if (y >= 7) out.push({ label: "Языки", send: "Интересна школа иностранных языков" });
+  out.push({ label: "Мастер-классы", send: "Интересны мастер-классы" });
+  if (summerSeason()) out.push({ label: "Летние программы", send: "Интересны летние программы" });
+  return out;
 }
 
 function booked(messages: { role: string; content: string }[]) {
@@ -129,41 +59,25 @@ export function nextChips(messages: { role: string; content: string }[]): { hint
       ],
     };
   }
-  const blob = blobOf(messages);
   const facts = factsFromMessages(messages);
-  const ageKey = facts.age
-    ? facts.age <= 4
-      ? "3-4"
-      : facts.age <= 6
-        ? "5-6"
-        : facts.age <= 9
-          ? "7-9"
-          : facts.age <= 14
-            ? "10-14"
-            : "15+"
-    : ageBand(blob);
-  if (!ageKey) return { hint: "Сколько лет ребёнку", chips: AGES };
-  if (!facts.branch && !hasCity(blob)) return { hint: "Какой филиал удобнее", chips: PLACES };
-  if (!hasCourse(blob) && !facts.course) {
-    const years = facts.age || ageYears(blob);
-    if (years) {
-      const chips = coursesForAge(years).flatMap((g) =>
-        g.items.map((item) => ({
-          label: chipLabel(item.name),
-          send: `Расскажите подробнее про «${item.name}»`,
-        })),
-      );
-      if (chips.length) return { hint: `Все курсы для ${years} лет`, chips };
-    }
-    return { hint: "Что откликается", chips: COURSES[ageKey] || COURSES["7-9"] };
+  if (!facts.age) return { hint: "Сколько лет ребёнку", chips: AGES };
+  if (!facts.city) return { hint: "Какой город удобнее", chips: CITIES };
+  if (facts.city === "Коломна" && !facts.branchId) return { hint: "Какой филиал в Коломне", chips: KOLOMNA };
+  if (!facts.school) return { hint: "Какое направление ближе", chips: schoolsFor(facts.age) };
+  if (!facts.briefed) {
+    return {
+      hint: "Когда программа ясна",
+      chips: [{ label: "Понятно, к записи", send: "Понятно. Давайте к пробному или в группу", primary: true }],
+    };
   }
-  const page = courseHint(`${blob} ${messages.map((m) => m.content).slice(-3).join(" ")}`);
+  const page = courseHint(messages.map((m) => m.content).slice(-4).join(" "));
   return {
-    hint: "Следующий шаг",
+    hint: "Как удобнее начать",
     chips: [
-      { label: "Пробное занятие", send: "Хочу записаться на пробное занятие", primary: true },
-      ...(page ? [{ label: "Страница курса", href: page.path }] : []),
-      { label: "Смотреть расписание", href: "/schedule" },
+      { label: "Пробное в группе", send: "Хочу пробное на ближайшем занятии группы", primary: true },
+      { label: "Пробное в свободный день", send: "Хочу пробное в свободный день, дату согласуем" },
+      { label: "Сразу в группу", send: "Хочу сразу в действующую группу" },
+      ...(page ? [{ label: "Подробнее о курсе", href: page.path }] : []),
     ],
   };
 }
