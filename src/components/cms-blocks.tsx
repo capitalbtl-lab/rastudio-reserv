@@ -8,6 +8,7 @@ import { SITE, coursesForSchool } from "@/data/site";
 import type { ProgramStep } from "@/data/school-programs";
 import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
+import { TRIAL_PROMISE } from "@/data/course-offer";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 export { ScheduleBlock } from "@/components/schedule-block";
@@ -156,6 +157,7 @@ export function CoursePageHero({
   description,
   images,
   video,
+  facts,
 }: {
   kicker: ReactNode;
   age?: string | null;
@@ -163,6 +165,7 @@ export function CoursePageHero({
   description?: string | null;
   images: HeroShot[];
   video?: string | null;
+  facts?: string[];
 }) {
   const srcs = images.filter((img) => {
     if (!img?.src) return false;
@@ -203,6 +206,18 @@ export function CoursePageHero({
           <h1 className="hero-in hero-in-2 mt-4 text-[clamp(2rem,1.15rem+2.6vw,3.4rem)] leading-[1.05]">
             {title}
           </h1>
+          {facts?.length ? (
+            <p className="hero-in mt-4 flex flex-wrap gap-2">
+              {facts.map((item) => (
+                <span
+                  key={item}
+                  className="rounded-full bg-white/10 px-3 py-1 text-[0.78rem] font-semibold text-header-fg"
+                >
+                  {item}
+                </span>
+              ))}
+            </p>
+          ) : null}
           {description ? (
             <p className="hero-in hero-in-3 mt-4 max-w-md text-[1.02rem] leading-relaxed text-header-fg/70">
               {description}
@@ -210,12 +225,13 @@ export function CoursePageHero({
           ) : null}
           <div className="hero-in hero-in-3 mt-6 flex flex-wrap gap-3">
             <Button asChild size="lg">
-              <a href="#trial">Записаться</a>
+              <a href="#trial">Пробное занятие</a>
             </Button>
             <Button asChild size="lg" variant="outline">
               <a href={SITE.phoneHref}>{SITE.phone}</a>
             </Button>
           </div>
+          <p className="hero-in mt-4 max-w-md text-sm text-header-fg/65">{TRIAL_PROMISE}</p>
         </div>
 
         {shots.length || video ? (

@@ -39,6 +39,45 @@ export function courseLength(href: string) {
   return "90 мин";
 }
 
+const PRICES: Record<string, string> = {
+  "/art-studio-9-13": "6 450 ₽ / 4 нед.",
+  "/happybricks": "3 350 ₽ / 4 нед.",
+  "/kinder-master": "7 450 ₽ / 4 нед.",
+  "/model-school": "5 450 ₽ / 4 нед.",
+  "/podgotovka-v-hudvuz": "5 500 ₽ / 4 нед.",
+  "/preparation-for-school": "4 850 ₽ / 4 нед.",
+  "/science-course": "4 350 ₽ / 4 нед.",
+  "/sculptural-studio": "3 850 ₽ / 4 нед.",
+  "/teslaphysics": "4 650 ₽ / 4 нед.",
+  "/mentalarithmetic": "4 650 ₽ / 4 нед.",
+};
+
+export function coursePrice(path: string) {
+  const clean = path.startsWith("/") ? path : `/${path}`;
+  try {
+    const decoded = decodeURIComponent(clean);
+    if (PRICES[decoded]) return PRICES[decoded];
+  } catch {
+    /* ignore */
+  }
+  return PRICES[clean] || "от 3 350 ₽ / 4 нед.";
+}
+
+export function ageShort(age?: string | null) {
+  if (!age) return "";
+  const bit = age
+    .replace(/^курс\s+/i, "")
+    .replace(/^для детей\s+/i, "")
+    .replace(/^для\s+/i, "")
+    .trim();
+  const range = bit.match(/(\d+\s*[–—-]\s*\d+\s*(?:лет|года)?|\d+\s*\+\s*|\d+\s*лет)/i);
+  return range ? range[1].replace(/\s+/g, " ").trim() : bit;
+}
+
 export function courseFacts(href: string, age?: string) {
-  return [age, courseLength(href), coursePlace(href)].filter(Boolean).join(" · ");
+  return [age, courseLength(href), coursePrice(href), coursePlace(href)].filter(Boolean).join(" · ");
+}
+
+export function courseOfferFacts(path: string, age?: string | null) {
+  return [ageShort(age), courseLength(path), coursePrice(path), coursePlace(path)].filter(Boolean);
 }

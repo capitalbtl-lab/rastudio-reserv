@@ -24,18 +24,18 @@ export function SiteShell({ children }: { children: ReactNode }) {
         {children}
       </main>
       <SiteFooter />
-      <div className="mobile-dock fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-bg/90 px-3 pt-3 backdrop-blur-xl md:hidden">
+      <div className="mobile-dock fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-bg/95 px-3 py-2.5 backdrop-blur-xl md:hidden">
         <div className="grid grid-cols-3 gap-2">
-          <Button asChild variant="secondary" className="w-full">
+          <Button asChild variant="secondary" className="h-11 w-full text-[0.78rem]">
             <a href={SITE.phoneHref}>Позвонить</a>
           </Button>
-          <Button asChild variant="secondary" className="w-full">
+          <Button asChild variant="secondary" className="h-11 w-full text-[0.78rem]">
             <a href={SITE.telegram} target="_blank" rel="noreferrer">
               Написать
             </a>
           </Button>
-          <Button asChild className="w-full">
-            <a href="#trial">Запись</a>
+          <Button asChild className="h-11 w-full text-[0.78rem]">
+            <a href="#trial">Пробное</a>
           </Button>
         </div>
       </div>

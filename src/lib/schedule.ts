@@ -113,4 +113,27 @@ export function matchesAgeBand(age: string, bandId: AgeBandId) {
   return agesOverlap(age, band.min, band.max);
 }
 
+export function nextSlots(sessions: CmsSession[], limit = 3) {
+  const today = new Date().getDay(); // 0 Sunday
+  function delta(dayId: string) {
+    const mon = dayIndex(dayId); // 0 Monday
+    if (mon > 6) return 8;
+    const js = (mon + 1) % 7;
+    let d = js - today;
+    if (d < 0) d += 7;
+    return d;
+  }
+  const slots = sessions.flatMap(expandSlots);
+  const seen = new Set<string>();
+  const unique: DaySlot[] = [];
+  for (const slot of slots.sort((a, b) => delta(a.day) - delta(b.day) || a.sort - b.sort)) {
+    const key = `${slot.day}-${slot.time}-${branchMeta(slot.session).short}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(slot);
+    if (unique.length >= limit) break;
+  }
+  return unique;
+}
+
 export { AGE_BANDS };

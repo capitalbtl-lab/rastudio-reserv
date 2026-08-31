@@ -6,13 +6,14 @@ import type { CmsCourse, CmsMaster, CmsSession, CmsTrajectoryStep } from "@/data
 import { PageLink } from "@/components/page-link";
 import { SeoImage } from "@/components/seo-image";
 import { TrialForm } from "@/components/trial-form";
-import { Button } from "@/components/ui/button";
 import { ProgrammingCoursePage } from "@/components/programming-course";
 import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
 import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses, SchoolCourseList, Trajectory } from "@/components/cms-blocks";
 import { PhotoSlider } from "@/components/photo-slider";
 import { PageReviews } from "@/components/reviews";
+import { ConvertBand, ConvertAside } from "@/components/convert";
 import { CourseSellAfterWhy, CourseSellAfterProgram } from "@/components/course-sell";
+import { courseOfferFacts } from "@/data/ages";
 import { galleryPhotos } from "@/lib/gallery";
 import { SCHOOL_PROGRAMS, SCHOOL_WHY } from "@/data/school-programs";
 import { whyForPath } from "@/data/course-why";
@@ -170,7 +171,15 @@ function CinematicPage({
         description={page.description}
         images={page.kind === "school" ? galleryPhotos(page.images) : page.images}
         video={page.video}
+        facts={
+          page.kind === "course" || page.kind === "school"
+            ? courseOfferFacts(page.pathDecoded || page.path, heading.age)
+            : undefined
+        }
       />
+      {page.kind === "course" || page.kind === "school" ? (
+        <ConvertBand path={page.pathDecoded || page.path} sessions={schedule} />
+      ) : null}
 
       <div className="page-wrap py-12 md:py-16">
         <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
@@ -225,26 +234,7 @@ function CinematicPage({
             ) : null}
             {page.kind === "school" ? null : <Related page={page} courses={courses} />}
           </div>
-          <aside className="h-fit rounded-xl bg-surface p-5 shadow-[var(--shadow-border)] lg:sticky lg:top-24">
-            <p className="text-sm font-medium">Запись и филиалы</p>
-            <p className="mt-2 text-sm text-muted">
-              {SITE.phone}
-              <br />
-              {SITE.email}
-            </p>
-            <ul className="mt-4 space-y-3 text-sm text-muted">
-              {BRANCHES.map((b) => (
-                <li key={b.address}>
-                  <span className="font-medium text-fg">{b.city}</span>
-                  <br />
-                  {b.address}
-                </li>
-              ))}
-            </ul>
-            <Button asChild className="mt-5 w-full">
-              <a href="#trial">Пробное занятие</a>
-            </Button>
-          </aside>
+          <ConvertAside />
         </div>
         <div className="mt-16">
           <TrialForm compact courseId={trialCourseForPath(page.pathDecoded || page.path)} />

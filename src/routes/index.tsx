@@ -149,8 +149,15 @@ function Home() {
       <section className="page-wrap pt-8 pb-2 md:pt-10">
         <p className="kicker text-primary">Подбор за 10 секунд</p>
         <h2 className="section-title mt-3">Сколько лет ребёнку?</h2>
-        <p className="mt-3 max-w-xl text-muted">Школы остаются как были — это быстрый вход по возрасту.</p>
+        <p className="mt-3 max-w-xl text-muted">
+          Нажмите возраст — откроются курсы с ценой, филиалом и записью на пробное.
+        </p>
         <AgeChips className="mt-5" />
+        <div className="mt-6">
+          <Button asChild size="lg">
+            <a href="#trial">Или оставить заявку сразу</a>
+          </Button>
+        </div>
       </section>
 
       <section className="page-wrap pt-8 pb-12 md:pt-10 md:pb-16">

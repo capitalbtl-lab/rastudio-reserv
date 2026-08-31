@@ -19,7 +19,9 @@ import {
 } from "@/components/cms-blocks";
 import { whyForPath } from "@/data/course-why";
 import { PageReviews } from "@/components/reviews";
+import { ConvertBand } from "@/components/convert";
 import { CourseSellAfterWhy, CourseSellAfterProgram } from "@/components/course-sell";
+import { courseOfferFacts } from "@/data/ages";
 
 type Props = {
   page: SitePage;
@@ -64,7 +66,9 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
         description={course.program}
         images={images}
         video={page.video}
+        facts={courseOfferFacts(course.pathDecoded || course.path || page.path, course.age)}
       />
+      <ConvertBand path={course.pathDecoded || course.path || page.path} sessions={schedule} />
 
       {course.aboutLead ? (
         <section className="border-b border-border bg-surface">

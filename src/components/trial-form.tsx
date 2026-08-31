@@ -68,19 +68,25 @@ export function TrialForm({
           <p className="kicker text-primary">Пробное занятие</p>
           <h2 className="display mt-3 max-w-md text-3xl md:text-4xl">Приведите ребёнка на первое занятие</h2>
           <p className="mt-4 max-w-md text-[0.98rem] leading-relaxed text-muted">
-            Оставьте заявку — администратор подберёт курс, филиал и время. Телефон{" "}
+            Пробное занятие. Решите после урока — заранее ничего не оформляем. Телефон{" "}
             <a className="font-semibold text-fg" href={SITE.phoneHref}>
               {SITE.phone}
             </a>
-            , почта {SITE.email}.
+            .
           </p>
         </div>
 
         {done ? (
           <div className="rounded-2xl bg-bg px-5 py-8">
-            <p className="display text-2xl">Заявка отправлена</p>
+            <p className="display text-2xl">Заявка у администратора</p>
             <p className="mt-3 text-muted">
-              Спасибо! Мы свяжемся с вами в ближайшее время и подберём удобную группу.
+              Напишем в течение 15 минут и подберём филиал и время. Если удобнее сейчас — позвоните или напишите.
+            </p>
+            <p className="mt-5 flex flex-wrap gap-4 text-sm font-semibold">
+              <a href={SITE.phoneHref}>{SITE.phone}</a>
+              <a href={SITE.telegram} target="_blank" rel="noreferrer">
+                Telegram
+              </a>
             </p>
           </div>
         ) : (
