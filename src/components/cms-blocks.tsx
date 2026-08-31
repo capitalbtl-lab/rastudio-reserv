@@ -558,7 +558,13 @@ export function RelatedAgeCourses({
     .filter((c) => c.href !== currentPath && c.image && agesOverlap(mine, c.age || ""))
     .slice(0, 8);
   if (!peers.length) return null;
-  const heading = mine ? `Курсы для детей ${mine.replace(/^для детей\s+/i, "")}` : "Курсы этого возраста";
+  const ageBit = mine
+    .replace(/^курс\s+/i, "")
+    .replace(/^для детей\s+/i, "")
+    .replace(/^для\s+/i, "")
+    .trim();
+  const range = ageBit.match(/(\d+\s*[–—-]\s*\d+\s*(?:лет|года)?|\d+\s*\+\s*|\d+\s*лет)/i);
+  const heading = range ? `Курсы для детей ${range[1].replace(/\s+/g, " ").trim()}` : "Курсы этого возраста";
 
   return (
     <div className="mt-12">
