@@ -30,15 +30,11 @@ function speechCtor() {
 type Msg = { role: "user" | "assistant"; content: string };
 type Mood = "hello" | "think" | "happy" | "sorry";
 
-function greeting(who: "oleg" | "olga", voice = false) {
-  const ask = voice
-    ? "Скажите, сколько лет ребёнку — сразу скажу, что зайдёт именно ему."
-    : "Нажмите, сколько лет ребёнку — сразу скажу, что зайдёт именно ему.";
-  return who === "olga"
-    ? `Ольга: Подберём курс за минуту. ${ask}`
-    : `Олег: Подберём курс за минуту. ${voice ? ask : "Сначала возраст — так не предложим слишком сложное."}`;
+function greeting(who: "oleg" | "olga", _voice = false) {
+  const name = who === "olga" ? "Ольга" : "Олег";
+  return `${name}: Подскажу программу, которая подойдёт именно вашему ребёнку. Сколько ему лет?`;
 }
-const DUAL_HELLO = /Олег: Подберём курс[\s\S]*Ольга: Я рядом/;
+const DUAL_HELLO = /Олег: Подскажу программу[\s\S]*Ольга:/;
 const ADMIN_ASK = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
 const ADMIN_HELLO = "Ольга: Доступ открыт на 30 минут. Цены, тексты страниц или голоса — что меняем?";
 
@@ -696,7 +692,7 @@ export function AgentChat() {
       !inAdminUi &&
       clientMsgs.length === 1 &&
       clientMsgs[0].role === "assistant" &&
-      /Подберём курс за минуту/.test(clientMsgs[0].content);
+      /Подскажу программу, которая подойдёт/.test(clientMsgs[0].content);
     const spoken = onlyHello ? greeting(partner, true) : [...messages].reverse().find((m) => m.role === "assistant")?.content;
     if (onlyHello) setClientMsgs([{ role: "assistant", content: spoken || greeting(partner, true) }]);
     if (spoken) await speak(spoken);
