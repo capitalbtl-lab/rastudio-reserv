@@ -457,6 +457,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     const { codewordInText, logAdmin } = await import("./admin-settings");
     const { factsFromMessages, factsPrompt } = await import("./agent-facts");
     const { buildSessionNote, notePrompt } = await import("./session-note");
+    const { findDossier, dossierPrompt, upsertDossier, dossierFromNote } = await import("./dossiers");
     const { agentPromptAddons } = await import("./agent-config");
     let admin = tokenOk(data.token);
     let granted: string | undefined;
@@ -497,9 +498,22 @@ export const chatAgent = createServerFn({ method: "POST" })
       : "";
     const facts = factsFromMessages(all);
     const note = buildSessionNote(all);
+    if (!admin && (facts.phone || facts.child || facts.parent)) {
+      try {
+        dossierFromNote(note, { phone: facts.phone, chatId: String(data.path || "") });
+      } catch {
+        /* */
+      }
+    }
+    const file = !admin ? findDossier({ phone: facts.phone }) : null;
     const system = admin
       ? ADMIN_SYSTEM + adminHint
-      : clientSystem(soloWho, facts, note.next) + agentPromptAddons() + knowledgeForAgent() + factsPrompt(facts) + notePrompt(note);
+      : clientSystem(soloWho, facts, note.next) +
+        agentPromptAddons() +
+        knowledgeForAgent() +
+        factsPrompt(facts) +
+        notePrompt(note) +
+        dossierPrompt(file);
     const messages: ChatMsg[] = [{ role: "system", content: system }, ...trimmed];
     try {
       for (let step = 0; step < 4; step++) {
@@ -538,6 +552,23 @@ export const chatAgent = createServerFn({ method: "POST" })
                 duration: args.duration != null ? Number(args.duration) : undefined,
               });
               const lessonName = saved.ok && saved.lesson?.type ? saved.lesson.type : "занятие";
+              if (saved.ok && "id" in saved && saved.id) {
+                try {
+                  upsertDossier({
+                    crmId: Number(saved.id),
+                    branchId: Number(saved.branch) || undefined,
+                    phone: String(args.phone || ""),
+                    child: String(args.child || ""),
+                    parent: String(args.parent || ""),
+                    dob: String(args.dob || ""),
+                    course: String(args.group_name || args.course_id || ""),
+                    source: "alfacrm",
+                    note: `Запись: ${lessonName}`,
+                  });
+                } catch {
+                  /* */
+                }
+              }
               messages.push({
                 role: "tool",
                 tool_call_id: call.id,

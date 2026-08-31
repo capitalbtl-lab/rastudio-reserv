@@ -24,10 +24,11 @@ import { AdminCalls } from "@/components/admin-calls";
 import { AdminChats } from "@/components/admin-chats";
 import { AdminAgent } from "@/components/admin-agent";
 import { AdminTrain } from "@/components/admin-train";
+import { AdminDossiers } from "@/components/admin-dossiers";
 import { cn } from "@/lib/utils";
 
 const KEY = "ra_admin";
-type Tab = "prices" | "voice" | "access" | "voices" | "calls" | "chats" | "agent" | "train";
+type Tab = "prices" | "voice" | "access" | "voices" | "calls" | "chats" | "agent" | "train" | "dossiers";
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: "prices", label: "Цены курсов", hint: "Прайс на сайте" },
@@ -36,6 +37,7 @@ const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: "agent", label: "Ассистент ИИ", hint: "Как ведёт диалог" },
   { id: "train", label: "Обучение", hint: "Примеры и экспорт" },
   { id: "calls", label: "База звонков", hint: "Novofon → знания" },
+  { id: "dossiers", label: "Личные дела", hint: "Клиенты AlfaCRM" },
   { id: "chats", label: "Диалоги сайта", hint: "Олег и Ольга" },
   { id: "access", label: "Голосовой доступ", hint: "Кодовое слово" },
 ];
@@ -765,6 +767,7 @@ export function AdminPrices() {
       ) : null}
 
       {tab === "calls" ? <AdminCalls /> : null}
+      {tab === "dossiers" ? <AdminDossiers /> : null}
       {tab === "chats" ? <AdminChats /> : null}
       {tab === "agent" ? <AdminAgent /> : null}
       {tab === "train" ? <AdminTrain /> : null}

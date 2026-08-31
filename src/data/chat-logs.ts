@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { createServerFn } from "@tanstack/react-start";
 import { isAdminRequest } from "./admin-auth";
 import { buildSessionNote, type SessionNote } from "./session-note";
+import { dossierFromNote } from "./dossiers";
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
 export type ChatSession = {
@@ -77,6 +78,13 @@ export function upsertSession(patch: {
     messages,
     note: buildSessionNote(messages),
   };
+  if (!next.admin && next.note && (next.note.phone || next.note.child || next.note.parent)) {
+    try {
+      dossierFromNote(next.note, { phone: next.note.phone, chatId: id, branchId: next.note.branchId });
+    } catch {
+      /* */
+    }
+  }
   if (idx >= 0) all[idx] = next;
   else all.unshift(next);
   all.sort((a, b) => (a.updated < b.updated ? 1 : -1));
