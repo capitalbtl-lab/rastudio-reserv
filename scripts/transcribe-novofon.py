@@ -82,14 +82,14 @@ def record_link(call):
 
 def stt_file(path):
     body = Path(path).read_bytes()
-    if len(body) < 400:
+    if len(body) < 400 or len(body) > 900000:
         return ""
     url = "https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?lang=ru-RU&topic=general&format=lpcm&sampleRateHertz=16000"
     last = ""
     for auth in (f"Api-Key {YKEY}", f"Bearer {YKEY}"):
         req = urllib.request.Request(url, data=body, headers={"Authorization": auth, "x-folder-id": FOLDER})
         try:
-            with urllib.request.urlopen(req, timeout=60) as r:
+            with urllib.request.urlopen(req, timeout=35) as r:
                 return json.loads(r.read().decode()).get("result") or ""
         except urllib.error.HTTPError as e:
             last = e.read().decode(errors="replace")[:200]
@@ -111,15 +111,35 @@ def transcribe(call):
     wav = work / "full.wav"
     subprocess.run(
         ["ffmpeg", "-y", "-i", str(mp3), "-ac", "1", "-ar", "16000", str(wav)],
-        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120,
     )
     subprocess.run(
-        ["ffmpeg", "-y", "-i", str(wav), "-f", "segment", "-segment_time", "25", "-c", "copy", str(chunks / "p-%03d.wav")],
-        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        [
+            "ffmpeg", "-y", "-i", str(wav),
+            "-f", "segment", "-segment_time", "20",
+            "-ac", "1", "-ar", "16000", "-acodec", "pcm_s16le",
+            str(chunks / "p-%03d.wav"),
+        ],
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120,
     )
-    parts = sorted(chunks.glob("p-*.wav"))
+    parts = sorted(p for p in chunks.glob("p-*.wav") if p.stat().st_size > 1000)
     if not parts and wav.exists():
-        parts = [wav]
+        # запасной нарез: сырой PCM по 20 секундам
+        raw = work / "full.raw"
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(wav), "-ac", "1", "-ar", "16000", "-f", "s16le", str(raw)],
+            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120,
+        )
+        data = raw.read_bytes() if raw.exists() else b""
+        step = 16000 * 2 * 20
+        parts = []
+        for i in range(0, len(data), step):
+            piece = data[i:i + step]
+            if len(piece) < 4000:
+                continue
+            dest = chunks / f"p-{i:05d}.raw"
+            dest.write_bytes(piece)
+            parts.append(dest)
     texts = []
     for p in parts:
         t = stt_file(p)

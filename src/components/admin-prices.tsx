@@ -142,6 +142,31 @@ export function AdminPrices() {
     void load();
   }, []);
 
+  useEffect(() => {
+    if (!in_ || tab !== "calls") return;
+    const id = window.setInterval(() => {
+      void (async () => {
+        const calls = await adminCalls({ data: { token: token(), action: "status" } });
+        if (!calls.ok || !calls.stats) return;
+        setCallInfo({
+          total: calls.stats.total,
+          transcribed: calls.stats.transcribed,
+          failed: calls.stats.failed,
+          pending: calls.stats.pending,
+          scannedAt: calls.stats.scannedAt || "",
+        });
+        if (calls.stats.knowledge) {
+          setKnowledge({
+            summary: calls.stats.knowledge.summary,
+            faq: calls.stats.knowledge.faq,
+            rules: calls.stats.knowledge.rules,
+          });
+        }
+      })();
+    }, 8000);
+    return () => window.clearInterval(id);
+  }, [in_, tab]);
+
   const grouped = useMemo(() => {
     const map = new Map<string, PriceRow[]>();
     for (const row of rows) {
@@ -729,7 +754,9 @@ export function AdminPrices() {
               3. Собрать базу знаний
             </Button>
           </div>
-          <p className="text-xs text-muted">Расшифровка идёт пачками, чтобы не оборвать связь. Нажимайте «ещё 6», пока очередь не станет нулевой. Потом — база знаний. Ольга подхватит её сама.</p>
+          <p className="text-xs text-muted">
+            Расшифровка лучших звонков (1–15 минут) идёт сама на сервере. Цифры обновляются каждые несколько секунд. Все 4361 подряд не гоняем — для базы знаний хватает живых консультаций.
+          </p>
           {knowledge ? (
             <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
               <p className="text-sm font-semibold">Как говорят на линии</p>
