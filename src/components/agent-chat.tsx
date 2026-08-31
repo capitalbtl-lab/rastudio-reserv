@@ -78,6 +78,7 @@ export function AgentChat() {
   const [box, setBox] = useState({ w: 400, h: 608 });
   const dragRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const lastMsgRef = useRef<HTMLDivElement>(null);
   const voiceOnRef = useRef(false);
   const recRef = useRef<Rec | null>(null);
   const audioRef = useRef<{ stop: () => void } | null>(null);
@@ -94,8 +95,13 @@ export function AgentChat() {
   partnerRef.current = partner;
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, open, mood, listening]);
+    const node = lastMsgRef.current;
+    if (!node) {
+      endRef.current?.scrollIntoView({ block: "end" });
+      return;
+    }
+    node.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [messages, open, busy]);
 
   useEffect(() => {
     return () => {
@@ -327,7 +333,7 @@ export function AgentChat() {
           >
             <span className="absolute left-0.5 top-0.5 h-2.5 w-2.5 rounded-[2px] border-l-2 border-t-2 border-white/70" />
           </button>
-          <div className="relative bg-primary px-4 pb-5 pt-3.5 text-primary-foreground">
+          <div className="relative shrink-0 bg-primary px-4 pb-3.5 pt-3.5 text-primary-foreground">
             <div className="absolute right-3 top-3">
               <button
                 type="button"
@@ -344,8 +350,8 @@ export function AgentChat() {
               </button>
             </div>
             <div className="flex items-end gap-3 pr-12">
-              <div className="-mb-10 shrink-0">
-                <Duo size={78} mood={mood} />
+              <div className="shrink-0">
+                <Duo size={64} mood={mood} />
               </div>
               <div className="min-w-0 pb-1">
                 <p className="font-display text-[1.15rem] leading-tight">
@@ -382,7 +388,7 @@ export function AgentChat() {
               </div>
             </div>
           </div>
-          <div className="flex-1 space-y-3 overflow-y-auto bg-[#eef1f7] px-3.5 pb-4 pt-12">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#eef1f7] px-3.5 py-3">
             {messages.map((m, i) =>
               m.role === "user" ? (
                 <div key={i} className="flex justify-end">
@@ -391,19 +397,21 @@ export function AgentChat() {
                   </div>
                 </div>
               ) : (
-                parseTurns(m.content).map((turn, t) => (
-                  <div key={`${i}-${t}`} className="flex items-end gap-2">
-                    <Face who={turn.who} mood={i === messages.length - 1 ? mood : "hello"} size={36} />
-                    <div className="max-w-[78%]">
-                      <p className="mb-0.5 pl-1 text-[0.65rem] font-semibold text-muted">
-                        {turn.who === "olga" ? "Ольга" : "Олег"}
-                      </p>
-                      <div className="rounded-2xl rounded-bl-md bg-white px-3.5 py-2.5 text-[0.92rem] leading-relaxed text-fg shadow-[0_8px_24px_-16px_rgba(18,20,26,0.4)]">
-                        {turn.text}
+                <div key={i} ref={i === messages.length - 1 ? lastMsgRef : undefined} className="space-y-3">
+                  {parseTurns(m.content).map((turn, t) => (
+                    <div key={`${i}-${t}`} className="flex items-end gap-2">
+                      <Face who={turn.who} mood={i === messages.length - 1 ? mood : "hello"} size={36} />
+                      <div className="max-w-[78%]">
+                        <p className="mb-0.5 pl-1 text-[0.65rem] font-semibold text-muted">
+                          {turn.who === "olga" ? "Ольга" : "Олег"}
+                        </p>
+                        <div className="rounded-2xl rounded-bl-md bg-white px-3.5 py-2.5 text-[0.92rem] leading-relaxed text-fg shadow-[0_8px_24px_-16px_rgba(18,20,26,0.4)]">
+                          {turn.text}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               ),
             )}
             {messages.length && !busy ? (
@@ -462,7 +470,7 @@ export function AgentChat() {
             <div ref={endRef} />
           </div>
           <form
-            className="border-t border-black/5 bg-white px-3 pb-3 pt-2"
+            className="shrink-0 border-t border-black/5 bg-white px-3 pb-3 pt-2"
             onSubmit={(e) => {
               e.preventDefault();
               void send();
