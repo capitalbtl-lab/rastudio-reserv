@@ -370,24 +370,47 @@ for (const page of compiled) applyLocalHeroes(page);
 
 const teamPage = byPath.get("/team");
 const teachers = [];
+const teacherPages = compiled.filter((p) => p.kind === "teacher");
+
+function normName(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/\(.*?\)/g, " ")
+    .replace(/[^a-zа-я\s-]/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findTeacherPage(name) {
+  const tokens = normName(name)
+    .split(" ")
+    .filter((t) => t.length > 2);
+  if (!tokens.length) return undefined;
+  return teacherPages.find((p) => {
+    const h = normName(p.h1);
+    return tokens.every((t) => h.includes(t));
+  });
+}
+
+function roleFromPage(page) {
+  const para = (page?.paragraphs || []).find((t) => /^(преподаватель|педагог)/i.test(t)) || "";
+  const first = para.split(/(?<=\.)\s+/)[0].trim();
+  return first || "Педагог студии «Развивайся»";
+}
+
 if (teamPage) {
-  const bios = teamPage.paragraphs.filter(
-    (t) => t.startsWith("Преподаватель") || t.startsWith("Педагог"),
-  );
-  let bi = 0;
   for (const img of teamPage.images) {
     const name = img.alt.replace(/\s*\(педагог\)\s*/i, "").trim();
     if (!name || name.length < 6) continue;
-    const slug = compiled.find(
-      (p) => p.kind === "teacher" && (p.h1.includes(name.split(" ")[0]) || p.title.includes(name.split(" ")[0])),
-    );
+    const page = findTeacherPage(name);
     teachers.push({
-      name,
-      role: bios[bi++] || "Педагог студии «Развивайся»",
+      name: page ? page.h1.replace(/\s*\(педагог\)\s*/i, "").trim() : name,
+      role: roleFromPage(page),
       photo: img.src,
       alt: img.alt,
       filename: img.filename,
-      href: slug?.path || "/team",
+      href: page?.pathDecoded || page?.path || "/team",
     });
   }
 }
