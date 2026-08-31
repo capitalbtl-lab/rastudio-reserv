@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowRight } from "lucide-react";
 import { adminAgentBrain, type TrainExample, type ScriptSection } from "@/data/agent-config";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -37,12 +36,6 @@ function download(name: string, text: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-const FLOW = [
-  { title: "Старт", ids: ["funnel", "age", "city", "branch"] },
-  { title: "Направление", ids: ["school", "program-robot", "program-art", "program-code", "program-science", "program-early", "program-other"] },
-  { title: "Запись", ids: ["trial", "group"] },
-] as const;
-
 function ScriptCard({
   s,
   value,
@@ -59,48 +52,35 @@ function ScriptCard({
   onSave: () => void;
 }) {
   return (
-    <article className="flex gap-3 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="font-display text-lg leading-tight">{s.title}</p>
-          <InfoTip text="Текст этого шага попадает в системный промпт, пока слот не закрыт. Пишите коротко, одним вопросом. Не просите спрашивать возраст и город — это делают кнопки." />
+    <article className="rounded-2xl bg-surface p-4 shadow-[var(--shadow-border)]">
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <p className="font-display text-[1.05rem] leading-tight">{s.title}</p>
+            <InfoTip text="Текст этого шага попадает в системный промпт, пока слот не закрыт. Пишите коротко, одним вопросом." />
+          </div>
+          <p className="mt-0.5 text-[0.68rem] text-muted">
+            {s.step}
+            {s.auto ? " · из диалогов" : ""}
+            {s.updatedAt ? ` · ${when(s.updatedAt)}` : ""}
+          </p>
         </div>
-        <p className="mt-0.5 text-[0.7rem] text-muted">
-          {s.step}
-          {s.auto ? " · из диалогов" : ""}
-          {s.updatedAt ? ` · ${when(s.updatedAt)}` : ""}
-        </p>
-        <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          rows={rows}
-          className="mt-2 w-full rounded-xl bg-surface-2 px-3 py-2 text-sm leading-relaxed ring-1 ring-black/10"
-        />
-      </div>
-      <div className="flex w-[7.25rem] shrink-0 flex-col items-stretch pt-1">
-        <Button type="button" disabled={busy} onClick={onSave}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onSave}
+          className="shrink-0 rounded-full bg-primary px-2.5 py-1 text-[0.7rem] font-semibold text-primary-foreground disabled:opacity-50"
+        >
           Сохранить
-        </Button>
-        <div className="mt-2 flex justify-center">
-          <InfoTip text="Пишет шаг на сервер сразу. Пока не сохранили, ассистент читает старую версию. Новый чат — с этой формулировкой, открытый — после сброса." />
-        </div>
+        </button>
       </div>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        className="w-full resize-y rounded-xl bg-surface-2 px-3 py-2.5 text-sm leading-relaxed ring-1 ring-black/10"
+      />
     </article>
-  );
-}
-
-function FlowArrow({ dir }: { dir: "down" | "right" }) {
-  if (dir === "right") {
-    return (
-      <div className="hidden h-full items-center justify-center text-primary lg:flex" aria-hidden>
-        <ArrowRight className="size-8" strokeWidth={2.2} />
-      </div>
-    );
-  }
-  return (
-    <div className="flex items-center justify-center py-1 text-primary" aria-hidden>
-      <ArrowDown className="size-6" strokeWidth={2.2} />
-    </div>
   );
 }
 
@@ -316,61 +296,20 @@ export function AdminTrain() {
             {lastSys ? <p className="self-center text-xs text-muted">Последний раз: {when(lastSys)}</p> : null}
           </div>
           {msg ? <p className="text-sm text-primary">{msg}</p> : null}
-          <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
-            Возраст
-            <ArrowRight className="size-4 text-primary" />
-            город
-            <ArrowRight className="size-4 text-primary" />
-            филиал
-            <ArrowRight className="size-4 text-primary" />
-            направление
-            <ArrowRight className="size-4 text-primary" />
-            программа
-            <ArrowRight className="size-4 text-primary" />
-            запись
-          </p>
-          <div className="grid items-start gap-6 lg:grid-cols-3">
-            {FLOW.map((col, i) => (
-              <div key={col.title} className="relative min-w-0">
-                {i < FLOW.length - 1 ? (
-                  <ArrowRight className="pointer-events-none absolute -right-5 top-28 hidden size-8 text-primary lg:block" aria-hidden />
-                ) : null}
-                <p className="mb-2 flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-muted">
-                  {i ? <ArrowDown className="size-4 text-primary lg:hidden" aria-hidden /> : null}
-                  {i + 1}. {col.title}
-                </p>
-                {col.ids.map((id, j) => {
-                  const s = scripts.find((x) => x.id === id);
-                  if (!s) return null;
-                  const tall = id === "funnel" ? 8 : id.startsWith("program") ? 5 : 6;
-                  return (
-                    <div key={s.id}>
-                      {j ? <FlowArrow dir="down" /> : null}
-                      <ScriptCard
-                        s={s}
-                        value={draft[s.id] ?? s.body}
-                        rows={tall}
-                        busy={busy}
-                        onChange={(v) => setDraft((d) => ({ ...d, [s.id]: v }))}
-                        onSave={() => void saveScript(s.id)}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+          <p className="text-sm text-muted">Возраст · город · филиал · направление · программа · запись</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {scripts.map((s) => (
+              <ScriptCard
+                key={s.id}
+                s={s}
+                value={draft[s.id] ?? s.body}
+                rows={s.id === "funnel" || s.id.startsWith("program") ? 8 : 6}
+                busy={busy}
+                onChange={(v) => setDraft((d) => ({ ...d, [s.id]: v }))}
+                onSave={() => void saveScript(s.id)}
+              />
             ))}
           </div>
-          {scripts.filter((s) => !FLOW.some((c) => (c.ids as readonly string[]).includes(s.id))).map((s) => (
-            <ScriptCard
-              key={s.id}
-              s={s}
-              value={draft[s.id] ?? s.body}
-              rows={6}
-              busy={busy}
-              onChange={(v) => setDraft((d) => ({ ...d, [s.id]: v }))}
-              onSave={() => void saveScript(s.id)}
-            />
-          ))}
         </div>
       ) : null}
 
