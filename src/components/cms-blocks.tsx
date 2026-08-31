@@ -10,6 +10,7 @@ import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 import { TRIAL_PROMISE } from "@/data/course-offer";
 import { Button } from "@/components/ui/button";
+import { CoursePrice } from "@/components/course-price";
 import { cn } from "@/lib/utils";
 export { ScheduleBlock } from "@/components/schedule-block";
 
@@ -158,6 +159,7 @@ export function CoursePageHero({
   images,
   video,
   facts,
+  path,
 }: {
   kicker: ReactNode;
   age?: string | null;
@@ -166,6 +168,7 @@ export function CoursePageHero({
   images: HeroShot[];
   video?: string | null;
   facts?: string[];
+  path?: string;
 }) {
   const srcs = images.filter((img) => {
     if (!img?.src) return false;
@@ -219,6 +222,7 @@ export function CoursePageHero({
               ))}
             </p>
           ) : null}
+          {path ? <CoursePrice path={path} tone="hero" /> : null}
           {description ? (
             <p className="hero-in hero-in-3 mt-4 max-w-md text-[1.02rem] leading-relaxed text-header-fg/70">
               {description}
@@ -611,6 +615,7 @@ export function RelatedAgeCourses({
               <span className="block px-4 py-3">
                 <span className="block text-[0.98rem] font-semibold leading-snug">{course.label}</span>
                 {course.age ? <span className="mt-1 block text-xs text-muted">{course.age}</span> : null}
+                <CoursePrice path={course.href} tone="card" />
               </span>
             </PageLink>
           </li>
@@ -658,6 +663,7 @@ export function SchoolCourseList({
                   {course.label}
                 </span>
               </span>
+              <CoursePrice path={course.href} tone="row" />
               <span className="grid size-9 shrink-0 place-items-center rounded-full bg-fg text-bg transition-colors duration-[var(--motion-fast)] group-hover:bg-primary">
                 <ArrowUpRight className="size-4" strokeWidth={2.2} />
               </span>

@@ -22,8 +22,44 @@ export function listPriceRows() {
   return cache;
 }
 
+export const SCHOOL_DIRECTION: Record<string, string> = {
+  "/art-studio": "Художественная школа",
+  "/robototehnika-v-kolomne": "Школа робототехники",
+  "/programming-school": "Школа программирования",
+  "/promising-professions": "Школа наук и инженерии",
+  "/early-childhood-care": "Школа раннего развития",
+  "/languageschool": "Школа иностранных языков",
+  "/model-school": "Модельная школа",
+};
+
+export function formatAmount(n: number) {
+  return n.toLocaleString("ru-RU");
+}
+
 export function formatRub(n: number) {
-  return `${n.toLocaleString("ru-RU")} ₽ / 4 нед.`;
+  return `${formatAmount(n)} ₽ / 4 нед.`;
+}
+
+export function priceInfo(path: string): { amount: number; from: boolean } | null {
+  const hit = priceForPath(path);
+  if (hit?.all) return { amount: hit.all, from: false };
+  const dir = SCHOOL_DIRECTION[normPath(path)];
+  if (!dir) return null;
+  const nums = cache.filter((r) => r.direction === dir).map((r) => r.all).filter(Boolean);
+  if (!nums.length) return null;
+  return { amount: Math.min(...nums), from: true };
+}
+
+export function publicPriceLabel(path: string) {
+  const info = priceInfo(path);
+  if (!info) return "от 3 350 ₽ / 4 нед.";
+  return `${info.from ? "от " : ""}${formatRub(info.amount)}`;
+}
+
+export function priceShort(path: string) {
+  const info = priceInfo(path);
+  if (!info) return "";
+  return `${info.from ? "от " : ""}${formatAmount(info.amount)} ₽`;
 }
 
 export function normPath(path: string) {
@@ -41,12 +77,6 @@ export function priceForPath(path: string) {
     cache.find((r) => normPath(r.path) === p) ||
     cache.find((r) => p.endsWith(normPath(r.path)) || normPath(r.path).endsWith(p))
   );
-}
-
-export function publicPriceLabel(path: string) {
-  const hit = priceForPath(path);
-  if (hit?.all) return formatRub(hit.all);
-  return "от 3 350 ₽ / 4 нед.";
 }
 
 export const PRICE_DIRECTIONS = [

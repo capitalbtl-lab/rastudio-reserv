@@ -69,6 +69,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
         images={galleryPhotos(images, course.pathDecoded || course.path || page.path, "hero")}
         video={page.video}
         facts={courseOfferFacts(course.pathDecoded || course.path || page.path, course.age)}
+        path={course.pathDecoded || course.path || page.path}
       />
       <ConvertBand path={course.pathDecoded || course.path || page.path} sessions={schedule} />
 

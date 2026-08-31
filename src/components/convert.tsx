@@ -4,6 +4,7 @@ import { OBJECTIONS, TRIAL_PROMISE } from "@/data/course-offer";
 import { reviewsForPath, YANDEX_RATING } from "@/data/reviews";
 import { branchMeta, nextSlots } from "@/lib/schedule";
 import { Button } from "@/components/ui/button";
+import { CoursePrice } from "@/components/course-price";
 import { cn } from "@/lib/utils";
 
 export function ConvertBand({ path, sessions }: { path: string; sessions: CmsSession[] }) {
@@ -18,7 +19,7 @@ export function ConvertBand({ path, sessions }: { path: string; sessions: CmsSes
             <p className="kicker text-primary">Ближайшие группы</p>
             <h2 className="display mt-1 text-xl md:text-2xl">Прийти на этой неделе</h2>
           </div>
-          <p className="text-xs text-muted md:text-sm">Яндекс {YANDEX_RATING.score} · пробное без абонемента</p>
+          <CoursePrice path={path} tone="row" />
         </div>
 
         {slots.length ? (

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { HeroCollage } from "@/components/hero-collage";
 import { AgeChips } from "@/components/age-chips";
 import { Reviews } from "@/components/reviews";
-import { courseFacts } from "@/data/ages";
+import { priceShort } from "@/data/prices-core";
 import { cn } from "@/lib/utils";
 
 const home = homePage;
@@ -175,6 +175,9 @@ function Home() {
                 <h3 className={cn("display mt-3 leading-tight", i === 0 ? "text-3xl md:text-4xl" : "text-xl")}>
                   {school.label}
                 </h3>
+                {priceShort(school.href) ? (
+                  <p className="mt-2 text-sm font-semibold text-white/95">{priceShort(school.href)} / 4 нед.</p>
+                ) : null}
                 <p className="mt-2 max-w-sm text-sm text-header-fg/80">{school.blurb}</p>
                 <span className="course-cta text-header-fg">Смотреть школу</span>
               </div>
@@ -208,9 +211,12 @@ function Home() {
               />
               <div className="absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t from-black/75 via-black/35 to-transparent px-4 pb-4 pt-28">
                 <p className="text-[0.68rem] font-medium leading-snug text-white/75">
-                  {courseFacts(course.href, course.age)}
+                  {course.age}
                 </p>
                 <p className="display mt-1 text-[1.15rem] leading-tight text-white">{course.title}</p>
+                {priceShort(course.href) ? (
+                  <p className="mt-1 text-[0.82rem] font-semibold text-white">{priceShort(course.href)} / 4 нед.</p>
+                ) : null}
                 <span className="course-cta text-white">Смотреть курс</span>
               </div>
             </PageLink>

@@ -61,5 +61,5 @@ export function courseFacts(href: string, age?: string) {
 }
 
 export function courseOfferFacts(path: string, age?: string | null) {
-  return [ageShort(age), courseLength(path), coursePrice(path), coursePlace(path)].filter(Boolean);
+  return [ageShort(age), courseLength(path), coursePlace(path)].filter(Boolean);
 }
