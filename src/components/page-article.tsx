@@ -24,6 +24,7 @@ import { AgeChips } from "@/components/age-chips";
 import { CoursePrice } from "@/components/course-price";
 import { trialCourseForPath } from "@/data/trial";
 import { hydrateEdits, pageEdit, type EditsStore } from "@/data/edits-core";
+import { cn } from "@/lib/utils";
 
 type MasterCard = { path: string; h1: string };
 
