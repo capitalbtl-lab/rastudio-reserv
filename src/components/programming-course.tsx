@@ -1,4 +1,4 @@
-import type { CourseCard, SitePage } from "@/data/catalog";
+import type { CourseCard, SitePage, TeacherCard } from "@/data/catalog";
 import type { CmsCourse, CmsSession } from "@/data/cms";
 import { inkOn } from "@/data/cms";
 import { SITE } from "@/data/site";
@@ -19,15 +19,17 @@ import {
 } from "@/components/cms-blocks";
 import { whyForPath } from "@/data/course-why";
 import { PageReviews } from "@/components/reviews";
+import { CourseSellAfterWhy, CourseSellAfterProgram } from "@/components/course-sell";
 
 type Props = {
   page: SitePage;
   course: CmsCourse;
   schedule: CmsSession[];
   courses?: CourseCard[];
+  teachers?: TeacherCard[];
 };
 
-export function ProgrammingCoursePage({ page, course, schedule, courses = [] }: Props) {
+export function ProgrammingCoursePage({ page, course, schedule, courses = [], teachers = [] }: Props) {
   const accent = course.accent || "#205EDC";
   const images = [];
   const seen = new Set<string>();
@@ -127,6 +129,8 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [] }: 
 
         <WhyNow items={why?.items} title={why?.heading} />
 
+        <CourseSellAfterWhy path={course.pathDecoded || course.path || page.path} />
+
         {course.programText ? (
           <section>
             <Kicker>Программа</Kicker>
@@ -211,6 +215,8 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [] }: 
             ) : null}
           </section>
         )}
+
+        <CourseSellAfterProgram path={course.pathDecoded || course.path || page.path} teachers={teachers} />
 
         <PageReviews path={course.pathDecoded || course.path || page.path} />
 

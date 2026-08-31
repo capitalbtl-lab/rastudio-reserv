@@ -382,6 +382,8 @@ export function CourseStory({
   paragraphs,
   headings,
   afterLead,
+  afterWhy,
+  afterProgram,
   program,
   why,
   whyTitle,
@@ -389,6 +391,8 @@ export function CourseStory({
   paragraphs: string[];
   headings: { tag: string; text: string }[];
   afterLead?: ReactNode;
+  afterWhy?: ReactNode;
+  afterProgram?: ReactNode;
   program?: ProgramStep[];
   why?: { title: string; text: string }[] | null;
   whyTitle?: string;
@@ -443,6 +447,8 @@ export function CourseStory({
 
       <WhyNow items={why} title={whyTitle} />
 
+      {afterWhy}
+
       {program?.length ? (
         <ProgramSteps items={program} />
       ) : accordion.length ? (
@@ -496,6 +502,8 @@ export function CourseStory({
           </Button>
         </section>
       ) : null}
+
+      {afterProgram}
     </div>
   );
 }

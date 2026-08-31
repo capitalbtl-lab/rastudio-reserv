@@ -11,7 +11,7 @@ import { ProgrammingCoursePage } from "@/components/programming-course";
 import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
 import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses, SchoolCourseList, Trajectory } from "@/components/cms-blocks";
 import { PhotoSlider } from "@/components/photo-slider";
-import { PageReviews } from "@/components/reviews";
+import { CourseSellAfterWhy, CourseSellAfterProgram } from "@/components/course-sell";
 import { galleryPhotos } from "@/lib/gallery";
 import { SCHOOL_PROGRAMS, SCHOOL_WHY } from "@/data/school-programs";
 import { whyForPath } from "@/data/course-why";
@@ -103,7 +103,7 @@ export function PageArticle({
   schedule = [],
 }: PageArticleProps) {
   if (cmsCourse) {
-    return <ProgrammingCoursePage page={page} course={cmsCourse} schedule={schedule} courses={courses} />;
+    return <ProgrammingCoursePage page={page} course={cmsCourse} schedule={schedule} courses={courses} teachers={teachers} />;
   }
   if (cmsMaster) {
     return <MasterClassPage page={page} master={cmsMaster} />;
@@ -121,7 +121,7 @@ export function PageArticle({
 
   const cinematic = ["course", "school", "teacher", "master"].includes(page.kind);
   if (cinematic) {
-    return <CinematicPage page={page} schedule={schedule} courses={courses} trajectory={trajectory} />;
+    return <CinematicPage page={page} schedule={schedule} courses={courses} trajectory={trajectory} teachers={teachers} />;
   }
 
   return <PlainPage page={page} schedule={schedule} courses={courses} />;
@@ -139,11 +139,13 @@ function CinematicPage({
   schedule,
   courses,
   trajectory = [],
+  teachers = [],
 }: {
   page: SitePage;
   schedule: CmsSession[];
   courses: CourseCard[];
   trajectory?: CmsTrajectoryStep[];
+  teachers?: TeacherCard[];
 }) {
   const body = page.paragraphs;
   const heading = splitCourseHeading(page.h1);
@@ -189,6 +191,16 @@ function CinematicPage({
               afterLead={
                 page.kind === "school" ? (
                   <SchoolCourseList schoolPath={page.pathDecoded || page.path} courses={courses} />
+                ) : null
+              }
+              afterWhy={
+                page.kind === "course" ? (
+                  <CourseSellAfterWhy path={page.pathDecoded || page.path} />
+                ) : null
+              }
+              afterProgram={
+                page.kind === "course" ? (
+                  <CourseSellAfterProgram path={page.pathDecoded || page.path} teachers={teachers} />
                 ) : null
               }
             />
