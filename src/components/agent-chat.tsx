@@ -591,9 +591,21 @@ export function AgentChat() {
                 <Send className="size-4" />
               </button>
             </div>
-            <p className="px-3 pt-1.5 text-[0.65rem] text-muted">
-              {voiceOn ? (speaking ? "Сейчас говорят" : "Голосовой режим включён") : `Пробное без обязательств · ${SITE.phone}`}
-            </p>
+            <div className="flex items-center justify-between gap-2 px-3 pt-1.5">
+              <p className="min-w-0 truncate text-[0.65rem] text-muted">
+                {voiceOn ? (speaking ? "Сейчас говорят" : "Голосовой режим включён") : `Пробное · ${SITE.phone}`}
+              </p>
+              <button
+                type="button"
+                className="shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-semibold text-primary hover:bg-primary/10"
+                onClick={() => {
+                  setPartner("olga");
+                  void send("Я администратор сайта. Открой режим управления сайтом и спроси кодовое слово.");
+                }}
+              >
+                Вход администратора
+              </button>
+            </div>
           </form>
         </div>
       ) : null}
