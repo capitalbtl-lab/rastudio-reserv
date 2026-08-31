@@ -425,23 +425,24 @@ function CatalogPage({ page, courses }: { page: SitePage; courses: CourseCard[] 
           <PageLink
             key={c.href}
             to={c.href}
-            className="course-card course-reveal group overflow-hidden rounded-2xl bg-surface shadow-[var(--shadow-border)]"
+            className="course-card course-reveal group flex flex-col overflow-hidden rounded-[1.6rem] bg-surface shadow-[var(--shadow-border)] hover:shadow-[var(--shadow-border-hover)]"
           >
             {c.image ? (
               <SeoImage
                 src={c.image}
                 alt={c.alt}
                 filename={c.filename}
-                className="course-media aspect-video bg-surface-2"
+                className="course-media aspect-[4/3] bg-surface-2"
               />
             ) : (
-              <div className="course-media aspect-video bg-surface-2" />
+              <div className="course-media aspect-[4/3] bg-surface-2" />
             )}
-            <div className="course-copy p-4">
-              <p className="text-xs font-semibold text-muted">{courseFacts(c.href, c.age)}</p>
-              <p className="mt-1 font-medium">{c.label}</p>
-              <p className="mt-2 line-clamp-3 text-sm text-muted">{c.description}</p>
-              <span className="course-cta text-primary">Смотреть курс</span>
+            <div className="flex flex-1 flex-col p-5">
+              <p className="w-fit rounded-full bg-primary/10 px-2.5 py-1 text-[0.7rem] font-semibold text-primary">
+                {courseFacts(c.href, c.age)}
+              </p>
+              <p className="display mt-3 text-[1.2rem] leading-snug md:text-[1.35rem]">{c.label}</p>
+              <span className="mt-auto pt-5 text-sm font-semibold text-primary">Смотреть курс →</span>
             </div>
           </PageLink>
         ))}
