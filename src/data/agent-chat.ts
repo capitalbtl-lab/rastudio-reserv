@@ -34,9 +34,10 @@ const SYSTEM = `Вы — два администратора студии «Ра
 Если родитель назвал ещё и курс — передай его в list_groups.
 Нельзя называть только 2–3 курса, если спросили «что есть для N лет» без филиала — тогда list_courses_by_age, все программы, и спроси филиал.
 Когда родитель выбрал слот — спроси: пробное занятие или сразу в группу.
-Пробное — без абонемента, первый визит. Собери родителя, ребёнка, дату рождения, телефон, email и вызови submit_trial (можно передать gid группы).
+Когда родитель назвал имя, телефон и филиал — сразу вызови submit_trial. Email и точная дата рождения не обязательны: хватит возраста. Не жди «идеальную анкету».
+Не говори «мы перезвоним» и не отправляй на форму, если заявка уже ушла в CRM. Скажи: заявку приняли, она уже в системе, на пробное можно прийти.
+Пробное — без абонемента, первый визит. Если есть gid группы — передай его.
 Запись в группу — open_group, форма этой группы в AlfaCRM.
-Всегда предлагай оба варианта, не подменяй одно другим.
 id курсов для заявки: ${TRIAL_COURSES.map((c) => `${c.id} ${c.name}`).join("; ")}.
 Когда родитель просит подробности курса или вы уже называете конкретный курс по имени — вызови open_course (path или название). Страница курса откроется, чат останется. В речи не читай URL. Скажи, что открыли страницу курса, и коротко по сути. Кнопка «Страница курса» появится сама.
 Не открывай страницу курса, пока курс не выбран.
@@ -182,22 +183,24 @@ const TOOLS = [
     function: {
       name: "submit_trial",
       description:
-        "Заявка на пробное занятие (не абонемент) в AlfaCRM. После согласия родителя. Можно привязать к группе через gid.",
+        "Создать лид в AlfaCRM сразу. Нужны имя родителя, телефон и филиал. Ребёнок, возраст, курс, email — если уже сказали. Не ждать полного набора.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
           parent: { type: "string", description: "Имя родителя" },
-          child: { type: "string", description: "Имя ребёнка" },
+          child: { type: "string", description: "Имя ребёнка, если назвали" },
           dob: { type: "string", description: "Дата рождения ДД.ММ.ГГГГ или ГГГГ-ММ-ДД" },
+          age: { type: "number", description: "Возраст ребёнка, если даты нет" },
           phone: { type: "string" },
           email: { type: "string" },
           course_id: { type: "string", description: "ID курса из списка, например 37" },
           branch_id: { type: "string", description: "1 Гражданская, 2 Октябрьской революции, 3 Луховицы" },
           gid: { type: "string", description: "Номер группы, если пробное в конкретный слот" },
           group_name: { type: "string", description: "Название группы" },
+          kind: { type: "string", description: "trial | group | consult" },
         },
-        required: ["parent", "child", "dob", "phone", "email", "branch_id"],
+        required: ["parent", "phone", "branch_id"],
       },
     },
   },
@@ -460,12 +463,14 @@ export const chatAgent = createServerFn({ method: "POST" })
                 branch: resolveBranch(String(args.branch_id || "")),
                 gid: args.gid ? String(args.gid) : "",
                 groupName: args.group_name ? String(args.group_name) : "",
+                age: args.age != null ? Number(args.age) : undefined,
+                kind: args.kind === "group" || args.kind === "consult" ? args.kind : "trial",
               });
               messages.push({
                 role: "tool",
                 tool_call_id: call.id,
                 content: saved.ok
-                  ? "Заявка на пробное принята. Администратор подтвердит время. Это не абонемент."
+                  ? `Лид в AlfaCRM${"id" in saved && saved.id ? ` id=${saved.id}` : ""}${saved.duplicate ? ", клиент уже был — карточку обновили" : ", новая карточка"}. Скажи: заявку приняли, она уже в системе. Не обещай звонок.`
                   : `Ошибка: ${saved.error}`,
               });
             } else if (call.function.name === "list_courses_by_age") {

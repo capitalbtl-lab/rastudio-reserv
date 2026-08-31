@@ -88,10 +88,18 @@ export type TrialPayload = {
   branch: string;
   gid?: string;
   groupName?: string;
+  age?: number;
+  kind?: "trial" | "group" | "consult";
 };
 
 function courseName(id: string) {
   return TRIAL_COURSES.find((c) => c.id === id)?.name || "";
+}
+
+function dobFromAge(age?: number) {
+  const n = Number(age);
+  if (!Number.isFinite(n) || n < 2 || n > 18) return "";
+  return `01.09.${new Date().getFullYear() - Math.round(n)}`;
 }
 
 async function saveLeadForm(data: {
@@ -127,18 +135,19 @@ async function saveLeadForm(data: {
 
 export async function saveTrialLead(data: TrialPayload) {
   const parent = data.parent.trim();
-  const child = data.child.trim();
+  const child = (data.child || "").trim() || "ребёнок";
   const phone = data.phone.trim();
-  const email = data.email.trim();
-  const dob = data.dob.trim();
+  const email = (data.email || "").trim();
   const branch = data.branch.trim();
-  if (!parent || !child || !phone || !email || !dob || !branch) {
-    return { ok: false as const, error: "Заполните все обязательные поля." };
+  if (!parent || !phone || !branch) {
+    return { ok: false as const, error: "Нужны имя родителя, телефон и филиал." };
   }
+  let dob = (data.dob || "").trim();
+  if (!dob && data.age) dob = dobFromAge(data.age);
   const [y, m, d] = dob.split("-");
-  const dobRu = d && m && y ? `${d}.${m}.${y}` : dob;
+  const dobRu = d && m && y ? `${d}.${m}.${y}` : dob || dobFromAge(data.age);
   try {
-    await upsertAlfaLead({
+    const saved = await upsertAlfaLead({
       parent,
       child,
       phone,
@@ -148,11 +157,14 @@ export async function saveTrialLead(data: TrialPayload) {
       courseName: courseName(data.course) || data.groupName || "",
       gid: data.gid,
       groupName: data.groupName,
+      kind: data.kind || "trial",
     });
-    return { ok: true as const };
+    return { ok: true as const, id: saved.id, duplicate: saved.duplicate, branch: saved.branch };
   } catch {
     try {
-      return await saveLeadForm({ parent, child, dobRu, phone, email, branch, course: data.course });
+      const form = await saveLeadForm({ parent, child, dobRu: dobRu || "", phone, email, branch, course: data.course });
+      if (form.ok) return { ok: true as const, id: 0, duplicate: false, branch: Number(branch) || 2 };
+      return form;
     } catch {
       return { ok: false as const, error: "Сеть недоступна. Позвоните 8 (800) 511-34-01." };
     }

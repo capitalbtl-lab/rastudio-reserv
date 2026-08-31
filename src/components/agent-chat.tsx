@@ -296,6 +296,16 @@ export function AgentChat() {
     const el = new Audio();
     el.preload = "auto";
     el.playsInline = true;
+    let objectUrl = "";
+    try {
+      const b64 = dataUrl.split(",")[1] || "";
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      objectUrl = URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" }));
+    } catch {
+      objectUrl = dataUrl;
+    }
     await new Promise<void>((resolve, reject) => {
       let finished = false;
       const done = (err?: boolean) => {
@@ -308,6 +318,7 @@ export function AgentChat() {
         } catch {
           /* */
         }
+        if (objectUrl.startsWith("blob:")) URL.revokeObjectURL(objectUrl);
         if (err) reject(new Error("audio"));
         else resolve();
       };
@@ -323,7 +334,7 @@ export function AgentChat() {
           done(false);
         },
       };
-      el.src = dataUrl;
+      el.src = objectUrl;
       const play = el.play();
       if (play && typeof play.catch === "function") play.catch(() => done(true));
     });
@@ -335,7 +346,11 @@ export function AgentChat() {
         const res = await speakAgent({
           data: { text, who: who === "olga" ? "olga" : "oleg" },
         });
-        if (res.ok && "audio" in res && res.audio) return { audio: res.audio, volume: "volume" in res ? Number(res.volume) : 1 };
+        if (!res.ok || !("audio" in res) || !res.audio) continue;
+        const voice = "voice" in res ? String(res.voice || "") : "";
+        if (who === "oleg" && /alena|jane|marina|oksana/i.test(voice)) continue;
+        if (who === "olga" && /zahar|filipp|ermil|madirus/i.test(voice)) continue;
+        return { audio: res.audio, volume: "volume" in res ? Number(res.volume) : 1 };
       } catch {
         /* retry */
       }
@@ -356,17 +371,16 @@ export function AgentChat() {
     try {
       const mode = adminLeft() > 0 ? "olga" : partnerRef.current;
       const turns = parseTurns(phrase).filter((t) => mode === "both" || t.who === mode);
-      const clips = await Promise.all(turns.map((turn) => yandexClip(turn.text, turn.who)));
-      if (gen !== genRef.current) return;
-      for (let i = 0; i < turns.length; i += 1) {
+      for (const turn of turns) {
         if (gen !== genRef.current) return;
-        const clip = clips[i];
+        const clip = await yandexClip(turn.text, turn.who);
+        if (gen !== genRef.current) return;
         if (!clip) continue;
-        spokenRef.current = turns[i].text;
+        spokenRef.current = turn.text;
         try {
           await playClip(clip.audio, clip.volume);
         } catch {
-          /* skip broken clip, never Windows TTS */
+          /* never Windows TTS */
         }
       }
     } finally {

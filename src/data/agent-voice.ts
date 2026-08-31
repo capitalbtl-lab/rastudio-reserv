@@ -27,6 +27,8 @@ function clean(text: string) {
   return speakRu(text)
     .replace(/https?:\/\/\S+/g, "")
     .replace(/[#*_`>]+/g, "")
+    .replace(/\b(zahar|filipp|ermil|madirus|alena|jane|marina|oksana)\b/gi, "")
+    .replace(/\bspeed\s*[\d.]+/gi, "")
     .replace(/\s*[—–]\s*/g, ", ")
     .replace(/\s*\.{2,}\s*/g, ". ")
     .replace(/;\s+/g, ", ")
@@ -126,6 +128,9 @@ async function synthesize(text: string, voice: string, emotion: string, speed: n
   return (await synthV1(text, voice, emotion, speed, key, folder)) || (await synthV3(text, voice, emotion, speed, key, folder));
 }
 
+const MALE_OK = new Set(["zahar", "filipp", "ermil", "madirus"]);
+const FEMALE_OK = new Set(["alena", "jane", "marina", "oksana"]);
+
 export const speakAgent = createServerFn({ method: "POST" })
   .validator(
     (data: unknown) =>
@@ -140,7 +145,7 @@ export const speakAgent = createServerFn({ method: "POST" })
     const folder = serverEnv("YANDEX_FOLDER_ID");
     const settings = { ...loadVoiceSettings(), ...(data.preview || {}) };
     const who = data.who === "olga" ? "olga" : "oleg";
-    const preferred = who === "olga" ? settings.olga : settings.oleg;
+    const preferred = who === "olga" ? settings.olga || "alena" : settings.oleg || "zahar";
     const list =
       who === "olga"
         ? [preferred, ...FEMALE.filter((v) => v !== preferred)]
@@ -151,15 +156,17 @@ export const speakAgent = createServerFn({ method: "POST" })
     const speed = pace(settings.speed, settings.pause);
     for (const voice of list) {
       const audio = await synthesize(text, voice, emotion, speed, key, folder);
-      if (audio) {
-        return {
-          ok: true as const,
-          audio,
-          speed: 1,
-          volume: settings.mood === "quiet" ? 0.78 : 1,
-          voice,
-        };
-      }
+      if (!audio) continue;
+      if (who === "oleg" && !MALE_OK.has(voice)) continue;
+      if (who === "olga" && !FEMALE_OK.has(voice)) continue;
+      return {
+        ok: true as const,
+        audio,
+        speed: 1,
+        volume: settings.mood === "quiet" ? 0.78 : 1,
+        voice,
+        who,
+      };
     }
     return { ok: false as const, error: "tts" };
   });
