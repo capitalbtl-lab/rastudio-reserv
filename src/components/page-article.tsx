@@ -173,18 +173,22 @@ function CinematicPage({
       <div className="page-wrap py-12 md:py-16">
         <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0">
-            <CourseStory paragraphs={body} headings={page.headings} />
+            <CourseStory
+              paragraphs={body}
+              headings={page.headings}
+              afterLead={
+                page.kind === "school" ? (
+                  <SchoolCourseList schoolPath={page.pathDecoded || page.path} courses={courses} />
+                ) : null
+              }
+            />
             <Gallery page={{ ...page, images: page.images.slice(Math.min(3, page.images.length)) }} />
             {schedule.length ? (
               <div className="pt-10">
                 <ScheduleBlock sessions={schedule} />
               </div>
             ) : null}
-            {page.kind === "school" ? (
-              <SchoolCourseList schoolPath={page.pathDecoded || page.path} courses={courses} />
-            ) : (
-              <Related page={page} courses={courses} />
-            )}
+            {page.kind === "school" ? null : <Related page={page} courses={courses} />}
           </div>
           <aside className="h-fit rounded-xl bg-surface p-5 shadow-[var(--shadow-border)] lg:sticky lg:top-24">
             <p className="text-sm font-medium">Запись и филиалы</p>

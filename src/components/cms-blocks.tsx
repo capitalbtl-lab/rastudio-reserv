@@ -400,9 +400,11 @@ const WHY_NOW = [
 export function CourseStory({
   paragraphs,
   headings,
+  afterLead,
 }: {
   paragraphs: string[];
   headings: { tag: string; text: string }[];
+  afterLead?: ReactNode;
 }) {
   const clean = paragraphs.filter((p) => p && !SKIP_COPY.test(p));
   const price = clean.find((p) => PRICE_COPY.test(p));
@@ -447,6 +449,8 @@ export function CourseStory({
           {teaser ? <p className="mt-4 max-w-3xl text-[1.02rem] leading-relaxed text-fg/80">{teaser}</p> : null}
         </section>
       ) : null}
+
+      {afterLead}
 
       <section>
         <p className="kicker">Почему сейчас</p>
@@ -609,7 +613,7 @@ export function SchoolCourseList({
   const list = coursesForSchool(schoolPath, courses);
   if (!list.length) return null;
   return (
-    <div className="mt-12">
+    <div>
       <p className="kicker">Курсы школы</p>
       <h2 className="display mt-2 text-2xl md:text-3xl">Программы этого направления</h2>
       <ul className="mt-6 grid gap-3 sm:grid-cols-2">
