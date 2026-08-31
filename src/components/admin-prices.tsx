@@ -9,8 +9,10 @@ import {
   adminPrices,
   adminSaveGroup,
   adminSavePrice,
+  adminSaveVoice,
   adminSetCodeword,
   adminSetPassword,
+  adminVoice,
 } from "@/data/admin";
 import { fieldLabel } from "@/data/edits-core";
 import { PRICE_DIRECTIONS, hydratePrices, type PriceRow } from "@/data/prices-core";
@@ -58,6 +60,11 @@ export function AdminPrices() {
   const [log, setLog] = useState<{ at: string; text: string }[]>([]);
   const [savedWord, setSavedWord] = useState("");
   const [edits, setEdits] = useState<{ path: string; fields: Record<string, string> }[]>([]);
+  const [voice, setVoice] = useState({ oleg: "filipp", olga: "alena", speed: 1.28, role: "good" });
+  const [male, setMale] = useState<{ id: string; label: string }[]>([]);
+  const [female, setFemale] = useState<{ id: string; label: string }[]>([]);
+  const [roles, setRoles] = useState<{ id: string; label: string }[]>([]);
+  const [savedVoice, setSavedVoice] = useState("");
 
   async function load(t = token()) {
     if (!t) return;
@@ -75,6 +82,13 @@ export function AdminPrices() {
     if (meta.ok) setLog(meta.log || []);
     const ed = await adminEdits({ data: { token: t } });
     if (ed.ok) setEdits(ed.edits || []);
+    const vo = await adminVoice({ data: { token: t } });
+    if (vo.ok) {
+      setVoice(vo.settings);
+      setMale(vo.male);
+      setFemale(vo.female);
+      setRoles(vo.roles);
+    }
   }
 
   useEffect(() => {
@@ -385,8 +399,90 @@ export function AdminPrices() {
           <div>
             <h2 className="font-display text-3xl">Голосовой доступ</h2>
             <p className="mt-2 max-w-2xl text-sm text-muted">
-              Кодовое слово открывает правки через Олега и Ольгу. Пароль — вход в этот кабинет.
+              Кодовое слово открывает правки. Здесь же — голоса Олега и Ольги.
             </p>
+          </div>
+
+          <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+            <p className="text-sm font-semibold">Голоса Олега и Ольги</p>
+            <p className="mt-1 text-sm text-muted">
+              Олег говорит мужским, Ольга — женским. Скорость больше 1.2 — меньше пауз между словами. Можно сказать в чате: «Олегу голос Филипп», «говорите быстрее».
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <label className="text-sm">
+                Олег
+                <select
+                  className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+                  value={voice.oleg}
+                  onChange={(e) => setVoice((v) => ({ ...v, oleg: e.target.value }))}
+                >
+                  {(male.length ? male : [{ id: "filipp", label: "Филипп" }]).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                Ольга
+                <select
+                  className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+                  value={voice.olga}
+                  onChange={(e) => setVoice((v) => ({ ...v, olga: e.target.value }))}
+                >
+                  {(female.length ? female : [{ id: "alena", label: "Алёна" }]).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                Характер
+                <select
+                  className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+                  value={voice.role}
+                  onChange={(e) => setVoice((v) => ({ ...v, role: e.target.value }))}
+                >
+                  {(roles.length ? roles : [{ id: "good", label: "Доброжелательный" }]).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                Скорость {voice.speed.toFixed(2)}
+                <input
+                  type="range"
+                  min="0.9"
+                  max="1.5"
+                  step="0.02"
+                  value={voice.speed}
+                  onChange={(e) => setVoice((v) => ({ ...v, speed: Number(e.target.value) }))}
+                  className="mt-3 block w-full"
+                />
+              </label>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  const res = await adminSaveVoice({ data: { token: token(), ...voice } });
+                  setBusy(false);
+                  if (!res.ok) setErr(res.error);
+                  else {
+                    setVoice(res.settings);
+                    setSavedVoice("Голоса сохранены");
+                  }
+                }}
+              >
+                Сохранить голоса
+              </Button>
+              {savedVoice ? <p className="text-sm text-primary">{savedVoice}</p> : null}
+            </div>
           </div>
 
           <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">

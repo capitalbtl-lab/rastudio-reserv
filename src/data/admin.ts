@@ -120,3 +120,27 @@ export const adminClearEdit = createServerFn({ method: "POST" })
     if (saved.ok) logAdmin(`Сброс текста: ${saved.path} · ${saved.field}`);
     return saved;
   });
+
+export const adminVoice = createServerFn({ method: "POST" })
+  .validator((data: unknown) => data as { token?: string })
+  .handler(async ({ data }) => {
+    if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
+    const { loadVoiceSettings, MALE_VOICES, FEMALE_VOICES, VOICE_ROLES } = await import("./voice-settings");
+    return {
+      ok: true as const,
+      settings: loadVoiceSettings(),
+      male: [...MALE_VOICES],
+      female: [...FEMALE_VOICES],
+      roles: [...VOICE_ROLES],
+    };
+  });
+
+export const adminSaveVoice = createServerFn({ method: "POST" })
+  .validator((data: unknown) => data as { token?: string; oleg?: string; olga?: string; speed?: number; role?: string })
+  .handler(async ({ data }) => {
+    if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
+    const { saveVoiceSettings } = await import("./voice-settings");
+    const settings = saveVoiceSettings({ oleg: data.oleg, olga: data.olga, speed: data.speed, role: data.role });
+    logAdmin(`Голоса: Олег ${settings.oleg}, Ольга ${settings.olga}, ${settings.speed}`);
+    return { ok: true as const, settings };
+  });

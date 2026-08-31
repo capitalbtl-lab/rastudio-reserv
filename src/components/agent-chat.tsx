@@ -153,8 +153,8 @@ export function AgentChat() {
       const start = () => {
         const u = new SpeechSynthesisUtterance(text);
         u.lang = "ru-RU";
-        u.rate = 1.12;
-        u.pitch = who === "olga" ? 1.12 : 0.86;
+        u.rate = who === "olga" ? 1.22 : 1.2;
+        u.pitch = who === "olga" ? 1.06 : 0.88;
         u.volume = 1;
         const voice = pickVoice(who, synth.getVoices());
         if (voice) u.voice = voice;
@@ -173,7 +173,7 @@ export function AgentChat() {
     });
   }
 
-  async function playClip(dataUrl: string) {
+  async function playClip(dataUrl: string, rate = 1.2) {
     const el = audioElRef.current || new Audio();
     audioElRef.current = el;
     await new Promise<void>((resolve, reject) => {
@@ -189,6 +189,7 @@ export function AgentChat() {
       el.preload = "auto";
       el.volume = 1;
       el.muted = false;
+      el.playbackRate = Math.min(1.6, Math.max(0.85, rate));
       el.onended = () => done(false);
       el.onerror = () => done(true);
       audioRef.current = {
@@ -211,18 +212,18 @@ export function AgentChat() {
       .join(" ");
     setSpeaking(true);
     stopListen();
-    await new Promise((r) => window.setTimeout(r, 180));
+    await new Promise((r) => window.setTimeout(r, 80));
     try {
       const turns = parseTurns(phrase).filter((t) => partnerRef.current === "both" || t.who === partnerRef.current);
       for (const turn of turns) {
         if (gen !== genRef.current) return;
         try {
           const res = await speakAgent({
-            data: { text: turn.text, voice: turn.who === "olga" ? "alena" : "zahar" },
+            data: { text: turn.text, who: turn.who === "olga" ? "olga" : "oleg" },
           });
           if (res.ok && "audio" in res && gen === genRef.current) {
             spokenRef.current = turn.text;
-            await playClip(res.audio);
+            await playClip(res.audio, "speed" in res ? Number(res.speed) : 1.2);
             continue;
           }
         } catch {

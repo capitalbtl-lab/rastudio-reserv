@@ -56,6 +56,12 @@ id курсов: ${TRIAL_COURSES.map((c) => `${c.id} ${c.name}`).join("; ")}.
 path: «главная», имя курса или текущая страница.
 clear_site_text — вернуть исходный текст поля.
 После текстовой правки вызови reload_page.
+
+Голоса. После кода можно менять голоса Олега и Ольги: set_voice_settings.
+Олег — только мужской (filipp, zahar, ermil). Ольга — только женский (alena, jane, marina, masha).
+speed от 0.9 до 1.5, чем больше — тем меньше паузы между словами. faster/slower — чуть быстрее/медленнее.
+role: good (приятный), friendly, neutral.
+После смены голоса скажи, что сохранено. Страницу перезагружать не обязательно.
 `;
 
 const ADMIN_TOOLS = [
@@ -147,6 +153,25 @@ const ADMIN_TOOLS = [
           field: { type: "string" },
         },
         required: ["field"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "set_voice_settings",
+      description: "Настроить голоса Олега и Ольги: тембр, скорость, характер. Только администратор.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          who: { type: "string", description: "oleg | olga | оба" },
+          voice: { type: "string", description: "filipp, zahar, ermil, alena, jane, marina, masha" },
+          speed: { type: "number", description: "0.9–1.5, больше — быстрее, меньше пауз" },
+          faster: { type: "boolean" },
+          slower: { type: "boolean" },
+          role: { type: "string", description: "good | friendly | neutral" },
+        },
       },
     },
   },
@@ -514,6 +539,29 @@ export const chatAgent = createServerFn({ method: "POST" })
               } else {
                 messages.push({ role: "tool", tool_call_id: call.id, content: saved.error });
               }
+            } else if (admin && call.function.name === "set_voice_settings") {
+              const { parseVoiceCommand, saveVoiceSettings, loadVoiceSettings } = await import("./voice-settings");
+              const { logAdmin } = await import("./admin-settings");
+              let settings = loadVoiceSettings();
+              if (args.faster || args.slower || args.voice || args.who) {
+                settings = parseVoiceCommand(
+                  String(args.who || ""),
+                  String(args.voice || ""),
+                  args.speed != null ? Number(args.speed) : undefined,
+                  Boolean(args.faster),
+                  Boolean(args.slower),
+                );
+              }
+              if (args.speed != null && !args.faster && !args.slower) {
+                settings = saveVoiceSettings({ speed: Number(args.speed) });
+              }
+              if (args.role) settings = saveVoiceSettings({ role: String(args.role) });
+              logAdmin(`Голоса: Олег ${settings.oleg}, Ольга ${settings.olga}, ${settings.speed}`);
+              messages.push({
+                role: "tool",
+                tool_call_id: call.id,
+                content: `Сохранено. Олег: ${settings.oleg}, Ольга: ${settings.olga}, скорость ${settings.speed}, характер ${settings.role}. Следующая реплика уже новым голосом.`,
+              });
             } else {
               messages.push({ role: "tool", tool_call_id: call.id, content: "Неизвестное действие." });
             }

@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { serverEnv } from "./server-env";
+import { loadVoiceSettings } from "./voice-settings";
 
 function speakRu(text: string) {
   return text
@@ -52,16 +53,18 @@ function audioFromV3(raw: string) {
   return Buffer.concat(parts);
 }
 
-export const speakAgent = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { text: string; voice?: "filipp" | "alena" | "zahar" })
-  .handler(async ({ data }) => {
-    const key = serverEnv("YANDEX_API_KEY");
-    const folder = serverEnv("YANDEX_FOLDER_ID");
-    const text = clean(data.text || "");
-    if (!key || !folder || !text) return { ok: false as const, error: "no-voice" };
-    const voice = data.voice === "alena" ? "alena" : "zahar";
-    const auths = [`Bearer ${key}`, `Api-Key ${key}`];
-    for (const auth of auths) {
+async function synthesize(text: string, voice: string, role: string, speed: number, key: string, folder: string) {
+  const auths = [`Bearer ${key}`, `Api-Key ${key}`];
+  const bodies = [
+    {
+      text,
+      hints: [{ voice }, { role }, { speed: String(speed) }],
+      folderId: folder,
+    },
+    { text, voice, folderId: folder },
+  ];
+  for (const auth of auths) {
+    for (const body of bodies) {
       const res = await fetch("https://tts.api.cloud.yandex.net/tts/v3/utteranceSynthesis", {
         method: "POST",
         headers: {
@@ -69,17 +72,30 @@ export const speakAgent = createServerFn({ method: "POST" })
           "Content-Type": "application/json",
           "x-folder-id": folder,
         },
-        body: JSON.stringify({
-          text,
-          voice,
-          folderId: folder,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) continue;
       const buf = audioFromV3(await res.text());
       if (!buf || buf.length < 200) continue;
       const mime = buf.slice(0, 4).toString("ascii") === "RIFF" ? "audio/wav" : "audio/mpeg";
-      return { ok: true as const, audio: `data:${mime};base64,${buf.toString("base64")}` };
+      return `data:${mime};base64,${buf.toString("base64")}`;
     }
-    return { ok: false as const, error: "tts" };
+  }
+  return "";
+}
+
+export const speakAgent = createServerFn({ method: "POST" })
+  .validator((data: unknown) => data as { text: string; who?: "oleg" | "olga" })
+  .handler(async ({ data }) => {
+    const key = serverEnv("YANDEX_API_KEY");
+    const folder = serverEnv("YANDEX_FOLDER_ID");
+    const text = clean(data.text || "");
+    if (!key || !folder || !text) return { ok: false as const, error: "no-voice" };
+    const settings = loadVoiceSettings();
+    const voice = data.who === "olga" ? settings.olga : settings.oleg;
+    const audio = await synthesize(text, voice, settings.role, settings.speed, key, folder);
+    if (!audio) return { ok: false as const, error: "tts" };
+    return { ok: true as const, audio, speed: settings.speed };
   });
+
+export const publicVoiceSettings = createServerFn({ method: "GET" }).handler(async () => loadVoiceSettings());
