@@ -274,11 +274,11 @@ export function AdminTrainDocs() {
           <h3 className="font-display text-2xl">Как устроены документы и каналы</h3>
           <InfoTip text="Канал — среда, где сейчас говорит агент. Чат rastudio.org = сайт. Novofon = телефон. Сообщество = ВК. Бот MAX = MAX. «Общее» читают всегда. Чужой столбец агент не видит: телефон не рассказывает про кнопки чата." />
         </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5 lg:items-stretch">
           {STEPS.map((s) => (
-            <div key={s.n} className="rounded-2xl bg-surface-2 p-3">
+            <div key={s.n} className="flex h-full min-h-[7.5rem] flex-col rounded-2xl bg-surface-2 p-3">
               <p className="text-[0.7rem] font-semibold uppercase tracking-wider text-primary">{s.n}. {s.t}</p>
-              <p className="mt-1 text-sm leading-snug">{s.d}</p>
+              <p className="mt-1 flex-1 text-sm leading-snug">{s.d}</p>
             </div>
           ))}
         </div>
@@ -294,26 +294,31 @@ export function AdminTrainDocs() {
             Сейчас на сайте говорит <span className="font-semibold text-fg">Агент на сайте</span>. Остальные каналы хранят свой столбец, пока не подключится телефон, ВК или MAX.
           </p>
         </div>
-        <div className="grid gap-0 lg:grid-cols-5">
+        <div className="grid gap-0 lg:grid-cols-5 lg:items-stretch">
           {channels.map((c, i) => (
             <div
               key={c.id}
               className={cn(
-                "flex flex-col border-black/6 p-4 lg:border-r lg:last:border-r-0",
+                "flex h-full min-h-[22rem] flex-col border-black/6 p-4 lg:border-r lg:last:border-r-0",
                 i > 0 ? "border-t lg:border-t-0" : "",
                 c.id === "site" ? "bg-[#f4f7ff]" : "bg-white",
               )}
             >
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex h-12 shrink-0 items-start justify-between gap-2">
                 <div>
                   <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted">{c.id}</p>
-                  {c.id === "site" ? (
-                    <span className="mt-1 inline-flex rounded-full bg-primary px-2 py-0.5 text-[0.65rem] font-semibold text-white">сейчас на сайте</span>
-                  ) : null}
+                  <span
+                    className={cn(
+                      "mt-1 inline-flex rounded-full bg-primary px-2 py-0.5 text-[0.65rem] font-semibold text-white",
+                      c.id === "site" ? "" : "invisible",
+                    )}
+                  >
+                    сейчас на сайте
+                  </span>
                 </div>
                 <InfoTip text={CHANNEL_HINT[c.id] || "Дополнительный канал. Правила внизу карточки — как говорить в этой среде."} />
               </div>
-              <label className="mt-3 text-xs font-semibold text-muted">
+              <label className="mt-3 shrink-0 text-xs font-semibold text-muted">
                 Название
                 <input
                   value={c.label}
@@ -321,7 +326,7 @@ export function AdminTrainDocs() {
                   className="mt-1 h-10 w-full rounded-xl bg-surface-2 px-3 text-sm font-medium text-fg ring-1 ring-black/8"
                 />
               </label>
-              <label className="mt-3 flex-1 text-xs font-semibold text-muted">
+              <label className="mt-3 flex min-h-0 flex-1 flex-col text-xs font-semibold text-muted">
                 <span className="inline-flex items-center gap-1">
                   Правила канала
                   <InfoTip text="Этот текст видит модель, когда процент адаптации больше 0. Пишите манеру канала: длина реплики, кнопки или без, что запрещено. Не дублируйте оферту." />
@@ -329,15 +334,16 @@ export function AdminTrainDocs() {
                 <textarea
                   value={c.rules || ""}
                   onChange={(e) => setChannels((list) => list.map((x, j) => (j === i ? { ...x, rules: e.target.value } : x)))}
-                  rows={8}
-                  className="mt-1 w-full resize-y rounded-xl bg-surface-2 px-3 py-2 text-[0.8rem] leading-relaxed text-fg ring-1 ring-black/8"
+                  className="mt-1 min-h-[12rem] w-full flex-1 resize-none overflow-auto rounded-xl bg-surface-2 px-3 py-2 text-[0.8rem] leading-relaxed text-fg ring-1 ring-black/8"
                 />
               </label>
-              {c.locked ? null : (
-                <button type="button" className="mt-2 self-start text-xs font-semibold text-primary" onClick={() => setChannels((list) => list.filter((_, j) => j !== i))}>
-                  Убрать канал
-                </button>
-              )}
+              <div className="mt-2 h-6 shrink-0">
+                {c.locked ? null : (
+                  <button type="button" className="text-xs font-semibold text-primary" onClick={() => setChannels((list) => list.filter((_, j) => j !== i))}>
+                    Убрать канал
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -543,13 +549,13 @@ export function AdminTrainDocs() {
               {open === d.id && d.text ? (
                 <pre className="mt-3 max-h-[20rem] overflow-auto whitespace-pre-wrap rounded-2xl bg-surface-2 p-4 text-[0.82rem] leading-relaxed">{d.text}</pre>
               ) : null}
-              <div className="mt-4 grid gap-3 overflow-x-auto sm:grid-cols-2 xl:grid-cols-5">
+              <div className="mt-4 grid gap-3 overflow-x-auto sm:grid-cols-2 xl:grid-cols-5 xl:items-stretch">
                 {channels.map((c) => {
                   const body = columnsOf(d, channels)[c.id] || "";
                   return (
-                    <div key={c.id} className={cn("min-w-[14rem] rounded-2xl p-3", c.id === "site" ? "bg-primary/5 ring-1 ring-primary/20" : "bg-surface-2")}>
-                      <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">{c.label}</p>
-                      <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap text-[0.78rem] leading-relaxed">
+                    <div key={c.id} className={cn("flex h-80 min-w-[14rem] flex-col rounded-2xl p-3", c.id === "site" ? "bg-primary/5 ring-1 ring-primary/20" : "bg-surface-2")}>
+                      <p className="shrink-0 text-[0.68rem] font-semibold uppercase tracking-wider text-muted">{c.label}</p>
+                      <pre className="mt-2 min-h-0 flex-1 overflow-auto whitespace-pre-wrap text-[0.78rem] leading-relaxed">
                         {body || "Пусто. «Преобразовать» разложит оригинал по столбцам."}
                       </pre>
                     </div>
