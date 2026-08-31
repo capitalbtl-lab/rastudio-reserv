@@ -17,22 +17,22 @@ const teachers = liteTeachers
 
 const COLLAGE = [
   {
-    href: SCHOOLS[0].href,
-    src: SCHOOLS[0].image,
-    alt: SCHOOLS[0].alt,
-    filename: SCHOOLS[0].filename,
+    href: "/art-studio",
+    src: "/media/home/shot-art.jpg",
+    alt: "Художественная школа в Студии Развивайся в Коломне",
+    filename: "shot-art.jpg",
   },
   {
-    href: SCHOOLS[1].href,
-    src: SCHOOLS[1].image,
-    alt: SCHOOLS[1].alt,
-    filename: SCHOOLS[1].filename,
+    href: "/sculptural-studio",
+    src: "/media/home/shot-sculpt.jpg",
+    alt: "Скульптурная студия в Студии Развивайся в Коломне",
+    filename: "shot-sculpt.jpg",
   },
   {
-    href: SHOWCASE[0].href,
-    src: SHOWCASE[0].src,
-    alt: SHOWCASE[0].alt,
-    filename: SHOWCASE[0].filename,
+    href: "/teslaphysics",
+    src: "/media/home/shot-science.jpg",
+    alt: "Научные и инженерные курсы в Студии Развивайся",
+    filename: "shot-science.jpg",
   },
 ] as const;
 
@@ -152,7 +152,7 @@ function Home() {
 
           <div className="relative hidden lg:block">
             <div className="photo-stack">
-              {COLLAGE.map((shot) => (
+              {COLLAGE.slice(0, 2).map((shot) => (
                 <PageLink key={shot.src} to={shot.href} className="shot bg-header">
                   <SeoImage
                     src={shot.src}
@@ -164,10 +164,34 @@ function Home() {
                   />
                 </PageLink>
               ))}
+              <div className="shot bg-header">
+                <video
+                  src="/media/home/hero.mp4"
+                  className="h-full w-full object-cover"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  aria-label="Видео студии Развивайся"
+                />
+              </div>
             </div>
           </div>
 
           <div className="snap-row lg:hidden">
+            <div className="snap-card overflow-hidden rounded-3xl">
+              <video
+                src="/media/home/hero.mp4"
+                className="aspect-4/5 w-full object-cover"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                aria-label="Видео студии Развивайся"
+              />
+            </div>
             {COLLAGE.map((shot) => (
               <PageLink key={shot.src} to={shot.href} className="snap-card overflow-hidden rounded-3xl">
                 <SeoImage
