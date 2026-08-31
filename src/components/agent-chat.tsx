@@ -119,35 +119,87 @@ export function AgentChat() {
       audioElRef.current.pause();
       audioElRef.current.removeAttribute("src");
     }
+    try {
+      window.speechSynthesis?.cancel();
+    } catch {
+      /* no synth */
+    }
     speakingRef.current = false;
     setSpeaking(false);
   }
 
-  async function playClip(dataUrl: string) {
+  function pickVoice(who: Who, voices: SpeechSynthesisVoice[]) {
+    const ru = voices.filter((v) => /ru(-|_|$)|русск|russian/i.test(`${v.lang} ${v.name}`));
+    const pool = ru.length ? ru : voices;
+    if (who === "olga") {
+      return (
+        pool.find((v) => /irina|alena|milena|oksana|jane|female|женск/i.test(v.name)) ||
+        pool.find((v) => /google.*ru/i.test(v.name)) ||
+        pool[0]
+      );
+    }
+    return (
+      pool.find((v) => /pavel|zahar|dmitri|filipp|ermil|male|мужск/i.test(v.name)) ||
+      pool.find((v) => /microsoft/i.test(v.name) && !/irina/i.test(v.name)) ||
+      pool[pool.length - 1] ||
+      pool[0]
+    );
+  }
+
+  async function speakBrowser(text: string, who: Who) {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
     await new Promise<void>((resolve) => {
-      const el = audioElRef.current || new Audio();
-      audioElRef.current = el;
+      const start = () => {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = "ru-RU";
+        u.rate = 1.12;
+        u.pitch = who === "olga" ? 1.12 : 0.86;
+        u.volume = 1;
+        const voice = pickVoice(who, synth.getVoices());
+        if (voice) u.voice = voice;
+        const done = () => resolve();
+        u.onend = done;
+        u.onerror = done;
+        audioRef.current = { stop: () => { synth.cancel(); done(); } };
+        synth.cancel();
+        synth.speak(u);
+      };
+      if (synth.getVoices().length) start();
+      else {
+        synth.onvoiceschanged = () => start();
+        window.setTimeout(start, 400);
+      }
+    });
+  }
+
+  async function playClip(dataUrl: string) {
+    const el = audioElRef.current || new Audio();
+    audioElRef.current = el;
+    await new Promise<void>((resolve, reject) => {
       let finished = false;
-      const done = () => {
+      const done = (err?: boolean) => {
         if (finished) return;
         finished = true;
         el.onended = null;
         el.onerror = null;
-        resolve();
+        if (err) reject(new Error("audio"));
+        else resolve();
       };
       el.preload = "auto";
       el.volume = 1;
-      el.onended = done;
-      el.onerror = done;
+      el.muted = false;
+      el.onended = () => done(false);
+      el.onerror = () => done(true);
       audioRef.current = {
         stop: () => {
           el.pause();
-          done();
+          done(false);
         },
       };
       el.src = dataUrl;
       const play = el.play();
-      if (play && typeof play.catch === "function") play.catch(() => done());
+      if (play && typeof play.catch === "function") play.catch(() => done(true));
     });
   }
 
@@ -159,16 +211,26 @@ export function AgentChat() {
       .join(" ");
     setSpeaking(true);
     stopListen();
+    await new Promise((r) => window.setTimeout(r, 180));
     try {
       const turns = parseTurns(phrase).filter((t) => partnerRef.current === "both" || t.who === partnerRef.current);
       for (const turn of turns) {
         if (gen !== genRef.current) return;
-        const res = await speakAgent({
-          data: { text: turn.text, voice: turn.who === "olga" ? "alena" : "zahar" },
-        });
-        if (!res.ok || !("audio" in res) || gen !== genRef.current) continue;
+        try {
+          const res = await speakAgent({
+            data: { text: turn.text, voice: turn.who === "olga" ? "alena" : "filipp" },
+          });
+          if (res.ok && "audio" in res && gen === genRef.current) {
+            spokenRef.current = turn.text;
+            await playClip(res.audio);
+            continue;
+          }
+        } catch {
+          /* browser voice */
+        }
+        if (gen !== genRef.current) return;
         spokenRef.current = turn.text;
-        await playClip(res.audio);
+        await speakBrowser(turn.text, turn.who);
       }
     } finally {
       if (gen === genRef.current) {
@@ -295,6 +357,11 @@ export function AgentChat() {
     }
     voiceOnRef.current = true;
     setVoiceOn(true);
+    try {
+      window.speechSynthesis?.getVoices();
+    } catch {
+      /* */
+    }
     const last = [...messages].reverse().find((m) => m.role === "assistant")?.content;
     if (last) await speak(last);
     if (voiceOnRef.current) startListen();
@@ -328,6 +395,7 @@ export function AgentChat() {
           className="agent-panel pointer-events-auto relative mx-3 mb-[4.75rem] flex h-[min(38rem,76dvh)] w-auto flex-col overflow-hidden rounded-[1.85rem] bg-white ring-[3px] ring-white shadow-[0_28px_70px_-18px_rgba(9,12,18,0.55)] md:mx-0 md:mb-0 md:h-[var(--agent-h)] md:w-[var(--agent-w)]"
           style={{ ["--agent-w" as string]: `${box.w}px`, ["--agent-h" as string]: `${box.h}px` }}
         >
+          <audio ref={audioElRef} className="hidden" playsInline preload="auto" />
           <button
             type="button"
             className="absolute left-1.5 top-1.5 z-10 hidden h-4 w-4 cursor-nwse-resize rounded-sm md:block"

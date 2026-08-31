@@ -67,44 +67,34 @@ export const speakAgent = createServerFn({ method: "POST" })
     const folder = env("YANDEX_FOLDER_ID");
     const text = clean(data.text || "");
     if (!key || !folder || !text) return { ok: false as const, error: "no-voice" };
-    const voice = data.voice === "alena" ? "alena" : "zahar";
-    const body = new URLSearchParams({
-      ssml: toSsml(text),
-      lang: "ru-RU",
-      voice,
-      emotion: "good",
-      speed: "1.18",
-      format: "mp3",
-      folderId: folder,
-    });
-    let res = await fetch("https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize", {
-      method: "POST",
-      headers: {
-        Authorization: `Api-Key ${key}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body,
-    });
-    if (!res.ok) {
-      const fallback = new URLSearchParams({
+    const voice = data.voice === "alena" ? "alena" : data.voice === "zahar" ? "zahar" : "filipp";
+    const attempts: { voice: string; extra?: Record<string, string> }[] = [
+      { voice, extra: { emotion: "good" } },
+      { voice },
+      { voice: voice === "alena" ? "alena" : "filipp" },
+    ];
+    let res: Response | null = null;
+    for (const attempt of attempts) {
+      const payload: Record<string, string> = {
         text,
         lang: "ru-RU",
-        voice,
-        emotion: "good",
+        voice: attempt.voice,
         speed: "1.18",
         format: "mp3",
         folderId: folder,
-      });
+        ...(attempt.extra || {}),
+      };
       res = await fetch("https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize", {
         method: "POST",
         headers: {
           Authorization: `Api-Key ${key}`,
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: fallback,
+        body: new URLSearchParams(payload),
       });
+      if (res.ok) break;
     }
-    if (!res.ok) return { ok: false as const, error: "tts" };
+    if (!res || !res.ok) return { ok: false as const, error: "tts" };
     const buf = Buffer.from(await res.arrayBuffer());
     return { ok: true as const, audio: `data:audio/mpeg;base64,${buf.toString("base64")}` };
   });
