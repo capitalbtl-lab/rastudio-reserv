@@ -13,6 +13,7 @@ import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses, SchoolCo
 import { PhotoSlider } from "@/components/photo-slider";
 import { galleryPhotos } from "@/lib/gallery";
 import { SCHOOL_PROGRAMS, SCHOOL_WHY } from "@/data/school-programs";
+import { whyForPath } from "@/data/course-why";
 import { AGE_BANDS, agesOverlap, courseFacts, coursePlace } from "@/data/ages";
 import { AgeChips } from "@/components/age-chips";
 import { trialCourseForPath } from "@/data/trial";
@@ -184,7 +185,16 @@ function CinematicPage({
               paragraphs={body}
               headings={page.headings}
               program={SCHOOL_PROGRAMS[page.pathDecoded || page.path]}
-              why={page.kind === "school" ? SCHOOL_WHY[page.pathDecoded || page.path] ?? null : null}
+              why={
+                page.kind === "school"
+                  ? SCHOOL_WHY[page.pathDecoded || page.path] ?? null
+                  : whyForPath(page.pathDecoded || page.path)
+              }
+              whyTitle={
+                page.kind === "school"
+                  ? "Зачем эта школа"
+                  : "Курс, который чувствуется, а не зубрится"
+              }
               afterLead={
                 page.kind === "school" ? (
                   <SchoolCourseList schoolPath={page.pathDecoded || page.path} courses={courses} />

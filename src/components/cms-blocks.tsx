@@ -354,6 +354,34 @@ const WHY_NOW = [
   },
 ] as const;
 
+export function WhyNow({
+  items,
+  title = "Курс, который чувствуется, а не зубрится",
+}: {
+  items?: { title: string; text: string }[] | null;
+  title?: string;
+}) {
+  if (!items?.length) return null;
+  return (
+    <section>
+      <p className="kicker">Почему сейчас</p>
+      <h2 className="display section-title mt-2">{title}</h2>
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        {items.map((item, i) => {
+          const Icon = WHY_NOW[i % WHY_NOW.length].icon;
+          return (
+            <article key={item.title} className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
+              <Icon className="size-5 text-primary" strokeWidth={1.8} />
+              <h3 className="display mt-3 text-lg leading-snug">{item.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">{item.text}</p>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function ProgramSteps({ items }: { items: ProgramStep[] }) {
   if (!items.length) return null;
   return (
@@ -376,12 +404,14 @@ export function CourseStory({
   afterLead,
   program,
   why,
+  whyTitle,
 }: {
   paragraphs: string[];
   headings: { tag: string; text: string }[];
   afterLead?: ReactNode;
   program?: ProgramStep[];
   why?: { title: string; text: string }[] | null;
+  whyTitle?: string;
 }) {
   const clean = paragraphs.filter((p) => p && !SKIP_COPY.test(p));
   const price = clean.find((p) => PRICE_COPY.test(p));
@@ -431,24 +461,7 @@ export function CourseStory({
 
       {afterLead}
 
-      {why?.length ? (
-        <section>
-          <p className="kicker">Почему сейчас</p>
-          <h2 className="display section-title mt-2">Зачем эта школа</h2>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            {why.map((item, i) => {
-              const Icon = WHY_NOW[i % WHY_NOW.length].icon;
-              return (
-                <article key={item.title} className="rounded-xl bg-surface p-5 shadow-[var(--shadow-border)]">
-                  <Icon className="size-5 text-primary" strokeWidth={1.8} />
-                  <h3 className="display mt-3 text-lg leading-snug">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted">{item.text}</p>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
+      <WhyNow items={why} title={whyTitle} />
 
       {program?.length ? (
         <ProgramSteps items={program} />

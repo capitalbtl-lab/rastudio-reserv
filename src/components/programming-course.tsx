@@ -15,7 +15,9 @@ import {
   CoursePageHero,
   ExpandableProse,
   RelatedAgeCourses,
+  WhyNow,
 } from "@/components/cms-blocks";
+import { whyForPath } from "@/data/course-why";
 
 type Props = {
   page: SitePage;
@@ -119,6 +121,8 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [] }: 
         {course.audienceNote ? (
           <p className="max-w-3xl text-muted">{course.audienceNote}</p>
         ) : null}
+
+        <WhyNow items={whyForPath(course.pathDecoded || course.path || page.path)} />
 
         {course.programText ? (
           <section>
