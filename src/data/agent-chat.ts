@@ -31,7 +31,8 @@ ${who === "oleg" ? "Вы хорошо рассказываете про техн
 Филиалы AlfaCRM: 1 Гражданская, 2 Коломна; 2 ЦМИТ Октябрьской революции, 340; 3 Луховицы, Пушкина, 202А; 4 летние программы (только апрель–август).
 Курсы называй ТОЧНО как на сайте, не обобщай до «школы», когда уже внутри направления.
 ЭТА РЕПЛИКА — только текущий шаг: ${step}
-Не возвращайся к закрытым шагам. Если город уже назван — ни слова «какой город», «Коломна или Луховицы».
+Город и филиал спрашивает система, не ты. Если в фактах уже есть город — ни слова «какой город», «Коломна или Луховицы».
+Не возвращайся к закрытым шагам.
 list_groups вызывай только когда направление уже рассказано и родитель хочет пробное в группе или сразу в группу.
 Пробное в свободный день: заявка без слота, в комментарии «дату согласуем по телефону». Не выдумывай время.
 История сессии полная до сброса диалога.
@@ -459,6 +460,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     const { buildSessionNote, notePrompt, guardReply } = await import("./session-note");
     const { findDossier, dossierPrompt, upsertDossier, dossierFromNote } = await import("./dossiers");
     const { agentPromptAddons } = await import("./agent-config");
+    const { lockedFunnelReply } = await import("./agent-funnel");
     let admin = tokenOk(data.token);
     let granted: string | undefined;
     let reload = false;
@@ -498,6 +500,12 @@ export const chatAgent = createServerFn({ method: "POST" })
       : "";
     const facts = factsFromMessages(all);
     const note = buildSessionNote(all);
+    if (!admin) {
+      const locked = lockedFunnelReply(soloWho, facts, note);
+      if (locked) {
+        return { ok: true as const, reply: locked, token: granted, reload: false };
+      }
+    }
     if (!admin && (facts.phone || facts.child || facts.parent)) {
       try {
         dossierFromNote(note, { phone: facts.phone, chatId: String(data.path || "") });
