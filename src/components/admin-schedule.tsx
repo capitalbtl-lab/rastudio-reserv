@@ -181,6 +181,10 @@ export function AdminSchedule() {
   const recRef = useRef<Rec | null>(null);
   const voiceModeRef = useRef(false);
   const promptRef = useRef("");
+  const addsRef = useRef<Draft[]>([]);
+  const changesRef = useRef<Change[]>([]);
+  const pickedRef = useRef<string[]>([]);
+  const [flash, setFlash] = useState<Set<string>>(new Set());
 
   function take(res: { ok: boolean; slots?: CrmSlot[]; at?: string; versions?: Ver[]; error?: string; comment?: string; changes?: Change[]; adds?: Draft[]; pushed?: number; created?: string[] }) {
     if (!res.ok) {
@@ -199,6 +203,20 @@ export function AdminSchedule() {
         for (const id of res.created!) n.add(id);
         return n;
       });
+      const first = (res.slots || []).find((s) => res.created!.includes(s.id));
+      if (first) {
+        setOpenAll(false);
+        setOpenSchool(first.school);
+        setOpenCourse(first.course);
+        setFlash(new Set(res.created));
+        window.setTimeout(() => {
+          document.getElementById(`ra-slot-${res.created![0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 80);
+        window.setTimeout(() => setFlash(new Set()), 2600);
+      }
+      setAiAdds([]);
+      setAiChanges([]);
+      setAiComment("");
     }
   }
 
@@ -220,6 +238,15 @@ export function AdminSchedule() {
   useEffect(() => {
     voiceModeRef.current = voiceMode;
   }, [voiceMode]);
+  useEffect(() => {
+    addsRef.current = aiAdds;
+  }, [aiAdds]);
+  useEffect(() => {
+    changesRef.current = aiChanges;
+  }, [aiChanges]);
+  useEffect(() => {
+    pickedRef.current = Object.keys(picked).filter((id) => picked[id]);
+  }, [picked]);
 
   function patch(id: string, field: keyof CrmSlot, value: string | number) {
     setSlots((list) =>
@@ -273,17 +300,21 @@ export function AdminSchedule() {
   }
 
   async function applyPreview() {
-    if (!aiChanges.length && !aiAdds.length) return;
-    const res = await run("aiApply", { changes: aiChanges, adds: aiAdds, prompt: aiPrompt, ids: pickedIds });
+    const adds = addsRef.current;
+    const changes = changesRef.current;
+    if (!changes.length && !adds.length) {
+      setMsg("Сначала предпросмотр: скажите «готово» или нажмите кнопку.");
+      return;
+    }
+    const res = await run("aiApply", { changes, adds, prompt: promptRef.current, ids: pickedRef.current });
     if (res.ok) {
-      setDirty((d) => {
-        const n = new Set(d);
-        for (const c of aiChanges) n.add(c.id);
-        return n;
-      });
-      setAiChanges([]);
-      setAiAdds([]);
-      setMsg(aiAdds.length > 1 ? `В расписание добавлено групп: ${aiAdds.length}. Выгрузка в CRM — отдельной кнопкой.` : "Применено на сайте.");
+      setAiPrompt("");
+      promptRef.current = "";
+      const created = (res as { created?: string[] }).created || [];
+      const list = (res as { slots?: CrmSlot[] }).slots || [];
+      const fresh = list.filter((s) => created.includes(s.id));
+      const title = fresh[0] ? `«${fresh[0].school}» → ${fresh[0].course}` : "расписание";
+      setMsg(fresh.length > 1 ? `Добавлено групп: ${fresh.length}. Открыл ${title}.` : `Группа в ${title}. Предпросмотр закрыт.`);
     }
   }
 
@@ -302,7 +333,7 @@ export function AdminSchedule() {
 
   function parseVoice(text: string) {
     const t = text.trim();
-    const m = t.match(/^(.*?)(?:,|\.|\s+)?(готово|предпросмотр|применить|примени|дальше)\s*$/i);
+    const m = t.match(/^(.*?)(?:,|\.|\s+)?(готово|предпросмотр|применить|примени|применитьте|дальше)\s*[.!]?\s*$/i);
     if (m && (m[1] || m[2])) return { body: (m[1] || "").trim(), cmd: m[2].toLowerCase() };
     if (/^(готово|предпросмотр|применить|примени|дальше)$/i.test(t)) return { body: "", cmd: t.toLowerCase() };
     return { body: t, cmd: "" };
@@ -776,7 +807,7 @@ export function AdminSchedule() {
                               const key = `${s.branchId}-${s.groupId}`;
                               const names = who[key];
                               return (
-                              <tr key={s.id} className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5")}>
+                              <tr id={`ra-slot-${s.id}`} key={s.id} className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash")}>
                                 <td className="px-2 py-1.5 align-middle">
                                   <CheckBox ids={[s.id]} picked={picked} onToggle={setIds} />
                                 </td>

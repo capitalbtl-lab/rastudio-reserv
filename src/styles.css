@@ -890,3 +890,18 @@
     animation: none;
   }
 }
+
+@keyframes ra-flash {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  20%,
+  70% {
+    background-color: rgb(37 99 235 / 0.28);
+  }
+}
+
+.ra-flash {
+  animation: ra-flash 0.55s ease-in-out 4;
+}
