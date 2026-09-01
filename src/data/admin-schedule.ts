@@ -57,6 +57,35 @@ function expandWeekday(day: number, from: string, to: string, start: Date, end: 
   return out;
 }
 
+const SEED_LEVELS = [
+  { id: 7, name: "1 класс" },
+  { id: 8, name: "2 класс" },
+  { id: 9, name: "3 класс" },
+  { id: 10, name: "4 класс" },
+  { id: 11, name: "5 класс" },
+  { id: 15, name: "Ознакомительный" },
+  { id: 12, name: "Начальный" },
+  { id: 13, name: "Средний" },
+  { id: 14, name: "Продвинутый" },
+];
+
+async function fetchLevels(t: string, branch: number) {
+  const { request } = await import("./alfacrm");
+  const paths = [`/v2api/${branch}/level/index`, `/v2api/2/level/index`, `/v2api/level/index`];
+  for (const path of paths) {
+    try {
+      const json = await request<{ items?: { id?: number; name?: string }[] }>(path, { page: 0, pageSize: 100 }, t);
+      const items = (json.items || [])
+        .map((x) => ({ id: Number(x.id), name: String(x.name || "").trim() }))
+        .filter((x) => x.id && x.name);
+      if (items.length) return items;
+    } catch {
+      /* next path */
+    }
+  }
+  return SEED_LEVELS;
+}
+
 export const adminSchedule = createServerFn({ method: "POST" })
   .validator(
     (data: unknown) =>
@@ -348,9 +377,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
         }
       }
       const calendar = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+      const levels = await fetchLevels(t, branch).catch(() => SEED_LEVELS);
       return {
         ok: true as const,
         subjects: loadSubjects(),
+        levels,
         group: {
           id: gid,
           name: String(g.name || ""),

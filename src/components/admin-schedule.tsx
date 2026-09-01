@@ -7,7 +7,7 @@ import { type CrmSlot } from "@/data/crm-slots-core";
 import { Button } from "@/components/ui/button";
 import { InfoTip, TipWrap } from "@/components/info-tip";
 import { AdminSectionHead } from "@/components/admin-self-test";
-import { SCHOOLS } from "@/data/site";
+import { SCHOOLS, BRANCHES } from "@/data/site";
 import { SCHOOL_ORDER } from "@/data/crm-slots-core";
 import { splitCourseAge } from "@/data/prices-core";
 import { cn } from "@/lib/utils";
@@ -26,9 +26,16 @@ const GROUP_STATUS = [
   { id: 4, name: "Приостановлена" },
 ];
 
-const GROUP_LEVELS = [
-  { id: 7, name: "Ознакомительный" },
-  { id: 12, name: "Базовый" },
+const SEED_LEVELS = [
+  { id: 7, name: "1 класс" },
+  { id: 8, name: "2 класс" },
+  { id: 9, name: "3 класс" },
+  { id: 10, name: "4 класс" },
+  { id: 11, name: "5 класс" },
+  { id: 15, name: "Ознакомительный" },
+  { id: 12, name: "Начальный" },
+  { id: 13, name: "Средний" },
+  { id: 14, name: "Продвинутый" },
 ];
 
 const WD = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
@@ -106,10 +113,10 @@ function GroupLessonStrip({ lessons }: { lessons: GroupCalLesson[] }) {
               key={l.date}
               title={time ? `${l.date} ${time}` : l.date}
               className={cn(
-                "flex h-11 min-w-[3.15rem] flex-col items-center justify-center rounded-lg px-1.5 text-center leading-tight",
-                isToday && "bg-primary text-white shadow-[0_4px_10px_rgba(37,99,235,0.28)]",
-                !isToday && past && "bg-white/55 text-muted",
-                !isToday && !past && "bg-white text-fg ring-1 ring-black/8",
+                "flex h-11 min-w-[3.15rem] flex-col items-center justify-center rounded-[4px] px-1.5 text-center leading-tight",
+                isToday && "bg-[#2f9a4a] text-white",
+                !isToday && past && "bg-[#e4f3e2] text-[#5b7a58]",
+                !isToday && !past && "bg-[#d4efd0] text-[#1e5c28] ring-1 ring-[#b7dcb4]",
               )}
             >
               {isToday ? (
@@ -126,6 +133,29 @@ function GroupLessonStrip({ lessons }: { lessons: GroupCalLesson[] }) {
       </div>
     </div>
   );
+}
+
+function siteBranchAddress(branchId: number, city = "", branch = "") {
+  const byId: Record<number, (typeof BRANCHES)[number] | undefined> = {
+    1: BRANCHES[1],
+    2: BRANCHES[0],
+    3: BRANCHES[2],
+  };
+  const hit = byId[branchId];
+  if (hit) return `${hit.city}, ${hit.address}`;
+  const hay = `${city} ${branch}`.toLowerCase();
+  const found = BRANCHES.find((b) => hay.includes("гражданск") && b.address.includes("Гражданская")
+    || hay.includes("октябрьск") && b.address.includes("Октябрьской")
+    || hay.includes("луховиц") && b.city === "Луховицы"
+    || hay.includes("пушкин") && b.address.includes("Пушкина"));
+  return found ? `${found.city}, ${found.address}` : [city, branch].filter(Boolean).join(", ");
+}
+
+function descriptionFromSite(note: string, branchId: number, city = "", branch = "") {
+  const addr = siteBranchAddress(branchId, city, branch);
+  const t = String(note || "").trim();
+  if (!t || /^https?:\/\//i.test(t) || /rastudio\.org/i.test(t)) return addr;
+  return t;
 }
 
 function token() {
@@ -579,6 +609,7 @@ export function AdminSchedule() {
   const [pushUi, setPushUi] = useState({ open: false, step: "", done: false, created: 0, pushed: 0, failed: 0, error: "", lines: [] as string[] });
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [subjects, setSubjects] = useState<CrmSubject[]>([]);
+  const [levels, setLevels] = useState<{ id: number; name: string }[]>(SEED_LEVELS);
   const fileRef = useRef<HTMLDivElement>(null);
   const promptEl = useRef<HTMLTextAreaElement>(null);
 
@@ -683,7 +714,7 @@ export function AdminSchedule() {
       id: s.id,
       groupId: s.groupId,
       branchId: s.branchId,
-      description: s.description || s.groupNote || "",
+      description: descriptionFromSite(s.description || s.groupNote || "", s.branchId, s.city, s.branch),
       remarks: s.remarks || "",
       hashtags: (s.hashtags || "").replace(/\s+/g, " ").trim(),
       makeup: s.makeup || "",
@@ -710,6 +741,9 @@ export function AdminSchedule() {
       return;
     }
     if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as CrmSubject[]);
+    if ("levels" in res && Array.isArray((res as { levels?: { id: number; name: string }[] }).levels) && (res as { levels: { id: number; name: string }[] }).levels.length) {
+      setLevels((res as { levels: { id: number; name: string }[] }).levels);
+    }
     const g = res.group as {
       note: string;
       description?: string;
@@ -728,7 +762,7 @@ export function AdminSchedule() {
       d && d.id === s.id
         ? {
             ...d,
-            description: g.description || g.note || "",
+            description: descriptionFromSite(g.description || g.note || "", s.branchId, s.city, s.branch),
             remarks: g.remarks || "",
             hashtags: (g.hashtags || "").replace(/\s+/g, " ").trim(),
             makeup: g.makeup,
@@ -1929,12 +1963,12 @@ export function AdminSchedule() {
                                             className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                                           >
                                             <option value="">— не задан —</option>
-                                            {GROUP_LEVELS.map((lv) => (
+                                            {levels.map((lv) => (
                                               <option key={lv.id} value={lv.id}>
                                                 {lv.name}
                                               </option>
                                             ))}
-                                            {detail.levelId && !GROUP_LEVELS.some((lv) => lv.id === detail.levelId) ? (
+                                            {detail.levelId && !levels.some((lv) => lv.id === detail.levelId) ? (
                                               <option value={detail.levelId}>Уровень {detail.levelId}</option>
                                             ) : null}
                                           </select>
