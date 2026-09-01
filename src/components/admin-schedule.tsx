@@ -104,13 +104,49 @@ function WeekDots({
 }) {
   const beats = beatsOf(s);
   const i = ((index % beats.length) + beats.length) % beats.length;
+  const plus = useRef<HTMLButtonElement>(null);
+  const box = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
   const first = beats[0];
   const [day, setDay] = useState(first.day === 2 ? 4 : 2);
   const [from, setFrom] = useState(first.timeFrom || "18:00");
   const [to, setTo] = useState(first.timeTo || "19:30");
+
+  function place() {
+    const el = plus.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const w = 240;
+    const h = 210;
+    let top = r.bottom + 8;
+    if (top + h > window.innerHeight - 12) top = Math.max(8, r.top - h - 8);
+    let left = r.right - w;
+    if (left < 8) left = 8;
+    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+    setPos({ top, left });
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    function close(e: MouseEvent) {
+      const t = e.target as Node;
+      if (plus.current?.contains(t) || box.current?.contains(t)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", close);
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
+
   return (
-    <div className="relative flex items-center justify-center gap-1">
+    <div className="flex items-center justify-center gap-1">
       <button
         type="button"
         title={beats.length > 1 ? `Занятие ${i + 1} из ${beats.length}. Нажмите, чтобы показать другой день.` : "Одно занятие в неделю"}
@@ -123,50 +159,62 @@ function WeekDots({
       </button>
       {beats.length < 3 ? (
         <button
+          ref={plus}
           type="button"
           title="Добавить занятие в другой день"
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-lg leading-none ring-1 ring-black/8"
-          onClick={() => setOpen((v) => !v)}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-lg leading-none ring-1 ring-black/20"
+          onClick={() => {
+            setOpen((v) => !v);
+            place();
+          }}
         >
           +
         </button>
       ) : null}
-      {open ? (
-        <div className="absolute right-0 top-full z-40 mt-1 w-52 rounded-2xl bg-white p-3 shadow-[var(--shadow-border)]">
-          <p className="text-xs font-semibold">Второе занятие</p>
-          <label className="mt-2 block text-[0.7rem] text-muted">
-            День
-            <select value={day} onChange={(e) => setDay(Number(e.target.value))} className="mt-1 h-8 w-full rounded-full bg-surface-2 px-2 text-sm ring-1 ring-black/8">
-              {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                <option key={d} value={d}>{["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"][d]}</option>
-              ))}
-            </select>
-          </label>
-          <div className="mt-2 flex gap-1">
-            <label className="flex-1 text-[0.7rem] text-muted">
-              С
-              <input value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 h-8 w-full rounded-full bg-surface-2 px-2 text-center text-sm ring-1 ring-black/8" />
-            </label>
-            <label className="flex-1 text-[0.7rem] text-muted">
-              До
-              <input value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 h-8 w-full rounded-full bg-surface-2 px-2 text-center text-sm ring-1 ring-black/8" />
-            </label>
-          </div>
-          <div className="mt-3 flex justify-end gap-2">
-            <button type="button" className="text-xs text-muted" onClick={() => setOpen(false)}>Отмена</button>
-            <button
-              type="button"
-              className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white"
-              onClick={() => {
-                onAdd({ day, timeFrom: from, timeTo: to, lessonId: 0 });
-                setOpen(false);
-              }}
+      {open
+        ? createPortal(
+            <div
+              ref={box}
+              className="fixed z-[90] w-[15rem] rounded-2xl bg-white p-3.5 text-fg shadow-[0_12px_40px_rgba(15,23,42,0.28)] ring-1 ring-black/20"
+              style={{ top: pos.top, left: pos.left }}
             >
-              Применить
-            </button>
-          </div>
-        </div>
-      ) : null}
+              <p className="text-sm font-semibold">Второе занятие</p>
+              <p className="mt-0.5 text-[0.7rem] text-muted">День и время в ту же группу. Длительность как у первого.</p>
+              <label className="mt-2.5 block text-[0.7rem] font-medium text-fg">
+                День
+                <select value={day} onChange={(e) => setDay(Number(e.target.value))} className="mt-1 h-9 w-full rounded-full bg-[#f3f5f8] px-3 text-sm ring-1 ring-black/15">
+                  {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                    <option key={d} value={d}>{["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"][d]}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="mt-2 flex gap-2">
+                <label className="flex-1 text-[0.7rem] font-medium">
+                  С
+                  <input value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 h-9 w-full rounded-full bg-[#f3f5f8] px-2 text-center text-sm ring-1 ring-black/15" />
+                </label>
+                <label className="flex-1 text-[0.7rem] font-medium">
+                  До
+                  <input value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 h-9 w-full rounded-full bg-[#f3f5f8] px-2 text-center text-sm ring-1 ring-black/15" />
+                </label>
+              </div>
+              <div className="mt-3 flex items-center justify-end gap-3">
+                <button type="button" className="text-xs font-semibold text-muted" onClick={() => setOpen(false)}>Отмена</button>
+                <button
+                  type="button"
+                  className="rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-white"
+                  onClick={() => {
+                    onAdd({ day, timeFrom: from, timeTo: to, lessonId: 0 });
+                    setOpen(false);
+                  }}
+                >
+                  Применить
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
