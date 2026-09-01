@@ -813,6 +813,15 @@ export function AdminSchedule() {
 
   useEffect(() => {
     void run("get");
+    const id = window.setInterval(() => {
+      void adminSchedule({ data: { token: token(), action: "pull" } }).then((res) => {
+        if (res.ok) {
+          take(res as never);
+          setMsg("Расписание само обновилось из AlfaCRM.");
+        }
+      });
+    }, 30 * 60 * 1000);
+    return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -894,8 +903,16 @@ export function AdminSchedule() {
       return;
     }
     const res = await adminSchedule({ data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId } as never });
+    applyGroupRes(s.id, s, res);
+    if (res.ok && "fromCache" in res && res.fromCache) {
+      const fresh = await adminSchedule({ data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId, fresh: true } as never });
+      applyGroupRes(s.id, s, fresh);
+    }
+  }
+
+  function applyGroupRes(id: string, s: CrmSlot, res: Awaited<ReturnType<typeof adminSchedule>>) {
     if (!res.ok || !("group" in res) || !res.group) {
-      setDetail((d) => (d && d.id === s.id ? { ...d, loading: false } : d));
+      setDetail((d) => (d && d.id === id ? { ...d, loading: false } : d));
       if (!res.ok) setMsg(res.error || "Не удалось открыть группу в AlfaCRM.");
       return;
     }
@@ -918,7 +935,7 @@ export function AdminSchedule() {
       calendar?: GroupCalLesson[];
     };
     setDetail((d) =>
-      d && d.id === s.id
+      d && d.id === id
         ? {
             ...d,
             description: g.description || g.note || "",
@@ -931,7 +948,7 @@ export function AdminSchedule() {
             levelId: g.levelId || d.levelId,
             signup: g.signup || d.signup,
             subjectId: g.subjectId || d.subjectId,
-            calendar: g.calendar?.length ? g.calendar : [],
+            calendar: g.calendar?.length ? g.calendar : d.calendar,
             loading: false,
           }
         : d,
@@ -1168,6 +1185,14 @@ export function AdminSchedule() {
     const { body, cmd } = parseVoice(raw);
     lastFinalRef.current = raw;
     setInterim("");
+    if (cmd) {
+      void runCmd(cmd, body);
+      return;
+    }
+    if (voiceModeRef.current) {
+      void handleScheduleVoice(body);
+      return;
+    }
     if (body) {
       setAiPrompt((p) => {
         const n = p ? `${p} ${body}` : body;
@@ -1177,7 +1202,6 @@ export function AdminSchedule() {
       });
       void absorbSpeech(body);
     }
-    if (cmd) void runCmd(cmd);
   }
 
   async function playScheduleVoice(dataUrl: string, volume: number) {
@@ -1430,7 +1454,45 @@ export function AdminSchedule() {
     startListen("loop");
     wizardRef.current = { ...EMPTY_WIZARD };
     setWizard({ ...EMPTY_WIZARD });
-    void say("Голосовой мастер. Назовите курс и возраст, день, время, филиал и педагога. Если чего-то не хватит — спрошу. Команды: готово, применить, дальше.");
+    void say("Привет, что будем делать сегодня?");
+  }
+
+  async function handleScheduleVoice(text: string) {
+    const q = text.trim();
+    if (!q) return;
+    setAiPrompt(q);
+    promptRef.current = q;
+    setMsg("Смотрю расписание…");
+    const res = await adminSchedule({ data: { token: token(), action: "voiceAsk", prompt: q, ids: pickedRef.current } as never });
+    if (!res.ok) {
+      await say("Нет, я не могу это поправить, потому что агент расписания не ответил.");
+      return;
+    }
+    const kind = "kind" in res ? String(res.kind) : "edit";
+    const reason = "reason" in res ? String(res.reason || "") : "";
+    const answer = "answer" in res ? String(res.answer || "") : "";
+    const action = "action" in res ? String(res.action || "") : "preview";
+    if (kind === "refuse") {
+      await say(`Нет, я не могу это поправить, потому что ${reason || "это не относится к расписанию занятий."}`);
+      return;
+    }
+    if (kind === "question") {
+      await say(answer || "В карточке группы на сайте этих данных нет.");
+      return;
+    }
+    await say("Хорошо, сейчас всё поправим.");
+    if (action === "pull") {
+      await pullCrm();
+      if (voiceModeRef.current) await say("Загрузила расписание из AlfaCRM.");
+      return;
+    }
+    if (action === "push") {
+      await pushCrm();
+      if (voiceModeRef.current) await say("Выгрузила отмеченные группы в AlfaCRM.");
+      return;
+    }
+    await run("aiPreview", { prompt: q, ids: pickedRef.current.length ? pickedRef.current : slotsRef.current.map((s) => s.id) });
+    if (voiceModeRef.current) await say("Готово. Скажите опубликовать, если всё верно, или отменить.");
   }
 
   async function pullCrm() {
@@ -2160,22 +2222,11 @@ export function AdminSchedule() {
                                       <div className="grid gap-3 md:grid-cols-2">
                                         <GroupLessonStrip lessons={detail.calendar} group={s.groupName} subject={s.subject} teacher={s.teacher} />
                                         <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                          Запись
-                                          <a
-                                            href={detail.signup || leadHref(s)}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="mt-1 flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold normal-case tracking-normal text-primary ring-1 ring-black/8"
-                                          >
-                                            gid {s.groupId || "—"} · открыть форму
-                                          </a>
-                                        </label>
-                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                                           Предмет
                                           <select
                                             value={detail.subjectId || ""}
                                             onChange={(e) => setDetail((d) => (d ? { ...d, subjectId: Number(e.target.value) || 0 } : d))}
-                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                                           >
                                             <option value="">— не выбран —</option>
                                             {subjects.map((sub) => (
@@ -2185,12 +2236,12 @@ export function AdminSchedule() {
                                             ))}
                                           </select>
                                         </label>
-                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted md:col-span-2">
+                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                                           Описание
                                           <input
                                             value={detail.description}
                                             onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))}
-                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                                           />
                                         </label>
                                         <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
@@ -2198,7 +2249,7 @@ export function AdminSchedule() {
                                           <input
                                             value={detail.hashtags}
                                             onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))}
-                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                                           />
                                         </label>
                                         <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
@@ -2206,33 +2257,47 @@ export function AdminSchedule() {
                                           <input
                                             value={detail.remarks}
                                             onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))}
-                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                                           />
                                         </label>
-                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                          Период обучения
-                                          <span className="mt-1 flex h-10 items-center gap-2">
+                                        <div className="grid grid-cols-[1fr_auto_1fr_1.3fr] items-end gap-2 md:col-span-2">
+                                          <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                            Период
                                             <input
                                               value={detail.bDate}
                                               onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))}
                                               placeholder="с"
-                                              className="h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                              className="mt-1 h-10 w-full rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                                             />
-                                            <span className="text-[0.7rem] font-medium normal-case text-muted">до</span>
+                                          </label>
+                                          <span className="pb-2 text-[0.7rem] font-medium text-muted">до</span>
+                                          <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                            <span className="opacity-0">до</span>
                                             <input
                                               value={detail.eDate}
                                               onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))}
                                               placeholder="до"
-                                              className="h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                              className="mt-1 h-10 w-full rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                                             />
-                                          </span>
-                                        </label>
+                                          </label>
+                                          <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                            Запись
+                                            <a
+                                              href={detail.signup || leadHref(s)}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="mt-1 flex h-10 items-center justify-center rounded-md bg-white px-3 text-sm font-semibold normal-case tracking-normal text-primary ring-1 ring-black/8"
+                                            >
+                                              запись в группу {s.groupId || "—"}
+                                            </a>
+                                          </label>
+                                        </div>
                                         <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                                           Уровень знаний
                                           <select
                                             value={detail.levelId || ""}
                                             onChange={(e) => setDetail((d) => (d ? { ...d, levelId: Number(e.target.value) || 0 } : d))}
-                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                                           >
                                             <option value="">— не задан —</option>
                                             {levels.map((lv) => (
@@ -2250,7 +2315,7 @@ export function AdminSchedule() {
                                           <select
                                             value={detail.statusId || ""}
                                             onChange={(e) => setDetail((d) => (d ? { ...d, statusId: Number(e.target.value) || 0 } : d))}
-                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                                           >
                                             <option value="">— не задан —</option>
                                             {GROUP_STATUS.map((st) => (
@@ -2260,12 +2325,12 @@ export function AdminSchedule() {
                                             ))}
                                           </select>
                                         </label>
-                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted md:col-span-2">
                                           Отработка
                                           <input
                                             value={detail.makeup}
                                             onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))}
-                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                                           />
                                         </label>
                                         <div className="flex items-end justify-end md:col-span-2">

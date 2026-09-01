@@ -26,6 +26,8 @@ import {
 import { loadSubjects, saveSubjects, pullSubjectsFromCrm, pushSubjectsToCrm } from "./crm-subjects";
 import type { GroupCalLesson } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
+import { loadGroupCard, saveGroupCard } from "./group-cards";
+import { scheduleVoiceTurn } from "./schedule-voice";
 
 function hm(raw?: string) {
   const m = String(raw || "").match(/(\d{1,2}):(\d{2})/);
@@ -124,7 +126,26 @@ async function fetchLevels(t: string, branch: number) {
   return SEED_LEVELS;
 }
 
-export const adminSchedule = createServerFn({ method: "POST" })
+const PULL_MS = 30 * 60 * 1000;
+const g = globalThis as { __raSchedPull?: ReturnType<typeof setInterval>; __raSchedLast?: number };
+
+async function maybeAutoPull(force = false) {
+  const last = g.__raSchedLast || 0;
+  if (!force && Date.now() - last < PULL_MS) return;
+  g.__raSchedLast = Date.now();
+  try {
+    await refreshCrmSchedule();
+  } catch {
+    g.__raSchedLast = last;
+  }
+}
+
+function ensureAutoPullTimer() {
+  if (g.__raSchedPull) return;
+  g.__raSchedPull = setInterval(() => {
+    void maybeAutoPull();
+  }, PULL_MS);
+}
   .validator(
     (data: unknown) =>
       data as {
@@ -149,10 +170,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "subjectsSave"
           | "subjectsPush"
           | "groupGet"
-          | "groupSave";
+          | "groupSave"
+          | "voiceAsk";
         slots?: CrmSlot[];
         text?: string;
         prompt?: string;
+        fresh?: boolean;
         changes?: { id: string; field: string; to: string }[];
         adds?: SlotDraft[];
         draft?: SlotDraft;
@@ -199,11 +222,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
       }
       const bound = bindSubjectsOnSite();
       if (bound.changed) logAdmin(`Предметы привязаны к группам на сайте: ${bound.slots.length}`);
-      return pack(bound.slots);
+      ensureAutoPullTimer();
+      const due = !g.__raSchedLast || Date.now() - g.__raSchedLast > PULL_MS;
+      if (due) void maybeAutoPull();
+      return pack(bound.slots, { autoPullDue: due });
     }
     if (data.action === "pull") {
       try {
         const res = await refreshCrmSchedule();
+        g.__raSchedLast = Date.now();
         pushVersion("Загрузка из AlfaCRM", res.slots);
         logAdmin(`Расписание из AlfaCRM: +${res.added} новых, ${res.updated} обновлено, всего ${res.count}`);
         return pack(res.slots, { added: res.added, updated: res.updated });
@@ -342,12 +369,34 @@ export const adminSchedule = createServerFn({ method: "POST" })
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось выгрузить предметы." };
       }
     }
+    if (data.action === "voiceAsk") {
+      const prompt = String(data.prompt || "").trim();
+      if (!prompt) return { ok: false as const, error: "Пустой запрос." };
+      try {
+        const turn = await scheduleVoiceTurn(prompt, Array.isArray(data.ids) ? data.ids.map(String) : []);
+        return { ok: true as const, ...turn };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Голосовой агент расписания не ответил." };
+      }
+    }
     if (data.action === "groupGet") {
       const { token, request } = await import("./alfacrm");
       const t = await token();
       const branch = Number(data.branchId) || 1;
       const gid = Number(data.groupId) || 0;
       if (!gid) return { ok: false as const, error: "Нет номера группы." };
+      if (!data.fresh) {
+        const cached = loadGroupCard(branch, gid);
+        if (cached) {
+          return {
+            ok: true as const,
+            fromCache: true,
+            subjects: loadSubjects(),
+            levels: SEED_LEVELS,
+            group: cached,
+          };
+        }
+      }
       const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/group/index`, { page: 0, pageSize: 100 }, t);
       const g = (json.items || []).find((x) => Number(x.id) === gid);
       if (!g) return { ok: false as const, error: "Группа не найдена в AlfaCRM." };
@@ -426,12 +475,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const calendar = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
       rememberLessons(calendar);
       const levels = await fetchLevels(t, branch).catch(() => SEED_LEVELS);
-      return {
-        ok: true as const,
-        subjects: loadSubjects(),
-        levels,
-        group: {
+      const group = {
           id: gid,
+          branchId: branch,
           name: String(g.name || ""),
           note: String(g.note || ""),
           description: String(g.note || ""),
@@ -446,7 +492,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
           subjectId: Number(slot?.subjectId || 0),
           subject: slot?.subject || "",
           calendar,
-        },
+          at: new Date().toISOString(),
+      };
+      saveGroupCard(group);
+      return {
+        ok: true as const,
+        fromCache: false,
+        subjects: loadSubjects(),
+        levels,
+        group,
       };
     }
     if (data.action === "groupSave") {
@@ -501,6 +555,23 @@ export const adminSchedule = createServerFn({ method: "POST" })
         }
       }
       const saved = saveAdminSlots(next).slots;
+      const prev = loadGroupCard(branch, gid);
+      if (prev) {
+        saveGroupCard({
+          ...prev,
+          note: description,
+          description,
+          remarks,
+          hashtags,
+          makeup,
+          statusId: statusId || prev.statusId,
+          bDate: bDate || prev.bDate,
+          eDate: eDate || prev.eDate,
+          levelId: levelId || prev.levelId,
+          subjectId: subjectId || prev.subjectId,
+          subject: subject?.name || prev.subject,
+        });
+      }
       logAdmin(`Группа ${gid}: подробности сохранены в AlfaCRM`);
       return pack(saved);
     }
