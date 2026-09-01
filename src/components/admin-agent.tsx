@@ -7,6 +7,7 @@ import { AdminChats } from "@/components/admin-chats";
 import { AdminVoices } from "@/components/admin-voices";
 import { AdminVoiceEdits } from "@/components/admin-voice-edits";
 import { AdminTrain } from "@/components/admin-train";
+import { AdminAccess } from "@/components/admin-access";
 import { AdminDebug } from "@/components/admin-debug";
 import { InfoTip } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
