@@ -401,6 +401,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         at?: string;
         subjects?: { id: number; name: string; local?: boolean }[];
         q?: string;
+        status?: string;
         note?: string;
         hashtags?: string;
         makeup?: string;
@@ -611,7 +612,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
     }
     if (data.action === "customersSearch") {
       const q = String(data.q || "").trim();
-      const local = searchClientViews(q, 400);
+      const status = String(data.status || "").trim();
+      const local = searchClientViews(q, 600, status);
       const items = local.items.map((d) => ({
         id: d.id,
         crmId: d.crmId,
@@ -669,7 +671,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           /* local list is enough */
         }
       }
-      return { ok: true as const, items, total: local.total, lastCrmSync: local.lastCrmSync };
+      return { ok: true as const, items, total: local.total, all: local.all, counts: local.counts, lastCrmSync: local.lastCrmSync };
     }
     if (data.action === "voiceAsk") {
       const prompt = String(data.prompt || "").trim();

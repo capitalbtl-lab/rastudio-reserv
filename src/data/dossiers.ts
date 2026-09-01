@@ -548,6 +548,62 @@ export async function syncAllFromCrm() {
   return { ok: true as const, count: n, lastCrmSync: store.lastCrmSync };
 }
 
+let teacherMapCache: Record<string, string> | null = null;
+
+async function teacherMap() {
+  if (teacherMapCache) return teacherMapCache;
+  const t = await alfaToken();
+  const map: Record<string, string> = {};
+  for (const branch of [1, 2, 3, 4]) {
+    const tr = await request<{ items?: { id?: number; name?: string }[] }>(`/v2api/${branch}/teacher/index`, { page: 0, pageSize: 200 }, t).catch(
+      () => ({ items: [] as { id?: number; name?: string }[] }),
+    );
+    for (const p of tr.items || []) if (p.id && p.name) map[String(p.id)] = p.name;
+  }
+  teacherMapCache = map;
+  return map;
+}
+
+export async function syncSliceFromCrm(opts: { branchId: number; isStudy?: number; removed?: boolean; page?: number; pages?: number }) {
+  const t = await alfaToken();
+  const map = await teacherMap();
+  const branch = Number(opts.branchId) || 1;
+  const pages = Math.min(Math.max(Number(opts.pages) || 3, 1), 6);
+  let page = Math.max(0, Number(opts.page) || 0);
+  let n = 0;
+  let hasMore = true;
+  for (let i = 0; i < pages; i += 1) {
+    const body = opts.removed
+      ? { page, pageSize: 50, removed: 1 }
+      : { page, pageSize: 50, is_study: opts.isStudy };
+    const data = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/customer/index`, body, t).catch(
+      () => ({ items: [] as Record<string, unknown>[] }),
+    );
+    const items = data.items || [];
+    for (const item of items) {
+      if (opts.removed) applyCrmCustomer(item, branch, Number(item.is_study) !== 1, map);
+      else applyCrmCustomer(item, branch, opts.isStudy === 2, map);
+      n += 1;
+    }
+    page += 1;
+    if (items.length < 50) {
+      hasMore = false;
+      break;
+    }
+  }
+  const store = loadStore();
+  store.lastCrmSync = new Date().toISOString();
+  saveStore(store);
+  const counts = { все: 0, учится: 0, лид: 0, архив: 0 };
+  for (const d of store.items) {
+    counts.все += 1;
+    if (d.status === "учится") counts.учится += 1;
+    else if (d.status === "лид") counts.лид += 1;
+    else if (d.status === "архив") counts.архив += 1;
+  }
+  return { ok: true as const, count: n, nextPage: page, hasMore, total: store.items.length, counts, lastCrmSync: store.lastCrmSync };
+}
+
 function viewOf(d: Dossier) {
   const ex = d.extras || {};
   const fromGroup = namesFromGroup(ex.groups);
@@ -590,14 +646,27 @@ function viewOf(d: Dossier) {
 
 export type ClientView = ReturnType<typeof viewOf>;
 
-export function searchClientViews(q = "", limit = 400) {
+export function searchClientViews(q = "", limit = 400, status = "") {
   const store = loadStore();
   const needle = String(q || "")
     .toLowerCase()
     .replace(/ё/g, "е")
     .trim();
   const words = needle.split(/\s+/).filter((w) => w.length > 1);
+  const want = String(status || "").trim();
+  const counts = { все: 0, учится: 0, лид: 0, архив: 0 };
+  for (const d of store.items) {
+    counts.все += 1;
+    if (d.status === "учится") counts.учится += 1;
+    else if (d.status === "лид") counts.лид += 1;
+    else if (d.status === "архив") counts.архив += 1;
+  }
   const items = store.items.map(viewOf).filter((d) => {
+    if (want && want !== "все") {
+      if (want === "архив") {
+        if (d.status !== "архив" && !d.archived) return false;
+      } else if (d.status !== want) return false;
+    }
     if (!needle) return true;
     const hay = `${d.child} ${d.parent} ${d.phone} ${d.city} ${d.branch} ${d.courses.join(" ")} ${d.schools.join(" ")} ${d.crmId || ""}`
       .toLowerCase()
@@ -605,13 +674,14 @@ export function searchClientViews(q = "", limit = 400) {
     if (hay.includes(needle)) return true;
     return words.length > 0 && words.every((w) => hay.includes(w));
   });
-  items.sort((a, b) => {
-    const rank = (s: string) => (s === "учится" ? 0 : s === "лид" ? 1 : 2);
-    const r = rank(a.status) - rank(b.status);
-    if (r) return r;
-    return (a.child || "").localeCompare(b.child || "", "ru");
-  });
-  return { items: items.slice(0, limit), total: store.items.length, lastCrmSync: store.lastCrmSync || "" };
+  items.sort((a, b) => (a.child || "").localeCompare(b.child || "", "ru"));
+  return {
+    items: items.slice(0, limit),
+    total: items.length,
+    all: store.items.length,
+    counts,
+    lastCrmSync: store.lastCrmSync || "",
+  };
 }
 
 export const adminDossiers = createServerFn({ method: "POST" })
@@ -619,11 +689,15 @@ export const adminDossiers = createServerFn({ method: "POST" })
     (data: unknown) =>
       data as {
         token?: string;
-        action?: "list" | "get" | "save" | "sync" | "syncAll";
+        action?: "list" | "get" | "save" | "sync" | "syncAll" | "syncSlice";
         id?: string;
         crmId?: number;
         branchId?: number;
         q?: string;
+        isStudy?: number;
+        page?: number;
+        pages?: number;
+        removed?: boolean;
         patch?: Partial<Dossier> & { childFio?: string; parentFio?: string; dob?: string; phone?: string };
       },
   )
@@ -641,6 +715,20 @@ export const adminDossiers = createServerFn({ method: "POST" })
         return { ok: true as const, ...res };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "CRM" };
+      }
+    }
+    if (data.action === "syncSlice") {
+      try {
+        const res = await syncSliceFromCrm({
+          branchId: Number(data.branchId) || 1,
+          isStudy: data.isStudy,
+          removed: Boolean(data.removed),
+          page: Number(data.page) || 0,
+          pages: Number(data.pages) || 3,
+        });
+        return { ok: true as const, ...res };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "CRM не ответила на этот шаг." };
       }
     }
     if (data.action === "sync" && data.crmId && data.branchId) {

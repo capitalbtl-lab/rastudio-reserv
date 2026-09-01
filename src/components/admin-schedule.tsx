@@ -848,13 +848,14 @@ export function AdminSchedule() {
   const [flash, setFlash] = useState<Set<string>>(new Set());
   const [view, setView] = useState<Record<string, number>>({});
   const [fileOpen, setFileOpen] = useState(false);
-  const [pull, setPull] = useState({ open: false, step: "", done: false, added: 0, updated: 0, total: 0, error: "" });
+  const [pull, setPull] = useState({ open: false, step: "", done: false, added: 0, updated: 0, total: 0, error: "", kind: "groups" as "groups" | "clients" });
   const [pane, setPane] = useState<"groups" | "clients" | "subjects" | "map">("groups");
   const [clientQ, setClientQ] = useState("");
   const [clientRows, setClientRows] = useState<ClientRow[]>([]);
   const [clientBusy, setClientBusy] = useState(false);
   const [clientStatus, setClientStatus] = useState("все");
   const [clientTotal, setClientTotal] = useState(0);
+  const [clientCounts, setClientCounts] = useState({ все: 0, учится: 0, лид: 0, архив: 0 });
   const [branchFilter, setBranchFilter] = useState("all");
   const [onlyMismatch, setOnlyMismatch] = useState(false);
   const [pushUi, setPushUi] = useState({ open: false, step: "", done: false, created: 0, pushed: 0, failed: 0, error: "", lines: [] as string[] });
@@ -1160,13 +1161,82 @@ export function AdminSchedule() {
     );
   }
 
-  async function loadClients(q = clientQ) {
+  async function loadClients(q = clientQ, status = clientStatus) {
     setClientBusy(true);
-    const res = await adminSchedule({ data: { token: token(), action: "customersSearch", q } as never });
-    setClientBusy(false);
-    if (res.ok && "items" in res) {
-      setClientRows((res.items || []) as ClientRow[]);
-      setClientTotal(Number((res as { total?: number }).total) || (res.items || []).length);
+    try {
+      const res = await adminSchedule({ data: { token: token(), action: "customersSearch", q, status } as never });
+      if (res.ok && "items" in res) {
+        setClientRows((res.items || []) as ClientRow[]);
+        setClientTotal(Number((res as { total?: number }).total) || (res.items || []).length);
+        const counts = (res as { counts?: { все: number; учится: number; лид: number; архив: number } }).counts;
+        if (counts) setClientCounts(counts);
+      }
+    } finally {
+      setClientBusy(false);
+    }
+  }
+
+  async function pullClients() {
+    setPull({ open: true, step: "Подключаюсь к AlfaCRM…", done: false, added: 0, updated: 0, total: 0, error: "", kind: "clients" });
+    const branches: [number, string][] = [
+      [1, "ЦМИТ"],
+      [2, "Гражданская"],
+      [3, "Луховицы"],
+      [4, "Лето"],
+    ];
+    const studies: [number, string][] = [
+      [1, "учатся"],
+      [0, "лиды"],
+      [2, "архив"],
+    ];
+    let loaded = 0;
+    try {
+      for (const [branchId, branchName] of branches) {
+        for (const [isStudy, label] of studies) {
+          let page = 0;
+          while (page < 80) {
+            setPull((u) => (u.done ? u : { ...u, step: `${branchName} · ${label} · стр. ${page + 1} · уже ${loaded}`, kind: "clients" }));
+            const res = await adminDossiers({
+              data: { token: token(), action: "syncSlice", branchId, isStudy, page, pages: 3 },
+            });
+            if (!res.ok) {
+              setPull((u) => ({ ...u, done: true, error: res.error || "AlfaCRM не ответила.", kind: "clients" }));
+              return;
+            }
+            const n = Number((res as { count?: number }).count) || 0;
+            loaded += n;
+            const total = Number((res as { total?: number }).total) || loaded;
+            setPull((u) => (u.done ? u : { ...u, added: loaded, total, kind: "clients" }));
+            if (!(res as { hasMore?: boolean }).hasMore) break;
+            page = Number((res as { nextPage?: number }).nextPage) || page + 3;
+          }
+        }
+        let page = 0;
+        while (page < 40) {
+          setPull((u) => (u.done ? u : { ...u, step: `${branchName} · снятые · стр. ${page + 1} · уже ${loaded}`, kind: "clients" }));
+          const res = await adminDossiers({
+            data: { token: token(), action: "syncSlice", branchId, removed: true, page, pages: 3 },
+          });
+          if (!res.ok) break;
+          const n = Number((res as { count?: number }).count) || 0;
+          loaded += n;
+          if (!(res as { hasMore?: boolean }).hasMore) break;
+          page = Number((res as { nextPage?: number }).nextPage) || page + 3;
+        }
+      }
+      setPull({
+        open: true,
+        step: "",
+        done: true,
+        added: loaded,
+        updated: 0,
+        total: loaded,
+        error: "",
+        kind: "clients",
+      });
+      await loadClients(clientQ, clientStatus);
+    } catch {
+      setPull((u) => ({ ...u, done: true, error: "Не удалось загрузить клиентов.", kind: "clients" }));
     }
   }
 
@@ -1857,7 +1927,7 @@ export function AdminSchedule() {
 
   async function pullCrm() {
     setBusy(true);
-    setPull({ open: true, step: "Подключаюсь к AlfaCRM…", done: false, added: 0, updated: 0, total: 0, error: "" });
+    setPull({ open: true, step: "Подключаюсь к AlfaCRM…", done: false, added: 0, updated: 0, total: 0, error: "", kind: "groups" });
     const steps = ["Читаю филиалы и предметы…", "Загружаю группы и уроки…", "Сверяю с расписанием на сайте…"];
     let i = 0;
     const timer = window.setInterval(() => {
@@ -1875,7 +1945,7 @@ export function AdminSchedule() {
         const updated = Number((res as { updated?: number }).updated || 0);
         const total = Array.isArray((res as { slots?: CrmSlot[] }).slots) ? (res as { slots: CrmSlot[] }).slots.length : 0;
         setDirty(new Set());
-        setPull({ open: true, step: "", done: true, added, updated, total, error: "" });
+        setPull({ open: true, step: "", done: true, added, updated, total, error: "", kind: "groups" });
         setMsg(`Загружено. Новых групп: ${added}. Обновлено: ${updated}. На сайте ${total}.`);
       }
     } catch {
@@ -2067,17 +2137,8 @@ export function AdminSchedule() {
               size="sm"
               variant="secondary"
               className="h-10"
-              disabled={clientBusy}
-              onClick={async () => {
-                setClientBusy(true);
-                setMsg("Загружаю клиентов из AlfaCRM…");
-                const res = await adminDossiers({ data: { token: token(), action: "syncAll" } });
-                setClientBusy(false);
-                if (res.ok) {
-                  setMsg(`Загружено ${"count" in res ? res.count : ""} карточек.`);
-                  void loadClients(clientQ);
-                } else setMsg(res.error || "Не удалось загрузить клиентов.");
-              }}
+              disabled={clientBusy || pull.open}
+              onClick={() => void pullClients()}
             >
               Загрузить из AlfaCRM
             </Button>
@@ -2086,18 +2147,22 @@ export function AdminSchedule() {
             </Button>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {["все", "учится", "лид", "архив"].map((st) => (
+            {(["все", "учится", "лид", "архив"] as const).map((st) => (
               <button
                 key={st}
                 type="button"
-                onClick={() => setClientStatus(st)}
+                onClick={() => {
+                  setClientStatus(st);
+                  void loadClients(clientQ, st);
+                }}
                 className={cn("rounded-full px-3 py-1 text-[0.78rem] font-semibold", clientStatus === st ? "bg-primary text-white" : "bg-surface-2 text-fg")}
               >
                 {st === "все" ? "Все" : st === "учится" ? "Учатся" : st === "лид" ? "Лиды" : "Архив"}
+                {clientCounts[st] ? ` ${clientCounts[st]}` : ""}
               </button>
             ))}
             <p className="ml-auto self-center text-[0.78rem] text-muted">
-              {clientBusy ? "ищу…" : `${clientRows.filter((r) => clientStatus === "все" || r.status === clientStatus).length} из ${clientTotal || clientRows.length}`}
+              {clientBusy ? "ищу…" : `${clientRows.length} из ${clientTotal || clientRows.length}`}
             </p>
           </div>
           {ask ? <p className="rounded-xl bg-primary/10 px-3 py-2 text-sm font-medium text-fg">{ask}</p> : null}
@@ -2115,7 +2180,6 @@ export function AdminSchedule() {
               </thead>
               <tbody>
                 {clientRows
-                  .filter((r) => clientStatus === "все" || r.status === clientStatus)
                   .slice(0, 250)
                   .map((r) => (
                     <tr key={r.id} className="cursor-pointer border-t border-black/6 hover:bg-primary/5" onClick={() => openClientRow(r)}>
@@ -2134,7 +2198,11 @@ export function AdminSchedule() {
               </tbody>
             </table>
             {!clientBusy && !clientRows.length ? (
-              <p className="px-4 py-6 text-sm text-muted">Пока пусто. Нажмите «Загрузить из AlfaCRM» или скажите: «найди Иванова».</p>
+              <p className="px-4 py-6 text-sm text-muted">
+                {clientStatus === "архив"
+                  ? "Архивных в этой выборке нет. Нажмите «Загрузить из AlfaCRM» — подтянем всех, включая архив."
+                  : "Пока пусто. Нажмите «Загрузить из AlfaCRM» или скажите: «найди Иванова»."}
+              </p>
             ) : null}
           </div>
         </div>
@@ -2840,7 +2908,9 @@ export function AdminSchedule() {
         ? createPortal(
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => pull.done && setPull((u) => ({ ...u, open: false }))}>
               <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.28)]" onClick={(e) => e.stopPropagation()}>
-                <p className="font-display text-2xl">{pull.done ? pull.error ? "Не загрузилось" : "Загрузка завершена" : "Загрузка из AlfaCRM"}</p>
+                <p className="font-display text-2xl">
+                  {pull.done ? pull.error ? "Не загрузилось" : "Загрузка завершена" : pull.kind === "clients" ? "Загрузка клиентов" : "Загрузка из AlfaCRM"}
+                </p>
                 {!pull.done ? (
                   <div className="mt-5 flex items-start gap-3">
                     <span className="mt-0.5 h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
@@ -2848,6 +2918,16 @@ export function AdminSchedule() {
                   </div>
                 ) : pull.error ? (
                   <p className="mt-4 text-sm text-red-600">{pull.error}</p>
+                ) : pull.kind === "clients" ? (
+                  <div className="mt-4 space-y-2 text-sm">
+                    <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">
+                      Обработано карточек: <b>{pull.added}</b>
+                    </p>
+                    <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">
+                      В базе на сайте: <b>{clientCounts.все || pull.total}</b>
+                      {clientCounts.все ? ` · учатся ${clientCounts.учится} · лиды ${clientCounts.лид} · архив ${clientCounts.архив}` : ""}
+                    </p>
+                  </div>
                 ) : (
                   <div className="mt-4 space-y-2 text-sm">
                     <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">
