@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,36 @@ function download(name: string, mime: string, text: string) {
 type Ver = { at: string; reason: string; count: number };
 type Change = { id: string; field: string; from: string; to: string };
 
+function CheckBox({
+  ids,
+  picked,
+  onToggle,
+}: {
+  ids: string[];
+  picked: Record<string, boolean>;
+  onToggle: (ids: string[], on: boolean) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const all = ids.length > 0 && ids.every((id) => picked[id]);
+  const some = ids.some((id) => picked[id]);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = some && !all;
+  }, [some, all]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={all}
+      className="h-4 w-4 shrink-0 accent-primary"
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        e.stopPropagation();
+        onToggle(ids, e.target.checked);
+      }}
+    />
+  );
+}
+
 export function AdminSchedule() {
   const [slots, setSlots] = useState<CrmSlot[]>([]);
   const [at, setAt] = useState("");
@@ -43,10 +73,11 @@ export function AdminSchedule() {
   const [openAll, setOpenAll] = useState(false);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [versions, setVersions] = useState<Ver[]>([]);
-  const [aiOpen, setAiOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiChanges, setAiChanges] = useState<Change[]>([]);
   const [aiComment, setAiComment] = useState("");
+  const [picked, setPicked] = useState<Record<string, boolean>>({});
+  const [who, setWho] = useState<Record<string, string[]>>({});
 
   function take(res: { ok: boolean; slots?: CrmSlot[]; at?: string; versions?: Ver[]; error?: string; comment?: string; changes?: Change[]; pushed?: number }) {
     if (!res.ok) {
@@ -104,6 +135,26 @@ export function AdminSchedule() {
           .map(([course, items]) => ({ course, items })),
       }));
   }, [slots]);
+
+  const pickedIds = useMemo(() => Object.keys(picked).filter((id) => picked[id]), [picked]);
+
+  function setIds(ids: string[], on: boolean) {
+    setPicked((prev) => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = on;
+      return next;
+    });
+  }
+
+  async function loadWho(s: CrmSlot) {
+    const key = `${s.branchId}-${s.groupId}`;
+    if (who[key] || !s.groupId) return;
+    const res = await adminSchedule({ data: { token: token(), action: "students", groupId: s.groupId, branchId: s.branchId } });
+    const names = res.ok && "names" in res && Array.isArray(res.names) ? (res.names as string[]) : [];
+    setWho((prev) => ({ ...prev, [key]: names }));
+  }
+
+  const cell = "h-8 rounded-md bg-surface-2 px-1 text-center text-[0.75rem] leading-8 ring-1 ring-black/8";
 
   return (
     <section className="mt-10 space-y-6">
@@ -163,9 +214,9 @@ export function AdminSchedule() {
             />
           </label>
         </TipWrap>
-        <TipWrap text="Опишите правку обычным языком. Сначала превью, потом применить. Создаётся версия — можно откатиться.">
-          <Button type="button" disabled={busy} onClick={() => setAiOpen((v) => !v)}>
-            Изменить через ИИ
+        <TipWrap text="Опишите правку обычным языком в блоке «Правка расписания». Сначала превью, потом применить. Создаётся версия — можно откатиться.">
+          <Button type="button" disabled={busy} onClick={() => document.getElementById("ra-sched-ai")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+            Правка расписания
           </Button>
         </TipWrap>
         <Button type="button" variant="secondary" onClick={() => setOpenAll((v) => !v)}>
@@ -174,36 +225,45 @@ export function AdminSchedule() {
       </div>
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
 
-      {aiOpen ? (
-        <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
-          <p className="font-display text-xl">Массовая правка ИИ</p>
-          <textarea
-            value={aiPrompt}
-            onChange={(e) => setAiPrompt(e.target.value)}
-            rows={4}
-            placeholder="Например: все группы художественной студии 5–6 на ЦМИТ перенеси на 17:00. Педагога не меняй."
-            className="mt-3 w-full rounded-xl bg-surface-2 px-3 py-2 ring-1 ring-black/10"
-          />
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button type="button" disabled={busy || !aiPrompt.trim()} onClick={async () => { setMsg("Считаю правки…"); await run("aiPreview", { prompt: aiPrompt }); }}>
-              Показать, что изменится
-            </Button>
-            <Button type="button" disabled={busy || !aiChanges.length} onClick={async () => { const res = await run("aiApply", { changes: aiChanges, prompt: aiPrompt }); if (res.ok) { setDirty(new Set(aiChanges.map((c) => c.id))); setAiChanges([]); setMsg("Правки ИИ на сайте. Выгрузите в CRM, если нужно."); } }}>
-              Применить
-            </Button>
+      <article id="ra-sched-ai" className="sticky top-20 z-20 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="font-display text-xl">Правка расписания</p>
+          <div className="flex flex-wrap items-center gap-2 text-[0.72rem] text-muted">
+            <span>отмечено {pickedIds.length}</span>
+            <button type="button" className="font-semibold text-primary" onClick={() => setIds(slots.map((s) => s.id), true)}>
+              Выделить всё
+            </button>
+            <button type="button" className="font-semibold text-primary" onClick={() => setPicked({})}>
+              Снять
+            </button>
           </div>
-          {aiComment ? <p className="mt-2 text-sm text-muted">{aiComment}</p> : null}
-          {aiChanges.length ? (
-            <ul className="mt-3 max-h-56 space-y-1 overflow-auto text-sm">
-              {aiChanges.map((c, i) => (
-                <li key={`${c.id}-${c.field}-${i}`}>
-                  <span className="text-muted">{c.id}</span> · {c.field}: {c.from || "∅"} → {c.to}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </article>
-      ) : null}
+        </div>
+        <textarea
+          value={aiPrompt}
+          onChange={(e) => setAiPrompt(e.target.value)}
+          rows={1}
+          placeholder="Например: все группы художественной студии 5–6 на ЦМИТ перенеси на 17:00. Педагога не меняй."
+          className="mt-3 h-10 w-full resize-none rounded-xl bg-surface-2 px-3 py-2 text-sm ring-1 ring-black/10"
+        />
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <Button type="button" disabled={busy || !aiPrompt.trim()} onClick={async () => { setMsg("Считаю правки…"); await run("aiPreview", { prompt: aiPrompt, ids: pickedIds }); }}>
+            Показать, что изменится
+          </Button>
+          <Button type="button" disabled={busy || !aiChanges.length} onClick={async () => { const res = await run("aiApply", { changes: aiChanges, prompt: aiPrompt, ids: pickedIds }); if (res.ok) { setDirty(new Set(aiChanges.map((c) => c.id))); setAiChanges([]); setMsg("Правки только для отмеченных групп. Выгрузите в CRM, если нужно."); } }}>
+            Применить
+          </Button>
+        </div>
+        {aiComment ? <p className="mt-2 text-sm text-muted">{aiComment}</p> : null}
+        {aiChanges.length ? (
+          <ul className="mt-3 max-h-40 space-y-1 overflow-auto text-sm">
+            {aiChanges.map((c, i) => (
+              <li key={`${c.id}-${c.field}-${i}`}>
+                <span className="text-muted">{c.id}</span> · {c.field}: {c.from || "∅"} → {c.to}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </article>
 
       {versions.length ? (
         <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
@@ -227,52 +287,88 @@ export function AdminSchedule() {
       ) : null}
 
       <div className="space-y-3">
-        {tree.map((sch) => (
+        {tree.map((sch) => {
+          const schoolIds = sch.courses.flatMap((c) => c.items.map((s) => s.id));
+          return (
           <article key={sch.school} className="overflow-hidden rounded-3xl bg-surface shadow-[var(--shadow-border)]">
-            <button type="button" className="flex w-full items-center justify-between px-5 py-4 text-left" onClick={() => { setOpenAll(false); setOpenSchool((v) => (v === sch.school ? "" : sch.school)); }}>
-              <span className="font-display text-xl">{sch.school}</span>
-              <span className="text-sm text-muted">
-                {sch.courses.length
-                  ? `${sch.courses.reduce((n, c) => n + c.items.length, 0)} слотов · ${sch.courses.length} курсов`
-                  : "не заполнено"}
-              </span>
-            </button>
+            <div className="flex w-full items-center gap-3 px-5 py-4">
+              <CheckBox ids={schoolIds} picked={picked} onToggle={setIds} />
+              <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => { setOpenAll(false); setOpenSchool((v) => (v === sch.school ? "" : sch.school)); }}>
+                <span className="font-display text-xl">{sch.school}</span>
+                <span className="text-sm text-muted">
+                  {sch.courses.length
+                    ? `${sch.courses.reduce((n, c) => n + c.items.length, 0)} слотов · ${sch.courses.length} курсов`
+                    : "не заполнено"}
+                </span>
+              </button>
+            </div>
             {openAll || openSchool === sch.school ? (
               sch.courses.length ? (
-                sch.courses.map((c) => (
+                sch.courses.map((c) => {
+                  const courseIds = c.items.map((s) => s.id);
+                  return (
                   <div key={c.course} className="border-t border-black/6">
-                    <button type="button" className="flex w-full items-center justify-between bg-surface-2 px-5 py-3 text-left" onClick={() => setOpenCourse((v) => (v === c.course ? "" : c.course))}>
-                      <span className="font-medium">{c.course}</span>
-                      <span className="text-xs text-muted">{c.items.length}</span>
-                    </button>
+                    <div className="flex items-center gap-3 bg-surface-2 px-5 py-3">
+                      <CheckBox ids={courseIds} picked={picked} onToggle={setIds} />
+                      <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => setOpenCourse((v) => (v === c.course ? "" : c.course))}>
+                        <span className="font-medium">{c.course}</span>
+                        <span className="text-xs text-muted">{c.items.length}</span>
+                      </button>
+                    </div>
                     {openAll || openCourse === c.course ? (
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1100px] text-left text-sm">
-                          <thead className="text-[0.68rem] uppercase tracking-wider text-muted">
+                        <table className="w-full text-left text-sm">
+                          <colgroup>
+                            <col className="w-8" />
+                            <col />
+                            <col className="w-[4.6rem]" />
+                            <col className="w-[3.4rem]" />
+                            <col className="w-[7.2rem]" />
+                            <col className="w-10" />
+                            <col className="w-[7.5rem]" />
+                            <col className="w-36" />
+                            <col className="w-[4.2rem]" />
+                            <col className="w-24" />
+                            <col className="w-16" />
+                          </colgroup>
+                          <thead className="text-[0.65rem] uppercase tracking-wider text-muted">
                             <tr>
-                              <th className="px-3 py-2">Группа · №</th>
-                              <th className="px-3 py-2">Возраст</th>
-                              <th className="px-3 py-2">День</th>
-                              <th className="px-3 py-2">С / до</th>
-                              <th className="px-3 py-2">×нед</th>
-                              <th className="px-3 py-2">Филиал</th>
-                              <th className="px-3 py-2">Педагог</th>
-                              <th className="px-3 py-2">Места</th>
-                              <th className="px-3 py-2">Запись</th>
+                              <th className="px-2 py-2" />
+                              <th className="px-2 py-2">Группа · №</th>
+                              <th className="px-1 py-2 text-center">Возраст</th>
+                              <th className="px-1 py-2 text-center">День</th>
+                              <th className="px-1 py-2 text-center">С / до</th>
+                              <th className="px-1 py-2 text-center">×нед</th>
+                              <th className="px-2 py-2">Филиал</th>
+                              <th className="px-2 py-2">Педагог</th>
+                              <th className="px-1 py-2 text-center">Места</th>
+                              <th className="px-2 py-2">Кто учится</th>
+                              <th className="px-2 py-2">Запись</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {c.items.map((s) => (
+                            {c.items.map((s) => {
+                              const key = `${s.branchId}-${s.groupId}`;
+                              const names = who[key];
+                              return (
                               <tr key={s.id} className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5")}>
-                                <td className="px-3 py-2">
-                                  <input value={s.groupName} onChange={(e) => patch(s.id, "groupName", e.target.value)} className="h-9 w-44 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8" />
-                                  <p className="mt-0.5 text-[0.7rem] text-muted">gid {s.groupId || "—"} · урок {s.lessonId || "—"}</p>
+                                <td className="px-2 py-1.5 align-middle">
+                                  <CheckBox ids={[s.id]} picked={picked} onToggle={setIds} />
                                 </td>
-                                <td className="px-3 py-2">
-                                  <input value={s.age} onChange={(e) => patch(s.id, "age", e.target.value)} className="h-9 w-24 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8" />
+                                <td className="px-2 py-1.5 align-middle">
+                                  <input
+                                    value={s.groupName}
+                                    title={s.groupName}
+                                    onChange={(e) => patch(s.id, "groupName", e.target.value)}
+                                    className="h-8 w-full min-w-[12rem] rounded-md bg-surface-2 px-2 text-[0.8rem] ring-1 ring-black/8"
+                                  />
+                                  <p className="mt-0.5 text-[0.65rem] text-muted">gid {s.groupId || "—"} · урок {s.lessonId || "—"}</p>
                                 </td>
-                                <td className="px-3 py-2">
-                                  <select value={s.day} onChange={(e) => patch(s.id, "day", Number(e.target.value))} className="h-9 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8">
+                                <td className="px-1 py-1.5 align-middle">
+                                  <input value={s.age} onChange={(e) => patch(s.id, "age", e.target.value)} className={cn(cell, "w-full")} />
+                                </td>
+                                <td className="px-1 py-1.5 align-middle">
+                                  <select value={s.day} onChange={(e) => patch(s.id, "day", Number(e.target.value))} className={cn(cell, "w-full px-0")}>
                                     {[1, 2, 3, 4, 5, 6, 7].map((d) => (
                                       <option key={d} value={d}>
                                         {["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"][d]}
@@ -280,27 +376,39 @@ export function AdminSchedule() {
                                     ))}
                                   </select>
                                 </td>
-                                <td className="px-3 py-2">
-                                  <div className="flex gap-1">
-                                    <input value={s.timeFrom} onChange={(e) => patch(s.id, "timeFrom", e.target.value)} className="h-9 w-16 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8" />
-                                    <input value={s.timeTo} onChange={(e) => patch(s.id, "timeTo", e.target.value)} className="h-9 w-16 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8" />
+                                <td className="px-1 py-1.5 align-middle">
+                                  <div className="flex items-center justify-center gap-0.5">
+                                    <input value={s.timeFrom} onChange={(e) => patch(s.id, "timeFrom", e.target.value)} className={cn(cell, "w-[3.2rem]")} />
+                                    <input value={s.timeTo} onChange={(e) => patch(s.id, "timeTo", e.target.value)} className={cn(cell, "w-[3.2rem]")} />
                                   </div>
                                 </td>
-                                <td className="px-3 py-2 text-muted">{s.timesPerWeek}</td>
-                                <td className="px-3 py-2 text-xs text-muted">
-                                  {s.city}
+                                <td className="px-1 py-1.5 text-center align-middle text-muted">{s.timesPerWeek}</td>
+                                <td className="px-2 py-1.5 align-middle text-[0.7rem] leading-tight text-muted">
+                                  <span className="block">{s.city}</span>
                                   <span className="block">{s.branch}</span>
                                 </td>
-                                <td className="px-3 py-2">
-                                  <input value={s.teacher} onChange={(e) => patch(s.id, "teacher", e.target.value)} className="h-9 w-36 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8" />
+                                <td className="px-2 py-1.5 align-middle">
+                                  <input value={s.teacher} onChange={(e) => patch(s.id, "teacher", e.target.value)} className="h-8 w-full rounded-md bg-surface-2 px-2 text-[0.75rem] ring-1 ring-black/8" />
                                 </td>
-                                <td className="px-3 py-2">
-                                  <input value={s.limit} onChange={(e) => patch(s.id, "limit", Number(e.target.value) || 0)} className="h-9 w-14 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8" />
-                                  <span className="ml-1 text-xs text-muted">/{s.taken}</span>
+                                <td className="px-1 py-1.5 align-middle">
+                                  <div className="flex items-center justify-center gap-0.5">
+                                    <input value={s.limit} onChange={(e) => patch(s.id, "limit", Number(e.target.value) || 0)} className={cn(cell, "w-8")} />
+                                    <span className="text-[0.65rem] text-muted">/{s.taken}</span>
+                                  </div>
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="px-2 py-1.5 align-middle">
+                                  <div className="group relative inline-block">
+                                    <button type="button" className="text-[0.7rem] font-semibold text-primary" onMouseEnter={() => void loadWho(s)} onFocus={() => void loadWho(s)}>
+                                      Кто учится
+                                    </button>
+                                    <div className="pointer-events-none absolute left-0 top-full z-30 hidden w-56 rounded-xl bg-fg p-3 text-left text-[0.72rem] font-normal leading-snug text-white shadow-lg group-hover:block">
+                                      {!names ? "Загружаю…" : names.length ? names.map((n) => <p key={n}>{n}</p>) : "В группе пока никого"}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-2 py-1.5 align-middle">
                                   {s.signup ? (
-                                    <a href={s.signup} target="_blank" rel="noreferrer" className="text-xs font-semibold text-primary">
+                                    <a href={s.signup} target="_blank" rel="noreferrer" className="text-[0.7rem] font-semibold text-primary">
                                       gid {s.groupId}
                                     </a>
                                   ) : (
@@ -308,19 +416,22 @@ export function AdminSchedule() {
                                   )}
                                 </td>
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
                     ) : null}
                   </div>
-                ))
+                  );
+                })
               ) : (
                 <p className="border-t border-black/6 px-5 py-4 text-sm text-muted">Расписание не заполнено.</p>
               )
             ) : null}
           </article>
-        ))}
+          );
+        })}
         {slots.length ? null : <p className="text-sm text-muted">Пока пусто — нажмите «Загрузить из AlfaCRM».</p>}
       </div>
     </section>

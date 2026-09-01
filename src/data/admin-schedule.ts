@@ -37,12 +37,16 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "aiPreview"
           | "aiApply"
           | "versions"
-          | "rollback";
+          | "rollback"
+          | "students";
         slots?: CrmSlot[];
         text?: string;
         prompt?: string;
         changes?: { id: string; field: string; to: string }[];
         dirtyIds?: string[];
+        ids?: string[];
+        groupId?: number;
+        branchId?: number;
         at?: string;
       },
   )
@@ -114,15 +118,48 @@ export const adminSchedule = createServerFn({ method: "POST" })
     }
     if (data.action === "aiPreview") {
       const slots = listAdminSlots();
-      const preview = await aiSchedulePatch(slots, String(data.prompt || ""));
+      const ids = Array.isArray(data.ids) ? data.ids.map(String) : [];
+      const subset = ids.length ? slots.filter((s) => ids.includes(s.id)) : [];
+      if (!subset.length) {
+        return pack(slots, { comment: "Отметьте группы чекбоксом слева или нажмите «Выделить всё».", changes: [] });
+      }
+      const preview = await aiSchedulePatch(subset, String(data.prompt || ""));
       return pack(slots, preview);
     }
     if (data.action === "aiApply") {
-      const next = applyChanges(listAdminSlots(), data.changes || []);
+      const ids = new Set((data.ids || []).map(String));
+      const allowed = ids.size ? (data.changes || []).filter((c) => ids.has(c.id)) : [];
+      if (!allowed.length) {
+        return pack(listAdminSlots(), { comment: "Нет отмеченных групп — ничего не применил.", changes: [] });
+      }
+      const next = applyChanges(listAdminSlots(), allowed);
       const saved = saveAdminSlots(next).slots;
       pushVersion(`ИИ: ${(data.prompt || "правка").slice(0, 80)}`, saved);
       logAdmin("Расписание: ИИ-правка применена");
       return pack(saved);
+    }
+    if (data.action === "students") {
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const gid = Number(data.groupId) || 0;
+      if (!gid) return { ok: true as const, names: [] as string[] };
+      const json = await request<{ items?: { id?: number; name?: string; is_study?: number; dob?: string }[] }>(
+        `/v2api/${branch}/customer/index`,
+        { page: 0, pageSize: 80, group_id: gid, is_study: 1 },
+        t,
+      ).catch(async () =>
+        request<{ items?: { id?: number; name?: string; is_study?: number; dob?: string }[] }>(
+          `/v2api/${branch}/customer/index`,
+          { page: 0, pageSize: 80, group_ids: [gid] },
+          t,
+        ),
+      );
+      const names = (json.items || [])
+        .filter((c) => Number(c.is_study) !== 2)
+        .map((c) => String(c.name || "").trim())
+        .filter(Boolean);
+      return { ok: true as const, names };
     }
     if (data.action === "versions") return pack(listAdminSlots());
     if (data.action === "rollback" && data.at) {
