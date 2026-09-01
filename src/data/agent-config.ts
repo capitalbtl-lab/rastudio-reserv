@@ -22,6 +22,7 @@ export type AgentSettings = {
   allowOlga: boolean;
   allowOleg: boolean;
   allowReset: boolean;
+  allowBarge: boolean;
   matchChipsToMessage: boolean;
   keepAssistantReplies: boolean;
   speakEveryReply: boolean;
@@ -36,6 +37,7 @@ export type AgentUiFlags = Pick<
   | "allowOlga"
   | "allowOleg"
   | "allowReset"
+  | "allowBarge"
   | "defaultPartner"
   | "matchChipsToMessage"
   | "keepAssistantReplies"
@@ -74,6 +76,7 @@ const DEFAULT_SETTINGS: AgentSettings = {
   allowOlga: true,
   allowOleg: true,
   allowReset: true,
+  allowBarge: true,
   matchChipsToMessage: true,
   keepAssistantReplies: true,
   speakEveryReply: true,
@@ -208,6 +211,8 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
         allowOlga: flag(data.settings?.allowOlga, brain.settings.allowOlga),
         allowOleg: flag(data.settings?.allowOleg, brain.settings.allowOleg),
         allowReset: flag(data.settings?.allowReset, brain.settings.allowReset),
+        allowBarge: flag(data.settings?.allowBarge, brain.settings.allowBarge),
+        matchChipsToMessage: flag(data.settings?.matchChipsToMessage, brain.settings.matchChipsToMessage),
         updatedAt: new Date().toISOString(),
       };
       saveBrain(brain);
@@ -381,6 +386,7 @@ export function uiFlagsOf(s: AgentSettings): AgentUiFlags {
     allowOlga: s.allowOlga !== false,
     allowOleg: s.allowOleg !== false,
     allowReset: s.allowReset !== false,
+    allowBarge: s.allowBarge !== false,
     matchChipsToMessage: s.matchChipsToMessage !== false,
     keepAssistantReplies: s.keepAssistantReplies !== false,
     speakEveryReply: s.speakEveryReply !== false,

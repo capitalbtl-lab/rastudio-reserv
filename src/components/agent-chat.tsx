@@ -185,6 +185,7 @@ export function AgentChat() {
   const [busy, setBusy] = useState(false);
   const [partner, setPartner] = useState<"oleg" | "olga">("olga");
   const [voiceOn, setVoiceOn] = useState(false);
+  const [bargeOn, setBargeOn] = useState(false);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [clientMsgs, setClientMsgs] = useState<Msg[]>([{ role: "assistant", content: greeting("olga") }]);
@@ -201,6 +202,7 @@ export function AgentChat() {
     allowOlga: true,
     allowOleg: true,
     allowReset: true,
+    allowBarge: true,
     defaultPartner: "olga",
     matchChipsToMessage: true,
     keepAssistantReplies: true,
@@ -219,6 +221,8 @@ export function AgentChat() {
   const speakingRef = useRef(false);
   const busyRef = useRef(false);
   const listenWantedRef = useRef(false);
+  const bargeRef = useRef(false);
+  const ignoreUntilRef = useRef(0);
   const partnerRef = useRef(partner);
   const awaitingCodeRef = useRef(false);
   const clientMsgsRef = useRef(clientMsgs);
@@ -244,12 +248,18 @@ export function AgentChat() {
         }
       : nextChips(messages, groupChips);
   voiceOnRef.current = voiceOn;
+  bargeRef.current = bargeOn;
   partnerRef.current = partner;
 
   useEffect(() => {
     const who = readPartner();
     setPartner(who);
     setClientMsgs(readChat(who));
+    try {
+      setBargeOn(localStorage.getItem("ra_barge") === "1");
+    } catch {
+      /* */
+    }
     const savedAdmin = readAdminChat();
     const left = adminLeft();
     setAdminMs(left);
@@ -525,8 +535,8 @@ export function AgentChat() {
       .map((t) => t.text)
       .join(" ");
     setSpeaking(true);
-    stopListen();
-    await new Promise((r) => window.setTimeout(r, 40));
+    ignoreUntilRef.current = Date.now() + (bargeRef.current ? 220 : 500);
+    if (voiceOnRef.current) startListen();
     try {
       const mode = adminLeft() > 0 ? "olga" : partnerRef.current;
       const turns = parseTurns(phrase, mode);
@@ -555,11 +565,12 @@ export function AgentChat() {
       if (gen === genRef.current) {
         speakingRef.current = false;
         setSpeaking(false);
+        ignoreUntilRef.current = Date.now() + (bargeRef.current ? 80 : 140);
       }
     }
   }
 
-  function isEcho(said: string) {
+  function isEcho(said: string, loose = false) {
     const a = said
       .toLowerCase()
       .replace(/[^\p{L}\d\s]/gu, " ")
@@ -570,7 +581,7 @@ export function AgentChat() {
     const b = spokenRef.current.toLowerCase();
     if (words.length < 2) return b.includes(a) && a.length > 10;
     const hits = words.filter((w) => b.includes(w)).length;
-    return hits / words.length >= 0.7;
+    return hits / words.length >= (loose ? 0.45 : 0.7);
   }
 
   function stopListen(keepMic = true) {
@@ -589,7 +600,7 @@ export function AgentChat() {
   }
 
   function startListen() {
-    if (busyRef.current || speakingRef.current) return;
+    if (busyRef.current) return;
     const SR = speechCtor();
     if (!SR) return;
     listenWantedRef.current = true;
@@ -608,21 +619,25 @@ export function AgentChat() {
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
-      if (busyRef.current || speakingRef.current) return;
+      if (busyRef.current) return;
       const last = e.results[e.results.length - 1];
       if (last && "isFinal" in last && last.isFinal === false) return;
       const said = last?.[0]?.transcript?.trim();
-      if (!said || isEcho(said)) return;
+      if (!said) return;
+      if (Date.now() < ignoreUntilRef.current) return;
+      if (isEcho(said, speakingRef.current)) return;
+      if (speakingRef.current && !bargeRef.current) return;
+      if (speakingRef.current) cancelSpeech();
       void send(said);
     };
     rec.onend = () => {
       if (recRef.current && recRef.current !== rec) return;
       recRef.current = null;
       setListening(false);
-      if (listenWantedRef.current && voiceOnRef.current && !busyRef.current && !speakingRef.current) {
+      if (listenWantedRef.current && voiceOnRef.current && !busyRef.current) {
         window.setTimeout(() => {
-          if (listenWantedRef.current && voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
-        }, 700);
+          if (listenWantedRef.current && voiceOnRef.current && !busyRef.current) startListen();
+        }, 80);
       }
     };
     rec.onerror = (ev?: { error?: string }) => {
@@ -1070,17 +1085,44 @@ export function AgentChat() {
             }}
           >
             {ui.allowVoice ? (
+            <div className="mb-2 space-y-1.5">
             <button
               type="button"
               onClick={() => void toggleVoice()}
               className={cn(
                 "flex h-11 w-full items-center justify-center gap-2 rounded-full text-[0.92rem] font-semibold",
-                voiceOn ? "mb-0 bg-[#e8f0ff] text-primary ring-1 ring-primary/20" : "mb-2 bg-primary text-primary-foreground",
+                voiceOn ? "bg-[#e8f0ff] text-primary ring-1 ring-primary/20" : "bg-primary text-primary-foreground",
               )}
             >
               {voiceOn ? <Mic className="size-4" /> : <Volume2 className="size-4" />}
               {voiceOn ? (listening ? "Слушаю… нажмите, чтобы выключить" : speaking ? "Говорю… нажмите, чтобы выключить" : "Выключить голосовой режим") : "Включить голосовой режим"}
             </button>
+            {voiceOn && ui.allowBarge !== false ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !bargeOn;
+                  setBargeOn(next);
+                  bargeRef.current = next;
+                  try {
+                    localStorage.setItem("ra_barge", next ? "1" : "0");
+                  } catch {
+                    /* */
+                  }
+                  if (voiceOnRef.current && !busyRef.current) {
+                    stopListen(true);
+                    startListen();
+                  }
+                }}
+                className={cn(
+                  "flex h-8 w-full items-center justify-center rounded-full text-[0.72rem] font-semibold",
+                  bargeOn ? "bg-primary/10 text-primary" : "bg-[#eef1f7] text-muted",
+                )}
+              >
+                {bargeOn ? "Перебивать можно — говорите поверх" : "Включить перебивание"}
+              </button>
+            ) : null}
+            </div>
             ) : null}
             {voiceOn && ui.allowVoice ? null : (
             <div className="flex items-center gap-2 rounded-full bg-[#eef1f7] p-1 ring-1 ring-black/8 focus-within:ring-2 focus-within:ring-primary/40">

@@ -160,6 +160,13 @@ export function AdminAgent() {
               tip="Без неё история сессии не сбрасывается с сайта. Новый посетитель всё равно начинает с чистого чата."
             />
             <Toggle
+              on={settings.allowBarge !== false}
+              set={(v) => setSettings({ ...settings, allowBarge: v })}
+              title="Перебивание в голосовом режиме"
+              hint="В окне чата появляется кнопка «Можно перебивать»."
+              tip="Посетитель сам включает. Пока говорит ассистент — можно сказать поверх, и ответ сразу пойдёт в чат. По умолчанию у клиента выключено, чтобы не ловить эхо."
+            />
+            <Toggle
               on={settings.matchChipsToMessage !== false}
               set={(v) => setSettings({ ...settings, matchChipsToMessage: v })}
               title="Кнопки только под текст"
