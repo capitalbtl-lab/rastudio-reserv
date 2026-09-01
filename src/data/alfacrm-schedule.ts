@@ -87,6 +87,43 @@ type CacheBag = { at: number; sessions: CmsSession[]; seats: Map<string, SeatInf
 let cache: CacheBag | null = null;
 const TTL = 10 * 60 * 1000;
 
+function endedOn(raw?: string) {
+  const s = String(raw || "").trim();
+  if (!s) return false;
+  let y = 0, m = 0, d = 0;
+  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ru) {
+    d = Number(ru[1]);
+    m = Number(ru[2]);
+    y = Number(ru[3]);
+  } else if (iso) {
+    y = Number(iso[1]);
+    m = Number(iso[2]);
+    d = Number(iso[3]);
+  } else return false;
+  const end = new Date(y, m - 1, d);
+  if (Number.isNaN(end.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return end < today;
+}
+
+function isLiveGroup(group?: Group): group is Group {
+  if (!group) return false;
+  if (Number(group.status_id) === 2) return false;
+  if (/архив|отложен/i.test(group.name || "")) return false;
+  if (endedOn(group.e_date)) return false;
+  return true;
+}
+
+function isLiveSlot(s: CrmSlot) {
+  if (Number(s.statusId) === 2) return false;
+  if (/архив|отложен/i.test(s.groupName || "")) return false;
+  if (endedOn(s.eDate)) return false;
+  return true;
+}
+
 function snapFile() {
   return join(process.cwd(), "storage", "crm-schedule.json");
 }
@@ -286,7 +323,7 @@ export function crmScheduleMeta() {
 export function listAdminSlots(): CrmSlot[] {
   const snap = cache || readSnap();
   const raw = snap?.slots?.length ? snap.slots : (snap?.sessions || []).map(slotFromSession);
-  return applyScheduleMap(stampSubjects(stampTimes(raw.map(normalizeArtSlot))));
+  return applyScheduleMap(stampSubjects(stampTimes(raw.map(normalizeArtSlot)))).filter(isLiveSlot);
 }
 
 export function bindSubjectsOnSite() {
@@ -302,7 +339,7 @@ export function bindSubjectsOnSite() {
 }
 
 export function saveAdminSlots(slots: CrmSlot[]) {
-  const stamped = applyScheduleMap(stampSubjects(stampTimes(slots.map((s) => normalizeArtSlot({ ...s })))));
+  const stamped = applyScheduleMap(stampSubjects(stampTimes(slots.map((s) => normalizeArtSlot({ ...s }))))).filter(isLiveSlot);
   const sessions = sessionsFromSlots(stamped);
   const seats = cache?.seats || readSnap()?.seats || new Map();
   cache = { at: Date.now(), sessions, seats, slots: stamped };
@@ -345,7 +382,8 @@ async function loadCrm(force = false): Promise<CacheBag> {
     for (const lesson of lessons.items || []) {
       const sid = Number(lesson.subject_id);
       const group = lesson.related_id ? groupMap.get(lesson.related_id) : undefined;
-      const subjectName = subjects.get(sid) || group?.name || "Курс";
+      if (!isLiveGroup(group)) continue;
+      const subjectName = subjects.get(sid) || group.name || "Курс";
       const age = ageOf(group?.name || "") || ageOf(subjectName);
       const path = SUBJECT_PATH[sid] || "";
       const gid = Number(group?.id || lesson.related_id || 0);
@@ -389,12 +427,11 @@ async function loadCrm(force = false): Promise<CacheBag> {
       };
       slots.push(normalizeArtSlot(slot));
       if (!sid || SKIP_SUBJECT.has(sid)) continue;
-      if (group && (/отложен/i.test(group.name) || group.status_id === 2)) continue;
       sessions.push(toSession(slots[slots.length - 1]));
     }
   }
   stampTimes(slots);
-  cache = { at: Date.now(), sessions, seats, slots };
+  cache = { at: Date.now(), sessions, seats, slots: slots.filter(isLiveSlot) };
   try {
     writeSnap(cache);
   } catch {
