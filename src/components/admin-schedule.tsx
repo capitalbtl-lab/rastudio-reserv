@@ -1167,23 +1167,25 @@ export function AdminSchedule() {
 
   function parseVoice(text: string) {
     const t = text.trim().replace(/[.!?…,:;]+$/g, "").replace(/\s+/g, " ").trim();
+    const whole = t.toLowerCase().replace(/ё/g, "е");
+    const hasPreview = Boolean(changesRef.current.length || addsRef.current.length);
+    if (hasPreview && /опублик\w*|примен\w*|\bпринять\b/.test(whole) && !/не\s+(опублик|примен)/.test(whole)) {
+      return { body: "", cmd: "применить" };
+    }
+    if (hasPreview && /\bотмен\w*/.test(whole) && !/не\s+отмен/.test(whole)) {
+      return { body: "", cmd: "отменить" };
+    }
     const words = t.split(" ").filter(Boolean);
-    const whole = t.toLowerCase().replace(/ё/g, "е").replace(/[^а-я ]/g, "").replace(/\s+/g, " ").trim();
-    if (/^(готов[аоыуе]?|гатов[аоыуе]?)$/.test(whole.replace(/ /g, ""))) return { body: "", cmd: "готово" };
-    if (words.length > 4) return { body: t, cmd: "" };
-    const last = words[words.length - 1] || "";
-    const word = last.toLowerCase().replace(/ё/g, "е").replace(/[^а-я]/g, "");
+    const last = (words[words.length - 1] || "").toLowerCase().replace(/ё/g, "е").replace(/[^а-я]/g, "");
     const rest = words.slice(0, -1).join(" ");
-    const ready = /^(готов[аоыуе]?|гатов[аоыуе]?|готовоа)$/.test(word);
-    const preview = /^(предпросмотр|превью)$/.test(word);
-    const apply = /^(примен\w*|принять|опублик\w*)$/.test(word);
-    const next = /^(дальше|далее|следующ\w*)$/.test(word);
-    const cancel = /^(отмен\w*)$/.test(word);
-    if (ready) return { body: rest, cmd: "готово" };
-    if (preview) return { body: rest, cmd: "предпросмотр" };
-    if (apply) return { body: rest, cmd: "применить" };
-    if (cancel) return { body: rest, cmd: "отменить" };
-    if (next) return { body: rest, cmd: "дальше" };
+    if (words.length <= 6) {
+      if (/^(готов[аоыуе]?|гатов[аоыуе]?)$/.test(last)) return { body: rest, cmd: "готово" };
+      if (/^(предпросмотр|превью)$/.test(last)) return { body: rest, cmd: "предпросмотр" };
+      if (/^(примен\w*|принять|опублик\w*)$/.test(last)) return { body: rest, cmd: "применить" };
+      if (/^(отмен\w*)$/.test(last)) return { body: rest, cmd: "отменить" };
+      if (/^(дальше|далее|следующ\w*)$/.test(last)) return { body: rest, cmd: "дальше" };
+    }
+    if (/^(готов[аоыуе]?|гатов[аоыуе]?)$/.test(whole.replace(/[^а-я]/g, ""))) return { body: "", cmd: "готово" };
     return { body: t, cmd: "" };
   }
 
@@ -1208,8 +1210,9 @@ export function AdminSchedule() {
       "хорошо сейчас все поправим",
       "готово скажите опубликовать",
       "нет я не могу это поправить",
-      "скажите опубликовать если все верно",
+      "скажите опубликовать",
       "предпросмотр на экране",
+      "лимит мест",
     ].some((c) => a.includes(c) || (a.length > 10 && c.includes(a)));
   }
 
@@ -1387,12 +1390,8 @@ export function AdminSchedule() {
     }
     const rec = new Ctor();
     rec.lang = "ru-RU";
-    rec.interimResults = true;
     rec.continuous = true;
-    lastFinalRef.current = "";
-    doneRef.current = 0;
-    accRef.current = "";
-    listenBaseRef.current = promptRef.current;
+    rec.interimResults = !voiceModeRef.current;
     rec.onresult = (e) => {
       if (pauseRef.current || speakingRef.current || Date.now() < ignoreUntilRef.current) return;
       let mid = "";
@@ -1406,11 +1405,12 @@ export function AdminSchedule() {
         } else mid = t;
       }
       const shown = [accRef.current, mid].filter(Boolean).join(" ");
-      setInterim(shown);
+      if (!voiceModeRef.current) setInterim(shown);
       window.clearTimeout(speechTimer.current);
       if (parseVoice(shown).cmd) {
         const raw = shown;
         accRef.current = "";
+        setInterim("");
         commitSpeech(raw);
         return;
       }
@@ -1495,6 +1495,19 @@ export function AdminSchedule() {
   async function handleScheduleVoice(text: string) {
     const q = text.trim();
     if (!q || isEcho(q) || busyVoiceRef.current) return;
+    if (changesRef.current.length || addsRef.current.length) {
+      const w = q.toLowerCase().replace(/ё/g, "е");
+      if (/опублик|примен|\bпринять\b/.test(w)) {
+        await runCmd("применить");
+        return;
+      }
+      if (/\bотмен/.test(w)) {
+        await runCmd("отменить");
+        return;
+      }
+      await say("Предпросмотр уже на экране. Скажите опубликовать или отменить.");
+      return;
+    }
     busyVoiceRef.current = true;
     setAiPrompt(q);
     promptRef.current = q;
@@ -1903,7 +1916,7 @@ export function AdminSchedule() {
           <textarea
             id="ra-sched-prompt"
             ref={promptEl}
-            value={interim ? [listenBaseRef.current, interim].filter(Boolean).join(" ") : aiPrompt}
+            value={voiceMode ? aiPrompt : interim ? [listenBaseRef.current, interim].filter(Boolean).join(" ") : aiPrompt}
             onChange={(e) => { setAiPrompt(e.target.value); promptRef.current = e.target.value; }}
             rows={1}
             onKeyDown={(e) => {
