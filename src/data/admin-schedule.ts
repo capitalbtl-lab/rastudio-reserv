@@ -25,6 +25,7 @@ import {
 } from "./crm-slots";
 import { loadSubjects, saveSubjects, pullSubjectsFromCrm, pushSubjectsToCrm } from "./crm-subjects";
 import type { GroupCalLesson } from "./crm-slots-core";
+import { rememberLessons } from "./crm-lessons";
 
 function ymd(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -35,6 +36,68 @@ function hm(raw?: string) {
   return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
 }
 
+function durationMins(from: string, to: string) {
+  const a = from.split(":").map(Number);
+  const b = to.split(":").map(Number);
+  if (a.length < 2 || b.length < 2) return 0;
+  const n = b[0] * 60 + b[1] - (a[0] * 60 + a[1]);
+  return n > 0 && n <= 480 ? n : 0;
+}
+
+function packCrmLesson(
+  item: {
+    id?: number;
+    date?: string;
+    time_from?: string;
+    time_to?: string;
+    status?: number;
+    lesson_type_id?: number;
+    lesson_type_name?: string;
+    room_id?: number | null;
+    teacher_ids?: number[];
+    subject_id?: number;
+    topic?: string | null;
+    homework?: string | null;
+    details?: { is_attend?: number | null }[];
+    customer_ids?: number[];
+  },
+  ctx: {
+    rooms: Map<number, string>;
+    teachers: Map<number, string>;
+    subjects: Map<number, string>;
+    groupName: string;
+    fallbackFrom: string;
+    fallbackTo: string;
+    fallbackTeacher: string;
+  },
+): GroupCalLesson | null {
+  const date = String(item.date || "").slice(0, 10);
+  if (!date) return null;
+  const from = hm(item.time_from) || ctx.fallbackFrom;
+  const to = hm(item.time_to) || ctx.fallbackTo;
+  const teacher = (item.teacher_ids || []).map((id) => ctx.teachers.get(Number(id)) || "").filter(Boolean).join(", ") || ctx.fallbackTeacher;
+  const attend = (item.details || []).filter((d) => d.is_attend === 1).length;
+  const total = (item.details || []).length || (item.customer_ids || []).length;
+  return {
+    date,
+    from,
+    to,
+    status: Number(item.status || 0),
+    type: String(item.lesson_type_name || "Групповое"),
+    typeId: Number(item.lesson_type_id || 0) || undefined,
+    duration: durationMins(from, to),
+    room: item.room_id ? ctx.rooms.get(Number(item.room_id)) || "" : "",
+    teacher,
+    subject: item.subject_id ? ctx.subjects.get(Number(item.subject_id)) || "" : "",
+    group: ctx.groupName,
+    topic: String(item.topic || "").trim(),
+    homework: String(item.homework || "").trim(),
+    attend,
+    total,
+    lessonId: Number(item.id || 0) || undefined,
+  };
+}
+
 function expandWeekday(day: number, from: string, to: string, start: Date, end: Date): GroupCalLesson[] {
   if (!day) return [];
   const want = day === 7 ? 0 : day;
@@ -42,7 +105,7 @@ function expandWeekday(day: number, from: string, to: string, start: Date, end: 
   while (cur.getDay() !== want) cur.setDate(cur.getDate() + 1);
   const out: GroupCalLesson[] = [];
   while (cur <= end) {
-    out.push({ date: ymd(cur), from, to, status: 0, type: "Групповое" });
+    out.push({ date: ymd(cur), from, to, status: 1, type: "Групповое" });
     cur.setDate(cur.getDate() + 7);
   }
   return out;
@@ -313,14 +376,33 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const winEnd = new Date(today);
       winEnd.setDate(winEnd.getDate() + 84);
       try {
+        const rooms = new Map<number, string>();
+        const teachers = new Map<number, string>();
+        const subjects = new Map<number, string>(loadSubjects().map((s) => [s.id, s.name]));
+        try {
+          const rm = await request<{ items?: { id?: number; name?: string; note?: string }[] }>(`/v2api/${branch}/room/index`, { page: 0, pageSize: 100 }, t);
+          for (const x of rm.items || []) {
+            const id = Number(x.id || 0);
+            if (!id) continue;
+            const name = String(x.name || "").trim();
+            const note = String(x.note || "").split("|")[0].trim();
+            rooms.set(id, note ? `${name} · ${note}` : name);
+          }
+        } catch { /* rooms optional */ }
+        try {
+          for (let page = 0; page < 4; page++) {
+            const pack = await request<{ items?: { id?: number; name?: string }[] }>(`/v2api/${branch}/teacher/index`, { page, pageSize: 100 }, t);
+            const chunk = pack.items || [];
+            for (const x of chunk) if (x.id) teachers.set(Number(x.id), String(x.name || "").trim());
+            if (chunk.length < 100) break;
+          }
+        } catch { /* teachers optional */ }
         const regs: {
           id?: number;
           related_id?: number;
           day?: number;
           time_from_v?: string;
           time_to_v?: string;
-          b_date?: string;
-          e_date?: string;
         }[] = [];
         for (let page = 0; page < 8; page++) {
           const pack = await request<{ items?: typeof regs }>(`/v2api/${branch}/regular-lesson/index`, { page, pageSize: 100 }, t);
@@ -329,26 +411,33 @@ export const adminSchedule = createServerFn({ method: "POST" })
           if (chunk.length < 100) break;
         }
         const mine = regs.filter((r) => Number(r.related_id) === gid);
+        const groupName = String(g.name || slot?.groupName || "");
+        const fallbackTeacher = String(slot?.teacher || "");
         for (const r of mine) {
           const from = hm(r.time_from_v);
           const to = hm(r.time_to_v);
           for (const occ of expandWeekday(Number(r.day || 0), from, to, winStart, winEnd)) {
+            occ.group = groupName;
+            occ.teacher = fallbackTeacher;
+            occ.subject = slot?.subject || "";
+            occ.duration = durationMins(from, to);
             byDate.set(occ.date, occ);
           }
-          if (r.id) {
-            const les = await request<{
-              items?: { date?: string; time_from?: string; time_to?: string; status?: number; lesson_type_name?: string }[];
-            }>(`/v2api/${branch}/lesson/index`, { page: 0, pageSize: 100, regular_id: r.id }, t);
-            for (const item of les.items || []) {
-              const date = String(item.date || "").slice(0, 10);
-              if (!date) continue;
-              byDate.set(date, {
-                date,
-                from: hm(item.time_from) || from,
-                to: hm(item.time_to) || to,
-                status: Number(item.status || 0),
-                type: String(item.lesson_type_name || "Групповое"),
-              });
+          if (!r.id) continue;
+          const ctx = { rooms, teachers, subjects, groupName, fallbackFrom: from, fallbackTo: to, fallbackTeacher };
+          for (const status of [1, 2, 3]) {
+            for (let page = 0; page < 6; page++) {
+              const les = await request<{ items?: Parameters<typeof packCrmLesson>[0][] }>(
+                `/v2api/${branch}/lesson/index`,
+                { page, pageSize: 100, regular_id: r.id, status },
+                t,
+              );
+              const chunk = les.items || [];
+              for (const item of chunk) {
+                const packed = packCrmLesson(item, ctx);
+                if (packed) byDate.set(packed.date, packed);
+              }
+              if (chunk.length < 100) break;
             }
           }
         }
@@ -364,6 +453,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         }
       }
       const calendar = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+      rememberLessons(calendar);
       const levels = await fetchLevels(t, branch).catch(() => SEED_LEVELS);
       return {
         ok: true as const,

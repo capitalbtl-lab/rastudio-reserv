@@ -486,6 +486,7 @@ export const chatAgent = createServerFn({ method: "POST" })
 
     const { tokenOk, makeAdminToken } = await import("./admin-auth");
     const { knowledgeForAgent } = await import("./call-knowledge");
+    const { lessonFactsForAgent } = await import("./crm-lessons");
     const { codewordInText, logAdmin } = await import("./admin-settings");
     const { factsFromMessages, factsPrompt } = await import("./agent-facts");
     const { buildSessionNote, notePrompt, guardReply } = await import("./session-note");
@@ -559,6 +560,10 @@ export const chatAgent = createServerFn({ method: "POST" })
       }
     }
     const file = !admin ? findDossier({ phone: facts.phone }) : null;
+    const factsLessons = lessonFactsForAgent(12);
+    const lessonBlock = factsLessons.length
+      ? `\nТемы недавних занятий (из AlfaCRM, без ФИО учеников):\n${factsLessons.map((x) => `— ${x}`).join("\n")}\n`
+      : "";
     const system = admin
       ? ADMIN_SYSTEM + adminHint
       : clientSystem(soloWho, facts, note.next) +
@@ -566,7 +571,8 @@ export const chatAgent = createServerFn({ method: "POST" })
         knowledgeForAgent() +
         factsPrompt(facts) +
         notePrompt(note) +
-        dossierPrompt(file);
+        dossierPrompt(file) +
+        lessonBlock;
     const messages: ChatMsg[] = [{ role: "system", content: system }, ...trimmed];
     try {
       for (let step = 0; step < 4; step++) {

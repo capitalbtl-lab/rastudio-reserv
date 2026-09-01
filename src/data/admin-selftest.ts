@@ -447,9 +447,12 @@ const PROBES: Probe[] = [
         await ping("предметы", "/v2api/2/subject/index");
         await ping("педагоги", "/v2api/2/teacher/index");
         await ping("аудитории", "/v2api/2/room/index");
+        await ping("типы занятий", "/v2api/2/lesson-type/index");
         await ping("уровни", "/v2api/2/level/index");
         await ping("клиенты", "/v2api/2/customer/index");
-        await ping("занятия", "/v2api/2/lesson/index");
+        await ping("занятия проведенные", "/v2api/2/lesson/index", { page: 0, pageSize: 5, status: 3 });
+        await ping("занятия запланированные", "/v2api/2/lesson/index", { page: 0, pageSize: 5, status: 1 });
+        await ping("занятия отменённые", "/v2api/2/lesson/index", { page: 0, pageSize: 5, status: 2 });
         const { listAdminSlots } = await import("./alfacrm-schedule");
         const { loadSubjects } = await import("./crm-subjects");
         const { loadScheduleMap } = await import("./schedule-map");

@@ -72,8 +72,11 @@ function slotCalendar(s: CrmSlot): GroupCalLesson[] {
         date: `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`,
         from: String(b.timeFrom || ""),
         to: String(b.timeTo || ""),
-        status: 0,
+        status: 1,
         type: "Групповое",
+        group: s.groupName,
+        teacher: s.teacher,
+        subject: s.subject,
       });
       cur.setDate(cur.getDate() + 7);
     }
@@ -96,9 +99,10 @@ const RANGE_OPTS = [
   { id: "360", label: "±360 дней" },
 ] as const;
 
-function GroupLessonStrip({ lessons }: { lessons: GroupCalLesson[] }) {
+function GroupLessonStrip({ lessons, group, subject, teacher }: { lessons: GroupCalLesson[]; group?: string; subject?: string; teacher?: string }) {
   const today = todayYmd();
   const [range, setRange] = useState<(typeof RANGE_OPTS)[number]["id"]>("10");
+  const [tip, setTip] = useState<{ lesson: GroupCalLesson; top: number; left: number } | null>(null);
   const all = useMemo(() => [...lessons].sort((a, b) => a.date.localeCompare(b.date)), [lessons]);
   const items = useMemo(() => {
     const past = all.filter((l) => l.date < today);
@@ -120,7 +124,7 @@ function GroupLessonStrip({ lessons }: { lessons: GroupCalLesson[] }) {
         if (cur.getDay() === want) {
           const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
           if (iso !== today && !have.has(iso)) {
-            extra.push({ date: iso, from: sample.from, to: sample.to, status: 0, type: "Групповое" });
+            extra.push({ date: iso, from: sample.from, to: sample.to, status: 1, type: sample.type || "Групповое", group: sample.group, teacher: sample.teacher, subject: sample.subject });
             have.add(iso);
           }
         }
@@ -143,6 +147,18 @@ function GroupLessonStrip({ lessons }: { lessons: GroupCalLesson[] }) {
     }
     return window;
   }, [all, range, today]);
+
+  function showTip(el: HTMLElement, lesson: GroupCalLesson) {
+    const r = el.getBoundingClientRect();
+    const width = 288;
+    let left = r.left;
+    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+    if (left < 8) left = 8;
+    let top = r.bottom + 8;
+    if (top + 260 > window.innerHeight) top = Math.max(8, r.top - 268);
+    setTip({ lesson, top, left });
+  }
+
   return (
     <div className="md:col-span-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -164,34 +180,104 @@ function GroupLessonStrip({ lessons }: { lessons: GroupCalLesson[] }) {
         {items.map((l) => {
           const d = parseYmd(l.date);
           const isToday = l.date === today;
-          const past = l.date < today;
-          const time = l.from && l.to ? `${l.from}–${l.to}` : l.from || "";
+          const cancelled = l.status === 2;
+          const done = l.status === 3;
+          const planned = l.status === 1 || l.status === 0;
           return (
             <div
               key={l.date}
-              title={time ? `${l.date} ${time}` : l.date}
+              onMouseEnter={(e) => showTip(e.currentTarget, l)}
+              onMouseLeave={() => setTip(null)}
               className={cn(
-                "flex h-[4.025rem] w-[2.82rem] min-w-[2.82rem] flex-col items-center justify-center rounded-[0.9rem] px-0.5 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
-                isToday && "bg-primary text-white",
-                !isToday && "bg-white text-fg ring-1 ring-neutral-500/55",
-                !isToday && past && "text-muted",
+                "flex h-[4.025rem] w-[2.82rem] min-w-[2.82rem] cursor-default flex-col items-center justify-center rounded-[0.9rem] px-0.5 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
+                isToday && !cancelled && "bg-primary text-white",
+                !isToday && done && "bg-emerald-100 text-fg ring-1 ring-emerald-400/80",
+                !isToday && planned && "bg-white text-fg ring-1 ring-neutral-500/55",
+                cancelled && "bg-neutral-200 text-neutral-400 ring-1 ring-neutral-300 line-through",
+                !isToday && !cancelled && !done && planned && l.date < today && "text-muted",
               )}
             >
-              {isToday ? (
+              {isToday && !cancelled ? (
                 <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/90">сегодня</span>
               ) : (
-                <span className="text-[0.6rem] font-semibold uppercase tracking-wider text-neutral-500">{WD[(d.getDay() + 6) % 7]}</span>
+                <span className={cn("text-[0.6rem] font-semibold uppercase tracking-wider", cancelled ? "text-neutral-400" : "text-neutral-500")}>{WD[(d.getDay() + 6) % 7]}</span>
               )}
-              <span className={cn("text-[0.83rem] font-semibold tabular-nums", isToday && "text-white")}>
+              <span className={cn("text-[0.83rem] font-semibold tabular-nums", isToday && !cancelled && "text-white")}>
                 {d.getDate()}
               </span>
-              <span className={cn("text-[0.6rem] font-medium", isToday ? "text-white/85" : "text-neutral-500")}>
+              <span className={cn("text-[0.6rem] font-medium", isToday && !cancelled ? "text-white/85" : "text-neutral-500")}>
                 {MONTHS_SHORT[d.getMonth()]}
               </span>
             </div>
           );
         })}
       </div>
+      <p className="mt-2 flex flex-wrap items-center gap-3 text-[0.68rem] text-muted">
+        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-100 ring-1 ring-emerald-400/80" /> проведено</span>
+        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-[3px] bg-white ring-1 ring-neutral-400" /> запланировано</span>
+        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-[3px] bg-neutral-200 ring-1 ring-neutral-300" /> отменено</span>
+      </p>
+      {tip
+        ? createPortal(
+            <LessonCard
+              lesson={tip.lesson}
+              top={tip.top}
+              left={tip.left}
+              group={group}
+              subject={subject}
+              teacher={teacher}
+            />,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
+function LessonCard({
+  lesson: l,
+  top,
+  left,
+  group,
+  subject,
+  teacher,
+}: {
+  lesson: GroupCalLesson;
+  top: number;
+  left: number;
+  group?: string;
+  subject?: string;
+  teacher?: string;
+}) {
+  const statusRu = l.status === 3 ? "Проведено" : l.status === 2 ? "Отменено" : l.status === -1 ? "Сегодня нет занятия" : "Запланировано";
+  const time = l.from && l.to ? `с ${l.from} до ${l.to}` : l.from || "";
+  const mins = l.duration ? ` (${l.duration} мин.)` : "";
+  const rows: [string, string][] = [
+    ["Тип", l.type || "Групповое"],
+    ["Статус", statusRu],
+    ["Время", time ? `${time}${mins}` : "—"],
+    ["Аудитория", l.room || ""],
+    ["Педагог", l.teacher || teacher || ""],
+    ["Предмет", l.subject || subject || ""],
+    ["Группа", l.group || group || ""],
+    ["Тема", l.topic || ""],
+    ["Домашнее задание", l.homework || ""],
+  ];
+  if (l.status === 3 && (l.total || 0) > 0) rows.push(["Присутствие", `${l.attend || 0} из ${l.total}`]);
+  return (
+    <div
+      className="pointer-events-none fixed z-[90] w-[18.5rem] rounded-md bg-white px-5 py-4 text-left text-[0.78rem] leading-relaxed text-fg shadow-[0_12px_32px_rgba(15,23,42,0.28)] ring-1 ring-black/12"
+      style={{ top, left }}
+    >
+      <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-wider text-muted">{l.date}</p>
+      <dl className="space-y-1.5">
+        {rows.filter(([, v]) => v).map(([k, v]) => (
+          <div key={k} className="grid grid-cols-[6.2rem_1fr] gap-2">
+            <dt className="text-muted">{k}</dt>
+            <dd className={cn("font-medium", k === "Тема" || k === "Домашнее задание" ? "whitespace-pre-wrap" : "")}>{v}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
@@ -2072,7 +2158,7 @@ export function AdminSchedule() {
                                       <p className="text-sm text-muted">Загружаю настройки группы из AlfaCRM…</p>
                                     ) : (
                                       <div className="grid gap-3 md:grid-cols-2">
-                                        <GroupLessonStrip lessons={detail.calendar} />
+                                        <GroupLessonStrip lessons={detail.calendar} group={s.groupName} subject={s.subject} teacher={s.teacher} />
                                         <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                                           Запись
                                           <a

@@ -62,6 +62,17 @@ export type GroupCalLesson = {
   to: string;
   status: number;
   type: string;
+  typeId?: number;
+  duration?: number;
+  room?: string;
+  teacher?: string;
+  subject?: string;
+  group?: string;
+  topic?: string;
+  homework?: string;
+  attend?: number;
+  total?: number;
+  lessonId?: number;
 };
 
 export type SlotVersion = { at: string; reason: string; count: number; slots: CrmSlot[] };
