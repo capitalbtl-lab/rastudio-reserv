@@ -9,7 +9,8 @@ ROOT = Path("/var/www/rastudio")
 STORE = ROOT / "storage" / "call-knowledge.json"
 STATUS = ROOT / "storage" / "transcribe-status.json"
 KEYS_PATH = ROOT / "storage" / "novofon.json"
-HOST = "https://api.novofon.com"
+API_KEYS = ROOT / "storage" / "api-keys.json"
+HOSTS = ["https://api.novofon.com", "https://api.zadarma.com"]
 SCAN_EVERY = 6 * 3600
 KB_EVERY = 8
 SETTINGS = ROOT / "storage" / "call-settings.json"
@@ -261,12 +262,23 @@ def env():
 
 
 def keys():
+    if API_KEYS.exists():
+        try:
+            raw = json.loads(API_KEYS.read_text())
+            fields = {f["key"]: f.get("value") or "" for c in raw.get("conns") or [] if c.get("id") == "novofon" for f in c.get("fields") or []}
+            user, secret = fields.get("NOVOFON_USER_KEY") or "", fields.get("NOVOFON_SECRET") or ""
+            if user and secret:
+                return user, secret
+        except Exception:
+            pass
     raw = json.loads(KEYS_PATH.read_text())
     return raw["userKey"], raw["secret"]
 
 
 def rest(path, params):
     user, secret = keys()
+    if not path.endswith("/"):
+        path = path + "/"
     qs = urlencode(sorted((k, str(v)) for k, v in params.items())).replace("%20", "+")
     md5 = hashlib.md5(qs.encode()).hexdigest()
     payload = path + qs + md5
@@ -274,23 +286,27 @@ def rest(path, params):
         base64.b64encode(hmac.new(secret.encode(), payload.encode(), hashlib.sha1).digest()).decode(),
         base64.b64encode(hmac.new(secret.encode(), payload.encode(), hashlib.sha1).hexdigest().encode()).decode(),
     ]
-    url = HOST + path + (("?" + qs) if qs else "")
     last = None
-    for sign in signs:
-        req = urllib.request.Request(url, headers={"Authorization": f"{user}:{sign}"})
-        try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                js = json.loads(r.read().decode())
-        except urllib.error.HTTPError as e:
-            raw = e.read().decode(errors="replace")
+    for host in HOSTS:
+        url = host + path + (("?" + qs) if qs else "")
+        for sign in signs:
+            req = urllib.request.Request(url, headers={"Authorization": f"{user}:{sign}"})
             try:
-                js = json.loads(raw)
-            except Exception:
-                last = raw
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    js = json.loads(r.read().decode())
+            except urllib.error.HTTPError as e:
+                raw = e.read().decode(errors="replace")
+                try:
+                    js = json.loads(raw)
+                except Exception:
+                    last = raw
+                    continue
+            except Exception as e:
+                last = str(e)
                 continue
-        if js.get("status") != "error":
-            return js
-        last = js.get("message") or js
+            if js.get("status") != "error":
+                return js
+            last = js.get("message") or js
     raise RuntimeError(str(last))
 
 

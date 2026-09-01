@@ -40,7 +40,7 @@ export const API_CATALOG: Catalog[] = [
     id: "novofon",
     kind: "telephony",
     name: "Novofon",
-    hint: "Запись звонков и статистика. User key и secret из кабинета Novofon / API.",
+    hint: "Запись звонков. Нужны оба поля: User key (appid_…) и Secret. После долгой выгрузки Novofon может резать IP сервера — тогда проверка пишет SSL timeout, это не ключ.",
     fields: [
       { key: "NOVOFON_USER_KEY", label: "User key" },
       { key: "NOVOFON_SECRET", label: "Secret", secret: true },
@@ -230,6 +230,15 @@ export const adminApiKeys = createServerFn({ method: "POST" })
         };
       }
       saveApiConns(list);
+      const novo = list.find((c) => c.id === "novofon");
+      if (novo) {
+        const userKey = novo.fields.find((f) => f.key === "NOVOFON_USER_KEY")?.value || "";
+        const secret = novo.fields.find((f) => f.key === "NOVOFON_SECRET")?.value || "";
+        if (userKey && secret) {
+          const { saveNovofonKeys } = await import("./novofon");
+          saveNovofonKeys({ userKey, secret });
+        }
+      }
       logAdmin(`API сохранён: ${incoming.name || incoming.id}`);
       return pack();
     }

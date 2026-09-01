@@ -179,19 +179,38 @@ async function pingDeepseek(): Promise<ProbeOut> {
 
 async function pingNovofon(): Promise<ProbeOut> {
   const related = ["apis", "calls"];
-  const { loadNovofonKeys, novofonGet } = await import("./novofon");
+  const { loadNovofonKeys, novofonGet, NovofonNetError } = await import("./novofon");
   const keys = loadNovofonKeys();
-  if (!keys?.userKey || !keys.secret) return fail("нет NOVOFON_USER_KEY / SECRET", "Ключей Novofon нет. База звонков и голосовой код входа не заработают.", "Кабинет → API → Novofon: User key и Secret из кабинета АТС.", related);
+  if (!keys?.userKey || !keys.secret) return fail("нет NOVOFON_USER_KEY / SECRET", "Ключей Novofon нет. База звонков и голосовой код входа не заработают.", "Кабинет → API → Novofon: User key (appid_…) и Secret из кабинета АТС. При перевыпуске ключа нужны оба, не только секрет.", related);
   try {
-    const json = await novofonGet<{ status?: string; balance?: number }>("/v1/balance", {}, keys);
+    const json = await novofonGet<{ status?: string; balance?: number }>("/v1/info/balance/", {}, keys);
     return ok(`Novofon balance ок${json.balance != null ? `, ${json.balance}` : ""}`, related);
   } catch (e1) {
+    if (e1 instanceof NovofonNetError || /SSL|timeout|fetch failed|handshake/i.test(e1 instanceof Error ? e1.message : "")) {
+      const raw = e1 instanceof Error ? `${e1.message}\n${"causeText" in e1 ? (e1 as { causeText?: string }).causeText : ""}` : String(e1);
+      return fail(
+        "api.novofon.com SSL timeout",
+        "С сервера сайта (83.222.25.109) Novofon API не открывает HTTPS: TCP есть, рукопожатие SSL не завершается. Так бывает после многочасовой выгрузки записей — режут IP, а не ключ. Новый Secret уже в кабинете; без ответа хоста он не проверится. Если ключ перевыпускали, нужен и новый User key (appid_…).",
+        "1) Novofon → поддержка: разблокируйте API для IP 83.222.25.109. 2) Кабинет Novofon → API: пришлите пару User key + Secret. 3) Не гоняйте выгрузку пачками больше 3 запросов статистики в минуту.",
+        related,
+        raw.slice(0, 1200),
+      );
+    }
     try {
-      await novofonGet("/v1/info", {}, keys);
-      return ok("Novofon /v1/info отвечает", related);
+      await novofonGet("/v1/tariff/", {}, keys);
+      return ok("Novofon /v1/tariff отвечает (balance закрыт в тарифе)", related);
     } catch (e2) {
       const raw = e2 instanceof Error ? e2.message : String(e1);
-      return fail(raw.slice(0, 200), "Novofon отклонил запрос. Ключи неверные или метод balance/info недоступен в тарифе.", "Сверьте User key и Secret. Если звонки качаются — ключи рабочие, метод баланса может быть закрыт, это не ломает расшифровку.", related, raw);
+      const unauthorized = /not authorized|401/i.test(raw);
+      return fail(
+        raw.slice(0, 200),
+        unauthorized
+          ? "Novofon ответил «Not authorized». Секрет не совпадает с User key. Если ключ перевыпускали — старый appid_ больше не действует, нужна новая пара целиком."
+          : "Novofon отклонил запрос.",
+        "Кабинет Novofon → Настройки → API: скопируйте User key (appid_…) и Secret заново, сохраните оба в API сайта.",
+        related,
+        raw,
+      );
     }
   }
 }

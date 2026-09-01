@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { serverEnv } from "./server-env";
 
-const HOST = "https://api.novofon.com";
+/** Novofon — белая метка Zadarma, но ключи Novofon ходят на api.novofon.com. Задарма — запасной хост. */
+const HOSTS = ["https://api.novofon.com", "https://api.zadarma.com"];
 
 export type NovofonKeys = { userKey: string; secret: string };
 export type NovofonCall = {
@@ -23,10 +24,16 @@ function keysPath() {
   return join(process.cwd(), "storage", "novofon.json");
 }
 
-export function loadNovofonKeys(): NovofonKeys | null {
+function apiKeysSecret(): NovofonKeys | null {
   const envKey = serverEnv("NOVOFON_USER_KEY");
   const envSecret = serverEnv("NOVOFON_SECRET");
   if (envKey && envSecret) return { userKey: envKey, secret: envSecret };
+  return null;
+}
+
+export function loadNovofonKeys(): NovofonKeys | null {
+  const fromApi = apiKeysSecret();
+  if (fromApi) return fromApi;
   try {
     if (!existsSync(keysPath())) return null;
     const raw = JSON.parse(readFileSync(keysPath(), "utf8")) as Partial<NovofonKeys>;
@@ -54,15 +61,69 @@ function signRaw(method: string, qs: string, secret: string) {
   return createHmac("sha1", secret).update(method + qs + md5).digest("base64");
 }
 
+function withSlash(path: string) {
+  return path.endsWith("/") ? path : `${path}/`;
+}
+
+export class NovofonNetError extends Error {
+  constructor(
+    message: string,
+    readonly host: string,
+    readonly causeText: string,
+  ) {
+    super(message);
+    this.name = "NovofonNetError";
+  }
+}
+
+async function fetchHost(host: string, path: string, qs: string, keys: NovofonKeys) {
+  const method = withSlash(path);
+  const url = `${host}${method}${qs ? `?${qs}` : ""}`;
+  const sign = signRaw(method, qs, keys.secret);
+  const res = await fetch(url, {
+    headers: { Authorization: `${keys.userKey}:${sign}` },
+    signal: AbortSignal.timeout(8000),
+  });
+  const text = await res.text();
+  let json: { status?: string; message?: string } = {};
+  try {
+    json = JSON.parse(text) as { status?: string; message?: string };
+  } catch {
+    throw new Error(`Novofon ${host} не JSON: ${text.slice(0, 160)}`);
+  }
+  if (!json || json.status === "error") {
+    const err = new Error(json?.message || text.slice(0, 180) || "novofon");
+    (err as Error & { http: number }).http = res.status;
+    throw err;
+  }
+  return json;
+}
+
 export async function novofonGet<T>(path: string, params: Record<string, string>, keys: NovofonKeys): Promise<T> {
   const qs = queryString(params);
-  const url = `${HOST}${path}${qs ? `?${qs}` : ""}`;
-  const sign = signRaw(path, qs, keys.secret);
-  const res = await fetch(url, { headers: { Authorization: `${keys.userKey}:${sign}` } });
-  const text = await res.text();
-  const json = JSON.parse(text) as T & { status?: string; message?: string };
-  if (!json || json.status === "error") throw new Error(json?.message || text.slice(0, 180) || "novofon");
-  return json;
+  const method = withSlash(path);
+  let lastNet = "";
+  let lastAuth = "";
+  for (const host of HOSTS) {
+    try {
+      return (await fetchHost(host, method, qs, keys)) as T;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const net = /fetch failed|timeout|AbortError|ECONN|ENOTFOUND|handshake|SSL|certificate/i.test(msg) || e instanceof NovofonNetError;
+      if (net) {
+        lastNet = `${host}: ${msg}`;
+        continue;
+      }
+      lastAuth = `${host}: ${msg}`;
+      /* ключ не приняли — другой хост всё равно стоит попробовать */
+    }
+  }
+  if (lastAuth) throw new Error(lastAuth);
+  throw new NovofonNetError(
+    "api.novofon.com не отвечает с сервера сайта (SSL timeout). После долгой выгрузки записей Novofon часто режет IP. Это не обязательно ключ.",
+    HOSTS[0],
+    lastNet,
+  );
 }
 
 export async function listRecordedCalls(start: string, end: string, keys: NovofonKeys) {
@@ -93,6 +154,7 @@ export async function listRecordedCalls(start: string, end: string, keys: Novofo
       });
     }
     if (rows.length < 1000) break;
+    await new Promise((r) => setTimeout(r, 22000));
   }
   return out;
 }
