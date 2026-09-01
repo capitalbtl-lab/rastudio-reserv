@@ -27,7 +27,7 @@ type Tab = "prices" | "schedule" | "agent" | "calls" | "dossiers" | "apis";
 const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: "prices", label: "Цены курсов", hint: "Прайс, КБМ и ТМХ" },
   { id: "schedule", label: "Расписание занятий", hint: "Группы студии" },
-  { id: "agent", label: "Ассистент ИИ", hint: "Окно, обучение, доступ" },
+  { id: "agent", label: "Ассистент ИИ", hint: "Окно, обучение агентов, доступ" },
   { id: "calls", label: "База звонков", hint: "Novofon → знания" },
   { id: "dossiers", label: "Личные дела", hint: "Клиенты AlfaCRM" },
   { id: "apis", label: "API и интеграции", hint: "Yandex, CRM, телефония" },

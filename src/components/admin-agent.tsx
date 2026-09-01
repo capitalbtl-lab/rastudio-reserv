@@ -24,11 +24,11 @@ type Pane = "window" | "dialog" | "voices" | "edits" | "chats" | "train" | "acce
 
 const PANES: { id: Pane; label: string }[] = [
   { id: "window", label: "Окно и кнопки" },
+  { id: "train", label: "Обучение агентов" },
   { id: "dialog", label: "Как говорит" },
   { id: "voices", label: "Голоса" },
   { id: "edits", label: "Изменение сайта" },
   { id: "chats", label: "Диалоги сайта" },
-  { id: "train", label: "Обучение" },
   { id: "access", label: "Голосовой доступ" },
   { id: "debug", label: "Отладка" },
 ];
@@ -67,11 +67,12 @@ export function AdminAgent() {
   const [settings, setSettings] = useState<AgentSettings | null>(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
-  const [pane, setPane] = useState<Pane>("window");
+  const [pane, setPane] = useState<Pane>("train");
 
   async function load() {
     const res = await adminAgentBrain({ data: { token: token(), action: "get" } });
     if (res.ok && "settings" in res) setSettings(res.settings);
+    else setMsg(res.ok ? "" : res.error || "Не удалось загрузить настройки окна. Обучение агентов всё равно можно открыть.");
   }
 
   useEffect(() => {
@@ -86,7 +87,28 @@ export function AdminAgent() {
     setMsg(res.ok ? "Сохранено — на сайте сразу, после обновления страницы." : res.error || "Ошибка");
   }
 
-  if (!settings) return <p className="mt-10 text-sm text-muted">Загрузка настроек…</p>;
+  if (!settings && pane !== "train" && pane !== "voices" && pane !== "edits" && pane !== "chats" && pane !== "access" && pane !== "debug") {
+    return (
+      <section className="mt-10 space-y-6">
+        <AdminSectionHead section="agent" title="Ассистент ИИ">
+          <p className="mt-2 max-w-2xl text-sm text-muted">Окно чата, обучение агентов, голоса и история диалогов.</p>
+        </AdminSectionHead>
+        <div className="flex flex-wrap gap-2">
+          {PANES.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setPane(p.id)}
+              className={cn("rounded-full px-4 py-2 text-sm font-semibold", pane === p.id ? "bg-primary text-primary-foreground" : "bg-surface")}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-sm text-muted">{msg || "Загрузка настроек окна… Нажмите «Обучение агентов», если нужно сразу к скриптам и документам."}</p>
+      </section>
+    );
+  }
 
   return (
     <section className="mt-10 space-y-6">
@@ -95,7 +117,7 @@ export function AdminAgent() {
         title="Ассистент ИИ"
       >
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Окно чата, обучение, голоса, доступ и история диалогов — всё здесь.
+          Окно чата, обучение агентов, голоса, доступ и история диалогов — всё здесь.
         </p>
       </AdminSectionHead>
 
@@ -112,7 +134,7 @@ export function AdminAgent() {
         ))}
       </div>
 
-      {pane === "window" ? (
+      {pane === "window" && settings ? (
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
             {WINDOW_FLAGS.map((f) => (
@@ -135,7 +157,7 @@ export function AdminAgent() {
         </div>
       ) : null}
 
-      {pane === "dialog" ? (
+      {pane === "dialog" && settings ? (
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="rounded-3xl bg-surface p-5 text-sm shadow-[var(--shadow-border)]">

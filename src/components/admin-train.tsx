@@ -246,7 +246,7 @@ export function AdminTrain() {
     <section className="mt-10 space-y-6">
       <div>
         <div className="flex items-center gap-2">
-          <h2 className="font-display text-3xl">Обучение ассистента</h2>
+          <h2 className="font-display text-3xl">Обучение агентов</h2>
           <InfoTip text="Три вкладки. Скрипты — порядок разговора (возраст → город → филиал → школа). Документы — Word/PDF: инструкция, правила, оферта, разложенные по каналам. Примеры — эталонные реплики. Ассистент читает всё включённое, но на сайте только канал «Агент на сайте» плюс «Общее»." />
         </div>
         <p className="mt-2 max-w-2xl text-sm text-muted">
