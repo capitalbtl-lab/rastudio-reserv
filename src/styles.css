@@ -905,3 +905,17 @@
 .ra-flash {
   animation: ra-flash 0.55s ease-in-out 4;
 }
+
+@keyframes ra-mismatch {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.38;
+  }
+}
+
+.ra-mismatch {
+  animation: ra-mismatch 1.45s ease-in-out infinite;
+}

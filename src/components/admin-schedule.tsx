@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { adminSchedule } from "@/data/admin-schedule";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { Button } from "@/components/ui/button";
-import { InfoTip, TipWrap } from "@/components/info-tip";
+import { InfoTip, TipWrap, TIP_BOX } from "@/components/info-tip";
 import { AdminSectionHead } from "@/components/admin-self-test";
 import { SCHOOLS, BRANCHES } from "@/data/site";
 import { SCHOOL_ORDER } from "@/data/crm-slots-core";
@@ -437,8 +437,8 @@ function MismatchDot({ text }: { text: string }) {
       {open
         ? createPortal(
             <div
-              className="pointer-events-none fixed z-[80] w-[17rem] whitespace-pre-line rounded-xl bg-neutral-700 px-3 py-2 text-left text-[0.75rem] leading-snug text-white shadow-[0_10px_28px_rgba(15,23,42,0.28)]"
-              style={{ top: pos.top, left: pos.left, transform: pos.top < 80 ? undefined : undefined }}
+              className={cn("pointer-events-none fixed z-[80] w-[17rem] whitespace-pre-line", TIP_BOX)}
+              style={{ top: pos.top, left: pos.left }}
             >
               {text}
             </div>,
@@ -664,7 +664,7 @@ function WhoTip({ names, onNeed }: { names?: string[]; onNeed: () => void }) {
       {open
         ? createPortal(
             <div
-              className="pointer-events-none fixed z-[80] w-[15rem] rounded-xl bg-neutral-700 px-3 py-2 text-left text-[0.75rem] leading-snug text-white shadow-[0_10px_28px_rgba(15,23,42,0.28)]"
+              className={cn("pointer-events-none fixed z-[80] w-[15rem]", TIP_BOX)}
               style={{ top: pos.top, left: pos.left }}
             >
               {!names ? "Загружаю…" : names.length ? names.map((n) => <p key={n}>{n}</p>) : "В группе пока никого"}
@@ -992,12 +992,15 @@ export function AdminSchedule() {
   const mismatchCount = useMemo(() => {
     let hard = 0;
     let soft = 0;
+    const lines: string[] = [];
     for (const s of slots) {
       const mm = slotMismatch(s);
+      if (!mm.level) continue;
       if (mm.level === "hard") hard += 1;
-      else if (mm.level === "soft") soft += 1;
+      else soft += 1;
+      lines.push(`${s.groupId || "—"} ${s.groupName}: ${mm.text}`);
     }
-    return { hard, soft, all: hard + soft };
+    return { hard, soft, all: hard + soft, lines };
   }, [slots]);
 
   const branchOpts = useMemo(() => {
@@ -1509,24 +1512,41 @@ export function AdminSchedule() {
           {mismatchCount.all ? (
             <>
               {" · "}
-              <button
-                type="button"
-                onClick={() => {
-                  setOnlyMismatch((v) => {
-                    const next = !v;
-                    if (next) {
-                      setOpenAll(true);
-                      setPane("groups");
-                    }
-                    return next;
-                  });
-                }}
-                className={cn("font-semibold underline-offset-2 hover:underline", mismatchCount.hard ? "text-red-700" : "text-amber-800")}
-              >
-                несоответствия {mismatchCount.all}
-                {mismatchCount.hard ? ` · грубых ${mismatchCount.hard}` : ""}
-                {onlyMismatch ? " · показать все" : ""}
-              </button>
+              <span className="relative inline-block align-baseline">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOnlyMismatch((v) => {
+                      const next = !v;
+                      if (next) {
+                        setOpenAll(true);
+                        setPane("groups");
+                      }
+                      return next;
+                    });
+                  }}
+                  className={cn(
+                    "ra-mismatch peer text-[0.95rem] font-extrabold underline-offset-2 hover:underline",
+                    mismatchCount.hard ? "text-[#e11d48]" : "text-[#d97706]",
+                  )}
+                >
+                  несоответствия {mismatchCount.all}
+                  {mismatchCount.hard ? ` · грубых ${mismatchCount.hard}` : ""}
+                  {onlyMismatch ? " · показать все" : ""}
+                </button>
+                <span className={cn("pointer-events-none absolute left-0 top-7 z-50 hidden w-[24rem] whitespace-pre-line peer-hover:block peer-focus:block", TIP_BOX)}>
+                  {mismatchCount.hard
+                    ? `Грубых ${mismatchCount.hard}: название группы и предмет из разных школ.\n`
+                    : ""}
+                  {mismatchCount.soft
+                    ? `Мягких ${mismatchCount.soft}: одно направление, но название и предмет не совпадают.\n`
+                    : ""}
+                  {"\n"}
+                  {mismatchCount.lines.slice(0, 6).join("\n\n")}
+                  {mismatchCount.lines.length > 6 ? `\n\nещё ${mismatchCount.lines.length - 6}` : ""}
+                  {"\n\nНажмите, чтобы показать только эти группы. Красный кружок i в строке — как исправить ИИ."}
+                </span>
+              </span>
             </>
           ) : null}
         </p>

@@ -3,6 +3,9 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
+export const TIP_BOX =
+  "rounded-md bg-[#12141a] px-5 py-4 text-left text-[0.78rem] font-normal leading-relaxed text-white shadow-[0_10px_28px_rgba(15,23,42,0.28)]";
+
 export function InfoTip({ text, className }: { text: string; className?: string }) {
   return (
     <span className={cn("relative inline-flex align-top", className)}>
@@ -13,7 +16,7 @@ export function InfoTip({ text, className }: { text: string; className?: string 
       >
         i
       </button>
-      <span className="pointer-events-none absolute left-1/2 top-6 z-50 hidden w-[22rem] -translate-x-1/2 rounded-2xl bg-[#12141a] px-3.5 py-3 text-left text-[0.78rem] font-normal leading-relaxed text-white shadow-xl peer-hover:block peer-focus:block md:w-[26rem]">
+      <span className={cn("pointer-events-none absolute left-1/2 top-6 z-50 hidden w-[22rem] -translate-x-1/2 peer-hover:block peer-focus:block md:w-[26rem]", TIP_BOX)}>
         {text}
       </span>
     </span>
