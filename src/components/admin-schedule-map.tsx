@@ -13,7 +13,7 @@ function token() {
   return m ? decodeURIComponent(m[1]) : localStorage.getItem("ra_admin") || "";
 }
 
-export function AdminScheduleMap() {
+export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
   const [schools, setSchools] = useState<SchoolLink[]>([]);
   const [courses, setCourses] = useState<CourseLink[]>([]);
   const [siteSchools, setSiteSchools] = useState<{ href: string; label: string }[]>([]);
@@ -55,7 +55,12 @@ export function AdminScheduleMap() {
   }
 
   return (
-    <section className="mt-10 space-y-6">
+    <section className={embedded ? "space-y-6" : "mt-10 space-y-6"}>
+      {embedded ? (
+        <p className="text-sm text-muted">
+          Предмет из AlfaCRM ↔ курс и школа на сайте. Школа в расписании берётся из названия группы, затем из этой таблицы. CRM не меняется.
+        </p>
+      ) : (
       <AdminSectionHead
         section="schedule"
         title="Соответствия"
@@ -65,6 +70,7 @@ export function AdminScheduleMap() {
           Науки и инженерия, языки и раннее развитие появляются в расписании, если предмет привязан к курсу этой школы.
         </p>
       </AdminSectionHead>
+      )}
 
       <div className="flex flex-wrap justify-end gap-2">
         {msg ? <p className="mr-auto text-sm text-primary">{msg}</p> : null}

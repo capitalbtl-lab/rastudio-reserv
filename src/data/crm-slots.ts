@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import type { CmsSession } from "@/data/cms";
 import { request } from "@/data/alfacrm";
 import { yandexJson } from "@/data/agent-channels";
-import { matchSubject, loadSubjects, bestSubject } from "@/data/crm-subjects";
+import { matchSubject, loadSubjects, bestSubject, scoreSubject } from "@/data/crm-subjects";
 import { type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
 
 export { SCHOOL_ORDER, type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
@@ -51,7 +51,13 @@ function schoolFile() {
 export function stampSubjects(slots: CrmSlot[]): CrmSlot[] {
   const list = loadSubjects();
   return slots.map((s) => {
-    const hit = bestSubject(`${s.groupName} ${s.course} ${s.age} ${s.subject}`, list);
+    const hay = `${s.groupName} ${s.course} ${s.age} ${s.subject}`;
+    const current = list.find((x) => x.id === s.subjectId);
+    if (current && scoreSubject(hay, current) >= 40) {
+      if (s.subject === current.name && s.subjectId === current.id) return s;
+      return { ...s, subjectId: current.id, subject: current.name };
+    }
+    const hit = bestSubject(hay, list);
     if (!hit) return s;
     if (s.subjectId === hit.id && s.subject === hit.name) return s;
     return { ...s, subjectId: hit.id, subject: hit.name };

@@ -14,7 +14,6 @@ import { AdminCalls } from "@/components/admin-calls";
 import { AdminAgent } from "@/components/admin-agent";
 import { AdminDossiers } from "@/components/admin-dossiers";
 import { AdminSchedule } from "@/components/admin-schedule";
-import { AdminScheduleMap } from "@/components/admin-schedule-map";
 import { AdminIntegrations } from "@/components/admin-integrations";
 import { AdminSaveBar } from "@/components/admin-save-bar";
 import { adminGhostBtn, AdminSectionHead, AdminSelfTest } from "@/components/admin-self-test";
@@ -23,12 +22,11 @@ import { InfoTip, TipWrap } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
 
 const KEY = "ra_admin";
-type Tab = "prices" | "schedule" | "map" | "agent" | "calls" | "dossiers" | "apis";
+type Tab = "prices" | "schedule" | "agent" | "calls" | "dossiers" | "apis";
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: "prices", label: "Цены курсов", hint: "Прайс, КБМ и ТМХ" },
   { id: "schedule", label: "Расписание занятий", hint: "Группы студии" },
-  { id: "map", label: "Соответствия", hint: "Школы и курсы сайта" },
   { id: "agent", label: "Ассистент ИИ", hint: "Окно, обучение, доступ" },
   { id: "calls", label: "База звонков", hint: "Novofon → знания" },
   { id: "dossiers", label: "Личные дела", hint: "Клиенты AlfaCRM" },
@@ -540,7 +538,6 @@ export function AdminPrices() {
       ) : null}
 
       {tab === "schedule" ? <AdminSchedule /> : null}
-      {tab === "map" ? <AdminScheduleMap /> : null}
       {tab === "calls" ? <AdminCalls /> : null}
       {tab === "dossiers" ? <AdminDossiers /> : null}
       {tab === "agent" ? <AdminAgent /> : null}

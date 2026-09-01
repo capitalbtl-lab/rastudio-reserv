@@ -151,10 +151,8 @@ export function scoreSubject(hay: string, sub: CrmSubject) {
     score = hit * 28;
   }
   const ages = ageHit(n, m);
-  if (ages.both) {
-    if (!ages.n) score = Math.min(score, 18);
-    else score += ages.n * 55;
-  }
+  if (ages.both && !ages.n) score = Math.min(score, 18);
+  else if (ages.both && ages.n && score >= 40) score += Math.min(120, ages.n * 12);
   return score;
 }
 

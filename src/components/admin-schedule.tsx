@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { speakAgent } from "@/data/agent-voice";
 import { missingScheduleFields, parseDraftFromSpeech, beatsOf, type LessonBeat } from "@/data/crm-slots";
 import { AdminSubjects } from "@/components/admin-subjects";
+import { AdminScheduleMap } from "@/components/admin-schedule-map";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -423,7 +424,7 @@ export function AdminSchedule() {
   const [view, setView] = useState<Record<string, number>>({});
   const [fileOpen, setFileOpen] = useState(false);
   const [pull, setPull] = useState({ open: false, step: "", done: false, added: 0, updated: 0, total: 0, error: "" });
-  const [pane, setPane] = useState<"groups" | "subjects">("groups");
+  const [pane, setPane] = useState<"groups" | "subjects" | "map">("groups");
   const [branchFilter, setBranchFilter] = useState("all");
   const [pushUi, setPushUi] = useState({ open: false, step: "", done: false, created: 0, pushed: 0, failed: 0, error: "", lines: [] as string[] });
   const fileRef = useRef<HTMLDivElement>(null);
@@ -1091,9 +1092,13 @@ export function AdminSchedule() {
         <Button type="button" size="sm" variant={pane === "subjects" ? "primary" : "secondary"} onClick={() => setPane("subjects")}>
           Предметы
         </Button>
+        <Button type="button" size="sm" variant={pane === "map" ? "primary" : "secondary"} onClick={() => setPane("map")}>
+          Соответствия
+        </Button>
       </div>
 
       {pane === "subjects" ? <AdminSubjects /> : null}
+      {pane === "map" ? <AdminScheduleMap embedded /> : null}
       {pane === "groups" ? (
       <>
       <div className="flex flex-wrap items-start gap-2">

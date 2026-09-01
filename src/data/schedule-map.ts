@@ -122,7 +122,14 @@ export function loadScheduleMap(): MapFile {
     const schools = defaultSchools().map((d) => raw.schools?.find((s) => s.schedule === d.schedule) || d);
     const courses = defaultCourses().map((d) => {
       const hit = raw.courses?.find((c) => c.subjectId === d.subjectId);
-      return hit ? { ...d, ...hit, subjectName: d.subjectName } : d;
+      if (!hit) return d;
+      const hrefSchool = schoolByPath(hit.siteHref || "");
+      const hrefOk = !hrefSchool || hrefSchool === d.school;
+      return {
+        ...d,
+        siteHref: hrefOk && hit.siteHref ? hit.siteHref : d.siteHref,
+        school: d.school,
+      };
     });
     for (const c of raw.courses || []) {
       if (!courses.some((x) => x.subjectId === c.subjectId)) courses.push(c);
@@ -143,22 +150,28 @@ export function saveScheduleMap(data: MapFile) {
   return next;
 }
 
+export function schoolFromHay(hay: string) {
+  return schoolBySubject({ id: 0, name: hay });
+}
+
 export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
   const map = loadScheduleMap();
   const byId = new Map(map.courses.map((c) => [c.subjectId, c]));
   return slots.map((s) => {
+    const hay = `${s.groupName} ${s.course} ${s.subject} ${s.age}`;
+    const byName = schoolFromHay(hay);
     const link = (s.subjectId && byId.get(s.subjectId)) || map.courses.find((c) => c.subjectName && s.subject && c.subjectName === s.subject);
-    if (!link) {
-      const school = map.schools.find((x) => x.schedule === s.school)?.schedule || s.school;
-      return { ...s, school: school || s.school };
-    }
-    const school = link.school || schoolByPath(link.siteHref) || s.school;
-    const price = listPriceRows().find((r) => r.path === link.siteHref);
+    const school =
+      (byName && byName !== "Прочее" ? byName : "") ||
+      link?.school ||
+      schoolByPath(link?.siteHref || s.path) ||
+      s.school;
+    const price = link?.siteHref ? listPriceRows().find((r) => r.path === link.siteHref) : undefined;
     return {
       ...s,
-      school,
-      path: link.siteHref || s.path,
-      course: price?.name || s.course || link.subjectName,
+      school: school || s.school,
+      path: link?.siteHref || s.path,
+      course: price?.name || s.course || link?.subjectName || s.course,
     };
   });
 }
