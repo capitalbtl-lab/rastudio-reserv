@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { adminSchedule } from "@/data/admin-schedule";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,65 @@ function CheckBox({
         onToggle(ids, e.target.checked);
       }}
     />
+  );
+}
+
+function WhoTip({ names, onNeed }: { names?: string[]; onNeed: () => void }) {
+  const btn = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  function place() {
+    const el = btn.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = 232;
+    const h = Math.min(280, 28 + Math.max(1, names?.length || 1) * 20);
+    let top = r.bottom + 8;
+    if (top + h > window.innerHeight - 10) top = Math.max(8, r.top - h - 8);
+    let left = r.right - width;
+    if (left < 8) left = 8;
+    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+    setPos({ top, left });
+  }
+
+  useEffect(() => {
+    if (open) place();
+  }, [open, names]);
+
+  return (
+    <>
+      <button
+        ref={btn}
+        type="button"
+        className="whitespace-nowrap text-[0.7rem] font-semibold text-primary"
+        onMouseEnter={() => {
+          setOpen(true);
+          place();
+          onNeed();
+        }}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => {
+          setOpen(true);
+          place();
+          onNeed();
+        }}
+        onBlur={() => setOpen(false)}
+      >
+        Кто учится
+      </button>
+      {open
+        ? createPortal(
+            <div
+              className="pointer-events-none fixed z-[80] w-[14.5rem] rounded-md bg-neutral-600 px-2.5 py-2 text-left text-[0.72rem] leading-snug text-white shadow-md"
+              style={{ top: pos.top, left: pos.left }}
+            >
+              {!names ? "Загружаю…" : names.length ? names.map((n) => <p key={n}>{n}</p>) : "В группе пока никого"}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 
@@ -286,11 +346,11 @@ export function AdminSchedule() {
         </article>
       ) : null}
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {tree.map((sch) => {
           const schoolIds = sch.courses.flatMap((c) => c.items.map((s) => s.id));
           return (
-          <article key={sch.school} className="overflow-hidden rounded-3xl bg-surface shadow-[var(--shadow-border)]">
+          <article key={sch.school} className="rounded-3xl bg-surface shadow-[var(--shadow-border)]">
             <div className="flex w-full items-center gap-3 px-5 py-4">
               <CheckBox ids={schoolIds} picked={picked} onToggle={setIds} />
               <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => { setOpenAll(false); setOpenSchool((v) => (v === sch.school ? "" : sch.school)); }}>
@@ -304,11 +364,12 @@ export function AdminSchedule() {
             </div>
             {openAll || openSchool === sch.school ? (
               sch.courses.length ? (
-                sch.courses.map((c) => {
+                <div className="space-y-2 px-3 pb-3">
+                {sch.courses.map((c) => {
                   const courseIds = c.items.map((s) => s.id);
                   return (
-                  <div key={c.course} className="border-t border-black/6">
-                    <div className="flex items-center gap-3 bg-surface-2 px-5 py-3">
+                  <div key={c.course} className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/8">
+                    <div className="flex items-center gap-3 bg-surface-2 px-4 py-2.5">
                       <CheckBox ids={courseIds} picked={picked} onToggle={setIds} />
                       <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => setOpenCourse((v) => (v === c.course ? "" : c.course))}>
                         <span className="font-medium">{c.course}</span>
@@ -316,7 +377,7 @@ export function AdminSchedule() {
                       </button>
                     </div>
                     {openAll || openCourse === c.course ? (
-                      <div className="overflow-x-auto">
+                      <div>
                         <table className="w-full text-left text-sm">
                           <colgroup>
                             <col className="w-8" />
@@ -327,9 +388,8 @@ export function AdminSchedule() {
                             <col className="w-10" />
                             <col className="w-[7.5rem]" />
                             <col className="w-36" />
-                            <col className="w-[4.2rem]" />
-                            <col className="w-24" />
-                            <col className="w-16" />
+                            <col className="w-[4.4rem]" />
+                            <col className="w-[5.5rem]" />
                           </colgroup>
                           <thead className="text-[0.65rem] uppercase tracking-wider text-muted">
                             <tr>
@@ -343,7 +403,6 @@ export function AdminSchedule() {
                               <th className="px-2 py-2">Педагог</th>
                               <th className="px-1 py-2 text-center">Места</th>
                               <th className="px-2 py-2">Кто учится</th>
-                              <th className="px-2 py-2">Запись</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -360,9 +419,8 @@ export function AdminSchedule() {
                                     value={s.groupName}
                                     title={s.groupName}
                                     onChange={(e) => patch(s.id, "groupName", e.target.value)}
-                                    className="h-8 w-full min-w-[12rem] rounded-md bg-surface-2 px-2 text-[0.8rem] ring-1 ring-black/8"
+                                    className="h-8 w-full min-w-[10rem] rounded-md bg-surface-2 px-2 text-[0.8rem] ring-1 ring-black/8"
                                   />
-                                  <p className="mt-0.5 text-[0.65rem] text-muted">gid {s.groupId || "—"} · урок {s.lessonId || "—"}</p>
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
                                   <input value={s.age} onChange={(e) => patch(s.id, "age", e.target.value)} className={cn(cell, "w-full")} />
@@ -377,7 +435,7 @@ export function AdminSchedule() {
                                   </select>
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
-                                  <div className="flex items-center justify-center gap-0.5">
+                                  <div className="flex items-center justify-center gap-1">
                                     <input value={s.timeFrom} onChange={(e) => patch(s.id, "timeFrom", e.target.value)} className={cn(cell, "w-[3.2rem]")} />
                                     <input value={s.timeTo} onChange={(e) => patch(s.id, "timeTo", e.target.value)} className={cn(cell, "w-[3.2rem]")} />
                                   </div>
@@ -391,29 +449,13 @@ export function AdminSchedule() {
                                   <input value={s.teacher} onChange={(e) => patch(s.id, "teacher", e.target.value)} className="h-8 w-full rounded-md bg-surface-2 px-2 text-[0.75rem] ring-1 ring-black/8" />
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
-                                  <div className="flex items-center justify-center gap-0.5">
-                                    <input value={s.limit} onChange={(e) => patch(s.id, "limit", Number(e.target.value) || 0)} className={cn(cell, "w-8")} />
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <input value={s.limit} onChange={(e) => patch(s.id, "limit", Number(e.target.value) || 0)} className={cn(cell, "w-7")} />
                                     <span className="text-[0.65rem] text-muted">/{s.taken}</span>
                                   </div>
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
-                                  <div className="group relative inline-block">
-                                    <button type="button" className="text-[0.7rem] font-semibold text-primary" onMouseEnter={() => void loadWho(s)} onFocus={() => void loadWho(s)}>
-                                      Кто учится
-                                    </button>
-                                    <div className="pointer-events-none absolute left-0 top-full z-30 hidden w-56 rounded-xl bg-fg p-3 text-left text-[0.72rem] font-normal leading-snug text-white shadow-lg group-hover:block">
-                                      {!names ? "Загружаю…" : names.length ? names.map((n) => <p key={n}>{n}</p>) : "В группе пока никого"}
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="px-2 py-1.5 align-middle">
-                                  {s.signup ? (
-                                    <a href={s.signup} target="_blank" rel="noreferrer" className="text-[0.7rem] font-semibold text-primary">
-                                      gid {s.groupId}
-                                    </a>
-                                  ) : (
-                                    "—"
-                                  )}
+                                  <WhoTip names={names} onNeed={() => void loadWho(s)} />
                                 </td>
                               </tr>
                               );
@@ -424,7 +466,8 @@ export function AdminSchedule() {
                     ) : null}
                   </div>
                   );
-                })
+                })}
+                </div>
               ) : (
                 <p className="border-t border-black/6 px-5 py-4 text-sm text-muted">Расписание не заполнено.</p>
               )
