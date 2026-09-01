@@ -11,7 +11,7 @@ import { SCHOOLS } from "@/data/site";
 import { SCHOOL_ORDER } from "@/data/crm-slots-core";
 import { cn } from "@/lib/utils";
 import { speakAgent } from "@/data/agent-voice";
-import { missingScheduleFields, parseDraftFromSpeech } from "@/data/crm-slots";
+import { missingScheduleFields, parseDraftFromSpeech, beatsOf, type LessonBeat } from "@/data/crm-slots";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -88,6 +88,86 @@ function CrmDot({ s }: { s: CrmSlot }) {
       title={ok ? "Группа есть в AlfaCRM" : "Только на сайте, в AlfaCRM ещё не выгружена"}
       className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", ok ? "bg-emerald-500" : "bg-pink-400")}
     />
+  );
+}
+
+function WeekDots({
+  s,
+  index,
+  onView,
+  onAdd,
+}: {
+  s: CrmSlot;
+  index: number;
+  onView: (i: number) => void;
+  onAdd: (b: LessonBeat) => void;
+}) {
+  const beats = beatsOf(s);
+  const i = ((index % beats.length) + beats.length) % beats.length;
+  const [open, setOpen] = useState(false);
+  const first = beats[0];
+  const [day, setDay] = useState(first.day === 2 ? 4 : 2);
+  const [from, setFrom] = useState(first.timeFrom || "18:00");
+  const [to, setTo] = useState(first.timeTo || "19:30");
+  return (
+    <div className="relative flex items-center justify-center gap-1">
+      <button
+        type="button"
+        title={beats.length > 1 ? `Занятие ${i + 1} из ${beats.length}. Нажмите, чтобы показать другой день.` : "Одно занятие в неделю"}
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-[0.75rem] font-semibold ring-1 ring-black/8"
+        onClick={() => {
+          if (beats.length > 1) onView((i + 1) % beats.length);
+        }}
+      >
+        {i + 1}
+      </button>
+      {beats.length < 3 ? (
+        <button
+          type="button"
+          title="Добавить занятие в другой день"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-lg leading-none ring-1 ring-black/8"
+          onClick={() => setOpen((v) => !v)}
+        >
+          +
+        </button>
+      ) : null}
+      {open ? (
+        <div className="absolute right-0 top-full z-40 mt-1 w-52 rounded-2xl bg-white p-3 shadow-[var(--shadow-border)]">
+          <p className="text-xs font-semibold">Второе занятие</p>
+          <label className="mt-2 block text-[0.7rem] text-muted">
+            День
+            <select value={day} onChange={(e) => setDay(Number(e.target.value))} className="mt-1 h-8 w-full rounded-full bg-surface-2 px-2 text-sm ring-1 ring-black/8">
+              {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                <option key={d} value={d}>{["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"][d]}</option>
+              ))}
+            </select>
+          </label>
+          <div className="mt-2 flex gap-1">
+            <label className="flex-1 text-[0.7rem] text-muted">
+              С
+              <input value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 h-8 w-full rounded-full bg-surface-2 px-2 text-center text-sm ring-1 ring-black/8" />
+            </label>
+            <label className="flex-1 text-[0.7rem] text-muted">
+              До
+              <input value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 h-8 w-full rounded-full bg-surface-2 px-2 text-center text-sm ring-1 ring-black/8" />
+            </label>
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <button type="button" className="text-xs text-muted" onClick={() => setOpen(false)}>Отмена</button>
+            <button
+              type="button"
+              className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white"
+              onClick={() => {
+                onAdd({ day, timeFrom: from, timeTo: to, lessonId: 0 });
+                setOpen(false);
+              }}
+            >
+              Применить
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -214,6 +294,7 @@ export function AdminSchedule() {
   const slotsRef = useRef<CrmSlot[]>([]);
   const wizardRef = useRef<Draft>(EMPTY_WIZARD);
   const [flash, setFlash] = useState<Set<string>>(new Set());
+  const [view, setView] = useState<Record<string, number>>({});
   const [fileOpen, setFileOpen] = useState(false);
   const fileRef = useRef<HTMLDivElement>(null);
 
@@ -301,6 +382,42 @@ export function AdminSchedule() {
     setDirty((d) => new Set(d).add(id));
   }
 
+  function shownBeat(s: CrmSlot) {
+    const beats = beatsOf(s);
+    const i = view[s.id] || 0;
+    return beats[((i % beats.length) + beats.length) % beats.length];
+  }
+
+  function patchBeat(s: CrmSlot, field: "day" | "timeFrom" | "timeTo", value: string | number) {
+    const beats = beatsOf(s);
+    const i = view[s.id] || 0;
+    const next = beats.map((b, n) => (n === i ? { ...b, [field]: value } : b));
+    const cur = next[i];
+    setSlots((list) =>
+      list.map((row) =>
+        row.id === s.id
+          ? {
+              ...row,
+              beats: next,
+              timesPerWeek: next.length,
+              day: i === 0 ? Number(cur.day) : row.day,
+              dayLabel: i === 0 ? ["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"][Number(cur.day)] || row.dayLabel : row.dayLabel,
+              timeFrom: i === 0 ? cur.timeFrom : row.timeFrom,
+              timeTo: i === 0 ? cur.timeTo : row.timeTo,
+            }
+          : row,
+      ),
+    );
+    setDirty((d) => new Set(d).add(s.id));
+  }
+
+  function addBeat(s: CrmSlot, b: LessonBeat) {
+    const beats = [...beatsOf(s), b];
+    setSlots((list) => list.map((row) => (row.id === s.id ? { ...row, beats, timesPerWeek: beats.length } : row)));
+    setView((v) => ({ ...v, [s.id]: beats.length - 1 }));
+    setDirty((d) => new Set(d).add(s.id));
+  }
+
   const tree = useMemo(() => {
     const map = new Map<string, Map<string, CrmSlot[]>>();
     const names = [...SCHOOLS.map((s) => s.label), "Прочее"];
@@ -360,7 +477,8 @@ export function AdminSchedule() {
   }
 
   const DAYS_SHORT = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-  const cell = "h-8 rounded-md bg-surface-2 px-1 text-center text-[0.75rem] leading-8 ring-1 ring-black/8";
+  const box = "h-8 w-[4.6rem] shrink-0 rounded-full bg-surface-2 px-1 text-center text-[0.75rem] leading-8 ring-1 ring-black/8";
+  const cell = box;
 
   const coursesOf = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -979,7 +1097,7 @@ export function AdminSchedule() {
                             <col className="w-[4.6rem]" />
                             <col className="w-[3.4rem]" />
                             <col className="w-[7.2rem]" />
-                            <col className="w-10" />
+                            <col className="w-[5.2rem]" />
                             <col className="w-[7.5rem]" />
                             <col className="w-36" />
                             <col className="w-[4.4rem]" />
@@ -1024,10 +1142,10 @@ export function AdminSchedule() {
                                   />
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
-                                  <input value={s.age} onChange={(e) => patch(s.id, "age", e.target.value)} className={cn(cell, "w-full")} />
+                                  <input value={s.age} onChange={(e) => patch(s.id, "age", e.target.value)} className={box} />
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
-                                  <select value={s.day} onChange={(e) => patch(s.id, "day", Number(e.target.value))} className={cn(cell, "w-full px-0")}>
+                                  <select value={shownBeat(s).day} onChange={(e) => patchBeat(s, "day", Number(e.target.value))} className={cn(box, "px-0")}>
                                     {[1, 2, 3, 4, 5, 6, 7].map((d) => (
                                       <option key={d} value={d}>
                                         {["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"][d]}
@@ -1037,11 +1155,18 @@ export function AdminSchedule() {
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
                                   <div className="flex items-center justify-center gap-1">
-                                    <input value={s.timeFrom} onChange={(e) => patch(s.id, "timeFrom", e.target.value)} className={cn(cell, "w-[3.2rem]")} />
-                                    <input value={s.timeTo} onChange={(e) => patch(s.id, "timeTo", e.target.value)} className={cn(cell, "w-[3.2rem]")} />
+                                    <input value={shownBeat(s).timeFrom} onChange={(e) => patchBeat(s, "timeFrom", e.target.value)} className={box} />
+                                    <input value={shownBeat(s).timeTo} onChange={(e) => patchBeat(s, "timeTo", e.target.value)} className={box} />
                                   </div>
                                 </td>
-                                <td className="px-1 py-1.5 text-center align-middle text-muted">{s.timesPerWeek}</td>
+                                <td className="px-1 py-1.5 align-middle">
+                                  <WeekDots
+                                    s={s}
+                                    index={view[s.id] || 0}
+                                    onView={(i) => setView((v) => ({ ...v, [s.id]: i }))}
+                                    onAdd={(b) => addBeat(s, b)}
+                                  />
+                                </td>
                                 <td className="px-2 py-1.5 align-middle text-[0.7rem] leading-tight text-muted">
                                   <span className="block">{s.city}</span>
                                   <span className="block">{s.branch}</span>

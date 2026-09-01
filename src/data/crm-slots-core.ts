@@ -9,6 +9,13 @@ export const SCHOOL_ORDER = [
   "Прочее",
 ];
 
+export type LessonBeat = {
+  day: number;
+  timeFrom: string;
+  timeTo: string;
+  lessonId: number;
+};
+
 export type CrmSlot = {
   id: string;
   lessonId: number;
@@ -29,6 +36,7 @@ export type CrmSlot = {
   timeFrom: string;
   timeTo: string;
   timesPerWeek: number;
+  beats?: LessonBeat[];
   branchId: number;
   city: string;
   branch: string;

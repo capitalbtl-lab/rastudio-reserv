@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import type { CmsSession } from "@/data/cms";
 import { request, token } from "@/data/alfacrm";
 import { agesOverlap } from "@/data/ages";
-import { courseOf, dayLabel, schoolOf, slotFromSession, stampTimes, toSession, normalizeArtSlot, type CrmSlot } from "@/data/crm-slots";
+import { courseOf, dayLabel, schoolOf, slotFromSession, stampTimes, toSession, normalizeArtSlot, beatsOf, type CrmSlot } from "@/data/crm-slots";
 
 const SKIP_SUBJECT = new Set([7, 54, 104, 85, 81, 1, 77, 106, 82, 105, 83, 90, 84, 88, 87]);
 const DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
@@ -214,14 +214,27 @@ export function crmScheduleMeta() {
 export function listAdminSlots(): CrmSlot[] {
   const snap = cache || readSnap();
   const raw = snap?.slots?.length ? snap.slots : (snap?.sessions || []).map(slotFromSession);
-  return raw.map(normalizeArtSlot);
+  return stampTimes(raw.map(normalizeArtSlot));
 }
 
 export function saveAdminSlots(slots: CrmSlot[]) {
   const stamped = stampTimes(slots.map((s) => normalizeArtSlot({ ...s })));
   const sessions = stamped
     .filter((s) => s.school !== "Прочее" && s.statusId !== 2 && !/отложен/i.test(s.groupName))
-    .map(toSession);
+    .flatMap((s) => {
+      const beats = beatsOf(s);
+      return beats.map((b, i) =>
+        toSession({
+          ...s,
+          id: beats.length > 1 ? `${s.id}-b${i}` : s.id,
+          day: b.day,
+          dayLabel: dayLabel(b.day),
+          timeFrom: b.timeFrom,
+          timeTo: b.timeTo,
+          timesPerWeek: beats.length,
+        }),
+      );
+    });
   const seats = cache?.seats || readSnap()?.seats || new Map();
   cache = { at: Date.now(), sessions, seats, slots: stamped };
   writeSnap(cache);

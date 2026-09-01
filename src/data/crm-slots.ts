@@ -3,9 +3,9 @@ import { dirname, join } from "node:path";
 import type { CmsSession } from "@/data/cms";
 import { request } from "@/data/alfacrm";
 import { yandexJson } from "@/data/agent-channels";
-import { type CrmSlot, type SlotVersion } from "@/data/crm-slots-core";
+import { type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
 
-export { SCHOOL_ORDER, type CrmSlot, type SlotVersion } from "@/data/crm-slots-core";
+export { SCHOOL_ORDER, type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
 
 function signupOf(branch: number, gid: string | number) {
   return `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`;
@@ -100,14 +100,45 @@ export function dayLabel(day?: number) {
   return DAYS[(Number(day) || 1) - 1] || "День";
 }
 
-export function stampTimes(slots: CrmSlot[]) {
-  const n = new Map<string, number>();
-  for (const s of slots) {
-    const k = `${s.branchId}:${s.groupId}`;
-    n.set(k, (n.get(k) || 0) + 1);
+export function beatsOf(s: CrmSlot): LessonBeat[] {
+  if (s.beats?.length) return s.beats;
+  return [{ day: s.day, timeFrom: s.timeFrom, timeTo: s.timeTo, lessonId: s.lessonId }];
+}
+
+export function mergeGroupBeats(slots: CrmSlot[]): CrmSlot[] {
+  const order: string[] = [];
+  const map = new Map<string, CrmSlot>();
+  for (const raw of slots) {
+    const s = { ...raw };
+    const k = s.groupId ? `${s.branchId}:${s.groupId}` : s.id;
+    const extra = beatsOf(s);
+    const prev = map.get(k);
+    if (!prev) {
+      map.set(k, { ...s, beats: extra, timesPerWeek: extra.length });
+      order.push(k);
+      continue;
+    }
+    const have = new Set((prev.beats || []).map((b) => `${b.day}|${b.timeFrom}|${b.lessonId}`));
+    const beats = [...(prev.beats || [])];
+    for (const b of extra) {
+      const key = `${b.day}|${b.timeFrom}|${b.lessonId}`;
+      if (!have.has(key)) {
+        beats.push(b);
+        have.add(key);
+      }
+    }
+    map.set(k, { ...prev, beats, timesPerWeek: beats.length });
   }
-  for (const s of slots) s.timesPerWeek = n.get(`${s.branchId}:${s.groupId}`) || 1;
-  return slots;
+  return order.map((k) => {
+    const s = map.get(k)!;
+    const beats = beatsOf(s);
+    const a = beats[0];
+    return { ...s, beats, timesPerWeek: beats.length, day: a.day, dayLabel: dayLabel(a.day), timeFrom: a.timeFrom, timeTo: a.timeTo };
+  });
+}
+
+export function stampTimes(slots: CrmSlot[]) {
+  return mergeGroupBeats(slots);
 }
 
 export function toSession(s: CrmSlot): CmsSession {
@@ -514,6 +545,7 @@ export function buildSlot(draft: SlotDraft, catalog: CrmSlot[]): CrmSlot {
     timeFrom: eveningTime(draft.timeFrom),
     timeTo: eveningTime(draft.timeTo),
     timesPerWeek: 1,
+    beats: [{ day, timeFrom: eveningTime(draft.timeFrom), timeTo: eveningTime(draft.timeTo), lessonId: 0 }],
     branchId: br.id,
     city: br.city,
     branch: br.branch,
@@ -671,21 +703,23 @@ export async function pushSlotsToCrm(slots: CrmSlot[], dirtyIds?: string[]) {
         },
         t,
       );
-      await request(
-        `/v2api/${s.branchId}/regular-lesson/update`,
-        {
-          id: s.lessonId,
+      for (const b of beatsOf(s)) {
+        const payload = {
           related_id: s.groupId,
           subject_id: s.subjectId || undefined,
-          day: s.day,
-          time_from: s.timeFrom,
-          time_to: s.timeTo,
-          time_from_v: s.timeFrom,
-          time_to_v: s.timeTo,
+          day: b.day,
+          time_from: b.timeFrom,
+          time_to: b.timeTo,
+          time_from_v: b.timeFrom,
+          time_to_v: b.timeTo,
           teacher_ids: s.teacherIds.length ? s.teacherIds : s.teacherId ? [s.teacherId] : undefined,
-        },
-        t,
-      );
+        };
+        if (b.lessonId) {
+          await request(`/v2api/${s.branchId}/regular-lesson/update`, { id: b.lessonId, ...payload }, t);
+        } else {
+          await request(`/v2api/${s.branchId}/regular-lesson/create`, payload, t);
+        }
+      }
       results.push({ id: s.id, ok: true });
     } catch (e) {
       results.push({ id: s.id, ok: false, error: e instanceof Error ? e.message.slice(0, 180) : "ошибка CRM" });
