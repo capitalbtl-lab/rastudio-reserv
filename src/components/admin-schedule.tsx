@@ -67,30 +67,67 @@ const RANGE_OPTS = [
   { id: "360", label: "±360 дней" },
 ] as const;
 
+function LessonTile({
+  lesson: l,
+  today,
+  onEnter,
+  onLeave,
+}: {
+  lesson: GroupCalLesson;
+  today: string;
+  onEnter: (el: HTMLElement, lesson: GroupCalLesson) => void;
+  onLeave: () => void;
+}) {
+  const d = parseYmd(l.date);
+  const isToday = l.date === today;
+  const cancelled = l.status === 2;
+  const done = l.status === 3;
+  const planned = l.status === 1 || l.status === 0;
+  return (
+    <div
+      onMouseEnter={(e) => onEnter(e.currentTarget, l)}
+      onMouseLeave={onLeave}
+      className={cn(
+        "flex h-[4.025rem] w-[2.82rem] min-w-[2.82rem] cursor-default flex-col items-center justify-center rounded-[0.9rem] px-0.5 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
+        isToday && !cancelled && "bg-primary text-white",
+        !isToday && done && "bg-emerald-100 text-fg ring-1 ring-emerald-400/80",
+        !isToday && planned && "bg-white text-fg ring-1 ring-neutral-500/55",
+        cancelled && "bg-neutral-200 text-neutral-400 ring-1 ring-neutral-300 line-through",
+      )}
+    >
+      {isToday && !cancelled ? (
+        <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/90">сегодня</span>
+      ) : (
+        <span className={cn("text-[0.6rem] font-semibold uppercase tracking-wider", cancelled ? "text-neutral-400" : "text-neutral-500")}>{WD[(d.getDay() + 6) % 7]}</span>
+      )}
+      <span className={cn("text-[0.83rem] font-semibold tabular-nums", isToday && !cancelled && "text-white")}>{d.getDate()}</span>
+      <span className={cn("text-[0.6rem] font-medium", isToday && !cancelled ? "text-white/85" : "text-neutral-500")}>{MONTHS_SHORT[d.getMonth()]}</span>
+    </div>
+  );
+}
+
 function GroupLessonStrip({ lessons, group, subject, teacher }: { lessons: GroupCalLesson[]; group?: string; subject?: string; teacher?: string }) {
   const today = todayYmd();
   const [range, setRange] = useState<(typeof RANGE_OPTS)[number]["id"]>("10");
   const [tip, setTip] = useState<{ lesson: GroupCalLesson; top: number; left: number } | null>(null);
   const all = useMemo(() => [...lessons].sort((a, b) => a.date.localeCompare(b.date)), [lessons]);
-  const items = useMemo(() => {
-    const past = all.filter((l) => l.date < today);
-    const future = all.filter((l) => l.date > today);
-    const todayHit = all.find((l) => l.date === today) || { date: today, from: "", to: "", status: -1, type: "сегодня" };
+  const { past, future, todayHit } = useMemo(() => {
+    let pool = all;
+    if (range !== "10") {
+      const days = Number(range);
+      const from = shiftYmd(today, -days);
+      const to = shiftYmd(today, days);
+      pool = all.filter((l) => l.date >= from && l.date <= to);
+    }
+    const pastAll = pool.filter((l) => l.date < today);
+    const futureAll = pool.filter((l) => l.date > today);
+    const todayHit = pool.find((l) => l.date === today) || null;
     if (range === "10") {
-      return [...past.slice(-10), todayHit, ...future.slice(0, 10)];
+      return { past: pastAll.slice(-10), future: futureAll.slice(0, 10), todayHit };
     }
-    const days = Number(range);
-    const from = shiftYmd(today, -days);
-    const to = shiftYmd(today, days);
-    const window = all.filter((l) => l.date >= from && l.date <= to);
-    if (!window.some((l) => l.date === today)) {
-      const i = window.findIndex((l) => l.date > today);
-      const next = [...window];
-      next.splice(i < 0 ? next.length : i, 0, todayHit);
-      return next;
-    }
-    return window;
+    return { past: pastAll, future: futureAll, todayHit };
   }, [all, range, today]);
+  const shown = past.length + future.length + (todayHit ? 1 : 0);
 
   function showTip(el: HTMLElement, lesson: GroupCalLesson) {
     const r = el.getBoundingClientRect();
@@ -108,7 +145,7 @@ function GroupLessonStrip({ lessons, group, subject, teacher }: { lessons: Group
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Расписание занятий</p>
         <div className="flex items-center gap-2">
-          <p className="text-[0.7rem] text-muted">{items.length} из {all.length}</p>
+          <p className="text-[0.7rem] text-muted">{shown} из {all.length}</p>
           <select
             value={range}
             onChange={(e) => setRange(e.target.value as (typeof RANGE_OPTS)[number]["id"])}
@@ -121,40 +158,24 @@ function GroupLessonStrip({ lessons, group, subject, teacher }: { lessons: Group
         </div>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
-        {items.map((l) => {
-          const d = parseYmd(l.date);
-          const isToday = l.date === today;
-          const cancelled = l.status === 2;
-          const done = l.status === 3;
-          const planned = l.status === 1 || l.status === 0;
-          return (
-            <div
-              key={l.date}
-              onMouseEnter={(e) => showTip(e.currentTarget, l)}
-              onMouseLeave={() => setTip(null)}
-              className={cn(
-                "flex h-[4.025rem] w-[2.82rem] min-w-[2.82rem] cursor-default flex-col items-center justify-center rounded-[0.9rem] px-0.5 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
-                isToday && !cancelled && "bg-primary text-white",
-                !isToday && done && "bg-emerald-100 text-fg ring-1 ring-emerald-400/80",
-                !isToday && planned && "bg-white text-fg ring-1 ring-neutral-500/55",
-                cancelled && "bg-neutral-200 text-neutral-400 ring-1 ring-neutral-300 line-through",
-                !isToday && !cancelled && !done && planned && l.date < today && "text-muted",
-              )}
-            >
-              {isToday && !cancelled ? (
-                <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/90">сегодня</span>
-              ) : (
-                <span className={cn("text-[0.6rem] font-semibold uppercase tracking-wider", cancelled ? "text-neutral-400" : "text-neutral-500")}>{WD[(d.getDay() + 6) % 7]}</span>
-              )}
-              <span className={cn("text-[0.83rem] font-semibold tabular-nums", isToday && !cancelled && "text-white")}>
-                {d.getDate()}
-              </span>
-              <span className={cn("text-[0.6rem] font-medium", isToday && !cancelled ? "text-white/85" : "text-neutral-500")}>
-                {MONTHS_SHORT[d.getMonth()]}
-              </span>
-            </div>
-          );
-        })}
+        {past.map((l) => (
+          <LessonTile key={l.date} lesson={l} today={today} onEnter={showTip} onLeave={() => setTip(null)} />
+        ))}
+        {todayHit ? (
+          <LessonTile key={todayHit.date} lesson={todayHit} today={today} onEnter={showTip} onLeave={() => setTip(null)} />
+        ) : (
+          <div
+            className="flex h-[4.025rem] w-[2.82rem] min-w-[2.82rem] flex-col items-center justify-center rounded-[0.9rem] bg-primary px-0.5 text-center text-white shadow-[0_1px_3px_rgba(15,23,42,0.12)]"
+            title="Сегодня"
+          >
+            <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/90">сейчас</span>
+            <span className="text-[0.83rem] font-semibold tabular-nums">{Number(today.slice(8))}</span>
+            <span className="text-[0.6rem] font-medium text-white/85">{MONTHS_SHORT[Number(today.slice(5, 7)) - 1]}</span>
+          </div>
+        )}
+        {future.map((l) => (
+          <LessonTile key={l.date} lesson={l} today={today} onEnter={showTip} onLeave={() => setTip(null)} />
+        ))}
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-3 text-[0.68rem] text-muted">
         <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-100 ring-1 ring-emerald-400/80" /> проведено</span>

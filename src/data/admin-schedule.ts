@@ -413,7 +413,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
             }
           }
         }
-        await pullLessons({ group_ids: [gid] });
+        await pullLessons({ group_id: gid });
         if (!byDate.size) {
           for (const r of mine) {
             if (!r.id) continue;
