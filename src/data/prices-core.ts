@@ -14,8 +14,12 @@ export type PriceRow = {
 const SEED = seed as PriceRow[];
 let cache: PriceRow[] = SEED.map((r) => ({ ...r }));
 
+export function tidyCourseName(name: string) {
+  return String(name || "").replace(/робототехника и программирование/gi, "Робототехника");
+}
+
 export function hydratePrices(rows: PriceRow[]) {
-  cache = rows.map((r) => ({ ...r }));
+  cache = rows.map((r) => ({ ...r, name: tidyCourseName(r.name) }));
 }
 
 export function listPriceRows() {

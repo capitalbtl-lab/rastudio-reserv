@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { SCHOOLS, SCHOOL_COURSE_MATCH } from "@/data/site";
-import { listPriceRows, SCHOOL_DIRECTION } from "@/data/prices-core";
+import { listPriceRows, SCHOOL_DIRECTION, tidyCourseName } from "@/data/prices-core";
 import { SEED_SUBJECTS, bestSubject, type CrmSubject } from "@/data/crm-subjects";
 import { type CrmSlot } from "@/data/crm-slots-core";
 
@@ -105,8 +105,8 @@ function defaultCourses(): CourseLink[] {
 function schoolBySubject(sub: CrmSubject) {
   const t = sub.name.toLowerCase();
   if (/худож|скульп|портрет|рисунок|вуз|манг|digital/.test(t)) return "Художественная школа";
-  if (/билингв|робототех/.test(t) && !/программ/.test(t)) return "Школа робототехники";
-  if (/python|scratch|c\+\+|си\+\+|unity|it-лаб|it-школ|codebook|gamedev|програм/.test(t)) return "Школа программирования";
+  if (/робототех|билингв/.test(t) && !/it-школ|it-лаб|python|scratch|unity/.test(t)) return "Школа робототехники";
+  if (/python|scratch|c\+\+|си\+\+|unity|it-лаб|it-школ|codebook|gamedev|програм/.test(t) && !/робототех/.test(t)) return "Школа программирования";
   if (/наук|физик|радио|беспилот|компас|blender|инженер|steam/.test(t) && !/лего|планет/.test(t)) return "Школа наук и инженерии";
   if (/лего|подготовк|к школе|планет/.test(t)) return "Школа раннего развития";
   if (/англий|япон|коре|язык|go getter|super minds|vitamin|nihongo/.test(t)) return "Школа иностранных языков";
@@ -171,7 +171,7 @@ export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
       ...s,
       school: school || s.school,
       path: link?.siteHref || s.path,
-      course: price?.name || s.course || link?.subjectName || s.course,
+      course: tidyCourseName(price?.name || s.course || link?.subjectName || s.course),
     };
   });
 }
