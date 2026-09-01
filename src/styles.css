@@ -318,6 +318,32 @@
   display: none;
 }
 
+.pretty-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(18, 20, 26, 0.28) transparent;
+}
+
+.pretty-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.pretty-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  margin-block: 10px;
+}
+
+.pretty-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(18, 20, 26, 0.22);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.pretty-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(18, 20, 26, 0.38);
+}
+
 .gallery-slider {
   display: flex;
   gap: 0.85rem;

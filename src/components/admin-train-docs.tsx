@@ -83,11 +83,50 @@ const CHANNEL_HINT: Record<string, string> = {
   telegram: "Запасной канал. Появится в промпте, когда бот начнёт передавать channel=telegram.",
 };
 
+function firstLine(text: string) {
+  return String(text || "")
+    .split("\n")
+    .map((s) => s.trim())
+    .find(Boolean) || "";
+}
+
+function fillRow(r: TransformRow, list: AgentChannel[]): TransformRow {
+  const from = String(r.from || r.toText || Object.values(r.byChannel || {}).find((v) => String(v || "").trim()) || "").trim();
+  const title = String(r.title || "").trim() || firstLine(from).slice(0, 140) || "Тема";
+  const byChannel: Record<string, string> = { ...(r.byChannel || {}) };
+  for (const c of list) {
+    if (!String(byChannel[c.id] || "").trim()) byChannel[c.id] = from;
+  }
+  return { ...r, title, from: from || r.from, byChannel, toText: r.toText || from };
+}
+
 function FieldHead({ label, tip }: { label: string; tip: string }) {
   return (
     <div className="mb-1 flex h-6 items-center justify-between gap-2">
       <span className="text-xs font-semibold text-muted">{label}</span>
       <InfoTip text={tip} />
+    </div>
+  );
+}
+
+function ScrollField({
+  value,
+  onChange,
+  height = "h-40",
+  tone = "bg-white",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  height?: string;
+  tone?: string;
+}) {
+  return (
+    <div className={cn("overflow-hidden rounded-xl ring-1 ring-black/10", tone)}>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn("pretty-scroll w-full resize-none overflow-y-auto border-0 bg-transparent px-3 py-2 text-[0.78rem] leading-relaxed outline-none", height)}
+      />
     </div>
   );
 }
@@ -128,6 +167,8 @@ export function AdminTrainDocs() {
   const [draftRows, setDraftRows] = useState<Record<string, TransformRow[]>>({});
   const [newCh, setNewCh] = useState({ id: "telegram", label: "Агент в Telegram" });
   const [percent, setPercent] = useState(0);
+  const [openTopic, setOpenTopic] = useState<Record<string, boolean>>({});
+  const [allOpen, setAllOpen] = useState<Record<string, boolean>>({});
 
   async function load() {
     const res = await adminAgentDocs({ data: { token: token(), action: "list" } });
@@ -259,31 +300,33 @@ export function AdminTrainDocs() {
   }
 
   function cellsOf(r: TransformRow, list: AgentChannel[]) {
+    const filled = fillRow(r, list);
     const bag: Record<string, string> = {};
-    for (const c of list) bag[c.id] = r.byChannel?.[c.id] || r.from || "";
-    if (!Object.values(bag).some(Boolean) && r.toText) bag[r.toChannel || list[0]?.id || "common"] = r.toText;
+    for (const c of list) bag[c.id] = filled.byChannel[c.id] || filled.from || "";
     return bag;
   }
 
   function topicRows(d: DocRow): TransformRow[] {
-    if (draftRows[d.id]?.length) return draftRows[d.id];
-    if (d.transformRows?.length) return d.transformRows;
-    const ids = channels.map((c) => c.id);
-    return (d.items || []).map((it, i) => {
-      const from = [it.title, it.body].filter(Boolean).join("\n");
-      return {
-        id: it.id || `t${i + 1}`,
-        title: it.title,
-        from,
-        toChannel: "common",
-        toText: from,
-        byChannel: Object.fromEntries(ids.map((id) => [id, from])),
-        comment: "",
-        accuracy: 100,
-        drift: 0,
-        on: it.on !== false,
-      };
-    });
+    const raw = draftRows[d.id]?.length
+      ? draftRows[d.id]
+      : d.transformRows?.length
+        ? d.transformRows
+        : (d.items || []).map((it, i) => {
+            const from = [it.title, it.body].filter(Boolean).join("\n");
+            return {
+              id: it.id || `t${i + 1}`,
+              title: it.title,
+              from,
+              toChannel: "common",
+              toText: from,
+              byChannel: Object.fromEntries(channels.map((c) => [c.id, from])),
+              comment: "",
+              accuracy: 100,
+              drift: 0,
+              on: it.on !== false,
+            };
+          });
+    return raw.map((r) => fillRow(r, channels));
   }
 
   return (
@@ -340,10 +383,11 @@ export function AdminTrainDocs() {
               />
               <div className="mt-3">
                 <FieldHead label="Правила канала" tip="Этот текст видит модель, когда процент адаптации больше 0. Пишите манеру канала: длина реплики, кнопки или без, что запрещено. Не дублируйте оферту." />
-                <textarea
+                <ScrollField
                   value={c.rules || ""}
-                  onChange={(e) => setChannels((list) => list.map((x, j) => (j === i ? { ...x, rules: e.target.value } : x)))}
-                  className="h-44 w-full resize-none overflow-y-auto rounded-xl bg-surface-2 px-3 py-2 text-[0.8rem] leading-relaxed text-fg ring-1 ring-black/8"
+                  height="h-44"
+                  tone="bg-surface-2"
+                  onChange={(v) => setChannels((list) => list.map((x, j) => (j === i ? { ...x, rules: v } : x)))}
                 />
                 <div className="mt-2 flex items-center justify-end">
                   <button
@@ -512,21 +556,37 @@ export function AdminTrainDocs() {
                 </div>
               </div>
 
-              <div className="mt-4 space-y-3">
-                <p className="text-sm font-semibold">
-                  {rows.length} тем · 5 каналов
-                  <InfoTip className="ml-2" text="Строка — тема из документа. Столбец — канал. Текст должен совпадать с оригиналом; отличия только в том, как говорить в этом канале." />
-                </p>
+              <div className="mt-4 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">
+                    {rows.length} тем · {channels.length} каналов
+                    <InfoTip className="ml-2" text="Строка — тема из документа. Пустые ячейки заполняются оригиналом темы. Сверните блоки, чтобы не мотать." />
+                  </p>
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-primary"
+                    onClick={() => setAllOpen((p) => ({ ...p, [d.id]: !p[d.id] }))}
+                  >
+                    {allOpen[d.id] ? "Свернуть все" : "Раскрыть все"}
+                  </button>
+                </div>
                 {rows.map((r) => {
                   const cells = cellsOf(r, channels);
+                  const key = `${d.id}:${r.id}`;
+                  const opened = allOpen[d.id] || Boolean(openTopic[key]);
+                  const preview = firstLine(r.from || Object.values(cells).find(Boolean) || "");
                   return (
                     <div key={r.id} className="rounded-2xl bg-surface-2 p-3">
-                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <label className="flex items-center gap-2 text-xs font-semibold">
-                          <input type="checkbox" checked={r.on} onChange={(e) => {
-                            if (!draftRows[d.id]?.length) setDraftRows((p) => ({ ...p, [d.id]: rows }));
-                            patchRow(d.id, r.id, { on: e.target.checked });
-                          }} />
+                          <input
+                            type="checkbox"
+                            checked={r.on}
+                            onChange={(e) => {
+                              if (!draftRows[d.id]?.length) setDraftRows((p) => ({ ...p, [d.id]: rows }));
+                              patchRow(d.id, r.id, { on: e.target.checked });
+                            }}
+                          />
                           Тема
                         </label>
                         <input
@@ -538,31 +598,38 @@ export function AdminTrainDocs() {
                           className="h-9 min-w-[12rem] flex-1 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-black/10"
                         />
                         <span className="text-[0.7rem] text-muted">точность {r.accuracy}% · расхождение {r.drift}%</span>
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-primary"
+                          onClick={() => setOpenTopic((p) => ({ ...p, [key]: !opened }))}
+                        >
+                          {opened ? "Свернуть" : "Развернуть"}
+                        </button>
                       </div>
-                      <div className="grid gap-2 lg:grid-cols-5">
-                        {channels.map((c) => (
-                          <div key={c.id}>
-                            <FieldHead label={c.label} tip={`Как эта тема звучит в канале «${c.label}». Факты те же, что в оригинале.`} />
-                            <textarea
-                              value={cells[c.id] || ""}
-                              onChange={(e) => {
-                                if (!draftRows[d.id]?.length) setDraftRows((p) => ({ ...p, [d.id]: rows }));
-                                patchCell(d.id, r.id, c.id, e.target.value);
-                              }}
-                              rows={rowsFor(cells[c.id] || r.from)}
-                              className={cn(
-                                "w-full resize-y rounded-xl px-3 py-2 text-[0.78rem] leading-relaxed ring-1 ring-black/10",
-                                c.id === "site" ? "bg-[#f4f7ff]" : "bg-white",
-                              )}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                      {r.comment ? <p className="mt-2 text-[0.7rem] text-muted">{r.comment}</p> : null}
+                      {opened ? (
+                        <div className="mt-2 grid gap-2 lg:grid-cols-5">
+                          {channels.map((c) => (
+                            <div key={c.id}>
+                              <FieldHead label={c.label} tip={`Как эта тема звучит в канале «${c.label}». Факты те же, что в оригинале.`} />
+                              <ScrollField
+                                value={cells[c.id] || ""}
+                                tone={c.id === "site" ? "bg-[#f4f7ff]" : "bg-white"}
+                                onChange={(v) => {
+                                  if (!draftRows[d.id]?.length) setDraftRows((p) => ({ ...p, [d.id]: rows }));
+                                  patchCell(d.id, r.id, c.id, v);
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 line-clamp-2 text-[0.78rem] leading-relaxed text-muted">{preview || "Текст темы появится после преобразования."}</p>
+                      )}
+                      {opened && r.comment ? <p className="mt-2 text-[0.7rem] text-muted">{r.comment}</p> : null}
                     </div>
                   );
                 })}
-                <Button type="button" disabled={busy || !rows.length} onClick={() => void apply(d.id, draftRows[d.id]?.length ? draftRows[d.id] : rows)}>
+                <Button type="button" disabled={busy || !rows.length} onClick={() => void apply(d.id, draftRows[d.id]?.length ? draftRows[d.id].map((r) => fillRow(r, channels)) : rows)}>
                   Применить преобразование
                 </Button>
               </div>
@@ -572,7 +639,7 @@ export function AdminTrainDocs() {
               </button>
               <InfoTip className="ml-2" text="Полный текст Word/PDF, как извлекли, без нарезки." />
               {open === d.id && d.text ? (
-                <pre className="mt-3 max-h-[20rem] overflow-auto whitespace-pre-wrap rounded-2xl bg-surface-2 p-4 text-[0.82rem] leading-relaxed">{d.text}</pre>
+                <pre className="pretty-scroll mt-3 max-h-[20rem] overflow-auto whitespace-pre-wrap rounded-2xl bg-surface-2 p-4 text-[0.82rem] leading-relaxed">{d.text}</pre>
               ) : null}
             </article>
           );
