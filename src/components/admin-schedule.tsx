@@ -351,6 +351,7 @@ export function AdminSchedule() {
   const [view, setView] = useState<Record<string, number>>({});
   const [fileOpen, setFileOpen] = useState(false);
   const fileRef = useRef<HTMLDivElement>(null);
+  const promptEl = useRef<HTMLTextAreaElement>(null);
 
   function take(res: { ok: boolean; slots?: CrmSlot[]; at?: string; versions?: Ver[]; error?: string; comment?: string; changes?: Change[]; adds?: Draft[]; pushed?: number; created?: string[] }) {
     if (!res.ok) {
@@ -416,6 +417,13 @@ export function AdminSchedule() {
   useEffect(() => {
     slotsRef.current = slots;
   }, [slots]);
+  useEffect(() => {
+    const el = promptEl.current;
+    if (!el) return;
+    el.style.height = "40px";
+    el.style.height = `${Math.min(160, Math.max(40, el.scrollHeight))}px`;
+    el.style.overflowY = el.scrollHeight > 160 ? "auto" : "hidden";
+  }, [aiPrompt, interim]);
   useEffect(() => {
     function close(e: MouseEvent) {
       if (!fileRef.current?.contains(e.target as Node)) setFileOpen(false);
@@ -970,14 +978,15 @@ export function AdminSchedule() {
             {wizard.teacher ? <span className="rounded-full bg-surface-2 px-2 py-0.5">{wizard.teacher}</span> : null}
           </p>
         ) : null}
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3 flex items-start gap-2">
           <textarea
             id="ra-sched-prompt"
+            ref={promptEl}
             value={interim ? [listenBaseRef.current, interim].filter(Boolean).join(" ") : aiPrompt}
             onChange={(e) => { setAiPrompt(e.target.value); promptRef.current = e.target.value; }}
-            rows={2}
+            rows={1}
             placeholder="Добавь художественную студию 3–4 года на Гражданской, вторник с 15:00 до 17:00, педагог Самсонова."
-            className="min-h-16 min-w-0 flex-1 resize-y rounded-xl bg-surface-2 px-3 py-2 text-sm ring-1 ring-black/10"
+            className="min-h-10 min-w-0 flex-1 resize-none overflow-hidden rounded-xl bg-surface-2 px-3 py-2 text-sm leading-6 ring-1 ring-black/10"
           />
           <button
             type="button"
@@ -989,13 +998,13 @@ export function AdminSchedule() {
               <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z" />
             </svg>
           </button>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
           <TipWrap text="Мастер голосом: спрашивает недостающие поля. готово — предпросмотр, применить — в расписание, дальше — сначала.">
-            <Button type="button" variant={voiceMode ? "default" : "secondary"} onClick={toggleVoiceMode}>
+            <Button type="button" size="sm" variant={voiceMode ? "primary" : "secondary"} className="h-10 shrink-0" onClick={toggleVoiceMode}>
               {voiceMode ? "Голосовой режим · вкл" : "Голосовой режим"}
             </Button>
           </TipWrap>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button type="button" disabled={busy || (!aiPrompt.trim() && !wizard.course)} onClick={() => void runCmd("готово")}>
             Предпросмотр
           </Button>
