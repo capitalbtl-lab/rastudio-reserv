@@ -13,6 +13,7 @@ import { Reviews } from "@/components/reviews";
 import { loadPublicEdits } from "@/data/load-site-page";
 import { hydrateEdits, pageEdit } from "@/data/edits-core";
 import { priceShort } from "@/data/prices-core";
+import { ageBadge, courseNameOnly } from "@/data/ages";
 import { cn } from "@/lib/utils";
 
 const home = homePage;
@@ -217,10 +218,10 @@ function Home() {
                 className="course-media aspect-4/5"
               />
               <div className="absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t from-black/75 via-black/35 to-transparent px-4 pb-4 pt-28">
-                <p className="text-[0.68rem] font-medium leading-snug text-white/75">
-                  {course.age}
+                <p className="text-[0.78rem] font-semibold leading-snug text-white/90">
+                  {ageBadge(course.age, course.title) || course.age}
                 </p>
-                <p className="display mt-1 text-[1.15rem] leading-tight text-white">{course.title}</p>
+                <p className="display mt-1 text-[1.15rem] leading-tight text-white">{courseNameOnly(course.title, course.age)}</p>
                 {priceShort(course.href) ? (
                   <p className="mt-1 text-[0.82rem] font-semibold text-white">{priceShort(course.href)} / 4 нед.</p>
                 ) : null}

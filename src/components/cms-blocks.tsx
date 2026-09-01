@@ -11,6 +11,7 @@ import { PageLink } from "@/components/page-link";
 import { TRIAL_PROMISE } from "@/data/course-offer";
 import { Button } from "@/components/ui/button";
 import { CoursePrice } from "@/components/course-price";
+import { ageBadge, courseNameOnly } from "@/data/ages";
 import { cn } from "@/lib/utils";
 export { ScheduleBlock } from "@/components/schedule-block";
 
@@ -613,8 +614,8 @@ export function RelatedAgeCourses({
                 imgClassName="h-full w-full object-cover transition-transform duration-[var(--motion-fast)] group-hover:scale-[1.04]"
               />
               <span className="block px-4 py-3">
-                <span className="block text-[0.98rem] font-semibold leading-snug">{course.label}</span>
-                {course.age ? <span className="mt-1 block text-xs text-muted">{course.age}</span> : null}
+                <span className="block text-[0.98rem] font-semibold leading-snug">{courseNameOnly(course.label, course.age)}</span>
+                {ageBadge(course.age, course.label) ? <span className="mt-1 block text-xs text-muted">{ageBadge(course.age, course.label)}</span> : null}
                 <CoursePrice path={course.href} tone="card" />
               </span>
             </PageLink>
@@ -654,13 +655,13 @@ export function SchoolCourseList({
                 imgClassName="h-full w-full object-cover transition-transform duration-[var(--motion-slow)] ease-[var(--ease-out)] group-hover:scale-[1.04]"
               />
               <span className="min-w-0 flex-1">
-                {course.age ? (
-                  <span className="inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[0.65rem] font-semibold tracking-[0.04em] text-primary">
-                    {course.age}
+                {ageBadge(course.age, course.label) ? (
+                  <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-[0.78rem] font-semibold tracking-[0.02em] text-primary md:text-[0.86rem]">
+                    {ageBadge(course.age, course.label)}
                   </span>
                 ) : null}
                 <span className="display mt-1 block text-[1.12rem] leading-[1.2] md:text-[1.32rem]">
-                  {course.label}
+                  {courseNameOnly(course.label, course.age)}
                 </span>
               </span>
               <CoursePrice path={course.href} tone="row" />

@@ -50,6 +50,41 @@ export function coursePrice(path: string) {
   return publicPriceLabel(path);
 }
 
+export function ageBadge(age?: string | null, title?: string | null) {
+  const src = `${age || ""} ${title || ""}`.replace(/\s+/g, " ").trim();
+  if (!src) return "";
+  const range = src.match(/(\d{1,2})\s*[–—-]\s*(\d{1,2})/);
+  if (range) {
+    const a = Number(range[1]);
+    const b = Number(range[2]);
+    if (a >= 2 && b <= 18 && a <= b) return `${a}–${b} ${b <= 4 ? "года" : "лет"}`;
+  }
+  const plus = src.match(/(?:от\s*)?(\d{1,2})\s*\+/i) || src.match(/от\s*(\d{1,2})/i);
+  if (plus) {
+    const n = Number(plus[1]);
+    if (n >= 2 && n <= 18) return `${n}+`;
+  }
+  const one = src.match(/\b(\d{1,2})\s*(лет|года|год)\b/i);
+  if (one) return `${one[1]} ${/год/i.test(one[2]) && Number(one[1]) <= 4 ? "года" : "лет"}`;
+  return ageShort(age);
+}
+
+export function courseNameOnly(title: string, age?: string | null) {
+  let t = (title || "").replace(/\s+/g, " ").trim();
+  if (!t) return title;
+  t = t
+    .replace(/\s*\(\s*\d{1,2}\s*[–—-]\s*\d{1,2}\s*(?:лет|года|год)?\s*\)\s*$/i, "")
+    .replace(/\s+для детей\s+\d{1,2}\s*[–—-]\s*\d{1,2}\s*(?:лет|года|год)?\s*$/i, "")
+    .replace(/\s+\d{1,2}\s*[–—-]\s*\d{1,2}\s*(?:лет|года|год)?\s*$/i, "")
+    .replace(/\s+\d{1,2}\s*\+\s*(?:лет)?\s*$/i, "")
+    .replace(/\s+для детей\s*$/i, "")
+    .replace(/\s*\d{1,2}\s*[–—-]\s*\d{1,2}\s*(?:лет|года|год)?/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/[·,;:\-–—]\s*$/g, "")
+    .trim();
+  return t.length >= 3 ? t : title;
+}
+
 export function ageShort(age?: string | null) {
   if (!age) return "";
   const bit = age

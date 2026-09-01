@@ -19,7 +19,7 @@ import { SCHOOL_PROGRAMS, SCHOOL_WHY, COURSE_STORY } from "@/data/school-program
 import { whyForPath } from "@/data/course-why";
 import { breadcrumbJsonLd, courseJsonLd } from "@/data/seo";
 import { JsonLd } from "@/components/json-ld";
-import { AGE_BANDS, agesOverlap, coursePlace } from "@/data/ages";
+import { AGE_BANDS, agesOverlap, coursePlace, ageBadge, courseNameOnly } from "@/data/ages";
 import { AgeChips } from "@/components/age-chips";
 import { CoursePrice } from "@/components/course-price";
 import { trialCourseForPath } from "@/data/trial";
@@ -489,12 +489,12 @@ function CatalogPage({ page, courses }: { page: SitePage; courses: CourseCard[] 
               <div className="course-media aspect-[4/3] bg-surface-2" />
             )}
             <div className="flex flex-1 flex-col p-5">
-              {c.age ? (
-                <p className="w-fit rounded-full bg-primary/10 px-2.5 py-1 text-[0.7rem] font-semibold text-primary">
-                  {c.age.replace(/^курс\s+/i, "").replace(/^для детей\s+/i, "")}
+              {ageBadge(c.age, c.label) ? (
+                <p className="w-fit rounded-full bg-primary/10 px-3 py-1 text-[0.82rem] font-semibold text-primary md:text-[0.9rem]">
+                  {ageBadge(c.age, c.label)}
                 </p>
               ) : null}
-              <p className="display mt-3 text-[1.2rem] leading-snug md:text-[1.35rem]">{c.label}</p>
+              <p className="display mt-3 text-[1.2rem] leading-snug md:text-[1.35rem]">{courseNameOnly(c.label, c.age)}</p>
               <CoursePrice path={c.href} tone="card" />
               <span className="mt-auto pt-5 text-sm font-semibold text-primary">Смотреть курс →</span>
             </div>
