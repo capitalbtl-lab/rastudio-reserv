@@ -4,6 +4,7 @@ import { SCHOOLS, SCHOOL_COURSE_MATCH } from "@/data/site";
 import { listPriceRows, SCHOOL_DIRECTION, splitCourseAge, tidyCourseName } from "@/data/prices-core";
 import { SEED_SUBJECTS, bestSubject, loadSubjects, type CrmSubject } from "@/data/crm-subjects";
 import { type CrmSlot } from "@/data/crm-slots-core";
+import { schoolFromHay, slotMismatch } from "@/data/slot-mismatch";
 
 export type SchoolLink = { schedule: string; siteHref: string };
 export type CourseLink = { subjectId: number; subjectName: string; siteHref: string; school: string };
@@ -105,15 +106,7 @@ function defaultCourses(): CourseLink[] {
 }
 
 function schoolBySubject(sub: CrmSubject) {
-  const t = sub.name.toLowerCase();
-  if (/худож|скульп|портрет|рисунок|вуз|манг|digital/.test(t)) return "Художественная школа";
-  if (/робототех|билингв/.test(t) && !/it-школ|it-лаб|python|scratch|unity/.test(t)) return "Школа робототехники";
-  if (/python|scratch|c\+\+|си\+\+|unity|it-лаб|it-школ|codebook|gamedev|програм/.test(t) && !/робототех/.test(t)) return "Школа программирования";
-  if (/наук|физик|радио|беспилот|компас|blender|инженер|steam/.test(t) && !/лего|планет/.test(t)) return "Школа наук и инженерии";
-  if (/лего|подготовк|к школе|планет/.test(t)) return "Школа раннего развития";
-  if (/англий|япон|коре|язык|go getter|super minds|vitamin|nihongo/.test(t)) return "Школа иностранных языков";
-  if (/модельн|подиум/.test(t)) return "Модельная школа";
-  return "Прочее";
+  return schoolFromHay(sub.name);
 }
 
 export function loadScheduleMap(): MapFile {
@@ -152,38 +145,34 @@ export function saveScheduleMap(data: MapFile) {
   return next;
 }
 
-export function schoolFromHay(hay: string) {
-  return schoolBySubject({ id: 0, name: hay });
-}
+export { schoolFromHay };
 
 export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
   const map = loadScheduleMap();
   const byId = new Map(map.courses.map((c) => [c.subjectId, c]));
   const prices = listPriceRows();
-  const priceByTitle = [...prices].sort((a, b) => b.name.length - a.name.length);
-  const fold = (s: string) => splitCourseAge(s).name.toLowerCase().replace(/ё/g, "е");
   return slots.map((s) => {
-    const hay = `${s.groupName} ${s.course} ${s.subject} ${s.age}`;
-    const byName = schoolFromHay(hay);
     const link = (s.subjectId && byId.get(s.subjectId)) || map.courses.find((c) => c.subjectName && s.subject && c.subjectName === s.subject);
+    const schoolFromSub =
+      (link?.school && link.school !== "Прочее" ? link.school : "") ||
+      schoolFromHay(s.subject) ||
+      schoolByPath(link?.siteHref || s.path);
+    const schoolFromName = schoolFromHay(s.groupName);
     const school =
-      (byName && byName !== "Прочее" ? byName : "") ||
-      link?.school ||
-      schoolByPath(link?.siteHref || s.path) ||
+      (schoolFromSub && schoolFromSub !== "Прочее" ? schoolFromSub : "") ||
+      (schoolFromName !== "Прочее" ? schoolFromName : "") ||
       s.school;
-    let price = link?.siteHref ? prices.find((r) => r.path === link.siteHref) : undefined;
-    if (!price) {
-      const key = fold(s.groupName || s.course || s.subject || "");
-      price = key ? priceByTitle.find((r) => fold(r.name) === key) : undefined;
-    }
-    const split = splitCourseAge(price?.name || s.course || link?.subjectName || s.groupName || "");
+    const price = link?.siteHref ? prices.find((r) => r.path === link.siteHref) : undefined;
+    const split = splitCourseAge(price?.name || link?.subjectName || s.subject || s.course || "");
     const age = s.age || split.age || splitCourseAge(s.groupName).age;
-    return {
+    const next = {
       ...s,
       school: school || s.school,
-      path: link?.siteHref || s.path || price?.path || "",
+      path: link?.siteHref || s.path || "",
       course: tidyCourseName(split.name),
       age,
     };
+    const mm = slotMismatch(next);
+    return { ...next, mismatch: mm.level || undefined, mismatchText: mm.text || undefined };
   });
 }

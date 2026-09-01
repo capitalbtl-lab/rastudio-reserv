@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import type { CmsSession } from "@/data/cms";
 import { request } from "@/data/alfacrm";
 import { yandexJson } from "@/data/agent-channels";
-import { matchSubject, loadSubjects, bestSubject, scoreSubject } from "@/data/crm-subjects";
+import { matchSubject, loadSubjects, bestSubject } from "@/data/crm-subjects";
 import { type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
 
 export { SCHOOL_ORDER, type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
@@ -51,16 +51,12 @@ function schoolFile() {
 export function stampSubjects(slots: CrmSlot[]): CrmSlot[] {
   const list = loadSubjects();
   return slots.map((s) => {
-    const nameHay = `${s.groupName} ${s.age}`;
-    const groupEn = /билингв|английск|english|на английском/i.test(nameHay);
-    const pool = groupEn ? list : list.filter((x) => !/билингв|английск|english/i.test(x.name));
     const current = list.find((x) => x.id === s.subjectId);
-    const currentEn = Boolean(current && /билингв|английск|english/i.test(current.name));
-    if (current && !(currentEn && !groupEn) && scoreSubject(nameHay, current) >= 40) {
+    if (current) {
       if (s.subject === current.name && s.subjectId === current.id) return s;
       return { ...s, subjectId: current.id, subject: current.name };
     }
-    const hit = bestSubject(nameHay, pool.length ? pool : list);
+    const hit = bestSubject(`${s.groupName} ${s.age}`, list);
     if (!hit) return s;
     if (s.subjectId === hit.id && s.subject === hit.name) return s;
     return { ...s, subjectId: hit.id, subject: hit.name };

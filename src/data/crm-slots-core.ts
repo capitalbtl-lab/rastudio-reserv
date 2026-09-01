@@ -52,6 +52,8 @@ export type CrmSlot = {
   description?: string;
   remarks?: string;
   levelId?: number;
+  mismatch?: "soft" | "hard";
+  mismatchText?: string;
 };
 
 export type GroupCalLesson = {

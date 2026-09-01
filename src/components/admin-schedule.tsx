@@ -10,6 +10,7 @@ import { AdminSectionHead } from "@/components/admin-self-test";
 import { SCHOOLS, BRANCHES } from "@/data/site";
 import { SCHOOL_ORDER } from "@/data/crm-slots-core";
 import { splitCourseAge } from "@/data/prices-core";
+import { slotMismatch } from "@/data/slot-mismatch";
 import { cn } from "@/lib/utils";
 import { speakAgent } from "@/data/agent-voice";
 import { missingScheduleFields, parseDraftFromSpeech, beatsOf, type LessonBeat } from "@/data/crm-slots";
@@ -642,6 +643,7 @@ export function AdminSchedule() {
   const [pull, setPull] = useState({ open: false, step: "", done: false, added: 0, updated: 0, total: 0, error: "" });
   const [pane, setPane] = useState<"groups" | "subjects" | "map">("groups");
   const [branchFilter, setBranchFilter] = useState("all");
+  const [onlyMismatch, setOnlyMismatch] = useState(false);
   const [pushUi, setPushUi] = useState({ open: false, step: "", done: false, created: 0, pushed: 0, failed: 0, error: "", lines: [] as string[] });
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [subjects, setSubjects] = useState<CrmSubject[]>([]);
@@ -889,6 +891,8 @@ export function AdminSchedule() {
         const key = s.branchId ? String(s.branchId) : `x-${s.city}|${s.branch}`;
         if (key !== branchFilter) continue;
       }
+      const mm = slotMismatch(s);
+      if (onlyMismatch && !mm.level) continue;
       const school = names.includes(s.school) ? s.school : "Прочее";
       const course = splitCourseAge(s.course || s.subject || s.groupName || "Без названия").name || "Без названия";
       const bag = map.get(school)!;
@@ -896,14 +900,25 @@ export function AdminSchedule() {
       bag.get(course)!.push(s);
     }
     return names
-      .filter((school) => school !== "Прочее" || (map.get(school)?.size || 0) > 0)
+      .filter((school) => (map.get(school)?.size || 0) > 0)
       .map((school) => ({
         school,
         courses: [...(map.get(school)?.entries() || [])]
           .sort((a, b) => a[0].localeCompare(b[0], "ru"))
           .map(([course, items]) => ({ course, items })),
       }));
-  }, [slots, branchFilter]);
+  }, [slots, branchFilter, onlyMismatch]);
+
+  const mismatchCount = useMemo(() => {
+    let hard = 0;
+    let soft = 0;
+    for (const s of slots) {
+      const mm = slotMismatch(s);
+      if (mm.level === "hard") hard += 1;
+      else if (mm.level === "soft") soft += 1;
+    }
+    return { hard, soft, all: hard + soft };
+  }, [slots]);
 
   const branchOpts = useMemo(() => {
     const main = [
@@ -1411,6 +1426,29 @@ export function AdminSchedule() {
       >
         <p className="mt-2 max-w-3xl text-sm text-muted">
           Последняя загрузка: {when(at)} · {slots.length} слотов · {dirty.size ? `${dirty.size} не выгружены в CRM` : "совпадает с кабинетом"}
+          {mismatchCount.all ? (
+            <>
+              {" · "}
+              <button
+                type="button"
+                onClick={() => {
+                  setOnlyMismatch((v) => {
+                    const next = !v;
+                    if (next) {
+                      setOpenAll(true);
+                      setPane("groups");
+                    }
+                    return next;
+                  });
+                }}
+                className={cn("font-semibold underline-offset-2 hover:underline", mismatchCount.hard ? "text-red-700" : "text-amber-800")}
+              >
+                несоответствия {mismatchCount.all}
+                {mismatchCount.hard ? ` · грубых ${mismatchCount.hard}` : ""}
+                {onlyMismatch ? " · показать все" : ""}
+              </button>
+            </>
+          ) : null}
         </p>
       </AdminSectionHead>
 
@@ -1852,9 +1890,10 @@ export function AdminSchedule() {
                             {c.items.map((s) => {
                               const key = `${s.branchId}-${s.groupId}`;
                               const names = who[key];
+                              const mm = slotMismatch(s);
                               return (
                               <Fragment key={s.id}>
-                              <tr id={`ra-slot-${s.id}`} className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash")}>
+                              <tr id={`ra-slot-${s.id}`} className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash", mm.level === "hard" && "bg-red-50", mm.level === "soft" && !dirty.has(s.id) && "bg-amber-50/80")}>
                                 <td className="px-2 py-1.5 align-middle">
                                   <div className="flex items-center gap-1.5">
                                     <CheckBox ids={[s.id]} picked={picked} onToggle={setIds} />
@@ -1864,6 +1903,17 @@ export function AdminSchedule() {
                                 <td className="px-2 py-1.5 align-middle">
                                   <div className="flex min-w-0 items-center gap-1.5">
                                     {s.groupId ? <span className="w-8 shrink-0 text-right text-[0.7rem] font-semibold tabular-nums text-muted">{s.groupId}</span> : <span className="w-8 shrink-0" />}
+                                    {mm.level ? (
+                                      <span
+                                        title={mm.text}
+                                        className={cn(
+                                          "shrink-0 rounded-[4px] px-1.5 py-0.5 text-[0.62rem] font-semibold uppercase tracking-wide",
+                                          mm.level === "hard" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800",
+                                        )}
+                                      >
+                                        {mm.level === "hard" ? "предмет ≠ название" : "проверить CRM"}
+                                      </span>
+                                    ) : null}
                                     <GroupNameField value={s.groupName} subject={s.subject} onChange={(v) => patch(s.id, "groupName", v)} />
                                   </div>
                                 </td>
