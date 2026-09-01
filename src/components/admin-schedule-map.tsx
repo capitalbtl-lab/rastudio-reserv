@@ -17,7 +17,7 @@ export function AdminScheduleMap() {
   const [schools, setSchools] = useState<SchoolLink[]>([]);
   const [courses, setCourses] = useState<CourseLink[]>([]);
   const [siteSchools, setSiteSchools] = useState<{ href: string; label: string }[]>([]);
-  const [siteCourses, setSiteCourses] = useState<{ href: string; name: string; school: string }[]>([]);
+  const [siteCourses, setSiteCourses] = useState<{ href: string; name: string; school: string; age?: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -145,7 +145,10 @@ export function AdminScheduleMap() {
                           >
                             <option value="">— не привязан —</option>
                             {siteCourses.map((o) => (
-                              <option key={o.href} value={o.href}>{o.school} · {o.name}</option>
+                              <option key={o.href} value={o.href}>
+                                {o.school} · {o.name}
+                                {o.age ? ` · ${o.age}` : ""}
+                              </option>
                             ))}
                           </select>
                         </td>

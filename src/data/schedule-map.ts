@@ -57,19 +57,19 @@ export function siteSchools() {
 export function siteCourses() {
   const rows = listPriceRows();
   const seen = new Set<string>();
-  const out: { href: string; name: string; school: string }[] = [];
+  const out: { href: string; name: string; school: string; age: string }[] = [];
   for (const r of rows) {
     const href = r.path;
     if (!href || seen.has(href)) continue;
     seen.add(href);
-    out.push({ href, name: r.name, school: r.direction || schoolByPath(href) });
+    out.push({ href, name: r.name, school: r.direction || schoolByPath(href), age: String(r.age || "").replace(/^Курс для (детей|девочек)\s*/i, "").trim() });
   }
   for (const s of SCHOOLS) {
     if (seen.has(s.href)) continue;
     seen.add(s.href);
-    out.push({ href: s.href, name: s.label, school: s.label });
+    out.push({ href: s.href, name: s.label, school: s.label, age: s.kicker || "" });
   }
-  return out.sort((a, b) => a.school.localeCompare(b.school, "ru") || a.name.localeCompare(b.name, "ru"));
+  return out.sort((a, b) => a.school.localeCompare(b.school, "ru") || a.name.localeCompare(b.name, "ru") || a.age.localeCompare(b.age, "ru"));
 }
 
 export function schoolByPath(path: string) {
