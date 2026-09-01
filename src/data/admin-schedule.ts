@@ -29,6 +29,190 @@ import { rememberLessons } from "./crm-lessons";
 import { loadGroupCard, saveGroupCard } from "./group-cards";
 import { scheduleVoiceTurn } from "./schedule-voice";
 
+export type GroupMember = {
+  id: number;
+  name: string;
+  parent: string;
+  dob: string;
+  age: string;
+  phone: string;
+  phones: string[];
+  email: string;
+  gender: string;
+  from: string;
+  to: string;
+  archived: boolean;
+  status: string;
+};
+
+export type CustomerComm = {
+  id: number;
+  at: string;
+  who: string;
+  channel: string;
+  text: string;
+  incoming: boolean;
+};
+
+export type CustomerCard = {
+  id: number;
+  branchId: number;
+  name: string;
+  parent: string;
+  dob: string;
+  age: string;
+  gender: string;
+  phones: string[];
+  emails: string[];
+  address: string;
+  status: string;
+  note: string;
+  paidTill: string;
+  url: string;
+  comms: CustomerComm[];
+};
+
+function asStrList(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map((x) => String(x || "").trim()).filter(Boolean);
+  if (v == null || v === "") return [];
+  return String(v)
+    .split(/[,;]/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function ageLabel(dob: string) {
+  const m = String(dob || "").match(/^(\d{1,2})[.](\d{1,2})[.](\d{4})$/) || String(dob || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return "";
+  const y = m[1].length === 4 ? Number(m[1]) : Number(m[3]);
+  const mo = m[1].length === 4 ? Number(m[2]) : Number(m[2]);
+  const d = m[1].length === 4 ? Number(m[3]) : Number(m[1]);
+  const now = new Date();
+  let years = now.getFullYear() - y;
+  let months = now.getMonth() + 1 - mo;
+  if (now.getDate() < d) months -= 1;
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+  if (years < 0) return "";
+  return months ? `${years} лет +${months}мес` : `${years} лет`;
+}
+
+function packMember(c: Record<string, unknown>, archived: boolean): GroupMember {
+  const phones = asStrList(c.phone);
+  const study = Number(c.is_study);
+  const arch = archived || study === 2;
+  const gender = c.gender === 1 || c.gender === "1" ? "мальчик" : c.gender === 2 || c.gender === "2" ? "девочка" : "";
+  const dob = String(c.dob || "");
+  return {
+    id: Number(c.id || 0),
+    name: String(c.name || "").trim(),
+    parent: String(c.legal_name || "").trim(),
+    dob,
+    age: ageLabel(dob),
+    phone: phones[0] || "",
+    phones,
+    email: asStrList(c.email)[0] || "",
+    gender,
+    from: String(c.b_date || ""),
+    to: String(c.e_date || c.paid_till || ""),
+    archived: arch,
+    status: study === 1 ? "учится" : arch ? "архив" : "лид",
+  };
+}
+
+function packComm(it: Record<string, unknown>): CustomerComm {
+  const text = String(it.comment || it.text || it.message || it.body || "").trim();
+  const incoming = Number(it.is_incoming ?? it.incoming ?? 0) === 1 || /входящ|incoming/i.test(String(it.type_name || it.direction || ""));
+  return {
+    id: Number(it.id || 0),
+    at: String(it.date || it.created_at || it.datetime || it.added || ""),
+    who: String(it.user_name || it.employee_name || it.manager_name || it.user || "").trim(),
+    channel: String(it.type_name || it.channel || it.source || it.provider || "сообщение").trim(),
+    text,
+    incoming,
+  };
+}
+
+async function loadGroupMembers(request: typeof import("./alfacrm").request, t: string, branch: number, gid: number) {
+  const seen = new Set<number>();
+  const active: GroupMember[] = [];
+  const archive: GroupMember[] = [];
+  async function pull(extra: Record<string, unknown>, forceArchive = false) {
+    for (let page = 0; page < 6; page += 1) {
+      const json = await request<{ items?: Record<string, unknown>[] }>(
+        `/v2api/${branch}/customer/index`,
+        { page, pageSize: 50, group_id: gid, ...extra },
+        t,
+      ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+      const items = json.items || [];
+      for (const c of items) {
+        const id = Number(c.id || 0);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        const m = packMember(c, forceArchive);
+        if (m.archived) archive.push(m);
+        else active.push(m);
+      }
+      if (items.length < 50) break;
+    }
+  }
+  await pull({ is_study: 1 });
+  await pull({ is_study: 2 }, true);
+  await pull({ removed: 1 }, true);
+  return { active, archive };
+}
+
+async function loadCustomerCard(request: typeof import("./alfacrm").request, t: string, branch: number, customerId: number): Promise<CustomerCard | null> {
+  const data = await request<{ items?: Record<string, unknown>[] }>(
+    `/v2api/${branch}/customer/index`,
+    { page: 0, pageSize: 1, id: customerId },
+    t,
+  ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+  const c = data.items?.[0];
+  if (!c) return null;
+  const phones = asStrList(c.phone);
+  const emails = asStrList(c.email);
+  const study = Number(c.is_study);
+  const addr = asStrList(c.addr).join(", ") || String(c.custom_adresprozhivaniya || "").trim();
+  const comms: CustomerComm[] = [];
+  const tries: [string, Record<string, unknown>][] = [
+    [`/v2api/${branch}/communication/index?class=Customer&related_id=${customerId}`, { page: 0, pageSize: 40 }],
+    [`/v2api/${branch}/communication/index`, { page: 0, pageSize: 40, class: "Customer", related_id: customerId }],
+    [`/v2api/${branch}/communication/index`, { page: 0, pageSize: 40, customer_id: customerId }],
+  ];
+  for (const [path, body] of tries) {
+    try {
+      const json = await request<{ items?: Record<string, unknown>[] }>(path, body, t);
+      const items = json.items || [];
+      if (items.length) {
+        comms.push(...items.map(packComm).filter((x) => x.text));
+        break;
+      }
+    } catch {
+      /* next shape */
+    }
+  }
+  return {
+    id: customerId,
+    branchId: branch,
+    name: String(c.name || "").trim(),
+    parent: String(c.legal_name || "").trim(),
+    dob: String(c.dob || ""),
+    age: ageLabel(String(c.dob || "")),
+    gender: c.gender === 1 || c.gender === "1" ? "мальчик" : c.gender === 2 || c.gender === "2" ? "девочка" : "",
+    phones,
+    emails,
+    address: /введите адрес/i.test(addr) ? "" : addr,
+    status: study === 1 ? "учится" : study === 2 ? "архив" : "лид",
+    note: String(c.note || "").trim(),
+    paidTill: String(c.paid_till || ""),
+    url: `https://studiyarazvivaysya.s20.online/company/${branch}/customer/view?id=${customerId}`,
+    comms,
+  };
+}
+
 function hm(raw?: string) {
   const m = String(raw || "").match(/(\d{1,2}):(\d{2})/);
   return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
@@ -165,6 +349,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "versions"
           | "rollback"
           | "students"
+          | "groupMembers"
+          | "customerGet"
           | "add"
           | "remove"
           | "subjectsGet"
@@ -184,6 +370,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         dirtyIds?: string[];
         ids?: string[];
         groupId?: number;
+        customerId?: number;
         branchId?: number;
         at?: string;
         subjects?: { id: number; name: string; local?: boolean }[];
@@ -327,12 +514,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const branch = Number(data.branchId) || 1;
       const gid = Number(data.groupId) || 0;
       if (!gid) return { ok: true as const, names: [] as string[] };
-      const json = await request<{ items?: { id?: number; name?: string; is_study?: number; dob?: string }[] }>(
+      const json = await request<{ items?: { id?: number; name?: string; is_study?: number }[] }>(
         `/v2api/${branch}/customer/index`,
         { page: 0, pageSize: 80, group_id: gid, is_study: 1 },
         t,
       ).catch(async () =>
-        request<{ items?: { id?: number; name?: string; is_study?: number; dob?: string }[] }>(
+        request<{ items?: { id?: number; name?: string; is_study?: number }[] }>(
           `/v2api/${branch}/customer/index`,
           { page: 0, pageSize: 80, group_ids: [gid] },
           t,
@@ -343,6 +530,30 @@ export const adminSchedule = createServerFn({ method: "POST" })
         .map((c) => String(c.name || "").trim())
         .filter(Boolean);
       return { ok: true as const, names };
+    }
+    if (data.action === "groupMembers") {
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const gid = Number(data.groupId) || 0;
+      if (!gid) return { ok: true as const, names: [] as string[], active: [] as GroupMember[], archive: [] as GroupMember[] };
+      const { active, archive } = await loadGroupMembers(request, t, branch, gid);
+      return {
+        ok: true as const,
+        names: active.map((m) => m.name).filter(Boolean),
+        active,
+        archive,
+      };
+    }
+    if (data.action === "customerGet") {
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const customerId = Number(data.customerId) || 0;
+      if (!customerId) return { ok: false as const, error: "Нет номера ученика." };
+      const customer = await loadCustomerCard(request, t, branch, customerId);
+      if (!customer) return { ok: false as const, error: "Ученик не найден в AlfaCRM." };
+      return { ok: true as const, customer };
     }
     if (data.action === "versions") return pack(listAdminSlots());
     if (data.action === "subjectsGet") {

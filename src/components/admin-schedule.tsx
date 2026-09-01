@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, Fragment } from "react";
 import { createPortal } from "react-dom";
-import { adminSchedule } from "@/data/admin-schedule";
+import { adminSchedule, type GroupMember, type CustomerCard } from "@/data/admin-schedule";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { Button } from "@/components/ui/button";
 import { InfoTip, TipWrap, TIP_BOX } from "@/components/info-tip";
@@ -396,8 +396,12 @@ type GroupDetail = {
   signup: string;
   subjectId: number;
   calendar: GroupCalLesson[];
+  members: GroupMember[];
+  archive: GroupMember[];
+  membersLoading: boolean;
   loading: boolean;
   saving: boolean;
+  slot: CrmSlot;
 };
 
 function GroupNameField({ value, onChange, subject }: { value: string; onChange: (v: string) => void; subject?: string }) {
@@ -754,6 +758,32 @@ function WhoTip({ names, onNeed }: { names?: string[]; onNeed: () => void }) {
   );
 }
 
+function MemberGrid({ title, items, onOpen, archive }: { title: string; items: GroupMember[]; onOpen: (m: GroupMember) => void; archive?: boolean }) {
+  if (!items.length) return null;
+  return (
+    <div className="mt-3">
+      <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">{title} · {items.length}</p>
+      <ul className="mt-1.5 divide-y divide-black/6 overflow-hidden rounded-2xl bg-white ring-1 ring-black/6">
+        {items.map((m) => (
+          <li key={m.id}>
+            <button type="button" onClick={() => onOpen(m)} className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-primary/5">
+              <span>
+                <span className="block font-medium">{m.name || "Без имени"}</span>
+                <span className="block text-[0.75rem] text-muted">
+                  {[m.age, m.parent, m.from && `с ${m.from}`, m.to && `по ${m.to}`].filter(Boolean).join(" · ")}
+                </span>
+              </span>
+              <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold", archive ? "bg-surface-2 text-muted" : "bg-primary/10 text-primary")}>
+                {archive ? "архив" : m.status || "учится"}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function AdminSchedule() {
   const [slots, setSlots] = useState<CrmSlot[]>([]);
   const [at, setAt] = useState("");
@@ -809,6 +839,8 @@ export function AdminSchedule() {
   const [onlyMismatch, setOnlyMismatch] = useState(false);
   const [pushUi, setPushUi] = useState({ open: false, step: "", done: false, created: 0, pushed: 0, failed: 0, error: "", lines: [] as string[] });
   const [detail, setDetail] = useState<GroupDetail | null>(null);
+  const [pupil, setPupil] = useState<CustomerCard | null>(null);
+  const [pupilLoading, setPupilLoading] = useState(false);
   const [subjects, setSubjects] = useState<CrmSubject[]>([]);
   const [levels, setLevels] = useState<{ id: number; name: string }[]>(SEED_LEVELS);
   const fileRef = useRef<HTMLDivElement>(null);
@@ -909,6 +941,19 @@ export function AdminSchedule() {
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, []);
+  useEffect(() => {
+    if (!detail) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (pupil) setPupil(null);
+      else {
+        setDetail(null);
+        setPupil(null);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [detail, pupil]);
 
   function patch(id: string, field: keyof CrmSlot, value: string | number) {
     setSlots((list) =>
@@ -925,8 +970,10 @@ export function AdminSchedule() {
   async function openDetail(s: CrmSlot) {
     if (detail?.id === s.id) {
       setDetail(null);
+      setPupil(null);
       return;
     }
+    setPupil(null);
     setDetail({
       id: s.id,
       groupId: s.groupId,
@@ -942,21 +989,64 @@ export function AdminSchedule() {
       signup: leadHref(s),
       subjectId: s.subjectId || 0,
       calendar: [],
+      members: [],
+      archive: [],
+      membersLoading: Boolean(s.groupId),
       loading: Boolean(s.groupId),
       saving: false,
+      slot: s,
     });
     if (!s.groupId) {
       const sub = await adminSchedule({ data: { token: token(), action: "subjectsGet" } as never });
       if (sub.ok && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects as CrmSubject[]);
-      setDetail((d) => (d && d.id === s.id ? { ...d, loading: false } : d));
+      setDetail((d) => (d && d.id === s.id ? { ...d, loading: false, membersLoading: false } : d));
       return;
     }
-    const res = await adminSchedule({ data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId } as never });
+    const [res, people] = await Promise.all([
+      adminSchedule({ data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId } as never }),
+      adminSchedule({ data: { token: token(), action: "groupMembers", groupId: s.groupId, branchId: s.branchId } as never }),
+    ]);
     applyGroupRes(s.id, s, res);
+    if (people.ok && "active" in people) {
+      const active = (people.active || []) as GroupMember[];
+      const archive = (people.archive || []) as GroupMember[];
+      setDetail((d) => (d && d.id === s.id ? { ...d, members: active, archive, membersLoading: false } : d));
+      const key = `${s.branchId}-${s.groupId}`;
+      const names = active.map((m) => m.name);
+      whoRef.current = { ...whoRef.current, [key]: names };
+      setWho((w) => ({ ...w, [key]: names }));
+    } else {
+      setDetail((d) => (d && d.id === s.id ? { ...d, membersLoading: false } : d));
+    }
     if (res.ok && "fromCache" in res && res.fromCache) {
       const fresh = await adminSchedule({ data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId, fresh: true } as never });
       applyGroupRes(s.id, s, fresh);
     }
+  }
+
+  async function openPupil(m: GroupMember) {
+    if (!detail) return;
+    setPupilLoading(true);
+    setPupil({
+      id: m.id,
+      branchId: detail.branchId,
+      name: m.name,
+      parent: m.parent,
+      dob: m.dob,
+      age: m.age,
+      gender: m.gender,
+      phones: m.phones,
+      emails: m.email ? [m.email] : [],
+      address: "",
+      status: m.status,
+      note: "",
+      paidTill: m.to,
+      url: `https://studiyarazvivaysya.s20.online/company/${detail.branchId}/customer/view?id=${m.id}`,
+      comms: [],
+    });
+    const res = await adminSchedule({ data: { token: token(), action: "customerGet", customerId: m.id, branchId: detail.branchId } as never });
+    setPupilLoading(false);
+    if (res.ok && "customer" in res && res.customer) setPupil(res.customer as CustomerCard);
   }
 
   function applyGroupRes(id: string, s: CrmSlot, res: Awaited<ReturnType<typeof adminSchedule>>) {
@@ -2271,8 +2361,7 @@ export function AdminSchedule() {
                               <Fragment key={s.id}>
                               <tr
                                 id={`ra-slot-${s.id}`}
-                                className={cn("border-t border-black/6", !open && dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash", !open && mm.level === "hard" && "bg-red-50", !open && mm.level === "soft" && !dirty.has(s.id) && "bg-amber-50/80")}
-                                style={open ? { background: ADMIN_PANEL_BLUE } : undefined}
+                                className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash", mm.level === "hard" && "bg-red-50", mm.level === "soft" && !dirty.has(s.id) && "bg-amber-50/80")}
                               >
                                 <td className="px-2 py-1.5 align-middle">
                                   <div className="flex items-center gap-1.5">
@@ -2338,135 +2427,6 @@ export function AdminSchedule() {
                                   </button>
                                 </td>
                               </tr>
-                              {open ? (
-                                <tr key={`${s.id}-detail`}>
-                                  <td colSpan={12} className="px-4 py-4" style={{ background: ADMIN_PANEL_BLUE }}>
-                                    {detail.loading ? (
-                                      <p className="text-sm text-muted">Загружаю настройки группы из AlfaCRM…</p>
-                                    ) : (
-                                      <div className="grid gap-3 md:grid-cols-2">
-                                        <GroupLessonStrip lessons={detail.calendar} group={s.groupName} subject={s.subject} teacher={s.teacher} />
-                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                          Предмет
-                                          <select
-                                            value={detail.subjectId || ""}
-                                            onChange={(e) => setDetail((d) => (d ? { ...d, subjectId: Number(e.target.value) || 0 } : d))}
-                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                          >
-                                            <option value="">— не выбран —</option>
-                                            {subjects.map((sub) => (
-                                              <option key={sub.id} value={sub.id}>
-                                                {sub.name} · id {sub.id}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        </label>
-                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                          Описание
-                                          <input
-                                            value={detail.description}
-                                            onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))}
-                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                          />
-                                        </label>
-                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                          Хэштеги
-                                          <input
-                                            value={detail.hashtags}
-                                            onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))}
-                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                          />
-                                        </label>
-                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                          Примечания
-                                          <input
-                                            value={detail.remarks}
-                                            onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))}
-                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                          />
-                                        </label>
-                                        <div className="flex flex-wrap items-end gap-2 md:col-span-2 md:flex-nowrap">
-                                          <label className="block shrink-0 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                            Период
-                                            <span className="mt-1 flex items-center gap-1">
-                                              <input
-                                                value={detail.bDate}
-                                                onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))}
-                                                placeholder="с"
-                                                className="h-10 w-[7.4rem] rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                              />
-                                              <span className="text-[0.7rem] font-medium normal-case text-muted">до</span>
-                                              <input
-                                                value={detail.eDate}
-                                                onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))}
-                                                placeholder="до"
-                                                className="h-10 w-[7.4rem] rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                              />
-                                            </span>
-                                          </label>
-                                          <label className="block min-w-[9.5rem] shrink-0 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                            Запись
-                                            <a
-                                              href={detail.signup || leadHref(s)}
-                                              target="_blank"
-                                              rel="noreferrer"
-                                              className="mt-1 flex h-10 items-center justify-center whitespace-nowrap rounded-md bg-white px-2.5 text-[0.8rem] font-semibold normal-case tracking-normal text-primary ring-1 ring-black/8"
-                                            >
-                                              запись в группу {s.groupId || "—"}
-                                            </a>
-                                          </label>
-                                          <label className="block min-w-0 flex-1 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                            Уровень знаний
-                                            <select
-                                              value={detail.levelId || ""}
-                                              onChange={(e) => setDetail((d) => (d ? { ...d, levelId: Number(e.target.value) || 0 } : d))}
-                                              className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                            >
-                                              <option value="">— не задан —</option>
-                                              {levels.map((lv) => (
-                                                <option key={lv.id} value={lv.id}>
-                                                  {lv.name}
-                                                </option>
-                                              ))}
-                                              {detail.levelId && !levels.some((lv) => lv.id === detail.levelId) ? (
-                                                <option value={detail.levelId}>Уровень {detail.levelId}</option>
-                                              ) : null}
-                                            </select>
-                                          </label>
-                                          <label className="block min-w-0 flex-[1.2] text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                            Статус
-                                            <select
-                                              value={detail.statusId || ""}
-                                              onChange={(e) => setDetail((d) => (d ? { ...d, statusId: Number(e.target.value) || 0 } : d))}
-                                              className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                            >
-                                              <option value="">— не задан —</option>
-                                              {GROUP_STATUS.map((st) => (
-                                                <option key={st.id} value={st.id}>
-                                                  {st.name}
-                                                </option>
-                                              ))}
-                                            </select>
-                                          </label>
-                                          <label className="block min-w-0 flex-1 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                            Отработка
-                                            <input
-                                              value={detail.makeup}
-                                              onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))}
-                                              className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                            />
-                                          </label>
-                                        </div>
-                                        <div className="flex items-end justify-end md:col-span-2">
-                                          <Button type="button" disabled={detail.saving} onClick={() => void saveDetail()}>
-                                            Сохранить в AlfaCRM
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </td>
-                                </tr>
-                              ) : null}
                               </Fragment>
                               );
                             })}
@@ -2489,6 +2449,159 @@ export function AdminSchedule() {
       </div>
       </div>
       ) : null}
+      {detail
+        ? createPortal(
+            <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-black/40 p-4 md:p-8" onClick={() => { setPupil(null); setDetail(null); }}>
+              <article
+                className="relative my-4 w-full max-w-4xl rounded-3xl p-5 shadow-[0_18px_50px_rgba(15,23,42,0.28)] md:p-6"
+                style={{ background: ADMIN_PANEL_BLUE }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Группа {detail.groupId || "без номера"}</p>
+                    <h3 className="font-display text-2xl">{detail.slot.groupName}</h3>
+                    <p className="mt-1 text-sm text-muted">
+                      {detail.slot.age} · {detail.slot.teacher} · {detail.slot.city}, {detail.slot.branch}
+                    </p>
+                  </div>
+                  <button type="button" className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-muted ring-1 ring-black/8" onClick={() => { setPupil(null); setDetail(null); }}>
+                    Закрыть
+                  </button>
+                </div>
+                {detail.loading ? (
+                  <p className="mt-4 text-sm text-muted">Загружаю настройки группы из AlfaCRM…</p>
+                ) : (
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <GroupLessonStrip lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} />
+                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                      Предмет
+                      <select value={detail.subjectId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, subjectId: Number(e.target.value) || 0 } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                        <option value="">— не выбран —</option>
+                        {subjects.map((sub) => (
+                          <option key={sub.id} value={sub.id}>{sub.name} · id {sub.id}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                      Описание
+                      <input value={detail.description} onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                    </label>
+                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                      Хэштеги
+                      <input value={detail.hashtags} onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                    </label>
+                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                      Примечания
+                      <input value={detail.remarks} onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                    </label>
+                    <div className="flex flex-wrap items-end gap-2 md:col-span-2 md:flex-nowrap">
+                      <label className="block shrink-0 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                        Период
+                        <span className="mt-1 flex items-center gap-1">
+                          <input value={detail.bDate} onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))} placeholder="с" className="h-10 w-[7.4rem] rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                          <span className="text-[0.7rem] font-medium normal-case text-muted">до</span>
+                          <input value={detail.eDate} onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))} placeholder="до" className="h-10 w-[7.4rem] rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                        </span>
+                      </label>
+                      <label className="block min-w-[9.5rem] shrink-0 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                        Запись
+                        <a href={detail.signup || leadHref(detail.slot)} target="_blank" rel="noreferrer" className="mt-1 flex h-10 items-center justify-center whitespace-nowrap rounded-md bg-white px-2.5 text-[0.8rem] font-semibold normal-case tracking-normal text-primary ring-1 ring-black/8">
+                          запись в группу {detail.groupId || "—"}
+                        </a>
+                      </label>
+                      <label className="block min-w-0 flex-1 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                        Уровень знаний
+                        <select value={detail.levelId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, levelId: Number(e.target.value) || 0 } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                          <option value="">— не задан —</option>
+                          {levels.map((lv) => (
+                            <option key={lv.id} value={lv.id}>{lv.name}</option>
+                          ))}
+                          {detail.levelId && !levels.some((lv) => lv.id === detail.levelId) ? <option value={detail.levelId}>Уровень {detail.levelId}</option> : null}
+                        </select>
+                      </label>
+                      <label className="block min-w-0 flex-[1.2] text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                        Статус
+                        <select value={detail.statusId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, statusId: Number(e.target.value) || 0 } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                          <option value="">— не задан —</option>
+                          {GROUP_STATUS.map((st) => (
+                            <option key={st.id} value={st.id}>{st.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block min-w-0 flex-1 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                        Отработка
+                        <input value={detail.makeup} onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                      </label>
+                    </div>
+                    <div className="flex items-end justify-end md:col-span-2">
+                      <Button type="button" disabled={detail.saving} onClick={() => void saveDetail()}>Сохранить в AlfaCRM</Button>
+                    </div>
+                  </div>
+                )}
+                <section className="mt-5 rounded-2xl bg-white/80 p-4 ring-1 ring-black/6">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <h4 className="font-display text-xl">Состав группы</h4>
+                    <p className="text-sm text-muted">
+                      {detail.membersLoading ? "загружаю…" : `${detail.members.length} учатся · ${detail.archive.length} в архиве`}
+                    </p>
+                  </div>
+                  {detail.membersLoading ? (
+                    <p className="mt-3 text-sm text-muted">Подгружаю учеников из AlfaCRM…</p>
+                  ) : (
+                    <>
+                      <MemberGrid title="Учатся сейчас" items={detail.members} onOpen={(m) => void openPupil(m)} />
+                      <MemberGrid title="Архив" items={detail.archive} onOpen={(m) => void openPupil(m)} archive />
+                      {!detail.members.length && !detail.archive.length ? <p className="mt-3 text-sm text-muted">В группе пока никого нет.</p> : null}
+                    </>
+                  )}
+                </section>
+                {pupil
+                  ? (
+                    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/35 p-4 md:p-10" onClick={() => setPupil(null)}>
+                      <div className="max-h-[min(82vh,720px)] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.28)]" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Карточка ученика</p>
+                            <h4 className="font-display text-2xl">{pupil.name || "Без имени"}</h4>
+                            <p className="mt-1 text-sm text-muted">
+                              {[pupil.gender, pupil.age, pupil.status].filter(Boolean).join(" · ")}
+                            </p>
+                          </div>
+                          <button type="button" className="rounded-full bg-surface-2 px-3 py-1 text-sm font-semibold text-muted" onClick={() => setPupil(null)}>Назад</button>
+                        </div>
+                        <dl className="mt-4 grid gap-2 text-sm">
+                          {pupil.dob ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Дата рождения</dt><dd>{pupil.dob}{pupil.age ? ` · ${pupil.age}` : ""}</dd></div> : null}
+                          {pupil.parent ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Заказчик</dt><dd>{pupil.parent}</dd></div> : null}
+                          {pupil.phones.length ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Телефоны</dt><dd className="space-y-0.5">{pupil.phones.map((ph) => <a key={ph} href={`tel:${ph}`} className="block text-primary">{ph}</a>)}</dd></div> : null}
+                          {pupil.emails.length ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Почта</dt><dd>{pupil.emails.join(", ")}</dd></div> : null}
+                          {pupil.address ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Адрес</dt><dd>{pupil.address}</dd></div> : null}
+                          {pupil.paidTill ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Оплачено до</dt><dd>{pupil.paidTill}</dd></div> : null}
+                          {pupil.note ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Заметка CRM</dt><dd>{pupil.note}</dd></div> : null}
+                        </dl>
+                        <a href={pupil.url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-primary">Открыть в AlfaCRM</a>
+                        <h5 className="mt-5 font-display text-lg">Коммуникации</h5>
+                        {pupilLoading ? <p className="mt-2 text-sm text-muted">Подгружаю переписку…</p> : null}
+                        <div className="mt-2 space-y-2">
+                          {pupil.comms.length ? pupil.comms.map((c, i) => (
+                            <div key={c.id || i} className={cn("rounded-2xl px-3 py-2.5 text-sm ring-1 ring-black/6", c.incoming ? "bg-[#f3f5f8]" : "bg-primary/8")}>
+                              <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">
+                                {[c.at, c.channel, c.who].filter(Boolean).join(" · ")}
+                                {c.incoming ? " · входящее" : ""}
+                              </p>
+                              <p className="mt-1 whitespace-pre-wrap leading-relaxed">{c.text}</p>
+                            </div>
+                          )) : pupilLoading ? null : <p className="text-sm text-muted">Переписки в карточке пока нет.</p>}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                  : null}
+              </article>
+            </div>,
+            document.body,
+          )
+        : null}
       {pull.open
         ? createPortal(
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => pull.done && setPull((u) => ({ ...u, open: false }))}>
