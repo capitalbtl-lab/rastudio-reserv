@@ -81,6 +81,75 @@ function inCrm(s: CrmSlot) {
   return Number(s.groupId) > 0 && !String(s.id).startsWith("local-");
 }
 
+function GroupNameField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const src = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, height: 32, width: 160 });
+
+  function place() {
+    const el = src.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const probe = document.createElement("span");
+    probe.style.cssText = "position:absolute;left:-9999px;white-space:nowrap;font-size:0.8rem;padding:0 8px";
+    probe.textContent = value || el.placeholder || "";
+    document.body.appendChild(probe);
+    const need = probe.offsetWidth + 20;
+    probe.remove();
+    const max = window.innerWidth - r.left - 12;
+    const width = Math.min(max, Math.max(r.width, need, r.width + 92));
+    setPos({ top: r.top, left: r.left, height: r.height, width });
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    function onScroll() {
+      place();
+    }
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [open, value]);
+
+  return (
+    <>
+      <input
+        ref={src}
+        value={value}
+        title={value}
+        onChange={(e) => onChange(e.target.value)}
+        onMouseEnter={() => {
+          setOpen(true);
+          place();
+        }}
+        onFocus={() => {
+          setOpen(true);
+          place();
+        }}
+        className="h-8 w-full min-w-[10rem] rounded-md bg-surface-2 px-2 text-[0.8rem] ring-1 ring-black/8"
+      />
+      {open
+        ? createPortal(
+            <input
+              value={value}
+              autoFocus={false}
+              onChange={(e) => onChange(e.target.value)}
+              onMouseLeave={() => setOpen(false)}
+              onBlur={() => setOpen(false)}
+              style={{ top: pos.top, left: pos.left, height: pos.height, width: pos.width }}
+              className="fixed z-[75] rounded-md bg-white px-2 text-[0.8rem] shadow-[0_8px_28px_rgba(15,23,42,0.22)] ring-1 ring-black/20"
+            />,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
 function CrmDot({ s }: { s: CrmSlot }) {
   const ok = inCrm(s);
   return (
@@ -1265,12 +1334,7 @@ export function AdminSchedule() {
                                   </div>
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
-                                  <input
-                                    value={s.groupName}
-                                    title={s.groupName}
-                                    onChange={(e) => patch(s.id, "groupName", e.target.value)}
-                                    className="h-8 w-full min-w-[10rem] rounded-md bg-surface-2 px-2 text-[0.8rem] ring-1 ring-black/8"
-                                  />
+                                  <GroupNameField value={s.groupName} onChange={(v) => patch(s.id, "groupName", v)} />
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
                                   <input value={s.age} onChange={(e) => patch(s.id, "age", e.target.value)} className={box} />
