@@ -114,6 +114,7 @@ function endedOn(raw?: string) {
 function isLiveGroup(group?: Group): group is Group {
   if (!group) return false;
   if (/отложен/i.test(group.name || "")) return false;
+  if (/\(2024\)|\b2024\b/.test(group.name || "") && /модельн/i.test(group.name || "")) return false;
   return true;
 }
 
@@ -223,9 +224,9 @@ export function signupUrl(branch: number, gid: string | number) {
 
 export function sessionsFromSlots(slots: CrmSlot[]): CmsSession[] {
   return stampTimes(slots.map((s) => normalizeArtSlot({ ...s })))
-    .filter((s) => s.school !== "Прочее" && !/отложен/i.test(s.groupName) && (s.timeFrom || s.day))
+    .filter((s) => s.school !== "Прочее" && !/отложен/i.test(s.groupName) && !SKIP_SUBJECT.has(s.subjectId))
     .flatMap((s) => {
-      const beats = beatsOf(s);
+      const beats = beatsOf(s).filter((b) => /^\d{1,2}:\d{2}$/.test(b.timeFrom || ""));
       return beats.map((b, i) =>
         toSession({
           ...s,
