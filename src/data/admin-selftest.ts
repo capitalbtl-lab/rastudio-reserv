@@ -200,17 +200,22 @@ async function pingNovofon(): Promise<ProbeOut> {
       await novofonGet("/v1/tariff/", {}, keys);
       return ok("Novofon /v1/tariff отвечает (balance закрыт в тарифе)", related);
     } catch (e2) {
-      const raw = e2 instanceof Error ? e2.message : String(e1);
-      const unauthorized = /not authorized|401/i.test(raw);
-      return fail(
-        raw.slice(0, 200),
-        unauthorized
-          ? "Novofon ответил «Not authorized». Секрет не совпадает с User key. Если ключ перевыпускали — старый appid_ больше не действует, нужна новая пара целиком."
-          : "Novofon отклонил запрос.",
-        "Кабинет Novofon → Настройки → API: скопируйте User key (appid_…) и Secret заново, сохраните оба в API сайта.",
-        related,
-        raw,
-      );
+      try {
+        await novofonGet("/v1/statistics/pbx/", { start: "2026-01-01 00:00:00", end: "2026-01-01 00:10:00", version: "2", limit: "1" }, keys);
+        return ok("Novofon статистика отвечает (balance закрыт)", related);
+      } catch (e3) {
+        const raw = [e2, e3].map((e) => (e instanceof Error ? e.message : String(e))).join("\n");
+        const unauthorized = /not authorized|401/i.test(raw);
+        return fail(
+          raw.slice(0, 200),
+          unauthorized
+            ? "Novofon ответил «Not authorized». Пара User key + Secret не принята на api.novofon.com. Старый appid_ после перевыпуска не действует."
+            : "Novofon отклонил запрос.",
+          "Кабинет Novofon → Настройки → API: скопируйте User key (appid_…) и Secret заново, сохраните оба в API сайта. Не вставляйте ключ Задармы.",
+          related,
+          raw,
+        );
+      }
     }
   }
 }
@@ -448,7 +453,13 @@ const PROBES: Probe[] = [
         await ping("педагоги", "/v2api/2/teacher/index");
         await ping("аудитории", "/v2api/2/room/index");
         await ping("типы занятий", "/v2api/2/lesson-type/index");
-        await ping("уровни", "/v2api/2/level/index");
+        await ping("статусы обучения", "/v2api/2/study-status/index");
+        try {
+          await request("/v2api/2/level/index", { page: 0, pageSize: 5 }, t);
+          got.push("уровни CRM  ок");
+        } catch {
+          got.push("уровни: справочник сайта (в AlfaCRM нет level/index — это нормально)");
+        }
         await ping("клиенты", "/v2api/2/customer/index");
         await ping("занятия проведенные", "/v2api/2/lesson/index", { page: 0, pageSize: 5, status: 3 });
         await ping("занятия запланированные", "/v2api/2/lesson/index", { page: 0, pageSize: 5, status: 1 });
@@ -616,13 +627,27 @@ const PROBES: Probe[] = [
   {
     id: "api-keys",
     title: "Слот ключей API",
-    sections: ["apis", "*"],
+    sections: ["apis"],
     run: async () => {
-      const { loadApiConns } = await import("./api-keys");
-      const list = loadApiConns();
-      const on = list.filter((c) => c.enabled);
-      const filled = on.filter((c) => c.fields.some((f) => f.value) || ["yandex", "deepseek", "novofon", "alfacrm"].includes(c.id));
-      const names = on.map((c) => `${c.name}${c.enabled ? "" : " выкл"}`).join(", ");
+      const p = storage("api-keys.json");
+      type Conn = { id?: string; name?: string; enabled?: boolean; fields?: { key?: string; value?: string }[] };
+      let list: Conn[] = [];
+      if (existsSync(p)) {
+        try {
+          const raw = JSON.parse(readFileSync(p, "utf8")) as { conns?: Conn[] };
+          list = Array.isArray(raw.conns) ? raw.conns : [];
+        } catch (e) {
+          return fail(
+            "api-keys.json не читается",
+            "Файл ключей повреждён. Карточки API в кабинете могут быть пустыми.",
+            "API и интеграции: сохраните ключи заново.",
+            ["apis"],
+            e instanceof Error ? e.message : "",
+          );
+        }
+      }
+      const on = list.filter((c) => c.enabled !== false);
+      const names = on.map((c) => c.name || c.id || "?").join(", ");
       if (!on.length) return fail("нет включённых API", "Все карточки API выключены. Ассистент, CRM и звонки останутся без ключей.", "API и интеграции: включите Yandex, AlfaCRM, Novofon.", ["apis"]);
       return ok(`включено ${on.length}: ${names}`, ["apis", "agent", "calls", "dossiers"]);
     },
@@ -641,13 +666,12 @@ function probesFor(section: string) {
     const seen = new Set<string>();
     return bag.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
   }
-  const tags = new Set(LINKS[section] || [section, "*"]);
-  tags.add("*");
+  const tags = new Set(LINKS[section] || [section]);
   tags.add(section);
   const seen = new Set<string>();
   return bag.filter((p) => {
     if (seen.has(p.id)) return false;
-    const hit = p.sections.some((s) => tags.has(s) || s === "*");
+    const hit = p.sections.some((s) => tags.has(s));
     if (hit) seen.add(p.id);
     return hit;
   });

@@ -102,9 +102,12 @@ async function fetchHost(host: string, path: string, qs: string, keys: NovofonKe
 export async function novofonGet<T>(path: string, params: Record<string, string>, keys: NovofonKeys): Promise<T> {
   const qs = queryString(params);
   const method = withSlash(path);
+  const hosts = String(keys.userKey || "").startsWith("appid_")
+    ? ["https://api.novofon.com"]
+    : HOSTS;
   let lastNet = "";
   let lastAuth = "";
-  for (const host of HOSTS) {
+  for (const host of hosts) {
     try {
       return (await fetchHost(host, method, qs, keys)) as T;
     } catch (e) {
@@ -115,13 +118,12 @@ export async function novofonGet<T>(path: string, params: Record<string, string>
         continue;
       }
       lastAuth = `${host}: ${msg}`;
-      /* ключ не приняли — другой хост всё равно стоит попробовать */
     }
   }
   if (lastAuth) throw new Error(lastAuth);
   throw new NovofonNetError(
     "api.novofon.com не отвечает с сервера сайта (SSL timeout). После долгой выгрузки записей Novofon часто режет IP. Это не обязательно ключ.",
-    HOSTS[0],
+    hosts[0],
     lastNet,
   );
 }
