@@ -610,6 +610,18 @@ export function AdminSchedule() {
   const DAYS_SHORT = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
   const box = "h-8 w-[4.6rem] shrink-0 rounded-full bg-surface-2 px-1 text-center text-[0.75rem] leading-8 ring-1 ring-black/8";
   const cell = box;
+  const FIELD_RU: Record<string, string> = {
+    limit: "места",
+    groupName: "название",
+    age: "возраст",
+    day: "день",
+    timeFrom: "с",
+    timeTo: "до",
+    teacher: "педагог",
+    branch: "филиал",
+    course: "курс",
+    school: "школа",
+  };
 
   const coursesOf = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -902,6 +914,13 @@ export function AdminSchedule() {
     void say("Голосовой мастер. Назовите курс и возраст, день, время, филиал и педагога. Если чего-то не хватит — спрошу. Команды: готово, применить, дальше.");
   }
 
+  function cancelPreview() {
+    setAiAdds([]);
+    setAiChanges([]);
+    setAiComment("");
+    setMsg("Предпросмотр отменён.");
+  }
+
   function patchAdd(i: number, field: keyof Draft, value: string | number) {
     setAiAdds((list) => list.map((a, n) => (n === i ? { ...a, [field]: value } : a)));
   }
@@ -1086,10 +1105,10 @@ export function AdminSchedule() {
         {aiAdds.length || aiChanges.length ? (
           <div className="mt-4 flex items-start gap-3">
             <div className="min-w-0 flex-1 overflow-hidden rounded-2xl bg-white ring-1 ring-black/8">
-              <p className="px-3 py-2 text-sm font-semibold">
+              <p className="px-4 py-3 text-sm font-semibold">
                 Предпросмотр
                 {aiAdds.length ? ` · ${aiAdds.length} ${aiAdds.length === 1 ? "новая группа" : "новых групп"}` : ""}
-                {aiChanges.length ? ` · ${aiChanges.length} правок` : ""}
+                {aiChanges.length ? ` · ${aiChanges.length} ${aiChanges.length === 1 ? "правка" : "правок"}` : ""}
               </p>
               {aiAdds.length ? (
                 <table className="w-full text-left text-sm">
@@ -1141,18 +1160,46 @@ export function AdminSchedule() {
                 </table>
               ) : null}
               {aiChanges.length ? (
-                <ul className="max-h-36 space-y-1 overflow-auto px-3 py-2 text-sm">
-                  {aiChanges.map((c, i) => (
-                    <li key={`${c.id}-${c.field}-${i}`}>
-                      <span className="text-muted">{c.id}</span> · {c.field}: {c.from || "∅"} → {c.to}
-                    </li>
-                  ))}
-                </ul>
+                <div className="max-h-72 space-y-3 overflow-auto border-t border-black/6 px-3 py-3">
+                  {(() => {
+                    const bags = new Map<string, { title: string; rows: typeof aiChanges }>();
+                    for (const c of aiChanges) {
+                      const s = slots.find((x) => x.id === c.id);
+                      const title = s ? `${s.school} · ${s.course || s.groupName}` : "Правки";
+                      if (!bags.has(title)) bags.set(title, { title, rows: [] });
+                      bags.get(title)!.rows.push(c);
+                    }
+                    return [...bags.values()].map((bag) => (
+                      <div key={bag.title}>
+                        <p className="mb-1.5 text-[0.72rem] font-semibold uppercase tracking-wide text-muted">{bag.title}</p>
+                        <ul className="space-y-1.5">
+                          {bag.rows.map((c, i) => {
+                            const s = slots.find((x) => x.id === c.id);
+                            return (
+                              <li key={`${c.id}-${c.field}-${i}`} className="flex flex-wrap items-center gap-2 rounded-xl bg-[#f3f5f8] px-3 py-2 text-sm">
+                                <span className="min-w-0 flex-1 truncate font-medium" title={s?.groupName}>{s?.groupName || c.id}</span>
+                                <span className="rounded-full bg-white px-2 py-0.5 text-[0.7rem] font-semibold text-muted">{FIELD_RU[c.field] || c.field}</span>
+                                <span className="tabular-nums text-muted">{c.from || "—"}</span>
+                                <span className="text-muted">→</span>
+                                <span className="tabular-nums font-semibold text-fg">{c.to}</span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    ));
+                  })()}
+                </div>
               ) : null}
             </div>
-            <Button type="button" className="shrink-0" disabled={busy} onClick={() => void applyPreview()}>
-              Применить
-            </Button>
+            <div className="flex shrink-0 flex-col gap-2">
+              <Button type="button" disabled={busy} onClick={() => void applyPreview()}>
+                Применить
+              </Button>
+              <Button type="button" variant="secondary" onClick={cancelPreview}>
+                Отменить
+              </Button>
+            </div>
           </div>
         ) : null}
       </article>
