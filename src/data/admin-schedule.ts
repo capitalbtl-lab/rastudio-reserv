@@ -27,10 +27,6 @@ import { loadSubjects, saveSubjects, pullSubjectsFromCrm, pushSubjectsToCrm } fr
 import type { GroupCalLesson } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 
-function ymd(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 function hm(raw?: string) {
   const m = String(raw || "").match(/(\d{1,2}):(\d{2})/);
   return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
@@ -60,6 +56,7 @@ function packCrmLesson(
     homework?: string | null;
     details?: { is_attend?: number | null }[];
     customer_ids?: number[];
+    group_ids?: number[];
   },
   ctx: {
     rooms: Map<number, string>;
@@ -71,7 +68,7 @@ function packCrmLesson(
     fallbackTeacher: string;
   },
 ): GroupCalLesson | null {
-  const date = String(item.date || "").slice(0, 10);
+  const date = String(item.date || item.time_from || "").slice(0, 10);
   if (!date) return null;
   const from = hm(item.time_from) || ctx.fallbackFrom;
   const to = hm(item.time_to) || ctx.fallbackTo;
@@ -96,19 +93,6 @@ function packCrmLesson(
     total,
     lessonId: Number(item.id || 0) || undefined,
   };
-}
-
-function expandWeekday(day: number, from: string, to: string, start: Date, end: Date): GroupCalLesson[] {
-  if (!day) return [];
-  const want = day === 7 ? 0 : day;
-  const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  while (cur.getDay() !== want) cur.setDate(cur.getDate() + 1);
-  const out: GroupCalLesson[] = [];
-  while (cur <= end) {
-    out.push({ date: ymd(cur), from, to, status: 1, type: "Групповое" });
-    cur.setDate(cur.getDate() + 7);
-  }
-  return out;
 }
 
 const SEED_LEVELS = [
@@ -369,12 +353,6 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!g) return { ok: false as const, error: "Группа не найдена в AlfaCRM." };
       const slot = listAdminSlots().find((s) => s.groupId === gid && s.branchId === branch);
       const byDate = new Map<string, GroupCalLesson>();
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const winStart = new Date(today);
-      winStart.setDate(winStart.getDate() - 84);
-      const winEnd = new Date(today);
-      winEnd.setDate(winEnd.getDate() + 84);
       try {
         const rooms = new Map<number, string>();
         const teachers = new Map<number, string>();
@@ -413,27 +391,21 @@ export const adminSchedule = createServerFn({ method: "POST" })
         const mine = regs.filter((r) => Number(r.related_id) === gid);
         const groupName = String(g.name || slot?.groupName || "");
         const fallbackTeacher = String(slot?.teacher || "");
-        for (const r of mine) {
-          const from = hm(r.time_from_v);
-          const to = hm(r.time_to_v);
-          for (const occ of expandWeekday(Number(r.day || 0), from, to, winStart, winEnd)) {
-            occ.group = groupName;
-            occ.teacher = fallbackTeacher;
-            occ.subject = slot?.subject || "";
-            occ.duration = durationMins(from, to);
-            byDate.set(occ.date, occ);
-          }
-          if (!r.id) continue;
-          const ctx = { rooms, teachers, subjects, groupName, fallbackFrom: from, fallbackTo: to, fallbackTeacher };
+        const fallbackFrom = hm(mine[0]?.time_from_v) || String(slot?.timeFrom || "");
+        const fallbackTo = hm(mine[0]?.time_to_v) || String(slot?.timeTo || "");
+        const ctx = { rooms, teachers, subjects, groupName, fallbackFrom, fallbackTo, fallbackTeacher };
+        async function pullLessons(extra: Record<string, unknown>) {
           for (const status of [1, 2, 3]) {
-            for (let page = 0; page < 6; page++) {
+            for (let page = 0; page < 8; page++) {
               const les = await request<{ items?: Parameters<typeof packCrmLesson>[0][] }>(
                 `/v2api/${branch}/lesson/index`,
-                { page, pageSize: 100, regular_id: r.id, status },
+                { page, pageSize: 100, status, ...extra },
                 t,
               );
               const chunk = les.items || [];
               for (const item of chunk) {
+                const gids = (item.group_ids || []).map(Number);
+                if (gids.length && !gids.includes(gid)) continue;
                 const packed = packCrmLesson(item, ctx);
                 if (packed) byDate.set(packed.date, packed);
               }
@@ -441,16 +413,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
             }
           }
         }
-      } catch {
-        /* календарь не должен ломать карточку */
-      }
-      if (!byDate.size && slot) {
-        const beats = slot.beats?.length ? slot.beats : [{ day: slot.day, timeFrom: slot.timeFrom, timeTo: slot.timeTo }];
-        for (const b of beats) {
-          for (const occ of expandWeekday(Number(b.day || slot.day || 0), String(b.timeFrom || ""), String(b.timeTo || ""), winStart, winEnd)) {
-            byDate.set(occ.date, occ);
+        await pullLessons({ group_ids: [gid] });
+        if (!byDate.size) {
+          for (const r of mine) {
+            if (!r.id) continue;
+            await pullLessons({ regular_id: r.id });
           }
         }
+      } catch {
+        /* календарь не должен ломать карточку */
       }
       const calendar = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
       rememberLessons(calendar);

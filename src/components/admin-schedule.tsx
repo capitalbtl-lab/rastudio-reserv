@@ -52,38 +52,6 @@ function parseYmd(s: string) {
   return new Date(y, (m || 1) - 1, d || 1);
 }
 
-function slotCalendar(s: CrmSlot): GroupCalLesson[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const start = new Date(today);
-  start.setDate(start.getDate() - 84);
-  const end = new Date(today);
-  end.setDate(end.getDate() + 84);
-  const beats = s.beats?.length ? s.beats : [{ day: s.day, timeFrom: s.timeFrom, timeTo: s.timeTo }];
-  const out: GroupCalLesson[] = [];
-  for (const b of beats) {
-    const want = Number(b.day || s.day || 0);
-    if (!want) continue;
-    const js = want === 7 ? 0 : want;
-    const cur = new Date(start);
-    while (cur.getDay() !== js) cur.setDate(cur.getDate() + 1);
-    while (cur <= end) {
-      out.push({
-        date: `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`,
-        from: String(b.timeFrom || ""),
-        to: String(b.timeTo || ""),
-        status: 1,
-        type: "Групповое",
-        group: s.groupName,
-        teacher: s.teacher,
-        subject: s.subject,
-      });
-      cur.setDate(cur.getDate() + 7);
-    }
-  }
-  return out;
-}
-
 function shiftYmd(iso: string, days: number) {
   const d = parseYmd(iso);
   d.setDate(d.getDate() + days);
@@ -108,32 +76,8 @@ function GroupLessonStrip({ lessons, group, subject, teacher }: { lessons: Group
     const past = all.filter((l) => l.date < today);
     const future = all.filter((l) => l.date > today);
     const todayHit = all.find((l) => l.date === today) || { date: today, from: "", to: "", status: -1, type: "сегодня" };
-    const sample = future[0] || past[past.length - 1] || all[0] || todayHit;
-    function pad(list: GroupCalLesson[], count: number, dir: 1 | -1) {
-      if (count <= 0) return list;
-      const have = new Set(list.map((x) => x.date));
-      const d = parseYmd(dir > 0 ? (list[list.length - 1]?.date || today) : (list[0]?.date || today));
-      const want = sample.date ? parseYmd(sample.date).getDay() : d.getDay();
-      const cur = new Date(d);
-      if (dir > 0) cur.setDate(cur.getDate() + 1);
-      else cur.setDate(cur.getDate() - 1);
-      const extra: GroupCalLesson[] = [];
-      let guard = 0;
-      while (extra.length + list.length < count && guard < 400) {
-        guard += 1;
-        if (cur.getDay() === want) {
-          const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
-          if (iso !== today && !have.has(iso)) {
-            extra.push({ date: iso, from: sample.from, to: sample.to, status: 1, type: sample.type || "Групповое", group: sample.group, teacher: sample.teacher, subject: sample.subject });
-            have.add(iso);
-          }
-        }
-        cur.setDate(cur.getDate() + dir);
-      }
-      return dir > 0 ? [...list, ...extra] : [...extra.reverse(), ...list];
-    }
     if (range === "10") {
-      return [...pad(past, 10, -1).slice(-10), todayHit, ...pad(future, 10, 1).slice(0, 10)];
+      return [...past.slice(-10), todayHit, ...future.slice(0, 10)];
     }
     const days = Number(range);
     const from = shiftYmd(today, -days);
@@ -929,7 +873,7 @@ export function AdminSchedule() {
       levelId: s.levelId || 0,
       signup: leadHref(s),
       subjectId: s.subjectId || 0,
-      calendar: slotCalendar(s),
+      calendar: [],
       loading: Boolean(s.groupId),
       saving: false,
     });
@@ -977,7 +921,7 @@ export function AdminSchedule() {
             levelId: g.levelId || d.levelId,
             signup: g.signup || d.signup,
             subjectId: g.subjectId || d.subjectId,
-            calendar: g.calendar?.length ? g.calendar : slotCalendar(s),
+            calendar: g.calendar?.length ? g.calendar : [],
             loading: false,
           }
         : d,
