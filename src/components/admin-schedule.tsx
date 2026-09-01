@@ -299,6 +299,51 @@ function speechCtor() {
   const w = window as unknown as { SpeechRecognition?: new () => Rec; webkitSpeechRecognition?: new () => Rec };
   return w.SpeechRecognition || w.webkitSpeechRecognition;
 }
+
+function voiceNorm(s: string) {
+  return s
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^а-я0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function leftoverAfterReject(s: string) {
+  return s
+    .replace(/\bнет\b[,.]?/gi, " ")
+    .replace(/\bне[- ]?а\b/gi, " ")
+    .replace(/\bне надо\b[,.]?/gi, " ")
+    .replace(/\bдавай по[- ]?другому( сделаем)?\b/gi, " ")
+    .replace(/\bпо[- ]?другому( сделаем)?\b/gi, " ")
+    .replace(/\bне так\b/gi, " ")
+    .replace(/\bне публик\w*\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function leftoverLooksLikeEdit(s: string) {
+  const w = voiceNorm(s);
+  if (w.length < 3) return false;
+  return /лимит|мест|групп|дет|человек|возраст|день|время|педагог|филиал|курс|поставь|поменяй|измени|сделай|максимум|минимум|\d/.test(w);
+}
+
+function isPreviewReject(s: string) {
+  const w = voiceNorm(s);
+  if (!w) return false;
+  if (/не\s+(надо|стоит|публик|примен|сохраня)|не надо|по[- ]?другому|не так|\bотмен/.test(w)) return true;
+  if (/^(нет|не|неа)$/.test(w)) return true;
+  if (/^нет\b/.test(w) && !leftoverLooksLikeEdit(leftoverAfterReject(s))) return true;
+  return false;
+}
+
+function isPreviewConfirm(s: string) {
+  const w = voiceNorm(s);
+  if (!w || isPreviewReject(s)) return false;
+  if (/опублик|примен|\bпринять\b|публик|сохраняй|сохрани|подтверд/.test(w) && !/не\s+(опублик|примен|публик|сохраня)/.test(w)) return true;
+  return /^(да|ага|угу|ок|окей|хорошо|ладно|давай|делай|делаем|конечно|верно|так|согласен|согласна|я согласен|я согласна|да давай|да делай|да хорошо|да публикуй|да опубликуй|так и сделай|вперед|можно|да можно)$/.test(w);
+}
+
 type Rec = {
   lang: string;
   interimResults: boolean;
@@ -741,6 +786,7 @@ export function AdminSchedule() {
   const pauseRef = useRef(false);
   const speakingRef = useRef(false);
   const busyVoiceRef = useRef(false);
+  const awaitingRevisionRef = useRef(false);
   const lastSaidRef = useRef("");
   const ignoreUntilRef = useRef(0);
   const listenBaseRef = useRef("");
@@ -1167,14 +1213,12 @@ export function AdminSchedule() {
 
   function parseVoice(text: string) {
     const t = text.trim().replace(/[.!?…,:;]+$/g, "").replace(/\s+/g, " ").trim();
-    const whole = t.toLowerCase().replace(/ё/g, "е");
     const hasPreview = Boolean(changesRef.current.length || addsRef.current.length);
-    if (hasPreview && /опублик\w*|примен\w*|\bпринять\b/.test(whole) && !/не\s+(опублик|примен)/.test(whole)) {
-      return { body: "", cmd: "применить" };
+    if (hasPreview) {
+      if (isPreviewReject(t) && !leftoverLooksLikeEdit(leftoverAfterReject(t))) return { body: "", cmd: "переделать" };
+      if (isPreviewConfirm(t)) return { body: "", cmd: "применить" };
     }
-    if (hasPreview && /\bотмен\w*/.test(whole) && !/не\s+отмен/.test(whole)) {
-      return { body: "", cmd: "отменить" };
-    }
+    const whole = t.toLowerCase().replace(/ё/g, "е");
     const words = t.split(" ").filter(Boolean);
     const last = (words[words.length - 1] || "").toLowerCase().replace(/ё/g, "е").replace(/[^а-я]/g, "");
     const rest = words.slice(0, -1).join(" ");
@@ -1197,6 +1241,7 @@ export function AdminSchedule() {
       .replace(/\s+/g, " ")
       .trim();
     if (!a || a.length < 6) return false;
+    if (isPreviewConfirm(heard) || isPreviewReject(heard)) return false;
     if (Date.now() < ignoreUntilRef.current) return true;
     const b = lastSaidRef.current
       .toLowerCase()
@@ -1213,6 +1258,8 @@ export function AdminSchedule() {
       "скажите опубликовать",
       "предпросмотр на экране",
       "лимит мест",
+      "что меняем как делаем",
+      "скажите да опубликую",
     ].some((c) => a.includes(c) || (a.length > 10 && c.includes(a)));
   }
 
@@ -1328,8 +1375,15 @@ export function AdminSchedule() {
       await absorbSpeech(extraBody);
     }
     if (cmd === "отменить") {
+      awaitingRevisionRef.current = false;
       cancelPreview();
       if (voiceModeRef.current) await say("Отменила предпросмотр.");
+      return;
+    }
+    if (cmd === "переделать") {
+      awaitingRevisionRef.current = true;
+      if (voiceModeRef.current) await say("Что меняем? Как делаем?");
+      else setMsg("Что меняем? Как делаем?");
       return;
     }
     if (cmd === "дальше") {
@@ -1368,6 +1422,7 @@ export function AdminSchedule() {
       return;
     }
     if (cmd === "применить") {
+      awaitingRevisionRef.current = false;
       if (!addsRef.current.length && !changesRef.current.length && wizardRef.current.course && !missingScheduleFields(wizardRef.current).length) {
         setAiAdds([wizardRef.current]);
         addsRef.current = [wizardRef.current];
@@ -1493,20 +1548,30 @@ export function AdminSchedule() {
   }
 
   async function handleScheduleVoice(text: string) {
-    const q = text.trim();
-    if (!q || isEcho(q) || busyVoiceRef.current) return;
+    const q0 = text.trim();
+    if (!q0 || isEcho(q0) || busyVoiceRef.current) return;
+    let q = q0;
     if (changesRef.current.length || addsRef.current.length) {
-      const w = q.toLowerCase().replace(/ё/g, "е");
-      if (/опублик|примен|\bпринять\b/.test(w)) {
+      if (isPreviewConfirm(q)) {
         await runCmd("применить");
         return;
       }
-      if (/\bотмен/.test(w)) {
-        await runCmd("отменить");
+      if (isPreviewReject(q)) {
+        const extra = leftoverAfterReject(q);
+        if (leftoverLooksLikeEdit(extra)) {
+          q = extra;
+          awaitingRevisionRef.current = false;
+        } else {
+          awaitingRevisionRef.current = true;
+          await say("Что меняем? Как делаем?");
+          return;
+        }
+      } else if (awaitingRevisionRef.current || leftoverLooksLikeEdit(q)) {
+        awaitingRevisionRef.current = false;
+      } else {
+        await say("Предпросмотр уже на экране. Скажите да — опубликую. Или скажите, что меняем.");
         return;
       }
-      await say("Предпросмотр уже на экране. Скажите опубликовать или отменить.");
-      return;
     }
     busyVoiceRef.current = true;
     setAiPrompt(q);
@@ -1899,7 +1964,7 @@ export function AdminSchedule() {
           </div>
         </div>
         <p className="mt-2 text-[0.78rem] leading-relaxed text-muted">
-          Стрелка — предпросмотр. Голосовые команды: <b>опубликовать</b>, <b>отменить</b>, <b>дальше</b>.
+          Стрелка — предпросмотр. После предпросмотра: <b>да</b>, <b>хорошо</b>, <b>делай</b>, <b>опубликовать</b> — применить. <b>нет</b>, <b>не надо</b>, <b>по-другому</b> — скажет, что меняем.
         </p>
         {ask ? <p className="mt-2 rounded-xl bg-primary/10 px-3 py-2 text-sm font-medium text-fg">{ask}</p> : null}
         {wizard.course || wizard.day || wizard.branch || wizard.teacher ? (
