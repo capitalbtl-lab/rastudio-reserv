@@ -994,14 +994,16 @@ export function AdminSchedule() {
     let hard = 0;
     let soft = 0;
     const lines: string[] = [];
+    const ids: string[] = [];
     for (const s of slots) {
       const mm = slotMismatch(s);
       if (!mm.level) continue;
       if (mm.level === "hard") hard += 1;
       else soft += 1;
       lines.push(`${s.groupId || "—"} ${s.groupName}: ${mm.text}`);
+      ids.push(s.id);
     }
-    return { hard, soft, all: hard + soft, lines };
+    return { hard, soft, all: hard + soft, lines, ids };
   }, [slots]);
 
   const branchOpts = useMemo(() => {
@@ -1508,49 +1510,52 @@ export function AdminSchedule() {
           </label>
         }
       >
-        <p className="mt-2 max-w-3xl text-sm text-muted">
-          Последняя загрузка: {when(at)} · {slots.length} слотов · {dirty.size ? `${dirty.size} не выгружены в CRM` : "совпадает с кабинетом"}
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p className="text-sm text-muted">
+            Последняя загрузка: {when(at)} · {slots.length} слотов · {dirty.size ? `${dirty.size} не выгружены в CRM` : "совпадает с кабинетом"}
+          </p>
           {mismatchCount.all ? (
-            <>
-              {" · "}
-              <span className="relative inline-block align-baseline">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOnlyMismatch((v) => {
-                      const next = !v;
-                      if (next) {
-                        setOpenAll(true);
-                        setPane("groups");
-                      }
-                      return next;
-                    });
-                  }}
-                  className={cn(
-                    "ra-mismatch peer text-[0.95rem] font-extrabold underline-offset-2 hover:underline",
-                    mismatchCount.hard ? "text-[#e11d48]" : "text-[#d97706]",
-                  )}
-                >
-                  несоответствия {mismatchCount.all}
-                  {mismatchCount.hard ? ` · грубых ${mismatchCount.hard}` : ""}
-                  {onlyMismatch ? " · показать все" : ""}
-                </button>
-                <span className={cn("pointer-events-none absolute left-0 top-7 z-50 hidden w-[24rem] whitespace-pre-line peer-hover:block peer-focus:block", TIP_BOX)}>
-                  {mismatchCount.hard
-                    ? `Грубых ${mismatchCount.hard}: название группы и предмет из разных школ.\n`
-                    : ""}
-                  {mismatchCount.soft
-                    ? `Мягких ${mismatchCount.soft}: одно направление, но название и предмет не совпадают.\n`
-                    : ""}
-                  {"\n"}
-                  {mismatchCount.lines.slice(0, 6).join("\n\n")}
-                  {mismatchCount.lines.length > 6 ? `\n\nещё ${mismatchCount.lines.length - 6}` : ""}
-                  {"\n\nНажмите, чтобы показать только эти группы. Красный кружок i в строке — как исправить ИИ."}
-                </span>
+            <span className="relative inline-flex">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !onlyMismatch;
+                  setOnlyMismatch(next);
+                  setPane("groups");
+                  if (next) {
+                    setOpenAll(true);
+                    setAddOpen(false);
+                    const id = mismatchCount.ids[0];
+                    window.setTimeout(() => {
+                      document.getElementById(id ? `ra-slot-${id}` : "ra-mismatch-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }, 80);
+                  }
+                }}
+                className={cn(
+                  "ra-mismatch peer inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[0.78rem] font-bold ring-1",
+                  mismatchCount.hard
+                    ? "bg-[#e11d48]/12 text-[#e11d48] ring-[#e11d48]/25"
+                    : "bg-amber-100 text-amber-800 ring-amber-300/60",
+                )}
+              >
+                <span className={cn("h-1.5 w-1.5 rounded-full", mismatchCount.hard ? "bg-[#e11d48]" : "bg-amber-600")} />
+                {onlyMismatch ? "Все группы" : `Ошибки CRM · ${mismatchCount.all}${mismatchCount.hard ? ` · грубых ${mismatchCount.hard}` : ""}`}
+              </button>
+              <span className={cn("pointer-events-none absolute left-0 top-9 z-50 hidden w-[24rem] whitespace-pre-line peer-hover:block peer-focus:block", TIP_BOX)}>
+                {mismatchCount.hard
+                  ? `Грубых ${mismatchCount.hard}: название группы и предмет из разных школ.\n`
+                  : ""}
+                {mismatchCount.soft
+                  ? `Мягких ${mismatchCount.soft}: одно направление, но название и предмет не совпадают.\n`
+                  : ""}
+                {"\n"}
+                {mismatchCount.lines.slice(0, 6).join("\n\n")}
+                {mismatchCount.lines.length > 6 ? `\n\nещё ${mismatchCount.lines.length - 6}` : ""}
+                {"\n\nНажмите — на экране сразу откроются эти группы."}
               </span>
-            </>
+            </span>
           ) : null}
-        </p>
+        </div>
       </AdminSectionHead>
 
       <div className="flex gap-2">
@@ -1649,6 +1654,7 @@ export function AdminSchedule() {
       </div>
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
 
+      {onlyMismatch ? null : (
       <article id="ra-sched-ai" className="sticky top-20 z-20 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -1820,8 +1826,9 @@ export function AdminSchedule() {
           </div>
         ) : null}
       </article>
+      )}
 
-      {addOpen ? (
+      {onlyMismatch || !addOpen ? null : (
         <article className="rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
           <p className="font-display text-xl">Новая группа</p>
           <p className="mt-1 text-sm text-muted">Поля по порядку. Стрелка у запроса кладёт группу в предпросмотр — на сайт после «Опубликовать изменения».</p>
@@ -1897,9 +1904,9 @@ export function AdminSchedule() {
             </Button>
           </div>
         </article>
-      ) : null}
+      )}
 
-      {versions.length ? (
+      {versions.length && !onlyMismatch ? (
         <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
           <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => setVersionsOpen((v) => !v)}>
             <p className="text-sm font-semibold">Версии</p>
@@ -1923,7 +1930,7 @@ export function AdminSchedule() {
         </article>
       ) : null}
 
-      <div className="space-y-4">
+      <div id="ra-mismatch-list" className="space-y-4 scroll-mt-28">
         {tree.map((sch) => {
           const schoolIds = sch.courses.flatMap((c) => c.items.map((s) => s.id));
           return (
@@ -1993,7 +2000,7 @@ export function AdminSchedule() {
                               const mm = slotMismatch(s);
                               return (
                               <Fragment key={s.id}>
-                              <tr id={`ra-slot-${s.id}`} className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash", mm.level === "hard" && "bg-red-50", mm.level === "soft" && !dirty.has(s.id) && "bg-amber-50/80")}>
+                              <tr id={`ra-slot-${s.id}`} className={cn("scroll-mt-28 border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash", mm.level === "hard" && "bg-red-50", mm.level === "soft" && !dirty.has(s.id) && "bg-amber-50/80")}>
                                 <td className="px-2 py-1.5 align-middle">
                                   <div className="flex items-center gap-1.5">
                                     <CheckBox ids={[s.id]} picked={picked} onToggle={setIds} />
