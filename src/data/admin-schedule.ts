@@ -146,6 +146,8 @@ function ensureAutoPullTimer() {
     void maybeAutoPull();
   }, PULL_MS);
 }
+
+export const adminSchedule = createServerFn({ method: "POST" })
   .validator(
     (data: unknown) =>
       data as {
