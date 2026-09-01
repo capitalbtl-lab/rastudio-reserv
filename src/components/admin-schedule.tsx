@@ -171,18 +171,22 @@ function GroupLessonStrip({ lessons }: { lessons: GroupCalLesson[] }) {
               key={l.date}
               title={time ? `${l.date} ${time}` : l.date}
               className={cn(
-                "flex h-11 min-w-[3.15rem] flex-col items-center justify-center rounded-[4px] bg-white px-1.5 text-center leading-tight text-fg shadow-[0_1px_3px_rgba(15,23,42,0.12)] ring-1 ring-neutral-500/55",
-                isToday && "ring-2 ring-neutral-800",
+                "flex h-14 w-[2.45rem] min-w-[2.45rem] flex-col items-center justify-center rounded-xl px-0.5 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
+                isToday && "bg-primary text-white",
+                !isToday && "bg-white text-fg ring-1 ring-neutral-500/55",
                 !isToday && past && "text-muted",
               )}
             >
               {isToday ? (
-                <span className="text-[0.58rem] font-semibold uppercase tracking-wider text-neutral-800">сегодня</span>
+                <span className="text-[0.42rem] font-semibold uppercase leading-none tracking-wide text-white/90">сегодня</span>
               ) : (
-                <span className="text-[0.58rem] font-semibold uppercase tracking-wider text-neutral-500">{WD[(d.getDay() + 6) % 7]}</span>
+                <span className="text-[0.52rem] font-semibold uppercase tracking-wider text-neutral-500">{WD[(d.getDay() + 6) % 7]}</span>
               )}
-              <span className="text-[0.78rem] font-semibold tabular-nums">
-                {d.getDate()} {MONTHS_SHORT[d.getMonth()]}
+              <span className={cn("text-[0.72rem] font-semibold tabular-nums", isToday && "text-white")}>
+                {d.getDate()}
+              </span>
+              <span className={cn("text-[0.52rem] font-medium", isToday ? "text-white/85" : "text-neutral-500")}>
+                {MONTHS_SHORT[d.getMonth()]}
               </span>
             </div>
           );
