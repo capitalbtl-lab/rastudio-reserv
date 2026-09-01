@@ -145,10 +145,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
     if (data.action === "aiApply") {
       const slots = listAdminSlots();
       const ids = new Set((data.ids || []).map(String));
-      const allowed = ids.size ? (data.changes || []).filter((c) => ids.has(c.id)) : data.adds?.length ? [] : [];
+      const incoming = data.changes || [];
+      const allowed = ids.size ? incoming.filter((c) => ids.has(c.id)) : incoming;
       const drafts = data.adds || [];
       if (!allowed.length && !drafts.length) {
-        return pack(slots, { comment: "Нет отмеченных групп и нет новых позиций.", changes: [], adds: [] });
+        return { ok: false as const, error: "В предпросмотре нет правок. Нажмите стрелку отправки, затем «Опубликовать изменения»." };
       }
       let next = allowed.length ? applyChanges(slots, allowed) : slots.map((s) => ({ ...s }));
       const created: string[] = [];
@@ -158,9 +159,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
         created.push(slot.id);
       }
       const saved = saveAdminSlots(next).slots;
+      const applied = [...new Set(allowed.map((c) => c.id).concat(created))];
       pushVersion(`ИИ: ${(data.prompt || "правка").slice(0, 80)}`, saved);
       logAdmin(`Расписание: ИИ ${allowed.length} правок, ${created.length} новых`);
-      return pack(saved, { created });
+      return pack(saved, { created, applied });
     }
     if (data.action === "add" && data.draft) {
       const slots = listAdminSlots();

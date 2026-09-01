@@ -430,7 +430,7 @@ export function AdminSchedule() {
   const fileRef = useRef<HTMLDivElement>(null);
   const promptEl = useRef<HTMLTextAreaElement>(null);
 
-  function take(res: { ok: boolean; slots?: CrmSlot[]; at?: string; versions?: Ver[]; error?: string; comment?: string; changes?: Change[]; adds?: Draft[]; pushed?: number; created?: string[] }) {
+  function take(res: { ok: boolean; slots?: CrmSlot[]; at?: string; versions?: Ver[]; error?: string; comment?: string; changes?: Change[]; adds?: Draft[]; pushed?: number; created?: string[]; applied?: string[] }) {
     if (!res.ok) {
       setMsg(res.error || "Ошибка");
       return;
@@ -441,23 +441,24 @@ export function AdminSchedule() {
     if (res.comment) setAiComment(res.comment);
     if (res.changes) setAiChanges(res.changes);
     if (res.adds) setAiAdds(res.adds);
-    if (res.created?.length) {
+    if (res.created?.length || res.applied?.length) {
+      const ids = [...new Set([...(res.created || []), ...(res.applied || [])])];
       setDirty((d) => {
         const n = new Set(d);
-        for (const id of res.created!) n.add(id);
+        for (const id of ids) n.add(id);
         return n;
       });
-      const first = (res.slots || []).find((s) => res.created!.includes(s.id));
+      setOpenAll(true);
+      setFlash(new Set(ids));
+      const first = (res.slots || []).find((s) => ids.includes(s.id));
       if (first) {
-        setOpenAll(false);
         setOpenSchool(first.school);
         setOpenCourse(first.course);
-        setFlash(new Set(res.created));
         window.setTimeout(() => {
-          document.getElementById(`ra-slot-${res.created![0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+          document.getElementById(`ra-slot-${ids[0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
         }, 80);
-        window.setTimeout(() => setFlash(new Set()), 2600);
       }
+      window.setTimeout(() => setFlash(new Set()), 2600);
       setAiAdds([]);
       setAiChanges([]);
       setAiComment("");
@@ -633,18 +634,17 @@ export function AdminSchedule() {
     const adds = addsRef.current;
     const changes = changesRef.current;
     if (!changes.length && !adds.length) {
-      setMsg("Сначала предпросмотр: скажите «готово» или нажмите кнопку.");
+      setMsg("Сначала отправьте запрос стрелкой — откроется предпросмотр.");
       return;
     }
-    const res = await run("aiApply", { changes, adds, prompt: promptRef.current, ids: pickedRef.current });
+    const res = await run("aiApply", { changes, adds, prompt: promptRef.current });
     if (res.ok) {
       setAiPrompt("");
       promptRef.current = "";
+      const applied = (res as { applied?: string[]; created?: string[] }).applied || [];
       const created = (res as { created?: string[] }).created || [];
-      const list = (res as { slots?: CrmSlot[] }).slots || [];
-      const fresh = list.filter((s) => created.includes(s.id));
-      const title = fresh[0] ? `«${fresh[0].school}» → ${fresh[0].course}` : "расписание";
-      setMsg(fresh.length > 1 ? `Добавлено групп: ${fresh.length}. Открыл ${title}.` : `Группа в ${title}. Предпросмотр закрыт.`);
+      const n = applied.length || created.length;
+      setMsg(n ? `Опубликовано на сайте: ${n} групп. Раскрыл расписание.` : "Опубликовано.");
     }
   }
 
@@ -681,11 +681,13 @@ export function AdminSchedule() {
     const rest = t.slice(0, t.length - last.length).trim();
     const ready = /^(готов[аоыуе]?|гатов[аоыуе]?|готовоа)$/.test(word);
     const preview = /^(предпросмотр|превью)$/.test(word);
-    const apply = /^(примен\w*|принять|опубликуй)$/.test(word);
+    const apply = /^(примен\w*|принять|опублик\w*)$/.test(word);
     const next = /^(дальше|далее|следующ\w*|сброс)$/.test(word);
+    const cancel = /^(отмен\w*|сброс)$/.test(word);
     if (ready) return { body: rest, cmd: "готово" };
     if (preview) return { body: rest, cmd: "предпросмотр" };
     if (apply) return { body: rest, cmd: "применить" };
+    if (cancel) return { body: rest, cmd: "отменить" };
     if (next) return { body: rest, cmd: "дальше" };
     if (/готов[аоыуе]?\s*$/i.test(t) && t.length <= 12) return { body: "", cmd: "готово" };
     return { body: t, cmd: "" };
@@ -780,7 +782,7 @@ export function AdminSchedule() {
     if (!voiceModeRef.current) return;
     const miss = missingScheduleFields(merged);
     if (miss[0]) await say(miss[0].ask);
-    else await say("Все поля есть. Скажите готово — открою предпросмотр. Или применить — сразу в расписание.");
+    else await say("Все поля есть. Отправьте запрос — открою предпросмотр. Потом опубликовать.");
   }
 
   async function runCmd(cmd: string, extraBody = "") {
@@ -791,6 +793,11 @@ export function AdminSchedule() {
         return n;
       });
       await absorbSpeech(extraBody);
+    }
+    if (cmd === "отменить") {
+      cancelPreview();
+      if (voiceModeRef.current) await say("Отменила предпросмотр.");
+      return;
     }
     if (cmd === "дальше") {
       setAiPrompt("");
@@ -811,9 +818,9 @@ export function AdminSchedule() {
       if (!miss.length && w.course) {
         setAiAdds([w]);
         addsRef.current = [w];
-        setAiComment("Предпросмотр по вашим ответам. Проверьте карточку и скажите применить.");
+        setAiComment("Предпросмотр. Нажмите «Опубликовать изменения», если всё верно.");
         setMsg("Предпросмотр готов.");
-        if (voiceModeRef.current) await say("Карточка на экране. Скажите применить, если всё верно.");
+        if (voiceModeRef.current) await say("Карточка на экране. Скажите опубликовать, если всё верно.");
         return;
       }
       const text = promptRef.current.trim();
@@ -823,8 +830,8 @@ export function AdminSchedule() {
         return;
       }
       setMsg("Готовлю предпросмотр…");
-      await run("aiPreview", { prompt: text, ids: pickedRef.current });
-      if (voiceModeRef.current) await say("Предпросмотр готов. Скажите применить или поправьте поля.");
+      await run("aiPreview", { prompt: text, ids: pickedRef.current.length ? pickedRef.current : slotsRef.current.map((s) => s.id) });
+      if (voiceModeRef.current) await say("Предпросмотр готов. Скажите опубликовать или поправьте поля.");
       return;
     }
     if (cmd === "применить") {
@@ -833,7 +840,7 @@ export function AdminSchedule() {
         addsRef.current = [wizardRef.current];
       }
       await applyPreview();
-      if (voiceModeRef.current) await say("Записала в расписание. Скажите дальше, если нужна ещё группа.");
+      if (voiceModeRef.current) await say("Опубликовала на сайте. Скажите дальше, если нужна ещё группа.");
     }
   }
 
@@ -1189,7 +1196,7 @@ export function AdminSchedule() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <p className="font-display text-xl">Добавить / исправить расписание</p>
-            <InfoTip text="Голосовой режим — мастер: спрашивает курс, возраст, день, время, филиал, педагога. Команды: готово, применить, дальше — те же кнопки внизу." />
+            <InfoTip text="Стрелка отправляет запрос агенту и открывает предпросмотр. «Опубликовать изменения» записывает их в расписание на сайте. В CRM — отдельной выгрузкой." />
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[0.72rem] text-muted">
             <span>отмечено {pickedIds.length}</span>
@@ -1202,7 +1209,7 @@ export function AdminSchedule() {
           </div>
         </div>
         <p className="mt-2 text-[0.78rem] leading-relaxed text-muted">
-          Команды голосового режима: <b>готово</b>, <b>применить</b>, <b>дальше</b> (кнопками).
+          Стрелка — предпросмотр. Голосовые команды: <b>опубликовать</b>, <b>отменить</b>, <b>дальше</b>.
         </p>
         {ask ? <p className="mt-2 rounded-xl bg-primary/10 px-3 py-2 text-sm font-medium text-fg">{ask}</p> : null}
         {wizard.course || wizard.day || wizard.branch || wizard.teacher ? (
@@ -1222,9 +1229,26 @@ export function AdminSchedule() {
             value={interim ? [listenBaseRef.current, interim].filter(Boolean).join(" ") : aiPrompt}
             onChange={(e) => { setAiPrompt(e.target.value); promptRef.current = e.target.value; }}
             rows={1}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void runCmd("готово");
+              }
+            }}
             placeholder="Добавь художественную студию 3–4 года на Гражданской, вторник с 15:00 до 17:00, педагог Самсонова."
             className="min-h-10 min-w-0 flex-1 resize-none overflow-hidden rounded-xl bg-surface-2 px-3 py-2 text-sm leading-6 ring-1 ring-black/10"
           />
+          <button
+            type="button"
+            title="Отправить запрос — предпросмотр"
+            disabled={busy || (!aiPrompt.trim() && !wizard.course)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-40"
+            onClick={() => void runCmd("готово")}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+              <path d="M5 12h12M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
           <button
             type="button"
             title={listen && !voiceMode ? "Стоп" : "Голосовой ввод в поле"}
@@ -1239,26 +1263,14 @@ export function AdminSchedule() {
               {voiceMode ? "Голосовой режим · вкл" : "Голосовой режим"}
             </Button>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button type="button" disabled={busy || (!aiPrompt.trim() && !wizard.course)} onClick={() => void runCmd("готово")}>
-            Готово
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => void runCmd("применить")}>
-            Применить
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => void runCmd("дальше")}>
-            Дальше
-          </Button>
-        </div>
         {aiComment && !aiAdds.length && !aiChanges.length ? <p className="mt-2 text-sm text-muted">{aiComment}</p> : null}
         {aiAdds.length || aiChanges.length ? (
-          <div className="mt-4 flex items-start gap-3">
-            <div className="min-w-0 flex-1 overflow-hidden rounded-2xl bg-white ring-1 ring-black/8">
-              <p className="px-4 py-3 text-sm font-semibold">
+          <div className="mt-4 overflow-hidden rounded-2xl bg-white ring-1 ring-black/8">
+            <p className="px-4 py-3 text-sm font-semibold">
                 Предпросмотр
                 {aiAdds.length ? ` · ${aiAdds.length} ${aiAdds.length === 1 ? "новая группа" : "новых групп"}` : ""}
                 {aiChanges.length ? ` · ${aiChanges.length} ${aiChanges.length === 1 ? "правка" : "правок"}` : ""}
-              </p>
+            </p>
               {aiAdds.length ? (
                 <table className="w-full text-left text-sm">
                   <thead className="text-[0.65rem] uppercase tracking-wider text-muted">
@@ -1340,13 +1352,12 @@ export function AdminSchedule() {
                   })()}
                 </div>
               ) : null}
-            </div>
-            <div className="flex shrink-0 flex-col gap-2">
-              <Button type="button" disabled={busy} onClick={() => void applyPreview()}>
-                Применить
-              </Button>
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-black/6 px-4 py-3">
               <Button type="button" variant="secondary" onClick={cancelPreview}>
-                Отменить
+                Отменить изменения
+              </Button>
+              <Button type="button" disabled={busy} onClick={() => void applyPreview()}>
+                Опубликовать изменения
               </Button>
             </div>
           </div>
@@ -1356,7 +1367,7 @@ export function AdminSchedule() {
       {addOpen ? (
         <article className="rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
           <p className="font-display text-xl">Новая группа</p>
-          <p className="mt-1 text-sm text-muted">Поля по порядку. «Готово» кладёт группу в предпросмотр — в расписание попадёт после «Применить».</p>
+          <p className="mt-1 text-sm text-muted">Поля по порядку. Стрелка у запроса кладёт группу в предпросмотр — на сайт после «Опубликовать изменения».</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <label className="text-sm">
               <span className="mb-1 block text-muted">Школа</span>
@@ -1421,7 +1432,7 @@ export function AdminSchedule() {
               disabled={busy || !draft.school || !draft.course || !draft.branch}
               onClick={() => {
                 setAiAdds((list) => [...list, { ...draft }]);
-                setAiComment(`В предпросмотре ${aiAdds.length + 1} групп. Нажмите «Применить», чтобы записать в расписание.`);
+                setAiComment(`В предпросмотре ${aiAdds.length + 1} групп. Нажмите «Опубликовать изменения».`);
                 setDraft(EMPTY_DRAFT);
               }}
             >
