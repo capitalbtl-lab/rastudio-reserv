@@ -343,9 +343,18 @@ export function AdminTrainDocs() {
                 <textarea
                   value={c.rules || ""}
                   onChange={(e) => setChannels((list) => list.map((x, j) => (j === i ? { ...x, rules: e.target.value } : x)))}
-                  rows={rowsFor(c.rules || "")}
-                  className="w-full resize-y rounded-xl bg-surface-2 px-3 py-2 text-[0.8rem] leading-relaxed text-fg ring-1 ring-black/8"
+                  className="h-44 w-full resize-none overflow-y-auto rounded-xl bg-surface-2 px-3 py-2 text-[0.8rem] leading-relaxed text-fg ring-1 ring-black/8"
                 />
+                <div className="mt-2 flex items-center justify-end">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void saveChannels()}
+                    className="h-7 rounded-lg bg-black/[0.07] px-2.5 text-[0.7rem] font-semibold text-muted hover:bg-black/[0.12] disabled:opacity-50"
+                  >
+                    Сохранить
+                  </button>
+                </div>
               </div>
               <div className="mt-2 h-6">
                 {c.locked ? null : (
