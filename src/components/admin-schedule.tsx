@@ -268,16 +268,14 @@ function DetailsBtn({ on, onClick }: { on?: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
-      title="Подробно"
+      title={on ? "Свернуть" : "Подробно"}
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors",
+        "inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-medium leading-none transition-colors",
         on ? "bg-[#b8c0cc] text-fg" : "bg-[#c5ccd6] text-[#3f4854] hover:bg-[#b4bcc8]",
       )}
     >
-      <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 fill-current" aria-hidden>
-        <path d="M6 3.4v9.2L13.2 8 6 3.4z" />
-      </svg>
+      {on ? "−" : "+"}
     </button>
   );
 }
@@ -1864,7 +1862,10 @@ export function AdminSchedule() {
                                   </div>
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
-                                  <GroupNameField value={s.groupName} subject={s.subject} onChange={(v) => patch(s.id, "groupName", v)} />
+                                  <div className="flex min-w-0 items-center gap-1.5">
+                                    {s.groupId ? <span className="w-8 shrink-0 text-right text-[0.7rem] font-semibold tabular-nums text-muted">{s.groupId}</span> : <span className="w-8 shrink-0" />}
+                                    <GroupNameField value={s.groupName} subject={s.subject} onChange={(v) => patch(s.id, "groupName", v)} />
+                                  </div>
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
                                   <input value={s.age} onChange={(e) => patch(s.id, "age", e.target.value)} className={box} />

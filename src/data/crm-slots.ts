@@ -51,13 +51,16 @@ function schoolFile() {
 export function stampSubjects(slots: CrmSlot[]): CrmSlot[] {
   const list = loadSubjects();
   return slots.map((s) => {
-    const hay = `${s.groupName} ${s.course} ${s.age} ${s.subject}`;
+    const nameHay = `${s.groupName} ${s.age}`;
+    const groupEn = /билингв|английск|english|на английском/i.test(nameHay);
+    const pool = groupEn ? list : list.filter((x) => !/билингв|английск|english/i.test(x.name));
     const current = list.find((x) => x.id === s.subjectId);
-    if (current && scoreSubject(hay, current) >= 40) {
+    const currentEn = Boolean(current && /билингв|английск|english/i.test(current.name));
+    if (current && !(currentEn && !groupEn) && scoreSubject(nameHay, current) >= 40) {
       if (s.subject === current.name && s.subjectId === current.id) return s;
       return { ...s, subjectId: current.id, subject: current.name };
     }
-    const hit = bestSubject(hay, list);
+    const hit = bestSubject(nameHay, pool.length ? pool : list);
     if (!hit) return s;
     if (s.subjectId === hit.id && s.subject === hit.name) return s;
     return { ...s, subjectId: hit.id, subject: hit.name };

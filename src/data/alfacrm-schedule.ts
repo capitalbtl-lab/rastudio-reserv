@@ -114,6 +114,22 @@ function endedOn(raw?: string) {
   return end < today;
 }
 
+function subjectIdFromNote(note?: string) {
+  const t = String(note || "")
+    .replace(/https?:\/\//gi, "")
+    .replace(/\bwww\./gi, "");
+  const m = t.match(/rastudio\.org(\/[\w\-./%]+)/i);
+  if (!m) return 0;
+  let path = m[1].split(/[?\s#]/)[0];
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    /* */
+  }
+  const hit = Object.entries(SUBJECT_PATH).find(([, p]) => p === path || path.startsWith(`${p}/`));
+  return hit ? Number(hit[0]) : 0;
+}
+
 function isLiveGroup(group?: Group): group is Group {
   if (!group) return false;
   if (/отложен/i.test(group.name || "")) return false;
@@ -425,7 +441,14 @@ async function loadCrm(force = false): Promise<CacheBag> {
     const meta = BRANCH[branchId] || BRANCH[fromBranch] || BRANCH[1];
     const groupLessons = lessonsByGid.get(g.id) || [];
     const first = groupLessons[0];
-    const sid = Number(g.subject_id || first?.subject_id) || matchSubject(g.name)?.id || 0;
+    const lessonSid = Number(first?.subject_id) || 0;
+    const groupSid = Number(g.subject_id) || 0;
+    const noteSid = subjectIdFromNote(g.note);
+    const nameHit = matchSubject(g.name);
+    const lessonName = (lessonSid && subjects.get(lessonSid)) || "";
+    const groupEn = /билингв|английск|english|на английском/i.test(g.name || "");
+    const lessonEn = /билингв|английск|english/i.test(lessonName);
+    const sid = groupSid || noteSid || (lessonEn && !groupEn ? nameHit?.id || 0 : 0) || lessonSid || nameHit?.id || 0;
     const subjectName = (sid && subjects.get(sid)) || matchSubject(g.name)?.name || g.name;
     const path = SUBJECT_PATH[sid] || "";
     const teach = teacherOf(first?.teacher_ids || g.teacher_ids, teachers);
