@@ -69,7 +69,7 @@ export function chipsForReply(
       ],
     };
   }
-  if (/здравствуйте|рады приветствовать|подберу программу|проконсультирую/.test(t) && !slotsFromMessages(messages).age) {
+  if (/здравствуйте|сколько лет ребёнк|подберу программу|проконсультирую/.test(t) && !slotsFromMessages(messages).age) {
     return { hint: "Сколько лет ребёнку", chips: AGES };
   }
   if (/сколько.{0,28}лет|возраст|цифрой или кнопк|кнопки ниже/.test(t)) {
@@ -88,6 +88,24 @@ export function chipsForReply(
     const page = courseHint(messages.map((m) => m.content).slice(-6).join(" "));
     return { hint: "Запись", chips: [...TRIAL, ...(page ? [{ label: "Подробнее о курсе", href: page.path }] : [])] };
   }
+  if (/подробнее или сразу|рассказать подробнее|сразу на пробное/.test(t)) {
+    return {
+      hint: "",
+      chips: [
+        { label: "Подробнее", send: "Расскажите подробнее, чем занимаются на уроке" },
+        { label: "Сразу пробное", send: "Давайте сразу на пробное занятие", primary: true },
+      ],
+    };
+  }
+  if (/мастерить руками или рисовать|творчеств.{0,12}или.{0,12}техник/.test(t)) {
+    return {
+      hint: "Что ближе",
+      chips: [
+        { label: "Творчество", send: "Ближе творчество и рисовать" },
+        { label: "Техника", send: "Ближе техника, роботы и мастерить" },
+      ],
+    };
+  }
   const facts = factsFromMessages(messages);
   const slots = slotsFromMessages(messages);
   const allSchools = schoolsFor(slots.age);
@@ -96,7 +114,7 @@ export function chipsForReply(
     return t.includes(key) || (c.send && t.includes(c.send.toLowerCase().replace("интересна ", "").replace("интересны ", "")));
   });
   if (named.length >= 2) return { hint: "Направление", chips: named };
-  if (/школ|направлен|что ближе|чем заняться/.test(t) && !facts.school) {
+  if (/школ|направлен|что ближе|чем заняться|рисова|робот|программир|раннее развитие|подготовка к школе|художка|инженер/.test(t) && !facts.school) {
     return { hint: "Направление", chips: allSchools };
   }
   if (/понятно|к записи|рассказать подробнее/.test(t)) {

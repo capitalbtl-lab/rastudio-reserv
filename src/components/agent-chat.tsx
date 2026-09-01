@@ -36,7 +36,7 @@ const SILENCE = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYA
 
 function greeting(who: "oleg" | "olga", _voice = false) {
   const name = who === "olga" ? "Ольга" : "Олег";
-  return `${name}: Здравствуйте. Рады приветствовать вас на сайте студии «Развивайся». С удовольствием проконсультирую и подберу программу, которая подойдёт именно вашему ребёнку.`;
+  return `${name}: Здравствуйте. Я ${name}, студия «Развивайся». Сколько лет ребёнку?`;
 }
 const DUAL_HELLO = /Олег: Здравствуйте[\s\S]*Ольга:/;
 const ADMIN_ASK = "Ольга: Режим управления сайтом. Назовите кодовое слово.";

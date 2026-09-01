@@ -102,7 +102,7 @@ function fileOf() {
 
 function seedScripts(list?: ScriptSection[]) {
   const have = Array.isArray(list) ? list : [];
-  const locked = new Set(["funnel", "age", "city", "branch"]);
+  const locked = new Set(["funnel", "age", "city", "branch", "school"]);
   if (!have.length) return DEFAULT_SCRIPTS.map((s) => ({ ...s, updatedAt: s.updatedAt || new Date().toISOString() }));
   const byId = new Map(have.map((s) => [s.id, s]));
   for (const def of DEFAULT_SCRIPTS) {
@@ -150,9 +150,9 @@ function flag(v: boolean | undefined, fallback: boolean) {
 }
 
 const STYLE: Record<AgentSettings["style"], string> = {
-  short: "Стиль: коротко, 1–3 предложения, без воды.",
-  warm: "Стиль: тёплый живой администратор, без канцелярита, 2–4 предложения.",
-  detailed: "Стиль: чуть подробнее, но без простыни. Главное — в первых двух фразах.",
+  short: "Как колонка Алиса: 1 предложение и один вопрос. Ждёшь ответ.",
+  warm: "Как колонка Алиса: коротко подтверди, что услышала, один новый вопрос, без лекции. 1–2 предложения.",
+  detailed: "Можно на предложение длиннее, но всё равно один вопрос за реплику, потом пауза.",
 };
 
 export function agentPromptAddons(facts?: SessionFacts, channel = "site") {

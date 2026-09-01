@@ -183,9 +183,9 @@ export function AdminAgent() {
                 }
                 className="mt-2 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
               >
-                <option value="warm">Тёплый, живой</option>
-                <option value="short">Короткий</option>
-                <option value="detailed">Подробнее</option>
+                <option value="warm">Как Алиса: коротко, один вопрос</option>
+                <option value="short">Ещё короче</option>
+                <option value="detailed">Чуть подробнее, всё равно один вопрос</option>
               </select>
             </label>
           </div>
