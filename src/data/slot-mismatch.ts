@@ -67,3 +67,10 @@ export function slotMismatch(s: { groupName?: string; subject?: string; subjectI
   }
   return { level: "", text: "" };
 }
+
+export function mismatchHint(s: { groupName?: string; subject?: string; subjectId?: number; groupId?: number }) {
+  const mm = slotMismatch(s);
+  if (!mm.level) return "";
+  const gid = s.groupId ? `группы ${s.groupId}` : "этой группы";
+  return `${mm.text}\n\nКак исправить ИИ: отметьте группу и в «Добавить / исправить расписание» напишите: «исправь предмет ${gid} по названию». Либо в AlfaCRM поставьте предмет, который совпадает с названием.`;
+}

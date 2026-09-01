@@ -38,7 +38,7 @@ const extraProbes: Probe[] = [];
 export const ADMIN_SECTIONS: SectionDef[] = [
   { id: "cabinet", title: "Весь кабинет", hint: "Все разделы, ключи API и связи между ними. Ничего не пишем." },
   { id: "prices", title: "Цены курсов", hint: "Прайс, формулы КБМ/ТМХ, связь с CRM и ассистентом." },
-  { id: "schedule", title: "Расписание занятий", hint: "Снимок, предметы, соответствия, группы CRM, уроки, ученики, поля карточки и страница /schedule. Ничего не пишем в AlfaCRM." },
+  { id: "schedule", title: "Расписание занятий", hint: "Снимок, предметы, соответствия, группы, уроки, ученики, поля, календарь, загрузка/выгрузка всех типов, /schedule. В AlfaCRM ничего не пишем." },
   { id: "agent", title: "Ассистент ИИ", hint: "Мозг, документы, каналы, модели. Пробный запрос без сохранения." },
   { id: "agent-window", title: "Окно и кнопки", hint: "Флаги виджета и связь с моделями." },
   { id: "agent-dialog", title: "Как говорит", hint: "Скрипты воронки и стиль." },
@@ -418,6 +418,83 @@ const PROBES: Probe[] = [
       const v = loadVersions();
       if (!v.length) return skip("снимков отката ещё нет — после первой загрузки появятся", ["schedule"]);
       return ok(`версий ${v.length}, последняя: ${v[0]?.reason || "—"}`, ["schedule"]);
+    },
+  },
+  {
+    id: "schedule-io",
+    title: "Загрузка и выгрузка всех типов расписания",
+    sections: ["schedule"],
+    run: async () => {
+      const related = ["schedule", "apis"];
+      const got: string[] = [];
+      const bad: string[] = [];
+      try {
+        const { token, request } = await import("./alfacrm");
+        const t = await token();
+        async function ping(name: string, path: string, body: Record<string, unknown> = { page: 0, pageSize: 5 }) {
+          try {
+            const json = await request<{ items?: unknown[]; total?: number }>(path, body, t);
+            const n = Array.isArray(json.items) ? json.items.length : json.total ?? 0;
+            got.push(`${name} ${n}`);
+          } catch (e) {
+            bad.push(`${name}: ${e instanceof Error ? e.message.slice(0, 90) : String(e)}`);
+          }
+        }
+        for (const b of [1, 2, 3]) {
+          await ping(`группы ф${b}`, `/v2api/${b}/group/index`);
+          await ping(`регулярные ф${b}`, `/v2api/${b}/regular-lesson/index`);
+        }
+        await ping("предметы", "/v2api/2/subject/index");
+        await ping("педагоги", "/v2api/2/teacher/index");
+        await ping("аудитории", "/v2api/2/room/index");
+        await ping("уровни", "/v2api/2/level/index");
+        await ping("клиенты", "/v2api/2/customer/index");
+        await ping("занятия", "/v2api/2/lesson/index");
+        const { listAdminSlots } = await import("./alfacrm-schedule");
+        const { loadSubjects } = await import("./crm-subjects");
+        const { loadScheduleMap } = await import("./schedule-map");
+        const { loadVersions, slotsToCsv, parseSlotsCsv } = await import("./crm-slots");
+        const { slotMismatch } = await import("./slot-mismatch");
+        const slots = listAdminSlots();
+        got.push(`сайт ${slots.length}`);
+        got.push(`предметы сайта ${loadSubjects().length}`);
+        got.push(`соответствия ${loadScheduleMap().courses.length}`);
+        got.push(`версии ${loadVersions().length}`);
+        const csv = slotsToCsv(slots);
+        const back = parseSlotsCsv(csv, slots);
+        if (!csv || back.length < Math.min(1, slots.length)) bad.push("CSV туда-обратно пустой");
+        else got.push(`CSV ${csv.split("\n").length - 1} строк`);
+        const mm = slots.filter((s) => slotMismatch(s).level).length;
+        got.push(`несоответствий ${mm}`);
+        const withCal = slots.filter((s) => s.day && s.timeFrom).length;
+        got.push(`с днём/временем ${withCal}`);
+        const { existsSync, accessSync, constants } = await import("node:fs");
+        const { join } = await import("node:path");
+        const file = join(process.cwd(), "storage", "crm-schedule.json");
+        if (!existsSync(file)) bad.push("нет storage/crm-schedule.json");
+        else {
+          try {
+            accessSync(file, constants.R_OK | constants.W_OK);
+            got.push("снимок читается и пишется");
+          } catch {
+            bad.push("снимок нельзя записать");
+          }
+        }
+        const text = `чтение CRM: ${got.join(", ")}. Выгрузка в AlfaCRM не выполнялась — только проверка, что данные читаются и локальный CSV/снимок живые.`;
+        if (bad.length) {
+          return fail(
+            bad.join("; ").slice(0, 220),
+            `Часть типов не загрузилась: ${bad.join("; ")}. ${text}`,
+            "Проверьте права роли API: группы, уроки, предметы, педагоги, аудитории, клиенты, уровни. Снимок storage/crm-schedule.json должен быть доступен на запись.",
+            related,
+            JSON.stringify({ got, bad }).slice(0, 800),
+          );
+        }
+        return ok(text, related);
+      } catch (e) {
+        const raw = e instanceof Error ? e.message : String(e);
+        return fail(raw.slice(0, 200), "Не собралась проверка загрузки типов расписания.", "API AlfaCRM и файл storage/crm-schedule.json.", related, raw);
+      }
     },
   },
   { id: "crm-live", title: "AlfaCRM живой", sections: ["schedule", "dossiers", "apis", "agent", "prices"], run: pingAlfa },

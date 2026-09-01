@@ -26,15 +26,6 @@ import {
 import { loadSubjects, saveSubjects, pullSubjectsFromCrm, pushSubjectsToCrm } from "./crm-subjects";
 import type { GroupCalLesson } from "./crm-slots-core";
 
-function parseCrmDate(raw?: string) {
-  const s = String(raw || "").trim();
-  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-  if (ru) return new Date(Number(ru[3]), Number(ru[2]) - 1, Number(ru[1]));
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
-  return null;
-}
-
 function ymd(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -315,10 +306,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!g) return { ok: false as const, error: "Группа не найдена в AlfaCRM." };
       const slot = listAdminSlots().find((s) => s.groupId === gid && s.branchId === branch);
       const byDate = new Map<string, GroupCalLesson>();
-      const groupStart = parseCrmDate(String(g.b_date || slot?.bDate || ""));
-      const groupEnd = parseCrmDate(String(g.e_date || slot?.eDate || ""));
-      const fallbackEnd = new Date();
-      fallbackEnd.setMonth(fallbackEnd.getMonth() + 10, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const winStart = new Date(today);
+      winStart.setDate(winStart.getDate() - 84);
+      const winEnd = new Date(today);
+      winEnd.setDate(winEnd.getDate() + 84);
       try {
         const regs: {
           id?: number;
@@ -337,12 +330,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
         }
         const mine = regs.filter((r) => Number(r.related_id) === gid);
         for (const r of mine) {
-          const start = parseCrmDate(r.b_date) || groupStart || new Date();
-          const end = parseCrmDate(r.e_date) || groupEnd || fallbackEnd;
           const from = hm(r.time_from_v);
           const to = hm(r.time_to_v);
-          for (const occ of expandWeekday(Number(r.day || 0), from, to, start, end)) {
-            if (byDate.size >= 120) break;
+          for (const occ of expandWeekday(Number(r.day || 0), from, to, winStart, winEnd)) {
             byDate.set(occ.date, occ);
           }
           if (r.id) {
@@ -366,12 +356,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
         /* календарь не должен ломать карточку */
       }
       if (!byDate.size && slot) {
-        const start = parseCrmDate(slot.bDate) || groupStart || new Date();
-        const end = parseCrmDate(slot.eDate) || groupEnd || fallbackEnd;
         const beats = slot.beats?.length ? slot.beats : [{ day: slot.day, timeFrom: slot.timeFrom, timeTo: slot.timeTo }];
         for (const b of beats) {
-          for (const occ of expandWeekday(Number(b.day || slot.day || 0), String(b.timeFrom || ""), String(b.timeTo || ""), start, end)) {
-            if (byDate.size >= 120) break;
+          for (const occ of expandWeekday(Number(b.day || slot.day || 0), String(b.timeFrom || ""), String(b.timeTo || ""), winStart, winEnd)) {
             byDate.set(occ.date, occ);
           }
         }

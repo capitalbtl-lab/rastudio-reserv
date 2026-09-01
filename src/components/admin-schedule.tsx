@@ -10,7 +10,7 @@ import { AdminSectionHead } from "@/components/admin-self-test";
 import { SCHOOLS, BRANCHES } from "@/data/site";
 import { SCHOOL_ORDER } from "@/data/crm-slots-core";
 import { splitCourseAge } from "@/data/prices-core";
-import { slotMismatch } from "@/data/slot-mismatch";
+import { slotMismatch, mismatchHint } from "@/data/slot-mismatch";
 import { cn } from "@/lib/utils";
 import { speakAgent } from "@/data/agent-voice";
 import { missingScheduleFields, parseDraftFromSpeech, beatsOf, type LessonBeat } from "@/data/crm-slots";
@@ -52,20 +52,13 @@ function parseYmd(s: string) {
   return new Date(y, (m || 1) - 1, d || 1);
 }
 
-function parseAnyDate(s: string) {
-  const t = String(s || "").trim();
-  const ru = t.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-  if (ru) return new Date(Number(ru[3]), Number(ru[2]) - 1, Number(ru[1]));
-  const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
-  return null;
-}
-
 function slotCalendar(s: CrmSlot): GroupCalLesson[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const start = parseAnyDate(s.bDate) || today;
-  const end = parseAnyDate(s.eDate) || new Date(start.getFullYear(), start.getMonth() + 10, 0);
+  const start = new Date(today);
+  start.setDate(start.getDate() - 84);
+  const end = new Date(today);
+  end.setDate(end.getDate() + 84);
   const beats = s.beats?.length ? s.beats : [{ day: s.day, timeFrom: s.timeFrom, timeTo: s.timeTo }];
   const out: GroupCalLesson[] = [];
   for (const b of beats) {
@@ -74,7 +67,7 @@ function slotCalendar(s: CrmSlot): GroupCalLesson[] {
     const js = want === 7 ? 0 : want;
     const cur = new Date(start);
     while (cur.getDay() !== js) cur.setDate(cur.getDate() + 1);
-    while (cur <= end && out.length < 120) {
+    while (cur <= end) {
       out.push({
         date: `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`,
         from: String(b.timeFrom || ""),
@@ -111,7 +104,33 @@ function GroupLessonStrip({ lessons }: { lessons: GroupCalLesson[] }) {
     const past = all.filter((l) => l.date < today);
     const future = all.filter((l) => l.date > today);
     const todayHit = all.find((l) => l.date === today) || { date: today, from: "", to: "", status: -1, type: "сегодня" };
-    if (range === "10") return [...past.slice(-10), todayHit, ...future.slice(0, 10)];
+    const sample = future[0] || past[past.length - 1] || all[0] || todayHit;
+    function pad(list: GroupCalLesson[], count: number, dir: 1 | -1) {
+      if (count <= 0) return list;
+      const have = new Set(list.map((x) => x.date));
+      const d = parseYmd(dir > 0 ? (list[list.length - 1]?.date || today) : (list[0]?.date || today));
+      const want = sample.date ? parseYmd(sample.date).getDay() : d.getDay();
+      const cur = new Date(d);
+      if (dir > 0) cur.setDate(cur.getDate() + 1);
+      else cur.setDate(cur.getDate() - 1);
+      const extra: GroupCalLesson[] = [];
+      let guard = 0;
+      while (extra.length + list.length < count && guard < 400) {
+        guard += 1;
+        if (cur.getDay() === want) {
+          const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
+          if (iso !== today && !have.has(iso)) {
+            extra.push({ date: iso, from: sample.from, to: sample.to, status: 0, type: "Групповое" });
+            have.add(iso);
+          }
+        }
+        cur.setDate(cur.getDate() + dir);
+      }
+      return dir > 0 ? [...list, ...extra] : [...extra.reverse(), ...list];
+    }
+    if (range === "10") {
+      return [...pad(past, 10, -1).slice(-10), todayHit, ...pad(future, 10, 1).slice(0, 10)];
+    }
     const days = Number(range);
     const from = shiftYmd(today, -days);
     const to = shiftYmd(today, days);
@@ -152,16 +171,15 @@ function GroupLessonStrip({ lessons }: { lessons: GroupCalLesson[] }) {
               key={l.date}
               title={time ? `${l.date} ${time}` : l.date}
               className={cn(
-                "flex h-11 min-w-[3.15rem] flex-col items-center justify-center rounded-[4px] px-1.5 text-center leading-tight",
-                isToday && "bg-[#2f9a4a] text-white",
-                !isToday && past && "bg-[#e4f3e2] text-[#5b7a58]",
-                !isToday && !past && "bg-[#d4efd0] text-[#1e5c28] ring-1 ring-[#b7dcb4]",
+                "flex h-11 min-w-[3.15rem] flex-col items-center justify-center rounded-[4px] bg-white px-1.5 text-center leading-tight text-fg shadow-[0_1px_3px_rgba(15,23,42,0.12)] ring-1 ring-neutral-500/55",
+                isToday && "ring-2 ring-neutral-800",
+                !isToday && past && "text-muted",
               )}
             >
               {isToday ? (
-                <span className="text-[0.58rem] font-semibold uppercase tracking-wider text-white/90">сегодня</span>
+                <span className="text-[0.58rem] font-semibold uppercase tracking-wider text-neutral-800">сегодня</span>
               ) : (
-                <span className="text-[0.58rem] font-semibold uppercase tracking-wider opacity-70">{WD[(d.getDay() + 6) % 7]}</span>
+                <span className="text-[0.58rem] font-semibold uppercase tracking-wider text-neutral-500">{WD[(d.getDay() + 6) % 7]}</span>
               )}
               <span className="text-[0.78rem] font-semibold tabular-nums">
                 {d.getDate()} {MONTHS_SHORT[d.getMonth()]}
@@ -302,8 +320,19 @@ type GroupDetail = {
 
 function GroupNameField({ value, onChange, subject }: { value: string; onChange: (v: string) => void; subject?: string }) {
   const src = useRef<HTMLInputElement>(null);
+  const hideT = useRef(0);
   const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, height: 32, width: 160 });
+
+  function show() {
+    window.clearTimeout(hideT.current);
+    setOpen(true);
+  }
+  function hide() {
+    window.clearTimeout(hideT.current);
+    hideT.current = window.setTimeout(() => setOpen(false), 150);
+  }
 
   function place() {
     const el = src.current;
@@ -321,17 +350,23 @@ function GroupNameField({ value, onChange, subject }: { value: string; onChange:
   }
 
   useEffect(() => {
-    if (!open) return;
-    place();
-    function onScroll() {
+    if (open) {
+      setShown(true);
       place();
+      const fade = window.setTimeout(() => setOpen(false), 5000);
+      function onScroll() {
+        place();
+      }
+      window.addEventListener("scroll", onScroll, true);
+      window.addEventListener("resize", onScroll);
+      return () => {
+        window.clearTimeout(fade);
+        window.removeEventListener("scroll", onScroll, true);
+        window.removeEventListener("resize", onScroll);
+      };
     }
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
-    return () => {
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
-    };
+    const hide = window.setTimeout(() => setShown(false), 320);
+    return () => window.clearTimeout(hide);
   }, [open, value]);
 
   return (
@@ -341,27 +376,68 @@ function GroupNameField({ value, onChange, subject }: { value: string; onChange:
         value={value}
         title={subject ? `${value} · предмет: ${subject}` : value}
         onChange={(e) => onChange(e.target.value)}
-        onMouseEnter={() => {
-          setOpen(true);
-          place();
-        }}
-        onFocus={() => {
-          setOpen(true);
-          place();
-        }}
-        className="h-8 w-full min-w-[10rem] rounded-md bg-surface-2 px-2 text-[0.8rem] ring-1 ring-black/8"
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+        className="h-8 w-full rounded-md bg-surface-2 px-2 text-[0.8rem] ring-1 ring-black/8"
       />
-      {open
+      {shown
         ? createPortal(
             <input
               value={value}
               autoFocus={false}
               onChange={(e) => onChange(e.target.value)}
-              onMouseLeave={() => setOpen(false)}
-              onBlur={() => setOpen(false)}
-              style={{ top: pos.top, left: pos.left, height: pos.height, width: pos.width }}
-              className="fixed z-[75] rounded-md bg-white px-2 text-[0.8rem] shadow-[0_8px_28px_rgba(15,23,42,0.22)] ring-1 ring-black/20"
+              onMouseEnter={show}
+              onMouseLeave={hide}
+              onBlur={hide}
+              style={{ top: pos.top, left: pos.left, height: pos.height, width: pos.width, opacity: open ? 1 : 0 }}
+              className="fixed z-[75] rounded-md bg-white px-2 text-[0.8rem] shadow-[0_8px_28px_rgba(15,23,42,0.22)] ring-1 ring-black/20 transition-opacity duration-300"
             />,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
+function MismatchDot({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const ref = useRef<HTMLButtonElement>(null);
+  function show() {
+    const r = ref.current?.getBoundingClientRect();
+    if (r) {
+      const left = Math.min(window.innerWidth - 280, Math.max(8, r.left));
+      const top = r.bottom + 8;
+      const flip = top + 140 > window.innerHeight;
+      setPos({ top: flip ? r.top - 8 : top, left });
+    }
+    setOpen(true);
+  }
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        onMouseEnter={show}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={show}
+        onBlur={() => setOpen(false)}
+        className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center"
+        aria-label="Ошибка CRM"
+      >
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400/75" />
+        <span className="relative inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[0.7rem] font-bold leading-none text-white">i</span>
+      </button>
+      {open
+        ? createPortal(
+            <div
+              className="pointer-events-none fixed z-[80] w-[17rem] whitespace-pre-line rounded-xl bg-neutral-700 px-3 py-2 text-left text-[0.75rem] leading-snug text-white shadow-[0_10px_28px_rgba(15,23,42,0.28)]"
+              style={{ top: pos.top, left: pos.left, transform: pos.top < 80 ? undefined : undefined }}
+            >
+              {text}
+            </div>,
             document.body,
           )
         : null}
@@ -1545,10 +1621,6 @@ export function AdminSchedule() {
         >
           Удалить выбранные{pickedIds.length ? ` · ${pickedIds.length}` : ""}
         </Button>
-        <span className="ml-1 inline-flex items-center gap-3 text-[0.72rem] text-muted">
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-pink-400" /> не в AlfaCRM</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> в AlfaCRM</span>
-        </span>
       </div>
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
 
@@ -1898,22 +1970,12 @@ export function AdminSchedule() {
                                   <div className="flex items-center gap-1.5">
                                     <CheckBox ids={[s.id]} picked={picked} onToggle={setIds} />
                                     <CrmDot s={s} />
+                                    {mm.level ? <MismatchDot text={mismatchHint(s)} /> : null}
                                   </div>
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
                                   <div className="flex min-w-0 items-center gap-1.5">
                                     {s.groupId ? <span className="w-8 shrink-0 text-right text-[0.7rem] font-semibold tabular-nums text-muted">{s.groupId}</span> : <span className="w-8 shrink-0" />}
-                                    {mm.level ? (
-                                      <span
-                                        title={mm.text}
-                                        className={cn(
-                                          "shrink-0 rounded-[4px] px-1.5 py-0.5 text-[0.62rem] font-semibold uppercase tracking-wide",
-                                          mm.level === "hard" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800",
-                                        )}
-                                      >
-                                        {mm.level === "hard" ? "предмет ≠ название" : "проверить CRM"}
-                                      </span>
-                                    ) : null}
                                     <GroupNameField value={s.groupName} subject={s.subject} onChange={(v) => patch(s.id, "groupName", v)} />
                                   </div>
                                 </td>
