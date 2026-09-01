@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { adminSchedule } from "@/data/admin-schedule";
 import { type CrmSlot } from "@/data/crm-slots-core";
@@ -14,6 +14,14 @@ import { speakAgent } from "@/data/agent-voice";
 import { missingScheduleFields, parseDraftFromSpeech, beatsOf, type LessonBeat } from "@/data/crm-slots";
 import { AdminSubjects } from "@/components/admin-subjects";
 import { AdminScheduleMap } from "@/components/admin-schedule-map";
+import type { CrmSubject } from "@/data/crm-subjects";
+
+const GROUP_STATUS = [
+  { id: 1, name: "Идет набор (ожидает старта)" },
+  { id: 2, name: "Идет обучение" },
+  { id: 3, name: "Завершена" },
+  { id: 4, name: "Приостановлена" },
+];
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -82,6 +90,38 @@ function leadHref(s: CrmSlot) {
 function inCrm(s: CrmSlot) {
   return Number(s.groupId) > 0 && !String(s.id).startsWith("local-");
 }
+
+function DetailsBtn({ on, onClick }: { on?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      title="Подробно"
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors",
+        on ? "bg-[#b8c0cc] text-fg" : "bg-[#c5ccd6] text-[#3f4854] hover:bg-[#b4bcc8]",
+      )}
+    >
+      <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 fill-current" aria-hidden>
+        <path d="M6 3.4v9.2L13.2 8 6 3.4z" />
+      </svg>
+    </button>
+  );
+}
+
+type GroupDetail = {
+  id: string;
+  groupId: number;
+  branchId: number;
+  note: string;
+  hashtags: string;
+  makeup: string;
+  statusId: number;
+  signup: string;
+  subjectId: number;
+  loading: boolean;
+  saving: boolean;
+};
 
 function GroupNameField({ value, onChange, subject }: { value: string; onChange: (v: string) => void; subject?: string }) {
   const src = useRef<HTMLInputElement>(null);
@@ -427,6 +467,8 @@ export function AdminSchedule() {
   const [pane, setPane] = useState<"groups" | "subjects" | "map">("groups");
   const [branchFilter, setBranchFilter] = useState("all");
   const [pushUi, setPushUi] = useState({ open: false, step: "", done: false, created: 0, pushed: 0, failed: 0, error: "", lines: [] as string[] });
+  const [detail, setDetail] = useState<GroupDetail | null>(null);
+  const [subjects, setSubjects] = useState<CrmSubject[]>([]);
   const fileRef = useRef<HTMLDivElement>(null);
   const promptEl = useRef<HTMLTextAreaElement>(null);
 
@@ -520,6 +562,78 @@ export function AdminSchedule() {
       }),
     );
     setDirty((d) => new Set(d).add(id));
+  }
+
+  async function openDetail(s: CrmSlot) {
+    if (detail?.id === s.id) {
+      setDetail(null);
+      return;
+    }
+    setDetail({
+      id: s.id,
+      groupId: s.groupId,
+      branchId: s.branchId,
+      note: s.groupNote || "",
+      hashtags: s.hashtags || "",
+      makeup: s.makeup || "",
+      statusId: s.statusId || 0,
+      signup: leadHref(s),
+      subjectId: s.subjectId || 0,
+      loading: Boolean(s.groupId),
+      saving: false,
+    });
+    if (!s.groupId) {
+      const sub = await adminSchedule({ data: { token: token(), action: "subjectsGet" } as never });
+      if (sub.ok && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects as CrmSubject[]);
+      setDetail((d) => (d && d.id === s.id ? { ...d, loading: false } : d));
+      return;
+    }
+    const res = await adminSchedule({ data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId } as never });
+    if (!res.ok || !("group" in res) || !res.group) {
+      setDetail((d) => (d && d.id === s.id ? { ...d, loading: false } : d));
+      if (!res.ok) setMsg(res.error || "Не удалось открыть группу в AlfaCRM.");
+      return;
+    }
+    if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as CrmSubject[]);
+    const g = res.group as { note: string; hashtags: string; makeup: string; statusId: number; signup: string; subjectId: number };
+    setDetail((d) =>
+      d && d.id === s.id
+        ? {
+            ...d,
+            note: g.note,
+            hashtags: g.hashtags,
+            makeup: g.makeup,
+            statusId: g.statusId,
+            signup: g.signup || d.signup,
+            subjectId: g.subjectId || d.subjectId,
+            loading: false,
+          }
+        : d,
+    );
+  }
+
+  async function saveDetail() {
+    if (!detail?.groupId) {
+      setMsg("Сначала выгрузите группу в AlfaCRM.");
+      return;
+    }
+    setDetail((d) => (d ? { ...d, saving: true } : d));
+    const res = await adminSchedule({
+      data: {
+        token: token(),
+        action: "groupSave",
+        groupId: detail.groupId,
+        branchId: detail.branchId,
+        note: detail.note,
+        hashtags: detail.hashtags,
+        makeup: detail.makeup,
+        statusId: detail.statusId,
+        subjectId: detail.subjectId,
+      } as never,
+    });
+    take(res as never);
+    setDetail((d) => (d ? { ...d, saving: false } : d));
+    if (res.ok) setMsg("Подробности группы сохранены в AlfaCRM.");
   }
 
   function shownBeat(s: CrmSlot) {
@@ -1507,7 +1621,7 @@ export function AdminSchedule() {
                             <col className="w-36" />
                             <col className="w-[4.4rem]" />
                             <col className="w-[5.5rem]" />
-                            <col className="w-[5.2rem]" />
+                            <col className="w-10" />
                             <col className="w-8" />
                           </colgroup>
                           <thead className="text-[0.65rem] uppercase tracking-wider text-muted">
@@ -1522,7 +1636,7 @@ export function AdminSchedule() {
                               <th className="px-2 py-2">Педагог</th>
                               <th className="px-1 py-2 text-center">Места</th>
                               <th className="px-2 py-2">Кто учится</th>
-                              <th className="px-2 py-2">Запись</th>
+                              <th className="px-1 py-2 text-center">Подробно</th>
                               <th className="px-1 py-2" />
                             </tr>
                           </thead>
@@ -1531,7 +1645,8 @@ export function AdminSchedule() {
                               const key = `${s.branchId}-${s.groupId}`;
                               const names = who[key];
                               return (
-                              <tr id={`ra-slot-${s.id}`} key={s.id} className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash")}>
+                              <Fragment key={s.id}>
+                              <tr id={`ra-slot-${s.id}`} className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash")}>
                                 <td className="px-2 py-1.5 align-middle">
                                   <div className="flex items-center gap-1.5">
                                     <CheckBox ids={[s.id]} picked={picked} onToggle={setIds} />
@@ -1583,14 +1698,8 @@ export function AdminSchedule() {
                                 <td className="px-2 py-1.5 align-middle">
                                   <WhoTip names={names} onNeed={() => void loadWho(s)} />
                                 </td>
-                                <td className="px-2 py-1.5 align-middle">
-                                  {leadHref(s) ? (
-                                    <a href={leadHref(s)} target="_blank" rel="noreferrer" className="whitespace-nowrap text-[0.72rem] font-semibold text-primary" title={leadHref(s)}>
-                                      gid {s.groupId}
-                                    </a>
-                                  ) : (
-                                    <span className="text-[0.72rem] text-muted">—</span>
-                                  )}
+                                <td className="px-1 py-1.5 align-middle text-center">
+                                  <DetailsBtn on={detail?.id === s.id} onClick={() => void openDetail(s)} />
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
                                   <button type="button" title="Удалить из расписания" className="text-xs font-semibold text-muted hover:text-red-600" onClick={() => void removeSlots([s.id])}>
@@ -1598,6 +1707,91 @@ export function AdminSchedule() {
                                   </button>
                                 </td>
                               </tr>
+                              {detail?.id === s.id ? (
+                                <tr key={`${s.id}-detail`}>
+                                  <td colSpan={12} className="bg-[#f3f5f8] px-4 py-4">
+                                    {detail.loading ? (
+                                      <p className="text-sm text-muted">Загружаю настройки группы из AlfaCRM…</p>
+                                    ) : (
+                                      <div className="grid gap-3 md:grid-cols-2">
+                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                          Запись
+                                          <a
+                                            href={detail.signup || leadHref(s)}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="mt-1 flex h-10 items-center rounded-xl bg-white px-3 text-sm font-semibold normal-case tracking-normal text-primary ring-1 ring-black/8"
+                                          >
+                                            gid {s.groupId || "—"} · открыть форму
+                                          </a>
+                                        </label>
+                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                          Предмет
+                                          <select
+                                            value={detail.subjectId || ""}
+                                            onChange={(e) => setDetail((d) => (d ? { ...d, subjectId: Number(e.target.value) || 0 } : d))}
+                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                          >
+                                            <option value="">— не выбран —</option>
+                                            {subjects.map((sub) => (
+                                              <option key={sub.id} value={sub.id}>
+                                                {sub.name} · id {sub.id}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </label>
+                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted md:col-span-2">
+                                          Хэштеги
+                                          <textarea
+                                            value={detail.hashtags}
+                                            onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))}
+                                            rows={2}
+                                            className="mt-1 w-full rounded-xl bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                          />
+                                        </label>
+                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted md:col-span-2">
+                                          Примечания
+                                          <textarea
+                                            value={detail.note}
+                                            onChange={(e) => setDetail((d) => (d ? { ...d, note: e.target.value } : d))}
+                                            rows={2}
+                                            className="mt-1 w-full rounded-xl bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                          />
+                                        </label>
+                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                          Статус
+                                          <select
+                                            value={detail.statusId || ""}
+                                            onChange={(e) => setDetail((d) => (d ? { ...d, statusId: Number(e.target.value) || 0 } : d))}
+                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                          >
+                                            <option value="">— не задан —</option>
+                                            {GROUP_STATUS.map((st) => (
+                                              <option key={st.id} value={st.id}>
+                                                {st.name}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </label>
+                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                          Отработка
+                                          <input
+                                            value={detail.makeup}
+                                            onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))}
+                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                          />
+                                        </label>
+                                        <div className="flex items-end justify-end md:col-span-2">
+                                          <Button type="button" disabled={detail.saving} onClick={() => void saveDetail()}>
+                                            Сохранить в AlfaCRM
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              ) : null}
+                              </Fragment>
                               );
                             })}
                           </tbody>

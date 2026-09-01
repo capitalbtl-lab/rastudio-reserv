@@ -47,6 +47,8 @@ export type CrmSlot = {
   roomId: number;
   bDate: string;
   eDate: string;
+  hashtags?: string;
+  makeup?: string;
 };
 
 export type SlotVersion = { at: string; reason: string; count: number; slots: CrmSlot[] };

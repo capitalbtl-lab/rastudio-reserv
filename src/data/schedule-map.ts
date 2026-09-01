@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { SCHOOLS, SCHOOL_COURSE_MATCH } from "@/data/site";
 import { listPriceRows, SCHOOL_DIRECTION, tidyCourseName } from "@/data/prices-core";
-import { SEED_SUBJECTS, bestSubject, type CrmSubject } from "@/data/crm-subjects";
+import { SEED_SUBJECTS, bestSubject, loadSubjects, type CrmSubject } from "@/data/crm-subjects";
 import { type CrmSlot } from "@/data/crm-slots-core";
 
 export type SchoolLink = { schedule: string; siteHref: string };
@@ -89,7 +89,9 @@ function defaultSchools(): SchoolLink[] {
 function defaultCourses(): CourseLink[] {
   const prices = listPriceRows();
   const out: CourseLink[] = [];
-  for (const sub of SEED_SUBJECTS) {
+  const subjects = loadSubjects();
+  const list = subjects.length ? subjects : SEED_SUBJECTS;
+  for (const sub of list) {
     const path = SUBJECT_PATH[sub.id] || "";
     const price = prices.find((r) => r.path === path) || prices.find((r) => bestSubject(`${r.name} ${r.age}`)?.id === sub.id);
     const href = path || price?.path || "";

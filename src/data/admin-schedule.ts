@@ -48,7 +48,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "subjectsGet"
           | "subjectsPull"
           | "subjectsSave"
-          | "subjectsPush";
+          | "subjectsPush"
+          | "groupGet"
+          | "groupSave";
         slots?: CrmSlot[];
         text?: string;
         prompt?: string;
@@ -61,6 +63,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
         branchId?: number;
         at?: string;
         subjects?: { id: number; name: string; local?: boolean }[];
+        note?: string;
+        hashtags?: string;
+        makeup?: string;
+        statusId?: number;
+        subjectId?: number;
       },
   )
   .handler(async ({ data }) => {
@@ -230,6 +237,75 @@ export const adminSchedule = createServerFn({ method: "POST" })
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось выгрузить предметы." };
       }
+    }
+    if (data.action === "groupGet") {
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const gid = Number(data.groupId) || 0;
+      if (!gid) return { ok: false as const, error: "Нет номера группы." };
+      const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/group/index`, { page: 0, pageSize: 100 }, t);
+      const g = (json.items || []).find((x) => Number(x.id) === gid);
+      if (!g) return { ok: false as const, error: "Группа не найдена в AlfaCRM." };
+      const slot = listAdminSlots().find((s) => s.groupId === gid && s.branchId === branch);
+      return {
+        ok: true as const,
+        subjects: loadSubjects(),
+        group: {
+          id: gid,
+          name: String(g.name || ""),
+          note: String(g.note || ""),
+          hashtags: String(g.custom_hashtagkursa || ""),
+          makeup: String(g.custom_workingout || ""),
+          statusId: Number(g.status_id || 0),
+          signup: slot?.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
+          subjectId: Number(slot?.subjectId || 0),
+          subject: slot?.subject || "",
+        },
+      };
+    }
+    if (data.action === "groupSave") {
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const gid = Number(data.groupId) || 0;
+      if (!gid) return { ok: false as const, error: "Нет номера группы." };
+      const subjectId = Number(data.subjectId || 0);
+      const note = String(data.note || "");
+      const hashtags = String(data.hashtags || "");
+      const makeup = String(data.makeup || "");
+      const statusId = Number(data.statusId || 0);
+      await request(`/v2api/${branch}/group/update`, {
+        id: gid,
+        note,
+        status_id: statusId || undefined,
+        custom_hashtagkursa: hashtags,
+        custom_workingout: makeup,
+      }, t);
+      const current = listAdminSlots();
+      const subject = loadSubjects().find((x) => x.id === subjectId);
+      const next = current.map((s) => {
+        if (s.groupId !== gid || s.branchId !== branch) return s;
+        return {
+          ...s,
+          groupNote: note,
+          hashtags,
+          makeup,
+          statusId: statusId || s.statusId,
+          subjectId: subjectId || s.subjectId,
+          subject: subject?.name || s.subject,
+        };
+      });
+      if (subjectId) {
+        const slot = next.find((s) => s.groupId === gid && s.branchId === branch);
+        for (const b of slot?.beats || []) {
+          if (!b.lessonId) continue;
+          await request(`/v2api/${branch}/regular-lesson/update`, { id: b.lessonId, related_id: gid, subject_id: subjectId }, t).catch(() => null);
+        }
+      }
+      const saved = saveAdminSlots(next).slots;
+      logAdmin(`Группа ${gid}: подробности сохранены в AlfaCRM`);
+      return pack(saved);
     }
     if (data.action === "rollback" && data.at) {
       const prev = versionSlots(data.at);

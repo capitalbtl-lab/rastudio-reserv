@@ -65,6 +65,8 @@ type Group = {
   b_date?: string;
   e_date?: string;
   subject_id?: number;
+  custom_hashtagkursa?: string;
+  custom_workingout?: string;
 };
 type Lesson = {
   id: number;
@@ -459,6 +461,8 @@ async function loadCrm(force = false): Promise<CacheBag> {
         roomId: Number(first?.room_id) || 0,
         bDate: String(g.b_date || ""),
         eDate: String(g.e_date || ""),
+        hashtags: String(g.custom_hashtagkursa || ""),
+        makeup: String(g.custom_workingout || ""),
       }),
     );
   }

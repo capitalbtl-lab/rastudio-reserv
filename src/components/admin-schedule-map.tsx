@@ -58,7 +58,7 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
     <section className={embedded ? "space-y-6" : "mt-10 space-y-6"}>
       {embedded ? (
         <p className="text-sm text-muted">
-          Предмет из AlfaCRM ↔ курс и школа на сайте. Школа в расписании берётся из названия группы, затем из этой таблицы. CRM не меняется.
+          Предметы подгружаются из вкладки «Предметы». Предмет AlfaCRM ↔ курс и школа на сайте. Школа в расписании берётся из названия группы, затем из этой таблицы. CRM не меняется.
         </p>
       ) : (
       <AdminSectionHead
@@ -117,7 +117,7 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
       <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
         <div className="flex items-center gap-2">
           <p className="font-display text-2xl">Курсы и предметы</p>
-          <InfoTip text="Предмет из AlfaCRM слева. Курс на сайте и школа расписания справа. Группа с этим предметом попадёт в выбранную школу." />
+          <InfoTip text="Список слева — все предметы из вкладки «Предметы». Если добавили предмет там, он появится здесь после обновления страницы." />
         </div>
         <div className="mt-4 space-y-6">
           {bySchool.map((block) => (
