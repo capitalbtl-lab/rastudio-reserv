@@ -2260,79 +2260,78 @@ export function AdminSchedule() {
                                             className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                                           />
                                         </label>
-                                        <div className="grid grid-cols-[1fr_auto_1fr_1.3fr] items-end gap-2 md:col-span-2">
-                                          <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                        <div className="flex flex-wrap items-end gap-2 md:col-span-2 md:flex-nowrap">
+                                          <label className="block shrink-0 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                                             Период
-                                            <input
-                                              value={detail.bDate}
-                                              onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))}
-                                              placeholder="с"
-                                              className="mt-1 h-10 w-full rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                            />
+                                            <span className="mt-1 flex items-center gap-1">
+                                              <input
+                                                value={detail.bDate}
+                                                onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))}
+                                                placeholder="с"
+                                                className="h-10 w-[7.4rem] rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                              />
+                                              <span className="text-[0.7rem] font-medium normal-case text-muted">до</span>
+                                              <input
+                                                value={detail.eDate}
+                                                onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))}
+                                                placeholder="до"
+                                                className="h-10 w-[7.4rem] rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                              />
+                                            </span>
                                           </label>
-                                          <span className="pb-2 text-[0.7rem] font-medium text-muted">до</span>
-                                          <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                            <span className="opacity-0">до</span>
-                                            <input
-                                              value={detail.eDate}
-                                              onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))}
-                                              placeholder="до"
-                                              className="mt-1 h-10 w-full rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                            />
-                                          </label>
-                                          <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                          <label className="block min-w-[9.5rem] shrink-0 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                                             Запись
                                             <a
                                               href={detail.signup || leadHref(s)}
                                               target="_blank"
                                               rel="noreferrer"
-                                              className="mt-1 flex h-10 items-center justify-center rounded-md bg-white px-3 text-sm font-semibold normal-case tracking-normal text-primary ring-1 ring-black/8"
+                                              className="mt-1 flex h-10 items-center justify-center whitespace-nowrap rounded-md bg-white px-2.5 text-[0.8rem] font-semibold normal-case tracking-normal text-primary ring-1 ring-black/8"
                                             >
                                               запись в группу {s.groupId || "—"}
                                             </a>
                                           </label>
+                                          <label className="block min-w-0 flex-1 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                            Уровень знаний
+                                            <select
+                                              value={detail.levelId || ""}
+                                              onChange={(e) => setDetail((d) => (d ? { ...d, levelId: Number(e.target.value) || 0 } : d))}
+                                              className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                            >
+                                              <option value="">— не задан —</option>
+                                              {levels.map((lv) => (
+                                                <option key={lv.id} value={lv.id}>
+                                                  {lv.name}
+                                                </option>
+                                              ))}
+                                              {detail.levelId && !levels.some((lv) => lv.id === detail.levelId) ? (
+                                                <option value={detail.levelId}>Уровень {detail.levelId}</option>
+                                              ) : null}
+                                            </select>
+                                          </label>
+                                          <label className="block min-w-0 flex-[1.2] text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                            Статус
+                                            <select
+                                              value={detail.statusId || ""}
+                                              onChange={(e) => setDetail((d) => (d ? { ...d, statusId: Number(e.target.value) || 0 } : d))}
+                                              className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                            >
+                                              <option value="">— не задан —</option>
+                                              {GROUP_STATUS.map((st) => (
+                                                <option key={st.id} value={st.id}>
+                                                  {st.name}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </label>
+                                          <label className="block min-w-0 flex-1 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                            Отработка
+                                            <input
+                                              value={detail.makeup}
+                                              onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))}
+                                              className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                            />
+                                          </label>
                                         </div>
-                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                          Уровень знаний
-                                          <select
-                                            value={detail.levelId || ""}
-                                            onChange={(e) => setDetail((d) => (d ? { ...d, levelId: Number(e.target.value) || 0 } : d))}
-                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                          >
-                                            <option value="">— не задан —</option>
-                                            {levels.map((lv) => (
-                                              <option key={lv.id} value={lv.id}>
-                                                {lv.name}
-                                              </option>
-                                            ))}
-                                            {detail.levelId && !levels.some((lv) => lv.id === detail.levelId) ? (
-                                              <option value={detail.levelId}>Уровень {detail.levelId}</option>
-                                            ) : null}
-                                          </select>
-                                        </label>
-                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                                          Статус
-                                          <select
-                                            value={detail.statusId || ""}
-                                            onChange={(e) => setDetail((d) => (d ? { ...d, statusId: Number(e.target.value) || 0 } : d))}
-                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                          >
-                                            <option value="">— не задан —</option>
-                                            {GROUP_STATUS.map((st) => (
-                                              <option key={st.id} value={st.id}>
-                                                {st.name}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        </label>
-                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted md:col-span-2">
-                                          Отработка
-                                          <input
-                                            value={detail.makeup}
-                                            onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))}
-                                            className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                                          />
-                                        </label>
                                         <div className="flex items-end justify-end md:col-span-2">
                                           <Button type="button" disabled={detail.saving} onClick={() => void saveDetail()}>
                                             Сохранить в AlfaCRM
