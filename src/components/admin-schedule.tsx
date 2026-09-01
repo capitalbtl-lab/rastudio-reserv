@@ -1021,7 +1021,7 @@ export function AdminSchedule() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <p className="font-display text-xl">Добавить / исправить расписание</p>
-            <InfoTip text="Микрофон держит связь, пока сами не выключите. Голосовой режим — мастер: ассистент спрашивает курс, возраст, день, время, филиал, педагога. Команды: готово (предпросмотр), применить (в список), дальше (новая группа)." />
+            <InfoTip text="Голосовой режим — мастер: спрашивает курс, возраст, день, время, филиал, педагога. Команды: готово, применить, дальше — те же кнопки внизу." />
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[0.72rem] text-muted">
             <span>отмечено {pickedIds.length}</span>
@@ -1034,7 +1034,7 @@ export function AdminSchedule() {
           </div>
         </div>
         <p className="mt-2 text-[0.78rem] leading-relaxed text-muted">
-          Микрофон не выключается сам. Мастер: недостающее спросит голосом. Команды — <b>готово</b>, <b>применить</b>, <b>дальше</b> (кнопками то же).
+          Команды голосового режима: <b>готово</b>, <b>применить</b>, <b>дальше</b> (кнопками).
         </p>
         {ask ? <p className="mt-2 rounded-xl bg-primary/10 px-3 py-2 text-sm font-medium text-fg">{ask}</p> : null}
         {wizard.course || wizard.day || wizard.branch || wizard.teacher ? (
@@ -1067,15 +1067,13 @@ export function AdminSchedule() {
               <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z" />
             </svg>
           </button>
-          <TipWrap text="Мастер голосом: спрашивает недостающие поля. готово — предпросмотр, применить — в расписание, дальше — сначала.">
             <Button type="button" size="sm" variant={voiceMode ? "primary" : "secondary"} className="h-10 shrink-0" onClick={toggleVoiceMode}>
               {voiceMode ? "Голосовой режим · вкл" : "Голосовой режим"}
             </Button>
-          </TipWrap>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button type="button" disabled={busy || (!aiPrompt.trim() && !wizard.course)} onClick={() => void runCmd("готово")}>
-            Предпросмотр
+            Готово
           </Button>
           <Button type="button" variant="secondary" onClick={() => void runCmd("применить")}>
             Применить
