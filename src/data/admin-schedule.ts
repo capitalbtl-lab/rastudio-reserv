@@ -22,6 +22,7 @@ import {
   type CrmSlot,
   type SlotDraft,
 } from "./crm-slots";
+import { loadSubjects, saveSubjects, pullSubjectsFromCrm, pushSubjectsToCrm } from "./crm-subjects";
 
 export const adminSchedule = createServerFn({ method: "POST" })
   .validator(
@@ -42,7 +43,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "rollback"
           | "students"
           | "add"
-          | "remove";
+          | "remove"
+          | "subjectsGet"
+          | "subjectsPull"
+          | "subjectsSave"
+          | "subjectsPush";
         slots?: CrmSlot[];
         text?: string;
         prompt?: string;
@@ -54,6 +59,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         groupId?: number;
         branchId?: number;
         at?: string;
+        subjects?: { id: number; name: string; local?: boolean }[];
       },
   )
   .handler(async ({ data }) => {
@@ -116,11 +122,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
       return pack(saved);
     }
     if (data.action === "push") {
-      const slots = data.slots?.length ? saveAdminSlots(data.slots).slots : listAdminSlots();
-      const results = await pushSlotsToCrm(slots, data.dirtyIds);
+      const ids = (data.ids || data.dirtyIds || []).map(String);
+      if (!ids.length) return { ok: false as const, error: "Отметьте группы чекбоксом слева от названия." };
+      const current = data.slots?.length ? data.slots : listAdminSlots();
+      const { results, slots: next } = await pushSlotsToCrm(current, ids);
+      const saved = saveAdminSlots(next).slots;
       const ok = results.filter((r) => r.ok).length;
-      logAdmin(`Выгрузка в AlfaCRM: ${ok}/${results.length}`);
-      return pack(slots, { results, pushed: ok });
+      const created = results.filter((r) => r.ok && r.created).length;
+      logAdmin(`Выгрузка в AlfaCRM: ${ok}/${results.length}, новых gid: ${created}`);
+      return pack(saved, { results, pushed: ok, created, failed: results.length - ok });
     }
     if (data.action === "aiPreview") {
       const slots = listAdminSlots();
@@ -190,6 +200,32 @@ export const adminSchedule = createServerFn({ method: "POST" })
       return { ok: true as const, names };
     }
     if (data.action === "versions") return pack(listAdminSlots());
+    if (data.action === "subjectsGet") {
+      return { ok: true as const, subjects: loadSubjects() };
+    }
+    if (data.action === "subjectsPull") {
+      try {
+        const subjects = await pullSubjectsFromCrm();
+        logAdmin(`Предметы из AlfaCRM: ${subjects.length}`);
+        return { ok: true as const, subjects };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось загрузить предметы." };
+      }
+    }
+    if (data.action === "subjectsSave") {
+      const subjects = saveSubjects(data.subjects || []);
+      logAdmin(`Предметы сохранены: ${subjects.length}`);
+      return { ok: true as const, subjects };
+    }
+    if (data.action === "subjectsPush") {
+      try {
+        const res = await pushSubjectsToCrm(data.subjects || loadSubjects());
+        logAdmin(`Предметы в AlfaCRM: ${res.results.filter((r) => r.ok).length}`);
+        return { ok: true as const, subjects: res.items, results: res.results };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось выгрузить предметы." };
+      }
+    }
     if (data.action === "rollback" && data.at) {
       const prev = versionSlots(data.at);
       if (!prev) return { ok: false as const, error: "Снимок не найден." };

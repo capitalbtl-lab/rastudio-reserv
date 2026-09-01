@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import type { CmsSession } from "@/data/cms";
 import { request } from "@/data/alfacrm";
 import { yandexJson } from "@/data/agent-channels";
+import { matchSubject, loadSubjects } from "@/data/crm-subjects";
 import { type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
 
 export { SCHOOL_ORDER, type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
@@ -525,6 +526,7 @@ export function buildSlot(draft: SlotDraft, catalog: CrmSlot[]): CrmSlot {
   const day = Math.max(1, Math.min(7, Number(draft.day) || 1));
   const year = new Date().getFullYear();
   const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const sub = matchSubject(`${course} ${draft.groupName || ""} ${age}`);
   return {
     id,
     lessonId: 0,
@@ -534,8 +536,8 @@ export function buildSlot(draft: SlotDraft, catalog: CrmSlot[]): CrmSlot {
     statusId: 1,
     limit: Number(draft.limit) || twin?.limit || 8,
     taken: 0,
-    subjectId: twin?.subjectId || 0,
-    subject: twin?.subject || course,
+    subjectId: twin?.subjectId || sub?.id || 0,
+    subject: sub?.name || twin?.subject || course,
     school,
     course,
     path: twin?.path || "",
@@ -682,49 +684,90 @@ export function applyChanges(slots: CrmSlot[], changes: { id: string; field: str
   return stampTimes(next);
 }
 
-export async function pushSlotsToCrm(slots: CrmSlot[], dirtyIds?: string[]) {
-  const { token } = await import("@/data/alfacrm");
+export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
+  const { token, request } = await import("@/data/alfacrm");
   const t = await token();
-  const list = dirtyIds?.length ? slots.filter((s) => dirtyIds.includes(s.id)) : slots;
-  const results: { id: string; ok: boolean; error?: string }[] = [];
-  for (const s of list) {
-    if (!s.branchId || !s.groupId || !s.lessonId) {
-      results.push({ id: s.id, ok: false, error: "нет id группы или урока" });
+  const pick = new Set(ids.map(String));
+  const list = slots.filter((s) => pick.has(s.id));
+  const subjects = loadSubjects();
+  const results: { id: string; ok: boolean; error?: string; groupId?: number; created?: boolean }[] = [];
+  const next = slots.map((s) => ({ ...s, beats: beatsOf(s).map((b) => ({ ...b })) }));
+
+  function crmId(res: unknown) {
+    const r = res as { model?: { id?: number }; id?: number; success?: boolean; errors?: unknown };
+    if (r && r.success === false) throw new Error(JSON.stringify(r.errors || r).slice(0, 180));
+    return Number(r?.model?.id || r?.id || 0);
+  }
+
+  for (const raw of list) {
+    const s = next.find((x) => x.id === raw.id);
+    if (!s) continue;
+    const branch = s.branchId || 1;
+    const sub = matchSubject(`${s.course} ${s.subject} ${s.groupName}`, subjects) || matchSubject(s.course, subjects) || matchSubject(s.subject, subjects);
+    const subjectId = Number(s.subjectId) || sub?.id || 0;
+    if (!subjectId) {
+      results.push({ id: s.id, ok: false, error: "Нет предмета AlfaCRM. Откройте вкладку «Предметы» и сопоставьте курс." });
       continue;
     }
+    s.subjectId = subjectId;
+    if (sub?.name) s.subject = sub.name;
+    const teachers = s.teacherIds.length ? s.teacherIds : s.teacherId ? [s.teacherId] : [];
     try {
-      await request(
-        `/v2api/${s.branchId}/group/update`,
-        {
-          id: s.groupId,
-          name: s.groupName,
-          note: s.groupNote,
-          limit: s.limit,
-          teacher_ids: s.teacherIds.length ? s.teacherIds : s.teacherId ? [s.teacherId] : undefined,
-        },
-        t,
-      );
-      for (const b of beatsOf(s)) {
+      let groupId = Number(s.groupId) || 0;
+      const wasNew = !groupId;
+      if (!groupId) {
+        const created = await request(`/v2api/${branch}/group/create`, {
+          name: s.groupName || s.course,
+          note: s.groupNote || "",
+          limit: s.limit || 8,
+          ...(teachers.length ? { teacher_ids: teachers } : {}),
+        }, t);
+        groupId = crmId(created);
+        if (!groupId) throw new Error("AlfaCRM не вернула номер группы после создания");
+        s.groupId = groupId;
+        s.branchId = branch;
+        s.signup = signupOf(branch, groupId);
+      } else {
+        await request(
+          `/v2api/${branch}/group/update`,
+          {
+            id: groupId,
+            name: s.groupName,
+            note: s.groupNote,
+            limit: s.limit,
+            ...(teachers.length ? { teacher_ids: teachers } : {}),
+          },
+          t,
+        );
+      }
+      const beats = beatsOf(s);
+      const savedBeats: LessonBeat[] = [];
+      for (const b of beats) {
         const payload = {
-          related_id: s.groupId,
-          subject_id: s.subjectId || undefined,
+          related_id: groupId,
+          subject_id: subjectId,
           day: b.day,
           time_from: b.timeFrom,
           time_to: b.timeTo,
           time_from_v: b.timeFrom,
           time_to_v: b.timeTo,
-          teacher_ids: s.teacherIds.length ? s.teacherIds : s.teacherId ? [s.teacherId] : undefined,
+          ...(teachers.length ? { teacher_ids: teachers } : {}),
         };
         if (b.lessonId) {
-          await request(`/v2api/${s.branchId}/regular-lesson/update`, { id: b.lessonId, ...payload }, t);
+          await request(`/v2api/${branch}/regular-lesson/update`, { id: b.lessonId, ...payload }, t);
+          savedBeats.push(b);
         } else {
-          await request(`/v2api/${s.branchId}/regular-lesson/create`, payload, t);
+          const created = await request(`/v2api/${branch}/regular-lesson/create`, payload, t);
+          const lessonId = crmId(created) || 0;
+          savedBeats.push({ ...b, lessonId });
+          if (!s.lessonId && lessonId) s.lessonId = lessonId;
         }
       }
-      results.push({ id: s.id, ok: true });
+      s.beats = savedBeats;
+      results.push({ id: raw.id, ok: true, groupId, created: wasNew });
     } catch (e) {
-      results.push({ id: s.id, ok: false, error: e instanceof Error ? e.message.slice(0, 180) : "ошибка CRM" });
+      results.push({ id: raw.id, ok: false, error: e instanceof Error ? e.message.slice(0, 180) : "ошибка CRM" });
     }
   }
-  return results;
+  return { results, slots: next };
 }

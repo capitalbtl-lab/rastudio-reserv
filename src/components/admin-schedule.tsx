@@ -12,6 +12,7 @@ import { SCHOOL_ORDER } from "@/data/crm-slots-core";
 import { cn } from "@/lib/utils";
 import { speakAgent } from "@/data/agent-voice";
 import { missingScheduleFields, parseDraftFromSpeech, beatsOf, type LessonBeat } from "@/data/crm-slots";
+import { AdminSubjects } from "@/components/admin-subjects";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -420,6 +421,8 @@ export function AdminSchedule() {
   const [view, setView] = useState<Record<string, number>>({});
   const [fileOpen, setFileOpen] = useState(false);
   const [pull, setPull] = useState({ open: false, step: "", done: false, added: 0, updated: 0, total: 0, error: "" });
+  const [pane, setPane] = useState<"groups" | "subjects">("groups");
+  const [pushUi, setPushUi] = useState({ open: false, step: "", done: false, created: 0, pushed: 0, failed: 0, error: "", lines: [] as string[] });
   const fileRef = useRef<HTMLDivElement>(null);
   const promptEl = useRef<HTMLTextAreaElement>(null);
 
@@ -945,6 +948,54 @@ export function AdminSchedule() {
     setBusy(false);
   }
 
+  async function pushCrm() {
+    if (!pickedIds.length) {
+      setPushUi({ open: true, step: "", done: true, created: 0, pushed: 0, failed: 0, error: "Отметьте группы чекбоксом слева от названия.", lines: [] });
+      return;
+    }
+    setBusy(true);
+    setPushUi({ open: true, step: "Создаю группы в AlfaCRM…", done: false, created: 0, pushed: 0, failed: 0, error: "", lines: [] });
+    const steps = ["Сохраняю группу…", "Создаю регулярное расписание…", "Записываю номера gid обратно на сайт…"];
+    let i = 0;
+    const timer = window.setInterval(() => {
+      i = Math.min(i + 1, steps.length - 1);
+      setPushUi((u) => (u.done ? u : { ...u, step: steps[i] }));
+    }, 900);
+    try {
+      const res = await adminSchedule({ data: { token: token(), action: "push", slots, ids: pickedIds } as never });
+      window.clearInterval(timer);
+      take(res as never);
+      if (!res.ok) {
+        setPushUi((u) => ({ ...u, done: true, error: res.error || "AlfaCRM не приняла выгрузку." }));
+      } else {
+        const rows = Array.isArray((res as { results?: { id: string; ok: boolean; groupId?: number; created?: boolean; error?: string }[] }).results)
+          ? (res as { results: { id: string; ok: boolean; groupId?: number; created?: boolean; error?: string }[] }).results
+          : [];
+        const created = Number((res as { created?: number }).created || rows.filter((r) => r.created).length);
+        const pushed = Number((res as { pushed?: number }).pushed || rows.filter((r) => r.ok).length);
+        const failed = Number((res as { failed?: number }).failed || rows.filter((r) => !r.ok).length);
+        const lines = rows.map((r) => {
+          const s = (res as { slots?: CrmSlot[] }).slots?.find((x) => x.id === r.id);
+          const name = s?.groupName || r.id;
+          if (r.ok && r.created) return `Создана «${name}» · gid ${r.groupId}`;
+          if (r.ok) return `Обновлена «${name}» · gid ${r.groupId || s?.groupId}`;
+          return `Ошибка «${name}»: ${r.error || ""}`;
+        });
+        setDirty((d) => {
+          const n = new Set(d);
+          for (const id of pickedIds) n.delete(id);
+          return n;
+        });
+        setPushUi({ open: true, step: "", done: true, created, pushed, failed, error: "", lines });
+        setMsg(created ? `В AlfaCRM создано групп: ${created}. Номера gid записаны в расписание.` : `Выгружено: ${pushed}.`);
+      }
+    } catch {
+      window.clearInterval(timer);
+      setPushUi((u) => ({ ...u, done: true, error: "Не удалось выгрузить." }));
+    }
+    setBusy(false);
+  }
+
   function cancelPreview() {
     setAiAdds([]);
     setAiChanges([]);
@@ -983,6 +1034,18 @@ export function AdminSchedule() {
         </p>
       </AdminSectionHead>
 
+      <div className="flex gap-2">
+        <Button type="button" size="sm" variant={pane === "groups" ? "primary" : "secondary"} onClick={() => setPane("groups")}>
+          Группы
+        </Button>
+        <Button type="button" size="sm" variant={pane === "subjects" ? "primary" : "secondary"} onClick={() => setPane("subjects")}>
+          Предметы
+        </Button>
+      </div>
+
+      {pane === "subjects" ? <AdminSubjects /> : null}
+      {pane === "groups" ? (
+      <>
       <div className="flex flex-wrap items-start gap-2">
         <TipWrap text="Школа, курс, возраст, день, время, филиал, педагог — затем «Готово». Строка на сайте, в CRM — отдельной выгрузкой.">
           <Button type="button" disabled={busy} onClick={() => { setAddOpen((v) => !v); document.getElementById("ra-sched-ai")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
@@ -999,8 +1062,8 @@ export function AdminSchedule() {
             Сохранить на сайте
           </Button>
         </TipWrap>
-        <TipWrap text="Пишет group/update и regular-lesson/update. Если CRM отклонит поле — строка в ответе. Сначала сохраните на сайте.">
-          <Button type="button" variant="secondary" disabled={busy || !slots.length} onClick={async () => { const res = await run("push", { slots, dirtyIds: [...dirty] }); const r = res as { pushed?: number }; setDirty(new Set()); setMsg(res.ok ? `В AlfaCRM ушло ${r.pushed ?? 0} групп (имя, день, время, педагог, лимит).` : ""); }}>
+        <TipWrap text="Только отмеченные чекбоксом. Сначала создаётся группа, потом регулярный урок с subject_id. Новый gid записывается в расписание.">
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => void pushCrm()}>
             Выгрузить в AlfaCRM
           </Button>
         </TipWrap>
@@ -1488,6 +1551,8 @@ export function AdminSchedule() {
         })}
         {slots.length ? null : <p className="text-sm text-muted">Пока пусто — нажмите «Загрузить из AlfaCRM».</p>}
       </div>
+      </>
+      ) : null}
       {pull.open
         ? createPortal(
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => pull.done && setPull((u) => ({ ...u, open: false }))}>
@@ -1517,6 +1582,45 @@ export function AdminSchedule() {
                 {pull.done ? (
                   <div className="mt-5 flex justify-end">
                     <Button type="button" onClick={() => setPull((u) => ({ ...u, open: false }))}>
+                      Закрыть
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+      {pushUi.open
+        ? createPortal(
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => pushUi.done && setPushUi((u) => ({ ...u, open: false }))}>
+              <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.28)]" onClick={(e) => e.stopPropagation()}>
+                <p className="font-display text-2xl">{pushUi.done ? pushUi.error ? "Выгрузка не прошла" : "Выгрузка завершена" : "Выгрузка в AlfaCRM"}</p>
+                {!pushUi.done ? (
+                  <div className="mt-5 flex items-start gap-3">
+                    <span className="mt-0.5 h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+                    <p className="text-sm text-fg">{pushUi.step}</p>
+                  </div>
+                ) : pushUi.error ? (
+                  <p className="mt-4 text-sm text-red-600">{pushUi.error}</p>
+                ) : (
+                  <div className="mt-4 space-y-2 text-sm">
+                    <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">Создано новых групп: <b>{pushUi.created}</b></p>
+                    <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">Успешно выгружено: <b>{pushUi.pushed}</b></p>
+                    {pushUi.failed ? <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">Ошибки: <b>{pushUi.failed}</b></p> : null}
+                    {pushUi.lines.length ? (
+                      <ul className="max-h-48 space-y-1 overflow-auto rounded-2xl bg-[#f3f5f8] px-4 py-3 text-[0.78rem]">
+                        {pushUi.lines.map((line) => (
+                          <li key={line}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    <p className="pt-1 text-[0.78rem] text-muted">Сначала группа, затем регулярный урок с предметом. Новый gid записан в столбец «Запись».</p>
+                  </div>
+                )}
+                {pushUi.done ? (
+                  <div className="mt-5 flex justify-end">
+                    <Button type="button" onClick={() => setPushUi((u) => ({ ...u, open: false }))}>
                       Закрыть
                     </Button>
                   </div>
