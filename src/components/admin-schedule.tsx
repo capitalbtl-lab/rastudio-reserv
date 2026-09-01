@@ -176,7 +176,11 @@ export function AdminSchedule() {
   const [addOpen, setAddOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [listen, setListen] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [interim, setInterim] = useState("");
   const recRef = useRef<Rec | null>(null);
+  const voiceModeRef = useRef(false);
+  const promptRef = useRef("");
 
   function take(res: { ok: boolean; slots?: CrmSlot[]; at?: string; versions?: Ver[]; error?: string; comment?: string; changes?: Change[]; adds?: Draft[]; pushed?: number; created?: string[] }) {
     if (!res.ok) {
@@ -209,6 +213,13 @@ export function AdminSchedule() {
   useEffect(() => {
     void run("get");
   }, []);
+
+  useEffect(() => {
+    promptRef.current = aiPrompt;
+  }, [aiPrompt]);
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+  }, [voiceMode]);
 
   function patch(id: string, field: keyof CrmSlot, value: string | number) {
     setSlots((list) =>
@@ -289,7 +300,48 @@ export function AdminSchedule() {
   }, [slots]);
   const teachers = useMemo(() => [...new Set(slots.map((s) => s.teacher).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru")), [slots]);
 
-  function startListen() {
+  function parseVoice(text: string) {
+    const t = text.trim();
+    const m = t.match(/^(.*?)(?:,|\.|\s+)?(готово|предпросмотр|применить|примени|дальше)\s*$/i);
+    if (m && (m[1] || m[2])) return { body: (m[1] || "").trim(), cmd: m[2].toLowerCase() };
+    if (/^(готово|предпросмотр|применить|примени|дальше)$/i.test(t)) return { body: "", cmd: t.toLowerCase() };
+    return { body: t, cmd: "" };
+  }
+
+  async function runCmd(cmd: string, extraBody = "") {
+    if (extraBody) {
+      setAiPrompt((p) => {
+        const n = p ? `${p} ${extraBody}` : extraBody;
+        promptRef.current = n;
+        return n;
+      });
+    }
+    if (cmd === "дальше") {
+      setAiPrompt("");
+      promptRef.current = "";
+      setAiAdds([]);
+      setAiChanges([]);
+      setAiComment("");
+      setInterim("");
+      setMsg("Поле очищено — можно говорить следующую группу.");
+      return;
+    }
+    if (cmd === "готово" || cmd === "предпросмотр") {
+      const text = (extraBody ? `${promptRef.current} ${extraBody}` : promptRef.current).trim();
+      if (!text) {
+        setMsg("Сначала скажите, какую группу добавить.");
+        return;
+      }
+      setMsg("Готовлю предпросмотр…");
+      await run("aiPreview", { prompt: text, ids: pickedIds });
+      return;
+    }
+    if (cmd === "применить" || cmd === "примени") {
+      await applyPreview();
+    }
+  }
+
+  function startListen(mode: "once" | "loop") {
     const Ctor = speechCtor();
     if (!Ctor) {
       setMsg("Голосовой ввод в этом браузере не работает — напишите текст.");
@@ -298,23 +350,40 @@ export function AdminSchedule() {
     recRef.current?.stop();
     const rec = new Ctor();
     rec.lang = "ru-RU";
-    rec.interimResults = false;
-    rec.continuous = false;
+    rec.interimResults = true;
+    rec.continuous = mode === "loop";
     rec.onresult = (e) => {
-      const t = Array.from(e.results)
-        .map((r) => r[0]?.transcript || "")
-        .join(" ")
-        .trim();
-      if (t) setAiPrompt((p) => (p ? `${p} ${t}` : t));
+      const last = e.results[e.results.length - 1] as unknown as { isFinal?: boolean; 0: { transcript: string } };
+      const piece = (last[0]?.transcript || "").trim();
+      if (!last.isFinal) {
+        setInterim(piece);
+        return;
+      }
+      setInterim("");
+      if (!piece) return;
+      const { body, cmd } = parseVoice(piece);
+      if (body) {
+        setAiPrompt((p) => {
+          const n = p ? `${p} ${body}` : body;
+          promptRef.current = n;
+          return n;
+        });
+      }
+      if (cmd) void runCmd(cmd);
     };
-    rec.onerror = () => setListen(false);
+    rec.onerror = () => {
+      if (!voiceModeRef.current) setListen(false);
+    };
     rec.onend = () => {
-      setListen(false);
-      window.setTimeout(() => {
-        const box = document.getElementById("ra-sched-prompt") as HTMLTextAreaElement | null;
-        const text = (box?.value || "").trim();
-        if (text) void run("aiPreview", { prompt: text, ids: pickedIds });
-      }, 80);
+      setInterim("");
+      if (voiceModeRef.current) {
+        try {
+          rec.start();
+        } catch {
+          setListen(false);
+          setVoiceMode(false);
+        }
+      } else setListen(false);
     };
     recRef.current = rec;
     setListen(true);
@@ -322,8 +391,25 @@ export function AdminSchedule() {
   }
 
   function stopListen() {
+    voiceModeRef.current = false;
+    setVoiceMode(false);
     recRef.current?.stop();
     setListen(false);
+    setInterim("");
+  }
+
+  function toggleVoiceMode() {
+    if (voiceMode) stopListen();
+    else {
+      setVoiceMode(true);
+      voiceModeRef.current = true;
+      startListen("loop");
+      setMsg("Голосовой режим. Скажите группу, затем «готово». «Применить» — в расписание. «Дальше» — новая.");
+    }
+  }
+
+  function patchAdd(i: number, field: keyof Draft, value: string | number) {
+    setAiAdds((list) => list.map((a, n) => (n === i ? { ...a, [field]: value } : a)));
   }
 
   return (
@@ -402,7 +488,10 @@ export function AdminSchedule() {
 
       <article id="ra-sched-ai" className="sticky top-20 z-20 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="font-display text-xl">Добавить / исправить расписание</p>
+          <div className="flex items-center gap-2">
+            <p className="font-display text-xl">Добавить / исправить расписание</p>
+            <InfoTip text="Микрофон — дописать фразу в поле. Голосовой режим — говорите запрос, затем команду: «готово» (предпросмотр), «применить» (записать в расписание), «дальше» (очистить и новую группу). Те же команды кнопками. Возраст сверяется с уже существующими группами: «студия 3-4 года», не «34 года»." />
+          </div>
           <div className="flex flex-wrap items-center gap-2 text-[0.72rem] text-muted">
             <span>отмечено {pickedIds.length}</span>
             <button type="button" className="font-semibold text-primary" onClick={() => setIds(slots.map((s) => s.id), true)}>
@@ -413,20 +502,23 @@ export function AdminSchedule() {
             </button>
           </div>
         </div>
+        <p className="mt-2 text-[0.78rem] leading-relaxed text-muted">
+          Голосовой режим: запрос → <b>готово</b> → правка карточки → <b>применить</b>. <b>Дальше</b> — новая группа. Возраст как в таблице: 3-4 года, не 34.
+        </p>
         <div className="mt-3 flex items-center gap-2">
           <textarea
             id="ra-sched-prompt"
-            value={aiPrompt}
-            onChange={(e) => setAiPrompt(e.target.value)}
-            rows={1}
-            placeholder="Добавь художественную студию 5–6 лет на Гражданской, вторник с 6:30 до 8:00, педагог Самсонова."
-            className="h-10 min-w-0 flex-1 resize-none rounded-xl bg-surface-2 px-3 py-2 text-sm ring-1 ring-black/10"
+            value={interim ? `${aiPrompt}${aiPrompt ? " " : ""}${interim}` : aiPrompt}
+            onChange={(e) => { setAiPrompt(e.target.value); promptRef.current = e.target.value; }}
+            rows={2}
+            placeholder="Добавь художественную студию 3–4 года на Гражданской, вторник с 15:00 до 17:00, педагог Самсонова."
+            className="min-h-16 min-w-0 flex-1 resize-y rounded-xl bg-surface-2 px-3 py-2 text-sm ring-1 ring-black/10"
           />
           <button
             type="button"
-            title={listen ? "Стоп" : "Голосовой ввод"}
-            className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1 ring-black/10", listen ? "bg-primary text-white" : "bg-surface-2 text-fg")}
-            onClick={() => (listen ? stopListen() : startListen())}
+            title={listen && !voiceMode ? "Стоп" : "Голосовой ввод в поле"}
+            className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1 ring-black/10", listen && !voiceMode ? "bg-primary text-white" : "bg-surface-2 text-fg")}
+            onClick={() => (listen && !voiceMode ? stopListen() : startListen("once"))}
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden>
               <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z" />
@@ -434,61 +526,89 @@ export function AdminSchedule() {
           </button>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
+          <TipWrap text="Говорите запрос. Команды: готово — предпросмотр, применить — в расписание, дальше — очистить поле.">
+            <Button type="button" variant={voiceMode ? "default" : "secondary"} onClick={toggleVoiceMode}>
+              {voiceMode ? "Голосовой режим · вкл" : "Голосовой режим"}
+            </Button>
+          </TipWrap>
           <Button type="button" disabled={busy || !aiPrompt.trim()} onClick={async () => { setMsg("Готовлю предпросмотр…"); await run("aiPreview", { prompt: aiPrompt, ids: pickedIds }); }}>
-            Показать, что изменится
+            Предпросмотр
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => void runCmd("дальше")}>
+            Дальше
           </Button>
         </div>
         {aiComment && !aiAdds.length && !aiChanges.length ? <p className="mt-2 text-sm text-muted">{aiComment}</p> : null}
         {aiAdds.length || aiChanges.length ? (
-          <div className="mt-4 rounded-2xl bg-surface-2 p-3 ring-1 ring-black/8">
-            <p className="text-sm font-semibold">
-              Предпросмотр
-              {aiAdds.length ? ` · ${aiAdds.length} ${aiAdds.length === 1 ? "новая группа" : "новых групп"}` : ""}
-              {aiChanges.length ? ` · ${aiChanges.length} правок` : ""}
-            </p>
-            {aiComment ? <p className="mt-1 text-sm text-muted">{aiComment}</p> : null}
-            {aiAdds.length ? (
-              <div className="mt-3 overflow-x-auto">
+          <div className="mt-4 flex items-start gap-3">
+            <div className="min-w-0 flex-1 overflow-hidden rounded-2xl bg-white ring-1 ring-black/8">
+              <p className="px-3 py-2 text-sm font-semibold">
+                Предпросмотр
+                {aiAdds.length ? ` · ${aiAdds.length} ${aiAdds.length === 1 ? "новая группа" : "новых групп"}` : ""}
+                {aiChanges.length ? ` · ${aiChanges.length} правок` : ""}
+              </p>
+              {aiAdds.length ? (
                 <table className="w-full text-left text-sm">
                   <thead className="text-[0.65rem] uppercase tracking-wider text-muted">
                     <tr>
-                      <th className="px-2 py-1">Курс</th>
-                      <th className="px-2 py-1">Возраст</th>
-                      <th className="px-2 py-1">День</th>
-                      <th className="px-2 py-1">Время</th>
-                      <th className="px-2 py-1">Филиал</th>
-                      <th className="px-2 py-1">Педагог</th>
+                      <th className="px-2 py-2">Группа · №</th>
+                      <th className="px-1 py-2 text-center">Возраст</th>
+                      <th className="px-1 py-2 text-center">День</th>
+                      <th className="px-1 py-2 text-center">С / до</th>
+                      <th className="px-2 py-2">Филиал</th>
+                      <th className="px-2 py-2">Педагог</th>
                     </tr>
                   </thead>
                   <tbody>
                     {aiAdds.map((a, i) => (
-                      <tr key={`add-${i}`} className="border-t border-black/8">
-                        <td className="px-2 py-2 font-medium">{a.course || a.school}</td>
-                        <td className="px-2 py-2">{a.age || "—"}</td>
-                        <td className="px-2 py-2">{DAYS_SHORT[a.day] || a.day}</td>
-                        <td className="px-2 py-2">{a.timeFrom}–{a.timeTo}</td>
-                        <td className="px-2 py-2 text-[0.8rem] leading-tight">{a.branch}</td>
-                        <td className="px-2 py-2">{a.teacher || "—"}</td>
+                      <tr key={`add-${i}`} className="border-t border-black/6">
+                        <td className="px-2 py-1.5">
+                          <input value={a.course} onChange={(e) => patchAdd(i, "course", e.target.value)} title={a.course} className="h-8 w-full min-w-[10rem] rounded-md bg-surface-2 px-2 text-[0.8rem] ring-1 ring-black/8" />
+                        </td>
+                        <td className="px-1 py-1.5">
+                          <input value={a.age} onChange={(e) => patchAdd(i, "age", e.target.value)} className={cn(cell, "w-full")} />
+                        </td>
+                        <td className="px-1 py-1.5">
+                          <select value={a.day} onChange={(e) => patchAdd(i, "day", Number(e.target.value))} className={cn(cell, "w-full px-0")}>
+                            {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                              <option key={d} value={d}>{DAYS_SHORT[d]}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-1 py-1.5">
+                          <div className="flex items-center justify-center gap-1">
+                            <input value={a.timeFrom} onChange={(e) => patchAdd(i, "timeFrom", e.target.value)} className={cn(cell, "w-[3.2rem]")} />
+                            <input value={a.timeTo} onChange={(e) => patchAdd(i, "timeTo", e.target.value)} className={cn(cell, "w-[3.2rem]")} />
+                          </div>
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <select value={a.branch} onChange={(e) => patchAdd(i, "branch", e.target.value)} className="h-8 w-full rounded-md bg-surface-2 px-1 text-[0.72rem] ring-1 ring-black/8">
+                            {BRANCH_OPTS.map((b) => (
+                              <option key={b} value={b}>{b}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <input list="ra-teachers" value={a.teacher} onChange={(e) => patchAdd(i, "teacher", e.target.value)} className="h-8 w-full rounded-md bg-surface-2 px-2 text-[0.75rem] ring-1 ring-black/8" />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
-            ) : null}
-            {aiChanges.length ? (
-              <ul className="mt-3 max-h-36 space-y-1 overflow-auto text-sm">
-                {aiChanges.map((c, i) => (
-                  <li key={`${c.id}-${c.field}-${i}`}>
-                    <span className="text-muted">{c.id}</span> · {c.field}: {c.from || "∅"} → {c.to}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            <div className="mt-3 flex justify-end">
-              <Button type="button" disabled={busy} onClick={() => void applyPreview()}>
-                Применить
-              </Button>
+              ) : null}
+              {aiChanges.length ? (
+                <ul className="max-h-36 space-y-1 overflow-auto px-3 py-2 text-sm">
+                  {aiChanges.map((c, i) => (
+                    <li key={`${c.id}-${c.field}-${i}`}>
+                      <span className="text-muted">{c.id}</span> · {c.field}: {c.from || "∅"} → {c.to}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
+            <Button type="button" className="shrink-0" disabled={busy} onClick={() => void applyPreview()}>
+              Применить
+            </Button>
           </div>
         ) : null}
       </article>

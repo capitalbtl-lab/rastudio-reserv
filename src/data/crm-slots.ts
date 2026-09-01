@@ -318,10 +318,76 @@ export function formatCourseName(name: string, age = "") {
   let n = String(name || "")
     .replace(/\s+/g, " ")
     .trim();
+  n = n.replace(/\s+\(30\s*[-–]\s*34[^)]*\)/gi, "");
   n = n.replace(/\s+(\d+\s*[-–—]\s*\d+\s*(?:лет|года|год))\s*$/i, " ($1)");
   const a = String(age || "").trim();
   if (a && !/\(/.test(n)) n = `${n} (${a})`;
-  return n.replace(/[()]/g, (ch, i, s) => (ch === "(" && i > 0 ? " (" : ch === ")" ? ")" : ch)).replace(/\s+/g, " ").trim();
+  return n.replace(/\s+/g, " ").trim();
+}
+
+const AGE_GLUE: [string, RegExp][] = [
+  ["3-4", /\b(?:30\s*[-–]?\s*34|34)\b/g],
+  ["4-5", /\b(?:45)\b/g],
+  ["5-6", /\b(?:56)\b/g],
+  ["7-8", /\b(?:78)\b/g],
+  ["7-9", /\b(?:79)\b/g],
+  ["8-9", /\b(?:89)\b/g],
+  ["10-12", /\b(?:1012)\b/g],
+  ["10-14", /\b(?:1014)\b/g],
+  ["10-15", /\b(?:1015)\b/g],
+];
+
+export function repairScheduleSpeech(prompt: string) {
+  let t = String(prompt || "");
+  t = t.replace(/три[-\s]?четыре/gi, "3-4");
+  t = t.replace(/четыре[-\s]?пять/gi, "4-5");
+  t = t.replace(/пять[-\s]?шесть/gi, "5-6");
+  t = t.replace(/семь[-\s]?девять/gi, "7-9");
+  t = t.replace(/семь[-\s]?восемь/gi, "7-8");
+  t = t.replace(/десять[-\s]?(четырнадцать|пятнадцать)/gi, (_, b) => (String(b).startsWith("пят") ? "10-15" : "10-14"));
+  for (const [range, re] of AGE_GLUE) t = t.replace(re, range);
+  t = t.replace(/студи[яи]\s*3-4/gi, "студия 3-4");
+  return t;
+}
+
+export function snapAge(age: string, catalog: CrmSlot[]) {
+  let raw = repairScheduleSpeech(age || "");
+  raw = raw.replace(/лет|года|год/gi, "").replace(/\s+/g, " ").trim();
+  const m = raw.match(/(\d+)\s*[-–]\s*(\d+)/);
+  const range = m ? `${m[1]}-${m[2]}` : "";
+  if (!range) return age;
+  const ages = [...new Set(catalog.map((s) => s.age).filter(Boolean))];
+  const hit = ages.find((a) => a.replace(/\s/g, "").includes(range.replace("-", "")) || a.includes(range));
+  if (hit) return hit;
+  const low = Number(m![1]);
+  return `${range} ${low <= 4 ? "года" : "лет"}`;
+}
+
+export function snapAdd(a: SlotDraft, catalog: CrmSlot[]): SlotDraft {
+  const age = snapAge(a.age || a.course || "", catalog);
+  const range = (age.match(/(\d+\s*[-–]\s*\d+)/) || [])[1] || "";
+  const base = String(a.course || "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\d+\s*[-–]?\s*\d*.*$/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  const hit = catalog.find((s) => {
+    const c = s.course.toLowerCase();
+    const okName = base.length > 4 && c.includes(base.slice(0, Math.min(22, base.length)));
+    const okAge = !range || s.age.includes(range) || s.course.includes(range);
+    return okName && okAge;
+  }) || catalog.find((s) => base.length > 4 && s.course.toLowerCase().includes(base.slice(0, 18)));
+  if (hit) {
+    return {
+      ...a,
+      school: a.school || hit.school,
+      course: hit.course,
+      age: hit.age || age,
+      teacher: matchTeacher(a.teacher, catalog) || hit.teacher,
+    };
+  }
+  return { ...a, course: formatCourseName(a.course || "Курс", age), age, teacher: matchTeacher(a.teacher, catalog) };
 }
 
 export function matchTeacher(raw: string, catalog: CrmSlot[]) {
@@ -403,7 +469,9 @@ export async function aiScheduleParse(slots: CrmSlot[], prompt: string, selected
     courses: [...new Set(slots.map((s) => s.course).filter(Boolean))],
     branches: BRANCHES.map((b) => `${b.city}, ${b.branch}`),
     teachers: [...new Set(slots.map((s) => s.teacher).filter(Boolean))],
+    ages: [...new Set(slots.map((s) => s.age).filter(Boolean))],
   };
+  const asked = repairScheduleSpeech(prompt);
   const slim = slots.map((s) => ({
     id: s.id,
     groupName: s.groupName,
@@ -428,14 +496,15 @@ export async function aiScheduleParse(slots: CrmSlot[], prompt: string, selected
     `Ты методист расписания студии «Развивайся».
 Правила:
 - Филиал пиши ТОЛЬКО одной из строк справочника, без своих формулировок.
-- Курс: «Название (возраст)», например «Художественная студия (5-6 лет)». Не пиши «5 6», пиши «5-6 лет».
+- Курс бери ТОЧНО из справочника. «художественная студия 3-4 года» / «студия 34» = «Художественная студия (3-4 лет)» или «(3-4 года)» — как уже записано. Никогда 30-34 лет: это дети.
+- Возраст только из справочника: ${JSON.stringify(catalog.ages).slice(0, 500)}
 - Время кружков вечером: «с 6:30 до 8:30» = 18:30 и 20:30. Всегда ЧЧ:ММ с двоеточием. Часы 1–9 без «утра» считай вечерними (+12).
 - Педагога бери точным ФИО из справочника.
 - Если оператор добавляет группу — массив adds. Несколько групп в одном запросе (разные дни, филиалы, возрасты, курсы) — отдельный объект adds на каждую, ничего не склеивай.
 - Если правит существующие — changes только с id из списка разрешённых. Не выдумывай id.
 - Разрешённые id для правки: ${selectedIds.length ? selectedIds.join(", ") : "нет — только adds, существующие не трогай"}.
 Ответ JSON.`,
-    `Запрос: ${prompt.slice(0, 2000)}
+    `Запрос: ${asked.slice(0, 2000)}
 JSON: {"comment":"что сделали","changes":[{"id":"crm-…","field":"timeFrom","to":"16:00"}],"adds":[{"school":"Художественная школа","course":"Художественная студия (5-6 лет)","age":"5-6 лет","day":2,"timeFrom":"18:30","timeTo":"20:00","branch":"Коломна, ул. Гражданская, 2","teacher":"Самсонова Ольга А"},{"school":"Художественная школа","course":"Художественная студия (7-9 лет)","age":"7-9 лет","day":4,"timeFrom":"18:30","timeTo":"20:00","branch":"Коломна, ЦМИТ, ул. Октябрьской революции, 340","teacher":"Самсонова Ольга А"}]}
 Справочник филиалов: ${JSON.stringify(catalog.branches)}
 Школы: ${JSON.stringify(catalog.schools)}
@@ -465,18 +534,23 @@ ${JSON.stringify(slim).slice(0, 14000)}`,
   for (const a of llm?.adds || []) {
     if (!a || !(a.course || a.school || a.groupName)) continue;
     const br = matchBranch(String(a.branch || ""));
-    adds.push({
-      school: a.school || schoolOf("", String(a.course || ""), ""),
-      course: formatCourseName(String(a.course || a.groupName || "Курс"), String(a.age || "")),
-      age: String(a.age || ""),
-      day: Math.max(1, Math.min(7, Number(a.day) || 1)),
-      timeFrom: eveningTime(String(a.timeFrom || "")),
-      timeTo: eveningTime(String(a.timeTo || "")),
-      branch: `${br.city}, ${br.branch}`,
-      teacher: matchTeacher(String(a.teacher || ""), slots),
-      groupName: a.groupName,
-      limit: a.limit,
-    });
+    adds.push(
+      snapAdd(
+        {
+          school: a.school || schoolOf("", String(a.course || ""), ""),
+          course: String(a.course || a.groupName || "Курс"),
+          age: String(a.age || ""),
+          day: Math.max(1, Math.min(7, Number(a.day) || 1)),
+          timeFrom: eveningTime(String(a.timeFrom || "")),
+          timeTo: eveningTime(String(a.timeTo || "")),
+          branch: `${br.city}, ${br.branch}`,
+          teacher: String(a.teacher || ""),
+          groupName: a.groupName,
+          limit: a.limit,
+        },
+        slots,
+      ),
+    );
   }
   const comment =
     llm?.comment ||
