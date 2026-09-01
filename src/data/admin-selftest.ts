@@ -38,7 +38,7 @@ const extraProbes: Probe[] = [];
 export const ADMIN_SECTIONS: SectionDef[] = [
   { id: "cabinet", title: "Весь кабинет", hint: "Все разделы, ключи API и связи между ними. Ничего не пишем." },
   { id: "prices", title: "Цены курсов", hint: "Прайс, формулы КБМ/ТМХ, связь с CRM и ассистентом." },
-  { id: "schedule", title: "Расписание CRM", hint: "Снимок на сайте и живой group/index. Ничего не пишем в AlfaCRM." },
+  { id: "schedule", title: "Расписание занятий", hint: "Снимок на сайте и живой group/index. Ничего не пишем в AlfaCRM." },
   { id: "agent", title: "Ассистент ИИ", hint: "Мозг, документы, каналы, модели. Пробный запрос без сохранения." },
   { id: "agent-window", title: "Окно и кнопки", hint: "Флаги виджета и связь с моделями." },
   { id: "agent-dialog", title: "Как говорит", hint: "Скрипты воронки и стиль." },
@@ -249,7 +249,7 @@ const PROBES: Probe[] = [
     run: async () => {
       const { crmScheduleMeta } = await import("./alfacrm-schedule");
       const m = crmScheduleMeta();
-      if (!m.count) return fail("снимок пуст", "На сайте нет слотов расписания. Ассистент не назовёт живые группы, страница /schedule пустая.", "Раздел «Расписание CRM» → Загрузить из AlfaCRM.", ["schedule", "agent"]);
+      if (!m.count) return fail("снимок пуст", "На сайте нет слотов расписания. Ассистент не назовёт живые группы, страница /schedule пустая.", "Раздел «Расписание занятий» → Загрузить из AlfaCRM.", ["schedule", "agent"]);
       return ok(`${m.count} слотов, обновлено ${m.at || "—"}`, ["schedule", "agent"]);
     },
   },

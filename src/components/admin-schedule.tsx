@@ -208,6 +208,8 @@ export function AdminSchedule() {
   const slotsRef = useRef<CrmSlot[]>([]);
   const wizardRef = useRef<Draft>(EMPTY_WIZARD);
   const [flash, setFlash] = useState<Set<string>>(new Set());
+  const [fileOpen, setFileOpen] = useState(false);
+  const fileRef = useRef<HTMLDivElement>(null);
 
   function take(res: { ok: boolean; slots?: CrmSlot[]; at?: string; versions?: Ver[]; error?: string; comment?: string; changes?: Change[]; adds?: Draft[]; pushed?: number; created?: string[] }) {
     if (!res.ok) {
@@ -273,6 +275,13 @@ export function AdminSchedule() {
   useEffect(() => {
     slotsRef.current = slots;
   }, [slots]);
+  useEffect(() => {
+    function close(e: MouseEvent) {
+      if (!fileRef.current?.contains(e.target as Node)) setFileOpen(false);
+    }
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
 
   function patch(id: string, field: keyof CrmSlot, value: string | number) {
     setSlots((list) =>
@@ -578,8 +587,8 @@ export function AdminSchedule() {
     <section className="mt-10 space-y-6">
       <AdminSectionHead
         section="schedule"
-        title="Расписание из AlfaCRM"
-        tip="Группы разложены по школам и курсам. Можно править прямо в таблице, сохранить на сайте, выгрузить в AlfaCRM, скачать Excel/CSV и накатить обратно. ИИ меняет пачкой — всегда есть откат к предыдущему снимку."
+        title="Расписание занятий"
+        tip="Группы по школам и курсам. Можно править в таблице, сохранить на сайте, выгрузить в AlfaCRM, скачать или загрузить файл. ИИ меняет пачкой — всегда есть откат."
       >
         <p className="mt-2 max-w-3xl text-sm text-muted">
           Последняя загрузка: {when(at)} · {slots.length} слотов · {dirty.size ? `${dirty.size} не выгружены в CRM` : "совпадает с кабинетом"}
@@ -587,61 +596,71 @@ export function AdminSchedule() {
       </AdminSectionHead>
 
       <div className="flex flex-wrap items-start gap-2">
-        <TipWrap text="group/index + regular-lesson/index + teacher/index по филиалам. Пишет снимок и версию для отката.">
-          <Button type="button" disabled={busy} onClick={async () => { setMsg("Читаю группы, уроки и педагогов…"); await run("pull"); setDirty(new Set()); setMsg("Снимок с AlfaCRM на сайте."); }}>
-            Загрузить из AlfaCRM
-          </Button>
-        </TipWrap>
-        <TipWrap text="Пишет storage/crm-schedule.json. Посетитель видит новое расписание без выгрузки в CRM.">
-          <Button type="button" disabled={busy || !slots.length} onClick={async () => { const res = await run("save", { slots }); if (res.ok) setMsg("Сохранено на сайте. Страницы курсов обновятся сразу. В CRM — отдельной кнопкой."); }}>
-            Сохранить на сайте
-          </Button>
-        </TipWrap>
-        <TipWrap text="Пишет group/update и regular-lesson/update. Если CRM отклонит поле — строка в ответе, остальные продолжат. Сначала сохраните на сайте.">
-          <Button type="button" variant="secondary" disabled={busy || !slots.length} onClick={async () => { const res = await run("push", { slots, dirtyIds: [...dirty] }); const r = res as { pushed?: number }; setDirty(new Set()); setMsg(res.ok ? `В AlfaCRM ушло ${r.pushed ?? 0} групп (имя, день, время, педагог, лимит).` : ""); }}>
-            Выгрузить в AlfaCRM
-          </Button>
-        </TipWrap>
-        <Button type="button" variant="secondary" disabled={busy} onClick={async () => { const res = await run("exportXls"); if (res.ok && "text" in res) download(String(res.filename), String(res.mime), String(res.text)); }}>
-          Excel
-        </Button>
-        <TipWrap text="Excel — SpreadsheetML. CSV — точка с запятой, UTF-8. Колонки: группа, предмет, возраст, день, время, филиал, ссылка записи, педагог.">
-          <Button type="button" variant="secondary" disabled={busy} onClick={async () => { const res = await run("exportCsv"); if (res.ok && "text" in res) download(String(res.filename), String(res.mime), String(res.text)); }}>
-            CSV
-          </Button>
-        </TipWrap>
-        <TipWrap text="Из Excel: «Сохранить как» → CSV UTF-8, либо загрузите наш .xls обратно. Строки стыкуются по id.">
-          <label className="inline-flex h-11 cursor-pointer items-center rounded-full bg-surface px-4 text-sm font-semibold shadow-[var(--shadow-border)]">
-            Импорт Excel/CSV
-            <input
-              type="file"
-              accept=".csv,.xls,.txt,text/csv"
-              className="hidden"
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                e.target.value = "";
-                if (!f) return;
-                const text = await f.text();
-                setBusy(true);
-                const res = await adminSchedule({ data: { token: token(), action: "import", text } });
-                take(res as never);
-                setBusy(false);
-                setDirty(new Set());
-                if (res.ok) setMsg(`Импортировано. Проверьте школы и нажмите «Выгрузить в AlfaCRM», если нужно отдать в CRM.`);
-              }}
-            />
-          </label>
-        </TipWrap>
-        <TipWrap text="Школа, курс, возраст, день, время, филиал, педагог — затем «Готово». Появится строка на сайте, в CRM — отдельной выгрузкой.">
+        <TipWrap text="Школа, курс, возраст, день, время, филиал, педагог — затем «Готово». Строка на сайте, в CRM — отдельной выгрузкой.">
           <Button type="button" disabled={busy} onClick={() => { setAddOpen((v) => !v); document.getElementById("ra-sched-ai")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
             Добавить расписание
           </Button>
         </TipWrap>
-        <TipWrap text="Текст или голос: добавить группу или поправить отмеченные. Филиалы и время ИИ приводит к тем же названиям, что в таблице.">
-          <Button type="button" disabled={busy} onClick={() => document.getElementById("ra-sched-ai")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
-            Добавить/исправить
+        <TipWrap text="group/index + regular-lesson/index + teacher/index по филиалам. Пишет снимок и версию для отката.">
+          <Button type="button" variant="secondary" disabled={busy} onClick={async () => { setMsg("Читаю группы, уроки и педагогов…"); await run("pull"); setDirty(new Set()); setMsg("Снимок с AlfaCRM на сайте."); }}>
+            Загрузить из AlfaCRM
           </Button>
         </TipWrap>
+        <TipWrap text="Пишет storage/crm-schedule.json. Посетитель видит новое расписание без выгрузки в CRM.">
+          <Button type="button" variant="secondary" disabled={busy || !slots.length} onClick={async () => { const res = await run("save", { slots }); if (res.ok) setMsg("Сохранено на сайте. Страницы курсов обновятся сразу. В CRM — отдельной кнопкой."); }}>
+            Сохранить на сайте
+          </Button>
+        </TipWrap>
+        <TipWrap text="Пишет group/update и regular-lesson/update. Если CRM отклонит поле — строка в ответе. Сначала сохраните на сайте.">
+          <Button type="button" variant="secondary" disabled={busy || !slots.length} onClick={async () => { const res = await run("push", { slots, dirtyIds: [...dirty] }); const r = res as { pushed?: number }; setDirty(new Set()); setMsg(res.ok ? `В AlfaCRM ушло ${r.pushed ?? 0} групп (имя, день, время, педагог, лимит).` : ""); }}>
+            Выгрузить в AlfaCRM
+          </Button>
+        </TipWrap>
+        <div className="relative" ref={fileRef}>
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => setFileOpen((v) => !v)}>
+            Файл
+            <span className="text-[0.65rem]">▾</span>
+          </Button>
+          {fileOpen ? (
+            <div className="absolute left-0 top-full z-30 mt-1 min-w-[13rem] rounded-2xl bg-white p-1 shadow-[var(--shadow-border)]">
+              <button
+                type="button"
+                className="block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-surface-2"
+                onClick={async () => { setFileOpen(false); const res = await run("exportXls"); if (res.ok && "text" in res) download(String(res.filename), String(res.mime), String(res.text)); }}
+              >
+                Скачать Excel
+              </button>
+              <button
+                type="button"
+                className="block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-surface-2"
+                onClick={async () => { setFileOpen(false); const res = await run("exportCsv"); if (res.ok && "text" in res) download(String(res.filename), String(res.mime), String(res.text)); }}
+              >
+                Скачать CSV
+              </button>
+              <label className="block w-full cursor-pointer rounded-xl px-3 py-2 text-left text-sm hover:bg-surface-2">
+                Импорт Excel/CSV
+                <input
+                  type="file"
+                  accept=".csv,.xls,.txt,text/csv"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    setFileOpen(false);
+                    if (!f) return;
+                    const text = await f.text();
+                    setBusy(true);
+                    const res = await adminSchedule({ data: { token: token(), action: "import", text } });
+                    take(res as never);
+                    setBusy(false);
+                    setDirty(new Set());
+                    if (res.ok) setMsg("Импортировано. Проверьте школы и при необходимости выгрузите в AlfaCRM.");
+                  }}
+                />
+              </label>
+            </div>
+          ) : null}
+        </div>
         <Button type="button" variant="secondary" onClick={() => setOpenAll((v) => !v)}>
           {openAll ? "Свернуть всё" : "Раскрыть всё"}
         </Button>
