@@ -5,7 +5,7 @@ import { adminSchedule } from "@/data/admin-schedule";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { Button } from "@/components/ui/button";
 import { InfoTip, TipWrap } from "@/components/info-tip";
-import { AdminSelfTest } from "@/components/admin-self-test";
+import { AdminSectionHead } from "@/components/admin-self-test";
 import { SCHOOLS } from "@/data/site";
 import { cn } from "@/lib/utils";
 
@@ -107,18 +107,15 @@ export function AdminSchedule() {
 
   return (
     <section className="mt-10 space-y-6">
-      <div>
-        <div className="flex items-center gap-2">
-          <h2 className="font-display text-3xl">Расписание из AlfaCRM</h2>
-          <InfoTip text="Группы разложены по школам и курсам. Можно править прямо в таблице, сохранить на сайте, выгрузить в AlfaCRM, скачать Excel/CSV и накатить обратно. ИИ меняет пачкой — всегда есть откат к предыдущему снимку." />
-        </div>
+      <AdminSectionHead
+        section="schedule"
+        title="Расписание из AlfaCRM"
+        tip="Группы разложены по школам и курсам. Можно править прямо в таблице, сохранить на сайте, выгрузить в AlfaCRM, скачать Excel/CSV и накатить обратно. ИИ меняет пачкой — всегда есть откат к предыдущему снимку."
+      >
         <p className="mt-2 max-w-3xl text-sm text-muted">
           Последняя загрузка: {when(at)} · {slots.length} слотов · {dirty.size ? `${dirty.size} не выгружены в CRM` : "совпадает с кабинетом"}
         </p>
-        <div className="mt-3">
-          <AdminSelfTest section="schedule" />
-        </div>
-      </div>
+      </AdminSectionHead>
 
       <div className="flex flex-wrap items-start gap-2">
         <TipWrap text="group/index + regular-lesson/index + teacher/index по филиалам. Пишет снимок и версию для отката.">

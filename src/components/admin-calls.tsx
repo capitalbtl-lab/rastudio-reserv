@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { adminCalls } from "@/data/admin";
 import { Button } from "@/components/ui/button";
-import { AdminSelfTest } from "@/components/admin-self-test";
+import { AdminSectionHead } from "@/components/admin-self-test";
 import { AdminSaveBar } from "@/components/admin-save-bar";
 import { cn } from "@/lib/utils";
 
@@ -165,15 +165,11 @@ export function AdminCalls() {
 
   return (
     <section className="mt-10 space-y-6">
-      <div>
-        <h2 className="font-display text-3xl">База звонков</h2>
+      <AdminSectionHead section="calls" title="База звонков">
         <p className="mt-2 max-w-2xl text-sm text-muted">
           Звонок стыкуется с карточкой AlfaCRM: возраст, курс, учится или ушёл, переписка. Ольга берёт это в консультацию без ФИО и телефонов.
         </p>
-        <div className="mt-3">
-          <AdminSelfTest section="calls" />
-        </div>
-      </div>
+      </AdminSectionHead>
       <div className="flex flex-wrap gap-2">
         {(
           [

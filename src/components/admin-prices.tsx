@@ -15,8 +15,8 @@ import { AdminAgent } from "@/components/admin-agent";
 import { AdminDossiers } from "@/components/admin-dossiers";
 import { AdminSchedule } from "@/components/admin-schedule";
 import { AdminIntegrations } from "@/components/admin-integrations";
-import { AdminSelfTest } from "@/components/admin-self-test";
 import { AdminSaveBar } from "@/components/admin-save-bar";
+import { adminGhostBtn, AdminSectionHead, AdminSelfTest } from "@/components/admin-self-test";
 import { adminPriceFormulas, type CorpFormulas } from "@/data/price-formulas";
 import { InfoTip, TipWrap } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
@@ -274,22 +274,28 @@ export function AdminPrices() {
 
   return (
     <article className="page-wrap py-10 md:py-14">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="kicker">Кабинет администратора</p>
-          <h1 className="display mt-3 text-4xl">Кабинет администратора</h1>
-        </div>
-        <button
-          type="button"
-          className="text-sm font-semibold text-muted hover:text-fg"
-          onClick={() => {
-            logout();
-            setIn(false);
-          }}
-        >
-          Выйти
-        </button>
-      </div>
+      <AdminSelfTest
+        section="cabinet"
+        label="Проверка кабинета"
+        heading={
+          <>
+            <p className="kicker">Кабинет администратора</p>
+            <h1 className="display mt-3 text-4xl">Кабинет администратора</h1>
+          </>
+        }
+        extra={
+          <button
+            type="button"
+            className={adminGhostBtn}
+            onClick={() => {
+              logout();
+              setIn(false);
+            }}
+          >
+            Выйти
+          </button>
+        }
+      />
 
       <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {TABS.map((item) => (
@@ -312,33 +318,27 @@ export function AdminPrices() {
 
       {tab === "prices" ? (
         <section className="mt-10">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="font-display text-3xl">Цены курсов</h2>
-              <p className="mt-2 max-w-2xl text-sm text-muted">
-                Колонка «Все» на сайте. КБМ и ТМХ — корпоративные. Формула считает их от «Все»: плюс сумма или умножение на процент.
-              </p>
-              <div className="mt-3">
-                <AdminSelfTest section="prices" />
-              </div>
-            </div>
-            <div className="flex items-start gap-1">
-              <TipWrap text="Когда в AlfaCRM появятся абонементы, эта кнопка заберёт их из tariff/index в колонку «Все». КБМ и ТМХ посчитаются по формуле ниже. Сейчас абонементы ещё не выложены — специально ничего не тянем.">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={async () => {
-                    setBusy(true);
-                    const res = await adminPriceFormulas({ data: { token: token(), action: "crmStub" } });
-                    setBusy(false);
-                    setErr(res.ok ? "" : res.error || "CRM пока не отдаёт абонементы.");
-                  }}
-                >
-                  Загрузить цены из CRM
-                </Button>
-              </TipWrap>
-            </div>
+          <AdminSectionHead section="prices" title="Цены курсов">
+            <p className="mt-2 max-w-2xl text-sm text-muted">
+              Колонка «Все» на сайте. КБМ и ТМХ — корпоративные. Формула считает их от «Все»: плюс сумма или умножение на процент.
+            </p>
+          </AdminSectionHead>
+          <div className="mt-4 flex items-start gap-1">
+            <TipWrap text="Когда в AlfaCRM появятся абонементы, эта кнопка заберёт их из tariff/index в колонку «Все». КБМ и ТМХ посчитаются по формуле ниже. Сейчас абонементы ещё не выложены — специально ничего не тянем.">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  const res = await adminPriceFormulas({ data: { token: token(), action: "crmStub" } });
+                  setBusy(false);
+                  setErr(res.ok ? "" : res.error || "CRM пока не отдаёт абонементы.");
+                }}
+              >
+                Загрузить цены из CRM
+              </Button>
+            </TipWrap>
           </div>
 
           <div className="mt-8 flex flex-col rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">

@@ -10,6 +10,10 @@ export type CheckResult = {
   ok: boolean;
   skip?: boolean;
   detail: string;
+  plain: string;
+  fix: string;
+  related: string[];
+  raw: string;
   ms: number;
 };
 
@@ -19,35 +23,54 @@ export type SectionDef = {
   hint: string;
 };
 
+type ProbeOut = { ok: boolean; skip?: boolean; detail: string; plain?: string; fix?: string; related?: string[]; raw?: string };
 type Probe = {
   id: string;
   title: string;
-  /** id раздела или `*` — общий контур для ещё не созданных разделов */
   sections: string[];
-  run: () => Promise<{ ok: boolean; skip?: boolean; detail: string }>;
+  related?: string[];
+  run: () => Promise<ProbeOut>;
 };
 
 const extraSections: SectionDef[] = [];
 const extraProbes: Probe[] = [];
 
 export const ADMIN_SECTIONS: SectionDef[] = [
-  { id: "prices", title: "Цены курсов", hint: "Прайс на диске, формулы КБМ/ТМХ. CRM абонементы только читаем." },
+  { id: "cabinet", title: "Весь кабинет", hint: "Все разделы, ключи API и связи между ними. Ничего не пишем." },
+  { id: "prices", title: "Цены курсов", hint: "Прайс, формулы КБМ/ТМХ, связь с CRM и ассистентом." },
   { id: "schedule", title: "Расписание CRM", hint: "Снимок на сайте и живой group/index. Ничего не пишем в AlfaCRM." },
-  { id: "agent", title: "Ассистент ИИ", hint: "Мозг, документы, каналы, модели. Пробный запрос в ИИ без сохранения." },
-  { id: "agent-window", title: "Окно и кнопки", hint: "Флаги виджета из настроек мозга." },
+  { id: "agent", title: "Ассистент ИИ", hint: "Мозг, документы, каналы, модели. Пробный запрос без сохранения." },
+  { id: "agent-window", title: "Окно и кнопки", hint: "Флаги виджета и связь с моделями." },
   { id: "agent-dialog", title: "Как говорит", hint: "Скрипты воронки и стиль." },
-  { id: "agent-voices", title: "Голоса", hint: "Настройки SpeechKit, без генерации ролика на сайт." },
+  { id: "agent-voices", title: "Голоса", hint: "SpeechKit и ключ Яндекса." },
   { id: "agent-edits", title: "Изменение сайта", hint: "Список правок. Файлы страниц не трогаем." },
-  { id: "agent-chats", title: "Диалоги сайта", hint: "Журнал сессий, только чтение." },
+  { id: "agent-chats", title: "Диалоги сайта", hint: "Журнал сессий и связь с личными делами." },
   { id: "agent-train", title: "Обучение", hint: "Документы, каналы, примеры." },
-  { id: "agent-access", title: "Голосовой доступ", hint: "Есть ли кодовое слово и пароль кабинета — без раскрытия." },
+  { id: "agent-access", title: "Голосовой доступ", hint: "Кодовое слово и пароль кабинета — без раскрытия." },
   { id: "agent-debug", title: "Отладка", hint: "Флаги режима отладки." },
-  { id: "calls", title: "База звонков", hint: "Novofon balance/info и индекс записей. Файлы не качаем." },
+  { id: "calls", title: "База звонков", hint: "Novofon и стыковка с личными делами." },
   { id: "dossiers", title: "Личные дела", hint: "Файл дел и вход в AlfaCRM." },
-  { id: "apis", title: "API и интеграции", hint: "Ключи на месте и короткий пинг сервисов." },
+  { id: "apis", title: "API и интеграции", hint: "Ключи и живой пинг Yandex, DeepSeek, Novofon, AlfaCRM." },
 ];
 
-/** Для будущих разделов: вызовите из их модуля, кнопка подхватит проверки. */
+const LINKS: Record<string, string[]> = {
+  cabinet: ["*"],
+  prices: ["prices", "apis", "schedule", "agent"],
+  schedule: ["schedule", "apis", "dossiers", "agent"],
+  agent: ["agent", "agent-window", "agent-dialog", "agent-voices", "agent-edits", "agent-chats", "agent-train", "agent-access", "agent-debug", "apis", "prices"],
+  "agent-window": ["agent-window", "agent", "apis"],
+  "agent-dialog": ["agent-dialog", "agent", "agent-train"],
+  "agent-voices": ["agent-voices", "agent", "apis"],
+  "agent-edits": ["agent-edits", "agent"],
+  "agent-chats": ["agent-chats", "agent", "dossiers"],
+  "agent-train": ["agent-train", "agent", "apis"],
+  "agent-access": ["agent-access", "agent"],
+  "agent-debug": ["agent-debug", "agent"],
+  calls: ["calls", "apis", "dossiers"],
+  dossiers: ["dossiers", "apis", "calls", "agent-chats"],
+  apis: ["apis", "agent", "calls", "schedule", "dossiers", "prices"],
+};
+
 export function registerAdminSection(def: SectionDef, probes: Probe[] = []) {
   extraSections.push(def);
   extraProbes.push(...probes);
@@ -57,82 +80,139 @@ function storage(...parts: string[]) {
   return join(process.cwd(), "storage", ...parts);
 }
 
-function fileOk(name: string) {
+function titlesOf(ids: string[]) {
+  const all = [...ADMIN_SECTIONS, ...extraSections];
+  return ids.map((id) => all.find((s) => s.id === id)?.title || id);
+}
+
+function fail(detail: string, plain: string, fix: string, related: string[] = [], raw = ""): ProbeOut {
+  return { ok: false, detail, plain, fix, related, raw };
+}
+
+function ok(detail: string, related: string[] = []): ProbeOut {
+  return { ok: true, detail, plain: detail, fix: "", related, raw: "" };
+}
+
+function skip(detail: string, related: string[] = []): ProbeOut {
+  return { ok: true, skip: true, detail, plain: detail, fix: "", related, raw: "" };
+}
+
+function fileOk(name: string, related: string[] = []): ProbeOut {
   const p = storage(name);
-  if (!existsSync(p)) return { ok: false as const, detail: `нет файла ${name}` };
+  if (!existsSync(p)) return fail(`нет файла ${name}`, `На диске нет ${name}. Раздел не сможет прочитать свои данные.`, `Проверьте папку storage на сервере или сохраните раздел ещё раз — файл должен появиться.`, related);
   try {
     const n = statSync(p).size;
-    return { ok: true as const, detail: `${name}, ${n} байт` };
+    return ok(`${name}, ${n} байт`, related);
   } catch (e) {
-    return { ok: false as const, detail: e instanceof Error ? e.message : "не читается" };
+    return fail(e instanceof Error ? e.message : "не читается", `Файл ${name} есть, но сервер его не прочитал.`, `Права на storage и свободное место на диске.`, related, e instanceof Error ? e.stack || e.message : "");
   }
 }
 
-function jsonCount(name: string, pick: (raw: unknown) => number) {
+function jsonCount(name: string, pick: (raw: unknown) => number, related: string[] = []): ProbeOut {
   const p = storage(name);
-  if (!existsSync(p)) return { ok: false as const, detail: `нет ${name}` };
+  if (!existsSync(p)) return fail(`нет ${name}`, `Нет ${name} — раздел ещё ни разу не сохранял данные.`, `Откройте раздел и нажмите сохранение или загрузку из CRM.`, related);
   try {
     const raw = JSON.parse(readFileSync(p, "utf8"));
     const n = pick(raw);
-    return { ok: true as const, detail: `${n} записей в ${name}` };
+    return ok(`${n} записей в ${name}`, related);
   } catch (e) {
-    return { ok: false as const, detail: e instanceof Error ? e.message : "json" };
+    return fail(e instanceof Error ? e.message : "json", `Файл ${name} повреждён или это не JSON.`, `Не правьте файл вручную. Скопируйте ошибку в Grok — восстановим из бэкапа или пересоберём.`, related, e instanceof Error ? e.message : "");
   }
 }
 
-async function pingYandex() {
+async function pingYandex(): Promise<ProbeOut> {
+  const related = ["apis", "agent", "agent-voices"];
   const key = serverEnv("YANDEX_API_KEY");
   const folder = serverEnv("YANDEX_FOLDER_ID");
-  if (!key || !folder) return { ok: false, detail: "нет YANDEX_API_KEY или Folder ID" };
-  const res = await fetch("https://ai.api.cloud.yandex.net/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Api-Key ${key}`, "Content-Type": "application/json", "x-folder-id": folder },
-    signal: AbortSignal.timeout(8000),
-    body: JSON.stringify({
-      model: `gpt://${folder}/yandexgpt/latest`,
-      temperature: 0,
-      max_tokens: 1,
-      messages: [{ role: "user", content: "пинг" }],
-    }),
-  });
-  if (res.ok) return { ok: true, detail: "YandexGPT ответил на пробный запрос, ничего не сохраняли" };
-  return { ok: false, detail: `Yandex ${res.status} ${(await res.text()).slice(0, 140)}` };
+  if (!key) return fail("нет YANDEX_API_KEY", "Ключ YandexGPT пустой. Ассистент не сможет отвечать, когда в диалоге есть ФИО или телефон.", "Кабинет → API и интеграции → YandexGPT: вставьте API-ключ из console.yandex.cloud.", related);
+  if (!folder) return fail("нет YANDEX_FOLDER_ID", "Ключ Яндекса есть, Folder ID пустой. Без каталога облако отклоняет запрос.", "В той же карточке YandexGPT заполните Folder ID каталога.", related);
+  try {
+    const res = await fetch("https://ai.api.cloud.yandex.net/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Api-Key ${key}`, "Content-Type": "application/json", "x-folder-id": folder },
+      signal: AbortSignal.timeout(8000),
+      body: JSON.stringify({
+        model: `gpt://${folder}/yandexgpt/latest`,
+        temperature: 0,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "пинг" }],
+      }),
+    });
+    const raw = await res.text();
+    if (res.ok) return ok("YandexGPT ответил на пробный запрос, ничего не сохраняли", related);
+    const plain =
+      res.status === 401
+        ? "Яндекс не принял ключ (401). Ключ неверный или отозван."
+        : res.status === 403
+          ? "Яндекс запретил доступ (403). Нет роли на каталог или биллинг."
+          : res.status === 429
+            ? "Яндекс ограничил частоту (429). Подождите минуту и проверьте баланс."
+            : `Яндекс ответил кодом ${res.status}.`;
+    return fail(`Yandex ${res.status}`, plain, "Кабинет → API → YandexGPT. Сверьте ключ и Folder ID. Баланс: console.yandex.cloud.", related, raw.slice(0, 1200));
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : "yandex", "До YandexGPT не достучались (сеть, таймаут 8с или блокировка).", "Сервер должен ходить в llm.api.cloud.yandex.net. Если VPN/firewall — откройте.", related, e instanceof Error ? e.stack || e.message : "");
+  }
 }
 
-async function pingDeepseek() {
+async function pingDeepseek(): Promise<ProbeOut> {
+  const related = ["apis", "agent"];
   const key = serverEnv("DEEPSEEK_API_KEY");
-  if (!key) return { ok: false, skip: true, detail: "ключ DeepSeek не задан — запасной контур выключен" };
-  const res = await fetch("https://api.deepseek.com/models", {
-    headers: { Authorization: `Bearer ${key}` },
-    signal: AbortSignal.timeout(8000),
-  });
-  if (res.ok) return { ok: true, detail: "DeepSeek /models доступен" };
-  return { ok: false, detail: `DeepSeek ${res.status} ${(await res.text()).slice(0, 140)}` };
+  if (!key) return skip("ключ DeepSeek не задан — запасной контур выключен", related);
+  try {
+    const res = await fetch("https://api.deepseek.com/models", {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    const raw = await res.text();
+    if (res.ok) return ok("DeepSeek /models доступен", related);
+    return fail(
+      `DeepSeek ${res.status}`,
+      res.status === 401 ? "DeepSeek не принял ключ (401)." : `DeepSeek ответил ${res.status}.`,
+      "Кабинет → API → DeepSeek. Ключ с platform.deepseek.com. Если ключ верный — запасной путь для вопросов без персональных данных.",
+      related,
+      raw.slice(0, 1200),
+    );
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : "deepseek", "DeepSeek не ответил за 8 секунд.", "Проверьте сеть сервера до api.deepseek.com.", related, e instanceof Error ? e.stack || e.message : "");
+  }
 }
 
-async function pingNovofon() {
+async function pingNovofon(): Promise<ProbeOut> {
+  const related = ["apis", "calls"];
   const { loadNovofonKeys, novofonGet } = await import("./novofon");
   const keys = loadNovofonKeys();
-  if (!keys?.userKey || !keys.secret) return { ok: false, detail: "нет NOVOFON_USER_KEY / SECRET" };
+  if (!keys?.userKey || !keys.secret) return fail("нет NOVOFON_USER_KEY / SECRET", "Ключей Novofon нет. База звонков и голосовой код входа не заработают.", "Кабинет → API → Novofon: User key и Secret из кабинета АТС.", related);
   try {
-    const json = await novofonGet<{ status?: string; balance?: number; data?: unknown }>("/v1/balance", {}, keys);
-    return { ok: true, detail: `Novofon balance ок${json.balance != null ? `, ${json.balance}` : ""}` };
+    const json = await novofonGet<{ status?: string; balance?: number }>("/v1/balance", {}, keys);
+    return ok(`Novofon balance ок${json.balance != null ? `, ${json.balance}` : ""}`, related);
   } catch (e1) {
     try {
       await novofonGet("/v1/info", {}, keys);
-      return { ok: true, detail: "Novofon /v1/info отвечает" };
+      return ok("Novofon /v1/info отвечает", related);
     } catch (e2) {
-      return { ok: false, detail: e2 instanceof Error ? e2.message.slice(0, 160) : String(e1).slice(0, 160) };
+      const raw = e2 instanceof Error ? e2.message : String(e1);
+      return fail(raw.slice(0, 200), "Novofon отклонил запрос. Ключи неверные или метод balance/info недоступен в тарифе.", "Сверьте User key и Secret. Если звонки качаются — ключи рабочие, метод баланса может быть закрыт, это не ломает расшифровку.", related, raw);
     }
   }
 }
 
-async function pingAlfa() {
-  const { token, request } = await import("./alfacrm");
-  const tok = await token();
-  const json = await request<{ items?: unknown[]; count?: number; totalCount?: number }>("/v2api/group/index", { page: 0 }, tok);
-  const n = Array.isArray(json.items) ? json.items.length : json.count ?? json.totalCount ?? 0;
-  return { ok: true, detail: `AlfaCRM вошли, group/index отдал ${n} (ничего не писали)` };
+async function pingAlfa(): Promise<ProbeOut> {
+  const related = ["apis", "schedule", "dossiers", "agent", "prices"];
+  try {
+    const { token, request } = await import("./alfacrm");
+    const tok = await token();
+    const json = await request<{ items?: unknown[]; count?: number; totalCount?: number }>("/v2api/group/index", { page: 0 }, tok);
+    const n = Array.isArray(json.items) ? json.items.length : json.count ?? json.totalCount ?? 0;
+    return ok(`AlfaCRM вошли, group/index отдал ${n} (ничего не писали)`, related);
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : String(e);
+    const plain = /no-alfacrm/.test(raw)
+      ? "Нет почты или ключа AlfaCRM. Расписание, личные дела и запись из чата не подтянутся."
+      : /401|403|token/.test(raw)
+        ? "AlfaCRM не выдала токен. Почта роли API или ключ v2api неверны."
+        : `Не удалось спросить группы в AlfaCRM: ${raw.slice(0, 180)}`;
+    return fail(raw.slice(0, 220), plain, "Кабинет → API → AlfaCRM: хост s20.online, почта роли, ключ v2api, X-APP-KEY. Роль должна видеть группы.", related, e instanceof Error ? e.stack || e.message : raw);
+  }
 }
 
 const PROBES: Probe[] = [
@@ -142,16 +222,15 @@ const PROBES: Probe[] = [
     sections: ["*"],
     run: async () => {
       const dir = storage();
-      if (!existsSync(dir)) return { ok: false, detail: "нет папки storage" };
-      const n = readdirSync(dir).length;
-      return { ok: true, detail: `каталог на месте, ${n} файлов/папок` };
+      if (!existsSync(dir)) return fail("нет папки storage", "Нет каталога storage на сервере. Кабинет некуда писать цены, мозг, звонки.", "Создайте /var/www/rastudio/storage и отдайте права процессу сайта.", ["cabinet"]);
+      return ok(`каталог на месте, ${readdirSync(dir).length} файлов/папок`);
     },
   },
   {
     id: "prices-file",
     title: "Файл цен",
     sections: ["prices", "*"],
-    run: async () => jsonCount("prices.json", (raw) => (Array.isArray(raw) ? raw.length : Array.isArray((raw as { rows?: unknown[] }).rows) ? (raw as { rows: unknown[] }).rows.length : 0)),
+    run: async () => jsonCount("prices.json", (raw) => (Array.isArray(raw) ? raw.length : Array.isArray((raw as { rows?: unknown[] }).rows) ? (raw as { rows: unknown[] }).rows.length : 0), ["prices", "agent"]),
   },
   {
     id: "prices-formulas",
@@ -160,7 +239,7 @@ const PROBES: Probe[] = [
     run: async () => {
       const { loadFormulas } = await import("./price-formulas");
       const f = loadFormulas();
-      return { ok: true, detail: `КБМ ${f.kbm.mode} ${f.kbm.value}, ТМХ ${f.tmx.mode} ${f.tmx.value}` };
+      return ok(`КБМ ${f.kbm.mode} ${f.kbm.value}, ТМХ ${f.tmx.mode} ${f.tmx.value}`, ["prices"]);
     },
   },
   {
@@ -170,15 +249,11 @@ const PROBES: Probe[] = [
     run: async () => {
       const { crmScheduleMeta } = await import("./alfacrm-schedule");
       const m = crmScheduleMeta();
-      return m.count ? { ok: true, detail: `${m.count} слотов, обновлено ${m.at || "—"}` } : { ok: false, detail: "снимок пуст — загрузите из CRM" };
+      if (!m.count) return fail("снимок пуст", "На сайте нет слотов расписания. Ассистент не назовёт живые группы, страница /schedule пустая.", "Раздел «Расписание CRM» → Загрузить из AlfaCRM.", ["schedule", "agent"]);
+      return ok(`${m.count} слотов, обновлено ${m.at || "—"}`, ["schedule", "agent"]);
     },
   },
-  {
-    id: "crm-live",
-    title: "AlfaCRM живой",
-    sections: ["schedule", "dossiers", "apis", "agent"],
-    run: pingAlfa,
-  },
+  { id: "crm-live", title: "AlfaCRM живой", sections: ["schedule", "dossiers", "apis", "agent", "prices"], run: pingAlfa },
   {
     id: "brain",
     title: "Мозг ассистента",
@@ -186,17 +261,14 @@ const PROBES: Probe[] = [
     run: async () => {
       const { loadBrain } = await import("./agent-config");
       const b = loadBrain();
-      return {
-        ok: true,
-        detail: `скриптов ${b.scripts.length}, примеров ${b.examples.length}, чат ${b.settings.showChat ? "вкл" : "выкл"}`,
-      };
+      return ok(`скриптов ${b.scripts.length}, примеров ${b.examples.length}, чат ${b.settings.showChat ? "вкл" : "выкл"}`, ["agent"]);
     },
   },
   {
     id: "docs",
     title: "Документы обучения",
     sections: ["agent", "agent-train"],
-    run: async () => jsonCount("agent-docs.json", (raw) => (Array.isArray((raw as { docs?: unknown[] }).docs) ? (raw as { docs: unknown[] }).docs.length : 0)),
+    run: async () => jsonCount("agent-docs.json", (raw) => (Array.isArray((raw as { docs?: unknown[] }).docs) ? (raw as { docs: unknown[] }).docs.length : 0), ["agent-train"]),
   },
   {
     id: "channels",
@@ -205,7 +277,8 @@ const PROBES: Probe[] = [
     run: async () => {
       const { loadChannels } = await import("./agent-channels");
       const list = loadChannels();
-      return { ok: list.length >= 4, detail: list.map((c) => c.id).join(", ") || "каналов нет" };
+      if (list.length < 4) return fail("мало каналов", `Каналов ${list.length}, нужны site, phone, vk, max и «общее». Преобразование документов сломается.`, "Обучение → Документы → каналы. Не удаляйте «Общее».", ["agent-train"]);
+      return ok(list.map((c) => c.id).join(", "), ["agent-train"]);
     },
   },
   {
@@ -215,27 +288,12 @@ const PROBES: Probe[] = [
     run: async () => {
       const { loadVoiceSettings } = await import("./voice-settings");
       const v = loadVoiceSettings();
-      return { ok: true, detail: `Олег ${v.oleg}, Ольга ${v.olga}, скорость ${v.speed}` };
+      return ok(`Олег ${v.oleg}, Ольга ${v.olga}, скорость ${v.speed}`, ["agent-voices", "apis"]);
     },
   },
-  {
-    id: "yandex",
-    title: "YandexGPT",
-    sections: ["apis", "agent", "agent-voices"],
-    run: pingYandex,
-  },
-  {
-    id: "deepseek",
-    title: "DeepSeek",
-    sections: ["apis", "agent"],
-    run: pingDeepseek,
-  },
-  {
-    id: "novofon",
-    title: "Novofon",
-    sections: ["calls", "apis"],
-    run: pingNovofon,
-  },
+  { id: "yandex", title: "YandexGPT", sections: ["apis", "agent", "agent-voices"], run: pingYandex },
+  { id: "deepseek", title: "DeepSeek", sections: ["apis", "agent"], run: pingDeepseek },
+  { id: "novofon", title: "Novofon", sections: ["calls", "apis"], run: pingNovofon },
   {
     id: "calls-index",
     title: "Индекс звонков",
@@ -244,27 +302,37 @@ const PROBES: Probe[] = [
       const { loadCallStore } = await import("./call-knowledge");
       const s = loadCallStore();
       const n = Array.isArray((s as { calls?: unknown[] }).calls) ? (s as { calls: unknown[] }).calls.length : 0;
-      return { ok: true, detail: `в базе ${n} звонков, знаний ${s.knowledge ? "есть" : "ещё нет"}` };
+      return ok(`в базе ${n} звонков, знаний ${s.knowledge ? "есть" : "ещё нет"}`, ["calls", "dossiers"]);
     },
   },
   {
     id: "dossiers-file",
     title: "Личные дела на диске",
     sections: ["dossiers"],
-    run: async () => jsonCount("dossiers.json", (raw) => {
-      if (Array.isArray(raw)) return raw.length;
-      const d = raw as { items?: unknown[]; dossiers?: unknown[] };
-      return (d.items || d.dossiers || []).length;
-    }),
+    run: async () =>
+      jsonCount(
+        "dossiers.json",
+        (raw) => {
+          if (Array.isArray(raw)) return raw.length;
+          const d = raw as { items?: unknown[]; dossiers?: unknown[] };
+          return (d.items || d.dossiers || []).length;
+        },
+        ["dossiers", "calls"],
+      ),
   },
   {
     id: "chats",
     title: "Журнал чатов",
     sections: ["agent-chats", "agent"],
-    run: async () => jsonCount("chat-logs.json", (raw) => {
-      const d = raw as { sessions?: unknown[] };
-      return Array.isArray(d.sessions) ? d.sessions.length : Array.isArray(raw) ? (raw as unknown[]).length : 0;
-    }),
+    run: async () =>
+      jsonCount(
+        "chat-logs.json",
+        (raw) => {
+          const d = raw as { sessions?: unknown[] };
+          return Array.isArray(d.sessions) ? d.sessions.length : Array.isArray(raw) ? (raw as unknown[]).length : 0;
+        },
+        ["agent-chats"],
+      ),
   },
   {
     id: "edits",
@@ -272,8 +340,8 @@ const PROBES: Probe[] = [
     sections: ["agent-edits"],
     run: async () => {
       const p = storage("site-edits.json");
-      if (!existsSync(p)) return { ok: true, skip: true, detail: "правок ещё не было — это нормально" };
-      return fileOk("site-edits.json");
+      if (!existsSync(p)) return skip("правок ещё не было — это нормально", ["agent-edits"]);
+      return fileOk("site-edits.json", ["agent-edits"]);
     },
   },
   {
@@ -282,12 +350,10 @@ const PROBES: Probe[] = [
     sections: ["agent-access", "agent"],
     run: async () => {
       const p = storage("admin.json");
-      if (!existsSync(p)) return { ok: true, skip: true, detail: "admin.json ещё нет — используются значения по умолчанию" };
+      if (!existsSync(p)) return skip("admin.json ещё нет — используются значения по умолчанию", ["agent-access"]);
       const raw = JSON.parse(readFileSync(p, "utf8")) as { passwordHash?: string; phraseHash?: string };
-      return {
-        ok: Boolean(raw.passwordHash),
-        detail: `пароль кабинета ${raw.passwordHash ? "задан" : "нет"}, кодовое слово ${raw.phraseHash ? "задано" : "не задано"}`,
-      };
+      if (!raw.passwordHash) return fail("нет пароля", "В admin.json нет хеша пароля. Вход в кабинет может сброситься к заводскому.", "Голосовой доступ → сохраните новый пароль кабинета.", ["agent-access"]);
+      return ok(`пароль кабинета задан, кодовое слово ${raw.phraseHash ? "задано" : "не задано"}`, ["agent-access"]);
     },
   },
   {
@@ -296,8 +362,8 @@ const PROBES: Probe[] = [
     sections: ["agent-debug"],
     run: async () => {
       const p = storage("debug-mode.json");
-      if (!existsSync(p)) return { ok: true, skip: true, detail: "настроек отладки ещё нет" };
-      return fileOk("debug-mode.json");
+      if (!existsSync(p)) return skip("настроек отладки ещё нет", ["agent-debug"]);
+      return fileOk("debug-mode.json", ["agent-debug"]);
     },
   },
   {
@@ -308,8 +374,10 @@ const PROBES: Probe[] = [
       const { loadApiConns } = await import("./api-keys");
       const list = loadApiConns();
       const on = list.filter((c) => c.enabled);
-      const filled = on.filter((c) => c.fields.some((f) => f.value));
-      return { ok: filled.length > 0, detail: `включено ${on.length}, с ключом ${filled.length}` };
+      const filled = on.filter((c) => c.fields.some((f) => f.value) || ["yandex", "deepseek", "novofon", "alfacrm"].includes(c.id));
+      const names = on.map((c) => `${c.name}${c.enabled ? "" : " выкл"}`).join(", ");
+      if (!on.length) return fail("нет включённых API", "Все карточки API выключены. Ассистент, CRM и звонки останутся без ключей.", "API и интеграции: включите Yandex, AlfaCRM, Novofon.", ["apis"]);
+      return ok(`включено ${on.length}: ${names}`, ["apis", "agent", "calls", "dossiers"]);
     },
   },
 ];
@@ -322,54 +390,99 @@ function allSections() {
 
 function probesFor(section: string) {
   const bag = [...PROBES, ...extraProbes];
-  const want = new Set(
-    bag
-      .filter((p) => p.sections.includes(section) || p.sections.includes("*") || p.sections.some((s) => section.startsWith(`${s}:`) || s.startsWith(`${section}:`)))
-      .map((p) => p.id),
-  );
-  const known = allSections().some((s) => s.id === section);
-  if (!known) {
-    for (const p of bag.filter((x) => x.sections.includes("*"))) want.add(p.id);
+  if (section === "cabinet" || section === "*") {
+    const seen = new Set<string>();
+    return bag.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
   }
-  return bag.filter((p) => want.has(p.id));
+  const tags = new Set(LINKS[section] || [section, "*"]);
+  tags.add("*");
+  tags.add(section);
+  const seen = new Set<string>();
+  return bag.filter((p) => {
+    if (seen.has(p.id)) return false;
+    const hit = p.sections.some((s) => tags.has(s) || s === "*");
+    if (hit) seen.add(p.id);
+    return hit;
+  });
 }
 
 async function runOne(p: Probe): Promise<CheckResult> {
   const t0 = Date.now();
   try {
     const r = await p.run();
-    return { id: p.id, title: p.title, ok: r.ok, skip: r.skip, detail: r.detail, ms: Date.now() - t0 };
+    return {
+      id: p.id,
+      title: p.title,
+      ok: r.ok,
+      skip: r.skip,
+      detail: r.detail,
+      plain: r.plain || r.detail,
+      fix: r.fix || "",
+      related: titlesOf(r.related || p.sections.filter((s) => s !== "*")),
+      raw: r.raw || "",
+      ms: Date.now() - t0,
+    };
   } catch (e) {
+    const raw = e instanceof Error ? e.stack || e.message : String(e);
     return {
       id: p.id,
       title: p.title,
       ok: false,
-      detail: e instanceof Error ? e.message.slice(0, 180) : "ошибка",
+      detail: e instanceof Error ? e.message.slice(0, 220) : "ошибка",
+      plain: `Проверка «${p.title}» упала исключением. Это баг кода, не настройка кабинета.`,
+      fix: "Скопируйте весь отчёт кнопкой ниже и вставьте в Grok — по стеку видно файл и строку.",
+      related: titlesOf(p.sections.filter((s) => s !== "*")),
+      raw,
       ms: Date.now() - t0,
     };
   }
+}
+
+export function formatGrokReport(opts: { title: string; section: string; pass: number; fail: number; checks: CheckResult[] }) {
+  const lines = [
+    `ОТЧЁТ ПРОВЕРКИ rastudio.org/admin`,
+    `Раздел: ${opts.title} (${opts.section})`,
+    `Итог: ок ${opts.pass}, сбоев ${opts.fail}, проверок ${opts.checks.length}`,
+    `Время: ${new Date().toISOString()}`,
+    `Ничего не записывали в CRM и на сайт.`,
+    ``,
+  ];
+  for (const c of opts.checks) {
+    const mark = c.ok ? (c.skip ? "ПРОПУСК" : "ОК") : "СБОЙ";
+    lines.push(`[${mark}] ${c.title} · id=${c.id} · ${c.ms}мс`);
+    lines.push(`что: ${c.plain || c.detail}`);
+    if (!c.ok && c.fix) lines.push(`как чинить: ${c.fix}`);
+    if (c.related.length) lines.push(`связано: ${c.related.join(", ")}`);
+    if (c.raw) lines.push(`сырой ответ:\n${c.raw}`);
+    lines.push("");
+  }
+  lines.push("Задача для Grok: разбери каждый СБОЙ, укажи файл и правку. Сайт rastudio.org, кабинет администратора, стек TanStack Start.");
+  return lines.join("\n");
 }
 
 export const adminSelfTest = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string; section?: string })
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
-    const section = String(data.section || "*").slice(0, 60);
+    const section = String(data.section || "cabinet").slice(0, 60);
     const meta = allSections().find((s) => s.id === section);
     const list = probesFor(section);
     const checks: CheckResult[] = [];
     for (const p of list) checks.push(await runOne(p));
-    const fail = checks.filter((c) => !c.ok && !c.skip).length;
+    const failN = checks.filter((c) => !c.ok && !c.skip).length;
     const pass = checks.filter((c) => c.ok).length;
+    const title = meta?.title || `Раздел «${section}»`;
+    const grok = formatGrokReport({ title, section, pass, fail: failN, checks });
     return {
       ok: true as const,
       section,
-      title: meta?.title || `Раздел «${section}»`,
-      hint: meta?.hint || "Раздел ещё не описан в каталоге — прогнали общий контур (диск, ключи). Добавьте registerAdminSection, когда появится.",
+      title,
+      hint: meta?.hint || "Раздел ещё не в каталоге — прогнали общий контур и связанные API.",
       dry: true,
       pass,
-      fail,
+      fail: failN,
       checks,
+      grok,
       future: !meta,
     };
   });

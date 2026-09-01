@@ -5,7 +5,7 @@ import { adminDossiers, type Dossier } from "@/data/dossiers";
 import { adminDossierJobs, JOB_ACTIONS, type DossierJob } from "@/data/dossier-jobs";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/info-tip";
-import { AdminSelfTest } from "@/components/admin-self-test";
+import { AdminSectionHead } from "@/components/admin-self-test";
 import { AdminSaveBar } from "@/components/admin-save-bar";
 import { cn } from "@/lib/utils";
 
@@ -235,18 +235,15 @@ export function AdminDossiers() {
 
   return (
     <section className="mt-10 space-y-5">
-      <div>
-        <div className="flex items-center gap-2">
-          <h2 className="font-display text-3xl">Личные дела</h2>
-          <InfoTip text="Все клиенты AlfaCRM: учатся, лиды и архив. Сайт только читает CRM. Фильтры режут список для массового задания агенту: рассылка, обзвон, ВК, MAX — когда канал подключен." />
-        </div>
+      <AdminSectionHead
+        section="dossiers"
+        title="Личные дела"
+        tip="Все клиенты AlfaCRM: учатся, лиды и архив. Сайт только читает CRM. Фильтры режут список для массового задания агенту: рассылка, обзвон, ВК, MAX — когда канал подключен."
+      >
         <p className="mt-2 max-w-3xl text-sm text-muted">
           Все карточки из CRM, без исключения. Сортировка: сначала учатся, затем лиды, затем архив — внутри по направлению и курсу. Отметьте сегмент и нажмите «Выполнить».
         </p>
-        <div className="mt-3">
-          <AdminSelfTest section="dossiers" />
-        </div>
-      </div>
+      </AdminSectionHead>
       <div className="flex flex-wrap gap-2">
         <input
           value={q}

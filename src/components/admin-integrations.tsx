@@ -5,7 +5,7 @@ import { adminApiKeys, type ApiConn, type ApiKind } from "@/data/api-keys";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/info-tip";
 import { AdminSaveBar } from "@/components/admin-save-bar";
-import { AdminSelfTest } from "@/components/admin-self-test";
+import { AdminSectionHead } from "@/components/admin-self-test";
 import { cn } from "@/lib/utils";
 
 function token() {
@@ -165,16 +165,13 @@ export function AdminIntegrations() {
 
   return (
     <section className="mt-10 space-y-4">
-      <div>
-        <div className="flex items-center gap-2">
-          <h2 className="font-display text-3xl">API и интеграции</h2>
-          <InfoTip text="Ключи лежат на сервере в storage/api-keys.json, не в git. Поля с точками — секрет уже есть, впишите новый только если меняете. Пустое поле при сохранении старый ключ не стирает. Процессные переменные .env имеют приоритет, если заданы." />
-        </div>
+      <AdminSectionHead
+        section="apis"
+        title="API и интеграции"
+        tip="Ключи лежат на сервере в storage/api-keys.json, не в git. Поля с точками — секрет уже есть, впишите новый только если меняете. Пустое поле при сохранении старый ключ не стирает. Процессные переменные .env имеют приоритет, если заданы."
+      >
         <p className="mt-2 max-w-2xl text-sm text-muted">Yandex, DeepSeek, Novofon, AlfaCRM и любые другие ключи — здесь, без правки файлов сервера.</p>
-        <div className="mt-3">
-          <AdminSelfTest section="apis" />
-        </div>
-      </div>
+      </AdminSectionHead>
 
       <div className="space-y-3">
         <div className="flex items-center gap-2">
