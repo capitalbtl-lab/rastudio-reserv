@@ -290,9 +290,120 @@ export function parseSlotsCsv(text: string, current: CrmSlot[]) {
   return stampTimes([...byId.values()]);
 }
 
-const EDITABLE = new Set(["groupName", "age", "day", "timeFrom", "timeTo", "teacher", "limit", "groupNote", "course", "school"]);
+const BRANCHES = [
+  { id: 1, city: "Коломна", branch: "ул. Гражданская, 2", keys: ["гражданск", "гражданская"] },
+  { id: 2, city: "Коломна", branch: "ЦМИТ, ул. Октябрьской революции, 340", keys: ["цмит", "октябрьск", "революц"] },
+  { id: 3, city: "Луховицы", branch: "ул. Пушкина, 202А", keys: ["луховиц", "пушкин"] },
+  { id: 4, city: "Коломна", branch: "летние программы", keys: ["летн", "лагер"] },
+];
+
+export function matchBranch(raw: string) {
+  const t = raw.toLowerCase().replace(/ё/g, "е");
+  const hit = BRANCHES.find((b) => b.keys.some((k) => t.includes(k))) || BRANCHES[0];
+  return hit;
+}
+
+export function eveningTime(raw: string) {
+  const m = String(raw || "")
+    .replace(".", ":")
+    .replace(",", ":")
+    .match(/(\d{1,2}):(\d{2})/);
+  if (!m) return String(raw || "").slice(0, 5);
+  let h = Number(m[1]);
+  if (h >= 1 && h <= 9) h += 12;
+  return `${String(h).padStart(2, "0")}:${m[2]}`;
+}
+
+export function formatCourseName(name: string, age = "") {
+  let n = String(name || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  n = n.replace(/\s+(\d+\s*[-–—]\s*\d+\s*(?:лет|года|год))\s*$/i, " ($1)");
+  const a = String(age || "").trim();
+  if (a && !/\(/.test(n)) n = `${n} (${a})`;
+  return n.replace(/[()]/g, (ch, i, s) => (ch === "(" && i > 0 ? " (" : ch === ")" ? ")" : ch)).replace(/\s+/g, " ").trim();
+}
+
+export function matchTeacher(raw: string, catalog: CrmSlot[]) {
+  const t = raw.toLowerCase().replace(/ё/g, "е");
+  if (!t) return "";
+  const names = [...new Set(catalog.map((s) => s.teacher).filter(Boolean))];
+  const hit = names.find((n) => n.toLowerCase().replace(/ё/g, "е").includes(t) || t.includes(n.toLowerCase().split(" ")[0]));
+  return hit || raw.trim();
+}
+
+export type SlotDraft = {
+  school: string;
+  course: string;
+  age: string;
+  day: number;
+  timeFrom: string;
+  timeTo: string;
+  branch: string;
+  teacher: string;
+  groupName?: string;
+  limit?: number;
+};
+
+export function buildSlot(draft: SlotDraft, catalog: CrmSlot[]): CrmSlot {
+  const br = matchBranch(`${draft.branch} ${draft.course}`);
+  const school = draft.school || schoolOf("", draft.course, draft.groupName || "");
+  const age = draft.age || (draft.course.match(/\(([^)]+)\)/)?.[1] || "");
+  const course = formatCourseName(draft.course || "Курс", age);
+  const twin =
+    catalog.find((s) => s.school === school && (s.course === course || s.course.includes(course.split("(")[0].trim()))) ||
+    catalog.find((s) => s.school === school);
+  const teacher = matchTeacher(draft.teacher, catalog);
+  const teacherHit = catalog.find((s) => s.teacher === teacher);
+  const day = Math.max(1, Math.min(7, Number(draft.day) || 1));
+  const year = new Date().getFullYear();
+  const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  return {
+    id,
+    lessonId: 0,
+    groupId: 0,
+    groupName: draft.groupName || `${year} ${course}`,
+    groupNote: "",
+    statusId: 1,
+    limit: Number(draft.limit) || twin?.limit || 8,
+    taken: 0,
+    subjectId: twin?.subjectId || 0,
+    subject: twin?.subject || course,
+    school,
+    course,
+    path: twin?.path || "",
+    age: age || twin?.age || "",
+    day,
+    dayLabel: dayLabel(day),
+    timeFrom: eveningTime(draft.timeFrom),
+    timeTo: eveningTime(draft.timeTo),
+    timesPerWeek: 1,
+    branchId: br.id,
+    city: br.city,
+    branch: br.branch,
+    signup: "",
+    teacherId: teacherHit?.teacherId || 0,
+    teacherIds: teacherHit?.teacherIds || [],
+    teacher,
+    roomId: 0,
+    bDate: "",
+    eDate: "",
+  };
+}
+
+const EDITABLE = new Set(["groupName", "age", "day", "timeFrom", "timeTo", "teacher", "limit", "groupNote", "course", "school", "branch"]);
 
 export async function aiSchedulePatch(slots: CrmSlot[], prompt: string) {
+  return aiScheduleParse(slots, prompt, slots.map((s) => s.id));
+}
+
+export async function aiScheduleParse(slots: CrmSlot[], prompt: string, selectedIds: string[] = []) {
+  const catalog = {
+    schools: [...new Set(slots.map((s) => s.school).filter(Boolean))],
+    courses: [...new Set(slots.map((s) => s.course).filter(Boolean))],
+    branches: BRANCHES.map((b) => `${b.city}, ${b.branch}`),
+    teachers: [...new Set(slots.map((s) => s.teacher).filter(Boolean))],
+  };
   const slim = slots.map((s) => ({
     id: s.id,
     groupName: s.groupName,
@@ -306,16 +417,31 @@ export async function aiSchedulePatch(slots: CrmSlot[], prompt: string) {
     timeTo: s.timeTo,
     teacher: s.teacher,
     limit: s.limit,
-    branch: s.branch,
+    branch: `${s.city}, ${s.branch}`,
     city: s.city,
-    timesPerWeek: s.timesPerWeek,
   }));
-  const llm = await yandexJson<{ changes?: { id?: string; field?: string; to?: string | number }[]; comment?: string }>(
-    "Ты методист расписания студии «Развивайся». Меняй только то, что просит оператор. Поля: groupName, age, day (1-7), timeFrom, timeTo, teacher, limit, groupNote, course, school. Не выдумывай id. Ответ — JSON.",
+  const llm = await yandexJson<{
+    changes?: { id?: string; field?: string; to?: string | number }[];
+    adds?: SlotDraft[];
+    comment?: string;
+  }>(
+    `Ты методист расписания студии «Развивайся».
+Правила:
+- Филиал пиши ТОЛЬКО одной из строк справочника, без своих формулировок.
+- Курс: «Название (возраст)», например «Художественная студия (5-6 лет)». Не пиши «5 6», пиши «5-6 лет».
+- Время кружков вечером: «с 6:30 до 8:30» = 18:30 и 20:30. Всегда ЧЧ:ММ с двоеточием. Часы 1–9 без «утра» считай вечерними (+12).
+- Педагога бери точным ФИО из справочника.
+- Если оператор добавляет группу — массив adds. Если правит существующие — changes только с id из списка разрешённых. Не выдумывай id.
+- Разрешённые id для правки: ${selectedIds.length ? selectedIds.join(", ") : "нет — только adds, существующие не трогай"}.
+Ответ JSON.`,
     `Запрос: ${prompt.slice(0, 2000)}
-JSON: {"comment":"что сделали","changes":[{"id":"crm-…","field":"timeFrom","to":"16:00"}]}
+JSON: {"comment":"что сделали","changes":[{"id":"crm-…","field":"timeFrom","to":"16:00"}],"adds":[{"school":"Художественная школа","course":"Художественная студия (5-6 лет)","age":"5-6 лет","day":2,"timeFrom":"18:30","timeTo":"20:30","branch":"Коломна, ул. Гражданская, 2","teacher":"Самойлова"}]}
+Справочник филиалов: ${JSON.stringify(catalog.branches)}
+Школы: ${JSON.stringify(catalog.schools)}
+Курсы: ${JSON.stringify(catalog.courses).slice(0, 4000)}
+Педагоги: ${JSON.stringify(catalog.teachers)}
 Слоты:
-${JSON.stringify(slim).slice(0, 18000)}`,
+${JSON.stringify(slim).slice(0, 14000)}`,
     4000,
   );
   const changes: { id: string; field: string; from: string; to: string }[] = [];
@@ -323,12 +449,38 @@ ${JSON.stringify(slim).slice(0, 18000)}`,
     if (!c.id || !c.field || !EDITABLE.has(c.field)) continue;
     const hit = slots.find((s) => s.id === c.id);
     if (!hit) continue;
+    let to = String(c.to ?? "");
+    if (c.field === "timeFrom" || c.field === "timeTo") to = eveningTime(to);
+    if (c.field === "course") to = formatCourseName(to);
+    if (c.field === "branch") {
+      const br = matchBranch(to);
+      to = br.branch;
+    }
     const from = String((hit as unknown as Record<string, unknown>)[c.field] ?? "");
-    const to = String(c.to ?? "");
     if (from === to) continue;
     changes.push({ id: c.id, field: c.field, from, to });
   }
-  return { comment: llm?.comment || (changes.length ? "Правки по запросу." : "Ничего не менял — уточните запрос."), changes };
+  const adds: SlotDraft[] = [];
+  for (const a of llm?.adds || []) {
+    if (!a || !(a.course || a.school || a.groupName)) continue;
+    const br = matchBranch(String(a.branch || ""));
+    adds.push({
+      school: a.school || schoolOf("", String(a.course || ""), ""),
+      course: formatCourseName(String(a.course || a.groupName || "Курс"), String(a.age || "")),
+      age: String(a.age || ""),
+      day: Math.max(1, Math.min(7, Number(a.day) || 1)),
+      timeFrom: eveningTime(String(a.timeFrom || "")),
+      timeTo: eveningTime(String(a.timeTo || "")),
+      branch: `${br.city}, ${br.branch}`,
+      teacher: matchTeacher(String(a.teacher || ""), slots),
+      groupName: a.groupName,
+      limit: a.limit,
+    });
+  }
+  const comment =
+    llm?.comment ||
+    (changes.length || adds.length ? "Правки по запросу." : "Ничего не менял — уточните запрос.");
+  return { comment, changes, adds };
 }
 
 export function applyChanges(slots: CrmSlot[], changes: { id: string; field: string; to: string }[]) {
@@ -341,6 +493,12 @@ export function applyChanges(slots: CrmSlot[], changes: { id: string; field: str
       hit.day = Math.max(1, Math.min(7, Number(c.to) || hit.day));
       hit.dayLabel = dayLabel(hit.day);
     } else if (c.field === "limit") hit.limit = Math.max(0, Number(c.to) || 0);
+    else if (c.field === "branch") {
+      const br = matchBranch(c.to);
+      hit.branch = br.branch;
+      hit.city = br.city;
+      hit.branchId = br.id;
+    } else if (c.field === "timeFrom" || c.field === "timeTo") rec[c.field] = eveningTime(c.to);
     else rec[c.field] = c.to;
   }
   return stampTimes(next);

@@ -9,8 +9,9 @@ import {
   sessionsFromCrm,
 } from "./alfacrm-schedule";
 import {
-  aiSchedulePatch,
+  aiScheduleParse,
   applyChanges,
+  buildSlot,
   loadVersions,
   parseSlotsCsv,
   pushSlotsToCrm,
@@ -19,6 +20,7 @@ import {
   slotsToXls,
   versionSlots,
   type CrmSlot,
+  type SlotDraft,
 } from "./crm-slots";
 
 export const adminSchedule = createServerFn({ method: "POST" })
@@ -38,11 +40,14 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "aiApply"
           | "versions"
           | "rollback"
-          | "students";
+          | "students"
+          | "add";
         slots?: CrmSlot[];
         text?: string;
         prompt?: string;
         changes?: { id: string; field: string; to: string }[];
+        adds?: SlotDraft[];
+        draft?: SlotDraft;
         dirtyIds?: string[];
         ids?: string[];
         groupId?: number;
@@ -119,24 +124,37 @@ export const adminSchedule = createServerFn({ method: "POST" })
     if (data.action === "aiPreview") {
       const slots = listAdminSlots();
       const ids = Array.isArray(data.ids) ? data.ids.map(String) : [];
-      const subset = ids.length ? slots.filter((s) => ids.includes(s.id)) : [];
-      if (!subset.length) {
-        return pack(slots, { comment: "Отметьте группы чекбоксом слева или нажмите «Выделить всё».", changes: [] });
-      }
-      const preview = await aiSchedulePatch(subset, String(data.prompt || ""));
+      const prompt = String(data.prompt || "");
+      const preview = await aiScheduleParse(slots, prompt, ids);
       return pack(slots, preview);
     }
     if (data.action === "aiApply") {
+      const slots = listAdminSlots();
       const ids = new Set((data.ids || []).map(String));
-      const allowed = ids.size ? (data.changes || []).filter((c) => ids.has(c.id)) : [];
-      if (!allowed.length) {
-        return pack(listAdminSlots(), { comment: "Нет отмеченных групп — ничего не применил.", changes: [] });
+      const allowed = ids.size ? (data.changes || []).filter((c) => ids.has(c.id)) : data.adds?.length ? [] : [];
+      const drafts = data.adds || [];
+      if (!allowed.length && !drafts.length) {
+        return pack(slots, { comment: "Нет отмеченных групп и нет новых позиций.", changes: [], adds: [] });
       }
-      const next = applyChanges(listAdminSlots(), allowed);
+      let next = allowed.length ? applyChanges(slots, allowed) : slots.map((s) => ({ ...s }));
+      const created: string[] = [];
+      for (const d of drafts) {
+        const slot = buildSlot(d, next);
+        next = [...next, slot];
+        created.push(slot.id);
+      }
       const saved = saveAdminSlots(next).slots;
       pushVersion(`ИИ: ${(data.prompt || "правка").slice(0, 80)}`, saved);
-      logAdmin("Расписание: ИИ-правка применена");
-      return pack(saved);
+      logAdmin(`Расписание: ИИ ${allowed.length} правок, ${created.length} новых`);
+      return pack(saved, { created });
+    }
+    if (data.action === "add" && data.draft) {
+      const slots = listAdminSlots();
+      const slot = buildSlot(data.draft, slots);
+      const saved = saveAdminSlots([...slots, slot]).slots;
+      pushVersion(`Новая группа: ${slot.course}`, saved);
+      logAdmin(`Расписание: добавлена ${slot.groupName}`);
+      return pack(saved, { created: [slot.id] });
     }
     if (data.action === "students") {
       const { token, request } = await import("./alfacrm");
