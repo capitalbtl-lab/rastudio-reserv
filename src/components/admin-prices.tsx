@@ -15,7 +15,6 @@ import { AdminAgent } from "@/components/admin-agent";
 import { AdminDossiers } from "@/components/admin-dossiers";
 import { AdminSchedule } from "@/components/admin-schedule";
 import { AdminIntegrations } from "@/components/admin-integrations";
-import { AdminSaveBar } from "@/components/admin-save-bar";
 import { adminGhostBtn, AdminSectionHead, AdminSelfTest } from "@/components/admin-self-test";
 import { adminPriceFormulas, type CorpFormulas } from "@/data/price-formulas";
 import { InfoTip, TipWrap } from "@/components/info-tip";
@@ -105,6 +104,7 @@ export function AdminPrices() {
   const [callView, setCallView] = useState<"overview" | "settings" | "knowledge" | "texts">("overview");
   const [formulas, setFormulas] = useState<CorpFormulas>({ kbm: { mode: "percent", value: 100 }, tmx: { mode: "percent", value: 100 } });
   const [corpDir, setCorpDir] = useState("");
+  const [formulasOpen, setFormulasOpen] = useState(false);
 
   async function load(t = token()) {
     if (!t) return;
@@ -341,143 +341,152 @@ export function AdminPrices() {
             </TipWrap>
           </div>
 
-          <div className="mt-8 flex flex-col rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold">КБМ и ТМХ от колонки «Все»</p>
-              <InfoTip text="Наценка суммой: 500 → корпоративная = публичная + 500 ₽ (минус — скидка). Умножение на процент: 90 → 90% от публичной, 100 → как есть, 110 → плюс 10%. Сначала сохраните формулу, потом «Пересчитать». Можно на все курсы или на одну школу." />
-            </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              {(["kbm", "tmx"] as const).map((who) => (
-                <div key={who} className="rounded-2xl bg-surface-2 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted">{who === "kbm" ? "КБМ" : "ТМХ"}</p>
-                  <div className="mt-3 flex flex-wrap items-end gap-3">
-                    <label className="text-sm">
-                      Как считать
-                      <select
-                        value={formulas[who].mode}
-                        onChange={(e) => setFormulas((f) => ({ ...f, [who]: { ...f[who], mode: e.target.value === "add" ? "add" : "percent" } }))}
-                        className="mt-1 block h-11 rounded-xl bg-white px-3 ring-1 ring-black/10"
-                      >
-                        <option value="add">Наценка суммой, ₽</option>
-                        <option value="percent">Умножить на процент</option>
-                      </select>
-                    </label>
-                    <label className="text-sm">
-                      {formulas[who].mode === "add" ? "Сумма, ₽" : "Процент"}
-                      <input
-                        value={formulas[who].value}
-                        inputMode="numeric"
-                        onChange={(e) => setFormulas((f) => ({ ...f, [who]: { ...f[who], value: Number(e.target.value) || 0 } }))}
-                        className="mt-1 block h-11 w-28 rounded-xl bg-white px-3 ring-1 ring-black/10"
-                      />
-                    </label>
+          <div className="mt-5 overflow-hidden rounded-2xl bg-surface ring-1 ring-black/8">
+            <button
+              type="button"
+              onClick={() => setFormulasOpen((v) => !v)}
+              className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
+            >
+              <span className="text-sm font-semibold">Формулы КБМ, ТМХ и правка группой</span>
+              <InfoTip text="Наценка суммой: 500 → корпоративная = публичная + 500 ₽. Умножение: 90 → 90% от «Все», 100 — как есть. Сначала сохраните формулу, потом «Пересчитать». Группой — сразу поставить или сдвинуть цену у всей школы." />
+              <span className="ml-auto text-[0.72rem] font-semibold text-muted">
+                {formulasOpen ? "Скрыть" : "Показать"}
+              </span>
+              <span className={cn("text-muted transition-transform", formulasOpen ? "rotate-180" : "")}>▾</span>
+            </button>
+            {formulasOpen ? (
+              <div className="space-y-3 border-t border-black/6 px-4 pb-3 pt-3">
+                <div className="flex flex-wrap items-end gap-2">
+                  {(["kbm", "tmx"] as const).map((who) => (
+                    <div key={who} className="flex flex-wrap items-end gap-2 rounded-xl bg-surface-2 px-2.5 py-2">
+                      <p className="mb-1 w-full text-[0.65rem] font-semibold uppercase tracking-wider text-muted">{who === "kbm" ? "КБМ" : "ТМХ"}</p>
+                      <label className="text-[0.72rem] text-muted">
+                        Как
+                        <select
+                          value={formulas[who].mode}
+                          onChange={(e) => setFormulas((f) => ({ ...f, [who]: { ...f[who], mode: e.target.value === "add" ? "add" : "percent" } }))}
+                          className="mt-0.5 block h-8 rounded-lg bg-white px-2 text-sm ring-1 ring-black/10"
+                        >
+                          <option value="add">Наценка, ₽</option>
+                          <option value="percent">× процент</option>
+                        </select>
+                      </label>
+                      <label className="text-[0.72rem] text-muted">
+                        {formulas[who].mode === "add" ? "₽" : "%"}
+                        <input
+                          value={formulas[who].value}
+                          inputMode="numeric"
+                          onChange={(e) => setFormulas((f) => ({ ...f, [who]: { ...f[who], value: Number(e.target.value) || 0 } }))}
+                          className="mt-0.5 block h-8 w-16 rounded-lg bg-white px-2 text-sm ring-1 ring-black/10"
+                        />
+                      </label>
+                    </div>
+                  ))}
+                  <label className="text-[0.72rem] text-muted">
+                    Область
+                    <select
+                      value={corpDir}
+                      onChange={(e) => setCorpDir(e.target.value)}
+                      className="mt-0.5 block h-8 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10"
+                    >
+                      <option value="">Все курсы</option>
+                      {PRICE_DIRECTIONS.map((d) => (
+                        <option key={d}>{d}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="h-8"
+                      disabled={busy}
+                      onClick={async () => {
+                        setBusy(true);
+                        const res = await adminPriceFormulas({ data: { token: token(), action: "save", formulas } });
+                        setBusy(false);
+                        setErr(res.ok ? "" : res.error || "Ошибка");
+                        if (res.ok) setErr("Формула сохранена.");
+                      }}
+                    >
+                      Сохранить
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8"
+                      disabled={busy}
+                      onClick={async () => {
+                        setBusy(true);
+                        const res = await adminPriceFormulas({ data: { token: token(), action: "apply", formulas, direction: corpDir || undefined } });
+                        setBusy(false);
+                        if (res.ok && "rows" in res && res.rows) {
+                          setRows(res.rows);
+                          hydratePrices(res.rows);
+                          setErr("КБМ и ТМХ пересчитаны.");
+                        } else setErr(res.ok ? "" : res.error || "Ошибка");
+                      }}
+                    >
+                      Пересчитать
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-            <label className="mt-4 text-sm">
-              Область
-              <select
-                value={corpDir}
-                onChange={(e) => setCorpDir(e.target.value)}
-                className="mt-1 block h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-              >
-                <option value="">Все курсы</option>
-                {PRICE_DIRECTIONS.map((d) => (
-                  <option key={d}>{d}</option>
-                ))}
-              </select>
-            </label>
-            <AdminSaveBar>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  const res = await adminPriceFormulas({ data: { token: token(), action: "save", formulas } });
-                  setBusy(false);
-                  setErr(res.ok ? "" : res.error || "Ошибка");
-                  if (res.ok) setErr("Формула сохранена.");
-                }}
-              >
-                Сохранить формулу
-              </Button>
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  const res = await adminPriceFormulas({ data: { token: token(), action: "apply", formulas, direction: corpDir || undefined } });
-                  setBusy(false);
-                  if (res.ok && "rows" in res && res.rows) {
-                    setRows(res.rows);
-                    hydratePrices(res.rows);
-                    setErr("КБМ и ТМХ пересчитаны.");
-                  } else setErr(res.ok ? "" : res.error || "Ошибка");
-                }}
-              >
-                Пересчитать КБМ и ТМХ
-              </Button>
-            </AdminSaveBar>
+                <div className="flex flex-wrap items-end gap-2 border-t border-black/6 pt-3">
+                  <p className="mb-1 w-full text-[0.65rem] font-semibold uppercase tracking-wider text-muted">Группой</p>
+                  <label className="text-[0.72rem] text-muted">
+                    Школа
+                    <select
+                      className="mt-0.5 block h-8 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10"
+                      value={dir}
+                      onChange={(e) => setDir(e.target.value)}
+                    >
+                      {PRICE_DIRECTIONS.map((d) => (
+                        <option key={d}>{d}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-[0.72rem] text-muted">
+                    Поле
+                    <select
+                      className="mt-0.5 block h-8 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10"
+                      value={field}
+                      onChange={(e) => setField(e.target.value as typeof field)}
+                    >
+                      <option value="all">Цена (все)</option>
+                      <option value="kbm">КБМ</option>
+                      <option value="tmx">ТМХ</option>
+                      <option value="all-three">Все три</option>
+                    </select>
+                  </label>
+                  <label className="text-[0.72rem] text-muted">
+                    Как
+                    <select
+                      className="mt-0.5 block h-8 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10"
+                      value={mode}
+                      onChange={(e) => setMode(e.target.value as typeof mode)}
+                    >
+                      <option value="set">Поставить</option>
+                      <option value="delta">Прибавить / убавить</option>
+                    </select>
+                  </label>
+                  <label className="text-[0.72rem] text-muted">
+                    Сумма, ₽
+                    <input
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="mt-0.5 block h-8 w-20 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10"
+                    />
+                  </label>
+                  <Button type="button" size="sm" className="ml-auto h-8" disabled={busy} onClick={() => void applyGroup()}>
+                    Применить к школе
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
-          <div className="mt-8 flex flex-col rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
-            <p className="text-sm font-semibold">Группой</p>
-            <div className="mt-3 flex flex-wrap items-end gap-3">
-              <label className="text-sm">
-                Школа
-                <select
-                  className="mt-1 block h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                  value={dir}
-                  onChange={(e) => setDir(e.target.value)}
-                >
-                  {PRICE_DIRECTIONS.map((d) => (
-                    <option key={d}>{d}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-sm">
-                Поле
-                <select
-                  className="mt-1 block h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                  value={field}
-                  onChange={(e) => setField(e.target.value as typeof field)}
-                >
-                  <option value="all">Цена (все)</option>
-                  <option value="kbm">КБМ</option>
-                  <option value="tmx">ТМХ</option>
-                  <option value="all-three">Все три</option>
-                </select>
-              </label>
-              <label className="text-sm">
-                Как
-                <select
-                  className="mt-1 block h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value as typeof mode)}
-                >
-                  <option value="set">Поставить</option>
-                  <option value="delta">Прибавить / убавить</option>
-                </select>
-              </label>
-              <label className="text-sm">
-                Сумма, ₽
-                <input
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="mt-1 block h-11 w-28 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                />
-              </label>
-            </div>
-            <AdminSaveBar>
-              <Button type="button" disabled={busy} onClick={() => void applyGroup()}>
-                Применить к школе
-              </Button>
-            </AdminSaveBar>
-          </div>
-
-          <div className="mt-8 space-y-8">
+          <div className="mt-5 space-y-8">
             {grouped.map(([name, list]) => (
               <section key={name}>
                 <h3 className="font-display text-xl">{name}</h3>
