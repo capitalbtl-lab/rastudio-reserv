@@ -6,6 +6,7 @@ import { adminDossierJobs, JOB_ACTIONS, type DossierJob } from "@/data/dossier-j
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/info-tip";
 import { AdminSelfTest } from "@/components/admin-self-test";
+import { AdminSaveBar } from "@/components/admin-save-bar";
 import { cn } from "@/lib/utils";
 
 function token() {
@@ -384,7 +385,7 @@ export function AdminDossiers() {
         </div>
         {open ? (
           <div className="lg:sticky lg:top-24 lg:max-h-[calc(100svh-7rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain">
-            <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+            <article className="flex flex-col rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
               <p className="text-xs text-muted">
                 {open.crmId ? `AlfaCRM ${open.crmId}` : "ещё без номера CRM"} · обновлено {when(open.updatedAt)}
               </p>
@@ -434,21 +435,21 @@ export function AdminDossiers() {
                   </ul>
                 </div>
               ) : null}
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button type="button" disabled={busy} onClick={() => void save()}>
-                  Сохранить
-                </Button>
-                {open.crmId && open.branchId ? (
-                  <Button type="button" variant="secondary" disabled={busy} onClick={() => void sync()}>
-                    Подтянуть эту карточку из CRM
-                  </Button>
-                ) : null}
+              <AdminSaveBar>
                 {open.url ? (
                   <a href={open.url} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center rounded-full bg-surface-2 px-4 text-sm font-semibold">
                     Карточка AlfaCRM
                   </a>
                 ) : null}
-              </div>
+                {open.crmId && open.branchId ? (
+                  <Button type="button" variant="secondary" disabled={busy} onClick={() => void sync()}>
+                    Подтянуть эту карточку из CRM
+                  </Button>
+                ) : null}
+                <Button type="button" disabled={busy} onClick={() => void save()}>
+                  Сохранить
+                </Button>
+              </AdminSaveBar>
               {open.log.length ? (
                 <div className="mt-5 border-t border-black/5 pt-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted">История фактов</p>

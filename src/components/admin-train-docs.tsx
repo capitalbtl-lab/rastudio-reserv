@@ -433,11 +433,13 @@ export function AdminTrainDocs() {
               </Button>
             </>
           ) : null}
-          <TipWrap text="Пишет названия и правила в storage/agent-channels.json. Без этой кнопки «Преобразовать» читает предыдущую сохранённую версию правил.">
-            <Button type="button" disabled={busy} onClick={() => void saveChannels()}>
-              Сохранить каналы
-            </Button>
-          </TipWrap>
+          <div className="ml-auto">
+            <TipWrap text="Пишет названия и правила в storage/agent-channels.json. Без этой кнопки «Преобразовать» читает предыдущую сохранённую версию правил.">
+              <Button type="button" disabled={busy} onClick={() => void saveChannels()}>
+                Сохранить каналы
+              </Button>
+            </TipWrap>
+          </div>
         </div>
       </article>
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { adminApiKeys, type ApiConn, type ApiKind } from "@/data/api-keys";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/info-tip";
+import { AdminSaveBar } from "@/components/admin-save-bar";
 import { AdminSelfTest } from "@/components/admin-self-test";
 import { cn } from "@/lib/utils";
 
@@ -78,7 +79,7 @@ export function AdminIntegrations() {
   function Card({ c }: { c: Row }) {
     const d = draft[c.id] || c;
     return (
-      <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
+      <article className="flex h-full flex-col rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="font-display text-lg">{d.name}</p>
@@ -124,10 +125,7 @@ export function AdminIntegrations() {
             </label>
           ))}
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button type="button" disabled={busy} onClick={() => void save(c.id)}>
-            Сохранить
-          </Button>
+        <AdminSaveBar>
           {c.id.startsWith("custom-") ? (
             <button
               type="button"
@@ -142,7 +140,10 @@ export function AdminIntegrations() {
               Удалить
             </button>
           ) : null}
-        </div>
+          <Button type="button" disabled={busy} onClick={() => void save(c.id)}>
+            Сохранить
+          </Button>
+        </AdminSaveBar>
       </article>
     );
   }
@@ -187,7 +188,7 @@ export function AdminIntegrations() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+      <div className="grid gap-4 lg:grid-cols-2">
         <KindCol kind="telephony" />
         <KindCol kind="crm" />
       </div>
@@ -206,7 +207,7 @@ export function AdminIntegrations() {
         </div>
       ) : null}
 
-      <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+      <article className="flex flex-col rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
         <div className="flex items-center gap-2">
           <p className="font-display text-xl">Добавить API</p>
           <InfoTip text="Свой сервис: MAX, VK, Telegram, почта, вторая АТС. Укажите имя, тип и ключ. Позже можно дописать поля, сохранив карточку. Тип «телефония» появится и в базе звонков, «CRM» — рядом с AlfaCRM." />
@@ -239,33 +240,34 @@ export function AdminIntegrations() {
             <input value={add.fieldValue} onChange={(e) => setAdd({ ...add, fieldValue: e.target.value })} className="mt-1 block h-11 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
           </label>
         </div>
-        <Button
-          className="mt-4"
-          type="button"
-          disabled={busy || !add.name.trim()}
-          onClick={async () => {
-            setBusy(true);
-            const res = await adminApiKeys({
-              data: {
-                token: token(),
-                action: "add",
-                kind: add.kind,
-                name: add.name,
-                fieldKey: add.fieldKey,
-                fieldLabel: add.fieldLabel || add.fieldKey,
-                fieldValue: add.fieldValue,
-              },
-            });
-            take(res);
-            setBusy(false);
-            if (res.ok) {
-              setMsg(`Добавлен: ${add.name}`);
-              setAdd({ ...add, name: "", fieldValue: "" });
-            }
-          }}
-        >
-          Добавить сервис
-        </Button>
+        <AdminSaveBar>
+          <Button
+            type="button"
+            disabled={busy || !add.name.trim()}
+            onClick={async () => {
+              setBusy(true);
+              const res = await adminApiKeys({
+                data: {
+                  token: token(),
+                  action: "add",
+                  kind: add.kind,
+                  name: add.name,
+                  fieldKey: add.fieldKey,
+                  fieldLabel: add.fieldLabel || add.fieldKey,
+                  fieldValue: add.fieldValue,
+                },
+              });
+              take(res);
+              setBusy(false);
+              if (res.ok) {
+                setMsg(`Добавлен: ${add.name}`);
+                setAdd({ ...add, name: "", fieldValue: "" });
+              }
+            }}
+          >
+            Добавить сервис
+          </Button>
+        </AdminSaveBar>
       </article>
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
     </section>

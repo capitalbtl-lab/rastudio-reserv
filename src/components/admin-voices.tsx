@@ -5,6 +5,7 @@ import { adminSaveVoice, adminVoice } from "@/data/admin";
 import { speakAgent } from "@/data/agent-voice";
 import { DEFAULT_VOICE, type VoiceSettings } from "@/data/voices-core";
 import { Button } from "@/components/ui/button";
+import { AdminSaveBar } from "@/components/admin-save-bar";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -187,7 +188,7 @@ export function AdminVoices() {
           </div>
         ))}
       </div>
-      <div className="rounded-[1.8rem] bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+      <div className="flex flex-col rounded-[1.8rem] bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
         <p className="font-display text-xl">Как они говорят вместе</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="text-sm">
@@ -200,7 +201,10 @@ export function AdminVoices() {
           </label>
         </div>
         {playing ? <p className="mt-4 text-sm font-semibold text-primary">Играет: {playing}</p> : null}
-        <div className="mt-5 flex flex-wrap items-center gap-3">
+        <AdminSaveBar>
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => { setVoice({ ...DEFAULT_VOICE }); setMsg("Сброшено к заводским. Нажмите «Сохранить», чтобы применить."); }}>
+            Сбросить
+          </Button>
           <Button type="button" onClick={() => void listen("both")}>
             Прослушать обоих
           </Button>
@@ -211,7 +215,6 @@ export function AdminVoices() {
           ) : null}
           <Button
             type="button"
-            variant="secondary"
             disabled={busy}
             onClick={async () => {
               setBusy(true);
@@ -226,19 +229,8 @@ export function AdminVoices() {
           >
             Сохранить
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={busy}
-            onClick={() => {
-              setVoice({ ...DEFAULT_VOICE });
-              setMsg("Сброшено к заводским. Нажмите «Сохранить», чтобы применить.");
-            }}
-          >
-            Сбросить
-          </Button>
-          {msg ? <p className="text-sm text-primary">{msg}</p> : null}
-        </div>
+        </AdminSaveBar>
+        {msg ? <p className="mt-2 text-right text-sm text-primary">{msg}</p> : null}
       </div>
     </div>
   );

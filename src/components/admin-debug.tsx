@@ -59,9 +59,11 @@ export function AdminDebug() {
           </label>
         ))}
       </div>
-      <Button type="button" disabled={busy} onClick={() => void save()}>
-        Сохранить набор
-      </Button>
+      <div className="flex justify-end">
+        <Button type="button" disabled={busy} onClick={() => void save()}>
+          Сохранить набор
+        </Button>
+      </div>
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
     </section>
   );

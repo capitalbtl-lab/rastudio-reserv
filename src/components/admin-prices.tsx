@@ -16,6 +16,7 @@ import { AdminDossiers } from "@/components/admin-dossiers";
 import { AdminSchedule } from "@/components/admin-schedule";
 import { AdminIntegrations } from "@/components/admin-integrations";
 import { AdminSelfTest } from "@/components/admin-self-test";
+import { AdminSaveBar } from "@/components/admin-save-bar";
 import { adminPriceFormulas, type CorpFormulas } from "@/data/price-formulas";
 import { InfoTip, TipWrap } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
@@ -340,7 +341,7 @@ export function AdminPrices() {
             </div>
           </div>
 
-          <div className="mt-8 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
+          <div className="mt-8 flex flex-col rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
             <div className="flex items-center gap-2">
               <p className="text-sm font-semibold">КБМ и ТМХ от колонки «Все»</p>
               <InfoTip text="Наценка суммой: 500 → корпоративная = публичная + 500 ₽ (минус — скидка). Умножение на процент: 90 → 90% от публичной, 100 → как есть, 110 → плюс 10%. Сначала сохраните формулу, потом «Пересчитать». Можно на все курсы или на одну школу." />
@@ -374,20 +375,20 @@ export function AdminPrices() {
                 </div>
               ))}
             </div>
-            <div className="mt-4 flex flex-wrap items-end gap-3">
-              <label className="text-sm">
-                Область
-                <select
-                  value={corpDir}
-                  onChange={(e) => setCorpDir(e.target.value)}
-                  className="mt-1 block h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
-                >
-                  <option value="">Все курсы</option>
-                  {PRICE_DIRECTIONS.map((d) => (
-                    <option key={d}>{d}</option>
-                  ))}
-                </select>
-              </label>
+            <label className="mt-4 text-sm">
+              Область
+              <select
+                value={corpDir}
+                onChange={(e) => setCorpDir(e.target.value)}
+                className="mt-1 block h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+              >
+                <option value="">Все курсы</option>
+                {PRICE_DIRECTIONS.map((d) => (
+                  <option key={d}>{d}</option>
+                ))}
+              </select>
+            </label>
+            <AdminSaveBar>
               <Button
                 type="button"
                 variant="secondary"
@@ -418,10 +419,10 @@ export function AdminPrices() {
               >
                 Пересчитать КБМ и ТМХ
               </Button>
-            </div>
+            </AdminSaveBar>
           </div>
 
-          <div className="mt-8 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
+          <div className="mt-8 flex flex-col rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
             <p className="text-sm font-semibold">Группой</p>
             <div className="mt-3 flex flex-wrap items-end gap-3">
               <label className="text-sm">
@@ -468,10 +469,12 @@ export function AdminPrices() {
                   className="mt-1 block h-11 w-28 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
                 />
               </label>
+            </div>
+            <AdminSaveBar>
               <Button type="button" disabled={busy} onClick={() => void applyGroup()}>
                 Применить к школе
               </Button>
-            </div>
+            </AdminSaveBar>
           </div>
 
           <div className="mt-8 space-y-8">

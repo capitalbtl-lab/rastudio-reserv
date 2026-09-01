@@ -5,6 +5,7 @@ import { adminAgentBrain, type TrainExample, type ScriptSection } from "@/data/a
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { InfoTip, TipWrap } from "@/components/info-tip";
+import { AdminSaveBar } from "@/components/admin-save-bar";
 import { AdminTrainDocs } from "@/components/admin-train-docs";
 
 function token() {
@@ -52,34 +53,34 @@ function ScriptCard({
   onSave: () => void;
 }) {
   return (
-    <article className="rounded-2xl bg-surface p-4 shadow-[var(--shadow-border)]">
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <p className="font-display text-[1.05rem] leading-tight">{s.title}</p>
-            <InfoTip text="Текст этого шага попадает в системный промпт, пока слот не закрыт. Пишите коротко, одним вопросом." />
-          </div>
-          <p className="mt-0.5 text-[0.68rem] text-muted">
-            {s.step}
-            {s.auto ? " · из диалогов" : ""}
-            {s.updatedAt ? ` · ${when(s.updatedAt)}` : ""}
-          </p>
+    <article className="flex h-full flex-col rounded-2xl bg-surface p-4 shadow-[var(--shadow-border)]">
+      <div className="mb-2 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <p className="font-display text-[1.05rem] leading-tight">{s.title}</p>
+          <InfoTip text="Текст этого шага попадает в системный промпт, пока слот не закрыт. Пишите коротко, одним вопросом." />
         </div>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onSave}
-          className="shrink-0 rounded-full bg-primary px-2.5 py-1 text-[0.7rem] font-semibold text-primary-foreground disabled:opacity-50"
-        >
-          Сохранить
-        </button>
+        <p className="mt-0.5 text-[0.68rem] text-muted">
+          {s.step}
+          {s.auto ? " · из диалогов" : ""}
+          {s.updatedAt ? ` · ${when(s.updatedAt)}` : ""}
+        </p>
       </div>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={rows}
-        className="w-full resize-y rounded-xl bg-surface-2 px-3 py-2.5 text-sm leading-relaxed ring-1 ring-black/10"
+        className="w-full flex-1 resize-y rounded-xl bg-surface-2 px-3 py-2.5 text-sm leading-relaxed ring-1 ring-black/10"
       />
+      <AdminSaveBar>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onSave}
+          className="h-7 rounded-lg bg-black/[0.07] px-2.5 text-[0.7rem] font-semibold text-muted hover:bg-black/[0.12] disabled:opacity-50"
+        >
+          Сохранить
+        </button>
+      </AdminSaveBar>
     </article>
   );
 }
@@ -346,7 +347,7 @@ export function AdminTrain() {
             <p className="self-center text-sm text-muted">{rows.length} записей</p>
           </div>
 
-          <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+          <div className="flex flex-col rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
             <p className="text-sm font-semibold">
               Новая запись <InfoTip text="Ручной пример. Вопрос родителя и эталонный ответ. Тип «правило» — запрет или установка без реплики. Заметка в модель не уходит." />
             </p>
@@ -405,13 +406,14 @@ export function AdminTrain() {
                 />
               </label>
             )}
-            <span className="mt-4 inline-flex items-center gap-2">
-              <Button className="" type="button" disabled={busy || (!input.trim() && !output.trim())} onClick={() => void add()}>
-                Записать в обучение
-              </Button>
-              <InfoTip text="Попадает в промпт, если в «Ассистент ИИ» включено подмешивание примеров. Чем запись свежее, тем выше в списке. Лимит — 400 записей." />
-            </span>
-            {msg && pane === "examples" ? <p className="mt-2 text-sm text-primary">{msg}</p> : null}
+            <AdminSaveBar>
+              <TipWrap text="Попадает в промпт, если в «Ассистент ИИ» включено подмешивание примеров. Чем запись свежее, тем выше в списке. Лимит — 400 записей.">
+                <Button type="button" disabled={busy || (!input.trim() && !output.trim())} onClick={() => void add()}>
+                  Записать в обучение
+                </Button>
+              </TipWrap>
+            </AdminSaveBar>
+            {msg && pane === "examples" ? <p className="mt-2 text-right text-sm text-primary">{msg}</p> : null}
           </div>
 
           <div className="space-y-3">

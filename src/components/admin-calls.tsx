@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { adminCalls } from "@/data/admin";
 import { Button } from "@/components/ui/button";
 import { AdminSelfTest } from "@/components/admin-self-test";
+import { AdminSaveBar } from "@/components/admin-save-bar";
 import { cn } from "@/lib/utils";
 
 type Tab = "overview" | "crm" | "texts" | "knowledge" | "settings";
@@ -421,29 +422,30 @@ export function AdminCalls() {
 
       {tab === "settings" ? (
         <div className="space-y-4">
-          <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+          <div className="flex flex-col rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
             <p className="text-sm font-semibold">{connected ? "Novofon подключён" : "Ключи API"}</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <input placeholder="User key" value={novoKey} onChange={(e) => setNovoKey(e.target.value)} className="h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
               <input type="password" placeholder="Secret" value={novoSecret} onChange={(e) => setNovoSecret(e.target.value)} className="h-11 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
             </div>
-            <Button
-              className="mt-4"
-              disabled={busy || !novoKey || !novoSecret}
-              onClick={() => {
-                void (async () => {
-                  setBusy(true);
-                  const res = await adminCalls({ data: { token: token(), action: "connect", userKey: novoKey, secret: novoSecret } });
-                  setBusy(false);
-                  if (!res.ok) setErr(res.error);
-                  else setConnected(true);
-                })();
-              }}
-            >
-              Сохранить ключи
-            </Button>
+            <AdminSaveBar>
+              <Button
+                disabled={busy || !novoKey || !novoSecret}
+                onClick={() => {
+                  void (async () => {
+                    setBusy(true);
+                    const res = await adminCalls({ data: { token: token(), action: "connect", userKey: novoKey, secret: novoSecret } });
+                    setBusy(false);
+                    if (!res.ok) setErr(res.error);
+                    else setConnected(true);
+                  })();
+                }}
+              >
+                Сохранить ключи
+              </Button>
+            </AdminSaveBar>
           </div>
-          <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+          <div className="flex flex-col rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
             <p className="text-sm font-semibold">Параметры фона</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="text-sm">Минимум секунд
@@ -474,21 +476,22 @@ export function AdminCalls() {
                 </label>
               ))}
             </div>
-            <Button
-              className="mt-5"
-              disabled={busy}
-              onClick={() => {
-                void (async () => {
-                  setBusy(true);
-                  const res = await adminCalls({ data: { token: token(), action: "settings", settings } });
-                  setBusy(false);
-                  if (!res.ok) setErr(res.error);
-                  else if (res.settings) setSettings({ ...settings, ...res.settings });
-                })();
-              }}
-            >
-              Сохранить настройки
-            </Button>
+            <AdminSaveBar>
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  void (async () => {
+                    setBusy(true);
+                    const res = await adminCalls({ data: { token: token(), action: "settings", settings } });
+                    setBusy(false);
+                    if (!res.ok) setErr(res.error);
+                    else if (res.settings) setSettings({ ...settings, ...res.settings });
+                  })();
+                }}
+              >
+                Сохранить настройки
+              </Button>
+            </AdminSaveBar>
           </div>
         </div>
       ) : null}

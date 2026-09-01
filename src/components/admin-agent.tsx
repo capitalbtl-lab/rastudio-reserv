@@ -10,6 +10,7 @@ import { AdminTrain } from "@/components/admin-train";
 import { AdminAccess } from "@/components/admin-access";
 import { AdminDebug } from "@/components/admin-debug";
 import { AdminSelfTest } from "@/components/admin-self-test";
+import { AdminSaveBar } from "@/components/admin-save-bar";
 import { InfoTip } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
 
@@ -193,11 +194,11 @@ export function AdminAgent() {
               tip="Если Yandex SpeechKit не ответил — фраза всё равно прозвучит запасным голосом. Первое приветствие тоже озвучивается."
             />
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {msg ? <p className="text-sm text-primary">{msg}</p> : null}
             <Button type="button" disabled={busy} onClick={() => void save()}>
               Сохранить
             </Button>
-            {msg ? <p className="text-sm text-primary">{msg}</p> : null}
           </div>
         </div>
       ) : null}
@@ -257,7 +258,7 @@ export function AdminAgent() {
               />
             </label>
           </div>
-          <label className="block rounded-3xl bg-surface p-5 text-sm shadow-[var(--shadow-border)] md:p-6">
+          <label className="flex flex-col rounded-3xl bg-surface p-5 text-sm shadow-[var(--shadow-border)] md:p-6">
             Дополнительная инструкция (всегда в промпте)
             <textarea
               value={settings.extra}
@@ -266,13 +267,13 @@ export function AdminAgent() {
               placeholder="Например: не предлагай летние программы с сентября; на Гражданской нет беспилотников."
               className="mt-2 w-full rounded-xl bg-surface-2 px-3 py-2.5 ring-1 ring-black/10"
             />
+            <AdminSaveBar>
+              <Button type="button" disabled={busy} onClick={() => void save()}>
+                Сохранить настройки
+              </Button>
+            </AdminSaveBar>
           </label>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" disabled={busy} onClick={() => void save()}>
-              Сохранить настройки
-            </Button>
-            {msg ? <p className="text-sm text-primary">{msg}</p> : null}
-          </div>
+          {msg ? <p className="text-right text-sm text-primary">{msg}</p> : null}
         </div>
       ) : null}
 
