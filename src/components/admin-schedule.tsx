@@ -684,6 +684,7 @@ export function AdminSchedule() {
   const [openSchool, setOpenSchool] = useState("");
   const [openCourse, setOpenCourse] = useState("");
   const [openAll, setOpenAll] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [versions, setVersions] = useState<Ver[]>([]);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -1900,10 +1901,12 @@ export function AdminSchedule() {
 
       {versions.length ? (
         <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
-          <div className="flex items-center gap-2">
+          <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => setVersionsOpen((v) => !v)}>
             <p className="text-sm font-semibold">Версии</p>
             <InfoTip text="Каждая загрузка из CRM, сохранение, импорт и ИИ-правка пишут снимок. Откат возвращает таблицу на сайте. В AlfaCRM само не откатится — после отката нажмите «Выгрузить в AlfaCRM»." />
-          </div>
+            <span className="ml-auto text-sm text-muted">{versions.length} · {versionsOpen ? "свернуть" : "раскрыть"}</span>
+          </button>
+          {versionsOpen ? (
           <ul className="mt-3 space-y-2 text-sm">
             {versions.map((v) => (
               <li key={v.at} className="flex flex-wrap items-center justify-between gap-2">
@@ -1916,6 +1919,7 @@ export function AdminSchedule() {
               </li>
             ))}
           </ul>
+          ) : null}
         </article>
       ) : null}
 
