@@ -4,6 +4,7 @@ import type { CmsSession } from "@/data/cms";
 import { request, token } from "@/data/alfacrm";
 import { agesOverlap } from "@/data/ages";
 import { courseOf, dayLabel, schoolOf, slotFromSession, stampTimes, toSession, normalizeArtSlot, beatsOf, stampSubjects, type CrmSlot } from "@/data/crm-slots";
+import { matchSubject } from "@/data/crm-subjects";
 import { applyScheduleMap } from "@/data/schedule-map";
 
 const SKIP_SUBJECT = new Set([7, 54, 104, 85, 81, 1, 77, 106, 82, 105, 83, 90, 84, 88, 87]);
@@ -59,7 +60,8 @@ type Group = {
   note?: string;
   limit?: number;
   status_id?: number;
-  teacher_ids?: number[];
+  teacher_ids?: Array<number | string>;
+  branch_ids?: number[];
   b_date?: string;
   e_date?: string;
   subject_id?: number;
@@ -111,16 +113,12 @@ function endedOn(raw?: string) {
 
 function isLiveGroup(group?: Group): group is Group {
   if (!group) return false;
-  if (Number(group.status_id) === 2) return false;
-  if (/архив|отложен/i.test(group.name || "")) return false;
-  if (endedOn(group.e_date)) return false;
+  if (/отложен/i.test(group.name || "")) return false;
   return true;
 }
 
 function isLiveSlot(s: CrmSlot) {
-  if (Number(s.statusId) === 2) return false;
-  if (/архив|отложен/i.test(s.groupName || "")) return false;
-  if (endedOn(s.eDate)) return false;
+  if (/отложен/i.test(s.groupName || "")) return false;
   return true;
 }
 
@@ -225,7 +223,7 @@ export function signupUrl(branch: number, gid: string | number) {
 
 export function sessionsFromSlots(slots: CrmSlot[]): CmsSession[] {
   return stampTimes(slots.map((s) => normalizeArtSlot({ ...s })))
-    .filter((s) => s.school !== "Прочее" && s.statusId !== 2 && !/отложен/i.test(s.groupName))
+    .filter((s) => s.school !== "Прочее" && !/отложен/i.test(s.groupName) && (s.timeFrom || s.day))
     .flatMap((s) => {
       const beats = beatsOf(s);
       return beats.map((b, i) =>
@@ -347,6 +345,32 @@ export function saveAdminSlots(slots: CrmSlot[]) {
   return cache;
 }
 
+async function paged<T>(path: string, t: string): Promise<T[]> {
+  const items: T[] = [];
+  for (let page = 0; page < 30; page += 1) {
+    const res = await request<{ items?: T[]; total?: number }>(path, { page, pageSize: 100 }, t);
+    const batch = res.items || [];
+    items.push(...batch);
+    const total = Number(res.total || 0);
+    if (!batch.length || (total > 0 && items.length >= total) || batch.length < 100) break;
+  }
+  return items;
+}
+
+function teacherOf(raw: unknown, teachers: Map<number, string>) {
+  const arr = Array.isArray(raw) ? raw : [];
+  const ids: number[] = [];
+  const names: string[] = [];
+  for (const x of arr) {
+    const n = Number(x);
+    if (Number.isFinite(n) && n > 0 && String(x).trim() === String(n)) {
+      ids.push(n);
+      names.push(teachers.get(n) || String(n));
+    } else if (typeof x === "string" && x.trim()) names.push(x.trim());
+  }
+  return { ids, name: names.filter(Boolean).join(", ") };
+}
+
 async function loadCrm(force = false): Promise<CacheBag> {
   if (!force && cache && Date.now() - cache.at < TTL) return cache;
   if (!force) {
@@ -357,81 +381,89 @@ async function loadCrm(force = false): Promise<CacheBag> {
     }
   }
   const t = await token();
-  const sessions: CmsSession[] = [];
-  const slots: CrmSlot[] = [];
   const seats = new Map<string, SeatInfo>();
   const subjects = new Map<number, string>();
   const teachers = new Map<number, string>();
-  const sub = await request<{ items?: Subject[] }>("/v2api/2/subject/index", { page: 0, pageSize: 200 }, t);
-  for (const s of sub.items || []) subjects.set(s.id, s.name);
-  for (const branch of [1, 2, 3]) {
-    const tr = await request<{ items?: Teacher[] }>(`/v2api/${branch}/teacher/index`, { page: 0, pageSize: 200 }, t).catch(() => ({ items: [] as Teacher[] }));
-    for (const p of tr.items || []) if (p.id) teachers.set(p.id, p.name || String(p.id));
-    const groups = await request<{ items?: Group[] }>(`/v2api/${branch}/group/index`, { page: 0, pageSize: 200 }, t);
-    const groupMap = new Map((groups.items || []).map((g) => [g.id, g]));
+  const groupsById = new Map<number, { g: Group; fromBranch: number }>();
+  const lessons: Lesson[] = [];
+  const sub = await paged<Subject>("/v2api/2/subject/index", t);
+  for (const s of sub) subjects.set(s.id, s.name);
+  for (const branch of [1, 2, 3, 4]) {
+    const tr = await paged<Teacher>(`/v2api/${branch}/teacher/index`, t).catch(() => [] as Teacher[]);
+    for (const p of tr) if (p.id) teachers.set(p.id, p.name || String(p.id));
+    const groups = await paged<Group>(`/v2api/${branch}/group/index`, t);
     const taken = await loadSeats(branch, t).catch(() => new Map<number, number>());
-    for (const g of groups.items || []) {
+    for (const g of groups) {
+      if (!groupsById.has(g.id)) groupsById.set(g.id, { g, fromBranch: branch });
       seats.set(seatKey(branch, g.id), { limit: Number(g.limit) || 0, taken: taken.get(g.id) || 0 });
     }
-    const lessons = await request<{ items?: Lesson[] }>(
-      `/v2api/${branch}/regular-lesson/index`,
-      { page: 0, pageSize: 200 },
-      t,
-    );
-    const meta = BRANCH[branch];
-    for (const lesson of lessons.items || []) {
-      const sid = Number(lesson.subject_id);
-      const group = lesson.related_id ? groupMap.get(lesson.related_id) : undefined;
-      if (!isLiveGroup(group)) continue;
-      const subjectName = subjects.get(sid) || group.name || "Курс";
-      const age = ageOf(group?.name || "") || ageOf(subjectName);
-      const path = SUBJECT_PATH[sid] || "";
-      const gid = Number(group?.id || lesson.related_id || 0);
-      const tIds = (lesson.teacher_ids || group?.teacher_ids || []).map(Number).filter(Boolean);
-      const teacherId = tIds[0] || 0;
-      const from = String(lesson.time_from_v || lesson.time_from || "").slice(0, 5);
-      const to = String(lesson.time_to_v || lesson.time_to || "").slice(0, 5);
-      const day = Number(lesson.day) || 1;
-      const school = schoolOf(path, subjectName, group?.name || "");
-      const seat = gid ? seats.get(seatKey(branch, gid)) : undefined;
-      const slot: CrmSlot = {
-        id: `crm-${lesson.id}`,
-        lessonId: Number(lesson.id),
-        groupId: gid,
-        groupName: group?.name || subjectName,
-        groupNote: String(group?.note || ""),
-        statusId: Number(group?.status_id || 0),
-        limit: seat?.limit || Number(group?.limit) || 0,
+    lessons.push(...(await paged<Lesson>(`/v2api/${branch}/regular-lesson/index`, t)));
+  }
+  const lessonsByGid = new Map<number, Lesson[]>();
+  for (const lesson of lessons) {
+    const gid = Number(lesson.related_id || 0);
+    if (!gid) continue;
+    const list = lessonsByGid.get(gid) || [];
+    list.push(lesson);
+    lessonsByGid.set(gid, list);
+  }
+  const slots: CrmSlot[] = [];
+  for (const { g, fromBranch } of groupsById.values()) {
+    if (!isLiveGroup(g)) continue;
+    const branchId = Number(g.branch_ids?.[0]) || Number(fromBranch) || 1;
+    const meta = BRANCH[branchId] || BRANCH[fromBranch] || BRANCH[1];
+    const groupLessons = lessonsByGid.get(g.id) || [];
+    const first = groupLessons[0];
+    const sid = Number(g.subject_id || first?.subject_id) || matchSubject(g.name)?.id || 0;
+    const subjectName = (sid && subjects.get(sid)) || matchSubject(g.name)?.name || g.name;
+    const path = SUBJECT_PATH[sid] || "";
+    const teach = teacherOf(first?.teacher_ids || g.teacher_ids, teachers);
+    const seat = seats.get(seatKey(branchId, g.id)) || seats.get(seatKey(fromBranch, g.id));
+    const beats = groupLessons.map((lesson) => ({
+      day: Number(lesson.day) || 1,
+      timeFrom: String(lesson.time_from_v || lesson.time_from || "").slice(0, 5),
+      timeTo: String(lesson.time_to_v || lesson.time_to || "").slice(0, 5),
+      lessonId: Number(lesson.id) || 0,
+    }));
+    const a = beats[0] || { day: 1, timeFrom: "", timeTo: "", lessonId: 0 };
+    slots.push(
+      normalizeArtSlot({
+        id: first ? `crm-${first.id}` : `crm-g${g.id}`,
+        lessonId: a.lessonId,
+        groupId: g.id,
+        groupName: g.name,
+        groupNote: String(g.note || ""),
+        statusId: Number(g.status_id || 0),
+        limit: seat?.limit || Number(g.limit) || 0,
         taken: seat?.taken || 0,
         subjectId: sid,
         subject: subjectName,
-        school,
-        course: courseOf(subjectName, group?.name || "", path),
+        school: schoolOf(path, subjectName, g.name),
+        course: courseOf(subjectName, g.name, path),
         path,
-        age,
-        day,
-        dayLabel: dayLabel(day),
-        timeFrom: from,
-        timeTo: to,
-        timesPerWeek: 1,
-        branchId: branch,
+        age: ageOf(g.name) || ageOf(subjectName),
+        day: a.day,
+        dayLabel: dayLabel(a.day),
+        timeFrom: a.timeFrom,
+        timeTo: a.timeTo,
+        timesPerWeek: Math.max(1, beats.length),
+        beats: beats.length ? beats : undefined,
+        branchId,
         city: meta.city,
         branch: meta.branch,
-        signup: gid ? signupUrl(branch, gid) : path,
-        teacherId,
-        teacherIds: tIds,
-        teacher: tIds.map((id) => teachers.get(id) || String(id)).join(", "),
-        roomId: Number(lesson.room_id) || 0,
-        bDate: String(group?.b_date || ""),
-        eDate: String(group?.e_date || ""),
-      };
-      slots.push(normalizeArtSlot(slot));
-      if (!sid || SKIP_SUBJECT.has(sid)) continue;
-      sessions.push(toSession(slots[slots.length - 1]));
-    }
+        signup: signupUrl(branchId, g.id),
+        teacherId: teach.ids[0] || 0,
+        teacherIds: teach.ids,
+        teacher: teach.name,
+        roomId: Number(first?.room_id) || 0,
+        bDate: String(g.b_date || ""),
+        eDate: String(g.e_date || ""),
+      }),
+    );
   }
-  stampTimes(slots);
-  cache = { at: Date.now(), sessions, seats, slots: slots.filter(isLiveSlot) };
+  const stamped = stampTimes(slots.filter(isLiveSlot));
+  const sessions = stamped.filter((s) => s.subjectId && !SKIP_SUBJECT.has(s.subjectId)).map(toSession);
+  cache = { at: Date.now(), sessions, seats, slots: stamped };
   try {
     writeSnap(cache);
   } catch {
