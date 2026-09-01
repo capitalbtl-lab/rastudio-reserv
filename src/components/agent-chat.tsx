@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { X, Send, Mic, Volume2, RotateCcw } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
 import { publicAgentUi, type AgentUiFlags } from "@/data/agent-config";
+import { debugSession } from "@/data/debug-mode";
 import { speakAgent } from "@/data/agent-voice";
 import { saveChatLog } from "@/data/chat-logs";
 import { nextChips } from "@/data/agent-chips";
@@ -208,6 +209,8 @@ export function AgentChat() {
     keepAssistantReplies: true,
     speakEveryReply: true,
   });
+  const [debugOn, setDebugOn] = useState(false);
+  const [debugWidget, setDebugWidget] = useState<Record<string, boolean>>({});
   const dragRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const lastMsgRef = useRef<HTMLDivElement>(null);
@@ -285,6 +288,40 @@ export function AgentChat() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    function read() {
+      try {
+        const t = sessionStorage.getItem("ra_debug");
+        if (!t) {
+          setDebugOn(false);
+          setDebugWidget({});
+          return;
+        }
+        void debugSession({ data: { token: t } }).then((res) => {
+          if (res.ok && "widget" in res) {
+            setDebugOn(true);
+            setDebugWidget(res.widget || {});
+          } else {
+            setDebugOn(false);
+            setDebugWidget({});
+          }
+        });
+      } catch {
+        setDebugOn(false);
+        setDebugWidget({});
+      }
+    }
+    read();
+    window.addEventListener("ra-debug-session", read);
+    return () => window.removeEventListener("ra-debug-session", read);
+  }, []);
+
+  function uiOn(key: keyof AgentUiFlags) {
+    if (key === "defaultPartner") return true;
+    if (ui[key]) return true;
+    return debugOn && debugWidget[key] === true;
+  }
 
   useEffect(() => {
     if (adminMs > 0 && partner !== "olga") setPartner("olga");
@@ -866,7 +903,7 @@ export function AgentChat() {
     dragRef.current = null;
   }
 
-  if (!ui.showChat) return null;
+  if (!uiOn("showChat")) return null;
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] md:inset-auto md:bottom-6 md:right-6">
@@ -889,7 +926,7 @@ export function AgentChat() {
           </button>
           <div className={cn("relative shrink-0 px-3 pb-2.5 pt-2.5 text-primary-foreground sm:px-4 sm:pb-3.5 sm:pt-3.5", inAdminUi ? "bg-ink" : "bg-primary")}>
             <div className="absolute right-2 top-2 flex items-center gap-1 sm:right-3 sm:top-3 sm:gap-1.5">
-              {ui.allowReset ? (
+              {uiOn("allowReset") ? (
               <button
                 type="button"
                 className="grid size-8 place-items-center rounded-full bg-black/15 hover:bg-black/25 sm:size-9"
@@ -966,9 +1003,9 @@ export function AgentChat() {
                 </p>
               </div>
             </div>
-            {inAdminUi ? null : ui.allowOlga || ui.allowOleg ? (
-              <div className={cn("mt-2 grid gap-1.5", ui.allowOlga && ui.allowOleg ? "grid-cols-2" : "grid-cols-1")}>
-                {ui.allowOlga ? (
+            {inAdminUi ? null : uiOn("allowOlga") || uiOn("allowOleg") ? (
+              <div className={cn("mt-2 grid gap-1.5", uiOn("allowOlga") && uiOn("allowOleg") ? "grid-cols-2" : "grid-cols-1")}>
+                {uiOn("allowOlga") ? (
                 <button
                   type="button"
                   className={cn(
@@ -980,7 +1017,7 @@ export function AgentChat() {
                   <span className="hidden min-[400px]:inline">Говорить с </span>Ольгой
                 </button>
                 ) : null}
-                {ui.allowOleg ? (
+                {uiOn("allowOleg") ? (
                 <button
                   type="button"
                   className={cn(
@@ -1003,7 +1040,7 @@ export function AgentChat() {
               const turns = (inAdminUi ? turnsRaw.filter((t) => t.who === "olga") : turnsRaw.filter((t) => t.who === partner));
               const view = turns.length ? turns : [{ who: mode as Who, text: m.content.replace(/^(Олег|Ольга):\s*/i, "") }];
               const chipBar =
-                i === lastAs && !busy && ui.showChips && offer.chips.length ? (
+                i === lastAs && !busy && uiOn("showChips") && offer.chips.length ? (
                   <div className="pl-11">
                     {offer.hint ? (
                       <p className="mb-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">{offer.hint}</p>
@@ -1084,7 +1121,7 @@ export function AgentChat() {
               void send();
             }}
           >
-            {ui.allowVoice ? (
+            {uiOn("allowVoice") ? (
             <div className="mb-2 space-y-1.5">
             <button
               type="button"
@@ -1097,7 +1134,7 @@ export function AgentChat() {
               {voiceOn ? <Mic className="size-4" /> : <Volume2 className="size-4" />}
               {voiceOn ? (listening ? "Слушаю… нажмите, чтобы выключить" : speaking ? "Говорю… нажмите, чтобы выключить" : "Выключить голосовой режим") : "Включить голосовой режим"}
             </button>
-            {voiceOn && ui.allowBarge !== false ? (
+            {voiceOn && uiOn("allowBarge") ? (
               <button
                 type="button"
                 onClick={() => {
@@ -1124,7 +1161,7 @@ export function AgentChat() {
             ) : null}
             </div>
             ) : null}
-            {voiceOn && ui.allowVoice ? null : (
+            {voiceOn && uiOn("allowVoice") ? null : (
             <div className="flex items-center gap-2 rounded-full bg-[#eef1f7] p-1 ring-1 ring-black/8 focus-within:ring-2 focus-within:ring-primary/40">
               <input
                 value={text}
@@ -1158,7 +1195,7 @@ export function AgentChat() {
               <p className="min-w-0 truncate text-[0.65rem] text-muted">
                 {voiceOn ? (speaking ? "Сейчас говорят" : "Голосовой режим включён") : `Пробное · ${SITE.phone}`}
               </p>
-              {ui.allowAdminMode ? (
+              {uiOn("allowAdminMode") ? (
               <button
                 type="button"
                 className="shrink-0 text-[0.62rem] font-semibold text-primary underline-offset-2 hover:underline"

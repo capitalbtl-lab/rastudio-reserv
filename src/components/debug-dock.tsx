@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { debugSession, unlockDebug, type DebugToolId } from "@/data/debug-mode";
+import { debugSession, unlockDebug, debugSessionChanged, type DebugToolId } from "@/data/debug-mode";
 import { slotsFromMessages } from "@/data/funnel-state";
 import { Button } from "@/components/ui/button";
 
@@ -69,6 +69,7 @@ export function DebugDock() {
     setOn(true);
     setAsk(false);
     setPass("");
+    debugSessionChanged();
   }
 
   function leave() {
@@ -79,6 +80,7 @@ export function DebugDock() {
     }
     setOn(false);
     setTools({});
+    debugSessionChanged();
   }
 
   const slots = slotsFromMessages(chat);

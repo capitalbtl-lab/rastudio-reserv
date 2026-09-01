@@ -44,6 +44,20 @@ export type AgentUiFlags = Pick<
   | "speakEveryReply"
 >;
 
+export const WINDOW_FLAGS: { id: keyof AgentUiFlags; title: string; hint: string; tip: string }[] = [
+  { id: "showChat", title: "Окно ИИ-агента на сайте", hint: "Кнопка «Подобрать курс» и само окно чата.", tip: "Выключено на сайте — посетитель не видит. В отладке можно включить только для себя." },
+  { id: "allowVoice", title: "Голосовой режим", hint: "Кнопка «Включить голосовой режим» и микрофон ввода.", tip: "Выключено — только текст. В отладке можно вернуть голос." },
+  { id: "allowAdminMode", title: "Административный режим из чата", hint: "Ссылка «войти в административный режим» внизу окна.", tip: "На сайте можно скрыть. В отладке можно оставить для проверки." },
+  { id: "showChips", title: "Кнопки-подсказки под сообщениями", hint: "Возраст, город, филиал, курсы и прочие чипы.", tip: "Выключено — только текст. В отладке чипы можно включить отдельно." },
+  { id: "allowOlga", title: "Говорить с Ольгой", hint: "Кнопка выбора Ольги в шапке чата.", tip: "Если выключено на сайте, в отладке можно вернуть кнопку." },
+  { id: "allowOleg", title: "Говорить с Олегом", hint: "Кнопка выбора Олега в шапке чата.", tip: "То же: сайт скрывает, отладка может показать." },
+  { id: "allowReset", title: "Сброс и обновление диалога", hint: "Круглая кнопка сброса в шапке окна.", tip: "На сайте можно убрать. В отладке удобно оставить." },
+  { id: "allowBarge", title: "Перебивание в голосовом режиме", hint: "Кнопка «Можно перебивать».", tip: "Посетитель не видит, если выключено. Отладка может включить." },
+  { id: "matchChipsToMessage", title: "Кнопки только под текст", hint: "Подсказки совпадают с последней фразой.", tip: "Влияет на логику чипов, не на видимость окна." },
+  { id: "keepAssistantReplies", title: "Не удалять ответы ассистента", hint: "Каждая реплика остаётся в ленте.", tip: "Логика ленты. В отладке можно включить отдельно." },
+  { id: "speakEveryReply", title: "Озвучивать каждый вопрос", hint: "Голосовой режим читает всю фразу.", tip: "На сайте выключено — молчит. В отладке можно слушать." },
+];
+
 export type TrainExample = {
   id: string;
   at: string;
@@ -213,6 +227,8 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
         allowReset: flag(data.settings?.allowReset, brain.settings.allowReset),
         allowBarge: flag(data.settings?.allowBarge, brain.settings.allowBarge),
         matchChipsToMessage: flag(data.settings?.matchChipsToMessage, brain.settings.matchChipsToMessage),
+        keepAssistantReplies: flag(data.settings?.keepAssistantReplies, brain.settings.keepAssistantReplies),
+        speakEveryReply: flag(data.settings?.speakEveryReply, brain.settings.speakEveryReply),
         updatedAt: new Date().toISOString(),
       };
       saveBrain(brain);

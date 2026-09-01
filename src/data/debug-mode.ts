@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { createServerFn } from "@tanstack/react-start";
 import { checkPassword, logAdmin } from "./admin-settings";
 import { isAdminRequest, makeAdminToken, tokenOk } from "./admin-auth";
+import { WINDOW_FLAGS } from "./agent-config";
 
 export const DEBUG_TOOLS = [
   { id: "chat", label: "Лента чата", hint: "Сырые сообщения Олега и Ольги, как уходят в историю." },
@@ -12,11 +13,19 @@ export const DEBUG_TOOLS = [
 ] as const;
 
 export type DebugToolId = (typeof DEBUG_TOOLS)[number]["id"];
+export type DebugWidgetId = (typeof WINDOW_FLAGS)[number]["id"];
 
-type DebugSettings = { tools: Record<string, boolean> };
+type DebugSettings = { tools: Record<string, boolean>; widget: Record<string, boolean> };
+
+function emptyWidget() {
+  const widget: Record<string, boolean> = {};
+  for (const f of WINDOW_FLAGS) widget[f.id] = false;
+  return widget;
+}
 
 const DEFAULT: DebugSettings = {
   tools: { chat: true, funnel: true, voice: true, net: true },
+  widget: emptyWidget(),
 };
 
 function fileOf() {
@@ -25,11 +34,14 @@ function fileOf() {
 
 export function loadDebug(): DebugSettings {
   try {
-    if (!existsSync(fileOf())) return { ...DEFAULT, tools: { ...DEFAULT.tools } };
+    if (!existsSync(fileOf())) return { tools: { ...DEFAULT.tools }, widget: emptyWidget() };
     const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Partial<DebugSettings>;
-    return { tools: { ...DEFAULT.tools, ...(raw.tools || {}) } };
+    return {
+      tools: { ...DEFAULT.tools, ...(raw.tools || {}) },
+      widget: { ...emptyWidget(), ...(raw.widget || {}) },
+    };
   } catch {
-    return { ...DEFAULT, tools: { ...DEFAULT.tools } };
+    return { tools: { ...DEFAULT.tools }, widget: emptyWidget() };
   }
 }
 
@@ -39,7 +51,7 @@ function saveDebug(s: DebugSettings) {
 }
 
 export const adminDebugMode = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { token?: string; action: "get" | "save"; tools?: Record<string, boolean> })
+  .validator((data: unknown) => data as { token?: string; action: "get" | "save"; tools?: Record<string, boolean>; widget?: Record<string, boolean> })
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
     if (data.action === "save") {
@@ -48,11 +60,16 @@ export const adminDebugMode = createServerFn({ method: "POST" })
       for (const t of DEBUG_TOOLS) {
         if (data.tools && t.id in data.tools) tools[t.id] = Boolean(data.tools[t.id]);
       }
-      saveDebug({ tools });
+      const widget = { ...cur.widget };
+      for (const f of WINDOW_FLAGS) {
+        if (data.widget && f.id in data.widget) widget[f.id] = Boolean(data.widget[f.id]);
+      }
+      saveDebug({ tools, widget });
       logAdmin("Режим отладки: набор инструментов обновлён");
-      return { ok: true as const, tools };
+      return { ok: true as const, tools, widget };
     }
-    return { ok: true as const, tools: loadDebug().tools };
+    const s = loadDebug();
+    return { ok: true as const, tools: s.tools, widget: s.widget };
   });
 
 export const unlockDebug = createServerFn({ method: "POST" })
@@ -61,14 +78,16 @@ export const unlockDebug = createServerFn({ method: "POST" })
     if (!checkPassword(String(data.password || ""))) {
       return { ok: false as const, error: "Пароль не подошёл." };
     }
-    return { ok: true as const, token: makeAdminToken(2 * 60 * 60 * 1000), tools: loadDebug().tools };
+    const s = loadDebug();
+    return { ok: true as const, token: makeAdminToken(2 * 60 * 60 * 1000), tools: s.tools, widget: s.widget };
   });
 
 export const debugSession = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string })
   .handler(async ({ data }) => {
     if (!tokenOk(data.token)) return { ok: false as const };
-    return { ok: true as const, tools: loadDebug().tools };
+    const s = loadDebug();
+    return { ok: true as const, tools: s.tools, widget: s.widget };
   });
 
 export function debugEmit(kind: string, payload: unknown) {
@@ -78,4 +97,9 @@ export function debugEmit(kind: string, payload: unknown) {
   } catch {
     /* */
   }
+}
+
+export function debugSessionChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("ra-debug-session"));
 }

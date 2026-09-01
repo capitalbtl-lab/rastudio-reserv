@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { adminAgentBrain, type AgentSettings } from "@/data/agent-config";
+import { adminAgentBrain, type AgentSettings, WINDOW_FLAGS } from "@/data/agent-config";
 import { Button } from "@/components/ui/button";
 import { AdminChats } from "@/components/admin-chats";
 import { AdminVoices } from "@/components/admin-voices";
@@ -115,83 +115,16 @@ export function AdminAgent() {
       {pane === "window" ? (
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
-            <Toggle
-              on={settings.showChat}
-              set={(v) => setSettings({ ...settings, showChat: v })}
-              title="Окно ИИ-агента на сайте"
-              hint="Кнопка «Подобрать курс» и само окно чата. Выключите — посетитель агента не увидит."
-              tip="Полностью прячет виджет на всех страницах. Диалоги и обучение в кабинете остаются. Чтобы вернуть — включите снова и сохраните."
-            />
-            <Toggle
-              on={settings.allowVoice}
-              set={(v) => setSettings({ ...settings, allowVoice: v })}
-              title="Голосовой режим"
-              hint="Кнопка «Включить голосовой режим» и микрофон ввода."
-              tip="Выключено — только текст. Уже открытый голосовой сеанс на сайте закроется после обновления страницы."
-            />
-            <Toggle
-              on={settings.allowAdminMode}
-              set={(v) => setSettings({ ...settings, allowAdminMode: v })}
-              title="Административный режим из чата"
-              hint="Ссылка «войти в административный режим» внизу окна."
-              tip="Выключите, если правки сайта только из этого кабинета. Кодовое слово в чате тогда не предлагается."
-            />
-            <Toggle
-              on={settings.showChips}
-              set={(v) => setSettings({ ...settings, showChips: v })}
-              title="Кнопки-подсказки под сообщениями"
-              hint="Возраст, город, филиал, курсы и прочие чипы."
-              tip="Текст вводить можно. Без кнопок воронка идёт голосовыми/текстовыми ответами. Обычно оставляют включённым."
-            />
-            <Toggle
-              on={settings.allowOlga}
-              set={(v) => setSettings({ ...settings, allowOlga: v })}
-              title="Говорить с Ольгой"
-              hint="Кнопка выбора Ольги в шапке чата."
-              tip="Если Ольгу выключить, а Олега оставить — чат сразу с Олегом. Если обоих выключить, кнопок выбора не будет, говорит тот, кто «встречает»."
-            />
-            <Toggle
-              on={settings.allowOleg}
-              set={(v) => setSettings({ ...settings, allowOleg: v })}
-              title="Говорить с Олегом"
-              hint="Кнопка выбора Олега в шапке чата."
-              tip="Олег — техника. Если его нет, творческие и технические вопросы ведёт Ольга."
-            />
-            <Toggle
-              on={settings.allowReset}
-              set={(v) => setSettings({ ...settings, allowReset: v })}
-              title="Сброс и обновление диалога"
-              hint="Круглая кнопка сброса в шапке окна."
-              tip="Без неё история сессии не сбрасывается с сайта. Новый посетитель всё равно начинает с чистого чата."
-            />
-            <Toggle
-              on={settings.allowBarge !== false}
-              set={(v) => setSettings({ ...settings, allowBarge: v })}
-              title="Перебивание в голосовом режиме"
-              hint="В окне чата появляется кнопка «Можно перебивать»."
-              tip="Посетитель сам включает. Пока говорит ассистент — можно сказать поверх, и ответ сразу пойдёт в чат. По умолчанию у клиента выключено, чтобы не ловить эхо."
-            />
-            <Toggle
-              on={settings.matchChipsToMessage !== false}
-              set={(v) => setSettings({ ...settings, matchChipsToMessage: v })}
-              title="Кнопки только под текст"
-              hint="Подсказки совпадают с последней фразой. Не показываем возраст, если спросили город."
-              tip="Выключите — кнопки снова по воронке, даже если в сообщении другой вопрос. Обычно оставляют включённым."
-            />
-            <Toggle
-              on={settings.keepAssistantReplies !== false}
-              set={(v) => setSettings({ ...settings, keepAssistantReplies: v })}
-              title="Не удалять ответы ассистента"
-              hint="Каждая реплика Олега и Ольги остаётся в ленте."
-              tip="Раньше похожий вопрос глотался и казалось, что ответ стёрли. Выключите только если лента дублируется."
-            />
-            <Toggle
-              on={settings.speakEveryReply !== false}
-              set={(v) => setSettings({ ...settings, speakEveryReply: v })}
-              title="Озвучивать каждый вопрос"
-              hint="Голосовой режим читает всю фразу, включая вопрос в конце."
-              tip="Если Yandex SpeechKit не ответил — фраза всё равно прозвучит запасным голосом. Первое приветствие тоже озвучивается."
-            />
+            {WINDOW_FLAGS.map((f) => (
+              <Toggle
+                key={f.id}
+                on={Boolean(settings[f.id])}
+                set={(v) => setSettings({ ...settings, [f.id]: v })}
+                title={f.title}
+                hint={f.hint}
+                tip={f.tip}
+              />
+            ))}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
             {msg ? <p className="text-sm text-primary">{msg}</p> : null}
