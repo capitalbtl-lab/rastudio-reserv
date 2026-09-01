@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import type { CmsSession } from "@/data/cms";
 import { request } from "@/data/alfacrm";
 import { yandexJson } from "@/data/agent-channels";
-import { matchSubject, loadSubjects } from "@/data/crm-subjects";
+import { matchSubject, loadSubjects, bestSubject } from "@/data/crm-subjects";
 import { type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
 
 export { SCHOOL_ORDER, type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
@@ -46,6 +46,16 @@ const COLS = [
 
 function schoolFile() {
   return join(process.cwd(), "storage", "crm-schedule-versions.json");
+}
+
+export function stampSubjects(slots: CrmSlot[]): CrmSlot[] {
+  const list = loadSubjects();
+  return slots.map((s) => {
+    const hit = bestSubject(`${s.groupName} ${s.course} ${s.age} ${s.subject}`, list);
+    if (!hit) return s;
+    if (s.subjectId === hit.id && s.subject === hit.name) return s;
+    return { ...s, subjectId: hit.id, subject: hit.name };
+  });
 }
 
 export function schoolOf(path: string, subject: string, group: string) {

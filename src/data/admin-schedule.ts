@@ -7,6 +7,7 @@ import {
   refreshCrmSchedule,
   saveAdminSlots,
   sessionsFromCrm,
+  bindSubjectsOnSite,
 } from "./alfacrm-schedule";
 import {
   aiScheduleParse,
@@ -85,7 +86,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
           /* */
         }
       }
-      return pack(slots);
+      const bound = bindSubjectsOnSite();
+      if (bound.changed) logAdmin(`Предметы привязаны к группам на сайте: ${bound.slots.length}`);
+      return pack(bound.slots);
     }
     if (data.action === "pull") {
       try {

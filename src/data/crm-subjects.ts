@@ -94,15 +94,81 @@ export function saveSubjects(items: CrmSubject[]) {
 }
 
 export function matchSubject(name: string, list = loadSubjects()): CrmSubject | undefined {
-  const n = foldSubject(name);
-  if (!n) return;
-  const exact = list.find((s) => foldSubject(s.name) === n);
-  if (exact) return exact;
-  const loose = list.find((s) => {
-    const m = foldSubject(s.name);
-    return m.length > 8 && (n.includes(m) || m.includes(n));
-  });
-  return loose;
+  return bestSubject(name, list);
+}
+
+function ageRanges(s: string) {
+  const out: { lo: number; hi: number }[] = [];
+  for (const m of s.matchAll(/(\d{1,2})\s*[-–—]\s*(\d{1,2})/g)) {
+    const lo = Number(m[1]);
+    const hi = Number(m[2]);
+    if (lo && hi && lo <= hi && hi < 20) out.push({ lo, hi });
+  }
+  for (const m of s.matchAll(/(\d{1,2})\s*\+/g)) {
+    const lo = Number(m[1]);
+    if (lo && lo < 20) out.push({ lo, hi: lo + 6 });
+  }
+  return out;
+}
+
+function ageHit(a: string, b: string) {
+  const x = ageRanges(a);
+  const y = ageRanges(b);
+  if (!x.length || !y.length) return { both: false, n: 0 };
+  let n = 0;
+  for (const p of x) {
+    for (const q of y) {
+      const lo = Math.max(p.lo, q.lo);
+      const hi = Math.min(p.hi, q.hi);
+      if (lo <= hi) n += hi - lo + 1;
+    }
+  }
+  return { both: true, n };
+}
+
+const STOP = new Set(["для", "лет", "год", "года", "детей", "курс", "школа", "the", "and", "на"]);
+
+function wordsOf(s: string) {
+  return foldSubject(s)
+    .split(/[^a-zа-я0-9+]+/)
+    .filter((w) => w.length > 2 && !STOP.has(w));
+}
+
+export function scoreSubject(hay: string, sub: CrmSubject) {
+  const n = foldSubject(hay);
+  const m = foldSubject(sub.name);
+  if (!n || !m) return 0;
+  const n2 = n.replace(/^\d{4}\s+/, "");
+  let score = 0;
+  if (n === m || n2 === m) score = 1000;
+  else if (n.includes(m) || n2.includes(m)) score = 620 + Math.min(80, m.length);
+  else if (m.includes(n2) && n2.length > 12) score = 520 + Math.min(40, n2.length);
+  else {
+    const nw = new Set(wordsOf(n2));
+    const mw = wordsOf(m);
+    if (!mw.length) return 0;
+    const hit = mw.filter((w) => nw.has(w)).length;
+    score = hit * 28;
+  }
+  const ages = ageHit(n, m);
+  if (ages.both) {
+    if (!ages.n) score = Math.min(score, 18);
+    else score += ages.n * 55;
+  }
+  return score;
+}
+
+export function bestSubject(name: string, list = loadSubjects()): CrmSubject | undefined {
+  let best: CrmSubject | undefined;
+  let score = 0;
+  for (const s of list) {
+    const sc = scoreSubject(name, s);
+    if (sc > score) {
+      score = sc;
+      best = s;
+    }
+  }
+  return score >= 40 ? best : undefined;
 }
 
 function crmId(res: unknown) {

@@ -82,7 +82,7 @@ function inCrm(s: CrmSlot) {
   return Number(s.groupId) > 0 && !String(s.id).startsWith("local-");
 }
 
-function GroupNameField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function GroupNameField({ value, onChange, subject }: { value: string; onChange: (v: string) => void; subject?: string }) {
   const src = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, height: 32, width: 160 });
@@ -121,7 +121,7 @@ function GroupNameField({ value, onChange }: { value: string; onChange: (v: stri
       <input
         ref={src}
         value={value}
-        title={value}
+        title={subject ? `${value} · предмет: ${subject}` : value}
         onChange={(e) => onChange(e.target.value)}
         onMouseEnter={() => {
           setOpen(true);
@@ -1524,7 +1524,7 @@ export function AdminSchedule() {
                                   </div>
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
-                                  <GroupNameField value={s.groupName} onChange={(v) => patch(s.id, "groupName", v)} />
+                                  <GroupNameField value={s.groupName} subject={s.subject} onChange={(v) => patch(s.id, "groupName", v)} />
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
                                   <input value={s.age} onChange={(e) => patch(s.id, "age", e.target.value)} className={box} />
