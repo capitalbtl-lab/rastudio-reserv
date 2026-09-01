@@ -54,4 +54,12 @@ export type CrmSlot = {
   levelId?: number;
 };
 
+export type GroupCalLesson = {
+  date: string;
+  from: string;
+  to: string;
+  status: number;
+  type: string;
+};
+
 export type SlotVersion = { at: string; reason: string; count: number; slots: CrmSlot[] };

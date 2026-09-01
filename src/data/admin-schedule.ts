@@ -24,6 +24,38 @@ import {
   type SlotDraft,
 } from "./crm-slots";
 import { loadSubjects, saveSubjects, pullSubjectsFromCrm, pushSubjectsToCrm } from "./crm-subjects";
+import type { GroupCalLesson } from "./crm-slots-core";
+
+function parseCrmDate(raw?: string) {
+  const s = String(raw || "").trim();
+  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (ru) return new Date(Number(ru[3]), Number(ru[2]) - 1, Number(ru[1]));
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  return null;
+}
+
+function ymd(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function hm(raw?: string) {
+  const m = String(raw || "").match(/(\d{1,2}):(\d{2})/);
+  return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
+}
+
+function expandWeekday(day: number, from: string, to: string, start: Date, end: Date): GroupCalLesson[] {
+  if (!day) return [];
+  const want = day === 7 ? 0 : day;
+  const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  while (cur.getDay() !== want) cur.setDate(cur.getDate() + 1);
+  const out: GroupCalLesson[] = [];
+  while (cur <= end) {
+    out.push({ date: ymd(cur), from, to, status: 0, type: "Групповое" });
+    cur.setDate(cur.getDate() + 7);
+  }
+  return out;
+}
 
 export const adminSchedule = createServerFn({ method: "POST" })
   .validator(
@@ -253,6 +285,66 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const g = (json.items || []).find((x) => Number(x.id) === gid);
       if (!g) return { ok: false as const, error: "Группа не найдена в AlfaCRM." };
       const slot = listAdminSlots().find((s) => s.groupId === gid && s.branchId === branch);
+      const byDate = new Map<string, GroupCalLesson>();
+      const horizonStart = new Date();
+      horizonStart.setMonth(horizonStart.getMonth() - 1, 1);
+      const horizonEnd = new Date(horizonStart.getFullYear(), horizonStart.getMonth() + 8, 0);
+      try {
+        const regs: {
+          id?: number;
+          related_id?: number;
+          day?: number;
+          time_from_v?: string;
+          time_to_v?: string;
+          b_date?: string;
+          e_date?: string;
+        }[] = [];
+        for (let page = 0; page < 8; page++) {
+          const pack = await request<{ items?: typeof regs }>(`/v2api/${branch}/regular-lesson/index`, { page, pageSize: 100 }, t);
+          const chunk = pack.items || [];
+          regs.push(...chunk);
+          if (chunk.length < 100) break;
+        }
+        const mine = regs.filter((r) => Number(r.related_id) === gid);
+        for (const r of mine) {
+          const start = parseCrmDate(r.b_date) || horizonStart;
+          const end = parseCrmDate(r.e_date) || horizonEnd;
+          const from = hm(r.time_from_v);
+          const to = hm(r.time_to_v);
+          for (const occ of expandWeekday(Number(r.day || 0), from, to, start < horizonStart ? horizonStart : start, end > horizonEnd ? horizonEnd : end)) {
+            byDate.set(occ.date, occ);
+          }
+          if (r.id) {
+            const les = await request<{
+              items?: { date?: string; time_from?: string; time_to?: string; status?: number; lesson_type_name?: string }[];
+            }>(`/v2api/${branch}/lesson/index`, { page: 0, pageSize: 100, regular_id: r.id }, t);
+            for (const item of les.items || []) {
+              const date = String(item.date || "").slice(0, 10);
+              if (!date) continue;
+              byDate.set(date, {
+                date,
+                from: hm(item.time_from) || from,
+                to: hm(item.time_to) || to,
+                status: Number(item.status || 0),
+                type: String(item.lesson_type_name || "Групповое"),
+              });
+            }
+          }
+        }
+      } catch {
+        /* календарь не должен ломать карточку */
+      }
+      if (!byDate.size && slot) {
+        const start = parseCrmDate(slot.bDate) || horizonStart;
+        const end = parseCrmDate(slot.eDate) || horizonEnd;
+        const beats = slot.beats?.length ? slot.beats : [{ day: slot.day, timeFrom: slot.timeFrom, timeTo: slot.timeTo }];
+        for (const b of beats) {
+          for (const occ of expandWeekday(Number(b.day || slot.day || 0), String(b.timeFrom || ""), String(b.timeTo || ""), start < horizonStart ? horizonStart : start, end > horizonEnd ? horizonEnd : end)) {
+            byDate.set(occ.date, occ);
+          }
+        }
+      }
+      const calendar = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
       return {
         ok: true as const,
         subjects: loadSubjects(),
@@ -271,6 +363,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           signup: slot?.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
           subjectId: Number(slot?.subjectId || 0),
           subject: slot?.subject || "",
+          calendar,
         },
       };
     }
