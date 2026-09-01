@@ -287,6 +287,7 @@ export function AdminSchedule() {
   const voiceModeRef = useRef(false);
   const dictationRef = useRef(false);
   const pauseRef = useRef(false);
+  const speakingRef = useRef(false);
   const promptRef = useRef("");
   const addsRef = useRef<Draft[]>([]);
   const changesRef = useRef<Change[]>([]);
@@ -506,9 +507,49 @@ export function AdminSchedule() {
     return { body: t, cmd: "" };
   }
 
+  async function playScheduleVoice(dataUrl: string, volume: number) {
+    let src = dataUrl;
+    try {
+      const b64 = String(dataUrl).split(",")[1] || "";
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      src = URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" }));
+    } catch {
+      /* data url as is */
+    }
+    const el = new Audio();
+    el.src = src;
+    el.volume = Math.min(1, Math.max(0.4, volume || 1));
+    await new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        el.onended = null;
+        el.onerror = null;
+        try {
+          el.pause();
+        } catch {
+          /* */
+        }
+        if (src.startsWith("blob:")) URL.revokeObjectURL(src);
+        resolve();
+      };
+      el.onended = () => finish();
+      el.onerror = () => finish();
+      el.onloadedmetadata = () => {
+        const ms = Math.max(1200, (Number.isFinite(el.duration) ? el.duration : 6) * 1000 + 600);
+        window.setTimeout(finish, ms);
+      };
+      el.play().catch(() => finish());
+    });
+  }
+
   async function say(text: string) {
     setAsk(text);
     setMsg(text);
+    speakingRef.current = true;
     pauseRef.current = true;
     try {
       recRef.current?.stop();
@@ -518,22 +559,17 @@ export function AdminSchedule() {
     try {
       const res = await speakAgent({ data: { text, who: "olga" } });
       if (res.ok && "audio" in res && res.audio) {
-        const el = new Audio(String(res.audio));
-        el.volume = "volume" in res ? Number(res.volume) || 1 : 1;
-        await el.play().catch(() => undefined);
-        await new Promise<void>((resolve) => {
-          el.onended = () => resolve();
-          window.setTimeout(resolve, 8000);
-        });
+        await playScheduleVoice(String(res.audio), "volume" in res ? Number(res.volume) || 1 : 1);
       }
     } catch {
       /* */
     }
+    speakingRef.current = false;
     pauseRef.current = false;
-    if (voiceModeRef.current || dictationRef.current) {
+    if (voiceModeRef.current) {
       window.setTimeout(() => {
-        if (voiceModeRef.current || dictationRef.current) startListen("loop");
-      }, 250);
+        if (voiceModeRef.current && !speakingRef.current) startListen("loop");
+      }, 280);
     }
   }
 
@@ -617,7 +653,7 @@ export function AdminSchedule() {
     rec.interimResults = true;
     rec.continuous = true;
     rec.onresult = (e) => {
-      if (pauseRef.current) return;
+      if (pauseRef.current || speakingRef.current) return;
       const last = e.results[e.results.length - 1] as unknown as { isFinal?: boolean; 0: { transcript: string } };
       const piece = (last[0]?.transcript || "").trim();
       if (!last.isFinal) {
@@ -642,10 +678,11 @@ export function AdminSchedule() {
     };
     rec.onend = () => {
       setInterim("");
-      if (pauseRef.current) return;
+      if (pauseRef.current || speakingRef.current) return;
       if (voiceModeRef.current || dictationRef.current) {
         window.setTimeout(() => {
-          if (!(voiceModeRef.current || dictationRef.current) || pauseRef.current) return;
+          if (speakingRef.current || pauseRef.current) return;
+          if (!(voiceModeRef.current || dictationRef.current)) return;
           try {
             rec.start();
             setListen(true);
@@ -668,6 +705,7 @@ export function AdminSchedule() {
     voiceModeRef.current = false;
     dictationRef.current = false;
     pauseRef.current = false;
+    speakingRef.current = false;
     setVoiceMode(false);
     try {
       recRef.current?.stop();
