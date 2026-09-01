@@ -1121,12 +1121,43 @@ export function AdminSchedule() {
     });
     const res = await adminSchedule({ data: { token: token(), action: "customerGet", customerId: m.id, branchId: branch } as never });
     setPupilLoading(false);
-    if (res.ok && "customer" in res && res.customer) setPupil(res.customer as CustomerCard);
+    if (res.ok && "customer" in res && res.customer) {
+      const next = res.customer as CustomerCard;
+      setPupil((prev) => ({
+        ...next,
+        name: next.name || prev?.name || "",
+        parent: next.parent || prev?.parent || "",
+        dob: next.dob || prev?.dob || "",
+        age: next.age || prev?.age || "",
+        gender: next.gender || prev?.gender || "",
+        phones: next.phones.length ? next.phones : prev?.phones || [],
+        emails: next.emails.length ? next.emails : prev?.emails || [],
+        status: next.status || prev?.status || "",
+      }));
+    }
   }
 
   async function openPupilById(crmId: number, branchId: number) {
     if (!crmId) return;
     await openPupil({ id: crmId, name: "", parent: "", dob: "", age: "", gender: "", phones: [], status: "" }, branchId);
+  }
+
+  function openClientRow(r: ClientRow) {
+    if (!r.crmId) return;
+    const age = r.age == null || r.age === "" ? "" : typeof r.age === "number" ? `${r.age} лет` : String(r.age);
+    void openPupil(
+      {
+        id: r.crmId,
+        name: r.child,
+        parent: r.parent,
+        dob: "",
+        age,
+        gender: r.gender,
+        phones: r.phone ? [r.phone] : [],
+        status: r.status,
+      },
+      r.branchId || 1,
+    );
   }
 
   async function loadClients(q = clientQ) {
@@ -2087,7 +2118,7 @@ export function AdminSchedule() {
                   .filter((r) => clientStatus === "все" || r.status === clientStatus)
                   .slice(0, 250)
                   .map((r) => (
-                    <tr key={r.id} className="cursor-pointer border-t border-black/6 hover:bg-primary/5" onClick={() => r.crmId && void openPupilById(r.crmId, r.branchId || 1)}>
+                    <tr key={r.id} className="cursor-pointer border-t border-black/6 hover:bg-primary/5" onClick={() => openClientRow(r)}>
                       <td className="px-3 py-2 font-medium">{r.child || "Без имени"}</td>
                       <td className="px-3 py-2 text-muted">{r.age || "—"}</td>
                       <td className="px-3 py-2">{r.parent || "—"}</td>
@@ -2758,18 +2789,18 @@ export function AdminSchedule() {
       {pupil
         ? createPortal(
             <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4" onClick={() => setPupil(null)}>
-              <div className="flex max-h-[min(86vh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-[0_18px_50px_rgba(15,23,42,0.28)]" onClick={(e) => e.stopPropagation()}>
+              <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-[0_18px_50px_rgba(15,23,42,0.28)]" style={{ maxHeight: "min(86vh, 720px)" }} onClick={(e) => e.stopPropagation()}>
                 <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
                   <div>
                     <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Карточка ученика</p>
-                    <h4 className="font-display text-2xl">{pupil.name || "Без имени"}</h4>
+                    <h4 className="font-display text-2xl">{pupil.name || (pupilLoading ? "Загружаю…" : "Нет имени в CRM")}</h4>
                     <p className="mt-1 text-sm text-muted">
                       {[pupil.gender, pupil.age, pupil.status].filter(Boolean).join(" · ")}
                     </p>
                   </div>
                   <button type="button" className="rounded-full bg-surface-2 px-3 py-1 text-sm font-semibold text-muted" onClick={() => setPupil(null)}>{detail ? "Назад" : "Закрыть"}</button>
                 </div>
-                <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+                <div className="pretty-scroll min-h-0 overflow-y-auto px-5 pb-5" style={{ flex: "0 1 auto" }}>
                 <dl className="mt-4 grid gap-2 text-sm">
                   {pupil.dob ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Дата рождения</dt><dd>{pupil.dob}{pupil.age ? ` · ${pupil.age}` : ""}</dd></div> : null}
                   {pupil.parent ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Заказчик</dt><dd>{pupil.parent}</dd></div> : null}
@@ -2779,20 +2810,26 @@ export function AdminSchedule() {
                   {pupil.paidTill ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Оплачено до</dt><dd>{pupil.paidTill}</dd></div> : null}
                   {pupil.note ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Заметка CRM</dt><dd>{pupil.note}</dd></div> : null}
                 </dl>
-                <a href={pupil.url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-primary">Открыть в AlfaCRM</a>
-                <h5 className="mt-5 font-display text-lg">Коммуникации</h5>
-                {pupilLoading ? <p className="mt-2 text-sm text-muted">Подгружаю переписку…</p> : null}
-                <div className="mt-2 space-y-2">
-                  {pupil.comms.length ? pupil.comms.map((c, i) => (
-                    <div key={c.id || i} className={cn("rounded-2xl px-3 py-2.5 text-sm ring-1 ring-black/6", c.incoming ? "bg-[#f3f5f8]" : "bg-primary/8")}>
-                      <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">
-                        {[c.at, c.channel, c.who].filter(Boolean).join(" · ")}
-                        {c.incoming ? " · входящее" : ""}
-                      </p>
-                      <p className="mt-1 whitespace-pre-wrap leading-relaxed">{c.text}</p>
+                {pupil.url ? <a href={pupil.url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-primary">Открыть в AlfaCRM</a> : null}
+                {pupilLoading && !pupil.comms.length ? <p className="mt-4 text-sm text-muted">Подгружаю карточку из AlfaCRM…</p> : null}
+                {pupil.comms.length ? (
+                  <>
+                    <h5 className="mt-5 font-display text-lg">Коммуникации</h5>
+                    <div className="mt-2 space-y-2">
+                      {pupil.comms.map((c, i) => (
+                        <div key={c.id || i} className={cn("rounded-2xl px-3 py-2.5 text-sm ring-1 ring-black/6", c.incoming ? "bg-[#f3f5f8]" : "bg-primary/8")}>
+                          <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">
+                            {[c.at, c.channel, c.who].filter(Boolean).join(" · ")}
+                            {c.incoming ? " · входящее" : ""}
+                          </p>
+                          <p className="mt-1 whitespace-pre-wrap leading-relaxed">{c.text}</p>
+                        </div>
+                      ))}
                     </div>
-                  )) : pupilLoading ? null : <p className="text-sm text-muted">Переписки в карточке пока нет.</p>}
-                </div>
+                  </>
+                ) : pupilLoading ? null : (
+                  <p className="mt-4 text-sm text-muted">Переписки в карточке пока нет.</p>
+                )}
                 </div>
               </div>
             </div>,

@@ -28,7 +28,7 @@ import type { GroupCalLesson } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { loadGroupCard, saveGroupCard } from "./group-cards";
 import { scheduleVoiceTurn } from "./schedule-voice";
-import { searchClientViews } from "./dossiers";
+import { searchClientViews, findDossier } from "./dossiers";
 
 export type GroupMember = {
   id: number;
@@ -165,23 +165,44 @@ async function loadGroupMembers(request: typeof import("./alfacrm").request, t: 
   return { active, archive };
 }
 
+async function loadCustomerRaw(
+  request: typeof import("./alfacrm").request,
+  t: string,
+  branch: number,
+  customerId: number,
+): Promise<{ c: Record<string, unknown>; branch: number } | null> {
+  const branches = [branch, 1, 2, 3, 4].filter((b, i, a) => b > 0 && a.indexOf(b) === i);
+  const bodies = [
+    { page: 0, pageSize: 10, id: customerId },
+    { page: 0, pageSize: 10, ids: [customerId] },
+  ];
+  for (const b of branches) {
+    for (const body of bodies) {
+      const data = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${b}/customer/index`, body, t).catch(
+        () => ({ items: [] as Record<string, unknown>[] }),
+      );
+      const hit = (data.items || []).find((x) => Number(x.id) === customerId);
+      if (hit) return { c: hit, branch: b };
+    }
+  }
+  return null;
+}
+
 async function loadCustomerCard(request: typeof import("./alfacrm").request, t: string, branch: number, customerId: number): Promise<CustomerCard | null> {
-  const data = await request<{ items?: Record<string, unknown>[] }>(
-    `/v2api/${branch}/customer/index`,
-    { page: 0, pageSize: 1, id: customerId },
-    t,
-  ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-  const c = data.items?.[0];
-  if (!c) return null;
+  const found = await loadCustomerRaw(request, t, branch, customerId);
+  const dossier = findDossier({ crmId: customerId });
+  if (!found && !dossier) return null;
+  const c = found?.c || {};
+  const useBranch = found?.branch || dossier?.branchId || branch || 1;
   const phones = asStrList(c.phone);
   const emails = asStrList(c.email);
   const study = Number(c.is_study);
   const addr = asStrList(c.addr).join(", ") || String(c.custom_adresprozhivaniya || "").trim();
   const comms: CustomerComm[] = [];
   const tries: [string, Record<string, unknown>][] = [
-    [`/v2api/${branch}/communication/index?class=Customer&related_id=${customerId}`, { page: 0, pageSize: 40 }],
-    [`/v2api/${branch}/communication/index`, { page: 0, pageSize: 40, class: "Customer", related_id: customerId }],
-    [`/v2api/${branch}/communication/index`, { page: 0, pageSize: 40, customer_id: customerId }],
+    [`/v2api/${useBranch}/communication/index?class=Customer&related_id=${customerId}`, { page: 0, pageSize: 40 }],
+    [`/v2api/${useBranch}/communication/index`, { page: 0, pageSize: 40, class: "Customer", related_id: customerId }],
+    [`/v2api/${useBranch}/communication/index`, { page: 0, pageSize: 40, customer_id: customerId }],
   ];
   for (const [path, body] of tries) {
     try {
@@ -195,21 +216,24 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
       /* next shape */
     }
   }
+  const name = String(c.name || dossier?.child.fio || "").trim();
+  const parent = String(c.legal_name || dossier?.parent.fio || "").trim();
+  const dob = String(c.dob || dossier?.child.dob || "");
   return {
     id: customerId,
-    branchId: branch,
-    name: String(c.name || "").trim(),
-    parent: String(c.legal_name || "").trim(),
-    dob: String(c.dob || ""),
-    age: ageLabel(String(c.dob || "")),
-    gender: c.gender === 1 || c.gender === "1" ? "мальчик" : c.gender === 2 || c.gender === "2" ? "девочка" : "",
-    phones,
+    branchId: useBranch,
+    name,
+    parent,
+    dob,
+    age: ageLabel(dob) || (dossier?.age ? `${dossier.age} лет` : ""),
+    gender: c.gender === 1 || c.gender === "1" ? "мальчик" : c.gender === 2 || c.gender === "2" ? "девочка" : dossier?.child.gender || "",
+    phones: phones.length ? phones : dossier?.phones || [],
     emails,
-    address: /введите адрес/i.test(addr) ? "" : addr,
-    status: study === 1 ? "учится" : study === 2 ? "архив" : "лид",
+    address: /введите адрес/i.test(addr) ? dossier?.address || "" : addr || dossier?.address || "",
+    status: study === 1 ? "учится" : study === 2 ? "архив" : dossier?.status || "лид",
     note: String(c.note || "").trim(),
     paidTill: String(c.paid_till || ""),
-    url: `https://studiyarazvivaysya.s20.online/company/${branch}/customer/view?id=${customerId}`,
+    url: `https://studiyarazvivaysya.s20.online/company/${useBranch}/customer/view?id=${customerId}`,
     comms,
   };
 }
