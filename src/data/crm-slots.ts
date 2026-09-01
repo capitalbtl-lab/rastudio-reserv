@@ -586,8 +586,11 @@ function bulkLimitFromPrompt(prompt: string, slots: CrmSlot[], selectedIds: stri
   const t = String(prompt || "")
     .toLowerCase()
     .replace(/ё/g, "е");
-  if (!/мест|лимит|свободн|набор|вместимост/.test(t)) return null;
-  const num = t.match(/(?:до|на|=)\s*(\d{1,3})\b/) || t.match(/\b(\d{1,3})\s*(?:мест|чел|человек)/) || t.match(/\b(\d{1,3})\s*$/);
+  if (!/мест|лимит|свободн|набор|вместимост|максимальн|количеств|детей|человек|ребен|ребён|capacity|limit/.test(t)) return null;
+  const num =
+    t.match(/(?:до|на|=|максимум|максимально(?:е|го)?)\s*(\d{1,3})\b/) ||
+    t.match(/\b(\d{1,3})\s*(?:мест|чел|человек|детей|ребенка|ребёнка|ребенку)/) ||
+    t.match(/\b(\d{1,3})\s*$/);
   if (!num) return null;
   const to = Number(num[1]);
   if (!Number.isFinite(to) || to < 0 || to > 200) return null;

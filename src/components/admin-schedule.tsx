@@ -740,6 +740,9 @@ export function AdminSchedule() {
   const dictationRef = useRef(false);
   const pauseRef = useRef(false);
   const speakingRef = useRef(false);
+  const busyVoiceRef = useRef(false);
+  const lastSaidRef = useRef("");
+  const ignoreUntilRef = useRef(0);
   const listenBaseRef = useRef("");
   const speechTimer = useRef(0);
   const lastFinalRef = useRef("");
@@ -1164,24 +1167,54 @@ export function AdminSchedule() {
 
   function parseVoice(text: string) {
     const t = text.trim().replace(/[.!?…,:;]+$/g, "").replace(/\s+/g, " ").trim();
-    const last = t.split(" ").pop() || "";
+    const words = t.split(" ").filter(Boolean);
+    const whole = t.toLowerCase().replace(/ё/g, "е").replace(/[^а-я ]/g, "").replace(/\s+/g, " ").trim();
+    if (/^(готов[аоыуе]?|гатов[аоыуе]?)$/.test(whole.replace(/ /g, ""))) return { body: "", cmd: "готово" };
+    if (words.length > 4) return { body: t, cmd: "" };
+    const last = words[words.length - 1] || "";
     const word = last.toLowerCase().replace(/ё/g, "е").replace(/[^а-я]/g, "");
-    const rest = t.slice(0, t.length - last.length).trim();
+    const rest = words.slice(0, -1).join(" ");
     const ready = /^(готов[аоыуе]?|гатов[аоыуе]?|готовоа)$/.test(word);
     const preview = /^(предпросмотр|превью)$/.test(word);
     const apply = /^(примен\w*|принять|опублик\w*)$/.test(word);
-    const next = /^(дальше|далее|следующ\w*|сброс)$/.test(word);
-    const cancel = /^(отмен\w*|сброс)$/.test(word);
+    const next = /^(дальше|далее|следующ\w*)$/.test(word);
+    const cancel = /^(отмен\w*)$/.test(word);
     if (ready) return { body: rest, cmd: "готово" };
     if (preview) return { body: rest, cmd: "предпросмотр" };
     if (apply) return { body: rest, cmd: "применить" };
     if (cancel) return { body: rest, cmd: "отменить" };
     if (next) return { body: rest, cmd: "дальше" };
-    if (/готов[аоыуе]?\s*$/i.test(t) && t.length <= 12) return { body: "", cmd: "готово" };
     return { body: t, cmd: "" };
   }
 
+  function isEcho(heard: string) {
+    const a = heard
+      .toLowerCase()
+      .replace(/ё/g, "е")
+      .replace(/[^а-я0-9 ]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!a || a.length < 6) return false;
+    if (Date.now() < ignoreUntilRef.current) return true;
+    const b = lastSaidRef.current
+      .toLowerCase()
+      .replace(/ё/g, "е")
+      .replace(/[^а-я0-9 ]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (b && (b.includes(a) || a.includes(b.slice(0, 18)))) return true;
+    return [
+      "привет что будем делать сегодня",
+      "хорошо сейчас все поправим",
+      "готово скажите опубликовать",
+      "нет я не могу это поправить",
+      "скажите опубликовать если все верно",
+      "предпросмотр на экране",
+    ].some((c) => a.includes(c) || (a.length > 10 && c.includes(a)));
+  }
+
   function commitSpeech(raw: string) {
+    if (isEcho(raw)) return;
     const { body, cmd } = parseVoice(raw);
     lastFinalRef.current = raw;
     setInterim("");
@@ -1244,6 +1277,7 @@ export function AdminSchedule() {
   }
 
   async function say(text: string) {
+    lastSaidRef.current = text;
     setAsk(text);
     setMsg(text);
     speakingRef.current = true;
@@ -1263,10 +1297,11 @@ export function AdminSchedule() {
     }
     speakingRef.current = false;
     pauseRef.current = false;
+    ignoreUntilRef.current = Date.now() + 900;
     if (voiceModeRef.current) {
       window.setTimeout(() => {
         if (voiceModeRef.current && !speakingRef.current) startListen("loop");
-      }, 280);
+      }, 700);
     }
   }
 
@@ -1281,7 +1316,7 @@ export function AdminSchedule() {
   }
 
   async function runCmd(cmd: string, extraBody = "") {
-    if (extraBody) {
+    if (extraBody && !voiceModeRef.current) {
       setAiPrompt((p) => {
         const n = p ? `${p} ${extraBody}` : extraBody;
         promptRef.current = n;
@@ -1359,7 +1394,7 @@ export function AdminSchedule() {
     accRef.current = "";
     listenBaseRef.current = promptRef.current;
     rec.onresult = (e) => {
-      if (pauseRef.current || speakingRef.current) return;
+      if (pauseRef.current || speakingRef.current || Date.now() < ignoreUntilRef.current) return;
       let mid = "";
       for (let i = doneRef.current; i < e.results.length; i += 1) {
         const row = e.results[i] as unknown as { isFinal?: boolean; 0: { transcript: string } };
@@ -1459,40 +1494,52 @@ export function AdminSchedule() {
 
   async function handleScheduleVoice(text: string) {
     const q = text.trim();
-    if (!q) return;
+    if (!q || isEcho(q) || busyVoiceRef.current) return;
+    busyVoiceRef.current = true;
     setAiPrompt(q);
     promptRef.current = q;
     setMsg("Смотрю расписание…");
-    const res = await adminSchedule({ data: { token: token(), action: "voiceAsk", prompt: q, ids: pickedRef.current } as never });
-    if (!res.ok) {
-      await say("Нет, я не могу это поправить, потому что агент расписания не ответил.");
-      return;
+    try {
+      const res = await adminSchedule({ data: { token: token(), action: "voiceAsk", prompt: q, ids: pickedRef.current } as never });
+      if (!res.ok) {
+        await say("Нет, я не могу это поправить, потому что агент расписания не ответил.");
+        return;
+      }
+      const kind = "kind" in res ? String(res.kind) : "edit";
+      const reason = "reason" in res ? String(res.reason || "") : "";
+      const answer = "answer" in res ? String(res.answer || "") : "";
+      const action = "action" in res ? String(res.action || "") : "preview";
+      if (kind === "refuse") {
+        await say(`Нет, я не могу это поправить, потому что ${reason || "это не относится к расписанию занятий."}`);
+        return;
+      }
+      if (kind === "question") {
+        await say(answer || "В карточке группы на сайте этих данных нет.");
+        return;
+      }
+      await say("Хорошо, сейчас всё поправим.");
+      if (action === "pull") {
+        await pullCrm();
+        if (voiceModeRef.current) await say("Загрузила расписание из AlfaCRM.");
+        return;
+      }
+      if (action === "push") {
+        await pushCrm();
+        if (voiceModeRef.current) await say("Выгрузила отмеченные группы в AlfaCRM.");
+        return;
+      }
+      const ids = pickedRef.current.length ? pickedRef.current : slotsRef.current.map((s) => s.id);
+      const preview = await run("aiPreview", { prompt: q, ids });
+      const n = preview && "changes" in preview && Array.isArray(preview.changes) ? preview.changes.length : 0;
+      const comment = preview && "comment" in preview ? String(preview.comment || "") : "";
+      if (!n) {
+        await say(comment || "Не нашла, что менять. Повторите: лимит мест и число.");
+        return;
+      }
+      if (voiceModeRef.current) await say(`${comment || `Готово, ${n} групп.`} Скажите опубликовать.`);
+    } finally {
+      busyVoiceRef.current = false;
     }
-    const kind = "kind" in res ? String(res.kind) : "edit";
-    const reason = "reason" in res ? String(res.reason || "") : "";
-    const answer = "answer" in res ? String(res.answer || "") : "";
-    const action = "action" in res ? String(res.action || "") : "preview";
-    if (kind === "refuse") {
-      await say(`Нет, я не могу это поправить, потому что ${reason || "это не относится к расписанию занятий."}`);
-      return;
-    }
-    if (kind === "question") {
-      await say(answer || "В карточке группы на сайте этих данных нет.");
-      return;
-    }
-    await say("Хорошо, сейчас всё поправим.");
-    if (action === "pull") {
-      await pullCrm();
-      if (voiceModeRef.current) await say("Загрузила расписание из AlfaCRM.");
-      return;
-    }
-    if (action === "push") {
-      await pushCrm();
-      if (voiceModeRef.current) await say("Выгрузила отмеченные группы в AlfaCRM.");
-      return;
-    }
-    await run("aiPreview", { prompt: q, ids: pickedRef.current.length ? pickedRef.current : slotsRef.current.map((s) => s.id) });
-    if (voiceModeRef.current) await say("Готово. Скажите опубликовать, если всё верно, или отменить.");
   }
 
   async function pullCrm() {
