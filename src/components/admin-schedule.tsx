@@ -131,7 +131,7 @@ function GroupLessonStrip({ lessons, group, subject, teacher }: { lessons: Group
 
   function showTip(el: HTMLElement, lesson: GroupCalLesson) {
     const r = el.getBoundingClientRect();
-    const width = 288;
+    const width = 256;
     let left = r.left;
     if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
     if (left < 8) left = 8;
@@ -229,16 +229,21 @@ function LessonCard({
     ["Домашнее задание", l.homework || ""],
   ];
   if (l.status === 3 && (l.total || 0) > 0) rows.push(["Присутствие", `${l.attend || 0} из ${l.total}`]);
+  const dateLabel = (() => {
+    const [y, m, d] = l.date.split("-").map(Number);
+    if (!y) return l.date;
+    return `${String(d).padStart(2, "0")}.${String(m).padStart(2, "0")}.${y}`;
+  })();
   return (
     <div
-      className="pointer-events-none fixed z-[90] w-[18.5rem] rounded-md bg-white px-5 py-4 text-left text-[0.78rem] leading-relaxed text-fg shadow-[0_12px_32px_rgba(15,23,42,0.28)] ring-1 ring-black/12"
+      className="pointer-events-none fixed z-[90] w-[16rem] rounded-md bg-white px-3 py-2 text-left text-[0.68rem] leading-snug text-fg shadow-[0_8px_22px_rgba(15,23,42,0.22)] ring-1 ring-black/10"
       style={{ top, left }}
     >
-      <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-wider text-muted">{l.date}</p>
-      <dl className="space-y-1.5">
+      <p className="mb-1 text-[0.62rem] font-semibold tracking-wide text-muted">{dateLabel}</p>
+      <dl className="space-y-0.5">
         {rows.filter(([, v]) => v).map(([k, v]) => (
-          <div key={k} className="grid grid-cols-[6.2rem_1fr] gap-2">
-            <dt className="text-muted">{k}</dt>
+          <div key={k} className="grid grid-cols-[5.2rem_1fr] gap-x-2">
+            <dt className="text-[0.62rem] text-muted">{k}</dt>
             <dd className={cn("font-medium", k === "Тема" || k === "Домашнее задание" ? "whitespace-pre-wrap" : "")}>{v}</dd>
           </div>
         ))}
@@ -781,6 +786,7 @@ export function AdminSchedule() {
   const [subjects, setSubjects] = useState<CrmSubject[]>([]);
   const [levels, setLevels] = useState<{ id: number; name: string }[]>(SEED_LEVELS);
   const fileRef = useRef<HTMLDivElement>(null);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
   const promptEl = useRef<HTMLTextAreaElement>(null);
 
   function take(res: { ok: boolean; slots?: CrmSlot[]; at?: string; versions?: Ver[]; error?: string; comment?: string; changes?: Change[]; adds?: Draft[]; pushed?: number; created?: string[]; applied?: string[] }) {
@@ -857,7 +863,9 @@ export function AdminSchedule() {
   }, [aiPrompt, interim]);
   useEffect(() => {
     function close(e: MouseEvent) {
-      if (!fileRef.current?.contains(e.target as Node)) setFileOpen(false);
+      const t = e.target as Node;
+      if (fileRef.current?.contains(t) || fileMenuRef.current?.contains(t)) return;
+      setFileOpen(false);
     }
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
@@ -1613,23 +1621,31 @@ export function AdminSchedule() {
         </div>
       </AdminSectionHead>
 
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" size="lg" className="px-7 text-base" variant={pane === "groups" ? "primary" : "secondary"} onClick={() => setPane("groups")}>
-          Группы
-        </Button>
-        <Button type="button" size="lg" className="px-7 text-base" variant={pane === "subjects" ? "primary" : "secondary"} onClick={() => setPane("subjects")}>
-          Предметы
-        </Button>
-        <Button type="button" size="lg" className="px-7 text-base" variant={pane === "map" ? "primary" : "secondary"} onClick={() => setPane("map")}>
-          Соответствия
-        </Button>
+      <div className="flex items-end gap-1 border-b border-black/10">
+        {([
+          ["groups", "Группы"],
+          ["subjects", "Предметы"],
+          ["map", "Соответствия"],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setPane(id)}
+            className={cn(
+              "rounded-t-xl px-7 py-2.5 text-base font-semibold transition-colors",
+              pane === id ? "bg-primary text-white" : "bg-surface-2 text-fg hover:bg-white",
+            )}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {pane === "subjects" ? <AdminSubjects /> : null}
       {pane === "map" ? <AdminScheduleMap embedded /> : null}
       {pane === "groups" ? (
       <>
-      <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5">
+      <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-visible pb-0.5">
         <Button type="button" size="sm" className="h-8 shrink-0 px-3 text-[0.78rem]" disabled={busy} onClick={() => { setAddOpen((v) => !v); document.getElementById("ra-sched-ai")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
           Добавить расписание вручную
         </Button>
@@ -1647,45 +1663,55 @@ export function AdminSchedule() {
             Файл
             <span className="text-[0.65rem]">▾</span>
           </Button>
-          {fileOpen ? (
-            <div className="absolute left-0 top-full z-30 mt-1 min-w-[13rem] rounded-2xl bg-white p-1 shadow-[var(--shadow-border)]">
-              <button
-                type="button"
-                className="block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-surface-2"
-                onClick={async () => { setFileOpen(false); const res = await run("exportXls"); if (res.ok && "text" in res) download(String(res.filename), String(res.mime), String(res.text)); }}
-              >
-                Скачать Excel
-              </button>
-              <button
-                type="button"
-                className="block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-surface-2"
-                onClick={async () => { setFileOpen(false); const res = await run("exportCsv"); if (res.ok && "text" in res) download(String(res.filename), String(res.mime), String(res.text)); }}
-              >
-                Скачать CSV
-              </button>
-              <label className="block w-full cursor-pointer rounded-xl px-3 py-2 text-left text-sm hover:bg-surface-2">
-                Импорт Excel/CSV
-                <input
-                  type="file"
-                  accept=".csv,.xls,.txt,text/csv"
-                  className="hidden"
-                  onChange={async (e) => {
-                    const f = e.target.files?.[0];
-                    e.target.value = "";
-                    setFileOpen(false);
-                    if (!f) return;
-                    const text = await f.text();
-                    setBusy(true);
-                    const res = await adminSchedule({ data: { token: token(), action: "import", text } });
-                    take(res as never);
-                    setBusy(false);
-                    setDirty(new Set());
-                    if (res.ok) setMsg("Импортировано. Проверьте школы и при необходимости выгрузите в AlfaCRM.");
-                  }}
-                />
-              </label>
-            </div>
-          ) : null}
+          {fileOpen && typeof document !== "undefined"
+            ? createPortal(
+                <div
+                  ref={fileMenuRef}
+                  className="fixed z-[80] min-w-[13rem] rounded-2xl bg-white p-1 shadow-[0_8px_24px_rgba(15,23,42,0.18)] ring-1 ring-black/10"
+                  style={(() => {
+                    const r = fileRef.current?.getBoundingClientRect();
+                    return r ? { top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 220)) } : { top: 0, left: 0 };
+                  })()}
+                >
+                  <button
+                    type="button"
+                    className="block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-surface-2"
+                    onClick={async () => { setFileOpen(false); const res = await run("exportXls"); if (res.ok && "text" in res) download(String(res.filename), String(res.mime), String(res.text)); }}
+                  >
+                    Скачать Excel
+                  </button>
+                  <button
+                    type="button"
+                    className="block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-surface-2"
+                    onClick={async () => { setFileOpen(false); const res = await run("exportCsv"); if (res.ok && "text" in res) download(String(res.filename), String(res.mime), String(res.text)); }}
+                  >
+                    Скачать CSV
+                  </button>
+                  <label className="block w-full cursor-pointer rounded-xl px-3 py-2 text-left text-sm hover:bg-surface-2">
+                    Импорт Excel/CSV
+                    <input
+                      type="file"
+                      accept=".csv,.xls,.txt,text/csv"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        setFileOpen(false);
+                        if (!f) return;
+                        const text = await f.text();
+                        setBusy(true);
+                        const res = await adminSchedule({ data: { token: token(), action: "import", text } });
+                        take(res as never);
+                        setBusy(false);
+                        setDirty(new Set());
+                        if (res.ok) setMsg("Импортировано. Проверьте школы и при необходимости выгрузите в AlfaCRM.");
+                      }}
+                    />
+                  </label>
+                </div>,
+                document.body,
+              )
+            : null}
         </div>
         <Button type="button" size="sm" className="h-8 shrink-0 px-3 text-[0.78rem]" variant="secondary" onClick={() => setOpenAll((v) => !v)}>
           {openAll ? "Свернуть всё" : "Раскрыть всё"}
