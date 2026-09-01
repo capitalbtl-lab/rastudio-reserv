@@ -320,7 +320,7 @@ function CheckBox({
 }
 
 function WhoTip({ names, onNeed }: { names?: string[]; onNeed: () => void }) {
-  const btn = useRef<HTMLButtonElement>(null);
+  const btn = useRef<HTMLSpanElement>(null);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
 
@@ -328,13 +328,13 @@ function WhoTip({ names, onNeed }: { names?: string[]; onNeed: () => void }) {
     const el = btn.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const width = 232;
+    const width = 240;
     const h = Math.min(280, 28 + Math.max(1, names?.length || 1) * 20);
-    let top = r.bottom + 8;
-    if (top + h > window.innerHeight - 10) top = Math.max(8, r.top - h - 8);
-    let left = r.right - width;
-    if (left < 8) left = 8;
+    let top = r.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    let left = r.left;
     if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+    if (left < 8) left = 8;
     setPos({ top, left });
   }
 
@@ -342,31 +342,31 @@ function WhoTip({ names, onNeed }: { names?: string[]; onNeed: () => void }) {
     if (open) place();
   }, [open, names]);
 
+  function show() {
+    onNeed();
+    place();
+    setOpen(true);
+  }
+
+  const label = names ? (names.length ? `${names.length} уч.` : "пусто") : "Кто учится";
+
   return (
     <>
-      <button
+      <span
         ref={btn}
-        type="button"
-        className="whitespace-nowrap text-[0.7rem] font-semibold text-primary"
-        onMouseEnter={() => {
-          setOpen(true);
-          place();
-          onNeed();
-        }}
+        tabIndex={0}
+        className="inline-flex h-8 w-full min-w-[5.6rem] cursor-default items-center justify-center rounded-full bg-surface-2 px-2 text-center text-[0.72rem] text-muted ring-1 ring-black/8"
+        onMouseEnter={show}
         onMouseLeave={() => setOpen(false)}
-        onFocus={() => {
-          setOpen(true);
-          place();
-          onNeed();
-        }}
+        onFocus={show}
         onBlur={() => setOpen(false)}
       >
-        Кто учится
-      </button>
+        {label}
+      </span>
       {open
         ? createPortal(
             <div
-              className="pointer-events-none fixed z-[80] w-[14.5rem] rounded-md bg-neutral-600 px-2.5 py-2 text-left text-[0.72rem] leading-snug text-white shadow-md"
+              className="pointer-events-none fixed z-[80] w-[15rem] rounded-xl bg-neutral-700 px-3 py-2 text-left text-[0.75rem] leading-snug text-white shadow-[0_10px_28px_rgba(15,23,42,0.28)]"
               style={{ top: pos.top, left: pos.left }}
             >
               {!names ? "Загружаю…" : names.length ? names.map((n) => <p key={n}>{n}</p>) : "В группе пока никого"}
@@ -394,6 +394,8 @@ export function AdminSchedule() {
   const [aiAdds, setAiAdds] = useState<Draft[]>([]);
   const [picked, setPicked] = useState<Record<string, boolean>>({});
   const [who, setWho] = useState<Record<string, string[]>>({});
+  const whoRef = useRef<Record<string, string[]>>({});
+  const whoPending = useRef<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [listen, setListen] = useState(false);
@@ -586,11 +588,21 @@ export function AdminSchedule() {
 
   async function loadWho(s: CrmSlot) {
     const key = `${s.branchId}-${s.groupId}`;
-    if (who[key] || !s.groupId) return;
+    if (!s.groupId || whoRef.current[key] || whoPending.current.has(key)) return;
+    whoPending.current.add(key);
     const res = await adminSchedule({ data: { token: token(), action: "students", groupId: s.groupId, branchId: s.branchId } });
     const names = res.ok && "names" in res && Array.isArray(res.names) ? (res.names as string[]) : [];
+    whoRef.current = { ...whoRef.current, [key]: names };
     setWho((prev) => ({ ...prev, [key]: names }));
+    whoPending.current.delete(key);
   }
+
+  useEffect(() => {
+    const items = openAll
+      ? tree.flatMap((s) => s.courses.flatMap((c) => c.items))
+      : tree.flatMap((s) => s.courses).find((c) => c.course === openCourse)?.items || [];
+    for (const s of items) void loadWho(s);
+  }, [openCourse, openAll, tree]);
 
   async function applyPreview() {
     const adds = addsRef.current;
