@@ -87,20 +87,58 @@ function slotCalendar(s: CrmSlot): GroupCalLesson[] {
   return out;
 }
 
+function shiftYmd(iso: string, days: number) {
+  const d = parseYmd(iso);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+const RANGE_OPTS = [
+  { id: "10", label: "±10 занятий" },
+  { id: "7", label: "±7 дней" },
+  { id: "30", label: "±30 дней" },
+  { id: "90", label: "±90 дней" },
+  { id: "180", label: "±180 дней" },
+  { id: "360", label: "±360 дней" },
+] as const;
+
 function GroupLessonStrip({ lessons }: { lessons: GroupCalLesson[] }) {
   const today = todayYmd();
+  const [range, setRange] = useState<(typeof RANGE_OPTS)[number]["id"]>("10");
+  const all = useMemo(() => [...lessons].sort((a, b) => a.date.localeCompare(b.date)), [lessons]);
   const items = useMemo(() => {
-    const map = new Map<string, GroupCalLesson>();
-    for (const l of lessons) map.set(l.date, l);
-    if (!map.has(today)) map.set(today, { date: today, from: "", to: "", status: -1, type: "сегодня" });
-    return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
-  }, [lessons, today]);
-  const count = lessons.length;
+    const past = all.filter((l) => l.date < today);
+    const future = all.filter((l) => l.date > today);
+    const todayHit = all.find((l) => l.date === today) || { date: today, from: "", to: "", status: -1, type: "сегодня" };
+    if (range === "10") return [...past.slice(-10), todayHit, ...future.slice(0, 10)];
+    const days = Number(range);
+    const from = shiftYmd(today, -days);
+    const to = shiftYmd(today, days);
+    const window = all.filter((l) => l.date >= from && l.date <= to);
+    if (!window.some((l) => l.date === today)) {
+      const i = window.findIndex((l) => l.date > today);
+      const next = [...window];
+      next.splice(i < 0 ? next.length : i, 0, todayHit);
+      return next;
+    }
+    return window;
+  }, [all, range, today]);
   return (
     <div className="md:col-span-2">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Расписание занятий</p>
-        <p className="text-[0.7rem] text-muted">{count ? `${count} занятий` : "нет дат в CRM"}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-[0.7rem] text-muted">{items.length} из {all.length}</p>
+          <select
+            value={range}
+            onChange={(e) => setRange(e.target.value as (typeof RANGE_OPTS)[number]["id"])}
+            className="h-8 rounded-[4px] bg-white px-2 text-[0.72rem] font-medium text-fg ring-1 ring-black/8"
+          >
+            {RANGE_OPTS.map((o) => (
+              <option key={o.id} value={o.id}>{o.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {items.map((l) => {
