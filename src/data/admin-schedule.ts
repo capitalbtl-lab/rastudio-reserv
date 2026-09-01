@@ -685,7 +685,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           /* local list is enough */
         }
       }
-      return { ok: true as const, items, total: local.total, all: local.all, counts: local.counts, lastCrmSync: local.lastCrmSync };
+      return { ok: true as const, items, total: local.total, all: local.all, counts: local.counts, branchCounts: local.branchCounts, lastCrmSync: local.lastCrmSync };
     }
     if (data.action === "voiceAsk") {
       const prompt = String(data.prompt || "").trim();

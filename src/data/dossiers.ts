@@ -148,8 +148,8 @@ function mergePerson(prev: PersonName, incoming?: string, crmWins = false): Pers
 }
 
 const BRANCH_TITLE: Record<number, string> = {
-  1: "Коломна, ЦМИТ, Октябрьской революции, 340",
-  2: "Коломна, Гражданская, 2",
+  1: "Коломна, Гражданская, 2",
+  2: "Коломна, ЦМИТ, Октябрьской революции, 340",
   3: "Луховицы, Пушкина, 202А",
   4: "Летние программы",
 };
@@ -235,32 +235,13 @@ function studyMeta(item: Record<string, unknown>) {
   return STUDY_STATUS[sid] || null;
 }
 
-function todayYmd() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function academicStart() {
-  const d = new Date();
-  const y = d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1;
-  return `${y}-09-01`;
-}
-
 function statusFromCrm(item: Record<string, unknown>, archived = false) {
+  if (Number(item.removed) === 1 || String(item.removed) === "1") return "удалён";
   const study = Number(item.is_study);
   if (study === 0) return "лид";
+  if (study === 1) return "учится";
   if (study === 2 || archived) return "архив";
-  const meta = studyMeta(item);
-  if (!meta || meta.bucket !== "учится") return "архив";
-  const last = String(item.last_attend_date || "").slice(0, 10);
-  const next = String(item.next_lesson_date || "").slice(0, 10);
-  const eDate = String(item.e_date || "").slice(0, 10);
-  const today = todayYmd();
-  const notEnded = !eDate || eDate >= today || eDate.startsWith("2030");
-  if (!notEnded) return "архив";
-  if (next >= today) return "учится";
-  if (last >= academicStart()) return "учится";
-  return "архив";
+  return "удалён";
 }
 
 function asList(v: unknown): string[] {
@@ -502,7 +483,7 @@ ${lines.map((l) => `— ${l}`).join("\n")}
 `;
 }
 
-export function applyCrmCustomer(item: Record<string, unknown>, branchId: number, archived = false, teacherMap: Record<string, string> = {}) {
+export function applyCrmCustomer(item: Record<string, unknown>, branchId: number, _archived = false, teacherMap: Record<string, string> = {}) {
   const id = Number(item.id);
   if (!id) return null;
   const phones = asList(item.phone);
@@ -512,7 +493,8 @@ export function applyCrmCustomer(item: Record<string, unknown>, branchId: number
   const extras = extrasFromCrm(item);
   const fromGroup = namesFromGroup(extras.groups);
   const study = Number(item.is_study);
-  const reallyArchived = study === 2 || (archived && study !== 1);
+  extras.removed = study === 0 || study === 1 || study === 2 ? "0" : String(extras.removed || "0");
+  const reallyArchived = study === 2;
   const courseName = fromGroup.courses[0] || "";
   const teacherFromIds = idList(extras.teacher_ids)
     .map((n) => teacherMap[String(n)] || "")
@@ -581,23 +563,6 @@ export async function syncAllFromCrm() {
         }
         if (items.length < 50) break;
       }
-    }
-    for (let page = 0; page < 40; page += 1) {
-      const data = await request<{ items?: Record<string, unknown>[] }>(
-        `/v2api/${branch}/customer/index`,
-        { page, pageSize: 50, removed: 1 },
-        t,
-      ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-      const items = data.items || [];
-      for (const item of items) {
-        if (Number(item.is_study) === 1) {
-          applyCrmCustomer(item, branch, false, teacherMap);
-        } else {
-          applyCrmCustomer(item, branch, true, teacherMap);
-        }
-        n += 1;
-      }
-      if (items.length < 50) break;
     }
   }
   const store = loadStore();
@@ -717,23 +682,90 @@ export async function syncMembershipsSlice(offset = 0, take = 8) {
   };
 }
 
+export async function reclassifyRolesFromCrm() {
+  const t = await alfaToken();
+  const current = new Set<number>();
+  const leads = new Set<number>();
+  const archive = new Set<number>();
+  const branchOf = new Map<number, number>();
+  const totals = { учится: 0, лид: 0, архив: 0 };
+  for (const branch of [1, 2, 3, 4]) {
+    for (const study of [1, 0, 2] as const) {
+      for (let page = 0; page < 80; page += 1) {
+        const data = await request<{ items?: { id?: number }[]; total?: number }>(
+          `/v2api/${branch}/customer/index`,
+          { page, pageSize: 50, is_study: study },
+          t,
+        ).catch(() => ({ items: [] as { id?: number }[] }));
+        const items = data.items || [];
+        if (page === 0) {
+          if (study === 1) totals.учится += Number(data.total) || items.length;
+          if (study === 0) totals.лид += Number(data.total) || items.length;
+          if (study === 2) totals.архив += Number(data.total) || items.length;
+        }
+        for (const it of items) {
+          const id = Number(it.id || 0);
+          if (!id) continue;
+          if (!branchOf.has(id)) branchOf.set(id, branch);
+          if (study === 1) current.add(id);
+          else if (study === 0) leads.add(id);
+          else archive.add(id);
+        }
+        if (items.length < 50) break;
+      }
+    }
+  }
+  const store = loadStore();
+  let marked = 0;
+  for (const d of store.items) {
+    const id = Number(d.crmId || 0);
+    if (!id) continue;
+    d.extras = d.extras || {};
+    if (current.has(id)) {
+      d.extras.is_study = "1";
+      d.extras.removed = "0";
+      d.status = "учится";
+      if (branchOf.get(id)) d.branchId = branchOf.get(id);
+      d.branch = BRANCH_TITLE[d.branchId || 0] || d.branch;
+    } else if (leads.has(id)) {
+      d.extras.is_study = "0";
+      d.extras.removed = "0";
+      d.status = "лид";
+    } else if (archive.has(id)) {
+      d.extras.is_study = "2";
+      d.extras.removed = "0";
+      d.status = "архив";
+    } else {
+      d.extras.removed = "1";
+      d.status = "удалён";
+    }
+    marked += 1;
+  }
+  store.lastCrmSync = new Date().toISOString();
+  saveStore(store);
+  const views = searchClientViews("", 1, "учится");
+  return {
+    ok: true as const,
+    crm: totals,
+    currentIds: current.size,
+    leadIds: leads.size,
+    archiveIds: archive.size,
+    marked,
+    counts: views.counts,
+    lastCrmSync: store.lastCrmSync,
+  };
+}
+
 function viewOf(d: Dossier) {
   const ex = d.extras || {};
   const fromGroup = namesFromGroup(ex.groups);
-  const study = Number(ex.is_study);
-  const inGroup = (d.groupLinks || []).some((g) => g.active);
-  const status = inGroup
-    ? "учится"
-    : statusFromCrm(
-        {
-          is_study: ex.is_study,
-          study_status_id: ex.study_status_id,
-          last_attend_date: ex.last_attend_date,
-          next_lesson_date: ex.next_lesson_date,
-          e_date: ex.e_date,
-        },
-        study === 2,
-      );
+  const removed = String(ex.removed || "") === "1";
+  const status = removed
+    ? "удалён"
+    : statusFromCrm({
+        is_study: ex.is_study,
+        removed: ex.removed,
+      });
   const studyStatus = studyMeta({ study_status_id: ex.study_status_id })?.name || "";
   const coursesNow = uniq([...(d.coursesNow || []), ...((d.groupLinks || []).filter((g) => g.active).map((g) => g.name)), ...(status === "учится" ? fromGroup.courses : [])]);
   const coursesPast = uniq([...(d.coursesPast || []), ...((d.groupLinks || []).filter((g) => !g.active).map((g) => g.name)), ...(status !== "учится" ? fromGroup.courses : [])]);
@@ -789,16 +821,22 @@ export function searchClientViews(q = "", limit = 400, status = "", branchId = 0
   const words = needle.split(/\s+/).filter((w) => w.length > 1);
   const want = String(status || "").trim();
   const views = store.items.map(viewOf);
-  const counts = { все: views.length, учится: 0, лид: 0, архив: 0 };
+  const counts = { все: 0, учится: 0, лид: 0, архив: 0 };
+  const branchCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
   for (const d of views) {
-    if (d.status === "учится") counts.учится += 1;
-    else if (d.status === "лид") counts.лид += 1;
+    if (d.status === "удалён") continue;
+    counts.все += 1;
+    if (d.status === "учится") {
+      counts.учится += 1;
+      if (d.branchId && branchCounts[d.branchId] != null) branchCounts[d.branchId] += 1;
+    } else if (d.status === "лид") counts.лид += 1;
     else if (d.status === "архив") counts.архив += 1;
   }
   const items = views.filter((d) => {
+    if (d.status === "удалён" && !needle) return false;
     if (want && want !== "все") {
       if (want === "архив") {
-        if (d.status !== "архив" && !d.archived) return false;
+        if (d.status !== "архив") return false;
       } else if (d.status !== want) return false;
     }
     if (branchId && d.branchId !== branchId && !(d.branchIds || []).includes(branchId)) return false;
@@ -816,6 +854,7 @@ export function searchClientViews(q = "", limit = 400, status = "", branchId = 0
     total: items.length,
     all: store.items.length,
     counts,
+    branchCounts,
     lastCrmSync: store.lastCrmSync || "",
   };
 }
@@ -825,7 +864,7 @@ export const adminDossiers = createServerFn({ method: "POST" })
     (data: unknown) =>
       data as {
         token?: string;
-        action?: "list" | "get" | "save" | "sync" | "syncAll" | "syncSlice" | "syncMembers";
+        action?: "list" | "get" | "save" | "sync" | "syncAll" | "syncSlice" | "syncMembers" | "reclassify";
         id?: string;
         crmId?: number;
         branchId?: number;
@@ -845,6 +884,14 @@ export const adminDossiers = createServerFn({ method: "POST" })
       const one = store.items.find((d) => d.id === data.id);
       if (!one) return { ok: false as const, error: "Дело не найдено." };
       return { ok: true as const, dossier: one };
+    }
+    if (data.action === "reclassify") {
+      try {
+        const res = await reclassifyRolesFromCrm();
+        return res;
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось сверить статусы с AlfaCRM." };
+      }
     }
     if (data.action === "syncAll") {
       try {

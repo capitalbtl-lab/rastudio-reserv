@@ -435,8 +435,8 @@ const AGE_BANDS = [
 
 const CLIENT_BRANCHES = [
   { id: 0, label: "Все филиалы" },
-  { id: 1, label: "ЦМИТ" },
-  { id: 2, label: "Гражданская" },
+  { id: 1, label: "Гражданская" },
+  { id: 2, label: "ЦМИТ" },
   { id: 3, label: "Луховицы" },
   { id: 4, label: "Лето" },
 ];
@@ -875,9 +875,10 @@ export function AdminSchedule() {
   const [clientQ, setClientQ] = useState("");
   const [clientRows, setClientRows] = useState<ClientRow[]>([]);
   const [clientBusy, setClientBusy] = useState(false);
-  const [clientStatus, setClientStatus] = useState("все");
+  const [clientStatus, setClientStatus] = useState("учится");
   const [clientTotal, setClientTotal] = useState(0);
   const [clientCounts, setClientCounts] = useState({ все: 0, учится: 0, лид: 0, архив: 0 });
+  const [clientBranchCounts, setClientBranchCounts] = useState<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 4: 0 });
   const [clientBranch, setClientBranch] = useState(0);
   const [clientAge, setClientAge] = useState("");
   const [branchFilter, setBranchFilter] = useState("all");
@@ -973,24 +974,16 @@ export function AdminSchedule() {
   useEffect(() => {
     if (pane !== "clients") return;
     if (clientRows.length || clientBusy) return;
-    void loadClients("");
+    void loadClients("", "учится");
   }, [pane]);
   useEffect(() => {
     if (pane !== "clients") return;
-    const key = "ra-members-sync";
-    if (sessionStorage.getItem(key) === "1") return;
-    sessionStorage.setItem(key, "1");
+    const key = "ra-roles-sync";
+    if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(key) === "1") return;
+    if (typeof sessionStorage !== "undefined") sessionStorage.setItem(key, "1");
     void (async () => {
-      let offset = 0;
-      while (offset < 200) {
-        const res = await adminDossiers({ data: { token: token(), action: "syncMembers", offset } });
-        if (!res.ok) break;
-        offset = Number((res as { next?: number }).next) || offset + 8;
-        if ((res as { done?: boolean }).done) {
-          void loadClients(clientQ, clientStatus, clientBranch, clientAge);
-          break;
-        }
-      }
+      const res = await adminDossiers({ data: { token: token(), action: "reclassify" } });
+      if (res.ok) void loadClients(clientQ, clientStatus, clientBranch, clientAge);
     })();
   }, [pane]);
   useEffect(() => {
@@ -1237,6 +1230,8 @@ export function AdminSchedule() {
         setClientTotal(Number((res as { total?: number }).total) || (res.items || []).length);
         const counts = (res as { counts?: { все: number; учится: number; лид: number; архив: number } }).counts;
         if (counts) setClientCounts(counts);
+        const bc = (res as { branchCounts?: Record<number, number> }).branchCounts;
+        if (bc) setClientBranchCounts(bc);
       }
     } finally {
       setClientBusy(false);
@@ -1244,20 +1239,27 @@ export function AdminSchedule() {
   }
 
   async function pullClients() {
-    setPull({ open: true, step: "Подключаюсь к AlfaCRM…", done: false, added: 0, updated: 0, total: 0, error: "", kind: "clients" });
+    setPull({ open: true, step: "Сверяю статусы с AlfaCRM…", done: false, added: 0, updated: 0, total: 0, error: "", kind: "clients" });
     const branches: [number, string][] = [
-      [1, "ЦМИТ"],
-      [2, "Гражданская"],
+      [1, "Гражданская"],
+      [2, "ЦМИТ"],
       [3, "Луховицы"],
       [4, "Лето"],
     ];
     const studies: [number, string][] = [
-      [1, "учатся"],
+      [1, "текущие"],
       [0, "лиды"],
       [2, "архив"],
     ];
     let loaded = 0;
     try {
+      const roles = await adminDossiers({ data: { token: token(), action: "reclassify" } });
+      if (!roles.ok) {
+        setPull((u) => ({ ...u, done: true, error: roles.error || "Не удалось сверить статусы.", kind: "clients" }));
+        return;
+      }
+      const crm = (roles as { crm?: { учится: number; лид: number; архив: number } }).crm;
+      setPull((u) => (u.done ? u : { ...u, step: crm ? `В CRM сейчас: клиенты ${crm.учится}, лиды ${crm.лид}, архив ${crm.архив}` : u.step, kind: "clients" }));
       for (const [branchId, branchName] of branches) {
         for (const [isStudy, label] of studies) {
           let page = 0;
@@ -1278,29 +1280,8 @@ export function AdminSchedule() {
             page = Number((res as { nextPage?: number }).nextPage) || page + 3;
           }
         }
-        let page = 0;
-        while (page < 40) {
-          setPull((u) => (u.done ? u : { ...u, step: `${branchName} · снятые · стр. ${page + 1} · уже ${loaded}`, kind: "clients" }));
-          const res = await adminDossiers({
-            data: { token: token(), action: "syncSlice", branchId, removed: true, page, pages: 3 },
-          });
-          if (!res.ok) break;
-          const n = Number((res as { count?: number }).count) || 0;
-          loaded += n;
-          if (!(res as { hasMore?: boolean }).hasMore) break;
-          page = Number((res as { nextPage?: number }).nextPage) || page + 3;
-        }
       }
-      let offset = 0;
-      while (offset < 200) {
-        setPull((u) => (u.done ? u : { ...u, step: `Сверяю состав групп с расписанием… ${offset}`, kind: "clients" }));
-        const res = await adminDossiers({ data: { token: token(), action: "syncMembers", offset } });
-        if (!res.ok) break;
-        offset = Number((res as { next?: number }).next) || offset + 8;
-        const studying = Number((res as { studying?: number }).studying) || 0;
-        setPull((u) => (u.done ? u : { ...u, added: studying, total: studying, kind: "clients" }));
-        if ((res as { done?: boolean }).done) break;
-      }
+      await adminDossiers({ data: { token: token(), action: "reclassify" } });
       setPull({
         open: true,
         step: "",
@@ -2224,7 +2205,7 @@ export function AdminSchedule() {
             </Button>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {(["все", "учится", "лид", "архив"] as const).map((st) => (
+            {(["учится", "лид", "архив", "все"] as const).map((st) => (
               <button
                 key={st}
                 type="button"
@@ -2234,7 +2215,7 @@ export function AdminSchedule() {
                 }}
                 className={cn("rounded-full px-3 py-1 text-[0.78rem] font-semibold", clientStatus === st ? "bg-primary text-white" : "bg-surface-2 text-fg")}
               >
-                {st === "все" ? "Все" : st === "учится" ? "Учатся" : st === "лид" ? "Лиды" : "Архив"}
+                {st === "все" ? "Все" : st === "учится" ? "Текущие" : st === "лид" ? "Лиды" : "Архив"}
                 {clientCounts[st] ? ` ${clientCounts[st]}` : ""}
               </button>
             ))}
@@ -2242,6 +2223,11 @@ export function AdminSchedule() {
               {clientBusy ? "ищу…" : `${clientRows.length} из ${clientTotal || clientRows.length}`}
             </p>
           </div>
+          <p className="text-[0.78rem] leading-snug text-muted">
+            Как в AlfaCRM: <b className="text-fg">текущие</b> — клиенты, которых не отправили в архив.
+            <b className="text-fg"> Лид</b> — заявка, ещё не клиент.
+            <b className="text-fg"> Архив</b> — клиента перенесли в архив. Снятые из базы сюда не входят.
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {CLIENT_BRANCHES.map((b) => (
               <button
@@ -2254,6 +2240,7 @@ export function AdminSchedule() {
                 className={cn("rounded-full px-3 py-1 text-[0.78rem] font-semibold", clientBranch === b.id ? "bg-primary text-white" : "bg-surface-2 text-fg")}
               >
                 {b.label}
+                {b.id && clientBranchCounts[b.id] ? ` ${clientBranchCounts[b.id]}` : ""}
               </button>
             ))}
           </div>
@@ -2298,8 +2285,8 @@ export function AdminSchedule() {
                       <td className="px-3 py-2 text-muted">{(r.schools || []).slice(0, 2).join(", ") || (r.courses || []).slice(0, 1).join(", ") || "—"}</td>
                       <td className="px-3 py-2">{r.parent || "—"}</td>
                       <td className="px-3 py-2">
-                        <span className={cn("rounded-full px-2 py-0.5 text-[0.68rem] font-semibold", r.status === "учится" ? "bg-primary/10 text-primary" : "bg-surface-2 text-muted")}>
-                          {r.studyStatus || r.status || "—"}
+                        <span className={cn("rounded-full px-2 py-0.5 text-[0.68rem] font-semibold", r.status === "учится" ? "bg-primary/10 text-primary" : r.status === "лид" ? "bg-amber-100 text-amber-900" : "bg-surface-2 text-muted")}>
+                          {r.status === "учится" ? "Клиент" : r.status === "лид" ? "Лид" : r.status === "архив" ? "Архив" : r.status || "—"}
                         </span>
                       </td>
                     </tr>
@@ -2309,8 +2296,10 @@ export function AdminSchedule() {
             {!clientBusy && !clientRows.length ? (
               <p className="px-4 py-6 text-sm text-muted">
                 {clientStatus === "архив"
-                  ? "Архивных в этой выборке нет. Нажмите «Загрузить из AlfaCRM» — подтянем всех, включая архив."
-                  : "Пока пусто. Нажмите «Загрузить из AlfaCRM» или скажите: «найди Иванова»."}
+                  ? "Архивных в этой выборке нет. Нажмите «Загрузить из AlfaCRM» — подтянем вкладку «Архивные»."
+                  : clientStatus === "учится"
+                    ? "Текущих клиентов пока нет. Нажмите «Загрузить из AlfaCRM» — цифры будут как во вкладке «Текущие» в CRM."
+                    : "Пока пусто. Нажмите «Загрузить из AlfaCRM» или скажите: «найди Иванова»."}
               </p>
             ) : null}
           </div>
@@ -3058,7 +3047,7 @@ export function AdminSchedule() {
                     </p>
                     <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">
                       В базе на сайте: <b>{clientCounts.все || pull.total}</b>
-                      {clientCounts.все ? ` · учатся ${clientCounts.учится} · лиды ${clientCounts.лид} · архив ${clientCounts.архив}` : ""}
+                      {clientCounts.все ? ` · текущие ${clientCounts.учится} · лиды ${clientCounts.лид} · архив ${clientCounts.архив}` : ""}
                     </p>
                   </div>
                 ) : (
