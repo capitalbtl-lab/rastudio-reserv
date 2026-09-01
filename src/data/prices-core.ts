@@ -14,8 +14,22 @@ export type PriceRow = {
 const SEED = seed as PriceRow[];
 let cache: PriceRow[] = SEED.map((r) => ({ ...r }));
 
+export function splitCourseAge(name: string): { name: string; age: string } {
+  let n = String(name || "")
+    .replace(/робототехника и программирование/gi, "Робототехника")
+    .replace(/\s+/g, " ")
+    .trim();
+  const m = n.match(/\s*[\(（]?\s*((?:\d+\s*[-–—]\s*\d+|\d+\s*\+|от\s*\d+)\s*(?:лет|года|год)?)\s*[\)）]?\s*$/i);
+  if (!m || m.index == null) return { name: n, age: "" };
+  const cut = n.slice(0, m.index).trim();
+  if (cut.length < 4) return { name: n, age: "" };
+  let age = m[1].replace(/\s+/g, " ").trim();
+  if (/\d/.test(age) && !/лет|год|\+/.test(age)) age = `${age} лет`;
+  return { name: cut, age };
+}
+
 export function tidyCourseName(name: string) {
-  return String(name || "").replace(/робототехника и программирование/gi, "Робототехника");
+  return splitCourseAge(name).name;
 }
 
 export function hydratePrices(rows: PriceRow[]) {

@@ -9,6 +9,7 @@ import { InfoTip, TipWrap } from "@/components/info-tip";
 import { AdminSectionHead } from "@/components/admin-self-test";
 import { SCHOOLS } from "@/data/site";
 import { SCHOOL_ORDER } from "@/data/crm-slots-core";
+import { splitCourseAge } from "@/data/prices-core";
 import { cn } from "@/lib/utils";
 import { speakAgent } from "@/data/agent-voice";
 import { missingScheduleFields, parseDraftFromSpeech, beatsOf, type LessonBeat } from "@/data/crm-slots";
@@ -872,7 +873,7 @@ export function AdminSchedule() {
         if (key !== branchFilter) continue;
       }
       const school = names.includes(s.school) ? s.school : "Прочее";
-      const course = s.course || s.subject || s.groupName || "Без названия";
+      const course = splitCourseAge(s.course || s.subject || s.groupName || "Без названия").name || "Без названия";
       const bag = map.get(school)!;
       if (!bag.has(course)) bag.set(course, []);
       bag.get(course)!.push(s);

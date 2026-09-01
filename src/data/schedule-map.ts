@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { SCHOOLS, SCHOOL_COURSE_MATCH } from "@/data/site";
-import { listPriceRows, SCHOOL_DIRECTION, tidyCourseName } from "@/data/prices-core";
+import { listPriceRows, SCHOOL_DIRECTION, splitCourseAge, tidyCourseName } from "@/data/prices-core";
 import { SEED_SUBJECTS, bestSubject, loadSubjects, type CrmSubject } from "@/data/crm-subjects";
 import { type CrmSlot } from "@/data/crm-slots-core";
 
@@ -159,6 +159,9 @@ export function schoolFromHay(hay: string) {
 export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
   const map = loadScheduleMap();
   const byId = new Map(map.courses.map((c) => [c.subjectId, c]));
+  const prices = listPriceRows();
+  const priceByTitle = [...prices].sort((a, b) => b.name.length - a.name.length);
+  const fold = (s: string) => splitCourseAge(s).name.toLowerCase().replace(/ё/g, "е");
   return slots.map((s) => {
     const hay = `${s.groupName} ${s.course} ${s.subject} ${s.age}`;
     const byName = schoolFromHay(hay);
@@ -168,12 +171,19 @@ export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
       link?.school ||
       schoolByPath(link?.siteHref || s.path) ||
       s.school;
-    const price = link?.siteHref ? listPriceRows().find((r) => r.path === link.siteHref) : undefined;
+    let price = link?.siteHref ? prices.find((r) => r.path === link.siteHref) : undefined;
+    if (!price) {
+      const key = fold(s.groupName || s.course || s.subject || "");
+      price = key ? priceByTitle.find((r) => fold(r.name) === key) : undefined;
+    }
+    const split = splitCourseAge(price?.name || s.course || link?.subjectName || s.groupName || "");
+    const age = s.age || split.age || splitCourseAge(s.groupName).age;
     return {
       ...s,
       school: school || s.school,
-      path: link?.siteHref || s.path,
-      course: tidyCourseName(price?.name || s.course || link?.subjectName || s.course),
+      path: link?.siteHref || s.path || price?.path || "",
+      course: tidyCourseName(split.name),
+      age,
     };
   });
 }
