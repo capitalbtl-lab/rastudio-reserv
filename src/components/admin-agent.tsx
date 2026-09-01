@@ -9,6 +9,7 @@ import { AdminVoiceEdits } from "@/components/admin-voice-edits";
 import { AdminTrain } from "@/components/admin-train";
 import { AdminAccess } from "@/components/admin-access";
 import { AdminDebug } from "@/components/admin-debug";
+import { AdminSelfTest } from "@/components/admin-self-test";
 import { InfoTip } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
 
@@ -93,6 +94,9 @@ export function AdminAgent() {
         <p className="mt-2 max-w-2xl text-sm text-muted">
           Окно чата, обучение, голоса, доступ и история диалогов — всё здесь.
         </p>
+        <div className="mt-3">
+          <AdminSelfTest section={pane === "window" ? "agent-window" : pane === "dialog" ? "agent-dialog" : `agent-${pane}`} />
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">

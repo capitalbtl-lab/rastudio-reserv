@@ -5,6 +5,7 @@ import { adminSchedule } from "@/data/admin-schedule";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { Button } from "@/components/ui/button";
 import { InfoTip, TipWrap } from "@/components/info-tip";
+import { AdminSelfTest } from "@/components/admin-self-test";
 import { SCHOOLS } from "@/data/site";
 import { cn } from "@/lib/utils";
 
@@ -114,6 +115,9 @@ export function AdminSchedule() {
         <p className="mt-2 max-w-3xl text-sm text-muted">
           Последняя загрузка: {when(at)} · {slots.length} слотов · {dirty.size ? `${dirty.size} не выгружены в CRM` : "совпадает с кабинетом"}
         </p>
+        <div className="mt-3">
+          <AdminSelfTest section="schedule" />
+        </div>
       </div>
 
       <div className="flex flex-wrap items-start gap-2">

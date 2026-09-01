@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { adminApiKeys, type ApiConn, type ApiKind } from "@/data/api-keys";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/info-tip";
+import { AdminSelfTest } from "@/components/admin-self-test";
 import { cn } from "@/lib/utils";
 
 function token() {
@@ -169,6 +170,9 @@ export function AdminIntegrations() {
           <InfoTip text="Ключи лежат на сервере в storage/api-keys.json, не в git. Поля с точками — секрет уже есть, впишите новый только если меняете. Пустое поле при сохранении старый ключ не стирает. Процессные переменные .env имеют приоритет, если заданы." />
         </div>
         <p className="mt-2 max-w-2xl text-sm text-muted">Yandex, DeepSeek, Novofon, AlfaCRM и любые другие ключи — здесь, без правки файлов сервера.</p>
+        <div className="mt-3">
+          <AdminSelfTest section="apis" />
+        </div>
       </div>
 
       <div className="space-y-3">

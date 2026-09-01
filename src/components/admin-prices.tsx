@@ -15,6 +15,7 @@ import { AdminAgent } from "@/components/admin-agent";
 import { AdminDossiers } from "@/components/admin-dossiers";
 import { AdminSchedule } from "@/components/admin-schedule";
 import { AdminIntegrations } from "@/components/admin-integrations";
+import { AdminSelfTest } from "@/components/admin-self-test";
 import { adminPriceFormulas, type CorpFormulas } from "@/data/price-formulas";
 import { InfoTip, TipWrap } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
@@ -316,6 +317,9 @@ export function AdminPrices() {
               <p className="mt-2 max-w-2xl text-sm text-muted">
                 Колонка «Все» на сайте. КБМ и ТМХ — корпоративные. Формула считает их от «Все»: плюс сумма или умножение на процент.
               </p>
+              <div className="mt-3">
+                <AdminSelfTest section="prices" />
+              </div>
             </div>
             <div className="flex items-start gap-1">
               <TipWrap text="Когда в AlfaCRM появятся абонементы, эта кнопка заберёт их из tariff/index в колонку «Все». КБМ и ТМХ посчитаются по формуле ниже. Сейчас абонементы ещё не выложены — специально ничего не тянем.">

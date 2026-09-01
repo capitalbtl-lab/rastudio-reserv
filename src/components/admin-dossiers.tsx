@@ -5,6 +5,7 @@ import { adminDossiers, type Dossier } from "@/data/dossiers";
 import { adminDossierJobs, JOB_ACTIONS, type DossierJob } from "@/data/dossier-jobs";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/info-tip";
+import { AdminSelfTest } from "@/components/admin-self-test";
 import { cn } from "@/lib/utils";
 
 function token() {
@@ -241,6 +242,9 @@ export function AdminDossiers() {
         <p className="mt-2 max-w-3xl text-sm text-muted">
           Все карточки из CRM, без исключения. Сортировка: сначала учатся, затем лиды, затем архив — внутри по направлению и курсу. Отметьте сегмент и нажмите «Выполнить».
         </p>
+        <div className="mt-3">
+          <AdminSelfTest section="dossiers" />
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         <input

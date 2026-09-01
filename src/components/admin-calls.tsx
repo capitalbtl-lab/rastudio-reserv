@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { adminCalls } from "@/data/admin";
 import { Button } from "@/components/ui/button";
+import { AdminSelfTest } from "@/components/admin-self-test";
 import { cn } from "@/lib/utils";
 
 type Tab = "overview" | "crm" | "texts" | "knowledge" | "settings";
@@ -168,6 +169,9 @@ export function AdminCalls() {
         <p className="mt-2 max-w-2xl text-sm text-muted">
           Звонок стыкуется с карточкой AlfaCRM: возраст, курс, учится или ушёл, переписка. Ольга берёт это в консультацию без ФИО и телефонов.
         </p>
+        <div className="mt-3">
+          <AdminSelfTest section="calls" />
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         {(
