@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { isAdminRequest } from "./admin-auth";
 import { formatRuPhone, leadUrl, request, token as alfaToken } from "./alfacrm";
 import type { SessionNote } from "./session-note";
+import { loadVersions } from "./crm-slots";
 
 export type PersonName = {
   fio: string;
@@ -31,6 +32,7 @@ export type Dossier = {
   services: string[];
   teachers: string[];
   schools: string[];
+  groupLinks?: { id: number; name: string; branchId: number; school: string; active: boolean }[];
   age?: number;
   ageBand?: string;
   tariff?: string;
@@ -183,8 +185,9 @@ export function ageBandOf(age?: number) {
   if (age <= 4) return "3-4";
   if (age <= 6) return "5-6";
   if (age <= 9) return "7-9";
-  if (age <= 14) return "10-14";
-  return "15+";
+  if (age <= 12) return "10-12";
+  if (age <= 17) return "13-17";
+  return "18+";
 }
 
 export function schoolOfText(text: string) {
@@ -201,10 +204,44 @@ export function schoolOfText(text: string) {
   return "";
 }
 
-function genderFromCrm(g: unknown): "мальчик" | "девочка" | "" | undefined {
+function genderFromFio(fio: string): "мальчик" | "девочка" | "" {
+  const parts = String(fio || "").trim().split(/\s+/);
+  const pat = (parts[2] || "").toLowerCase();
+  if (/овна$|евна$|ична$|инична$/.test(pat)) return "девочка";
+  if (/ович$|евич$/.test(pat) || (/ич$/.test(pat) && !/ичн/.test(pat))) return "мальчик";
+  return "";
+}
+
+function genderFromCrm(g: unknown, fio = ""): "мальчик" | "девочка" | "" | undefined {
   if (g === 1 || g === "1") return "мальчик";
   if (g === 2 || g === "2") return "девочка";
-  return undefined;
+  return genderFromFio(fio) || undefined;
+}
+
+const STUDY_STATUS: Record<number, { name: string; bucket: "учится" | "архив" | "лид" }> = {
+  1: { name: "Обучается", bucket: "учится" },
+  4: { name: "Ожидает старта", bucket: "учится" },
+  8: { name: "Ждём на занятиях", bucket: "учится" },
+  5: { name: "Должник", bucket: "учится" },
+  7: { name: "Пропустил 1 занятие", bucket: "учится" },
+  10: { name: "Пропустил 2 занятия", bucket: "учится" },
+  11: { name: "Пропустил 3 занятия", bucket: "архив" },
+  2: { name: "Завершил", bucket: "архив" },
+  9: { name: "Без статуса", bucket: "архив" },
+};
+
+function studyMeta(item: Record<string, unknown>) {
+  const sid = Number(item.study_status_id || 0);
+  return STUDY_STATUS[sid] || null;
+}
+
+function statusFromCrm(item: Record<string, unknown>, archived = false) {
+  const study = Number(item.is_study);
+  if (study === 0) return "лид";
+  if (study === 2 || archived) return "архив";
+  const meta = studyMeta(item);
+  if (meta) return meta.bucket;
+  return "архив";
 }
 
 function asList(v: unknown): string[] {
@@ -234,14 +271,6 @@ function addressFromCrm(item: Record<string, unknown>) {
   if (addr) return addr;
   if (custom && !/введите адрес/i.test(custom)) return custom;
   return "";
-}
-
-function statusFromCrm(item: Record<string, unknown>, archived = false) {
-  const study = Number(item.is_study);
-  if (study === 1) return "учится";
-  if (study === 2 || archived) return "архив";
-  if (study === 0) return "лид";
-  return item.study_status_id != null ? `статус ${item.study_status_id}` : "";
 }
 
 function parseJsonish(raw?: string) {
@@ -296,6 +325,7 @@ export function upsertDossier(patch: {
   tariff?: string;
   status?: string;
   extras?: Record<string, string>;
+  groupLink?: { id: number; name: string; branchId: number; school: string; active: boolean };
   chatId?: string;
   source: string;
   note?: string;
@@ -330,7 +360,7 @@ export function upsertDossier(patch: {
     phoneDigits: digits || cur.phoneDigits,
     child: {
       ...childFio,
-      gender: patch.gender !== undefined && patch.gender !== "" ? patch.gender : cur.child.gender || "",
+      gender: (patch.gender !== undefined && patch.gender !== "" ? patch.gender : cur.child.gender) || genderFromFio(childFio.fio) || "",
       dob: crm && patch.dob ? patch.dob : patch.dob || cur.child.dob || "",
     },
     parent: parentFio,
@@ -342,6 +372,15 @@ export function upsertDossier(patch: {
     services: uniq([...(cur.services || []), patch.service || ""]),
     teachers: uniq([...(cur.teachers || []), patch.teacher || "", ...(patch.teachers || [])]),
     schools: uniq([...(cur.schools || []), patch.school || "", schoolOfText(patch.course || ""), schoolOfText(patch.coursePast || "")]),
+    groupLinks: (() => {
+      const list = [...(cur.groupLinks || [])];
+      if (patch.groupLink?.id) {
+        const i = list.findIndex((x) => x.id === patch.groupLink!.id && x.branchId === patch.groupLink!.branchId);
+        if (i >= 0) list[i] = patch.groupLink;
+        else list.push(patch.groupLink);
+      }
+      return list;
+    })(),
     age: ageFromDob(crm && patch.dob ? patch.dob : patch.dob || cur.child.dob || "") || cur.age,
     ageBand: "",
     tariff: crm && patch.tariff ? patch.tariff : patch.tariff || cur.tariff,
@@ -448,7 +487,7 @@ export function applyCrmCustomer(item: Record<string, unknown>, branchId: number
   const id = Number(item.id);
   if (!id) return null;
   const phones = asList(item.phone);
-  const gender = genderFromCrm(item.gender);
+  const gender = genderFromCrm(item.gender, String(item.name || ""));
   const paid = item.paid_till ? `оплачено до ${item.paid_till}` : "";
   const extraTariff = Number(item.paid_count) ? `занятий по абонементу: ${item.paid_count}` : "";
   const extras = extrasFromCrm(item);
@@ -604,27 +643,86 @@ export async function syncSliceFromCrm(opts: { branchId: number; isStudy?: numbe
   return { ok: true as const, count: n, nextPage: page, hasMore, total: store.items.length, counts, lastCrmSync: store.lastCrmSync };
 }
 
+export async function syncMembershipsSlice(offset = 0, take = 8) {
+  const slots = (loadVersions()[0]?.slots || []).filter((s) => Number(s.groupId) > 0);
+  const seen = new Set<string>();
+  const groups: { id: number; branchId: number; name: string; school: string }[] = [];
+  for (const s of slots) {
+    const id = Number(s.groupId);
+    const branchId = Number(s.branchId) || 1;
+    const k = `${branchId}-${id}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    groups.push({ id, branchId, name: s.groupName || s.course || `группа ${id}`, school: s.school || schoolOfText(s.groupName || s.course || "") });
+  }
+  const slice = groups.slice(offset, offset + take);
+  const t = await alfaToken();
+  let n = 0;
+  for (const g of slice) {
+    for (let page = 0; page < 4; page += 1) {
+      const json = await request<{ items?: Record<string, unknown>[] }>(
+        `/v2api/${g.branchId}/customer/index`,
+        { page, pageSize: 50, group_id: g.id, is_study: 1 },
+        t,
+      ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+      const items = json.items || [];
+      for (const c of items) {
+        const crmId = Number(c.id || 0);
+        if (!crmId) continue;
+        applyCrmCustomer(c, g.branchId, false, {});
+        upsertDossier({
+          crmId,
+          branchId: g.branchId,
+          course: g.name,
+          school: g.school,
+          status: "учится",
+          groupLink: { id: g.id, name: g.name, branchId: g.branchId, school: g.school, active: true },
+          source: "alfacrm",
+          crmWins: true,
+        });
+        n += 1;
+      }
+      if (items.length < 50) break;
+    }
+  }
+  const done = offset + take >= groups.length;
+  const views = searchClientViews("", 1, "учится");
+  return {
+    ok: true as const,
+    count: n,
+    next: offset + take,
+    totalGroups: groups.length,
+    done,
+    studying: views.counts.учится,
+    counts: views.counts,
+  };
+}
+
 function viewOf(d: Dossier) {
   const ex = d.extras || {};
   const fromGroup = namesFromGroup(ex.groups);
   const study = Number(ex.is_study);
-  const status = d.status && d.status !== "архив" ? d.status : statusFromCrm({ is_study: ex.is_study, study_status_id: ex.study_status_id }, study === 2);
-  const coursesNow = uniq([...(d.coursesNow || []), ...(status === "учится" ? fromGroup.courses : [])]);
-  const coursesPast = uniq([...(d.coursesPast || []), ...(status !== "учится" ? fromGroup.courses : [])]);
+  const inGroup = (d.groupLinks || []).some((g) => g.active);
+  const status = inGroup ? "учится" : statusFromCrm({ is_study: ex.is_study, study_status_id: ex.study_status_id }, study === 2);
+  const studyStatus = studyMeta({ study_status_id: ex.study_status_id })?.name || "";
+  const coursesNow = uniq([...(d.coursesNow || []), ...((d.groupLinks || []).filter((g) => g.active).map((g) => g.name)), ...(status === "учится" ? fromGroup.courses : [])]);
+  const coursesPast = uniq([...(d.coursesPast || []), ...((d.groupLinks || []).filter((g) => !g.active).map((g) => g.name)), ...(status !== "учится" ? fromGroup.courses : [])]);
   const teachers = uniq([...(d.teachers || []), ...fromGroup.teachers]);
   const schools = uniq([
     ...(d.schools || []),
+    ...(d.groupLinks || []).map((g) => g.school),
     ...coursesNow.map(schoolOfText),
     ...coursesPast.map(schoolOfText),
   ].filter(Boolean));
   const age = d.age || ageFromDob(d.child.dob);
+  const gender = d.child.gender || genderFromFio(d.child.fio) || "";
   return {
     id: d.id,
     crmId: d.crmId || null,
     branchId: d.branchId || null,
     url: d.url || "",
     child: d.child.fio,
-    gender: d.child.gender || "",
+    gender,
     dob: d.child.dob || "",
     age: age ?? null,
     ageBand: ageBandOf(age),
@@ -632,6 +730,10 @@ function viewOf(d: Dossier) {
     phone: d.phones[0] || d.phoneDigits,
     city: d.city || "",
     branch: d.branch || "",
+    branchIds: String(ex.branch_ids || d.branchId || "")
+      .split(/[,\s]+/)
+      .map((x) => Number(x))
+      .filter((n) => n > 0),
     courses: uniq([...coursesNow, ...coursesPast]),
     coursesNow,
     coursesPast,
@@ -639,6 +741,8 @@ function viewOf(d: Dossier) {
     teachers,
     tariff: d.tariff || "",
     status,
+    studyStatus,
+    groupLinks: d.groupLinks || [],
     archived: status === "архив",
     updatedAt: d.updatedAt,
   };
@@ -646,7 +750,7 @@ function viewOf(d: Dossier) {
 
 export type ClientView = ReturnType<typeof viewOf>;
 
-export function searchClientViews(q = "", limit = 400, status = "") {
+export function searchClientViews(q = "", limit = 400, status = "", branchId = 0, ageBand = "") {
   const store = loadStore();
   const needle = String(q || "")
     .toLowerCase()
@@ -654,21 +758,23 @@ export function searchClientViews(q = "", limit = 400, status = "") {
     .trim();
   const words = needle.split(/\s+/).filter((w) => w.length > 1);
   const want = String(status || "").trim();
-  const counts = { все: 0, учится: 0, лид: 0, архив: 0 };
-  for (const d of store.items) {
-    counts.все += 1;
+  const views = store.items.map(viewOf);
+  const counts = { все: views.length, учится: 0, лид: 0, архив: 0 };
+  for (const d of views) {
     if (d.status === "учится") counts.учится += 1;
     else if (d.status === "лид") counts.лид += 1;
     else if (d.status === "архив") counts.архив += 1;
   }
-  const items = store.items.map(viewOf).filter((d) => {
+  const items = views.filter((d) => {
     if (want && want !== "все") {
       if (want === "архив") {
         if (d.status !== "архив" && !d.archived) return false;
       } else if (d.status !== want) return false;
     }
+    if (branchId && d.branchId !== branchId && !(d.branchIds || []).includes(branchId)) return false;
+    if (ageBand && d.ageBand !== ageBand) return false;
     if (!needle) return true;
-    const hay = `${d.child} ${d.parent} ${d.phone} ${d.city} ${d.branch} ${d.courses.join(" ")} ${d.schools.join(" ")} ${d.crmId || ""}`
+    const hay = `${d.child} ${d.parent} ${d.phone} ${d.city} ${d.branch} ${d.courses.join(" ")} ${d.schools.join(" ")} ${d.gender} ${d.crmId || ""}`
       .toLowerCase()
       .replace(/ё/g, "е");
     if (hay.includes(needle)) return true;
@@ -689,7 +795,7 @@ export const adminDossiers = createServerFn({ method: "POST" })
     (data: unknown) =>
       data as {
         token?: string;
-        action?: "list" | "get" | "save" | "sync" | "syncAll" | "syncSlice";
+        action?: "list" | "get" | "save" | "sync" | "syncAll" | "syncSlice" | "syncMembers";
         id?: string;
         crmId?: number;
         branchId?: number;
@@ -697,6 +803,7 @@ export const adminDossiers = createServerFn({ method: "POST" })
         isStudy?: number;
         page?: number;
         pages?: number;
+        offset?: number;
         removed?: boolean;
         patch?: Partial<Dossier> & { childFio?: string; parentFio?: string; dob?: string; phone?: string };
       },
@@ -729,6 +836,14 @@ export const adminDossiers = createServerFn({ method: "POST" })
         return { ok: true as const, ...res };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "CRM не ответила на этот шаг." };
+      }
+    }
+    if (data.action === "syncMembers") {
+      try {
+        const res = await syncMembershipsSlice(Number(data.offset) || 0, 8);
+        return { ok: true as const, ...res };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось сверить состав групп." };
       }
     }
     if (data.action === "sync" && data.crmId && data.branchId) {

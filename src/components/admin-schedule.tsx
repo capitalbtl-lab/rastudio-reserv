@@ -411,13 +411,35 @@ type ClientRow = {
   parent: string;
   phone: string;
   age: number | string | null;
+  ageBand?: string;
   gender: string;
   status: string;
+  studyStatus?: string;
   courses: string[];
+  schools?: string[];
   city: string;
   branch: string;
+  groupLinks?: { id: number; name: string; branchId: number; school: string; active: boolean }[];
   archived: boolean;
 };
+
+const AGE_BANDS = [
+  { id: "", label: "Все возраста" },
+  { id: "3-4", label: "3–4 года" },
+  { id: "5-6", label: "5–6 лет" },
+  { id: "7-9", label: "7–9 лет" },
+  { id: "10-12", label: "10–12 лет" },
+  { id: "13-17", label: "13–17 лет" },
+  { id: "18+", label: "18+ лет" },
+];
+
+const CLIENT_BRANCHES = [
+  { id: 0, label: "Все филиалы" },
+  { id: 1, label: "ЦМИТ" },
+  { id: 2, label: "Гражданская" },
+  { id: 3, label: "Луховицы" },
+  { id: 4, label: "Лето" },
+];
 
 function GroupNameField({ value, onChange, subject }: { value: string; onChange: (v: string) => void; subject?: string }) {
   const src = useRef<HTMLInputElement>(null);
@@ -856,6 +878,8 @@ export function AdminSchedule() {
   const [clientStatus, setClientStatus] = useState("все");
   const [clientTotal, setClientTotal] = useState(0);
   const [clientCounts, setClientCounts] = useState({ все: 0, учится: 0, лид: 0, архив: 0 });
+  const [clientBranch, setClientBranch] = useState(0);
+  const [clientAge, setClientAge] = useState("");
   const [branchFilter, setBranchFilter] = useState("all");
   const [onlyMismatch, setOnlyMismatch] = useState(false);
   const [pushUi, setPushUi] = useState({ open: false, step: "", done: false, created: 0, pushed: 0, failed: 0, error: "", lines: [] as string[] });
@@ -1118,6 +1142,8 @@ export function AdminSchedule() {
       note: "",
       paidTill: m.to || "",
       url: `https://studiyarazvivaysya.s20.online/company/${branch}/customer/view?id=${m.id}`,
+      schools: [],
+      groups: [],
       comms: [],
     });
     const res = await adminSchedule({ data: { token: token(), action: "customerGet", customerId: m.id, branchId: branch } as never });
@@ -1134,6 +1160,9 @@ export function AdminSchedule() {
         phones: next.phones.length ? next.phones : prev?.phones || [],
         emails: next.emails.length ? next.emails : prev?.emails || [],
         status: next.status || prev?.status || "",
+        schools: next.schools?.length ? next.schools : prev?.schools || [],
+        groups: next.groups?.length ? next.groups : prev?.groups || [],
+        studyStatus: next.studyStatus || prev?.studyStatus || "",
       }));
     }
   }
@@ -1158,13 +1187,33 @@ export function AdminSchedule() {
         status: r.status,
       },
       r.branchId || 1,
-    );
+    ).then(() => {
+      setPupil((p) =>
+        p
+          ? {
+              ...p,
+              groups: p.groups?.length ? p.groups : r.groupLinks || [],
+              schools: p.schools?.length ? p.schools : r.schools || [],
+            }
+          : p,
+      );
+    });
   }
 
-  async function loadClients(q = clientQ, status = clientStatus) {
+  function openGroupFromLink(gid: number, branchId: number) {
+    const s = slots.find((x) => x.groupId === gid && x.branchId === branchId) || slots.find((x) => x.groupId === gid);
+    if (!s) {
+      setMsg("Группа есть у клиента, но её нет в расписании на сайте. Загрузите расписание из AlfaCRM.");
+      return;
+    }
+    setPupil(null);
+    void openDetail(s);
+  }
+
+  async function loadClients(q = clientQ, status = clientStatus, branch = clientBranch, ageBand = clientAge) {
     setClientBusy(true);
     try {
-      const res = await adminSchedule({ data: { token: token(), action: "customersSearch", q, status } as never });
+      const res = await adminSchedule({ data: { token: token(), action: "customersSearch", q, status, branchId: branch, ageBand } as never });
       if (res.ok && "items" in res) {
         setClientRows((res.items || []) as ClientRow[]);
         setClientTotal(Number((res as { total?: number }).total) || (res.items || []).length);
@@ -1223,6 +1272,16 @@ export function AdminSchedule() {
           if (!(res as { hasMore?: boolean }).hasMore) break;
           page = Number((res as { nextPage?: number }).nextPage) || page + 3;
         }
+      }
+      let offset = 0;
+      while (offset < 200) {
+        setPull((u) => (u.done ? u : { ...u, step: `Сверяю состав групп с расписанием… ${offset}`, kind: "clients" }));
+        const res = await adminDossiers({ data: { token: token(), action: "syncMembers", offset } });
+        if (!res.ok) break;
+        offset = Number((res as { next?: number }).next) || offset + 8;
+        const studying = Number((res as { studying?: number }).studying) || 0;
+        setPull((u) => (u.done ? u : { ...u, added: studying, total: studying, kind: "clients" }));
+        if ((res as { done?: boolean }).done) break;
       }
       setPull({
         open: true,
@@ -2153,7 +2212,7 @@ export function AdminSchedule() {
                 type="button"
                 onClick={() => {
                   setClientStatus(st);
-                  void loadClients(clientQ, st);
+                  void loadClients(clientQ, st, clientBranch, clientAge);
                 }}
                 className={cn("rounded-full px-3 py-1 text-[0.78rem] font-semibold", clientStatus === st ? "bg-primary text-white" : "bg-surface-2 text-fg")}
               >
@@ -2165,16 +2224,47 @@ export function AdminSchedule() {
               {clientBusy ? "ищу…" : `${clientRows.length} из ${clientTotal || clientRows.length}`}
             </p>
           </div>
+          <div className="flex flex-wrap gap-1.5">
+            {CLIENT_BRANCHES.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => {
+                  setClientBranch(b.id);
+                  void loadClients(clientQ, clientStatus, b.id, clientAge);
+                }}
+                className={cn("rounded-full px-3 py-1 text-[0.78rem] font-semibold", clientBranch === b.id ? "bg-primary text-white" : "bg-surface-2 text-fg")}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {AGE_BANDS.map((b) => (
+              <button
+                key={b.id || "all"}
+                type="button"
+                onClick={() => {
+                  setClientAge(b.id);
+                  void loadClients(clientQ, clientStatus, clientBranch, b.id);
+                }}
+                className={cn("rounded-full px-3 py-1 text-[0.78rem] font-semibold", clientAge === b.id ? "bg-primary text-white" : "bg-surface-2 text-fg")}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
           {ask ? <p className="rounded-xl bg-primary/10 px-3 py-2 text-sm font-medium text-fg">{ask}</p> : null}
           <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/8">
             <table className="w-full text-left text-sm">
               <thead className="bg-surface-2 text-[0.68rem] uppercase tracking-wider text-muted">
                 <tr>
                   <th className="px-3 py-2 font-semibold">Ребёнок</th>
+                  <th className="px-3 py-2 font-semibold">Пол</th>
                   <th className="px-3 py-2 font-semibold">Возраст</th>
+                  <th className="px-3 py-2 font-semibold">Филиал</th>
+                  <th className="px-3 py-2 font-semibold">Направление</th>
                   <th className="px-3 py-2 font-semibold">Заказчик</th>
-                  <th className="px-3 py-2 font-semibold">Телефон</th>
-                  <th className="px-3 py-2 font-semibold">Курс</th>
                   <th className="px-3 py-2 font-semibold">Статус</th>
                 </tr>
               </thead>
@@ -2184,13 +2274,14 @@ export function AdminSchedule() {
                   .map((r) => (
                     <tr key={r.id} className="cursor-pointer border-t border-black/6 hover:bg-primary/5" onClick={() => openClientRow(r)}>
                       <td className="px-3 py-2 font-medium">{r.child || "Без имени"}</td>
+                      <td className="px-3 py-2 text-muted">{r.gender || "—"}</td>
                       <td className="px-3 py-2 text-muted">{r.age || "—"}</td>
+                      <td className="px-3 py-2 text-muted">{r.branch?.replace("Коломна, ", "") || "—"}</td>
+                      <td className="px-3 py-2 text-muted">{(r.schools || []).slice(0, 2).join(", ") || (r.courses || []).slice(0, 1).join(", ") || "—"}</td>
                       <td className="px-3 py-2">{r.parent || "—"}</td>
-                      <td className="px-3 py-2">{r.phone || "—"}</td>
-                      <td className="px-3 py-2 text-muted">{(r.courses || []).slice(0, 2).join(", ") || "—"}</td>
                       <td className="px-3 py-2">
                         <span className={cn("rounded-full px-2 py-0.5 text-[0.68rem] font-semibold", r.status === "учится" ? "bg-primary/10 text-primary" : "bg-surface-2 text-muted")}>
-                          {r.status || "—"}
+                          {r.studyStatus || r.status || "—"}
                         </span>
                       </td>
                     </tr>
@@ -2879,6 +2970,30 @@ export function AdminSchedule() {
                   {pupil.note ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Заметка CRM</dt><dd>{pupil.note}</dd></div> : null}
                 </dl>
                 {pupil.url ? <a href={pupil.url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-primary">Открыть в AlfaCRM</a> : null}
+                {detail ? (
+                  <button type="button" className="mt-2 block text-sm font-semibold text-primary" onClick={() => setPupil(null)}>
+                    К группе {detail.slot.groupName}
+                  </button>
+                ) : null}
+                {(pupil.groups || []).length ? (
+                  <div className="mt-4">
+                    <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">Группы</p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {(pupil.groups || []).map((g) => (
+                        <button
+                          key={`${g.branchId}-${g.id}`}
+                          type="button"
+                          className={cn("rounded-full px-3 py-1 text-sm font-semibold", g.active ? "bg-primary/10 text-primary" : "bg-surface-2 text-muted")}
+                          onClick={() => openGroupFromLink(g.id, g.branchId)}
+                        >
+                          {g.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (pupil.schools || []).length ? (
+                  <p className="mt-3 text-sm text-muted">{(pupil.schools || []).join(" · ")}</p>
+                ) : null}
                 {pupilLoading && !pupil.comms.length ? <p className="mt-4 text-sm text-muted">Подгружаю карточку из AlfaCRM…</p> : null}
                 {pupil.comms.length ? (
                   <>

@@ -67,9 +67,12 @@ export type CustomerCard = {
   emails: string[];
   address: string;
   status: string;
+  studyStatus?: string;
   note: string;
   paidTill: string;
   url: string;
+  schools: string[];
+  groups: { id: number; name: string; branchId: number; school: string; active: boolean }[];
   comms: CustomerComm[];
 };
 
@@ -230,10 +233,13 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
     phones: phones.length ? phones : dossier?.phones || [],
     emails,
     address: /введите адрес/i.test(addr) ? dossier?.address || "" : addr || dossier?.address || "",
-    status: study === 1 ? "учится" : study === 2 ? "архив" : dossier?.status || "лид",
+    status: study === 1 ? (Number(c.study_status_id) === 2 ? "архив" : dossier?.status || "учится") : study === 2 ? "архив" : dossier?.status || "лид",
+    studyStatus: String(c.study_status_id || ""),
     note: String(c.note || "").trim(),
     paidTill: String(c.paid_till || ""),
     url: `https://studiyarazvivaysya.s20.online/company/${useBranch}/customer/view?id=${customerId}`,
+    schools: dossier?.schools || [],
+    groups: dossier?.groupLinks || [],
     comms,
   };
 }
@@ -402,6 +408,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
         subjects?: { id: number; name: string; local?: boolean }[];
         q?: string;
         status?: string;
+        branchId?: number;
+        ageBand?: string;
         note?: string;
         hashtags?: string;
         makeup?: string;
@@ -613,7 +621,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
     if (data.action === "customersSearch") {
       const q = String(data.q || "").trim();
       const status = String(data.status || "").trim();
-      const local = searchClientViews(q, 600, status);
+      const branchId = Number(data.branchId) || 0;
+      const ageBand = String(data.ageBand || "").trim();
+      const local = searchClientViews(q, 800, status, branchId, ageBand);
       const items = local.items.map((d) => ({
         id: d.id,
         crmId: d.crmId,
@@ -622,11 +632,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
         parent: d.parent,
         phone: d.phone,
         age: d.age,
+        ageBand: d.ageBand,
         gender: d.gender,
         status: d.status,
+        studyStatus: d.studyStatus,
         courses: d.coursesNow.length ? d.coursesNow : d.courses,
+        schools: d.schools,
         city: d.city,
         branch: d.branch,
+        groupLinks: d.groupLinks,
         archived: d.archived,
       }));
       if (q.length >= 3 && items.length < 8) {
