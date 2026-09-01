@@ -38,7 +38,7 @@ const extraProbes: Probe[] = [];
 export const ADMIN_SECTIONS: SectionDef[] = [
   { id: "cabinet", title: "Весь кабинет", hint: "Все разделы, ключи API и связи между ними. Ничего не пишем." },
   { id: "prices", title: "Цены курсов", hint: "Прайс, формулы КБМ/ТМХ, связь с CRM и ассистентом." },
-  { id: "schedule", title: "Расписание занятий", hint: "Снимок на сайте и живой group/index. Ничего не пишем в AlfaCRM." },
+  { id: "schedule", title: "Расписание занятий", hint: "Снимок, предметы, соответствия, группы CRM, уроки, ученики, поля карточки и страница /schedule. Ничего не пишем в AlfaCRM." },
   { id: "agent", title: "Ассистент ИИ", hint: "Мозг, документы, каналы, модели. Пробный запрос без сохранения." },
   { id: "agent-window", title: "Окно и кнопки", hint: "Флаги виджета и связь с моделями." },
   { id: "agent-dialog", title: "Как говорит", hint: "Скрипты воронки и стиль." },
@@ -251,6 +251,154 @@ const PROBES: Probe[] = [
       const m = crmScheduleMeta();
       if (!m.count) return fail("снимок пуст", "На сайте нет слотов расписания. Ассистент не назовёт живые группы, страница /schedule пустая.", "Раздел «Расписание занятий» → Загрузить из AlfaCRM.", ["schedule", "agent"]);
       return ok(`${m.count} слотов, обновлено ${m.at || "—"}`, ["schedule", "agent"]);
+    },
+  },
+  {
+    id: "schedule-subjects",
+    title: "Справочник предметов",
+    sections: ["schedule"],
+    run: async () => {
+      const { loadSubjects } = await import("./crm-subjects");
+      const list = loadSubjects();
+      if (!list.length) return fail("нет предметов", "Вкладка «Предметы» пустая. Нельзя привязать группу и выгрузить урок в CRM.", "Расписание → Предметы → Загрузить из AlfaCRM.", ["schedule"]);
+      return ok(`${list.length} предметов (id ${list.slice(0, 3).map((s) => s.id).join(", ")}…)`, ["schedule"]);
+    },
+  },
+  {
+    id: "schedule-map",
+    title: "Соответствия школ и курсов",
+    sections: ["schedule"],
+    run: async () => {
+      const { loadScheduleMap } = await import("./schedule-map");
+      const map = loadScheduleMap();
+      const unbound = (map.courses || []).filter((c) => !c.siteHref).length;
+      if (!map.courses.length) return fail("нет соответствий", "Вкладка «Соответствия» пустая. Группы не разложатся по школам сайта.", "Расписание → Соответствия → сохранить.", ["schedule"]);
+      return ok(`школ ${map.schools.length}, предметов ${map.courses.length}, без страницы курса ${unbound}`, ["schedule"]);
+    },
+  },
+  {
+    id: "schedule-fields",
+    title: "Поля карточки группы на сайте",
+    sections: ["schedule"],
+    run: async () => {
+      const { listAdminSlots } = await import("./alfacrm-schedule");
+      const slots = listAdminSlots();
+      if (!slots.length) return fail("нет групп", "Снимок расписания пуст — проверять поля нечего.", "Загрузить из AlfaCRM.", ["schedule"]);
+      const withGid = slots.filter((s) => s.groupId).length;
+      const withSub = slots.filter((s) => s.subjectId).length;
+      const withHash = slots.filter((s) => s.hashtags).length;
+      const withDesc = slots.filter((s) => s.description || s.groupNote).length;
+      const withDates = slots.filter((s) => s.bDate || s.eDate).length;
+      const withStatus = slots.filter((s) => s.statusId).length;
+      const withTime = slots.filter((s) => s.timeFrom).length;
+      return ok(
+        `gid ${withGid}/${slots.length}, предмет ${withSub}, хэштеги ${withHash}, описание ${withDesc}, период ${withDates}, статус ${withStatus}, время ${withTime}`,
+        ["schedule"],
+      );
+    },
+  },
+  {
+    id: "schedule-crm-group",
+    title: "Карточка группы: сайт ↔ AlfaCRM",
+    sections: ["schedule"],
+    run: async () => {
+      const { listAdminSlots } = await import("./alfacrm-schedule");
+      const slots = listAdminSlots().filter((s) => s.groupId && s.branchId);
+      if (!slots.length) return fail("нет gid", "На сайте нет групп с номером CRM. Подробности и запись не откроются.", "Загрузить из AlfaCRM.", ["schedule", "apis"]);
+      const s = slots[0];
+      try {
+        const { token, request } = await import("./alfacrm");
+        const t = await token();
+        const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${s.branchId}/group/index`, { page: 0, pageSize: 100 }, t);
+        const g = (json.items || []).find((x) => Number(x.id) === s.groupId);
+        if (!g) return fail(`gid ${s.groupId} нет в CRM`, `Группа ${s.groupName} (gid ${s.groupId}) есть на сайте, в AlfaCRM филиала ${s.branchId} её нет. Подробности не подгрузятся.`, "Загрузить из AlfaCRM ещё раз. Если группу удалили в CRM — удалите её и на сайте.", ["schedule", "apis"], JSON.stringify({ gid: s.groupId, branch: s.branchId }).slice(0, 400));
+        const miss: string[] = [];
+        if (String(g.name || "") && String(g.name) !== s.groupName) miss.push(`имя CRM «${g.name}» / сайт «${s.groupName}»`);
+        const fields = ["note", "status_id", "b_date", "e_date", "level_id", "custom_hashtagkursa", "custom_workingout", "limit"];
+        const present = fields.filter((k) => g[k] != null && g[k] !== "");
+        return ok(
+          `gid ${s.groupId} найдена. Поля CRM: ${present.join(", ") || "пустые"}.${miss.length ? ` Расхождение: ${miss.join("; ")}` : " Имя совпадает."} Чтение, без записи.`,
+          ["schedule", "apis"],
+        );
+      } catch (e) {
+        const raw = e instanceof Error ? e.message : String(e);
+        return fail(raw.slice(0, 200), "Не удалось прочитать карточку группы в AlfaCRM. Панель «Подробно» не заполнится.", "API → AlfaCRM: ключ и роль с правом group/index.", ["schedule", "apis"], raw);
+      }
+    },
+  },
+  {
+    id: "schedule-lessons",
+    title: "Регулярные уроки AlfaCRM",
+    sections: ["schedule"],
+    run: async () => {
+      try {
+        const { token, request } = await import("./alfacrm");
+        const t = await token();
+        const json = await request<{ items?: unknown[]; total?: number }>(`/v2api/2/regular-lesson/index`, { page: 0, pageSize: 20 }, t);
+        const n = Array.isArray(json.items) ? json.items.length : 0;
+        if (!n) return fail("нет уроков", "regular-lesson/index филиала ЦМИТ пустой. Время занятий на сайте не из чего брать.", "Проверьте регулярное расписание групп в AlfaCRM.", ["schedule", "apis"]);
+        return ok(`уроков на странице ${n}, всего ${json.total ?? "—"}. Чтение, без записи.`, ["schedule", "apis"]);
+      } catch (e) {
+        const raw = e instanceof Error ? e.message : String(e);
+        return fail(raw.slice(0, 200), "Не прочитались регулярные уроки. День и время в расписании не обновятся.", "Роль API должна видеть regular-lesson/index.", ["schedule", "apis"], raw);
+      }
+    },
+  },
+  {
+    id: "schedule-students",
+    title: "Кто учится (ученики группы)",
+    sections: ["schedule", "dossiers"],
+    run: async () => {
+      const { listAdminSlots } = await import("./alfacrm-schedule");
+      const s = listAdminSlots().find((x) => x.groupId && x.taken);
+      if (!s) return skip("нет группы с учениками в снимке — проверку учеников пропускаем", ["schedule", "dossiers"]);
+      try {
+        const { token, request } = await import("./alfacrm");
+        const t = await token();
+        const json = await request<{ items?: { name?: string }[] }>(`/v2api/${s.branchId}/customer/index`, { page: 0, pageSize: 20, group_id: s.groupId, is_study: 1 }, t);
+        const n = (json.items || []).length;
+        return ok(`gid ${s.groupId}: в CRM ${n} учеников (подсказка «Кто учится»). Чтение, без записи.`, ["schedule", "dossiers", "apis"]);
+      } catch (e) {
+        const raw = e instanceof Error ? e.message : String(e);
+        return fail(raw.slice(0, 200), "customer/index по группе не ответил. Кнопка «Кто учится» останется пустой.", "Роль API: клиенты / список.", ["schedule", "dossiers", "apis"], raw);
+      }
+    },
+  },
+  {
+    id: "schedule-public",
+    title: "Публичное расписание /schedule",
+    sections: ["schedule"],
+    run: async () => {
+      const { listAdminSlots, sessionsFromSlots } = await import("./alfacrm-schedule");
+      const slots = listAdminSlots();
+      const sessions = sessionsFromSlots(slots);
+      if (!slots.length) return fail("нет слотов", "Кабинет пуст, посетитель /schedule ничего не увидит.", "Загрузить из AlfaCRM.", ["schedule"]);
+      if (!sessions.length) return fail("публичных сессий 0", `В кабинете ${slots.length} групп, на сайт не попала ни одна (нет времени или школа «Прочее»).`, "Проверьте время у групп и соответствия школ.", ["schedule"]);
+      return ok(`кабинет ${slots.length} групп → сайт ${sessions.length} занятий с временем`, ["schedule", "agent"]);
+    },
+  },
+  {
+    id: "schedule-signup",
+    title: "Ссылки записи gid",
+    sections: ["schedule"],
+    run: async () => {
+      const { listAdminSlots } = await import("./alfacrm-schedule");
+      const slots = listAdminSlots().filter((s) => s.groupId);
+      const bad = slots.filter((s) => !/lead\/create\?gid=/.test(s.signup || "")).length;
+      if (!slots.length) return fail("нет gid", "Нет ссылок записи в группу.", "Загрузить из AlfaCRM.", ["schedule"]);
+      if (bad) return fail(`${bad} без ссылки`, `${bad} групп с номером, но без формы lead/create?gid=. Кнопка записи на сайте сломается.`, "Выгрузить отмеченные группы в AlfaCRM или загрузить заново.", ["schedule"]);
+      return ok(`${slots.length} ссылок записи вида lead/create?gid=`, ["schedule", "agent"]);
+    },
+  },
+  {
+    id: "schedule-versions",
+    title: "История версий расписания",
+    sections: ["schedule"],
+    run: async () => {
+      const { loadVersions } = await import("./crm-slots");
+      const v = loadVersions();
+      if (!v.length) return skip("снимков отката ещё нет — после первой загрузки появятся", ["schedule"]);
+      return ok(`версий ${v.length}, последняя: ${v[0]?.reason || "—"}`, ["schedule"]);
     },
   },
   { id: "crm-live", title: "AlfaCRM живой", sections: ["schedule", "dossiers", "apis", "agent", "prices"], run: pingAlfa },

@@ -49,6 +49,9 @@ export type CrmSlot = {
   eDate: string;
   hashtags?: string;
   makeup?: string;
+  description?: string;
+  remarks?: string;
+  levelId?: number;
 };
 
 export type SlotVersion = { at: string; reason: string; count: number; slots: CrmSlot[] };

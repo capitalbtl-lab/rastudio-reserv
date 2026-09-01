@@ -68,6 +68,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
         makeup?: string;
         statusId?: number;
         subjectId?: number;
+        description?: string;
+        remarks?: string;
+        bDate?: string;
+        eDate?: string;
+        levelId?: number;
       },
   )
   .handler(async ({ data }) => {
@@ -255,9 +260,14 @@ export const adminSchedule = createServerFn({ method: "POST" })
           id: gid,
           name: String(g.name || ""),
           note: String(g.note || ""),
-          hashtags: String(g.custom_hashtagkursa || ""),
+          description: String(g.note || ""),
+          remarks: slot?.remarks || "",
+          hashtags: String(g.custom_hashtagkursa || "").replace(/\s+/g, " ").trim(),
           makeup: String(g.custom_workingout || ""),
           statusId: Number(g.status_id || 0),
+          bDate: String(g.b_date || slot?.bDate || ""),
+          eDate: String(g.e_date || slot?.eDate || ""),
+          levelId: Number(g.level_id || slot?.levelId || 0),
           signup: slot?.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
           subjectId: Number(slot?.subjectId || 0),
           subject: slot?.subject || "",
@@ -271,16 +281,23 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const gid = Number(data.groupId) || 0;
       if (!gid) return { ok: false as const, error: "Нет номера группы." };
       const subjectId = Number(data.subjectId || 0);
-      const note = String(data.note || "");
+      const description = String(data.description ?? data.note ?? "");
+      const remarks = String(data.remarks || "");
       const hashtags = String(data.hashtags || "");
       const makeup = String(data.makeup || "");
       const statusId = Number(data.statusId || 0);
+      const bDate = String(data.bDate || "");
+      const eDate = String(data.eDate || "");
+      const levelId = Number(data.levelId || 0);
       await request(`/v2api/${branch}/group/update`, {
         id: gid,
-        note,
+        note: description,
         status_id: statusId || undefined,
         custom_hashtagkursa: hashtags,
         custom_workingout: makeup,
+        ...(bDate ? { b_date: bDate } : {}),
+        ...(eDate ? { e_date: eDate } : {}),
+        ...(levelId ? { level_id: levelId } : { level_id: null }),
       }, t);
       const current = listAdminSlots();
       const subject = loadSubjects().find((x) => x.id === subjectId);
@@ -288,10 +305,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
         if (s.groupId !== gid || s.branchId !== branch) return s;
         return {
           ...s,
-          groupNote: note,
+          groupNote: description,
+          description,
+          remarks,
           hashtags,
           makeup,
           statusId: statusId || s.statusId,
+          bDate: bDate || s.bDate,
+          eDate: eDate || s.eDate,
+          levelId: levelId || s.levelId,
           subjectId: subjectId || s.subjectId,
           subject: subject?.name || s.subject,
         };

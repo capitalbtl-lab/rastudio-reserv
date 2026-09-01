@@ -67,6 +67,7 @@ type Group = {
   subject_id?: number;
   custom_hashtagkursa?: string;
   custom_workingout?: string;
+  level_id?: number;
 };
 type Lesson = {
   id: number;
@@ -270,6 +271,13 @@ export function mergeCrmIntoSite(incoming: CrmSlot[], existing: CrmSlot[]) {
         path: s.path || old.path,
         age: s.age || old.age,
         beats: s.beats?.length ? s.beats : old.beats,
+        remarks: old.remarks || s.remarks || "",
+        description: s.description || s.groupNote || old.description || old.groupNote || "",
+        hashtags: s.hashtags || old.hashtags || "",
+        makeup: s.makeup || old.makeup || "",
+        bDate: s.bDate || old.bDate || "",
+        eDate: s.eDate || old.eDate || "",
+        levelId: s.levelId || old.levelId || 0,
       });
       updated += 1;
     } else {
@@ -461,8 +469,11 @@ async function loadCrm(force = false): Promise<CacheBag> {
         roomId: Number(first?.room_id) || 0,
         bDate: String(g.b_date || ""),
         eDate: String(g.e_date || ""),
-        hashtags: String(g.custom_hashtagkursa || ""),
+        hashtags: String(g.custom_hashtagkursa || "").replace(/\s+/g, " ").trim(),
         makeup: String(g.custom_workingout || ""),
+        description: String(g.note || ""),
+        remarks: "",
+        levelId: Number(g.level_id || 0),
       }),
     );
   }

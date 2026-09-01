@@ -15,12 +15,18 @@ import { missingScheduleFields, parseDraftFromSpeech, beatsOf, type LessonBeat }
 import { AdminSubjects } from "@/components/admin-subjects";
 import { AdminScheduleMap } from "@/components/admin-schedule-map";
 import type { CrmSubject } from "@/data/crm-subjects";
+import { ADMIN_PANEL_BLUE } from "@/data/admin-ui";
 
 const GROUP_STATUS = [
   { id: 1, name: "Идет набор (ожидает старта)" },
-  { id: 2, name: "Идет обучение" },
+  { id: 2, name: "Обучается (идет набор)" },
   { id: 3, name: "Завершена" },
   { id: 4, name: "Приостановлена" },
+];
+
+const GROUP_LEVELS = [
+  { id: 7, name: "Ознакомительный" },
+  { id: 12, name: "Базовый" },
 ];
 
 function token() {
@@ -113,10 +119,14 @@ type GroupDetail = {
   id: string;
   groupId: number;
   branchId: number;
-  note: string;
+  description: string;
+  remarks: string;
   hashtags: string;
   makeup: string;
   statusId: number;
+  bDate: string;
+  eDate: string;
+  levelId: number;
   signup: string;
   subjectId: number;
   loading: boolean;
@@ -573,10 +583,14 @@ export function AdminSchedule() {
       id: s.id,
       groupId: s.groupId,
       branchId: s.branchId,
-      note: s.groupNote || "",
-      hashtags: s.hashtags || "",
+      description: s.description || s.groupNote || "",
+      remarks: s.remarks || "",
+      hashtags: (s.hashtags || "").replace(/\s+/g, " ").trim(),
       makeup: s.makeup || "",
       statusId: s.statusId || 0,
+      bDate: s.bDate || "",
+      eDate: s.eDate || "",
+      levelId: s.levelId || 0,
       signup: leadHref(s),
       subjectId: s.subjectId || 0,
       loading: Boolean(s.groupId),
@@ -595,15 +609,31 @@ export function AdminSchedule() {
       return;
     }
     if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as CrmSubject[]);
-    const g = res.group as { note: string; hashtags: string; makeup: string; statusId: number; signup: string; subjectId: number };
+    const g = res.group as {
+      note: string;
+      description?: string;
+      remarks?: string;
+      hashtags: string;
+      makeup: string;
+      statusId: number;
+      signup: string;
+      subjectId: number;
+      bDate?: string;
+      eDate?: string;
+      levelId?: number;
+    };
     setDetail((d) =>
       d && d.id === s.id
         ? {
             ...d,
-            note: g.note,
-            hashtags: g.hashtags,
+            description: g.description || g.note || "",
+            remarks: g.remarks || "",
+            hashtags: (g.hashtags || "").replace(/\s+/g, " ").trim(),
             makeup: g.makeup,
             statusId: g.statusId,
+            bDate: g.bDate || d.bDate,
+            eDate: g.eDate || d.eDate,
+            levelId: g.levelId || d.levelId,
             signup: g.signup || d.signup,
             subjectId: g.subjectId || d.subjectId,
             loading: false,
@@ -624,11 +654,16 @@ export function AdminSchedule() {
         action: "groupSave",
         groupId: detail.groupId,
         branchId: detail.branchId,
-        note: detail.note,
+        note: detail.description,
+        description: detail.description,
+        remarks: detail.remarks,
         hashtags: detail.hashtags,
         makeup: detail.makeup,
         statusId: detail.statusId,
         subjectId: detail.subjectId,
+        bDate: detail.bDate,
+        eDate: detail.eDate,
+        levelId: detail.levelId,
       } as never,
     });
     take(res as never);
@@ -1709,7 +1744,7 @@ export function AdminSchedule() {
                               </tr>
                               {detail?.id === s.id ? (
                                 <tr key={`${s.id}-detail`}>
-                                  <td colSpan={12} className="bg-[#f3f5f8] px-4 py-4">
+                                  <td colSpan={12} className="px-4 py-4" style={{ background: ADMIN_PANEL_BLUE }}>
                                     {detail.loading ? (
                                       <p className="text-sm text-muted">Загружаю настройки группы из AlfaCRM…</p>
                                     ) : (
@@ -1741,22 +1776,64 @@ export function AdminSchedule() {
                                           </select>
                                         </label>
                                         <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted md:col-span-2">
-                                          Хэштеги
-                                          <textarea
-                                            value={detail.hashtags}
-                                            onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))}
-                                            rows={2}
-                                            className="mt-1 w-full rounded-xl bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                          Описание
+                                          <input
+                                            value={detail.description}
+                                            onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))}
+                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                                           />
                                         </label>
-                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted md:col-span-2">
-                                          Примечания
-                                          <textarea
-                                            value={detail.note}
-                                            onChange={(e) => setDetail((d) => (d ? { ...d, note: e.target.value } : d))}
-                                            rows={2}
-                                            className="mt-1 w-full rounded-xl bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                          Хэштеги
+                                          <input
+                                            value={detail.hashtags}
+                                            onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))}
+                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                                           />
+                                        </label>
+                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                          Примечания
+                                          <input
+                                            value={detail.remarks}
+                                            onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))}
+                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                          />
+                                        </label>
+                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                          Период обучения
+                                          <span className="mt-1 flex h-10 items-center gap-2">
+                                            <input
+                                              value={detail.bDate}
+                                              onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))}
+                                              placeholder="с"
+                                              className="h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                            />
+                                            <span className="text-[0.7rem] font-medium normal-case text-muted">до</span>
+                                            <input
+                                              value={detail.eDate}
+                                              onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))}
+                                              placeholder="до"
+                                              className="h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                            />
+                                          </span>
+                                        </label>
+                                        <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                                          Уровень знаний
+                                          <select
+                                            value={detail.levelId || ""}
+                                            onChange={(e) => setDetail((d) => (d ? { ...d, levelId: Number(e.target.value) || 0 } : d))}
+                                            className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                                          >
+                                            <option value="">— не задан —</option>
+                                            {GROUP_LEVELS.map((lv) => (
+                                              <option key={lv.id} value={lv.id}>
+                                                {lv.name}
+                                              </option>
+                                            ))}
+                                            {detail.levelId && !GROUP_LEVELS.some((lv) => lv.id === detail.levelId) ? (
+                                              <option value={detail.levelId}>Уровень {detail.levelId}</option>
+                                            ) : null}
+                                          </select>
                                         </label>
                                         <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                                           Статус
