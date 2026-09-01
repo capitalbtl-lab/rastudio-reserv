@@ -4,6 +4,7 @@ import type { CmsSession } from "@/data/cms";
 import { request, token } from "@/data/alfacrm";
 import { agesOverlap } from "@/data/ages";
 import { courseOf, dayLabel, schoolOf, slotFromSession, stampTimes, toSession, normalizeArtSlot, beatsOf, stampSubjects, type CrmSlot } from "@/data/crm-slots";
+import { applyScheduleMap } from "@/data/schedule-map";
 
 const SKIP_SUBJECT = new Set([7, 54, 104, 85, 81, 1, 77, 106, 82, 105, 83, 90, 84, 88, 87]);
 const DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
@@ -243,7 +244,7 @@ export function mergeCrmIntoSite(incoming: CrmSlot[], existing: CrmSlot[]) {
     if (k && seen.has(k)) continue;
     if (!k || String(s.id).startsWith("local-")) out.push(s);
   }
-  return { slots: stampSubjects(stampTimes(out)), added, updated };
+  return { slots: applyScheduleMap(stampSubjects(stampTimes(out))), added, updated };
 }
 
 export async function sessionsFromCrm(): Promise<CmsSession[]> {
@@ -285,21 +286,23 @@ export function crmScheduleMeta() {
 export function listAdminSlots(): CrmSlot[] {
   const snap = cache || readSnap();
   const raw = snap?.slots?.length ? snap.slots : (snap?.sessions || []).map(slotFromSession);
-  return stampSubjects(stampTimes(raw.map(normalizeArtSlot)));
+  return applyScheduleMap(stampSubjects(stampTimes(raw.map(normalizeArtSlot))));
 }
 
 export function bindSubjectsOnSite() {
   const snap = cache || readSnap();
   const raw = snap?.slots?.length ? snap.slots : (snap?.sessions || []).map(slotFromSession);
   const stamped = stampTimes((raw || []).map(normalizeArtSlot));
-  const bound = stampSubjects(stamped);
-  const changed = bound.some((s, i) => s.subjectId !== stamped[i]?.subjectId || s.subject !== stamped[i]?.subject);
+  const bound = applyScheduleMap(stampSubjects(stamped));
+  const changed = bound.some(
+    (s, i) => s.subjectId !== stamped[i]?.subjectId || s.subject !== stamped[i]?.subject || s.school !== stamped[i]?.school || s.path !== stamped[i]?.path,
+  );
   if (changed) saveAdminSlots(bound);
   return { slots: bound, changed };
 }
 
 export function saveAdminSlots(slots: CrmSlot[]) {
-  const stamped = stampSubjects(stampTimes(slots.map((s) => normalizeArtSlot({ ...s }))));
+  const stamped = applyScheduleMap(stampSubjects(stampTimes(slots.map((s) => normalizeArtSlot({ ...s })))));
   const sessions = sessionsFromSlots(stamped);
   const seats = cache?.seats || readSnap()?.seats || new Map();
   cache = { at: Date.now(), sessions, seats, slots: stamped };

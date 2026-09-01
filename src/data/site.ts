@@ -136,7 +136,7 @@ export const SCHOOL_COURSE_MATCH: Record<string, (href: string) => boolean> = {
   "/programming-school": (href) => href.includes("kursy-shkoly-programmirovaniya"),
   "/promising-professions": (href) =>
     /radioengineering|science-course|teslaphysics|3d-modeling|gamedesign|mentalarithmetic|kinder-master/i.test(href),
-  "/early-childhood-care": (href) => /preparation-for-school|happybricks/i.test(href),
+  "/early-childhood-care": (href) => /preparation-for-school|happybricks|planet-steam/i.test(href),
   "/languageschool": (href) => /englishlanguage|japanese|vitaminkorean/i.test(href),
 };
 

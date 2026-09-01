@@ -578,8 +578,7 @@ export function AdminSchedule() {
         courses: [...(map.get(school)?.entries() || [])]
           .sort((a, b) => a[0].localeCompare(b[0], "ru"))
           .map(([course, items]) => ({ course, items })),
-      }))
-      .filter((s) => s.courses.length > 0);
+      }));
   }, [slots, branchFilter]);
 
   const branchOpts = useMemo(() => {
@@ -1594,7 +1593,7 @@ export function AdminSchedule() {
                 })}
                 </div>
               ) : (
-                <p className="border-t border-black/6 px-5 py-4 text-sm text-muted">Расписание не заполнено.</p>
+                <p className="border-t border-black/6 px-5 py-4 text-sm text-muted">Нет групп. Привяжите предметы этой школы в разделе «Соответствия».</p>
               )
             ) : null}
           </article>
