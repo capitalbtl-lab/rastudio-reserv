@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import type { CmsSession } from "@/data/cms";
 import { request, token } from "@/data/alfacrm";
 import { agesOverlap } from "@/data/ages";
-import { courseOf, dayLabel, schoolOf, slotFromSession, stampTimes, toSession, type CrmSlot } from "@/data/crm-slots";
+import { courseOf, dayLabel, schoolOf, slotFromSession, stampTimes, toSession, normalizeArtSlot, type CrmSlot } from "@/data/crm-slots";
 
 const SKIP_SUBJECT = new Set([7, 54, 104, 85, 81, 1, 77, 106, 82, 105, 83, 90, 84, 88, 87]);
 const DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
@@ -187,6 +187,7 @@ export function signupUrl(branch: number, gid: string | number) {
 
 export async function sessionsFromCrm(): Promise<CmsSession[]> {
   const bag = await loadCrm();
+  if (bag.slots?.length) return bag.slots.map(normalizeArtSlot).map(toSession);
   return bag.sessions;
 }
 
@@ -212,12 +213,12 @@ export function crmScheduleMeta() {
 
 export function listAdminSlots(): CrmSlot[] {
   const snap = cache || readSnap();
-  if (snap?.slots?.length) return snap.slots;
-  return (snap?.sessions || []).map(slotFromSession);
+  const raw = snap?.slots?.length ? snap.slots : (snap?.sessions || []).map(slotFromSession);
+  return raw.map(normalizeArtSlot);
 }
 
 export function saveAdminSlots(slots: CrmSlot[]) {
-  const stamped = stampTimes(slots.map((s) => ({ ...s })));
+  const stamped = stampTimes(slots.map((s) => normalizeArtSlot({ ...s })));
   const sessions = stamped
     .filter((s) => s.school !== "Прочее" && s.statusId !== 2 && !/отложен/i.test(s.groupName))
     .map(toSession);
@@ -304,10 +305,10 @@ async function loadCrm(force = false): Promise<CacheBag> {
         bDate: String(group?.b_date || ""),
         eDate: String(group?.e_date || ""),
       };
-      slots.push(slot);
+      slots.push(normalizeArtSlot(slot));
       if (!sid || SKIP_SUBJECT.has(sid)) continue;
       if (group && (/отложен/i.test(group.name) || group.status_id === 2)) continue;
-      sessions.push(toSession(slot));
+      sessions.push(toSession(slots[slots.length - 1]));
     }
   }
   stampTimes(slots);

@@ -208,6 +208,8 @@ function CinematicPage({
 }) {
   const heading = splitCourseHeading(page.h1);
   const path = page.pathDecoded || page.path;
+  const current = courses.find((c) => c.href === path);
+  const age = heading.age || current?.age || null;
   const edit = pageEdit(path);
   const body = edit.about ? [edit.about] : COURSE_STORY[path] ?? page.paragraphs;
 
@@ -225,14 +227,14 @@ function CinematicPage({
             </PageLink>
           </>
         }
-        age={heading.age}
+        age={age}
         title={heading.title}
         description={page.description}
         images={galleryPhotos(page.images, page.pathDecoded || page.path, "hero")}
         video={page.video}
         facts={
           page.kind === "course" || page.kind === "school"
-            ? courseOfferFacts(page.pathDecoded || page.path, heading.age)
+            ? courseOfferFacts(page.pathDecoded || page.path, age)
             : undefined
         }
         path={page.kind === "course" || page.kind === "school" ? page.pathDecoded || page.path : undefined}

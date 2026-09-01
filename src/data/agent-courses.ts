@@ -16,7 +16,7 @@ const ALIAS: { keys: string[]; path: string }[] = [
   { keys: ["3–4", "3-4", "три-четыре"], path: "/art-studio-3-4" },
   { keys: ["5–6", "5-6", "студия 5"], path: "/art-studio-5-6" },
   { keys: ["7–9", "7-8", "7-9", "студия 7"], path: "/art-studio-7-8" },
-  { keys: ["10–14", "9-13", "худож", "академич"], path: "/art-studio-9-13" },
+  { keys: ["10–15", "10-15", "10–14", "9-13", "пятилетн"], path: "/art-studio-9-13" },
   { keys: ["скульпт"], path: "/sculptural-studio" },
   { keys: ["вуз", "hudvuz"], path: "/podgotovka-v-hudvuz" },
   { keys: ["digital", "цифров"], path: "/digitalartschool" },

@@ -249,7 +249,7 @@ export const COURSE_LADDER: Record<string, { heading: string; text: string; next
   "/art-studio-7-8": {
     heading: "После студии 7–8",
     text: "Дальше — академическая база: рисунок, живопись, композиция. Пять лет как в ДХШ, без случайных тем.",
-    next: { href: "/art-studio-9-13", label: "Художественная школа 9–13 лет" },
+    next: { href: "/art-studio-9-13", label: "Художественная школа 10–15 лет" },
   },
   "/art-studio-9-13": {
     heading: "После академической школы",
@@ -259,7 +259,7 @@ export const COURSE_LADDER: Record<string, { heading: string; text: string; next
   "/sculptural-studio": {
     heading: "Скульптура в системе школы",
     text: "Объём усиливает рисунок. Параллельно или следом — академическая группа по возрасту, затем вуз.",
-    next: { href: "/art-studio-9-13", label: "Художественная школа 9–13 лет" },
+    next: { href: "/art-studio-9-13", label: "Художественная школа 10–15 лет" },
   },
   "/podgotovka-v-hudvuz": {
     heading: "После портфолио",
@@ -269,7 +269,7 @@ export const COURSE_LADDER: Record<string, { heading: string; text: string; next
   "/digitalartschool": {
     heading: "Цифра опирается на базу",
     text: "Если руки ещё нет — сначала академичка. Если есть — этот курс уже про портфолио в сеть и дизайн.",
-    next: { href: "/art-studio-9-13", label: "Художественная школа 9–13 лет" },
+    next: { href: "/art-studio-9-13", label: "Художественная школа 10–15 лет" },
   },
   "/robototehnika-5-7": {
     heading: "После первого конструктора",
@@ -369,7 +369,7 @@ export const COURSE_LADDER: Record<string, { heading: string; text: string; next
   "/model-school": {
     heading: "После «Подиума»",
     text: "Уверенность перед камерой усиливает художественную студию: свет, кадр, образ — уже как работа.",
-    next: { href: "/art-studio-9-13", label: "Художественная школа 9–13 лет" },
+    next: { href: "/art-studio-9-13", label: "Художественная школа 10–15 лет" },
   },
   "/englishlanguagesm": {
     heading: "После Super Minds",

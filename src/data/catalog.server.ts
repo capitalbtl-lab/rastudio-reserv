@@ -43,7 +43,16 @@ function norm(input: string) {
 
 export function getPage(splat?: string | null): SitePage | undefined {
   const page = splat ? pageIndex.get(norm(splat)) : pageIndex.get("/");
-  return page ? applyPageEdits(page) : undefined;
+  if (!page) return undefined;
+  const edited = applyPageEdits(page);
+  if (norm(edited.pathDecoded || edited.path) === "/art-studio-9-13") {
+    return {
+      ...edited,
+      title: "Художественная школа 10–15 лет в Коломне | Студия «Развивайся»",
+      ogTitle: "Художественная школа 10–15 лет в Коломне",
+    };
+  }
+  return edited;
 }
 
 export function allPages() {
@@ -55,7 +64,12 @@ export function allTeachers() {
 }
 
 export function allCourses() {
-  return catalog.courses;
+  return catalog.courses.map((c) => {
+    if (c.href === "/art-studio-9-13") {
+      return { ...c, label: "Художественная школа 10–15 лет", age: "10–15 лет" };
+    }
+    return c;
+  });
 }
 
 export function getCmsCourse(splat?: string | null) {
