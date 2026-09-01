@@ -776,19 +776,19 @@ function WhoTip({ names, onNeed }: { names?: string[]; onNeed: () => void }) {
 function MemberGrid({ title, items, onOpen, archive }: { title: string; items: GroupMember[]; onOpen: (m: GroupMember) => void; archive?: boolean }) {
   if (!items.length) return null;
   return (
-    <div className={archive ? "mt-3" : ""}>
-      <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">{title} · {items.length}</p>
-      <ul className="mt-1.5 divide-y divide-black/6 overflow-hidden rounded-2xl bg-white ring-1 ring-black/6">
+    <div className={archive ? "mt-4 rounded-2xl bg-[#d8dce3] p-3" : ""}>
+      <p className={cn("text-[0.72rem] font-semibold uppercase tracking-wider", archive ? "text-[#5c636c]" : "text-muted")}>{title} · {items.length}</p>
+      <ul className={cn("mt-1.5 divide-y overflow-hidden rounded-2xl ring-1", archive ? "divide-black/10 bg-[#e4e7ec] ring-black/10" : "divide-black/6 bg-white ring-black/6")}>
         {items.map((m) => (
           <li key={m.id}>
-            <button type="button" onClick={() => onOpen(m)} className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-primary/5">
+            <button type="button" onClick={() => onOpen(m)} className={cn("flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left", archive ? "text-[#5a6169] hover:bg-black/[0.04]" : "hover:bg-primary/5")}>
               <span>
-                <span className="block font-medium">{m.name || "Без имени"}</span>
-                <span className="block text-[0.75rem] text-muted">
+                <span className={cn("block font-medium", archive && "text-[#4a5058]")}>{m.name || "Без имени"}</span>
+                <span className={cn("block text-[0.75rem]", archive ? "text-[#7b828c]" : "text-muted")}>
                   {[m.age, m.parent, m.from && `с ${m.from}`, m.to && `по ${m.to}`].filter(Boolean).join(" · ")}
                 </span>
               </span>
-              <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold", archive ? "bg-surface-2 text-muted" : "bg-primary/10 text-primary")}>
+              <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold", archive ? "bg-[#c5cad1] text-[#4e555d]" : "bg-primary/10 text-primary")}>
                 {archive ? "архив" : m.status || "учится"}
               </span>
             </button>
@@ -2658,13 +2658,13 @@ export function AdminSchedule() {
       ) : null}
       {detail
         ? createPortal(
-            <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-black/40 p-4 md:p-8" onClick={() => { setPupil(null); setDetail(null); }}>
+            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4 md:p-6" onClick={() => { setPupil(null); setDetail(null); }}>
               <article
-                className="relative my-4 w-full max-w-4xl rounded-3xl p-5 shadow-[0_18px_50px_rgba(15,23,42,0.28)] md:p-6"
+                className="relative flex max-h-[min(90vh,920px)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl shadow-[0_18px_50px_rgba(15,23,42,0.28)]"
                 style={{ background: ADMIN_PANEL_BLUE }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5 md:px-6 md:pt-6">
                   <div>
                     <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Группа {detail.groupId || "без номера"}</p>
                     <h3 className="font-display text-2xl">{detail.slot.groupName}</h3>
@@ -2676,6 +2676,7 @@ export function AdminSchedule() {
                     Закрыть
                   </button>
                 </div>
+                <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 md:px-6 md:pb-6">
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <GroupLessonStrip lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} />
                     <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
@@ -2748,6 +2749,7 @@ export function AdminSchedule() {
                     <MemberGrid title="Архив" items={detail.archive} onOpen={(m) => void openPupil(m, detail.branchId)} archive />
                   </section>
                 ) : null}
+                </div>
               </article>
             </div>,
             document.body,
@@ -2755,9 +2757,9 @@ export function AdminSchedule() {
         : null}
       {pupil
         ? createPortal(
-            <div className="fixed inset-0 z-[110] flex items-start justify-center overflow-y-auto bg-black/35 p-4 md:p-10" onClick={() => setPupil(null)}>
-              <div className="max-h-[min(82vh,720px)] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.28)]" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-start justify-between gap-3">
+            <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4" onClick={() => setPupil(null)}>
+              <div className="flex max-h-[min(86vh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-[0_18px_50px_rgba(15,23,42,0.28)]" onClick={(e) => e.stopPropagation()}>
+                <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
                   <div>
                     <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Карточка ученика</p>
                     <h4 className="font-display text-2xl">{pupil.name || "Без имени"}</h4>
@@ -2767,6 +2769,7 @@ export function AdminSchedule() {
                   </div>
                   <button type="button" className="rounded-full bg-surface-2 px-3 py-1 text-sm font-semibold text-muted" onClick={() => setPupil(null)}>{detail ? "Назад" : "Закрыть"}</button>
                 </div>
+                <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5">
                 <dl className="mt-4 grid gap-2 text-sm">
                   {pupil.dob ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Дата рождения</dt><dd>{pupil.dob}{pupil.age ? ` · ${pupil.age}` : ""}</dd></div> : null}
                   {pupil.parent ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Заказчик</dt><dd>{pupil.parent}</dd></div> : null}
@@ -2789,6 +2792,7 @@ export function AdminSchedule() {
                       <p className="mt-1 whitespace-pre-wrap leading-relaxed">{c.text}</p>
                     </div>
                   )) : pupilLoading ? null : <p className="text-sm text-muted">Переписки в карточке пока нет.</p>}
+                </div>
                 </div>
               </div>
             </div>,

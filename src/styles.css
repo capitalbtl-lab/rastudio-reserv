@@ -320,21 +320,21 @@
 
 .pretty-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(18, 20, 26, 0.28) transparent;
+  scrollbar-color: rgba(18, 20, 26, 0.22) transparent;
 }
 
 .pretty-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 .pretty-scroll::-webkit-scrollbar-track {
   background: transparent;
-  margin-block: 10px;
+  margin-block: 18px;
 }
 
 .pretty-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(18, 20, 26, 0.22);
+  background-color: rgba(18, 20, 26, 0.2);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
