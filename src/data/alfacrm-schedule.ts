@@ -185,21 +185,92 @@ export function signupUrl(branch: number, gid: string | number) {
   return `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`;
 }
 
+export function sessionsFromSlots(slots: CrmSlot[]): CmsSession[] {
+  return stampTimes(slots.map((s) => normalizeArtSlot({ ...s })))
+    .filter((s) => s.school !== "Прочее" && s.statusId !== 2 && !/отложен/i.test(s.groupName))
+    .flatMap((s) => {
+      const beats = beatsOf(s);
+      return beats.map((b, i) =>
+        toSession({
+          ...s,
+          id: beats.length > 1 ? `${s.id}-b${i}` : s.id,
+          day: b.day,
+          dayLabel: dayLabel(b.day),
+          timeFrom: b.timeFrom,
+          timeTo: b.timeTo,
+          timesPerWeek: beats.length,
+        }),
+      );
+    });
+}
+
+function gidKey(s: CrmSlot) {
+  return s.groupId ? `${s.branchId}:${s.groupId}` : "";
+}
+
+export function mergeCrmIntoSite(incoming: CrmSlot[], existing: CrmSlot[]) {
+  const prev = new Map<string, CrmSlot>();
+  for (const s of existing) {
+    const k = gidKey(s);
+    if (k) prev.set(k, s);
+  }
+  const seen = new Set<string>();
+  let added = 0;
+  let updated = 0;
+  const out: CrmSlot[] = [];
+  for (const s of incoming) {
+    const k = gidKey(s);
+    if (k) seen.add(k);
+    const old = k ? prev.get(k) : undefined;
+    if (old) {
+      out.push({
+        ...old,
+        ...s,
+        school: s.school && s.school !== "Прочее" ? s.school : old.school,
+        course: s.course || old.course,
+        path: s.path || old.path,
+        age: s.age || old.age,
+        beats: s.beats?.length ? s.beats : old.beats,
+      });
+      updated += 1;
+    } else {
+      out.push(s);
+      added += 1;
+    }
+  }
+  for (const s of existing) {
+    const k = gidKey(s);
+    if (k && seen.has(k)) continue;
+    if (!k || String(s.id).startsWith("local-")) out.push(s);
+  }
+  return { slots: stampTimes(out), added, updated };
+}
+
 export async function sessionsFromCrm(): Promise<CmsSession[]> {
-  const bag = await loadCrm();
-  if (bag.slots?.length) return bag.slots.map(normalizeArtSlot).map(toSession);
-  return bag.sessions;
+  const local = listAdminSlots();
+  if (local.length) return sessionsFromSlots(local);
+  try {
+    const bag = await loadCrm();
+    if (bag.slots?.length) return sessionsFromSlots(bag.slots);
+    return bag.sessions;
+  } catch {
+    return [];
+  }
 }
 
 export async function refreshCrmSchedule() {
+  const existing = listAdminSlots();
   cache = null;
   const bag = await loadCrm(true);
-  writeSnap(bag);
+  const merged = mergeCrmIntoSite(stampTimes((bag.slots || []).map(normalizeArtSlot)), existing);
+  const saved = saveAdminSlots(merged.slots);
   return {
-    at: new Date(bag.at).toISOString(),
-    count: bag.slots.length || bag.sessions.length,
-    sessions: bag.sessions,
-    slots: bag.slots,
+    at: new Date(saved.at).toISOString(),
+    count: saved.slots.length,
+    sessions: saved.sessions,
+    slots: saved.slots,
+    added: merged.added,
+    updated: merged.updated,
   };
 }
 
@@ -219,22 +290,7 @@ export function listAdminSlots(): CrmSlot[] {
 
 export function saveAdminSlots(slots: CrmSlot[]) {
   const stamped = stampTimes(slots.map((s) => normalizeArtSlot({ ...s })));
-  const sessions = stamped
-    .filter((s) => s.school !== "Прочее" && s.statusId !== 2 && !/отложен/i.test(s.groupName))
-    .flatMap((s) => {
-      const beats = beatsOf(s);
-      return beats.map((b, i) =>
-        toSession({
-          ...s,
-          id: beats.length > 1 ? `${s.id}-b${i}` : s.id,
-          day: b.day,
-          dayLabel: dayLabel(b.day),
-          timeFrom: b.timeFrom,
-          timeTo: b.timeTo,
-          timesPerWeek: beats.length,
-        }),
-      );
-    });
+  const sessions = sessionsFromSlots(stamped);
   const seats = cache?.seats || readSnap()?.seats || new Map();
   cache = { at: Date.now(), sessions, seats, slots: stamped };
   writeSnap(cache);

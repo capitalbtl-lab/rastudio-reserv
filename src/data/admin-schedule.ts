@@ -85,8 +85,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
       try {
         const res = await refreshCrmSchedule();
         pushVersion("Загрузка из AlfaCRM", res.slots);
-        logAdmin(`Расписание из AlfaCRM: ${res.count} слотов`);
-        return pack(res.slots);
+        logAdmin(`Расписание из AlfaCRM: +${res.added} новых, ${res.updated} обновлено, всего ${res.count}`);
+        return pack(res.slots, { added: res.added, updated: res.updated });
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "AlfaCRM не ответила." };
       }

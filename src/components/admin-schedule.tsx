@@ -419,6 +419,7 @@ export function AdminSchedule() {
   const [flash, setFlash] = useState<Set<string>>(new Set());
   const [view, setView] = useState<Record<string, number>>({});
   const [fileOpen, setFileOpen] = useState(false);
+  const [pull, setPull] = useState({ open: false, step: "", done: false, added: 0, updated: 0, total: 0, error: "" });
   const fileRef = useRef<HTMLDivElement>(null);
   const promptEl = useRef<HTMLTextAreaElement>(null);
 
@@ -914,6 +915,36 @@ export function AdminSchedule() {
     void say("Голосовой мастер. Назовите курс и возраст, день, время, филиал и педагога. Если чего-то не хватит — спрошу. Команды: готово, применить, дальше.");
   }
 
+  async function pullCrm() {
+    setBusy(true);
+    setPull({ open: true, step: "Подключаюсь к AlfaCRM…", done: false, added: 0, updated: 0, total: 0, error: "" });
+    const steps = ["Читаю филиалы и предметы…", "Загружаю группы и уроки…", "Сверяю с расписанием на сайте…"];
+    let i = 0;
+    const timer = window.setInterval(() => {
+      i = Math.min(i + 1, steps.length - 1);
+      setPull((u) => (u.done ? u : { ...u, step: steps[i] }));
+    }, 1100);
+    try {
+      const res = await adminSchedule({ data: { token: token(), action: "pull" } });
+      window.clearInterval(timer);
+      take(res as never);
+      if (!res.ok) {
+        setPull((u) => ({ ...u, done: true, error: res.error || "AlfaCRM не ответила." }));
+      } else {
+        const added = Number((res as { added?: number }).added || 0);
+        const updated = Number((res as { updated?: number }).updated || 0);
+        const total = Array.isArray((res as { slots?: CrmSlot[] }).slots) ? (res as { slots: CrmSlot[] }).slots.length : 0;
+        setDirty(new Set());
+        setPull({ open: true, step: "", done: true, added, updated, total, error: "" });
+        setMsg(`Загружено. Новых групп: ${added}. Обновлено: ${updated}. На сайте ${total}.`);
+      }
+    } catch {
+      window.clearInterval(timer);
+      setPull((u) => ({ ...u, done: true, error: "Не удалось загрузить." }));
+    }
+    setBusy(false);
+  }
+
   function cancelPreview() {
     setAiAdds([]);
     setAiChanges([]);
@@ -958,8 +989,8 @@ export function AdminSchedule() {
             Добавить расписание
           </Button>
         </TipWrap>
-        <TipWrap text="group/index + regular-lesson/index + teacher/index по филиалам. Пишет снимок и версию для отката.">
-          <Button type="button" variant="secondary" disabled={busy} onClick={async () => { setMsg("Читаю группы, уроки и педагогов…"); await run("pull"); setDirty(new Set()); setMsg("Снимок с AlfaCRM на сайте."); }}>
+        <TipWrap text="Подтягивает группы из AlfaCRM: новые добавляет, существующие обновляет. Страницы курсов и /schedule сразу показывают это расписание.">
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => void pullCrm()}>
             Загрузить из AlfaCRM
           </Button>
         </TipWrap>
@@ -1457,6 +1488,44 @@ export function AdminSchedule() {
         })}
         {slots.length ? null : <p className="text-sm text-muted">Пока пусто — нажмите «Загрузить из AlfaCRM».</p>}
       </div>
+      {pull.open
+        ? createPortal(
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => pull.done && setPull((u) => ({ ...u, open: false }))}>
+              <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.28)]" onClick={(e) => e.stopPropagation()}>
+                <p className="font-display text-2xl">{pull.done ? pull.error ? "Не загрузилось" : "Загрузка завершена" : "Загрузка из AlfaCRM"}</p>
+                {!pull.done ? (
+                  <div className="mt-5 flex items-start gap-3">
+                    <span className="mt-0.5 h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+                    <p className="text-sm text-fg">{pull.step}</p>
+                  </div>
+                ) : pull.error ? (
+                  <p className="mt-4 text-sm text-red-600">{pull.error}</p>
+                ) : (
+                  <div className="mt-4 space-y-2 text-sm">
+                    <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">
+                      Новых групп: <b>{pull.added}</b>
+                    </p>
+                    <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">
+                      Обновлено на сайте: <b>{pull.updated}</b>
+                    </p>
+                    <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">
+                      Всего в расписании: <b>{pull.total}</b>
+                    </p>
+                    <p className="pt-1 text-[0.78rem] text-muted">Эти группы сразу видны на страницах курсов и в разделе «Расписание».</p>
+                  </div>
+                )}
+                {pull.done ? (
+                  <div className="mt-5 flex justify-end">
+                    <Button type="button" onClick={() => setPull((u) => ({ ...u, open: false }))}>
+                      Закрыть
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </section>
   );
 }
