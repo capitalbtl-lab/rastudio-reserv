@@ -588,6 +588,32 @@ function viewOf(d: Dossier) {
   };
 }
 
+export type ClientView = ReturnType<typeof viewOf>;
+
+export function searchClientViews(q = "", limit = 400) {
+  const store = loadStore();
+  const needle = String(q || "")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .trim();
+  const words = needle.split(/\s+/).filter((w) => w.length > 1);
+  const items = store.items.map(viewOf).filter((d) => {
+    if (!needle) return true;
+    const hay = `${d.child} ${d.parent} ${d.phone} ${d.city} ${d.branch} ${d.courses.join(" ")} ${d.schools.join(" ")} ${d.crmId || ""}`
+      .toLowerCase()
+      .replace(/ё/g, "е");
+    if (hay.includes(needle)) return true;
+    return words.length > 0 && words.every((w) => hay.includes(w));
+  });
+  items.sort((a, b) => {
+    const rank = (s: string) => (s === "учится" ? 0 : s === "лид" ? 1 : 2);
+    const r = rank(a.status) - rank(b.status);
+    if (r) return r;
+    return (a.child || "").localeCompare(b.child || "", "ru");
+  });
+  return { items: items.slice(0, limit), total: store.items.length, lastCrmSync: store.lastCrmSync || "" };
+}
+
 export const adminDossiers = createServerFn({ method: "POST" })
   .validator(
     (data: unknown) =>

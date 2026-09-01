@@ -28,6 +28,7 @@ import type { GroupCalLesson } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { loadGroupCard, saveGroupCard } from "./group-cards";
 import { scheduleVoiceTurn } from "./schedule-voice";
+import { searchClientViews } from "./dossiers";
 
 export type GroupMember = {
   id: number;
@@ -359,7 +360,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "subjectsPush"
           | "groupGet"
           | "groupSave"
-          | "voiceAsk";
+          | "voiceAsk"
+          | "customersSearch";
         slots?: CrmSlot[];
         text?: string;
         prompt?: string;
@@ -374,6 +376,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         branchId?: number;
         at?: string;
         subjects?: { id: number; name: string; local?: boolean }[];
+        q?: string;
         note?: string;
         hashtags?: string;
         makeup?: string;
@@ -581,6 +584,68 @@ export const adminSchedule = createServerFn({ method: "POST" })
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось выгрузить предметы." };
       }
+    }
+    if (data.action === "customersSearch") {
+      const q = String(data.q || "").trim();
+      const local = searchClientViews(q, 400);
+      const items = local.items.map((d) => ({
+        id: d.id,
+        crmId: d.crmId,
+        branchId: d.branchId,
+        child: d.child,
+        parent: d.parent,
+        phone: d.phone,
+        age: d.age,
+        gender: d.gender,
+        status: d.status,
+        courses: d.coursesNow.length ? d.coursesNow : d.courses,
+        city: d.city,
+        branch: d.branch,
+        archived: d.archived,
+      }));
+      if (q.length >= 3 && items.length < 8) {
+        try {
+          const { token, request } = await import("./alfacrm");
+          const t = await token();
+          const seen = new Set(items.map((x) => `${x.branchId}-${x.crmId}`));
+          const needle = q.toLowerCase();
+          for (const branch of [1, 2, 3, 4]) {
+            const json = await request<{ items?: Record<string, unknown>[] }>(
+              `/v2api/${branch}/customer/index`,
+              { page: 0, pageSize: 30, name: q },
+              t,
+            ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+            for (const c of json.items || []) {
+              const name = String(c.name || "");
+              const parent = String(c.legal_name || "");
+              const hay = `${name} ${parent}`.toLowerCase();
+              if (!hay.includes(needle) && !needle.split(/\s+/).every((w) => hay.includes(w))) continue;
+              const crmId = Number(c.id || 0);
+              if (!crmId || seen.has(`${branch}-${crmId}`)) continue;
+              seen.add(`${branch}-${crmId}`);
+              const m = packMember(c, Number(c.is_study) === 2);
+              items.push({
+                id: `crm-${branch}-${crmId}`,
+                crmId,
+                branchId: branch,
+                child: m.name,
+                parent: m.parent,
+                phone: m.phone,
+                age: m.age ? Number(String(m.age).match(/\d+/)?.[0] || 0) || null : null,
+                gender: m.gender,
+                status: m.status,
+                courses: [],
+                city: branch === 3 ? "Луховицы" : "Коломна",
+                branch: "",
+                archived: m.archived,
+              });
+            }
+          }
+        } catch {
+          /* local list is enough */
+        }
+      }
+      return { ok: true as const, items, total: local.total, lastCrmSync: local.lastCrmSync };
     }
     if (data.action === "voiceAsk") {
       const prompt = String(data.prompt || "").trim();

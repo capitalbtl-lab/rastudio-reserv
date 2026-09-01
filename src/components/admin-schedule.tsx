@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { adminSchedule, type GroupMember, type CustomerCard } from "@/data/admin-schedule";
+import { adminDossiers } from "@/data/dossiers";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { Button } from "@/components/ui/button";
 import { InfoTip, TipWrap, TIP_BOX } from "@/components/info-tip";
@@ -400,6 +401,22 @@ type GroupDetail = {
   archive: GroupMember[];
   saving: boolean;
   slot: CrmSlot;
+};
+
+type ClientRow = {
+  id: string;
+  crmId: number | null;
+  branchId: number | null;
+  child: string;
+  parent: string;
+  phone: string;
+  age: number | string | null;
+  gender: string;
+  status: string;
+  courses: string[];
+  city: string;
+  branch: string;
+  archived: boolean;
 };
 
 function GroupNameField({ value, onChange, subject }: { value: string; onChange: (v: string) => void; subject?: string }) {
@@ -832,7 +849,12 @@ export function AdminSchedule() {
   const [view, setView] = useState<Record<string, number>>({});
   const [fileOpen, setFileOpen] = useState(false);
   const [pull, setPull] = useState({ open: false, step: "", done: false, added: 0, updated: 0, total: 0, error: "" });
-  const [pane, setPane] = useState<"groups" | "subjects" | "map">("groups");
+  const [pane, setPane] = useState<"groups" | "clients" | "subjects" | "map">("groups");
+  const [clientQ, setClientQ] = useState("");
+  const [clientRows, setClientRows] = useState<ClientRow[]>([]);
+  const [clientBusy, setClientBusy] = useState(false);
+  const [clientStatus, setClientStatus] = useState("все");
+  const [clientTotal, setClientTotal] = useState(0);
   const [branchFilter, setBranchFilter] = useState("all");
   const [onlyMismatch, setOnlyMismatch] = useState(false);
   const [pushUi, setPushUi] = useState({ open: false, step: "", done: false, created: 0, pushed: 0, failed: 0, error: "", lines: [] as string[] });
@@ -923,6 +945,11 @@ export function AdminSchedule() {
   useEffect(() => {
     slotsRef.current = slots;
   }, [slots]);
+  useEffect(() => {
+    if (pane !== "clients") return;
+    if (clientRows.length || clientBusy) return;
+    void loadClients("");
+  }, [pane]);
   useEffect(() => {
     const el = promptEl.current;
     if (!el) return;
@@ -1072,29 +1099,44 @@ export function AdminSchedule() {
     }
   }
 
-  async function openPupil(m: GroupMember) {
-    if (!detail) return;
+  async function openPupil(m: Pick<GroupMember, "id" | "name" | "parent" | "dob" | "age" | "gender" | "phones" | "status"> & { email?: string; to?: string }, branchId: number) {
+    const branch = branchId || 1;
     setPupilLoading(true);
     setPupil({
       id: m.id,
-      branchId: detail.branchId,
+      branchId: branch,
       name: m.name,
       parent: m.parent,
       dob: m.dob,
       age: m.age,
       gender: m.gender,
-      phones: m.phones,
+      phones: m.phones || [],
       emails: m.email ? [m.email] : [],
       address: "",
       status: m.status,
       note: "",
-      paidTill: m.to,
-      url: `https://studiyarazvivaysya.s20.online/company/${detail.branchId}/customer/view?id=${m.id}`,
+      paidTill: m.to || "",
+      url: `https://studiyarazvivaysya.s20.online/company/${branch}/customer/view?id=${m.id}`,
       comms: [],
     });
-    const res = await adminSchedule({ data: { token: token(), action: "customerGet", customerId: m.id, branchId: detail.branchId } as never });
+    const res = await adminSchedule({ data: { token: token(), action: "customerGet", customerId: m.id, branchId: branch } as never });
     setPupilLoading(false);
     if (res.ok && "customer" in res && res.customer) setPupil(res.customer as CustomerCard);
+  }
+
+  async function openPupilById(crmId: number, branchId: number) {
+    if (!crmId) return;
+    await openPupil({ id: crmId, name: "", parent: "", dob: "", age: "", gender: "", phones: [], status: "" }, branchId);
+  }
+
+  async function loadClients(q = clientQ) {
+    setClientBusy(true);
+    const res = await adminSchedule({ data: { token: token(), action: "customersSearch", q } as never });
+    setClientBusy(false);
+    if (res.ok && "items" in res) {
+      setClientRows((res.items || []) as ClientRow[]);
+      setClientTotal(Number((res as { total?: number }).total) || (res.items || []).length);
+    }
   }
 
   function applyGroupRes(id: string, s: CrmSlot, res: Awaited<ReturnType<typeof adminSchedule>>) {
@@ -1712,7 +1754,7 @@ export function AdminSchedule() {
     busyVoiceRef.current = true;
     setAiPrompt(q);
     promptRef.current = q;
-    setMsg("Смотрю расписание…");
+    setMsg("Секунду…");
     try {
       const res = await adminSchedule({ data: { token: token(), action: "voiceAsk", prompt: q, ids: pickedRef.current } as never });
       if (!res.ok) {
@@ -1723,6 +1765,32 @@ export function AdminSchedule() {
       const reason = "reason" in res ? String(res.reason || "") : "";
       const answer = "answer" in res ? String(res.answer || "") : "";
       const action = "action" in res ? String(res.action || "") : "preview";
+      const paneTo = "pane" in res ? String(res.pane || "") : "";
+      const query = "query" in res ? String(res.query || "") : "";
+      const customerId = "customerId" in res ? Number(res.customerId || 0) : 0;
+      const groupId = "groupId" in res ? Number(res.groupId || 0) : 0;
+      const slotId = "slotId" in res ? String(res.slotId || "") : "";
+      const branchId = "branchId" in res ? Number(res.branchId || 0) : 0;
+      if (kind === "openTab" || kind === "openClient" || kind === "openGroup") {
+        if (paneTo === "clients" || kind === "openClient") setPane("clients");
+        if (paneTo === "groups" || kind === "openGroup") setPane("groups");
+        if (query) {
+          setClientQ(query);
+          void loadClients(query);
+        } else if (kind === "openClient" || paneTo === "clients") {
+          void loadClients(query);
+        }
+        if (kind === "openClient" && customerId) {
+          await openPupilById(customerId, branchId || 1);
+        }
+        if (kind === "openGroup" && (groupId || slotId)) {
+          const slot = slotsRef.current.find((s) => s.id === slotId || Number(s.groupId) === groupId);
+          if (slot) await openDetail(slot);
+          else setMsg(`Группа ${groupId || slotId} не найдена в расписании.`);
+        }
+        await say(answer || "Готово.");
+        return;
+      }
       if (kind === "refuse") {
         await say(`Нет, я не могу это поправить, потому что ${reason || "это не относится к расписанию занятий."}`);
         return;
@@ -1928,6 +1996,7 @@ export function AdminSchedule() {
       <div className="flex items-end gap-1 border-b border-black/10">
         {([
           ["groups", "Группы"],
+          ["clients", "Клиенты"],
           ["subjects", "Предметы"],
           ["map", "Соответствия"],
         ] as const).map(([id, label]) => (
@@ -1947,6 +2016,98 @@ export function AdminSchedule() {
 
       {pane === "subjects" ? <AdminSubjects /> : null}
       {pane === "map" ? <AdminScheduleMap embedded /> : null}
+      {pane === "clients" ? (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={clientQ}
+              onChange={(e) => setClientQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void loadClients(clientQ);
+              }}
+              placeholder="Фамилия, имя, телефон, курс…"
+              className="h-10 min-w-[16rem] flex-1 rounded-xl bg-surface-2 px-3 text-sm ring-1 ring-black/10"
+            />
+            <Button type="button" size="sm" className="h-10" disabled={clientBusy} onClick={() => void loadClients(clientQ)}>
+              Найти
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="h-10"
+              disabled={clientBusy}
+              onClick={async () => {
+                setClientBusy(true);
+                setMsg("Загружаю клиентов из AlfaCRM…");
+                const res = await adminDossiers({ data: { token: token(), action: "syncAll" } });
+                setClientBusy(false);
+                if (res.ok) {
+                  setMsg(`Загружено ${"count" in res ? res.count : ""} карточек.`);
+                  void loadClients(clientQ);
+                } else setMsg(res.error || "Не удалось загрузить клиентов.");
+              }}
+            >
+              Загрузить из AlfaCRM
+            </Button>
+            <Button type="button" size="sm" variant={voiceMode ? "primary" : "secondary"} className="h-10" onClick={toggleVoiceMode}>
+              {voiceMode ? "Голосовой режим · вкл" : "Голосовой режим"}
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {["все", "учится", "лид", "архив"].map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setClientStatus(st)}
+                className={cn("rounded-full px-3 py-1 text-[0.78rem] font-semibold", clientStatus === st ? "bg-primary text-white" : "bg-surface-2 text-fg")}
+              >
+                {st === "все" ? "Все" : st === "учится" ? "Учатся" : st === "лид" ? "Лиды" : "Архив"}
+              </button>
+            ))}
+            <p className="ml-auto self-center text-[0.78rem] text-muted">
+              {clientBusy ? "ищу…" : `${clientRows.filter((r) => clientStatus === "все" || r.status === clientStatus).length} из ${clientTotal || clientRows.length}`}
+            </p>
+          </div>
+          {ask ? <p className="rounded-xl bg-primary/10 px-3 py-2 text-sm font-medium text-fg">{ask}</p> : null}
+          <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/8">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-surface-2 text-[0.68rem] uppercase tracking-wider text-muted">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">Ребёнок</th>
+                  <th className="px-3 py-2 font-semibold">Возраст</th>
+                  <th className="px-3 py-2 font-semibold">Заказчик</th>
+                  <th className="px-3 py-2 font-semibold">Телефон</th>
+                  <th className="px-3 py-2 font-semibold">Курс</th>
+                  <th className="px-3 py-2 font-semibold">Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clientRows
+                  .filter((r) => clientStatus === "все" || r.status === clientStatus)
+                  .slice(0, 250)
+                  .map((r) => (
+                    <tr key={r.id} className="cursor-pointer border-t border-black/6 hover:bg-primary/5" onClick={() => r.crmId && void openPupilById(r.crmId, r.branchId || 1)}>
+                      <td className="px-3 py-2 font-medium">{r.child || "Без имени"}</td>
+                      <td className="px-3 py-2 text-muted">{r.age || "—"}</td>
+                      <td className="px-3 py-2">{r.parent || "—"}</td>
+                      <td className="px-3 py-2">{r.phone || "—"}</td>
+                      <td className="px-3 py-2 text-muted">{(r.courses || []).slice(0, 2).join(", ") || "—"}</td>
+                      <td className="px-3 py-2">
+                        <span className={cn("rounded-full px-2 py-0.5 text-[0.68rem] font-semibold", r.status === "учится" ? "bg-primary/10 text-primary" : "bg-surface-2 text-muted")}>
+                          {r.status || "—"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+            {!clientBusy && !clientRows.length ? (
+              <p className="px-4 py-6 text-sm text-muted">Пока пусто. Нажмите «Загрузить из AlfaCRM» или скажите: «найди Иванова».</p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       {pane === "groups" ? (
       <div>
       <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-visible pb-0.5">
@@ -2583,52 +2744,53 @@ export function AdminSchedule() {
                   </div>
                 {detail.members.length || detail.archive.length ? (
                   <section className="mt-5 rounded-2xl bg-white/80 p-4 ring-1 ring-black/6">
-                    <MemberGrid title="Учатся сейчас" items={detail.members} onOpen={(m) => void openPupil(m)} />
-                    <MemberGrid title="Архив" items={detail.archive} onOpen={(m) => void openPupil(m)} archive />
+                    <MemberGrid title="Учатся сейчас" items={detail.members} onOpen={(m) => void openPupil(m, detail.branchId)} />
+                    <MemberGrid title="Архив" items={detail.archive} onOpen={(m) => void openPupil(m, detail.branchId)} archive />
                   </section>
                 ) : null}
-                {pupil
-                  ? (
-                    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/35 p-4 md:p-10" onClick={() => setPupil(null)}>
-                      <div className="max-h-[min(82vh,720px)] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.28)]" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Карточка ученика</p>
-                            <h4 className="font-display text-2xl">{pupil.name || "Без имени"}</h4>
-                            <p className="mt-1 text-sm text-muted">
-                              {[pupil.gender, pupil.age, pupil.status].filter(Boolean).join(" · ")}
-                            </p>
-                          </div>
-                          <button type="button" className="rounded-full bg-surface-2 px-3 py-1 text-sm font-semibold text-muted" onClick={() => setPupil(null)}>Назад</button>
-                        </div>
-                        <dl className="mt-4 grid gap-2 text-sm">
-                          {pupil.dob ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Дата рождения</dt><dd>{pupil.dob}{pupil.age ? ` · ${pupil.age}` : ""}</dd></div> : null}
-                          {pupil.parent ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Заказчик</dt><dd>{pupil.parent}</dd></div> : null}
-                          {pupil.phones.length ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Телефоны</dt><dd className="space-y-0.5">{pupil.phones.map((ph) => <a key={ph} href={`tel:${ph}`} className="block text-primary">{ph}</a>)}</dd></div> : null}
-                          {pupil.emails.length ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Почта</dt><dd>{pupil.emails.join(", ")}</dd></div> : null}
-                          {pupil.address ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Адрес</dt><dd>{pupil.address}</dd></div> : null}
-                          {pupil.paidTill ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Оплачено до</dt><dd>{pupil.paidTill}</dd></div> : null}
-                          {pupil.note ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Заметка CRM</dt><dd>{pupil.note}</dd></div> : null}
-                        </dl>
-                        <a href={pupil.url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-primary">Открыть в AlfaCRM</a>
-                        <h5 className="mt-5 font-display text-lg">Коммуникации</h5>
-                        {pupilLoading ? <p className="mt-2 text-sm text-muted">Подгружаю переписку…</p> : null}
-                        <div className="mt-2 space-y-2">
-                          {pupil.comms.length ? pupil.comms.map((c, i) => (
-                            <div key={c.id || i} className={cn("rounded-2xl px-3 py-2.5 text-sm ring-1 ring-black/6", c.incoming ? "bg-[#f3f5f8]" : "bg-primary/8")}>
-                              <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">
-                                {[c.at, c.channel, c.who].filter(Boolean).join(" · ")}
-                                {c.incoming ? " · входящее" : ""}
-                              </p>
-                              <p className="mt-1 whitespace-pre-wrap leading-relaxed">{c.text}</p>
-                            </div>
-                          )) : pupilLoading ? null : <p className="text-sm text-muted">Переписки в карточке пока нет.</p>}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                  : null}
               </article>
+            </div>,
+            document.body,
+          )
+        : null}
+      {pupil
+        ? createPortal(
+            <div className="fixed inset-0 z-[110] flex items-start justify-center overflow-y-auto bg-black/35 p-4 md:p-10" onClick={() => setPupil(null)}>
+              <div className="max-h-[min(82vh,720px)] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.28)]" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Карточка ученика</p>
+                    <h4 className="font-display text-2xl">{pupil.name || "Без имени"}</h4>
+                    <p className="mt-1 text-sm text-muted">
+                      {[pupil.gender, pupil.age, pupil.status].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                  <button type="button" className="rounded-full bg-surface-2 px-3 py-1 text-sm font-semibold text-muted" onClick={() => setPupil(null)}>{detail ? "Назад" : "Закрыть"}</button>
+                </div>
+                <dl className="mt-4 grid gap-2 text-sm">
+                  {pupil.dob ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Дата рождения</dt><dd>{pupil.dob}{pupil.age ? ` · ${pupil.age}` : ""}</dd></div> : null}
+                  {pupil.parent ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Заказчик</dt><dd>{pupil.parent}</dd></div> : null}
+                  {pupil.phones.length ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Телефоны</dt><dd className="space-y-0.5">{pupil.phones.map((ph) => <a key={ph} href={`tel:${ph}`} className="block text-primary">{ph}</a>)}</dd></div> : null}
+                  {pupil.emails.length ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Почта</dt><dd>{pupil.emails.join(", ")}</dd></div> : null}
+                  {pupil.address ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Адрес</dt><dd>{pupil.address}</dd></div> : null}
+                  {pupil.paidTill ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Оплачено до</dt><dd>{pupil.paidTill}</dd></div> : null}
+                  {pupil.note ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Заметка CRM</dt><dd>{pupil.note}</dd></div> : null}
+                </dl>
+                <a href={pupil.url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-primary">Открыть в AlfaCRM</a>
+                <h5 className="mt-5 font-display text-lg">Коммуникации</h5>
+                {pupilLoading ? <p className="mt-2 text-sm text-muted">Подгружаю переписку…</p> : null}
+                <div className="mt-2 space-y-2">
+                  {pupil.comms.length ? pupil.comms.map((c, i) => (
+                    <div key={c.id || i} className={cn("rounded-2xl px-3 py-2.5 text-sm ring-1 ring-black/6", c.incoming ? "bg-[#f3f5f8]" : "bg-primary/8")}>
+                      <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">
+                        {[c.at, c.channel, c.who].filter(Boolean).join(" · ")}
+                        {c.incoming ? " · входящее" : ""}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap leading-relaxed">{c.text}</p>
+                    </div>
+                  )) : pupilLoading ? null : <p className="text-sm text-muted">Переписки в карточке пока нет.</p>}
+                </div>
+              </div>
             </div>,
             document.body,
           )

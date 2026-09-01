@@ -1,13 +1,20 @@
 import { yandexJson } from "@/data/agent-channels";
 import { listAdminSlots } from "@/data/alfacrm-schedule";
-import { groupFactsForVoice } from "@/data/group-cards";
+import { groupFactsForVoice } from "./group-cards";
+import { searchClientViews } from "./dossiers";
 import { BRANCHES } from "@/data/site";
 
 export type ScheduleVoiceResult = {
-  kind: "edit" | "question" | "refuse";
+  kind: "edit" | "question" | "refuse" | "openClient" | "openGroup" | "openTab";
   reason: string;
   answer: string;
   action: "preview" | "pull" | "push" | "none";
+  pane?: "groups" | "clients";
+  query?: string;
+  customerId?: number;
+  branchId?: number;
+  groupId?: number;
+  slotId?: string;
 };
 
 function norm(s: string) {
@@ -26,8 +33,112 @@ function localLimitTurn(prompt: string): ScheduleVoiceResult | null {
   return { kind: "edit", reason: "", answer: "", action: "preview" };
 }
 
-/** Только расписание. Не Олег/Ольга, не запись родителей, не клиентский чат. */
+function stripQuery(raw: string) {
+  return String(raw || "")
+    .replace(/^(найди|найти|открой|покажи|поищи|карточка|карточку|клиент[аеу]?|ученик[аеу]?|реб[её]нк\w*|группу|группа)\s+/i, "")
+    .replace(/\b(пожалуйста|карточка|карточку|клиента?|ученика?)\b/gi, "")
+    .trim();
+}
+
+function localPeopleTurn(prompt: string): ScheduleVoiceResult | null {
+  const t = norm(prompt);
+  if (/вкладк.{0,16}клиент|покажи клиент|перечень клиент|список клиент|открой клиент(ов|ами)?$/.test(t)) {
+    return { kind: "openTab", reason: "", answer: "Открываю клиентов.", action: "none", pane: "clients" };
+  }
+  if (/вкладк.{0,16}групп|покажи групп|перечень групп|список групп/.test(t) && !/клиент/.test(t)) {
+    return { kind: "openTab", reason: "", answer: "Открываю группы.", action: "none", pane: "groups" };
+  }
+  const gid = t.match(/групп[ауие]?\s+(\d{2,6})/) || t.match(/\bgid\s*(\d{2,6})/) || t.match(/номер[а]?\s+(\d{2,6})/);
+  if (gid && /групп|gid|открой|покажи|найди/.test(t)) {
+    const groupId = Number(gid[1]);
+    const slot = listAdminSlots().find((s) => Number(s.groupId) === groupId);
+    return {
+      kind: "openGroup",
+      reason: "",
+      answer: slot ? `Открываю группу ${groupId}, ${slot.groupName}.` : `Открываю группу ${groupId}.`,
+      action: "none",
+      pane: "groups",
+      groupId,
+      slotId: slot?.id,
+      branchId: slot?.branchId,
+    };
+  }
+  if (/групп/.test(t) && /открой|найди|покажи|карточка групп/.test(t)) {
+    const q = stripQuery(prompt);
+    if (q.length >= 3) {
+      const nq = norm(q);
+      const hits = listAdminSlots().filter((s) => norm(`${s.groupName} ${s.course} ${s.groupId}`).includes(nq));
+      if (hits.length === 1) {
+        const s = hits[0];
+        return {
+          kind: "openGroup",
+          reason: "",
+          answer: `Открываю ${s.groupName}.`,
+          action: "none",
+          pane: "groups",
+          groupId: s.groupId,
+          slotId: s.id,
+          branchId: s.branchId,
+        };
+      }
+      if (hits.length > 1) {
+        return {
+          kind: "openTab",
+          reason: "",
+          answer: `Нашла ${hits.length} групп. Открываю список, уточните номер.`,
+          action: "none",
+          pane: "groups",
+        };
+      }
+    }
+  }
+  if (!/клиент|ученик|карточка|карточк|найди|найти|поищи|фамилия|кто так|реб[её]н/.test(t)) return null;
+  if (/лимит|мест|расписан|добав групп/.test(t) && !/клиент|ученик|карточка/.test(t)) return null;
+  const q = stripQuery(prompt);
+  if (!q || q.length < 2) {
+    return { kind: "question", reason: "", answer: "Назовите фамилию или имя ребёнка — открою карточку.", action: "none", pane: "clients" };
+  }
+  const hits = searchClientViews(q, 8).items.filter((x) => x.crmId);
+  if (!hits.length) {
+    return {
+      kind: "openTab",
+      reason: "",
+      answer: `Не нашла «${q}» среди клиентов. Открываю вкладку, поищите там.`,
+      action: "none",
+      pane: "clients",
+      query: q,
+    };
+  }
+  if (hits.length === 1) {
+    const h = hits[0];
+    return {
+      kind: "openClient",
+      reason: "",
+      answer: `Открываю карточку ${h.child}.`,
+      action: "none",
+      pane: "clients",
+      query: q,
+      customerId: Number(h.crmId),
+      branchId: Number(h.branchId) || 1,
+    };
+  }
+  return {
+    kind: "openTab",
+    reason: "",
+    answer: `Нашла ${hits.length}: ${hits
+      .slice(0, 4)
+      .map((h) => h.child)
+      .join(", ")}. Кого открыть?`,
+    action: "none",
+    pane: "clients",
+    query: q,
+  };
+}
+
+/** Только кабинет. Не Олег/Ольга, не запись родителей. */
 export async function scheduleVoiceTurn(prompt: string, selectedIds: string[]): Promise<ScheduleVoiceResult> {
+  const people = localPeopleTurn(prompt);
+  if (people) return people;
   const local = localLimitTurn(prompt);
   if (local) return local;
   const slots = listAdminSlots();
@@ -54,29 +165,47 @@ export async function scheduleVoiceTurn(prompt: string, selectedIds: string[]): 
     reason?: string;
     answer?: string;
     action?: string;
+    pane?: string;
+    query?: string;
+    customerId?: number;
+    branchId?: number;
+    groupId?: number;
+    slotId?: string;
   }>(
-    `Ты голосовой агент РАСПИСАНИЯ занятий студии «Развивайся». Только кабинет администратора.
+    `Ты голосовой агент кабинета студии «Развивайся»: расписание, группы и клиенты.
 Ты НЕ Олег и НЕ Ольга. Ты НЕ консультируешь родителей. Ты НЕ записываешь детей.
-Ты умеешь: менять расписание, лимит мест / максимум детей в группе, добавлять группы, отвечать по карточке, загрузить/выгрузить AlfaCRM.
+Умеешь: менять расписание и лимит мест, добавлять группы, открывать карточку группы, искать карточку клиента, открывать вкладки «группы» и «клиенты», загрузить/выгрузить AlfaCRM.
+«найди Иванова» / «открой карточку Маши» = kind=openClient, если один человек; если несколько — kind=openTab pane=clients и query.
+«открой группу 405» = kind=openGroup.
+«покажи клиентов» = kind=openTab pane=clients.
 «максимальное количество детей на 15» = правка лимита, kind=edit, action=preview.
 Свои фразы «привет что будем делать», «хорошо сейчас всё поправим», «скажите опубликовать» — не запросы, kind=refuse reason=это эхо.
-Если запрос не про расписание — kind=refuse и точная причина.
-Вопрос сколько/когда/кто — kind=question.
+Если запрос не про расписание/группы/клиентов — kind=refuse и точная причина.
+Вопрос сколько/когда/кто в группе — kind=question.
 Отмечено групп: ${selectedIds.length}. Филиалы: ${BRANCHES.map((b) => `${b.city}, ${b.address}`).join(" | ")}
-JSON: {"kind":"edit|question|refuse","reason":"","answer":"","action":"preview|pull|push|none"}`,
+JSON: {"kind":"edit|question|refuse|openClient|openGroup|openTab","reason":"","answer":"","action":"preview|pull|push|none","pane":"groups|clients","query":"","customerId":0,"branchId":0,"groupId":0,"slotId":""}`,
     `Запрос оператора: ${String(prompt || "").slice(0, 1500)}
-Карточки:
-${cards.join("\n").slice(0, 4000)}
+Карточки групп:
+${cards.join("\n").slice(0, 3500)}
 Слоты:
-${JSON.stringify(slim).slice(0, 10000)}`,
+${JSON.stringify(slim).slice(0, 9000)}`,
     800,
   );
-  const kind = llm?.kind === "question" || llm?.kind === "refuse" || llm?.kind === "edit" ? llm.kind : "refuse";
+  const kind =
+    llm?.kind === "question" || llm?.kind === "refuse" || llm?.kind === "edit" || llm?.kind === "openClient" || llm?.kind === "openGroup" || llm?.kind === "openTab"
+      ? llm.kind
+      : "refuse";
   const action = llm?.action === "pull" || llm?.action === "push" || llm?.action === "preview" ? llm.action : kind === "edit" ? "preview" : "none";
   return {
     kind,
-    reason: String(llm?.reason || (kind === "refuse" ? "не разобрала запрос по расписанию." : "")).trim(),
+    reason: String(llm?.reason || (kind === "refuse" ? "не разобрала запрос по расписанию, группам или клиентам." : "")).trim(),
     answer: String(llm?.answer || "").trim(),
-    action: kind === "refuse" ? "none" : action,
+    action: kind === "refuse" || kind === "openClient" || kind === "openGroup" || kind === "openTab" ? "none" : action,
+    pane: llm?.pane === "clients" || llm?.pane === "groups" ? llm.pane : kind === "openClient" ? "clients" : kind === "openGroup" ? "groups" : undefined,
+    query: String(llm?.query || "").trim() || undefined,
+    customerId: Number(llm?.customerId) || undefined,
+    branchId: Number(llm?.branchId) || undefined,
+    groupId: Number(llm?.groupId) || undefined,
+    slotId: String(llm?.slotId || "").trim() || undefined,
   };
 }
