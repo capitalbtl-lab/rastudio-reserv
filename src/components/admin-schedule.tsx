@@ -71,6 +71,12 @@ type Rec = {
   onend: (() => void) | null;
 };
 
+function leadHref(s: CrmSlot) {
+  if (s.signup?.startsWith("http")) return s.signup;
+  if (s.groupId) return `https://studiyarazvivaysya.s20.online/common/${s.branchId || 1}/lead/create?gid=${s.groupId}`;
+  return "";
+}
+
 function inCrm(s: CrmSlot) {
   return Number(s.groupId) > 0 && !String(s.id).startsWith("local-");
 }
@@ -583,6 +589,21 @@ export function AdminSchedule() {
     setAiAdds((list) => list.map((a, n) => (n === i ? { ...a, [field]: value } : a)));
   }
 
+  async function removeSlots(ids: string[]) {
+    if (!ids.length) return;
+    if (!window.confirm(ids.length === 1 ? "Удалить эту группу из расписания на сайте? В AlfaCRM она останется." : `Удалить ${ids.length} групп из расписания на сайте? В AlfaCRM они останутся.`)) return;
+    const res = await run("remove", { ids });
+    if (res.ok) {
+      setPicked({});
+      setDirty((d) => {
+        const n = new Set(d);
+        for (const id of ids) n.delete(id);
+        return n;
+      });
+      setMsg(ids.length === 1 ? "Группа убрана из расписания на сайте." : `Удалено групп: ${ids.length}.`);
+    }
+  }
+
   return (
     <section className="mt-10 space-y-6">
       <AdminSectionHead
@@ -663,6 +684,14 @@ export function AdminSchedule() {
         </div>
         <Button type="button" variant="secondary" onClick={() => setOpenAll((v) => !v)}>
           {openAll ? "Свернуть всё" : "Раскрыть всё"}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={busy || !pickedIds.length}
+          onClick={() => void removeSlots(pickedIds)}
+        >
+          Удалить выбранные{pickedIds.length ? ` · ${pickedIds.length}` : ""}
         </Button>
         <span className="ml-1 inline-flex items-center gap-3 text-[0.72rem] text-muted">
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-pink-400" /> не в AlfaCRM</span>
@@ -955,6 +984,8 @@ export function AdminSchedule() {
                             <col className="w-36" />
                             <col className="w-[4.4rem]" />
                             <col className="w-[5.5rem]" />
+                            <col className="w-[5.2rem]" />
+                            <col className="w-8" />
                           </colgroup>
                           <thead className="text-[0.65rem] uppercase tracking-wider text-muted">
                             <tr>
@@ -968,6 +999,8 @@ export function AdminSchedule() {
                               <th className="px-2 py-2">Педагог</th>
                               <th className="px-1 py-2 text-center">Места</th>
                               <th className="px-2 py-2">Кто учится</th>
+                              <th className="px-2 py-2">Запись</th>
+                              <th className="px-1 py-2" />
                             </tr>
                           </thead>
                           <tbody>
@@ -1024,6 +1057,20 @@ export function AdminSchedule() {
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
                                   <WhoTip names={names} onNeed={() => void loadWho(s)} />
+                                </td>
+                                <td className="px-2 py-1.5 align-middle">
+                                  {leadHref(s) ? (
+                                    <a href={leadHref(s)} target="_blank" rel="noreferrer" className="whitespace-nowrap text-[0.72rem] font-semibold text-primary" title={leadHref(s)}>
+                                      gid {s.groupId}
+                                    </a>
+                                  ) : (
+                                    <span className="text-[0.72rem] text-muted">—</span>
+                                  )}
+                                </td>
+                                <td className="px-1 py-1.5 align-middle">
+                                  <button type="button" title="Удалить из расписания" className="text-xs font-semibold text-muted hover:text-red-600" onClick={() => void removeSlots([s.id])}>
+                                    ×
+                                  </button>
                                 </td>
                               </tr>
                               );

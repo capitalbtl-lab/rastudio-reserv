@@ -41,7 +41,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "versions"
           | "rollback"
           | "students"
-          | "add";
+          | "add"
+          | "remove";
         slots?: CrmSlot[];
         text?: string;
         prompt?: string;
@@ -155,6 +156,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
       pushVersion(`Новая группа: ${slot.course}`, saved);
       logAdmin(`Расписание: добавлена ${slot.groupName}`);
       return pack(saved, { created: [slot.id] });
+    }
+    if (data.action === "remove") {
+      const ids = new Set((data.ids || []).map(String));
+      if (!ids.size) return pack(listAdminSlots(), { comment: "Нечего удалять." });
+      const slots = listAdminSlots();
+      const saved = saveAdminSlots(slots.filter((s) => !ids.has(s.id))).slots;
+      pushVersion(`Удалено групп: ${ids.size}`, saved);
+      logAdmin(`Расписание: удалено ${ids.size}`);
+      return pack(saved);
     }
     if (data.action === "students") {
       const { token, request } = await import("./alfacrm");
