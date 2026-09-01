@@ -687,16 +687,17 @@ export async function reclassifyRolesFromCrm() {
   const current = new Set<number>();
   const leads = new Set<number>();
   const archive = new Set<number>();
-  const branchOf = new Map<number, number>();
+  const currentBranches = new Map<number, Set<number>>();
   const totals = { учится: 0, лид: 0, архив: 0 };
+  const map = await teacherMap();
   for (const branch of [1, 2, 3, 4]) {
     for (const study of [1, 0, 2] as const) {
       for (let page = 0; page < 80; page += 1) {
-        const data = await request<{ items?: { id?: number }[]; total?: number }>(
+        const data = await request<{ items?: Record<string, unknown>[]; total?: number }>(
           `/v2api/${branch}/customer/index`,
           { page, pageSize: 50, is_study: study },
           t,
-        ).catch(() => ({ items: [] as { id?: number }[] }));
+        ).catch(() => ({ items: [] as Record<string, unknown>[] }));
         const items = data.items || [];
         if (page === 0) {
           if (study === 1) totals.учится += Number(data.total) || items.length;
@@ -706,9 +707,12 @@ export async function reclassifyRolesFromCrm() {
         for (const it of items) {
           const id = Number(it.id || 0);
           if (!id) continue;
-          if (!branchOf.has(id)) branchOf.set(id, branch);
-          if (study === 1) current.add(id);
-          else if (study === 0) leads.add(id);
+          applyCrmCustomer(it, branch, false, map);
+          if (study === 1) {
+            current.add(id);
+            if (!currentBranches.has(id)) currentBranches.set(id, new Set());
+            currentBranches.get(id)!.add(branch);
+          } else if (study === 0) leads.add(id);
           else archive.add(id);
         }
         if (items.length < 50) break;
@@ -724,10 +728,14 @@ export async function reclassifyRolesFromCrm() {
     if (current.has(id)) {
       d.extras.is_study = "1";
       d.extras.removed = "0";
+      d.extras.crm_current_branches = [...(currentBranches.get(id) || [])].join(",");
       d.status = "учится";
-      if (branchOf.get(id)) d.branchId = branchOf.get(id);
-      d.branch = BRANCH_TITLE[d.branchId || 0] || d.branch;
-    } else if (leads.has(id)) {
+      const first = [...(currentBranches.get(id) || [])][0];
+      if (first) {
+        d.branchId = first;
+        d.branch = BRANCH_TITLE[first] || d.branch;
+      }
+    } else if (leads.has(id) && !archive.has(id)) {
       d.extras.is_study = "0";
       d.extras.removed = "0";
       d.status = "лид";
@@ -792,10 +800,18 @@ function viewOf(d: Dossier) {
     phone: d.phones[0] || d.phoneDigits,
     city: d.city || "",
     branch: d.branch || "",
-    branchIds: String(ex.branch_ids || d.branchId || "")
-      .split(/[,\s]+/)
-      .map((x) => Number(x))
-      .filter((n) => n > 0),
+    branchIds: uniq(
+      [
+        ...String(ex.crm_current_branches || "")
+          .split(/[,\s]+/)
+          .map((x) => Number(x))
+          .filter((n) => n > 0),
+        ...String(ex.branch_ids || d.branchId || "")
+          .split(/[,\s]+/)
+          .map((x) => Number(x))
+          .filter((n) => n > 0),
+      ],
+    ),
     courses: uniq([...coursesNow, ...coursesPast]),
     coursesNow,
     coursesPast,
@@ -828,7 +844,8 @@ export function searchClientViews(q = "", limit = 400, status = "", branchId = 0
     counts.все += 1;
     if (d.status === "учится") {
       counts.учится += 1;
-      if (d.branchId && branchCounts[d.branchId] != null) branchCounts[d.branchId] += 1;
+      const br = (d.branchIds || []).length ? d.branchIds : d.branchId ? [d.branchId] : [];
+      for (const b of br) if (branchCounts[b] != null) branchCounts[b] += 1;
     } else if (d.status === "лид") counts.лид += 1;
     else if (d.status === "архив") counts.архив += 1;
   }
