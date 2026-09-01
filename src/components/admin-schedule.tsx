@@ -261,6 +261,22 @@ export function AdminSchedule() {
     setWho((prev) => ({ ...prev, [key]: names }));
   }
 
+  async function applyPreview() {
+    if (!aiChanges.length && !aiAdds.length) return;
+    const res = await run("aiApply", { changes: aiChanges, adds: aiAdds, prompt: aiPrompt, ids: pickedIds });
+    if (res.ok) {
+      setDirty((d) => {
+        const n = new Set(d);
+        for (const c of aiChanges) n.add(c.id);
+        return n;
+      });
+      setAiChanges([]);
+      setAiAdds([]);
+      setMsg(aiAdds.length > 1 ? `В расписание добавлено групп: ${aiAdds.length}. Выгрузка в CRM — отдельной кнопкой.` : "Применено на сайте.");
+    }
+  }
+
+  const DAYS_SHORT = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
   const cell = "h-8 rounded-md bg-surface-2 px-1 text-center text-[0.75rem] leading-8 ring-1 ring-black/8";
 
   const coursesOf = useMemo(() => {
@@ -292,7 +308,14 @@ export function AdminSchedule() {
       if (t) setAiPrompt((p) => (p ? `${p} ${t}` : t));
     };
     rec.onerror = () => setListen(false);
-    rec.onend = () => setListen(false);
+    rec.onend = () => {
+      setListen(false);
+      window.setTimeout(() => {
+        const box = document.getElementById("ra-sched-prompt") as HTMLTextAreaElement | null;
+        const text = (box?.value || "").trim();
+        if (text) void run("aiPreview", { prompt: text, ids: pickedIds });
+      }, 80);
+    };
     recRef.current = rec;
     setListen(true);
     rec.start();
@@ -392,6 +415,7 @@ export function AdminSchedule() {
         </div>
         <div className="mt-3 flex items-center gap-2">
           <textarea
+            id="ra-sched-prompt"
             value={aiPrompt}
             onChange={(e) => setAiPrompt(e.target.value)}
             rows={1}
@@ -409,39 +433,70 @@ export function AdminSchedule() {
             </svg>
           </button>
         </div>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <Button type="button" disabled={busy || !aiPrompt.trim()} onClick={async () => { setMsg("Считаю правки…"); await run("aiPreview", { prompt: aiPrompt, ids: pickedIds }); }}>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button type="button" disabled={busy || !aiPrompt.trim()} onClick={async () => { setMsg("Готовлю предпросмотр…"); await run("aiPreview", { prompt: aiPrompt, ids: pickedIds }); }}>
             Показать, что изменится
           </Button>
-          <Button type="button" disabled={busy || (!aiChanges.length && !aiAdds.length)} onClick={async () => { const res = await run("aiApply", { changes: aiChanges, adds: aiAdds, prompt: aiPrompt, ids: pickedIds }); if (res.ok) { setDirty((d) => { const n = new Set(d); for (const c of aiChanges) n.add(c.id); return n; }); setAiChanges([]); setAiAdds([]); setMsg("Применено на сайте. Новые группы в CRM — кнопкой «Выгрузить», когда появятся id."); } }}>
-            Применить
-          </Button>
         </div>
-        {aiComment ? <p className="mt-2 text-sm text-muted">{aiComment}</p> : null}
-        {aiAdds.length ? (
-          <ul className="mt-3 max-h-40 space-y-1 overflow-auto text-sm">
-            {aiAdds.map((a, i) => (
-              <li key={`add-${i}`}>
-                <span className="font-semibold text-primary">новая</span> · {a.course || a.school} · {["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"][a.day] || a.day} {a.timeFrom}–{a.timeTo} · {a.branch} · {a.teacher || "педагог не указан"}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {aiChanges.length ? (
-          <ul className="mt-3 max-h-40 space-y-1 overflow-auto text-sm">
-            {aiChanges.map((c, i) => (
-              <li key={`${c.id}-${c.field}-${i}`}>
-                <span className="text-muted">{c.id}</span> · {c.field}: {c.from || "∅"} → {c.to}
-              </li>
-            ))}
-          </ul>
+        {aiComment && !aiAdds.length && !aiChanges.length ? <p className="mt-2 text-sm text-muted">{aiComment}</p> : null}
+        {aiAdds.length || aiChanges.length ? (
+          <div className="mt-4 rounded-2xl bg-surface-2 p-3 ring-1 ring-black/8">
+            <p className="text-sm font-semibold">
+              Предпросмотр
+              {aiAdds.length ? ` · ${aiAdds.length} ${aiAdds.length === 1 ? "новая группа" : "новых групп"}` : ""}
+              {aiChanges.length ? ` · ${aiChanges.length} правок` : ""}
+            </p>
+            {aiComment ? <p className="mt-1 text-sm text-muted">{aiComment}</p> : null}
+            {aiAdds.length ? (
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="text-[0.65rem] uppercase tracking-wider text-muted">
+                    <tr>
+                      <th className="px-2 py-1">Курс</th>
+                      <th className="px-2 py-1">Возраст</th>
+                      <th className="px-2 py-1">День</th>
+                      <th className="px-2 py-1">Время</th>
+                      <th className="px-2 py-1">Филиал</th>
+                      <th className="px-2 py-1">Педагог</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aiAdds.map((a, i) => (
+                      <tr key={`add-${i}`} className="border-t border-black/8">
+                        <td className="px-2 py-2 font-medium">{a.course || a.school}</td>
+                        <td className="px-2 py-2">{a.age || "—"}</td>
+                        <td className="px-2 py-2">{DAYS_SHORT[a.day] || a.day}</td>
+                        <td className="px-2 py-2">{a.timeFrom}–{a.timeTo}</td>
+                        <td className="px-2 py-2 text-[0.8rem] leading-tight">{a.branch}</td>
+                        <td className="px-2 py-2">{a.teacher || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+            {aiChanges.length ? (
+              <ul className="mt-3 max-h-36 space-y-1 overflow-auto text-sm">
+                {aiChanges.map((c, i) => (
+                  <li key={`${c.id}-${c.field}-${i}`}>
+                    <span className="text-muted">{c.id}</span> · {c.field}: {c.from || "∅"} → {c.to}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <div className="mt-3 flex justify-end">
+              <Button type="button" disabled={busy} onClick={() => void applyPreview()}>
+                Применить
+              </Button>
+            </div>
+          </div>
         ) : null}
       </article>
 
       {addOpen ? (
         <article className="rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
           <p className="font-display text-xl">Новая группа</p>
-          <p className="mt-1 text-sm text-muted">Поля по порядку. «Готово» добавляет строку на сайт.</p>
+          <p className="mt-1 text-sm text-muted">Поля по порядку. «Готово» кладёт группу в предпросмотр — в расписание попадёт после «Применить».</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <label className="text-sm">
               <span className="mb-1 block text-muted">Школа</span>
@@ -504,13 +559,10 @@ export function AdminSchedule() {
             <Button
               type="button"
               disabled={busy || !draft.school || !draft.course || !draft.branch}
-              onClick={async () => {
-                const res = await run("add", { draft });
-                if (res.ok) {
-                  setDraft(EMPTY_DRAFT);
-                  setAddOpen(false);
-                  setMsg("Группа добавлена на сайт. Выгрузите в AlfaCRM, когда будет готова карточка группы.");
-                }
+              onClick={() => {
+                setAiAdds((list) => [...list, { ...draft }]);
+                setAiComment(`В предпросмотре ${aiAdds.length + 1} групп. Нажмите «Применить», чтобы записать в расписание.`);
+                setDraft(EMPTY_DRAFT);
               }}
             >
               Готово
