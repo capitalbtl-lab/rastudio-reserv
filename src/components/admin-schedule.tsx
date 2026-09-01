@@ -1822,7 +1822,7 @@ export function AdminSchedule() {
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
 
       {onlyMismatch ? null : (
-      <article id="ra-sched-ai" className="sticky top-20 z-20 mt-6 rounded-3xl bg-gradient-to-br from-[#e8f0ff] via-white to-[#eef4ff] p-4 ring-2 ring-primary/35 shadow-[0_14px_40px_rgba(32,94,220,0.18)] md:p-5">
+      <article id="ra-sched-ai" className="sticky top-20 z-20 mt-6 rounded-3xl bg-gradient-to-br from-[#e8f0ff] via-white to-[#eef4ff] p-4 ring-2 ring-primary/35 shadow-[0_10px_28px_rgba(32,94,220,0.18)] md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <p className="font-display text-xl text-primary">Добавить / исправить расписание</p>
