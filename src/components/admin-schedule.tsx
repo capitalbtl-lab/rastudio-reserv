@@ -976,6 +976,24 @@ export function AdminSchedule() {
     void loadClients("");
   }, [pane]);
   useEffect(() => {
+    if (pane !== "clients") return;
+    const key = "ra-members-sync";
+    if (sessionStorage.getItem(key) === "1") return;
+    sessionStorage.setItem(key, "1");
+    void (async () => {
+      let offset = 0;
+      while (offset < 200) {
+        const res = await adminDossiers({ data: { token: token(), action: "syncMembers", offset } });
+        if (!res.ok) break;
+        offset = Number((res as { next?: number }).next) || offset + 8;
+        if ((res as { done?: boolean }).done) {
+          void loadClients(clientQ, clientStatus, clientBranch, clientAge);
+          break;
+        }
+      }
+    })();
+  }, [pane]);
+  useEffect(() => {
     const el = promptEl.current;
     if (!el) return;
     el.style.height = "40px";

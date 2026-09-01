@@ -235,12 +235,31 @@ function studyMeta(item: Record<string, unknown>) {
   return STUDY_STATUS[sid] || null;
 }
 
+function todayYmd() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function academicStart() {
+  const d = new Date();
+  const y = d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1;
+  return `${y}-09-01`;
+}
+
 function statusFromCrm(item: Record<string, unknown>, archived = false) {
   const study = Number(item.is_study);
   if (study === 0) return "лид";
   if (study === 2 || archived) return "архив";
   const meta = studyMeta(item);
-  if (meta) return meta.bucket;
+  if (!meta || meta.bucket !== "учится") return "архив";
+  const last = String(item.last_attend_date || "").slice(0, 10);
+  const next = String(item.next_lesson_date || "").slice(0, 10);
+  const eDate = String(item.e_date || "").slice(0, 10);
+  const today = todayYmd();
+  const notEnded = !eDate || eDate >= today || eDate.startsWith("2030");
+  if (!notEnded) return "архив";
+  if (next >= today) return "учится";
+  if (last >= academicStart()) return "учится";
   return "архив";
 }
 
@@ -644,7 +663,7 @@ export async function syncSliceFromCrm(opts: { branchId: number; isStudy?: numbe
 }
 
 export async function syncMembershipsSlice(offset = 0, take = 8) {
-  const slots = (loadVersions()[0]?.slots || []).filter((s) => Number(s.groupId) > 0);
+  const slots = (loadVersions()[0]?.slots || []).filter((s) => Number(s.groupId) > 0 && Number(s.statusId) !== 3 && Number(s.statusId) !== 4);
   const seen = new Set<string>();
   const groups: { id: number; branchId: number; name: string; school: string }[] = [];
   for (const s of slots) {
@@ -703,7 +722,18 @@ function viewOf(d: Dossier) {
   const fromGroup = namesFromGroup(ex.groups);
   const study = Number(ex.is_study);
   const inGroup = (d.groupLinks || []).some((g) => g.active);
-  const status = inGroup ? "учится" : statusFromCrm({ is_study: ex.is_study, study_status_id: ex.study_status_id }, study === 2);
+  const status = inGroup
+    ? "учится"
+    : statusFromCrm(
+        {
+          is_study: ex.is_study,
+          study_status_id: ex.study_status_id,
+          last_attend_date: ex.last_attend_date,
+          next_lesson_date: ex.next_lesson_date,
+          e_date: ex.e_date,
+        },
+        study === 2,
+      );
   const studyStatus = studyMeta({ study_status_id: ex.study_status_id })?.name || "";
   const coursesNow = uniq([...(d.coursesNow || []), ...((d.groupLinks || []).filter((g) => g.active).map((g) => g.name)), ...(status === "учится" ? fromGroup.courses : [])]);
   const coursesPast = uniq([...(d.coursesPast || []), ...((d.groupLinks || []).filter((g) => !g.active).map((g) => g.name)), ...(status !== "учится" ? fromGroup.courses : [])]);
