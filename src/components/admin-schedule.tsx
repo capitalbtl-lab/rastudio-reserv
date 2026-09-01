@@ -1648,14 +1648,14 @@ export function AdminSchedule() {
         </div>
       </AdminSectionHead>
 
-      <div className="flex gap-2">
-        <Button type="button" size="sm" variant={pane === "groups" ? "primary" : "secondary"} onClick={() => setPane("groups")}>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="lg" className="px-7 text-base" variant={pane === "groups" ? "primary" : "secondary"} onClick={() => setPane("groups")}>
           Группы
         </Button>
-        <Button type="button" size="sm" variant={pane === "subjects" ? "primary" : "secondary"} onClick={() => setPane("subjects")}>
+        <Button type="button" size="lg" className="px-7 text-base" variant={pane === "subjects" ? "primary" : "secondary"} onClick={() => setPane("subjects")}>
           Предметы
         </Button>
-        <Button type="button" size="sm" variant={pane === "map" ? "primary" : "secondary"} onClick={() => setPane("map")}>
+        <Button type="button" size="lg" className="px-7 text-base" variant={pane === "map" ? "primary" : "secondary"} onClick={() => setPane("map")}>
           Соответствия
         </Button>
       </div>
@@ -1664,29 +1664,21 @@ export function AdminSchedule() {
       {pane === "map" ? <AdminScheduleMap embedded /> : null}
       {pane === "groups" ? (
       <>
-      <div className="flex flex-wrap items-start gap-2">
-        <TipWrap text="Школа, курс, возраст, день, время, филиал, педагог — затем «Готово». Строка на сайте, в CRM — отдельной выгрузкой.">
-          <Button type="button" disabled={busy} onClick={() => { setAddOpen((v) => !v); document.getElementById("ra-sched-ai")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
-            Добавить расписание
-          </Button>
-        </TipWrap>
-        <TipWrap text="Подтягивает группы из AlfaCRM: новые добавляет, существующие обновляет. Страницы курсов и /schedule сразу показывают это расписание.">
-          <Button type="button" variant="secondary" disabled={busy} onClick={() => void pullCrm()}>
-            Загрузить из AlfaCRM
-          </Button>
-        </TipWrap>
-        <TipWrap text="Пишет storage/crm-schedule.json. Посетитель видит новое расписание без выгрузки в CRM.">
-          <Button type="button" variant="secondary" disabled={busy || !slots.length} onClick={async () => { const res = await run("save", { slots }); if (res.ok) setMsg("Сохранено на сайте. Страницы курсов обновятся сразу. В CRM — отдельной кнопкой."); }}>
-            Сохранить на сайте
-          </Button>
-        </TipWrap>
-        <TipWrap text="Только отмеченные чекбоксом. Сначала создаётся группа, потом регулярный урок с subject_id. Новый gid записывается в расписание.">
-          <Button type="button" variant="secondary" disabled={busy} onClick={() => void pushCrm()}>
-            Выгрузить в AlfaCRM
-          </Button>
-        </TipWrap>
-        <div className="relative" ref={fileRef}>
-          <Button type="button" variant="secondary" disabled={busy} onClick={() => setFileOpen((v) => !v)}>
+      <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5">
+        <Button type="button" size="sm" className="h-8 shrink-0 px-3 text-[0.78rem]" disabled={busy} onClick={() => { setAddOpen((v) => !v); document.getElementById("ra-sched-ai")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
+          Добавить расписание вручную
+        </Button>
+        <Button type="button" size="sm" className="h-8 shrink-0 px-3 text-[0.78rem]" variant="secondary" disabled={busy} onClick={() => void pullCrm()}>
+          Загрузить из AlfaCRM
+        </Button>
+        <Button type="button" size="sm" className="h-8 shrink-0 px-3 text-[0.78rem]" variant="secondary" disabled={busy || !slots.length} onClick={async () => { const res = await run("save", { slots }); if (res.ok) setMsg("Сохранено на сайте. Страницы курсов обновятся сразу. В CRM — отдельной кнопкой."); }}>
+          Сохранить на сайте
+        </Button>
+        <Button type="button" size="sm" className="h-8 shrink-0 px-3 text-[0.78rem]" variant="secondary" disabled={busy} onClick={() => void pushCrm()}>
+          Выгрузить в AlfaCRM
+        </Button>
+        <div className="relative shrink-0" ref={fileRef}>
+          <Button type="button" size="sm" className="h-8 px-3 text-[0.78rem]" variant="secondary" disabled={busy} onClick={() => setFileOpen((v) => !v)}>
             Файл
             <span className="text-[0.65rem]">▾</span>
           </Button>
@@ -1730,11 +1722,13 @@ export function AdminSchedule() {
             </div>
           ) : null}
         </div>
-        <Button type="button" variant="secondary" onClick={() => setOpenAll((v) => !v)}>
+        <Button type="button" size="sm" className="h-8 shrink-0 px-3 text-[0.78rem]" variant="secondary" onClick={() => setOpenAll((v) => !v)}>
           {openAll ? "Свернуть всё" : "Раскрыть всё"}
         </Button>
         <Button
           type="button"
+          size="sm"
+          className="h-8 shrink-0 px-3 text-[0.78rem]"
           variant="secondary"
           disabled={busy || !pickedIds.length}
           onClick={() => void removeSlots(pickedIds)}
