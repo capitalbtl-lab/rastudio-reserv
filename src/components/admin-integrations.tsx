@@ -79,7 +79,7 @@ export function AdminIntegrations() {
   function Card({ c }: { c: Row }) {
     const d = draft[c.id] || c;
     return (
-      <article className="flex h-full flex-col rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
+      <article className="flex flex-col rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="font-display text-lg">{d.name}</p>
@@ -164,7 +164,7 @@ export function AdminIntegrations() {
   }
 
   return (
-    <section className="mt-10 space-y-6">
+    <section className="mt-10 space-y-4">
       <div>
         <div className="flex items-center gap-2">
           <h2 className="font-display text-3xl">API и интеграции</h2>

@@ -53,7 +53,7 @@ function ScriptCard({
   onSave: () => void;
 }) {
   return (
-    <article className="flex h-full flex-col rounded-2xl bg-surface p-4 shadow-[var(--shadow-border)]">
+    <article className="flex flex-col rounded-2xl bg-surface p-4 shadow-[var(--shadow-border)]">
       <div className="mb-2 min-w-0">
         <div className="flex items-center gap-1.5">
           <p className="font-display text-[1.05rem] leading-tight">{s.title}</p>
