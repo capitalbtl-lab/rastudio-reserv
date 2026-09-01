@@ -252,29 +252,6 @@ function LessonCard({
   );
 }
 
-function siteBranchAddress(branchId: number, city = "", branch = "") {
-  const byId: Record<number, (typeof BRANCHES)[number] | undefined> = {
-    1: BRANCHES[1],
-    2: BRANCHES[0],
-    3: BRANCHES[2],
-  };
-  const hit = byId[branchId];
-  if (hit) return `${hit.city}, ${hit.address}`;
-  const hay = `${city} ${branch}`.toLowerCase();
-  const found = BRANCHES.find((b) => hay.includes("гражданск") && b.address.includes("Гражданская")
-    || hay.includes("октябрьск") && b.address.includes("Октябрьской")
-    || hay.includes("луховиц") && b.city === "Луховицы"
-    || hay.includes("пушкин") && b.address.includes("Пушкина"));
-  return found ? `${found.city}, ${found.address}` : [city, branch].filter(Boolean).join(", ");
-}
-
-function descriptionFromSite(note: string, branchId: number, city = "", branch = "") {
-  const addr = siteBranchAddress(branchId, city, branch);
-  const t = String(note || "").trim();
-  if (!t || /^https?:\/\//i.test(t) || /rastudio\.org/i.test(t)) return addr;
-  return t;
-}
-
 function token() {
   if (typeof document === "undefined") return "";
   const m = document.cookie.match(/(?:^|;\s*)ra_admin=([^;]+)/);
@@ -892,7 +869,7 @@ export function AdminSchedule() {
       id: s.id,
       groupId: s.groupId,
       branchId: s.branchId,
-      description: descriptionFromSite(s.description || s.groupNote || "", s.branchId, s.city, s.branch),
+      description: s.description || s.groupNote || "",
       remarks: s.remarks || "",
       hashtags: (s.hashtags || "").replace(/\s+/g, " ").trim(),
       makeup: s.makeup || "",
@@ -940,7 +917,7 @@ export function AdminSchedule() {
       d && d.id === s.id
         ? {
             ...d,
-            description: descriptionFromSite(g.description || g.note || "", s.branchId, s.city, s.branch),
+            description: g.description || g.note || "",
             remarks: g.remarks || "",
             hashtags: (g.hashtags || "").replace(/\s+/g, " ").trim(),
             makeup: g.makeup,
@@ -2073,9 +2050,14 @@ export function AdminSchedule() {
                               const key = `${s.branchId}-${s.groupId}`;
                               const names = who[key];
                               const mm = slotMismatch(s);
+                              const open = detail?.id === s.id;
                               return (
                               <Fragment key={s.id}>
-                              <tr id={`ra-slot-${s.id}`} className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash", mm.level === "hard" && "bg-red-50", mm.level === "soft" && !dirty.has(s.id) && "bg-amber-50/80")}>
+                              <tr
+                                id={`ra-slot-${s.id}`}
+                                className={cn("border-t border-black/6", !open && dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash", !open && mm.level === "hard" && "bg-red-50", !open && mm.level === "soft" && !dirty.has(s.id) && "bg-amber-50/80")}
+                                style={open ? { background: ADMIN_PANEL_BLUE } : undefined}
+                              >
                                 <td className="px-2 py-1.5 align-middle">
                                   <div className="flex items-center gap-1.5">
                                     <CheckBox ids={[s.id]} picked={picked} onToggle={setIds} />
@@ -2132,7 +2114,7 @@ export function AdminSchedule() {
                                   <WhoTip names={names} onNeed={() => void loadWho(s)} />
                                 </td>
                                 <td className="px-1 py-1.5 align-middle text-center">
-                                  <DetailsBtn on={detail?.id === s.id} onClick={() => void openDetail(s)} />
+                                  <DetailsBtn on={open} onClick={() => void openDetail(s)} />
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
                                   <button type="button" title="Удалить из расписания" className="text-xs font-semibold text-muted hover:text-red-600" onClick={() => void removeSlots([s.id])}>
@@ -2140,7 +2122,7 @@ export function AdminSchedule() {
                                   </button>
                                 </td>
                               </tr>
-                              {detail?.id === s.id ? (
+                              {open ? (
                                 <tr key={`${s.id}-detail`}>
                                   <td colSpan={12} className="px-4 py-4" style={{ background: ADMIN_PANEL_BLUE }}>
                                     {detail.loading ? (
