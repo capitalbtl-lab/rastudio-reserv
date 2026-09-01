@@ -32,7 +32,6 @@ const GROUP_LEVELS = [
 ];
 
 const WD = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
-const MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 
 function todayYmd() {
@@ -45,10 +44,20 @@ function parseYmd(s: string) {
   return new Date(y, (m || 1) - 1, d || 1);
 }
 
+function parseAnyDate(s: string) {
+  const t = String(s || "").trim();
+  const ru = t.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (ru) return new Date(Number(ru[3]), Number(ru[2]) - 1, Number(ru[1]));
+  const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  return null;
+}
+
 function slotCalendar(s: CrmSlot): GroupCalLesson[] {
-  const start = new Date();
-  start.setMonth(start.getMonth() - 1, 1);
-  const end = new Date(start.getFullYear(), start.getMonth() + 8, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = parseAnyDate(s.bDate) || today;
+  const end = parseAnyDate(s.eDate) || new Date(start.getFullYear(), start.getMonth() + 10, 0);
   const beats = s.beats?.length ? s.beats : [{ day: s.day, timeFrom: s.timeFrom, timeTo: s.timeTo }];
   const out: GroupCalLesson[] = [];
   for (const b of beats) {
@@ -57,7 +66,7 @@ function slotCalendar(s: CrmSlot): GroupCalLesson[] {
     const js = want === 7 ? 0 : want;
     const cur = new Date(start);
     while (cur.getDay() !== js) cur.setDate(cur.getDate() + 1);
-    while (cur <= end) {
+    while (cur <= end && out.length < 120) {
       out.push({
         date: `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`,
         from: String(b.timeFrom || ""),
@@ -71,111 +80,49 @@ function slotCalendar(s: CrmSlot): GroupCalLesson[] {
   return out;
 }
 
-function GroupMonthCal({ lessons }: { lessons: GroupCalLesson[] }) {
+function GroupLessonStrip({ lessons }: { lessons: GroupCalLesson[] }) {
   const today = todayYmd();
-  const upcoming = lessons.filter((l) => l.date >= today).sort((a, b) => a.date.localeCompare(b.date));
-  const nextDates = new Set(upcoming.slice(0, 4).map((l) => l.date));
-  const nearest = upcoming[0]?.date;
-  const seed = parseYmd(nearest && nearest.slice(0, 7) === today.slice(0, 7) ? today : nearest || today);
-  const [cursor, setCursor] = useState(() => ({ y: seed.getFullYear(), m: seed.getMonth() }));
-  const byDate = useMemo(() => {
+  const items = useMemo(() => {
     const map = new Map<string, GroupCalLesson>();
     for (const l of lessons) map.set(l.date, l);
-    return map;
-  }, [lessons]);
-  const cells = useMemo(() => {
-    const first = new Date(cursor.y, cursor.m, 1);
-    const start = new Date(first);
-    const mondayShift = (first.getDay() + 6) % 7;
-    start.setDate(1 - mondayShift);
-    const out: { iso: string; inMonth: boolean }[] = [];
-    for (let i = 0; i < 42; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      out.push({
-        iso: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-        inMonth: d.getMonth() === cursor.m,
-      });
-    }
-    return out;
-  }, [cursor]);
-  const next4 = upcoming.slice(0, 4);
+    if (!map.has(today)) map.set(today, { date: today, from: "", to: "", status: -1, type: "сегодня" });
+    return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+  }, [lessons, today]);
+  const count = lessons.length;
   return (
     <div className="md:col-span-2">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-baseline justify-between gap-2">
         <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Расписание занятий</p>
-        <div className="flex items-center gap-1">
-          <button type="button" className="grid h-8 w-8 place-items-center rounded-full bg-white text-sm font-semibold ring-1 ring-black/8" onClick={() => setCursor((c) => ({ y: c.m === 0 ? c.y - 1 : c.y, m: c.m === 0 ? 11 : c.m - 1 }))} aria-label="Предыдущий месяц">
-            ‹
-          </button>
-          <span className="min-w-[9.5rem] text-center text-sm font-semibold capitalize">{MONTHS[cursor.m]} {cursor.y}</span>
-          <button type="button" className="grid h-8 w-8 place-items-center rounded-full bg-white text-sm font-semibold ring-1 ring-black/8" onClick={() => setCursor((c) => ({ y: c.m === 11 ? c.y + 1 : c.y, m: c.m === 11 ? 0 : c.m + 1 }))} aria-label="Следующий месяц">
-            ›
-          </button>
-        </div>
+        <p className="text-[0.7rem] text-muted">{count ? `${count} занятий` : "нет дат в CRM"}</p>
       </div>
-      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]">
-        <div className="rounded-2xl bg-white/80 p-3 ring-1 ring-black/6">
-          <div className="grid grid-cols-7 gap-1">
-            {WD.map((d) => (
-              <span key={d} className="pb-1 text-center text-[0.65rem] font-semibold uppercase tracking-wider text-muted">{d}</span>
-            ))}
-            {cells.map((c) => {
-              const lesson = byDate.get(c.iso);
-              const isToday = c.iso === today;
-              const isNext = c.iso === nearest;
-              const isNear = nextDates.has(c.iso);
-              const past = Boolean(lesson && c.iso < today);
-              const num = Number(c.iso.slice(-2));
-              return (
-                <div
-                  key={c.iso}
-                  title={lesson ? `${lesson.from || "занятие"}${lesson.to ? `–${lesson.to}` : ""}` : isToday ? "сегодня" : undefined}
-                  className={cn(
-                    "relative grid aspect-square place-items-center rounded-xl text-[0.82rem] font-semibold tabular-nums",
-                    !c.inMonth && "opacity-30",
-                    !lesson && !isToday && "text-muted",
-                    past && "bg-[#d7e2f2] text-[#35507a]",
-                    lesson && !past && !isNear && "bg-[#cfe0fb] text-primary",
-                    isNear && !isNext && "bg-primary/80 text-white",
-                    isNext && "bg-primary text-white shadow-[0_6px_14px_rgba(37,99,235,0.35)]",
-                    isToday && !lesson && "bg-white text-fg ring-2 ring-primary",
-                    isToday && lesson && "ring-2 ring-white",
-                  )}
-                >
-                  {num}
-                  {isToday ? <span className="absolute bottom-1 h-1 w-1 rounded-full bg-current" /> : null}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-1">
-          {next4.length ? next4.map((l, i) => {
-            const d = parseYmd(l.date);
-            return (
-              <div
-                key={l.date}
-                className={cn(
-                  "rounded-2xl px-3 py-2.5 ring-1",
-                  i === 0 ? "bg-primary text-white ring-primary" : "bg-white text-fg ring-black/8",
-                )}
-              >
-                <p className={cn("text-[0.65rem] font-semibold uppercase tracking-wider", i === 0 ? "text-white/80" : "text-muted")}>
-                  {WD[(d.getDay() + 6) % 7]} {i === 0 ? "· ближайшее" : ""}
-                </p>
-                <p className="mt-0.5 font-display text-xl leading-none">{d.getDate()} {MONTHS_SHORT[d.getMonth()]}</p>
-                <p className={cn("mt-1 text-sm font-semibold tabular-nums", i === 0 ? "text-white/90" : "text-muted")}>
-                  {l.from && l.to ? `${l.from}–${l.to}` : l.from || "время в CRM не задано"}
-                </p>
-              </div>
-            );
-          }) : (
-            <div className="col-span-2 rounded-2xl bg-white px-3 py-3 text-sm text-muted ring-1 ring-black/8 lg:col-span-1">
-              Ближайших занятий в AlfaCRM нет — у группы ещё нет регулярного урока.
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {items.map((l) => {
+          const d = parseYmd(l.date);
+          const isToday = l.date === today;
+          const past = l.date < today;
+          const time = l.from && l.to ? `${l.from}–${l.to}` : l.from || "";
+          return (
+            <div
+              key={l.date}
+              title={time ? `${l.date} ${time}` : l.date}
+              className={cn(
+                "flex h-11 min-w-[3.15rem] flex-col items-center justify-center rounded-lg px-1.5 text-center leading-tight",
+                isToday && "bg-primary text-white shadow-[0_4px_10px_rgba(37,99,235,0.28)]",
+                !isToday && past && "bg-white/55 text-muted",
+                !isToday && !past && "bg-white text-fg ring-1 ring-black/8",
+              )}
+            >
+              {isToday ? (
+                <span className="text-[0.58rem] font-semibold uppercase tracking-wider text-white/90">сегодня</span>
+              ) : (
+                <span className="text-[0.58rem] font-semibold uppercase tracking-wider opacity-70">{WD[(d.getDay() + 6) % 7]}</span>
+              )}
+              <span className="text-[0.78rem] font-semibold tabular-nums">
+                {d.getDate()} {MONTHS_SHORT[d.getMonth()]}
+              </span>
             </div>
-          )}
-        </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -1905,7 +1852,7 @@ export function AdminSchedule() {
                                       <p className="text-sm text-muted">Загружаю настройки группы из AlfaCRM…</p>
                                     ) : (
                                       <div className="grid gap-3 md:grid-cols-2">
-                                        <GroupMonthCal lessons={detail.calendar} />
+                                        <GroupLessonStrip lessons={detail.calendar} />
                                         <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                                           Запись
                                           <a

@@ -286,9 +286,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!g) return { ok: false as const, error: "Группа не найдена в AlfaCRM." };
       const slot = listAdminSlots().find((s) => s.groupId === gid && s.branchId === branch);
       const byDate = new Map<string, GroupCalLesson>();
-      const horizonStart = new Date();
-      horizonStart.setMonth(horizonStart.getMonth() - 1, 1);
-      const horizonEnd = new Date(horizonStart.getFullYear(), horizonStart.getMonth() + 8, 0);
+      const groupStart = parseCrmDate(String(g.b_date || slot?.bDate || ""));
+      const groupEnd = parseCrmDate(String(g.e_date || slot?.eDate || ""));
+      const fallbackEnd = new Date();
+      fallbackEnd.setMonth(fallbackEnd.getMonth() + 10, 0);
       try {
         const regs: {
           id?: number;
@@ -307,11 +308,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
         }
         const mine = regs.filter((r) => Number(r.related_id) === gid);
         for (const r of mine) {
-          const start = parseCrmDate(r.b_date) || horizonStart;
-          const end = parseCrmDate(r.e_date) || horizonEnd;
+          const start = parseCrmDate(r.b_date) || groupStart || new Date();
+          const end = parseCrmDate(r.e_date) || groupEnd || fallbackEnd;
           const from = hm(r.time_from_v);
           const to = hm(r.time_to_v);
-          for (const occ of expandWeekday(Number(r.day || 0), from, to, start < horizonStart ? horizonStart : start, end > horizonEnd ? horizonEnd : end)) {
+          for (const occ of expandWeekday(Number(r.day || 0), from, to, start, end)) {
+            if (byDate.size >= 120) break;
             byDate.set(occ.date, occ);
           }
           if (r.id) {
@@ -335,11 +337,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
         /* календарь не должен ломать карточку */
       }
       if (!byDate.size && slot) {
-        const start = parseCrmDate(slot.bDate) || horizonStart;
-        const end = parseCrmDate(slot.eDate) || horizonEnd;
+        const start = parseCrmDate(slot.bDate) || groupStart || new Date();
+        const end = parseCrmDate(slot.eDate) || groupEnd || fallbackEnd;
         const beats = slot.beats?.length ? slot.beats : [{ day: slot.day, timeFrom: slot.timeFrom, timeTo: slot.timeTo }];
         for (const b of beats) {
-          for (const occ of expandWeekday(Number(b.day || slot.day || 0), String(b.timeFrom || ""), String(b.timeTo || ""), start < horizonStart ? horizonStart : start, end > horizonEnd ? horizonEnd : end)) {
+          for (const occ of expandWeekday(Number(b.day || slot.day || 0), String(b.timeFrom || ""), String(b.timeTo || ""), start, end)) {
+            if (byDate.size >= 120) break;
             byDate.set(occ.date, occ);
           }
         }
