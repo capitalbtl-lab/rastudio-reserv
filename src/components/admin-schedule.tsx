@@ -365,7 +365,7 @@ function inCrm(s: CrmSlot) {
   return Number(s.groupId) > 0 && !String(s.id).startsWith("local-");
 }
 
-function DetailsBtn({ on, onClick }: { on?: boolean; onClick: () => void }) {
+function DetailsBtn({ on, onClick, busy }: { on?: boolean; onClick: () => void; busy?: boolean }) {
   return (
     <button
       type="button"
@@ -376,7 +376,7 @@ function DetailsBtn({ on, onClick }: { on?: boolean; onClick: () => void }) {
         on ? "bg-[#b8c0cc] text-fg" : "bg-[#c5ccd6] text-[#3f4854] hover:bg-[#b4bcc8]",
       )}
     >
-      {on ? "−" : "+"}
+      {busy ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-fg/20 border-t-fg" /> : on ? "−" : "+"}
     </button>
   );
 }
@@ -398,8 +398,6 @@ type GroupDetail = {
   calendar: GroupCalLesson[];
   members: GroupMember[];
   archive: GroupMember[];
-  membersLoading: boolean;
-  loading: boolean;
   saving: boolean;
   slot: CrmSlot;
 };
@@ -761,7 +759,7 @@ function WhoTip({ names, onNeed }: { names?: string[]; onNeed: () => void }) {
 function MemberGrid({ title, items, onOpen, archive }: { title: string; items: GroupMember[]; onOpen: (m: GroupMember) => void; archive?: boolean }) {
   if (!items.length) return null;
   return (
-    <div className="mt-3">
+    <div className={archive ? "mt-3" : ""}>
       <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">{title} · {items.length}</p>
       <ul className="mt-1.5 divide-y divide-black/6 overflow-hidden rounded-2xl bg-white ring-1 ring-black/6">
         {items.map((m) => (
@@ -839,6 +837,8 @@ export function AdminSchedule() {
   const [onlyMismatch, setOnlyMismatch] = useState(false);
   const [pushUi, setPushUi] = useState({ open: false, step: "", done: false, created: 0, pushed: 0, failed: 0, error: "", lines: [] as string[] });
   const [detail, setDetail] = useState<GroupDetail | null>(null);
+  const [openingId, setOpeningId] = useState("");
+  const openingRef = useRef("");
   const [pupil, setPupil] = useState<CustomerCard | null>(null);
   const [pupilLoading, setPupilLoading] = useState(false);
   const [subjects, setSubjects] = useState<CrmSubject[]>([]);
@@ -971,10 +971,15 @@ export function AdminSchedule() {
     if (detail?.id === s.id) {
       setDetail(null);
       setPupil(null);
+      setOpeningId("");
+      openingRef.current = "";
       return;
     }
     setPupil(null);
-    setDetail({
+    setOpeningId(s.id);
+    openingRef.current = s.id;
+    const still = () => openingRef.current === s.id;
+    const base = (): GroupDetail => ({
       id: s.id,
       groupId: s.groupId,
       branchId: s.branchId,
@@ -991,36 +996,79 @@ export function AdminSchedule() {
       calendar: [],
       members: [],
       archive: [],
-      membersLoading: Boolean(s.groupId),
-      loading: Boolean(s.groupId),
       saving: false,
       slot: s,
     });
-    if (!s.groupId) {
-      const sub = await adminSchedule({ data: { token: token(), action: "subjectsGet" } as never });
-      if (sub.ok && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects as CrmSubject[]);
-      setDetail((d) => (d && d.id === s.id ? { ...d, loading: false, membersLoading: false } : d));
-      return;
-    }
-    const [res, people] = await Promise.all([
-      adminSchedule({ data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId } as never }),
-      adminSchedule({ data: { token: token(), action: "groupMembers", groupId: s.groupId, branchId: s.branchId } as never }),
-    ]);
-    applyGroupRes(s.id, s, res);
-    if (people.ok && "active" in people) {
-      const active = (people.active || []) as GroupMember[];
-      const archive = (people.archive || []) as GroupMember[];
-      setDetail((d) => (d && d.id === s.id ? { ...d, members: active, archive, membersLoading: false } : d));
-      const key = `${s.branchId}-${s.groupId}`;
-      const names = active.map((m) => m.name);
-      whoRef.current = { ...whoRef.current, [key]: names };
-      setWho((w) => ({ ...w, [key]: names }));
-    } else {
-      setDetail((d) => (d && d.id === s.id ? { ...d, membersLoading: false } : d));
-    }
-    if (res.ok && "fromCache" in res && res.fromCache) {
-      const fresh = await adminSchedule({ data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId, fresh: true } as never });
-      applyGroupRes(s.id, s, fresh);
+    try {
+      if (!s.groupId) {
+        const sub = await adminSchedule({ data: { token: token(), action: "subjectsGet" } as never });
+        if (sub.ok && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects as CrmSubject[]);
+        if (still()) setDetail(base());
+        return;
+      }
+      const [res, people] = await Promise.all([
+        adminSchedule({ data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId } as never }),
+        adminSchedule({ data: { token: token(), action: "groupMembers", groupId: s.groupId, branchId: s.branchId } as never }),
+      ]);
+      if (!still()) return;
+      if (!res.ok) {
+        setMsg(res.error || "Не удалось открыть группу в AlfaCRM.");
+        return;
+      }
+      if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as CrmSubject[]);
+      if ("levels" in res && Array.isArray((res as { levels?: { id: number; name: string }[] }).levels) && (res as { levels: { id: number; name: string }[] }).levels.length) {
+        setLevels((res as { levels: { id: number; name: string }[] }).levels);
+      }
+      const g = "group" in res && res.group
+        ? (res.group as {
+            note: string;
+            description?: string;
+            remarks?: string;
+            hashtags: string;
+            makeup: string;
+            statusId: number;
+            signup: string;
+            subjectId: number;
+            bDate?: string;
+            eDate?: string;
+            levelId?: number;
+            calendar?: GroupCalLesson[];
+          })
+        : null;
+      const active = people.ok && "active" in people ? ((people.active || []) as GroupMember[]) : [];
+      const archive = people.ok && "archive" in people ? ((people.archive || []) as GroupMember[]) : [];
+      const next: GroupDetail = {
+        ...base(),
+        description: g?.description || g?.note || s.description || s.groupNote || "",
+        remarks: g?.remarks || s.remarks || "",
+        hashtags: ((g?.hashtags || s.hashtags || "").replace(/\s+/g, " ").trim()),
+        makeup: g?.makeup || s.makeup || "",
+        statusId: g?.statusId || s.statusId || 0,
+        bDate: g?.bDate || s.bDate || "",
+        eDate: g?.eDate || s.eDate || "",
+        levelId: g?.levelId || s.levelId || 0,
+        signup: g?.signup || leadHref(s),
+        subjectId: g?.subjectId || s.subjectId || 0,
+        calendar: g?.calendar?.length ? g.calendar : [],
+        members: active,
+        archive,
+      };
+      setDetail(next);
+      if (active.length) {
+        const key = `${s.branchId}-${s.groupId}`;
+        const names = active.map((m) => m.name);
+        whoRef.current = { ...whoRef.current, [key]: names };
+        setWho((w) => ({ ...w, [key]: names }));
+      }
+      if (res.ok && "fromCache" in res && res.fromCache) {
+        const fresh = await adminSchedule({ data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId, fresh: true } as never });
+        if (still()) applyGroupRes(s.id, s, fresh);
+      }
+    } finally {
+      if (still()) {
+        setOpeningId("");
+        openingRef.current = "";
+      }
     }
   }
 
@@ -1051,7 +1099,6 @@ export function AdminSchedule() {
 
   function applyGroupRes(id: string, s: CrmSlot, res: Awaited<ReturnType<typeof adminSchedule>>) {
     if (!res.ok || !("group" in res) || !res.group) {
-      setDetail((d) => (d && d.id === id ? { ...d, loading: false } : d));
       if (!res.ok) setMsg(res.error || "Не удалось открыть группу в AlfaCRM.");
       return;
     }
@@ -1088,7 +1135,6 @@ export function AdminSchedule() {
             signup: g.signup || d.signup,
             subjectId: g.subjectId || d.subjectId,
             calendar: g.calendar?.length ? g.calendar : d.calendar,
-            loading: false,
           }
         : d,
     );
@@ -2419,7 +2465,7 @@ export function AdminSchedule() {
                                   <WhoTip names={names} onNeed={() => void loadWho(s)} />
                                 </td>
                                 <td className="px-1 py-1.5 align-middle text-center">
-                                  <DetailsBtn on={open} onClick={() => void openDetail(s)} />
+                                  <DetailsBtn on={open} busy={openingId === s.id} onClick={() => void openDetail(s)} />
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
                                   <button type="button" title="Удалить из расписания" className="text-xs font-semibold text-muted hover:text-red-600" onClick={() => void removeSlots([s.id])}>
@@ -2469,10 +2515,7 @@ export function AdminSchedule() {
                     Закрыть
                   </button>
                 </div>
-                {detail.loading ? (
-                  <p className="mt-4 text-sm text-muted">Загружаю настройки группы из AlfaCRM…</p>
-                ) : (
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <GroupLessonStrip lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} />
                     <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                       Предмет
@@ -2538,24 +2581,12 @@ export function AdminSchedule() {
                       <Button type="button" disabled={detail.saving} onClick={() => void saveDetail()}>Сохранить в AlfaCRM</Button>
                     </div>
                   </div>
-                )}
-                <section className="mt-5 rounded-2xl bg-white/80 p-4 ring-1 ring-black/6">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <h4 className="font-display text-xl">Состав группы</h4>
-                    <p className="text-sm text-muted">
-                      {detail.membersLoading ? "загружаю…" : `${detail.members.length} учатся · ${detail.archive.length} в архиве`}
-                    </p>
-                  </div>
-                  {detail.membersLoading ? (
-                    <p className="mt-3 text-sm text-muted">Подгружаю учеников из AlfaCRM…</p>
-                  ) : (
-                    <>
-                      <MemberGrid title="Учатся сейчас" items={detail.members} onOpen={(m) => void openPupil(m)} />
-                      <MemberGrid title="Архив" items={detail.archive} onOpen={(m) => void openPupil(m)} archive />
-                      {!detail.members.length && !detail.archive.length ? <p className="mt-3 text-sm text-muted">В группе пока никого нет.</p> : null}
-                    </>
-                  )}
-                </section>
+                {detail.members.length || detail.archive.length ? (
+                  <section className="mt-5 rounded-2xl bg-white/80 p-4 ring-1 ring-black/6">
+                    <MemberGrid title="Учатся сейчас" items={detail.members} onOpen={(m) => void openPupil(m)} />
+                    <MemberGrid title="Архив" items={detail.archive} onOpen={(m) => void openPupil(m)} archive />
+                  </section>
+                ) : null}
                 {pupil
                   ? (
                     <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/35 p-4 md:p-10" onClick={() => setPupil(null)}>
