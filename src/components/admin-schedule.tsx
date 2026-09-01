@@ -68,6 +68,20 @@ type Rec = {
   onend: (() => void) | null;
 };
 
+function inCrm(s: CrmSlot) {
+  return Number(s.groupId) > 0 && !String(s.id).startsWith("local-");
+}
+
+function CrmDot({ s }: { s: CrmSlot }) {
+  const ok = inCrm(s);
+  return (
+    <span
+      title={ok ? "Группа есть в AlfaCRM" : "Только на сайте, в AlfaCRM ещё не выгружена"}
+      className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", ok ? "bg-emerald-500" : "bg-pink-400")}
+    />
+  );
+}
+
 function CheckBox({
   ids,
   picked,
@@ -514,6 +528,10 @@ export function AdminSchedule() {
         <Button type="button" variant="secondary" onClick={() => setOpenAll((v) => !v)}>
           {openAll ? "Свернуть всё" : "Раскрыть всё"}
         </Button>
+        <span className="ml-1 inline-flex items-center gap-3 text-[0.72rem] text-muted">
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-pink-400" /> не в AlfaCRM</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> в AlfaCRM</span>
+        </span>
       </div>
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
 
@@ -809,7 +827,10 @@ export function AdminSchedule() {
                               return (
                               <tr id={`ra-slot-${s.id}`} key={s.id} className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash")}>
                                 <td className="px-2 py-1.5 align-middle">
-                                  <CheckBox ids={[s.id]} picked={picked} onToggle={setIds} />
+                                  <div className="flex items-center gap-1.5">
+                                    <CheckBox ids={[s.id]} picked={picked} onToggle={setIds} />
+                                    <CrmDot s={s} />
+                                  </div>
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
                                   <input
