@@ -363,6 +363,14 @@ export function snapAge(age: string, catalog: CrmSlot[]) {
   return `${range} ${low <= 4 ? "года" : "лет"}`;
 }
 
+export function matchTeacher(raw: string, catalog: CrmSlot[]) {
+  const t = raw.toLowerCase().replace(/ё/g, "е");
+  if (!t) return "";
+  const names = [...new Set(catalog.map((s) => s.teacher).filter(Boolean))];
+  const hit = names.find((n) => n.toLowerCase().replace(/ё/g, "е").includes(t) || t.includes(n.toLowerCase().split(" ")[0]));
+  return hit || raw.trim();
+}
+
 export function snapAdd(a: SlotDraft, catalog: CrmSlot[]): SlotDraft {
   const age = snapAge(a.age || a.course || "", catalog);
   const range = (age.match(/(\d+\s*[-–]\s*\d+)/) || [])[1] || "";
@@ -390,12 +398,74 @@ export function snapAdd(a: SlotDraft, catalog: CrmSlot[]): SlotDraft {
   return { ...a, course: formatCourseName(a.course || "Курс", age), age, teacher: matchTeacher(a.teacher, catalog) };
 }
 
-export function matchTeacher(raw: string, catalog: CrmSlot[]) {
+export function parseDraftFromSpeech(text: string, catalog: CrmSlot[], prev?: Partial<SlotDraft>): SlotDraft {
+  const raw = repairScheduleSpeech(text);
   const t = raw.toLowerCase().replace(/ё/g, "е");
-  if (!t) return "";
-  const names = [...new Set(catalog.map((s) => s.teacher).filter(Boolean))];
-  const hit = names.find((n) => n.toLowerCase().replace(/ё/g, "е").includes(t) || t.includes(n.toLowerCase().split(" ")[0]));
-  return hit || raw.trim();
+  const next: SlotDraft = {
+    school: prev?.school || "",
+    course: prev?.course || "",
+    age: prev?.age || "",
+    day: Number(prev?.day) || 0,
+    timeFrom: prev?.timeFrom || "",
+    timeTo: prev?.timeTo || "",
+    branch: prev?.branch || "",
+    teacher: prev?.teacher || "",
+  };
+  const days: [RegExp, number][] = [
+    [/понедельник|\bпн\b/, 1],
+    [/вторник|\bвт\b/, 2],
+    [/сред[аыу]|\bср\b/, 3],
+    [/четверг|\bчт\b/, 4],
+    [/пятниц|\bпт\b/, 5],
+    [/суббот|\bсб\b/, 6],
+    [/воскресень|\bвс\b/, 7],
+  ];
+  for (const [re, d] of days) if (re.test(t)) next.day = d;
+  const span = t.match(/с\s*(\d{1,2})(?:[:.](\d{2}))?\s*до\s*(\d{1,2})(?:[:.](\d{2}))?/);
+  if (span) {
+    next.timeFrom = eveningTime(`${span[1]}:${span[2] || "00"}`);
+    next.timeTo = eveningTime(`${span[3]}:${span[4] || "00"}`);
+  } else {
+    const hm = [...t.matchAll(/(\d{1,2})[:.](\d{2})/g)].map((m) => eveningTime(`${m[1]}:${m[2]}`));
+    if (hm[0]) next.timeFrom = hm[0];
+    if (hm[1]) next.timeTo = hm[1];
+  }
+  if (/гражданск/.test(t)) next.branch = "Коломна, ул. Гражданская, 2";
+  else if (/цмит|октябрьск|революц/.test(t)) next.branch = "Коломна, ЦМИТ, ул. Октябрьской революции, 340";
+  else if (/луховиц|пушкин/.test(t)) next.branch = "Луховицы, ул. Пушкина, 202А";
+  const teach = matchTeacher(raw, catalog);
+  if (teach && catalog.some((s) => s.teacher === teach)) next.teacher = teach;
+  else {
+    const last = catalog.map((s) => s.teacher).find((n) => n && t.includes(n.toLowerCase().split(" ")[0].replace(/ё/g, "е")));
+    if (last) next.teacher = last;
+  }
+  const ageHit = snapAge(raw, catalog);
+  if (/\d/.test(ageHit) && /лет|год/.test(ageHit)) next.age = ageHit;
+  const snapped = snapAdd({ ...next, course: next.course || raw }, catalog);
+  if (snapped.course && catalog.some((s) => s.course === snapped.course)) {
+    next.course = snapped.course;
+    next.school = snapped.school || next.school;
+    next.age = snapped.age || next.age;
+  } else if (/художественн|студи/.test(t)) {
+    next.school = next.school || "Художественная школа";
+    next.course = formatCourseName("Художественная студия", next.age);
+  } else if (/робот/.test(t)) {
+    next.school = next.school || "Школа робототехники";
+    next.course = next.course || "Робототехника";
+  }
+  if (!next.school && next.course) next.school = schoolOf("", next.course, "");
+  return next;
+}
+
+export function missingScheduleFields(d: Partial<SlotDraft>) {
+  const miss: { key: string; ask: string }[] = [];
+  if (!d.course) miss.push({ key: "course", ask: "Какой курс? Например, художественная студия 3–4 года." });
+  if (!d.age) miss.push({ key: "age", ask: "Какой возраст детей?" });
+  if (!d.day) miss.push({ key: "day", ask: "В какой день недели занятия?" });
+  if (!d.timeFrom || !d.timeTo) miss.push({ key: "time", ask: "С какого по какое время? Например, с пяти до семи вечера." });
+  if (!d.branch) miss.push({ key: "branch", ask: "Какой филиал: Гражданская, ЦМИТ или Луховицы?" });
+  if (!d.teacher) miss.push({ key: "teacher", ask: "Кто педагог?" });
+  return miss;
 }
 
 export type SlotDraft = {

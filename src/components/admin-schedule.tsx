@@ -10,6 +10,8 @@ import { AdminSectionHead } from "@/components/admin-self-test";
 import { SCHOOLS } from "@/data/site";
 import { SCHOOL_ORDER } from "@/data/crm-slots-core";
 import { cn } from "@/lib/utils";
+import { speakAgent } from "@/data/agent-voice";
+import { missingScheduleFields, parseDraftFromSpeech } from "@/data/crm-slots";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -46,6 +48,7 @@ type Draft = {
 };
 
 const EMPTY_DRAFT: Draft = { school: "", course: "", age: "", day: 2, timeFrom: "18:00", timeTo: "19:30", branch: "", teacher: "" };
+const EMPTY_WIZARD: Draft = { school: "", course: "", age: "", day: 0, timeFrom: "", timeTo: "", branch: "", teacher: "" };
 
 const BRANCH_OPTS = [
   "Коломна, ул. Гражданская, 2",
@@ -192,12 +195,18 @@ export function AdminSchedule() {
   const [listen, setListen] = useState(false);
   const [voiceMode, setVoiceMode] = useState(false);
   const [interim, setInterim] = useState("");
+  const [wizard, setWizard] = useState<Draft>(EMPTY_WIZARD);
+  const [ask, setAsk] = useState("");
   const recRef = useRef<Rec | null>(null);
   const voiceModeRef = useRef(false);
+  const dictationRef = useRef(false);
+  const pauseRef = useRef(false);
   const promptRef = useRef("");
   const addsRef = useRef<Draft[]>([]);
   const changesRef = useRef<Change[]>([]);
   const pickedRef = useRef<string[]>([]);
+  const slotsRef = useRef<CrmSlot[]>([]);
+  const wizardRef = useRef<Draft>(EMPTY_WIZARD);
   const [flash, setFlash] = useState<Set<string>>(new Set());
 
   function take(res: { ok: boolean; slots?: CrmSlot[]; at?: string; versions?: Ver[]; error?: string; comment?: string; changes?: Change[]; adds?: Draft[]; pushed?: number; created?: string[] }) {
@@ -261,6 +270,9 @@ export function AdminSchedule() {
   useEffect(() => {
     pickedRef.current = Object.keys(picked).filter((id) => picked[id]);
   }, [picked]);
+  useEffect(() => {
+    slotsRef.current = slots;
+  }, [slots]);
 
   function patch(id: string, field: keyof CrmSlot, value: string | number) {
     setSlots((list) =>
@@ -346,11 +358,60 @@ export function AdminSchedule() {
   const teachers = useMemo(() => [...new Set(slots.map((s) => s.teacher).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru")), [slots]);
 
   function parseVoice(text: string) {
-    const t = text.trim();
-    const m = t.match(/^(.*?)(?:,|\.|\s+)?(готово|предпросмотр|применить|примени|применитьте|дальше)\s*[.!]?\s*$/i);
-    if (m && (m[1] || m[2])) return { body: (m[1] || "").trim(), cmd: m[2].toLowerCase() };
-    if (/^(готово|предпросмотр|применить|примени|дальше)$/i.test(t)) return { body: "", cmd: t.toLowerCase() };
+    const t = text.trim().replace(/[.!?…]+$/g, "").trim();
+    const m = t.match(/^(.*?)(?:^|\s)(готово|готов|предпросмотр|применить|примени|применяй|применитьте|дальше|следующ\w*|сброс)\s*$/i);
+    if (m) {
+      const raw = m[2].toLowerCase();
+      const cmd = /предпросмотр/.test(raw) ? "предпросмотр" : /готов/.test(raw) ? "готово" : /примен/.test(raw) ? "применить" : "дальше";
+      return { body: (m[1] || "").trim(), cmd };
+    }
+    if (/^(готово|готов|предпросмотр|применить|примени|дальше|сброс)$/i.test(t)) {
+      const raw = t.toLowerCase();
+      const cmd = raw === "предпросмотр" ? "предпросмотр" : /готов/.test(raw) ? "готово" : /примен/.test(raw) ? "применить" : "дальше";
+      return { body: "", cmd };
+    }
     return { body: t, cmd: "" };
+  }
+
+  async function say(text: string) {
+    setAsk(text);
+    setMsg(text);
+    pauseRef.current = true;
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* */
+    }
+    try {
+      const res = await speakAgent({ data: { text, who: "olga" } });
+      if (res.ok && "audio" in res && res.audio) {
+        const el = new Audio(String(res.audio));
+        el.volume = "volume" in res ? Number(res.volume) || 1 : 1;
+        await el.play().catch(() => undefined);
+        await new Promise<void>((resolve) => {
+          el.onended = () => resolve();
+          window.setTimeout(resolve, 8000);
+        });
+      }
+    } catch {
+      /* */
+    }
+    pauseRef.current = false;
+    if (voiceModeRef.current || dictationRef.current) {
+      window.setTimeout(() => {
+        if (voiceModeRef.current || dictationRef.current) startListen("loop");
+      }, 250);
+    }
+  }
+
+  async function absorbSpeech(body: string) {
+    const merged = parseDraftFromSpeech(body, slotsRef.current, wizardRef.current);
+    wizardRef.current = merged;
+    setWizard({ ...merged });
+    if (!voiceModeRef.current) return;
+    const miss = missingScheduleFields(merged);
+    if (miss[0]) await say(miss[0].ask);
+    else await say("Все поля есть. Скажите готово — открою предпросмотр. Или применить — сразу в расписание.");
   }
 
   async function runCmd(cmd: string, extraBody = "") {
@@ -360,6 +421,7 @@ export function AdminSchedule() {
         promptRef.current = n;
         return n;
       });
+      await absorbSpeech(extraBody);
     }
     if (cmd === "дальше") {
       setAiPrompt("");
@@ -368,36 +430,61 @@ export function AdminSchedule() {
       setAiChanges([]);
       setAiComment("");
       setInterim("");
-      setMsg("Поле очищено — можно говорить следующую группу.");
+      wizardRef.current = { ...EMPTY_WIZARD };
+      setWizard({ ...EMPTY_WIZARD });
+      if (voiceModeRef.current) await say("Хорошо, следующая группа. Назовите курс и возраст.");
+      else setMsg("Поле очищено — можно говорить следующую группу.");
       return;
     }
     if (cmd === "готово" || cmd === "предпросмотр") {
-      const text = (extraBody ? `${promptRef.current} ${extraBody}` : promptRef.current).trim();
+      const w = wizardRef.current;
+      const miss = missingScheduleFields(w);
+      if (!miss.length && w.course) {
+        setAiAdds([w]);
+        addsRef.current = [w];
+        setAiComment("Предпросмотр по вашим ответам. Проверьте карточку и скажите применить.");
+        setMsg("Предпросмотр готов.");
+        if (voiceModeRef.current) await say("Карточка на экране. Скажите применить, если всё верно.");
+        return;
+      }
+      const text = promptRef.current.trim();
       if (!text) {
-        setMsg("Сначала скажите, какую группу добавить.");
+        if (voiceModeRef.current) await say(miss[0]?.ask || "Сначала назовите курс.");
+        else setMsg("Сначала скажите, какую группу добавить.");
         return;
       }
       setMsg("Готовлю предпросмотр…");
-      await run("aiPreview", { prompt: text, ids: pickedIds });
+      await run("aiPreview", { prompt: text, ids: pickedRef.current });
+      if (voiceModeRef.current) await say("Предпросмотр готов. Скажите применить или поправьте поля.");
       return;
     }
-    if (cmd === "применить" || cmd === "примени") {
+    if (cmd === "применить") {
+      if (!addsRef.current.length && !changesRef.current.length && wizardRef.current.course && !missingScheduleFields(wizardRef.current).length) {
+        setAiAdds([wizardRef.current]);
+        addsRef.current = [wizardRef.current];
+      }
       await applyPreview();
+      if (voiceModeRef.current) await say("Записала в расписание. Скажите дальше, если нужна ещё группа.");
     }
   }
 
-  function startListen(mode: "once" | "loop") {
+  function startListen(_mode: "once" | "loop") {
     const Ctor = speechCtor();
     if (!Ctor) {
       setMsg("Голосовой ввод в этом браузере не работает — напишите текст.");
       return;
     }
-    recRef.current?.stop();
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* */
+    }
     const rec = new Ctor();
     rec.lang = "ru-RU";
     rec.interimResults = true;
-    rec.continuous = mode === "loop";
+    rec.continuous = true;
     rec.onresult = (e) => {
+      if (pauseRef.current) return;
       const last = e.results[e.results.length - 1] as unknown as { isFinal?: boolean; 0: { transcript: string } };
       const piece = (last[0]?.transcript || "").trim();
       if (!last.isFinal) {
@@ -413,44 +500,74 @@ export function AdminSchedule() {
           promptRef.current = n;
           return n;
         });
+        void absorbSpeech(body);
       }
       if (cmd) void runCmd(cmd);
     };
     rec.onerror = () => {
-      if (!voiceModeRef.current) setListen(false);
+      /* onend перезапустит */
     };
     rec.onend = () => {
       setInterim("");
-      if (voiceModeRef.current) {
-        try {
-          rec.start();
-        } catch {
-          setListen(false);
-          setVoiceMode(false);
-        }
+      if (pauseRef.current) return;
+      if (voiceModeRef.current || dictationRef.current) {
+        window.setTimeout(() => {
+          if (!(voiceModeRef.current || dictationRef.current) || pauseRef.current) return;
+          try {
+            rec.start();
+            setListen(true);
+          } catch {
+            startListen("loop");
+          }
+        }, 180);
       } else setListen(false);
     };
     recRef.current = rec;
     setListen(true);
-    rec.start();
+    try {
+      rec.start();
+    } catch {
+      setMsg("Не удалось включить микрофон. Разрешите доступ.");
+    }
   }
 
   function stopListen() {
     voiceModeRef.current = false;
+    dictationRef.current = false;
+    pauseRef.current = false;
     setVoiceMode(false);
-    recRef.current?.stop();
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* */
+    }
     setListen(false);
     setInterim("");
   }
 
-  function toggleVoiceMode() {
-    if (voiceMode) stopListen();
-    else {
-      setVoiceMode(true);
-      voiceModeRef.current = true;
-      startListen("loop");
-      setMsg("Голосовой режим. Скажите группу, затем «готово». «Применить» — в расписание. «Дальше» — новая.");
+  function toggleDictation() {
+    if (listen && !voiceMode) {
+      stopListen();
+      return;
     }
+    dictationRef.current = true;
+    startListen("loop");
+    setMsg("Слушаю. Говорите дальше, микрофон сам не выключаю. Стоп — ещё раз нажмите на микрофон.");
+  }
+
+  function toggleVoiceMode() {
+    if (voiceMode) {
+      stopListen();
+      setAsk("");
+      return;
+    }
+    setVoiceMode(true);
+    voiceModeRef.current = true;
+    dictationRef.current = false;
+    startListen("loop");
+    wizardRef.current = { ...EMPTY_WIZARD };
+    setWizard({ ...EMPTY_WIZARD });
+    void say("Голосовой мастер. Назовите курс и возраст, день, время, филиал и педагога. Если чего-то не хватит — спрошу. Команды: готово, применить, дальше.");
   }
 
   function patchAdd(i: number, field: keyof Draft, value: string | number) {
@@ -539,7 +656,7 @@ export function AdminSchedule() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <p className="font-display text-xl">Добавить / исправить расписание</p>
-            <InfoTip text="Микрофон — дописать фразу в поле. Голосовой режим — говорите запрос, затем команду: «готово» (предпросмотр), «применить» (записать в расписание), «дальше» (очистить и новую группу). Те же команды кнопками. Возраст сверяется с уже существующими группами: «студия 3-4 года», не «34 года»." />
+            <InfoTip text="Микрофон держит связь, пока сами не выключите. Голосовой режим — мастер: ассистент спрашивает курс, возраст, день, время, филиал, педагога. Команды: готово (предпросмотр), применить (в список), дальше (новая группа)." />
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[0.72rem] text-muted">
             <span>отмечено {pickedIds.length}</span>
@@ -552,8 +669,19 @@ export function AdminSchedule() {
           </div>
         </div>
         <p className="mt-2 text-[0.78rem] leading-relaxed text-muted">
-          Голосовой режим: запрос → <b>готово</b> → правка карточки → <b>применить</b>. <b>Дальше</b> — новая группа. Возраст как в таблице: 3-4 года, не 34.
+          Микрофон не выключается сам. Мастер: недостающее спросит голосом. Команды — <b>готово</b>, <b>применить</b>, <b>дальше</b> (кнопками то же).
         </p>
+        {ask ? <p className="mt-2 rounded-xl bg-primary/10 px-3 py-2 text-sm font-medium text-fg">{ask}</p> : null}
+        {wizard.course || wizard.day || wizard.branch || wizard.teacher ? (
+          <p className="mt-2 flex flex-wrap gap-1.5 text-[0.72rem] text-muted">
+            {wizard.course ? <span className="rounded-full bg-surface-2 px-2 py-0.5">{wizard.course}</span> : null}
+            {wizard.age ? <span className="rounded-full bg-surface-2 px-2 py-0.5">{wizard.age}</span> : null}
+            {wizard.day ? <span className="rounded-full bg-surface-2 px-2 py-0.5">{["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"][wizard.day]}</span> : null}
+            {wizard.timeFrom ? <span className="rounded-full bg-surface-2 px-2 py-0.5">{wizard.timeFrom}–{wizard.timeTo}</span> : null}
+            {wizard.branch ? <span className="rounded-full bg-surface-2 px-2 py-0.5">{wizard.branch}</span> : null}
+            {wizard.teacher ? <span className="rounded-full bg-surface-2 px-2 py-0.5">{wizard.teacher}</span> : null}
+          </p>
+        ) : null}
         <div className="mt-3 flex items-center gap-2">
           <textarea
             id="ra-sched-prompt"
@@ -567,7 +695,7 @@ export function AdminSchedule() {
             type="button"
             title={listen && !voiceMode ? "Стоп" : "Голосовой ввод в поле"}
             className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1 ring-black/10", listen && !voiceMode ? "bg-primary text-white" : "bg-surface-2 text-fg")}
-            onClick={() => (listen && !voiceMode ? stopListen() : startListen("once"))}
+            onClick={toggleDictation}
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden>
               <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z" />
@@ -575,13 +703,16 @@ export function AdminSchedule() {
           </button>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <TipWrap text="Говорите запрос. Команды: готово — предпросмотр, применить — в расписание, дальше — очистить поле.">
+          <TipWrap text="Мастер голосом: спрашивает недостающие поля. готово — предпросмотр, применить — в расписание, дальше — сначала.">
             <Button type="button" variant={voiceMode ? "default" : "secondary"} onClick={toggleVoiceMode}>
               {voiceMode ? "Голосовой режим · вкл" : "Голосовой режим"}
             </Button>
           </TipWrap>
-          <Button type="button" disabled={busy || !aiPrompt.trim()} onClick={async () => { setMsg("Готовлю предпросмотр…"); await run("aiPreview", { prompt: aiPrompt, ids: pickedIds }); }}>
+          <Button type="button" disabled={busy || (!aiPrompt.trim() && !wizard.course)} onClick={() => void runCmd("готово")}>
             Предпросмотр
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => void runCmd("применить")}>
+            Применить
           </Button>
           <Button type="button" variant="secondary" onClick={() => void runCmd("дальше")}>
             Дальше
