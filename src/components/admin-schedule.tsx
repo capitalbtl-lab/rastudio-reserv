@@ -89,7 +89,7 @@ function LessonTile({
       onMouseLeave={onLeave}
       className={cn(
         "flex h-[4.025rem] w-[2.82rem] min-w-[2.82rem] cursor-default flex-col items-center justify-center rounded-[0.9rem] px-0.5 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
-        isToday && !cancelled && "bg-primary text-white",
+        isToday && !cancelled && "ra-today-tile text-white",
         !isToday && done && "bg-emerald-100 text-fg ring-1 ring-emerald-400/80",
         !isToday && planned && "bg-white text-fg ring-1 ring-neutral-500/55",
         cancelled && "bg-neutral-200 text-neutral-400 ring-1 ring-neutral-300 line-through",
@@ -165,12 +165,12 @@ function GroupLessonStrip({ lessons, group, subject, teacher }: { lessons: Group
           <LessonTile key={todayHit.date} lesson={todayHit} today={today} onEnter={showTip} onLeave={() => setTip(null)} />
         ) : (
           <div
-            className="flex h-[4.025rem] w-[2.82rem] min-w-[2.82rem] flex-col items-center justify-center rounded-[0.9rem] bg-primary px-0.5 text-center text-white shadow-[0_1px_3px_rgba(15,23,42,0.12)]"
+            className="ra-today-tile flex h-[4.025rem] w-[2.82rem] min-w-[2.82rem] flex-col items-center justify-center rounded-[0.9rem] px-0.5 text-center text-white"
             title="Сегодня"
           >
-            <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/90">сейчас</span>
+            <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/95">сегодня</span>
             <span className="text-[0.83rem] font-semibold tabular-nums">{Number(today.slice(8))}</span>
-            <span className="text-[0.6rem] font-medium text-white/85">{MONTHS_SHORT[Number(today.slice(5, 7)) - 1]}</span>
+            <span className="text-[0.6rem] font-medium text-white/90">{MONTHS_SHORT[Number(today.slice(5, 7)) - 1]}</span>
           </div>
         )}
         {future.map((l) => (
@@ -1557,7 +1557,7 @@ export function AdminSchedule() {
   }
 
   return (
-    <section className="mt-10 space-y-6">
+    <section className="mt-10 space-y-4">
       <AdminSectionHead
         section="schedule"
         title="Расписание занятий"
@@ -1644,9 +1644,9 @@ export function AdminSchedule() {
       {pane === "subjects" ? <AdminSubjects /> : null}
       {pane === "map" ? <AdminScheduleMap embedded /> : null}
       {pane === "groups" ? (
-      <>
+      <div className="space-y-3">
       <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-visible pb-0.5">
-        <Button type="button" size="sm" className="h-8 shrink-0 px-3 text-[0.78rem]" disabled={busy} onClick={() => { setAddOpen((v) => !v); document.getElementById("ra-sched-ai")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
+        <Button type="button" size="sm" variant="secondary" className="h-8 shrink-0 px-3 text-[0.78rem]" disabled={busy} onClick={() => { setAddOpen((v) => !v); document.getElementById("ra-sched-ai")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
           Добавить расписание вручную
         </Button>
         <Button type="button" size="sm" className="h-8 shrink-0 px-3 text-[0.78rem]" variant="secondary" disabled={busy} onClick={() => void pullCrm()}>
@@ -1730,10 +1730,10 @@ export function AdminSchedule() {
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
 
       {onlyMismatch ? null : (
-      <article id="ra-sched-ai" className="sticky top-20 z-20 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
+      <article id="ra-sched-ai" className="sticky top-20 z-20 rounded-3xl bg-gradient-to-br from-[#e8f0ff] via-white to-[#eef4ff] p-4 ring-2 ring-primary/35 shadow-[0_14px_40px_rgba(32,94,220,0.18)] md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <p className="font-display text-xl">Добавить / исправить расписание</p>
+            <p className="font-display text-xl text-primary">Добавить / исправить расписание</p>
             <InfoTip text="Стрелка отправляет запрос агенту и открывает предпросмотр. «Опубликовать изменения» записывает их в расписание на сайте. В CRM — отдельной выгрузкой." />
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[0.72rem] text-muted">
@@ -2287,7 +2287,7 @@ export function AdminSchedule() {
         })}
         {slots.length ? null : <p className="text-sm text-muted">Пока пусто — нажмите «Загрузить из AlfaCRM».</p>}
       </div>
-      </>
+      </div>
       ) : null}
       {pull.open
         ? createPortal(

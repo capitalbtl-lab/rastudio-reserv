@@ -919,3 +919,23 @@
 .ra-mismatch {
   animation: ra-mismatch 1.45s ease-in-out infinite;
 }
+
+@keyframes ra-today-sheen {
+  0% {
+    background-position: 0% 42%;
+  }
+  50% {
+    background-position: 100% 58%;
+  }
+  100% {
+    background-position: 0% 42%;
+  }
+}
+
+.ra-today-tile {
+  background-image: linear-gradient(120deg, #1d4ed8, #38bdf8, #4f46e5, #2563eb, #22d3ee, #1d4ed8);
+  background-size: 260% 260%;
+  animation: ra-today-sheen 2.6s ease-in-out infinite;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.55), 0 8px 18px rgb(37 99 235 / 0.38);
+  color: #fff;
+}
