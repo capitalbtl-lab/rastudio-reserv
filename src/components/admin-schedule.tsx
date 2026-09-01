@@ -424,6 +424,7 @@ export function AdminSchedule() {
   const [fileOpen, setFileOpen] = useState(false);
   const [pull, setPull] = useState({ open: false, step: "", done: false, added: 0, updated: 0, total: 0, error: "" });
   const [pane, setPane] = useState<"groups" | "subjects">("groups");
+  const [branchFilter, setBranchFilter] = useState("all");
   const [pushUi, setPushUi] = useState({ open: false, step: "", done: false, created: 0, pushed: 0, failed: 0, error: "", lines: [] as string[] });
   const fileRef = useRef<HTMLDivElement>(null);
   const promptEl = useRef<HTMLTextAreaElement>(null);
@@ -560,6 +561,10 @@ export function AdminSchedule() {
     const names = [...SCHOOLS.map((s) => s.label), "Прочее"];
     for (const name of names) map.set(name, new Map());
     for (const s of slots) {
+      if (branchFilter !== "all") {
+        const key = s.branchId ? String(s.branchId) : `x-${s.city}|${s.branch}`;
+        if (key !== branchFilter) continue;
+      }
       const school = names.includes(s.school) ? s.school : "Прочее";
       const course = s.course || s.subject || s.groupName || "Без названия";
       const bag = map.get(school)!;
@@ -573,7 +578,27 @@ export function AdminSchedule() {
         courses: [...(map.get(school)?.entries() || [])]
           .sort((a, b) => a[0].localeCompare(b[0], "ru"))
           .map(([course, items]) => ({ course, items })),
-      }));
+      }))
+      .filter((s) => s.courses.length > 0);
+  }, [slots, branchFilter]);
+
+  const branchOpts = useMemo(() => {
+    const main = [
+      { id: "1", label: "Гражданская, 2" },
+      { id: "2", label: "ЦМИТ, Октябрьской, 340" },
+      { id: "3", label: "Луховицы, Пушкина, 202А" },
+    ];
+    const seen = new Set(main.map((m) => m.id));
+    const extra: { id: string; label: string }[] = [];
+    for (const s of slots) {
+      const id = s.branchId ? String(s.branchId) : `x-${s.city}|${s.branch}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const label = [s.city, s.branch].filter(Boolean).join(", ") || `филиал ${id}`;
+      extra.push({ id, label });
+    }
+    extra.sort((a, b) => a.label.localeCompare(b.label, "ru"));
+    return [{ id: "all", label: "Все филиалы" }, ...main, ...extra];
   }, [slots]);
 
   const pickedIds = useMemo(() => Object.keys(picked).filter((id) => picked[id]), [picked]);
@@ -1040,6 +1065,20 @@ export function AdminSchedule() {
         section="schedule"
         title="Расписание занятий"
         tip="Группы по школам и курсам. Можно править в таблице, сохранить на сайте, выгрузить в AlfaCRM, скачать или загрузить файл. ИИ меняет пачкой — всегда есть откат."
+        aside={
+          <label className="flex items-center gap-2 text-sm text-muted">
+            Филиал
+            <select
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+              className="h-9 min-w-[14rem] rounded-full bg-surface-2 px-3 text-sm text-fg ring-1 ring-black/10"
+            >
+              {branchOpts.map((b) => (
+                <option key={b.id} value={b.id}>{b.label}</option>
+              ))}
+            </select>
+          </label>
+        }
       >
         <p className="mt-2 max-w-3xl text-sm text-muted">
           Последняя загрузка: {when(at)} · {slots.length} слотов · {dirty.size ? `${dirty.size} не выгружены в CRM` : "совпадает с кабинетом"}

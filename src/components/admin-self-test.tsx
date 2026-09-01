@@ -67,7 +67,7 @@ export function AdminSelfTest({
   return (
     <div className="w-full">
       <div className="flex items-end justify-between gap-4">
-        <div className="min-w-0">{heading}</div>
+        <div className="min-w-0 flex-1">{heading}</div>
         <div className="flex shrink-0 items-center gap-2 pb-1">
           <button type="button" disabled={busy} onClick={() => void run()} className={adminGhostBtn}>
             {busy ? "Проверяю…" : label}
@@ -134,23 +134,28 @@ export function AdminSectionHead({
   title,
   tip,
   children,
+  aside,
 }: {
   section: string;
   title: string;
   tip?: string;
   children?: ReactNode;
+  aside?: ReactNode;
 }) {
   return (
     <AdminSelfTest
       section={section}
       heading={
-        <>
-          <div className="flex items-center gap-2">
-            <h2 className="font-display text-3xl">{title}</h2>
-            {tip ? <InfoTip text={tip} /> : null}
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-3xl">{title}</h2>
+              {tip ? <InfoTip text={tip} /> : null}
+            </div>
+            {children}
           </div>
-          {children}
-        </>
+          {aside}
+        </div>
       }
     />
   );
