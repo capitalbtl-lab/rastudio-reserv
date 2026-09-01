@@ -583,7 +583,46 @@ export async function aiSchedulePatch(slots: CrmSlot[], prompt: string) {
   return aiScheduleParse(slots, prompt, slots.map((s) => s.id));
 }
 
+function bulkLimitFromPrompt(prompt: string, slots: CrmSlot[], selectedIds: string[]) {
+  const t = String(prompt || "")
+    .toLowerCase()
+    .replace(/ё/g, "е");
+  if (!/мест|лимит|свободн|набор|вместимост/.test(t)) return null;
+  const num = t.match(/(?:до|на|=)\s*(\d{1,3})\b/) || t.match(/\b(\d{1,3})\s*(?:мест|чел|человек)/) || t.match(/\b(\d{1,3})\s*$/);
+  if (!num) return null;
+  const to = Number(num[1]);
+  if (!Number.isFinite(to) || to < 0 || to > 200) return null;
+  const all = /у\s+всех|во\s+всех|всем\s+групп|все\s+групп|каждую\s+групп|каждой\s+групп|массово|по\s+всем/.test(t);
+  let pool = selectedIds.length ? slots.filter((s) => selectedIds.includes(s.id)) : slots.slice();
+  const schools = [...new Set(slots.map((s) => s.school).filter(Boolean))];
+  const school = schools.find((s) => s.length > 4 && t.includes(s.toLowerCase().replace(/ё/g, "е")));
+  if (school) pool = pool.filter((s) => s.school === school);
+  const courses = [...new Set(slots.map((s) => s.course).filter(Boolean))];
+  const course = courses
+    .filter((c) => c.length > 6 && t.includes(c.toLowerCase().replace(/ё/g, "е").slice(0, 24)))
+    .sort((a, b) => b.length - a.length)[0];
+  if (course && !all) pool = pool.filter((s) => s.course === course);
+  if (!all && !selectedIds.length && !school && course) {
+    /* one course is ok */
+  } else if (!all && !selectedIds.length && !school) {
+    pool = slots.slice();
+  }
+  const changes = pool
+    .filter((s) => Number(s.limit) !== to)
+    .map((s) => ({ id: s.id, field: "limit", from: String(s.limit ?? 0), to: String(to) }));
+  if (!changes.length) {
+    return { comment: `Лимит ${to} уже стоит у выбранных групп.`, changes: [], adds: [] as SlotDraft[] };
+  }
+  return {
+    comment: `Лимит мест ${to} у ${changes.length} групп${school ? ` · ${school}` : ""}.`,
+    changes,
+    adds: [] as SlotDraft[],
+  };
+}
+
 export async function aiScheduleParse(slots: CrmSlot[], prompt: string, selectedIds: string[] = []) {
+  const bulk = bulkLimitFromPrompt(prompt, slots, selectedIds);
+  if (bulk) return bulk;
   const catalog = {
     schools: [...new Set(slots.map((s) => s.school).filter(Boolean))],
     courses: [...new Set(slots.map((s) => s.course).filter(Boolean))],
@@ -620,10 +659,10 @@ export async function aiScheduleParse(slots: CrmSlot[], prompt: string, selected
 - Возраст только из справочника: ${JSON.stringify(catalog.ages).slice(0, 500)}
 - Время кружков вечером: «с 6:30 до 8:30» = 18:30 и 20:30. Всегда ЧЧ:ММ с двоеточием. Часы 1–9 без «утра» считай вечерними (+12).
 - Педагога бери точным ФИО из справочника.
-- «места», «лимит», «сколько мест», «свободные места», «количество мест» = поле limit у существующих групп. Не создавай новые группы.
+- «места», «лимит», «свободные места», «количество мест» = поле limit. Если сказано «все группы» / «у всех» — change на КАЖДЫЙ id из списка, не одну строку.
 - adds только если оператор явно просит ДОБАВИТЬ / СОЗДАТЬ группу. Несколько групп — отдельный объект adds на каждую.
 - Если правит существующие — только changes с id из списка. Не выдумывай id и не добавляй лишние группы.
-- Разрешённые id для правки: ${selectedIds.length ? selectedIds.join(", ") : "нет — только adds, существующие не трогай"}.
+- Разрешённые id для правки: ${selectedIds.length ? `${selectedIds.length} штук, все перечислены в слотах` : "нет — только adds, существующие не трогай"}.
 Ответ JSON.`,
     `Запрос: ${asked.slice(0, 2000)}
 JSON: {"comment":"что сделали","changes":[{"id":"crm-…","field":"limit","to":"8"}],"adds":[]}
