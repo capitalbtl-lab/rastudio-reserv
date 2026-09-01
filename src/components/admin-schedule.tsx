@@ -288,6 +288,11 @@ export function AdminSchedule() {
   const dictationRef = useRef(false);
   const pauseRef = useRef(false);
   const speakingRef = useRef(false);
+  const listenBaseRef = useRef("");
+  const speechTimer = useRef(0);
+  const lastFinalRef = useRef("");
+  const doneRef = useRef(0);
+  const accRef = useRef("");
   const promptRef = useRef("");
   const addsRef = useRef<Draft[]>([]);
   const changesRef = useRef<Change[]>([]);
@@ -492,19 +497,36 @@ export function AdminSchedule() {
   const teachers = useMemo(() => [...new Set(slots.map((s) => s.teacher).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru")), [slots]);
 
   function parseVoice(text: string) {
-    const t = text.trim().replace(/[.!?…]+$/g, "").trim();
-    const m = t.match(/^(.*?)(?:^|\s)(готово|готов|предпросмотр|применить|примени|применяй|применитьте|дальше|следующ\w*|сброс)\s*$/i);
-    if (m) {
-      const raw = m[2].toLowerCase();
-      const cmd = /предпросмотр/.test(raw) ? "предпросмотр" : /готов/.test(raw) ? "готово" : /примен/.test(raw) ? "применить" : "дальше";
-      return { body: (m[1] || "").trim(), cmd };
-    }
-    if (/^(готово|готов|предпросмотр|применить|примени|дальше|сброс)$/i.test(t)) {
-      const raw = t.toLowerCase();
-      const cmd = raw === "предпросмотр" ? "предпросмотр" : /готов/.test(raw) ? "готово" : /примен/.test(raw) ? "применить" : "дальше";
-      return { body: "", cmd };
-    }
+    const t = text.trim().replace(/[.!?…,:;]+$/g, "").replace(/\s+/g, " ").trim();
+    const last = t.split(" ").pop() || "";
+    const word = last.toLowerCase().replace(/ё/g, "е").replace(/[^а-я]/g, "");
+    const rest = t.slice(0, t.length - last.length).trim();
+    const ready = /^(готов[аоыуе]?|гатов[аоыуе]?|готовоа)$/.test(word);
+    const preview = /^(предпросмотр|превью)$/.test(word);
+    const apply = /^(примен\w*|принять|опубликуй)$/.test(word);
+    const next = /^(дальше|далее|следующ\w*|сброс)$/.test(word);
+    if (ready) return { body: rest, cmd: "готово" };
+    if (preview) return { body: rest, cmd: "предпросмотр" };
+    if (apply) return { body: rest, cmd: "применить" };
+    if (next) return { body: rest, cmd: "дальше" };
+    if (/готов[аоыуе]?\s*$/i.test(t) && t.length <= 12) return { body: "", cmd: "готово" };
     return { body: t, cmd: "" };
+  }
+
+  function commitSpeech(raw: string) {
+    const { body, cmd } = parseVoice(raw);
+    lastFinalRef.current = raw;
+    setInterim("");
+    if (body) {
+      setAiPrompt((p) => {
+        const n = p ? `${p} ${body}` : body;
+        promptRef.current = n;
+        listenBaseRef.current = n;
+        return n;
+      });
+      void absorbSpeech(body);
+    }
+    if (cmd) void runCmd(cmd);
   }
 
   async function playScheduleVoice(dataUrl: string, volume: number) {
@@ -652,26 +674,38 @@ export function AdminSchedule() {
     rec.lang = "ru-RU";
     rec.interimResults = true;
     rec.continuous = true;
+    lastFinalRef.current = "";
+    doneRef.current = 0;
+    accRef.current = "";
+    listenBaseRef.current = promptRef.current;
     rec.onresult = (e) => {
       if (pauseRef.current || speakingRef.current) return;
-      const last = e.results[e.results.length - 1] as unknown as { isFinal?: boolean; 0: { transcript: string } };
-      const piece = (last[0]?.transcript || "").trim();
-      if (!last.isFinal) {
-        setInterim(piece);
+      let mid = "";
+      for (let i = doneRef.current; i < e.results.length; i += 1) {
+        const row = e.results[i] as unknown as { isFinal?: boolean; 0: { transcript: string } };
+        const t = (row[0]?.transcript || "").replace(/\s+/g, " ").trim();
+        if (!t) continue;
+        if (row.isFinal) {
+          accRef.current = accRef.current ? `${accRef.current} ${t}` : t;
+          doneRef.current = i + 1;
+        } else mid = t;
+      }
+      const shown = [accRef.current, mid].filter(Boolean).join(" ");
+      setInterim(shown);
+      window.clearTimeout(speechTimer.current);
+      if (parseVoice(shown).cmd) {
+        const raw = shown;
+        accRef.current = "";
+        commitSpeech(raw);
         return;
       }
-      setInterim("");
-      if (!piece) return;
-      const { body, cmd } = parseVoice(piece);
-      if (body) {
-        setAiPrompt((p) => {
-          const n = p ? `${p} ${body}` : body;
-          promptRef.current = n;
-          return n;
-        });
-        void absorbSpeech(body);
+      if (!mid && accRef.current && accRef.current !== lastFinalRef.current) {
+        const fin = accRef.current;
+        speechTimer.current = window.setTimeout(() => {
+          accRef.current = "";
+          commitSpeech(fin);
+        }, 700);
       }
-      if (cmd) void runCmd(cmd);
     };
     rec.onerror = () => {
       /* onend перезапустит */
@@ -714,6 +748,8 @@ export function AdminSchedule() {
     }
     setListen(false);
     setInterim("");
+    window.clearTimeout(speechTimer.current);
+    accRef.current = "";
   }
 
   function toggleDictation() {
@@ -889,7 +925,7 @@ export function AdminSchedule() {
         <div className="mt-3 flex items-center gap-2">
           <textarea
             id="ra-sched-prompt"
-            value={interim ? `${aiPrompt}${aiPrompt ? " " : ""}${interim}` : aiPrompt}
+            value={interim ? [listenBaseRef.current, interim].filter(Boolean).join(" ") : aiPrompt}
             onChange={(e) => { setAiPrompt(e.target.value); promptRef.current = e.target.value; }}
             rows={2}
             placeholder="Добавь художественную студию 3–4 года на Гражданской, вторник с 15:00 до 17:00, педагог Самсонова."
