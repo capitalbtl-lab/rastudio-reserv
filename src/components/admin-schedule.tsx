@@ -764,6 +764,8 @@ export function AdminSchedule() {
   const [levels, setLevels] = useState<{ id: number; name: string }[]>(SEED_LEVELS);
   const fileRef = useRef<HTMLDivElement>(null);
   const fileMenuRef = useRef<HTMLDivElement>(null);
+  const versionsRef = useRef<HTMLDivElement>(null);
+  const versionsMenuRef = useRef<HTMLDivElement>(null);
   const promptEl = useRef<HTMLTextAreaElement>(null);
 
   function take(res: { ok: boolean; slots?: CrmSlot[]; at?: string; versions?: Ver[]; error?: string; comment?: string; changes?: Change[]; adds?: Draft[]; pushed?: number; created?: string[]; applied?: string[] }) {
@@ -843,6 +845,8 @@ export function AdminSchedule() {
       const t = e.target as Node;
       if (fileRef.current?.contains(t) || fileMenuRef.current?.contains(t)) return;
       setFileOpen(false);
+      if (versionsRef.current?.contains(t) || versionsMenuRef.current?.contains(t)) return;
+      setVersionsOpen(false);
     }
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
@@ -1621,7 +1625,7 @@ export function AdminSchedule() {
       {pane === "subjects" ? <AdminSubjects /> : null}
       {pane === "map" ? <AdminScheduleMap embedded /> : null}
       {pane === "groups" ? (
-      <div className="space-y-3">
+      <div>
       <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-visible pb-0.5">
         <Button type="button" size="sm" variant="secondary" className="h-8 shrink-0 px-3 text-[0.78rem]" disabled={busy} onClick={() => { setAddOpen((v) => !v); document.getElementById("ra-sched-ai")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
           Добавить расписание вручную
@@ -1690,6 +1694,7 @@ export function AdminSchedule() {
               )
             : null}
         </div>
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
         <Button type="button" size="sm" className="h-8 shrink-0 px-3 text-[0.78rem]" variant="secondary" onClick={() => setOpenAll((v) => !v)}>
           {openAll ? "Свернуть всё" : "Раскрыть всё"}
         </Button>
@@ -1703,11 +1708,59 @@ export function AdminSchedule() {
         >
           Удалить выбранные{pickedIds.length ? ` · ${pickedIds.length}` : ""}
         </Button>
+        {versions.length && !onlyMismatch ? (
+          <div className="relative shrink-0" ref={versionsRef}>
+            <Button type="button" size="sm" className="h-8 px-3 text-[0.78rem]" variant="secondary" disabled={busy} onClick={() => setVersionsOpen((v) => !v)}>
+              Версии{versions.length ? ` · ${versions.length}` : ""}
+              <span className="text-[0.65rem]">▾</span>
+            </Button>
+            {versionsOpen && typeof document !== "undefined"
+              ? createPortal(
+                  <div
+                    ref={versionsMenuRef}
+                    className="fixed z-[80] w-[22rem] max-w-[calc(100vw-1.5rem)] rounded-2xl bg-white p-2 shadow-[0_8px_24px_rgba(15,23,42,0.18)] ring-1 ring-black/10"
+                    style={(() => {
+                      const r = versionsRef.current?.getBoundingClientRect();
+                      const width = 352;
+                      const left = r ? Math.max(8, Math.min(r.right - width, window.innerWidth - width - 8)) : 8;
+                      return r ? { top: r.bottom + 6, left } : { top: 0, left: 8 };
+                    })()}
+                  >
+                    <p className="px-2 pb-1 pt-1 text-[0.68rem] text-muted">Снимки расписания на сайте. Откат в CRM сам не уйдёт.</p>
+                    <ul className="max-h-72 space-y-1 overflow-auto">
+                      {versions.map((v) => (
+                        <li key={v.at} className="flex items-start justify-between gap-2 rounded-xl px-2 py-1.5 hover:bg-surface-2">
+                          <span className="text-[0.78rem] leading-snug">
+                            {when(v.at)} · {v.reason} · {v.count}
+                          </span>
+                          <button
+                            type="button"
+                            className="shrink-0 text-xs font-semibold text-primary"
+                            disabled={busy}
+                            onClick={async () => {
+                              setVersionsOpen(false);
+                              await run("rollback", { at: v.at });
+                              setDirty(new Set());
+                              setMsg("Откатили снимок на сайте.");
+                            }}
+                          >
+                            Откатить
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>,
+                  document.body,
+                )
+              : null}
+          </div>
+        ) : null}
+        </div>
       </div>
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
 
       {onlyMismatch ? null : (
-      <article id="ra-sched-ai" className="sticky top-20 z-20 rounded-3xl bg-gradient-to-br from-[#e8f0ff] via-white to-[#eef4ff] p-4 ring-2 ring-primary/35 shadow-[0_14px_40px_rgba(32,94,220,0.18)] md:p-5">
+      <article id="ra-sched-ai" className="sticky top-20 z-20 mt-6 rounded-3xl bg-gradient-to-br from-[#e8f0ff] via-white to-[#eef4ff] p-4 ring-2 ring-primary/35 shadow-[0_14px_40px_rgba(32,94,220,0.18)] md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <p className="font-display text-xl text-primary">Добавить / исправить расписание</p>
@@ -1958,31 +2011,7 @@ export function AdminSchedule() {
         </article>
       )}
 
-      {versions.length && !onlyMismatch ? (
-        <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]">
-          <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => setVersionsOpen((v) => !v)}>
-            <p className="text-sm font-semibold">Версии</p>
-            <InfoTip text="Каждая загрузка из CRM, сохранение, импорт и ИИ-правка пишут снимок. Откат возвращает таблицу на сайте. В AlfaCRM само не откатится — после отката нажмите «Выгрузить в AlfaCRM»." />
-            <span className="ml-auto text-sm text-muted">{versions.length} · {versionsOpen ? "свернуть" : "раскрыть"}</span>
-          </button>
-          {versionsOpen ? (
-          <ul className="mt-3 space-y-2 text-sm">
-            {versions.map((v) => (
-              <li key={v.at} className="flex flex-wrap items-center justify-between gap-2">
-                <span>
-                  {when(v.at)} · {v.reason} · {v.count} слотов
-                </span>
-                <button type="button" className="text-xs font-semibold text-primary" disabled={busy} onClick={async () => { await run("rollback", { at: v.at }); setDirty(new Set()); setMsg("Откатили снимок на сайте."); }}>
-                  Откатить
-                </button>
-              </li>
-            ))}
-          </ul>
-          ) : null}
-        </article>
-      ) : null}
-
-      <div id="ra-mismatch-list" className="space-y-4 scroll-mt-24">
+      <div id="ra-mismatch-list" className="mt-8 space-y-4 scroll-mt-24">
         {tree.map((sch) => {
           const schoolIds = sch.courses.flatMap((c) => c.items.map((s) => s.id));
           return (
