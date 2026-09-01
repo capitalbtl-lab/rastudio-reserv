@@ -514,11 +514,11 @@ function MismatchDot({ text }: { text: string }) {
         onMouseLeave={() => setOpen(false)}
         onFocus={show}
         onBlur={() => setOpen(false)}
-        className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center"
+        className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center"
         aria-label="Ошибка CRM"
       >
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400/75" />
-        <span className="relative inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[0.7rem] font-bold leading-none text-white">i</span>
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400/70" />
+        <span className="relative inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[0.62rem] font-bold leading-none text-white">i</span>
       </button>
       {open
         ? createPortal(
@@ -1076,6 +1076,14 @@ export function AdminSchedule() {
       }));
   }, [slots, branchFilter, onlyMismatch]);
 
+  useEffect(() => {
+    if (!onlyMismatch) return;
+    const t = window.setTimeout(() => {
+      document.getElementById("ra-mismatch-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 40);
+    return () => window.clearTimeout(t);
+  }, [onlyMismatch, tree.length]);
+
   const mismatchCount = useMemo(() => {
     let hard = 0;
     let soft = 0;
@@ -1611,10 +1619,6 @@ export function AdminSchedule() {
                   if (next) {
                     setOpenAll(true);
                     setAddOpen(false);
-                    const id = mismatchCount.ids[0];
-                    window.setTimeout(() => {
-                      document.getElementById(id ? `ra-slot-${id}` : "ra-mismatch-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }, 80);
                   }
                 }}
                 className={cn(
@@ -2016,7 +2020,7 @@ export function AdminSchedule() {
         </article>
       ) : null}
 
-      <div id="ra-mismatch-list" className="space-y-4 scroll-mt-28">
+      <div id="ra-mismatch-list" className="space-y-4 scroll-mt-24">
         {tree.map((sch) => {
           const schoolIds = sch.courses.flatMap((c) => c.items.map((s) => s.id));
           return (
@@ -2050,7 +2054,7 @@ export function AdminSchedule() {
                       <div>
                         <table className="w-full text-left text-sm">
                           <colgroup>
-                            <col className="w-8" />
+                            <col className="w-10" />
                             <col />
                             <col className="w-[4.6rem]" />
                             <col className="w-[3.4rem]" />
@@ -2086,17 +2090,17 @@ export function AdminSchedule() {
                               const mm = slotMismatch(s);
                               return (
                               <Fragment key={s.id}>
-                              <tr id={`ra-slot-${s.id}`} className={cn("scroll-mt-28 border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash", mm.level === "hard" && "bg-red-50", mm.level === "soft" && !dirty.has(s.id) && "bg-amber-50/80")}>
+                              <tr id={`ra-slot-${s.id}`} className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash", mm.level === "hard" && "bg-red-50", mm.level === "soft" && !dirty.has(s.id) && "bg-amber-50/80")}>
                                 <td className="px-2 py-1.5 align-middle">
                                   <div className="flex items-center gap-1.5">
                                     <CheckBox ids={[s.id]} picked={picked} onToggle={setIds} />
                                     <CrmDot s={s} />
-                                    {mm.level ? <MismatchDot text={mismatchHint(s)} /> : null}
                                   </div>
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
                                   <div className="flex min-w-0 items-center gap-1.5">
                                     {s.groupId ? <span className="w-8 shrink-0 text-right text-[0.7rem] font-semibold tabular-nums text-muted">{s.groupId}</span> : <span className="w-8 shrink-0" />}
+                                    {mm.level ? <MismatchDot text={mismatchHint(s)} /> : null}
                                     <GroupNameField value={s.groupName} subject={s.subject} onChange={(v) => patch(s.id, "groupName", v)} />
                                   </div>
                                 </td>
