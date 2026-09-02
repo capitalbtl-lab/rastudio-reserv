@@ -244,7 +244,7 @@ export const IDS_FOR_AGENT = `КАРТА ID (обязательно). Не ищ�
 Кабинет администратора: cabinetId = cabinet:admin. Вкладка клиентов data-pane=clients data-layout=list-card.
 is_study: 0 лид · 1 клиент · 2 архив. studyStatusId — состояние обучения (1 Обучается …).
 Занятие: customerLesson { lessonType, date, time, duration, groupId, subjectId, roomId, teacherId, topic, note } — popup data-op=lesson-dialog. Абонемент: кнопка data-op=add-tariff, customerTariff { tariffId, date } — popup data-op=tariff-dialog. Деньги: customerPay { payKind, sum }. Сохранить: customerSave, кнопка в шапке. Контакты — две колонки равной ширины: ребёнок|заказчик, телефон|заметка, почта. На десктопе карточка всегда открыта (первая в списке), без «Скрыть».
-Календарь клиента: плитки LessonStrip как у группы (data-lesson-date, data-lesson-status). Сортировка клиентов: status учится|лид, затем branchId, затем ageBand. Архив и лиды из CRM — только по кнопке.
+Календарь клиента: плитки LessonStrip как у группы (data-lesson-date, data-lesson-status). Сортировка клиентов: status учится|лид, затем branchId, затем ageBand. Архив и лиды из CRM — только по кнопке. «Загрузить лиды» ещё удаляет с сайта архивные лиды (is_study=2 и старые лиды не из активных).
 Нет ID — спросить уточнение, не подбирать «похожий» курс.
 
 CmsSession.courseId на сайте = subjectId (legacy). В кабинете courseId = id папки дерева.`;

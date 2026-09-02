@@ -21,7 +21,7 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-03-romashka-3";
+export const GUIDE_REV = "2026-09-03-purge-leads";
 
 const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Филиал", idField: "branchId 1–4", link: "1 Гражданская · 2 ЦМИТ · 3 Луховицы · 4 лето" },
@@ -95,7 +95,7 @@ const SCHEDULE_OPS: GuideOp[] = [
   { id: "open-client", title: "Открыть клиента", body: "Только по customerId. Карточка clientCardId = card:customer:{customerId}. Событие окна ra-open-client { customerId, branchId }. «найди Иванова» — один человек → открыть карточку; несколько → вкладка clients + query. На десктопе карточка в правой панели, не popup." },
   { id: "filter-clients", title: "Сортировка клиентов", body: "Событие ra-clients-filter { status, branchId, ageBand }. status: учится | лид | архив. Главные: учится и лид. branchId 0 = все филиалы, 1–4 = филиал. ageBand пусто = все возраста. Архив не автозагружать. Голос: «покажи лиды» / «текущих» / «архив» = openTab pane=clients + status." },
   { id: "pull-clients", title: "Загрузка текущих", body: "По умолчанию и автоматически только is_study=1 AND removed=0. Кнопка «Обновить» не читает лиды и не читает архив (is_study=2)." },
-  { id: "pull-leads", title: "Загрузка лидов", body: "Только по кнопке «Загрузить лиды». is_study=0 AND removed=0. Архив (is_study=2) и удалённых не трогать. Не смешивать с текущими." },
+  { id: "pull-leads", title: "Загрузка лидов", body: "Только по кнопке «Загрузить лиды». Пишет на сайт только is_study=0 AND removed=0. После загрузки с сайта удаляются архивные лиды: status=архив / is_study=2 и старые лиды, которых нет среди активных в CRM. Текущих (is_study=1) не трогать. Архив не подмешивать." },
   { id: "pull-archive", title: "Загрузка архива", body: "Только по тихой кнопке «Загрузить архив». is_study=2. Не главная сортировка." },
   { id: "save-client", title: "Сохранить карточку", body: "adminSchedule action=customerSave. Поля: customerId, branchId, patch { name, parent, phone, email, note, dob, address }, isStudy 0|1|2, studyStatusId. Пишет AlfaCRM customer/update, затем customerGet. DOM: data-op=save-contacts, data-is-study." },
   { id: "set-client-status", title: "Клиент ↔ Лид", body: "customerSave { isStudy: 1 } = клиент (учится). customerSave { isStudy: 0 } = лид. Не путать с studyStatusId (состояние обучения). Архив isStudy=2 — только явно." },
@@ -113,7 +113,7 @@ const SCHEDULE_NEVER = [
   "Не консультировать родителей из агента расписания. Это не Олег и не Ольга.",
   "Не ставить телефон в заголовок «ребёнок». Телефон — отдельное поле. Нет имени — «Без имени».",
   "Не считать клиента в каждом филиале из branchIds[]. Только primary branchId.",
-  "Не загружать архив кнопками «Обновить» и «Загрузить лиды». Обновить = is_study=1 removed=0. Лиды = is_study=0 removed=0. Архив — только тихая кнопка is_study=2.",
+  "Не загружать архив кнопками «Обновить» и «Загрузить лиды». Обновить = is_study=1 removed=0. Лиды = is_study=0 removed=0, после загрузки архивные лиды удалить с сайта. Архив — только тихая кнопка is_study=2.",
   "Не открывать карточку клиента по ФИО. Только customerId / clientCardId.",
   "Не показывать overlay и правую панель одновременно. Overlay только mobile. Desktop = panel.",
   "Не прятать карточку на десктопе. Кнопки «Скрыть» нет. Если нет выбранного — открыть items[0] списка.",

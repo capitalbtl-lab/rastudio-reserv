@@ -514,6 +514,19 @@ export function dossierFromNote(note: SessionNote, extra?: { phone?: string; cha
   });
 }
 
+function isArchivedLeadOnSite(d: Dossier, activeLeadIds: Set<number>, currentMap?: Map<number, Set<number>>) {
+  const id = Number(d.crmId || 0);
+  if (id && currentMap?.has(id)) return false;
+  const ex = d.extras || {};
+  const studyRaw = String(ex.is_study ?? "");
+  const study = studyRaw === "" ? null : Number(studyRaw);
+  const st = String(d.status || "");
+  if (st === "учится" || study === 1 || String(ex.crm_current) === "1") return false;
+  if (st === "архив" || study === 2) return true;
+  if ((st === "лид" || study === 0) && id && !activeLeadIds.has(id)) return true;
+  return false;
+}
+
 export function findDossier(opts: { crmId?: number; phone?: string; id?: string }) {
   const store = loadStore();
   const digits = digitsPhone(opts.phone);
@@ -632,6 +645,7 @@ export async function syncAllFromCrm(
   const names: Record<number, string> = { 1: "Гражданская", 2: "ЦМИТ", 3: "Луховицы", 4: "Лето" };
   const want = studies.length ? studies : [1];
   const currentMap = new Map<number, Set<number>>();
+  const leadIds = new Set<number>();
   for (const branch of [1, 2, 3, 4]) {
     for (const study of want) {
       for (let page = 0; page < 80; page += 1) {
@@ -656,6 +670,7 @@ export async function syncAllFromCrm(
             if (!currentMap.has(id)) currentMap.set(id, new Set());
             currentMap.get(id)!.add(branch);
           }
+          if (id && study === 0) leadIds.add(id);
           n += 1;
         }
         if (items.length < 50) break;
@@ -690,9 +705,17 @@ export async function syncAllFromCrm(
       }
     }
   }
+  let purged = 0;
+  if (want.includes(0) && !want.includes(2)) {
+    store.items = store.items.filter((d) => {
+      if (!isArchivedLeadOnSite(d, leadIds, currentMap)) return true;
+      purged += 1;
+      return false;
+    });
+  }
   store.lastCrmSync = new Date().toISOString();
   saveStore(store);
-  return { ok: true as const, count: n, lastCrmSync: store.lastCrmSync, studies: want };
+  return { ok: true as const, count: n, purged, lastCrmSync: store.lastCrmSync, studies: want };
 }
 
 let teacherMapCache: Record<string, string> | null = null;

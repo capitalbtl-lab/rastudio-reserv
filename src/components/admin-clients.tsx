@@ -454,7 +454,7 @@ export function AdminClients({
           <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Архив на сайте пуст. Нажмите «загрузить архив» — только is_study=2.</p>
         ) : null}
         {status === "лид" && !counts.лид ? (
-          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Лидов на сайте нет. Нажмите «Загрузить лиды» — только is_study=0.</p>
+          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Лидов на сайте нет. Нажмите «Загрузить лиды» — только активные is_study=0. Архивные лиды с сайта удаляются.</p>
         ) : null}
       </div>
 

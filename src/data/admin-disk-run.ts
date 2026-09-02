@@ -122,6 +122,9 @@ async function runPull(kind: PullKind) {
       const { searchClientViews } = await import("./dossiers");
       const local = searchClientViews("", 1, studies[0] === 2 ? "архив" : studies[0] === 0 ? "лид" : "учится");
       lines.push({ ok: true, text: `${label}: обработано ${res.count}` });
+      if (Number(res.purged || 0) > 0) {
+        lines.push({ ok: true, text: `С сайта удалены архивные лиды: ${res.purged}` });
+      }
       lines.push({ ok: local.all > 0, text: `В базе на сайте: ${local.all}` });
       if (studies[0] === 1) lines.push({ ok: true, text: `Текущих уникальных: ${local.counts.учится}` });
       lines.push({ ok: true, text: "Архив и лиды подгружаются отдельными кнопками — AlfaCRM не читаем целиком." });
