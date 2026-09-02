@@ -5,6 +5,17 @@ import { adminSelfTest, type CheckResult } from "@/data/admin-selftest";
 import { InfoTip } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
 
+function tidyError(raw: string) {
+  const s = String(raw || "");
+  if (/<!DOCTYPE|<html|502 Bad Gateway|504 Gateway|nginx/i.test(s)) {
+    return "Сервер не ответил (перезапуск). Обновите страницу и нажмите «Проверить» ещё раз.";
+  }
+  if (/node:fs|readFileSync|externalized for browser/i.test(s)) {
+    return "Серверная проверка попала в браузер. Обновите страницу — это уже починено.";
+  }
+  return s.slice(0, 400);
+}
+
 function token() {
   if (typeof document === "undefined") return "";
   const m = document.cookie.match(/(?:^|;\s*)ra_admin=([^;]+)/);
@@ -19,11 +30,13 @@ export function AdminSelfTest({
   label = "Проверить раздел",
   heading,
   extra,
+  tip,
 }: {
   section: string;
   label?: string;
   heading?: ReactNode;
   extra?: ReactNode;
+  tip?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
@@ -35,16 +48,26 @@ export function AdminSelfTest({
   const [grok, setGrok] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [dry, setDry] = useState(true);
+  const [leftovers, setLeftovers] = useState<string[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
 
   async function run() {
     setBusy(true);
     setError("");
     setOpen(true);
     setCopied(false);
-    const res = await adminSelfTest({ data: { token: token(), section } });
+    setLeftovers([]);
+    setErrors([]);
+    setChecks([]);
+    setGrok("");
+    const res = await adminSelfTest({ data: { token: token(), section } }).catch((e: unknown) => ({
+      ok: false as const,
+      error: e instanceof Error ? e.message : "Не удалось проверить",
+    }));
     setBusy(false);
     if (!res.ok) {
-      setError(res.error || "Не удалось проверить");
+      setError(tidyError(res.error || "Не удалось проверить"));
       return;
     }
     setTitle(res.title);
@@ -53,6 +76,9 @@ export function AdminSelfTest({
     setFail(res.fail);
     setChecks(res.checks);
     setGrok(res.grok || "");
+    setDry(res.dry !== false);
+    setLeftovers(Array.isArray(res.leftovers) ? res.leftovers.filter(Boolean) : []);
+    setErrors(Array.isArray(res.errors) ? res.errors.filter(Boolean) : []);
   }
 
   async function copy() {
@@ -73,7 +99,12 @@ export function AdminSelfTest({
             {busy ? "Проверяю…" : label}
           </button>
           {extra}
-          <InfoTip text="Сухой прогон: файлы, ключи API и связи с другими разделами. CRM и сайт не меняются. Сбой — простым языком плюс сырой ответ. Кнопка «Скопировать для Grok» собирает весь отчёт." />
+          <InfoTip
+            text={
+              tip ||
+              "Сухой прогон: файлы, ключи API и связи с другими разделами. CRM и сайт не меняются. Сбой — простым языком плюс сырой ответ. Кнопка «Скопировать для Grok» собирает весь отчёт."
+            }
+          />
         </div>
       </div>
       {open ? (
@@ -85,7 +116,8 @@ export function AdminSelfTest({
                 {title}
                 <span className="ml-2 font-normal text-muted">
                   ок {pass}
-                  {fail ? ` · сбоев ${fail}` : ""} · {checks.length} проверок · без записи
+                  {fail ? ` · сбоев ${fail}` : ""} · {checks.length} проверок
+                  {busy ? " · идёт проверка" : dry ? " · без записи" : " · запись в CRM, без удаления"}
                 </span>
               </p>
               {hint ? <p className="mt-1 text-[0.78rem] leading-relaxed text-muted">{hint}</p> : null}
@@ -96,6 +128,29 @@ export function AdminSelfTest({
               </button>
             ) : null}
           </div>
+          {errors.length ? (
+            <div className="mt-4 rounded-xl bg-[#e11d48]/10 px-3 py-3 text-sm ring-1 ring-[#e11d48]/20">
+              <p className="font-semibold text-[#e11d48]">Ошибки для оператора</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {errors.map((row) => (
+                  <li key={row}>{row}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {leftovers.length ? (
+            <div className="mt-3 rounded-xl bg-amber-100 px-3 py-3 text-sm ring-1 ring-amber-300/60">
+              <p className="font-semibold text-amber-900">Удалите в AlfaCRM сами</p>
+              <p className="mt-1 text-[0.78rem] text-amber-900/80">
+                Проверка записала тестовые данные и специально ничего не стирает — даже то, что сама создала.
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-amber-950">
+                {leftovers.map((row) => (
+                  <li key={row}>{row}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <ul className="mt-4 space-y-3">
             {checks.map((c) => (
               <li key={c.id} className="rounded-xl bg-surface-2 px-3 py-2.5">

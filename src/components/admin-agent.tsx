@@ -9,6 +9,7 @@ import { AdminVoiceEdits } from "@/components/admin-voice-edits";
 import { AdminTrain } from "@/components/admin-train";
 import { AdminAccess } from "@/components/admin-access";
 import { AdminDebug } from "@/components/admin-debug";
+import { AdminSectionGuides } from "@/components/admin-section-guides";
 import { AdminSectionHead } from "@/components/admin-self-test";
 import { AdminSaveBar } from "@/components/admin-save-bar";
 import { InfoTip } from "@/components/info-tip";
@@ -20,11 +21,12 @@ function token() {
   return m ? decodeURIComponent(m[1]) : localStorage.getItem("ra_admin") || "";
 }
 
-type Pane = "window" | "dialog" | "voices" | "edits" | "chats" | "train" | "access" | "debug";
+type Pane = "window" | "dialog" | "voices" | "edits" | "chats" | "train" | "guides" | "access" | "debug";
 
 const PANES: { id: Pane; label: string }[] = [
   { id: "window", label: "Окно и кнопки" },
   { id: "train", label: "Обучение агентов" },
+  { id: "guides", label: "Разделы сайта" },
   { id: "dialog", label: "Как говорит" },
   { id: "voices", label: "Голоса" },
   { id: "edits", label: "Изменение сайта" },
@@ -87,7 +89,7 @@ export function AdminAgent() {
     setMsg(res.ok ? "Сохранено — на сайте сразу, после обновления страницы." : res.error || "Ошибка");
   }
 
-  if (!settings && pane !== "train" && pane !== "voices" && pane !== "edits" && pane !== "chats" && pane !== "access" && pane !== "debug") {
+  if (!settings && pane !== "train" && pane !== "guides" && pane !== "voices" && pane !== "edits" && pane !== "chats" && pane !== "access" && pane !== "debug") {
     return (
       <section className="mt-10 space-y-6">
         <AdminSectionHead section="agent" title="Ассистент ИИ">
@@ -117,7 +119,7 @@ export function AdminAgent() {
         title="Ассистент ИИ"
       >
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Окно чата, обучение агентов, голоса, доступ и история диалогов — всё здесь.
+          Окно чата, обучение, инструкции по разделам сайта, голоса и история диалогов — всё здесь.
         </p>
       </AdminSectionHead>
 
@@ -235,6 +237,7 @@ export function AdminAgent() {
       {pane === "edits" ? <AdminVoiceEdits /> : null}
       {pane === "chats" ? <AdminChats /> : null}
       {pane === "train" ? <AdminTrain /> : null}
+      {pane === "guides" ? <AdminSectionGuides /> : null}
       {pane === "access" ? <AdminAccess /> : null}
       {pane === "debug" ? <AdminDebug /> : null}
     </section>

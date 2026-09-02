@@ -3,7 +3,7 @@ export type SlotMismatch = "" | "soft" | "hard";
 export function schoolFromHay(hay: string) {
   const t = String(hay || "").toLowerCase().replace(/ё/g, "е");
   if (/худож|скульп|портрет|рисунок|вуз|манг|digital|живопис|лепк|рисов/.test(t)) return "Художественная школа";
-  if (/робототех|билингв/.test(t) && !/it-школ|it-лаб|python|scratch|unity/.test(t)) return "Школа робототехники";
+  if (/робототех/.test(t) && !/it-школ|it-лаб|python|scratch|unity/.test(t)) return "Школа робототехники";
   if (/python|scratch|c\+\+|си\+\+|unity|it-лаб|it-школ|codebook|gamedev|програм/.test(t) && !/робототех/.test(t)) return "Школа программирования";
   if (/наук|физик|радио|беспилот|компас|blender|инженер|steam/.test(t) && !/лего|планет/.test(t)) return "Школа наук и инженерии";
   if (/лего|подготовк|к школе|планет/.test(t)) return "Школа раннего развития";
@@ -14,7 +14,6 @@ export function schoolFromHay(hay: string) {
 
 function programFamily(hay: string) {
   const t = String(hay || "").toLowerCase().replace(/ё/g, "е");
-  if (/билингв|на английск\w* язык|робототех\w* на англий|english/.test(t) && /робот/.test(t)) return "robot-en";
   if (/робототех/.test(t)) return "robot";
   if (/python|питон|codebook/.test(t)) return "python";
   if (/scratch|startschool|старт\s*скул/.test(t)) return "scratch";

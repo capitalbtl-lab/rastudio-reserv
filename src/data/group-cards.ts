@@ -16,6 +16,7 @@ export type CachedGroupCard = {
   eDate: string;
   levelId: number;
   signup: string;
+  /** Предмет CRM. Карточка группы ключуется branchId+id (=groupId). */
   subjectId: number;
   subject: string;
   calendar: GroupCalLesson[];

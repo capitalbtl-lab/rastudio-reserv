@@ -49,7 +49,9 @@ def load():
 def save(store):
     FILE.parent.mkdir(parents=True, exist_ok=True)
     store["items"] = store["items"][:MAX]
-    FILE.write_text(json.dumps(store, ensure_ascii=False, separators=(",", ":")))
+    tmp = FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(store, ensure_ascii=False, separators=(",", ":")))
+    tmp.replace(FILE)
 
 
 def digits(raw):

@@ -101,9 +101,13 @@ function sleep(ms: number) {
 }
 
 async function throttle() {
-  const wait = 220 - (Date.now() - lastAt);
+  const wait = 300 - (Date.now() - lastAt);
   if (wait > 0) await sleep(wait);
   lastAt = Date.now();
+}
+
+export async function pace() {
+  await throttle();
 }
 
 export function formatRuPhone(raw: string) {
@@ -131,15 +135,20 @@ export function leadUrl(branch: number, id: number) {
 
 export async function request<T>(path: string, body: unknown, tok?: string): Promise<T> {
   await throttle();
+  let url = path;
+  if (body && typeof body === "object" && /\/(update|delete)(\?|$)/.test(url) && !/[?&]id=/.test(url)) {
+    const id = Number((body as { id?: unknown }).id);
+    if (id) url += `${url.includes("?") ? "&" : "?"}id=${id}`;
+  }
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
   };
   if (tok) headers["X-ALFACRM-TOKEN"] = tok;
-  const res = await fetch(`${HOST()}${path}`, {
+  const res = await fetch(`${HOST()}${url}`, {
     method: "POST",
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify(body ?? {}),
   });
   const text = await res.text();
   let json: unknown = {};
@@ -252,6 +261,9 @@ export async function createAlfaLesson(opts: {
   time?: string;
   duration?: number;
   note?: string;
+  topic?: string;
+  roomId?: number;
+  teacherId?: number;
 }) {
   const t = await token();
   const type = resolveLessonType(opts.type) || resolveLessonType("trial")!;
@@ -259,18 +271,18 @@ export async function createAlfaLesson(opts: {
   let date = formatRuDob(opts.date);
   let time = String(opts.time || "").replace(".", ":").slice(0, 5);
   let duration = Number(opts.duration) || 90;
-  let teacherIds: number[] = [];
-  let roomId: number | undefined;
+  let teacherIds: number[] = Number(opts.teacherId) > 0 ? [Number(opts.teacherId)] : [];
+  let roomId: number | undefined = Number(opts.roomId) > 0 ? Number(opts.roomId) : undefined;
   const gid = opts.gid && /^\d+$/.test(opts.gid) ? Number(opts.gid) : 0;
   if (gid) {
     const slot = await slotFromGid(opts.branch, gid, t).catch(() => null);
     if (slot) {
       if (!subjectId) subjectId = Number(slot.subject_id) || 0;
       if (!time) time = String(slot.time_from_v || "").slice(0, 5);
-      duration = durationOf(slot.time_from_v, slot.time_to_v, duration);
+      if (!opts.duration) duration = durationOf(slot.time_from_v, slot.time_to_v, duration);
       if (!date && slot.day) date = nextDateForCrmDay(Number(slot.day));
-      teacherIds = slot.teacher_ids || [];
-      if (slot.room_id) roomId = slot.room_id;
+      if (!teacherIds.length) teacherIds = slot.teacher_ids || [];
+      if (!roomId && slot.room_id) roomId = slot.room_id;
     }
   }
   if (!date) date = nextDateForCrmDay(moscowParts().day === 7 ? 1 : moscowParts().day + 1);
@@ -288,6 +300,7 @@ export async function createAlfaLesson(opts: {
       ...(gid ? { group_ids: [gid] } : {}),
       ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
       ...(roomId ? { room_id: roomId } : {}),
+      ...(opts.topic ? { topic: opts.topic } : {}),
       note: opts.note || `${type.name} с сайта rastudio.org`,
     },
     t,

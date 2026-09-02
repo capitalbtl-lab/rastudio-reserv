@@ -56,6 +56,7 @@ export const API_CATALOG: Catalog[] = [
       { key: "ALFACRM_EMAIL", label: "E-mail" },
       { key: "ALFACRM_API_KEY", label: "Ключ API v2", secret: true },
       { key: "ALFACRM_APP_KEY", label: "X-APP-KEY", secret: true },
+      { key: "ALFACRM_WEB_PASSWORD", label: "Пароль входа в CRM", secret: true },
     ],
   },
 ];

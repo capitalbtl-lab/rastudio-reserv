@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { adminDossiers, type Dossier } from "@/data/dossiers";
+import { adminDossiers } from "@/data/dossiers-fn";
+import type { Dossier } from "@/data/dossiers";
 import { adminDossierJobs, JOB_ACTIONS, type DossierJob } from "@/data/dossier-jobs";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/info-tip";

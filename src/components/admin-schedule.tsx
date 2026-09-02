@@ -3,23 +3,90 @@
 import { useEffect, useMemo, useRef, useState, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { adminSchedule, type GroupMember, type CustomerCard } from "@/data/admin-schedule";
-import { adminDossiers } from "@/data/dossiers";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { Button } from "@/components/ui/button";
 import { InfoTip, TipWrap, TIP_BOX } from "@/components/info-tip";
-import { AdminSectionHead } from "@/components/admin-self-test";
+import { AdminSectionHead, AdminSelfTest } from "@/components/admin-self-test";
 import { SCHOOLS, BRANCHES } from "@/data/site";
-import { SCHOOL_ORDER } from "@/data/crm-slots-core";
-import { splitCourseAge } from "@/data/prices-core";
 import { slotMismatch, mismatchHint } from "@/data/slot-mismatch";
 import { cn } from "@/lib/utils";
 import { speakAgent } from "@/data/agent-voice";
-import { missingScheduleFields, parseDraftFromSpeech, beatsOf, type LessonBeat } from "@/data/crm-slots";
+import { missingScheduleFields, beatsOf, type LessonBeat, matchBranch, defaultPeriod } from "@/data/crm-slots-core";
+import { parseDraftFromSpeech } from "@/data/schedule-speech";
 import { AdminSubjects } from "@/components/admin-subjects";
+import { AdminCoursePrices } from "@/components/admin-course-prices";
+import { AdminTariffs } from "@/components/admin-tariffs";
 import { AdminScheduleMap } from "@/components/admin-schedule-map";
+import { pullFromCrm } from "@/lib/crm-pull";
+import { CrmPullDialog, emptyPull, type CrmPullState } from "@/components/crm-pull-dialog";
 import type { CrmSubject } from "@/data/crm-subjects";
 import { ADMIN_PANEL_BLUE } from "@/data/admin-ui";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
+import type { CrmTeacher } from "@/data/crm-teachers";
+import { AdminClients } from "@/components/admin-clients";
+import { CrmClientCard } from "@/components/crm-client-card";
+import { CrmGroupMembers } from "@/components/crm-group-card";
+import { GroupLessonStrip } from "@/components/lesson-strip";
+import { clientCardId, groupCardId } from "@/data/ids";
+import { displayPersonName } from "@/data/client-display";
+
+type SiteTree = {
+  schools: { id: string; label: string; href: string }[];
+  courses: { id: string; schoolId: string; label: string; href: string; age: string }[];
+  assign: Record<string, string>;
+};
+const EMPTY_TREE: SiteTree = { schools: [], courses: [], assign: {} };
+
+function wantedSubjectName(s: CrmSlot) {
+  return String(s.course || s.groupName || "")
+    .replace(/^20\d{2}\s+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function branchSubjectList(slots: CrmSlot[], branchId: number, list: CrmSubject[], exceptId = "") {
+  const ids = new Set(
+    slots.filter((x) => x.branchId === branchId && x.subjectId && x.id !== exceptId).map((x) => x.subjectId),
+  );
+  return list.filter((s) => ids.has(s.id));
+}
+
+function guessSubjectId(slot: CrmSlot, list: CrmSubject[]) {
+  if (slot.subjectId && list.some((s) => s.id === slot.subjectId)) return slot.subjectId;
+  const fold = (x: string) =>
+    String(x || "")
+      .toLowerCase()
+      .replace(/ё/g, "е")
+      .replace(/^20\d{2}\s+/, "")
+      .replace(/[·•]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const hay = fold(`${slot.groupName} ${slot.course}`);
+  const quoted = [...`${slot.groupName} ${slot.course}`.matchAll(/["«]([^"»]{2,40})["»]/g)].map((m) => fold(m[1]));
+  const stop = new Set(["курс", "для", "лет", "год", "года", "детей", "школа", "студия", "язык", "языка", "английского", "английский", "носителем", "носитель", "группа"]);
+  const words = (x: string) => fold(x).split(/[^a-zа-я0-9+]+/).filter((w) => w.length > 2 && !stop.has(w));
+  const hw = words(hay);
+  let best = 0;
+  let score = 0;
+  for (const s of list) {
+    const m = fold(s.name);
+    let sc = 0;
+    if (quoted.some((q) => q && m.includes(q))) sc += 500;
+    const hit = words(s.name).filter((w) => hw.includes(w));
+    sc += hit.reduce((n, w) => n + (w.length > 5 ? 90 : 45), 0);
+    if (sc > score) {
+      score = sc;
+      best = s.id;
+    }
+  }
+  return score >= 80 ? best : 0;
+}
+
+function subjectFitsCourse(slot: CrmSlot, sub?: CrmSubject | null) {
+  if (!sub) return false;
+  if (slot.subjectId) return slot.subjectId === sub.id;
+  return false;
+}
 
 const GROUP_STATUS = [
   { id: 1, name: "Идет набор (ожидает старта)" },
@@ -39,219 +106,6 @@ const SEED_LEVELS = [
   { id: 13, name: "Средний" },
   { id: 14, name: "Продвинутый" },
 ];
-
-const WD = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
-const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
-
-function todayYmd() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function parseYmd(s: string) {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, (m || 1) - 1, d || 1);
-}
-
-function shiftYmd(iso: string, days: number) {
-  const d = parseYmd(iso);
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-const RANGE_OPTS = [
-  { id: "10", label: "±10 занятий" },
-  { id: "7", label: "±7 дней" },
-  { id: "30", label: "±30 дней" },
-  { id: "90", label: "±90 дней" },
-  { id: "180", label: "±180 дней" },
-  { id: "360", label: "±360 дней" },
-] as const;
-
-function LessonTile({
-  lesson: l,
-  today,
-  onEnter,
-  onLeave,
-}: {
-  lesson: GroupCalLesson;
-  today: string;
-  onEnter: (el: HTMLElement, lesson: GroupCalLesson) => void;
-  onLeave: () => void;
-}) {
-  const d = parseYmd(l.date);
-  const isToday = l.date === today;
-  const cancelled = l.status === 2;
-  const done = l.status === 3;
-  const planned = l.status === 1 || l.status === 0;
-  return (
-    <div
-      onMouseEnter={(e) => onEnter(e.currentTarget, l)}
-      onMouseLeave={onLeave}
-      className={cn(
-        "flex h-[4.025rem] w-[2.82rem] min-w-[2.82rem] cursor-default flex-col items-center justify-center rounded-[0.9rem] px-0.5 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
-        isToday && !cancelled && "ra-today-tile text-white",
-        !isToday && done && "bg-emerald-100 text-fg ring-1 ring-emerald-400/80",
-        !isToday && planned && "bg-white text-fg ring-1 ring-neutral-500/55",
-        cancelled && "bg-neutral-200 text-neutral-400 ring-1 ring-neutral-300 line-through",
-      )}
-    >
-      {isToday && !cancelled ? (
-        <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/90">сегодня</span>
-      ) : (
-        <span className={cn("text-[0.6rem] font-semibold uppercase tracking-wider", cancelled ? "text-neutral-400" : "text-neutral-500")}>{WD[(d.getDay() + 6) % 7]}</span>
-      )}
-      <span className={cn("text-[0.83rem] font-semibold tabular-nums", isToday && !cancelled && "text-white")}>{d.getDate()}</span>
-      <span className={cn("text-[0.6rem] font-medium", isToday && !cancelled ? "text-white/85" : "text-neutral-500")}>{MONTHS_SHORT[d.getMonth()]}</span>
-    </div>
-  );
-}
-
-function GroupLessonStrip({ lessons, group, subject, teacher }: { lessons: GroupCalLesson[]; group?: string; subject?: string; teacher?: string }) {
-  const today = todayYmd();
-  const [range, setRange] = useState<(typeof RANGE_OPTS)[number]["id"]>("10");
-  const [tip, setTip] = useState<{ lesson: GroupCalLesson; top: number; left: number } | null>(null);
-  const all = useMemo(() => [...lessons].sort((a, b) => a.date.localeCompare(b.date)), [lessons]);
-  const { past, future, todayHit } = useMemo(() => {
-    let pool = all;
-    if (range !== "10") {
-      const days = Number(range);
-      const from = shiftYmd(today, -days);
-      const to = shiftYmd(today, days);
-      pool = all.filter((l) => l.date >= from && l.date <= to);
-    }
-    const pastAll = pool.filter((l) => l.date < today);
-    const futureAll = pool.filter((l) => l.date > today);
-    const todayHit = pool.find((l) => l.date === today) || null;
-    if (range === "10") {
-      return { past: pastAll.slice(-10), future: futureAll.slice(0, 10), todayHit };
-    }
-    return { past: pastAll, future: futureAll, todayHit };
-  }, [all, range, today]);
-  const shown = past.length + future.length + (todayHit ? 1 : 0);
-
-  function showTip(el: HTMLElement, lesson: GroupCalLesson) {
-    const r = el.getBoundingClientRect();
-    const width = 256;
-    let left = r.left;
-    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
-    if (left < 8) left = 8;
-    let top = r.bottom + 8;
-    if (top + 260 > window.innerHeight) top = Math.max(8, r.top - 268);
-    setTip({ lesson, top, left });
-  }
-
-  return (
-    <div className="md:col-span-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Расписание занятий</p>
-        <div className="flex items-center gap-2">
-          <p className="text-[0.7rem] text-muted">{shown} из {all.length}</p>
-          <select
-            value={range}
-            onChange={(e) => setRange(e.target.value as (typeof RANGE_OPTS)[number]["id"])}
-            className="h-8 rounded-[4px] bg-white px-2 text-[0.72rem] font-medium text-fg ring-1 ring-black/8"
-          >
-            {RANGE_OPTS.map((o) => (
-              <option key={o.id} value={o.id}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {past.map((l) => (
-          <LessonTile key={l.date} lesson={l} today={today} onEnter={showTip} onLeave={() => setTip(null)} />
-        ))}
-        {todayHit ? (
-          <LessonTile key={todayHit.date} lesson={todayHit} today={today} onEnter={showTip} onLeave={() => setTip(null)} />
-        ) : (
-          <div
-            className="ra-today-tile flex h-[4.025rem] w-[2.82rem] min-w-[2.82rem] flex-col items-center justify-center rounded-[0.9rem] px-0.5 text-center text-white"
-            title="Сегодня"
-          >
-            <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/95">сегодня</span>
-            <span className="text-[0.83rem] font-semibold tabular-nums">{Number(today.slice(8))}</span>
-            <span className="text-[0.6rem] font-medium text-white/90">{MONTHS_SHORT[Number(today.slice(5, 7)) - 1]}</span>
-          </div>
-        )}
-        {future.map((l) => (
-          <LessonTile key={l.date} lesson={l} today={today} onEnter={showTip} onLeave={() => setTip(null)} />
-        ))}
-      </div>
-      <p className="mt-2 flex flex-wrap items-center gap-3 text-[0.68rem] text-muted">
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-100 ring-1 ring-emerald-400/80" /> проведено</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-[3px] bg-white ring-1 ring-neutral-400" /> запланировано</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-[3px] bg-neutral-200 ring-1 ring-neutral-300" /> отменено</span>
-      </p>
-      {tip
-        ? createPortal(
-            <LessonCard
-              lesson={tip.lesson}
-              top={tip.top}
-              left={tip.left}
-              group={group}
-              subject={subject}
-              teacher={teacher}
-            />,
-            document.body,
-          )
-        : null}
-    </div>
-  );
-}
-
-function LessonCard({
-  lesson: l,
-  top,
-  left,
-  group,
-  subject,
-  teacher,
-}: {
-  lesson: GroupCalLesson;
-  top: number;
-  left: number;
-  group?: string;
-  subject?: string;
-  teacher?: string;
-}) {
-  const statusRu = l.status === 3 ? "Проведено" : l.status === 2 ? "Отменено" : l.status === -1 ? "Сегодня нет занятия" : "Запланировано";
-  const time = l.from && l.to ? `с ${l.from} до ${l.to}` : l.from || "";
-  const mins = l.duration ? ` (${l.duration} мин.)` : "";
-  const rows: [string, string][] = [
-    ["Тип", l.type || "Групповое"],
-    ["Статус", statusRu],
-    ["Время", time ? `${time}${mins}` : "—"],
-    ["Аудитория", l.room || ""],
-    ["Педагог", l.teacher || teacher || ""],
-    ["Предмет", l.subject || subject || ""],
-    ["Группа", l.group || group || ""],
-    ["Тема", l.topic || ""],
-    ["Домашнее задание", l.homework || ""],
-  ];
-  if (l.status === 3 && (l.total || 0) > 0) rows.push(["Присутствие", `${l.attend || 0} из ${l.total}`]);
-  const dateLabel = (() => {
-    const [y, m, d] = l.date.split("-").map(Number);
-    if (!y) return l.date;
-    return `${String(d).padStart(2, "0")}.${String(m).padStart(2, "0")}.${y}`;
-  })();
-  return (
-    <div
-      className="pointer-events-none fixed z-[90] w-[16rem] rounded-md bg-white px-3 py-2 text-left text-[0.68rem] leading-snug text-fg shadow-[0_8px_22px_rgba(15,23,42,0.22)] ring-1 ring-black/10"
-      style={{ top, left }}
-    >
-      <p className="mb-1 text-[0.62rem] font-semibold tracking-wide text-muted">{dateLabel}</p>
-      <dl className="space-y-0.5">
-        {rows.filter(([, v]) => v).map(([k, v]) => (
-          <div key={k} className="grid grid-cols-[5.2rem_1fr] gap-x-2">
-            <dt className="text-[0.62rem] text-muted">{k}</dt>
-            <dd className={cn("font-medium", k === "Тема" || k === "Домашнее задание" ? "whitespace-pre-wrap" : "")}>{v}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -279,6 +133,8 @@ type Change = { id: string; field: string; from: string; to: string };
 type Draft = {
   school: string;
   course: string;
+  courseId?: string;
+  schoolId?: string;
   age: string;
   day: number;
   timeFrom: string;
@@ -299,6 +155,37 @@ const BRANCH_OPTS = [
 function speechCtor() {
   const w = window as unknown as { SpeechRecognition?: new () => Rec; webkitSpeechRecognition?: new () => Rec };
   return w.SpeechRecognition || w.webkitSpeechRecognition;
+}
+
+const SILENCE = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+
+function speakBrowser(text: string) {
+  return new Promise<void>((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    const syn = window.speechSynthesis;
+    if (!syn || !text.trim()) {
+      finish();
+      return;
+    }
+    syn.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "ru-RU";
+    u.rate = 1.06;
+    const voices = syn.getVoices();
+    const ru =
+      voices.find((v) => /ru/i.test(v.lang) && /female|anna|milena|irina|alena|oksana/i.test(v.name)) ||
+      voices.find((v) => /ru/i.test(v.lang));
+    if (ru) u.voice = ru;
+    u.onend = finish;
+    u.onerror = finish;
+    syn.speak(u);
+    window.setTimeout(finish, Math.min(12000, 800 + text.length * 70));
+  });
 }
 
 function voiceNorm(s: string) {
@@ -327,6 +214,30 @@ function leftoverLooksLikeEdit(s: string) {
   const w = voiceNorm(s);
   if (w.length < 3) return false;
   return /лимит|мест|групп|дет|человек|возраст|день|время|педагог|филиал|курс|поставь|поменяй|измени|сделай|максимум|минимум|\d/.test(w);
+}
+
+function localLimitPreview(prompt: string, slots: CrmSlot[], selectedIds: string[]) {
+  const t = String(prompt || "")
+    .toLowerCase()
+    .replace(/ё/g, "е");
+  if (!/мест|лимит|столбц|цифр|вместим|свободн|количеств|детей|человек/.test(t)) return null;
+  const tagged = t.match(/цифр[а-я]*\s*(\d{1,3})/);
+  const nums = [...t.matchAll(/\b(\d{1,3})\b/g)].map((m) => Number(m[1])).filter((n) => n >= 1 && n <= 200);
+  const to = tagged ? Number(tagged[1]) : nums.length ? nums[nums.length - 1] : NaN;
+  if (!Number.isFinite(to) || to < 1 || to > 200) return null;
+  const all = /у\s+всех|во\s+всех|всем|все\s+групп|каждую|каждой|массово|по\s+всем|столбц/.test(t);
+  let pool = selectedIds.length ? slots.filter((s) => selectedIds.includes(s.id)) : slots.slice();
+  if (all || !selectedIds.length) pool = slots.slice();
+  const changes = pool
+    .filter((s) => Number(s.limit) !== to)
+    .map((s) => ({ id: s.id, field: "limit", from: String(s.limit ?? 0), to: String(to) }));
+  return {
+    comment: changes.length
+      ? `Лимит мест ${to} у ${changes.length} групп.`
+      : `Лимит ${to} уже стоит у всех этих групп — менять нечего.`,
+    changes,
+    adds: [] as Draft[],
+  };
 }
 
 function isPreviewReject(s: string) {
@@ -363,18 +274,26 @@ function leadHref(s: CrmSlot) {
 }
 
 function inCrm(s: CrmSlot) {
-  return Number(s.groupId) > 0 && !String(s.id).startsWith("local-");
+  return Number(s.groupId) > 0;
 }
 
 function DetailsBtn({ on, onClick, busy }: { on?: boolean; onClick: () => void; busy?: boolean }) {
   return (
     <button
       type="button"
-      title={on ? "Свернуть" : "Подробно"}
-      onClick={onClick}
+      title={on ? "Свернуть карточку" : "Открыть карточку группы"}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
       className={cn(
-        "inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-medium leading-none transition-colors",
-        on ? "bg-[#b8c0cc] text-fg" : "bg-[#c5ccd6] text-[#3f4854] hover:bg-[#b4bcc8]",
+        "relative z-10 inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-medium leading-none transition-colors",
+        on ? "bg-primary text-white" : "bg-[#c5ccd6] text-[#3f4854] hover:bg-[#b4bcc8]",
       )}
     >
       {busy ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-fg/20 border-t-fg" /> : on ? "−" : "+"}
@@ -400,46 +319,10 @@ type GroupDetail = {
   members: GroupMember[];
   archive: GroupMember[];
   saving: boolean;
+  error?: string;
   slot: CrmSlot;
+  tariffs: { id: number; name: string; price: number; lessonsCount: number; duration: number }[];
 };
-
-type ClientRow = {
-  id: string;
-  crmId: number | null;
-  branchId: number | null;
-  child: string;
-  parent: string;
-  phone: string;
-  age: number | string | null;
-  ageBand?: string;
-  gender: string;
-  status: string;
-  studyStatus?: string;
-  courses: string[];
-  schools?: string[];
-  city: string;
-  branch: string;
-  groupLinks?: { id: number; name: string; branchId: number; school: string; active: boolean }[];
-  archived: boolean;
-};
-
-const AGE_BANDS = [
-  { id: "", label: "Все возраста" },
-  { id: "3-4", label: "3–4 года" },
-  { id: "5-6", label: "5–6 лет" },
-  { id: "7-9", label: "7–9 лет" },
-  { id: "10-12", label: "10–12 лет" },
-  { id: "13-17", label: "13–17 лет" },
-  { id: "18+", label: "18+ лет" },
-];
-
-const CLIENT_BRANCHES = [
-  { id: 0, label: "Все филиалы" },
-  { id: 1, label: "Гражданская" },
-  { id: 2, label: "ЦМИТ" },
-  { id: 3, label: "Луховицы" },
-  { id: 4, label: "Лето" },
-];
 
 function GroupNameField({ value, onChange, subject }: { value: string; onChange: (v: string) => void; subject?: string }) {
   const src = useRef<HTMLInputElement>(null);
@@ -503,7 +386,7 @@ function GroupNameField({ value, onChange, subject }: { value: string; onChange:
         onMouseLeave={hide}
         onFocus={show}
         onBlur={hide}
-        className="h-8 w-full rounded-md bg-surface-2 px-2 text-[0.8rem] ring-1 ring-black/8"
+        className="h-[26px] w-full rounded-md bg-surface-2 px-2 text-[0.64rem] ring-1 ring-black/8"
       />
       {shown
         ? createPortal(
@@ -589,13 +472,16 @@ function WeekDots({
   onView: (i: number) => void;
   onAdd: (b: LessonBeat) => void;
 }) {
-  const beats = beatsOf(s);
-  const i = ((index % beats.length) + beats.length) % beats.length;
+  const rawBeats = beatsOf(s);
+  const beats = rawBeats.filter((b) => b.lessonId || /^\d{1,2}:\d{2}$/.test(b.timeFrom || ""));
+  const list = beats.length ? beats : rawBeats;
+  const n = Math.max(1, list.length);
+  const i = ((index % n) + n) % n;
   const plus = useRef<HTMLButtonElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
-  const first = beats[0];
+  const first = list[0] || { day: 1, timeFrom: "18:00", timeTo: "19:30", lessonId: 0 };
   const [day, setDay] = useState(first.day === 2 ? 4 : 2);
   const [from, setFrom] = useState(first.timeFrom || "18:00");
   const [to, setTo] = useState(first.timeTo || "19:30");
@@ -636,15 +522,15 @@ function WeekDots({
     <div className="flex items-center justify-center gap-1">
       <button
         type="button"
-        title={beats.length > 1 ? `Занятие ${i + 1} из ${beats.length}. Нажмите, чтобы показать другой день.` : "Одно занятие в неделю"}
+        title={n > 1 ? `${n} занятия в неделю. Сейчас день ${i + 1}. Нажмите, чтобы показать другой.` : "Одно занятие в неделю"}
         className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-[0.75rem] font-semibold ring-1 ring-black/8"
         onClick={() => {
-          if (beats.length > 1) onView((i + 1) % beats.length);
+          if (n > 1) onView((i + 1) % n);
         }}
       >
-        {i + 1}
+        {n}
       </button>
-      {beats.length < 3 ? (
+      {list.length < 3 ? (
         <button
           ref={plus}
           type="button"
@@ -726,7 +612,7 @@ function CheckBox({
       ref={ref}
       type="checkbox"
       checked={all}
-      className="h-4 w-4 shrink-0 accent-primary"
+      className="h-[13px] w-[13px] shrink-0 accent-primary"
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => {
         e.stopPropagation();
@@ -795,35 +681,12 @@ function WhoTip({ names, onNeed }: { names?: string[]; onNeed: () => void }) {
   );
 }
 
-function MemberGrid({ title, items, onOpen, archive }: { title: string; items: GroupMember[]; onOpen: (m: GroupMember) => void; archive?: boolean }) {
-  if (!items.length) return null;
-  return (
-    <div className={archive ? "mt-4 rounded-2xl bg-[#d8dce3] p-3" : ""}>
-      <p className={cn("text-[0.72rem] font-semibold uppercase tracking-wider", archive ? "text-[#5c636c]" : "text-muted")}>{title} · {items.length}</p>
-      <ul className={cn("mt-1.5 divide-y overflow-hidden rounded-2xl ring-1", archive ? "divide-black/10 bg-[#e4e7ec] ring-black/10" : "divide-black/6 bg-white ring-black/6")}>
-        {items.map((m) => (
-          <li key={m.id}>
-            <button type="button" onClick={() => onOpen(m)} className={cn("flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left", archive ? "text-[#5a6169] hover:bg-black/[0.04]" : "hover:bg-primary/5")}>
-              <span>
-                <span className={cn("block font-medium", archive && "text-[#4a5058]")}>{m.name || "Без имени"}</span>
-                <span className={cn("block text-[0.75rem]", archive ? "text-[#7b828c]" : "text-muted")}>
-                  {[m.age, m.parent, m.from && `с ${m.from}`, m.to && `по ${m.to}`].filter(Boolean).join(" · ")}
-                </span>
-              </span>
-              <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold", archive ? "bg-[#c5cad1] text-[#4e555d]" : "bg-primary/10 text-primary")}>
-                {archive ? "архив" : m.status || "учится"}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 export function AdminSchedule() {
   const [slots, setSlots] = useState<CrmSlot[]>([]);
   const [at, setAt] = useState("");
+  const [pullN, setPullN] = useState(30);
+  const [pullUnit, setPullUnit] = useState<"min" | "hour" | "day" | "week">("min");
+  const [nextPullAt, setNextPullAt] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [openSchool, setOpenSchool] = useState("");
@@ -837,10 +700,15 @@ export function AdminSchedule() {
   const [aiComment, setAiComment] = useState("");
   const [aiAdds, setAiAdds] = useState<Draft[]>([]);
   const [picked, setPicked] = useState<Record<string, boolean>>({});
+  const [pickedSchools, setPickedSchools] = useState<Record<string, boolean>>({});
+  const [pickedCourses, setPickedCourses] = useState<Record<string, boolean>>({});
   const [who, setWho] = useState<Record<string, string[]>>({});
   const whoRef = useRef<Record<string, string[]>>({});
   const whoPending = useRef<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
+  const [addKind, setAddKind] = useState<"school" | "course" | "group">("group");
+  const [createSchool, setCreateSchool] = useState("");
+  const [createCourse, setCreateCourse] = useState({ name: "", age: "" });
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [listen, setListen] = useState(false);
   const [voiceMode, setVoiceMode] = useState(false);
@@ -848,6 +716,7 @@ export function AdminSchedule() {
   const [wizard, setWizard] = useState<Draft>(EMPTY_WIZARD);
   const [ask, setAsk] = useState("");
   const recRef = useRef<Rec | null>(null);
+  const ttsRef = useRef<HTMLAudioElement | null>(null);
   const voiceModeRef = useRef(false);
   const dictationRef = useRef(false);
   const pauseRef = useRef(false);
@@ -870,19 +739,13 @@ export function AdminSchedule() {
   const [flash, setFlash] = useState<Set<string>>(new Set());
   const [view, setView] = useState<Record<string, number>>({});
   const [fileOpen, setFileOpen] = useState(false);
-  const [pull, setPull] = useState({ open: false, step: "", done: false, added: 0, updated: 0, total: 0, error: "", kind: "groups" as "groups" | "clients" });
-  const [pane, setPane] = useState<"groups" | "clients" | "subjects" | "map">("groups");
-  const [clientQ, setClientQ] = useState("");
-  const [clientRows, setClientRows] = useState<ClientRow[]>([]);
-  const [clientBusy, setClientBusy] = useState(false);
-  const [clientStatus, setClientStatus] = useState("учится");
-  const [clientTotal, setClientTotal] = useState(0);
-  const [clientCounts, setClientCounts] = useState({ все: 0, учится: 0, лид: 0, архив: 0 });
-  const [clientBranchCounts, setClientBranchCounts] = useState<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 4: 0 });
-  const [clientBranch, setClientBranch] = useState(0);
-  const [clientAge, setClientAge] = useState("");
+  const [pull, setPull] = useState<CrmPullState>(emptyPull("groups"));
+  const [pane, setPane] = useState<"groups" | "clients" | "subjects" | "prices" | "tariffs" | "map">("groups");
   const [branchFilter, setBranchFilter] = useState("all");
   const [onlyMismatch, setOnlyMismatch] = useState(false);
+  const [siteTree, setSiteTree] = useState<SiteTree>(EMPTY_TREE);
+  const [crmTeachers, setCrmTeachers] = useState<CrmTeacher[]>([]);
+  const [dragId, setDragId] = useState("");
   const [pushUi, setPushUi] = useState({ open: false, step: "", done: false, created: 0, pushed: 0, failed: 0, error: "", lines: [] as string[] });
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [openingId, setOpeningId] = useState("");
@@ -890,14 +753,33 @@ export function AdminSchedule() {
   const [pupil, setPupil] = useState<CustomerCard | null>(null);
   const [pupilLoading, setPupilLoading] = useState(false);
   const [subjects, setSubjects] = useState<CrmSubject[]>([]);
+  const [creatingSubject, setCreatingSubject] = useState(false);
   const [levels, setLevels] = useState<{ id: number; name: string }[]>(SEED_LEVELS);
   const fileRef = useRef<HTMLDivElement>(null);
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const versionsRef = useRef<HTMLDivElement>(null);
   const versionsMenuRef = useRef<HTMLDivElement>(null);
   const promptEl = useRef<HTMLTextAreaElement>(null);
+  const closeGuard = useRef(0);
 
-  function take(res: { ok: boolean; slots?: CrmSlot[]; at?: string; versions?: Ver[]; error?: string; comment?: string; changes?: Change[]; adds?: Draft[]; pushed?: number; created?: string[]; applied?: string[] }) {
+  function take(res: {
+    ok: boolean;
+    slots?: CrmSlot[];
+    at?: string;
+    versions?: Ver[];
+    error?: string;
+    comment?: string;
+    changes?: Change[];
+    adds?: Draft[];
+    pushed?: number;
+    created?: string[];
+    applied?: string[];
+    pullN?: number;
+    pullUnit?: "min" | "hour" | "day" | "week";
+    nextPullAt?: string;
+    tree?: SiteTree;
+    teachers?: CrmTeacher[];
+  }) {
     if (!res.ok) {
       setMsg(res.error || "Ошибка");
       return;
@@ -905,6 +787,11 @@ export function AdminSchedule() {
     if (res.slots) setSlots(res.slots);
     if (res.at) setAt(res.at);
     if (res.versions) setVersions(res.versions);
+    if (res.tree) setSiteTree(res.tree);
+    if (res.teachers) setCrmTeachers(res.teachers);
+    if (res.pullN) setPullN(res.pullN);
+    if (res.pullUnit) setPullUnit(res.pullUnit);
+    if (res.nextPullAt !== undefined) setNextPullAt(res.nextPullAt || "");
     if (res.comment) setAiComment(res.comment);
     if (res.changes) setAiChanges(res.changes);
     if (res.adds) setAiAdds(res.adds);
@@ -934,23 +821,30 @@ export function AdminSchedule() {
 
   async function run(action: string, extra?: Record<string, unknown>) {
     setBusy(true);
-    const res = await adminSchedule({ data: { token: token(), action, ...extra } as never });
+    try {
+      const res = await adminSchedule({ data: { token: token(), action, ...extra } as never });
+      take(res as never);
+      return res;
+    } catch (e) {
+      const error = e instanceof Error ? e.message : "Ошибка запроса";
+      setMsg(error);
+      return { ok: false as const, error };
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function savePull(n: number, unit: "min" | "hour" | "day" | "week") {
+    const res = await adminSchedule({ data: { token: token(), action: "saveSettings", pullN: n, pullUnit: unit } });
     take(res as never);
-    setBusy(false);
-    return res;
+    if (res.ok) setMsg("Настройка сохранена. Автозагрузка выключена — данные читаются с сайта.");
   }
 
   useEffect(() => {
     void run("get");
-    const id = window.setInterval(() => {
-      void adminSchedule({ data: { token: token(), action: "pull" } }).then((res) => {
-        if (res.ok) {
-          take(res as never);
-          setMsg("Расписание само обновилось из AlfaCRM.");
-        }
-      });
-    }, 30 * 60 * 1000);
-    return () => window.clearInterval(id);
+    void adminSchedule({ data: { token: token(), action: "subjectsGet" } as never }).then((res) => {
+      if (res.ok && "subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as CrmSubject[]);
+    });
   }, []);
 
   useEffect(() => {
@@ -971,21 +865,6 @@ export function AdminSchedule() {
   useEffect(() => {
     slotsRef.current = slots;
   }, [slots]);
-  useEffect(() => {
-    if (pane !== "clients") return;
-    if (clientRows.length || clientBusy) return;
-    void loadClients("", "учится");
-  }, [pane]);
-  useEffect(() => {
-    if (pane !== "clients") return;
-    const key = "ra-roles-sync";
-    if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(key) === "1") return;
-    if (typeof sessionStorage !== "undefined") sessionStorage.setItem(key, "1");
-    void (async () => {
-      const res = await adminDossiers({ data: { token: token(), action: "reclassify" } });
-      if (res.ok) void loadClients(clientQ, clientStatus, clientBranch, clientAge);
-    })();
-  }, [pane]);
   useEffect(() => {
     const el = promptEl.current;
     if (!el) return;
@@ -1038,10 +917,12 @@ export function AdminSchedule() {
       openingRef.current = "";
       return;
     }
+    closeGuard.current = Date.now() + 800;
     setPupil(null);
     setOpeningId(s.id);
     openingRef.current = s.id;
     const still = () => openingRef.current === s.id;
+    const period = defaultPeriod(s.bDate, s.eDate);
     const base = (): GroupDetail => ({
       id: s.id,
       groupId: s.groupId,
@@ -1051,22 +932,29 @@ export function AdminSchedule() {
       hashtags: (s.hashtags || "").replace(/\s+/g, " ").trim(),
       makeup: s.makeup || "",
       statusId: s.statusId || 0,
-      bDate: s.bDate || "",
-      eDate: s.eDate || "",
+      bDate: s.bDate || period.bDate,
+      eDate: s.eDate || period.eDate,
       levelId: s.levelId || 0,
       signup: leadHref(s),
-      subjectId: s.subjectId || 0,
+      subjectId: s.groupId ? guessSubjectId(s, branchSubjectList(slots, s.branchId, subjects, s.id)) || s.subjectId || 0 : 0,
       calendar: [],
       members: [],
       archive: [],
       saving: false,
       slot: s,
+      tariffs: [],
     });
+    setDetail(base());
+    setMsg(`Карточка группы ${s.groupId || ""}`);
     try {
       if (!s.groupId) {
         const sub = await adminSchedule({ data: { token: token(), action: "subjectsGet" } as never });
-        if (sub.ok && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects as CrmSubject[]);
-        if (still()) setDetail(base());
+        if (sub.ok && "subjects" in sub && Array.isArray(sub.subjects)) {
+          const list = sub.subjects as CrmSubject[];
+          setSubjects(list);
+          const sid = guessSubjectId(s, branchSubjectList(slots, s.branchId, list, s.id));
+          if (sid && s.groupId) setDetail((d) => (d && d.id === s.id && !d.subjectId ? { ...d, subjectId: sid } : d));
+        }
         return;
       }
       const [res, people] = await Promise.all([
@@ -1075,7 +963,7 @@ export function AdminSchedule() {
       ]);
       if (!still()) return;
       if (!res.ok) {
-        setMsg(res.error || "Не удалось открыть группу в AlfaCRM.");
+        setMsg(res.error || "Карточка с сайта. AlfaCRM не ответила — данные группы можно править здесь.");
         return;
       }
       if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as CrmSubject[]);
@@ -1107,14 +995,15 @@ export function AdminSchedule() {
         hashtags: ((g?.hashtags || s.hashtags || "").replace(/\s+/g, " ").trim()),
         makeup: g?.makeup || s.makeup || "",
         statusId: g?.statusId || s.statusId || 0,
-        bDate: g?.bDate || s.bDate || "",
-        eDate: g?.eDate || s.eDate || "",
+        bDate: g?.bDate || s.bDate || period.bDate,
+        eDate: g?.eDate || s.eDate || period.eDate,
         levelId: g?.levelId || s.levelId || 0,
         signup: g?.signup || leadHref(s),
         subjectId: g?.subjectId || s.subjectId || 0,
         calendar: g?.calendar?.length ? g.calendar : [],
         members: active,
         archive,
+        tariffs: "tariffs" in res && Array.isArray(res.tariffs) ? (res.tariffs as GroupDetail["tariffs"]) : [],
       };
       setDetail(next);
       if (active.length) {
@@ -1127,6 +1016,8 @@ export function AdminSchedule() {
         const fresh = await adminSchedule({ data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId, fresh: true } as never });
         if (still()) applyGroupRes(s.id, s, fresh);
       }
+    } catch {
+      if (still()) setMsg("Карточка открыта по данным сайта. AlfaCRM не ответила.");
     } finally {
       if (still()) {
         setOpeningId("");
@@ -1140,8 +1031,9 @@ export function AdminSchedule() {
     setPupilLoading(true);
     setPupil({
       id: m.id,
+      cardId: clientCardId(m.id),
       branchId: branch,
-      name: m.name,
+      name: displayPersonName(m.name, m.parent, m.phones?.[0]),
       parent: m.parent,
       dob: m.dob,
       age: m.age,
@@ -1183,32 +1075,13 @@ export function AdminSchedule() {
     await openPupil({ id: crmId, name: "", parent: "", dob: "", age: "", gender: "", phones: [], status: "" }, branchId);
   }
 
-  function openClientRow(r: ClientRow) {
-    if (!r.crmId) return;
-    const age = r.age == null || r.age === "" ? "" : typeof r.age === "number" ? `${r.age} лет` : String(r.age);
-    void openPupil(
-      {
-        id: r.crmId,
-        name: r.child,
-        parent: r.parent,
-        dob: "",
-        age,
-        gender: r.gender,
-        phones: r.phone ? [r.phone] : [],
-        status: r.status,
-      },
-      r.branchId || 1,
-    ).then(() => {
-      setPupil((p) =>
-        p
-          ? {
-              ...p,
-              groups: p.groups?.length ? p.groups : r.groupLinks || [],
-              schools: p.schools?.length ? p.schools : r.schools || [],
-            }
-          : p,
-      );
+  async function mutatePupil(action: "customerSave" | "customerLesson" | "customerPay" | "customerTariff", extra: Record<string, unknown> = {}) {
+    if (!pupil) return;
+    const res = await adminSchedule({
+      data: { token: token(), action, customerId: pupil.id, branchId: pupil.branchId, ...extra } as never,
     });
+    if (!res.ok) throw new Error(("error" in res && res.error) || "AlfaCRM не приняла изменение.");
+    if ("customer" in res && res.customer) setPupil(res.customer as CustomerCard);
   }
 
   function openGroupFromLink(gid: number, branchId: number) {
@@ -1219,83 +1092,6 @@ export function AdminSchedule() {
     }
     setPupil(null);
     void openDetail(s);
-  }
-
-  async function loadClients(q = clientQ, status = clientStatus, branch = clientBranch, ageBand = clientAge) {
-    setClientBusy(true);
-    try {
-      const res = await adminSchedule({ data: { token: token(), action: "customersSearch", q, status, branchId: branch, ageBand } as never });
-      if (res.ok && "items" in res) {
-        setClientRows((res.items || []) as ClientRow[]);
-        setClientTotal(Number((res as { total?: number }).total) || (res.items || []).length);
-        const counts = (res as { counts?: { все: number; учится: number; лид: number; архив: number } }).counts;
-        if (counts) setClientCounts(counts);
-        const bc = (res as { branchCounts?: Record<number, number> }).branchCounts;
-        if (bc) setClientBranchCounts(bc);
-      }
-    } finally {
-      setClientBusy(false);
-    }
-  }
-
-  async function pullClients() {
-    setPull({ open: true, step: "Сверяю статусы с AlfaCRM…", done: false, added: 0, updated: 0, total: 0, error: "", kind: "clients" });
-    const branches: [number, string][] = [
-      [1, "Гражданская"],
-      [2, "ЦМИТ"],
-      [3, "Луховицы"],
-      [4, "Лето"],
-    ];
-    const studies: [number, string][] = [
-      [1, "текущие"],
-      [0, "лиды"],
-      [2, "архив"],
-    ];
-    let loaded = 0;
-    try {
-      const roles = await adminDossiers({ data: { token: token(), action: "reclassify" } });
-      if (!roles.ok) {
-        setPull((u) => ({ ...u, done: true, error: roles.error || "Не удалось сверить статусы.", kind: "clients" }));
-        return;
-      }
-      const crm = (roles as { crm?: { учится: number; лид: number; архив: number } }).crm;
-      setPull((u) => (u.done ? u : { ...u, step: crm ? `В CRM сейчас: клиенты ${crm.учится}, лиды ${crm.лид}, архив ${crm.архив}` : u.step, kind: "clients" }));
-      for (const [branchId, branchName] of branches) {
-        for (const [isStudy, label] of studies) {
-          let page = 0;
-          while (page < 80) {
-            setPull((u) => (u.done ? u : { ...u, step: `${branchName} · ${label} · стр. ${page + 1} · уже ${loaded}`, kind: "clients" }));
-            const res = await adminDossiers({
-              data: { token: token(), action: "syncSlice", branchId, isStudy, page, pages: 3 },
-            });
-            if (!res.ok) {
-              setPull((u) => ({ ...u, done: true, error: res.error || "AlfaCRM не ответила.", kind: "clients" }));
-              return;
-            }
-            const n = Number((res as { count?: number }).count) || 0;
-            loaded += n;
-            const total = Number((res as { total?: number }).total) || loaded;
-            setPull((u) => (u.done ? u : { ...u, added: loaded, total, kind: "clients" }));
-            if (!(res as { hasMore?: boolean }).hasMore) break;
-            page = Number((res as { nextPage?: number }).nextPage) || page + 3;
-          }
-        }
-      }
-      await adminDossiers({ data: { token: token(), action: "reclassify" } });
-      setPull({
-        open: true,
-        step: "",
-        done: true,
-        added: loaded,
-        updated: 0,
-        total: loaded,
-        error: "",
-        kind: "clients",
-      });
-      await loadClients(clientQ, clientStatus);
-    } catch {
-      setPull((u) => ({ ...u, done: true, error: "Не удалось загрузить клиентов.", kind: "clients" }));
-    }
   }
 
   function applyGroupRes(id: string, s: CrmSlot, res: Awaited<ReturnType<typeof adminSchedule>>) {
@@ -1336,21 +1132,48 @@ export function AdminSchedule() {
             signup: g.signup || d.signup,
             subjectId: g.subjectId || d.subjectId,
             calendar: g.calendar?.length ? g.calendar : d.calendar,
+            tariffs: "tariffs" in res && Array.isArray(res.tariffs) ? (res.tariffs as GroupDetail["tariffs"]) : d.tariffs,
           }
         : d,
     );
   }
 
-  async function saveDetail() {
-    if (!detail?.groupId) {
-      setMsg("Сначала выгрузите группу в AlfaCRM.");
+  async function createSubjectForBranch() {
+    if (!detail) return;
+    const name = wantedSubjectName(detail.slot);
+    if (!name) {
+      setDetail((d) => (d ? { ...d, error: "Нет названия курса — нечего создавать." } : d));
       return;
     }
-    setDetail((d) => (d ? { ...d, saving: true } : d));
+    setCreatingSubject(true);
+    setDetail((d) => (d ? { ...d, error: "" } : d));
+    try {
+      const res = await adminSchedule({
+        data: { token: token(), action: "subjectCreate", name, branchId: detail.branchId, courseId: detail.slot.courseId || "" } as never,
+      });
+      if (res.ok && "subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as CrmSubject[]);
+      const created = res.ok && "created" in res ? (res as { created?: { id?: number; name?: string } }).created : undefined;
+      if (created?.id) {
+        setDetail((d) => (d ? { ...d, subjectId: Number(created.id), error: "" } : d));
+        setMsg(`Предмет «${created.name}» создан в AlfaCRM и включён`);
+      } else {
+        setDetail((d) => (d ? { ...d, error: (!res.ok && res.error) || "AlfaCRM не создала предмет. Повторите." } : d));
+      }
+    } catch (e) {
+      setDetail((d) => (d ? { ...d, error: e instanceof Error ? e.message : "Не удалось создать предмет." } : d));
+    } finally {
+      setCreatingSubject(false);
+    }
+  }
+
+  async function saveDetail() {
+    if (!detail) return;
+    setDetail((d) => (d ? { ...d, saving: true, error: "" } : d));
     const res = await adminSchedule({
       data: {
         token: token(),
         action: "groupSave",
+        ids: [detail.id],
         groupId: detail.groupId,
         branchId: detail.branchId,
         note: detail.description,
@@ -1366,14 +1189,38 @@ export function AdminSchedule() {
       } as never,
     });
     take(res as never);
-    setDetail((d) => (d ? { ...d, saving: false } : d));
-    if (res.ok) setMsg("Подробности группы сохранены в AlfaCRM.");
+    if (!res.ok) {
+      setDetail((d) => (d ? { ...d, saving: false, error: res.error || "AlfaCRM не приняла группу." } : d));
+      setMsg(res.error || "AlfaCRM не приняла группу.");
+      return;
+    }
+    const gid = Number((res as { groupId?: number }).groupId || detail.groupId || 0);
+    const nextSlot = ((res as { slots?: CrmSlot[] }).slots || []).find((s) => s.id === detail.id);
+    const period = defaultPeriod(nextSlot?.bDate || detail.bDate, nextSlot?.eDate || detail.eDate);
+    setDetail((d) =>
+      d
+        ? {
+            ...d,
+            saving: false,
+            error: "",
+            groupId: gid || d.groupId,
+            slot: nextSlot || d.slot,
+            subjectId: nextSlot?.subjectId || d.subjectId,
+            signup: nextSlot?.signup || d.signup,
+            bDate: nextSlot?.bDate || d.bDate || period.bDate,
+            eDate: nextSlot?.eDate || d.eDate || period.eDate,
+          }
+        : d,
+    );
+    setMsg(detail.groupId ? "Подробности группы сохранены в AlfaCRM." : `Группа создана в AlfaCRM · gid ${gid}.`);
   }
 
   function shownBeat(s: CrmSlot) {
-    const beats = beatsOf(s);
+    const raw = beatsOf(s);
+    const beats = raw.filter((b) => b.lessonId || /^\d{1,2}:\d{2}$/.test(b.timeFrom || ""));
+    const list = beats.length ? beats : raw;
     const i = view[s.id] || 0;
-    return beats[((i % beats.length) + beats.length) % beats.length];
+    return list[((i % list.length) + list.length) % list.length] || list[0];
   }
 
   function patchBeat(s: CrmSlot, field: "day" | "timeFrom" | "timeTo", value: string | number) {
@@ -1407,31 +1254,56 @@ export function AdminSchedule() {
   }
 
   const tree = useMemo(() => {
-    const map = new Map<string, Map<string, CrmSlot[]>>();
-    const names = [...SCHOOLS.map((s) => s.label), "Прочее"];
-    for (const name of names) map.set(name, new Map());
+    const schools = siteTree.schools.length
+      ? siteTree.schools
+      : SCHOOLS.map((s) => ({ id: s.href, label: s.label, href: s.href }));
+    const filtered: CrmSlot[] = [];
     for (const s of slots) {
       if (branchFilter !== "all") {
         const key = s.branchId ? String(s.branchId) : `x-${s.city}|${s.branch}`;
         if (key !== branchFilter) continue;
       }
-      const mm = slotMismatch(s);
-      if (onlyMismatch && !mm.level) continue;
-      const school = names.includes(s.school) ? s.school : "Прочее";
-      const course = splitCourseAge(s.course || s.subject || s.groupName || "Без названия").name || "Без названия";
-      const bag = map.get(school)!;
-      if (!bag.has(course)) bag.set(course, []);
-      bag.get(course)!.push(s);
+      if (onlyMismatch && !slotMismatch(s).level) continue;
+      filtered.push(s);
     }
-    return names
-      .filter((school) => (map.get(school)?.size || 0) > 0)
-      .map((school) => ({
-        school,
-        courses: [...(map.get(school)?.entries() || [])]
-          .sort((a, b) => a[0].localeCompare(b[0], "ru"))
-          .map(([course, items]) => ({ course, items })),
-      }));
-  }, [slots, branchFilter, onlyMismatch]);
+    const used = new Set<string>();
+    const ageLo = (s: string) => {
+      const m = String(s || "").match(/(\d{1,2})/);
+      return m ? Number(m[1]) : 99;
+    };
+    const rows = schools.map((school) => {
+      const list = siteTree.courses
+        .filter((c) => c.schoolId === school.id)
+        .slice()
+        .sort((a, b) => ageLo(a.age || a.label) - ageLo(b.age || b.label) || a.label.localeCompare(b.label, "ru"));
+      const courses = list.map((c) => ({ course: c.label, courseId: c.id, href: c.href, items: [] as CrmSlot[] }));
+      for (const s of filtered) {
+        if (used.has(s.id)) continue;
+        const key = Number(s.groupId) > 0 ? `gid:${Number(s.branchId) || 0}:${s.groupId}` : s.id;
+        const cid = (siteTree.assign?.[key] || s.courseId || "") as string;
+        const byHit = courses.find((c) => c.courseId && c.courseId === cid);
+        if (byHit) {
+          byHit.items.push(s);
+          used.add(s.id);
+        }
+      }
+      const loose = filtered.filter((s) => s.school === school.label && !used.has(s.id));
+      if (loose.length) {
+        loose.forEach((s) => used.add(s.id));
+        courses.push({ course: "Без курса", courseId: `${school.id}#loose`, href: "", items: loose });
+      }
+      return { school: school.label, schoolId: school.id, courses };
+    });
+    const orphan = filtered.filter((s) => !used.has(s.id));
+    if (orphan.length) {
+      rows.push({
+        school: "Прочее",
+        schoolId: "other",
+        courses: [{ course: "Без курса", courseId: "other#loose", href: "", items: orphan }],
+      });
+    }
+    return rows;
+  }, [slots, branchFilter, onlyMismatch, siteTree]);
 
   useEffect(() => {
     if (!onlyMismatch) return;
@@ -1500,7 +1372,7 @@ export function AdminSchedule() {
   useEffect(() => {
     const items = openAll
       ? tree.flatMap((s) => s.courses.flatMap((c) => c.items))
-      : tree.flatMap((s) => s.courses).find((c) => c.course === openCourse)?.items || [];
+      : tree.flatMap((s) => s.courses).find((c) => c.courseId === openCourse)?.items || [];
     for (const s of items) void loadWho(s);
   }, [openCourse, openAll, tree]);
 
@@ -1523,7 +1395,7 @@ export function AdminSchedule() {
   }
 
   const DAYS_SHORT = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-  const box = "h-8 w-[4.6rem] shrink-0 rounded-full bg-surface-2 px-1 text-center text-[0.75rem] leading-8 ring-1 ring-black/8";
+  const box = "h-[26px] w-[3.7rem] shrink-0 rounded-full bg-surface-2 px-1 text-center text-[0.6rem] leading-[26px] ring-1 ring-black/8";
   const cell = box;
   const FIELD_RU: Record<string, string> = {
     limit: "места",
@@ -1538,15 +1410,18 @@ export function AdminSchedule() {
     school: "школа",
   };
 
-  const coursesOf = useMemo(() => {
-    const map = new Map<string, string[]>();
+  function teachersForBranch(branchId: number) {
+    const fromCrm = crmTeachers.filter((t) => t.branchIds.includes(branchId));
+    if (fromCrm.length) return fromCrm.slice().sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    const seen = new Map<number, CrmTeacher>();
     for (const s of slots) {
-      if (!map.has(s.school)) map.set(s.school, []);
-      if (s.course && !map.get(s.school)!.includes(s.course)) map.get(s.school)!.push(s.course);
+      if (s.branchId !== branchId) continue;
+      const id = s.teacherId || s.teacherIds?.[0];
+      if (!id || !s.teacher) continue;
+      if (!seen.has(id)) seen.set(id, { id, name: s.teacher, branchIds: [branchId] });
     }
-    return map;
-  }, [slots]);
-  const teachers = useMemo(() => [...new Set(slots.map((s) => s.teacher).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru")), [slots]);
+    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, "ru"));
+  }
 
   function parseVoice(text: string) {
     const t = text.trim().replace(/[.!?…,:;]+$/g, "").replace(/\s+/g, " ").trim();
@@ -1600,28 +1475,48 @@ export function AdminSchedule() {
     ].some((c) => a.includes(c) || (a.length > 10 && c.includes(a)));
   }
 
-  function commitSpeech(raw: string) {
-    if (isEcho(raw)) return;
-    const { body, cmd } = parseVoice(raw);
-    lastFinalRef.current = raw;
+  function flushPrompt() {
+    const live = (promptEl.current?.value || promptRef.current || aiPrompt || "").replace(/\s+/g, " ").trim();
+    promptRef.current = live;
+    listenBaseRef.current = live;
+    accRef.current = "";
+    setAiPrompt(live);
     setInterim("");
+    return live;
+  }
+
+  function commitSpeech(raw: string) {
+    const text = String(raw || "").replace(/\s+/g, " ").trim();
+    if (!text || isEcho(text)) return;
+    lastFinalRef.current = text;
+    accRef.current = "";
+    promptRef.current = text;
+    listenBaseRef.current = text;
+    setAiPrompt(text);
+    setInterim("");
+    const { body, cmd } = parseVoice(text);
     if (cmd) {
       void runCmd(cmd, body);
       return;
     }
     if (voiceModeRef.current) {
-      void handleScheduleVoice(body);
+      void handleScheduleVoice(body || text);
       return;
     }
-    if (body) {
-      setAiPrompt((p) => {
-        const n = p ? `${p} ${body}` : body;
-        promptRef.current = n;
-        listenBaseRef.current = n;
-        return n;
-      });
-      void absorbSpeech(body);
+    if (body) void absorbSpeech(body);
+  }
+
+  function unlockTts() {
+    try {
+      window.speechSynthesis?.getVoices();
+    } catch {
+      /* */
     }
+    const el = ttsRef.current || new Audio();
+    ttsRef.current = el;
+    el.src = SILENCE;
+    el.volume = 1;
+    el.play().catch(() => null);
   }
 
   async function playScheduleVoice(dataUrl: string, volume: number) {
@@ -1635,9 +1530,15 @@ export function AdminSchedule() {
     } catch {
       /* data url as is */
     }
-    const el = new Audio();
+    const el = ttsRef.current || new Audio();
+    ttsRef.current = el;
+    try {
+      el.pause();
+    } catch {
+      /* */
+    }
     el.src = src;
-    el.volume = Math.min(1, Math.max(0.4, volume || 1));
+    el.volume = Math.min(1, Math.max(0.5, volume || 1));
     await new Promise<void>((resolve) => {
       let done = false;
       const finish = () => {
@@ -1656,7 +1557,7 @@ export function AdminSchedule() {
       el.onended = () => finish();
       el.onerror = () => finish();
       el.onloadedmetadata = () => {
-        const ms = Math.max(1200, (Number.isFinite(el.duration) ? el.duration : 6) * 1000 + 600);
+        const ms = Math.max(800, (Number.isFinite(el.duration) ? el.duration : 4) * 1000 + 400);
         window.setTimeout(finish, ms);
       };
       el.play().catch(() => finish());
@@ -1674,21 +1575,27 @@ export function AdminSchedule() {
     } catch {
       /* */
     }
+    let played = false;
     try {
-      const res = await speakAgent({ data: { text, who: "olga" } });
-      if (res.ok && "audio" in res && res.audio) {
-        await playScheduleVoice(String(res.audio), "volume" in res ? Number(res.volume) || 1 : 1);
+      const res = (await Promise.race([
+        speakAgent({ data: { text, who: "olga" } }),
+        new Promise<{ ok: false }>((resolve) => window.setTimeout(() => resolve({ ok: false }), 8000)),
+      ])) as { ok: boolean; audio?: string; volume?: number };
+      if (res.ok && res.audio) {
+        await playScheduleVoice(String(res.audio), Number(res.volume) || 1);
+        played = true;
       }
     } catch {
       /* */
     }
+    if (!played) await speakBrowser(text);
     speakingRef.current = false;
     pauseRef.current = false;
-    ignoreUntilRef.current = Date.now() + 900;
+    ignoreUntilRef.current = Date.now() + 700;
     if (voiceModeRef.current) {
       window.setTimeout(() => {
         if (voiceModeRef.current && !speakingRef.current) startListen("loop");
-      }, 700);
+      }, 280);
     }
   }
 
@@ -1703,12 +1610,12 @@ export function AdminSchedule() {
   }
 
   async function runCmd(cmd: string, extraBody = "") {
+    const flushed = flushPrompt();
     if (extraBody && !voiceModeRef.current) {
-      setAiPrompt((p) => {
-        const n = p ? `${p} ${extraBody}` : extraBody;
-        promptRef.current = n;
-        return n;
-      });
+      const n = flushed && !flushed.endsWith(extraBody) ? `${flushed} ${extraBody}`.trim() : extraBody || flushed;
+      promptRef.current = n;
+      listenBaseRef.current = n;
+      setAiPrompt(n);
       await absorbSpeech(extraBody);
     }
     if (cmd === "отменить") {
@@ -1739,7 +1646,9 @@ export function AdminSchedule() {
     if (cmd === "готово" || cmd === "предпросмотр") {
       const w = wizardRef.current;
       const miss = missingScheduleFields(w);
-      if (!miss.length && w.course) {
+      const text = promptRef.current.trim() || flushed;
+      const looksEdit = /во\s+всех|у\s+всех|лимит|мест|цифр|поменя|измени|постав/i.test(text);
+      if (!miss.length && w.course && !looksEdit) {
         setAiAdds([w]);
         addsRef.current = [w];
         setAiComment("Предпросмотр. Нажмите «Опубликовать изменения», если всё верно.");
@@ -1747,15 +1656,30 @@ export function AdminSchedule() {
         if (voiceModeRef.current) await say("Карточка на экране. Скажите опубликовать, если всё верно.");
         return;
       }
-      const text = promptRef.current.trim();
       if (!text) {
         if (voiceModeRef.current) await say(miss[0]?.ask || "Сначала назовите курс.");
-        else setMsg("Сначала скажите, какую группу добавить.");
+        else setMsg("Сначала скажите, какую группу добавить, или что изменить.");
+        return;
+      }
+      const local = localLimitPreview(text, slotsRef.current, pickedRef.current);
+      if (local) {
+        setAiComment(local.comment);
+        setAiChanges(local.changes);
+        setAiAdds(local.adds);
+        changesRef.current = local.changes;
+        addsRef.current = local.adds;
+        setMsg(local.comment);
+        if (voiceModeRef.current) await say(local.changes.length ? `${local.comment} Скажите опубликовать.` : local.comment);
         return;
       }
       setMsg("Готовлю предпросмотр…");
-      await run("aiPreview", { prompt: text, ids: pickedRef.current.length ? pickedRef.current : slotsRef.current.map((s) => s.id) });
-      if (voiceModeRef.current) await say("Предпросмотр готов. Скажите опубликовать или поправьте поля.");
+      const preview = await run("aiPreview", { prompt: text, ids: pickedRef.current });
+      const n = preview && "changes" in preview && Array.isArray(preview.changes) ? preview.changes.length : 0;
+      const addsN = preview && "adds" in preview && Array.isArray(preview.adds) ? preview.adds.length : 0;
+      const comment = preview && "comment" in preview ? String(preview.comment || "") : "";
+      if (!n && !addsN) setMsg(comment || "Ничего не менял — уточните запрос.");
+      else setMsg(comment || "Предпросмотр готов.");
+      if (voiceModeRef.current) await say(comment || (n || addsN ? "Предпросмотр готов. Скажите опубликовать." : "Не поняла запрос. Повторите короче."));
       return;
     }
     if (cmd === "применить") {
@@ -1780,10 +1704,12 @@ export function AdminSchedule() {
     } catch {
       /* */
     }
+    doneRef.current = 0;
+    accRef.current = "";
     const rec = new Ctor();
     rec.lang = "ru-RU";
     rec.continuous = true;
-    rec.interimResults = !voiceModeRef.current;
+    rec.interimResults = true;
     rec.onresult = (e) => {
       if (pauseRef.current || speakingRef.current || Date.now() < ignoreUntilRef.current) return;
       let mid = "";
@@ -1796,29 +1722,24 @@ export function AdminSchedule() {
           doneRef.current = i + 1;
         } else mid = t;
       }
-      const shown = [accRef.current, mid].filter(Boolean).join(" ");
-      if (!voiceModeRef.current) setInterim(shown);
+      const utterance = [accRef.current, mid].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+      if (!utterance) return;
+      const shown = [listenBaseRef.current, utterance].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+      promptRef.current = shown;
+      setAiPrompt(shown);
+      setInterim("");
       window.clearTimeout(speechTimer.current);
-      if (parseVoice(shown).cmd) {
-        const raw = shown;
+      speechTimer.current = window.setTimeout(() => {
+        const fin = [listenBaseRef.current, accRef.current].filter(Boolean).join(" ").replace(/\s+/g, " ").trim() || shown;
         accRef.current = "";
-        setInterim("");
-        commitSpeech(raw);
-        return;
-      }
-      if (!mid && accRef.current && accRef.current !== lastFinalRef.current) {
-        const fin = accRef.current;
-        speechTimer.current = window.setTimeout(() => {
-          accRef.current = "";
-          commitSpeech(fin);
-        }, 700);
-      }
+        commitSpeech(fin);
+      }, 1400);
     };
     rec.onerror = () => {
       /* onend перезапустит */
     };
     rec.onend = () => {
-      setInterim("");
+      doneRef.current = 0;
       if (pauseRef.current || speakingRef.current) return;
       if (voiceModeRef.current || dictationRef.current) {
         window.setTimeout(() => {
@@ -1861,12 +1782,16 @@ export function AdminSchedule() {
 
   function toggleDictation() {
     if (listen && !voiceMode) {
+      const live = flushPrompt();
       stopListen();
+      dictationRef.current = false;
+      if (live) void absorbSpeech(live);
       return;
     }
     dictationRef.current = true;
+    listenBaseRef.current = promptRef.current.trim();
     startListen("loop");
-    setMsg("Слушаю. Говорите дальше, микрофон сам не выключаю. Стоп — ещё раз нажмите на микрофон.");
+    setMsg("Слушаю. Текст появляется в поле сразу. Стрелка — предпросмотр.");
   }
 
   function toggleVoiceMode() {
@@ -1875,12 +1800,13 @@ export function AdminSchedule() {
       setAsk("");
       return;
     }
+    unlockTts();
     setVoiceMode(true);
     voiceModeRef.current = true;
     dictationRef.current = false;
-    startListen("loop");
     wizardRef.current = { ...EMPTY_WIZARD };
     setWizard({ ...EMPTY_WIZARD });
+    startListen("loop");
     void say("Привет, что будем делать сегодня?");
   }
 
@@ -1915,7 +1841,12 @@ export function AdminSchedule() {
     promptRef.current = q;
     setMsg("Секунду…");
     try {
-      const res = await adminSchedule({ data: { token: token(), action: "voiceAsk", prompt: q, ids: pickedRef.current } as never });
+      const res = await Promise.race([
+        adminSchedule({ data: { token: token(), action: "voiceAsk", prompt: q, ids: pickedRef.current } as never }),
+        new Promise<{ ok: false; error: string }>((resolve) =>
+          window.setTimeout(() => resolve({ ok: false, error: "timeout" }), 22000),
+        ),
+      ]);
       if (!res.ok) {
         await say("Нет, я не могу это поправить, потому что агент расписания не ответил.");
         return;
@@ -1930,17 +1861,28 @@ export function AdminSchedule() {
       const groupId = "groupId" in res ? Number(res.groupId || 0) : 0;
       const slotId = "slotId" in res ? String(res.slotId || "") : "";
       const branchId = "branchId" in res ? Number(res.branchId || 0) : 0;
+      const filterStatus = "status" in res ? String((res as { status?: string }).status || "") : "";
+      const ageBand = "ageBand" in res ? String((res as { ageBand?: string }).ageBand || "") : "";
       if (kind === "openTab" || kind === "openClient" || kind === "openGroup") {
         if (paneTo === "clients" || kind === "openClient") setPane("clients");
         if (paneTo === "groups" || kind === "openGroup") setPane("groups");
-        if (query) {
-          setClientQ(query);
-          void loadClients(query);
-        } else if (kind === "openClient" || paneTo === "clients") {
-          void loadClients(query);
-        }
         if (kind === "openClient" && customerId) {
-          await openPupilById(customerId, branchId || 1);
+          window.setTimeout(() => {
+            window.dispatchEvent(new CustomEvent("ra-open-client", { detail: { customerId, branchId: branchId || 1, q: query } }));
+          }, 120);
+        } else if (filterStatus || ageBand || query || paneTo === "clients") {
+          window.setTimeout(() => {
+            window.dispatchEvent(
+              new CustomEvent("ra-clients-filter", {
+                detail: {
+                  q: query,
+                  status: filterStatus === "лид" || filterStatus === "архив" || filterStatus === "учится" ? filterStatus : undefined,
+                  branchId: branchId || undefined,
+                  ageBand: ageBand || undefined,
+                },
+              }),
+            );
+          }, 120);
         }
         if (kind === "openGroup" && (groupId || slotId)) {
           const slot = slotsRef.current.find((s) => s.id === slotId || Number(s.groupId) === groupId);
@@ -1969,8 +1911,18 @@ export function AdminSchedule() {
         if (voiceModeRef.current) await say("Выгрузила отмеченные группы в AlfaCRM.");
         return;
       }
-      const ids = pickedRef.current.length ? pickedRef.current : slotsRef.current.map((s) => s.id);
-      const preview = await run("aiPreview", { prompt: q, ids });
+      const local = localLimitPreview(q, slotsRef.current, pickedRef.current);
+      if (local) {
+        setAiComment(local.comment);
+        setAiChanges(local.changes);
+        setAiAdds(local.adds);
+        changesRef.current = local.changes;
+        addsRef.current = local.adds;
+        setMsg(local.comment);
+        await say(local.changes.length ? `${local.comment} Скажите опубликовать.` : local.comment);
+        return;
+      }
+      const preview = await run("aiPreview", { prompt: q, ids: pickedRef.current });
       const n = preview && "changes" in preview && Array.isArray(preview.changes) ? preview.changes.length : 0;
       const comment = preview && "comment" in preview ? String(preview.comment || "") : "";
       if (!n) {
@@ -1985,30 +1937,52 @@ export function AdminSchedule() {
 
   async function pullCrm() {
     setBusy(true);
-    setPull({ open: true, step: "Подключаюсь к AlfaCRM…", done: false, added: 0, updated: 0, total: 0, error: "", kind: "groups" });
-    const steps = ["Читаю филиалы и предметы…", "Загружаю группы и уроки…", "Сверяю с расписанием на сайте…"];
-    let i = 0;
-    const timer = window.setInterval(() => {
-      i = Math.min(i + 1, steps.length - 1);
-      setPull((u) => (u.done ? u : { ...u, step: steps[i] }));
-    }, 1100);
+    setPull({ ...emptyPull("groups"), open: true, step: "Подключаюсь к AlfaCRM…" });
     try {
-      const res = await adminSchedule({ data: { token: token(), action: "pull" } });
-      window.clearInterval(timer);
-      take(res as never);
-      if (!res.ok) {
-        setPull((u) => ({ ...u, done: true, error: res.error || "AlfaCRM не ответила." }));
-      } else {
-        const added = Number((res as { added?: number }).added || 0);
-        const updated = Number((res as { updated?: number }).updated || 0);
-        const total = Array.isArray((res as { slots?: CrmSlot[] }).slots) ? (res as { slots: CrmSlot[] }).slots.length : 0;
-        setDirty(new Set());
-        setPull({ open: true, step: "", done: true, added, updated, total, error: "", kind: "groups" });
-        setMsg(`Загружено. Новых групп: ${added}. Обновлено: ${updated}. На сайте ${total}.`);
+      const st = await pullFromCrm("groups", (step, lines, done, total) => {
+        setPull((u) => (u.done ? u : { ...u, step: step || u.step, lines, added: done, total }));
+      });
+      const fresh = await adminSchedule({ data: { token: token(), action: "get" } });
+      take(fresh as never);
+      if (!st.ok) {
+        const total = slotsRef.current.length;
+        if (total) {
+          setDirty(new Set());
+          setPull({
+            ...emptyPull("groups"),
+            open: true,
+            done: true,
+            total,
+            lines: [{ ok: true, text: `На сайте уже ${total} групп. AlfaCRM: ${st.error || "не ответила"}.` }],
+          });
+        } else {
+          setPull((u) => ({ ...u, done: true, error: st.error || "AlfaCRM не ответила." }));
+        }
+        setBusy(false);
+        return;
       }
-    } catch {
-      window.clearInterval(timer);
-      setPull((u) => ({ ...u, done: true, error: "Не удалось загрузить." }));
+      setDirty(new Set());
+      setPull({
+        open: true,
+        kind: "groups",
+        step: "",
+        done: true,
+        error: String((st as { error?: string }).error || ""),
+        lines: ((st as { lines?: { ok: boolean; text: string }[] }).lines || []) as { ok: boolean; text: string }[],
+        added: Number((st as { added?: number }).added || 0),
+        updated: Number((st as { updated?: number }).updated || 0),
+        total: Number((st as { total?: number }).total || slotsRef.current.length),
+      });
+    } catch (e) {
+      const total = slotsRef.current.length;
+      setPull({
+        ...emptyPull("groups"),
+        open: true,
+        done: true,
+        error: total ? "" : e instanceof Error ? e.message : "Не удалось загрузить.",
+        total,
+        lines: total ? [{ ok: true, text: `Показано расписание с сайта: ${total} групп.` }] : [],
+      });
     }
     setBusy(false);
   }
@@ -2033,14 +2007,13 @@ export function AdminSchedule() {
       if (!res.ok) {
         setPushUi((u) => ({ ...u, done: true, error: res.error || "AlfaCRM не приняла выгрузку." }));
       } else {
-        const rows = Array.isArray((res as { results?: { id: string; ok: boolean; groupId?: number; created?: boolean; error?: string }[] }).results)
-          ? (res as { results: { id: string; ok: boolean; groupId?: number; created?: boolean; error?: string }[] }).results
-          : [];
-        const created = Number((res as { created?: number }).created || rows.filter((r) => r.created).length);
-        const pushed = Number((res as { pushed?: number }).pushed || rows.filter((r) => r.ok).length);
-        const failed = Number((res as { failed?: number }).failed || rows.filter((r) => !r.ok).length);
+        const pack = res as unknown as { results?: { id: string; ok: boolean; groupId?: number; created?: boolean; error?: string }[]; created?: number; pushed?: number; failed?: number; slots?: CrmSlot[] };
+        const rows = Array.isArray(pack.results) ? pack.results : [];
+        const created = Number(pack.created || rows.filter((r) => r.created).length);
+        const pushed = Number(pack.pushed || rows.filter((r) => r.ok).length);
+        const failed = Number(pack.failed || rows.filter((r) => !r.ok).length);
         const lines = rows.map((r) => {
-          const s = (res as { slots?: CrmSlot[] }).slots?.find((x) => x.id === r.id);
+          const s = pack.slots?.find((x) => x.id === r.id || Number(x.groupId) === Number(r.groupId));
           const name = s?.groupName || r.id;
           if (r.ok && r.created) return `Создана «${name}» · gid ${r.groupId}`;
           if (r.ok) return `Обновлена «${name}» · gid ${r.groupId || s?.groupId}`;
@@ -2087,12 +2060,54 @@ export function AdminSchedule() {
     }
   }
 
+  async function deleteSelected() {
+    const schoolIds = Object.keys(pickedSchools).filter((id) => pickedSchools[id] && id !== "other");
+    const courseIds = Object.keys(pickedCourses).filter((id) => pickedCourses[id] && !id.endsWith("#loose"));
+    const groupIds = pickedIds;
+    if (!schoolIds.length && !courseIds.length && !groupIds.length) return;
+    const bits: string[] = [];
+    if (schoolIds.length) bits.push(schoolIds.length === 1 ? "1 школу из структуры" : `${schoolIds.length} школы из структуры`);
+    if (courseIds.length) bits.push(courseIds.length === 1 ? "1 курс из структуры" : `${courseIds.length} курса из структуры`);
+    if (groupIds.length) bits.push(groupIds.length === 1 ? "1 группу из расписания" : `${groupIds.length} групп из расписания`);
+    if (!window.confirm(`Удалить: ${bits.join(", ")}? Группы из AlfaCRM не удаляются. Курсы и школы пропадают только на сайте.`)) return;
+    if (groupIds.length) {
+      const res = await run("remove", { ids: groupIds });
+      if (res.ok) {
+        setPicked({});
+        setDirty((d) => {
+          const n = new Set(d);
+          for (const id of groupIds) n.delete(id);
+          return n;
+        });
+      }
+    }
+    if (schoolIds.length || courseIds.length) {
+      await run("treeDeleteSelected", { schoolIds, courseIds });
+      setPickedSchools({});
+      setPickedCourses({});
+    }
+    setMsg(`Удалено: ${bits.join(", ")}.`);
+  }
+
+  const subjectOffer = detail
+    ? {
+        wanted: wantedSubjectName(detail.slot),
+        ok: subjectFitsCourse(detail.slot, subjects.find((s) => s.id === detail.subjectId)),
+      }
+    : null;
+
   return (
-    <section className="mt-10 space-y-4">
+    <section
+      className={cn(
+        "mt-10 space-y-4",
+        pane === "clients" &&
+          "lg:sticky lg:top-[5.25rem] lg:z-10 lg:flex lg:max-h-[calc(100dvh-5.25rem)] lg:flex-col lg:overflow-hidden lg:bg-bg lg:pb-3",
+      )}
+    >
       <AdminSectionHead
         section="schedule"
         title="Расписание занятий"
-        tip="Группы по школам и курсам. Можно править в таблице, сохранить на сайте, выгрузить в AlfaCRM, скачать или загрузить файл. ИИ меняет пачкой — всегда есть откат."
+        tip="Группы по школам и курсам (courseId). Связи только по ID: группа→курс, предмет, абонемент, клиент."
         aside={
           <label className="flex items-center gap-2 text-sm text-muted">
             Филиал
@@ -2152,11 +2167,13 @@ export function AdminSchedule() {
         </div>
       </AdminSectionHead>
 
-      <div className="flex items-end gap-1 border-b border-black/10">
+      <div className="flex shrink-0 flex-nowrap items-center gap-1 border-b border-black/10">
         {([
           ["groups", "Группы"],
           ["clients", "Клиенты"],
           ["subjects", "Предметы"],
+          ["prices", "Цены курсов"],
+          ["tariffs", "Абонементы"],
           ["map", "Соответствия"],
         ] as const).map(([id, label]) => (
           <button
@@ -2173,143 +2190,29 @@ export function AdminSchedule() {
         ))}
       </div>
 
-      {pane === "subjects" ? <AdminSubjects /> : null}
-      {pane === "map" ? <AdminScheduleMap embedded /> : null}
-      {pane === "clients" ? (
-        <div className="mt-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              value={clientQ}
-              onChange={(e) => setClientQ(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void loadClients(clientQ);
-              }}
-              placeholder="Фамилия, имя, телефон, курс…"
-              className="h-10 min-w-[16rem] flex-1 rounded-xl bg-surface-2 px-3 text-sm ring-1 ring-black/10"
-            />
-            <Button type="button" size="sm" className="h-10" disabled={clientBusy} onClick={() => void loadClients(clientQ)}>
-              Найти
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="h-10"
-              disabled={clientBusy || pull.open}
-              onClick={() => void pullClients()}
-            >
-              Загрузить из AlfaCRM
-            </Button>
-            <Button type="button" size="sm" variant={voiceMode ? "primary" : "secondary"} className="h-10" onClick={toggleVoiceMode}>
-              {voiceMode ? "Голосовой режим · вкл" : "Голосовой режим"}
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {(["учится", "лид", "архив", "все"] as const).map((st) => (
-              <button
-                key={st}
-                type="button"
-                onClick={() => {
-                  setClientStatus(st);
-                  void loadClients(clientQ, st, clientBranch, clientAge);
-                }}
-                className={cn("rounded-full px-3 py-1 text-[0.78rem] font-semibold", clientStatus === st ? "bg-primary text-white" : "bg-surface-2 text-fg")}
-              >
-                {st === "все" ? "Все" : st === "учится" ? "Текущие" : st === "лид" ? "Лиды" : "Архив"}
-                {clientCounts[st] ? ` ${clientCounts[st]}` : ""}
-              </button>
-            ))}
-            <p className="ml-auto self-center text-[0.78rem] text-muted">
-              {clientBusy ? "ищу…" : `${clientRows.length} из ${clientTotal || clientRows.length}`}
+      {pane === "groups" ? (
+        <AdminSelfTest
+          section="schedule-groups"
+          label="Проверить группы"
+          tip="Прогоняет все функции вкладки с записью в AlfaCRM. Удаление в CRM не делается. Если создали тестовую группу — удалите её сами. Отчёт появляется только после всех проверок. Сбой — красным блоком."
+          heading={
+            <p className="max-w-2xl text-sm text-muted">
+              Все функции вкладки, с записью в AlfaCRM. Удаление в CRM не выполняется: тестовую группу оператор стирает сам. Отчёт — после полной проверки; ошибки — отдельным блоком.
             </p>
-          </div>
-          <p className="text-[0.78rem] leading-snug text-muted">
-            Как в AlfaCRM: <b className="text-fg">текущие</b> — клиенты, которых не отправили в архив.
-            <b className="text-fg"> Лид</b> — заявка, ещё не клиент.
-            <b className="text-fg"> Архив</b> — клиента перенесли в архив. Снятые из базы сюда не входят.
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {CLIENT_BRANCHES.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                onClick={() => {
-                  setClientBranch(b.id);
-                  void loadClients(clientQ, clientStatus, b.id, clientAge);
-                }}
-                className={cn("rounded-full px-3 py-1 text-[0.78rem] font-semibold", clientBranch === b.id ? "bg-primary text-white" : "bg-surface-2 text-fg")}
-              >
-                {b.label}
-                {b.id && clientBranchCounts[b.id] ? ` ${clientBranchCounts[b.id]}` : ""}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {AGE_BANDS.map((b) => (
-              <button
-                key={b.id || "all"}
-                type="button"
-                onClick={() => {
-                  setClientAge(b.id);
-                  void loadClients(clientQ, clientStatus, clientBranch, b.id);
-                }}
-                className={cn("rounded-full px-3 py-1 text-[0.78rem] font-semibold", clientAge === b.id ? "bg-primary text-white" : "bg-surface-2 text-fg")}
-              >
-                {b.label}
-              </button>
-            ))}
-          </div>
-          {ask ? <p className="rounded-xl bg-primary/10 px-3 py-2 text-sm font-medium text-fg">{ask}</p> : null}
-          <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/8">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-surface-2 text-[0.68rem] uppercase tracking-wider text-muted">
-                <tr>
-                  <th className="px-3 py-2 font-semibold">Ребёнок</th>
-                  <th className="px-3 py-2 font-semibold">Пол</th>
-                  <th className="px-3 py-2 font-semibold">Возраст</th>
-                  <th className="px-3 py-2 font-semibold">Филиал</th>
-                  <th className="px-3 py-2 font-semibold">Направление</th>
-                  <th className="px-3 py-2 font-semibold">Заказчик</th>
-                  <th className="px-3 py-2 font-semibold">Статус</th>
-                </tr>
-              </thead>
-              <tbody>
-                {clientRows
-                  .slice(0, 250)
-                  .map((r) => (
-                    <tr key={r.id} className="cursor-pointer border-t border-black/6 hover:bg-primary/5" onClick={() => openClientRow(r)}>
-                      <td className="px-3 py-2 font-medium">{r.child || "Без имени"}</td>
-                      <td className="px-3 py-2 text-muted">{r.gender || "—"}</td>
-                      <td className="px-3 py-2 text-muted">{r.age || "—"}</td>
-                      <td className="px-3 py-2 text-muted">{r.branch?.replace("Коломна, ", "") || "—"}</td>
-                      <td className="px-3 py-2 text-muted">{(r.schools || []).slice(0, 2).join(", ") || (r.courses || []).slice(0, 1).join(", ") || "—"}</td>
-                      <td className="px-3 py-2">{r.parent || "—"}</td>
-                      <td className="px-3 py-2">
-                        <span className={cn("rounded-full px-2 py-0.5 text-[0.68rem] font-semibold", r.status === "учится" ? "bg-primary/10 text-primary" : r.status === "лид" ? "bg-amber-100 text-amber-900" : "bg-surface-2 text-muted")}>
-                          {r.status === "учится" ? "Клиент" : r.status === "лид" ? "Лид" : r.status === "архив" ? "Архив" : r.status || "—"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-            {!clientBusy && !clientRows.length ? (
-              <p className="px-4 py-6 text-sm text-muted">
-                {clientStatus === "архив"
-                  ? "Архивных в этой выборке нет. Нажмите «Загрузить из AlfaCRM» — подтянем вкладку «Архивные»."
-                  : clientStatus === "учится"
-                    ? "Текущих клиентов пока нет. Нажмите «Загрузить из AlfaCRM» — цифры будут как во вкладке «Текущие» в CRM."
-                    : "Пока пусто. Нажмите «Загрузить из AlfaCRM» или скажите: «найди Иванова»."}
-              </p>
-            ) : null}
-          </div>
-        </div>
+          }
+        />
       ) : null}
+
+      {pane === "subjects" ? <AdminSubjects /> : null}
+      {pane === "prices" ? <AdminCoursePrices /> : null}
+      {pane === "tariffs" ? <AdminTariffs /> : null}
+      {pane === "map" ? <AdminScheduleMap embedded /> : null}
+      {pane === "clients" ? <AdminClients onOpenGroup={openGroupFromLink} hint={ask} /> : null}
       {pane === "groups" ? (
       <div>
       <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-visible pb-0.5">
-        <Button type="button" size="sm" variant="secondary" className="h-8 shrink-0 px-3 text-[0.78rem]" disabled={busy} onClick={() => { setAddOpen((v) => !v); document.getElementById("ra-sched-ai")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>
-          Добавить расписание вручную
+        <Button type="button" size="sm" variant="secondary" className="h-8 shrink-0 px-3 text-[0.78rem]" disabled={busy} onClick={() => { setAddKind("group"); setAddOpen((v) => !v); window.setTimeout(() => document.getElementById("ra-add-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 40); }}>
+          Добавить
         </Button>
         <Button type="button" size="sm" className="h-8 shrink-0 px-3 text-[0.78rem]" variant="secondary" disabled={busy} onClick={() => void pullCrm()}>
           Загрузить из AlfaCRM
@@ -2384,10 +2287,13 @@ export function AdminSchedule() {
           size="sm"
           className="h-8 shrink-0 px-3 text-[0.78rem]"
           variant="secondary"
-          disabled={busy || !pickedIds.length}
-          onClick={() => void removeSlots(pickedIds)}
+          disabled={busy || !(pickedIds.length || Object.values(pickedSchools).some(Boolean) || Object.values(pickedCourses).some(Boolean))}
+          onClick={() => void deleteSelected()}
         >
-          Удалить выбранные{pickedIds.length ? ` · ${pickedIds.length}` : ""}
+          Удалить выбранные
+          {pickedIds.length || Object.values(pickedSchools).some(Boolean) || Object.values(pickedCourses).some(Boolean)
+            ? ` · ${pickedIds.length + Object.values(pickedSchools).filter(Boolean).length + Object.values(pickedCourses).filter(Boolean).length}`
+            : ""}
         </Button>
         {versions.length && !onlyMismatch ? (
           <div className="relative shrink-0" ref={versionsRef}>
@@ -2452,7 +2358,7 @@ export function AdminSchedule() {
             <button type="button" className="font-semibold text-primary" onClick={() => setIds(slots.map((s) => s.id), true)}>
               Выделить всё
             </button>
-            <button type="button" className="font-semibold text-primary" onClick={() => setPicked({})}>
+            <button type="button" className="font-semibold text-primary" onClick={() => { setPicked({}); setPickedSchools({}); setPickedCourses({}); }}>
               Снять
             </button>
           </div>
@@ -2475,12 +2381,13 @@ export function AdminSchedule() {
           <textarea
             id="ra-sched-prompt"
             ref={promptEl}
-            value={voiceMode ? aiPrompt : interim ? [listenBaseRef.current, interim].filter(Boolean).join(" ") : aiPrompt}
-            onChange={(e) => { setAiPrompt(e.target.value); promptRef.current = e.target.value; }}
+            value={aiPrompt}
+            onChange={(e) => { setAiPrompt(e.target.value); promptRef.current = e.target.value; listenBaseRef.current = e.target.value; }}
             rows={1}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
+                flushPrompt();
                 void runCmd("готово");
               }
             }}
@@ -2490,13 +2397,24 @@ export function AdminSchedule() {
           <button
             type="button"
             title="Отправить запрос — предпросмотр"
-            disabled={busy || (!aiPrompt.trim() && !wizard.course)}
+            disabled={busy}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-40"
-            onClick={() => void runCmd("готово")}
+            onClick={() => {
+              const t = flushPrompt();
+              if (!t && !wizard.course) {
+                setMsg("Сначала скажите или напишите, что изменить.");
+                return;
+              }
+              void runCmd("готово");
+            }}
           >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
-              <path d="M5 12h12M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            {busy ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            ) : (
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+                <path d="M5 12h12M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
           </button>
           <button
             type="button"
@@ -2512,7 +2430,9 @@ export function AdminSchedule() {
               {voiceMode ? "Голосовой режим · вкл" : "Голосовой режим"}
             </Button>
         </div>
-        {aiComment && !aiAdds.length && !aiChanges.length ? <p className="mt-2 text-sm text-muted">{aiComment}</p> : null}
+        {aiComment && !aiAdds.length && !aiChanges.length ? (
+          <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-medium text-fg ring-1 ring-black/8">{aiComment}</p>
+        ) : null}
         {aiAdds.length || aiChanges.length ? (
           <div className="mt-4 overflow-hidden rounded-2xl bg-white ring-1 ring-black/8">
             <p className="px-4 py-3 text-sm font-semibold">
@@ -2562,7 +2482,12 @@ export function AdminSchedule() {
                           </select>
                         </td>
                         <td className="px-2 py-1.5">
-                          <input list="ra-teachers" value={a.teacher} onChange={(e) => patchAdd(i, "teacher", e.target.value)} className="h-8 w-full rounded-md bg-surface-2 px-2 text-[0.75rem] ring-1 ring-black/8" />
+                          <select value={a.teacher} onChange={(e) => patchAdd(i, "teacher", e.target.value)} className="h-8 w-full rounded-md bg-surface-2 px-1 text-[0.72rem] ring-1 ring-black/8">
+                            <option value="">— педагог филиала —</option>
+                            {teachersForBranch(matchBranch(a.branch).id).map((t) => (
+                              <option key={t.id} value={t.name}>{t.name}</option>
+                            ))}
+                          </select>
                         </td>
                       </tr>
                     ))}
@@ -2615,114 +2540,343 @@ export function AdminSchedule() {
       )}
 
       {onlyMismatch || !addOpen ? null : (
-        <article className="rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
-          <p className="font-display text-xl">Новая группа</p>
-          <p className="mt-1 text-sm text-muted">Поля по порядку. Стрелка у запроса кладёт группу в предпросмотр — на сайт после «Опубликовать изменения».</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="text-sm">
-              <span className="mb-1 block text-muted">Школа</span>
-              <select value={draft.school} onChange={(e) => setDraft((d) => ({ ...d, school: e.target.value, course: "" }))} className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10">
-                <option value="">Выберите школу</option>
-                {(SCHOOL_ORDER.filter((s) => s !== "Прочее")).map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-muted">Курс</span>
-              <input list="ra-courses" value={draft.course} onChange={(e) => setDraft((d) => ({ ...d, course: e.target.value }))} placeholder="Художественная студия (5-6 лет)" className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
-              <datalist id="ra-courses">
-                {(coursesOf.get(draft.school) || []).map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-muted">Возраст</span>
-              <input value={draft.age} onChange={(e) => setDraft((d) => ({ ...d, age: e.target.value }))} placeholder="5-6 лет" className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-muted">День недели</span>
-              <select value={draft.day} onChange={(e) => setDraft((d) => ({ ...d, day: Number(e.target.value) }))} className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10">
-                {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                  <option key={d} value={d}>{["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"][d]}</option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-muted">С</span>
-              <input value={draft.timeFrom} onChange={(e) => setDraft((d) => ({ ...d, timeFrom: e.target.value }))} placeholder="18:30" className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-muted">До</span>
-              <input value={draft.timeTo} onChange={(e) => setDraft((d) => ({ ...d, timeTo: e.target.value }))} placeholder="20:00" className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-muted">Филиал</span>
-              <select value={draft.branch} onChange={(e) => setDraft((d) => ({ ...d, branch: e.target.value }))} className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10">
-                <option value="">Выберите филиал</option>
-                {BRANCH_OPTS.map((b) => (
-                  <option key={b} value={b}>{b}</option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-muted">Педагог</span>
-              <input list="ra-teachers" value={draft.teacher} onChange={(e) => setDraft((d) => ({ ...d, teacher: e.target.value }))} placeholder="Фамилия из списка" className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
-              <datalist id="ra-teachers">
-                {teachers.map((t) => (
-                  <option key={t} value={t} />
-                ))}
-              </datalist>
-            </label>
+        <article id="ra-add-panel" className="scroll-mt-24 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
+          <div className="flex rounded-2xl bg-surface-2 p-1">
+            {([
+              ["school", "Школа"],
+              ["course", "Направление"],
+              ["group", "Группа"],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setAddKind(id)}
+                className={cn("flex-1 rounded-xl py-2 text-sm font-semibold transition-colors", addKind === id ? "bg-white text-fg shadow-sm" : "text-muted hover:text-fg")}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-          <div className="mt-4 flex justify-end">
-            <Button
-              type="button"
-              disabled={busy || !draft.school || !draft.course || !draft.branch}
-              onClick={() => {
-                setAiAdds((list) => [...list, { ...draft }]);
-                setAiComment(`В предпросмотре ${aiAdds.length + 1} групп. Нажмите «Опубликовать изменения».`);
-                setDraft(EMPTY_DRAFT);
-              }}
-            >
-              Готово
-            </Button>
-          </div>
+          {addKind === "school" ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-muted">Новая школа на сайте. Например «Танцевальная школа». Потом в ней — направления и группы. В AlfaCRM уйдёт вместе с первой группой.</p>
+              <label className="block text-sm">
+                <span className="mb-1 block text-muted">Название школы</span>
+                <input value={createSchool} onChange={(e) => setCreateSchool(e.target.value)} placeholder="Танцевальная школа" className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+              </label>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  disabled={busy || !createSchool.trim()}
+                  onClick={async () => {
+                    const label = createSchool.trim();
+                    const res = await run("treeAddSchool", { label });
+                    if (!res.ok) return;
+                    setCreateSchool("");
+                    setDraft((d) => ({ ...d, school: label, course: "", age: "" }));
+                    setAddKind("course");
+                    setOpenSchool(label);
+                    setMsg(`Школа «${label}» создана. Добавьте направление.`);
+                  }}
+                >
+                  Создать школу
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {addKind === "course" ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-muted">Направление внутри школы. Например «Бальные танцы» для 3–4 лет. После этого можно сразу завести группу.</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-sm">
+                  <span className="mb-1 block text-muted">Школа</span>
+                  <select
+                    value={siteTree.schools.find((s) => s.id === draft.schoolId || s.label === draft.school)?.id || ""}
+                    onChange={(e) => {
+                      const sch = siteTree.schools.find((s) => s.id === e.target.value);
+                      setDraft((d) => ({ ...d, school: sch?.label || "", schoolId: sch?.id || "", course: "", courseId: "" }));
+                    }}
+                    className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+                  >
+                    <option value="">Выберите школу</option>
+                    {siteTree.schools.map((s) => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-muted">Направление</span>
+                  <input value={createCourse.name} onChange={(e) => setCreateCourse((c) => ({ ...c, name: e.target.value }))} placeholder="Бальные танцы" className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+                </label>
+                <label className="text-sm sm:col-span-2">
+                  <span className="mb-1 block text-muted">Возраст</span>
+                  <input value={createCourse.age} onChange={(e) => setCreateCourse((c) => ({ ...c, age: e.target.value }))} placeholder="3-4 года" className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+                </label>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  disabled={busy || !draft.school || !createCourse.name.trim()}
+                  onClick={async () => {
+                    const school = siteTree.schools.find((s) => s.id === draft.schoolId || s.label === draft.school);
+                    if (!school) {
+                      setMsg("Сначала создайте школу.");
+                      return;
+                    }
+                    const age = createCourse.age.trim();
+                    const name = createCourse.name.trim();
+                    const label = age && !name.toLowerCase().includes(age.toLowerCase().slice(0, 5)) ? `${name} · ${age}` : name;
+                    const res = await run("treeAddCourse", { schoolId: school.id, label, age });
+                    if (!res.ok) return;
+                    const created = (res.tree || siteTree).courses.find((c) => c.schoolId === school.id && c.label === label);
+                    setCreateCourse({ name: "", age: "" });
+                    setDraft((d) => ({ ...d, school: school.label, schoolId: school.id, course: label, courseId: created?.id || "", age }));
+                    setAddKind("group");
+                    setOpenSchool(school.label);
+                    setOpenCourse(created?.id || label);
+                    setMsg(`Направление «${label}» создано. Заведите группу — расписание.`);
+                  }}
+                >
+                  Создать направление
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {addKind === "group" ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-muted">Группа с расписанием. «Готово» — в предпросмотр, «Опубликовать изменения» — на сайт. В AlfaCRM — «Выгрузить в AlfaCRM».</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-sm">
+                  <span className="mb-1 block text-muted">Школа</span>
+                  <select
+                    value={siteTree.schools.find((s) => s.id === draft.schoolId || s.label === draft.school)?.id || ""}
+                    onChange={(e) => {
+                      const sch = siteTree.schools.find((s) => s.id === e.target.value);
+                      setDraft((d) => ({ ...d, school: sch?.label || "", schoolId: sch?.id || "", course: "", courseId: "" }));
+                    }}
+                    className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+                  >
+                    <option value="">Выберите школу</option>
+                    {siteTree.schools.map((s) => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-muted">Направление</span>
+                  <select
+                    value={draft.courseId || ""}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const c = siteTree.courses.find((x) => x.id === id);
+                      const sch = c ? siteTree.schools.find((s) => s.id === c.schoolId) : undefined;
+                      setDraft((d) => ({
+                        ...d,
+                        courseId: c?.id || "",
+                        course: c?.label || "",
+                        schoolId: sch?.id || d.schoolId,
+                        school: sch?.label || d.school,
+                        age: c?.age || d.age,
+                      }));
+                    }}
+                    className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+                  >
+                    <option value="">Выберите направление</option>
+                    {siteTree.courses
+                      .filter((c) => !draft.schoolId || c.schoolId === draft.schoolId)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>{c.label}</option>
+                      ))}
+                  </select>
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-muted">Возраст</span>
+                  <input value={draft.age} onChange={(e) => setDraft((d) => ({ ...d, age: e.target.value }))} placeholder="5-6 лет" className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-muted">День недели</span>
+                  <select value={draft.day} onChange={(e) => setDraft((d) => ({ ...d, day: Number(e.target.value) }))} className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10">
+                    {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                      <option key={d} value={d}>{["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"][d]}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-muted">С</span>
+                  <input value={draft.timeFrom} onChange={(e) => setDraft((d) => ({ ...d, timeFrom: e.target.value }))} placeholder="18:30" className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-muted">До</span>
+                  <input value={draft.timeTo} onChange={(e) => setDraft((d) => ({ ...d, timeTo: e.target.value }))} placeholder="20:00" className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-muted">Филиал</span>
+                  <select
+                    value={draft.branch}
+                    onChange={(e) => {
+                      const branch = e.target.value;
+                      const bid = matchBranch(branch).id;
+                      const ok = teachersForBranch(bid).some((t) => t.name === draft.teacher);
+                      setDraft((d) => ({ ...d, branch, teacher: ok ? d.teacher : "" }));
+                    }}
+                    className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+                  >
+                    <option value="">Выберите филиал</option>
+                    {BRANCH_OPTS.map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-muted">Педагог филиала AlfaCRM</span>
+                  <select
+                    value={draft.teacher}
+                    onChange={(e) => setDraft((d) => ({ ...d, teacher: e.target.value }))}
+                    disabled={!draft.branch}
+                    className="h-10 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10"
+                  >
+                    <option value="">{draft.branch ? "— педагог этого филиала —" : "Сначала филиал"}</option>
+                    {teachersForBranch(draft.branch ? matchBranch(draft.branch).id : 0).map((t) => (
+                      <option key={t.id} value={t.name}>{t.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  disabled={busy || !draft.school || !draft.course || !draft.branch}
+                  onClick={() => {
+                    setAiAdds((list) => [...list, { ...draft }]);
+                    setAiComment(`В предпросмотре ${aiAdds.length + 1} групп. Нажмите «Опубликовать изменения».`);
+                    setDraft((d) => ({ ...EMPTY_DRAFT, school: d.school, course: d.course, age: d.age }));
+                  }}
+                >
+                  Готово
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </article>
       )}
 
       <div id="ra-mismatch-list" className="mt-8 space-y-4 scroll-mt-24">
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-surface px-4 py-3 shadow-[var(--shadow-border)]">
+          <p className="mr-auto text-sm text-muted">Школа → направление → группа. Удаление — чекбокс и «Удалить выбранные».</p>
+          <div className="flex rounded-2xl bg-surface-2 p-0.5 ring-1 ring-black/8">
+            {([
+              ["school", "Школу"],
+              ["course", "Направление"],
+              ["group", "Группу"],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setAddKind(id);
+                  setAddOpen(true);
+                  window.setTimeout(() => document.getElementById("ra-add-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
+                }}
+                className={cn("rounded-xl px-3 py-1.5 text-[0.78rem] font-semibold", addOpen && addKind === id ? "bg-primary text-white" : "text-fg hover:bg-white")}
+              >
+                + {label}
+              </button>
+            ))}
+          </div>
+        </div>
         {tree.map((sch) => {
-          const schoolIds = sch.courses.flatMap((c) => c.items.map((s) => s.id));
           return (
-          <article key={sch.school} className="rounded-3xl bg-surface shadow-[var(--shadow-border)]">
+          <article key={sch.schoolId || sch.school} className="rounded-3xl bg-surface shadow-[var(--shadow-border)]">
             <div className="flex w-full items-center gap-3 px-5 py-4">
-              <CheckBox ids={schoolIds} picked={picked} onToggle={setIds} />
+              <input
+                type="checkbox"
+                className="h-[13px] w-[13px] shrink-0 accent-primary"
+                checked={Boolean(pickedSchools[sch.schoolId])}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  const on = e.target.checked;
+                  setPickedSchools((p) => ({ ...p, [sch.schoolId]: on }));
+                }}
+              />
               <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => { setOpenAll(false); setOpenSchool((v) => (v === sch.school ? "" : sch.school)); }}>
                 <span className="font-display text-xl">{sch.school}</span>
                 <span className="text-sm text-muted">
                   {sch.courses.length
-                    ? `${sch.courses.reduce((n, c) => n + c.items.length, 0)} слотов · ${sch.courses.length} курсов`
-                    : "не заполнено"}
+                    ? `${sch.courses.reduce((n, c) => n + c.items.length, 0)} групп · ${sch.courses.filter((c) => c.course !== "Без курса").length} курсов`
+                    : "нет курсов"}
                 </span>
               </button>
+              {sch.schoolId && sch.schoolId !== "other" ? (
+                <button
+                  type="button"
+                  title="Добавить направление"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-surface-2 text-lg leading-none text-muted hover:bg-white hover:text-fg"
+                  onClick={() => {
+                    setDraft((d) => ({ ...d, school: sch.school, course: "", age: "" }));
+                    setCreateCourse({ name: "", age: "" });
+                    setAddKind("course");
+                    setAddOpen(true);
+                    window.setTimeout(() => document.getElementById("ra-add-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
+                  }}
+                >
+                  +
+                </button>
+              ) : null}
             </div>
             {openAll || openSchool === sch.school ? (
               sch.courses.length ? (
                 <div className="space-y-2 px-3 pb-3">
                 {sch.courses.map((c) => {
-                  const courseIds = c.items.map((s) => s.id);
+                  const canEdit = Boolean(c.courseId) && !String(c.courseId).endsWith("#loose");
                   return (
-                  <div key={c.course} className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/8">
+                  <div
+                    key={c.courseId || c.course}
+                    className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/8"
+                    onDragOver={(e) => {
+                      if (canEdit) e.preventDefault();
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const id = dragId || e.dataTransfer.getData("text/plain");
+                      if (id && canEdit) void run("treeMove", { ids: [id], courseId: c.courseId });
+                      setDragId("");
+                    }}
+                  >
                     <div className="flex items-center gap-3 bg-surface-2 px-4 py-2.5">
-                      <CheckBox ids={courseIds} picked={picked} onToggle={setIds} />
-                      <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => setOpenCourse((v) => (v === c.course ? "" : c.course))}>
+                      <input
+                        type="checkbox"
+                        className="h-[13px] w-[13px] shrink-0 accent-primary"
+                        checked={Boolean(pickedCourses[c.courseId])}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          const on = e.target.checked;
+                          setPickedCourses((p) => ({ ...p, [c.courseId]: on }));
+                        }}
+                      />
+                      <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => setOpenCourse((v) => (v === c.courseId ? "" : c.courseId))}>
                         <span className="font-medium">{c.course}</span>
                         <span className="text-xs text-muted">{c.items.length}</span>
                       </button>
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          title="Добавить группу"
+                          className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white text-base leading-none text-muted ring-1 ring-black/8 hover:text-fg"
+                          onClick={() => {
+                            const hit = siteTree.courses.find((x) => x.id === c.courseId);
+                            setDraft((d) => ({ ...d, school: sch.school, course: c.course, age: hit?.age || d.age }));
+                            setAddKind("group");
+                            setAddOpen(true);
+                            window.setTimeout(() => document.getElementById("ra-add-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
+                          }}
+                        >
+                          +
+                        </button>
+                      ) : null}
                     </div>
-                    {openAll || openCourse === c.course ? (
+                    {openAll || openCourse === c.courseId ? (
                       <div>
                         <table className="w-full text-left text-sm">
                           <colgroup>
@@ -2737,7 +2891,6 @@ export function AdminSchedule() {
                             <col className="w-[4.4rem]" />
                             <col className="w-[5.5rem]" />
                             <col className="w-10" />
-                            <col className="w-8" />
                           </colgroup>
                           <thead className="text-[0.65rem] uppercase tracking-wider text-muted">
                             <tr>
@@ -2752,7 +2905,6 @@ export function AdminSchedule() {
                               <th className="px-1 py-2 text-center">Места</th>
                               <th className="px-2 py-2">Кто учится</th>
                               <th className="px-1 py-2 text-center">Подробно</th>
-                              <th className="px-1 py-2" />
                             </tr>
                           </thead>
                           <tbody>
@@ -2765,7 +2917,14 @@ export function AdminSchedule() {
                               <Fragment key={s.id}>
                               <tr
                                 id={`ra-slot-${s.id}`}
-                                className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash", mm.level === "hard" && "bg-red-50", mm.level === "soft" && !dirty.has(s.id) && "bg-amber-50/80")}
+                                draggable
+                                onDragStart={(e) => {
+                                  setDragId(s.id);
+                                  e.dataTransfer.setData("text/plain", s.id);
+                                  e.dataTransfer.effectAllowed = "move";
+                                }}
+                                onDragEnd={() => setDragId("")}
+                                className={cn("border-t border-black/6", dirty.has(s.id) && "bg-primary/5", flash.has(s.id) && "ra-flash", mm.level === "hard" && "bg-red-50", mm.level === "soft" && !dirty.has(s.id) && "bg-amber-50/80", dragId === s.id && "opacity-50")}
                               >
                                 <td className="px-2 py-1.5 align-middle">
                                   <div className="flex items-center gap-1.5">
@@ -2811,7 +2970,31 @@ export function AdminSchedule() {
                                   <span className="block">{s.branch}</span>
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
-                                  <input value={s.teacher} onChange={(e) => patch(s.id, "teacher", e.target.value)} className="h-8 w-full rounded-md bg-surface-2 px-2 text-[0.75rem] ring-1 ring-black/8" />
+                                  <select
+                                    value={s.teacher}
+                                    title={teachersForBranch(s.branchId).some((t) => t.name === s.teacher) ? s.teacher : `${s.teacher || "—"} · нет в филиале AlfaCRM`}
+                                    onChange={(e) => {
+                                      const name = e.target.value;
+                                      const hit = teachersForBranch(s.branchId).find((t) => t.name === name);
+                                      setSlots((list) =>
+                                        list.map((row) =>
+                                          row.id === s.id
+                                            ? { ...row, teacher: name, teacherId: hit?.id || 0, teacherIds: hit ? [hit.id] : [] }
+                                            : row,
+                                        ),
+                                      );
+                                      setDirty((d) => new Set(d).add(s.id));
+                                    }}
+                                    className="h-[26px] w-full rounded-md bg-surface-2 px-1 text-[0.6rem] ring-1 ring-black/8"
+                                  >
+                                    <option value="">— филиал —</option>
+                                    {teachersForBranch(s.branchId).map((t) => (
+                                      <option key={t.id} value={t.name}>{t.name}</option>
+                                    ))}
+                                    {s.teacher && !teachersForBranch(s.branchId).some((t) => t.name === s.teacher) ? (
+                                      <option value={s.teacher}>{s.teacher} · нет в филиале</option>
+                                    ) : null}
+                                  </select>
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
                                   <div className="flex items-center justify-center gap-1.5">
@@ -2823,14 +3006,23 @@ export function AdminSchedule() {
                                   <WhoTip names={names} onNeed={() => void loadWho(s)} />
                                 </td>
                                 <td className="px-1 py-1.5 align-middle text-center">
-                                  <DetailsBtn on={open} busy={openingId === s.id} onClick={() => void openDetail(s)} />
-                                </td>
-                                <td className="px-1 py-1.5 align-middle">
-                                  <button type="button" title="Удалить из расписания" className="text-xs font-semibold text-muted hover:text-red-600" onClick={() => void removeSlots([s.id])}>
-                                    ×
-                                  </button>
+                                  <DetailsBtn
+                                    on={open}
+                                    busy={openingId === s.id}
+                                    onClick={() => void openDetail(s)}
+                                  />
                                 </td>
                               </tr>
+                              {open ? (
+                                <tr className="bg-[#e8f3ff]">
+                                  <td colSpan={11} className="px-4 py-3 text-sm">
+                                    <p className="font-medium">Группа {s.groupId} · {s.groupName}</p>
+                                    <p className="mt-1 text-muted">
+                                      {s.age} · {s.dayLabel} {s.timeFrom && s.timeTo ? `${s.timeFrom}–${s.timeTo}` : "время не указано"} · {s.city}, {s.branch} · {s.teacher} · места {s.limit}/{s.taken}
+                                    </p>
+                                  </td>
+                                </tr>
+                              ) : null}
                               </Fragment>
                               );
                             })}
@@ -2843,7 +3035,9 @@ export function AdminSchedule() {
                 })}
                 </div>
               ) : (
-                <p className="border-t border-black/6 px-5 py-4 text-sm text-muted">Нет групп. Привяжите предметы этой школы в разделе «Соответствия».</p>
+                <div className="space-y-2 border-t border-black/6 px-5 py-4">
+                  <p className="text-sm text-muted">Нет направлений. Нажмите «+» у школы или «+ Направление» сверху.</p>
+                </div>
               )
             ) : null}
           </article>
@@ -2855,15 +3049,31 @@ export function AdminSchedule() {
       ) : null}
       {detail
         ? createPortal(
-            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4 md:p-6" onClick={() => { setPupil(null); setDetail(null); }}>
+            <div
+              className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4 md:p-6"
+              onPointerDown={(e) => {
+                if (Date.now() < closeGuard.current) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
+              }}
+              onClick={() => {
+                if (Date.now() < closeGuard.current) return;
+                setPupil(null);
+                setDetail(null);
+              }}
+            >
               <article
                 className="relative flex max-h-[min(90vh,920px)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl shadow-[0_18px_50px_rgba(15,23,42,0.28)]"
                 style={{ background: ADMIN_PANEL_BLUE }}
                 onClick={(e) => e.stopPropagation()}
+                data-card-id={groupCardId(detail.branchId, detail.groupId)}
+                data-group-id={detail.groupId || undefined}
+                data-branch-id={detail.branchId || undefined}
               >
                 <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5 md:px-6 md:pt-6">
                   <div>
-                    <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Группа {detail.groupId || "без номера"}</p>
+                    <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Карточка группы · {groupCardId(detail.branchId, detail.groupId)}</p>
                     <h3 className="font-display text-2xl">{detail.slot.groupName}</h3>
                     <p className="mt-1 text-sm text-muted">
                       {detail.slot.age} · {detail.slot.teacher} · {detail.slot.city}, {detail.slot.branch}
@@ -2873,17 +3083,100 @@ export function AdminSchedule() {
                     Закрыть
                   </button>
                 </div>
+                {subjectOffer && !subjectOffer.ok ? (
+                  <div
+                    className="mx-5 mt-3 shrink-0 rounded-xl px-4 py-3 md:mx-6"
+                    style={{ background: "#FFD54A", color: "#1A1408", boxShadow: "inset 0 0 0 2px #E6B000" }}
+                  >
+                    <p className="text-[0.95rem] font-semibold leading-snug">
+                      В этом филиале нет предмета «{subjectOffer.wanted || "этого курса"}». Выберите из списка филиала или создайте.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={creatingSubject || !subjectOffer.wanted}
+                      onClick={() => void createSubjectForBranch()}
+                      className="mt-2 flex h-10 items-center rounded-md bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      {creatingSubject ? "Создаём…" : `Создать «${subjectOffer.wanted}»`}
+                    </button>
+                    {detail.error ? <p className="mt-2 text-sm font-semibold text-red-800">{detail.error}</p> : null}
+                  </div>
+                ) : null}
                 <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 md:px-6 md:pb-6">
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <GroupLessonStrip lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} />
-                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                      Предмет
-                      <select value={detail.subjectId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, subjectId: Number(e.target.value) || 0 } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted md:col-span-2">
+                      Курс на сайте
+                      <select
+                        value={siteTree.courses.find((x) => x.href === detail.slot.path || x.label === detail.slot.course)?.id || ""}
+                        onChange={(e) => {
+                          const to = e.target.value;
+                          if (!to) return;
+                          void run("treeMove", { ids: [detail.slot.id], courseId: to }).then((res) => {
+                            if (!res.ok || !("slots" in res) || !Array.isArray(res.slots)) return;
+                            const next = (res.slots as CrmSlot[]).find((row) => row.id === detail.slot.id);
+                            if (next) setDetail((d) => (d ? { ...d, slot: next } : d));
+                          });
+                        }}
+                        className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                      >
                         <option value="">— не выбран —</option>
-                        {subjects.map((sub) => (
-                          <option key={sub.id} value={sub.id}>{sub.name} · id {sub.id}</option>
+                        {siteTree.schools.map((sc) => (
+                          <optgroup key={sc.id} label={sc.label}>
+                            {siteTree.courses
+                              .filter((x) => x.schoolId === sc.id)
+                              .map((x) => (
+                                <option key={x.id} value={x.id}>
+                                  {x.label}
+                                </option>
+                              ))}
+                          </optgroup>
                         ))}
                       </select>
+                    </label>
+                    <p className="md:col-span-2 rounded-xl bg-white/70 px-3 py-2 text-sm text-fg ring-1 ring-black/6">
+                      Регулярно: {detail.slot.dayLabel || "день недели"} {detail.slot.timeFrom}–{detail.slot.timeTo}
+                      {detail.slot.timesPerWeek > 1 ? ` · ${detail.slot.timesPerWeek} раза в неделю` : ""}
+                      {" · "}групповое
+                      {detail.slot.bDate || detail.slot.eDate ? ` · период ${detail.slot.bDate || "…"} – ${detail.slot.eDate || "…"}` : ""}
+                    </p>
+                    <div className="md:col-span-2">
+                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                      Предмет
+                      {(() => {
+                        const branchSubs = branchSubjectList(slots, detail.branchId, subjects, detail.id);
+                        const others = subjects.filter((s) => !branchSubs.some((b) => b.id === s.id));
+                        return (
+                          <select value={detail.subjectId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, subjectId: Number(e.target.value) || 0 } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                            <option value="">— выберите предмет филиала —</option>
+                            {branchSubs.length ? (
+                              <optgroup label="В этом филиале">
+                                {branchSubs.map((sub) => (
+                                  <option key={sub.id} value={sub.id}>{sub.name}</option>
+                                ))}
+                              </optgroup>
+                            ) : null}
+                            {others.length ? (
+                              <optgroup label="Все предметы CRM">
+                                {others.map((sub) => (
+                                  <option key={sub.id} value={sub.id}>{sub.name}</option>
+                                ))}
+                              </optgroup>
+                            ) : null}
+                          </select>
+                        );
+                      })()}
+                    </label>
+                    </div>
+                    <GroupLessonStrip className="md:col-span-2" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} />
+                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                      Абонементы
+                      <div className="mt-1 flex min-h-10 flex-wrap items-center gap-1 rounded-md bg-white px-2 py-1.5 ring-1 ring-black/8">
+                        {detail.tariffs.length ? detail.tariffs.map((t) => (
+                          <span key={t.id} className="rounded-md bg-sky-50 px-1.5 py-0.5 text-[0.75rem] font-medium normal-case tracking-normal text-sky-900">
+                            {t.name} · {Math.round(t.price).toLocaleString("ru-RU")} ₽
+                          </span>
+                        )) : <span className="text-sm font-medium normal-case tracking-normal text-muted">нет совпадения по предмету и минутам</span>}
+                      </div>
                     </label>
                     <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                       Описание
@@ -2901,9 +3194,9 @@ export function AdminSchedule() {
                       <label className="block shrink-0 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                         Период
                         <span className="mt-1 flex items-center gap-1">
-                          <input value={detail.bDate} onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))} placeholder="с" className="h-10 w-[7.4rem] rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                          <input value={detail.bDate} onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))} placeholder="02.09.2026" className="h-10 w-[7.4rem] rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                           <span className="text-[0.7rem] font-medium normal-case text-muted">до</span>
-                          <input value={detail.eDate} onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))} placeholder="до" className="h-10 w-[7.4rem] rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                          <input value={detail.eDate} onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))} placeholder="31.05.2027" className="h-10 w-[7.4rem] rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                         </span>
                       </label>
                       <label className="block min-w-[9.5rem] shrink-0 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
@@ -2936,14 +3229,20 @@ export function AdminSchedule() {
                         <input value={detail.makeup} onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                       </label>
                     </div>
-                    <div className="flex items-end justify-end md:col-span-2">
-                      <Button type="button" disabled={detail.saving} onClick={() => void saveDetail()}>Сохранить в AlfaCRM</Button>
+                    <div className="flex flex-col items-end gap-2 md:col-span-2">
+                      {detail.error ? <p className="w-full text-sm text-red-600">{detail.error}</p> : null}
+                      {!detail.groupId ? (
+                        <p className="w-full text-sm text-muted">Группа пока только на сайте. Кнопка создаст её в AlfaCRM. Если предмет не выбран — заведём по названию курса.</p>
+                      ) : null}
+                      <Button type="button" disabled={detail.saving} onClick={() => void saveDetail()}>
+                        {detail.saving ? "Сохраняю…" : detail.groupId ? "Сохранить в AlfaCRM" : "Создать в AlfaCRM"}
+                      </Button>
                     </div>
                   </div>
                 {detail.members.length || detail.archive.length ? (
                   <section className="mt-5 rounded-2xl bg-white/80 p-4 ring-1 ring-black/6">
-                    <MemberGrid title="Учатся сейчас" items={detail.members} onOpen={(m) => void openPupil(m, detail.branchId)} />
-                    <MemberGrid title="Архив" items={detail.archive} onOpen={(m) => void openPupil(m, detail.branchId)} archive />
+                    <CrmGroupMembers title="Учатся сейчас" items={detail.members} onOpen={(m) => void openPupil(m, detail.branchId)} />
+                    <CrmGroupMembers title="Архив группы" items={detail.archive} onOpen={(m) => void openPupil(m, detail.branchId)} archive />
                   </section>
                 ) : null}
                 </div>
@@ -2952,130 +3251,23 @@ export function AdminSchedule() {
             document.body,
           )
         : null}
-      {pupil
+      {pupil && typeof document !== "undefined"
         ? createPortal(
-            <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-4" onClick={() => setPupil(null)}>
-              <div className="flex w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-[0_18px_50px_rgba(15,23,42,0.28)]" style={{ maxHeight: "min(86vh, 720px)" }} onClick={(e) => e.stopPropagation()}>
-                <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                  <div>
-                    <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Карточка ученика</p>
-                    <h4 className="font-display text-2xl">{pupil.name || (pupilLoading ? "Загружаю…" : "Нет имени в CRM")}</h4>
-                    <p className="mt-1 text-sm text-muted">
-                      {[pupil.gender, pupil.age, pupil.status].filter(Boolean).join(" · ")}
-                    </p>
-                  </div>
-                  <button type="button" className="rounded-full bg-surface-2 px-3 py-1 text-sm font-semibold text-muted" onClick={() => setPupil(null)}>{detail ? "Назад" : "Закрыть"}</button>
-                </div>
-                <div className="pretty-scroll min-h-0 overflow-y-auto px-5 pb-5" style={{ flex: "0 1 auto" }}>
-                <dl className="mt-4 grid gap-2 text-sm">
-                  {pupil.dob ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Дата рождения</dt><dd>{pupil.dob}{pupil.age ? ` · ${pupil.age}` : ""}</dd></div> : null}
-                  {pupil.parent ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Заказчик</dt><dd>{pupil.parent}</dd></div> : null}
-                  {pupil.phones.length ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Телефоны</dt><dd className="space-y-0.5">{pupil.phones.map((ph) => <a key={ph} href={`tel:${ph}`} className="block text-primary">{ph}</a>)}</dd></div> : null}
-                  {pupil.emails.length ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Почта</dt><dd>{pupil.emails.join(", ")}</dd></div> : null}
-                  {pupil.address ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Адрес</dt><dd>{pupil.address}</dd></div> : null}
-                  {pupil.paidTill ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Оплачено до</dt><dd>{pupil.paidTill}</dd></div> : null}
-                  {pupil.note ? <div><dt className="text-[0.68rem] uppercase tracking-wider text-muted">Заметка CRM</dt><dd>{pupil.note}</dd></div> : null}
-                </dl>
-                {pupil.url ? <a href={pupil.url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-primary">Открыть в AlfaCRM</a> : null}
-                {detail ? (
-                  <button type="button" className="mt-2 block text-sm font-semibold text-primary" onClick={() => setPupil(null)}>
-                    К группе {detail.slot.groupName}
-                  </button>
-                ) : null}
-                {(pupil.groups || []).length ? (
-                  <div className="mt-4">
-                    <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">Группы</p>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {(pupil.groups || []).map((g) => (
-                        <button
-                          key={`${g.branchId}-${g.id}`}
-                          type="button"
-                          className={cn("rounded-full px-3 py-1 text-sm font-semibold", g.active ? "bg-primary/10 text-primary" : "bg-surface-2 text-muted")}
-                          onClick={() => openGroupFromLink(g.id, g.branchId)}
-                        >
-                          {g.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (pupil.schools || []).length ? (
-                  <p className="mt-3 text-sm text-muted">{(pupil.schools || []).join(" · ")}</p>
-                ) : null}
-                {pupilLoading && !pupil.comms.length ? <p className="mt-4 text-sm text-muted">Подгружаю карточку из AlfaCRM…</p> : null}
-                {pupil.comms.length ? (
-                  <>
-                    <h5 className="mt-5 font-display text-lg">Коммуникации</h5>
-                    <div className="mt-2 space-y-2">
-                      {pupil.comms.map((c, i) => (
-                        <div key={c.id || i} className={cn("rounded-2xl px-3 py-2.5 text-sm ring-1 ring-black/6", c.incoming ? "bg-[#f3f5f8]" : "bg-primary/8")}>
-                          <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">
-                            {[c.at, c.channel, c.who].filter(Boolean).join(" · ")}
-                            {c.incoming ? " · входящее" : ""}
-                          </p>
-                          <p className="mt-1 whitespace-pre-wrap leading-relaxed">{c.text}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : pupilLoading ? null : (
-                  <p className="mt-4 text-sm text-muted">Переписки в карточке пока нет.</p>
-                )}
-                </div>
-              </div>
-            </div>,
+            <CrmClientCard
+              card={pupil}
+              loading={pupilLoading}
+              backLabel={detail ? "К группе" : "Закрыть"}
+              onClose={() => setPupil(null)}
+              onAction={mutatePupil}
+              onOpenGroup={(gid, bid) => {
+                setPupil(null);
+                openGroupFromLink(gid, bid);
+              }}
+            />,
             document.body,
           )
         : null}
-      {pull.open
-        ? createPortal(
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => pull.done && setPull((u) => ({ ...u, open: false }))}>
-              <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.28)]" onClick={(e) => e.stopPropagation()}>
-                <p className="font-display text-2xl">
-                  {pull.done ? pull.error ? "Не загрузилось" : "Загрузка завершена" : pull.kind === "clients" ? "Загрузка клиентов" : "Загрузка из AlfaCRM"}
-                </p>
-                {!pull.done ? (
-                  <div className="mt-5 flex items-start gap-3">
-                    <span className="mt-0.5 h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
-                    <p className="text-sm text-fg">{pull.step}</p>
-                  </div>
-                ) : pull.error ? (
-                  <p className="mt-4 text-sm text-red-600">{pull.error}</p>
-                ) : pull.kind === "clients" ? (
-                  <div className="mt-4 space-y-2 text-sm">
-                    <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">
-                      Обработано карточек: <b>{pull.added}</b>
-                    </p>
-                    <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">
-                      В базе на сайте: <b>{clientCounts.все || pull.total}</b>
-                      {clientCounts.все ? ` · текущие ${clientCounts.учится} · лиды ${clientCounts.лид} · архив ${clientCounts.архив}` : ""}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="mt-4 space-y-2 text-sm">
-                    <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">
-                      Новых групп: <b>{pull.added}</b>
-                    </p>
-                    <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">
-                      Обновлено на сайте: <b>{pull.updated}</b>
-                    </p>
-                    <p className="rounded-2xl bg-[#f3f5f8] px-4 py-3">
-                      Всего в расписании: <b>{pull.total}</b>
-                    </p>
-                    <p className="pt-1 text-[0.78rem] text-muted">Эти группы сразу видны на страницах курсов и в разделе «Расписание».</p>
-                  </div>
-                )}
-                {pull.done ? (
-                  <div className="mt-5 flex justify-end">
-                    <Button type="button" onClick={() => setPull((u) => ({ ...u, open: false }))}>
-                      Закрыть
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+      {pull.open ? <CrmPullDialog pull={pull} onClose={() => setPull((u) => ({ ...u, open: false }))} /> : null}
       {pushUi.open
         ? createPortal(
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => pushUi.done && setPushUi((u) => ({ ...u, open: false }))}>

@@ -1,32 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   adminLogin,
-  adminPrices,
-  adminSaveGroup,
-  adminSavePrice,
   adminCalls,
+  adminMeta,
 } from "@/data/admin";
-import { PRICE_DIRECTIONS, hydratePrices, type PriceRow } from "@/data/prices-core";
 import { Button } from "@/components/ui/button";
 import { AdminCalls } from "@/components/admin-calls";
 import { AdminAgent } from "@/components/admin-agent";
 import { AdminDossiers } from "@/components/admin-dossiers";
 import { AdminSchedule } from "@/components/admin-schedule";
 import { AdminIntegrations } from "@/components/admin-integrations";
-import { adminGhostBtn, AdminSectionHead, AdminSelfTest } from "@/components/admin-self-test";
-import { adminPriceFormulas, type CorpFormulas } from "@/data/price-formulas";
-import { InfoTip, TipWrap } from "@/components/info-tip";
+import { adminGhostBtn, AdminSelfTest } from "@/components/admin-self-test";
 import { cn } from "@/lib/utils";
 
 const KEY = "ra_admin";
-type Tab = "prices" | "schedule" | "agent" | "calls" | "dossiers" | "apis";
+type Tab = "schedule" | "agent" | "calls" | "dossiers" | "apis";
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
-  { id: "prices", label: "Цены курсов", hint: "Прайс, КБМ и ТМХ" },
-  { id: "schedule", label: "Расписание занятий", hint: "Группы студии" },
-  { id: "agent", label: "Ассистент ИИ", hint: "Окно, обучение агентов, доступ" },
+  { id: "schedule", label: "Расписание занятий", hint: "Группы, цены, абонементы" },
+  { id: "agent", label: "Ассистент ИИ", hint: "Окно, обучение, разделы сайта" },
   { id: "calls", label: "База звонков", hint: "Novofon → знания" },
   { id: "dossiers", label: "Личные дела", hint: "Клиенты AlfaCRM" },
   { id: "apis", label: "API и интеграции", hint: "Yandex, CRM, телефония" },
@@ -39,8 +33,12 @@ function token() {
 }
 
 function persist(t: string) {
+  if (!t) return;
   localStorage.setItem(KEY, t);
-  document.cookie = `ra_admin=${encodeURIComponent(t)}; path=/; max-age=${7 * 24 * 3600}; samesite=lax`;
+  const host = typeof location !== "undefined" ? location.hostname : "";
+  const domain = host.endsWith("rastudio.org") ? "; domain=.rastudio.org" : "";
+  const secure = typeof location !== "undefined" && location.protocol === "https:" ? "; secure" : "";
+  document.cookie = `ra_admin=${encodeURIComponent(t)}; path=/; max-age=${7 * 24 * 3600}; samesite=lax${domain}${secure}`;
 }
 
 function logout() {
@@ -51,14 +49,8 @@ function logout() {
 export function AdminPrices() {
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [rows, setRows] = useState<PriceRow[]>([]);
   const [in_, setIn] = useState(false);
-  const [tab, setTab] = useState<Tab>("prices");
-  const [dir, setDir] = useState(PRICE_DIRECTIONS[0]);
-  const [field, setField] = useState<"all" | "kbm" | "tmx" | "all-three">("all");
-  const [mode, setMode] = useState<"set" | "delta">("set");
-  const [amount, setAmount] = useState("0");
-  const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<Tab>("schedule");
   const [novoKey, setNovoKey] = useState("");
   const [novoSecret, setNovoSecret] = useState("");
   const [callsConnected, setCallsConnected] = useState(false);
@@ -102,24 +94,38 @@ export function AdminPrices() {
     }[]
   >([]);
   const [callView, setCallView] = useState<"overview" | "settings" | "knowledge" | "texts">("overview");
-  const [formulas, setFormulas] = useState<CorpFormulas>({ kbm: { mode: "percent", value: 100 }, tmx: { mode: "percent", value: 100 } });
-  const [corpDir, setCorpDir] = useState("");
-  const [formulasOpen, setFormulasOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   async function load(t = token()) {
     if (!t) return;
-    const res = await adminPrices({ data: { token: t } });
-    if (!res.ok) {
-      setIn(false);
-      setErr(res.error);
-      return;
-    }
-    setRows(res.rows);
-    hydratePrices(res.rows);
     setIn(true);
-    setErr("");
-    const calls = await adminCalls({ data: { token: t, action: "status" } });
-    if (calls.ok) {
+    try {
+      const meta = await adminMeta({ data: { token: t } });
+      if (meta.ok && "token" in meta && meta.token) persist(String(meta.token));
+      if (!meta.ok && /вход/i.test(meta.error || "")) {
+        const stored = localStorage.getItem(KEY) || "";
+        if (stored && stored !== t) {
+          persist(stored);
+          const retry = await adminMeta({ data: { token: stored } });
+          if (retry.ok) {
+            if ("token" in retry && retry.token) persist(String(retry.token));
+            setIn(true);
+            setErr("");
+          } else {
+            setIn(false);
+            setErr(retry.error || meta.error);
+            return;
+          }
+        } else {
+          setIn(false);
+          setErr(meta.error);
+          return;
+        }
+      }
+      setErr("");
+      const auth = token() || t;
+      const calls = await adminCalls({ data: { token: auth, action: "status" } });
+      if (calls.ok) {
       setCallsConnected(Boolean(calls.connected));
       if (calls.stats) {
         setCallInfo({
@@ -148,13 +154,15 @@ export function AdminPrices() {
         if (calls.stats.settings) setCallSet({ ...callSet, ...calls.stats.settings, inject: { ...callSet.inject, ...(calls.stats.settings.inject || {}) } });
       }
     }
-    const listed = await adminCalls({ data: { token: t, action: "list" } });
-    if (listed.ok && listed.transcripts) setTranscripts(listed.transcripts);
-    const form = await adminPriceFormulas({ data: { token: t, action: "get" } });
-    if (form.ok && "formulas" in form && form.formulas) setFormulas(form.formulas);
+      const listed = await adminCalls({ data: { token: auth, action: "list" } });
+      if (listed.ok && listed.transcripts) setTranscripts(listed.transcripts);
+    } catch {
+      setIn(Boolean(token() || t));
+    }
   }
 
   useEffect(() => {
+    if (token()) setIn(true);
     void load();
   }, []);
 
@@ -193,16 +201,6 @@ export function AdminPrices() {
     return () => window.clearInterval(id);
   }, [in_, tab]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, PriceRow[]>();
-    for (const row of rows) {
-      const list = map.get(row.direction) || [];
-      list.push(row);
-      map.set(row.direction, list);
-    }
-    return [...map.entries()];
-  }, [rows]);
-
   async function login(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -214,38 +212,6 @@ export function AdminPrices() {
     }
     persist(res.token);
     await load(res.token);
-  }
-
-  async function saveRow(row: PriceRow) {
-    setBusy(true);
-    const res = await adminSavePrice({
-      data: { token: token(), path: row.path, all: row.all, kbm: row.kbm, tmx: row.tmx },
-    });
-    setBusy(false);
-    if (!res.ok) setErr(res.error);
-    else await load();
-  }
-
-  async function applyGroup() {
-    const n = Number(amount.replace(/\s/g, "").replace(",", "."));
-    if (!Number.isFinite(n)) return;
-    setBusy(true);
-    const res = await adminSaveGroup({
-      data: {
-        token: token(),
-        direction: dir,
-        field,
-        ...(mode === "set" ? { set: n } : { delta: n }),
-      },
-    });
-    setBusy(false);
-    if (!res.ok) setErr(res.error);
-    else await load();
-  }
-
-  function patch(path: string, key: "all" | "kbm" | "tmx", value: string) {
-    const n = Number(value.replace(/\s/g, ""));
-    setRows((prev) => prev.map((r) => (r.path === path ? { ...r, [key]: Number.isFinite(n) ? n : 0 } : r)));
   }
 
   if (!in_) {
@@ -315,236 +281,6 @@ export function AdminPrices() {
       </div>
 
       {err ? <p className="mt-4 text-sm text-primary">{err}</p> : null}
-
-      {tab === "prices" ? (
-        <section className="mt-10">
-          <AdminSectionHead section="prices" title="Цены курсов">
-            <p className="mt-2 max-w-2xl text-sm text-muted">
-              Колонка «Все» на сайте. КБМ и ТМХ — корпоративные. Формула считает их от «Все»: плюс сумма или умножение на процент.
-            </p>
-          </AdminSectionHead>
-          <div className="mt-4 flex items-start gap-1">
-            <TipWrap text="Когда в AlfaCRM появятся абонементы, эта кнопка заберёт их из tariff/index в колонку «Все». КБМ и ТМХ посчитаются по формуле ниже. Сейчас абонементы ещё не выложены — специально ничего не тянем.">
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  const res = await adminPriceFormulas({ data: { token: token(), action: "crmStub" } });
-                  setBusy(false);
-                  setErr(res.ok ? "" : res.error || "CRM пока не отдаёт абонементы.");
-                }}
-              >
-                Загрузить цены из CRM
-              </Button>
-            </TipWrap>
-          </div>
-
-          <div className="mt-5 overflow-hidden rounded-2xl bg-surface ring-1 ring-black/8">
-            <button
-              type="button"
-              onClick={() => setFormulasOpen((v) => !v)}
-              className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
-            >
-              <span className="text-sm font-semibold">Формулы КБМ, ТМХ и правка группой</span>
-              <InfoTip text="Наценка суммой: 500 → корпоративная = публичная + 500 ₽. Умножение: 90 → 90% от «Все», 100 — как есть. Сначала сохраните формулу, потом «Пересчитать». Группой — сразу поставить или сдвинуть цену у всей школы." />
-              <span className="ml-auto text-[0.72rem] font-semibold text-muted">
-                {formulasOpen ? "Скрыть" : "Показать"}
-              </span>
-              <span className={cn("text-muted transition-transform", formulasOpen ? "rotate-180" : "")}>▾</span>
-            </button>
-            {formulasOpen ? (
-              <div className="space-y-3 border-t border-black/6 px-4 pb-3 pt-3">
-                <div className="flex flex-wrap items-end gap-2">
-                  {(["kbm", "tmx"] as const).map((who) => (
-                    <div key={who} className="flex flex-wrap items-end gap-2 rounded-xl bg-surface-2 px-2.5 py-2">
-                      <p className="mb-1 w-full text-[0.65rem] font-semibold uppercase tracking-wider text-muted">{who === "kbm" ? "КБМ" : "ТМХ"}</p>
-                      <label className="text-[0.72rem] text-muted">
-                        Как
-                        <select
-                          value={formulas[who].mode}
-                          onChange={(e) => setFormulas((f) => ({ ...f, [who]: { ...f[who], mode: e.target.value === "add" ? "add" : "percent" } }))}
-                          className="mt-0.5 block h-8 rounded-lg bg-white px-2 text-sm ring-1 ring-black/10"
-                        >
-                          <option value="add">Наценка, ₽</option>
-                          <option value="percent">× процент</option>
-                        </select>
-                      </label>
-                      <label className="text-[0.72rem] text-muted">
-                        {formulas[who].mode === "add" ? "₽" : "%"}
-                        <input
-                          value={formulas[who].value}
-                          inputMode="numeric"
-                          onChange={(e) => setFormulas((f) => ({ ...f, [who]: { ...f[who], value: Number(e.target.value) || 0 } }))}
-                          className="mt-0.5 block h-8 w-16 rounded-lg bg-white px-2 text-sm ring-1 ring-black/10"
-                        />
-                      </label>
-                    </div>
-                  ))}
-                  <label className="text-[0.72rem] text-muted">
-                    Область
-                    <select
-                      value={corpDir}
-                      onChange={(e) => setCorpDir(e.target.value)}
-                      className="mt-0.5 block h-8 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10"
-                    >
-                      <option value="">Все курсы</option>
-                      {PRICE_DIRECTIONS.map((d) => (
-                        <option key={d}>{d}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="ml-auto flex items-center gap-1.5">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="h-8"
-                      disabled={busy}
-                      onClick={async () => {
-                        setBusy(true);
-                        const res = await adminPriceFormulas({ data: { token: token(), action: "save", formulas } });
-                        setBusy(false);
-                        setErr(res.ok ? "" : res.error || "Ошибка");
-                        if (res.ok) setErr("Формула сохранена.");
-                      }}
-                    >
-                      Сохранить
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-8"
-                      disabled={busy}
-                      onClick={async () => {
-                        setBusy(true);
-                        const res = await adminPriceFormulas({ data: { token: token(), action: "apply", formulas, direction: corpDir || undefined } });
-                        setBusy(false);
-                        if (res.ok && "rows" in res && res.rows) {
-                          setRows(res.rows);
-                          hydratePrices(res.rows);
-                          setErr("КБМ и ТМХ пересчитаны.");
-                        } else setErr(res.ok ? "" : res.error || "Ошибка");
-                      }}
-                    >
-                      Пересчитать
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-end gap-2 border-t border-black/6 pt-3">
-                  <p className="mb-1 w-full text-[0.65rem] font-semibold uppercase tracking-wider text-muted">Группой</p>
-                  <label className="text-[0.72rem] text-muted">
-                    Школа
-                    <select
-                      className="mt-0.5 block h-8 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10"
-                      value={dir}
-                      onChange={(e) => setDir(e.target.value)}
-                    >
-                      {PRICE_DIRECTIONS.map((d) => (
-                        <option key={d}>{d}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-[0.72rem] text-muted">
-                    Поле
-                    <select
-                      className="mt-0.5 block h-8 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10"
-                      value={field}
-                      onChange={(e) => setField(e.target.value as typeof field)}
-                    >
-                      <option value="all">Цена (все)</option>
-                      <option value="kbm">КБМ</option>
-                      <option value="tmx">ТМХ</option>
-                      <option value="all-three">Все три</option>
-                    </select>
-                  </label>
-                  <label className="text-[0.72rem] text-muted">
-                    Как
-                    <select
-                      className="mt-0.5 block h-8 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10"
-                      value={mode}
-                      onChange={(e) => setMode(e.target.value as typeof mode)}
-                    >
-                      <option value="set">Поставить</option>
-                      <option value="delta">Прибавить / убавить</option>
-                    </select>
-                  </label>
-                  <label className="text-[0.72rem] text-muted">
-                    Сумма, ₽
-                    <input
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="mt-0.5 block h-8 w-20 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10"
-                    />
-                  </label>
-                  <Button type="button" size="sm" className="ml-auto h-8" disabled={busy} onClick={() => void applyGroup()}>
-                    Применить к школе
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="mt-5 space-y-8">
-            {grouped.map(([name, list]) => (
-              <section key={name}>
-                <h3 className="font-display text-xl">{name}</h3>
-                <div className="mt-3 overflow-x-auto rounded-2xl ring-1 ring-black/8">
-                  <table className="w-full min-w-[52rem] table-fixed text-left text-sm">
-                    <colgroup>
-                      <col className="w-[46%]" />
-                      <col className="w-[13%]" />
-                      <col className="w-[13%]" />
-                      <col className="w-[13%]" />
-                      <col className="w-[15%]" />
-                    </colgroup>
-                    <thead className="bg-surface-2 text-[0.72rem] uppercase tracking-wider text-muted">
-                      <tr>
-                        <th className="px-4 py-3 font-semibold">Курс</th>
-                        <th className="px-3 py-3 text-right font-semibold">Все</th>
-                        <th className="px-3 py-3 text-right font-semibold">КБМ</th>
-                        <th className="px-3 py-3 text-right font-semibold">ТМХ</th>
-                        <th className="px-3 py-3" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {list.map((row) => (
-                        <tr key={row.path} className="border-t border-black/6">
-                          <td className="px-4 py-3 align-middle">
-                            <p className="font-medium leading-snug">{row.name}</p>
-                            <p className="mt-0.5 text-xs text-muted">{row.age}</p>
-                          </td>
-                          {(["all", "kbm", "tmx"] as const).map((k) => (
-                            <td key={k} className="px-3 py-3 align-middle">
-                              <input
-                                value={row[k]}
-                                inputMode="numeric"
-                                onChange={(e) => patch(row.path, k, e.target.value)}
-                                className="h-10 w-full rounded-lg bg-surface-2 px-2 text-right tabular-nums ring-1 ring-black/10"
-                              />
-                            </td>
-                          ))}
-                          <td className="px-3 py-3 align-middle text-right">
-                            <button
-                              type="button"
-                              disabled={busy}
-                              className="text-sm font-semibold text-primary"
-                              onClick={() => void saveRow(row)}
-                            >
-                              Сохранить
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            ))}
-          </div>
-        </section>
-      ) : null}
 
       {tab === "schedule" ? <AdminSchedule /> : null}
       {tab === "calls" ? <AdminCalls /> : null}

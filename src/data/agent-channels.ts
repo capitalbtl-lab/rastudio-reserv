@@ -154,6 +154,7 @@ export async function yandexJson<T>(system: string, user: string, maxTokens = 50
         method: "POST",
         headers: { Authorization: auth, "Content-Type": "application/json", "x-folder-id": folder },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(18000),
       });
       if (!res.ok) continue;
       const json = (await res.json()) as { result?: { alternatives?: { message?: { text?: string } }[] } };

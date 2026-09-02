@@ -1,51 +1,20 @@
+/**
+ * Загрузка групп из AlfaCRM. subjectId = group.subject_id || lesson.subject_id || URL в заметке.
+ * courseId = SUBJECT_TO_COURSE[subjectId] / карта / assign. Имя группы не склеивает курс.
+ */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CmsSession } from "@/data/cms";
 import { request, token } from "@/data/alfacrm";
 import { agesOverlap } from "@/data/ages";
 import { courseOf, dayLabel, schoolOf, slotFromSession, stampTimes, toSession, normalizeArtSlot, beatsOf, stampSubjects, type CrmSlot } from "@/data/crm-slots";
-import { matchSubject } from "@/data/crm-subjects";
 import { applyScheduleMap } from "@/data/schedule-map";
+import { mergeTeacher, saveTeachers, type CrmTeacher } from "@/data/crm-teachers";
+import { SUBJECT_TO_COURSE } from "@/data/ids";
 
 const SKIP_SUBJECT = new Set([7, 54, 104, 85, 81, 1, 77, 106, 82, 105, 83, 90, 84, 88, 87]);
 const DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 const DAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-
-const SUBJECT_PATH: Record<number, string> = {
-  12: "/art-studio-3-4",
-  116: "/art-studio-3-4",
-  13: "/art-studio-5-6",
-  14: "/art-studio-7-8",
-  92: "/art-studio-9-13",
-  115: "/art-studio-9-13",
-  5: "/podgotovka-v-hudvuz",
-  11: "/sculptural-studio",
-  97: "/digitalartschool",
-  36: "/robototehnika-5-7",
-  37: "/robototehnika-7-9",
-  35: "/robototehnika-10-14",
-  114: "/roboticsinenglish",
-  46: "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python",
-  48: "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-си",
-  52: "/kursy-shkoly-programmirovaniya/it-школа-разработка-игр-на-unity",
-  43: "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-5-7-лет",
-  98: "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-7-9-лет",
-  15: "/kursy-shkoly-programmirovaniya/it-лаборатория-dev-для-детей-9-10-лет",
-  107: "/gamedesign",
-  39: "/3d-modeling",
-  27: "/science-course",
-  89: "/teslaphysics",
-  67: "/radioengineering",
-  25: "/robototehnika-v-kolomne",
-  16: "/preparation-for-school",
-  108: "/happybricks",
-  109: "/science-course",
-  4: "/model-school",
-  110: "/englishlanguagesm",
-  111: "/englishlanguagegg",
-  112: "/vitaminkorean",
-  113: "/japanese",
-};
 
 const BRANCH: Record<number, { city: string; branch: string; short: string }> = {
   1: { city: "Коломна", branch: "ул. Гражданская, 2", short: "Гражданская" },
@@ -126,7 +95,7 @@ function subjectIdFromNote(note?: string) {
   } catch {
     /* */
   }
-  const hit = Object.entries(SUBJECT_PATH).find(([, p]) => p === path || path.startsWith(`${p}/`));
+  const hit = Object.entries(SUBJECT_TO_COURSE).find(([, p]) => p === path || path.startsWith(`${p}/`));
   return hit ? Number(hit[0]) : 0;
 }
 
@@ -282,8 +251,12 @@ export function mergeCrmIntoSite(incoming: CrmSlot[], existing: CrmSlot[]) {
       out.push({
         ...old,
         ...s,
+        subjectId: Number(s.subjectId) || Number(old.subjectId) || 0,
+        subject: s.subject || old.subject,
         school: s.school && s.school !== "Прочее" ? s.school : old.school,
         course: s.course || old.course,
+        courseId: old.courseId || s.courseId || "",
+        schoolId: old.schoolId || s.schoolId || "",
         path: s.path || old.path,
         age: s.age || old.age,
         beats: s.beats?.length ? s.beats : old.beats,
@@ -345,14 +318,26 @@ export function crmScheduleMeta() {
   };
 }
 
+let listed: { at: number; slots: CrmSlot[] } | null = null;
+
+export function resetSlotCache() {
+  listed = null;
+}
+
 export function listAdminSlots(): CrmSlot[] {
   const snap = cache || readSnap();
+  const at = snap?.at || 0;
+  if (listed && listed.at === at && listed.slots.length) return listed.slots;
   const raw = snap?.slots?.length ? snap.slots : (snap?.sessions || []).map(slotFromSession);
-  return applyScheduleMap(stampSubjects(stampTimes(raw.map(normalizeArtSlot)))).filter(isLiveSlot);
+  const slots = applyScheduleMap(stampSubjects(stampTimes(raw.map(normalizeArtSlot)))).filter(isLiveSlot);
+  listed = { at, slots };
+  return slots;
 }
 
 export function bindSubjectsOnSite() {
   const snap = cache || readSnap();
+  const at = snap?.at || 0;
+  if (listed && listed.at === at && listed.slots.length) return { slots: listed.slots, changed: false };
   const raw = snap?.slots?.length ? snap.slots : (snap?.sessions || []).map(slotFromSession);
   const stamped = stampTimes((raw || []).map(normalizeArtSlot));
   const bound = applyScheduleMap(stampSubjects(stamped));
@@ -360,7 +345,8 @@ export function bindSubjectsOnSite() {
     (s, i) => s.subjectId !== stamped[i]?.subjectId || s.subject !== stamped[i]?.subject || s.school !== stamped[i]?.school || s.path !== stamped[i]?.path,
   );
   if (changed) saveAdminSlots(bound);
-  return { slots: bound, changed };
+  else listed = { at, slots: bound.filter(isLiveSlot) };
+  return { slots: listed?.slots || bound.filter(isLiveSlot), changed };
 }
 
 export function saveAdminSlots(slots: CrmSlot[]) {
@@ -368,6 +354,7 @@ export function saveAdminSlots(slots: CrmSlot[]) {
   const sessions = sessionsFromSlots(stamped);
   const seats = cache?.seats || readSnap()?.seats || new Map();
   cache = { at: Date.now(), sessions, seats, slots: stamped };
+  listed = { at: cache.at, slots: stamped };
   writeSnap(cache);
   return cache;
 }
@@ -411,13 +398,18 @@ async function loadCrm(force = false): Promise<CacheBag> {
   const seats = new Map<string, SeatInfo>();
   const subjects = new Map<number, string>();
   const teachers = new Map<number, string>();
+  const teacherBag: CrmTeacher[] = [];
   const groupsById = new Map<number, { g: Group; fromBranch: number }>();
   const lessons: Lesson[] = [];
   const sub = await paged<Subject>("/v2api/2/subject/index", t);
   for (const s of sub) subjects.set(s.id, s.name);
   for (const branch of [1, 2, 3, 4]) {
     const tr = await paged<Teacher>(`/v2api/${branch}/teacher/index`, t).catch(() => [] as Teacher[]);
-    for (const p of tr) if (p.id) teachers.set(p.id, p.name || String(p.id));
+    for (const p of tr) {
+      if (!p.id) continue;
+      teachers.set(p.id, p.name || String(p.id));
+      mergeTeacher(teacherBag, p.id, p.name || String(p.id), branch);
+    }
     const groups = await paged<Group>(`/v2api/${branch}/group/index`, t);
     const taken = await loadSeats(branch, t).catch(() => new Map<number, number>());
     for (const g of groups) {
@@ -426,6 +418,7 @@ async function loadCrm(force = false): Promise<CacheBag> {
     }
     lessons.push(...(await paged<Lesson>(`/v2api/${branch}/regular-lesson/index`, t)));
   }
+  saveTeachers(teacherBag);
   const lessonsByGid = new Map<number, Lesson[]>();
   for (const lesson of lessons) {
     const gid = Number(lesson.related_id || 0);
@@ -444,18 +437,20 @@ async function loadCrm(force = false): Promise<CacheBag> {
     const lessonSid = Number(first?.subject_id) || 0;
     const groupSid = Number(g.subject_id) || 0;
     const noteSid = subjectIdFromNote(g.note);
-    const nameHit = matchSubject(g.name);
-    const sid = groupSid || lessonSid || noteSid || nameHit?.id || 0;
-    const subjectName = (sid && subjects.get(sid)) || matchSubject(g.name)?.name || g.name;
-    const path = SUBJECT_PATH[sid] || "";
+    const sid = groupSid || lessonSid || noteSid || 0;
+    const subjectName = (sid && subjects.get(sid)) || g.name;
+    const path = SUBJECT_TO_COURSE[sid] || "";
     const teach = teacherOf(first?.teacher_ids || g.teacher_ids, teachers);
     const seat = seats.get(seatKey(branchId, g.id)) || seats.get(seatKey(fromBranch, g.id));
-    const beats = groupLessons.map((lesson) => ({
-      day: Number(lesson.day) || 1,
-      timeFrom: String(lesson.time_from_v || lesson.time_from || "").slice(0, 5),
-      timeTo: String(lesson.time_to_v || lesson.time_to || "").slice(0, 5),
-      lessonId: Number(lesson.id) || 0,
-    }));
+    const beats = groupLessons
+      .map((lesson) => ({
+        day: Number(lesson.day) || 1,
+        timeFrom: String(lesson.time_from_v || lesson.time_from || "").slice(0, 5),
+        timeTo: String(lesson.time_to_v || lesson.time_to || "").slice(0, 5),
+        lessonId: Number(lesson.id) || 0,
+      }))
+      .filter((b) => b.lessonId || /^\d{1,2}:\d{2}$/.test(b.timeFrom))
+      .sort((a, b) => a.day - b.day || a.timeFrom.localeCompare(b.timeFrom));
     const a = beats[0] || { day: 1, timeFrom: "", timeTo: "", lessonId: 0 };
     slots.push(
       normalizeArtSlot({
@@ -471,6 +466,7 @@ async function loadCrm(force = false): Promise<CacheBag> {
         subject: subjectName,
         school: schoolOf(path, subjectName, g.name),
         course: courseOf(subjectName, g.name, path),
+        courseId: path,
         path,
         age: ageOf(g.name) || ageOf(subjectName),
         day: a.day,

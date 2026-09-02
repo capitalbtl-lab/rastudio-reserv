@@ -4,6 +4,7 @@ import { logAdmin } from "./admin-settings";
 import { applyScheduleMap, loadScheduleMap, saveScheduleMap, siteCourses, siteSchools, type CourseLink, type SchoolLink } from "./schedule-map";
 import { listAdminSlots, saveAdminSlots } from "./alfacrm-schedule";
 import { stampSubjects } from "./crm-slots";
+import { loadSiteTree, pinAllGuesses } from "./site-tree";
 
 export const adminScheduleMap = createServerFn({ method: "POST" })
   .validator(
@@ -23,16 +24,18 @@ export const adminScheduleMap = createServerFn({ method: "POST" })
         courses: data.courses || [],
       });
       const slots = applyScheduleMap(stampSubjects(listAdminSlots()));
+      pinAllGuesses(slots);
       saveAdminSlots(slots);
       logAdmin("Соответствия школ и курсов сохранены, расписание на сайте обновлено");
-      return { ok: true as const, ...map, siteSchools: siteSchools(), siteCourses: siteCourses(), count: slots.length };
+      return { ok: true as const, ...map, siteSchools: siteSchools(), siteCourses: siteCourses(), tree: loadSiteTree(), count: slots.length };
     }
     if (data.action === "apply") {
       const slots = applyScheduleMap(stampSubjects(listAdminSlots()));
+      pinAllGuesses(slots);
       saveAdminSlots(slots);
       logAdmin("Соответствия применены к расписанию на сайте");
-      return { ok: true as const, ...loadScheduleMap(), siteSchools: siteSchools(), siteCourses: siteCourses(), count: slots.length };
+      return { ok: true as const, ...loadScheduleMap(), siteSchools: siteSchools(), siteCourses: siteCourses(), tree: loadSiteTree(), count: slots.length };
     }
     const map = loadScheduleMap();
-    return { ok: true as const, ...map, siteSchools: siteSchools(), siteCourses: siteCourses() };
+    return { ok: true as const, ...map, siteSchools: siteSchools(), siteCourses: siteCourses(), tree: loadSiteTree() };
   });

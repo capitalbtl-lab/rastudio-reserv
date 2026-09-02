@@ -44,17 +44,22 @@ export function savePriceRows(rows: PriceRow[]) {
   return listPriceRows();
 }
 
-export function updateOnePrice(path: string, patch: Partial<Pick<PriceRow, "all" | "kbm" | "tmx">>) {
+export function updateOnePrice(
+  path: string,
+  patch: Partial<Pick<PriceRow, "all" | "kbm" | "tmx" | "mins" | "perWeek">>,
+) {
   ensureLivePrices();
   const rows = listPriceRows().map((r) => ({ ...r }));
   const p = normPath(path);
   const i = rows.findIndex(
-    (r) => normPath(r.path) === p || r.name.toLowerCase() === path.toLowerCase() || r.name.toLowerCase().includes(path.toLowerCase()),
+    (r) => normPath(r.courseId || r.path) === p || normPath(r.path) === p || r.id === path,
   );
   if (i < 0) return { ok: false as const, error: "Курс не найден" };
   if (patch.all != null) rows[i].all = Math.max(0, Math.round(patch.all));
   if (patch.kbm != null) rows[i].kbm = Math.max(0, Math.round(patch.kbm));
   if (patch.tmx != null) rows[i].tmx = Math.max(0, Math.round(patch.tmx));
+  if (patch.mins != null) rows[i].mins = Math.max(0, Math.round(patch.mins));
+  if (patch.perWeek != null) rows[i].perWeek = Math.max(0, Math.round(patch.perWeek));
   savePriceRows(rows);
   return { ok: true as const, row: rows[i] };
 }
@@ -62,12 +67,12 @@ export function updateOnePrice(path: string, patch: Partial<Pick<PriceRow, "all"
 export function updateGroupPrice(opts: {
   direction?: string;
   query?: string;
-  field: "all" | "kbm" | "tmx" | "all-three";
+  field: string;
   set?: number;
   delta?: number;
 }) {
   ensureLivePrices();
-  const rows = listPriceRows().map((r) => ({ ...r }));
+  const rows = listPriceRows().map((r) => ({ ...r, extra: { ...(r.extra || {}) } }));
   const dir = (opts.direction || "").toLowerCase().trim();
   const q = (opts.query || "").toLowerCase().trim();
   const hit = rows.filter((r) => {
@@ -76,12 +81,14 @@ export function updateGroupPrice(opts: {
     return Boolean(dir || q);
   });
   if (!hit.length) return { ok: false as const, error: "Нет курсов в этой группе", count: 0 };
-  const fields: Array<"all" | "kbm" | "tmx"> =
-    opts.field === "all-three" ? ["all", "kbm", "tmx"] : [opts.field];
+  const fields: string[] =
+    opts.field === "all-three" ? ["all", "kbm", "tmx"] : opts.field === "all-corps" ? ["kbm", "tmx"] : [opts.field];
   for (const row of hit) {
     for (const f of fields) {
-      if (opts.set != null) row[f] = Math.max(0, Math.round(opts.set));
-      else if (opts.delta != null) row[f] = Math.max(0, Math.round(row[f] + opts.delta));
+      const cur = f === "all" || f === "kbm" || f === "tmx" ? Number(row[f] || 0) : Number(row.extra?.[f] || 0);
+      const next = opts.set != null ? Math.max(0, Math.round(opts.set)) : Math.max(0, Math.round(cur + (opts.delta || 0)));
+      if (f === "all" || f === "kbm" || f === "tmx") row[f] = next;
+      else row.extra = { ...(row.extra || {}), [f]: next };
     }
   }
   savePriceRows(rows);

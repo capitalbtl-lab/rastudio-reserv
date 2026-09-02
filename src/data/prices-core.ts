@@ -5,10 +5,17 @@ export type PriceRow = {
   name: string;
   age: string;
   path: string;
+  /** = courseId в дереве (обычно path). Цена курса ищется по этому ID, не по имени. */
+  courseId?: string;
+  /** Предмет AlfaCRM, если цена привязана к subjectId. */
+  subjectId?: number;
   direction: string;
   all: number;
   kbm: number;
   tmx: number;
+  mins?: number;
+  perWeek?: number;
+  extra?: Record<string, number>;
 };
 
 const SEED = seed as PriceRow[];
@@ -17,23 +24,66 @@ let cache: PriceRow[] = SEED.map((r) => ({ ...r }));
 export function splitCourseAge(name: string): { name: string; age: string } {
   let n = String(name || "")
     .replace(/робототехника и программирование/gi, "Робототехника")
+    .replace(/^\d{4}\s+/, "")
     .replace(/\s+/g, " ")
     .trim();
-  const m = n.match(/\s*[\(（]?\s*((?:\d+\s*[-–—]\s*\d+|\d+\s*\+|от\s*\d+)\s*(?:лет|года|год)?)\s*[\)）]?\s*$/i);
-  if (!m || m.index == null) return { name: n, age: "" };
-  const cut = n.slice(0, m.index).trim();
-  if (cut.length < 4) return { name: n, age: "" };
-  let age = m[1].replace(/\s+/g, " ").trim();
-  if (/\d/.test(age) && !/лет|год|\+/.test(age)) age = `${age} лет`;
-  return { name: cut, age };
+  n = n.replace(/[·•]/g, " ");
+  n = n.replace(/\s*[\(（]\s*\d+\s*(?:групп[аые]?|гр\.?)?\s*[\)）]\s*$/gi, "").trim();
+  let age = "";
+  const block = n.match(/\s*[\(（]\s*((?:(?:\d+\s*[-–—]\s*\d+|\d+\s*\+|от\s*\d+)(?:\s*(?:лет|года|год))?(?:\s*[,;]\s*)?)+)\s*[\)）]\s*$/i);
+  if (block && block.index != null && block.index >= 4) {
+    age = block[1].replace(/\s+/g, " ").replace(/[,\s]+$/g, "").trim();
+    n = n.slice(0, block.index).trim();
+  } else {
+    const m = n.match(/\s*[\(（]?\s*((?:\d+\s*[-–—]\s*\d+|\d+\s*\+|от\s*\d+)\s*(?:лет|года|год)?)\s*[\)）]?\s*$/i);
+    if (m && m.index != null && m.index >= 4) {
+      age = m[1].replace(/\s+/g, " ").trim();
+      n = n.slice(0, m.index).trim();
+    }
+  }
+  n = n
+    .replace(/\s*[\(（]\s*(?:\d+\s*[-–—]\s*\d+\s*,?\s*)+$/g, "")
+    .replace(/[\s,;:]+$/g, "")
+    .replace(/[\(（]\s*$/g, "")
+    .trim();
+  if (age && /\d/.test(age) && !/лет|год|\+/.test(age)) age = `${age} лет`;
+  return { name: n || String(name || "").replace(/^\d{4}\s+/, "").trim(), age };
 }
 
 export function tidyCourseName(name: string) {
   return splitCourseAge(name).name;
 }
 
+/** «2026 Бальные танцы 5-7 лет» и «Бальные танцы · 5-7 лет» — одна папка. */
+export function foldCourseLabel(s: string) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/^\d{4}\s+/, "")
+    .replace(/[·•–—()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function hydratePrices(rows: PriceRow[]) {
-  cache = rows.map((r) => ({ ...r, name: tidyCourseName(r.name) }));
+  cache = rows.map((r) => ({
+    ...r,
+    name: tidyCourseName(r.name),
+    courseId: r.courseId || r.path || r.id,
+    mins: Math.max(0, Math.round(Number(r.mins) || 0)),
+    perWeek: Math.max(0, Math.round(Number(r.perWeek) || 0)),
+    extra: cleanExtra(r.extra),
+  }));
+}
+
+function cleanExtra(raw?: Record<string, number>) {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (!k || k === "all" || k === "kbm" || k === "tmx") continue;
+    out[k] = Math.max(0, Math.round(Number(v) || 0));
+  }
+  return out;
 }
 
 export function listPriceRows() {
@@ -92,10 +142,25 @@ export function normPath(path: string) {
 export function priceForPath(path: string) {
   const p = normPath(path);
   return (
+    cache.find((r) => normPath(r.courseId || r.path || r.id) === p) ||
     cache.find((r) => normPath(r.path) === p) ||
     cache.find((r) => p.endsWith(normPath(r.path)) || normPath(r.path).endsWith(p))
   );
 }
+
+export type GroupDuration = { path: string; course: string; mins: number; perWeek: number; groups: number };
+
+/** Длительность к цене: только courseId / path. Имя курса не склеивает. */
+export function matchDuration(row: PriceRow, items: GroupDuration[]) {
+  const rp = normPath(row.courseId || row.path);
+  const byId = items.find((it) => {
+    const sp = normPath(it.path);
+    return Boolean(rp && sp && (rp === sp || sp.endsWith(rp) || rp.endsWith(sp)));
+  });
+  return byId || null;
+}
+
+export { priceRowKey } from "./ids";
 
 export const PRICE_DIRECTIONS = [
   "Художественная школа",

@@ -1,12 +1,20 @@
+/**
+ * Слоты расписания кабинета. Связи группы — courseId / schoolId / subjectId / groupId.
+ * stampSubjects только обновляет имя по subjectId; не подбирает предмет по названию группы.
+ */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CmsSession } from "@/data/cms";
 import { request } from "@/data/alfacrm";
 import { yandexJson } from "@/data/agent-channels";
-import { matchSubject, loadSubjects, bestSubject } from "@/data/crm-subjects";
-import { type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
+import { loadSubjects, pickSubjectForSlot } from "@/data/crm-subjects";
+import { teacherAllowed, teachersAtBranch, listTeachers } from "@/data/crm-teachers";
+import { type CrmSlot, type SlotVersion, type LessonBeat, beatsOf, validBeat } from "@/data/crm-slots-core";
+import { loadSiteTree } from "@/data/site-tree";
+import { subjectIdOfCourse } from "@/data/ids";
+import { loadScheduleMap } from "@/data/schedule-map";
 
-export { SCHOOL_ORDER, type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
+export { SCHOOL_ORDER, beatsOf, validBeat, type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
 
 function signupOf(branch: number, gid: string | number) {
   return `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`;
@@ -48,6 +56,7 @@ function schoolFile() {
   return join(process.cwd(), "storage", "crm-schedule-versions.json");
 }
 
+/** Имя предмета из справочника по subjectId. Не подставляет чужой предмет по названию группы. */
 export function stampSubjects(slots: CrmSlot[]): CrmSlot[] {
   const list = loadSubjects();
   return slots.map((s) => {
@@ -56,10 +65,7 @@ export function stampSubjects(slots: CrmSlot[]): CrmSlot[] {
       if (s.subject === current.name && s.subjectId === current.id) return s;
       return { ...s, subjectId: current.id, subject: current.name };
     }
-    const hit = bestSubject(`${s.groupName} ${s.age}`, list);
-    if (!hit) return s;
-    if (s.subjectId === hit.id && s.subject === hit.name) return s;
-    return { ...s, subjectId: hit.id, subject: hit.name };
+    return s;
   });
 }
 
@@ -116,21 +122,16 @@ export function dayLabel(day?: number) {
   return DAYS[(Number(day) || 1) - 1] || "День";
 }
 
-export function beatsOf(s: CrmSlot): LessonBeat[] {
-  if (s.beats?.length) return s.beats;
-  return [{ day: s.day, timeFrom: s.timeFrom, timeTo: s.timeTo, lessonId: s.lessonId }];
-}
-
 export function mergeGroupBeats(slots: CrmSlot[]): CrmSlot[] {
   const order: string[] = [];
   const map = new Map<string, CrmSlot>();
   for (const raw of slots) {
     const s = { ...raw };
     const k = s.groupId ? `${s.branchId}:${s.groupId}` : s.id;
-    const extra = beatsOf(s);
+    const extra = beatsOf(s).filter((b) => validBeat(b) || b.lessonId);
     const prev = map.get(k);
     if (!prev) {
-      map.set(k, { ...s, beats: extra, timesPerWeek: extra.length });
+      map.set(k, { ...s, beats: extra.length ? extra : beatsOf(s), timesPerWeek: Math.max(1, extra.length) });
       order.push(k);
       continue;
     }
@@ -143,7 +144,8 @@ export function mergeGroupBeats(slots: CrmSlot[]): CrmSlot[] {
         have.add(key);
       }
     }
-    map.set(k, { ...prev, beats, timesPerWeek: beats.length });
+    const cleaned = beats.filter((b) => validBeat(b) || b.lessonId);
+    map.set(k, { ...prev, beats: cleaned.length ? cleaned : beats.slice(0, 1), timesPerWeek: Math.max(1, cleaned.length) });
   }
   return order.map((k) => {
     const s = map.get(k)!;
@@ -208,8 +210,7 @@ export function slotFromSession(s: CmsSession): CrmSlot {
     teacherIds: s.teacherId ? [Number(s.teacherId)] : [],
     teacher: "",
     roomId: 0,
-    bDate: "",
-    eDate: "",
+    ...defaultPeriod(),
   };
 }
 
@@ -437,7 +438,10 @@ export function snapAdd(a: SlotDraft, catalog: CrmSlot[]): SlotDraft {
     return {
       ...a,
       school: a.school || hit.school,
+      schoolId: a.schoolId || hit.schoolId,
       course: hit.course,
+      courseId: hit.courseId || a.courseId,
+      subjectId: a.subjectId || hit.subjectId,
       age: hit.age || age,
       teacher: matchTeacher(a.teacher, catalog) || hit.teacher,
     };
@@ -451,6 +455,9 @@ export function parseDraftFromSpeech(text: string, catalog: CrmSlot[], prev?: Pa
   const next: SlotDraft = {
     school: prev?.school || "",
     course: prev?.course || "",
+    courseId: prev?.courseId || "",
+    schoolId: prev?.schoolId || "",
+    subjectId: prev?.subjectId,
     age: prev?.age || "",
     day: Number(prev?.day) || 0,
     timeFrom: prev?.timeFrom || "",
@@ -489,8 +496,11 @@ export function parseDraftFromSpeech(text: string, catalog: CrmSlot[], prev?: Pa
   const ageHit = snapAge(raw, catalog);
   if (/\d/.test(ageHit) && /лет|год/.test(ageHit)) next.age = ageHit;
   const snapped = snapAdd({ ...next, course: next.course || raw }, catalog);
-  if (snapped.course && catalog.some((s) => s.course === snapped.course)) {
+  if (snapped.course && (snapped.courseId || catalog.some((s) => s.courseId && s.courseId === snapped.courseId) || catalog.some((s) => s.course === snapped.course))) {
     next.course = snapped.course;
+    next.courseId = snapped.courseId || next.courseId;
+    next.schoolId = snapped.schoolId || next.schoolId;
+    next.subjectId = snapped.subjectId || next.subjectId;
     next.school = snapped.school || next.school;
     next.age = snapped.age || next.age;
   } else if (/художественн|студи/.test(t)) {
@@ -518,6 +528,9 @@ export function missingScheduleFields(d: Partial<SlotDraft>) {
 export type SlotDraft = {
   school: string;
   course: string;
+  courseId?: string;
+  schoolId?: string;
+  subjectId?: number;
   age: string;
   day: number;
   timeFrom: string;
@@ -528,20 +541,31 @@ export type SlotDraft = {
   limit?: number;
 };
 
+/** Новая группа: courseId из дерева, subjectId из карты курса. Имя курса — подпись. */
 export function buildSlot(draft: SlotDraft, catalog: CrmSlot[]): CrmSlot {
-  const br = matchBranch(`${draft.branch} ${draft.course}`);
-  const school = draft.school || schoolOf("", draft.course, draft.groupName || "");
-  const age = draft.age || (draft.course.match(/\(([^)]+)\)/)?.[1] || "");
-  const course = formatCourseName(draft.course || "Курс", age);
+  const tree = loadSiteTree();
+  const map = loadScheduleMap();
+  const courseRow =
+    tree.courses.find((c) => c.id && c.id === draft.courseId) ||
+    tree.courses.find((c) => draft.courseId && c.href === draft.courseId);
+  const schoolRow =
+    tree.schools.find((s) => s.id && (s.id === draft.schoolId || s.id === courseRow?.schoolId)) ||
+    tree.schools.find((s) => draft.school && s.label === draft.school);
+  const br = matchBranch(`${draft.branch} ${courseRow?.label || draft.course}`);
+  const school = schoolRow?.label || draft.school || schoolOf("", draft.course, draft.groupName || "");
+  const age = draft.age || courseRow?.age || (draft.course.match(/\(([^)]+)\)/)?.[1] || "");
+  const course = courseRow?.label || (draft.course ? String(draft.course).trim() : formatCourseName("Курс", age));
   const twin =
-    catalog.find((s) => s.school === school && (s.course === course || s.course.includes(course.split("(")[0].trim()))) ||
-    catalog.find((s) => s.school === school);
-  const teacher = matchTeacher(draft.teacher, catalog);
-  const teacherHit = catalog.find((s) => s.teacher === teacher);
+    catalog.find((s) => courseRow?.id && s.courseId === courseRow.id) ||
+    catalog.find((s) => s.schoolId && schoolRow?.id && s.schoolId === schoolRow.id);
+  const teacher = matchTeacher(draft.teacher, catalog.filter((s) => !br.id || s.branchId === br.id));
+  const teacherHit = catalog.find((s) => s.teacher === teacher && (!br.id || s.branchId === br.id));
   const day = Math.max(1, Math.min(7, Number(draft.day) || 1));
   const year = new Date().getFullYear();
   const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const sub = matchSubject(`${course} ${draft.groupName || ""} ${age}`);
+  const mappedSid = courseRow?.id ? subjectIdOfCourse(courseRow.id, map.courses) : 0;
+  const subjectId = Number(draft.subjectId) || Number(twin?.subjectId) || mappedSid || 0;
+  const sub = subjectId ? loadSubjects().find((x) => x.id === subjectId) : undefined;
   return {
     id,
     lessonId: 0,
@@ -551,11 +575,13 @@ export function buildSlot(draft: SlotDraft, catalog: CrmSlot[]): CrmSlot {
     statusId: 1,
     limit: Number(draft.limit) || twin?.limit || 8,
     taken: 0,
-    subjectId: twin?.subjectId || sub?.id || 0,
+    subjectId,
     subject: sub?.name || twin?.subject || course,
     school,
     course,
-    path: twin?.path || "",
+    courseId: courseRow?.id || "",
+    schoolId: schoolRow?.id || courseRow?.schoolId || "",
+    path: courseRow?.href || twin?.path || "",
     age: age || twin?.age || "",
     day,
     dayLabel: dayLabel(day),
@@ -571,8 +597,7 @@ export function buildSlot(draft: SlotDraft, catalog: CrmSlot[]): CrmSlot {
     teacherIds: teacherHit?.teacherIds || [],
     teacher,
     roomId: 0,
-    bDate: "",
-    eDate: "",
+    ...defaultPeriod(),
   };
 }
 
@@ -586,29 +611,17 @@ function bulkLimitFromPrompt(prompt: string, slots: CrmSlot[], selectedIds: stri
   const t = String(prompt || "")
     .toLowerCase()
     .replace(/ё/g, "е");
-  if (!/мест|лимит|свободн|набор|вместимост|максимальн|количеств|детей|человек|ребен|ребён|capacity|limit/.test(t)) return null;
-  const num =
-    t.match(/(?:до|на|=|максимум|максимально(?:е|го)?)\s*(\d{1,3})\b/) ||
-    t.match(/\b(\d{1,3})\s*(?:мест|чел|человек|детей|ребенка|ребёнка|ребенку)/) ||
-    t.match(/\b(\d{1,3})\s*$/);
-  if (!num) return null;
-  const to = Number(num[1]);
+  if (!/мест|лимит|столбц|цифр|свободн|набор|вместимост|максимальн|количеств|детей|человек|ребен|ребён|capacity|limit/.test(t)) return null;
+  const tagged = t.match(/цифр[а-я]*\s*(\d{1,3})/);
+  const nums = [...t.matchAll(/\b(\d{1,3})\b/g)].map((m) => Number(m[1])).filter((n) => n >= 1 && n <= 200);
+  const to = tagged ? Number(tagged[1]) : nums.length ? nums[nums.length - 1] : NaN;
   if (!Number.isFinite(to) || to < 0 || to > 200) return null;
-  const all = /у\s+всех|во\s+всех|всем\s+групп|все\s+групп|каждую\s+групп|каждой\s+групп|массово|по\s+всем/.test(t);
+  const all = /у\s+всех|во\s+всех|всем|все\s+групп|каждую\s+групп|каждой\s+групп|массово|по\s+всем|столбц/.test(t);
   let pool = selectedIds.length ? slots.filter((s) => selectedIds.includes(s.id)) : slots.slice();
+  if (all || !selectedIds.length) pool = slots.slice();
   const schools = [...new Set(slots.map((s) => s.school).filter(Boolean))];
-  const school = schools.find((s) => s.length > 4 && t.includes(s.toLowerCase().replace(/ё/g, "е")));
+  const school = !all ? schools.find((s) => s.length > 4 && t.includes(s.toLowerCase().replace(/ё/g, "е"))) : undefined;
   if (school) pool = pool.filter((s) => s.school === school);
-  const courses = [...new Set(slots.map((s) => s.course).filter(Boolean))];
-  const course = courses
-    .filter((c) => c.length > 6 && t.includes(c.toLowerCase().replace(/ё/g, "е").slice(0, 24)))
-    .sort((a, b) => b.length - a.length)[0];
-  if (course && !all) pool = pool.filter((s) => s.course === course);
-  if (!all && !selectedIds.length && !school && course) {
-    /* one course is ok */
-  } else if (!all && !selectedIds.length && !school) {
-    pool = slots.slice();
-  }
   const changes = pool
     .filter((s) => Number(s.limit) !== to)
     .map((s) => ({ id: s.id, field: "limit", from: String(s.limit ?? 0), to: String(to) }));
@@ -741,8 +754,99 @@ export function applyChanges(slots: CrmSlot[], changes: { id: string; field: str
   return stampTimes(next);
 }
 
+function hhmm(s: string) {
+  const m = String(s || "").match(/(\d{1,2}):(\d{2})/);
+  if (!m) return "";
+  return `${m[1].padStart(2, "0")}:${m[2]}`;
+}
+
+function isoDate(raw?: string) {
+  const t = String(raw || "").trim();
+  const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const ru = t.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
+  return new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+function academicEndIso(startIso: string) {
+  const [y, m] = startIso.split("-").map(Number);
+  const endY = m >= 6 ? y + 1 : y;
+  return `${endY}-05-31`;
+}
+
+function ruFromIso(iso: string) {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
+}
+
+function laterIso(a: string, b: string) {
+  if (!a) return b;
+  if (!b) return a;
+  return a >= b ? a : b;
+}
+
+function minBDateFromError(msg: string) {
+  const m = String(msg).match(/меньше\s+(\d{1,2})[.](\d{1,2})[.](\d{4})/i);
+  if (!m) return "";
+  return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+}
+
+function asCrmDate(iso: string, ru: boolean) {
+  return ru ? ruFromIso(iso) : iso;
+}
+
+export function defaultPeriod(from?: string, to?: string) {
+  const start = isoDate(from);
+  const end = to ? isoDate(to) : academicEndIso(start);
+  return { bDate: ruFromIso(start), eDate: ruFromIso(end) };
+}
+
+function durationMin(from: string, to: string) {
+  const a = hhmm(from).split(":").map(Number);
+  const b = hhmm(to).split(":").map(Number);
+  if (a.length < 2 || b.length < 2) return 90;
+  const d = b[0] * 60 + b[1] - (a[0] * 60 + a[1]);
+  return d > 0 ? d : 90;
+}
+
+function crmFieldErrors(raw: unknown) {
+  if (!raw || typeof raw !== "object") return "";
+  const parts: string[] = [];
+  for (const v of Object.values(raw as Record<string, unknown>)) {
+    if (Array.isArray(v)) parts.push(v.map(String).join("; "));
+    else if (v) parts.push(String(v));
+  }
+  return parts.filter(Boolean).join(" ");
+}
+
+async function regularsOfGroup(branch: number, gid: number, t: string, request: typeof import("@/data/alfacrm").request) {
+  type Reg = {
+    id?: number;
+    related_id?: number;
+    day?: number;
+    time_from?: string;
+    time_from_v?: string;
+    time_to?: string;
+    time_to_v?: string;
+    lesson_type_id?: number;
+    branch_id?: number;
+    subject_id?: number;
+    b_date?: string;
+    e_date?: string;
+  };
+  const items: Reg[] = [];
+  for (let page = 0; page < 6; page++) {
+    const pack = await request<{ items?: Reg[] }>(`/v2api/${branch}/regular-lesson/index`, { page, pageSize: 100 }, t);
+    const chunk = pack.items || [];
+    for (const x of chunk) if (Number(x.related_id) === gid) items.push(x);
+    if (chunk.length < 100) break;
+  }
+  return items;
+}
+
 export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
-  const { token, request } = await import("@/data/alfacrm");
+  const { token, request, formatRuDob } = await import("@/data/alfacrm");
   const t = await token();
   const pick = new Set(ids.map(String));
   const list = slots.filter((s) => pick.has(s.id));
@@ -752,78 +856,235 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
 
   function crmId(res: unknown) {
     const r = res as { model?: { id?: number }; id?: number; success?: boolean; errors?: unknown };
-    if (r && r.success === false) throw new Error(JSON.stringify(r.errors || r).slice(0, 180));
+    if (r && r.success === false) throw new Error(crmFieldErrors(r.errors) || JSON.stringify(r.errors || r).slice(0, 180));
     return Number(r?.model?.id || r?.id || 0);
+  }
+
+  async function postCrm(path: string, body: Record<string, unknown>) {
+    try {
+      return await request(path, body, t);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const min = minBDateFromError(msg);
+      if (!min || body.b_date == null) throw e;
+      const cur = isoDate(String(body.b_date));
+      if (cur >= min) throw e;
+      const ru = /^\d{1,2}\.\d{1,2}\.\d{4}$/.test(String(body.b_date));
+      const end = laterIso(isoDate(String(body.e_date || "")), academicEndIso(min));
+      return await request(path, { ...body, b_date: asCrmDate(min, ru), e_date: asCrmDate(end, ru) }, t);
+    }
   }
 
   for (const raw of list) {
     const s = next.find((x) => x.id === raw.id);
     if (!s) continue;
     const branch = s.branchId || 1;
-    const sub = matchSubject(`${s.course} ${s.subject} ${s.groupName}`, subjects) || matchSubject(s.course, subjects) || matchSubject(s.subject, subjects);
-    const subjectId = Number(s.subjectId) || sub?.id || 0;
+    const branchSubs = subjects.filter((x) => next.some((slot) => slot.branchId === branch && slot.subjectId === x.id));
+    const picked =
+      (Number(s.subjectId) ? subjects.find((x) => x.id === Number(s.subjectId) && !x.local) : undefined) ||
+      pickSubjectForSlot(s, branchSubs);
+    const sub = picked;
+    const subjectId = Number(sub?.id || 0);
     if (!subjectId) {
-      results.push({ id: s.id, ok: false, error: "Нет предмета AlfaCRM. Откройте вкладку «Предметы» и сопоставьте курс." });
+      results.push({
+        id: s.id,
+        ok: false,
+        error: "В этом филиале нет такого предмета. Выберите из списка филиала или нажмите «Создать предмет».",
+      });
       continue;
     }
     s.subjectId = subjectId;
     if (sub?.name) s.subject = sub.name;
-    const teachers = s.teacherIds.length ? s.teacherIds : s.teacherId ? [s.teacherId] : [];
+    const roster = teachersAtBranch(branch, listTeachers(next));
+    const rawIds = s.teacherIds.length ? s.teacherIds : s.teacherId ? [s.teacherId] : [];
+    const byName = s.teacher
+      ? roster.find((t) => t.name.toLowerCase() === s.teacher.toLowerCase())
+      : undefined;
+    const teachers = (rawIds.length ? rawIds : byName ? [byName.id] : []).filter((id) => teacherAllowed(id, branch, roster));
+    if (s.teacher && !teachers.length) {
+      s.teacherId = 0;
+      s.teacherIds = [];
+    } else if (teachers.length) {
+      s.teacherId = teachers[0];
+      s.teacherIds = teachers;
+    }
     try {
       let groupId = Number(s.groupId) || 0;
       const wasNew = !groupId;
+      let startIso = isoDate(s.bDate);
+      let endIso = isoDate(s.eDate || academicEndIso(startIso));
+      s.bDate = ruFromIso(startIso);
+      s.eDate = ruFromIso(endIso);
+      const teacherIds = teachers.map(Number).filter((n) => n > 0);
+      const groupBody = {
+        name: s.groupName || s.course,
+        note: s.groupNote || "",
+        limit: s.limit || 8,
+        branch_ids: [branch],
+        subject_id: subjectId,
+        subject_ids: [subjectId],
+        status_id: s.statusId || 1,
+        b_date: formatRuDob(startIso),
+        e_date: formatRuDob(endIso),
+        ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+      };
       if (!groupId) {
-        const created = await request(`/v2api/${branch}/group/create`, {
-          name: s.groupName || s.course,
-          note: s.groupNote || "",
-          limit: s.limit || 8,
-          ...(teachers.length ? { teacher_ids: teachers } : {}),
-        }, t);
+        const created = await request(`/v2api/${branch}/group/create`, groupBody, t);
         groupId = crmId(created);
         if (!groupId) throw new Error("AlfaCRM не вернула номер группы после создания");
         s.groupId = groupId;
         s.branchId = branch;
         s.signup = signupOf(branch, groupId);
+        try {
+          const { loadSiteTree, saveSiteTree, slotTreeKey } = await import("./site-tree");
+          const tree = loadSiteTree();
+          const old = String(raw.id);
+          const neu = slotTreeKey(s);
+          if (neu && neu !== old) {
+            if (tree.assign[old]) {
+              tree.assign[neu] = tree.assign[old];
+              delete tree.assign[old];
+              saveSiteTree(tree);
+            }
+            s.id = neu;
+          }
+        } catch {
+          s.id = `gid:${branch}:${groupId}`;
+        }
       } else {
-        await request(
-          `/v2api/${branch}/group/update`,
-          {
-            id: groupId,
-            name: s.groupName,
-            note: s.groupNote,
-            limit: s.limit,
-            ...(teachers.length ? { teacher_ids: teachers } : {}),
-          },
-          t,
-        );
+        await postCrm(`/v2api/${branch}/group/update`, { id: groupId, ...groupBody });
       }
-      const beats = beatsOf(s);
+      const beats = beatsOf(s).map((b) => ({
+        ...b,
+        timeFrom: hhmm(b.timeFrom || s.timeFrom),
+        timeTo: hhmm(b.timeTo || s.timeTo),
+        day: Math.max(1, Math.min(7, Number(b.day) || Number(s.day) || 1)),
+      }));
+      const existing = groupId ? await regularsOfGroup(branch, groupId, t, request).catch(() => []) : [];
+      const fromCrm = existing.map((x) => isoDate(x.b_date || "")).filter(Boolean);
+      if (fromCrm.length) startIso = laterIso(startIso, fromCrm.sort()[fromCrm.length - 1] || startIso);
+      const used = new Set<number>();
       const savedBeats: LessonBeat[] = [];
       for (const b of beats) {
+        if (!b.timeFrom || !b.timeTo) {
+          savedBeats.push(b);
+          continue;
+        }
+        let lessonId = Number(b.lessonId) || 0;
+        if (lessonId && used.has(lessonId)) lessonId = 0;
+        if (!lessonId) {
+          const free = existing.filter((x) => x.id && !used.has(Number(x.id)));
+          const sameDay = free.filter((x) => Number(x.day) === b.day);
+          const exact = sameDay.find((x) => hhmm(String(x.time_from_v || x.time_from || "")) === b.timeFrom);
+          const hit = exact || (sameDay.length === 1 ? sameDay[0] : null) || (free.length === 1 && beats.length === 1 ? free[0] : null);
+          if (hit?.id) lessonId = Number(hit.id);
+        }
+        const known = existing.find((x) => Number(x.id) === lessonId);
+        const bDate = laterIso(startIso, known?.b_date ? isoDate(known.b_date) : "");
+        const eDate = laterIso(endIso, known?.e_date ? isoDate(known.e_date) : academicEndIso(bDate));
         const payload = {
+          related_class: "Group",
           related_id: groupId,
           subject_id: subjectId,
+          subject_ids: [subjectId],
+          branch_id: branch,
+          lesson_type_id: Number(known?.lesson_type_id) || 2,
           day: b.day,
-          time_from: b.timeFrom,
-          time_to: b.timeTo,
+          days: [b.day],
           time_from_v: b.timeFrom,
           time_to_v: b.timeTo,
-          ...(teachers.length ? { teacher_ids: teachers } : {}),
+          duration: durationMin(b.timeFrom, b.timeTo),
+          b_date: bDate,
+          e_date: eDate,
+          ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+          ...(s.roomId ? { room_id: s.roomId } : {}),
         };
-        if (b.lessonId) {
-          await request(`/v2api/${branch}/regular-lesson/update`, { id: b.lessonId, ...payload }, t);
-          savedBeats.push(b);
-        } else {
-          const created = await request(`/v2api/${branch}/regular-lesson/create`, payload, t);
-          const lessonId = crmId(created) || 0;
+        if (lessonId) {
+          await postCrm(`/v2api/${branch}/regular-lesson/update?id=${lessonId}`, { id: lessonId, ...payload });
+          used.add(lessonId);
           savedBeats.push({ ...b, lessonId });
-          if (!s.lessonId && lessonId) s.lessonId = lessonId;
+        } else {
+          let created: unknown;
+          try {
+            created = await postCrm(`/v2api/${branch}/regular-lesson/create`, payload);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : "";
+            if (/филиал не доступен для преподавател/i.test(msg) && "teacher_ids" in payload) {
+              const { teacher_ids: _drop, ...rest } = payload as typeof payload & { teacher_ids?: number[] };
+              created = await postCrm(`/v2api/${branch}/regular-lesson/create`, rest);
+              s.teacherId = 0;
+              s.teacherIds = [];
+            } else {
+              throw e;
+            }
+          }
+          const newId = crmId(created) || 0;
+          if (!newId) throw new Error("AlfaCRM не создала регулярное занятие — проверьте день и время.");
+          await postCrm(`/v2api/${branch}/regular-lesson/update?id=${newId}`, {
+            id: newId,
+            related_class: "Group",
+            related_id: groupId,
+            lesson_type_id: 2,
+            subject_id: subjectId,
+            subject_ids: [subjectId],
+            branch_id: branch,
+            day: b.day,
+            days: [b.day],
+            time_from_v: b.timeFrom,
+            time_to_v: b.timeTo,
+            ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+            b_date: bDate,
+            e_date: eDate,
+          }).catch(() => null);
+          used.add(newId);
+          savedBeats.push({ ...b, lessonId: newId });
+          if (!s.lessonId) s.lessonId = newId;
         }
       }
       s.beats = savedBeats;
+      s.bDate = formatRuDob(startIso);
+      s.eDate = formatRuDob(endIso);
+      const first = savedBeats[0];
+      if (first) {
+        s.day = first.day;
+        s.dayLabel = dayLabel(first.day);
+        s.timeFrom = first.timeFrom;
+        s.timeTo = first.timeTo;
+        s.lessonId = first.lessonId;
+        s.timesPerWeek = savedBeats.length;
+      }
       results.push({ id: raw.id, ok: true, groupId, created: wasNew });
     } catch (e) {
-      results.push({ id: raw.id, ok: false, error: e instanceof Error ? e.message.slice(0, 180) : "ошибка CRM" });
+      const msg = e instanceof Error ? e.message : "ошибка CRM";
+      if (/филиал не доступен для преподавател/i.test(msg)) {
+        results.push({
+          id: raw.id,
+          ok: false,
+          error: "Этот педагог не работает в выбранном филиале AlfaCRM. Выберите педагога этого филиала — список уже отфильтрован.",
+        });
+        continue;
+      }
+      let shown = "AlfaCRM не приняла регулярное занятие.";
+      const minB = minBDateFromError(msg);
+      if (minB) {
+        shown = `Дата начала в CRM не раньше ${ruFromIso(minB)}. Выгрузка подставит её сама — нажмите ещё раз.`;
+      } else {
+        const brace = msg.indexOf("{");
+        if (brace >= 0) {
+          try {
+            const j = JSON.parse(msg.slice(brace));
+            shown = crmFieldErrors(j.errors || j) || shown;
+          } catch {
+            const ru = msg.match(/"[^"]+":\s*\[\s*"([^"]+)"/);
+            shown = ru?.[1] || msg.replace(/^alfacrm \d+\s+\S+\s*/, "").slice(0, 180) || shown;
+          }
+        } else if (/день недели/i.test(msg)) {
+          shown = "Укажите день недели в строке группы (Пн–Вс) и нажмите ещё раз.";
+        } else {
+          shown = msg.replace(/^alfacrm \d+\s+\S+\s*/, "").slice(0, 180) || shown;
+        }
+      }
+      results.push({ id: raw.id, ok: false, error: shown.slice(0, 220) });
     }
   }
   return { results, slots: next };

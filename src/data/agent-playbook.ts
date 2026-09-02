@@ -1,5 +1,6 @@
 import type { SessionFacts } from "./agent-facts";
 import { nextStepOf } from "./agent-facts";
+import { IDS_FOR_AGENT } from "./ids";
 
 export type ScriptStep =
   | "age"
@@ -173,6 +174,8 @@ export function playbookPrompt(scripts: ScriptSection[], facts?: SessionFacts, n
 
 СКРИПТЫ СТУДИИ:
 ${season}
+
+${IDS_FOR_AGENT}
 
 ${live}
 

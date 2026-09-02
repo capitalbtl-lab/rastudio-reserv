@@ -1,0 +1,490 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { adminGroupDurations, adminPrices, adminSaveAll, adminSaveGroup } from "@/data/admin";
+import { PRICE_DIRECTIONS, hydratePrices, listPriceRows, matchDuration, type PriceRow } from "@/data/prices-core";
+import { Button } from "@/components/ui/button";
+import { AdminSectionHead } from "@/components/admin-self-test";
+import { adminPriceFormulas, type CorpFormulas } from "@/data/price-formulas";
+import { retryFetch } from "@/lib/retry-fetch";
+import { pullFromCrm } from "@/lib/crm-pull";
+import { CrmPullDialog, emptyPull, type CrmPullState } from "@/components/crm-pull-dialog";
+import { InfoTip, TipWrap } from "@/components/info-tip";
+import { cn } from "@/lib/utils";
+
+function token() {
+  if (typeof document === "undefined") return "";
+  const m = document.cookie.match(/(?:^|;\s*)ra_admin=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : localStorage.getItem("ra_admin") || "";
+}
+
+export function AdminCoursePrices() {
+  const [rows, setRows] = useState<PriceRow[]>(() => listPriceRows());
+  const [dir, setDir] = useState(PRICE_DIRECTIONS[0]);
+  const [field, setField] = useState("all");
+  const [mode, setMode] = useState<"set" | "delta">("set");
+  const [amount, setAmount] = useState("0");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [formulas, setFormulas] = useState<CorpFormulas>({ kbm: { mode: "percent", value: 100 }, tmx: { mode: "percent", value: 100 }, extra: [] });
+  const [corpDir, setCorpDir] = useState("");
+  const [formulasOpen, setFormulasOpen] = useState(false);
+  const [pull, setPull] = useState<CrmPullState>(emptyPull("prices"));
+  const [addName, setAddName] = useState("");
+
+  async function load() {
+    setBusy(true);
+    try {
+      const res = await retryFetch(() => adminPrices({ data: { token: token() } }));
+      if (!res.ok) {
+        setErr(res.error || "Не удалось загрузить цены.");
+        return;
+      }
+      const next = Array.isArray(res.rows) ? res.rows : [];
+      if (next.length) {
+        setRows(next);
+        hydratePrices(next);
+      }
+      setErr(next.length ? "" : "Файл цен пуст — показаны курсы с сайта.");
+      const form = await adminPriceFormulas({ data: { token: token(), action: "get" } });
+      if (form.ok && "formulas" in form && form.formulas) {
+        setFormulas({ kbm: form.formulas.kbm, tmx: form.formulas.tmx, extra: form.formulas.extra || [] });
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Не удалось загрузить цены.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, PriceRow[]>();
+    for (const row of rows) {
+      const list = map.get(row.direction) || [];
+      list.push(row);
+      map.set(row.direction, list);
+    }
+    return [...map.entries()];
+  }, [rows]);
+
+  async function saveAll() {
+    setBusy(true);
+    const res = await adminSaveAll({ data: { token: token(), rows } });
+    setBusy(false);
+    if (!res.ok) {
+      setErr(res.error || "Не удалось сохранить.");
+      return;
+    }
+    if ("rows" in res && Array.isArray(res.rows) && res.rows.length) {
+      setRows(res.rows);
+      hydratePrices(res.rows);
+    }
+    setErr("Лист цен сохранён.");
+  }
+
+  async function applyGroup() {
+    const n = Number(amount.replace(/\s/g, "").replace(",", "."));
+    if (!Number.isFinite(n)) return;
+    setBusy(true);
+    const res = await adminSaveGroup({
+      data: {
+        token: token(),
+        direction: dir,
+        field,
+        ...(mode === "set" ? { set: n } : { delta: n }),
+      },
+    });
+    setBusy(false);
+    if (!res.ok) setErr(res.error);
+    else await load();
+  }
+
+  function patch(path: string, key: string, value: string) {
+    const n = Number(value.replace(/\s/g, ""));
+    const num = Number.isFinite(n) ? n : 0;
+    setRows((prev) =>
+      prev.map((r) => {
+        if ((r.courseId || r.path) !== path) return r;
+        if (key === "all" || key === "kbm" || key === "tmx" || key === "mins" || key === "perWeek") return { ...r, [key]: num };
+        return { ...r, extra: { ...(r.extra || {}), [key]: num } };
+      }),
+    );
+  }
+
+  const extra = formulas.extra || [];
+
+  function takePack(res: { ok: boolean; error?: string; formulas?: CorpFormulas; rows?: PriceRow[] }, okText: string) {
+    if (!res.ok) {
+      setErr(res.error || "Ошибка");
+      return;
+    }
+    if (res.formulas) setFormulas({ kbm: res.formulas.kbm, tmx: res.formulas.tmx, extra: res.formulas.extra || [] });
+    if (res.rows) {
+      setRows(res.rows);
+      hydratePrices(res.rows);
+    }
+    setErr(okText);
+  }
+
+  async function addClient() {
+    const name = addName.trim();
+    if (name.length < 2) {
+      setErr("Название клиента — минимум 2 символа.");
+      return;
+    }
+    setBusy(true);
+    const res = await adminPriceFormulas({ data: { token: token(), action: "add", name } });
+    setBusy(false);
+    takePack(res, `Клиент «${name}» добавлен. Колонка появилась у всех курсов.`);
+    if (res.ok) setAddName("");
+  }
+
+  async function pullFromGroups() {
+    setBusy(true);
+    try {
+      const res = await adminGroupDurations({ data: { token: token() } });
+      if (!res.ok || !("items" in res)) {
+        setErr(res.ok ? "Группы пустые." : res.error || "Не удалось прочитать группы.");
+        return;
+      }
+      const items = res.items || [];
+      let filled = 0;
+      const next = rows.map((r) => {
+        const hit = matchDuration(r, items);
+        if (!hit) return r;
+        filled += 1;
+        return { ...r, mins: hit.mins || 0, perWeek: hit.perWeek || 0 };
+      });
+      setRows(next);
+      setErr(
+        filled
+          ? `Из групп: ${filled} курсов, учтено ${res.used ?? "—"} из ${res.groups} групп. Проверьте минуты и «в неделю», затем «Сохранить».`
+          : "В группах нет курсов, которые можно сопоставить с таблицей цен.",
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Не удалось подгрузить из групп.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="mt-4 space-y-4">
+      <AdminSectionHead section="prices" title="Цены курсов">
+        <p className="mt-1 max-w-2xl text-sm text-muted">
+          Колонка «Все» на сайте. КБМ, ТМХ и другие корпоративные клиенты — отдельные столбцы. Минуты и «в неделю» сами не подтягиваются: кнопка «Подгрузить из групп».
+        </p>
+      </AdminSectionHead>
+      {err ? <p className="text-sm text-primary">{err}</p> : null}
+      <div className="sticky top-0 z-20 -mx-1 flex items-center gap-2 bg-[#f5f6f8]/95 px-1 py-2 backdrop-blur">
+        <TipWrap text="Когда в AlfaCRM появятся абонементы в прайсе сайта, эта кнопка заберёт их в колонку «Все». КБМ и ТМХ посчитаются по формуле ниже.">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={busy}
+            onClick={async () => {
+              setPull({ ...emptyPull("prices"), open: true, step: "Считаю цены с абонементов…" });
+              const st = await pullFromCrm("prices", (step, lines, done, total) => {
+                setPull((u) => (u.done ? u : { ...u, step: step || u.step, lines, added: done, total }));
+              });
+              if (!st.ok) {
+                setPull((u) => ({ ...u, done: true, error: st.error || "Не удалось обновить цены." }));
+                return;
+              }
+              setPull({
+                open: true,
+                kind: "prices",
+                step: "",
+                done: true,
+                error: String((st as { error?: string }).error || ""),
+                lines: ((st as { lines?: { ok: boolean; text: string }[] }).lines || []) as { ok: boolean; text: string }[],
+                added: 0,
+                updated: Number((st as { updated?: number }).updated || 0),
+                total: Number((st as { total?: number }).total || 0),
+              });
+              await load();
+            }}
+          >
+            Загрузить цены из CRM
+          </Button>
+        </TipWrap>
+        <TipWrap text="Возьмёт длительность урока и число занятий в неделю из вкладки «Группы». Жёсткой привязки нет: цифры можно править, пока снова не нажмёте кнопку. Чтобы записать на диск — «Сохранить».">
+          <Button type="button" variant="secondary" className="h-10" disabled={busy} onClick={() => void pullFromGroups()}>
+            Подгрузить из групп
+          </Button>
+        </TipWrap>
+        <input
+          value={addName}
+          onChange={(e) => setAddName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void addClient();
+            }
+          }}
+          placeholder="Название клиента"
+          className="h-10 w-44 rounded-xl bg-white px-3 text-sm ring-1 ring-black/10"
+        />
+        <Button type="button" variant="secondary" className="h-10" disabled={busy} onClick={() => void addClient()}>
+          Добавить клиента
+        </Button>
+        <Button type="button" className="ml-auto h-10 px-5" disabled={busy || !rows.length} onClick={() => void saveAll()}>
+          Сохранить
+        </Button>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl bg-surface ring-1 ring-black/8">
+        <button type="button" onClick={() => setFormulasOpen((v) => !v)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left">
+          <span className="text-sm font-semibold">Формулы корпоративных клиентов и правка группой</span>
+          <InfoTip text="Наценка суммой: 500 → корпоративная = публичная + 500 ₽. Умножение: 90 → 90% от «Все». Сначала сохраните формулу, потом «Пересчитать»." />
+          <span className="ml-auto text-[0.72rem] font-semibold text-muted">{formulasOpen ? "Скрыть" : "Показать"}</span>
+          <span className={cn("text-muted transition-transform", formulasOpen ? "rotate-180" : "")}>▾</span>
+        </button>
+        {formulasOpen ? (
+          <div className="space-y-3 border-t border-black/6 px-4 pb-3 pt-3">
+            <div className="flex flex-wrap items-end gap-2">
+              {(["kbm", "tmx"] as const).map((who) => (
+                <div key={who} className="flex flex-wrap items-end gap-2 rounded-xl bg-surface-2 px-2.5 py-2">
+                  <p className="mb-1 w-full text-[0.65rem] font-semibold uppercase tracking-wider text-muted">{who === "kbm" ? "КБМ" : "ТМХ"}</p>
+                  <label className="text-[0.72rem] text-muted">
+                    Как
+                    <select
+                      value={formulas[who].mode}
+                      onChange={(e) => setFormulas((f) => ({ ...f, [who]: { ...f[who], mode: e.target.value === "add" ? "add" : "percent" } }))}
+                      className="mt-0.5 block h-8 rounded-lg bg-white px-2 text-sm ring-1 ring-black/10"
+                    >
+                      <option value="add">Наценка, ₽</option>
+                      <option value="percent">× процент</option>
+                    </select>
+                  </label>
+                  <label className="text-[0.72rem] text-muted">
+                    {formulas[who].mode === "add" ? "₽" : "%"}
+                    <input
+                      value={formulas[who].value}
+                      inputMode="numeric"
+                      onChange={(e) => setFormulas((f) => ({ ...f, [who]: { ...f[who], value: Number(e.target.value) || 0 } }))}
+                      className="mt-0.5 block h-8 w-16 rounded-lg bg-white px-2 text-sm ring-1 ring-black/10"
+                    />
+                  </label>
+                </div>
+              ))}
+              {extra.map((c, i) => (
+                <div key={c.id} className="flex flex-wrap items-end gap-2 rounded-xl bg-surface-2 px-2.5 py-2">
+                  <div className="mb-1 flex w-full items-center gap-2">
+                    <input
+                      value={c.name}
+                      onChange={(e) =>
+                        setFormulas((f) => ({
+                          ...f,
+                          extra: f.extra.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)),
+                        }))
+                      }
+                      className="h-7 min-w-0 flex-1 rounded-lg bg-white px-2 text-[0.72rem] font-semibold uppercase tracking-wider ring-1 ring-black/10"
+                    />
+                    <button type="button" className="text-[0.7rem] font-semibold text-muted hover:text-primary" onClick={() => void removeClient(c.id, c.name)}>
+                      Удалить
+                    </button>
+                  </div>
+                  <label className="text-[0.72rem] text-muted">
+                    Как
+                    <select
+                      value={c.mode}
+                      onChange={(e) =>
+                        setFormulas((f) => ({
+                          ...f,
+                          extra: f.extra.map((x, j) => (j === i ? { ...x, mode: e.target.value === "add" ? "add" : "percent" } : x)),
+                        }))
+                      }
+                      className="mt-0.5 block h-8 rounded-lg bg-white px-2 text-sm ring-1 ring-black/10"
+                    >
+                      <option value="add">Наценка, ₽</option>
+                      <option value="percent">× процент</option>
+                    </select>
+                  </label>
+                  <label className="text-[0.72rem] text-muted">
+                    {c.mode === "add" ? "₽" : "%"}
+                    <input
+                      value={c.value}
+                      inputMode="numeric"
+                      onChange={(e) =>
+                        setFormulas((f) => ({
+                          ...f,
+                          extra: f.extra.map((x, j) => (j === i ? { ...x, value: Number(e.target.value) || 0 } : x)),
+                        }))
+                      }
+                      className="mt-0.5 block h-8 w-16 rounded-lg bg-white px-2 text-sm ring-1 ring-black/10"
+                    />
+                  </label>
+                </div>
+              ))}
+              <label className="text-[0.72rem] text-muted">
+                Область
+                <select value={corpDir} onChange={(e) => setCorpDir(e.target.value)} className="mt-0.5 block h-8 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10">
+                  <option value="">Все курсы</option>
+                  {PRICE_DIRECTIONS.map((d) => (
+                    <option key={d}>{d}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="ml-auto flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="h-8"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    const res = await adminPriceFormulas({ data: { token: token(), action: "save", formulas } });
+                    setBusy(false);
+                    setErr(res.ok ? "Формула сохранена." : res.error || "Ошибка");
+                  }}
+                >
+                  Сохранить
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    const res = await adminPriceFormulas({ data: { token: token(), action: "apply", formulas, direction: corpDir || undefined } });
+                    setBusy(false);
+                    if (res.ok && "rows" in res && res.rows) {
+                      setRows(res.rows);
+                      hydratePrices(res.rows);
+                      setErr("Корпоративные цены пересчитаны.");
+                    } else setErr(res.ok ? "" : res.error || "Ошибка");
+                  }}
+                >
+                  Пересчитать
+                </Button>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-end gap-2 border-t border-black/6 pt-3">
+              <p className="mb-1 w-full text-[0.65rem] font-semibold uppercase tracking-wider text-muted">Группой</p>
+              <label className="text-[0.72rem] text-muted">
+                Школа
+                <select className="mt-0.5 block h-8 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10" value={dir} onChange={(e) => setDir(e.target.value)}>
+                  {PRICE_DIRECTIONS.map((d) => (
+                    <option key={d}>{d}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-[0.72rem] text-muted">
+                Поле
+                <select className="mt-0.5 block h-8 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10" value={field} onChange={(e) => setField(e.target.value as typeof field)}>
+                  <option value="all">Цена (все)</option>
+                  <option value="kbm">КБМ</option>
+                  <option value="tmx">ТМХ</option>
+                  {extra.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                  <option value="all-three">Все + КБМ + ТМХ</option>
+                </select>
+              </label>
+              <label className="text-[0.72rem] text-muted">
+                Как
+                <select className="mt-0.5 block h-8 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10" value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
+                  <option value="set">Поставить</option>
+                  <option value="delta">Прибавить / убавить</option>
+                </select>
+              </label>
+              <label className="text-[0.72rem] text-muted">
+                Сумма, ₽
+                <input value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-0.5 block h-8 w-20 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10" />
+              </label>
+              <Button type="button" size="sm" className="ml-auto h-8" disabled={busy} onClick={() => void applyGroup()}>
+                Применить к школе
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="space-y-8">
+        {!grouped.length ? (
+          <p className="rounded-2xl bg-white px-4 py-6 text-sm text-muted ring-1 ring-black/8">
+            {busy ? "Загружаю цены…" : "Таблица пуста. Обновите страницу или нажмите «Загрузить цены из CRM»."}
+          </p>
+        ) : null}
+        {grouped.map(([name, list]) => (
+          <section key={name}>
+            <h3 className="font-display text-xl">{name}</h3>
+            <div className="mt-3 overflow-x-auto rounded-2xl ring-1 ring-black/8">
+              <table className="w-full min-w-[48rem] text-left text-sm">
+                <thead className="bg-surface-2 text-[0.72rem] uppercase tracking-wider text-muted">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Курс</th>
+                    <th className="w-20 px-2 py-3 text-center font-semibold">Минут</th>
+                    <th className="w-24 px-2 py-3 text-center font-semibold">В неделю</th>
+                    <th className="w-24 px-2 py-3 text-center font-semibold">Все</th>
+                    <th className="w-24 px-2 py-3 text-center font-semibold">КБМ</th>
+                    <th className="w-24 px-2 py-3 text-center font-semibold">ТМХ</th>
+                    {extra.map((c) => (
+                      <th key={c.id} className="w-28 px-2 py-3 text-center font-semibold">
+                        <span className="flex items-center justify-center gap-1">
+                          <span className="truncate" title={c.name}>
+                            {c.name}
+                          </span>
+                          <button
+                            type="button"
+                            className="rounded-full px-1 text-[0.7rem] font-semibold text-muted hover:text-primary"
+                            title={`Убрать ${c.name}`}
+                            onClick={() => void removeClient(c.id, c.name)}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((row) => (
+                    <tr key={row.courseId || row.path || row.id} className="border-t border-black/6">
+                      <td className="px-4 py-3 align-middle">
+                        <p className="font-medium leading-snug">{row.name}</p>
+                        <p className="mt-0.5 text-xs text-muted">{row.age}</p>
+                      </td>
+                      {(["mins", "perWeek", "all", "kbm", "tmx"] as const).map((k) => (
+                        <td key={k} className="px-2 py-3 align-middle">
+                          <input
+                            value={row[k] || ""}
+                            inputMode="numeric"
+                            placeholder="—"
+                            onChange={(e) => patch(row.courseId || row.path, k, e.target.value)}
+                            className="mx-auto block h-10 w-[4.75rem] rounded-lg bg-surface-2 px-2 text-center tabular-nums ring-1 ring-black/10"
+                          />
+                        </td>
+                      ))}
+                      {extra.map((c) => (
+                        <td key={c.id} className="px-2 py-3 align-middle">
+                          <input
+                            value={row.extra?.[c.id] || ""}
+                            inputMode="numeric"
+                            placeholder="—"
+                            onChange={(e) => patch(row.courseId || row.path, c.id, e.target.value)}
+                            className="mx-auto block h-10 w-[4.75rem] rounded-lg bg-surface-2 px-2 text-center tabular-nums ring-1 ring-black/10"
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ))}
+      </div>
+      <CrmPullDialog pull={pull} onClose={() => setPull((u) => ({ ...u, open: false }))} />
+    </section>
+  );
+}

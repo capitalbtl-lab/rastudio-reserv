@@ -3,6 +3,8 @@ import { listAdminSlots } from "@/data/alfacrm-schedule";
 import { groupFactsForVoice } from "./group-cards";
 import { searchClientViews } from "./dossiers";
 import { BRANCHES } from "@/data/site";
+import { IDS_FOR_AGENT } from "@/data/ids";
+import { scheduleGuidePrompt } from "@/data/agent-section-guides-run";
 
 export type ScheduleVoiceResult = {
   kind: "edit" | "question" | "refuse" | "openClient" | "openGroup" | "openTab";
@@ -15,6 +17,8 @@ export type ScheduleVoiceResult = {
   branchId?: number;
   groupId?: number;
   slotId?: string;
+  status?: "учится" | "лид" | "архив";
+  ageBand?: string;
 };
 
 function norm(s: string) {
@@ -42,8 +46,17 @@ function stripQuery(raw: string) {
 
 function localPeopleTurn(prompt: string): ScheduleVoiceResult | null {
   const t = norm(prompt);
+  if (/покажи лид|вкладк.{0,16}лид|открой лид|фильтр лид/.test(t)) {
+    return { kind: "openTab", reason: "", answer: "Открываю лиды с диска. Из AlfaCRM не выгружаю.", action: "none", pane: "clients", status: "лид" };
+  }
+  if (/покажи архив|вкладк.{0,16}архив|фильтр архив/.test(t)) {
+    return { kind: "openTab", reason: "", answer: "Открываю архив с диска. Из AlfaCRM не выгружаю.", action: "none", pane: "clients", status: "архив" };
+  }
+  if (/покажи текущ|текущих клиент|фильтр текущ/.test(t)) {
+    return { kind: "openTab", reason: "", answer: "Открываю текущих клиентов.", action: "none", pane: "clients", status: "учится" };
+  }
   if (/вкладк.{0,16}клиент|покажи клиент|перечень клиент|список клиент|открой клиент(ов|ами)?$/.test(t)) {
-    return { kind: "openTab", reason: "", answer: "Открываю клиентов.", action: "none", pane: "clients" };
+    return { kind: "openTab", reason: "", answer: "Открываю клиентов.", action: "none", pane: "clients", status: "учится" };
   }
   if (/вкладк.{0,16}групп|покажи групп|перечень групп|список групп/.test(t) && !/клиент/.test(t)) {
     return { kind: "openTab", reason: "", answer: "Открываю группы.", action: "none", pane: "groups" };
@@ -114,7 +127,7 @@ function localPeopleTurn(prompt: string): ScheduleVoiceResult | null {
     return {
       kind: "openClient",
       reason: "",
-      answer: `Открываю карточку ${h.child}.`,
+      answer: `Открываю карточку ${h.displayName || h.child || h.crmId}.`,
       action: "none",
       pane: "clients",
       query: q,
@@ -127,7 +140,7 @@ function localPeopleTurn(prompt: string): ScheduleVoiceResult | null {
     reason: "",
     answer: `Нашла ${hits.length}: ${hits
       .slice(0, 4)
-      .map((h) => h.child)
+      .map((h) => h.displayName || h.child)
       .join(", ")}. Кого открыть?`,
     action: "none",
     pane: "clients",
@@ -144,7 +157,11 @@ export async function scheduleVoiceTurn(prompt: string, selectedIds: string[]): 
   const slots = listAdminSlots();
   const slim = slots.slice(0, 90).map((s) => ({
     id: s.id,
-    gid: s.groupId,
+    groupId: s.groupId,
+    branchId: s.branchId,
+    subjectId: s.subjectId,
+    courseId: s.courseId || "",
+    teacherId: s.teacherId,
     name: s.groupName,
     school: s.school,
     course: s.course,
@@ -171,19 +188,26 @@ export async function scheduleVoiceTurn(prompt: string, selectedIds: string[]): 
     branchId?: number;
     groupId?: number;
     slotId?: string;
+    status?: string;
+    ageBand?: string;
   }>(
     `Ты голосовой агент кабинета студии «Развивайся»: расписание, группы и клиенты.
 Ты НЕ Олег и НЕ Ольга. Ты НЕ консультируешь родителей. Ты НЕ записываешь детей.
-Умеешь: менять расписание и лимит мест, добавлять группы, открывать карточку группы, искать карточку клиента, открывать вкладки «группы» и «клиенты», загрузить/выгрузить AlfaCRM.
-«найди Иванова» / «открой карточку Маши» = kind=openClient, если один человек; если несколько — kind=openTab pane=clients и query.
-«открой группу 405» = kind=openGroup.
-«покажи клиентов» = kind=openTab pane=clients.
+Умеешь: менять расписание и лимит мест, добавлять группы, открывать карточку группы, искать карточку клиента, открывать вкладки «группы» и «клиенты», фильтровать текущих/лидов/архив, загрузить/выгрузить AlfaCRM.
+Карточка клиента на десктопе — правая панель, не popup. Overlay только на телефоне.
+${scheduleGuidePrompt() || IDS_FOR_AGENT}
+Открывать группу только по groupId+branchId (groupCardId = card:group:{branchId}:{groupId}). Клиента — только по customerId (clientCardId = card:customer:{customerId}). Курс — courseId, предмет — subjectId.
+«найди Иванова» / «открой карточку Маши» = kind=openClient, если один человек (подставь customerId); если несколько — kind=openTab pane=clients и query.
+«открой группу 405» = kind=openGroup, groupId=405.
+«покажи клиентов» / «текущих» = kind=openTab pane=clients status=учится.
+«покажи лиды» = kind=openTab pane=clients status=лид. Не выгружать AlfaCRM.
+«покажи архив» = kind=openTab pane=clients status=архив. Не выгружать AlfaCRM.
 «максимальное количество детей на 15» = правка лимита, kind=edit, action=preview.
 Свои фразы «привет что будем делать», «хорошо сейчас всё поправим», «скажите опубликовать» — не запросы, kind=refuse reason=это эхо.
 Если запрос не про расписание/группы/клиентов — kind=refuse и точная причина.
 Вопрос сколько/когда/кто в группе — kind=question.
 Отмечено групп: ${selectedIds.length}. Филиалы: ${BRANCHES.map((b) => `${b.city}, ${b.address}`).join(" | ")}
-JSON: {"kind":"edit|question|refuse|openClient|openGroup|openTab","reason":"","answer":"","action":"preview|pull|push|none","pane":"groups|clients","query":"","customerId":0,"branchId":0,"groupId":0,"slotId":""}`,
+JSON: {"kind":"edit|question|refuse|openClient|openGroup|openTab","reason":"","answer":"","action":"preview|pull|push|none","pane":"groups|clients","query":"","customerId":0,"branchId":0,"groupId":0,"slotId":"","status":"учится|лид|архив","ageBand":""}`,
     `Запрос оператора: ${String(prompt || "").slice(0, 1500)}
 Карточки групп:
 ${cards.join("\n").slice(0, 3500)}
@@ -191,6 +215,18 @@ ${cards.join("\n").slice(0, 3500)}
 ${JSON.stringify(slim).slice(0, 9000)}`,
     800,
   );
+  if (!llm) {
+    if (localLimitTurn(prompt)) return { kind: "edit", reason: "", answer: "", action: "preview" };
+    if (/добав|создай|постав|измени|поменя|лимит|мест|расписан|групп|цифр/i.test(prompt)) {
+      return { kind: "edit", reason: "", answer: "", action: "preview" };
+    }
+    return {
+      kind: "question",
+      reason: "",
+      answer: "Не получилось связаться с агентом. Нажмите стрелку — сделаю предпросмотр по тексту.",
+      action: "none",
+    };
+  }
   const kind =
     llm?.kind === "question" || llm?.kind === "refuse" || llm?.kind === "edit" || llm?.kind === "openClient" || llm?.kind === "openGroup" || llm?.kind === "openTab"
       ? llm.kind
@@ -207,5 +243,7 @@ ${JSON.stringify(slim).slice(0, 9000)}`,
     branchId: Number(llm?.branchId) || undefined,
     groupId: Number(llm?.groupId) || undefined,
     slotId: String(llm?.slotId || "").trim() || undefined,
+    status: llm?.status === "лид" || llm?.status === "архив" || llm?.status === "учится" ? llm.status : undefined,
+    ageBand: String(llm?.ageBand || "").trim() || undefined,
   };
 }

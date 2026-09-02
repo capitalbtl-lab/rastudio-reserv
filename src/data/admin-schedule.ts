@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { isAdminRequest } from "./admin-auth";
 import { logAdmin } from "./admin-settings";
+import { loadScheduleSettings, saveScheduleSettings, markLastPull } from "./schedule-settings";
 import {
   crmScheduleMeta,
   listAdminSlots,
@@ -8,6 +9,7 @@ import {
   saveAdminSlots,
   sessionsFromCrm,
   bindSubjectsOnSite,
+  resetSlotCache,
 } from "./alfacrm-schedule";
 import {
   aiScheduleParse,
@@ -20,15 +22,33 @@ import {
   slotsToCsv,
   slotsToXls,
   versionSlots,
+  defaultPeriod,
   type CrmSlot,
   type SlotDraft,
 } from "./crm-slots";
-import { loadSubjects, saveSubjects, pullSubjectsFromCrm, pushSubjectsToCrm } from "./crm-subjects";
+import { loadSubjects, saveSubjects, pullSubjectsFromCrm, pushSubjectsToCrm, ensureCrmSubject } from "./crm-subjects";
 import type { GroupCalLesson } from "./crm-slots-core";
+import { beatsOf } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { loadGroupCard, saveGroupCard } from "./group-cards";
 import { scheduleVoiceTurn } from "./schedule-voice";
+import { loadSiteTree, addTreeSchool, addTreeCourse, deleteTreeCourse, deleteTreeSchool, moveSlotsToCourse, pinAllGuesses, saveSiteTree, slotTreeKey } from "./site-tree";
+import { listTeachers, teachersAtBranch } from "./crm-teachers";
 import { searchClientViews, findDossier } from "./dossiers";
+import { isPhoneLike } from "./client-display";
+import { clientCardId, CRM_BRANCH } from "./ids";
+import { loadTariffs, pullTariffsFromCrm, matchTariffs, subjectTariffStats, saveTariffEdits, pushTariffsToCrm, archiveTariffsInCrm, aiTariffsParse, applyTariffChanges, probeCreateTariff, probeDeleteTariff, subjectsWithHref, tariffGroupHits } from "./crm-tariffs";
+import { loadScheduleMap, saveScheduleMap } from "./schedule-map";
+import { courseIdOfSubject } from "./ids";
+
+function isoish(raw: string) {
+  const s = String(raw || "").trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
+  return s;
+}
 
 export type GroupMember = {
   id: number;
@@ -57,6 +77,7 @@ export type CustomerComm = {
 
 export type CustomerCard = {
   id: number;
+  cardId?: string;
   branchId: number;
   name: string;
   parent: string;
@@ -67,13 +88,36 @@ export type CustomerCard = {
   emails: string[];
   address: string;
   status: string;
+  isStudy?: number;
   studyStatus?: string;
+  studyStatusId?: number;
   note: string;
   paidTill: string;
+  teacher?: string;
+  balance?: number;
+  lessonsLeft?: number;
   url: string;
   schools: string[];
-  groups: { id: number; name: string; branchId: number; school: string; active: boolean }[];
+  groups: { id: number; name: string; branchId: number; school: string; active: boolean; subjectId?: number; courseId?: string }[];
+  regular?: {
+    groupId: number;
+    groupName: string;
+    day: string;
+    from: string;
+    to: string;
+    teacher: string;
+    subject: string;
+    branch: string;
+    room?: string;
+    lessonId?: number;
+    subjectId?: number;
+    teacherId?: number;
+    roomId?: number;
+  }[];
+  calendar?: { id: number; date: string; from: string; to: string; type: string; typeId: number; group: string; teacher: string; status?: number; subject?: string; room?: string }[];
+  tariffs?: { id: number; name: string; rest: number; lessons: number; archived?: boolean }[];
   comms: CustomerComm[];
+  catalog?: { subjects: { id: number; name: string }[]; teachers: { id: number; name: string }[]; rooms: { id: number; name: string }[]; tariffs?: { id: number; name: string; price: number; lessons: number; subjectIds?: number[] }[] };
 };
 
 function asStrList(v: unknown): string[] {
@@ -105,14 +149,17 @@ function ageLabel(dob: string) {
 
 function packMember(c: Record<string, unknown>, archived: boolean): GroupMember {
   const phones = asStrList(c.phone);
+  const rawName = String(c.name || "").trim();
+  const rawParent = String(c.legal_name || "").trim();
+  if (isPhoneLike(rawName) && rawName && !phones.includes(rawName)) phones.unshift(rawName);
   const study = Number(c.is_study);
   const arch = archived || study === 2;
   const gender = c.gender === 1 || c.gender === "1" ? "мальчик" : c.gender === 2 || c.gender === "2" ? "девочка" : "";
   const dob = String(c.dob || "");
   return {
     id: Number(c.id || 0),
-    name: String(c.name || "").trim(),
-    parent: String(c.legal_name || "").trim(),
+    name: isPhoneLike(rawName) ? "" : rawName,
+    parent: isPhoneLike(rawParent) ? "" : rawParent,
     dob,
     age: ageLabel(dob),
     phone: phones[0] || "",
@@ -191,6 +238,34 @@ async function loadCustomerRaw(
   return null;
 }
 
+const roomCache = new Map<number, { at: number; items: { id: number; name: string }[] }>();
+
+async function roomsOfBranch(request: typeof import("./alfacrm").request, t: string, branch: number) {
+  const hit = roomCache.get(branch);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.items;
+  try {
+    const rm = await request<{ items?: { id?: number; name?: string; note?: string }[] }>(`/v2api/${branch}/room/index`, { page: 0, pageSize: 100 }, t);
+    const items: { id: number; name: string }[] = [];
+    for (const x of rm.items || []) {
+      const id = Number(x.id || 0);
+      if (!id) continue;
+      const name = String(x.name || "").trim();
+      const note = String(x.note || "").split("|")[0].trim();
+      items.push({ id, name: note ? `${name} · ${note}` : name || `аудитория ${id}` });
+    }
+    roomCache.set(branch, { at: Date.now(), items });
+    return items;
+  } catch {
+    return hit?.items || [];
+  }
+}
+
+function lessonCatalogOf(branch: number) {
+  const subjects = loadSubjects().map((s) => ({ id: s.id, name: s.name }));
+  const teachers = teachersAtBranch(branch, listTeachers(listAdminSlots())).map((x) => ({ id: x.id, name: x.name }));
+  return { subjects, teachers };
+}
+
 async function loadCustomerCard(request: typeof import("./alfacrm").request, t: string, branch: number, customerId: number): Promise<CustomerCard | null> {
   const found = await loadCustomerRaw(request, t, branch, customerId);
   const dossier = findDossier({ crmId: customerId });
@@ -219,11 +294,140 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
       /* next shape */
     }
   }
-  const name = String(c.name || dossier?.child.fio || "").trim();
-  const parent = String(c.legal_name || dossier?.parent.fio || "").trim();
+  const rawName = String(c.name || dossier?.child.fio || "").trim();
+  const rawParent = String(c.legal_name || dossier?.parent.fio || "").trim();
+  const name = isPhoneLike(rawName) ? "" : rawName;
+  const parent = isPhoneLike(rawParent) ? "" : rawParent;
   const dob = String(c.dob || dossier?.child.dob || "");
+  const fromDossier = dossier?.groupLinks || [];
+  const fromCrm = (() => {
+    const raw = c.groups;
+    const list = Array.isArray(raw) ? raw : [];
+    return list
+      .map((g) => {
+        const rec = g as { id?: number; name?: string; branch_id?: number };
+        const id = Number(rec.id || 0);
+        if (!id) return null;
+        return {
+          id,
+          name: String(rec.name || `группа ${id}`),
+          branchId: Number(rec.branch_id || useBranch),
+          school: "",
+          active: true,
+        };
+      })
+      .filter(Boolean) as CustomerCard["groups"];
+  })();
+  const groups = fromDossier.length ? fromDossier : fromCrm;
+  const slots = listAdminSlots();
+  const packedGroups = (groups.length ? groups : fromDossier).map((g) => {
+    const slot = slots.find((s) => s.groupId === g.id && s.branchId === g.branchId) || slots.find((s) => s.groupId === g.id);
+    return slot
+      ? { ...g, subjectId: slot.subjectId || g.subjectId, courseId: slot.courseId || g.courseId, school: slot.school || g.school, name: g.name || slot.groupName }
+      : g;
+  });
+  const days = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+  const regular: NonNullable<CustomerCard["regular"]> = [];
+  for (const g of packedGroups) {
+    const slot = slots.find((s) => s.groupId === g.id && s.branchId === g.branchId) || slots.find((s) => s.groupId === g.id);
+    if (!slot) continue;
+    for (const b of beatsOf(slot)) {
+      regular.push({
+        groupId: g.id,
+        groupName: g.name || slot.groupName,
+        day: slot.dayLabel || days[Number(b.day)] || "",
+        from: b.timeFrom,
+        to: b.timeTo,
+        teacher: slot.teacher || "",
+        subject: slot.subject || "",
+        branch: CRM_BRANCH[slot.branchId]?.short || "",
+        lessonId: b.lessonId,
+        subjectId: slot.subjectId,
+        teacherId: slot.teacherId || undefined,
+        roomId: slot.roomId || undefined,
+      });
+    }
+  }
+  const calendar: NonNullable<CustomerCard["calendar"]> = [];
+  try {
+    const json = await request<{ items?: Record<string, unknown>[] }>(
+      `/v2api/${useBranch}/lesson/index`,
+      { page: 0, pageSize: 80, customer_id: customerId },
+      t,
+    );
+    for (const it of json.items || []) {
+      const date = isoish(String(it.date || it.lesson_date || ""));
+      if (!date || date.length < 10) continue;
+      calendar.push({
+        id: Number(it.id || 0),
+        date,
+        from: hm(String(it.time_from || "")),
+        to: hm(String(it.time_to || "")),
+        type: String(it.lesson_type_name || ""),
+        typeId: Number(it.lesson_type_id || 0),
+        group: String(it.group_name || (Array.isArray(it.group_ids) ? it.group_ids[0] : "") || ""),
+        teacher: "",
+        status: Number(it.status || 0),
+        subject: String(it.subject_name || ""),
+        room: String(it.room_name || it.room_id || ""),
+      });
+    }
+  } catch {
+    /* calendar is optional */
+  }
+  const tariffs: NonNullable<CustomerCard["tariffs"]> = [];
+  try {
+    const json = await request<{ items?: Record<string, unknown>[] }>(
+      `/v2api/${useBranch}/customer-tariff/index`,
+      { page: 0, pageSize: 20, customer_id: customerId },
+      t,
+    );
+    for (const it of json.items || []) {
+      tariffs.push({
+        id: Number(it.id || 0),
+        name: String(it.tariff_name || it.name || "абонемент"),
+        rest: Number(it.balance ?? it.rest ?? it.paid ?? 0),
+        lessons: Number(it.lessons_count ?? it.paid_count ?? it.lesson_count ?? 0),
+        archived: Number(it.removed || it.is_archived || 0) === 1,
+      });
+    }
+  } catch {
+    /* tariffs optional */
+  }
+  const studyStatusId = Number(c.study_status_id || 0);
+  const statusName =
+    studyStatusId === 1
+      ? "Обучается"
+      : studyStatusId === 4
+        ? "Ожидает старта"
+        : studyStatusId === 8
+          ? "Ждём на занятиях"
+          : studyStatusId === 5
+            ? "Должник"
+            : studyStatusId === 2
+              ? "Завершил"
+              : studyStatusId === 7
+                ? "Пропустил 1 занятие"
+                : studyStatusId === 10
+                  ? "Пропустил 2 занятия"
+                  : studyStatusId === 11
+                    ? "Пропустил 3 занятия"
+                    : studyStatusId === 9
+                      ? "Без статуса"
+                      : "";
+  const rooms = await roomsOfBranch(request, t, useBranch);
+  const subjectIds = packedGroups.map((g) => Number(g.subjectId) || 0).filter(Boolean);
+  const offerTariffs = loadTariffs()
+    .items.filter((t) => !t.archive && (!t.branchIds.length || t.branchIds.includes(useBranch)))
+    .sort((a, b) => {
+      const am = subjectIds.length && a.subjectIds.some((id) => subjectIds.includes(id)) ? 0 : 1;
+      const bm = subjectIds.length && b.subjectIds.some((id) => subjectIds.includes(id)) ? 0 : 1;
+      return am - bm || a.name.localeCompare(b.name, "ru");
+    })
+    .map((t) => ({ id: t.id, name: t.name, price: t.price, lessons: t.lessonsCount, subjectIds: t.subjectIds }));
   return {
     id: customerId,
+    cardId: clientCardId(customerId),
     branchId: useBranch,
     name,
     parent,
@@ -233,14 +437,23 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
     phones: phones.length ? phones : dossier?.phones || [],
     emails,
     address: /введите адрес/i.test(addr) ? dossier?.address || "" : addr || dossier?.address || "",
-    status: study === 1 ? (Number(c.study_status_id) === 2 ? "архив" : dossier?.status || "учится") : study === 2 ? "архив" : dossier?.status || "лид",
-    studyStatus: String(c.study_status_id || ""),
+    status: study === 1 ? "учится" : study === 2 ? "архив" : "лид",
+    isStudy: Number.isFinite(study) ? study : undefined,
+    studyStatus: statusName,
+    studyStatusId,
     note: String(c.note || "").trim(),
     paidTill: String(c.paid_till || ""),
+    teacher: String(c.teacher_name || "").trim(),
+    balance: Number(c.balance ?? tariffs[0]?.rest ?? 0),
+    lessonsLeft: Number(c.paid_count ?? tariffs.filter((x) => !x.archived).reduce((n, x) => n + x.lessons, 0) ?? 0),
     url: `https://studiyarazvivaysya.s20.online/company/${useBranch}/customer/view?id=${customerId}`,
     schools: dossier?.schools || [],
-    groups: dossier?.groupLinks || [],
+    groups: packedGroups,
+    regular,
+    calendar,
+    tariffs,
     comms,
+    catalog: { ...lessonCatalogOf(useBranch), rooms, tariffs: offerTariffs },
   };
 }
 
@@ -341,25 +554,126 @@ async function fetchLevels(t: string, branch: number) {
   return SEED_LEVELS;
 }
 
-const PULL_MS = 30 * 60 * 1000;
-const g = globalThis as { __raSchedPull?: ReturnType<typeof setInterval>; __raSchedLast?: number };
+const g = globalThis as {
+  __raSchedPull?: ReturnType<typeof setInterval>;
+  __raSchedLast?: number;
+  __raSchedPullMs?: number;
+  __raSchedPulling?: boolean;
+  __raSchedPullJob?: { at: number; added: number; updated: number; error: string; count: number };
+  __raGetPack?: { at: number; body: Record<string, unknown> };
+};
 
-async function maybeAutoPull(force = false) {
-  const last = g.__raSchedLast || 0;
-  if (!force && Date.now() - last < PULL_MS) return;
-  g.__raSchedLast = Date.now();
+async function runPullJob() {
+  if (g.__raSchedPulling) return;
+  const { startCrmSync, syncState } = await import("./crm-sync");
+  const cur = syncState();
+  if (cur.running && cur.kind !== "groups" && cur.kind !== "all") {
+    g.__raSchedPullJob = {
+      at: Date.now(),
+      added: 0,
+      updated: 0,
+      error: `Сейчас уже идёт загрузка «${cur.kind}». Дождитесь окончания — AlfaCRM не любит два потока сразу.`,
+      count: listAdminSlots().length,
+    };
+    return;
+  }
+  g.__raSchedPulling = true;
+  g.__raSchedPullJob = { at: 0, added: 0, updated: 0, error: "", count: listAdminSlots().length };
   try {
-    await refreshCrmSchedule();
-  } catch {
-    g.__raSchedLast = last;
+    if (!cur.running) startCrmSync("groups");
+    const t0 = Date.now();
+    while (Date.now() - t0 < 170000) {
+      await new Promise((r) => setTimeout(r, 800));
+      const st = syncState();
+      g.__raSchedPullJob = {
+        at: Date.now(),
+        added: st.added,
+        updated: st.updated,
+        error: st.error,
+        count: st.counts.groups || listAdminSlots().length,
+      };
+      if (!st.running) break;
+    }
+    g.__raSchedLast = Date.now();
+    markLastPull(g.__raSchedLast);
+    const st = syncState();
+    logAdmin(`Расписание из AlfaCRM: +${st.added} новых, ${st.updated} обновлено, всего ${st.counts.groups || listAdminSlots().length}`);
+    g.__raSchedPullJob = {
+      at: Date.now(),
+      added: st.added,
+      updated: st.updated,
+      error: st.error,
+      count: st.counts.groups || listAdminSlots().length,
+    };
+  } catch (e) {
+    g.__raSchedPullJob = {
+      at: Date.now(),
+      added: 0,
+      updated: 0,
+      error: e instanceof Error ? e.message : "AlfaCRM не ответила.",
+      count: listAdminSlots().length,
+    };
+  } finally {
+    g.__raSchedPulling = false;
+    g.__raGetPack = undefined;
   }
 }
 
 function ensureAutoPullTimer() {
-  if (g.__raSchedPull) return;
-  g.__raSchedPull = setInterval(() => {
-    void maybeAutoPull();
-  }, PULL_MS);
+  if (g.__raSchedPull) {
+    clearInterval(g.__raSchedPull);
+    g.__raSchedPull = undefined;
+  }
+}
+
+function decorateSubjects(subjects: { id: number; name: string; local?: boolean }[]) {
+  const { bySubject, branches } = subjectTariffStats();
+  const map = loadScheduleMap();
+  const tree = loadSiteTree();
+  const bySub = new Map(map.courses.map((c) => [c.subjectId, c]));
+  return {
+    ok: true as const,
+    subjects: subjects.map((s) => {
+      const st = bySubject.get(s.id) || { total: 0, byBranch: {} as Record<number, number>, names: [] as string[] };
+      const link = bySub.get(s.id);
+      const courseId = link?.courseId || courseIdOfSubject(s.id, tree);
+      const course = courseId ? tree.courses.find((c) => c.id === courseId || c.href === courseId) : undefined;
+      return {
+        ...s,
+        tariffTotal: st.total,
+        tariffByBranch: st.byBranch,
+        tariffNames: st.names,
+        courseId: course?.id || courseId || "",
+        courseLabel: course?.label || "",
+      };
+    }),
+    tariffBranches: branches,
+  };
+}
+
+function pinNewSlots(slots: { id: string; course?: string; courseId?: string; school?: string; path?: string; groupId?: number; branchId?: number; groupName?: string }[], ids: string[]) {
+  const tree = loadSiteTree();
+  let changed = false;
+  for (const s of slots) {
+    if (!ids.includes(s.id)) continue;
+    const course =
+      tree.courses.find((c) => c.id && c.id === s.courseId) ||
+      tree.courses.find((c) => s.courseId && c.href === s.courseId) ||
+      tree.courses.find((c) => s.path && (c.id === s.path || c.href === s.path));
+    if (!course) continue;
+    const k = slotTreeKey(s);
+    if (k && tree.assign[k] !== course.id) {
+      tree.assign[k] = course.id;
+      changed = true;
+    }
+    s.courseId = course.id;
+    s.course = course.label;
+    if (course.href) s.path = course.href;
+    const sch = tree.schools.find((x) => x.id === course.schoolId);
+    if (sch) s.school = sch.label;
+    changed = true;
+  }
+  if (changed) saveSiteTree(tree);
 }
 
 export const adminSchedule = createServerFn({ method: "POST" })
@@ -370,6 +684,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         action:
           | "get"
           | "pull"
+          | "pullStatus"
           | "save"
           | "exportCsv"
           | "exportXls"
@@ -382,16 +697,39 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "students"
           | "groupMembers"
           | "customerGet"
+          | "customerSave"
+          | "customerLesson"
+          | "customerPay"
+          | "customerTariff"
           | "add"
           | "remove"
           | "subjectsGet"
+          | "subjectCreate"
           | "subjectsPull"
           | "subjectsSave"
           | "subjectsPush"
+          | "subjectsAiPreview"
+          | "subjectsAiApply"
           | "groupGet"
           | "groupSave"
           | "voiceAsk"
-          | "customersSearch";
+          | "customersSearch"
+          | "tariffsGet"
+          | "tariffsPull"
+          | "tariffsSave"
+          | "tariffsPush"
+          | "tariffsDelete"
+          | "tariffsAiPreview"
+          | "tariffsAiApply"
+          | "tariffsProbe"
+          | "tariffsProbeDelete"
+          | "treeAddSchool"
+          | "treeAddCourse"
+          | "treeDeleteCourse"
+          | "treeDeleteSchool"
+          | "treeDeleteSelected"
+          | "treeMove"
+          | "saveSettings";
         slots?: CrmSlot[];
         text?: string;
         prompt?: string;
@@ -404,64 +742,118 @@ export const adminSchedule = createServerFn({ method: "POST" })
         groupId?: number;
         customerId?: number;
         branchId?: number;
+        isStudy?: number;
+        studyStatusId?: number;
+        sum?: number;
+        lessonType?: string;
+        date?: string;
+        time?: string;
+        duration?: number;
+        payKind?: string;
+        tariffId?: number;
+        roomId?: number;
+        teacherId?: number;
+        topic?: string;
+        patch?: {
+          name?: string;
+          parent?: string;
+          phone?: string;
+          email?: string;
+          address?: string;
+          note?: string;
+          dob?: string;
+        };
         at?: string;
         subjects?: { id: number; name: string; local?: boolean }[];
         q?: string;
         status?: string;
-        branchId?: number;
         ageBand?: string;
         note?: string;
         hashtags?: string;
         makeup?: string;
         statusId?: number;
         subjectId?: number;
+        name?: string;
         description?: string;
         remarks?: string;
         bDate?: string;
         eDate?: string;
         levelId?: number;
+        tariff?: import("./crm-tariffs").CrmTariff;
+        tariffs?: import("./crm-tariffs").CrmTariff[];
+        pullN?: number;
+        pullUnit?: "min" | "hour" | "day" | "week";
+        schoolId?: string;
+        courseId?: string;
+        schoolIds?: string[];
+        courseIds?: string[];
+        href?: string;
+        label?: string;
+        age?: string;
       },
   )
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
     const pack = (slots: CrmSlot[], extra?: Record<string, unknown>) => {
       const meta = crmScheduleMeta();
+      const settings = loadScheduleSettings();
+      ensureAutoPullTimer();
       return {
         ok: true as const,
         at: meta.at,
         count: slots.length,
         slots,
         versions: loadVersions().map((v) => ({ at: v.at, reason: v.reason, count: v.count })),
+        pullN: settings.pullN,
+        pullUnit: settings.pullUnit,
+        pullMs: 0,
+        nextPullAt: "",
+        pulling: Boolean(g.__raSchedPulling),
+        pullJob: g.__raSchedPullJob || null,
+        tree: loadSiteTree(),
+        teachers: listTeachers(slots),
         ...extra,
       };
     };
-    if (data.action === "get") {
-      let slots = listAdminSlots();
-      if (!slots.length) {
-        try {
-          await sessionsFromCrm();
-          slots = listAdminSlots();
-        } catch {
-          /* */
-        }
-      }
-      const bound = bindSubjectsOnSite();
-      if (bound.changed) logAdmin(`Предметы привязаны к группам на сайте: ${bound.slots.length}`);
+    if (data.action === "pullStatus") {
+      const meta = crmScheduleMeta();
+      const settings = loadScheduleSettings();
       ensureAutoPullTimer();
-      const due = !g.__raSchedLast || Date.now() - g.__raSchedLast > PULL_MS;
-      if (due) void maybeAutoPull();
-      return pack(bound.slots, { autoPullDue: due });
+      return {
+        ok: true as const,
+        pulling: Boolean(g.__raSchedPulling),
+        pullJob: g.__raSchedPullJob || null,
+        at: meta.at,
+        count: meta.count,
+        pullN: settings.pullN,
+        pullUnit: settings.pullUnit,
+        nextPullAt: "",
+      };
+    }
+    if (data.action === "get") {
+      const cached = g.__raGetPack;
+      if (cached && Date.now() - cached.at < 2500) return cached.body as never;
+      let slots = listAdminSlots();
+      if (pinAllGuesses(slots)) {
+        resetSlotCache();
+        slots = saveAdminSlots(listAdminSlots()).slots;
+      }
+      const body = pack(slots);
+      g.__raGetPack = { at: Date.now(), body };
+      return body;
+    }
+    if (data.action === "saveSettings") {
+      const settings = saveScheduleSettings({
+        pullN: Number((data as { pullN?: number }).pullN),
+        pullUnit: (data as { pullUnit?: "min" | "hour" | "day" | "week" }).pullUnit,
+      });
+      ensureAutoPullTimer();
+      logAdmin("Автозагрузка расписания выключена");
+      return pack(listAdminSlots(), { settings });
     }
     if (data.action === "pull") {
-      try {
-        const res = await refreshCrmSchedule();
-        g.__raSchedLast = Date.now();
-        pushVersion("Загрузка из AlfaCRM", res.slots);
-        logAdmin(`Расписание из AlfaCRM: +${res.added} новых, ${res.updated} обновлено, всего ${res.count}`);
-        return pack(res.slots, { added: res.added, updated: res.updated });
-      } catch (e) {
-        return { ok: false as const, error: e instanceof Error ? e.message : "AlfaCRM не ответила." };
-      }
+      void runPullJob();
+      return pack(listAdminSlots(), { pulling: true, added: 0, updated: 0 });
     }
     if (data.action === "save") {
       const slots = saveAdminSlots(data.slots || listAdminSlots()).slots;
@@ -521,6 +913,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         next = [...next, slot];
         created.push(slot.id);
       }
+      pinNewSlots(next, created);
       const saved = saveAdminSlots(next).slots;
       const applied = [...new Set(allowed.map((c) => c.id).concat(created))];
       pushVersion(`ИИ: ${(data.prompt || "правка").slice(0, 80)}`, saved);
@@ -530,6 +923,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
     if (data.action === "add" && data.draft) {
       const slots = listAdminSlots();
       const slot = buildSlot(data.draft, slots);
+      pinNewSlots([slot], [slot.id]);
       const saved = saveAdminSlots([...slots, slot]).slots;
       pushVersion(`Новая группа: ${slot.course}`, saved);
       logAdmin(`Расписание: добавлена ${slot.groupName}`);
@@ -591,15 +985,182 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!customer) return { ok: false as const, error: "Ученик не найден в AlfaCRM." };
       return { ok: true as const, customer };
     }
+    if (data.action === "customerSave") {
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const customerId = Number(data.customerId) || 0;
+      if (!customerId) return { ok: false as const, error: "Нет customerId." };
+      const patch = data.patch || {};
+      const body: Record<string, unknown> = { id: customerId };
+      if (patch.name) body.name = patch.name;
+      if (patch.parent) body.legal_name = patch.parent;
+      if (patch.phone) body.phone = [patch.phone];
+      if (patch.email) body.email = [patch.email];
+      if (patch.note != null) body.note = patch.note;
+      if (patch.dob) body.dob = patch.dob;
+      if (patch.address) body.custom_adresprozhivaniya = patch.address;
+      if (data.isStudy === 0 || data.isStudy === 1 || data.isStudy === 2) body.is_study = data.isStudy;
+      if (Number(data.studyStatusId) > 0) body.study_status_id = Number(data.studyStatusId);
+      const upd = await request<{ success?: boolean; errors?: unknown }>(`/v2api/${branch}/customer/update?id=${customerId}`, body, t);
+      if (upd.success === false) return { ok: false as const, error: JSON.stringify(upd.errors || upd) };
+      logAdmin(`Клиент ${customerId}: правка карточки`);
+      const customer = await loadCustomerCard(request, t, branch, customerId);
+      return { ok: true as const, customer };
+    }
+    if (data.action === "customerLesson") {
+      const { createAlfaLesson } = await import("./alfacrm");
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const customerId = Number(data.customerId) || 0;
+      if (!customerId) return { ok: false as const, error: "Нет customerId." };
+      try {
+        const card = await loadCustomerCard(request, t, branch, customerId);
+        const wantedGid = Number(data.groupId) || 0;
+        const g = (card?.groups || []).find((x) => x.id === wantedGid) || card?.groups?.[0];
+        const reg = (card?.regular || []).find((x) => x.groupId === (g?.id || wantedGid)) || card?.regular?.[0];
+        const booked = await createAlfaLesson({
+          branch,
+          customerId,
+          type: String(data.lessonType || "trial"),
+          subjectId: Number(data.subjectId) || g?.subjectId || reg?.subjectId,
+          gid: g?.id ? String(g.id) : wantedGid ? String(wantedGid) : undefined,
+          date: data.date,
+          time: data.time || reg?.from,
+          duration: data.duration,
+          note: data.note,
+          topic: data.topic,
+          roomId: data.roomId,
+          teacherId: data.teacherId,
+        });
+        if (!booked.ok) return { ok: false as const, error: booked.error === "no-subject" ? "Нет subjectId у группы клиента — выберите группу." : "Не удалось поставить занятие." };
+        logAdmin(`Клиент ${customerId}: занятие ${booked.type} #${booked.id}`);
+        const customer = await loadCustomerCard(request, t, branch, customerId);
+        return { ok: true as const, customer, lesson: booked };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось поставить занятие." };
+      }
+    }
+    if (data.action === "customerPay") {
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const customerId = Number(data.customerId) || 0;
+      const sum = Number(data.sum || 0);
+      if (!customerId) return { ok: false as const, error: "Нет customerId." };
+      if (!sum) return { ok: false as const, error: "Укажите сумму." };
+      const kind = String(data.payKind || "income");
+      const now = new Date();
+      const ru = `${String(now.getDate()).padStart(2, "0")}.${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
+      const note = kind === "product" ? "продажа товара" : kind === "refund" ? "возврат средств" : kind === "correct" ? "корректировка" : "доход";
+      const income = kind === "refund" ? 0 : sum;
+      const expenditure = kind === "refund" ? sum : 0;
+      const tries: Record<string, unknown>[] = [
+        { customer_id: customerId, document_date: ru, income, expenditure, note },
+        { customer_id: customerId, date: ru, sum, is_income: kind === "refund" ? 0 : 1, note },
+        { related_id: customerId, related_class: "Customer", document_date: ru, income, note },
+      ];
+      let last = "";
+      let ok = false;
+      for (const body of tries) {
+        try {
+          const res = await request<{ success?: boolean; errors?: unknown; model?: { id?: number } }>(`/v2api/${branch}/pay/create`, body, t);
+          if (res.success === false) {
+            last = JSON.stringify(res.errors || res);
+            continue;
+          }
+          ok = true;
+          break;
+        } catch (e) {
+          last = e instanceof Error ? e.message : String(e);
+        }
+      }
+      if (!ok) return { ok: false as const, error: last || "AlfaCRM не приняла платёж." };
+      logAdmin(`Клиент ${customerId}: ${note} ${sum}`);
+      const customer = await loadCustomerCard(request, t, branch, customerId);
+      return { ok: true as const, customer };
+    }
+    if (data.action === "customerTariff") {
+      const { token, request, formatRuDob } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const customerId = Number(data.customerId) || 0;
+      const tariffId = Number(data.tariffId) || 0;
+      if (!customerId) return { ok: false as const, error: "Нет customerId." };
+      if (!tariffId) return { ok: false as const, error: "Выберите абонемент." };
+      const offer = loadTariffs().items.find((x) => x.id === tariffId);
+      const bDate = formatRuDob(data.date) || (() => {
+        const now = new Date();
+        return `${String(now.getDate()).padStart(2, "0")}.${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
+      })();
+      const tries: Record<string, unknown>[] = [
+        { customer_id: customerId, tariff_id: tariffId, b_date: bDate, ...(offer?.lessonsCount ? { lesson_count: offer.lessonsCount } : {}) },
+        { customer_id: customerId, tariff_id: tariffId, begin: bDate },
+        { related_id: customerId, related_class: "Customer", tariff_id: tariffId, b_date: bDate },
+      ];
+      let last = "";
+      let ok = false;
+      for (const body of tries) {
+        try {
+          const res = await request<{ success?: boolean; errors?: unknown; model?: { id?: number } }>(`/v2api/${branch}/customer-tariff/create`, body, t);
+          if (res.success === false) {
+            last = JSON.stringify(res.errors || res);
+            continue;
+          }
+          ok = true;
+          break;
+        } catch (e) {
+          last = e instanceof Error ? e.message : String(e);
+        }
+      }
+      if (!ok) return { ok: false as const, error: last || "AlfaCRM не приняла абонемент." };
+      logAdmin(`Клиент ${customerId}: абонемент ${tariffId}`);
+      const customer = await loadCustomerCard(request, t, branch, customerId);
+      return { ok: true as const, customer };
+    }
     if (data.action === "versions") return pack(listAdminSlots());
     if (data.action === "subjectsGet") {
-      return { ok: true as const, subjects: loadSubjects() };
+      try {
+        return decorateSubjects(loadSubjects());
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось прочитать предметы." };
+      }
+    }
+    if (data.action === "subjectCreate") {
+      try {
+        const name = String(data.name || "").replace(/^20\d{2}\s+/, "").trim();
+        const branch = Number(data.branchId) || 2;
+        if (!name) return { ok: false as const, error: "Нет названия предмета." };
+        const sub = await ensureCrmSubject(name, Number(data.subjectId) || 0, branch, "create");
+        const courseId = String((data as { courseId?: string }).courseId || "");
+        if (sub.id && courseId) {
+          const tree = loadSiteTree();
+          const course = tree.courses.find((c) => c.id === courseId);
+          const school = course ? tree.schools.find((s) => s.id === course.schoolId) : undefined;
+          const map = loadScheduleMap();
+          const next = map.courses.filter((c) => c.subjectId !== sub.id);
+          next.push({
+            subjectId: sub.id,
+            subjectName: sub.name,
+            courseId: course?.id || courseId,
+            schoolId: school?.id || course?.schoolId || "",
+            siteHref: course?.href || course?.id || "",
+            school: school?.label || "",
+          });
+          saveScheduleMap({ ...map, courses: next });
+        }
+        logAdmin(`Предмет «${sub.name}» id ${sub.id} для филиала ${branch}`);
+        return { ...decorateSubjects(loadSubjects()), created: sub };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось создать предмет." };
+      }
     }
     if (data.action === "subjectsPull") {
       try {
         const subjects = await pullSubjectsFromCrm();
         logAdmin(`Предметы из AlfaCRM: ${subjects.length}`);
-        return { ok: true as const, subjects };
+        return decorateSubjects(subjects);
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось загрузить предметы." };
       }
@@ -607,26 +1168,45 @@ export const adminSchedule = createServerFn({ method: "POST" })
     if (data.action === "subjectsSave") {
       const subjects = saveSubjects(data.subjects || []);
       logAdmin(`Предметы сохранены: ${subjects.length}`);
-      return { ok: true as const, subjects };
+      return decorateSubjects(subjects);
     }
     if (data.action === "subjectsPush") {
       try {
         const res = await pushSubjectsToCrm(data.subjects || loadSubjects());
         logAdmin(`Предметы в AlfaCRM: ${res.results.filter((r) => r.ok).length}`);
-        return { ok: true as const, subjects: res.items, results: res.results };
+        return { ...decorateSubjects(res.items), results: res.results };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось выгрузить предметы." };
       }
     }
+    if (data.action === "subjectsAiPreview") {
+      const { aiSubjectsParse } = await import("./crm-subjects");
+      const ids = (data.ids || []).map(Number).filter(Boolean);
+      const preview = await aiSubjectsParse(loadSubjects(), String(data.prompt || ""), ids);
+      return { ok: true as const, ...preview };
+    }
+    if (data.action === "subjectsAiApply") {
+      const { applySubjectChanges } = await import("./crm-subjects");
+      const changes = (data.changes || []).map((c) => ({ id: Number(c.id), field: c.field, from: "", to: String(c.to) }));
+      const adds = Array.isArray(data.subjects)
+        ? data.subjects.map((s) => ({ name: String(s.name || "") })).filter((s) => s.name)
+        : [];
+      if (!changes.length && !adds.length) return { ok: false as const, error: "В предпросмотре нет правок." };
+      const items = applySubjectChanges(loadSubjects(), changes, adds);
+      logAdmin(`Предметы ИИ: ${changes.length} правок, ${adds.length} новых`);
+      return decorateSubjects(items);
+    }
     if (data.action === "customersSearch") {
+      try {
       const q = String(data.q || "").trim();
       const status = String(data.status || "").trim();
       const branchId = Number(data.branchId) || 0;
       const ageBand = String(data.ageBand || "").trim();
-      const local = searchClientViews(q, 800, status, branchId, ageBand);
+      const local = searchClientViews(q, 2500, status, branchId, ageBand);
       const items = local.items.map((d) => ({
         id: d.id,
         crmId: d.crmId,
+        cardId: d.cardId,
         branchId: d.branchId,
         child: d.child,
         parent: d.parent,
@@ -667,16 +1247,21 @@ export const adminSchedule = createServerFn({ method: "POST" })
               items.push({
                 id: `crm-${branch}-${crmId}`,
                 crmId,
+                cardId: clientCardId(crmId),
                 branchId: branch,
                 child: m.name,
                 parent: m.parent,
                 phone: m.phone,
                 age: m.age ? Number(String(m.age).match(/\d+/)?.[0] || 0) || null : null,
+                ageBand: "",
                 gender: m.gender,
                 status: m.status,
+                studyStatus: "",
                 courses: [],
+                schools: [],
                 city: branch === 3 ? "Луховицы" : "Коломна",
                 branch: "",
+                groupLinks: [],
                 archived: m.archived,
               });
             }
@@ -686,6 +1271,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
         }
       }
       return { ok: true as const, items, total: local.total, all: local.all, counts: local.counts, branchCounts: local.branchCounts, lastCrmSync: local.lastCrmSync };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось прочитать базу клиентов." };
+      }
     }
     if (data.action === "voiceAsk") {
       const prompt = String(data.prompt || "").trim();
@@ -706,12 +1294,14 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!data.fresh) {
         const cached = loadGroupCard(branch, gid);
         if (cached) {
+          const slot = listAdminSlots().find((s) => s.groupId === gid && s.branchId === branch);
           return {
             ok: true as const,
             fromCache: true,
-            subjects: loadSubjects(),
+            subjects: subjectsWithHref(),
             levels: SEED_LEVELS,
             group: cached,
+            tariffs: slot ? matchTariffs(slot) : [],
           };
         }
       }
@@ -819,37 +1409,94 @@ export const adminSchedule = createServerFn({ method: "POST" })
         subjects: loadSubjects(),
         levels,
         group,
+        tariffs: slot ? matchTariffs(slot) : [],
       };
     }
     if (data.action === "groupSave") {
       const { token, request } = await import("./alfacrm");
       const t = await token();
-      const branch = Number(data.branchId) || 1;
-      const gid = Number(data.groupId) || 0;
-      if (!gid) return { ok: false as const, error: "Нет номера группы." };
+      let branch = Number(data.branchId) || 1;
+      let gid = Number(data.groupId) || 0;
+      const slotId = String(data.ids?.[0] || "");
       const subjectId = Number(data.subjectId || 0);
       const description = String(data.description ?? data.note ?? "");
       const remarks = String(data.remarks || "");
       const hashtags = String(data.hashtags || "");
       const makeup = String(data.makeup || "");
       const statusId = Number(data.statusId || 0);
-      const bDate = String(data.bDate || "");
-      const eDate = String(data.eDate || "");
+      const period = defaultPeriod(String(data.bDate || ""), String(data.eDate || ""));
+      const bDate = String(data.bDate || "").trim() || period.bDate;
+      const eDate = String(data.eDate || "").trim() || period.eDate;
       const levelId = Number(data.levelId || 0);
+      if (!gid) {
+        if (!slotId) return { ok: false as const, error: "Группа ещё без номера. Закройте карточку, отметьте строку и нажмите «Выгрузить в AlfaCRM» — или сохраните ещё раз, мы создадим её сами." };
+        const current = listAdminSlots();
+        const found = current.find((s) => s.id === slotId);
+        if (!found) return { ok: false as const, error: "Группа не найдена в расписании на сайте." };
+        const picked = subjectId || 0;
+        if (!picked) {
+          return { ok: false as const, error: "Выберите предмет филиала или нажмите «Создать предмет»." };
+        }
+        const patched = current.map((s) =>
+          s.id === slotId
+            ? {
+                ...s,
+                subjectId: picked || s.subjectId,
+                statusId: statusId || s.statusId || 1,
+                bDate: bDate || s.bDate,
+                eDate: eDate || s.eDate,
+                groupNote: description || s.groupNote,
+                description,
+                remarks,
+                hashtags,
+                makeup,
+                levelId: levelId || s.levelId,
+              }
+            : s,
+        );
+        const { results, slots: createdSlots } = await pushSlotsToCrm(patched, [slotId]);
+        const r = results[0];
+        saveAdminSlots(createdSlots);
+        if (!r?.ok || !r.groupId) {
+          return { ok: false as const, error: r?.error || "AlfaCRM не создала группу. Проверьте предмет, филиал и время занятий." };
+        }
+        gid = r.groupId;
+        branch = createdSlots.find((s) => s.id === slotId)?.branchId || branch;
+      }
       await request(`/v2api/${branch}/group/update`, {
         id: gid,
         note: description,
         status_id: statusId || undefined,
         custom_hashtagkursa: hashtags,
         custom_workingout: makeup,
-        ...(bDate ? { b_date: bDate } : {}),
-        ...(eDate ? { e_date: eDate } : {}),
+        b_date: bDate,
+        e_date: eDate,
         ...(levelId ? { level_id: levelId } : { level_id: null }),
       }, t);
       const current = listAdminSlots();
       const subject = loadSubjects().find((x) => x.id === subjectId);
       const next = current.map((s) => {
-        if (s.groupId !== gid || s.branchId !== branch) return s;
+        if (s.groupId !== gid || s.branchId !== branch) {
+          if (slotId && s.id === slotId) {
+            return {
+              ...s,
+              groupId: gid,
+              groupNote: description,
+              description,
+              remarks,
+              hashtags,
+              makeup,
+              statusId: statusId || s.statusId,
+              bDate: bDate || s.bDate,
+              eDate: eDate || s.eDate,
+              levelId: levelId || s.levelId,
+              subjectId: subjectId || s.subjectId,
+              subject: subject?.name || s.subject,
+              signup: s.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
+            };
+          }
+          return s;
+        }
         return {
           ...s,
           groupNote: description,
@@ -866,10 +1513,25 @@ export const adminSchedule = createServerFn({ method: "POST" })
         };
       });
       if (subjectId) {
-        const slot = next.find((s) => s.groupId === gid && s.branchId === branch);
-        for (const b of slot?.beats || []) {
+        const slot = next.find((s) => s.groupId === gid && s.branchId === branch) || next.find((s) => s.id === slotId);
+        for (const b of (slot?.beats?.length ? slot.beats : slot ? [{ day: slot.day, timeFrom: slot.timeFrom, timeTo: slot.timeTo, lessonId: slot.lessonId }] : [])) {
           if (!b.lessonId) continue;
-          await request(`/v2api/${branch}/regular-lesson/update`, { id: b.lessonId, related_id: gid, subject_id: subjectId }, t).catch(() => null);
+          await request(
+            `/v2api/${branch}/regular-lesson/update?id=${b.lessonId}`,
+            {
+              id: b.lessonId,
+              related_class: "Group",
+              related_id: gid,
+              subject_id: subjectId,
+              day: b.day,
+              days: [b.day],
+              time_from_v: b.timeFrom,
+              time_to_v: b.timeTo,
+              b_date: isoish(bDate),
+              e_date: isoish(eDate),
+            },
+            t,
+          ).catch(() => null);
         }
       }
       const saved = saveAdminSlots(next).slots;
@@ -891,7 +1553,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         });
       }
       logAdmin(`Группа ${gid}: подробности сохранены в AlfaCRM`);
-      return pack(saved);
+      return pack(saved, { groupId: gid });
     }
     if (data.action === "rollback" && data.at) {
       const prev = versionSlots(data.at);
@@ -900,6 +1562,196 @@ export const adminSchedule = createServerFn({ method: "POST" })
       pushVersion(`Откат к ${data.at}`, saved);
       logAdmin("Расписание: откат версии");
       return pack(saved);
+    }
+    if (data.action === "tariffsGet") {
+      try {
+        const store = loadTariffs();
+        return {
+          ok: true as const,
+          at: store.at,
+          tariffs: store.items.map((t) => ({ ...t, groups: [] as { id: string; gid: number; name: string; branch: string; branchId: number; age: string; mins: number }[] })),
+          lessonTypes: store.lessonTypes,
+          branches: store.branches,
+          subjects: subjectsWithHref(),
+        };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось прочитать абонементы." };
+      }
+    }
+    if (data.action === "tariffsPull") {
+      try {
+        const res = await pullTariffsFromCrm();
+        const slots = listAdminSlots();
+        const tariffs = res.items.map((t) => ({
+          ...t,
+          groups: tariffGroupHits(t, slots),
+        }));
+        logAdmin(`Абонементы из AlfaCRM: ${res.stats.active} активных, ${res.stats.withSubjects} с предметами`);
+        return {
+          ok: true as const,
+          at: res.at,
+          tariffs,
+          lessonTypes: res.lessonTypes,
+          branches: res.branches,
+          subjects: subjectsWithHref(),
+          stats: res.stats,
+          tariffError: res.error || "",
+        };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось загрузить абонементы." };
+      }
+    }
+    if (data.action === "tariffsSave") {
+      const list = Array.isArray(data.tariffs) ? data.tariffs : data.tariff ? [data.tariff] : [];
+      if (!list.length) return { ok: false as const, error: "Нет абонементов для сохранения." };
+      const store = saveTariffEdits(list);
+      const slots = listAdminSlots();
+      logAdmin(`Абонементы сохранены на сайте: ${list.length}`);
+      return {
+        ok: true as const,
+        at: store.at,
+        tariffs: store.items.map((t) => ({
+          ...t,
+          groups: tariffGroupHits(t, slots),
+        })),
+        lessonTypes: store.lessonTypes,
+        branches: store.branches,
+        subjects: loadSubjects(),
+      };
+    }
+    if (data.action === "tariffsPush") {
+      const list = Array.isArray(data.tariffs) && data.tariffs.length ? data.tariffs : data.tariff ? [data.tariff] : [];
+      logAdmin(`Выгрузка абонементов в AlfaCRM: ${list.length} шт. ${list.map((t) => t.id).join(", ")}`);
+      if (!list.length) return { ok: false as const, error: "Нет абонементов для выгрузки в AlfaCRM." };
+      try {
+        saveTariffEdits(list);
+        const res = await pushTariffsToCrm(list);
+        const store = loadTariffs();
+        const slots = listAdminSlots();
+        logAdmin(`Абонементы в AlfaCRM: ${res.pushed} ок, ${res.failed} сбоев`);
+        return {
+          ok: (res.failed === 0) as true,
+          at: store.at,
+          tariffs: store.items.map((t) => ({
+            ...t,
+            groups: tariffGroupHits(t, slots),
+          })),
+          lessonTypes: store.lessonTypes,
+          branches: store.branches,
+          subjects: subjectsWithHref(),
+          pushed: res.pushed,
+          failed: res.failed,
+          error: res.error || undefined,
+        };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось выгрузить абонементы." };
+      }
+    }
+    if (data.action === "tariffsDelete") {
+      const ids = (data.ids || []).map(Number).filter((n) => n);
+      if (!ids.length) return { ok: false as const, error: "Отметьте абонементы для удаления." };
+      try {
+        const res = await archiveTariffsInCrm(ids);
+        const store = loadTariffs();
+        const slots = listAdminSlots();
+        logAdmin(`Абонементы в архив CRM: ${ids.join(", ")}`);
+        return {
+          ok: res.ok as true,
+          at: store.at,
+          tariffs: store.items.map((t) => ({
+            ...t,
+            groups: tariffGroupHits(t, slots),
+          })),
+          lessonTypes: store.lessonTypes,
+          branches: store.branches,
+          subjects: subjectsWithHref(),
+          error: res.ok ? undefined : "Часть абонементов CRM не архивировала.",
+        };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось удалить абонементы." };
+      }
+    }
+    if (data.action === "tariffsAiPreview") {
+      const store = loadTariffs();
+      const ids = (data.ids || []).map(Number).filter(Boolean);
+      const preview = await aiTariffsParse(store.items, String(data.prompt || ""), ids);
+      return { ok: true as const, ...preview };
+    }
+    if (data.action === "tariffsAiApply") {
+      const store = loadTariffs();
+      const changes = (data.changes || []).map((c) => ({ id: Number(c.id), field: c.field, from: "", to: String(c.to) }));
+      const adds = Array.isArray(data.tariffs) ? data.tariffs : [];
+      if (!changes.length && !adds.length) return { ok: false as const, error: "В предпросмотре нет правок." };
+      const saved = applyTariffChanges(store.items, changes, adds);
+      const slots = listAdminSlots();
+      logAdmin(`Абонементы ИИ: ${changes.length} правок, ${adds.length} новых`);
+      return {
+        ok: true as const,
+        at: saved.at,
+        tariffs: saved.items.map((t) => ({
+          ...t,
+          groups: tariffGroupHits(t, slots),
+        })),
+        lessonTypes: saved.lessonTypes,
+        branches: saved.branches,
+        subjects: loadSubjects(),
+      };
+    }
+    if (data.action === "tariffsProbe") {
+      try {
+        const probe = await probeCreateTariff();
+        return { ok: probe.ok as true, probe };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Проверка абонемента не удалась." };
+      }
+    }
+    if (data.action === "tariffsProbeDelete") {
+      const id = Number(data.ids?.[0] || 0);
+      const res = await probeDeleteTariff(id);
+      return { ok: res.ok as true, error: res.error || undefined, probeDeleted: id };
+    }
+    if (data.action === "treeAddSchool") {
+      const tree = addTreeSchool(String(data.label || data.text || ""), data.href);
+      logAdmin(`Школа: ${data.label}`);
+      return pack(listAdminSlots(), { tree });
+    }
+    if (data.action === "treeAddCourse") {
+      const tree = addTreeCourse(String(data.schoolId || ""), String(data.label || data.text || ""), data.href, data.age);
+      logAdmin(`Курс: ${data.label}`);
+      return pack(listAdminSlots(), { tree });
+    }
+    if (data.action === "treeDeleteCourse") {
+      const tree = deleteTreeCourse(String(data.courseId || data.ids?.[0] || ""));
+      logAdmin("Курс удалён из структуры");
+      return pack(listAdminSlots(), { tree });
+    }
+    if (data.action === "treeDeleteSchool") {
+      const tree = deleteTreeSchool(String(data.schoolId || ""));
+      logAdmin("Школа удалена из структуры");
+      return pack(listAdminSlots(), { tree });
+    }
+    if (data.action === "treeDeleteSelected") {
+      const courseIds = ((data as { courseIds?: string[] }).courseIds || []).filter((id) => id && !id.endsWith("#loose"));
+      const schoolIds = ((data as { schoolIds?: string[] }).schoolIds || []).filter((id) => id && id !== "other");
+      let tree = loadSiteTree();
+      for (const id of courseIds) tree = deleteTreeCourse(id);
+      for (const id of schoolIds) tree = deleteTreeSchool(id);
+      const bits = [];
+      if (schoolIds.length) bits.push(`школ ${schoolIds.length}`);
+      if (courseIds.length) bits.push(`курсов ${courseIds.length}`);
+      logAdmin(`Удалено из структуры: ${bits.join(", ") || "ничего"}`);
+      return pack(listAdminSlots(), { tree });
+    }
+    if (data.action === "treeMove") {
+      const ids = data.ids || [];
+      const courseId = String(data.courseId || "");
+      resetSlotCache();
+      const moved = moveSlotsToCourse(listAdminSlots(), ids, courseId);
+      const slots = saveAdminSlots(moved.slots).slots;
+      g.__raGetPack = undefined;
+      pushVersion("Группы перенесены в другой курс", slots);
+      logAdmin(`Перенос ${ids.length} групп`);
+      return pack(slots, { tree: moved.tree });
     }
     return { ok: false as const, error: "Неизвестное действие." };
   });

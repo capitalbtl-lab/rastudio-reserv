@@ -1,5 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { serverEnv } from "./server-env";
+import { subjectIdOfCourse } from "./ids";
 
 export type CrmSubject = { id: number; name: string; local?: boolean };
 
@@ -63,7 +65,8 @@ export function foldSubject(s: string) {
     .toLowerCase()
     .replace(/ё/g, "е")
     .replace(/["«»„“]/g, "")
-    .replace(/[–—]/g, "-")
+    .replace(/[·•–—]/g, " ")
+    .replace(/[()]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -169,22 +172,380 @@ export function bestSubject(name: string, list = loadSubjects()): CrmSubject | u
   return score >= 40 ? best : undefined;
 }
 
+function stemLabel(s: string) {
+  return foldSubject(s)
+    .replace(/^20\d{2}\s+/, "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\d+\s*[-–—]?\s*\d*\s*(лет|года|год)?/g, " ")
+    .replace(/[·•]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const GENERIC = new Set([
+  "курс",
+  "для",
+  "лет",
+  "год",
+  "года",
+  "детей",
+  "школа",
+  "студия",
+  "язык",
+  "языка",
+  "английского",
+  "английский",
+  "группа",
+  "занятие",
+  "программа",
+  "основы",
+  "подготовка",
+  "творческая",
+  "научный",
+  "развивающий",
+  "носителем",
+  "носитель",
+  "мире",
+  "цифры",
+]);
+
+function tokensOf(s: string) {
+  return foldSubject(s)
+    .replace(/^20\d{2}\s+/, "")
+    .split(/[^a-zа-я0-9+]+/)
+    .filter((w) => w.length > 2 && !GENERIC.has(w));
+}
+
+function quotedOf(s: string) {
+  const out: string[] = [];
+  for (const m of String(s || "").matchAll(/["«„“]([^"»”]{2,40})["»”]/g)) out.push(foldSubject(m[1]));
+  return out;
+}
+
+/** Предмет группы: сначала slot.subjectId, затем карта courseId → subjectId. Имя — запасной поиск. */
+export function pickSubjectForSlot(
+  slot: { subjectId?: number; subject?: string; course?: string; courseId?: string; groupName?: string },
+  list: CrmSubject[],
+) {
+  if (Number(slot.subjectId)) {
+    const hit = list.find((s) => s.id === Number(slot.subjectId) && !s.local);
+    if (hit) return hit;
+  }
+  if (slot.courseId) {
+    const sid = subjectIdOfCourse(slot.courseId);
+    if (sid) {
+      const hit = list.find((s) => s.id === sid && !s.local);
+      if (hit) return hit;
+    }
+  }
+  const hay = foldSubject(`${slot.groupName || ""} ${slot.course || ""} ${slot.subject || ""}`);
+  const hw = tokensOf(hay);
+  const quoted = quotedOf(`${slot.groupName || ""} ${slot.course || ""} ${slot.subject || ""}`);
+  let best: CrmSubject | undefined;
+  let score = 0;
+  for (const s of list) {
+    if (s.local) continue;
+    const m = foldSubject(s.name);
+    const sw = tokensOf(s.name);
+    let sc = 0;
+    if (quoted.some((q) => q && (m.includes(q) || q.includes(m)))) sc += 500;
+    const hit = sw.filter((w) => hw.includes(w) || hay.includes(w));
+    for (const w of hit) sc += w.length > 5 ? 90 : 45;
+    if (sw.length && hit.length === sw.length) sc += 80;
+    const ages = ageHit(hay, m);
+    if (ages.both && ages.n) sc += 25;
+    if (ages.both && !ages.n) sc -= 100;
+    if (sc > score) {
+      score = sc;
+      best = s;
+    }
+  }
+  return score >= 80 ? best : undefined;
+}
+
 function crmId(res: unknown) {
   const r = res as { model?: { id?: number }; id?: number };
   return Number(r?.model?.id || r?.id || 0);
 }
 
+function crmHost() {
+  return (serverEnv("ALFACRM_HOST") || "https://studiyarazvivaysya.s20.online").replace(/\/$/, "");
+}
+
+function webPassword() {
+  return (
+    serverEnv("ALFACRM_WEB_PASSWORD") ||
+    serverEnv("ALFACRM_PASSWORD") ||
+    serverEnv("ALFACRM_CRM_PASSWORD") ||
+    ""
+  );
+}
+
+function setCookieList(res: Response) {
+  const h = res.headers as Headers & { getSetCookie?: () => string[] };
+  if (typeof h.getSetCookie === "function") {
+    const list = h.getSetCookie();
+    if (list?.length) return list;
+  }
+  const raw = res.headers.get("set-cookie");
+  return raw ? [raw] : [];
+}
+
+function mergeCookies(prev: string, set: string[]) {
+  const map = new Map<string, string>();
+  for (const p of prev.split("; ").filter(Boolean)) {
+    const i = p.indexOf("=");
+    if (i > 0) map.set(p.slice(0, i), p.slice(i + 1));
+  }
+  for (const raw of set) {
+    const part = raw.split(";")[0];
+    const i = part.indexOf("=");
+    if (i > 0) map.set(part.slice(0, i), part.slice(i + 1));
+  }
+  return [...map.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
+}
+
+function csrfOf(html: string) {
+  return (
+    (html.match(/meta name="csrf-token" content="([^"]+)"/i) || [])[1] ||
+    (html.match(/name="_csrf"[^>]*value="([^"]+)"/i) || [])[1] ||
+    (html.match(/value="([^"]+)"[^>]*name="_csrf"/i) || [])[1] ||
+    ""
+  );
+}
+
+function subjectTitle(name: string) {
+  return String(name || "")
+    .replace(/^20\d{2}\s+/, "")
+    .replace(/[·•]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\s+(\d{1,2})\s*[-–—]\s*(\d{1,2})\s*(лет|года)?$/i, " ($1-$2 лет)")
+    .slice(0, 120);
+}
+
+async function listLive(branch: number) {
+  const { token, request } = await import("./alfacrm");
+  const t = await token();
+  const listed = await request<{ items?: { id?: number; name?: string }[] }>(`/v2api/${Number(branch) || 1}/subject/index`, { page: 0, pageSize: 100 }, t);
+  return (listed.items || [])
+    .map((s) => ({ id: Number(s.id) || 0, name: String(s.name || "").trim() }))
+    .filter((s) => s.id && s.name);
+}
+
+function pickCreated(name: string, before: Set<number>, after: { id: number; name: string }[]) {
+  const fold = foldSubject(name);
+  const born = after.filter((s) => !before.has(s.id)).sort((a, b) => b.id - a.id);
+  return born.find((s) => foldSubject(s.name) === fold) || after.find((s) => foldSubject(s.name) === fold) || born[0];
+}
+
+async function crmWebLogin() {
+  const host = crmHost();
+  const email = serverEnv("ALFACRM_EMAIL") || "";
+  const pass = webPassword();
+  if (!email || !pass) return { cookie: "", error: "Нет пароля кабинета CRM." };
+  const loginUrl = `${host}/site/login`;
+  const page = await fetch(loginUrl, { redirect: "manual" });
+  let cookie = mergeCookies("", setCookieList(page));
+  const html = await page.text();
+  const csrf = csrfOf(html);
+  const res = await fetch(loginUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Cookie: cookie,
+      Origin: host,
+      Referer: loginUrl,
+    },
+    body: new URLSearchParams({
+      ...(csrf ? { _csrf: csrf } : {}),
+      "LoginForm[username]": email,
+      "LoginForm[password]": pass,
+      "LoginForm[rememberMe]": "1",
+    }),
+    redirect: "manual",
+  });
+  cookie = mergeCookies(cookie, setCookieList(res));
+  const loc = res.headers.get("location") || "";
+  if (res.status === 302 && loc && !/login/i.test(loc)) {
+    const next = loc.startsWith("http") ? loc : `${host}${loc}`;
+    const follow = await fetch(next, { headers: { Cookie: cookie }, redirect: "manual" });
+    cookie = mergeCookies(cookie, setCookieList(follow));
+    return { cookie, error: "" };
+  }
+  return { cookie: "", error: "Вход в кабинет CRM не удался." };
+}
+
+/** Включает предмет тумблером «Сделать активным». v2api weight этого не делает. */
+export async function activateCrmSubject(id: number, branches = [1, 2, 3, 4], cookieIn = "") {
+  const host = crmHost();
+  let cookie = cookieIn;
+  if (!cookie) {
+    const login = await crmWebLogin();
+    if (!login.cookie) throw new Error(login.error || "Нет входа в кабинет CRM, предмет не включён.");
+    cookie = login.cookie;
+  }
+  const ok: number[] = [];
+  const uniq = [...new Set(branches.map(Number).filter((n) => n > 0))];
+  for (const br of uniq) {
+    const indexUrl = `${host}/settings/${br}/subject/index`;
+    const page = await fetch(indexUrl, {
+      headers: { Cookie: cookie, Accept: "text/html", "X-Requested-With": "XMLHttpRequest" },
+      redirect: "manual",
+    });
+    cookie = mergeCookies(cookie, setCookieList(page));
+    const html = await page.text();
+    const csrf = csrfOf(html);
+    if (new RegExp(`subject/state\\?id=${id}[^"']*state=0`).test(html)) {
+      ok.push(br);
+      continue;
+    }
+    const url = `${host}/settings/${br}/subject/state?id=${id}&state=1`;
+    const res = await fetch(url, {
+      headers: {
+        Cookie: cookie,
+        Accept: "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+        "X-CSRF-Token": csrf,
+        Referer: indexUrl,
+      },
+      redirect: "manual",
+    });
+    cookie = mergeCookies(cookie, setCookieList(res));
+    const text = await res.text();
+    if (res.ok || /reload_pjax|state=0|toggle-on/i.test(text)) ok.push(br);
+  }
+  if (!ok.length) throw new Error("AlfaCRM не включила предмет. Откройте Настройки → Предметы и нажмите тумблер.");
+  return ok;
+}
+
+async function createSubjectHtml(name: string, branch: number) {
+  const host = crmHost();
+  const login = await crmWebLogin();
+  if (!login.cookie) throw new Error(login.error || "Нет входа в кабинет CRM.");
+  let cookie = login.cookie;
+  const title = subjectTitle(name);
+  const br = Number(branch) || 1;
+  const before = new Set((await listLive(br)).map((s) => s.id));
+  const createUrl = `${host}/settings/${br}/subject/create`;
+  const formRes = await fetch(createUrl, {
+    headers: {
+      Cookie: cookie,
+      Accept: "application/json, text/javascript, */*; q=0.01",
+      "X-Requested-With": "XMLHttpRequest",
+      Referer: `${host}/settings/${br}/subject/index`,
+    },
+    redirect: "manual",
+  });
+  cookie = mergeCookies(cookie, setCookieList(formRes));
+  const raw = await formRes.text();
+  let content = raw;
+  try {
+    const j = JSON.parse(raw) as { modal_open?: { content?: string } };
+    if (j.modal_open?.content) content = j.modal_open.content;
+  } catch {
+    /* html */
+  }
+  if (/LoginForm/i.test(content) && !/Subject\[name\]/.test(content)) {
+    throw new Error("Сессия CRM сбросилась. Войдите в AlfaCRM и повторите.");
+  }
+  const csrf = csrfOf(content);
+  if (!csrf) throw new Error("Форма предмета не открылась.");
+  const post = await fetch(createUrl, {
+    method: "POST",
+    headers: {
+      Cookie: cookie,
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      Accept: "application/json, text/javascript, */*; q=0.01",
+      "X-Requested-With": "XMLHttpRequest",
+      "X-CSRF-Token": csrf,
+      Origin: host,
+      Referer: createUrl,
+    },
+    body: new URLSearchParams({
+      _csrf: csrf,
+      "Subject[is_reload]": "0",
+      "Subject[name]": title,
+      "Subject[description]": "",
+      "Subject[color]": "#00FF00",
+      "Subject[custom_webpage]": "",
+    }),
+    redirect: "manual",
+  });
+  cookie = mergeCookies(cookie, setCookieList(post));
+  const text = await post.text();
+  const loc = post.headers.get("location") || "";
+  if (post.status === 302 && /login/i.test(loc)) throw new Error("CRM сбросила сессию при сохранении предмета.");
+  if (post.status === 400 || /Не удалось проверить переданные данные/i.test(text)) {
+    throw new Error("CRM отклонила форму (CSRF). Повторите.");
+  }
+  const saved = /reload_pjax|modal_close|"success"\s*:\s*true/i.test(text);
+  if (!saved) {
+    throw new Error(`CRM не приняла предмет (${post.status}): ${text.replace(/\s+/g, " ").slice(0, 180)}`);
+  }
+  await new Promise((r) => setTimeout(r, 600));
+  const after = await listLive(br);
+  const hit = pickCreated(title, before, after);
+  if (!hit) {
+    throw new Error(`CRM закрыла форму, но предмета «${title}» в списке нет. Обновите предметы из CRM.`);
+  }
+  await activateCrmSubject(hit.id, [br, 1, 2, 3, 4], cookie).catch(() => undefined);
+  return { id: hit.id, name: hit.name, cookie };
+}
+
+export async function ensureCrmSubject(name: string, hintId = 0, branch = 2, mode: "auto" | "create" = "auto") {
+  const list = loadSubjects();
+  const cleaned = subjectTitle(name);
+  if (!cleaned) throw new Error("Нет названия предмета, чтобы создать его в AlfaCRM.");
+  const fold = foldSubject(cleaned);
+  const br = Number(branch) || 1;
+  const live = await listLive(br);
+  if (live.length) saveSubjects([...list.filter((s) => !live.some((x) => x.id === s.id)), ...live]);
+  const liveHit = live.find((s) => foldSubject(s.name) === fold) || (hintId ? live.find((s) => s.id === hintId) : undefined);
+  if (liveHit) {
+    void activateCrmSubject(liveHit.id, [br, 1, 2, 3, 4]).catch(() => undefined);
+    return liveHit;
+  }
+  if (mode === "auto") {
+    const guessed = pickSubjectForSlot({ course: cleaned, groupName: name }, live.length ? live : list);
+    if (guessed) {
+      void activateCrmSubject(guessed.id, [br, 1, 2, 3, 4]).catch(() => undefined);
+      return guessed;
+    }
+  }
+  const made = await createSubjectHtml(cleaned, br);
+  const next = { id: made.id, name: made.name };
+  saveSubjects([...loadSubjects().filter((s) => s.id !== next.id), next]);
+  return next;
+}
+
+async function bumpSubjectWeight(id: number, branch: number) {
+  const { token, request } = await import("./alfacrm");
+  const t = await token();
+  const list = loadSubjects();
+  const hit = list.find((s) => s.id === id);
+  if (!hit) return;
+  await request(`/v2api/${Number(branch) || 2}/subject/update?id=${id}`, { id, name: hit.name, weight: 1 }, t);
+}
+
 export async function pullSubjectsFromCrm() {
   const { token, request } = await import("./alfacrm");
   const t = await token();
-  const res = await request<{ items?: { id?: number; name?: string }[] }>("/v2api/2/subject/index", { page: 0, pageSize: 300 }, t);
   const byId = new Map<number, CrmSubject>();
-  for (const s of SEED_SUBJECTS) byId.set(s.id, { ...s });
-  for (const s of res.items || []) {
-    const id = Number(s.id);
-    const name = String(s.name || "").trim();
-    if (!id || !name) continue;
-    byId.set(id, { id, name });
+  for (let page = 0; page < 20; page++) {
+    const res = await request<{ items?: { id?: number; name?: string }[]; total?: number }>(
+      "/v2api/2/subject/index",
+      { page, pageSize: 100 },
+      t,
+    );
+    const batch = res.items || [];
+    for (const s of batch) {
+      const id = Number(s.id);
+      const name = String(s.name || "").trim();
+      if (!id || !name) continue;
+      byId.set(id, { id, name });
+    }
+    if (batch.length < 100) break;
   }
   return saveSubjects([...byId.values()]);
 }
@@ -201,9 +562,10 @@ export async function pushSubjectsToCrm(items: CrmSubject[]) {
         next.push({ id: s.id, name: s.name });
         results.push({ name: s.name, id: s.id, ok: true });
       } else {
-        const created = await request("/v2api/2/subject/create", { name: s.name }, t);
+        const created = await request("/v2api/2/subject/create", { name: s.name, weight: 1 }, t);
         const id = crmId(created) || s.id;
         if (!id) throw new Error("CRM не вернула id предмета");
+        await activateCrmSubject(id).catch(() => undefined);
         next.push({ id, name: s.name });
         results.push({ name: s.name, id, ok: true });
       }
@@ -214,4 +576,80 @@ export async function pushSubjectsToCrm(items: CrmSubject[]) {
   }
   saveSubjects(next);
   return { items: loadSubjects(), results };
+}
+
+export type SubjectChange = { id: number; field: string; from: string; to: string };
+export type SubjectAdd = { name: string };
+
+export async function aiSubjectsParse(items: CrmSubject[], prompt: string, selectedIds: number[]) {
+  const asked = prompt.trim();
+  const pool = selectedIds.length ? items.filter((s) => selectedIds.includes(s.id)) : [];
+  const quoted = asked.match(/[«"]([^«»"]+)[»"]/);
+  if (pool.length && /переимен|назван|замени|сделай назван/i.test(asked) && quoted) {
+    const to = quoted[1].trim();
+    const changes = pool.filter((s) => s.name !== to).map((s) => ({ id: s.id, field: "name", from: s.name, to }));
+    if (changes.length) return { comment: `Новое имя «${to}» у ${changes.length} предметов.`, changes, adds: [] as SubjectAdd[] };
+  }
+  if (pool.length && /убери|удали|вырежи/i.test(asked) && /возраст|лет|год/i.test(asked)) {
+    const changes: SubjectChange[] = [];
+    for (const s of pool) {
+      const to = s.name.replace(/\s*\([^)]*\d[^)]*\)\s*/g, " ").replace(/\s{2,}/g, " ").trim();
+      if (to && to !== s.name) changes.push({ id: s.id, field: "name", from: s.name, to });
+    }
+    if (changes.length) return { comment: `Убираю возраст из названия у ${changes.length} предметов.`, changes, adds: [] };
+  }
+  const { yandexJson } = await import("./agent-channels");
+  const slim = (pool.length ? pool : items).map((s) => ({ id: s.id, name: s.name }));
+  const llm = await yandexJson<{
+    comment?: string;
+    changes?: { id?: number; field?: string; to?: string }[];
+    adds?: { name?: string }[];
+  }>(
+    `Ты правишь справочник предметов студии «Развивайся».
+Меняй только поле name. changes только с id из списка. adds — только если просят добавить предмет.
+Ответ JSON.`,
+    `Запрос: ${asked.slice(0, 1500)}
+Предметы: ${JSON.stringify(slim).slice(0, 8000)}
+JSON: {"comment":"","changes":[{"id":12,"field":"name","to":"Художественная студия (3-4 года)"}],"adds":[]}`,
+    1800,
+  );
+  const out: SubjectChange[] = [];
+  for (const c of llm?.changes || []) {
+    const id = Number(c.id);
+    if (!id || String(c.field || "name") !== "name") continue;
+    const hit = items.find((s) => s.id === id);
+    if (!hit) continue;
+    const to = String(c.to || "").trim();
+    if (!to || to === hit.name) continue;
+    out.push({ id, field: "name", from: hit.name, to });
+  }
+  const adds: SubjectAdd[] = [];
+  for (const a of llm?.adds || []) {
+    const name = String(a?.name || "").trim();
+    if (name) adds.push({ name });
+  }
+  return {
+    comment: llm?.comment || (out.length || adds.length ? "Предпросмотр" : "Не понял. Напишите: «переименуй в …» или «убери возраст из названия»."),
+    changes: out,
+    adds,
+  };
+}
+
+export function applySubjectChanges(items: CrmSubject[], changes: SubjectChange[], adds: SubjectAdd[]) {
+  const byId = new Map(items.map((s) => [s.id, { ...s }]));
+  for (const c of changes) {
+    const s = byId.get(c.id);
+    if (!s || c.field !== "name") continue;
+    s.name = c.to;
+    byId.set(c.id, s);
+  }
+  let nextLocal = 9000;
+  while (byId.has(nextLocal)) nextLocal += 1;
+  for (const a of adds) {
+    const name = String(a.name || "").trim();
+    if (!name) continue;
+    byId.set(nextLocal, { id: nextLocal, name, local: true });
+    nextLocal += 1;
+  }
+  return saveSubjects([...byId.values()]);
 }

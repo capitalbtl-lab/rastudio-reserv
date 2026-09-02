@@ -1,76 +1,61 @@
+/**
+ * Соответствия: subjectId (AlfaCRM) → courseId (дерево сайта).
+ * Имена предметов и курсов — только подписи. Раскладка групп — applyScheduleMap по ID.
+ */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { SCHOOLS, SCHOOL_COURSE_MATCH } from "@/data/site";
-import { listPriceRows, SCHOOL_DIRECTION, splitCourseAge, tidyCourseName } from "@/data/prices-core";
-import { SEED_SUBJECTS, bestSubject, loadSubjects, type CrmSubject } from "@/data/crm-subjects";
+import { listPriceRows, SCHOOL_DIRECTION, tidyCourseName } from "@/data/prices-core";
+import { SEED_SUBJECTS, loadSubjects } from "@/data/crm-subjects";
 import { type CrmSlot } from "@/data/crm-slots-core";
-import { schoolFromHay, slotMismatch } from "@/data/slot-mismatch";
+import { slotMismatch } from "@/data/slot-mismatch";
+import { loadSiteTree, courseIdOf } from "./site-tree";
+import { SUBJECT_TO_COURSE, courseIdOfSubject, resolveGroupCourseId } from "./ids";
 
-export type SchoolLink = { schedule: string; siteHref: string };
-export type CourseLink = { subjectId: number; subjectName: string; siteHref: string; school: string };
+export type SchoolLink = { schedule: string; siteHref: string; schoolId?: string };
+export type CourseLink = {
+  subjectId: number;
+  subjectName: string;
+  /** ID курса в дереве. Соответствие subjectId → courseId, не по имени. */
+  courseId: string;
+  schoolId: string;
+  siteHref: string;
+  school: string;
+};
 
 type MapFile = { schools: SchoolLink[]; courses: CourseLink[] };
-
-const SUBJECT_PATH: Record<number, string> = {
-  12: "/art-studio-3-4",
-  116: "/art-studio-3-4",
-  13: "/art-studio-5-6",
-  14: "/art-studio-7-8",
-  92: "/art-studio-9-13",
-  115: "/art-studio-9-13",
-  5: "/podgotovka-v-hudvuz",
-  11: "/sculptural-studio",
-  97: "/digitalartschool",
-  36: "/robototehnika-5-7",
-  37: "/robototehnika-7-9",
-  35: "/robototehnika-10-14",
-  114: "/roboticsinenglish",
-  46: "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python",
-  48: "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-си",
-  52: "/kursy-shkoly-programmirovaniya/it-школа-разработка-игр-на-unity",
-  43: "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-5-7-лет",
-  98: "/kursy-shkoly-programmirovaniya/it-лаборатория-create-для-детей-7-9-лет",
-  15: "/kursy-shkoly-programmirovaniya/it-лаборатория-dev-для-детей-9-10-лет",
-  107: "/gamedesign",
-  39: "/3d-modeling",
-  27: "/science-course",
-  89: "/teslaphysics",
-  67: "/radioengineering",
-  25: "/robototehnika-v-kolomne",
-  16: "/preparation-for-school",
-  108: "/happybricks",
-  109: "/planet-steam",
-  4: "/model-school",
-  110: "/englishlanguagesm",
-  111: "/englishlanguagegg",
-  112: "/vitaminkorean",
-  113: "/japanese",
-};
 
 function fileOf() {
   return join(process.cwd(), "storage", "schedule-map.json");
 }
 
 export function siteSchools() {
-  return SCHOOLS.map((s) => ({ href: s.href, label: s.label }));
+  const tree = loadSiteTree();
+  return tree.schools.map((s) => ({ href: s.href || s.id, label: s.label }));
 }
 
 export function siteCourses() {
-  const rows = listPriceRows();
-  const seen = new Set<string>();
-  const out: { href: string; name: string; school: string; age: string }[] = [];
-  for (const r of rows) {
-    const href = r.path;
-    if (!href || seen.has(href)) continue;
-    seen.add(href);
-    out.push({ href, name: r.name, school: r.direction || schoolByPath(href), age: String(r.age || "").replace(/^Курс для (детей|девочек)\s*/i, "").trim() });
-  }
-  for (const s of SCHOOLS) {
-    if (seen.has(s.href)) continue;
-    seen.add(s.href);
-    out.push({ href: s.href, name: s.label, school: s.label, age: s.kicker || "" });
-  }
-  return out.sort((a, b) => a.school.localeCompare(b.school, "ru") || a.name.localeCompare(b.name, "ru") || a.age.localeCompare(b.age, "ru"));
+  const tree = loadSiteTree();
+  const ageLo = (s: string) => {
+    const m = String(s || "").match(/(\d{1,2})/);
+    return m ? Number(m[1]) : 99;
+  };
+  return tree.courses
+    .slice()
+    .sort((a, b) => {
+      const sa = tree.schools.findIndex((s) => s.id === a.schoolId);
+      const sb = tree.schools.findIndex((s) => s.id === b.schoolId);
+      if (sa !== sb) return sa - sb;
+      return ageLo(a.age || a.label) - ageLo(b.age || b.label) || a.label.localeCompare(b.label, "ru");
+    })
+    .map((c) => ({
+      href: c.href || c.id,
+      name: c.label,
+      school: tree.schools.find((s) => s.id === c.schoolId)?.label || "",
+      age: c.age || "",
+      schoolId: c.schoolId,
+      courseId: c.id,
+    }));
 }
 
 export function schoolByPath(path: string) {
@@ -84,29 +69,36 @@ export function schoolByPath(path: string) {
 }
 
 function defaultSchools(): SchoolLink[] {
-  return SCHOOLS.map((s) => ({ schedule: s.label, siteHref: s.href }));
+  const tree = loadSiteTree();
+  if (tree.schools.length) {
+    return tree.schools.map((s) => ({ schedule: s.label, siteHref: s.href || s.id, schoolId: s.id }));
+  }
+  return SCHOOLS.map((s) => ({ schedule: s.label, siteHref: s.href, schoolId: s.href }));
 }
 
 function defaultCourses(): CourseLink[] {
+  const tree = loadSiteTree();
   const prices = listPriceRows();
   const out: CourseLink[] = [];
   const subjects = loadSubjects();
   const list = subjects.length ? subjects : SEED_SUBJECTS;
   for (const sub of list) {
-    const path = SUBJECT_PATH[sub.id] || "";
-    const price = prices.find((r) => r.path === path) || prices.find((r) => bestSubject(`${r.name} ${r.age}`)?.id === sub.id);
-    const href = path || price?.path || "";
-    let school = price?.direction || schoolByPath(href) || schoolBySubject(sub);
-    if (/беспилот/.test(sub.name)) school = "Школа наук и инженерии";
-    if (sub.id === 109 || /планет/.test(sub.name.toLowerCase())) school = "Школа раннего развития";
-    if (sub.id === 108 || /лего/.test(sub.name.toLowerCase())) school = "Школа раннего развития";
-    out.push({ subjectId: sub.id, subjectName: sub.name, siteHref: href, school: school || "Прочее" });
+    const path = SUBJECT_TO_COURSE[sub.id] || "";
+    const course = tree.courses.find((c) => c.id === path || c.href === path) || tree.courses.find((c) => c.id === courseIdOfSubject(sub.id, tree));
+    const price = prices.find((r) => (r.courseId || r.path) === (course?.id || path) || r.path === path);
+    const href = course?.href || path || price?.path || "";
+    const schoolNode = course ? tree.schools.find((s) => s.id === course.schoolId) : undefined;
+    const school = schoolNode?.label || price?.direction || schoolByPath(href) || "Прочее";
+    out.push({
+      subjectId: sub.id,
+      subjectName: sub.name,
+      courseId: course?.id || path,
+      schoolId: course?.schoolId || schoolNode?.id || "",
+      siteHref: href,
+      school,
+    });
   }
   return out;
-}
-
-function schoolBySubject(sub: CrmSubject) {
-  return schoolFromHay(sub.name);
 }
 
 export function loadScheduleMap(): MapFile {
@@ -114,20 +106,33 @@ export function loadScheduleMap(): MapFile {
   try {
     if (!existsSync(fileOf())) return fallback;
     const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Partial<MapFile>;
-    const schools = defaultSchools().map((d) => raw.schools?.find((s) => s.schedule === d.schedule) || d);
+    const schools = defaultSchools().map((d) => {
+      const hit = raw.schools?.find((s) => (s.schoolId && s.schoolId === d.schoolId) || s.siteHref === d.siteHref) || d;
+      return { ...d, ...hit, schoolId: hit.schoolId || d.schoolId };
+    });
     const courses = defaultCourses().map((d) => {
       const hit = raw.courses?.find((c) => c.subjectId === d.subjectId);
       if (!hit) return d;
-      const hrefSchool = schoolByPath(hit.siteHref || "");
-      const hrefOk = !hrefSchool || hrefSchool === d.school;
       return {
         ...d,
-        siteHref: hrefOk && hit.siteHref ? hit.siteHref : d.siteHref,
-        school: d.school,
+        courseId: hit.courseId || hit.siteHref || d.courseId,
+        schoolId: hit.schoolId || d.schoolId,
+        siteHref: hit.siteHref || d.siteHref,
+        school: hit.school || d.school,
+        subjectName: hit.subjectName || d.subjectName,
       };
     });
     for (const c of raw.courses || []) {
-      if (!courses.some((x) => x.subjectId === c.subjectId)) courses.push(c);
+      if (!courses.some((x) => x.subjectId === c.subjectId)) {
+        courses.push({
+          subjectId: c.subjectId,
+          subjectName: c.subjectName,
+          courseId: c.courseId || c.siteHref || "",
+          schoolId: c.schoolId || "",
+          siteHref: c.siteHref || "",
+          school: c.school || "",
+        });
+      }
     }
     return { schools, courses };
   } catch {
@@ -139,38 +144,74 @@ export function saveScheduleMap(data: MapFile) {
   mkdirSync(dirname(fileOf()), { recursive: true });
   const next: MapFile = {
     schools: data.schools?.length ? data.schools : defaultSchools(),
-    courses: data.courses?.length ? data.courses : defaultCourses(),
+    courses: (data.courses?.length ? data.courses : defaultCourses()).map((c) => ({
+      subjectId: c.subjectId,
+      subjectName: c.subjectName,
+      courseId: c.courseId || c.siteHref || "",
+      schoolId: c.schoolId || "",
+      siteHref: c.siteHref || c.courseId || "",
+      school: c.school || "",
+    })),
   };
   writeFileSync(fileOf(), JSON.stringify(next, null, 2));
   return next;
 }
 
-export { schoolFromHay };
+export const ROBOT_COURSE_ORDER = [
+  "Робототехника 5–6 лет",
+  "Робототехника 7–9 лет",
+  "Робототехника 10–14 лет",
+  "Робототехника на английском",
+];
 
+export function robotCourseOrder(a: string, b: string) {
+  const ia = ROBOT_COURSE_ORDER.indexOf(a);
+  const ib = ROBOT_COURSE_ORDER.indexOf(b);
+  if (ia >= 0 || ib >= 0) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  return a.localeCompare(b, "ru");
+}
+
+export function canonicalCourse(
+  name: string,
+  school?: string,
+  extra?: { age?: string; path?: string; subject?: string },
+) {
+  const n = tidyCourseName(name);
+  const hay = `${name} ${n} ${extra?.subject || ""} ${extra?.path || ""} ${extra?.age || ""} ${school || ""}`
+    .toLowerCase()
+    .replace(/ё/g, "е");
+  if (school === "Школа робототехники" || /робототех|билингв/.test(hay)) {
+    if (/англий|билингв|roboticsinenglish/.test(hay)) return "Робототехника на английском";
+    const ageHay = `${extra?.age || ""} ${extra?.path || ""} ${name} ${extra?.subject || ""}`;
+    if (/robototehnika-5/.test(ageHay) || /(?:^|[^\d])5\s*[-–]\s*[67](?:[^\d]|$)/.test(ageHay)) return "Робототехника 5–6 лет";
+    if (/robototehnika-7/.test(ageHay) || /(?:^|[^\d])7\s*[-–]\s*9(?:[^\d]|$)/.test(ageHay)) return "Робототехника 7–9 лет";
+    if (/robototehnika-10/.test(ageHay) || /(?:9|10|11)\s*[-–]\s*1[1-4]/.test(ageHay)) return "Робототехника 10–14 лет";
+    return n || "Робототехника";
+  }
+  return n;
+}
+
+/** Раскладывает группы по courseId / subjectId. Имена не участвуют. */
 export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
+  const tree = loadSiteTree();
   const map = loadScheduleMap();
-  const byId = new Map(map.courses.map((c) => [c.subjectId, c]));
-  const prices = listPriceRows();
   return slots.map((s) => {
-    const link = (s.subjectId && byId.get(s.subjectId)) || map.courses.find((c) => c.subjectName && s.subject && c.subjectName === s.subject);
-    const schoolFromSub =
-      (link?.school && link.school !== "Прочее" ? link.school : "") ||
-      schoolFromHay(s.subject) ||
-      schoolByPath(link?.siteHref || s.path);
-    const schoolFromName = schoolFromHay(s.groupName);
-    const school =
-      (schoolFromSub && schoolFromSub !== "Прочее" ? schoolFromSub : "") ||
-      (schoolFromName !== "Прочее" ? schoolFromName : "") ||
-      s.school;
-    const price = link?.siteHref ? prices.find((r) => r.path === link.siteHref) : undefined;
-    const split = splitCourseAge(price?.name || link?.subjectName || s.subject || s.course || "");
-    const age = s.age || split.age || splitCourseAge(s.groupName).age;
+    const fromAssign = courseIdOf(s, tree);
+    const cid = fromAssign || resolveGroupCourseId(s, tree, map.courses);
+    const course = cid ? tree.courses.find((c) => c.id === cid || c.href === cid) : undefined;
+    const schoolNode = course ? tree.schools.find((x) => x.id === course.schoolId) : undefined;
+    if (!course || !schoolNode) {
+      const mm = slotMismatch(s);
+      return { ...s, courseId: cid || s.courseId, mismatch: mm.level || undefined, mismatchText: mm.text || undefined };
+    }
     const next = {
       ...s,
-      school: school || s.school,
-      path: link?.siteHref || s.path || "",
-      course: tidyCourseName(split.name),
-      age,
+      courseId: course.id,
+      schoolId: schoolNode.id,
+      school: schoolNode.label,
+      course: course.label,
+      path: course.href || s.path,
+      age: s.age || course.age,
     };
     const mm = slotMismatch(next);
     return { ...next, mismatch: mm.level || undefined, mismatchText: mm.text || undefined };
