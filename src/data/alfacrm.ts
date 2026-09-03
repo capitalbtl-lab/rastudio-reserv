@@ -1,4 +1,5 @@
 import { serverEnv } from "./server-env";
+import { crmIndexAccumTotal, crmIndexShouldStop } from "./crm-leads-stages";
 
 const HOST = () => (serverEnv("ALFACRM_HOST") || "https://studiyarazvivaysya.s20.online").replace(/\/$/, "");
 const EMAIL = () => serverEnv("ALFACRM_EMAIL") || process.env.ALFACRM_EMAIL || "";
@@ -161,6 +162,37 @@ export async function request<T>(path: string, body: unknown, tok?: string): Pro
     throw new Error(`alfacrm ${res.status} ${path} ${text.slice(0, 240)}`);
   }
   return json as T;
+}
+
+/** AlfaCRM index: page с 0, pageSize до 500, в ответе total (все) и count (страница). */
+export async function pagedIndex<T extends Record<string, unknown>>(
+  path: string,
+  body: Record<string, unknown>,
+  tok: string,
+  onItem: (item: T) => void,
+  opts?: { pageSize?: number; pages?: number },
+) {
+  const pageSize = Math.min(500, Math.max(1, opts?.pageSize ?? 50));
+  const maxPages = opts?.pages ?? 40;
+  let total = Number.POSITIVE_INFINITY;
+  let loaded = 0;
+  let prev = "";
+  for (let page = 0; page < maxPages; page += 1) {
+    const res = await request<{ items?: T[]; total?: number; count?: number }>(
+      path,
+      { ...body, page, pageSize },
+      tok,
+    ).catch(() => ({ items: [] as T[] }));
+    const batch = res.items || [];
+    total = crmIndexAccumTotal(page, pageSize, batch.length, res.total, total);
+    const key = batch.map((x) => String(x.id ?? "")).join(",");
+    if (key && key === prev) break;
+    prev = key;
+    for (const it of batch) onItem(it);
+    loaded += batch.length;
+    if (crmIndexShouldStop(pageSize, batch.length, res.count, loaded, total)) break;
+  }
+  return { loaded, total: Number.isFinite(total) ? total : loaded };
 }
 
 export async function token() {

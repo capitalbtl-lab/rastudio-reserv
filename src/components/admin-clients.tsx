@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { RefreshCw, Search, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CrmClientCard } from "@/components/crm-client-card";
@@ -16,7 +17,7 @@ import { LessonStrip, GroupLessonStrip } from "@/components/lesson-strip";
 import { CrmGroupMembers, GroupLoadScene } from "@/components/crm-group-card";
 import { CrmLeadBoard } from "@/components/crm-lead-board";
 import type { ClientRow, CustomerCard, GroupMember } from "@/data/crm-cards";
-import { LEAD_STAGES, mergeStages, reorderLeads, type LeadCard, type LeadStage } from "@/data/crm-leads";
+import { LEAD_STAGES, mergeStages, reorderLeads, filterLeadCards, type LeadCard, type LeadStage } from "@/data/crm-leads";
 import type { CrmSlot, GroupCalLesson } from "@/data/crm-slots-core";
 
 function token() {
@@ -218,6 +219,7 @@ export function AdminClients({
   const [funnelW, setFunnelW] = useState(400);
   const [stageAdd, setStageAdd] = useState(false);
   const [stageName, setStageName] = useState("");
+  const [funnelNote, setFunnelNote] = useState("");
   const funnelWRef = useRef(400);
   const funnelMoved = useRef(new Map<string, number>());
   const funnelGone = useRef(new Set<string>());
@@ -342,7 +344,7 @@ export function AdminClients({
       if (kind === "clientsLeads") {
         leadKeysRef.current = null;
         setLeadKeys(null);
-        void loadFunnel(branchRef.current);
+        void loadFunnel(branchRef.current, true);
       }
       setStatus(nextStatus);
       await load(qRef.current, nextStatus, branchRef.current, ageRef.current);
@@ -359,10 +361,11 @@ export function AdminClients({
 
   async function loadFunnel(bid: number, force = false) {
     setFunnelLoading(true);
+    setFunnelNote(force ? "Загружаю лидов из AlfaCRM…" : funnelNote);
     try {
       const res = (await adminSchedule({
         data: { token: token(), action: "leadsBoard", branchId: bid, force } as never,
-      })) as { ok?: boolean; stages?: LeadStage[]; items?: LeadCard[] };
+      })) as { ok?: boolean; error?: string; stages?: LeadStage[]; items?: LeadCard[]; total?: number; note?: string };
       if (res.ok && Array.isArray(res.items)) {
         setFunnelStages(mergeStages(res.stages || [], res.items.map((x) => x.statusId)));
         const moved = funnelMoved.current;
@@ -376,9 +379,12 @@ export function AdminClients({
                 })
             : res.items,
         );
+        setFunnelNote(res.note || (res.items.length ? `${res.items.length} лидов` : "Пустая воронка."));
+        return;
       }
-    } catch {
-      /* keep dossier fallback */
+      setFunnelNote(res.error || "AlfaCRM не отдала воронку лидов.");
+    } catch (e) {
+      setFunnelNote(e instanceof Error && e.message ? e.message : "Не удалось загрузить воронку лидов.");
     } finally {
       setFunnelLoading(false);
     }
@@ -439,6 +445,60 @@ export function AdminClients({
         groups: next.groups?.length ? next.groups : prev?.groups || r.groupLinks || [],
         schools: next.schools?.length ? next.schools : prev?.schools || r.schools || [],
       }));
+      applyLiveStatus(crmId, bid, next);
+    }
+  }
+
+  function applyLiveStatus(crmId: number, bid: number, next: CustomerCard) {
+    const live = next.status === "лид" || next.isStudy === 0 ? "лид" : next.status === "архив" || next.isStudy === 2 ? "архив" : "учится";
+    const tab = statusRef.current;
+    const prev = rowsRef.current.find((row) => Number(row.crmId) === crmId)?.status;
+    setRows((xs) => {
+      const i = xs.findIndex((row) => Number(row.crmId) === crmId);
+      if (tab && tab !== "все" && tab !== live) {
+        if (i < 0) return xs;
+        const copy = xs.filter((_, j) => j !== i);
+        rowsRef.current = copy;
+        return copy;
+      }
+      if (i < 0) return xs;
+      const copy = xs.slice();
+      copy[i] = { ...copy[i], status: live };
+      rowsRef.current = copy;
+      return copy;
+    });
+    if (prev && prev !== live) {
+      setCounts((c) => {
+        const nextCounts = { ...c };
+        if (prev === "учится" || prev === "лид" || prev === "архив") nextCounts[prev] = Math.max(0, (nextCounts[prev] || 0) - 1);
+        if (live === "учится" || live === "лид" || live === "архив") nextCounts[live] = (nextCounts[live] || 0) + 1;
+        return nextCounts;
+      });
+    }
+    if (live === "лид") {
+      setFunnelItems((xs) => {
+        if (xs.some((x) => x.id === crmId && x.branchId === bid)) return xs;
+        return [
+          ...xs,
+          {
+            id: crmId,
+            customerId: crmId,
+            branchId: bid,
+            name: next.name || "",
+            age: next.age || "",
+            phone: next.phones?.[0] || "",
+            email: next.emails?.[0] || "",
+            note: next.note || "",
+            assigned: "",
+            statusId: Number(next.leadStatusId || 0),
+            sort: 0,
+            at: "",
+            chats: 0,
+          },
+        ];
+      });
+    } else {
+      setFunnelItems((xs) => xs.filter((x) => !(x.id === crmId && x.branchId === bid)));
     }
   }
 
@@ -448,7 +508,11 @@ export function AdminClients({
       data: { token: token(), action, customerId: card.id, branchId: card.branchId, ...extra } as never,
     });
     if (!res.ok) throw new Error(("error" in res && res.error) || "AlfaCRM не приняла изменение.");
-    if ("customer" in res && res.customer) setCard(res.customer as CustomerCard);
+    if ("customer" in res && res.customer) {
+      const next = res.customer as CustomerCard;
+      setCard(next);
+      applyLiveStatus(card.id, card.branchId, next);
+    }
   }
 
   async function openById(customerId: number, branchId: number) {
@@ -484,6 +548,12 @@ export function AdminClients({
   useEffect(() => {
     if (status === "лид" && view === "дети") void loadFunnel(branch, true);
   }, [status, view, branch]);
+
+  useEffect(() => {
+    if (!funnelNote || funnelNote.startsWith("Записываю")) return;
+    const t = window.setTimeout(() => setFunnelNote(""), 8000);
+    return () => window.clearTimeout(t);
+  }, [funnelNote]);
 
   useEffect(() => {
     if (!(status === "лид" && view === "дети")) return;
@@ -547,9 +617,21 @@ export function AdminClients({
     };
   }, [rows]);
 
-  const branchSum = (branchCounts[1] || 0) + (branchCounts[2] || 0) + (branchCounts[3] || 0) + (branchCounts[4] || 0);
   const shown = useMemo(() => rows.slice(0, cap), [rows, cap]);
   const funnelOn = status === "лид" && view === "дети";
+  const chipCounts = useMemo(() => {
+    const next = { ...branchCounts };
+    if (!funnelOn || !funnelItems.length) return next;
+    const tally: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    for (const it of funnelItems) {
+      if (tally[it.branchId] != null) tally[it.branchId] += 1;
+    }
+    for (const id of [1, 2, 3, 4] as const) {
+      if (tally[id] > 0) next[id] = tally[id];
+    }
+    return next;
+  }, [branchCounts, funnelOn, funnelItems]);
+  const branchSum = (chipCounts[1] || 0) + (chipCounts[2] || 0) + (chipCounts[3] || 0) + (chipCounts[4] || 0);
   const funnelWas = useRef(false);
   useEffect(() => {
     try {
@@ -570,21 +652,10 @@ export function AdminClients({
     }
     funnelWas.current = funnelOn;
   }, [funnelOn]);
-  const funnelShown = useMemo(() => {
-    const src = funnelItems.length ? funnelItems : shown.filter((r) => r.status === "лид" || status === "лид").map(rowToLead);
-    const qq = q.trim().toLowerCase().replace(/ё/g, "е");
-    return src.filter((it) => {
-      if (funnelGone.current.has(`${it.branchId}:${it.id}`)) return false;
-      if (branch && it.branchId !== branch) return false;
-      if (age) {
-        const years = parseInt(it.age, 10);
-        const band = !years ? "" : years <= 4 ? "3-4" : years <= 6 ? "5-6" : years <= 9 ? "7-9" : years <= 12 ? "10-12" : years <= 17 ? "13-17" : "18+";
-        if (band && band !== age) return false;
-      }
-      if (!qq) return true;
-      return `${it.name} ${it.phone} ${it.note} ${it.id} ${it.customerId}`.toLowerCase().replace(/ё/g, "е").includes(qq);
-    });
-  }, [funnelItems, shown, q, branch, age, status]);
+  const funnelShown = useMemo(
+    () => filterLeadCards(funnelItems, { branch, age, q, gone: funnelGone.current }),
+    [funnelItems, q, branch, age],
+  );
   const activeIndex = shown.findIndex((r) => Number(r.crmId) === activeId);
   const joinedIds = new Set((card?.groups || []).filter((g) => g.active).map((g) => g.id));
   const groupOpts = useMemo(() => {
@@ -958,7 +1029,7 @@ export function AdminClients({
               disabled={busy || pull.open}
               onClick={() => void pullKind("clientsLeads")}
             >
-              Загрузить лиды
+              Загрузить доску CRM
             </button>
             <button
               type="button"
@@ -1010,7 +1081,7 @@ export function AdminClients({
                 className={cn("rounded-full px-2.5 py-1 text-[0.75rem] font-semibold transition-colors duration-[var(--motion-quick)]", branch === id ? "bg-fg text-white" : "text-muted hover:bg-surface-2 hover:text-fg")}
               >
                 {CRM_BRANCH[id]?.short || id}
-                <span className="ml-1 tabular-nums opacity-70">{branchCounts[id] || 0}</span>
+                <span className="ml-1 tabular-nums opacity-70">{chipCounts[id] || 0}</span>
               </button>
             ))}
           </div>
@@ -1146,6 +1217,10 @@ export function AdminClients({
           funnelLoading && !funnelShown.length ? (
             <p className="m-auto text-sm text-muted">Загружаю воронку лидов AlfaCRM…</p>
           ) : (
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              {funnelNote ? (
+                <p className="shrink-0 px-3 py-2 text-[0.78rem] text-muted">{funnelNote}</p>
+              ) : null}
             <CrmLeadBoard
               stages={funnelStages}
               items={funnelShown}
@@ -1158,12 +1233,12 @@ export function AdminClients({
                 const prev = lead.statusId;
                 const sameCol = prev === statusId;
                 funnelMoved.current.set(key, statusId);
-                setFunnelItems((xs) => {
-                  const src = xs.length ? xs : funnelShown;
-                  return reorderLeads(src, lead, statusId, beforeId);
-                });
-                const colNow = (funnelItems.length ? funnelItems : funnelShown).filter((x) => (x.id === lead.id && x.branchId === lead.branchId ? statusId : x.statusId) === statusId);
-                const sort = Math.max(0, colNow.findIndex((x) => x.id === (beforeId || 0))) * 10;
+                const src = funnelItems.length ? funnelItems : funnelShown;
+                const nextItems = reorderLeads(src, lead, statusId, beforeId);
+                setFunnelItems(nextItems);
+                const colNow = nextItems.filter((x) => x.statusId === statusId);
+                const idx = colNow.findIndex((x) => x.id === lead.id && x.branchId === lead.branchId);
+                const sort = Math.max(0, idx) * 10;
                 void adminSchedule({
                   data: { token: token(), action: "leadMove", leadId: lead.id, branchId: lead.branchId, leadStatusId: statusId, sort } as never,
                 }).then((res) => {
@@ -1216,7 +1291,29 @@ export function AdminClients({
                   }
                 });
               }}
+              onReorderStages={(ids) => {
+                const prev = funnelStages;
+                setFunnelNote("Записываю порядок в AlfaCRM…");
+                setFunnelStages((xs) => {
+                  const by = new Map(xs.map((s) => [s.id, s]));
+                  const next = ids.map((id) => by.get(id)).filter((s): s is LeadStage => Boolean(s));
+                  for (const s of xs) if (!next.some((x) => x.id === s.id)) next.push(s);
+                  return next;
+                });
+                void adminSchedule({
+                  data: { token: token(), action: "leadStageSort", stageIds: ids, branchId: branchRef.current } as never,
+                }).then((res) => {
+                  if (res && "ok" in res && res.ok && "stages" in res && Array.isArray(res.stages)) {
+                    setFunnelStages(mergeStages(res.stages as LeadStage[]));
+                    setFunnelNote("Порядок записан в AlfaCRM. Обновите страницу этапов воронки в CRM.");
+                    return;
+                  }
+                  setFunnelStages(prev);
+                  setFunnelNote((res && "error" in res && String(res.error || "")) || "AlfaCRM не приняла новый порядок этапов.");
+                });
+              }}
             />
+            </div>
           )
         ) : (
         <div ref={listRef} className="pretty-scroll min-h-0 space-y-1.5 overflow-y-auto p-2 max-lg:max-h-[72vh] lg:h-full">
@@ -1576,6 +1673,23 @@ export function AdminClients({
           </div>
         </div>
       ) : null}
+      {funnelNote && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className={cn(
+                "fixed bottom-6 left-1/2 z-[400] max-w-[min(92vw,28rem)] -translate-x-1/2 rounded-2xl px-5 py-3 text-center text-sm font-semibold shadow-[0_16px_40px_rgba(15,23,42,.28)]",
+                funnelNote.startsWith("Порядок записан")
+                  ? "bg-emerald-700 text-white"
+                  : funnelNote.startsWith("Записываю")
+                    ? "bg-slate-900 text-white"
+                    : "bg-rose-700 text-white",
+              )}
+            >
+              {funnelNote}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

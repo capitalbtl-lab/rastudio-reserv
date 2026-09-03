@@ -87,6 +87,13 @@
   body.ra-lead-dragging {
     touch-action: none !important;
   }
+  body.ra-lead-dragging .ra-lead-card {
+    transition: transform 180ms var(--ease-smooth-out);
+  }
+  .ra-lead-ghost {
+    will-change: transform;
+    pointer-events: none;
+  }
 
   :focus-visible {
     outline: 2px solid var(--color-ring);

@@ -651,7 +651,7 @@ export function CrmClientCard({
               className={cn(
                 "shrink-0 rounded-full py-1 font-semibold",
                 leadTight ? "px-2 text-[0.65rem]" : "px-2.5 text-[0.72rem]",
-                card.status === "учится" ? "bg-primary text-white" : "bg-white ring-1 ring-black/8",
+                card.status === "учится" && !loading ? "bg-primary text-white" : "bg-white ring-1 ring-black/8",
               )}
             >
               Клиент
@@ -665,7 +665,7 @@ export function CrmClientCard({
               className={cn(
                 "shrink-0 rounded-full py-1 font-semibold",
                 leadTight ? "px-2 text-[0.65rem]" : "px-2.5 text-[0.72rem]",
-                card.status === "лид" ? "bg-amber-500 text-white" : "bg-white ring-1 ring-black/8",
+                card.status === "лид" && !loading ? "bg-amber-500 text-white" : "bg-white ring-1 ring-black/8",
               )}
             >
               Лид

@@ -211,8 +211,38 @@ export async function handleAdminDisk(data: DiskReq) {
       };
     }
     if (kind === "clients") {
-      const { searchClientViews } = await import("./dossiers");
-      const res = searchClientViews(String(data.q || ""), 2500, String(data.status || ""), Number(data.branchId) || 0, String(data.ageBand || ""));
+      const { searchClientViews, applyCrmCustomer } = await import("./dossiers");
+      const q = String(data.q || "").trim();
+      const status = String(data.status || "");
+      const branchId = Number(data.branchId) || 0;
+      const ageBand = String(data.ageBand || "");
+      let res = searchClientViews(q, 2500, status, branchId, ageBand);
+      if (q.length >= 3 && res.items.length < 3) {
+        try {
+          const { token, request } = await import("./alfacrm");
+          const t = await token();
+          const needle = q.toLowerCase();
+          for (const b of [1, 2, 3, 4]) {
+            const json = await request<{ items?: Record<string, unknown>[] }>(
+              `/v2api/${b}/customer/index`,
+              { page: 0, pageSize: 30, name: q },
+              t,
+            ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+            for (const c of json.items || []) {
+              const hay = `${c.name || ""} ${c.legal_name || ""}`.toLowerCase();
+              if (!hay.includes(needle) && !needle.split(/\s+/).every((w) => hay.includes(w))) continue;
+              applyCrmCustomer(c, b, false);
+              const { rememberCustomerAsLead, forgetLead } = await import("./crm-leads");
+              const st = Number(c.is_study);
+              if (st === 1 || st === 2) forgetLead(Number(c.id), b);
+              else rememberCustomerAsLead(c, b);
+            }
+          }
+          res = searchClientViews(q, 2500, status, branchId, ageBand);
+        } catch {
+          /* local list is enough */
+        }
+      }
       return { ok: true as const, ...res };
     }
     if (kind === "prices") {

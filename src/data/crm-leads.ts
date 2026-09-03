@@ -1,11 +1,56 @@
-import { request, token as alfaToken } from "./alfacrm";
+import { request, token as alfaToken, pagedIndex } from "./alfacrm";
 import { CRM_BRANCH } from "./ids";
+import {
+  LEAD_PIPELINE as PIPELINE,
+  LEAD_STAGES,
+  colorPatch,
+  mapCrmLeadStatuses,
+  mergeStages,
+  leadStatusSortForm,
+  leadStatusSortPayload,
+  parseCrmStageOrder,
+  applyStageOrder,
+  pinUnsorted,
+  crmBranchIds,
+  crmLeadStatusId,
+  LEAD_INDEX_QUERY,
+  leadMoveFields,
+  isCrmLeadRecord,
+  parseCrmLeadColumn,
+  parseCrmLeadBoard,
+  parseCrmLeadBoardPayload,
+  applyCrmBoardRows,
+  crmBoardStatusField,
+  type LeadStage,
+} from "./crm-leads-stages";
+import { crmHost, crmWebLogin, csrfOf, mergeCookies, setCookieList } from "./crm-web";
 
-export type LeadStage = { id: number; name: string; color: string };
+export type { LeadStage } from "./crm-leads-stages";
+export {
+  CRM_STAGE_COLORS,
+  LEAD_STAGES,
+  colorPatch,
+  leadStatusSortPayload,
+  mapCrmLeadStatuses,
+  mergeStages,
+  orderedStages,
+  parseCrmStageOrder,
+  applyStageOrder,
+  pinUnsorted,
+  crmBranchIds,
+  crmLeadStatusId,
+  leadVisibleInBranch,
+  stageOf,
+  LEAD_INDEX_QUERY,
+  leadMoveFields,
+  isCrmLeadRecord,
+} from "./crm-leads-stages";
+
 export type LeadCard = {
   id: number;
   customerId: number;
   branchId: number;
+  branches?: number[];
   name: string;
   age: string;
   phone: string;
@@ -18,17 +63,7 @@ export type LeadCard = {
   chats: number;
 };
 
-export const LEAD_STAGES: LeadStage[] = [
-  { id: 0, name: "Не разобрано", color: "#6a6a6a" },
-  { id: 1, name: "Разбирается", color: "#c26629" },
-  { id: 2, name: "Ожидает старта", color: "#2563eb" },
-  { id: 7, name: "Отложен", color: "#6b7280" },
-  { id: 4, name: "Оплатил", color: "#16a34a" },
-];
-
-const STAGE_ORDER = [0, 1, 2, 7, 4];
-
-type Bag = { at: number; stages: LeadStage[]; items: LeadCard[] };
+type Bag = { at: number; stages: LeadStage[]; items: LeadCard[]; note?: string };
 const g = globalThis as { __raLeads?: Map<string, Bag> };
 
 function bag() {
@@ -57,15 +92,46 @@ function asAge(it: Record<string, unknown>) {
   return months ? `${years} лет +${months}мес` : `${years} лет`;
 }
 
-function isGone(it: Record<string, unknown>) {
-  if (Number(it.removed) === 1 || String(it.removed) === "1") return true;
-  const study = Number(it.is_study);
-  return study === 1 || study === 2;
+export function leadAgeBand(age: string) {
+  const years = parseInt(String(age || ""), 10);
+  if (!Number.isFinite(years) || years <= 0) return "";
+  if (years <= 4) return "3-4";
+  if (years <= 6) return "5-6";
+  if (years <= 9) return "7-9";
+  if (years <= 12) return "10-12";
+  if (years <= 17) return "13-17";
+  return "18+";
 }
 
-function packLead(it: Record<string, unknown>, branchId: number): LeadCard | null {
+/** Клиентский фильтр доски. API «Текущие» уже отсёк removed и архив. */
+export function filterLeadCards(
+  items: LeadCard[],
+  opts: { branch?: number; age?: string; q?: string; gone?: Set<string> } = {},
+) {
+  const branch = Number(opts.branch || 0);
+  const age = String(opts.age || "");
+  const qq = String(opts.q || "")
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, "е");
+  const gone = opts.gone;
+  return items.filter((it) => {
+    if (!it.id) return false;
+    if (gone?.has(`${it.branchId}:${it.id}`)) return false;
+    if (branch && it.branchId !== branch && !(it.branches || []).includes(branch)) return false;
+    if (age && leadAgeBand(it.age) !== age) return false;
+    if (!qq) return true;
+    const hay = `${it.name} ${it.phone} ${it.email} ${it.note} ${it.assigned} ${it.id} ${it.customerId}`
+      .toLowerCase()
+      .replace(/ё/g, "е");
+    return hay.includes(qq);
+  });
+}
+
+export function packLead(it: Record<string, unknown>, branchId: number): LeadCard | null {
+  if (!isCrmLeadRecord(it)) return null;
   const id = Number(it.id || 0);
-  if (!id || isGone(it)) return null;
+  const branches = crmBranchIds(it);
   const name = String(it.name || it.legal_name || "").trim() || asPhone(it.phone) || `лид ${id}`;
   const assigned = Array.isArray(it.assigned_ids)
     ? ""
@@ -74,6 +140,7 @@ function packLead(it: Record<string, unknown>, branchId: number): LeadCard | nul
     id,
     customerId: Number(it.customer_id || it.customerId || id) || id,
     branchId,
+    branches: branches.length ? branches : [branchId],
     name,
     age: asAge(it),
     phone: asPhone(it.phone),
@@ -83,84 +150,188 @@ function packLead(it: Record<string, unknown>, branchId: number): LeadCard | nul
       .replace(/<[^>]+>/g, "")
       .trim(),
     assigned,
-    statusId: Number(it.lead_status_id ?? it.status_id ?? 0),
+    statusId: crmLeadStatusId(it),
     sort: Number(it.sort ?? it.weight ?? it.ordering ?? 0) || 0,
     at: String(it.updated_at || it.created_at || it.date_add || it.datetime || ""),
     chats: Number(it.chat_count || it.comments_count || 0),
   };
 }
 
-export function mergeStages(api: LeadStage[] = [], extraIds: number[] = []) {
-  const byId = new Map<number, LeadStage>();
-  byId.set(0, { ...LEAD_STAGES[0] });
-  for (const s of api) {
-    if (!Number.isFinite(s.id)) continue;
-    const seed = LEAD_STAGES.find((x) => x.id === s.id);
-    byId.set(s.id, {
-      id: s.id,
-      name: String(s.name || seed?.name || `этап ${s.id}`).trim() || `этап ${s.id}`,
-      color: String(s.color || seed?.color || "#6a6a6a"),
-    });
-  }
-  if (!api.length) for (const s of LEAD_STAGES) byId.set(s.id, { ...s });
-  for (const id of extraIds) {
-    if (byId.has(id)) continue;
-    const seed = LEAD_STAGES.find((x) => x.id === id);
-    byId.set(id, seed || { id, name: `этап ${id}`, color: "#6a6a6a" });
-  }
-  const list = [...byId.values()];
-  list.sort((a, b) => {
-    const ia = STAGE_ORDER.indexOf(a.id);
-    const ib = STAGE_ORDER.indexOf(b.id);
-    return (ia < 0 ? 80 + a.id : ia) - (ib < 0 ? 80 + b.id : ib);
-  });
-  return list;
-}
-
-export function orderedStages(api: LeadStage[] = []) {
-  return mergeStages(api);
-}
-
 async function fetchStages(t: string, branch: number): Promise<LeadStage[]> {
-  const json = await request<{ items?: { id?: number; name?: string; color?: string }[] }>(
+  const json = await request<{ items?: Record<string, unknown>[] }>(
     `/v2api/${branch}/lead-status/index`,
     { page: 0, pageSize: 50 },
     t,
-  ).catch(() => ({ items: [] as { id?: number; name?: string; color?: string }[] }));
-  return mergeStages(
-    (json.items || [])
-      .map((s) => ({ id: Number(s.id), name: String(s.name || ""), color: String(s.color || "") }))
-      .filter((s) => Number.isFinite(s.id)),
-  );
+  ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+  return mapCrmLeadStatuses(json.items || []);
 }
 
-async function fetchBranchLeads(t: string, branch: number, stages: LeadStage[]) {
-  const out: LeadCard[] = [];
+async function fetchStageOrderFromSettings(branchId: number): Promise<number[]> {
+  const host = crmHost();
+  const login = await crmWebLogin();
+  if (!login.cookie) return [];
+  const tries = [...new Set([Number(branchId) || 2, 2, 1].filter((n) => n > 0))];
+  for (const br of tries) {
+    const res = await fetch(`${host}/settings/${br}/pipeline/index`, {
+      headers: {
+        Cookie: login.cookie,
+        Accept: "text/html,application/json",
+        "X-Requested-With": "XMLHttpRequest",
+        Referer: `${host}/`,
+      },
+      redirect: "manual",
+    });
+    const html = await res.text();
+    if (/LoginForm/i.test(html) && !/sortable-item/i.test(html)) continue;
+    const ids = parseCrmStageOrder(html);
+    if (ids.length) return ids;
+  }
+  return [];
+}
+
+async function hydrateLead(t: string, branch: number, id: number) {
+  const data = await request<{ items?: Record<string, unknown>[] }>(
+    `/v2api/${branch}/customer/index`,
+    { page: 0, pageSize: 10, id },
+    t,
+  ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+  return (data.items || []).find((x) => Number(x.id) === id || Number(x.customer_id) === id) || null;
+}
+
+async function fetchCrmLeadColumns(branch: number, statusIds: number[], cookie: string, token = "") {
+  const host = crmHost();
+  const found: { id: number; name: string; statusId: number }[] = [];
   const seen = new Set<number>();
-  async function pull(extra: Record<string, unknown>) {
-    for (let page = 0; page < 8; page += 1) {
-      const json = await request<{ items?: Record<string, unknown>[] }>(
-        `/v2api/${branch}/lead/index`,
-        { page, pageSize: 50, removed: 0, is_study: 0, ...extra },
-        t,
-      ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-      const items = json.items || [];
-      for (const it of items) {
-        const packed = packLead(it, branch);
-        if (!packed || seen.has(packed.id)) continue;
-        seen.add(packed.id);
-        out.push(packed);
-      }
-      if (items.length < 50) break;
+  const take = (rows: { id: number; name: string; statusId: number }[]) => {
+    for (const row of rows) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      found.push(row);
+    }
+  };
+  const headers: Record<string, string> = {
+    Accept: "application/json, text/html",
+    "X-Requested-With": "XMLHttpRequest",
+    Referer: `${host}/company/${branch}/lead/index`,
+  };
+  if (cookie) headers.Cookie = cookie;
+  if (token) headers["X-ALFACRM-TOKEN"] = token;
+  const get = async (path: string) => {
+    const url = path.startsWith("http") ? path : `${host}${path.startsWith("/") ? "" : "/"}${path}`;
+    return fetch(url, { headers, redirect: "manual" });
+  };
+  const index = await get(`/company/${branch}/lead/index`).catch(() => null);
+  if (index) {
+    const html = await index.text();
+    if (!(/LoginForm/i.test(html) && !/lead-element/i.test(html))) take(parseCrmLeadBoard(html));
+  }
+  for (const statusId of statusIds) {
+    const query = encodeURIComponent(JSON.stringify({ branch: String(branch) }));
+    const seenPaths = new Set<string>();
+    const queue = [
+      `/company/${branch}/lead/board?id=${statusId}&query=${query}`,
+      `/company/${branch}/lead/board?id=${statusId}&query=${query}&page=1`,
+      `/company/${branch}/lead/board?id=${statusId}&query=${query}&page=2`,
+      `/company/${branch}/lead/board?id=${statusId}&query=${query}&page=3`,
+      `/company/${branch}/lead/board?id=${statusId}&query=${query}&page=4`,
+    ];
+    while (queue.length) {
+      const path = queue.shift()!;
+      if (seenPaths.has(path)) continue;
+      seenPaths.add(path);
+      const res = await get(path).catch(() => null);
+      if (!res) continue;
+      const raw = await res.text();
+      if (/LoginForm/i.test(raw) && !/lead-element/i.test(raw) && !/"content"/i.test(raw)) continue;
+      const parsed = parseCrmLeadBoardPayload(raw, statusId);
+      take(parsed.cards);
+      if (parsed.nextUrl && !seenPaths.has(parsed.nextUrl)) queue.push(parsed.nextUrl);
     }
   }
-  await pull({});
-  await pull({ lead_status_id: 0 });
-  for (const stage of stages) {
-    if (stage.id === 0 || out.some((x) => x.statusId === stage.id)) continue;
-    await pull({ lead_status_id: stage.id });
+  return found;
+}
+
+async function fetchBranchLeads(t: string, branch: number, stages: { id: number }[] = []) {
+  const out: LeadCard[] = [];
+  const seen = new Set<number>();
+  const take = (it: Record<string, unknown>, forceLead = false) => {
+    const packed = packLead(forceLead ? { ...it, is_study: 0 } : it, branch);
+    if (!packed || seen.has(packed.id)) return;
+    seen.add(packed.id);
+    out.push(packed);
+  };
+  await pagedIndex(
+    `/v2api/${branch}/customer/index`,
+    { ...LEAD_INDEX_QUERY },
+    t,
+    (it) => take(it),
+    { pageSize: 50 },
+  );
+  for (const s of stages) {
+    if (!s.id) continue;
+    await pagedIndex(
+      `/v2api/${branch}/customer/index`,
+      { lead_status_id: s.id },
+      t,
+      (it) => take(it, true),
+      { pageSize: 50 },
+    );
   }
-  return out;
+  const login = await crmWebLogin().catch(() => ({ cookie: "", error: "вход в кабинет не удался" }));
+  const statusIds = [0, ...stages.map((s) => s.id)].filter((id, i, a) => a.indexOf(id) === i);
+  const board = await fetchCrmLeadColumns(branch, statusIds, login.cookie || "", t).catch(() => []);
+  let fromBoard = 0;
+  if (board.length) {
+    fromBoard = board.length;
+    const byApi = new Map(out.map((x) => [x.id, x]));
+    const merged = applyCrmBoardRows([], board, (row) => {
+      const api = byApi.get(row.id);
+      if (api) return { ...api, statusId: row.statusId, branchId: branch, name: api.name || row.name };
+      return {
+        id: row.id,
+        customerId: row.id,
+        branchId: branch,
+        branches: [branch],
+        name: row.name || `лид ${row.id}`,
+        age: "",
+        phone: "",
+        email: "",
+        note: "",
+        assigned: "",
+        statusId: row.statusId,
+        sort: 0,
+        at: "",
+        chats: 0,
+      };
+    });
+    out.length = 0;
+    seen.clear();
+    for (const card of merged) {
+      seen.add(card.id);
+      out.push(card);
+    }
+    for (const row of board) {
+      const hit = out.find((x) => x.id === row.id);
+      if (!hit || (hit.phone && hit.name && hit.name !== `лид ${hit.id}`)) continue;
+      const raw = await hydrateLead(t, branch, row.id).catch(() => null);
+      if (!raw) continue;
+      const packed = packLead(
+        {
+          ...raw,
+          name: String(raw.name || row.name || hit.name),
+          is_study: 0,
+          lead_status_id: crmBoardStatusField(row.statusId),
+          branch_ids: raw.branch_ids || [branch],
+        },
+        branch,
+      );
+      if (!packed) continue;
+      packed.statusId = row.statusId;
+      const i = out.findIndex((x) => x.id === row.id);
+      if (i >= 0) out[i] = packed;
+    }
+  }
+  return { items: out, fromBoard, boardError: board.length ? "" : login.error || "доска CRM не открылась" };
 }
 
 export async function loadLeadsBoard(branchId = 0, force = false) {
@@ -168,31 +339,77 @@ export async function loadLeadsBoard(branchId = 0, force = false) {
   const hit = bag().get(key);
   if (!force && hit && Date.now() - hit.at < 45 * 1000) return hit;
   const t = await alfaToken();
-  const branches = branchId ? [branchId] : [1, 2, 3, 4];
-  const rawStages = await fetchStages(t, branches[0] || 1);
-  const packs = await Promise.all(branches.map((b) => fetchBranchLeads(t, b, rawStages)));
-  const seen = new Set<string>();
+  const rawStages = await fetchStages(t, branchId || 2);
+  const packs = await Promise.all([1, 2, 3, 4].map((b) => fetchBranchLeads(t, b, rawStages)));
+  const seen = new Set<number>();
   const items: LeadCard[] = [];
+  let fromBoard = 0;
+  const boardErrors: string[] = [];
   for (const pack of packs) {
-    for (const it of pack) {
-      const k = `${it.branchId}:${it.id}`;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      items.push(it);
+    fromBoard += pack.fromBoard;
+    if (pack.boardError) boardErrors.push(pack.boardError);
+    for (const it of pack.items) {
+      if (seen.has(it.id)) continue;
+      if (branchId && it.branchId !== branchId && !(it.branches || []).includes(branchId)) continue;
+      seen.add(it.id);
+      items.push(branchId && it.branchId !== branchId ? { ...it, branchId } : it);
     }
   }
   const stages = mergeStages(
     rawStages,
     items.map((x) => x.statusId),
   );
-  const next = { at: Date.now(), stages, items };
-  bag().set(key, next);
-  if (!branchId) {
-    for (const b of branches) {
-      bag().set(String(b), { at: next.at, stages, items: items.filter((x) => x.branchId === b) });
+  try {
+    const { searchClientViews } = await import("./dossiers");
+    const local = searchClientViews("", 5000, "лид", branchId || 0);
+    const have = new Map(items.map((x) => [x.id, x]));
+    for (const row of local.items) {
+      const id = Number(row.crmId || 0);
+      const hit = have.get(id);
+      if (!hit) continue;
+      if (!hit.phone && row.phone) hit.phone = String(row.phone || "");
+      if (!hit.note && row.note) hit.note = String(row.note || "");
     }
+  } catch {
+    /* API board is enough */
   }
+  const byCol = new Map<number, number>();
+  for (const it of items) byCol.set(it.statusId, (byCol.get(it.statusId) || 0) + 1);
+  const colText = stages.map((s) => `${s.name} ${byCol.get(s.id) || 0}`).join(" · ");
+  const note = fromBoard
+    ? `${items.length} с воронки CRM (${colText})`
+    : `${items.length} из API is_study=0 (${colText}). Доска CRM не открылась: ${[...new Set(boardErrors)].join("; ") || "нет сессии кабинета"}`;
+  const next = { at: Date.now(), stages, items, note };
+  bag().set(key, next);
   return next;
+}
+
+export function rememberCustomerAsLead(it: Record<string, unknown>, branchId: number) {
+  const packed = packLead({ ...it, is_study: it.is_study ?? 0 }, branchId);
+  if (!packed) return packed;
+  const maps = bag();
+  for (const key of ["0", String(branchId)]) {
+    const cur = maps.get(key);
+    if (!cur) {
+      maps.set(key, { at: Date.now(), stages: LEAD_STAGES, items: [packed] });
+      continue;
+    }
+    const items = cur.items.filter((x) => !(x.id === packed.id && x.branchId === packed.branchId));
+    items.push(packed);
+    maps.set(key, { ...cur, items, at: Date.now() });
+  }
+  return packed;
+}
+
+export function forgetLead(id: number, branchId: number) {
+  const maps = bag();
+  for (const [key, cur] of maps) {
+    maps.set(key, {
+      ...cur,
+      items: cur.items.filter((x) => !(x.id === id && (key === "0" || x.branchId === branchId))),
+      at: Date.now(),
+    });
+  }
 }
 
 async function patchLead(branch: number, id: number, fields: Record<string, unknown>, t: string) {
@@ -219,7 +436,7 @@ export async function moveLead(branchId: number, leadId: number, statusId: numbe
   const id = Number(leadId) || 0;
   if (!id) throw new Error("Нет номера лида.");
   if (!Number.isFinite(Number(statusId))) throw new Error("Нет этапа воронки.");
-  const fields: Record<string, unknown> = { lead_status_id: Number(statusId), is_study: 0 };
+  const fields = leadMoveFields(statusId);
   await patchLead(branch, id, fields, t);
   if (Number.isFinite(Number(sort))) {
     try {
@@ -256,7 +473,8 @@ export function reorderLeads(list: LeadCard[], lead: LeadCard, statusId: number,
     if (bi >= 0) at = bi;
   }
   col.splice(at, 0, item);
-  byCol.set(statusId, col);
+  const ranked = col.map((x, i) => ({ ...x, sort: i * 10 }));
+  byCol.set(statusId, ranked);
   const out: LeadCard[] = [];
   const seen = new Set<number>();
   for (const x of list) {
@@ -285,12 +503,12 @@ export async function archiveLead(branchId: number, leadId: number) {
   return { ok: true as const };
 }
 
-export async function createLeadStage(name: string, color = "#2563eb") {
+export async function createLeadStage(name: string, color = "#1a7bb9") {
   const t = await alfaToken();
   const title = name.trim() || "Новый этап";
   const json = await request<{ success?: boolean; model?: { id?: number }; id?: number; errors?: unknown }>(
     `/v2api/1/lead-status/create`,
-    { name: title, color, is_enabled: 1 },
+    { name: title, pipeline_id: PIPELINE, is_enabled: 1, ...colorPatch(color) },
     t,
   );
   if (json.success === false) throw new Error(JSON.stringify(json.errors || json));
@@ -300,9 +518,9 @@ export async function createLeadStage(name: string, color = "#2563eb") {
 
 export async function saveLeadStage(id: number, patch: { name?: string; color?: string }) {
   const t = await alfaToken();
-  const body: Record<string, unknown> = { id };
+  const body: Record<string, unknown> = { id, pipeline_id: PIPELINE };
   if (patch.name) body.name = patch.name.trim();
-  if (patch.color) body.color = patch.color;
+  if (patch.color) Object.assign(body, colorPatch(patch.color));
   const json = await request<{ success?: boolean; errors?: unknown }>(`/v2api/1/lead-status/update`, body, t);
   if (json.success === false) throw new Error(JSON.stringify(json.errors || json));
   for (const v of bag().values()) {
@@ -315,6 +533,90 @@ export async function saveLeadStage(id: number, patch: { name?: string; color?: 
   return { ok: true as const };
 }
 
+export async function sortLeadStages(ids: number[], branchId = 2) {
+  const data = leadStatusSortPayload(ids);
+  if (!data.length) return { ok: true as const };
+  await postCrmLeadStatusSort(data, branchId);
+  const t = await alfaToken();
+  for (const row of data) {
+    await request(`/v2api/1/lead-status/update`, { id: row.id, weight: row.weight, sort: row.weight, pipeline_id: PIPELINE }, t).catch(
+      () => null,
+    );
+  }
+  const order = pinUnsorted(ids);
+  for (const v of bag().values()) {
+    const by = new Map(v.stages.map((s) => [s.id, s]));
+    const next: LeadStage[] = [];
+    const seen = new Set<number>();
+    for (const id of order) {
+      const s = by.get(id);
+      if (!s || seen.has(id)) continue;
+      seen.add(id);
+      next.push({ ...s, weight: id === 0 ? 0 : data.find((row) => row.id === id)?.weight });
+    }
+    for (const s of v.stages) if (!seen.has(s.id)) next.push(s);
+    v.stages = next;
+  }
+  return { ok: true as const };
+}
+
+async function postCrmLeadStatusSort(data: { id: number; weight: number }[], branchId: number) {
+  const host = crmHost();
+  const login = await crmWebLogin();
+  if (!login.cookie) throw new Error(login.error || "Нет пароля кабинета CRM — порядок этапов в AlfaCRM не записан.");
+  let cookie = login.cookie;
+  const tries = [...new Set([Number(branchId) || 2, 2, 1].filter((n) => n > 0))];
+  let last = "";
+  for (const branch of tries) {
+    const pageUrl = `${host}/settings/${branch}/pipeline/index`;
+    const page = await fetch(pageUrl, {
+      headers: {
+        Cookie: cookie,
+        Accept: "text/html,application/json",
+        "X-Requested-With": "XMLHttpRequest",
+        Referer: `${host}/`,
+      },
+      redirect: "manual",
+    });
+    cookie = mergeCookies(cookie, setCookieList(page));
+    const html = await page.text();
+    if (/LoginForm/i.test(html) && !/lead-status/i.test(html)) {
+      last = "Сессия CRM сбросилась. Войдите в AlfaCRM.";
+      continue;
+    }
+    const csrf = csrfOf(html);
+    const sortUrl = `${host}/settings/${branch}/lead-status/sort`;
+    const res = await fetch(sortUrl, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        Accept: "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        ...(csrf ? { "X-CSRF-Token": csrf } : {}),
+        Origin: host,
+        Referer: pageUrl,
+      },
+      body: leadStatusSortForm(data, csrf),
+      redirect: "manual",
+    });
+    cookie = mergeCookies(cookie, setCookieList(res));
+    const text = await res.text();
+    const loc = res.headers.get("location") || "";
+    if (res.status === 302 && /login/i.test(loc)) {
+      last = "CRM сбросила сессию при сортировке этапов.";
+      continue;
+    }
+    if (res.status === 400 || /Не удалось проверить переданные данные/i.test(text)) {
+      last = "CRM отклонила запрос сортировки этапов.";
+      continue;
+    }
+    if (res.ok || res.status === 204 || res.status === 302) return;
+    last = `CRM не приняла порядок этапов (${res.status}).`;
+  }
+  throw new Error(last || "AlfaCRM не записала порядок этапов.");
+}
+
 export async function deleteLeadStage(id: number) {
   if (id === 0) throw new Error("Системный столбец «Не разобрано» нельзя удалить.");
   const t = await alfaToken();
@@ -325,10 +627,6 @@ export async function deleteLeadStage(id: number) {
     for (const it of v.items) if (it.statusId === id) it.statusId = 0;
   }
   return { ok: true as const };
-}
-
-export function stageOf(id: number, stages: LeadStage[]) {
-  return stages.find((s) => s.id === id) || stages[0] || LEAD_STAGES[0];
 }
 
 export { CRM_BRANCH };

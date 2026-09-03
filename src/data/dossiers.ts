@@ -584,6 +584,8 @@ export function applyCrmCustomer(item: Record<string, unknown>, branchId: number
   const fromGroup = namesFromGroup(extras.groups);
   const study = Number(item.is_study);
   extras.removed = study === 0 || study === 1 || study === 2 ? "0" : String(extras.removed || "0");
+  extras.crm_current = study === 1 ? "1" : "0";
+  extras.is_study = String(Number.isFinite(study) ? study : "");
   const reallyArchived = study === 2;
   const courseName = fromGroup.courses[0] || "";
   const teacherFromIds = idList(extras.teacher_ids)
@@ -660,9 +662,9 @@ export async function syncAllFromCrm(
           n,
           total: n,
         });
-        const data = await request<{ items?: Record<string, unknown>[] }>(
+        const data = await request<{ items?: Record<string, unknown>[]; total?: number }>(
           `/v2api/${branch}/customer/index`,
-          { page, pageSize: 50, is_study: study, ...(study === 2 ? {} : { removed: 0 }) },
+          { page, pageSize: 50, is_study: study, ...(study === 1 ? { removed: 0 } : {}) },
           t,
         ).catch(() => ({ items: [] as Record<string, unknown>[] }));
         const items = data.items || [];
@@ -679,7 +681,7 @@ export async function syncAllFromCrm(
           if (id && study === 0) leadIds.add(id);
           n += 1;
         }
-        if (items.length < 50) break;
+        if (!items.length || items.length < 50) break;
       }
     }
   }
@@ -706,8 +708,13 @@ export async function syncAllFromCrm(
       } else if (String(d.extras.is_study) === "1" || d.status === "учится") {
         d.extras.crm_current = "0";
         d.extras.crm_current_branches = "";
-        d.extras.is_study = "";
-        d.status = "снят";
+        if (leadIds.has(id)) {
+          d.extras.is_study = "0";
+          d.status = "лид";
+        } else {
+          d.extras.is_study = "";
+          d.status = "снят";
+        }
       }
     }
   }
@@ -727,13 +734,13 @@ export async function syncAllFromCrm(
 
 let leadTickBusy = false;
 
-/** Только новые лиды (id, которых ещё нет на сайте). Старых не перечитываем. */
+/** Новые лиды и те, кто сменил роль с клиента на лид. */
 export async function syncNewLeadsFromCrm() {
   if (leadTickBusy) return { ok: true as const, added: 0, skipped: true as const };
   leadTickBusy = true;
   try {
     const store = loadStore();
-    const known = new Set(store.items.map((d) => Number(d.crmId || 0)).filter(Boolean));
+    const knownStudy = new Map(store.items.map((d) => [Number(d.crmId || 0), String(d.extras?.is_study ?? "")]));
     const t = await alfaToken();
     let added = 0;
     for (const branch of [1, 2, 3, 4]) {
@@ -752,9 +759,10 @@ export async function syncNewLeadsFromCrm() {
         for (const item of items) {
           const id = Number(item.id || 0);
           if (!id || Number(item.removed) === 1 || Number(item.is_study) !== 0) continue;
-          if (known.has(id)) continue;
+          const prev = knownStudy.get(id);
+          if (prev === "0") continue;
           applyCrmCustomer(item, branch, false);
-          known.add(id);
+          knownStudy.set(id, "0");
           added += 1;
           newOnPage += 1;
         }
@@ -1002,17 +1010,17 @@ function viewOf(d: Dossier) {
   const removed = String(ex.removed || "") === "1";
   const studyRaw = String(ex.is_study ?? "");
   const study = studyRaw === "" ? null : Number(studyRaw);
-  const current = String(ex.crm_current || "") === "1" || study === 1;
+  const current = study === 1 || (study == null && String(ex.crm_current || "") === "1");
   const status = removed
     ? "удалён"
-    : d.status === "снят" && !current
-      ? "снят"
-      : current
-        ? "учится"
-        : study === 0
-          ? "лид"
-          : study === 2
-            ? "архив"
+    : study === 0
+      ? "лид"
+      : study === 2
+        ? "архив"
+        : d.status === "снят" && !current
+          ? "снят"
+          : current
+            ? "учится"
             : d.status === "учится" || d.status === "лид" || d.status === "архив"
               ? d.status
               : "удалён";

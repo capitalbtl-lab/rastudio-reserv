@@ -87,6 +87,7 @@ export type CustomerCard = {
   address: string;
   status: string;
   isStudy?: number;
+  leadStatusId?: number;
   studyStatus?: string;
   studyStatusId?: number;
   note: string;

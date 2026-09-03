@@ -34,7 +34,7 @@ import { loadGroupCard, saveGroupCard } from "./group-cards";
 import { scheduleVoiceTurn } from "./schedule-voice";
 import { loadSiteTree, addTreeSchool, addTreeCourse, deleteTreeCourse, deleteTreeSchool, moveSlotsToCourse, pinAllGuesses, saveSiteTree, slotTreeKey } from "./site-tree";
 import { listTeachers, teachersAtBranch } from "./crm-teachers";
-import { searchClientViews, findDossier, upsertDossier } from "./dossiers";
+import { searchClientViews, findDossier, upsertDossier, applyCrmCustomer } from "./dossiers";
 import { isPhoneLike } from "./client-display";
 import { clientCardId, CRM_BRANCH } from "./ids";
 import { loadTariffs, pullTariffsFromCrm, matchTariffs, subjectTariffStats, saveTariffEdits, pushTariffsToCrm, archiveTariffsInCrm, aiTariffsParse, applyTariffChanges, probeCreateTariff, probeDeleteTariff, subjectsWithHref, tariffGroupHits } from "./crm-tariffs";
@@ -89,6 +89,7 @@ export type CustomerCard = {
   address: string;
   status: string;
   isStudy?: number;
+  leadStatusId?: number;
   studyStatus?: string;
   studyStatusId?: number;
   note: string;
@@ -352,6 +353,13 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
   if (!found && !dossier) return null;
   const c = found?.c || {};
   const useBranch = found?.branch || dossier?.branchId || branch || 1;
+  if (found?.c) {
+    applyCrmCustomer(found.c, useBranch);
+    const studyNow = Number(found.c.is_study);
+    const { rememberCustomerAsLead, forgetLead } = await import("./crm-leads");
+    if (studyNow === 1 || studyNow === 2) forgetLead(customerId, useBranch);
+    else rememberCustomerAsLead(found.c, useBranch);
+  }
   const phones = asStrList(c.phone);
   const emails = asStrList(c.email);
   const study = Number(c.is_study);
@@ -535,6 +543,7 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
     address: /введите адрес/i.test(addr) ? dossier?.address || "" : addr || dossier?.address || "",
     status: study === 1 ? "учится" : study === 2 ? "архив" : "лид",
     isStudy: Number.isFinite(study) ? study : undefined,
+    leadStatusId: Number(c.lead_status_id ?? c.status_id ?? 0) || 0,
     studyStatus: statusName,
     studyStatusId,
     note: String(c.note || "").trim(),
@@ -815,6 +824,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "leadStageSave"
           | "leadStageCreate"
           | "leadStageDelete"
+          | "leadStageSort"
           | "voiceAsk"
           | "customersSearch"
           | "tariffsGet"
@@ -849,6 +859,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         leadStatusId?: number;
         sort?: number;
         stageId?: number;
+        stageIds?: number[];
         force?: boolean;
         color?: string;
         branchId?: number;
@@ -1489,7 +1500,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const branch = Number(data.branchId) || 0;
       try {
         const board = await loadLeadsBoard(branch, Boolean(data.force));
-        return { ok: true as const, stages: board.stages, items: board.items, total: board.items.length };
+        return { ok: true as const, stages: board.stages, items: board.items, total: board.items.length, note: board.note };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось прочитать воронку лидов." };
       }
@@ -1568,6 +1579,25 @@ export const adminSchedule = createServerFn({ method: "POST" })
         return { ok: true as const, stages: board.stages, items: board.items };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "AlfaCRM не удалила этап." };
+      }
+    }
+    if (data.action === "leadStageSort") {
+      const { sortLeadStages, loadLeadsBoard } = await import("./crm-leads");
+      const ids = Array.isArray(data.stageIds) ? data.stageIds.map(Number).filter((n) => Number.isFinite(n)) : [];
+      if (!ids.length) return { ok: false as const, error: "Нет порядка этапов." };
+      try {
+        await sortLeadStages(ids, Number(data.branchId) || 2);
+        logAdmin(`Этапы воронки: порядок ${ids.filter((id) => id).join(",")}`);
+        const board = await loadLeadsBoard(Number(data.branchId) || 0, true);
+        const { mergeStages, pinUnsorted } = await import("./crm-leads");
+        const order = pinUnsorted(ids);
+        const stages = mergeStages(
+          (board.stages || []).map((s) => ({ ...s, weight: Math.max(0, order.indexOf(s.id)) })),
+          (board.items || []).map((x) => x.statusId),
+        );
+        return { ok: true as const, stages, items: board.items };
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "AlfaCRM не сменила порядок этапов." };
       }
     }
     if (data.action === "voiceAsk") {
