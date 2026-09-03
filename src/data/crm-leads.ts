@@ -96,9 +96,20 @@ function asAge(it: Record<string, unknown>) {
   return months ? `${years} лет +${months}мес` : `${years} лет`;
 }
 
-export function leadAgeBand(age: string) {
-  const years = parseInt(String(age || ""), 10);
-  if (!Number.isFinite(years) || years <= 0) return "";
+export function leadYears(age: string, extra = "") {
+  const fromAge = parseInt(String(age || ""), 10);
+  if (Number.isFinite(fromAge) && fromAge > 0 && fromAge < 90) return fromAge;
+  const blob = `${age} ${extra}`;
+  const m =
+    blob.match(/(\d{1,2})\s*(?:лет|года|год|г\.)\b/i) ||
+    blob.match(/(?:ребён\w*|ребен\w*|возраст|ему|ей)[^\d]{0,16}(\d{1,2})/i);
+  const n = m ? Number(m[1]) : 0;
+  return n > 0 && n < 90 ? n : 0;
+}
+
+export function leadAgeBand(age: string, extra = "") {
+  const years = leadYears(age, extra);
+  if (!years) return "";
   if (years <= 4) return "3-4";
   if (years <= 6) return "5-6";
   if (years <= 9) return "7-9";
@@ -123,7 +134,10 @@ export function filterLeadCards(
     if (!it.id) return false;
     if (gone?.has(`${it.branchId}:${it.id}`)) return false;
     if (branch && it.branchId !== branch && !(it.branches || []).includes(branch)) return false;
-    if (age && leadAgeBand(it.age) !== age) return false;
+    if (age) {
+      const band = leadAgeBand(it.age, `${it.name} ${it.note}`);
+      if (band && band !== age) return false;
+    }
     if (!qq) return true;
     const hay = `${it.name} ${it.phone} ${it.email} ${it.note} ${it.assigned} ${it.id} ${it.customerId}`
       .toLowerCase()
@@ -402,7 +416,7 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
     );
     try {
       const { searchClientViews } = await import("./dossiers");
-      const local = searchClientViews("", 5000, "лид", branchId || 0);
+      const local = searchClientViews("", 5000, "все", branchId || 0);
       const have = new Map(items.map((x) => [x.id, x]));
       for (const row of local.items) {
         const id = Number(row.crmId || 0);
@@ -410,6 +424,7 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
         if (!hitRow) continue;
         if (!hitRow.phone && row.phone) hitRow.phone = String(row.phone || "");
         if (!hitRow.note && row.note) hitRow.note = String(row.note || "");
+        if (!hitRow.age && row.age) hitRow.age = `${row.age} лет`;
       }
     } catch {
       /* API board is enough */

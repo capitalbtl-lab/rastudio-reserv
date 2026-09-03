@@ -14,6 +14,7 @@ import {
   parseCrmStageOrder,
   pinUnsorted,
 } from "./crm-leads-stages.ts";
+import { filterLeadCards, leadAgeBand, leadYears, type LeadCard } from "./crm-leads.ts";
 
 describe("воронка AlfaCRM: порядок этапов", () => {
   it("без ответа API колонки как в кабинете: Не разобрано → Разбирается → Ожидает старта → Отложен → Оплатил", () => {
@@ -167,6 +168,50 @@ describe("воронка AlfaCRM: порядок этапов", () => {
       [7759, 100],
     );
     assert.equal(rows[0].name, "Фролов Дмитрий Сергеевич");
+  });
+});
+
+function card(p: Partial<LeadCard>): LeadCard {
+  return {
+    id: 1,
+    customerId: 1,
+    branchId: 2,
+    name: "Лид",
+    age: "",
+    phone: "",
+    email: "",
+    note: "",
+    assigned: "",
+    statusId: 1,
+    at: "",
+    chats: 0,
+    ...p,
+  };
+}
+
+describe("возраст на доске лидов", () => {
+  it("читает 7 лет +6мес и «ребёнок 13 лет» из имени", () => {
+    assert.equal(leadYears("7 лет +6мес"), 7);
+    assert.equal(leadAgeBand("7 лет +6мес"), "7-9");
+    assert.equal(leadAgeBand("", "Ребенок 13 лет ВИКИТИ"), "13-17");
+    assert.equal(leadAgeBand("", "хочет C++"), "");
+  });
+
+  it("чип возраста не прячет лидов без возраста и отсекает чужой", () => {
+    const items = [
+      card({ id: 1, name: "Каширский", age: "7 лет +6мес" }),
+      card({ id: 2, name: "Ребенок 13 лет ВИКИТИ" }),
+      card({ id: 3, name: "Семекашев", note: "ХОЧЕТ НА C++" }),
+    ];
+    assert.deepEqual(
+      filterLeadCards(items, { age: "7-9" }).map((x) => x.id),
+      [1, 3],
+    );
+    assert.deepEqual(
+      filterLeadCards(items, { age: "13-17" }).map((x) => x.id),
+      [2, 3],
+    );
+    assert.equal(filterLeadCards(items, { age: "3-4" }).length, 1);
   });
 });
 
