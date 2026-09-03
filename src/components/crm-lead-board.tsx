@@ -202,6 +202,7 @@ export function CrmLeadBoard({
   const [editName, setEditName] = useState("");
   const [pending, setPending] = useState<LeadCard | null>(null);
   const [hint, setHint] = useState("");
+  const [stagesOpen, setStagesOpen] = useState(false);
   const [order, setOrder] = useState<Record<number, string[]>>({});
   const [lift, setLift] = useState({ w: 264, h: 72 });
   const boardRef = useRef<HTMLDivElement>(null);
@@ -243,6 +244,7 @@ export function CrmLeadBoard({
   itemsRef.current = items;
   const startColsRef = useRef<number[]>([]);
   const nameDragRef = useRef(0);
+  const stagesBox = useRef<HTMLDivElement>(null);
   const onReorderRef = useRef(onReorderStages);
   onReorderRef.current = onReorderStages;
 
@@ -250,6 +252,22 @@ export function CrmLeadBoard({
   useEffect(() => {
     if (drag) paintGhost();
   }, [drag]);
+  useEffect(() => {
+    if (!stagesOpen) return;
+    const close = (e: PointerEvent) => {
+      if (stagesBox.current?.contains(e.target as Node)) return;
+      setStagesOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setStagesOpen(false);
+    };
+    window.addEventListener("pointerdown", close, true);
+    window.addEventListener("keydown", esc);
+    return () => {
+      window.removeEventListener("pointerdown", close, true);
+      window.removeEventListener("keydown", esc);
+    };
+  }, [stagesOpen]);
 
   const cols = colOrder.map((id) => base.find((s) => s.id === id)).filter((s): s is LeadStage => Boolean(s));
   const renderCols = base.filter((s, i, a) => a.findIndex((x) => x.id === s.id) === i);
@@ -684,62 +702,81 @@ export function CrmLeadBoard({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
-      <div className="shrink-0 rounded-[1.1rem] bg-white px-3 py-2 ring-1 ring-black/8">
-        <p className="text-[0.78rem] font-semibold text-fg">Этапы воронки — как в настройках AlfaCRM. Перетащите строку за название.</p>
-        {hint ? <p className="mt-1 text-[0.82rem] font-semibold text-emerald-800">{hint}</p> : null}
-        <table className="mt-1 w-full text-left">
-          <tbody>
-            {cols
-              .filter((c) => c.id !== 0)
-              .map((col) => (
-                <tr
-                  key={col.id}
-                  draggable
-                  onDragStart={(e) => {
-                    nameDragRef.current = col.id;
-                    e.dataTransfer.setData("text/plain", String(col.id));
-                    e.dataTransfer.effectAllowed = "move";
-                  }}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const from = Number(e.dataTransfer.getData("text/plain") || nameDragRef.current);
-                    if (!from || from === col.id) return;
-                    const rest = colOrderRef.current.filter((id) => id !== from);
-                    const at = rest.indexOf(col.id);
-                    if (at < 0) return;
-                    rest.splice(at, 0, from);
-                    persistCols(rest);
-                  }}
-                  className="cursor-grab border-b border-black/6 last:border-0 hover:bg-black/[0.03] active:cursor-grabbing"
-                >
-                  <td className="w-6 py-1.5 pr-2 text-center text-muted">⇅</td>
-                  <td className="py-1.5 text-[0.82rem] font-semibold" style={{ color: col.color }}>
-                    {col.name} <small className="font-normal text-muted">[ID {col.id}]</small>
-                  </td>
-                  <td className="py-1.5 text-right">
-                    <button
-                      type="button"
-                      className="mr-1 rounded-md px-2 py-0.5 text-[0.75rem] font-semibold ring-1 ring-black/10 hover:bg-black/5"
-                      onClick={() => shiftCol(col.id, -1)}
-                    >
-                      вверх
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-md px-2 py-0.5 text-[0.75rem] font-semibold ring-1 ring-black/10 hover:bg-black/5"
-                      onClick={() => shiftCol(col.id, 1)}
-                    >
-                      вниз
-                    </button>
-                  </td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
+      <div className="relative z-[50] flex shrink-0 items-center gap-2 px-1">
+        <div ref={stagesBox} className="relative">
+          <button
+            type="button"
+            data-no-drag="1"
+            aria-expanded={stagesOpen}
+            onClick={() => setStagesOpen((v) => !v)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[0.8rem] font-semibold text-fg hover:bg-white ring-1 ring-black/8"
+          >
+            Этапы воронки
+            <svg viewBox="0 0 12 12" className={cn("h-3 w-3 opacity-60 transition-transform", stagesOpen && "rotate-180")} aria-hidden>
+              <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+          {stagesOpen ? (
+            <div className={cn("absolute left-0 top-[calc(100%+6px)] z-[60] w-[min(36rem,calc(100vw-1.5rem))] p-3", RA_POP)}>
+              <p className="text-[0.78rem] font-semibold text-fg">Как в настройках AlfaCRM. Перетащите строку за название.</p>
+              {hint ? <p className="mt-1 text-[0.82rem] font-semibold text-emerald-800">{hint}</p> : null}
+              <table className="mt-1 w-full text-left">
+                <tbody>
+                  {cols
+                    .filter((c) => c.id !== 0)
+                    .map((col) => (
+                      <tr
+                        key={col.id}
+                        draggable
+                        onDragStart={(e) => {
+                          nameDragRef.current = col.id;
+                          e.dataTransfer.setData("text/plain", String(col.id));
+                          e.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const from = Number(e.dataTransfer.getData("text/plain") || nameDragRef.current);
+                          if (!from || from === col.id) return;
+                          const rest = colOrderRef.current.filter((id) => id !== from);
+                          const at = rest.indexOf(col.id);
+                          if (at < 0) return;
+                          rest.splice(at, 0, from);
+                          persistCols(rest);
+                        }}
+                        className="cursor-grab border-b border-black/6 last:border-0 hover:bg-black/[0.03] active:cursor-grabbing"
+                      >
+                        <td className="w-6 py-1.5 pr-2 text-center text-muted">⇅</td>
+                        <td className="py-1.5 text-[0.82rem] font-semibold" style={{ color: col.color }}>
+                          {col.name} <small className="font-normal text-muted">[ID {col.id}]</small>
+                        </td>
+                        <td className="py-1.5 text-right">
+                          <button
+                            type="button"
+                            className="mr-1 rounded-md px-2 py-0.5 text-[0.75rem] font-semibold ring-1 ring-black/10 hover:bg-black/5"
+                            onClick={() => shiftCol(col.id, -1)}
+                          >
+                            вверх
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-md px-2 py-0.5 text-[0.75rem] font-semibold ring-1 ring-black/10 hover:bg-black/5"
+                            onClick={() => shiftCol(col.id, 1)}
+                          >
+                            вниз
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </div>
+        {hint && !stagesOpen ? <p className="text-[0.78rem] font-semibold text-emerald-800">{hint}</p> : null}
       </div>
     <div ref={boardRef} className="pretty-scroll relative flex min-h-0 flex-1 gap-3 overflow-x-auto p-1">
       {renderCols.map((col) => {
