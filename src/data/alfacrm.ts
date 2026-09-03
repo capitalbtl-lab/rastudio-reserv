@@ -409,6 +409,14 @@ export async function upsertAlfaLead(lead: AlfaLead) {
     usedBranch = existing.branch;
     duplicate = true;
   } else {
+    let newStatus = STATUS_NEW;
+    try {
+      const { loadFunnelAuto } = await import("./funnel-auto");
+      const rules = loadFunnelAuto();
+      if (rules.siteOn) newStatus = rules.siteStageId;
+    } catch {
+      /* заводской Разбирается */
+    }
     const created = await request<{ success?: boolean; errors?: unknown; model?: Customer }>(
       `/v2api/${branch}/customer/create`,
       {
@@ -420,7 +428,7 @@ export async function upsertAlfaLead(lead: AlfaLead) {
         ...(dob ? { dob } : {}),
         is_study: 0,
         lead_source_id: SOURCE_SITE,
-        lead_status_id: STATUS_NEW,
+        lead_status_id: newStatus,
         pipeline_id: PIPELINE,
         branch_ids: [branch],
         note: noteLine,

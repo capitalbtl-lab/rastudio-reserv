@@ -825,6 +825,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "leadStageCreate"
           | "leadStageDelete"
           | "leadStageSort"
+          | "funnelAutoGet"
+          | "funnelAutoSave"
           | "voiceAsk"
           | "customersSearch"
           | "tariffsGet"
@@ -907,6 +909,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         pullUnit?: "min" | "hour" | "day" | "week";
         schoolId?: string;
         courseId?: string;
+        funnelAuto?: import("./funnel-auto").FunnelAuto;
         schoolIds?: string[];
         courseIds?: string[];
         href?: string;
@@ -1200,6 +1203,16 @@ export const adminSchedule = createServerFn({ method: "POST" })
       }
       if (!ok) return { ok: false as const, error: last || "AlfaCRM не приняла платёж." };
       logAdmin(`Клиент ${customerId}: ${note} ${sum}`);
+      if (kind !== "refund") {
+        const { applyFunnelAuto } = await import("./funnel-auto");
+        const raw = await loadCustomerRaw(request, t, branch, customerId);
+        await applyFunnelAuto("tariff", {
+          customerId,
+          branchId: raw?.branch || branch,
+          isStudy: Number(raw?.c?.is_study),
+          statusId: Number(raw?.c?.lead_status_id ?? raw?.c?.status_id ?? 0),
+        });
+      }
       const customer = await loadCustomerCard(request, t, branch, customerId);
       return { ok: true as const, customer };
     }
@@ -1254,6 +1267,16 @@ export const adminSchedule = createServerFn({ method: "POST" })
       }
       if (!ok) return { ok: false as const, error: last || "AlfaCRM не приняла абонемент." };
       logAdmin(`Клиент ${customerId}: абонемент ${tariffId}`);
+      {
+        const { applyFunnelAuto } = await import("./funnel-auto");
+        const raw = await loadCustomerRaw(request, t, branch, customerId);
+        await applyFunnelAuto("tariff", {
+          customerId,
+          branchId: raw?.branch || branch,
+          isStudy: Number(raw?.c?.is_study),
+          statusId: Number(raw?.c?.lead_status_id ?? raw?.c?.status_id ?? 0),
+        });
+      }
       const customer = await loadCustomerCard(request, t, branch, customerId);
       return { ok: true as const, customer };
     }
@@ -1346,6 +1369,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
         /* local dossier is optional */
       }
       logAdmin(drop ? `Клиент ${customerId}: снят с группы ${groupId}` : `Клиент ${customerId}: группа ${groupId}`);
+      if (!drop) {
+        const { applyFunnelAuto } = await import("./funnel-auto");
+        await applyFunnelAuto("group", {
+          customerId,
+          branchId: useBranch,
+          isStudy: Number(found?.c?.is_study),
+          statusId: Number(found?.c?.lead_status_id ?? found?.c?.status_id ?? 0),
+        });
+      }
       const customer = await loadCustomerCard(request, t, useBranch, customerId);
       return { ok: true as const, customer };
     }
@@ -1610,6 +1642,17 @@ export const adminSchedule = createServerFn({ method: "POST" })
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "AlfaCRM не сменила порядок этапов." };
       }
+    }
+    if (data.action === "funnelAutoGet") {
+      const { loadFunnelAuto, funnelAutoHint } = await import("./funnel-auto");
+      const rules = loadFunnelAuto();
+      return { ok: true as const, rules, hint: funnelAutoHint(rules) };
+    }
+    if (data.action === "funnelAutoSave") {
+      const { saveFunnelAuto, funnelAutoHint } = await import("./funnel-auto");
+      const rules = saveFunnelAuto(data.funnelAuto || {});
+      logAdmin(`Автоматизация воронки: ${JSON.stringify(funnelAutoHint(rules))}`);
+      return { ok: true as const, rules, hint: funnelAutoHint(rules) };
     }
     if (data.action === "voiceAsk") {
       const prompt = String(data.prompt || "").trim();

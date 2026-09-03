@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
 import { CRM_STAGE_COLORS, LEAD_STAGES, mergeStages, pinUnsorted, type LeadStage } from "@/data/crm-leads";
+import { FUNNEL_AUTO_DEFAULT, type FunnelAuto } from "@/data/funnel-auto-core";
 import { CRM_BRANCH } from "@/data/ids";
 import { cn } from "@/lib/utils";
 
@@ -39,12 +40,38 @@ export function AdminCrmSettings() {
   const [addName, setAddName] = useState("");
   const [addColor, setAddColor] = useState("#1a7bb9");
   const [syncMin, setSyncMin] = useState(10);
+  const [auto, setAuto] = useState<FunnelAuto>(FUNNEL_AUTO_DEFAULT);
   const dragId = useRef(0);
 
   useEffect(() => {
     setSyncMin(crmSyncMinutes());
     void loadStages();
+    void loadAuto();
   }, []);
+
+  async function loadAuto() {
+    try {
+      const res = (await adminSchedule({
+        data: { token: token(), action: "funnelAutoGet" } as never,
+      })) as { ok?: boolean; rules?: FunnelAuto };
+      if (res.ok && res.rules) setAuto(res.rules);
+    } catch {
+      /* defaults */
+    }
+  }
+
+  async function saveAuto(next: FunnelAuto) {
+    setAuto(next);
+    const res = (await adminSchedule({
+      data: { token: token(), action: "funnelAutoSave", funnelAuto: next } as never,
+    })) as { ok?: boolean; rules?: FunnelAuto; error?: string };
+    if (res.ok && res.rules) {
+      setAuto(res.rules);
+      setMsg("Автоматизация записана.");
+      return;
+    }
+    setMsg(res.error || "Не удалось сохранить автоматизацию.");
+  }
 
   async function loadStages() {
     setBusy(true);
@@ -172,7 +199,7 @@ export function AdminCrmSettings() {
       <div>
         <h2 className="font-display text-3xl">Настройка CRM</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted">
-          Этапы воронки, филиалы и синхронизация с AlfaCRM. Порядок столбцов здесь — тот же, что в кабинете CRM и на доске лидов.
+          Этапы воронки, автоматизация и синхронизация с AlfaCRM. Порядок столбцов здесь — тот же, что в кабинете CRM и на доске лидов.
         </p>
       </div>
 
@@ -337,6 +364,60 @@ export function AdminCrmSettings() {
           </button>
         </div>
         {msg ? <p className={cn("mt-3 text-sm font-semibold", msg.includes("не") || msg.includes("Не") ? "text-rose-700" : "text-emerald-800")}>{msg}</p> : null}
+      </Card>
+
+      <Card
+        title="Автоматизация воронки продаж"
+        hint="Сайт и карточка сами двигают этап в AlfaCRM. Ученика (is_study=1) и архив не трогает. С «Оплатил» назад в группу не возвращает."
+      >
+        <ul className="space-y-3">
+          {(
+            [
+              ["siteOn", "siteStageId", "Заявка с сайта", "Форма пробного и ассистент"],
+              ["groupOn", "groupStageId", "Добавили в группу", "Карточка клиента → группа"],
+              ["tariffOn", "tariffStageId", "Абонемент или оплата", "Выдали абонемент или провели платёж"],
+            ] as const
+          ).map(([onKey, stageKey, title, hint]) => (
+            <li key={onKey} className="flex flex-wrap items-center gap-3 rounded-xl bg-surface-2 px-3 py-2.5">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={auto[onKey]}
+                onClick={() => void saveAuto({ ...auto, [onKey]: !auto[onKey] })}
+                className={cn(
+                  "relative h-6 w-11 shrink-0 rounded-full transition",
+                  auto[onKey] ? "bg-primary" : "bg-black/15",
+                )}
+              >
+                <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow", auto[onKey] ? "left-5" : "left-0.5")} />
+              </button>
+              <div className="min-w-[10rem] flex-1">
+                <p className="text-sm font-semibold">{title}</p>
+                <p className="text-[0.75rem] text-muted">{hint}</p>
+              </div>
+              <select
+                className="h-9 rounded-full bg-white px-3 text-sm ring-1 ring-black/8"
+                disabled={!auto[onKey]}
+                value={auto[stageKey]}
+                onChange={(e) => void saveAuto({ ...auto, [stageKey]: Number(e.target.value) })}
+              >
+                {stages.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </li>
+          ))}
+        </ul>
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={auto.skipIfPaid}
+            onChange={(e) => void saveAuto({ ...auto, skipIfPaid: e.target.checked })}
+          />
+          Не возвращать с «Оплатил», если снова добавили в группу
+        </label>
       </Card>
 
       <Card
