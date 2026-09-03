@@ -14,7 +14,7 @@
 export const ROMASHKA_REV = 3;
 export const ROMASHKA_NAME = "ромашка 3";
 export const ROMASHKA_ID = "romashka-3";
-export const ROMASHKA_AT = "2026-09-03T15:37:00Z";
+export const ROMASHKA_AT = "2026-09-03T15:51:39Z";
 
 export const ROMASHKA_NOTE = [
   "Карта ID: customerId, groupId, branchId, subjectId, courseId, tariffId, clientCardId, groupCardId, cabinetId.",
@@ -24,7 +24,7 @@ export const ROMASHKA_NOTE = [
   "Добавить абонемент — кнопка в блоке Остаток, popup tariffId + дата начала.",
   "Ближайшие занятия — плитки LessonStrip как у группы.",
   "Обновить = is_study=1 removed=0. Загрузить лиды = is_study=0 removed=0. Архив только тихой кнопкой.",
-  "Доска лидов CrmLeadBoard, выбор RaSelect, полный бэкап системы 2026-09-03.",
+  "Доска лидов CrmLeadBoard, выбор RaSelect, полный бэкап системы 2026-09-03 (перезапись).",
 ].join(" ");
 
 export type RestorePoint = {
