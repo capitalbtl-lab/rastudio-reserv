@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { adminSectionGuides, GUIDE_REV, type SectionGuide } from "@/data/agent-section-guides";
+import { adminSectionGuides, FACTORY_GUIDES, GUIDE_REV, type SectionGuide } from "@/data/agent-section-guides";
 import { Button } from "@/components/ui/button";
 import { AdminSaveBar } from "@/components/admin-save-bar";
 import { InfoTip, TipWrap } from "@/components/info-tip";
@@ -20,9 +20,9 @@ function when(iso: string) {
 }
 
 export function AdminSectionGuides() {
-  const [guides, setGuides] = useState<SectionGuide[]>([]);
+  const [guides, setGuides] = useState<SectionGuide[]>(FACTORY_GUIDES);
   const [active, setActive] = useState("schedule");
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState(FACTORY_GUIDES[0]?.body || "");
   const [on, setOn] = useState(true);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -30,17 +30,21 @@ export function AdminSectionGuides() {
   const guide = guides.find((g) => g.id === active) || guides[0];
 
   async function load() {
-    const res = await adminSectionGuides({ data: { token: token(), action: "get" } });
-    if (!res.ok || !("guides" in res)) {
-      setMsg(res.ok ? "" : res.error || "Не удалось загрузить инструкции.");
-      return;
-    }
-    setGuides(res.guides);
-    const first = res.guides.find((g) => g.id === active) || res.guides[0];
-    if (first) {
-      setActive(first.id);
-      setBody(first.body);
-      setOn(first.on);
+    try {
+      const res = await adminSectionGuides({ data: { token: token(), action: "get" } });
+      if (!res.ok || !("guides" in res) || !res.guides?.length) {
+        setMsg(res.ok ? "" : res.error || "Не удалось загрузить правки. Показана заводская база.");
+        return;
+      }
+      setGuides(res.guides);
+      const first = res.guides.find((g) => g.id === active) || res.guides[0];
+      if (first) {
+        setActive(first.id);
+        setBody(first.body);
+        setOn(first.on);
+      }
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Сервер не ответил. Показана заводская база.");
     }
   }
 
@@ -92,7 +96,7 @@ export function AdminSectionGuides() {
     <div className="space-y-5">
       <div>
         <div className="flex items-center gap-2">
-          <h2 className="font-display text-3xl">Инструкции по разделам сайта</h2>
+          <h2 className="font-display text-3xl">База знаний ИИ</h2>
           <InfoTip text="Сюда кладутся правила, по которым ИИ управляет кабинетом. Это не скрипт разговора с родителем. Сейчас заполнен раздел «Расписание занятий». Другие разделы добавятся сюда же." />
         </div>
         <p className="mt-2 max-w-2xl text-sm text-muted">

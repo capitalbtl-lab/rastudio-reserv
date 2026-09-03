@@ -7,6 +7,7 @@ import { loadVersions } from "./crm-slots";
 import { isPhoneLike, displayPersonName, membershipIds } from "./client-display";
 import { clientCardId } from "./ids";
 import type { DossiersReq } from "./dossiers-fn";
+import { logAdmin } from "./admin-settings";
 
 export type PersonName = {
   fio: string;
@@ -57,7 +58,7 @@ export type Dossier = {
   updatedAt: string;
 };
 
-type Store = { items: Dossier[]; lastCrmSync?: string; nextCrmSync?: string };
+type Store = { items: Dossier[]; lastCrmSync?: string; nextCrmSync?: string; lastLeadSync?: string };
 
 const MAX = 8000;
 let cachedStore: { mtime: number; store: Store } | null = null;
@@ -83,6 +84,7 @@ function loadStore(): Store {
         items: Array.isArray(raw.items) ? raw.items : [],
         lastCrmSync: raw.lastCrmSync,
         nextCrmSync: raw.nextCrmSync,
+        lastLeadSync: raw.lastLeadSync,
       };
       if (store.items.length) cachedStore = { mtime, store };
       return store.items.length ? store : cachedStore?.store || store;
@@ -101,6 +103,7 @@ function saveStore(store: Store) {
     items: store.items.slice(0, MAX),
     lastCrmSync: store.lastCrmSync || "",
     nextCrmSync: store.nextCrmSync || "",
+    lastLeadSync: store.lastLeadSync || "",
   };
   writeFileSync(tmp, JSON.stringify(packed, null, 0), "utf8");
   renameSync(tmp, target);
@@ -633,17 +636,20 @@ export async function syncAllFromCrm(
 ) {
   const t = await alfaToken();
   const teacherMap: Record<string, string> = {};
-  for (const branch of [1, 2, 3, 4]) {
-    onProgress?.({ step: `Педагоги · филиал ${branch}`, n: 0, total: 0 });
-    const tr = await request<{ items?: { id?: number; name?: string }[] }>(`/v2api/${branch}/teacher/index`, { page: 0, pageSize: 200 }, t).catch(
-      () => ({ items: [] as { id?: number; name?: string }[] }),
-    );
-    for (const p of tr.items || []) if (p.id && p.name) teacherMap[String(p.id)] = p.name;
+  const want = studies.length ? studies : [1];
+  const leadsOnly = want.length === 1 && want[0] === 0;
+  if (!leadsOnly) {
+    for (const branch of [1, 2, 3, 4]) {
+      onProgress?.({ step: `Педагоги · филиал ${branch}`, n: 0, total: 0 });
+      const tr = await request<{ items?: { id?: number; name?: string }[] }>(`/v2api/${branch}/teacher/index`, { page: 0, pageSize: 200 }, t).catch(
+        () => ({ items: [] as { id?: number; name?: string }[] }),
+      );
+      for (const p of tr.items || []) if (p.id && p.name) teacherMap[String(p.id)] = p.name;
+    }
   }
   let n = 0;
   const labels: Record<number, string> = { 0: "лиды", 1: "текущие", 2: "архив" };
   const names: Record<number, string> = { 1: "Гражданская", 2: "ЦМИТ", 3: "Луховицы", 4: "Лето" };
-  const want = studies.length ? studies : [1];
   const currentMap = new Map<number, Set<number>>();
   const leadIds = new Set<number>();
   for (const branch of [1, 2, 3, 4]) {
@@ -658,7 +664,7 @@ export async function syncAllFromCrm(
           `/v2api/${branch}/customer/index`,
           { page, pageSize: 50, is_study: study, ...(study === 2 ? {} : { removed: 0 }) },
           t,
-        );
+        ).catch(() => ({ items: [] as Record<string, unknown>[] }));
         const items = data.items || [];
         for (const item of items) {
           if (Number(item.removed) === 1 || String(item.removed) === "1") continue;
@@ -712,10 +718,73 @@ export async function syncAllFromCrm(
       purged += 1;
       return false;
     });
+    store.lastLeadSync = new Date().toISOString();
   }
   store.lastCrmSync = new Date().toISOString();
   saveStore(store);
   return { ok: true as const, count: n, purged, lastCrmSync: store.lastCrmSync, studies: want };
+}
+
+let leadTickBusy = false;
+
+/** Только новые лиды (id, которых ещё нет на сайте). Старых не перечитываем. */
+export async function syncNewLeadsFromCrm() {
+  if (leadTickBusy) return { ok: true as const, added: 0, skipped: true as const };
+  leadTickBusy = true;
+  try {
+    const store = loadStore();
+    const known = new Set(store.items.map((d) => Number(d.crmId || 0)).filter(Boolean));
+    const t = await alfaToken();
+    let added = 0;
+    for (const branch of [1, 2, 3, 4]) {
+      let knownPages = 0;
+      for (let page = 0; page < 4; page += 1) {
+        const data = await request<{ items?: Record<string, unknown>[] }>(
+          `/v2api/${branch}/customer/index`,
+          { page, pageSize: 50, is_study: 0, removed: 0 },
+          t,
+        ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+        const items = data.items || [];
+        if (!items.length) break;
+        const ids = items.map((it) => Number(it.id || 0)).filter(Boolean);
+        const desc = ids.length >= 2 && ids[0] > ids[ids.length - 1];
+        let newOnPage = 0;
+        for (const item of items) {
+          const id = Number(item.id || 0);
+          if (!id || Number(item.removed) === 1 || Number(item.is_study) !== 0) continue;
+          if (known.has(id)) continue;
+          applyCrmCustomer(item, branch, false);
+          known.add(id);
+          added += 1;
+          newOnPage += 1;
+        }
+        if (newOnPage === 0) {
+          knownPages += 1;
+          if (desc || knownPages >= 2) break;
+        } else knownPages = 0;
+        if (items.length < 50) break;
+      }
+    }
+    const next = loadStore();
+    next.lastLeadSync = new Date().toISOString();
+    next.nextCrmSync = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    if (added) next.lastCrmSync = next.lastLeadSync;
+    saveStore(next);
+    if (added) logAdmin(`Новые лиды из AlfaCRM: ${added}`);
+    return { ok: true as const, added, count: added };
+  } finally {
+    leadTickBusy = false;
+  }
+}
+
+export function startLeadTicker() {
+  const g = globalThis as { __raLeadTimer?: ReturnType<typeof setInterval> };
+  if (g.__raLeadTimer) return;
+  const tick = () => {
+    void syncNewLeadsFromCrm().catch(() => {});
+  };
+  g.__raLeadTimer = setInterval(tick, 5 * 60 * 1000);
+  setTimeout(tick, 20 * 1000);
 }
 
 let teacherMapCache: Record<string, string> | null = null;
@@ -991,11 +1060,62 @@ function viewOf(d: Dossier) {
     studyStatus,
     groupLinks: links,
     archived: status === "архив",
+    leadStatusId: Number(ex.lead_status_id || 0),
+    note: String(d.note || ex.note || "").replace(/<[^>]+>/g, "").trim().slice(0, 280),
     updatedAt: d.updatedAt,
   };
 }
 
 export type ClientView = ReturnType<typeof viewOf>;
+
+export function groupRoster(branchId: number, groupId: number) {
+  const store = loadStore();
+  const active: {
+    id: number;
+    name: string;
+    parent: string;
+    dob: string;
+    age: string;
+    phone: string;
+    phones: string[];
+    email: string;
+    gender: string;
+    from: string;
+    to: string;
+    archived: boolean;
+    status: string;
+  }[] = [];
+  const archive: typeof active = [];
+  for (const d of store.items) {
+    const home = Number(d.branchId) || branchId;
+    const links = (d.groupLinks || []).length
+      ? d.groupLinks || []
+      : groupsFromItem({ groups: parseJsonish(d.extras?.groups) || d.extras?.groups }, home);
+    const hit = links.some((g) => Number(g.id) === groupId && (!g.branchId || !branchId || Number(g.branchId) === branchId));
+    if (!hit) continue;
+    const id = Number(d.crmId || 0);
+    if (!id) continue;
+    const v = viewOf(d);
+    const m = {
+      id,
+      name: v.child,
+      parent: v.parent,
+      dob: v.dob || "",
+      age: v.age == null ? "" : `${v.age} лет`,
+      phone: v.phone || "",
+      phones: [v.phone].filter(Boolean),
+      email: "",
+      gender: v.gender || "",
+      from: "",
+      to: "",
+      archived: v.archived,
+      status: v.status === "лид" ? "лид" : v.archived || v.status === "архив" ? "архив" : "учится",
+    };
+    if (m.archived || m.status === "архив") archive.push(m);
+    else active.push(m);
+  }
+  return { active, archive };
+}
 
 export function searchClientViews(q = "", limit = 2500, status = "", branchId = 0, ageBand = "") {
   const store = loadStore();

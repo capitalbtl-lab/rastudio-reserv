@@ -9,7 +9,7 @@ import { JsonLd } from "@/components/json-ld";
 import { AgentChat } from "@/components/agent-chat";
 import { DebugDock } from "@/components/debug-dock";
 
-export function SiteShell({ children }: { children: ReactNode }) {
+export function SiteShell({ children, bare }: { children: ReactNode; bare?: boolean }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,10 +25,11 @@ export function SiteShell({ children }: { children: ReactNode }) {
       </a>
       <SiteHeader />
       <div className="h-[3.75rem] bg-header sm:h-[4.75rem] md:h-[5.25rem]" aria-hidden />
-      <main id="content" className="pb-24 md:pb-0">
+      <main id="content" className={bare ? "min-h-0" : "pb-24 md:pb-0"}>
         {children}
       </main>
-      <SiteFooter />
+      {bare ? null : <SiteFooter />}
+      {bare ? null : (
       <div className="mobile-dock fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-bg/95 px-3 py-2.5 backdrop-blur-xl md:hidden">
         <div className="grid grid-cols-3 gap-2">
           <Button asChild variant="secondary" className="h-11 w-full text-[0.78rem]">
@@ -44,6 +45,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
           </Button>
         </div>
       </div>
+      )}
       <AgentChat />
       <DebugDock />
     </div>

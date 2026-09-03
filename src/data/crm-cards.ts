@@ -124,15 +124,45 @@ export type ClientRow = {
   branch: string;
   groupLinks?: ClientGroupLink[];
   archived: boolean;
+  leadStatusId?: number;
+  note?: string;
+  updatedAt?: string;
 };
 
 export type LessonCatalogItem = { id: number; name: string };
-export type TariffOffer = { id: number; name: string; price: number; lessons: number; subjectIds?: number[] };
+export type TariffOffer = {
+  id: number;
+  name: string;
+  price: number;
+  lessons: number;
+  subjectIds?: number[];
+  lessonTypeIds?: number[];
+  periodCount?: number;
+  periodType?: number;
+  periodLabel?: string;
+  eDate?: string;
+  calculationType?: number;
+};
+export type GroupOffer = {
+  id: number;
+  name: string;
+  branchId: number;
+  subjectId?: number;
+  teacher?: string;
+  day?: string;
+  from?: string;
+  to?: string;
+  course?: string;
+  school?: string;
+  schoolId?: string;
+  courseId?: string;
+};
 export type LessonCatalog = {
   subjects: LessonCatalogItem[];
   teachers: LessonCatalogItem[];
   rooms: LessonCatalogItem[];
   tariffs?: TariffOffer[];
+  groups?: GroupOffer[];
 };
 
 /** Типы занятий — те же id, что в AlfaCRM / LESSON_TYPES. */

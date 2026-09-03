@@ -167,6 +167,9 @@ async function runPull(kind: PullKind) {
 export async function handleAdminDisk(data: DiskReq) {
   if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
   const kind = data.kind || "subjects";
+  if (kind === "clients" || kind === "clientsLeads" || kind === "clientsArchive") {
+    void import("./dossiers").then((m) => m.startLeadTicker()).catch(() => {});
+  }
   if (data.action === "pullStatus") return { ok: true as const, ...job() };
   if (data.action === "pull") {
     const cur = job();

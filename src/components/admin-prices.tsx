@@ -239,7 +239,7 @@ export function AdminPrices() {
   }
 
   return (
-    <article className="page-wrap py-10 md:py-14">
+    <article className={cn("mx-auto py-10 md:py-14", tab === "schedule" ? "w-[min(1520px,calc(100%-1.5rem))] md:w-[min(1560px,calc(100%-2rem))]" : "page-wrap")}>
       <AdminSelfTest
         section="cabinet"
         label="Проверка кабинета"

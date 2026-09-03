@@ -6,7 +6,7 @@ import { adminSchedule, type GroupMember, type CustomerCard } from "@/data/admin
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { Button } from "@/components/ui/button";
 import { InfoTip, TipWrap, TIP_BOX } from "@/components/info-tip";
-import { AdminSectionHead, AdminSelfTest } from "@/components/admin-self-test";
+import { AdminSectionHead, AdminSelfTest, adminGhostBtn, type AdminSelfTestHandle } from "@/components/admin-self-test";
 import { SCHOOLS, BRANCHES } from "@/data/site";
 import { slotMismatch, mismatchHint } from "@/data/slot-mismatch";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,7 @@ import { AdminScheduleMap } from "@/components/admin-schedule-map";
 import { pullFromCrm } from "@/lib/crm-pull";
 import { CrmPullDialog, emptyPull, type CrmPullState } from "@/components/crm-pull-dialog";
 import type { CrmSubject } from "@/data/crm-subjects";
-import { ADMIN_PANEL_BLUE } from "@/data/admin-ui";
+import { ADMIN_PANEL_BLUE, RA_POP } from "@/data/admin-ui";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
 import type { CrmTeacher } from "@/data/crm-teachers";
 import { AdminClients } from "@/components/admin-clients";
@@ -324,7 +324,7 @@ type GroupDetail = {
   tariffs: { id: number; name: string; price: number; lessonsCount: number; duration: number }[];
 };
 
-function GroupNameField({ value, onChange, subject }: { value: string; onChange: (v: string) => void; subject?: string }) {
+function GroupNameField({ value, onChange, subject, large }: { value: string; onChange: (v: string) => void; subject?: string; large?: boolean }) {
   const src = useRef<HTMLInputElement>(null);
   const hideT = useRef(0);
   const [open, setOpen] = useState(false);
@@ -345,7 +345,9 @@ function GroupNameField({ value, onChange, subject }: { value: string; onChange:
     if (!el) return;
     const r = el.getBoundingClientRect();
     const probe = document.createElement("span");
-    probe.style.cssText = "position:absolute;left:-9999px;white-space:nowrap;font-size:0.8rem;padding:0 8px";
+    probe.style.cssText = large
+      ? "position:absolute;left:-9999px;white-space:nowrap;font-size:0.85rem;padding:0 8px"
+      : "position:absolute;left:-9999px;white-space:nowrap;font-size:0.8rem;padding:0 8px";
     probe.textContent = value || el.placeholder || "";
     document.body.appendChild(probe);
     const need = probe.offsetWidth + 20;
@@ -386,7 +388,10 @@ function GroupNameField({ value, onChange, subject }: { value: string; onChange:
         onMouseLeave={hide}
         onFocus={show}
         onBlur={hide}
-        className="h-[26px] w-full rounded-md bg-surface-2 px-2 text-[0.64rem] ring-1 ring-black/8"
+        className={cn(
+          "w-full rounded-md bg-surface-2 px-2 ring-1 ring-black/8",
+          large ? "h-8 text-[0.85rem]" : "h-[26px] text-[0.64rem]",
+        )}
       />
       {shown
         ? createPortal(
@@ -398,7 +403,10 @@ function GroupNameField({ value, onChange, subject }: { value: string; onChange:
               onMouseLeave={hide}
               onBlur={hide}
               style={{ top: pos.top, left: pos.left, height: pos.height, width: pos.width, opacity: open ? 1 : 0 }}
-              className="fixed z-[75] rounded-md bg-white px-2 text-[0.8rem] shadow-[0_8px_28px_rgba(15,23,42,0.22)] ring-1 ring-black/20 transition-opacity duration-300"
+              className={cn(
+                "fixed z-[75] rounded-md bg-white px-2 shadow-[0_8px_28px_rgba(15,23,42,0.22)] ring-1 ring-black/20 transition-opacity duration-300",
+                large ? "text-[0.92rem]" : "text-[0.8rem]",
+              )}
             />,
             document.body,
           )
@@ -548,7 +556,7 @@ function WeekDots({
         ? createPortal(
             <div
               ref={box}
-              className="fixed z-[90] w-[15rem] rounded-2xl bg-white p-3.5 text-fg shadow-[0_12px_40px_rgba(15,23,42,0.28)] ring-1 ring-black/20"
+              className={cn("fixed z-[90] w-[15rem] p-3.5 text-fg", RA_POP)}
               style={{ top: pos.top, left: pos.left }}
             >
               <p className="text-sm font-semibold">Второе занятие</p>
@@ -741,6 +749,12 @@ export function AdminSchedule() {
   const [fileOpen, setFileOpen] = useState(false);
   const [pull, setPull] = useState<CrmPullState>(emptyPull("groups"));
   const [pane, setPane] = useState<"groups" | "clients" | "subjects" | "prices" | "tariffs" | "map">("groups");
+  const [seen, setSeen] = useState({ groups: true, clients: false, subjects: false, prices: false, tariffs: false, map: false });
+  function showPane(id: typeof pane) {
+    setPane(id);
+    setSeen((s) => (s[id] ? s : { ...s, [id]: true }));
+  }
+  const [groupsWide, setGroupsWide] = useState(false);
   const [branchFilter, setBranchFilter] = useState("all");
   const [onlyMismatch, setOnlyMismatch] = useState(false);
   const [siteTree, setSiteTree] = useState<SiteTree>(EMPTY_TREE);
@@ -761,6 +775,21 @@ export function AdminSchedule() {
   const versionsMenuRef = useRef<HTMLDivElement>(null);
   const promptEl = useRef<HTMLTextAreaElement>(null);
   const closeGuard = useRef(0);
+  const checkRef = useRef<AdminSelfTestHandle>(null);
+
+  useEffect(() => {
+    if (!groupsWide) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setGroupsWide(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [groupsWide]);
 
   function take(res: {
     ok: boolean;
@@ -1075,7 +1104,7 @@ export function AdminSchedule() {
     await openPupil({ id: crmId, name: "", parent: "", dob: "", age: "", gender: "", phones: [], status: "" }, branchId);
   }
 
-  async function mutatePupil(action: "customerSave" | "customerLesson" | "customerPay" | "customerTariff", extra: Record<string, unknown> = {}) {
+  async function mutatePupil(action: "customerSave" | "customerLesson" | "customerPay" | "customerTariff" | "customerGroup", extra: Record<string, unknown> = {}) {
     if (!pupil) return;
     const res = await adminSchedule({
       data: { token: token(), action, customerId: pupil.id, branchId: pupil.branchId, ...extra } as never,
@@ -1395,7 +1424,9 @@ export function AdminSchedule() {
   }
 
   const DAYS_SHORT = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-  const box = "h-[26px] w-[3.7rem] shrink-0 rounded-full bg-surface-2 px-1 text-center text-[0.6rem] leading-[26px] ring-1 ring-black/8";
+  const box = groupsWide
+    ? "h-8 w-[4.6rem] shrink-0 rounded-full bg-surface-2 px-1.5 text-center text-[0.82rem] leading-8 ring-1 ring-black/8"
+    : "h-[26px] w-[3.7rem] shrink-0 rounded-full bg-surface-2 px-1 text-center text-[0.6rem] leading-[26px] ring-1 ring-black/8";
   const cell = box;
   const FIELD_RU: Record<string, string> = {
     limit: "места",
@@ -1864,8 +1895,8 @@ export function AdminSchedule() {
       const filterStatus = "status" in res ? String((res as { status?: string }).status || "") : "";
       const ageBand = "ageBand" in res ? String((res as { ageBand?: string }).ageBand || "") : "";
       if (kind === "openTab" || kind === "openClient" || kind === "openGroup") {
-        if (paneTo === "clients" || kind === "openClient") setPane("clients");
-        if (paneTo === "groups" || kind === "openGroup") setPane("groups");
+        if (paneTo === "clients" || kind === "openClient") showPane("clients");
+        if (paneTo === "groups" || kind === "openGroup") showPane("groups");
         if (kind === "openClient" && customerId) {
           window.setTimeout(() => {
             window.dispatchEvent(new CustomEvent("ra-open-client", { detail: { customerId, branchId: branchId || 1, q: query } }));
@@ -2097,33 +2128,26 @@ export function AdminSchedule() {
     : null;
 
   return (
-    <section
-      className={cn(
-        "mt-10 space-y-4",
-        pane === "clients" &&
-          "lg:sticky lg:top-[5.25rem] lg:z-10 lg:flex lg:max-h-[calc(100dvh-5.25rem)] lg:flex-col lg:overflow-hidden lg:bg-bg lg:pb-3",
-      )}
-    >
+    <section className="mt-6 space-y-3">
       <AdminSectionHead
         section="schedule"
         title="Расписание занятий"
+        check={false}
         tip="Группы по школам и курсам (courseId). Связи только по ID: группа→курс, предмет, абонемент, клиент."
-        aside={
-          <label className="flex items-center gap-2 text-sm text-muted">
-            Филиал
-            <select
-              value={branchFilter}
-              onChange={(e) => setBranchFilter(e.target.value)}
-              className="h-9 min-w-[14rem] rounded-full bg-surface-2 px-3 text-sm text-fg ring-1 ring-black/10"
-            >
-              {branchOpts.map((b) => (
-                <option key={b.id} value={b.id}>{b.label}</option>
-              ))}
-            </select>
-          </label>
+        extra={
+          <button
+            type="button"
+            data-op="groups-wide"
+            className={adminGhostBtn}
+            onClick={() => {
+              setGroupsWide((v) => !v);
+            }}
+          >
+            {groupsWide ? "Свернуть экран" : "На весь экран"}
+          </button>
         }
       >
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
           <p className="text-sm text-muted">
             Последняя загрузка: {when(at)} · {slots.length} слотов · {dirty.size ? `${dirty.size} не выгружены в CRM` : "совпадает с кабинетом"}
           </p>
@@ -2134,7 +2158,7 @@ export function AdminSchedule() {
                 onClick={() => {
                   const next = !onlyMismatch;
                   setOnlyMismatch(next);
-                  setPane("groups");
+                  showPane("groups");
                   if (next) {
                     setOpenAll(true);
                     setAddOpen(false);
@@ -2167,6 +2191,10 @@ export function AdminSchedule() {
         </div>
       </AdminSectionHead>
 
+      <div
+        className={cn(groupsWide && "fixed inset-0 z-[60] flex flex-col overflow-hidden bg-bg p-4 md:px-8 md:py-5")}
+        data-screen={groupsWide ? "wide" : "normal"}
+      >
       <div className="flex shrink-0 flex-nowrap items-center gap-1 border-b border-black/10">
         {([
           ["groups", "Группы"],
@@ -2179,7 +2207,7 @@ export function AdminSchedule() {
           <button
             key={id}
             type="button"
-            onClick={() => setPane(id)}
+            onClick={() => showPane(id)}
             className={cn(
               "rounded-t-xl px-7 py-2.5 text-base font-semibold transition-colors",
               pane === id ? "bg-primary text-white" : "bg-surface-2 text-fg hover:bg-white",
@@ -2188,28 +2216,45 @@ export function AdminSchedule() {
             {label}
           </button>
         ))}
+        {groupsWide ? (
+          <button type="button" data-op="groups-wide-off" className={cn(adminGhostBtn, "ml-auto mb-1")} onClick={() => setGroupsWide(false)}>
+            Свернуть экран
+          </button>
+        ) : null}
       </div>
 
-      {pane === "groups" ? (
-        <AdminSelfTest
-          section="schedule-groups"
-          label="Проверить группы"
-          tip="Прогоняет все функции вкладки с записью в AlfaCRM. Удаление в CRM не делается. Если создали тестовую группу — удалите её сами. Отчёт появляется только после всех проверок. Сбой — красным блоком."
-          heading={
-            <p className="max-w-2xl text-sm text-muted">
-              Все функции вкладки, с записью в AlfaCRM. Удаление в CRM не выполняется: тестовую группу оператор стирает сам. Отчёт — после полной проверки; ошибки — отдельным блоком.
-            </p>
-          }
-        />
+      <div className={cn("mt-4", groupsWide && "flex min-h-0 flex-1 flex-col overflow-hidden")}>
+      {seen.subjects ? (
+        <div className={cn(groupsWide && pane === "subjects" && "min-h-0 flex-1 overflow-y-auto")} style={pane === "subjects" ? undefined : { display: "none" }} hidden={pane !== "subjects"}>
+          <AdminSubjects />
+        </div>
       ) : null}
-
-      {pane === "subjects" ? <AdminSubjects /> : null}
-      {pane === "prices" ? <AdminCoursePrices /> : null}
-      {pane === "tariffs" ? <AdminTariffs /> : null}
-      {pane === "map" ? <AdminScheduleMap embedded /> : null}
-      {pane === "clients" ? <AdminClients onOpenGroup={openGroupFromLink} hint={ask} /> : null}
-      {pane === "groups" ? (
-      <div>
+      {seen.prices ? (
+        <div className={cn(groupsWide && pane === "prices" && "min-h-0 flex-1 overflow-y-auto")} style={pane === "prices" ? undefined : { display: "none" }} hidden={pane !== "prices"}>
+          <AdminCoursePrices />
+        </div>
+      ) : null}
+      {seen.tariffs ? (
+        <div className={cn(groupsWide && pane === "tariffs" && "min-h-0 flex-1 overflow-y-auto")} style={pane === "tariffs" ? undefined : { display: "none" }} hidden={pane !== "tariffs"}>
+          <AdminTariffs />
+        </div>
+      ) : null}
+      {seen.map ? (
+        <div className={cn(groupsWide && pane === "map" && "min-h-0 flex-1 overflow-y-auto")} style={pane === "map" ? undefined : { display: "none" }} hidden={pane !== "map"}>
+          <AdminScheduleMap embedded />
+        </div>
+      ) : null}
+      {seen.clients ? (
+        <div
+          className={pane === "clients" ? (groupsWide ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "lg:flex lg:sticky lg:top-[5.25rem] lg:z-10 lg:h-[calc(100dvh-5.25rem)] lg:flex-col lg:overflow-hidden lg:bg-bg") : undefined}
+          style={pane === "clients" ? undefined : { display: "none" }}
+          hidden={pane !== "clients"}
+        >
+          <AdminClients onOpenGroup={openGroupFromLink} hint={ask} slots={slots} wide={groupsWide} active={pane === "clients"} />
+        </div>
+      ) : null}
+      {seen.groups ? (
+      <div className={cn(groupsWide && pane === "groups" && "flex min-h-0 flex-1 flex-col overflow-hidden")} style={pane === "groups" ? undefined : { display: "none" }} hidden={pane !== "groups"}>
       <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-visible pb-0.5">
         <Button type="button" size="sm" variant="secondary" className="h-8 shrink-0 px-3 text-[0.78rem]" disabled={busy} onClick={() => { setAddKind("group"); setAddOpen((v) => !v); window.setTimeout(() => document.getElementById("ra-add-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 40); }}>
           Добавить
@@ -2232,7 +2277,7 @@ export function AdminSchedule() {
             ? createPortal(
                 <div
                   ref={fileMenuRef}
-                  className="fixed z-[80] min-w-[13rem] rounded-2xl bg-white p-1 shadow-[0_8px_24px_rgba(15,23,42,0.18)] ring-1 ring-black/10"
+                  className={cn("fixed z-[80] min-w-[13rem] p-1", RA_POP)}
                   style={(() => {
                     const r = fileRef.current?.getBoundingClientRect();
                     return r ? { top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 220)) } : { top: 0, left: 0 };
@@ -2305,7 +2350,7 @@ export function AdminSchedule() {
               ? createPortal(
                   <div
                     ref={versionsMenuRef}
-                    className="fixed z-[80] w-[22rem] max-w-[calc(100vw-1.5rem)] rounded-2xl bg-white p-2 shadow-[0_8px_24px_rgba(15,23,42,0.18)] ring-1 ring-black/10"
+                    className={cn("fixed z-[80] w-[22rem] max-w-[calc(100vw-1.5rem)] p-2", RA_POP)}
                     style={(() => {
                       const r = versionsRef.current?.getBoundingClientRect();
                       const width = 352;
@@ -2342,11 +2387,28 @@ export function AdminSchedule() {
               : null}
           </div>
         ) : null}
+        <button
+          type="button"
+          className={cn(adminGhostBtn, "h-8")}
+          data-op="check-groups"
+          onClick={() => checkRef.current?.run()}
+        >
+          Проверить группы
+        </button>
         </div>
       </div>
+      {pane === "groups" ? (
+        <AdminSelfTest
+          ref={checkRef}
+          hideTrigger
+          section="schedule-groups"
+          label="Проверить группы"
+          tip="Прогоняет все функции вкладки с записью в AlfaCRM. Удаление в CRM не делается. Если создали тестовую группу — удалите её сами. Отчёт появляется только после всех проверок. Сбой — красным блоком."
+        />
+      ) : null}
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
 
-      {onlyMismatch ? null : (
+      {onlyMismatch || groupsWide ? null : (
       <article id="ra-sched-ai" className="sticky top-20 z-20 mt-6 rounded-3xl bg-gradient-to-br from-[#e8f0ff] via-white to-[#eef4ff] p-4 ring-2 ring-primary/35 shadow-[0_10px_28px_rgba(32,94,220,0.18)] md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -2539,7 +2601,7 @@ export function AdminSchedule() {
       </article>
       )}
 
-      {onlyMismatch || !addOpen ? null : (
+      {onlyMismatch || !addOpen || groupsWide ? null : (
         <article id="ra-add-panel" className="scroll-mt-24 rounded-3xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
           <div className="flex rounded-2xl bg-surface-2 p-1">
             {([
@@ -2760,9 +2822,20 @@ export function AdminSchedule() {
         </article>
       )}
 
-      <div id="ra-mismatch-list" className="mt-8 space-y-4 scroll-mt-24">
+      <div id="ra-mismatch-list" className={cn("mt-8 space-y-4 scroll-mt-24", groupsWide && "mt-3 min-h-0 flex-1 overflow-y-auto pretty-scroll")}>
         <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-surface px-4 py-3 shadow-[var(--shadow-border)]">
-          <p className="mr-auto text-sm text-muted">Школа → направление → группа. Удаление — чекбокс и «Удалить выбранные».</p>
+          <label className="mr-auto flex items-center gap-2 text-[0.8rem] font-semibold text-muted">
+            Филиал
+            <select
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+              className="h-9 min-w-[16rem] rounded-full bg-white px-3 text-sm font-medium text-fg ring-1 ring-black/10"
+            >
+              {branchOpts.map((b) => (
+                <option key={b.id} value={b.id}>{b.label}</option>
+              ))}
+            </select>
+          </label>
           <div className="flex rounded-2xl bg-surface-2 p-0.5 ring-1 ring-black/8">
             {([
               ["school", "Школу"],
@@ -2800,8 +2873,8 @@ export function AdminSchedule() {
                 }}
               />
               <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => { setOpenAll(false); setOpenSchool((v) => (v === sch.school ? "" : sch.school)); }}>
-                <span className="font-display text-xl">{sch.school}</span>
-                <span className="text-sm text-muted">
+                <span className={cn("font-display", groupsWide ? "text-2xl" : "text-xl")}>{sch.school}</span>
+                <span className={cn("text-muted", groupsWide ? "text-base" : "text-sm")}>
                   {sch.courses.length
                     ? `${sch.courses.reduce((n, c) => n + c.items.length, 0)} групп · ${sch.courses.filter((c) => c.course !== "Без курса").length} курсов`
                     : "нет курсов"}
@@ -2856,8 +2929,8 @@ export function AdminSchedule() {
                         }}
                       />
                       <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => setOpenCourse((v) => (v === c.courseId ? "" : c.courseId))}>
-                        <span className="font-medium">{c.course}</span>
-                        <span className="text-xs text-muted">{c.items.length}</span>
+                        <span className={cn("font-medium", groupsWide && "text-base")}>{c.course}</span>
+                        <span className={cn("text-muted", groupsWide ? "text-sm" : "text-xs")}>{c.items.length}</span>
                       </button>
                       {canEdit ? (
                         <button
@@ -2878,21 +2951,21 @@ export function AdminSchedule() {
                     </div>
                     {openAll || openCourse === c.courseId ? (
                       <div>
-                        <table className="w-full text-left text-sm">
+                        <table className={cn("text-left", groupsWide ? "w-max max-w-full text-[0.95rem]" : "w-full text-sm")}>
                           <colgroup>
                             <col className="w-10" />
-                            <col />
+                            <col className={groupsWide ? "w-[22rem]" : undefined} />
                             <col className="w-[4.6rem]" />
                             <col className="w-[3.4rem]" />
                             <col className="w-[7.2rem]" />
                             <col className="w-[5.2rem]" />
-                            <col className="w-[7.5rem]" />
-                            <col className="w-36" />
+                            <col className={groupsWide ? "w-[12rem]" : "w-[7.5rem]"} />
+                            <col className={groupsWide ? "w-72" : "w-36"} />
                             <col className="w-[4.4rem]" />
                             <col className="w-[5.5rem]" />
                             <col className="w-10" />
                           </colgroup>
-                          <thead className="text-[0.65rem] uppercase tracking-wider text-muted">
+                          <thead className={cn("uppercase tracking-wider text-muted", groupsWide ? "text-[0.75rem]" : "text-[0.65rem]")}>
                             <tr>
                               <th className="px-2 py-2" />
                               <th className="px-2 py-2">Группа · №</th>
@@ -2900,8 +2973,8 @@ export function AdminSchedule() {
                               <th className="px-1 py-2 text-center">День</th>
                               <th className="px-1 py-2 text-center">С / до</th>
                               <th className="px-1 py-2 text-center">×нед</th>
-                              <th className="px-2 py-2">Филиал</th>
-                              <th className="px-2 py-2">Педагог</th>
+                              <th className="whitespace-nowrap px-2 py-2">Филиал</th>
+                              <th className="whitespace-nowrap px-2 py-2">Педагог</th>
                               <th className="px-1 py-2 text-center">Места</th>
                               <th className="px-2 py-2">Кто учится</th>
                               <th className="px-1 py-2 text-center">Подробно</th>
@@ -2933,10 +3006,10 @@ export function AdminSchedule() {
                                   </div>
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
-                                  <div className="flex min-w-0 items-center gap-1.5">
-                                    {s.groupId ? <span className="w-8 shrink-0 text-right text-[0.7rem] font-semibold tabular-nums text-muted">{s.groupId}</span> : <span className="w-8 shrink-0" />}
+                                  <div className={cn("flex items-center gap-1.5", groupsWide ? "w-[22rem] max-w-[22rem]" : "min-w-0")}>
+                                    {s.groupId ? <span className={cn("w-8 shrink-0 text-right font-semibold tabular-nums text-muted", groupsWide ? "text-[0.8rem]" : "text-[0.7rem]")}>{s.groupId}</span> : <span className="w-8 shrink-0" />}
                                     {mm.level ? <MismatchDot text={mismatchHint(s)} /> : null}
-                                    <GroupNameField value={s.groupName} subject={s.subject} onChange={(v) => patch(s.id, "groupName", v)} />
+                                    <GroupNameField large={groupsWide} value={s.groupName} subject={s.subject} onChange={(v) => patch(s.id, "groupName", v)} />
                                   </div>
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
@@ -2965,9 +3038,15 @@ export function AdminSchedule() {
                                     onAdd={(b) => addBeat(s, b)}
                                   />
                                 </td>
-                                <td className="px-2 py-1.5 align-middle text-[0.7rem] leading-tight text-muted">
-                                  <span className="block">{s.city}</span>
-                                  <span className="block">{s.branch}</span>
+                                <td className={cn("px-2 py-1.5 align-middle leading-tight text-muted", groupsWide ? "whitespace-nowrap text-[0.85rem]" : "text-[0.7rem]")}>
+                                  {groupsWide ? (
+                                    <span>{[s.city, s.branch].filter(Boolean).join(", ")}</span>
+                                  ) : (
+                                    <>
+                                      <span className="block">{s.city}</span>
+                                      <span className="block">{s.branch}</span>
+                                    </>
+                                  )}
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
                                   <select
@@ -2985,7 +3064,10 @@ export function AdminSchedule() {
                                       );
                                       setDirty((d) => new Set(d).add(s.id));
                                     }}
-                                    className="h-[26px] w-full rounded-md bg-surface-2 px-1 text-[0.6rem] ring-1 ring-black/8"
+                                    className={cn(
+                                      "w-full rounded-md bg-surface-2 px-1 ring-1 ring-black/8",
+                                      groupsWide ? "h-8 text-[0.8rem]" : "h-[26px] text-[0.6rem]",
+                                    )}
                                   >
                                     <option value="">— филиал —</option>
                                     {teachersForBranch(s.branchId).map((t) => (
@@ -2999,7 +3081,7 @@ export function AdminSchedule() {
                                 <td className="px-1 py-1.5 align-middle">
                                   <div className="flex items-center justify-center gap-1.5">
                                     <input value={s.limit} onChange={(e) => patch(s.id, "limit", Number(e.target.value) || 0)} className={cn(cell, "w-7")} />
-                                    <span className="text-[0.65rem] text-muted">/{s.taken}</span>
+                                    <span className={cn("text-muted", groupsWide ? "text-[0.8rem]" : "text-[0.65rem]")}>/{s.taken}</span>
                                   </div>
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
@@ -3047,6 +3129,8 @@ export function AdminSchedule() {
       </div>
       </div>
       ) : null}
+      </div>
+      </div>
       {detail
         ? createPortal(
             <div
@@ -3064,7 +3148,7 @@ export function AdminSchedule() {
               }}
             >
               <article
-                className="relative flex max-h-[min(90vh,920px)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl shadow-[0_18px_50px_rgba(15,23,42,0.28)]"
+                className={cn("relative flex max-h-[min(90vh,920px)] w-full max-w-4xl flex-col overflow-hidden", RA_POP)}
                 style={{ background: ADMIN_PANEL_BLUE }}
                 onClick={(e) => e.stopPropagation()}
                 data-card-id={groupCardId(detail.branchId, detail.groupId)}
@@ -3239,12 +3323,11 @@ export function AdminSchedule() {
                       </Button>
                     </div>
                   </div>
-                {detail.members.length || detail.archive.length ? (
                   <section className="mt-5 rounded-2xl bg-white/80 p-4 ring-1 ring-black/6">
-                    <CrmGroupMembers title="Учатся сейчас" items={detail.members} onOpen={(m) => void openPupil(m, detail.branchId)} />
-                    <CrmGroupMembers title="Архив группы" items={detail.archive} onOpen={(m) => void openPupil(m, detail.branchId)} archive />
+                    <CrmGroupMembers title="Ученики" items={detail.members.filter((m) => m.status !== "лид")} onOpen={(m) => void openPupil(m, detail.branchId)} />
+                    <CrmGroupMembers title="Лиды" items={detail.members.filter((m) => m.status === "лид")} onOpen={(m) => void openPupil(m, detail.branchId)} variant="lead" />
+                    <CrmGroupMembers title="Архивные ученики" items={detail.archive} onOpen={(m) => void openPupil(m, detail.branchId)} variant="archive" />
                   </section>
-                ) : null}
                 </div>
               </article>
             </div>,
@@ -3271,7 +3354,7 @@ export function AdminSchedule() {
       {pushUi.open
         ? createPortal(
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => pushUi.done && setPushUi((u) => ({ ...u, open: false }))}>
-              <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.28)]" onClick={(e) => e.stopPropagation()}>
+              <div className={cn("w-full max-w-md p-6", RA_POP)} onClick={(e) => e.stopPropagation()}>
                 <p className="font-display text-2xl">{pushUi.done ? pushUi.error ? "Выгрузка не прошла" : "Выгрузка завершена" : "Выгрузка в AlfaCRM"}</p>
                 {!pushUi.done ? (
                   <div className="mt-5 flex items-start gap-3">

@@ -231,6 +231,8 @@ export const IDS_FOR_AGENT = `КАРТА ID (обязательно). Не ищ�
 клиент customerId = dossier.crmId; группы клиента — groupLinks[].id (это groupId) + branchId + subjectId + courseId
 карточка клиента clientCardId = card:customer:{customerId} — открывать только по customerId
 карточка группы groupCardId = card:group:{branchId}:{groupId} — открывать только по groupId+branchId
+не путать customerId и groupId (разные сущности, даже при равных числах)
+клиенты: две оси status=учится|лид и view=дети|группы; архив тихий; автолиды каждые 5 мин только новые customerId
 кабинет cabinetId = cabinet:admin
 цена курса price.courseId = path курса
 соответствие subjectId → courseId в карте (вкладка Соответствия)

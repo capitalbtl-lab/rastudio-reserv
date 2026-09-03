@@ -2,6 +2,8 @@
 
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
+import { RA_POP } from "@/data/admin-ui";
+import { cn } from "@/lib/utils";
 
 export type CrmPullState = {
   open: boolean;
@@ -32,7 +34,7 @@ export function CrmPullDialog({ pull, onClose }: { pull: CrmPullState; onClose: 
   const title = pull.done ? (pull.error ? "Не загрузилось" : "Загрузка завершена") : TITLES[pull.kind];
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => pull.done && onClose()}>
-      <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.28)]" onClick={(e) => e.stopPropagation()}>
+      <div className={cn("w-full max-w-md p-6", RA_POP)} onClick={(e) => e.stopPropagation()}>
         <p className="font-display text-2xl">{title}</p>
         {!pull.done ? (
           <div className="mt-5 flex items-start gap-3">

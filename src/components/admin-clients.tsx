@@ -1,17 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw, Search } from "lucide-react";
+import { RefreshCw, Search, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CrmClientCard } from "@/components/crm-client-card";
 import { CrmPullDialog, emptyPull, type CrmPullState } from "@/components/crm-pull-dialog";
 import { loadFromDisk, pullFromCrm } from "@/lib/crm-pull";
 import { retryFetch } from "@/lib/retry-fetch";
 import { adminSchedule } from "@/data/admin-schedule";
-import { clientCardId, CABINET_ID, CRM_BRANCH } from "@/data/ids";
+import { clientCardId, groupCardId, CABINET_ID, CRM_BRANCH } from "@/data/ids";
 import { displayPersonName, displayParent, initialsOf, statusLabel } from "@/data/client-display";
 import { cn } from "@/lib/utils";
+import { ADMIN_PANEL_BLUE, RA_POP } from "@/data/admin-ui";
+import { LessonStrip, GroupLessonStrip } from "@/components/lesson-strip";
+import { CrmGroupMembers, GroupLoadScene } from "@/components/crm-group-card";
+import { CrmLeadBoard } from "@/components/crm-lead-board";
 import type { ClientRow, CustomerCard, GroupMember } from "@/data/crm-cards";
+import { LEAD_STAGES, mergeStages, reorderLeads, type LeadCard, type LeadStage } from "@/data/crm-leads";
+import type { CrmSlot, GroupCalLesson } from "@/data/crm-slots-core";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -29,7 +35,82 @@ const AGE_BANDS = [
   { id: "18+", label: "18+" },
 ];
 
+function ageSpan(raw: string): [number, number] | null {
+  const t = String(raw || "")
+    .toLowerCase()
+    .replace(/[–—]/g, "-");
+  if (/\b18\s*\+|взросл|родител/.test(t)) return [18, 99];
+  const plus = t.match(/(\d+)\s*\+/);
+  if (plus) return [Number(plus[1]), 99];
+  const m = t.match(/(\d+)\s*-\s*(\d+)/);
+  if (m) return [Number(m[1]), Number(m[2])];
+  const one = t.match(/(?:^|\D)(\d{1,2})(?:\s*лет|\s*года|\s*год)?/);
+  if (one) {
+    const n = Number(one[1]);
+    if (n >= 1 && n <= 80) return [n, n];
+  }
+  return null;
+}
+
+function ageMatches(slot: CrmSlot, band: string) {
+  if (!band) return true;
+  const want = ageSpan(band === "18+" ? "18+" : band);
+  if (!want) return true;
+  const got = ageSpan(`${slot.age} ${slot.groupName} ${slot.course}`);
+  if (!got) return false;
+  return got[0] <= want[1] && want[0] <= got[1];
+}
+
 type Status = "учится" | "лид" | "архив" | "все";
+
+const GROUP_LEVELS = [
+  { id: 7, name: "1 класс" },
+  { id: 8, name: "2 класс" },
+  { id: 9, name: "3 класс" },
+  { id: 10, name: "4 класс" },
+  { id: 11, name: "5 класс" },
+  { id: 15, name: "Ознакомительный" },
+  { id: 12, name: "Начальный" },
+  { id: 13, name: "Средний" },
+  { id: 14, name: "Продвинутый" },
+];
+
+const GROUP_STATUS = [
+  { id: 1, name: "Идет набор (ожидает старта)" },
+  { id: 2, name: "Обучается (идет набор)" },
+  { id: 3, name: "Завершена" },
+  { id: 4, name: "Приостановлена" },
+];
+
+type GroupInfo = {
+  description: string;
+  remarks: string;
+  hashtags: string;
+  makeup: string;
+  statusId: number;
+  bDate: string;
+  eDate: string;
+  levelId: number;
+  signup: string;
+  subjectId: number;
+  calendar: GroupCalLesson[];
+  tariffs: { id: number; name: string; price: number }[];
+};
+
+type ClientsSnap = {
+  q: string;
+  status: Status;
+  branch: number;
+  age: string;
+  items: ClientRow[];
+  total: number;
+  counts: { все: number; учится: number; лид: number; архив: number };
+  branchCounts: Record<number, number>;
+  synced: string;
+  all: number;
+};
+
+let clientsSnap: ClientsSnap | null = null;
 
 function emptyRow(customerId: number, branchId: number): ClientRow {
   return {
@@ -50,48 +131,137 @@ function emptyRow(customerId: number, branchId: number): ClientRow {
   };
 }
 
+function rowToLead(r: ClientRow): LeadCard {
+  const title = displayPersonName(r.child, r.parent, r.phone);
+  const age = r.age == null || r.age === "" ? "" : typeof r.age === "number" ? `${r.age} лет` : String(r.age);
+  return {
+    id: Number(r.crmId) || 0,
+    customerId: Number(r.crmId) || 0,
+    branchId: Number(r.branchId) || 0,
+    name: title || r.phone || `лид ${r.crmId || ""}`,
+    age,
+    phone: r.phone || "",
+    email: "",
+    note: r.note || "",
+    assigned: "",
+    statusId: Number(r.leadStatusId || 0),
+    at: r.updatedAt || "",
+    chats: 0,
+  };
+}
+
+function slotCalendar(s: CrmSlot): GroupCalLesson[] {
+  const days = s.beats?.length ? [...new Set(s.beats.map((b) => b.day).filter(Boolean))] : [s.day].filter(Boolean);
+  if (!days.length) return [];
+  const out: GroupCalLesson[] = [];
+  const start = new Date();
+  start.setHours(12, 0, 0, 0);
+  for (let add = -14; add <= 56 && out.length < 12; add += 1) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + add);
+    const wd = d.getDay() === 0 ? 7 : d.getDay();
+    if (!days.includes(wd)) continue;
+    const beat = s.beats?.find((b) => b.day === wd);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    out.push({
+      date: `${y}-${m}-${day}`,
+      from: beat?.timeFrom || s.timeFrom || "",
+      to: beat?.timeTo || s.timeTo || "",
+      status: 2,
+      type: "Групповое",
+    });
+  }
+  return out;
+}
+
 export function AdminClients({
   onOpenGroup,
   hint,
+  slots = [],
+  wide,
+  active = true,
 }: {
   onOpenGroup: (groupId: number, branchId: number) => void;
   hint?: string;
+  slots?: CrmSlot[];
+  wide?: boolean;
+  active?: boolean;
 }) {
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState<Status>("учится");
-  const [branch, setBranch] = useState(0);
-  const [age, setAge] = useState("");
-  const [rows, setRows] = useState<ClientRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [counts, setCounts] = useState({ все: 0, учится: 0, лид: 0, архив: 0 });
-  const [branchCounts, setBranchCounts] = useState<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 4: 0 });
-  const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState(() => clientsSnap?.q || "");
+  const [status, setStatus] = useState<Status>(() => clientsSnap?.status || "учится");
+  const [branch, setBranch] = useState(() => clientsSnap?.branch || 0);
+  const [age, setAge] = useState(() => clientsSnap?.age || "");
+  const [rows, setRows] = useState<ClientRow[]>(() => clientsSnap?.items || []);
+  const [total, setTotal] = useState(() => clientsSnap?.total || 0);
+  const [counts, setCounts] = useState(() => clientsSnap?.counts || { все: 0, учится: 0, лид: 0, архив: 0 });
+  const [branchCounts, setBranchCounts] = useState<Record<number, number>>(() => clientsSnap?.branchCounts || { 1: 0, 2: 0, 3: 0, 4: 0 });
+  const [busy, setBusy] = useState(() => !clientsSnap?.items.length);
   const [card, setCard] = useState<CustomerCard | null>(null);
   const [cardLoading, setCardLoading] = useState(false);
   const [activeId, setActiveId] = useState(0);
   const [pull, setPull] = useState<CrmPullState>(emptyPull("clients"));
-  const [synced, setSynced] = useState("");
+  const [synced, setSynced] = useState(() => clientsSnap?.synced || "");
   const [cap, setCap] = useState(120);
+  const [groupOpen, setGroupOpen] = useState(false);
+  const [addingGroup, setAddingGroup] = useState("");
+  const [view, setView] = useState<"дети" | "группы">("дети");
+  const [pickedGroup, setPickedGroup] = useState<CrmSlot | null>(null);
+  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
+  const [groupArchive, setGroupArchive] = useState<GroupMember[]>([]);
+  const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
+  const [groupLoading, setGroupLoading] = useState(false);
+  const [funnelItems, setFunnelItems] = useState<LeadCard[]>([]);
+  const [funnelStages, setFunnelStages] = useState<LeadStage[]>(LEAD_STAGES);
+  const [funnelLoading, setFunnelLoading] = useState(false);
+  const [funnelW, setFunnelW] = useState(400);
+  const [stageAdd, setStageAdd] = useState(false);
+  const [stageName, setStageName] = useState("");
+  const funnelWRef = useRef(400);
+  const funnelMoved = useRef(new Map<string, number>());
+  const funnelGone = useRef(new Set<string>());
+  const [leadKeys, setLeadKeys] = useState<Set<string> | null>(null);
+  const leadKeysRef = useRef<Set<string> | null>(null);
+  const groupMenuRef = useRef<HTMLDivElement>(null);
   const [desktop, setDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches);
   const searchT = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const autoPull = useRef(false);
+  const groupGen = useRef(0);
+  const groupPack = useRef(new Map<string, { members: GroupMember[]; archive: GroupMember[]; info: GroupInfo }>());
   const qRef = useRef("");
   const statusRef = useRef<Status>("учится");
   const branchRef = useRef(0);
   const ageRef = useRef("");
   const activeIdRef = useRef(0);
   const desktopRef = useRef(desktop);
+  const viewRef = useRef<"дети" | "группы">("дети");
+  const rowsRef = useRef<ClientRow[]>(rows);
+  const wasActive = useRef(active);
   qRef.current = q;
   statusRef.current = status;
   branchRef.current = branch;
   ageRef.current = age;
   desktopRef.current = desktop;
+  viewRef.current = view;
+  rowsRef.current = rows;
+
+  useEffect(() => {
+    if (active && !wasActive.current && viewRef.current === "группы") {
+      setView("дети");
+      setPickedGroup(null);
+      setGroupInfo(null);
+      setGroupMembers([]);
+      setGroupArchive([]);
+    }
+    wasActive.current = active;
+  }, [active]);
 
   async function load(nextQ = q, nextStatus = status, nextBranch = branch, nextAge = age) {
-    setBusy(true);
+    if (!rowsRef.current.length) setBusy(true);
     try {
-      const res = (await retryFetch(() => loadFromDisk("clients", { q: nextQ, status: nextStatus, branchId: nextBranch, ageBand: nextAge }))) as {
+      const res = (await retryFetch(() => loadFromDisk("clients", { q: nextQ, status: nextStatus, branchId: nextBranch, ageBand: nextAge }), 2, 20000)) as {
         ok?: boolean;
         items?: ClientRow[];
         total?: number;
@@ -103,12 +273,25 @@ export function AdminClients({
       };
       if (res.ok && Array.isArray(res.items)) {
         setRows(res.items);
+        rowsRef.current = res.items;
         setTotal(Number(res.total) || res.items.length);
         if (res.counts) setCounts(res.counts);
         if (res.branchCounts) setBranchCounts(res.branchCounts);
         if (res.lastCrmSync) setSynced(res.lastCrmSync);
+        clientsSnap = {
+          q: nextQ,
+          status: nextStatus,
+          branch: nextBranch,
+          age: nextAge,
+          items: res.items,
+          total: Number(res.total) || res.items.length,
+          counts: res.counts || counts,
+          branchCounts: res.branchCounts || { 1: 0, 2: 0, 3: 0, 4: 0 },
+          synced: res.lastCrmSync || "",
+          all: Number(res.all || 0),
+        };
         const all = Number(res.all || 0);
-        if (!autoPull.current && !nextQ && nextStatus === "учится" && all === 0) {
+        if (!autoPull.current && !nextQ && nextStatus === "учится" && all === 0 && !res.items.length) {
           autoPull.current = true;
           void pullKind("clients");
         }
@@ -118,10 +301,16 @@ export function AdminClients({
           setCard(null);
           setActiveId(0);
           activeIdRef.current = 0;
-        } else if (!still && desktopRef.current) {
-          void openRow(res.items[0]);
+        } else if (!still && desktopRef.current && viewRef.current === "дети" && nextStatus !== "лид") {
+          const first = res.items[0];
+          window.requestAnimationFrame(() => {
+            if (activeIdRef.current) return;
+            void openRow(first);
+          });
         }
       }
+    } catch {
+      /* keep cache on screen */
     } finally {
       setBusy(false);
     }
@@ -134,8 +323,8 @@ export function AdminClients({
       const res = (await pullFromCrm(kind, (step, lines, done, totalN) => {
         setPull((u) => (u.done ? u : { ...u, step: step || u.step, lines, added: done, total: totalN, kind: "clients" }));
       })) as { ok?: boolean; error?: string; lines?: { ok: boolean; text: string }[]; added?: number; total?: number };
-      if (!res.ok) {
-        setPull((u) => ({ ...u, done: true, error: res.error || "AlfaCRM не ответила.", kind: "clients" }));
+      if (!res.ok || res.error) {
+        setPull((u) => ({ ...u, done: true, error: res.error || "AlfaCRM не ответила.", lines: res.lines || u.lines, kind: "clients" }));
         return;
       }
       setPull({
@@ -150,11 +339,64 @@ export function AdminClients({
         total: Number(res.total || 0),
       });
       const nextStatus: Status = kind === "clientsArchive" ? "архив" : kind === "clientsLeads" ? "лид" : "учится";
+      if (kind === "clientsLeads") {
+        leadKeysRef.current = null;
+        setLeadKeys(null);
+        void loadFunnel(branchRef.current);
+      }
       setStatus(nextStatus);
       await load(qRef.current, nextStatus, branchRef.current, ageRef.current);
-    } catch {
-      setPull((u) => ({ ...u, done: true, error: "Не удалось загрузить клиентов.", kind: "clients" }));
+      if (viewRef.current === "группы") void openFirstGroup(nextStatus);
+    } catch (e) {
+      setPull((u) => ({
+        ...u,
+        done: true,
+        error: e instanceof Error && e.message ? e.message : "Не удалось загрузить клиентов.",
+        kind: "clients",
+      }));
     }
+  }
+
+  async function loadFunnel(bid: number, force = false) {
+    setFunnelLoading(true);
+    try {
+      const res = (await adminSchedule({
+        data: { token: token(), action: "leadsBoard", branchId: bid, force } as never,
+      })) as { ok?: boolean; stages?: LeadStage[]; items?: LeadCard[] };
+      if (res.ok && Array.isArray(res.items)) {
+        setFunnelStages(mergeStages(res.stages || [], res.items.map((x) => x.statusId)));
+        const moved = funnelMoved.current;
+        setFunnelItems(
+          moved.size || funnelGone.current.size
+            ? res.items
+                .filter((it) => !funnelGone.current.has(`${it.branchId}:${it.id}`))
+                .map((it) => {
+                  const v = moved.get(`${it.branchId}:${it.id}`);
+                  return v == null ? it : { ...it, statusId: v };
+                })
+            : res.items,
+        );
+      }
+    } catch {
+      /* keep dossier fallback */
+    } finally {
+      setFunnelLoading(false);
+    }
+  }
+
+  function createLeadStage(name: string) {
+    const title = name.trim();
+    if (!title) return;
+    setStageAdd(false);
+    setStageName("");
+    void adminSchedule({
+      data: { token: token(), action: "leadStageCreate", name: title, branchId: branchRef.current } as never,
+    }).then((res) => {
+      if (res && "stages" in res && Array.isArray(res.stages)) {
+        setFunnelStages(mergeStages(res.stages as LeadStage[]));
+        if ("items" in res && Array.isArray(res.items)) setFunnelItems(res.items as LeadCard[]);
+      }
+    });
   }
 
   async function openRow(r: ClientRow) {
@@ -200,7 +442,7 @@ export function AdminClients({
     }
   }
 
-  async function mutateCard(action: "customerSave" | "customerLesson" | "customerPay" | "customerTariff", extra: Record<string, unknown> = {}) {
+  async function mutateCard(action: "customerSave" | "customerLesson" | "customerPay" | "customerTariff" | "customerGroup", extra: Record<string, unknown> = {}) {
     if (!card) return;
     const res = await adminSchedule({
       data: { token: token(), action, customerId: card.id, branchId: card.branchId, ...extra } as never,
@@ -231,6 +473,39 @@ export function AdminClients({
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
   }, []);
+
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      void load(qRef.current, statusRef.current, branchRef.current, ageRef.current);
+    }, 5 * 60 * 1000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (status === "лид" && view === "дети") void loadFunnel(branch, true);
+  }, [status, view, branch]);
+
+  useEffect(() => {
+    if (!(status === "лид" && view === "дети")) return;
+    const t = window.setInterval(() => void loadFunnel(branchRef.current, true), 5 * 60 * 1000);
+    return () => window.clearInterval(t);
+  }, [status, view]);
+
+  useEffect(() => {
+    if (!groupOpen) return;
+    function onDoc(e: MouseEvent) {
+      if (groupMenuRef.current && !groupMenuRef.current.contains(e.target as Node)) setGroupOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setGroupOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [groupOpen]);
 
   useEffect(() => {
     function onQuery(e: Event) {
@@ -274,7 +549,257 @@ export function AdminClients({
 
   const branchSum = (branchCounts[1] || 0) + (branchCounts[2] || 0) + (branchCounts[3] || 0) + (branchCounts[4] || 0);
   const shown = useMemo(() => rows.slice(0, cap), [rows, cap]);
+  const funnelOn = status === "лид" && view === "дети";
+  const funnelWas = useRef(false);
+  useEffect(() => {
+    try {
+      const n = Number(localStorage.getItem("ra_funnel_card_w") || 0);
+      if (n >= 280 && n <= 760) {
+        setFunnelW(n);
+        funnelWRef.current = n;
+      }
+    } catch {
+      /* */
+    }
+  }, []);
+  useEffect(() => {
+    if (funnelOn && !funnelWas.current) {
+      setCard(null);
+      setActiveId(0);
+      activeIdRef.current = 0;
+    }
+    funnelWas.current = funnelOn;
+  }, [funnelOn]);
+  const funnelShown = useMemo(() => {
+    const src = funnelItems.length ? funnelItems : shown.filter((r) => r.status === "лид" || status === "лид").map(rowToLead);
+    const qq = q.trim().toLowerCase().replace(/ё/g, "е");
+    return src.filter((it) => {
+      if (funnelGone.current.has(`${it.branchId}:${it.id}`)) return false;
+      if (branch && it.branchId !== branch) return false;
+      if (age) {
+        const years = parseInt(it.age, 10);
+        const band = !years ? "" : years <= 4 ? "3-4" : years <= 6 ? "5-6" : years <= 9 ? "7-9" : years <= 12 ? "10-12" : years <= 17 ? "13-17" : "18+";
+        if (band && band !== age) return false;
+      }
+      if (!qq) return true;
+      return `${it.name} ${it.phone} ${it.note} ${it.id} ${it.customerId}`.toLowerCase().replace(/ё/g, "е").includes(qq);
+    });
+  }, [funnelItems, shown, q, branch, age, status]);
   const activeIndex = shown.findIndex((r) => Number(r.crmId) === activeId);
+  const joinedIds = new Set((card?.groups || []).filter((g) => g.active).map((g) => g.id));
+  const groupOpts = useMemo(() => {
+    const seen = new Set<string>();
+    const out: CrmSlot[] = [];
+    for (const s of slots) {
+      if (!s.groupId || s.statusId === 3 || s.statusId === 4) continue;
+      if (branch && s.branchId !== branch) continue;
+      if (!ageMatches(s, age)) continue;
+      const key = `${s.branchId}:${s.groupId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(s);
+    }
+    out.sort((a, b) => a.groupName.localeCompare(b.groupName, "ru") || a.day - b.day || a.timeFrom.localeCompare(b.timeFrom));
+    return out;
+  }, [slots, branch, age]);
+  const freeGroupOpts = groupOpts.filter((s) => !joinedIds.has(s.groupId));
+  const shownGroups = useMemo(() => {
+    let list = groupOpts;
+    if (status === "лид") {
+      list = leadKeys ? list.filter((s) => leadKeys.has(`${s.branchId}:${s.groupId}`)) : [];
+    }
+    const qq = q.trim().toLowerCase();
+    if (!qq) return list;
+    return list.filter((s) =>
+      `${s.groupName} ${s.teacher} ${s.age} ${s.course} ${CRM_BRANCH[s.branchId]?.short || ""}`.toLowerCase().includes(qq),
+    );
+  }, [groupOpts, status, leadKeys, q]);
+  const warmupKey = shownGroups.slice(0, 6).map((s) => `${s.branchId}:${s.groupId}`).join(",");
+  useEffect(() => {
+    if (view !== "группы" || !warmupKey) return;
+    shownGroups.slice(0, 6).forEach((s) => {
+      if (s.groupId && !groupPack.current.has(`${s.branchId}:${s.groupId}`)) void prefetchGroup(s);
+    });
+  }, [view, warmupKey]);
+  const memberShown = useMemo(() => {
+    const qq = q.trim().toLowerCase().replace(/ё/g, "е");
+    const list = [
+      ...groupMembers.map((m) => ({ ...m, archived: false })),
+      ...groupArchive.map((m) => ({ ...m, archived: true })),
+    ];
+    if (!qq) return list;
+    return list.filter((m) =>
+      `${m.name} ${m.parent} ${m.phone} ${m.id} ${m.age}`.toLowerCase().replace(/ё/g, "е").includes(qq),
+    );
+  }, [groupMembers, groupArchive, q]);
+
+  async function loadLeadKeys() {
+    if (leadKeysRef.current) return leadKeysRef.current;
+    const res = (await retryFetch(() => loadFromDisk("clients", { q: "", status: "лид", branchId: 0, ageBand: "" }), 2, 20000)) as {
+      items?: ClientRow[];
+    };
+    const keys = new Set<string>();
+    for (const r of res.items || []) {
+      for (const g of r.groupLinks || []) {
+        if (g.id) keys.add(`${Number(g.branchId || r.branchId || 0)}:${g.id}`);
+      }
+    }
+    leadKeysRef.current = keys;
+    setLeadKeys(keys);
+    return keys;
+  }
+
+  async function openFirstGroup(statusNow: Status, list?: CrmSlot[]) {
+    let rows = list;
+    if (!rows) {
+      if (statusNow === "лид") {
+        const keys = await loadLeadKeys();
+        rows = groupOpts.filter((s) => keys.has(`${s.branchId}:${s.groupId}`));
+      } else rows = groupOpts;
+    }
+    const first = rows[0];
+    if (first) await openGroupSlot(first);
+    else {
+      setPickedGroup(null);
+      setGroupInfo(null);
+      setGroupMembers([]);
+      setGroupArchive([]);
+    }
+  }
+
+  async function openGroupSlot(s: CrmSlot) {
+    if (!s.groupId) return;
+    const key = `${s.branchId}:${s.groupId}`;
+    const gen = ++groupGen.current;
+    setView("группы");
+    setPickedGroup(s);
+    setCard(null);
+    setActiveId(0);
+    activeIdRef.current = 0;
+    setGroupOpen(false);
+    const cached = groupPack.current.get(key);
+    if (cached) {
+      setGroupMembers(cached.members);
+      setGroupArchive(cached.archive);
+      setGroupInfo(cached.info);
+      setGroupLoading(false);
+    } else {
+      setGroupLoading(true);
+      setGroupMembers([]);
+      setGroupArchive([]);
+      setGroupInfo({
+        description: s.description || s.groupNote || "",
+        remarks: s.remarks || "",
+        hashtags: (s.hashtags || "").replace(/\s+/g, " ").trim(),
+        makeup: s.makeup || "",
+        statusId: s.statusId || 0,
+        bDate: s.bDate || "",
+        eDate: s.eDate || "",
+        levelId: s.levelId || 0,
+        signup: s.signup || "",
+        subjectId: s.subjectId || 0,
+        calendar: slotCalendar(s),
+        tariffs: [],
+      });
+    }
+    try {
+      const [people, res] = await Promise.all([
+        adminSchedule({
+          data: { token: token(), action: "groupMembers", groupId: s.groupId, branchId: s.branchId } as never,
+        }),
+        adminSchedule({
+          data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId, lite: true } as never,
+        }),
+      ]);
+      if (gen !== groupGen.current) return;
+      const members = people.ok && "active" in people ? ((people.active || []) as GroupMember[]) : [];
+      const archive = people.ok && "archive" in people ? ((people.archive || []) as GroupMember[]) : [];
+      const g = res.ok && "group" in res && res.group
+        ? (res.group as {
+            note?: string;
+            description?: string;
+            remarks?: string;
+            hashtags?: string;
+            makeup?: string;
+            statusId?: number;
+            signup?: string;
+            subjectId?: number;
+            bDate?: string;
+            eDate?: string;
+            levelId?: number;
+            calendar?: GroupCalLesson[];
+          })
+        : null;
+      const info: GroupInfo = {
+        description: g?.description || g?.note || s.description || s.groupNote || "",
+        remarks: g?.remarks || s.remarks || "",
+        hashtags: ((g?.hashtags || s.hashtags || "").replace(/\s+/g, " ").trim()),
+        makeup: g?.makeup || s.makeup || "",
+        statusId: g?.statusId || s.statusId || 0,
+        bDate: g?.bDate || s.bDate || "",
+        eDate: g?.eDate || s.eDate || "",
+        levelId: g?.levelId || s.levelId || 0,
+        signup: g?.signup || s.signup || "",
+        subjectId: g?.subjectId || s.subjectId || 0,
+        calendar: g?.calendar?.length ? g.calendar : cached?.info.calendar?.length ? cached.info.calendar : slotCalendar(s),
+        tariffs: res.ok && "tariffs" in res && Array.isArray(res.tariffs) ? (res.tariffs as GroupInfo["tariffs"]) : cached?.info.tariffs || [],
+      };
+      setGroupMembers(members);
+      setGroupArchive(archive);
+      setGroupInfo(info);
+      groupPack.current.set(key, { members, archive, info });
+      const i = shownGroups.findIndex((x) => x.groupId === s.groupId && x.branchId === s.branchId);
+      [shownGroups[i - 1], shownGroups[i + 1], shownGroups[i + 2], shownGroups[i + 3]]
+        .filter((x): x is CrmSlot => Boolean(x?.groupId))
+        .forEach((next) => {
+          if (!groupPack.current.has(`${next.branchId}:${next.groupId}`)) void prefetchGroup(next);
+        });
+    } finally {
+      if (gen === groupGen.current) setGroupLoading(false);
+    }
+  }
+
+  async function prefetchGroup(s: CrmSlot) {
+    if (!s.groupId) return;
+    const key = `${s.branchId}:${s.groupId}`;
+    if (groupPack.current.has(key)) return;
+    try {
+      const [people, res] = await Promise.all([
+        adminSchedule({
+          data: { token: token(), action: "groupMembers", groupId: s.groupId, branchId: s.branchId } as never,
+        }),
+        adminSchedule({
+          data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId, lite: true } as never,
+        }),
+      ]);
+      if (groupPack.current.has(key)) return;
+      const members = people.ok && "active" in people ? ((people.active || []) as GroupMember[]) : [];
+      const archive = people.ok && "archive" in people ? ((people.archive || []) as GroupMember[]) : [];
+      const g = res.ok && "group" in res && res.group
+        ? (res.group as { note?: string; description?: string; remarks?: string; hashtags?: string; makeup?: string; statusId?: number; signup?: string; subjectId?: number; bDate?: string; eDate?: string; levelId?: number; calendar?: GroupCalLesson[] })
+        : null;
+      groupPack.current.set(key, {
+        members,
+        archive,
+        info: {
+          description: g?.description || g?.note || s.description || s.groupNote || "",
+          remarks: g?.remarks || s.remarks || "",
+          hashtags: (g?.hashtags || s.hashtags || "").replace(/\s+/g, " ").trim(),
+          makeup: g?.makeup || s.makeup || "",
+          statusId: g?.statusId || s.statusId || 0,
+          bDate: g?.bDate || s.bDate || "",
+          eDate: g?.eDate || s.eDate || "",
+          levelId: g?.levelId || s.levelId || 0,
+          signup: g?.signup || s.signup || "",
+          subjectId: g?.subjectId || s.subjectId || 0,
+          calendar: g?.calendar || [],
+          tariffs: res.ok && "tariffs" in res && Array.isArray(res.tariffs) ? (res.tariffs as GroupInfo["tariffs"]) : [],
+        },
+      });
+    } catch {
+      /* prefetch is best-effort */
+    }
+  }
 
   function move(delta: number) {
     if (!shown.length) return;
@@ -287,16 +812,17 @@ export function AdminClients({
 
   return (
     <div
-      className="mt-4 flex min-h-0 flex-1 flex-col"
+      className="flex h-full min-h-0 flex-1 flex-col"
       data-cabinet-id={CABINET_ID}
       data-pane="clients"
+      data-screen={wide ? "wide" : "normal"}
       data-filter-status={status}
       data-filter-branch={branch}
       data-filter-age={age}
     >
       <div className="shrink-0 rounded-[1.4rem] bg-white p-3 shadow-[var(--shadow-border)] md:px-4 md:py-3">
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex h-10 min-w-[14rem] max-w-md flex-1 items-center gap-2 rounded-full bg-surface-2 px-3 ring-1 ring-black/6 transition-[box-shadow] duration-[var(--motion-quick)] focus-within:ring-2 focus-within:ring-primary/35">
+          <label className="flex h-10 w-full max-w-[22rem] items-center gap-2 rounded-full bg-surface-2 px-3 ring-1 ring-black/6 transition-[box-shadow] duration-[var(--motion-quick)] focus-within:ring-2 focus-within:ring-primary/35">
             <Search className="h-4 w-4 shrink-0 text-muted" aria-hidden />
             <input
               value={q}
@@ -304,8 +830,12 @@ export function AdminClients({
                 const v = e.target.value;
                 setQ(v);
                 window.clearTimeout(searchT.current);
-                searchT.current = window.setTimeout(() => void load(v, status, branch, age), 120);
+                searchT.current = window.setTimeout(() => {
+                  if (viewRef.current === "дети") void load(v, status, branch, age);
+                }, 120);
               }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => e.preventDefault()}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   if (activeId) return;
@@ -325,41 +855,91 @@ export function AdminClients({
                   e.currentTarget.blur();
                 }
               }}
-              placeholder="Имя, телефон, customerId"
+              placeholder={view === "группы" ? "Группа, педагог, возраст" : status === "лид" ? "Лид, телефон, этап" : "Имя, телефон, customerId"}
               className="h-10 w-full bg-transparent text-sm outline-none"
-              aria-label="Поиск клиентов"
+              aria-label={view === "группы" ? "Поиск групп" : "Поиск клиентов"}
             />
             <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 font-mono text-[0.68rem] tabular-nums text-muted">
-              {busy ? "…" : `${shown.length}${total > shown.length ? `/${total}` : ""}`}
+              {busy || groupLoading || funnelLoading ? "…" : view === "группы" ? `${shownGroups.length}` : funnelOn ? `${funnelShown.length}` : `${shown.length}${total > shown.length ? `/${total}` : ""}`}
             </span>
           </label>
-
-          <div className="flex h-10 items-center rounded-full bg-surface-2 p-1" data-sort-group="status" role="tablist" aria-label="Статус">
+          <div className="flex h-10 items-center rounded-full bg-surface-2 p-1" data-sort-group="status" role="tablist" aria-label="Текущие или лиды">
             {([
               ["учится", "Текущие", counts.учится],
               ["лид", "Лиды", counts.лид],
-            ] as const).map(([id, label, n]) => (
+            ] as const).map(([id, label, n]) => {
+              const on = status === id;
+              return (
               <button
                 key={id}
                 type="button"
                 role="tab"
-                aria-selected={status === id}
+                aria-selected={on}
                 data-sort="status"
                 data-id={id}
                 onClick={() => {
                   setStatus(id);
                   setCap(120);
-                  void load(q, id, branch, age);
+                  if (view === "дети") {
+                    setPickedGroup(null);
+                    void load(q, id, branch, age);
+                    return;
+                  }
+                  setCard(null);
+                  setActiveId(0);
+                  activeIdRef.current = 0;
+                  void openFirstGroup(id);
                 }}
                 className={cn(
                   "h-8 rounded-full px-3.5 text-[0.8rem] font-semibold transition-colors duration-[var(--motion-quick)]",
-                  status === id ? "bg-primary text-white shadow-sm" : "text-muted hover:text-fg",
+                  on ? "bg-primary text-white shadow-sm" : "text-muted hover:text-fg",
                 )}
               >
                 {label}
                 <span className="ml-1 tabular-nums opacity-80">{n}</span>
               </button>
-            ))}
+              );
+            })}
+          </div>
+          <span className="hidden h-6 w-px bg-black/10 sm:block" aria-hidden />
+          <div className="flex h-10 items-center rounded-full bg-surface-2 p-1" data-sort-group="entity" role="tablist" aria-label="Группы или дети">
+            {([
+              ["группы", "Группы", status === "лид" ? shownGroups.length : groupOpts.length],
+              ["дети", "Дети", status === "лид" ? counts.лид : counts.учится],
+            ] as const).map(([id, label, n]) => {
+              const on = id === "группы" ? view === "группы" : view === "дети";
+              return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                data-sort="entity"
+                data-id={id}
+                onClick={() => {
+                  if (id === "группы") {
+                    setView("группы");
+                    setCard(null);
+                    setActiveId(0);
+                    activeIdRef.current = 0;
+                    void openFirstGroup(status);
+                    return;
+                  }
+                  setView("дети");
+                  setPickedGroup(null);
+                  setCap(120);
+                  void load(q, status, branch, age);
+                }}
+                className={cn(
+                  "h-8 rounded-full px-3.5 text-[0.8rem] font-semibold transition-colors duration-[var(--motion-quick)]",
+                  on ? "bg-primary text-white shadow-sm" : "text-muted hover:text-fg",
+                )}
+              >
+                {label}
+                <span className="ml-1 tabular-nums opacity-80">{n}</span>
+              </button>
+              );
+            })}
           </div>
 
           <div className="ml-auto flex flex-wrap items-center gap-1">
@@ -372,12 +952,17 @@ export function AdminClients({
               <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} aria-hidden />
               Обновить
             </button>
-            <Button type="button" size="sm" variant="secondary" className="h-10" disabled={busy || pull.open} onClick={() => void pullKind("clientsLeads")}>
-              Загрузить лиды
-            </Button>
             <button
               type="button"
-              className={cn("px-2 text-[0.75rem] font-semibold underline-offset-2 hover:underline", status === "архив" ? "text-fg" : "text-muted")}
+              className="inline-flex h-10 items-center rounded-full px-3 text-[0.8rem] font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
+              disabled={busy || pull.open}
+              onClick={() => void pullKind("clientsLeads")}
+            >
+              Загрузить лиды
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-10 items-center rounded-full px-3 text-[0.8rem] font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
               disabled={busy || pull.open}
               onClick={() => {
                 if (!counts.архив) void pullKind("clientsArchive");
@@ -388,7 +973,7 @@ export function AdminClients({
                 }
               }}
             >
-              {counts.архив ? `архив ${counts.архив}` : "загрузить архив"}
+              {counts.архив ? `Архив ${counts.архив}` : "Загрузить архив"}
             </button>
           </div>
         </div>
@@ -396,7 +981,7 @@ export function AdminClients({
 
         <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
           <div className="flex min-w-0 flex-wrap items-center gap-1">
-            <span className="pr-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted">Филиал</span>
+            <span className="pr-1 text-[0.72rem] font-bold uppercase tracking-[0.12em] text-fg">Филиал</span>
             <button
               type="button"
               data-sort="branch"
@@ -430,7 +1015,7 @@ export function AdminClients({
             ))}
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-1">
-            <span className="pr-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-muted">Возраст</span>
+            <span className="pr-1 text-[0.72rem] font-bold uppercase tracking-[0.12em] text-fg">Возраст</span>
             {AGE_BANDS.map((b) => (
               <button
                 key={b.id || "all"}
@@ -448,7 +1033,94 @@ export function AdminClients({
               </button>
             ))}
           </div>
-          {synced ? <span className="ml-auto text-[0.68rem] text-muted">{new Date(synced).toLocaleString("ru-RU")}</span> : null}
+          <div className="ml-auto flex items-center gap-1.5">
+            {funnelOn ? (
+              <span className="group relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStageName("");
+                    setStageAdd(true);
+                  }}
+                  className="grid h-8 w-8 place-items-center rounded-full bg-surface-2 text-lg leading-none text-muted ring-1 ring-black/8 hover:bg-white hover:text-fg"
+                  aria-label="Добавить раздел в воронку продаж"
+                >
+                  +
+                </button>
+                <span className="pointer-events-none absolute right-0 top-[2.35rem] z-50 hidden whitespace-nowrap rounded-full bg-fg px-3 py-1.5 text-[0.72rem] font-medium text-white shadow-[0_8px_20px_rgba(15,23,42,.25)] group-hover:block">
+                  Добавить раздел в воронку продаж
+                </span>
+              </span>
+            ) : null}
+            <div className="relative" ref={groupMenuRef} data-op="group-filter">
+            <button
+              type="button"
+              data-op="add-group"
+              onClick={() => setGroupOpen((v) => !v)}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[0.75rem] font-semibold ring-1 transition-colors",
+                groupOpen ? "bg-fg text-white ring-fg" : "bg-surface-2 text-fg ring-black/8 hover:bg-white",
+              )}
+            >
+              Группа
+              <span className="tabular-nums opacity-80">{groupOpts.length}</span>
+              <span className="text-[0.65rem] opacity-70">▾</span>
+            </button>
+            {groupOpen ? (
+              <div className={cn("absolute right-0 top-9 z-50 w-[min(28rem,calc(100vw-2rem))] overflow-hidden", RA_POP)}>
+                <p className="border-b border-black/6 px-3 py-2 text-[0.72rem] text-muted">
+                  {card ? `Добавить «${displayPersonName(card.name, card.parent)}» в группу` : "Откройте карточку клиента — затем плюс у группы"}
+                  {branch ? ` · ${CRM_BRANCH[branch]?.short}` : ""}
+                  {age ? ` · ${AGE_BANDS.find((b) => b.id === age)?.label || age}` : ""}
+                </p>
+                <ul className="max-h-72 overflow-y-auto pretty-scroll py-1">
+                  {groupOpts.length ? groupOpts.map((s) => {
+                    const key = `${s.branchId}:${s.groupId}`;
+                    const inGroup = joinedIds.has(s.groupId);
+                    const busyPlus = addingGroup === key;
+                    return (
+                      <li key={key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-surface-2">
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 text-left"
+                          onClick={() => void openGroupSlot(s)}
+                        >
+                          <p className="truncate text-[0.82rem] font-medium">{s.groupName}</p>
+                          <p className="truncate text-[0.7rem] text-muted">
+                            {[s.dayLabel && s.timeFrom ? `${s.dayLabel} ${s.timeFrom}${s.timeTo ? `–${s.timeTo}` : ""}` : "", s.age, s.teacher, !branch ? CRM_BRANCH[s.branchId]?.short : ""]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          title={inGroup ? "уже в этой группе" : "добавить в группу"}
+                          disabled={!card || inGroup || Boolean(addingGroup)}
+                          data-group-id={s.groupId}
+                          data-branch-id={s.branchId}
+                          className={cn(
+                            "grid h-7 w-7 shrink-0 place-items-center rounded-full text-lg leading-none",
+                            inGroup ? "bg-primary/15 text-primary" : "bg-primary text-white hover:bg-primary/90 disabled:opacity-40",
+                          )}
+                          onClick={() => {
+                            if (!card || inGroup) return;
+                            setAddingGroup(key);
+                            void mutateCard("customerGroup", { groupId: s.groupId, branchId: s.branchId || card.branchId }).finally(() => setAddingGroup(""));
+                          }}
+                        >
+                          {busyPlus ? "…" : inGroup ? "✓" : <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />}
+                        </button>
+                      </li>
+                    );
+                  }) : (
+                    <li className="px-3 py-4 text-center text-sm text-muted">Нет групп в этой выборке.</li>
+                  )}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+          </div>
+          {synced ? <span className="hidden text-[0.68rem] text-muted xl:inline">{new Date(synced).toLocaleString("ru-RU")}</span> : null}
         </div>
         {status === "архив" && !counts.архив ? (
           <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Архив на сайте пуст. Нажмите «загрузить архив» — только is_study=2.</p>
@@ -458,9 +1130,131 @@ export function AdminClients({
         ) : null}
       </div>
 
-      <div className="mt-3 grid min-h-0 flex-1 items-stretch gap-3 overflow-hidden lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]" data-layout="list-card">
-        <div ref={listRef} className="pretty-scroll min-h-0 space-y-1.5 overflow-y-auto p-1 max-lg:max-h-[72vh] lg:h-full">
-          {shown.map((r) => {
+      <div
+        className={cn(
+          "mt-3 min-h-0 flex-1 items-stretch overflow-hidden",
+          funnelOn && card && desktop
+            ? "grid gap-0"
+            : funnelOn
+              ? "flex flex-col gap-3"
+              : "grid gap-3 lg:grid-cols-[22rem_minmax(0,1fr)]",
+        )}
+        style={funnelOn && card && desktop ? { gridTemplateColumns: `minmax(0,1fr) ${funnelW}px` } : undefined}
+        data-layout={funnelOn ? "lead-funnel" : "list-card"}
+      >
+        {funnelOn ? (
+          funnelLoading && !funnelShown.length ? (
+            <p className="m-auto text-sm text-muted">Загружаю воронку лидов AlfaCRM…</p>
+          ) : (
+            <CrmLeadBoard
+              stages={funnelStages}
+              items={funnelShown}
+              activeId={activeId}
+              hideBranch={Boolean(branch)}
+              onOpen={(lead) => void openById(lead.customerId || lead.id, lead.branchId || 1)}
+              onMove={(lead, statusId, beforeId) => {
+                if (!lead.id) return;
+                const key = `${lead.branchId}:${lead.id}`;
+                const prev = lead.statusId;
+                const sameCol = prev === statusId;
+                funnelMoved.current.set(key, statusId);
+                setFunnelItems((xs) => {
+                  const src = xs.length ? xs : funnelShown;
+                  return reorderLeads(src, lead, statusId, beforeId);
+                });
+                const colNow = (funnelItems.length ? funnelItems : funnelShown).filter((x) => (x.id === lead.id && x.branchId === lead.branchId ? statusId : x.statusId) === statusId);
+                const sort = Math.max(0, colNow.findIndex((x) => x.id === (beforeId || 0))) * 10;
+                void adminSchedule({
+                  data: { token: token(), action: "leadMove", leadId: lead.id, branchId: lead.branchId, leadStatusId: statusId, sort } as never,
+                }).then((res) => {
+                  if (res && res.ok) return;
+                  if (sameCol) return;
+                  funnelMoved.current.delete(key);
+                  setFunnelItems((xs) => xs.map((x) => (x.id === lead.id && x.branchId === lead.branchId ? { ...x, statusId: prev } : x)));
+                });
+              }}
+              onArchive={(lead) => {
+                const key = `${lead.branchId}:${lead.id}`;
+                funnelGone.current.add(key);
+                setFunnelItems((xs) => {
+                  const src = xs.length ? xs : funnelShown;
+                  return src.filter((x) => !(x.id === lead.id && x.branchId === lead.branchId));
+                });
+                if (activeId === lead.customerId || activeId === lead.id) {
+                  setCard(null);
+                  setActiveId(0);
+                  activeIdRef.current = 0;
+                }
+                void adminSchedule({
+                  data: { token: token(), action: "leadArchive", leadId: lead.id, branchId: lead.branchId } as never,
+                }).then((res) => {
+                  if (res && res.ok) return;
+                  funnelGone.current.delete(key);
+                  setFunnelItems((xs) => {
+                    if (xs.some((x) => x.id === lead.id && x.branchId === lead.branchId)) return xs;
+                    return [lead, ...xs];
+                  });
+                });
+              }}
+              onRenameStage={(id, name) => {
+                setFunnelStages((xs) => xs.map((s) => (s.id === id ? { ...s, name } : s)));
+                void adminSchedule({
+                  data: { token: token(), action: "leadStageSave", stageId: id, name, branchId: branchRef.current } as never,
+                }).then((res) => {
+                  if (res && "stages" in res && Array.isArray(res.stages)) setFunnelStages(mergeStages(res.stages as LeadStage[]));
+                });
+              }}
+              onDeleteStage={(id) => {
+                setFunnelStages((xs) => xs.filter((s) => s.id !== id));
+                setFunnelItems((xs) => xs.map((it) => (it.statusId === id ? { ...it, statusId: 0 } : it)));
+                void adminSchedule({
+                  data: { token: token(), action: "leadStageDelete", stageId: id, branchId: branchRef.current } as never,
+                }).then((res) => {
+                  if (res && "stages" in res && Array.isArray(res.stages)) {
+                    setFunnelStages(mergeStages(res.stages as LeadStage[]));
+                    if ("items" in res && Array.isArray(res.items)) setFunnelItems(res.items as LeadCard[]);
+                  }
+                });
+              }}
+            />
+          )
+        ) : (
+        <div ref={listRef} className="pretty-scroll min-h-0 space-y-1.5 overflow-y-auto p-2 max-lg:max-h-[72vh] lg:h-full">
+          {view === "группы"
+            ? shownGroups.map((s) => {
+                const title = s.groupName || `группа ${s.groupId}`;
+                const on = pickedGroup && s.groupId === pickedGroup.groupId && s.branchId === pickedGroup.branchId;
+                return (
+                  <button
+                    key={`${s.branchId}-${s.groupId}`}
+                    type="button"
+                    onClick={() => void openGroupSlot(s)}
+                    data-group-id={s.groupId}
+                    data-branch-id={s.branchId}
+                    data-card-id={groupCardId(s.branchId, s.groupId)}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-[1rem] bg-white px-2.5 py-2 text-left shadow-[var(--shadow-border)] transition-[box-shadow,transform] duration-[var(--motion-quick)] ease-[var(--ease-out)]",
+                      on ? "shadow-[0_0_0_2px_var(--color-primary,#2563eb)]" : "hover:shadow-[var(--shadow-border-hover)]",
+                    )}
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 font-mono text-[0.68rem] font-bold text-primary">
+                      {s.groupId}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-start justify-between gap-1.5">
+                        <span className="truncate font-display text-[0.95rem] leading-tight">{title}</span>
+                        <span className="shrink-0 rounded-full bg-surface-2 px-1.5 py-0.5 text-[0.62rem] font-semibold text-muted">
+                          {CRM_BRANCH[s.branchId]?.short || s.city || "филиал"}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 block truncate text-[0.72rem] text-muted">
+                        {[s.age, s.dayLabel && s.timeFrom ? `${s.dayLabel} ${s.timeFrom}` : "", s.teacher].filter(Boolean).join(" · ")}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })
+            : shown.map((r) => {
             const crmId = Number(r.crmId || 0);
             const title = displayPersonName(r.child, r.parent);
             const parent = displayParent(r.child, r.parent);
@@ -474,7 +1268,7 @@ export function AdminClients({
                 data-card-id={crmId ? clientCardId(crmId) : undefined}
                 className={cn(
                   "flex w-full items-center gap-2.5 rounded-[1rem] bg-white px-2.5 py-2 text-left shadow-[var(--shadow-border)] transition-[box-shadow,transform] duration-[var(--motion-quick)] ease-[var(--ease-out)]",
-                  on ? "ring-2 ring-primary" : "hover:shadow-[var(--shadow-border-hover)]",
+                  on ? "shadow-[0_0_0_2px_var(--color-primary,#2563eb)]" : "hover:shadow-[var(--shadow-border-hover)]",
                 )}
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-[0.72rem] font-bold text-primary">
@@ -501,24 +1295,195 @@ export function AdminClients({
               </button>
             );
           })}
-          {total > shown.length ? (
+          {view === "группы" && !groupLoading && !shownGroups.length ? (
+            <p className="rounded-[1.2rem] bg-white px-4 py-10 text-center text-sm text-muted ring-1 ring-black/6">
+              {status === "лид" ? "Нет групп, в которых есть лиды." : "Нет групп в этой выборке."}
+            </p>
+          ) : null}
+          {view === "дети" && total > shown.length ? (
             <button type="button" className="w-full rounded-[1.2rem] bg-white py-3 text-sm font-semibold text-primary ring-1 ring-black/6" onClick={() => setCap((n) => n + 120)}>
               Ещё {Math.min(120, total - shown.length)} из {total - shown.length}
             </button>
           ) : null}
-          {!busy && !shown.length ? (
+          {view === "дети" && !busy && !shown.length ? (
             <p className="rounded-[1.2rem] bg-white px-4 py-10 text-center text-sm text-muted ring-1 ring-black/6">
               {status === "архив" ? "Архив пуст в этой выборке." : status === "лид" ? "Лидов нет в этой выборке." : "Текущих клиентов нет. Нажмите «Обновить»."}
             </p>
           ) : null}
         </div>
-        <div className="hidden min-h-0 min-w-0 lg:block lg:h-full lg:overflow-hidden">
-          {card ? (
+        )}
+        {funnelOn && !(card && desktop) ? null : (
+        <div className="hidden min-h-0 min-w-0 lg:flex lg:h-full lg:flex-col lg:overflow-hidden">
+          {view === "группы" && pickedGroup && !card ? (
+            <article
+              className="pretty-scroll min-h-0 flex-1 overflow-y-auto rounded-[1.2rem] p-4 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] md:p-5"
+              style={{ background: ADMIN_PANEL_BLUE }}
+              data-card-id={`card:group:${pickedGroup.branchId}:${pickedGroup.groupId}`}
+              data-group-id={pickedGroup.groupId}
+              data-branch-id={pickedGroup.branchId}
+            >
+              {groupLoading ? <GroupLoadScene hint={pickedGroup.groupName} /> : null}
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted">
+                Карточка группы · card:group:{pickedGroup.branchId}:{pickedGroup.groupId}
+              </p>
+              <h4 className="font-display mt-1 text-[1.45rem] leading-tight">{pickedGroup.groupName}</h4>
+              <p className="mt-1.5 flex flex-wrap gap-1.5 text-sm text-muted">
+                <span className="rounded-full bg-white px-2 py-0.5 font-mono text-[0.72rem] ring-1 ring-black/8">gid {pickedGroup.groupId}</span>
+                {CRM_BRANCH[pickedGroup.branchId]?.short ? <span>{CRM_BRANCH[pickedGroup.branchId]?.short}</span> : null}
+                {pickedGroup.age ? <span>{pickedGroup.age}</span> : null}
+                {pickedGroup.course ? <span>{pickedGroup.course}</span> : null}
+                {pickedGroup.teacher ? <span>{pickedGroup.teacher}</span> : null}
+              </p>
+              <p className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-sm ring-1 ring-black/6">
+                {[
+                  pickedGroup.dayLabel && pickedGroup.timeFrom ? `${pickedGroup.dayLabel} ${pickedGroup.timeFrom}${pickedGroup.timeTo ? `–${pickedGroup.timeTo}` : ""}` : "",
+                  pickedGroup.timesPerWeek > 1 ? `${pickedGroup.timesPerWeek} раза в неделю` : "",
+                  pickedGroup.city,
+                  pickedGroup.branch,
+                  groupInfo?.bDate || pickedGroup.bDate ? `период ${groupInfo?.bDate || pickedGroup.bDate || "…"} – ${groupInfo?.eDate || pickedGroup.eDate || "…"}` : "",
+                  `${groupMembers.filter((m) => m.status !== "лид").length} уч. · ${groupMembers.filter((m) => m.status === "лид").length} лид. · ${groupArchive.length} арх. / ${pickedGroup.limit || "—"} мест`,
+                ].filter(Boolean).join(" · ")}
+              </p>
+              {groupInfo?.calendar?.length ? (
+                <div className="mt-3">
+                  <LessonStrip lessons={groupInfo.calendar} />
+                </div>
+              ) : null}
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                  Описание
+                  <p className="mt-1 min-h-10 rounded-md bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                    {groupInfo?.description || "—"}
+                  </p>
+                </label>
+                <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                  Примечания
+                  <p className="mt-1 min-h-10 rounded-md bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                    {groupInfo?.remarks || "—"}
+                  </p>
+                </label>
+                <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                  Хэштеги
+                  <p className="mt-1 min-h-10 rounded-md bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                    {groupInfo?.hashtags || "—"}
+                  </p>
+                </label>
+                <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                  Отработка
+                  <p className="mt-1 min-h-10 rounded-md bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                    {groupInfo?.makeup || "—"}
+                  </p>
+                </label>
+                <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                  Статус
+                  <p className="mt-1 min-h-10 rounded-md bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                    {GROUP_STATUS.find((st) => st.id === (groupInfo?.statusId || pickedGroup.statusId))?.name || "—"}
+                  </p>
+                </label>
+                <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                  Предмет
+                  <p className="mt-1 min-h-10 rounded-md bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                    {pickedGroup.subject || pickedGroup.course || (groupInfo?.subjectId ? `id ${groupInfo.subjectId}` : "—")}
+                  </p>
+                </label>
+                <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted sm:col-span-2">
+                  Абонементы
+                  <div className="mt-1 flex min-h-10 flex-wrap items-center gap-1 rounded-md bg-white px-2 py-1.5 ring-1 ring-black/8">
+                    {groupInfo?.tariffs?.length
+                      ? groupInfo.tariffs.map((t) => (
+                          <span key={t.id} className="rounded-md bg-sky-50 px-1.5 py-0.5 text-[0.75rem] font-medium text-sky-900">
+                            {t.name} · {Math.round(t.price).toLocaleString("ru-RU")} ₽
+                          </span>
+                        ))
+                      : <span className="text-sm text-muted">нет совпадения по предмету</span>}
+                  </div>
+                </label>
+              </div>
+              {groupInfo?.signup ? (
+                <a href={groupInfo.signup} target="_blank" rel="noreferrer" className="mt-3 inline-flex h-10 items-center rounded-md bg-white px-3 text-sm font-semibold text-primary ring-1 ring-black/8">
+                  Запись в группу {pickedGroup.groupId}
+                </a>
+              ) : null}
+              <CrmGroupMembers
+                title="Ученики"
+                items={groupMembers.filter((m) => m.status !== "лид")}
+                onOpen={(m) => void openById(m.id, pickedGroup.branchId)}
+                loading={groupLoading}
+              />
+              <CrmGroupMembers
+                title="Лиды"
+                items={groupMembers.filter((m) => m.status === "лид")}
+                onOpen={(m) => void openById(m.id, pickedGroup.branchId)}
+                variant="lead"
+                loading={groupLoading}
+              />
+              <CrmGroupMembers
+                title="Архивные ученики"
+                items={groupArchive}
+                onOpen={(m) => void openById(m.id, pickedGroup.branchId)}
+                variant="archive"
+                loading={groupLoading}
+              />
+            </article>
+          ) : card ? (
+            <div className={cn("relative min-h-0 min-w-0 flex-1 overflow-hidden p-1", funnelOn && "pl-3")}>
+            {funnelOn ? (
+            <button
+              type="button"
+              aria-label="Ширина карточки"
+              title="Потяните, чтобы изменить ширину карточки"
+              className="absolute left-0 top-3 bottom-3 z-10 w-2 cursor-col-resize rounded-full bg-black/10 hover:bg-primary/50"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const startX = e.clientX;
+                const startW = funnelWRef.current;
+                const move = (ev: PointerEvent) => {
+                  const next = Math.min(760, Math.max(280, startW - (ev.clientX - startX)));
+                  funnelWRef.current = next;
+                  setFunnelW(next);
+                };
+                const up = () => {
+                  window.removeEventListener("pointermove", move);
+                  window.removeEventListener("pointerup", up);
+                  try {
+                    localStorage.setItem("ra_funnel_card_w", String(funnelWRef.current));
+                  } catch {
+                    /* */
+                  }
+                };
+                window.addEventListener("pointermove", move);
+                window.addEventListener("pointerup", up);
+              }}
+            />
+            ) : null}
             <CrmClientCard
               card={card}
               loading={cardLoading}
               variant="panel"
+              wide={funnelOn ? false : wide}
+              layout={funnelOn ? "lead" : "client"}
+              groupChoices={freeGroupOpts.map((s) => ({
+                id: s.groupId,
+                name: s.groupName,
+                branchId: s.branchId,
+                subjectId: s.subjectId || undefined,
+                teacher: s.teacher,
+                day: s.dayLabel,
+                from: s.timeFrom,
+                to: s.timeTo,
+                course: s.course,
+                school: s.school,
+                schoolId: s.schoolId,
+                courseId: s.courseId,
+              }))}
               onClose={() => {
+                if (viewRef.current === "группы") {
+                  setCard(null);
+                  setActiveId(0);
+                  activeIdRef.current = 0;
+                  return;
+                }
                 if (desktopRef.current) {
                   const first = shown[0];
                   if (first && Number(first.crmId) !== activeId) void openRow(first);
@@ -528,21 +1493,43 @@ export function AdminClients({
                 setActiveId(0);
                 activeIdRef.current = 0;
               }}
-              onOpenGroup={onOpenGroup}
+              onOpenGroup={(gid, bid) => {
+                const s = groupOpts.find((g) => g.groupId === gid && g.branchId === bid) || groupOpts.find((g) => g.groupId === gid);
+                if (s) void openGroupSlot(s);
+                else onOpenGroup(gid, bid);
+              }}
               onAction={mutateCard}
             />
+            </div>
           ) : (
-            <div className="flex h-full min-h-[16rem] items-center justify-center rounded-[1.4rem] bg-white px-6 text-center text-sm text-muted shadow-[var(--shadow-border)]">
-              Выберите человека — карточка <span className="mx-1 font-mono">card:customer:{"{id}"}</span> откроется здесь.
+            <div className="flex min-h-0 flex-1 items-center justify-center rounded-[1.4rem] bg-white px-6 text-center text-sm text-muted shadow-[var(--shadow-border)]">
+              {view === "группы" ? "Выберите группу слева — карточка откроется здесь." : <>Выберите человека — карточка <span className="mx-1 font-mono">card:customer:{"{id}"}</span> откроется здесь.</>}
             </div>
           )}
         </div>
+        )}
       </div>
 
       {card && !desktop ? (
         <CrmClientCard
           card={card}
           loading={cardLoading}
+          wide={funnelOn ? false : wide}
+          layout={funnelOn ? "lead" : "client"}
+          groupChoices={freeGroupOpts.map((s) => ({
+            id: s.groupId,
+            name: s.groupName,
+            branchId: s.branchId,
+            subjectId: s.subjectId || undefined,
+            teacher: s.teacher,
+            day: s.dayLabel,
+            from: s.timeFrom,
+            to: s.timeTo,
+            course: s.course,
+            school: s.school,
+            schoolId: s.schoolId,
+            courseId: s.courseId,
+          }))}
           onClose={() => {
             setCard(null);
             setActiveId(0);
@@ -553,6 +1540,42 @@ export function AdminClients({
         />
       ) : null}
       {pull.open ? <CrmPullDialog pull={pull} onClose={() => setPull((u) => ({ ...u, open: false }))} /> : null}
+      {stageAdd ? (
+        <div className="fixed inset-0 z-[240] grid place-items-center bg-black/35 p-4" onClick={() => setStageAdd(false)}>
+          <div className={cn("w-full max-w-[22rem] p-5", RA_POP)} onClick={(e) => e.stopPropagation()}>
+            <p className="font-display text-[1.05rem] leading-snug">Новый раздел воронки</p>
+            <p className="mt-1 text-sm text-muted">Название столбца появится в AlfaCRM и на этой доске.</p>
+            <input
+              autoFocus
+              value={stageName}
+              onChange={(e) => setStageName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") createLeadStage(stageName);
+                if (e.key === "Escape") setStageAdd(false);
+              }}
+              placeholder="Например: Запись на пробное"
+              className="mt-3 h-10 w-full rounded-full bg-surface-2 px-3 text-sm outline-none ring-1 ring-black/8 focus:ring-2 focus:ring-primary/35"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                className="h-9 rounded-full bg-black/6 px-4 text-sm font-semibold text-muted hover:bg-black/10"
+                onClick={() => setStageAdd(false)}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={!stageName.trim()}
+                className="h-9 rounded-full bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-40"
+                onClick={() => createLeadStage(stageName)}
+              >
+                Добавить
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

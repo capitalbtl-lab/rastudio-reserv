@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { forwardRef, useImperativeHandle, useState, type ReactNode } from "react";
 import { adminSelfTest, type CheckResult } from "@/data/admin-selftest";
 import { InfoTip } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
@@ -25,19 +25,23 @@ function token() {
 export const adminGhostBtn =
   "inline-flex h-8 shrink-0 items-center rounded-lg bg-black/[0.07] px-3 text-[0.72rem] font-semibold text-muted hover:bg-black/[0.12] disabled:opacity-50";
 
-export function AdminSelfTest({
-  section,
-  label = "Проверить раздел",
-  heading,
-  extra,
-  tip,
-}: {
+export type AdminSelfTestHandle = { run: () => void };
+
+export const AdminSelfTest = forwardRef<AdminSelfTestHandle, {
   section: string;
   label?: string;
   heading?: ReactNode;
   extra?: ReactNode;
   tip?: string;
-}) {
+  hideTrigger?: boolean;
+}>(function AdminSelfTest({
+  section,
+  label = "Проверить раздел",
+  heading,
+  extra,
+  tip,
+  hideTrigger,
+}, ref) {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -90,8 +94,11 @@ export function AdminSelfTest({
     }
   }
 
+  useImperativeHandle(ref, () => ({ run: () => { void run(); } }));
+
   return (
     <div className="w-full">
+      {hideTrigger ? null : (
       <div className="flex items-end justify-between gap-4">
         <div className="min-w-0 flex-1">{heading}</div>
         <div className="flex shrink-0 items-center gap-2 pb-1">
@@ -107,6 +114,7 @@ export function AdminSelfTest({
           />
         </div>
       </div>
+      )}
       {open ? (
         <div className="mt-4 rounded-2xl bg-surface p-4 shadow-[var(--shadow-border)] md:p-5">
           {error ? <p className="text-sm text-primary">{error}</p> : null}
@@ -182,7 +190,7 @@ export function AdminSelfTest({
       ) : null}
     </div>
   );
-}
+});
 
 export function AdminSectionHead({
   section,
@@ -190,28 +198,32 @@ export function AdminSectionHead({
   tip,
   children,
   aside,
+  extra,
+  check = true,
 }: {
   section: string;
   title: string;
   tip?: string;
   children?: ReactNode;
   aside?: ReactNode;
+  extra?: ReactNode;
+  check?: boolean;
 }) {
-  return (
-    <AdminSelfTest
-      section={section}
-      heading={
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-display text-3xl">{title}</h2>
-              {tip ? <InfoTip text={tip} /> : null}
-            </div>
-            {children}
-          </div>
-          {aside}
+  const head = (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <h2 className="font-display text-3xl">{title}</h2>
+          {tip ? <InfoTip text={tip} /> : null}
         </div>
-      }
-    />
+        {children}
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {extra}
+        {aside}
+      </div>
+    </div>
   );
+  if (!check) return head;
+  return <AdminSelfTest section={section} heading={head} />;
 }

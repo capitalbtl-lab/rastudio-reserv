@@ -26,7 +26,7 @@ type Pane = "window" | "dialog" | "voices" | "edits" | "chats" | "train" | "guid
 const PANES: { id: Pane; label: string }[] = [
   { id: "window", label: "Окно и кнопки" },
   { id: "train", label: "Обучение агентов" },
-  { id: "guides", label: "Разделы сайта" },
+  { id: "guides", label: "База знаний ИИ" },
   { id: "dialog", label: "Как говорит" },
   { id: "voices", label: "Голоса" },
   { id: "edits", label: "Изменение сайта" },
