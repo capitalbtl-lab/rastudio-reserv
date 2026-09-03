@@ -827,6 +827,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "leadStageSort"
           | "funnelAutoGet"
           | "funnelAutoSave"
+          | "pupilTariffGroups"
+          | "pupilTariffPlan"
+          | "pupilTariffAssign"
           | "voiceAsk"
           | "customersSearch"
           | "tariffsGet"
@@ -910,6 +913,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
         schoolId?: string;
         courseId?: string;
         funnelAuto?: import("./funnel-auto").FunnelAuto;
+        groupKeys?: { branchId: number; groupId: number }[];
+        pupilItems?: import("./pupil-tariffs").PupilTariffItem[];
+        includeLeads?: boolean;
+        skipExisting?: boolean;
         schoolIds?: string[];
         courseIds?: string[];
         href?: string;
@@ -1653,6 +1660,102 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const rules = saveFunnelAuto(data.funnelAuto || {});
       logAdmin(`Автоматизация воронки: ${JSON.stringify(funnelAutoHint(rules))}`);
       return { ok: true as const, rules, hint: funnelAutoHint(rules) };
+    }
+    if (data.action === "pupilTariffGroups") {
+      const { uniqueLiveGroups } = await import("./pupil-tariffs");
+      const groups = uniqueLiveGroups(listAdminSlots());
+      const schools = [...new Set(groups.map((g) => g.school).filter(Boolean))];
+      return { ok: true as const, groups, schools };
+    }
+    if (data.action === "pupilTariffPlan") {
+      const { uniqueLiveGroups, pupilRowFromMember, pickBestTariff } = await import("./pupil-tariffs");
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const keys = Array.isArray(data.groupKeys) ? data.groupKeys : [];
+      const includeLeads = Boolean(data.includeLeads);
+      const all = uniqueLiveGroups(listAdminSlots());
+      const want = new Set(keys.map((k) => `${Number(k.branchId)}:${Number(k.groupId)}`));
+      const groups = all.filter((g) => want.has(g.key));
+      const tariffs = loadTariffs().items;
+      const items = [];
+      const byGroup: Record<string, { tariffId: number; tariffName: string; options: { id: number; name: string; price: number }[] }> = {};
+      for (const g of groups) {
+        const slot = listAdminSlots().find((s) => s.groupId === g.groupId && s.branchId === g.branchId);
+        const options = slot ? matchTariffs(slot, tariffs) : [];
+        const best = slot ? pickBestTariff(slot, tariffs) : options[0] || null;
+        byGroup[g.key] = {
+          tariffId: best?.id || 0,
+          tariffName: best?.name || "",
+          options: options.map((x) => ({ id: x.id, name: x.name, price: x.price })),
+        };
+        const mem = await loadGroupMembers(request, t, g.branchId, g.groupId);
+        for (const m of mem.active) {
+          const row = pupilRowFromMember(m, g, best, includeLeads);
+          if (row) items.push(row);
+        }
+      }
+      return { ok: true as const, items, byGroup, total: items.length };
+    }
+    if (data.action === "pupilTariffAssign") {
+      const { token, request, formatRuDob } = await import("./alfacrm");
+      const { assignable } = await import("./pupil-tariffs");
+      const t = await token();
+      const date = formatRuDob(data.date) || formatRuDob(new Date().toISOString().slice(0, 10));
+      const skipExisting = data.skipExisting !== false;
+      const rows = assignable(Array.isArray(data.pupilItems) ? data.pupilItems : []);
+      const done: number[] = [];
+      const skipped: { id: number; name: string; reason: string }[] = [];
+      const failed: { id: number; name: string; error: string }[] = [];
+      for (const row of rows) {
+        try {
+          if (skipExisting) {
+            const have = await request<{ items?: Record<string, unknown>[] }>(
+              `/v2api/${row.branchId}/customer-tariff/index`,
+              { page: 0, pageSize: 30, customer_id: row.customerId },
+              t,
+            ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+            const hit = (have.items || []).some((it) => {
+              const tid = Number(it.tariff_id || it.tariffId || 0);
+              const gone = Number(it.removed || it.is_archived || 0) === 1;
+              return tid === row.tariffId && !gone;
+            });
+            if (hit) {
+              skipped.push({ id: row.customerId, name: row.name, reason: "уже есть" });
+              continue;
+            }
+          }
+          const extra: Record<string, unknown> = {
+            group_id: row.groupId || undefined,
+            is_separate_balance: row.calcType ? 1 : 0,
+            calculation_type: row.calcType ? 2 : 1,
+          };
+          if (row.periodCount) extra.unit = Number(row.periodType) === 2 ? "weeks" : Number(row.periodType) === 3 ? "months" : Number(row.periodType) === 4 ? "years" : "days";
+          const bodies = [
+            { customer_id: row.customerId, tariff_id: row.tariffId, b_date: date, ...extra },
+            { customer_id: row.customerId, tariff_id: row.tariffId, b_date: date, group_id: row.groupId || undefined },
+          ];
+          let ok = false;
+          let last = "";
+          for (const body of bodies) {
+            const res = await request<{ success?: boolean; errors?: unknown }>(`/v2api/${row.branchId}/customer-tariff/create`, body, t);
+            if (res.success === false) {
+              last = JSON.stringify(res.errors || res);
+              continue;
+            }
+            ok = true;
+            break;
+          }
+          if (!ok) {
+            failed.push({ id: row.customerId, name: row.name, error: last || "CRM не приняла" });
+            continue;
+          }
+          done.push(row.customerId);
+        } catch (e) {
+          failed.push({ id: row.customerId, name: row.name, error: e instanceof Error ? e.message : "ошибка" });
+        }
+      }
+      logAdmin(`Мастер учеников: выдано ${done.length}, пропуск ${skipped.length}, ошибок ${failed.length}`);
+      return { ok: true as const, done: done.length, skipped, failed, total: rows.length };
     }
     if (data.action === "voiceAsk") {
       const prompt = String(data.prompt || "").trim();

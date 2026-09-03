@@ -11,6 +11,7 @@ import { PRICE_DIRECTIONS, type PriceRow } from "@/data/prices-core";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CrmTariff, CrmLessonType, CrmBranch } from "@/data/crm-tariffs";
+import { PupilTariffWizard } from "@/components/admin-pupil-tariffs";
 
 const CALC_NAMES: Record<number, string> = { 0: "Любой", 1: "Базовый счет", 2: "Отдельный счет" };
 const TYPE_NAMES: Record<number, string> = { 1: "Поурочная", 2: "Помесячная", 3: "Недельная" };
@@ -281,6 +282,7 @@ export function AdminTariffs() {
   const dictBase = useRef("");
   const [probe, setProbe] = useState<Probe | null>(null);
   const [wiz, setWiz] = useState(false);
+  const [pupilWiz, setPupilWiz] = useState(false);
   const [pull, setPull] = useState<CrmPullState>(emptyPull("tariffs"));
 
   async function loadLocal() {
@@ -481,6 +483,9 @@ export function AdminTariffs() {
         <Button type="button" variant="secondary" disabled={busy} onClick={() => setWiz(true)}>
           Мастер абонементов студии
         </Button>
+        <Button type="button" variant="secondary" disabled={busy} onClick={() => setPupilWiz(true)}>
+          Мастер абонементов учеников
+        </Button>
         <Button type="button" variant="secondary" disabled={busy} onClick={async () => {
           setPull({ ...emptyPull("tariffs"), open: true, step: "Подключаюсь к AlfaCRM…" });
           const st = await pullFromCrm("tariffs", (step, lines, done, total) => {
@@ -596,6 +601,8 @@ export function AdminTariffs() {
           }}
         />
       ) : null}
+
+      {pupilWiz ? <PupilTariffWizard onClose={() => setPupilWiz(false)} /> : null}
 
       {probe ? (
         <div className="rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-200">
