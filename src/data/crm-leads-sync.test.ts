@@ -22,6 +22,7 @@ import {
   applyLeadDelta,
   leadDeltaDrops,
   crmUpdatedAtFrom,
+  mergeBranchLeadCards,
 } from "./crm-leads-stages.ts";
 
 const FROLOV: Record<string, unknown> = {
@@ -293,6 +294,21 @@ describe("снимок кабинета AlfaCRM /company/2/lead/index", () => {
     assert.equal(keys.size, 120);
     assert.equal(keys.has("7759"), false, "на сайте в выгрузке нет Фролова");
     assert.ok(crmHtml.includes("data-id=\"7759\""));
+  });
+
+  it("догрузка Луховиц не затирает ЦМИТ", () => {
+    const cmit = [
+      { id: 7759, branchId: 2, name: "Фролов" },
+      { id: 1, branchId: 2, name: "Бордачев" },
+    ];
+    const lukh = [{ id: 99, branchId: 3, name: "Лаклин" }];
+    const merged = mergeBranchLeadCards(cmit, lukh, 3);
+    assert.equal(merged.length, 3);
+    assert.ok(merged.some((x) => x.id === 7759));
+    assert.ok(merged.some((x) => x.id === 99));
+    const onlyLukh = mergeBranchLeadCards(merged, [{ id: 99, branchId: 3, name: "Лаклин 2" }], 3);
+    assert.equal(onlyLukh.filter((x) => x.branchId === 3).length, 1);
+    assert.equal(onlyLukh.filter((x) => x.branchId === 2).length, 2);
   });
 
   it("колонки board берут data-url с resource_id, как initBoard", () => {

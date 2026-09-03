@@ -319,6 +319,15 @@ export function applyLeadDelta<T extends { id: number }>(
   return { items: [...by.values()], added, updated, removed };
 }
 
+/** Догрузка филиала не затирает карточки других филиалов. */
+export function mergeBranchLeadCards<T extends { id: number; branchId: number }>(prev: T[], incoming: T[], branchId: number): T[] {
+  const bid = Number(branchId) || 0;
+  if (!bid) return incoming.slice();
+  const incomingIds = new Set(incoming.map((x) => x.id));
+  const rest = prev.filter((x) => x.branchId !== bid && !incomingIds.has(x.id));
+  return [...rest, ...incoming];
+}
+
 export function crmUpdatedAtFrom(at: number, overlapMs = 5 * 60 * 1000) {
   const d = new Date(Math.max(0, at - overlapMs));
   const p = (n: number) => String(n).padStart(2, "0");

@@ -23,6 +23,7 @@ import {
   applyLeadDelta,
   leadDeltaDrops,
   crmUpdatedAtFrom,
+  mergeBranchLeadCards,
   type LeadStage,
 } from "./crm-leads-stages";
 import { crmHost, crmWebLogin, csrfOf, mergeCookies, setCookieList } from "./crm-web";
@@ -46,6 +47,7 @@ export {
   LEAD_INDEX_QUERY,
   leadMoveFields,
   isCrmLeadRecord,
+  mergeBranchLeadCards,
 } from "./crm-leads-stages";
 
 export type LeadCard = {

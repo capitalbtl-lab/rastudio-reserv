@@ -17,7 +17,7 @@ import { LessonStrip, GroupLessonStrip } from "@/components/lesson-strip";
 import { CrmGroupMembers, GroupLoadScene } from "@/components/crm-group-card";
 import { CrmLeadBoard } from "@/components/crm-lead-board";
 import type { ClientRow, CustomerCard, GroupMember } from "@/data/crm-cards";
-import { LEAD_STAGES, mergeStages, reorderLeads, filterLeadCards, type LeadCard, type LeadStage } from "@/data/crm-leads";
+import { LEAD_STAGES, mergeStages, reorderLeads, filterLeadCards, mergeBranchLeadCards, type LeadCard, type LeadStage } from "@/data/crm-leads";
 import { crmSyncMinutes } from "@/components/admin-crm-settings";
 import type { CrmSlot, GroupCalLesson } from "@/data/crm-slots-core";
 
@@ -45,9 +45,25 @@ function funnelStore(): Record<string, FunnelSnap> {
 
 function funnelSnapGet(bid: number): FunnelSnap | null {
   const all = funnelStore();
-  const hit = all[String(bid)];
-  if (hit?.items?.length) return hit;
-  return Object.values(all).find((x) => x.items?.length) || null;
+  if (bid) return all[String(bid)]?.items?.length ? all[String(bid)] : null;
+  const zero = all["0"];
+  const parts = [1, 2, 3, 4].map((id) => all[String(id)]).filter((x): x is FunnelSnap => Boolean(x?.items?.length));
+  if (!parts.length) return zero?.items?.length ? zero : null;
+  const seen = new Set<number>();
+  const items: LeadCard[] = [];
+  for (const p of parts) {
+    for (const it of p.items) {
+      if (seen.has(it.id)) continue;
+      seen.add(it.id);
+      items.push(it);
+    }
+  }
+  return {
+    at: Math.max(zero?.at || 0, ...parts.map((p) => p.at || 0)),
+    branch: 0,
+    stages: parts[0]?.stages || zero?.stages || LEAD_STAGES,
+    items,
+  };
 }
 
 function funnelSnapPut(bid: number, stages: LeadStage[], items: LeadCard[]) {
@@ -55,6 +71,20 @@ function funnelSnapPut(bid: number, stages: LeadStage[], items: LeadCard[]) {
   try {
     const all = funnelStore();
     all[String(bid)] = { at: Date.now(), branch: bid, stages, items };
+    if (bid) {
+      const seen = new Set<number>();
+      const union: LeadCard[] = [];
+      for (const key of ["1", "2", "3", "4"]) {
+        const snap = all[key];
+        if (!snap?.items) continue;
+        for (const it of snap.items) {
+          if (seen.has(it.id)) continue;
+          seen.add(it.id);
+          union.push(it);
+        }
+      }
+      all["0"] = { at: Date.now(), branch: 0, stages, items: union };
+    }
     localStorage.setItem(FUNNEL_KEY, JSON.stringify(all));
   } catch {
     /* quota */
@@ -254,7 +284,7 @@ export function AdminClients({
   const [groupArchive, setGroupArchive] = useState<GroupMember[]>([]);
   const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
   const [groupLoading, setGroupLoading] = useState(false);
-  const [funnelItems, setFunnelItems] = useState<LeadCard[]>(() => funnelSnapGet(clientsSnap?.branch || 0)?.items || []);
+  const [funnelItems, setFunnelItems] = useState<LeadCard[]>(() => funnelSnapGet(0)?.items || funnelSnapGet(clientsSnap?.branch || 0)?.items || []);
   const [funnelStages, setFunnelStages] = useState<LeadStage[]>(() => funnelSnapGet(clientsSnap?.branch || 0)?.stages || LEAD_STAGES);
   const [funnelLoading, setFunnelLoading] = useState(false);
   const [funnelW, setFunnelW] = useState(400);
@@ -263,6 +293,8 @@ export function AdminClients({
   const funnelMoved = useRef(new Map<string, number>());
   const funnelGone = useRef(new Set<string>());
   const funnelAt = useRef<Record<number, number>>(funnelSnapTimes());
+  const funnelSeq = useRef(0);
+  const funnelItemsRef = useRef<LeadCard[]>([]);
   const [leadKeys, setLeadKeys] = useState<Set<string> | null>(null);
   const leadKeysRef = useRef<Set<string> | null>(null);
   const groupMenuRef = useRef<HTMLDivElement>(null);
@@ -400,14 +432,19 @@ export function AdminClients({
   }
 
   async function loadFunnel(bid: number, force = false, delta = false) {
-    const have = funnelItems.length > 0 || funnelAt.current[bid] > 0;
+    const seq = ++funnelSeq.current;
+    const have = funnelItemsRef.current.length > 0 || funnelAt.current[bid] > 0;
     if (force || !have) setFunnelLoading(!have);
-    if (delta && have) setFunnelNote("Сверяю изменения в AlfaCRM…");
-    else if (force && have) setFunnelNote("Обновляю доску CRM…");
-    else if (!have) setFunnelNote("Загружаю лидов из AlfaCRM…");
+    const watching = () => bid === 0 || bid === branchRef.current;
+    if (watching()) {
+      if (delta && have) setFunnelNote("Сверяю изменения в AlfaCRM…");
+      else if (force && have) setFunnelNote("Обновляю доску CRM…");
+      else if (!have) setFunnelNote("Загружаю лидов из AlfaCRM…");
+    }
     const watchdog = window.setTimeout(() => {
+      if (seq !== funnelSeq.current) return;
       setFunnelLoading(false);
-      if (!funnelAt.current[bid]) setFunnelNote("CRM отвечает долго. Доска откроется, как только дойдёт.");
+      if (watching() && !funnelAt.current[bid]) setFunnelNote("CRM отвечает долго. Доска откроется, как только дойдёт.");
     }, 15000);
     try {
       const res = (await adminSchedule({
@@ -416,7 +453,7 @@ export function AdminClients({
       if (res.ok && Array.isArray(res.items)) {
         const nextStages = mergeStages(res.stages || [], res.items.map((x) => x.statusId));
         const moved = funnelMoved.current;
-        const nextItems =
+        const packed =
           moved.size || funnelGone.current.size
             ? res.items
                 .filter((it) => !funnelGone.current.has(`${it.branchId}:${it.id}`))
@@ -425,19 +462,21 @@ export function AdminClients({
                   return v == null ? it : { ...it, statusId: v };
                 })
             : res.items;
+        const nextItems = mergeBranchLeadCards(funnelItemsRef.current, packed, bid);
+        funnelItemsRef.current = nextItems;
+        funnelAt.current[bid] = Date.now();
+        funnelSnapPut(bid, nextStages, packed);
         setFunnelStages(nextStages);
         setFunnelItems(nextItems);
-        funnelAt.current[bid] = Date.now();
-        funnelSnapPut(bid, nextStages, nextItems);
-        setFunnelNote(res.note || (res.items.length ? `${res.items.length} лидов` : "Пустая воронка."));
+        if (watching()) setFunnelNote(res.note || (packed.length ? `${packed.length} лидов` : "Пустая воронка."));
         return;
       }
-      setFunnelNote(res.error || "AlfaCRM не отдала воронку лидов.");
+      if (watching()) setFunnelNote(res.error || "AlfaCRM не отдала воронку лидов.");
     } catch (e) {
-      setFunnelNote(e instanceof Error && e.message ? e.message : "Не удалось загрузить воронку лидов.");
+      if (watching()) setFunnelNote(e instanceof Error && e.message ? e.message : "Не удалось загрузить воронку лидов.");
     } finally {
       window.clearTimeout(watchdog);
-      setFunnelLoading(false);
+      if (seq === funnelSeq.current) setFunnelLoading(false);
     }
   }
 
@@ -583,21 +622,25 @@ export function AdminClients({
 
   useLayoutEffect(() => {
     if (!(status === "лид" && view === "дети")) return;
-    const snap = funnelSnapGet(branch);
+    if (funnelItemsRef.current.length) return;
+    const snap = funnelSnapGet(0);
     if (!snap?.items?.length) return;
+    funnelItemsRef.current = snap.items;
     setFunnelItems(snap.items);
     if (snap.stages?.length) setFunnelStages(mergeStages(snap.stages));
-    funnelAt.current[branch] = snap.at || funnelAt.current[branch] || Date.now();
   }, [status, view, branch]);
 
   useEffect(() => {
+    funnelItemsRef.current = funnelItems;
+  }, [funnelItems]);
+
+  useEffect(() => {
     if (!(status === "лид" && view === "дети")) return;
-    const snap = funnelSnapGet(branch);
-    const n = snap?.items?.length || funnelItems.length;
-    const stale = !funnelAt.current[branch] || Date.now() - funnelAt.current[branch] > funnelTtl();
-    const thin = n < 80;
-    if (!stale && !thin) return;
-    void loadFunnel(branch, thin, !thin);
+    const at = funnelAt.current[branch] || 0;
+    if (at && Date.now() - at < funnelTtl()) return;
+    const local = filterLeadCards(funnelItemsRef.current, { branch });
+    if (local.length) void loadFunnel(branch, false, true);
+    else void loadFunnel(branch, true, false);
   }, [status, view, branch]);
 
   useEffect(() => {
@@ -1674,7 +1717,7 @@ export function AdminClients({
         />
       ) : null}
       {pull.open ? <CrmPullDialog pull={pull} onClose={() => setPull((u) => ({ ...u, open: false }))} /> : null}
-      {funnelNote && typeof document !== "undefined"
+      {funnelNote && typeof document !== "undefined" && (/не |ошиб|не удалось|записываю|порядок записан/i.test(funnelNote) || funnelNote.startsWith("Записываю") || funnelNote.startsWith("Порядок записан"))
         ? createPortal(
             <div
               className={cn(
