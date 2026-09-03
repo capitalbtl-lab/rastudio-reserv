@@ -18,6 +18,7 @@ import { CrmGroupMembers, GroupLoadScene } from "@/components/crm-group-card";
 import { CrmLeadBoard } from "@/components/crm-lead-board";
 import type { ClientRow, CustomerCard, GroupMember } from "@/data/crm-cards";
 import { LEAD_STAGES, mergeStages, reorderLeads, filterLeadCards, type LeadCard, type LeadStage } from "@/data/crm-leads";
+import { crmSyncMinutes } from "@/components/admin-crm-settings";
 import type { CrmSlot, GroupCalLesson } from "@/data/crm-slots-core";
 
 function token() {
@@ -27,7 +28,9 @@ function token() {
 }
 
 const FUNNEL_KEY = "ra_funnel_board";
-const FUNNEL_TTL = 10 * 60 * 1000;
+function funnelTtl() {
+  return crmSyncMinutes() * 60 * 1000;
+}
 
 type FunnelSnap = { at: number; branch: number; stages: LeadStage[]; items: LeadCard[] };
 
@@ -255,8 +258,6 @@ export function AdminClients({
   const [funnelStages, setFunnelStages] = useState<LeadStage[]>(() => funnelSnapGet(clientsSnap?.branch || 0)?.stages || LEAD_STAGES);
   const [funnelLoading, setFunnelLoading] = useState(false);
   const [funnelW, setFunnelW] = useState(400);
-  const [stageAdd, setStageAdd] = useState(false);
-  const [stageName, setStageName] = useState("");
   const [funnelNote, setFunnelNote] = useState("");
   const funnelWRef = useRef(400);
   const funnelMoved = useRef(new Map<string, number>());
@@ -448,21 +449,6 @@ export function AdminClients({
     }
   }
 
-  function createLeadStage(name: string) {
-    const title = name.trim();
-    if (!title) return;
-    setStageAdd(false);
-    setStageName("");
-    void adminSchedule({
-      data: { token: token(), action: "leadStageCreate", name: title, branchId: branchRef.current } as never,
-    }).then((res) => {
-      if (res && "stages" in res && Array.isArray(res.stages)) {
-        setFunnelStages(mergeStages(res.stages as LeadStage[]));
-        if ("items" in res && Array.isArray(res.items)) setFunnelItems(res.items as LeadCard[]);
-      }
-    });
-  }
-
   async function openRow(r: ClientRow) {
     const crmId = Number(r.crmId || 0);
     if (!crmId) return;
@@ -615,7 +601,7 @@ export function AdminClients({
   useEffect(() => {
     if (!(status === "лид" && view === "дети")) return;
     const at = funnelAt.current[branch] || 0;
-    if (at && Date.now() - at < FUNNEL_TTL) return;
+    if (at && Date.now() - at < funnelTtl()) return;
     void loadFunnel(branch, false, true);
   }, [status, view, branch]);
 
@@ -627,7 +613,7 @@ export function AdminClients({
 
   useEffect(() => {
     if (!(status === "лид" && view === "дети")) return;
-    const t = window.setInterval(() => void loadFunnel(branchRef.current, false, true), 10 * 60 * 1000);
+    const t = window.setInterval(() => void loadFunnel(branchRef.current, false, true), crmSyncMinutes() * 60 * 1000);
     return () => window.clearInterval(t);
   }, [status, view]);
 
@@ -1175,24 +1161,6 @@ export function AdminClients({
             ))}
           </div>
           <div className="ml-auto flex items-center gap-1.5">
-            {funnelOn ? (
-              <span className="group relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStageName("");
-                    setStageAdd(true);
-                  }}
-                  className="grid h-8 w-8 place-items-center rounded-full bg-surface-2 text-lg leading-none text-muted ring-1 ring-black/8 hover:bg-white hover:text-fg"
-                  aria-label="Добавить раздел в воронку продаж"
-                >
-                  +
-                </button>
-                <span className="pointer-events-none absolute right-0 top-[2.35rem] z-50 hidden whitespace-nowrap rounded-full bg-fg px-3 py-1.5 text-[0.72rem] font-medium text-white shadow-[0_8px_20px_rgba(15,23,42,.25)] group-hover:block">
-                  Добавить раздел в воронку продаж
-                </span>
-              </span>
-            ) : null}
             <div className="relative" ref={groupMenuRef} data-op="group-filter">
             <button
               type="button"
@@ -1711,42 +1679,6 @@ export function AdminClients({
         />
       ) : null}
       {pull.open ? <CrmPullDialog pull={pull} onClose={() => setPull((u) => ({ ...u, open: false }))} /> : null}
-      {stageAdd ? (
-        <div className="fixed inset-0 z-[240] grid place-items-center bg-black/35 p-4" onClick={() => setStageAdd(false)}>
-          <div className={cn("w-full max-w-[22rem] p-5", RA_POP)} onClick={(e) => e.stopPropagation()}>
-            <p className="font-display text-[1.05rem] leading-snug">Новый раздел воронки</p>
-            <p className="mt-1 text-sm text-muted">Название столбца появится в AlfaCRM и на этой доске.</p>
-            <input
-              autoFocus
-              value={stageName}
-              onChange={(e) => setStageName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") createLeadStage(stageName);
-                if (e.key === "Escape") setStageAdd(false);
-              }}
-              placeholder="Например: Запись на пробное"
-              className="mt-3 h-10 w-full rounded-full bg-surface-2 px-3 text-sm outline-none ring-1 ring-black/8 focus:ring-2 focus:ring-primary/35"
-            />
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                className="h-9 rounded-full bg-black/6 px-4 text-sm font-semibold text-muted hover:bg-black/10"
-                onClick={() => setStageAdd(false)}
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                disabled={!stageName.trim()}
-                className="h-9 rounded-full bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-40"
-                onClick={() => createLeadStage(stageName)}
-              >
-                Добавить
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
       {funnelNote && typeof document !== "undefined"
         ? createPortal(
             <div

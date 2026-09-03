@@ -1547,10 +1547,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const { saveLeadStage, loadLeadsBoard } = await import("./crm-leads");
       const id = Number(data.stageId);
       const name = String(data.name || "").trim();
-      if (!Number.isFinite(id) || !name) return { ok: false as const, error: "Нет названия этапа." };
+      const color = String(data.color || "").trim();
+      if (!Number.isFinite(id) || (!name && !color)) return { ok: false as const, error: "Нет названия этапа." };
       try {
-        await saveLeadStage(id, { name, color: String(data.color || "") || undefined });
-        logAdmin(`Этап лида ${id}: «${name}»`);
+        await saveLeadStage(id, { name: name || undefined, color: color || undefined });
+        logAdmin(`Этап лида ${id}: ${name || color}`);
         const board = await loadLeadsBoard(Number(data.branchId) || 0, true);
         return { ok: true as const, stages: board.stages, items: board.items };
       } catch (e) {

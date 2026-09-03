@@ -24,6 +24,7 @@ import { ADMIN_PANEL_BLUE, RA_POP } from "@/data/admin-ui";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
 import type { CrmTeacher } from "@/data/crm-teachers";
 import { AdminClients } from "@/components/admin-clients";
+import { AdminCrmSettings } from "@/components/admin-crm-settings";
 import { CrmClientCard } from "@/components/crm-client-card";
 import { CrmGroupMembers } from "@/components/crm-group-card";
 import { GroupLessonStrip } from "@/components/lesson-strip";
@@ -748,8 +749,8 @@ export function AdminSchedule() {
   const [view, setView] = useState<Record<string, number>>({});
   const [fileOpen, setFileOpen] = useState(false);
   const [pull, setPull] = useState<CrmPullState>(emptyPull("groups"));
-  const [pane, setPane] = useState<"groups" | "clients" | "subjects" | "prices" | "tariffs" | "map">("groups");
-  const [seen, setSeen] = useState({ groups: true, clients: false, subjects: false, prices: false, tariffs: false, map: false });
+  const [pane, setPane] = useState<"groups" | "clients" | "subjects" | "prices" | "tariffs" | "map" | "crm">("groups");
+  const [seen, setSeen] = useState({ groups: true, clients: false, subjects: false, prices: false, tariffs: false, map: false, crm: false });
   function showPane(id: typeof pane) {
     setPane(id);
     setSeen((s) => (s[id] ? s : { ...s, [id]: true }));
@@ -2203,6 +2204,7 @@ export function AdminSchedule() {
           ["prices", "Цены курсов"],
           ["tariffs", "Абонементы"],
           ["map", "Соответствия"],
+          ["crm", "Настройка CRM"],
         ] as const).map(([id, label]) => (
           <button
             key={id}
@@ -2242,6 +2244,11 @@ export function AdminSchedule() {
       {seen.map ? (
         <div className={cn(groupsWide && pane === "map" && "min-h-0 flex-1 overflow-y-auto")} style={pane === "map" ? undefined : { display: "none" }} hidden={pane !== "map"}>
           <AdminScheduleMap embedded />
+        </div>
+      ) : null}
+      {seen.crm ? (
+        <div className={cn(groupsWide && pane === "crm" && "min-h-0 flex-1 overflow-y-auto")} style={pane === "crm" ? undefined : { display: "none" }} hidden={pane !== "crm"}>
+          <AdminCrmSettings />
         </div>
       ) : null}
       {seen.clients ? (
