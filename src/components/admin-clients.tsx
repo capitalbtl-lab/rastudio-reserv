@@ -815,6 +815,11 @@ export function AdminClients({
     return keys;
   }
 
+  useEffect(() => {
+    if (status !== "лид") return;
+    void loadLeadKeys();
+  }, [status]);
+
   async function openFirstGroup(statusNow: Status, list?: CrmSlot[]) {
     let rows = list;
     if (!rows) {
@@ -1070,7 +1075,7 @@ export function AdminClients({
           <span className="hidden h-6 w-px bg-black/10 sm:block" aria-hidden />
           <div className="flex h-10 items-center rounded-full bg-surface-2 p-1" data-sort-group="entity" role="tablist" aria-label="Группы или дети">
             {([
-              ["группы", "Группы", status === "лид" ? shownGroups.length : groupOpts.length],
+              ["группы", "Группы", status === "лид" ? (leadKeys ? shownGroups.length : "…") : groupOpts.length],
               ["дети", "Дети", status === "лид" ? counts.лид : counts.учится],
             ] as const).map(([id, label, n]) => {
               const on = id === "группы" ? view === "группы" : view === "дети";
