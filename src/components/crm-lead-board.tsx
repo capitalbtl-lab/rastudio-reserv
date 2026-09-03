@@ -7,21 +7,10 @@ import { LEAD_STAGES, pinUnsorted, type LeadCard, type LeadStage } from "@/data/
 import { RA_POP } from "@/data/admin-ui";
 import { cn } from "@/lib/utils";
 
-const LIFT = 4;
+const LIFT = 6;
 const EDGE = 40;
 const SCROLL = 16;
-const DT_MIN = 1 / 120;
-const DT_MAX = 1 / 30;
-const MASS = 1;
-const TH_MAX = (16 * Math.PI) / 180;
-const B2 = 0.0016;
-const BETA2 = 0.06;
-const G = 840;
-const MU_S = 0.26;
-const MU_K = 0.16;
-const V_DEAD = 22;
-const V_STRIB = 110;
-const OM_DEAD = 0.4;
+const TILT_MAX = 2.4;
 
 function when(raw: string) {
   const s = String(raw || "").trim();
@@ -96,77 +85,19 @@ type Drag =
   | { kind: "card"; key: string; lead: LeadCard; from: number }
   | { kind: "col"; id: number };
 
-type Phys = {
-  px: number;
-  py: number;
+type GhostPos = {
+  x: number;
+  y: number;
+  ox: number;
+  oy: number;
   w: number;
   h: number;
-  m: number;
-  I: number;
-  lx: number;
-  ly: number;
-  cx: number;
-  cy: number;
-  vx: number;
-  vy: number;
-  th: number;
-  om: number;
-  sx: number;
-  sy: number;
-  scale: number;
-  lastT: number;
+  tilt: number;
+  lastX: number;
 };
 
 function clamp(n: number, a: number, b: number) {
   return Math.max(a, Math.min(b, n));
-}
-
-function muOf(speed: number) {
-  return MU_K + (MU_S - MU_K) * Math.exp(-((speed / V_STRIB) * (speed / V_STRIB)));
-}
-
-function coulomb(
-  vx: number,
-  vy: number,
-  om: number,
-  fxO: number,
-  fyO: number,
-  tauO: number,
-  N: number,
-  R: number,
-) {
-  const speed = Math.hypot(vx, vy);
-  let fxC = 0;
-  let fyC = 0;
-  let stickLin = false;
-  if (speed > V_DEAD) {
-    const f = muOf(speed) * N;
-    fxC = (-f * vx) / speed;
-    fyC = (-f * vy) / speed;
-  } else {
-    const fO = Math.hypot(fxO, fyO);
-    const fMax = MU_S * N;
-    if (fO <= fMax) {
-      fxC = -fxO;
-      fyC = -fyO;
-      stickLin = true;
-    } else {
-      fxC = (-fMax * fxO) / (fO || 1);
-      fyC = (-fMax * fyO) / (fO || 1);
-    }
-  }
-  let tauC = 0;
-  let stickAng = false;
-  const tauMax = MU_S * N * R;
-  if (Math.abs(om) > OM_DEAD) {
-    tauC = -muOf(Math.abs(om) * R) * N * R * Math.sign(om);
-  } else if (Math.abs(tauO) <= tauMax) {
-    tauC = -tauO;
-    stickAng = true;
-  } else {
-    tauC = -tauMax * Math.sign(tauO || 1);
-  }
-  return { fxC, fyC, tauC, stickLin, stickAng };
 }
 
 export function CrmLeadBoard({
@@ -211,28 +142,7 @@ export function CrmLeadBoard({
   const orderRef = useRef<Record<number, string[]>>({});
   const startOrderRef = useRef<Record<number, string[]>>({});
   const liveRef = useRef(false);
-  const settleRef = useRef(false);
-  const phys = useRef<Phys>({
-    px: 0,
-    py: 0,
-    w: 264,
-    h: 72,
-    m: MASS,
-    I: (264 * 264 + 72 * 72) / 12,
-    lx: 0,
-    ly: 0,
-    cx: 0,
-    cy: 0,
-    vx: 0,
-    vy: 0,
-    th: 0,
-    om: 0,
-    sx: 0,
-    sy: 0,
-    scale: 1,
-    lastT: 0,
-  });
-  const rafRef = useRef(0);
+  const ghost = useRef<GhostPos>({ x: 0, y: 0, ox: 0, oy: 0, w: 264, h: 72, tilt: 0, lastX: 0 });
   const onMoveRef = useRef(onMove);
   onMoveRef.current = onMove;
   const onOpenRef = useRef(onOpen);
@@ -362,79 +272,10 @@ export function CrmLeadBoard({
 
   function paintGhost() {
     const el = ghostRef.current;
-    const p = phys.current;
+    const g = ghost.current;
     if (!el) return;
-    const deg = (p.th * 180) / Math.PI;
-    el.style.transform = `translate3d(${p.cx - p.w / 2}px, ${p.cy - p.h / 2}px, 0) rotate(${deg}deg) scale(${p.scale})`;
-  }
-
-  function step(now: number) {
-    const p = phys.current;
-    const dt = clamp((now - (p.lastT || now)) / 1000, DT_MIN, DT_MAX);
-    p.lastT = now;
-    const wn = settleRef.current ? 20 : 13.5;
-    const k = p.m * wn * wn;
-    const b = 2 * (settleRef.current ? 0.72 : 0.38) * p.m * wn;
-    const beta = 2 * (settleRef.current ? 0.78 : 0.42) * p.I * wn;
-    const N = p.m * G;
-    const R = 0.22 * Math.hypot(p.w, p.h);
-    const steps = 2;
-    const h = dt / steps;
-    for (let i = 0; i < steps; i += 1) {
-      const cos = Math.cos(p.th);
-      const sin = Math.sin(p.th);
-      const rx = p.lx * cos - p.ly * sin;
-      const ry = p.lx * sin + p.ly * cos;
-      const speed = Math.hypot(p.vx, p.vy);
-      const fxV = -b * p.vx - B2 * p.m * speed * p.vx;
-      const fyV = -b * p.vy - B2 * p.m * speed * p.vy;
-      const tauV = -beta * p.om - BETA2 * p.I * Math.abs(p.om) * p.om;
-      let fxE = 0;
-      let fyE = 0;
-      let tauE = 0;
-      if (settleRef.current) {
-        fxE = k * (p.sx - p.cx);
-        fyE = k * (p.sy - p.cy);
-        tauE = -(p.I * 18 * 18) * p.th;
-      } else {
-        const gx = p.cx + rx;
-        const gy = p.cy + ry;
-        fxE = k * (p.px - gx);
-        fyE = k * (p.py - gy);
-        tauE = rx * fyE - ry * fxE;
-        if (p.th > TH_MAX) tauE -= p.I * 80 * (p.th - TH_MAX);
-        if (p.th < -TH_MAX) tauE -= p.I * 80 * (p.th + TH_MAX);
-      }
-      const dry = coulomb(p.vx, p.vy, p.om, fxE + fxV, fyE + fyV, tauE + tauV, N, R);
-      const fx = fxE + fxV + dry.fxC;
-      const fy = fyE + fyV + dry.fyC;
-      const tau = tauE + tauV + dry.tauC;
-      p.vx += (fx / p.m) * h;
-      p.vy += (fy / p.m) * h;
-      p.om += (tau / p.I) * h;
-      if (dry.stickLin) {
-        p.vx = 0;
-        p.vy = 0;
-      }
-      if (dry.stickAng) p.om = 0;
-      p.cx += p.vx * h;
-      p.cy += p.vy * h;
-      p.th += p.om * h;
-    }
-    const wantScale = settleRef.current ? 1 : 1.04;
-    p.scale += (wantScale - p.scale) * (1 - Math.exp(-dt * 14));
-    paintGhost();
-    if (settleRef.current) {
-      const dist = Math.hypot(p.sx - p.cx, p.sy - p.cy);
-      const spd = Math.hypot(p.vx, p.vy);
-      if (dist < 1.8 && spd < 55 && Math.abs(p.th) < 0.03 && Math.abs(p.om) < 0.4) {
-        finish(true);
-        return;
-      }
-    } else {
-      collide();
-    }
-    rafRef.current = requestAnimationFrame(step);
+    el.style.transform = `translate3d(${g.x - g.ox}px, ${g.y - g.oy}px, 0) rotate(${g.tilt}deg) scale(1.02)`;
+    el.style.transformOrigin = `${g.ox}px ${g.oy}px`;
   }
 
   function flipColumn(colId: number) {
@@ -484,9 +325,9 @@ export function CrmLeadBoard({
     if (!current) return;
     const root = boardRef.current;
     if (!root) return;
-    const p = phys.current;
+    const g = ghost.current;
     if (current.kind === "col") {
-      const col = columnAt(p.px, p.py);
+      const col = columnAt(g.x, g.y);
       if (col != null) {
         if (col !== overRef.current.col) {
           overRef.current = { col, key: "" };
@@ -496,15 +337,15 @@ export function CrmLeadBoard({
       }
       return;
     }
-    const cx = p.cx;
-    const cy = p.cy;
+    const cx = g.x;
+    const cy = g.y;
     const col = columnAt(cx, cy);
     if (col == null) return;
     const ul = root.querySelector<HTMLElement>(`section[data-col-id="${col}"] ul`);
     if (ul) {
       const box = ul.getBoundingClientRect();
-      if (p.py < box.top + EDGE) ul.scrollTop -= SCROLL;
-      else if (p.py > box.bottom - EDGE) ul.scrollTop += SCROLL;
+      if (g.y < box.top + EDGE) ul.scrollTop -= SCROLL;
+      else if (g.y > box.bottom - EDGE) ul.scrollTop += SCROLL;
     }
     const cards = root.querySelectorAll<HTMLElement>(`section[data-col-id="${col}"] li[data-card-key]`);
     const seen = new Set<string>();
@@ -528,13 +369,11 @@ export function CrmLeadBoard({
   }
 
   function finish(commit: boolean) {
-    cancelAnimationFrame(rafRef.current);
     const current = dragRef.current;
     if (current?.kind === "col") collide();
     if (!current && !liveRef.current) return;
     const dest = overRef.current;
     liveRef.current = false;
-    settleRef.current = false;
     dragRef.current = null;
     overRef.current = { col: null, key: "" };
     setDrag(null);
@@ -561,29 +400,6 @@ export function CrmLeadBoard({
     if (now.join(",") !== startColsRef.current.join(",")) persistCols(now);
   }
 
-  function beginSettle() {
-    collide();
-    const p = phys.current;
-    const root = boardRef.current;
-    const col = overRef.current.col;
-    let sx = p.cx;
-    let sy = p.cy;
-    if (root && col != null) {
-      const slot = root.querySelector<HTMLElement>(`section[data-col-id="${col}"] li[data-slot]`);
-      if (slot) {
-        const r = slot.getBoundingClientRect();
-        sx = r.left + p.w / 2;
-        sy = r.top + p.h / 2;
-      }
-    }
-    p.sx = sx;
-    p.sy = sy;
-    settleRef.current = true;
-    window.setTimeout(() => {
-      if (settleRef.current) finish(true);
-    }, 780);
-  }
-
   function startPointer(e: React.PointerEvent, next: Drag) {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement | null)?.closest?.("[data-lead-del],[data-no-drag]")) return;
@@ -593,7 +409,6 @@ export function CrmLeadBoard({
     const pid = e.pointerId;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     liveRef.current = false;
-    settleRef.current = false;
     dragRef.current = next;
     const seeded = seedOrder();
     orderRef.current = seeded;
@@ -601,25 +416,15 @@ export function CrmLeadBoard({
     startColsRef.current = colOrderRef.current.slice();
     setOrder(seeded);
     overRef.current = { col: next.kind === "card" ? next.from : next.id, key: next.kind === "card" ? next.key : "" };
-    phys.current = {
-      px: e.clientX,
-      py: e.clientY,
+    ghost.current = {
+      x: e.clientX,
+      y: e.clientY,
+      ox: e.clientX - rect.left,
+      oy: e.clientY - rect.top,
       w: rect.width,
       h: rect.height,
-      m: MASS,
-      I: Math.max(400, (rect.width * rect.width + rect.height * rect.height) / 12),
-      lx: e.clientX - rect.left - rect.width / 2,
-      ly: e.clientY - rect.top - rect.height / 2,
-      cx: rect.left + rect.width / 2,
-      cy: rect.top + rect.height / 2,
-      vx: 0,
-      vy: 0,
-      th: 0,
-      om: 0,
-      sx: rect.left + rect.width / 2,
-      sy: rect.top + rect.height / 2,
-      scale: 1,
-      lastT: performance.now(),
+      tilt: 0,
+      lastX: e.clientX,
     };
     try {
       (e.currentTarget as HTMLElement).setPointerCapture?.(pid);
@@ -629,22 +434,27 @@ export function CrmLeadBoard({
 
     const move = (ev: PointerEvent) => {
       if (ev.pointerId !== pid) return;
-      const p = phys.current;
-      p.px = ev.clientX;
-      p.py = ev.clientY;
+      const g = ghost.current;
+      const vx = ev.clientX - g.lastX;
+      g.x = ev.clientX;
+      g.y = ev.clientY;
+      g.lastX = ev.clientX;
+      g.tilt = clamp(g.tilt * 0.62 + vx * 0.22, -TILT_MAX, TILT_MAX);
       const dx = ev.clientX - originX;
       const dy = ev.clientY - originY;
       if (!liveRef.current) {
         if (dx * dx + dy * dy < LIFT * LIFT) return;
         liveRef.current = true;
-        p.lastT = performance.now();
-        setLift({ w: p.w, h: p.h });
+        setLift({ w: g.w, h: g.h });
         setDrag(next);
         document.body.classList.add("ra-lead-dragging");
         document.body.style.userSelect = "none";
         document.body.style.cursor = "grabbing";
         document.body.style.touchAction = "none";
-        rafRef.current = requestAnimationFrame(step);
+        requestAnimationFrame(paintGhost);
+      } else {
+        paintGhost();
+        collide();
       }
       ev.preventDefault();
     };
@@ -664,12 +474,10 @@ export function CrmLeadBoard({
         if (next.kind === "card") onOpenRef.current(next.lead);
         return;
       }
-      phys.current.px = ev.clientX;
-      phys.current.py = ev.clientY;
-      if (next.kind === "card" && ev.type === "pointerup") {
-        beginSettle();
-        return;
-      }
+      ghost.current.x = ev.clientX;
+      ghost.current.y = ev.clientY;
+      ghost.current.tilt = 0;
+      collide();
       finish(ev.type === "pointerup");
     };
     window.addEventListener("pointermove", move, { capture: true, passive: false });
@@ -856,8 +664,12 @@ export function CrmLeadBoard({
             <div
               ref={ghostRef}
               data-ghost="1"
-              className="ra-lead-ghost fixed top-0 left-0 z-[280] origin-center rounded-[0.9rem] bg-white px-2.5 py-2 shadow-[0_22px_50px_rgba(15,23,42,.28)] ring-1 ring-black/12"
-              style={{ width: lift.w }}
+              className="ra-lead-ghost pointer-events-none fixed top-0 left-0 z-[280] rounded-[0.9rem] bg-white px-2.5 py-2 shadow-[0_12px_28px_rgba(15,23,42,.18)] ring-1 ring-black/8"
+              style={{
+                width: lift.w,
+                transform: `translate3d(${ghost.current.x - ghost.current.ox}px, ${ghost.current.y - ghost.current.oy}px, 0) rotate(${ghost.current.tilt}deg) scale(1.02)`,
+                transformOrigin: `${ghost.current.ox}px ${ghost.current.oy}px`,
+              }}
             >
               <CardFace it={draggingCard.lead} color="#0f172a" hideBranch={hideBranch} />
             </div>,
@@ -869,8 +681,13 @@ export function CrmLeadBoard({
             <div
               ref={ghostRef}
               data-ghost="1"
-              className="ra-lead-ghost fixed top-0 left-0 z-[280] origin-center rounded-[0.9rem] bg-white px-3 py-2 text-[0.82rem] font-semibold shadow-[0_22px_50px_rgba(15,23,42,.28)] ring-1 ring-black/12"
-              style={{ width: Math.max(180, lift.w), color: draggingStage.color }}
+              className="ra-lead-ghost pointer-events-none fixed top-0 left-0 z-[280] rounded-[0.9rem] bg-white px-3 py-2 text-[0.82rem] font-semibold shadow-[0_12px_28px_rgba(15,23,42,.18)] ring-1 ring-black/8"
+              style={{
+                width: Math.max(180, lift.w),
+                color: draggingStage.color,
+                transform: `translate3d(${ghost.current.x - ghost.current.ox}px, ${ghost.current.y - ghost.current.oy}px, 0) rotate(${ghost.current.tilt}deg) scale(1.02)`,
+                transformOrigin: `${ghost.current.ox}px ${ghost.current.oy}px`,
+              }}
             >
               {draggingStage.name}
             </div>,
