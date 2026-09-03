@@ -15,6 +15,7 @@ import {
   parseCrmLeadColumn,
   parseCrmLeadBoardPayload,
   parseCrmBoardCounts,
+  parseCrmBoardColumnUrls,
   parseCrmScrollPagerUrl,
   applyCrmBoardRows,
   crmBoardStatusField,
@@ -292,6 +293,31 @@ describe("снимок кабинета AlfaCRM /company/2/lead/index", () => {
     assert.equal(keys.size, 120);
     assert.equal(keys.has("7759"), false, "на сайте в выгрузке нет Фролова");
     assert.ok(crmHtml.includes("data-id=\"7759\""));
+  });
+
+  it("колонки board берут data-url с resource_id, как initBoard", () => {
+    const html = readFileSync(join(process.cwd(), "attachments", "Лиды _ ALFACRM.html"), "utf8");
+    const urls = parseCrmBoardColumnUrls(html);
+    assert.deepEqual(
+      urls.map((u) => u.id),
+      [0, 1, 2, 7, 4],
+    );
+    for (const u of urls) {
+      assert.match(u.url, /\/company\/2\/lead\/board\?id=/);
+      assert.match(u.url, /resource_id=694/);
+      assert.match(u.url, /[?&]color=/);
+      assert.equal(u.url.includes("&" + "amp;"), false);
+    }
+    const board = parseCrmLeadBoard(html);
+    const by: Record<number, number> = {};
+    for (const row of board) by[row.statusId] = (by[row.statusId] || 0) + 1;
+    assert.equal(by[0], 1);
+    assert.equal(by[1], 60);
+    assert.equal(by[2], 34);
+    assert.equal(by[7], 30);
+    const pager = parseCrmScrollPagerUrl(html);
+    assert.match(pager, /page=3/);
+    assert.match(pager, /resource_id=694/);
   });
 
   it("initBoard отдаёт JSON {content}, не голый HTML", () => {

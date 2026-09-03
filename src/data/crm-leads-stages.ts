@@ -202,9 +202,28 @@ export function parseCrmLeadBoard(html: string): { id: number; name: string; sta
   return parseCrmLeadColumn(html, 0);
 }
 
+function decodeCrmAttr(s: string) {
+  return String(s || "")
+    .replace(new RegExp("&" + "amp;", "gi"), "&")
+    .trim();
+}
+
 export function parseCrmScrollPagerUrl(html: string) {
   const m = html.match(/crm-scroll-pager[^>]*data-url=["']([^"']+)/i);
-  return m ? m[1].replace(/&/g, "&").trim() : "";
+  return m ? decodeCrmAttr(m[1]) : "";
+}
+
+/** data-url колонки как у initBoard: /company/2/lead/board?id=1&color=…&resource_id=694 */
+export function parseCrmBoardColumnUrls(html: string): { id: number; url: string }[] {
+  const out: { id: number; url: string }[] = [];
+  const seen = new Set<number>();
+  for (const m of html.matchAll(/lead-items-(\d+)[^>]*data-url=["']([^"']+)/gi)) {
+    const id = Number(m[1]);
+    if (!Number.isFinite(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, url: decodeCrmAttr(m[2]) });
+  }
+  return out;
 }
 
 /** Ответ /lead/board — JSON {content} как в initBoard, либо HTML колонки. */

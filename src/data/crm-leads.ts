@@ -17,6 +17,8 @@ import {
   leadMoveFields,
   isCrmLeadRecord,
   parseCrmLeadBoardPayload,
+  parseCrmLeadBoard,
+  parseCrmBoardColumnUrls,
   applyCrmBoardRows,
   applyLeadDelta,
   leadDeltaDrops,
@@ -212,9 +214,26 @@ async function fetchCrmLeadColumns(branch: number, statusIds: number[], cookie: 
     const res = await fetch(url, { headers, redirect: "manual", signal: AbortSignal.timeout(15000) });
     return res.text();
   };
+  let indexHtml = "";
+  try {
+    indexHtml = await get(`/company/${branch}/lead/index`);
+  } catch {
+    indexHtml = "";
+  }
+  if (/LoginForm/i.test(indexHtml) && !/lead-items-/i.test(indexHtml)) return found;
+  if (indexHtml) take(parseCrmLeadBoard(indexHtml));
+  const colUrls = parseCrmBoardColumnUrls(indexHtml);
   const query = encodeURIComponent(JSON.stringify({ branch: String(branch) }));
-  async function column(statusId: number) {
-    let path = `/company/${branch}/lead/board?id=${statusId}&query=${query}`;
+  const rid = (indexHtml.match(/resource_id=(\d+)/) || [])[1] || "";
+  const fallback = (statusIds.length ? statusIds : colUrls.map((c) => c.id)).filter((id, i, a) => a.indexOf(id) === i);
+  const jobs: { id: number; url: string }[] = colUrls.length
+    ? colUrls
+    : fallback.map((id) => ({
+        id,
+        url: `/company/${branch}/lead/board?id=${id}&query=${query}${rid ? `&resource_id=${rid}` : ""}`,
+      }));
+  async function follow(start: string, statusId: number) {
+    let path = start;
     for (let page = 0; page < 40; page++) {
       let raw = "";
       try {
@@ -229,17 +248,15 @@ async function fetchCrmLeadColumns(branch: number, statusIds: number[], cookie: 
         path = parsed.nextUrl;
         continue;
       }
-      if (!parsed.cards.length || parsed.cards.length < 20) return;
-      path = `/company/${branch}/lead/board?id=${statusId}&query=${query}&page=${page + 1}`;
+      break;
     }
   }
-  const ids = (statusIds.length ? statusIds : [0]).filter((id, i, a) => a.indexOf(id) === i);
-  const queue = ids.slice();
+  const queue = jobs.slice();
   const workers = Array.from({ length: Math.min(2, queue.length) }, async () => {
     while (queue.length) {
-      const id = queue.shift();
-      if (id == null) return;
-      await column(id);
+      const job = queue.shift();
+      if (!job) return;
+      await follow(job.url, job.id);
     }
   });
   await Promise.all(workers);
