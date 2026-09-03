@@ -16,11 +16,8 @@ import {
   LEAD_INDEX_QUERY,
   leadMoveFields,
   isCrmLeadRecord,
-  parseCrmLeadColumn,
-  parseCrmLeadBoard,
   parseCrmLeadBoardPayload,
   applyCrmBoardRows,
-  crmBoardStatusField,
   type LeadStage,
 } from "./crm-leads-stages";
 import { crmHost, crmWebLogin, csrfOf, mergeCookies, setCookieList } from "./crm-web";
@@ -189,15 +186,6 @@ async function fetchStageOrderFromSettings(branchId: number): Promise<number[]> 
   return [];
 }
 
-async function hydrateLead(t: string, branch: number, id: number) {
-  const data = await request<{ items?: Record<string, unknown>[] }>(
-    `/v2api/${branch}/customer/index`,
-    { page: 0, pageSize: 10, id },
-    t,
-  ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-  return (data.items || []).find((x) => Number(x.id) === id || Number(x.customer_id) === id) || null;
-}
-
 async function fetchCrmLeadColumns(branch: number, statusIds: number[], cookie: string, token = "") {
   const host = crmHost();
   const found: { id: number; name: string; statusId: number }[] = [];
@@ -218,36 +206,25 @@ async function fetchCrmLeadColumns(branch: number, statusIds: number[], cookie: 
   if (token) headers["X-ALFACRM-TOKEN"] = token;
   const get = async (path: string) => {
     const url = path.startsWith("http") ? path : `${host}${path.startsWith("/") ? "" : "/"}${path}`;
-    return fetch(url, { headers, redirect: "manual" });
+    const res = await fetch(url, { headers, redirect: "manual", signal: AbortSignal.timeout(8000) });
+    return res.text();
   };
-  const index = await get(`/company/${branch}/lead/index`).catch(() => null);
-  if (index) {
-    const html = await index.text();
-    if (!(/LoginForm/i.test(html) && !/lead-element/i.test(html))) take(parseCrmLeadBoard(html));
-  }
+  const query = encodeURIComponent(JSON.stringify({ branch: String(branch) }));
+  const jobs: Promise<void>[] = [];
   for (const statusId of statusIds) {
-    const query = encodeURIComponent(JSON.stringify({ branch: String(branch) }));
-    const seenPaths = new Set<string>();
-    const queue = [
-      `/company/${branch}/lead/board?id=${statusId}&query=${query}`,
-      `/company/${branch}/lead/board?id=${statusId}&query=${query}&page=1`,
-      `/company/${branch}/lead/board?id=${statusId}&query=${query}&page=2`,
-      `/company/${branch}/lead/board?id=${statusId}&query=${query}&page=3`,
-      `/company/${branch}/lead/board?id=${statusId}&query=${query}&page=4`,
-    ];
-    while (queue.length) {
-      const path = queue.shift()!;
-      if (seenPaths.has(path)) continue;
-      seenPaths.add(path);
-      const res = await get(path).catch(() => null);
-      if (!res) continue;
-      const raw = await res.text();
-      if (/LoginForm/i.test(raw) && !/lead-element/i.test(raw) && !/"content"/i.test(raw)) continue;
-      const parsed = parseCrmLeadBoardPayload(raw, statusId);
-      take(parsed.cards);
-      if (parsed.nextUrl && !seenPaths.has(parsed.nextUrl)) queue.push(parsed.nextUrl);
+    for (const page of [0, 1, 2, 3]) {
+      const path = `/company/${branch}/lead/board?id=${statusId}&query=${query}${page ? `&page=${page}` : ""}`;
+      jobs.push(
+        get(path)
+          .then((raw) => {
+            if (/LoginForm/i.test(raw) && !/lead-element/i.test(raw) && !/"content"/i.test(raw)) return;
+            take(parseCrmLeadBoardPayload(raw, statusId).cards);
+          })
+          .catch(() => undefined),
+      );
     }
   }
+  await Promise.all(jobs);
   return found;
 }
 
@@ -260,26 +237,15 @@ async function fetchBranchLeads(t: string, branch: number, stages: { id: number 
     seen.add(packed.id);
     out.push(packed);
   };
-  await pagedIndex(
-    `/v2api/${branch}/customer/index`,
-    { ...LEAD_INDEX_QUERY },
-    t,
-    (it) => take(it),
-    { pageSize: 50 },
-  );
-  for (const s of stages) {
-    if (!s.id) continue;
-    await pagedIndex(
-      `/v2api/${branch}/customer/index`,
-      { lead_status_id: s.id },
-      t,
-      (it) => take(it, true),
-      { pageSize: 50 },
-    );
-  }
-  const login = await crmWebLogin().catch(() => ({ cookie: "", error: "вход в кабинет не удался" }));
   const statusIds = [0, ...stages.map((s) => s.id)].filter((id, i, a) => a.indexOf(id) === i);
+  const loginP = crmWebLogin().catch(() => ({ cookie: "", error: "вход в кабинет не удался" }));
+  const apiP = pagedIndex(`/v2api/${branch}/customer/index`, { ...LEAD_INDEX_QUERY }, t, (it) => take(it), {
+    pageSize: 100,
+    pages: 8,
+  }).catch(() => undefined);
+  const login = await loginP;
   const board = await fetchCrmLeadColumns(branch, statusIds, login.cookie || "", t).catch(() => []);
+  await apiP;
   let fromBoard = 0;
   if (board.length) {
     fromBoard = board.length;
@@ -310,26 +276,17 @@ async function fetchBranchLeads(t: string, branch: number, stages: { id: number 
       seen.add(card.id);
       out.push(card);
     }
-    for (const row of board) {
-      const hit = out.find((x) => x.id === row.id);
-      if (!hit || (hit.phone && hit.name && hit.name !== `лид ${hit.id}`)) continue;
-      const raw = await hydrateLead(t, branch, row.id).catch(() => null);
-      if (!raw) continue;
-      const packed = packLead(
-        {
-          ...raw,
-          name: String(raw.name || row.name || hit.name),
-          is_study: 0,
-          lead_status_id: crmBoardStatusField(row.statusId),
-          branch_ids: raw.branch_ids || [branch],
-        },
-        branch,
-      );
-      if (!packed) continue;
-      packed.statusId = row.statusId;
-      const i = out.findIndex((x) => x.id === row.id);
-      if (i >= 0) out[i] = packed;
-    }
+  } else {
+    await Promise.all(
+      stages
+        .filter((s) => s.id)
+        .map((s) =>
+          pagedIndex(`/v2api/${branch}/customer/index`, { lead_status_id: s.id }, t, (it) => take(it, true), {
+            pageSize: 100,
+            pages: 6,
+          }).catch(() => undefined),
+        ),
+    );
   }
   return { items: out, fromBoard, boardError: board.length ? "" : login.error || "доска CRM не открылась" };
 }
@@ -337,51 +294,65 @@ async function fetchBranchLeads(t: string, branch: number, stages: { id: number 
 export async function loadLeadsBoard(branchId = 0, force = false) {
   const key = String(branchId || 0);
   const hit = bag().get(key);
-  if (!force && hit && Date.now() - hit.at < 45 * 1000) return hit;
-  const t = await alfaToken();
-  const rawStages = await fetchStages(t, branchId || 2);
-  const packs = await Promise.all([1, 2, 3, 4].map((b) => fetchBranchLeads(t, b, rawStages)));
-  const seen = new Set<number>();
-  const items: LeadCard[] = [];
-  let fromBoard = 0;
-  const boardErrors: string[] = [];
-  for (const pack of packs) {
-    fromBoard += pack.fromBoard;
-    if (pack.boardError) boardErrors.push(pack.boardError);
-    for (const it of pack.items) {
-      if (seen.has(it.id)) continue;
-      if (branchId && it.branchId !== branchId && !(it.branches || []).includes(branchId)) continue;
-      seen.add(it.id);
-      items.push(branchId && it.branchId !== branchId ? { ...it, branchId } : it);
+  if (!force && hit && Date.now() - hit.at < 10 * 60 * 1000) return hit;
+  const work = async () => {
+    const t = await alfaToken();
+    const rawStages = await fetchStages(t, branchId || 2);
+    const branches = branchId ? [branchId] : [1, 2, 3, 4];
+    const packs = await Promise.all(branches.map((b) => fetchBranchLeads(t, b, rawStages)));
+    const seen = new Set<number>();
+    const items: LeadCard[] = [];
+    let fromBoard = 0;
+    const boardErrors: string[] = [];
+    for (const pack of packs) {
+      fromBoard += pack.fromBoard;
+      if (pack.boardError) boardErrors.push(pack.boardError);
+      for (const it of pack.items) {
+        if (seen.has(it.id)) continue;
+        if (branchId && it.branchId !== branchId && !(it.branches || []).includes(branchId)) continue;
+        seen.add(it.id);
+        items.push(branchId && it.branchId !== branchId ? { ...it, branchId } : it);
+      }
     }
-  }
-  const stages = mergeStages(
-    rawStages,
-    items.map((x) => x.statusId),
-  );
+    const stages = mergeStages(
+      rawStages,
+      items.map((x) => x.statusId),
+    );
+    try {
+      const { searchClientViews } = await import("./dossiers");
+      const local = searchClientViews("", 5000, "лид", branchId || 0);
+      const have = new Map(items.map((x) => [x.id, x]));
+      for (const row of local.items) {
+        const id = Number(row.crmId || 0);
+        const hitRow = have.get(id);
+        if (!hitRow) continue;
+        if (!hitRow.phone && row.phone) hitRow.phone = String(row.phone || "");
+        if (!hitRow.note && row.note) hitRow.note = String(row.note || "");
+      }
+    } catch {
+      /* API board is enough */
+    }
+    const byCol = new Map<number, number>();
+    for (const it of items) byCol.set(it.statusId, (byCol.get(it.statusId) || 0) + 1);
+    const colText = stages.map((s) => `${s.name} ${byCol.get(s.id) || 0}`).join(" · ");
+    const note = fromBoard
+      ? `${items.length} с воронки CRM (${colText})`
+      : `${items.length} из API is_study=0 (${colText}). Доска CRM не открылась: ${[...new Set(boardErrors)].join("; ") || "нет сессии кабинета"}`;
+    const built = { at: Date.now(), stages, items, note };
+    bag().set(key, built);
+    return built;
+  };
   try {
-    const { searchClientViews } = await import("./dossiers");
-    const local = searchClientViews("", 5000, "лид", branchId || 0);
-    const have = new Map(items.map((x) => [x.id, x]));
-    for (const row of local.items) {
-      const id = Number(row.crmId || 0);
-      const hit = have.get(id);
-      if (!hit) continue;
-      if (!hit.phone && row.phone) hit.phone = String(row.phone || "");
-      if (!hit.note && row.note) hit.note = String(row.note || "");
-    }
-  } catch {
-    /* API board is enough */
+    const next = await Promise.race([
+      work(),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("CRM не ответила вовремя")), 20000)),
+    ]);
+    bag().set(key, next);
+    return next;
+  } catch (e) {
+    if (hit) return { ...hit, note: "CRM отвечает медленно — показана предыдущая доска." };
+    throw e;
   }
-  const byCol = new Map<number, number>();
-  for (const it of items) byCol.set(it.statusId, (byCol.get(it.statusId) || 0) + 1);
-  const colText = stages.map((s) => `${s.name} ${byCol.get(s.id) || 0}`).join(" · ");
-  const note = fromBoard
-    ? `${items.length} с воронки CRM (${colText})`
-    : `${items.length} из API is_study=0 (${colText}). Доска CRM не открылась: ${[...new Set(boardErrors)].join("; ") || "нет сессии кабинета"}`;
-  const next = { at: Date.now(), stages, items, note };
-  bag().set(key, next);
-  return next;
 }
 
 export function rememberCustomerAsLead(it: Record<string, unknown>, branchId: number) {

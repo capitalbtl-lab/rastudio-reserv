@@ -47,13 +47,19 @@ export function csrfOf(html: string) {
   );
 }
 
+let loginMemo: { at: number; cookie: string; error: string } | null = null;
+
 export async function crmWebLogin() {
+  if (loginMemo && Date.now() - loginMemo.at < 8 * 60 * 1000) return loginMemo;
   const host = crmHost();
   const email = serverEnv("ALFACRM_EMAIL") || "";
   const pass = webPassword();
-  if (!email || !pass) return { cookie: "", error: "Нет пароля кабинета CRM (ALFACRM_WEB_PASSWORD)." };
+  if (!email || !pass) {
+    loginMemo = { at: Date.now(), cookie: "", error: "Нет пароля кабинета CRM (ALFACRM_WEB_PASSWORD)." };
+    return loginMemo;
+  }
   const loginUrl = `${host}/site/login`;
-  const page = await fetch(loginUrl, { redirect: "manual" });
+  const page = await fetch(loginUrl, { redirect: "manual", signal: AbortSignal.timeout(8000) });
   let cookie = mergeCookies("", setCookieList(page));
   const html = await page.text();
   const csrf = csrfOf(html);
@@ -72,14 +78,17 @@ export async function crmWebLogin() {
       "LoginForm[rememberMe]": "1",
     }),
     redirect: "manual",
+    signal: AbortSignal.timeout(8000),
   });
   cookie = mergeCookies(cookie, setCookieList(res));
   const loc = res.headers.get("location") || "";
   if (res.status === 302 && loc && !/login/i.test(loc)) {
     const next = loc.startsWith("http") ? loc : `${host}${loc}`;
-    const follow = await fetch(next, { headers: { Cookie: cookie }, redirect: "manual" });
+    const follow = await fetch(next, { headers: { Cookie: cookie }, redirect: "manual", signal: AbortSignal.timeout(8000) });
     cookie = mergeCookies(cookie, setCookieList(follow));
-    return { cookie, error: "" };
+    loginMemo = { at: Date.now(), cookie, error: "" };
+    return loginMemo;
   }
-  return { cookie: "", error: "Вход в кабинет CRM не удался." };
+  loginMemo = { at: Date.now(), cookie: "", error: "Вход в кабинет CRM не удался." };
+  return loginMemo;
 }

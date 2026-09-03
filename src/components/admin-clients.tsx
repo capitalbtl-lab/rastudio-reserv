@@ -365,6 +365,10 @@ export function AdminClients({
     if (force || !have) setFunnelLoading(!have);
     if (force && have) setFunnelNote("Обновляю доску CRM…");
     else if (!have) setFunnelNote("Загружаю лидов из AlfaCRM…");
+    const watchdog = window.setTimeout(() => {
+      setFunnelLoading(false);
+      if (!funnelAt.current[bid]) setFunnelNote("CRM отвечает долго. Доска откроется, как только дойдёт.");
+    }, 15000);
     try {
       const res = (await adminSchedule({
         data: { token: token(), action: "leadsBoard", branchId: bid, force } as never,
@@ -390,6 +394,7 @@ export function AdminClients({
     } catch (e) {
       setFunnelNote(e instanceof Error && e.message ? e.message : "Не удалось загрузить воронку лидов.");
     } finally {
+      window.clearTimeout(watchdog);
       setFunnelLoading(false);
     }
   }
@@ -564,7 +569,7 @@ export function AdminClients({
 
   useEffect(() => {
     if (!(status === "лид" && view === "дети")) return;
-    const t = window.setInterval(() => void loadFunnel(branchRef.current, true), 5 * 60 * 1000);
+    const t = window.setInterval(() => void loadFunnel(branchRef.current, true), 10 * 60 * 1000);
     return () => window.clearInterval(t);
   }, [status, view]);
 
