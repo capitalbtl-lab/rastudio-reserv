@@ -223,6 +223,7 @@ export function AdminClients({
   const funnelWRef = useRef(400);
   const funnelMoved = useRef(new Map<string, number>());
   const funnelGone = useRef(new Set<string>());
+  const funnelAt = useRef<Record<number, number>>({});
   const [leadKeys, setLeadKeys] = useState<Set<string> | null>(null);
   const leadKeysRef = useRef<Set<string> | null>(null);
   const groupMenuRef = useRef<HTMLDivElement>(null);
@@ -360,8 +361,10 @@ export function AdminClients({
   }
 
   async function loadFunnel(bid: number, force = false) {
-    setFunnelLoading(true);
-    setFunnelNote(force ? "Загружаю лидов из AlfaCRM…" : funnelNote);
+    const have = funnelItems.length > 0 || funnelAt.current[bid] > 0;
+    if (force || !have) setFunnelLoading(!have);
+    if (force && have) setFunnelNote("Обновляю доску CRM…");
+    else if (!have) setFunnelNote("Загружаю лидов из AlfaCRM…");
     try {
       const res = (await adminSchedule({
         data: { token: token(), action: "leadsBoard", branchId: bid, force } as never,
@@ -379,6 +382,7 @@ export function AdminClients({
                 })
             : res.items,
         );
+        funnelAt.current[bid] = Date.now();
         setFunnelNote(res.note || (res.items.length ? `${res.items.length} лидов` : "Пустая воронка."));
         return;
       }
@@ -546,7 +550,10 @@ export function AdminClients({
   }, []);
 
   useEffect(() => {
-    if (status === "лид" && view === "дети") void loadFunnel(branch, true);
+    if (!(status === "лид" && view === "дети")) return;
+    const at = funnelAt.current[branch] || 0;
+    if (at && Date.now() - at < 10 * 60 * 1000) return;
+    void loadFunnel(branch, !at);
   }, [status, view, branch]);
 
   useEffect(() => {
