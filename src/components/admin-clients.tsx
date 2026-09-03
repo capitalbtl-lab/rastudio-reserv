@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { RefreshCw, Search, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,44 @@ function token() {
   if (typeof document === "undefined") return "";
   const m = document.cookie.match(/(?:^|;\s*)ra_admin=([^;]+)/);
   return m ? decodeURIComponent(m[1]) : localStorage.getItem("ra_admin") || "";
+}
+
+const FUNNEL_KEY = "ra_funnel_board";
+const FUNNEL_TTL = 10 * 60 * 1000;
+
+type FunnelSnap = { at: number; branch: number; stages: LeadStage[]; items: LeadCard[] };
+
+function funnelStore(): Record<string, FunnelSnap> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(FUNNEL_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function funnelSnapGet(bid: number): FunnelSnap | null {
+  const all = funnelStore();
+  const hit = all[String(bid)];
+  if (hit?.items?.length) return hit;
+  return Object.values(all).find((x) => x.items?.length) || null;
+}
+
+function funnelSnapPut(bid: number, stages: LeadStage[], items: LeadCard[]) {
+  if (typeof window === "undefined") return;
+  try {
+    const all = funnelStore();
+    all[String(bid)] = { at: Date.now(), branch: bid, stages, items };
+    localStorage.setItem(FUNNEL_KEY, JSON.stringify(all));
+  } catch {
+    /* quota */
+  }
+}
+
+function funnelSnapTimes(): Record<number, number> {
+  const out: Record<number, number> = {};
+  for (const [k, v] of Object.entries(funnelStore())) out[Number(k)] = Number(v.at || 0);
+  return out;
 }
 
 const AGE_BANDS = [
@@ -213,8 +251,8 @@ export function AdminClients({
   const [groupArchive, setGroupArchive] = useState<GroupMember[]>([]);
   const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
   const [groupLoading, setGroupLoading] = useState(false);
-  const [funnelItems, setFunnelItems] = useState<LeadCard[]>([]);
-  const [funnelStages, setFunnelStages] = useState<LeadStage[]>(LEAD_STAGES);
+  const [funnelItems, setFunnelItems] = useState<LeadCard[]>(() => funnelSnapGet(clientsSnap?.branch || 0)?.items || []);
+  const [funnelStages, setFunnelStages] = useState<LeadStage[]>(() => funnelSnapGet(clientsSnap?.branch || 0)?.stages || LEAD_STAGES);
   const [funnelLoading, setFunnelLoading] = useState(false);
   const [funnelW, setFunnelW] = useState(400);
   const [stageAdd, setStageAdd] = useState(false);
@@ -223,7 +261,7 @@ export function AdminClients({
   const funnelWRef = useRef(400);
   const funnelMoved = useRef(new Map<string, number>());
   const funnelGone = useRef(new Set<string>());
-  const funnelAt = useRef<Record<number, number>>({});
+  const funnelAt = useRef<Record<number, number>>(funnelSnapTimes());
   const [leadKeys, setLeadKeys] = useState<Set<string> | null>(null);
   const leadKeysRef = useRef<Set<string> | null>(null);
   const groupMenuRef = useRef<HTMLDivElement>(null);
@@ -374,9 +412,9 @@ export function AdminClients({
         data: { token: token(), action: "leadsBoard", branchId: bid, force } as never,
       })) as { ok?: boolean; error?: string; stages?: LeadStage[]; items?: LeadCard[]; total?: number; note?: string };
       if (res.ok && Array.isArray(res.items)) {
-        setFunnelStages(mergeStages(res.stages || [], res.items.map((x) => x.statusId)));
+        const nextStages = mergeStages(res.stages || [], res.items.map((x) => x.statusId));
         const moved = funnelMoved.current;
-        setFunnelItems(
+        const nextItems =
           moved.size || funnelGone.current.size
             ? res.items
                 .filter((it) => !funnelGone.current.has(`${it.branchId}:${it.id}`))
@@ -384,9 +422,11 @@ export function AdminClients({
                   const v = moved.get(`${it.branchId}:${it.id}`);
                   return v == null ? it : { ...it, statusId: v };
                 })
-            : res.items,
-        );
+            : res.items;
+        setFunnelStages(nextStages);
+        setFunnelItems(nextItems);
         funnelAt.current[bid] = Date.now();
+        funnelSnapPut(bid, nextStages, nextItems);
         setFunnelNote(res.note || (res.items.length ? `${res.items.length} лидов` : "Пустая воронка."));
         return;
       }
@@ -554,11 +594,20 @@ export function AdminClients({
     return () => window.clearInterval(t);
   }, []);
 
+  useLayoutEffect(() => {
+    if (!(status === "лид" && view === "дети")) return;
+    const snap = funnelSnapGet(branch);
+    if (!snap?.items?.length) return;
+    setFunnelItems(snap.items);
+    if (snap.stages?.length) setFunnelStages(mergeStages(snap.stages));
+    funnelAt.current[branch] = snap.at || funnelAt.current[branch] || Date.now();
+  }, [status, view, branch]);
+
   useEffect(() => {
     if (!(status === "лид" && view === "дети")) return;
     const at = funnelAt.current[branch] || 0;
-    if (at && Date.now() - at < 10 * 60 * 1000) return;
-    void loadFunnel(branch, !at);
+    if (at && Date.now() - at < FUNNEL_TTL) return;
+    void loadFunnel(branch, true);
   }, [status, view, branch]);
 
   useEffect(() => {
@@ -1248,6 +1297,7 @@ export function AdminClients({
                 const src = funnelItems.length ? funnelItems : funnelShown;
                 const nextItems = reorderLeads(src, lead, statusId, beforeId);
                 setFunnelItems(nextItems);
+                funnelSnapPut(branchRef.current, funnelStages, nextItems);
                 const colNow = nextItems.filter((x) => x.statusId === statusId);
                 const idx = colNow.findIndex((x) => x.id === lead.id && x.branchId === lead.branchId);
                 const sort = Math.max(0, idx) * 10;
@@ -1265,7 +1315,9 @@ export function AdminClients({
                 funnelGone.current.add(key);
                 setFunnelItems((xs) => {
                   const src = xs.length ? xs : funnelShown;
-                  return src.filter((x) => !(x.id === lead.id && x.branchId === lead.branchId));
+                  const next = src.filter((x) => !(x.id === lead.id && x.branchId === lead.branchId));
+                  funnelSnapPut(branchRef.current, funnelStages, next);
+                  return next;
                 });
                 if (activeId === lead.customerId || activeId === lead.id) {
                   setCard(null);
@@ -1310,6 +1362,7 @@ export function AdminClients({
                   const by = new Map(xs.map((s) => [s.id, s]));
                   const next = ids.map((id) => by.get(id)).filter((s): s is LeadStage => Boolean(s));
                   for (const s of xs) if (!next.some((x) => x.id === s.id)) next.push(s);
+                  funnelSnapPut(branchRef.current, next, funnelItems);
                   return next;
                 });
                 void adminSchedule({
