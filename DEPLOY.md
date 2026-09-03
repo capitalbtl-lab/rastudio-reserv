@@ -37,12 +37,24 @@ pm2 startup
 
 Обновление после пуша в GitHub:
 
+Сайт сам подтягивает `main` раз в минуту (`rastudio-deploy` в PM2). SSH больше не нужен.
+
+Первый раз (чтобы запустить вотчер):
+
 ```bash
 cd /var/www/rastudio
 git pull
-npm ci
-npm run build:beget
-pm2 restart rastudio
+chmod +x scripts/beget-deploy.sh
+npm run deploy
+```
+
+Дальше: пуш в `main` → в течение минуты сборка и рестарт. Если сборка упала, старый процесс не трогаем.
+
+Вручную, если надо сразу:
+
+```bash
+cd /var/www/rastudio
+npm run deploy
 ```
 
 ## GitHub Actions

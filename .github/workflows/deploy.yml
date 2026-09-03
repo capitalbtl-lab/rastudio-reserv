@@ -7,9 +7,37 @@ on:
 
 concurrency:
   group: production
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
+  beget:
+    name: Beget VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Need Beget secrets
+        id: gate
+        env:
+          HOST: ${{ secrets.BEGET_HOST }}
+          KEY: ${{ secrets.BEGET_SSH_KEY }}
+        run: |
+          if [ -z "$HOST" ] || [ -z "$KEY" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Секреты BEGET_HOST / BEGET_SSH_KEY не заданы — выкладка на сервере через rastudio-deploy."
+          fi
+      - if: steps.gate.outputs.skip != 'true'
+        name: SSH deploy
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.BEGET_HOST }}
+          username: root
+          key: ${{ secrets.BEGET_SSH_KEY }}
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            cd /var/www/rastudio
+            bash scripts/beget-deploy.sh --force
+
   production:
     name: Vercel production
     runs-on: ubuntu-latest

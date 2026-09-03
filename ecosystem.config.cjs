@@ -47,5 +47,18 @@ module.exports = {
         PYTHONUNBUFFERED: "1",
       },
     },
+    {
+      name: "rastudio-deploy",
+      script: "scripts/beget-watch.mjs",
+      interpreter: "node",
+      instances: 1,
+      exec_mode: "fork",
+      autorestart: true,
+      max_restarts: 20,
+      restart_delay: 15000,
+      env: {
+        NODE_ENV: "production",
+      },
+    },
   ],
 };
