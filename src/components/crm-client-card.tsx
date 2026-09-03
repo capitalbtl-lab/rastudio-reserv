@@ -327,6 +327,7 @@ export function CrmClientCard({
   const [tariffNote, setTariffNote] = useState("");
   const [periodOpen, setPeriodOpen] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
+  const [dropGroup, setDropGroup] = useState<{ id: number; branchId: number; name: string } | null>(null);
   const [groupId, setGroupId] = useState(0);
   const [groupBranch, setGroupBranch] = useState(0);
   const [groupDir, setGroupDir] = useState("");
@@ -516,6 +517,7 @@ export function CrmClientCard({
       setLessonOpen(false);
       setTariffOpen(false);
       setGroupOpen(false);
+      setDropGroup(null);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Не удалось сохранить.");
     } finally {
@@ -809,13 +811,13 @@ export function CrmClientCard({
                 {activeGroups.map((g) => {
                   const reg = (card.regular || []).find((r) => r.groupId === g.id);
                   return (
-                    <li key={`${g.branchId}-${g.id}`}>
+                    <li key={`${g.branchId}-${g.id}`} className="flex items-stretch gap-1">
                       <button
                         type="button"
                         data-group-id={g.id}
                         data-branch-id={g.branchId}
                         data-card-id={groupCardId(g.branchId, g.id)}
-                        className="w-full rounded-xl bg-white px-3 py-2 text-left ring-1 ring-primary/20 hover:bg-primary/5"
+                        className="min-w-0 flex-1 rounded-xl bg-white px-3 py-2 text-left ring-1 ring-primary/20 hover:bg-primary/5"
                         onClick={() => onOpenGroup?.(g.id, g.branchId)}
                       >
                         <p className="font-semibold text-sm">{g.name || `группа ${g.id}`}</p>
@@ -824,6 +826,18 @@ export function CrmClientCard({
                             .filter(Boolean)
                             .join(" · ")}
                         </p>
+                      </button>
+                      <button
+                        type="button"
+                        data-op="remove-group"
+                        title="Удалить из группы"
+                        disabled={!onAction || Boolean(busy)}
+                        onClick={() => setDropGroup({ id: g.id, branchId: g.branchId, name: g.name || `группа ${g.id}` })}
+                        className="grid h-auto w-8 shrink-0 place-items-center rounded-xl text-muted ring-1 ring-black/6 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"
+                      >
+                        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                          <path d="M4 7h16M9 7V5h6v2m-8 0 1 12h8l1-12" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
                       </button>
                     </li>
                   );
@@ -1393,6 +1407,32 @@ export function CrmClientCard({
     </div>
   ) : null;
   const groupNode = groupDialog && typeof document !== "undefined" ? createPortal(groupDialog, document.body) : groupDialog;
+  const dropDialog = dropGroup ? (
+    <div className="fixed inset-0 z-[240] grid place-items-center bg-black/35 p-4" onClick={() => setDropGroup(null)}>
+      <div className={cn("w-full max-w-[22rem] p-5", RA_POP)} onClick={(e) => e.stopPropagation()}>
+        <p className="font-display text-[1.05rem] leading-snug">Удалить из группы?</p>
+        <p className="mt-2 text-sm text-muted">
+          «{title}» снимется с «{dropGroup.name}». Это запишется в AlfaCRM.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" className="h-9 rounded-full px-4 text-sm font-semibold text-muted hover:bg-surface-2" onClick={() => setDropGroup(null)}>
+            Отмена
+          </button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 bg-rose-600 text-white hover:bg-rose-700"
+            data-op="remove-group-confirm"
+            disabled={Boolean(busy)}
+            onClick={() => void run("customerGroup", { groupId: dropGroup.id, branchId: dropGroup.branchId, remove: true })}
+          >
+            {busy === "customerGroup" ? "Снимаю…" : "Удалить"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+  const dropNode = dropDialog && typeof document !== "undefined" ? createPortal(dropDialog, document.body) : dropDialog;
 
   if (variant === "panel") {
     return (
@@ -1401,6 +1441,7 @@ export function CrmClientCard({
         {dialogNode}
         {tariffNode}
         {groupNode}
+        {dropNode}
       </>
     );
   }
@@ -1416,6 +1457,7 @@ export function CrmClientCard({
         {dialog}
         {tariffDialog}
         {groupDialog}
+        {dropDialog}
       </>
     );
   }
@@ -1425,6 +1467,7 @@ export function CrmClientCard({
       {dialogNode}
       {tariffNode}
       {groupNode}
+      {dropNode}
     </>
   );
 }

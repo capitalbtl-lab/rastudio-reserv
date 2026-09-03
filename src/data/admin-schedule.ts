@@ -1263,26 +1263,34 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const customerId = Number(data.customerId) || 0;
       const groupId = Number(data.groupId) || 0;
       const branch = Number(data.branchId) || 1;
+      const drop = Boolean((data as { remove?: boolean }).remove);
       if (!customerId) return { ok: false as const, error: "Нет customerId." };
       if (!groupId) return { ok: false as const, error: "Выберите группу." };
       const found = await loadCustomerRaw(request, t, branch, customerId);
       const useBranch = found?.branch || branch;
       const ids = new Set(groupIdsFromCustomer(found?.c || {}));
-      if (ids.has(groupId)) {
+      if (!drop && ids.has(groupId)) {
         const customer = await loadCustomerCard(request, t, useBranch, customerId);
         return { ok: true as const, customer };
       }
-      ids.add(groupId);
+      if (drop) ids.delete(groupId);
+      else ids.add(groupId);
       const next = [...ids];
       const bDate = String(data.bDate || "").trim();
       const eDate = String(data.eDate || "").trim();
       const period: Record<string, unknown> = {};
-      if (bDate) period.b_date = bDate;
-      if (eDate) period.e_date = eDate;
+      if (!drop) {
+        if (bDate) period.b_date = bDate;
+        if (eDate) period.e_date = eDate;
+      }
       const tries: [string, Record<string, unknown>][] = [
         [`/v2api/${useBranch}/customer/update?id=${customerId}`, { id: customerId, group_ids: next, ...period }],
-        [`/v2api/${useBranch}/customer/update?id=${customerId}`, { id: customerId, group_ids: next, is_study: 1, ...period }],
       ];
+      if (!drop) {
+        tries.push([`/v2api/${useBranch}/customer/update?id=${customerId}`, { id: customerId, group_ids: next, is_study: 1, ...period }]);
+      } else {
+        tries.push([`/v2api/${useBranch}/customer/update?id=${customerId}`, { id: customerId, group_ids: next, groups: next }]);
+      }
       try {
         const les = await request<{ items?: Record<string, unknown>[] }>(
           `/v2api/${useBranch}/regular-lesson/index`,
@@ -1293,7 +1301,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
           const lid = Number(it.id || 0);
           if (!lid) continue;
           const cids = Array.isArray(it.customer_ids) ? it.customer_ids.map(Number).filter(Boolean) : [];
-          if (!cids.includes(customerId)) {
+          if (drop && cids.includes(customerId)) {
+            tries.push([`/v2api/${useBranch}/regular-lesson/update?id=${lid}`, { id: lid, customer_ids: cids.filter((x) => x !== customerId) }]);
+          } else if (!drop && !cids.includes(customerId)) {
             tries.push([`/v2api/${useBranch}/regular-lesson/update?id=${lid}`, { id: lid, customer_ids: [...cids, customerId] }]);
           }
         }
@@ -1310,12 +1320,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
             continue;
           }
           ok = true;
-          break;
         } catch (e) {
           last = e instanceof Error ? e.message : String(e);
         }
       }
-      if (!ok) return { ok: false as const, error: last || "AlfaCRM не добавила в группу." };
+      if (!ok) return { ok: false as const, error: last || (drop ? "AlfaCRM не сняла с группы." : "AlfaCRM не добавила в группу.") };
       const slot = listAdminSlots().find((s) => s.groupId === groupId);
       try {
         upsertDossier({
@@ -1326,7 +1335,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
             name: slot?.groupName || `группа ${groupId}`,
             branchId: slot?.branchId || useBranch,
             school: slot?.school || "",
-            active: true,
+            active: !drop,
             subjectId: slot?.subjectId || undefined,
             courseId: slot?.courseId,
           },
@@ -1336,7 +1345,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       } catch {
         /* local dossier is optional */
       }
-      logAdmin(`Клиент ${customerId}: группа ${groupId}`);
+      logAdmin(drop ? `Клиент ${customerId}: снят с группы ${groupId}` : `Клиент ${customerId}: группа ${groupId}`);
       const customer = await loadCustomerCard(request, t, useBranch, customerId);
       return { ok: true as const, customer };
     }
