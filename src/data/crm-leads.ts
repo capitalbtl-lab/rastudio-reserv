@@ -18,6 +18,9 @@ import {
   isCrmLeadRecord,
   parseCrmLeadBoardPayload,
   applyCrmBoardRows,
+  applyLeadDelta,
+  leadDeltaDrops,
+  crmUpdatedAtFrom,
   type LeadStage,
 } from "./crm-leads-stages";
 import { crmHost, crmWebLogin, csrfOf, mergeCookies, setCookieList } from "./crm-web";
@@ -291,10 +294,55 @@ async function fetchBranchLeads(t: string, branch: number, stages: { id: number 
   return { items: out, fromBoard, boardError: board.length ? "" : login.error || "доска CRM не открылась" };
 }
 
-export async function loadLeadsBoard(branchId = 0, force = false) {
+export async function syncLeadsDelta(branchId = 0) {
   const key = String(branchId || 0);
   const hit = bag().get(key);
-  if (!force && hit && Date.now() - hit.at < 10 * 60 * 1000) return hit;
+  if (!hit?.items.length) return loadLeadsBoard(branchId, true);
+  const t = await alfaToken();
+  const since = crmUpdatedAtFrom(hit.at);
+  const branches = branchId ? [branchId] : [1, 2, 3, 4];
+  const incoming: LeadCard[] = [];
+  const dropped: number[] = [];
+  const seen = new Set<number>();
+  const onBoard = new Set(hit.items.map((x) => x.id));
+  await Promise.all(
+    branches.map((b) =>
+      pagedIndex(
+        `/v2api/${b}/customer/index`,
+        { updated_at_from: since },
+        t,
+        (it) => {
+          const id = Number(it.id || 0);
+          if (!id || seen.has(id)) return;
+          seen.add(id);
+          if (leadDeltaDrops(it)) {
+            dropped.push(id);
+            return;
+          }
+          const force = Number(it.is_study) === 0 || crmLeadStatusId(it) > 0 || onBoard.has(id);
+          if (!force) return;
+          const packed = packLead({ ...it, is_study: 0 }, b);
+          if (packed) incoming.push(packed);
+        },
+        { pageSize: 100, pages: 4 },
+      ).catch(() => undefined),
+    ),
+  );
+  const merged = applyLeadDelta(hit.items, incoming, dropped);
+  const note =
+    merged.added || merged.updated || merged.removed
+      ? `с CRM: ${merged.updated} изменённых, ${merged.added} новых, ${merged.removed} снятых`
+      : "изменений в CRM нет";
+  const next = { at: Date.now(), stages: hit.stages, items: merged.items, note, delta: true as const };
+  bag().set(key, next);
+  return next;
+}
+
+export async function loadLeadsBoard(branchId = 0, force = false, delta = false) {
+  const key = String(branchId || 0);
+  const hit = bag().get(key);
+  if (!force && !delta && hit && Date.now() - hit.at < 10 * 60 * 1000) return hit;
+  if ((!force || delta) && hit?.items.length) return syncLeadsDelta(branchId);
   const work = async () => {
     const t = await alfaToken();
     const rawStages = await fetchStages(t, branchId || 2);

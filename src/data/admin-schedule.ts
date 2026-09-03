@@ -861,6 +861,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         stageId?: number;
         stageIds?: number[];
         force?: boolean;
+        delta?: boolean;
         color?: string;
         branchId?: number;
         isStudy?: number;
@@ -1499,8 +1500,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const { loadLeadsBoard } = await import("./crm-leads");
       const branch = Number(data.branchId) || 0;
       try {
-        const board = await loadLeadsBoard(branch, Boolean(data.force));
-        return { ok: true as const, stages: board.stages, items: board.items, total: board.items.length, note: board.note };
+        const board = await loadLeadsBoard(branch, Boolean(data.force), Boolean(data.delta));
+        return { ok: true as const, stages: board.stages, items: board.items, total: board.items.length, note: board.note, delta: Boolean((board as { delta?: boolean }).delta) };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось прочитать воронку лидов." };
       }

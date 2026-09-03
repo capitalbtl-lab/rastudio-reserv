@@ -18,6 +18,9 @@ import {
   parseCrmScrollPagerUrl,
   applyCrmBoardRows,
   crmBoardStatusField,
+  applyLeadDelta,
+  leadDeltaDrops,
+  crmUpdatedAtFrom,
 } from "./crm-leads-stages.ts";
 
 const FROLOV: Record<string, unknown> = {
@@ -400,5 +403,48 @@ describe("живая AlfaCRM: Фролов 7759 и все лиды ЦМИТ", ()
     );
     assert.ok(packed, `Причина: запись отброшена. is_study=${JSON.stringify(study)} removed=${JSON.stringify(removed)}`);
     assert.equal(packed!.statusId, Number(status) > 0 ? Number(status) : 0);
+  });
+});
+
+describe("инкремент CRM: только изменённые карточки", () => {
+  it("водяной знак updated_at_from с запасом 5 минут", () => {
+    const at = Date.parse("2026-09-03T20:00:00Z");
+    const w = crmUpdatedAtFrom(at, 5 * 60 * 1000);
+    assert.match(w, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    const back = Date.parse(w.replace(" ", "T"));
+    assert.ok(Number.isFinite(back));
+    assert.ok(Math.abs(at - 5 * 60 * 1000 - back) < 24 * 60 * 60 * 1000);
+  });
+
+  it("архив и отказ снимаются, правки и новые вливаются, остальные не трогаем", () => {
+    const board = [
+      { id: 1, name: "А" },
+      { id: 2, name: "Б" },
+      { id: 7759, name: "Фролов" },
+    ];
+    const next = applyLeadDelta(
+      board,
+      [
+        { id: 2, name: "Б-правка" },
+        { id: 9, name: "Новый" },
+      ],
+      [1],
+    );
+    assert.equal(next.removed, 1);
+    assert.equal(next.updated, 1);
+    assert.equal(next.added, 1);
+    assert.deepEqual(
+      next.items.map((x) => x.id).sort((a, b) => a - b),
+      [2, 9, 7759],
+    );
+    assert.equal(next.items.find((x) => x.id === 2)?.name, "Б-правка");
+    assert.equal(next.items.find((x) => x.id === 7759)?.name, "Фролов");
+  });
+
+  it("архив is_study=2 и removed снимают с воронки, «сделать лидом» — нет", () => {
+    assert.equal(leadDeltaDrops({ id: 1, is_study: 2 }), true);
+    assert.equal(leadDeltaDrops({ id: 1, removed: 1, is_study: 0 }), true);
+    assert.equal(leadDeltaDrops({ id: 7759, is_study: 1, lead_status_id: null }), false);
+    assert.equal(leadDeltaDrops({ id: 2, is_study: 0, lead_status_id: 1 }), false);
   });
 });

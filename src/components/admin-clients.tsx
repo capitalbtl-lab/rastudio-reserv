@@ -398,11 +398,20 @@ export function AdminClients({
     }
   }
 
-  async function loadFunnel(bid: number, force = false) {
+  async function loadFunnel(bid: number, force = false, delta = false) {
     const have = funnelItems.length > 0 || funnelAt.current[bid] > 0;
     if (force || !have) setFunnelLoading(!have);
-    if (force && have) setFunnelNote("Обновляю доску CRM…");
+    if (delta && have) setFunnelNote("Сверяю изменения в AlfaCRM…");
+    else if (force && have) setFunnelNote("Обновляю доску CRM…");
     else if (!have) setFunnelNote("Загружаю лидов из AlfaCRM…");
+    const watchdog = window.setTimeout(() => {
+      setFunnelLoading(false);
+      if (!funnelAt.current[bid]) setFunnelNote("CRM отвечает долго. Доска откроется, как только дойдёт.");
+    }, 15000);
+    try {
+      const res = (await adminSchedule({
+        data: { token: token(), action: "leadsBoard", branchId: bid, force, delta } as never,
+      })) as { ok?: boolean; error?: string; stages?: LeadStage[]; items?: LeadCard[]; total?: number; note?: string; delta?: boolean };
     const watchdog = window.setTimeout(() => {
       setFunnelLoading(false);
       if (!funnelAt.current[bid]) setFunnelNote("CRM отвечает долго. Доска откроется, как только дойдёт.");
@@ -607,7 +616,7 @@ export function AdminClients({
     if (!(status === "лид" && view === "дети")) return;
     const at = funnelAt.current[branch] || 0;
     if (at && Date.now() - at < FUNNEL_TTL) return;
-    void loadFunnel(branch, true);
+    void loadFunnel(branch, false, true);
   }, [status, view, branch]);
 
   useEffect(() => {
@@ -618,7 +627,7 @@ export function AdminClients({
 
   useEffect(() => {
     if (!(status === "лид" && view === "дети")) return;
-    const t = window.setInterval(() => void loadFunnel(branchRef.current, true), 10 * 60 * 1000);
+    const t = window.setInterval(() => void loadFunnel(branchRef.current, false, true), 10 * 60 * 1000);
     return () => window.clearInterval(t);
   }, [status, view]);
 

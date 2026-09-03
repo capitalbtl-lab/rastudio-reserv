@@ -270,6 +270,42 @@ export function isCrmLeadRecord(it: Record<string, unknown>) {
   return true;
 }
 
+/** Карточка уходит с воронки только в архив или отказ. Клиент «Сделать лидом» остаётся. */
+export function leadDeltaDrops(it: Record<string, unknown>) {
+  return Number(it.removed) === 1 || Number(it.is_study) === 2;
+}
+
+export function applyLeadDelta<T extends { id: number }>(
+  items: T[],
+  incoming: T[],
+  droppedIds: number[],
+): { items: T[]; added: number; updated: number; removed: number } {
+  const by = new Map(items.map((x) => [x.id, x]));
+  let added = 0;
+  let updated = 0;
+  let removed = 0;
+  for (const id of droppedIds) {
+    if (by.delete(id)) removed += 1;
+  }
+  for (const card of incoming) {
+    if (!card.id) continue;
+    if (by.has(card.id)) {
+      by.set(card.id, { ...by.get(card.id)!, ...card });
+      updated += 1;
+    } else {
+      by.set(card.id, card);
+      added += 1;
+    }
+  }
+  return { items: [...by.values()], added, updated, removed };
+}
+
+export function crmUpdatedAtFrom(at: number, overlapMs = 5 * 60 * 1000) {
+  const d = new Date(Math.max(0, at - overlapMs));
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
 /** total первой страницы, равный pageSize, нельзя принимать за полное число записей. */
 export function crmIndexAccumTotal(page: number, pageSize: number, batchLen: number, rawTotal: unknown, prev: number) {
   const n = Number(rawTotal);
