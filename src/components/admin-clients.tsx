@@ -413,14 +413,6 @@ export function AdminClients({
       const res = (await adminSchedule({
         data: { token: token(), action: "leadsBoard", branchId: bid, force, delta } as never,
       })) as { ok?: boolean; error?: string; stages?: LeadStage[]; items?: LeadCard[]; total?: number; note?: string; delta?: boolean };
-    const watchdog = window.setTimeout(() => {
-      setFunnelLoading(false);
-      if (!funnelAt.current[bid]) setFunnelNote("CRM отвечает долго. Доска откроется, как только дойдёт.");
-    }, 15000);
-    try {
-      const res = (await adminSchedule({
-        data: { token: token(), action: "leadsBoard", branchId: bid, force } as never,
-      })) as { ok?: boolean; error?: string; stages?: LeadStage[]; items?: LeadCard[]; total?: number; note?: string };
       if (res.ok && Array.isArray(res.items)) {
         const nextStages = mergeStages(res.stages || [], res.items.map((x) => x.statusId));
         const moved = funnelMoved.current;
