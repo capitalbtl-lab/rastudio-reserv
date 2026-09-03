@@ -30,6 +30,10 @@ export type PupilTariffItem = {
   periodCount: number;
   periodType: number;
   calcType: number;
+  subjectIds: number[];
+  lessonTypeIds: number[];
+  lessonsCount: number;
+  eDate?: string;
   skip?: "no-tariff" | "already" | "lead";
 };
 
@@ -78,6 +82,8 @@ export function pupilRowFromMember(
   if (m.archived || m.status === "архив") return null;
   if (m.status === "лид" && !includeLeads) return null;
   const skip = !tariff ? ("no-tariff" as const) : m.status === "лид" ? ("lead" as const) : undefined;
+  const subjects = [...new Set([...(tariff?.subjectIds || []), group.subjectId].filter(Boolean))];
+  const lessons = tariff?.lessonTypeIds?.length ? [...tariff.lessonTypeIds] : [2];
   return {
     customerId: m.id,
     name: m.name || `ученик ${m.id}`,
@@ -90,10 +96,26 @@ export function pupilRowFromMember(
     tariffName: tariff?.name || "",
     price: tariff?.price || 0,
     periodCount: tariff?.periodCount || 0,
-    periodType: tariff?.periodType || 0,
-    calcType: tariff && tariff.calculationType === 1 ? 0 : 1,
+    periodType: tariff?.periodType || 1,
+    calcType: tariff && Number(tariff.calculationType) === 2 ? 1 : 0,
+    subjectIds: subjects,
+    lessonTypeIds: lessons,
+    lessonsCount: tariff?.lessonsCount || 0,
     skip,
   };
+}
+
+export function addPeriod(iso: string, count: number, type: number) {
+  if (!iso || !count) return "";
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return "";
+  if (type === 1) d.setDate(d.getDate() + count);
+  else if (type === 2) d.setDate(d.getDate() + count * 7);
+  else if (type === 3) d.setMonth(d.getMonth() + count);
+  else if (type === 4) d.setFullYear(d.getFullYear() + count);
+  else return "";
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export function assignable(items: PupilTariffItem[]) {

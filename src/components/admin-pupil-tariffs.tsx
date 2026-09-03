@@ -34,6 +34,10 @@ type PupilTariffItem = {
   periodCount: number;
   periodType: number;
   calcType: number;
+  subjectIds: number[];
+  lessonTypeIds: number[];
+  lessonsCount: number;
+  eDate?: string;
   skip?: "no-tariff" | "already" | "lead";
 };
 
@@ -52,7 +56,48 @@ function todayIso() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-type GroupTariff = { tariffId: number; tariffName: string; options: { id: number; name: string; price: number }[] };
+function addPeriod(iso: string, count: number, type: number) {
+  if (!iso || !count) return "";
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return "";
+  if (type === 1) d.setDate(d.getDate() + count);
+  else if (type === 2) d.setDate(d.getDate() + count * 7);
+  else if (type === 3) d.setMonth(d.getMonth() + count);
+  else if (type === 4) d.setFullYear(d.getFullYear() + count);
+  else return "";
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function periodWord(n: number, u: { one: string; few: string; many: string }) {
+  const abs = Math.abs(Number(n) || 0) % 100;
+  const d = abs % 10;
+  if (abs > 10 && abs < 20) return u.many;
+  if (d === 1) return u.one;
+  if (d >= 2 && d <= 4) return u.few;
+  return u.many;
+}
+
+const PERIOD_HINTS = [
+  { id: 1, one: "день", few: "дня", many: "дней" },
+  { id: 2, one: "неделя", few: "недели", many: "недель" },
+  { id: 3, one: "месяц", few: "месяца", many: "месяцев" },
+  { id: 4, one: "год", few: "года", many: "лет" },
+];
+
+type TariffOpt = {
+  id: number;
+  name: string;
+  price: number;
+  subjectIds?: number[];
+  lessonTypeIds?: number[];
+  periodCount?: number;
+  periodType?: number;
+  calculationType?: number;
+  lessonsCount?: number;
+};
+
+type GroupTariff = { tariffId: number; tariffName: string; options: TariffOpt[] };
 
 export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState(1);
@@ -69,6 +114,10 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [byGroup, setByGroup] = useState<Record<string, GroupTariff>>({});
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [date, setDate] = useState(todayIso);
+  const [periodCount, setPeriodCount] = useState(0);
+  const [periodType, setPeriodType] = useState(3);
+  const [dateTo, setDateTo] = useState("");
+  const [calcType, setCalcType] = useState(1);
   const [skipExisting, setSkipExisting] = useState(true);
   const [result, setResult] = useState<{ done: number; skipped: number; failed: { name: string; error: string }[] } | null>(null);
 
@@ -133,6 +182,15 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       setItems(rows);
       setByGroup(res.byGroup || {});
       setChosen(new Set(rows.filter((r) => r.tariffId && r.status === "учится").map(pupilKey)));
+      const sample = rows.find((r) => r.tariffId);
+      if (sample) {
+        const count = Number(sample.periodCount) || 0;
+        const unit = Number(sample.periodType) || 3;
+        setPeriodCount(count);
+        setPeriodType(unit);
+        setCalcType(Number(sample.calcType) || 0);
+        setDateTo(addPeriod(date, count, unit));
+      }
       setMsg("");
       return true;
     } catch (e) {
@@ -153,14 +211,27 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     setStep((s) => s + 1);
   }
 
-  function applyTariff(groupKey: string, tariffId: number, name: string, price: number) {
-    setByGroup((m) => ({ ...m, [groupKey]: { ...(m[groupKey] || { options: [] }), tariffId, tariffName: name } }));
+  function applyTariff(groupKey: string, opt: TariffOpt | null) {
+    const tariffId = opt?.id || 0;
+    setByGroup((m) => ({ ...m, [groupKey]: { ...(m[groupKey] || { options: [] }), tariffId, tariffName: opt?.name || "" } }));
     setItems((list) =>
-      list.map((it) =>
-        `${it.branchId}:${it.groupId}` === groupKey
-          ? { ...it, tariffId, tariffName: name, price, skip: tariffId ? (it.status === "лид" ? "lead" : undefined) : "no-tariff" }
-          : it,
-      ),
+      list.map((it) => {
+        if (`${it.branchId}:${it.groupId}` !== groupKey) return it;
+        const subjects = [...new Set([...(opt?.subjectIds || []), it.subjectIds?.[0] || 0].filter(Boolean))];
+        return {
+          ...it,
+          tariffId,
+          tariffName: opt?.name || "",
+          price: opt?.price || 0,
+          periodCount: opt?.periodCount || it.periodCount,
+          periodType: opt?.periodType || it.periodType,
+          calcType: opt && Number(opt.calculationType) === 2 ? 1 : 0,
+          subjectIds: subjects,
+          lessonTypeIds: opt?.lessonTypeIds?.length ? opt.lessonTypeIds : [2],
+          lessonsCount: opt?.lessonsCount || 0,
+          skip: tariffId ? (it.status === "лид" ? "lead" : undefined) : "no-tariff",
+        };
+      }),
     );
   }
 
@@ -180,7 +251,14 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               action: "pupilTariffAssign",
               date,
               skipExisting,
-              pupilItems: ready,
+              pupilItems: ready.map((it) => ({
+                ...it,
+                periodCount,
+                periodType,
+                calcType,
+                eDate: dateTo || addPeriod(date, periodCount, periodType),
+                lessonTypeIds: it.lessonTypeIds?.length ? it.lessonTypeIds : [2],
+              })),
             } as never,
           }),
         1,
@@ -377,10 +455,75 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
 
       {step === 3 ? (
         <div className="mt-4 space-y-4">
-          <label className="block max-w-xs text-sm">
-            <span className="text-[0.72rem] font-medium text-muted">Дата начала у всех</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 h-10 w-full rounded-xl bg-surface-2 px-3 text-sm ring-1 ring-black/10" />
-          </label>
+          <div>
+            <span className="mb-1.5 block text-[0.72rem] font-medium text-muted">Период у всех *</span>
+            <div className="flex flex-wrap items-center gap-2 rounded-[16px] bg-surface-2 p-2 ring-1 ring-black/6">
+              <span className="shrink-0 pl-1.5 text-[0.75rem] font-medium text-muted">с</span>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => {
+                  const from = e.target.value;
+                  setDate(from);
+                  setDateTo(addPeriod(from, periodCount, periodType));
+                }}
+                className="h-10 w-[9.4rem] rounded-[12px] bg-white px-2 text-sm ring-1 ring-black/8"
+              />
+              <input
+                type="number"
+                min={1}
+                value={periodCount || ""}
+                placeholder="N"
+                onChange={(e) => {
+                  const count = Number(e.target.value) || 0;
+                  setPeriodCount(count);
+                  setDateTo(addPeriod(date, count, periodType));
+                }}
+                className="h-10 w-14 rounded-[12px] bg-white px-1 text-center text-sm font-semibold ring-1 ring-black/8"
+              />
+              <div className="flex rounded-full bg-white p-0.5 ring-1 ring-black/8">
+                {PERIOD_HINTS.filter((u) => u.id !== 4).map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => {
+                      setPeriodType(u.id);
+                      setDateTo(addPeriod(date, periodCount, u.id));
+                    }}
+                    className={cn(
+                      "h-9 rounded-full px-2.5 text-[0.75rem] font-semibold",
+                      periodType === u.id ? "bg-primary text-white" : "text-muted hover:text-fg",
+                    )}
+                  >
+                    {periodCount ? `${periodCount} ${periodWord(periodCount, u)}` : u.many}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[0.75rem] font-medium text-muted">до</span>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-10 w-[9.4rem] rounded-[12px] bg-white px-2 text-sm ring-1 ring-black/8" />
+            </div>
+          </div>
+          <div>
+            <span className="mb-1.5 block text-[0.72rem] font-medium text-muted">Тип расчётов *</span>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setCalcType(0)}
+                className={cn("rounded-[16px] px-4 py-3 text-left ring-1", calcType === 0 ? "bg-primary/8 ring-primary/35" : "bg-surface-2 ring-black/6")}
+              >
+                <p className="text-sm font-semibold">Базовый</p>
+                <p className="mt-0.5 text-[0.75rem] text-muted">Общий счёт карточки</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCalcType(1)}
+                className={cn("rounded-[16px] px-4 py-3 text-left ring-1", calcType === 1 ? "bg-primary/8 ring-primary/35" : "bg-surface-2 ring-black/6")}
+              >
+                <p className="text-sm font-semibold">Раздельный</p>
+                <p className="mt-0.5 text-[0.75rem] text-muted">Отдельный счёт — как в карточке ученика</p>
+              </button>
+            </div>
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={skipExisting} onChange={(e) => setSkipExisting(e.target.checked)} />
             Пропускать, если этот абонемент уже висит на ученике
@@ -401,8 +544,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                     value={info.tariffId || ""}
                     onChange={(e) => {
                       const id = Number(e.target.value);
-                      const opt = info.options.find((o) => o.id === id);
-                      applyTariff(key, id, opt?.name || "", opt?.price || 0);
+                      applyTariff(key, info.options.find((o) => o.id === id) || null);
                     }}
                   >
                     <option value="">— нет —</option>

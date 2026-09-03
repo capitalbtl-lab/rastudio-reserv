@@ -83,6 +83,15 @@ const PERIOD_HINTS = [
   { id: 4, one: "год", few: "года", many: "лет" },
 ];
 
+function periodWord(n: number, u: { one: string; few: string; many: string }) {
+  const abs = Math.abs(Number(n) || 0) % 100;
+  const d = abs % 10;
+  if (abs > 10 && abs < 20) return u.many;
+  if (d === 1) return u.one;
+  if (d >= 2 && d <= 4) return u.few;
+  return u.many;
+}
+
 function schoolShort(name: string) {
   return name
     .replace(/^Школа\s+/i, "")

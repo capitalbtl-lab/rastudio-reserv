@@ -264,6 +264,66 @@ async function loadCustomerRaw(
   return null;
 }
 
+async function createCustomerTariff(
+  request: typeof import("./alfacrm").request,
+  t: string,
+  opts: {
+    branch: number;
+    customerId: number;
+    tariffId: number;
+    bDate: string;
+    eDate?: string;
+    groupId?: number;
+    calcType?: number;
+    subjectIds?: number[];
+    lessonTypeIds?: number[];
+    periodCount?: number;
+    periodType?: number;
+    note?: string;
+    lessonsCount?: number;
+  },
+) {
+  const customerId = Number(opts.customerId) || 0;
+  const tariffId = Number(opts.tariffId) || 0;
+  const branch = Number(opts.branch) || 1;
+  if (!customerId) return { ok: false as const, error: "Нет customerId." };
+  if (!tariffId) return { ok: false as const, error: "Выберите абонемент." };
+  const groupId = Number(opts.groupId) || 0;
+  const calcType = Number(opts.calcType) || 0;
+  const subjectIds = (opts.subjectIds || []).map(Number).filter(Boolean);
+  const lessonTypeIds = (opts.lessonTypeIds || []).map(Number).filter(Boolean);
+  const extra: Record<string, unknown> = {};
+  if (opts.eDate) extra.e_date = opts.eDate;
+  if (groupId) extra.group_id = groupId;
+  extra.is_separate_balance = calcType ? 1 : 0;
+  extra.calculation_type = calcType ? 2 : 1;
+  if (subjectIds.length) extra.subject_ids = subjectIds;
+  if (lessonTypeIds.length) extra.lesson_type_ids = lessonTypeIds;
+  if (opts.lessonsCount) extra.lesson_count = opts.lessonsCount;
+  if (opts.note) extra.note = String(opts.note);
+  const unit = Number(opts.periodType) === 2 ? "weeks" : Number(opts.periodType) === 3 ? "months" : Number(opts.periodType) === 4 ? "years" : "days";
+  if (Number(opts.periodCount)) extra.unit = unit;
+  const tries: Record<string, unknown>[] = [
+    { customer_id: customerId, tariff_id: tariffId, b_date: opts.bDate, ...extra },
+    { customer_id: customerId, tariff_id: tariffId, b_date: opts.bDate, e_date: opts.eDate || undefined, group_id: groupId || undefined },
+    { related_id: customerId, related_class: "Customer", tariff_id: tariffId, b_date: opts.bDate, ...extra },
+  ];
+  let last = "";
+  for (const body of tries) {
+    try {
+      const res = await request<{ success?: boolean; errors?: unknown }>(`/v2api/${branch}/customer-tariff/create`, body, t);
+      if (res.success === false) {
+        last = JSON.stringify(res.errors || res);
+        continue;
+      }
+      return { ok: true as const };
+    } catch (e) {
+      last = e instanceof Error ? e.message : String(e);
+    }
+  }
+  return { ok: false as const, error: last || "AlfaCRM не приняла абонемент." };
+}
+
 const roomCache = new Map<number, { at: number; items: { id: number; name: string }[] }>();
 
 async function roomsOfBranch(request: typeof import("./alfacrm").request, t: string, branch: number) {
@@ -917,6 +977,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
         pupilItems?: import("./pupil-tariffs").PupilTariffItem[];
         includeLeads?: boolean;
         skipExisting?: boolean;
+        subjectIds?: number[];
+        lessonTypeIds?: number[];
+        periodCount?: number;
+        periodType?: number;
+        calcType?: number;
+        isSeparateBalance?: number;
         schoolIds?: string[];
         courseIds?: string[];
         href?: string;
@@ -1236,43 +1302,22 @@ export const adminSchedule = createServerFn({ method: "POST" })
         const now = new Date();
         return `${String(now.getDate()).padStart(2, "0")}.${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
       })();
-      const eDate = formatRuDob(data.eDate) || "";
-      const groupId = Number(data.groupId) || 0;
-      const calcType = Number(data.calcType ?? data.isSeparateBalance) || 0;
-      const subjectIds = Array.isArray(data.subjectIds) ? (data.subjectIds as unknown[]).map(Number).filter(Boolean) : [];
-      const lessonTypeIds = Array.isArray(data.lessonTypeIds) ? (data.lessonTypeIds as unknown[]).map(Number).filter(Boolean) : [];
-      const extra: Record<string, unknown> = {};
-      if (eDate) extra.e_date = eDate;
-      if (groupId) extra.group_id = groupId;
-      extra.is_separate_balance = calcType ? 1 : 0;
-      extra.calculation_type = calcType ? 2 : 1;
-      if (subjectIds.length) extra.subject_ids = subjectIds;
-      if (lessonTypeIds.length) extra.lesson_type_ids = lessonTypeIds;
-      if (offer?.lessonsCount) extra.lesson_count = offer.lessonsCount;
-      if (data.note) extra.note = String(data.note);
-      const unit = Number(data.periodType) === 2 ? "weeks" : Number(data.periodType) === 3 ? "months" : Number(data.periodType) === 4 ? "years" : "days";
-      if (Number(data.periodCount)) extra.unit = unit;
-      const tries: Record<string, unknown>[] = [
-        { customer_id: customerId, tariff_id: tariffId, b_date: bDate, ...extra },
-        { customer_id: customerId, tariff_id: tariffId, b_date: bDate, e_date: eDate, group_id: groupId || undefined },
-        { related_id: customerId, related_class: "Customer", tariff_id: tariffId, b_date: bDate, ...extra },
-      ];
-      let last = "";
-      let ok = false;
-      for (const body of tries) {
-        try {
-          const res = await request<{ success?: boolean; errors?: unknown; model?: { id?: number } }>(`/v2api/${branch}/customer-tariff/create`, body, t);
-          if (res.success === false) {
-            last = JSON.stringify(res.errors || res);
-            continue;
-          }
-          ok = true;
-          break;
-        } catch (e) {
-          last = e instanceof Error ? e.message : String(e);
-        }
-      }
-      if (!ok) return { ok: false as const, error: last || "AlfaCRM не приняла абонемент." };
+      const made = await createCustomerTariff(request, t, {
+        branch,
+        customerId,
+        tariffId,
+        bDate,
+        eDate: formatRuDob(data.eDate) || "",
+        groupId: Number(data.groupId) || 0,
+        calcType: Number(data.calcType ?? data.isSeparateBalance) || 0,
+        subjectIds: Array.isArray(data.subjectIds) ? (data.subjectIds as unknown[]).map(Number).filter(Boolean) : offer?.subjectIds,
+        lessonTypeIds: Array.isArray(data.lessonTypeIds) ? (data.lessonTypeIds as unknown[]).map(Number).filter(Boolean) : offer?.lessonTypeIds,
+        periodCount: Number(data.periodCount) || offer?.periodCount,
+        periodType: Number(data.periodType) || offer?.periodType,
+        note: data.note ? String(data.note) : "",
+        lessonsCount: offer?.lessonsCount,
+      });
+      if (!made.ok) return { ok: false as const, error: made.error };
       logAdmin(`Клиент ${customerId}: абонемент ${tariffId}`);
       {
         const { applyFunnelAuto } = await import("./funnel-auto");
@@ -1686,7 +1731,17 @@ export const adminSchedule = createServerFn({ method: "POST" })
         byGroup[g.key] = {
           tariffId: best?.id || 0,
           tariffName: best?.name || "",
-          options: options.map((x) => ({ id: x.id, name: x.name, price: x.price })),
+          options: options.map((x) => ({
+            id: x.id,
+            name: x.name,
+            price: x.price,
+            subjectIds: x.subjectIds,
+            lessonTypeIds: x.lessonTypeIds,
+            periodCount: x.periodCount,
+            periodType: x.periodType,
+            calculationType: x.calculationType,
+            lessonsCount: x.lessonsCount,
+          })),
         };
         const mem = await loadGroupMembers(request, t, g.branchId, g.groupId);
         for (const m of mem.active) {
@@ -1698,61 +1753,60 @@ export const adminSchedule = createServerFn({ method: "POST" })
     }
     if (data.action === "pupilTariffAssign") {
       const { token, request, formatRuDob } = await import("./alfacrm");
-      const { assignable } = await import("./pupil-tariffs");
+      const { assignable, addPeriod } = await import("./pupil-tariffs");
       const t = await token();
-      const date = formatRuDob(data.date) || formatRuDob(new Date().toISOString().slice(0, 10));
+      const fromIso = String(data.date || "").slice(0, 10);
+      const bDate = formatRuDob(fromIso) || formatRuDob(new Date().toISOString().slice(0, 10));
       const skipExisting = data.skipExisting !== false;
       const rows = assignable(Array.isArray(data.pupilItems) ? data.pupilItems : []);
       const done: number[] = [];
       const skipped: { id: number; name: string; reason: string }[] = [];
       const failed: { id: number; name: string; error: string }[] = [];
+      const catalog = loadTariffs().items;
       for (const row of rows) {
-        try {
-          if (skipExisting) {
-            const have = await request<{ items?: Record<string, unknown>[] }>(
-              `/v2api/${row.branchId}/customer-tariff/index`,
-              { page: 0, pageSize: 30, customer_id: row.customerId },
-              t,
-            ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-            const hit = (have.items || []).some((it) => {
-              const tid = Number(it.tariff_id || it.tariffId || 0);
-              const gone = Number(it.removed || it.is_archived || 0) === 1;
-              return tid === row.tariffId && !gone;
-            });
-            if (hit) {
-              skipped.push({ id: row.customerId, name: row.name, reason: "уже есть" });
-              continue;
-            }
-          }
-          const extra: Record<string, unknown> = {
-            group_id: row.groupId || undefined,
-            is_separate_balance: row.calcType ? 1 : 0,
-            calculation_type: row.calcType ? 2 : 1,
-          };
-          if (row.periodCount) extra.unit = Number(row.periodType) === 2 ? "weeks" : Number(row.periodType) === 3 ? "months" : Number(row.periodType) === 4 ? "years" : "days";
-          const bodies = [
-            { customer_id: row.customerId, tariff_id: row.tariffId, b_date: date, ...extra },
-            { customer_id: row.customerId, tariff_id: row.tariffId, b_date: date, group_id: row.groupId || undefined },
-          ];
-          let ok = false;
-          let last = "";
-          for (const body of bodies) {
-            const res = await request<{ success?: boolean; errors?: unknown }>(`/v2api/${row.branchId}/customer-tariff/create`, body, t);
-            if (res.success === false) {
-              last = JSON.stringify(res.errors || res);
-              continue;
-            }
-            ok = true;
-            break;
-          }
-          if (!ok) {
-            failed.push({ id: row.customerId, name: row.name, error: last || "CRM не приняла" });
-            continue;
-          }
-          done.push(row.customerId);
-        } catch (e) {
-          failed.push({ id: row.customerId, name: row.name, error: e instanceof Error ? e.message : "ошибка" });
+        const offer = catalog.find((x) => x.id === row.tariffId);
+        const periodCount = Number(row.periodCount) || offer?.periodCount || 0;
+        const periodType = Number(row.periodType) || offer?.periodType || 1;
+        const eIso = row.eDate || addPeriod(fromIso, periodCount, periodType);
+        const made = await createCustomerTariff(request, t, {
+          branch: row.branchId,
+          customerId: Number(row.customerId),
+          tariffId: Number(row.tariffId),
+          bDate,
+          eDate: formatRuDob(eIso) || "",
+          groupId: Number(row.groupId) || 0,
+          calcType: Number(row.calcType) || 0,
+          subjectIds: row.subjectIds?.length ? row.subjectIds : offer?.subjectIds,
+          lessonTypeIds: row.lessonTypeIds?.length ? row.lessonTypeIds : offer?.lessonTypeIds?.length ? offer.lessonTypeIds : [2],
+          periodCount,
+          periodType,
+          lessonsCount: row.lessonsCount || offer?.lessonsCount,
+        });
+        if (skipExisting && /already|уже|duplicate|существ/i.test(made.ok ? "" : made.error)) {
+          skipped.push({ id: row.customerId, name: row.name, reason: "уже есть" });
+          continue;
         }
+        if (!made.ok) {
+          if (skipExisting) {
+            try {
+              const have = await request<{ items?: Record<string, unknown>[] }>(
+                `/v2api/${row.branchId}/customer-tariff/index`,
+                { page: 0, pageSize: 30, customer_id: row.customerId },
+                t,
+              ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+              const hit = (have.items || []).some((it) => Number(it.tariff_id || it.tariffId || 0) === row.tariffId && Number(it.removed || it.is_archived || 0) !== 1);
+              if (hit) {
+                skipped.push({ id: row.customerId, name: row.name, reason: "уже есть" });
+                continue;
+              }
+            } catch {
+              /* keep error */
+            }
+          }
+          failed.push({ id: row.customerId, name: row.name, error: made.error });
+          continue;
+        }
+        done.push(row.customerId);
       }
       logAdmin(`Мастер учеников: выдано ${done.length}, пропуск ${skipped.length}, ошибок ${failed.length}`);
       return { ok: true as const, done: done.length, skipped, failed, total: rows.length };
