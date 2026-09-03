@@ -479,7 +479,7 @@ export function AdminTariffs() {
           Добавить абонемент вручную
         </Button>
         <Button type="button" variant="secondary" disabled={busy} onClick={() => setWiz(true)}>
-          Мастер абонементов
+          Мастер абонементов студии
         </Button>
         <Button type="button" variant="secondary" disabled={busy} onClick={async () => {
           setPull({ ...emptyPull("tariffs"), open: true, step: "Подключаюсь к AlfaCRM…" });
@@ -1334,7 +1334,7 @@ function TariffWizard({
     <article className="rounded-[1.4rem] bg-white p-5 shadow-[0_8px_28px_rgba(15,23,42,0.08)] ring-1 ring-primary/20">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="font-display text-xl text-primary">Мастер абонементов</p>
+          <p className="font-display text-xl text-primary">Мастер абонементов студии</p>
           <p className="mt-0.5 text-sm text-muted">Цена, минуты и уроки в неделю — из цен курсов. Период действия — дни, недели или месяцы.</p>
         </div>
         <button type="button" className="text-sm text-muted hover:text-fg" onClick={onClose}>Закрыть</button>
