@@ -14,7 +14,7 @@
 export const ROMASHKA_REV = 3;
 export const ROMASHKA_NAME = "ромашка 3";
 export const ROMASHKA_ID = "romashka-3";
-export const ROMASHKA_AT = "2026-09-03T15:51:39Z";
+export const ROMASHKA_AT = "2026-09-03T16:04:20Z";
 
 export const ROMASHKA_NOTE = [
   "Карта ID: customerId, groupId, branchId, subjectId, courseId, tariffId, clientCardId, groupCardId, cabinetId.",
