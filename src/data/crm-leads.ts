@@ -209,25 +209,40 @@ async function fetchCrmLeadColumns(branch: number, statusIds: number[], cookie: 
   if (token) headers["X-ALFACRM-TOKEN"] = token;
   const get = async (path: string) => {
     const url = path.startsWith("http") ? path : `${host}${path.startsWith("/") ? "" : "/"}${path}`;
-    const res = await fetch(url, { headers, redirect: "manual", signal: AbortSignal.timeout(8000) });
+    const res = await fetch(url, { headers, redirect: "manual", signal: AbortSignal.timeout(15000) });
     return res.text();
   };
   const query = encodeURIComponent(JSON.stringify({ branch: String(branch) }));
-  const jobs: Promise<void>[] = [];
-  for (const statusId of statusIds) {
-    for (const page of [0, 1, 2, 3]) {
-      const path = `/company/${branch}/lead/board?id=${statusId}&query=${query}${page ? `&page=${page}` : ""}`;
-      jobs.push(
-        get(path)
-          .then((raw) => {
-            if (/LoginForm/i.test(raw) && !/lead-element/i.test(raw) && !/"content"/i.test(raw)) return;
-            take(parseCrmLeadBoardPayload(raw, statusId).cards);
-          })
-          .catch(() => undefined),
-      );
+  async function column(statusId: number) {
+    let path = `/company/${branch}/lead/board?id=${statusId}&query=${query}`;
+    for (let page = 0; page < 40; page++) {
+      let raw = "";
+      try {
+        raw = await get(path);
+      } catch {
+        break;
+      }
+      if (/LoginForm/i.test(raw) && !/lead-element/i.test(raw) && !/"content"/i.test(raw)) return;
+      const parsed = parseCrmLeadBoardPayload(raw, statusId);
+      take(parsed.cards);
+      if (parsed.nextUrl) {
+        path = parsed.nextUrl;
+        continue;
+      }
+      if (!parsed.cards.length || parsed.cards.length < 20) return;
+      path = `/company/${branch}/lead/board?id=${statusId}&query=${query}&page=${page + 1}`;
     }
   }
-  await Promise.all(jobs);
+  const ids = (statusIds.length ? statusIds : [0]).filter((id, i, a) => a.indexOf(id) === i);
+  const queue = ids.slice();
+  const workers = Array.from({ length: Math.min(2, queue.length) }, async () => {
+    while (queue.length) {
+      const id = queue.shift();
+      if (id == null) return;
+      await column(id);
+    }
+  });
+  await Promise.all(workers);
   return found;
 }
 
@@ -393,8 +408,17 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
   try {
     const next = await Promise.race([
       work(),
-      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("CRM не ответила вовремя")), 20000)),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("CRM не ответила вовремя")), 60000)),
     ]);
+    const prev = bag().get(key);
+    if (prev?.items.length && next.items.length && next.items.length < prev.items.length * 0.7) {
+      const ids = new Set(next.items.map((x) => x.id));
+      const extra = prev.items.filter((x) => !ids.has(x.id));
+      if (extra.length) {
+        next.items = [...next.items, ...extra];
+        next.note = `${next.note || ""} · добраны ${extra.length} с прошлой загрузки`;
+      }
+    }
     bag().set(key, next);
     return next;
   } catch (e) {

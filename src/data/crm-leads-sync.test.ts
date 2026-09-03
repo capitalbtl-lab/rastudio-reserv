@@ -303,6 +303,10 @@ describe("снимок кабинета AlfaCRM /company/2/lead/index", () => {
     assert.equal(parsed.cards[0].statusId, 1);
     assert.equal(parsed.nextUrl, "/company/2/lead/board?id=1&page=3");
     assert.equal(parseCrmScrollPagerUrl(inner), "/company/2/lead/board?id=1&page=3");
+    assert.equal(
+      parseCrmScrollPagerUrl(`<li class="crm-scroll-pager" data-url="/company/2/lead/board?id=1&page=4"></li>`),
+      "/company/2/lead/board?id=1&page=4",
+    );
   });
 
   it("доска — кто в воронке: API-лишние не считаются", () => {

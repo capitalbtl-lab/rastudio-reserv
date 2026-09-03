@@ -592,9 +592,12 @@ export function AdminClients({
 
   useEffect(() => {
     if (!(status === "лид" && view === "дети")) return;
-    const at = funnelAt.current[branch] || 0;
-    if (at && Date.now() - at < funnelTtl()) return;
-    void loadFunnel(branch, false, true);
+    const snap = funnelSnapGet(branch);
+    const n = snap?.items?.length || funnelItems.length;
+    const stale = !funnelAt.current[branch] || Date.now() - funnelAt.current[branch] > funnelTtl();
+    const thin = n < 80;
+    if (!stale && !thin) return;
+    void loadFunnel(branch, thin, !thin);
   }, [status, view, branch]);
 
   useEffect(() => {

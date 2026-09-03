@@ -204,7 +204,7 @@ export function parseCrmLeadBoard(html: string): { id: number; name: string; sta
 
 export function parseCrmScrollPagerUrl(html: string) {
   const m = html.match(/crm-scroll-pager[^>]*data-url=["']([^"']+)/i);
-  return m ? m[1].replace(/&/g, "&") : "";
+  return m ? m[1].replace(/&/g, "&").trim() : "";
 }
 
 /** Ответ /lead/board — JSON {content} как в initBoard, либо HTML колонки. */
