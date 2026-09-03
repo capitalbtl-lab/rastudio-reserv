@@ -645,7 +645,8 @@ export function AdminClients({
 
   useEffect(() => {
     if (!funnelNote || funnelNote.startsWith("Записываю")) return;
-    const t = window.setTimeout(() => setFunnelNote(""), 8000);
+    const info = /с воронки CRM|из API is_study/i.test(funnelNote);
+    const t = window.setTimeout(() => setFunnelNote(""), info ? 3500 : 8000);
     return () => window.clearTimeout(t);
   }, [funnelNote]);
 
@@ -1717,19 +1718,10 @@ export function AdminClients({
         />
       ) : null}
       {pull.open ? <CrmPullDialog pull={pull} onClose={() => setPull((u) => ({ ...u, open: false }))} /> : null}
-      {funnelNote && typeof document !== "undefined" && (/не |ошиб|не удалось|записываю|порядок записан/i.test(funnelNote) || funnelNote.startsWith("Записываю") || funnelNote.startsWith("Порядок записан"))
+      {funnelNote && typeof document !== "undefined"
         ? createPortal(
-            <div
-              className={cn(
-                "fixed bottom-6 left-1/2 z-[400] max-w-[min(92vw,28rem)] -translate-x-1/2 rounded-2xl px-5 py-3 text-center text-sm font-semibold shadow-[0_16px_40px_rgba(15,23,42,.28)]",
-                funnelNote.startsWith("Порядок записан")
-                  ? "bg-emerald-700 text-white"
-                  : funnelNote.startsWith("Записываю")
-                    ? "bg-slate-900 text-white"
-                    : "bg-rose-700 text-white",
-              )}
-            >
-              {funnelNote}
+            <div className="pointer-events-none fixed bottom-4 left-1/2 z-[400] max-w-[min(90vw,20rem)] -translate-x-1/2 rounded-full bg-slate-100/95 px-3 py-1 text-center text-[0.7rem] leading-snug text-slate-500 shadow-sm ring-1 ring-black/[0.06]">
+              {/с воронки CRM|из API is_study/i.test(funnelNote) ? funnelNote.replace(/\s*\(.*\)\s*$/, "").trim() : funnelNote}
             </div>,
             document.body,
           )
