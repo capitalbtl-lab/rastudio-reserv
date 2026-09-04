@@ -3630,7 +3630,8 @@ export function AdminSchedule() {
                   </div>
                 ) : null}
                 <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:px-5 md:pb-5">
-                <div className="mt-2 grid gap-3 md:grid-cols-2">
+                <div className="mt-2">
+                    <div className="grid gap-3 md:grid-cols-2">
                     {showField("remarks") ? (
                     <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Примечания
@@ -3643,8 +3644,9 @@ export function AdminSchedule() {
                       <input value={detail.description} onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
                     </label>
                     ) : null}
-                    {showField("calendar") ? <GroupLessonStrip className="md:col-span-2" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} /> : null}
-                    <div className="grid gap-3 md:col-span-2">
+                    </div>
+                    {showField("calendar") ? <GroupLessonStrip className="mt-5" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} /> : null}
+                    <div className="mt-5 grid gap-3">
                       <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-[6.75rem_8.75rem_minmax(10.5rem,1fr)_8.25rem_auto_5.5rem]">
                       {showField("age") ? (
                       <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
