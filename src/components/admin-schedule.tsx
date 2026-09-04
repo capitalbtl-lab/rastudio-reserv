@@ -3630,7 +3630,7 @@ export function AdminSchedule() {
                   </div>
                 ) : null}
                 <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:px-6 md:pb-5">
-                <div className="mt-8">
+                <div className="mt-[1.7rem]">
                     <div className="grid gap-3 md:grid-cols-2">
                     {showField("remarks") ? (
                     <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
