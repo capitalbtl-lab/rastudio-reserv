@@ -68,6 +68,22 @@ function branchSubjectList(slots: CrmSlot[], branchId: number, list: CrmSubject[
   return list.filter((s) => ids.has(s.id));
 }
 
+function courseSubjectList(
+  courseId: string,
+  slots: CrmSlot[],
+  list: (CrmSubject & { href?: string; courseId?: string })[],
+) {
+  if (!courseId) return [] as typeof list;
+  const ids = new Set<number>();
+  for (const s of list) {
+    if (s.courseId === courseId || s.href === courseId) ids.add(s.id);
+  }
+  for (const s of slots) {
+    if (s.courseId === courseId && s.subjectId) ids.add(s.subjectId);
+  }
+  return list.filter((s) => ids.has(s.id));
+}
+
 function subjectFitsCourse(slot: CrmSlot, sub?: CrmSubject | null) {
   if (!sub) return false;
   if (slot.subjectId) return slot.subjectId === sub.id;
@@ -1128,6 +1144,8 @@ export function AdminSchedule() {
                 takenLead: active.filter((m) => m.status === "лид").length,
                 priority: next.priority,
                 statusId: next.statusId || row.statusId,
+                subjectId: next.subjectId || row.subjectId,
+                subject: subjects.find((x) => x.id === next.subjectId)?.name || row.subject,
               }
             : row,
         ),
@@ -3898,9 +3916,17 @@ export function AdminSchedule() {
                     <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Предмет
                       {(() => {
-                        const branchSubs = branchSubjectList(slots, detail.branchId, subjects, detail.id);
-                        const others = subjects.filter((s) => !branchSubs.some((b) => b.id === s.id));
+                        const courseId = siteCourseValue(detail.slot, siteTree);
+                        const typed = subjects as (CrmSubject & { href?: string; courseId?: string })[];
+                        const courseSubs = courseSubjectList(courseId, slots, typed);
+                        const courseIds = new Set(courseSubs.map((s) => s.id));
+                        const branchSubs = branchSubjectList(slots, detail.branchId, subjects, detail.id).filter((s) => !courseIds.has(s.id));
+                        const used = new Set([...courseIds, ...branchSubs.map((s) => s.id)]);
+                        const others = subjects.filter((s) => !used.has(s.id));
                         const groups = [
+                          ...(courseSubs.length
+                            ? [{ label: "К этому курсу сайта", options: courseSubs.map((sub) => ({ value: String(sub.id), label: sub.name })) }]
+                            : []),
                           ...(branchSubs.length
                             ? [{ label: "В этом филиале", options: branchSubs.map((sub) => ({ value: String(sub.id), label: sub.name })) }]
                             : []),
@@ -3908,15 +3934,32 @@ export function AdminSchedule() {
                             ? [{ label: "Все предметы CRM", options: others.map((sub) => ({ value: String(sub.id), label: sub.name })) }]
                             : []),
                         ];
+                        if (detail.subjectId && !groups.some((g) => g.options.some((o) => o.value === String(detail.subjectId)))) {
+                          const orphan = subjects.find((s) => s.id === detail.subjectId);
+                          groups.unshift({
+                            label: "Сейчас в карточке",
+                            options: [{ value: String(detail.subjectId), label: orphan?.name || `предмет ${detail.subjectId}` }],
+                          });
+                        }
+                        const mapped = typed.find((s) => s.id === detail.subjectId);
+                        const mappedCourse = mapped?.courseId || mapped?.href || "";
+                        const mismatch = Boolean(courseId && mappedCourse && mappedCourse !== courseId);
                         return (
+                          <>
                           <RaSelect
                             value={detail.subjectId ? String(detail.subjectId) : ""}
-                            placeholder="— выберите предмет филиала —"
+                            placeholder="— выберите предмет курса —"
                             className={CARD_SEL}
                             menuMinWidth={260}
                             groups={groups}
                             onChange={(v) => setDetail((d) => (d ? { ...d, subjectId: Number(v) || 0 } : d))}
                           />
+                          {mismatch ? (
+                            <span className="mt-1 block text-[0.68rem] font-normal normal-case tracking-normal text-amber-800">
+                              В соответствиях этот предмет привязан к другому курсу сайта.
+                            </span>
+                          ) : null}
+                          </>
                         );
                       })()}
                     </label>

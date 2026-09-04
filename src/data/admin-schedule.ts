@@ -51,6 +51,18 @@ function isoish(raw: string) {
   return s;
 }
 
+function crmGroupSubjectId(g: Record<string, unknown> | null | undefined) {
+  if (!g) return 0;
+  const one = Number(g.subject_id || 0);
+  if (one) return one;
+  const arr = Array.isArray(g.subject_ids) ? g.subject_ids : [];
+  for (const x of arr) {
+    const n = Number(x);
+    if (n) return n;
+  }
+  return 0;
+}
+
 export type GroupMember = {
   id: number;
   name: string;
@@ -2077,7 +2089,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           levelId: Number(g.level_id || slot?.levelId || 0),
           priority: crmPriority ?? readPriority(slot?.priority),
           signup: slot?.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
-          subjectId: Number(slot?.subjectId || g.subject_id || 0),
+          subjectId: crmGroupSubjectId(g) || Number(slot?.subjectId || 0),
           subject: slot?.subject || "",
           calendar: cached?.calendar || [],
           at: new Date().toISOString(),
@@ -2086,7 +2098,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         return {
           ok: true as const,
           fromCache: false,
-          subjects: loadSubjects(),
+          subjects: subjectsWithHref(),
           levels: SEED_LEVELS,
           group,
           ...groupTariffPack(slot),
@@ -2159,17 +2171,24 @@ export const adminSchedule = createServerFn({ method: "POST" })
           levelId: Number(g.level_id || slot?.levelId || 0),
           priority: crmPriority ?? readPriority(slot?.priority),
           signup: slot?.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
-          subjectId: Number(slot?.subjectId || 0),
-          subject: slot?.subject || "",
+          subjectId: crmGroupSubjectId(g) || Number(slot?.subjectId || 0),
+          subject: loadSubjects().find((x) => x.id === (crmGroupSubjectId(g) || Number(slot?.subjectId || 0)))?.name || slot?.subject || "",
           calendar,
           at: new Date().toISOString(),
       };
       saveGroupCard(group);
+      if (group.subjectId && slot && slot.subjectId !== group.subjectId) {
+        saveAdminSlots(
+          listAdminSlots().map((s) =>
+            s.groupId === gid && s.branchId === branch ? { ...s, subjectId: group.subjectId, subject: group.subject } : s,
+          ),
+        );
+      }
       const liveTeachers = await teachersOfBranch(request, t, branch).catch(() => [] as { id: number; name: string }[]);
       return {
         ok: true as const,
         fromCache: false,
-        subjects: loadSubjects(),
+        subjects: subjectsWithHref(),
         levels,
         group,
         teachers: liveTeachers.map((x) => ({ id: x.id, name: x.name, branchIds: [branch] })),

@@ -196,11 +196,11 @@ export function subjectIdsOfCourse(courseId: string, mapCourses?: IdMapCourse[])
     .filter(Boolean);
 }
 
-/** subjectId курса из карты Соответствия в админке. */
+/** subjectId курса из карты Соответствия в админке. Несколько предметов на курсе — не угадываем. */
 export function subjectIdOfCourse(courseId: string, mapCourses?: IdMapCourse[]): number {
   if (!courseId) return 0;
-  const ids = subjectIdsOfCourse(courseId, mapCourses);
-  return ids.length === 1 ? ids[0] : ids[0] || 0;
+  const ids = [...new Set(subjectIdsOfCourse(courseId, mapCourses))];
+  return ids.length === 1 ? ids[0] : 0;
 }
 
 /** Ключ строки цены = courseId сайта. */
