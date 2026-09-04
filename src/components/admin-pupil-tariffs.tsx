@@ -355,14 +355,43 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         <div>
           <p className="font-display text-xl text-primary">Мастер абонементов учеников</p>
           <p className="mt-0.5 text-sm text-muted">
-            Сначала режим: добавить абонементы или снять текущие. Дальше группы и ученики.
+            Режим сверху, шаги под ним. Добавление выдаёт абонементы, завершение закрывает текущие.
           </p>
         </div>
         <button type="button" className="text-sm text-muted hover:text-fg" onClick={onClose}>
           Закрыть
         </button>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2 text-[0.78rem]">
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <span className="shrink-0 text-sm font-medium text-muted">Выбор режима работы мастера</span>
+        <div className="grid w-[20rem] grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setPath("add");
+              setJob("assign");
+              setResult(null);
+              setStep(1);
+            }}
+            className={cn("h-9 w-full rounded-[8px] text-sm font-semibold", path === "add" ? "bg-primary text-white" : "bg-surface-2 text-muted")}
+          >
+            Добавление
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPath("remove");
+              setJob("close");
+              setResult(null);
+              setStep(1);
+            }}
+            className={cn("h-9 w-full rounded-[8px] text-sm font-semibold", path === "remove" ? "bg-primary text-white" : "bg-surface-2 text-muted")}
+          >
+            Завершение
+          </button>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2 text-[0.78rem]">
         {stepLabels.map((label, i) => (
           <span key={label} className={cn("rounded-full px-3 py-1", step === i + 1 ? "bg-primary text-white" : "bg-surface-2 text-muted")}>
             {i + 1}. {label}
@@ -374,28 +403,6 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
 
       {step === 1 ? (
         <div className="mt-4 space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setPath("add");
-                setJob("assign");
-              }}
-              className={cn("rounded-[8px] px-4 py-2 text-sm font-semibold", path === "add" ? "bg-primary text-white" : "bg-surface-2 text-muted")}
-            >
-              Добавление
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPath("remove");
-                setJob("close");
-              }}
-              className={cn("rounded-[8px] px-4 py-2 text-sm font-semibold", path === "remove" ? "bg-primary text-white" : "bg-surface-2 text-muted")}
-            >
-              Удаление
-            </button>
-          </div>
           <p className="text-sm text-muted">
             {path === "add"
               ? "Выдать ученикам новые абонементы."
