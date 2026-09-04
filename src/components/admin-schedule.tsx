@@ -87,6 +87,44 @@ const SEED_LEVELS = [
   { id: 14, name: "Продвинутый" },
 ];
 
+const CARD_FIELDS = [
+  { id: "remarks", label: "Примечания" },
+  { id: "description", label: "Описание" },
+  { id: "calendar", label: "Расписание занятий" },
+  { id: "age", label: "Возраст" },
+  { id: "day", label: "День" },
+  { id: "period", label: "Период" },
+  { id: "time", label: "Время" },
+  { id: "week", label: "×нед" },
+  { id: "places", label: "Места" },
+  { id: "branch", label: "Филиал" },
+  { id: "teacher", label: "Педагог" },
+  { id: "tariff", label: "Абонемент" },
+  { id: "hashtags", label: "Хэштеги" },
+  { id: "course", label: "Курс на сайте" },
+  { id: "subject", label: "Предмет" },
+  { id: "signup", label: "Запись" },
+  { id: "level", label: "Уровень" },
+  { id: "status", label: "Статус" },
+  { id: "priority", label: "Приоритет" },
+  { id: "makeup", label: "Отработка" },
+  { id: "members", label: "Ученики" },
+  { id: "leads", label: "Лиды" },
+  { id: "archive", label: "Архивные ученики" },
+] as const;
+
+const CARD_FIELDS_KEY = "ra_group_card_fields";
+
+function readCardFields(): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(CARD_FIELDS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
 function token() {
   if (typeof document === "undefined") return "";
   const m = document.cookie.match(/(?:^|;\s*)ra_admin=([^;]+)/);
@@ -735,6 +773,7 @@ export function AdminSchedule() {
   const [addBusy, setAddBusy] = useState(false);
   const [addErr, setAddErr] = useState("");
   const [memberBusy, setMemberBusy] = useState(0);
+  const [cardFields, setCardFields] = useState<Record<string, boolean>>(readCardFields);
   const [subjects, setSubjects] = useState<CrmSubject[]>([]);
   const [creatingSubject, setCreatingSubject] = useState(false);
   const [levels, setLevels] = useState<{ id: number; name: string }[]>(SEED_LEVELS);
@@ -1158,6 +1197,33 @@ export function AdminSchedule() {
     setAddBusy(false);
     setAddErr("");
     setMemberBusy(0);
+  }
+
+  function showField(id: string) {
+    return cardFields[id] !== false;
+  }
+
+  function toggleCardField(id: string) {
+    setCardFields((prev) => {
+      const next = { ...prev, [id]: prev[id] === false };
+      try {
+        localStorage.setItem(CARD_FIELDS_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  function showAllCardFields() {
+    const next: Record<string, boolean> = {};
+    for (const f of CARD_FIELDS) next[f.id] = true;
+    setCardFields(next);
+    try {
+      localStorage.setItem(CARD_FIELDS_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
   }
 
   function applyMembers(slotId: string, active: GroupMember[], archive: GroupMember[]) {
@@ -3449,7 +3515,7 @@ export function AdminSchedule() {
                 data-group-id={detail.groupId || undefined}
                 data-branch-id={detail.branchId || undefined}
               >
-                <div className="flex shrink-0 items-start gap-2 px-4 pt-3 md:px-5 md:pt-4">
+                <div className="relative z-30 flex shrink-0 items-start gap-2 px-4 pt-3 md:px-5 md:pt-4">
                   <div className="min-w-0 max-w-md">
                     <p className="text-[0.62rem] font-semibold uppercase tracking-wider text-muted">Карточка группы · {groupCardId(detail.branchId, detail.groupId)}</p>
                     <label className="mt-0.5 block">
@@ -3465,7 +3531,7 @@ export function AdminSchedule() {
                       <span className="ml-2">Учится {detail.slot.takenStudy ?? "—"} · лиды {detail.slot.takenLead ?? "—"} · всего {detail.slot.taken}</span>
                     </p>
                   </div>
-                  <div className="ml-auto flex shrink-0 items-center gap-1.5 pt-[1.15rem]">
+                  <div className="ml-auto flex shrink-0 items-start gap-1.5 pt-[1.15rem]">
                     <button
                       type="button"
                       disabled={detail.saving}
@@ -3482,9 +3548,47 @@ export function AdminSchedule() {
                     >
                       {detail.saving ? "Сохраняю…" : detail.groupId ? "Сохранить в AlfaCRM" : "Создать в AlfaCRM"}
                     </button>
+                    <div className="flex flex-col items-end gap-1">
                     <button type="button" className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-muted ring-1 ring-black/8" onClick={() => { setPupil(null); resetAddPupil(); setDetail(null); }}>
                       Закрыть
                     </button>
+                    <div className="group/gear relative">
+                      <button
+                        type="button"
+                        aria-label="Поля карточки"
+                        title="Какие поля показать"
+                        className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-muted ring-1 ring-black/8 hover:text-fg"
+                      >
+                        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="3" />
+                          <path d="M12 3.2v2.2M12 18.6v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M3.2 12h2.2M18.6 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" />
+                        </svg>
+                      </button>
+                      <div className="pointer-events-none invisible absolute right-0 top-full z-[40] pt-1 opacity-0 transition group-hover/gear:pointer-events-auto group-hover/gear:visible group-hover/gear:opacity-100 group-focus-within/gear:pointer-events-auto group-focus-within/gear:visible group-focus-within/gear:opacity-100">
+                        <div className={cn("w-[15.5rem] p-2", RA_POP)}>
+                          <p className="px-1.5 pb-1 text-[0.65rem] font-semibold uppercase tracking-wider text-muted">Поля карточки</p>
+                          <div className="pretty-scroll max-h-64 overflow-y-auto">
+                            {CARD_FIELDS.map((f) => (
+                              <label key={f.id} className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[0.78rem] hover:bg-black/[0.04]">
+                                <input
+                                  type="checkbox"
+                                  checked={showField(f.id)}
+                                  onChange={() => toggleCardField(f.id)}
+                                  className="h-3.5 w-3.5 rounded border-black/20 text-primary"
+                                />
+                                {f.label}
+                              </label>
+                            ))}
+                          </div>
+                          {CARD_FIELDS.some((f) => !showField(f.id)) ? (
+                            <button type="button" className="mt-1 w-full rounded-md px-1.5 py-1 text-left text-[0.75rem] font-semibold text-primary hover:bg-primary/5" onClick={showAllCardFields}>
+                              Показать все
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    </div>
                   </div>
                 </div>
                 {subjectOffer && !subjectOffer.ok ? (
@@ -3508,21 +3612,28 @@ export function AdminSchedule() {
                 ) : null}
                 <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:px-5 md:pb-5">
                 <div className="mt-2 grid gap-3 md:grid-cols-2">
+                    {showField("remarks") ? (
                     <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Примечания
                       <input value={detail.remarks} onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
                     </label>
+                    ) : null}
+                    {showField("description") ? (
                     <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Описание
                       <input value={detail.description} onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
                     </label>
-                    <GroupLessonStrip className="md:col-span-2" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} />
+                    ) : null}
+                    {showField("calendar") ? <GroupLessonStrip className="md:col-span-2" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} /> : null}
                     <div className="grid gap-3 md:col-span-2">
                       <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-[6.75rem_8.75rem_minmax(10.5rem,1fr)_8.25rem_auto_5.5rem]">
+                      {showField("age") ? (
                       <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Возраст
                         <input value={detail.slot.age} onChange={(e) => patch(detail.id, "age", e.target.value)} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
                       </label>
+                      ) : null}
+                      {showField("day") ? (
                       <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         День
                         <select
@@ -3537,6 +3648,8 @@ export function AdminSchedule() {
                           ))}
                         </select>
                       </label>
+                      ) : null}
+                      {showField("period") ? (
                       <label className="col-span-2 block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80 sm:col-auto">
                         Период
                         <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
@@ -3545,6 +3658,8 @@ export function AdminSchedule() {
                           <input value={detail.eDate} onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))} placeholder="30.06.2027" className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none" />
                         </span>
                       </label>
+                      ) : null}
+                      {showField("time") ? (
                       <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Время
                         <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
@@ -3553,6 +3668,8 @@ export function AdminSchedule() {
                           <input value={shownBeat(detail.slot).timeTo} onChange={(e) => patchBeat(detail.slot, "timeTo", e.target.value)} className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.8rem] font-medium text-fg outline-none" />
                         </span>
                       </label>
+                      ) : null}
+                      {showField("week") ? (
                       <div className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         ×нед
                         <div className="mt-1 flex h-8 items-center">
@@ -3564,6 +3681,8 @@ export function AdminSchedule() {
                           />
                         </div>
                       </div>
+                      ) : null}
+                      {showField("places") ? (
                       <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Места
                         <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
@@ -3575,8 +3694,10 @@ export function AdminSchedule() {
                           <span className="shrink-0 pr-2 text-[0.75rem] font-medium text-muted">/ {detail.slot.taken}</span>
                         </span>
                       </label>
+                      ) : null}
                       </div>
                       <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
+                      {showField("branch") ? (
                       <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Филиал
                         <select
@@ -3600,6 +3721,8 @@ export function AdminSchedule() {
                           ))}
                         </select>
                       </label>
+                      ) : null}
+                      {showField("teacher") ? (
                       <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Педагог
                         <select
@@ -3625,8 +3748,10 @@ export function AdminSchedule() {
                           ) : null}
                         </select>
                       </label>
+                      ) : null}
                       </div>
                       <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
+                    {showField("tariff") ? (
                     <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Абонемент
                       <select
@@ -3655,11 +3780,15 @@ export function AdminSchedule() {
                         ) : null}
                       </select>
                     </label>
+                    ) : null}
+                    {showField("hashtags") ? (
                     <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Хэштеги
                       <span className="ml-1 font-normal normal-case tracking-normal text-muted/60">не для привязок</span>
                       <input value={detail.hashtags} onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
                     </label>
+                    ) : null}
+                    {showField("course") ? (
                     <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Курс на сайте
                       <select
@@ -3702,6 +3831,8 @@ export function AdminSchedule() {
                         ))}
                       </select>
                     </label>
+                    ) : null}
+                    {showField("subject") ? (
                     <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Предмет
                       {(() => {
@@ -3728,14 +3859,18 @@ export function AdminSchedule() {
                         );
                       })()}
                     </label>
+                    ) : null}
                       </div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-[9.25rem_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_5.75rem]">
+                      {showField("signup") ? (
                       <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Запись
                         <a href={detail.signup || leadHref(detail.slot)} target="_blank" rel="noreferrer" className="mt-1 flex h-8 items-center justify-center whitespace-nowrap rounded-lg bg-white px-2.5 text-[0.75rem] font-semibold text-primary ring-1 ring-black/[0.07] transition hover:ring-primary/30">
                           в группу {detail.groupId || "—"}
                         </a>
                       </label>
+                      ) : null}
+                      {showField("level") ? (
                       <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Уровень
                         <select value={detail.levelId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, levelId: Number(e.target.value) || 0 } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35">
@@ -3746,6 +3881,8 @@ export function AdminSchedule() {
                           {detail.levelId && !levels.some((lv) => lv.id === detail.levelId) ? <option value={detail.levelId}>Уровень {detail.levelId}</option> : null}
                         </select>
                       </label>
+                      ) : null}
+                      {showField("status") ? (
                       <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Статус
                         <select value={detail.statusId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, statusId: Number(e.target.value) || 0 } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35">
@@ -3755,6 +3892,8 @@ export function AdminSchedule() {
                           ))}
                         </select>
                       </label>
+                      ) : null}
+                      {showField("priority") ? (
                       <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Приоритет
                         <select value={detail.priority} onChange={(e) => setDetail((d) => (d ? { ...d, priority: Number(e.target.value) } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35">
@@ -3763,10 +3902,13 @@ export function AdminSchedule() {
                           ))}
                         </select>
                       </label>
+                      ) : null}
+                      {showField("makeup") ? (
                       <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Отработка
                         <input value={detail.makeup} onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
                       </label>
+                      ) : null}
                       </div>
                     {detail.error ? <p className="text-sm text-red-600">{detail.error}</p> : null}
                     {!detail.groupId ? (
@@ -3774,6 +3916,7 @@ export function AdminSchedule() {
                     ) : null}
                     </div>
                   </div>
+                  {showField("members") || showField("leads") || showField("archive") || addPupil ? (
                   <section className="mt-3 rounded-xl bg-white/80 p-3 ring-1 ring-black/6">
                     {addPupil ? (
                       <div className="mb-3 rounded-xl bg-[#eef2f7] p-3">
@@ -3852,6 +3995,7 @@ export function AdminSchedule() {
                         )}
                       </div>
                     ) : null}
+                    {showField("members") ? (
                     <CrmGroupMembers
                       title="Ученики"
                       items={detail.members.filter((m) => m.status !== "лид")}
@@ -3860,6 +4004,8 @@ export function AdminSchedule() {
                       onRemove={(m) => void removePupil(m)}
                       busyId={memberBusy}
                     />
+                    ) : null}
+                    {showField("leads") ? (
                     <CrmGroupMembers
                       title="Лиды"
                       items={detail.members.filter((m) => m.status === "лид")}
@@ -3868,6 +4014,8 @@ export function AdminSchedule() {
                       variant="lead"
                       busyId={memberBusy}
                     />
+                    ) : null}
+                    {showField("archive") ? (
                     <CrmGroupMembers
                       title="Архивные ученики"
                       items={detail.archive}
@@ -3876,7 +4024,9 @@ export function AdminSchedule() {
                       variant="archive"
                       busyId={memberBusy}
                     />
+                    ) : null}
                   </section>
+                  ) : null}
                 </div>
               </article>
             </div>,
