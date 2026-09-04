@@ -1276,7 +1276,7 @@ export function AdminTariffs() {
                     </td>
                     <td className="py-2 font-mono text-[0.75rem] text-muted">{t.id > 0 ? t.id : "новый"}</td>
                     <td className="py-2 pr-3">
-                      <div className="truncate text-[0.82rem] font-medium leading-snug">
+                      <div className="truncate text-[0.82rem] font-bold leading-snug">
                         {t.name}
                         {dirty.has(t.id) ? <span className="ml-1 text-[0.7rem] text-amber-600">●</span> : null}
                       </div>
@@ -1297,11 +1297,11 @@ export function AdminTariffs() {
                       {empty ? (
                         <span className="text-[0.75rem] text-rose-700">нет предметов</span>
                       ) : (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[0.8rem] leading-snug text-fg">
                           {t.subjectIds.slice(0, 2).map((id) => (
-                            <span key={id} className="rounded-[8px] bg-[#f3f5f8] px-1.5 py-0.5 text-[0.75rem] leading-snug text-fg ring-1 ring-black/[0.06]">{nameOf(id)}</span>
+                            <span key={id}>{nameOf(id)}</span>
                           ))}
-                          {t.subjectIds.length > 2 ? <span className="text-[0.75rem] text-muted">+{t.subjectIds.length - 2}</span> : null}
+                          {t.subjectIds.length > 2 ? <span className="text-muted">+{t.subjectIds.length - 2}</span> : null}
                         </div>
                       )}
                     </td>
@@ -1498,7 +1498,7 @@ function CourseChips({
           links.map((l) => {
             const c = courses.find((x) => x.id === l.courseId);
             return (
-              <span key={l.courseId} className="inline-flex max-w-full items-center gap-0.5 rounded-[8px] bg-[#f3f5f8] px-1.5 py-0.5 text-[0.75rem] leading-snug text-fg ring-1 ring-black/[0.06]">
+              <span key={l.courseId} className="inline-flex max-w-full items-center gap-0.5 text-[0.8rem] leading-snug text-fg">
                 <span className="truncate">{c?.label || l.courseId}</span>
                 {editing ? (
                   <button type="button" className="shrink-0 text-muted hover:text-rose-700" onClick={() => onRemove(l.courseId)}>
