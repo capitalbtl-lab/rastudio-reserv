@@ -1841,20 +1841,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
     }
     if (data.action === "pupilTariffGroups") {
       const { uniqueLiveGroups, groupHasBoundPupils } = await import("./pupil-tariffs");
-      const { token, request } = await import("./alfacrm");
-      const t = await token();
       const all = uniqueLiveGroups(listAdminSlots());
-      const groups = [];
-      for (const g of all) {
-        if (g.taken > 0) {
-          groups.push(g);
-          continue;
-        }
-        const mem = await loadGroupMembers(request, t, g.branchId, g.groupId);
-        const n = mem.active.length + mem.archive.length;
-        if (!groupHasBoundPupils(0, mem.active.length, mem.archive.length)) continue;
-        groups.push({ ...g, taken: n });
-      }
+      const withPeople = all.filter((g) => groupHasBoundPupils(g.taken, 0, 0));
+      const groups = withPeople.length ? withPeople : all;
       const schools = [...new Set(groups.map((g) => g.school).filter(Boolean))];
       const unbound = groups.filter((g) => g.school === "Без школы на сайте").length;
       return { ok: true as const, groups, schools, unbound };

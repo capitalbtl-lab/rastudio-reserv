@@ -260,4 +260,10 @@ describe("мастер абонементов учеников", () => {
     assert.equal(groupHasBoundPupils(0, 0, 4), true);
     assert.equal(groupHasBoundPupils(0, 0, 0), false);
   });
+
+  it("места в мастере: лиды и ученики из слота, без запроса CRM на каждую группу", () => {
+    const list = uniqueLiveGroups([slot({ taken: 0, takenStudy: 3, takenLead: 2 })]);
+    assert.equal(list[0].taken, 5);
+    assert.equal(groupHasBoundPupils(list[0].taken, 0, 0), true);
+  });
 });

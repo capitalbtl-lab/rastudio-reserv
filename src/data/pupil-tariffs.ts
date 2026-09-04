@@ -70,7 +70,7 @@ export function uniqueLiveGroups(slots: CrmSlot[]): PupilGroup[] {
       course: s.course || s.subject || "",
       age: s.age || "",
       teacher: s.teacher || "",
-      taken: Number(s.taken || 0),
+      taken: Number(s.taken || 0) || Number(s.takenStudy || 0) + Number(s.takenLead || 0),
       limit: Number(s.limit || 0),
       subjectId: Number(s.subjectId || 0),
     });

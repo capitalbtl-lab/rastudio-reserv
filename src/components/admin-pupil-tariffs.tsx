@@ -505,7 +505,11 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                 </span>
               </label>
             ))}
-            {!visible.length ? <p className="px-3 py-6 text-center text-sm text-muted">{busy ? "Загружаю группы…" : "Нет групп в этой выборке."}</p> : null}
+            {!visible.length ? (
+              <p className="px-3 py-6 text-center text-sm text-muted">
+                {busy ? "Загружаю группы…" : groups.length ? "Нет групп в этой выборке." : "Нет групп в расписании. Во вкладке «Группы» нажмите «Загрузить из AlfaCRM»."}
+              </p>
+            ) : null}
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={includeLeads} onChange={(e) => setIncludeLeads(e.target.checked)} />
