@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
 import { adminScheduleMap } from "@/data/admin-schedule-map";
 import { retryFetch } from "@/lib/retry-fetch";
@@ -28,6 +28,53 @@ const PERIOD_UNITS: { id: number; name: string }[] = [
   { id: 4, name: "лет" },
 ];
 const LESSON_TYPE_ORDER = [2, 5, 10, 11, 3, 4, 1, 15, 13, 7, 6, 8, 12, 9, 14];
+const TARIFF_COLS_KEY = "ra_tariff_cols";
+const TARIFF_COL_DEF: Record<string, number> = {
+  pick: 40,
+  id: 56,
+  name: 280,
+  price: 112,
+  pack: 128,
+  subs: 160,
+  course: 240,
+  groups: 64,
+  open: 48,
+};
+const TARIFF_COL_MIN: Record<string, number> = {
+  pick: 36,
+  id: 44,
+  name: 140,
+  price: 80,
+  pack: 90,
+  subs: 90,
+  course: 140,
+  groups: 48,
+  open: 40,
+};
+
+function readTariffCols() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(TARIFF_COLS_KEY) || "{}") as Record<string, number>;
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function ColHandle({ onDown }: { onDown: (e: PointerEvent<HTMLSpanElement>) => void }) {
+  return (
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Ширина столбца"
+      title="Потяните, чтобы изменить ширину"
+      className="absolute right-0 top-0 z-20 flex h-full w-3 cursor-col-resize touch-none items-center justify-center"
+      onPointerDown={onDown}
+    >
+      <span className="pointer-events-none h-[1.4rem] w-px rounded-full bg-black/20 group-hover/col:bg-primary/70" />
+    </span>
+  );
+}
 
 function sortLessonTypes(list: CrmLessonType[]) {
   return [...list].sort((a, b) => {
@@ -290,6 +337,9 @@ export function AdminTariffs() {
   const [wiz, setWiz] = useState(false);
   const [pupilWiz, setPupilWiz] = useState(false);
   const [pull, setPull] = useState<CrmPullState>(emptyPull("tariffs"));
+  const [colW, setColW] = useState<Record<string, number>>({});
+  const colWRef = useRef(colW);
+  colWRef.current = colW;
   const [tree, setTree] = useState<SiteTree>({ schools: [], courses: [], assign: {} });
   const [tariffMap, setTariffMap] = useState<TariffLink[]>([]);
 
@@ -358,6 +408,7 @@ export function AdminTariffs() {
   }
 
   useEffect(() => {
+    setColW(readTariffCols());
     void loadLocal();
   }, []);
 
@@ -367,6 +418,42 @@ export function AdminTariffs() {
   const subjectList = useMemo(() => [...subjects].sort((a, b) => a.name.localeCompare(b.name, "ru")), [subjects]);
   const siteSchools = tree.schools.length ? tree.schools : siteSchoolOptions();
   const siteCourses = tree.courses.length ? tree.courses : siteCourseOptions();
+  const colPx = (key: string) => {
+    const n = Number(colW[key]);
+    return n > 0 ? n : TARIFF_COL_DEF[key] || 100;
+  };
+  const tableW = Object.keys(TARIFF_COL_DEF).reduce((n, k) => n + colPx(k), 0);
+  function resizeCol(key: string, e: PointerEvent<HTMLSpanElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const startX = e.clientX;
+    const startW = colPx(key);
+    const min = TARIFF_COL_MIN[key] || 40;
+    const prevUser = document.body.style.userSelect;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    const move = (ev: globalThis.PointerEvent) => {
+      const next = Math.round(Math.min(720, Math.max(min, startW + ev.clientX - startX)));
+      setColW((cur) => ({ ...cur, [key]: next }));
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      document.body.style.userSelect = prevUser;
+      document.body.style.cursor = prevCursor;
+      try {
+        localStorage.setItem(TARIFF_COLS_KEY, JSON.stringify(colWRef.current));
+      } catch {
+        /* */
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }
 
   const counts = useMemo(() => {
     const live = items.filter((t) => showArchive || !t.archive);
@@ -773,21 +860,43 @@ export function AdminTariffs() {
 
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
 
-      <div className="overflow-hidden rounded-3xl bg-surface shadow-[var(--shadow-border)]">
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-3xl bg-surface shadow-[var(--shadow-border)]">
+        <table className="text-left text-sm" style={{ width: tableW, minWidth: "100%", tableLayout: "fixed" }}>
           <thead className="text-[0.65rem] uppercase tracking-wider text-muted">
             <tr>
-              <th className="w-10 px-3 py-3">
+              <th className="group/col relative px-3 py-3" style={{ width: colPx("pick") }}>
                 <input type="checkbox" checked={view.length > 0 && view.every((t) => picked.has(t.id))} onChange={(e) => setPicked(e.target.checked ? new Set(view.map((t) => t.id)) : new Set())} />
+                <ColHandle onDown={(e) => resizeCol("pick", e)} />
               </th>
-              <th className="w-16 py-3">ID</th>
-              <th className="py-3">Абонемент</th>
-              <th className="w-28 py-3">Цена</th>
-              <th className="w-32 py-3">Пакет</th>
-              <th className="py-3">Предметы</th>
-              <th className="py-3">Курс сайта</th>
-              <th className="w-16 py-3 text-center">Группы</th>
-              <th className="w-12 py-3" />
+              <th className="group/col relative py-3" style={{ width: colPx("id") }}>
+                ID
+                <ColHandle onDown={(e) => resizeCol("id", e)} />
+              </th>
+              <th className="group/col relative py-3 pr-3" style={{ width: colPx("name") }}>
+                Абонемент
+                <ColHandle onDown={(e) => resizeCol("name", e)} />
+              </th>
+              <th className="group/col relative py-3" style={{ width: colPx("price") }}>
+                Цена
+                <ColHandle onDown={(e) => resizeCol("price", e)} />
+              </th>
+              <th className="group/col relative py-3" style={{ width: colPx("pack") }}>
+                Пакет
+                <ColHandle onDown={(e) => resizeCol("pack", e)} />
+              </th>
+              <th className="group/col relative py-3 pr-3" style={{ width: colPx("subs") }}>
+                Предметы
+                <ColHandle onDown={(e) => resizeCol("subs", e)} />
+              </th>
+              <th className="group/col relative py-3 pr-2" style={{ width: colPx("course") }}>
+                Курс сайта
+                <ColHandle onDown={(e) => resizeCol("course", e)} />
+              </th>
+              <th className="group/col relative py-3 text-center" style={{ width: colPx("groups") }}>
+                Группы
+                <ColHandle onDown={(e) => resizeCol("groups", e)} />
+              </th>
+              <th className="relative py-3" style={{ width: colPx("open") }} />
             </tr>
           </thead>
           <tbody>
@@ -810,7 +919,7 @@ export function AdminTariffs() {
                     </td>
                     <td className="py-2 font-mono text-xs text-muted">{t.id > 0 ? t.id : "новый"}</td>
                     <td className="py-2 pr-3">
-                      <div className="font-medium">
+                      <div className="truncate font-medium">
                         {t.name}
                         {dirty.has(t.id) ? <span className="ml-1 text-[0.7rem] text-amber-600">●</span> : null}
                       </div>
@@ -844,7 +953,7 @@ export function AdminTariffs() {
                         value={tariffMap.find((x) => x.tariffId === t.id)?.courseId || ""}
                         placeholder="нет курса"
                         menuMinWidth={280}
-                        className="h-8 max-w-[14rem] rounded-[8px] text-[0.75rem]"
+                        className="h-8 w-full rounded-[8px] text-[0.75rem]"
                         groups={siteSchools.map((sc) => ({
                           label: sc.label,
                           options: siteCourses

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { adminGroupDurations, adminPrices, adminSaveAll, adminSaveGroup, adminAddPriceCourse } from "@/data/admin";
 import { PRICE_DIRECTIONS, hydratePrices, listPriceRows, matchDuration, type PriceRow } from "@/data/prices-core";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,31 @@ function token() {
   if (typeof document === "undefined") return "";
   const m = document.cookie.match(/(?:^|;\s*)ra_admin=([^;]+)/);
   return m ? decodeURIComponent(m[1]) : localStorage.getItem("ra_admin") || "";
+}
+
+const PRICE_COLS_KEY = "ra_price_cols";
+function readPriceCols() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PRICE_COLS_KEY) || "{}") as Record<string, number>;
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function PriceColHandle({ onDown }: { onDown: (e: PointerEvent<HTMLSpanElement>) => void }) {
+  return (
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Ширина столбца"
+      title="Потяните, чтобы изменить ширину"
+      className="absolute right-0 top-0 z-20 flex h-full w-3 cursor-col-resize touch-none items-center justify-center"
+      onPointerDown={onDown}
+    >
+      <span className="pointer-events-none h-[1.4rem] w-px rounded-full bg-black/20 group-hover/col:bg-primary/70" />
+    </span>
+  );
 }
 
 export function AdminCoursePrices() {
@@ -36,6 +61,9 @@ export function AdminCoursePrices() {
   const [newCourseSchool, setNewCourseSchool] = useState("");
   const [newCourse, setNewCourse] = useState("");
   const [newAge, setNewAge] = useState("");
+  const [colW, setColW] = useState<Record<string, number>>({});
+  const colWRef = useRef(colW);
+  colWRef.current = colW;
 
   async function load() {
     setBusy(true);
@@ -64,6 +92,7 @@ export function AdminCoursePrices() {
   }
 
   useEffect(() => {
+    setColW(readPriceCols());
     void load();
   }, []);
 
@@ -122,6 +151,40 @@ export function AdminCoursePrices() {
   }
 
   const extra = formulas.extra || [];
+  const colPx = (key: string, fallback: number) => {
+    const n = Number(colW[key]);
+    return n > 0 ? n : fallback;
+  };
+  function resizeCol(key: string, min: number, e: PointerEvent<HTMLSpanElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const startX = e.clientX;
+    const startW = colPx(key, min);
+    const prevUser = document.body.style.userSelect;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    const move = (ev: globalThis.PointerEvent) => {
+      const next = Math.round(Math.min(640, Math.max(min, startW + ev.clientX - startX)));
+      setColW((cur) => ({ ...cur, [key]: next }));
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      document.body.style.userSelect = prevUser;
+      document.body.style.cursor = prevCursor;
+      try {
+        localStorage.setItem(PRICE_COLS_KEY, JSON.stringify(colWRef.current));
+      } catch {
+        /* */
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }
 
   function takePack(res: { ok: boolean; error?: string; formulas?: CorpFormulas; rows?: PriceRow[] }, okText: string) {
     if (!res.ok) {
@@ -533,17 +596,35 @@ export function AdminCoursePrices() {
           <section key={name}>
             <h3 className="font-display text-xl">{name}</h3>
             <div className="mt-3 overflow-x-auto rounded-2xl ring-1 ring-black/8">
-              <table className="w-full min-w-[48rem] text-left text-sm">
+              <table className="w-full min-w-[48rem] table-fixed text-left text-sm">
                 <thead className="bg-surface-2 text-[0.72rem] uppercase tracking-wider text-muted">
                   <tr>
-                    <th className="px-4 py-3 font-semibold">Курс</th>
-                    <th className="w-20 px-2 py-3 text-center font-semibold">Минут</th>
-                    <th className="w-24 px-2 py-3 text-center font-semibold">В неделю</th>
-                    <th className="w-24 px-2 py-3 text-center font-semibold">Все</th>
-                    <th className="w-24 px-2 py-3 text-center font-semibold">КБМ</th>
-                    <th className="w-24 px-2 py-3 text-center font-semibold">ТМХ</th>
+                    <th className="group/col relative px-4 py-3 font-semibold" style={{ width: colPx("course", 280) }}>
+                      Курс
+                      <PriceColHandle onDown={(e) => resizeCol("course", 140, e)} />
+                    </th>
+                    <th className="group/col relative px-2 py-3 text-center font-semibold" style={{ width: colPx("mins", 80) }}>
+                      Минут
+                      <PriceColHandle onDown={(e) => resizeCol("mins", 56, e)} />
+                    </th>
+                    <th className="group/col relative px-2 py-3 text-center font-semibold" style={{ width: colPx("week", 96) }}>
+                      В неделю
+                      <PriceColHandle onDown={(e) => resizeCol("week", 64, e)} />
+                    </th>
+                    <th className="group/col relative px-2 py-3 text-center font-semibold" style={{ width: colPx("all", 96) }}>
+                      Все
+                      <PriceColHandle onDown={(e) => resizeCol("all", 64, e)} />
+                    </th>
+                    <th className="group/col relative px-2 py-3 text-center font-semibold" style={{ width: colPx("kbm", 96) }}>
+                      КБМ
+                      <PriceColHandle onDown={(e) => resizeCol("kbm", 64, e)} />
+                    </th>
+                    <th className="group/col relative px-2 py-3 text-center font-semibold" style={{ width: colPx("tmx", 96) }}>
+                      ТМХ
+                      <PriceColHandle onDown={(e) => resizeCol("tmx", 64, e)} />
+                    </th>
                     {extra.map((c) => (
-                      <th key={c.id} className="w-28 px-2 py-3 text-center font-semibold">
+                      <th key={c.id} className="group/col relative px-2 py-3 text-center font-semibold" style={{ width: colPx(`x${c.id}`, 112) }}>
                         <span className="flex items-center justify-center gap-1">
                           <span className="truncate" title={c.name}>
                             {c.name}
@@ -557,6 +638,7 @@ export function AdminCoursePrices() {
                             ×
                           </button>
                         </span>
+                        <PriceColHandle onDown={(e) => resizeCol(`x${c.id}`, 72, e)} />
                       </th>
                     ))}
                   </tr>
