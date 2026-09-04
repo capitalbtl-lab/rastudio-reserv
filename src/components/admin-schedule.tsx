@@ -3410,6 +3410,14 @@ export function AdminSchedule() {
                       })()}
                     </label>
                     </div>
+                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      Примечания
+                      <input value={detail.remarks} onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                    </label>
+                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      Описание
+                      <input value={detail.description} onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                    </label>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:col-span-2 md:grid-cols-5">
                       <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                         Возраст
@@ -3539,17 +3547,9 @@ export function AdminSchedule() {
                       </select>
                     </label>
                     <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
-                      Описание
-                      <input value={detail.description} onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
-                    </label>
-                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                       Хэштеги
                       <span className="ml-1 font-normal normal-case tracking-normal text-muted">не для привязок</span>
                       <input value={detail.hashtags} onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
-                    </label>
-                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
-                      Примечания
-                      <input value={detail.remarks} onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                     </label>
                     <div className="flex flex-wrap items-end gap-2 md:col-span-2 md:flex-nowrap">
                       <label className="block shrink-0 text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
