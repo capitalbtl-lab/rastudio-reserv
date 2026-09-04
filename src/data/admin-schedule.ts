@@ -260,7 +260,7 @@ async function loadBranchActiveTariffs(
   request: typeof import("./alfacrm").request,
   t: string,
   branch: number,
-  catalog?: { id: number; name: string }[],
+  catalog?: { id: number; name: string; archive?: boolean; price?: number }[],
 ): Promise<BranchTariffMap> {
   const bag = globalThis as { __raCTar?: Map<number, { at: number; items: Record<string, unknown>[] }> };
   if (!bag.__raCTar) bag.__raCTar = new Map();
@@ -1943,7 +1943,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       }
       if (data.onlyActive) {
         const { customerTariffIndexPath, activeCustomerTariffs, keepPupilsWithActiveTariffs, withCatalogNames, formatTariffNames } = await import("./pupil-tariffs");
-        const catalog = tariffs.map((x) => ({ id: x.id, name: x.name }));
+        const catalog = tariffs.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price }));
         const byCustomer = new Map<string, { id: number; tariffId: number; name: string }[]>();
         const branches = [...new Set(items.map((row) => row.branchId))];
         for (const branch of branches) {

@@ -249,6 +249,26 @@ describe("мастер абонементов учеников", () => {
     assert.equal(list[0].name, "живой");
   });
 
+  it("архивный шаблон абонемента в изменении не предлагается", () => {
+    const list = activeCustomerTariffs(
+      [
+        { id: 1, customer_id: 8, tariff_id: 385 },
+        { id: 2, customer_id: 8, tariff_id: 177 },
+        { id: 3, customer_id: 8, tariff_id: 385, is_archive: 1 },
+        { id: 4, customer_id: 8, tariff_id: 174 },
+      ],
+      [
+        { id: 385, name: "Абонемент 3850/4/90 Скульптурная студия", archive: false },
+        { id: 177, name: "старый", archive: true },
+      ],
+    );
+    assert.deepEqual(
+      list.map((x) => x.tariffId),
+      [385],
+    );
+    assert.equal(list[0].name, "Абонемент 3850/4/90 Скульптурная студия");
+  });
+
   it("имя абонемента берётся из каталога, повтор схлопывается", () => {
     assert.equal(customerTariffLabel({ tariff_id: 386 }, [{ id: 386, name: "Абонемент 3850/4/90" }]), "Абонемент 3850/4/90");
     assert.equal(customerTariffLabel({ tariff_id: 9 }), "абонемент #9");

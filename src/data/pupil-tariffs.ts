@@ -190,13 +190,21 @@ export function tariffDateToIso(raw: string) {
   return "";
 }
 
-/** Живой = не удалён в CRM. Пустая/нулевая «до» — это бессрочный, не просроченный. */
-export function customerTariffLive(it: Record<string, unknown>) {
-  if (Number(it.removed || it.is_archived || 0) === 1) return false;
-  return Number(it.id) > 0;
+export type CatalogTariff = { id: number; name: string; archive?: boolean; price?: number };
+
+/** Живой: не удалён в CRM и шаблон абонемента не в архиве каталога. #177 и старые ID отсекаем. */
+export function customerTariffLive(it: Record<string, unknown>, catalog?: CatalogTariff[]) {
+  if (Number(it.removed || it.is_archived || it.is_archive || 0) === 1) return false;
+  if (!(Number(it.id) > 0)) return false;
+  const tariffId = Number(it.tariff_id || it.tariffId || 0);
+  if (!tariffId) return false;
+  if (!catalog?.length) return true;
+  const hit = catalog.find((t) => t.id === tariffId);
+  if (!hit || hit.archive) return false;
+  return true;
 }
 
-export function customerTariffLabel(it: Record<string, unknown>, catalog?: { id: number; name: string }[]) {
+export function customerTariffLabel(it: Record<string, unknown>, catalog?: CatalogTariff[]) {
   const tariffId = Number(it.tariff_id || it.tariffId || 0);
   const raw = String(it.tariff_name || it.tariffName || "").trim();
   if (raw && !/^абонемент$/i.test(raw)) return raw;
@@ -207,13 +215,13 @@ export function customerTariffLabel(it: Record<string, unknown>, catalog?: { id:
 
 export function withCatalogNames(
   list: { id: number; tariffId: number; name: string }[],
-  catalog?: { id: number; name: string }[],
+  catalog?: CatalogTariff[],
 ) {
   if (!catalog?.length) return list;
   return list.map((t) => {
-    const hit = catalog.find((c) => c.id === t.tariffId);
+    const hit = catalog.find((c) => c.id === t.tariffId && !c.archive);
     if (hit?.name) return { ...t, name: hit.name };
-    if (t.name && !/^абонемент$/i.test(t.name)) return t;
+    if (t.name && !/^абонемент(#\s*\d+)?$/i.test(t.name)) return t;
     return { ...t, name: t.tariffId ? `абонемент #${t.tariffId}` : "абонемент" };
   });
 }
@@ -234,9 +242,9 @@ export function formatTariffNames(list: { name: string }[] | undefined) {
 
 export function activeCustomerTariffs(
   items: Record<string, unknown>[] | undefined,
-  catalog?: { id: number; name: string }[],
+  catalog?: CatalogTariff[],
 ) {
-  return (items || []).filter((it) => customerTariffLive(it)).map((it) => ({
+  return (items || []).filter((it) => customerTariffLive(it, catalog)).map((it) => ({
     id: Number(it.id),
     tariffId: Number(it.tariff_id || it.tariffId || 0),
     name: customerTariffLabel(it, catalog),
@@ -246,11 +254,11 @@ export function activeCustomerTariffs(
 /** Индекс живых абонементов филиала: customer_id → список. Один index вместо запроса на каждого ученика. */
 export function indexActiveTariffsByCustomer(
   items: Record<string, unknown>[] | undefined,
-  catalog?: { id: number; name: string }[],
+  catalog?: CatalogTariff[],
 ) {
   const map = new Map<number, { id: number; tariffId: number; name: string }[]>();
   for (const it of items || []) {
-    if (!customerTariffLive(it)) continue;
+    if (!customerTariffLive(it, catalog)) continue;
     const id = Number(it.id) || 0;
     const customerId = Number(it.customer_id ?? it.customerId ?? 0);
     if (!id || !customerId) continue;
