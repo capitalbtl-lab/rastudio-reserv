@@ -1,76 +1,10 @@
-"use client";
-
-import { useState, type FormEvent } from "react";
-import type { CmsSession } from "@/data/cms";
-import { sendTrial, TRIAL_BRANCHES } from "@/data/trial";
-import { trialCourseForPath } from "@/data/trial";
-import { SITE_BRANCHES } from "@/data/site-signup-core";
-import { freePlaces, formatTrialDate, isoDate, nextLessonDate, tidyGroupName, whenShort } from "@/lib/trial-slot";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-
-const field =
-  "mt-1.5 h-11 w-full rounded-xl bg-bg px-3.5 text-sm shadow-[var(--shadow-border)] outline-none focus:ring-2 focus:ring-primary/30";
-
-export function TrialModal({
-  session,
-  path = "",
-  mode = "trial",
-  onClose,
-}: {
-  session: CmsSession;
-  path?: string;
-  mode?: "trial" | "group";
-  onClose: () => void;
-}) {
-  const next = nextLessonDate(session);
-  const seats = freePlaces(session);
-  const branchId = String(session.branchId || 2);
-  const branchLabel =
-    SITE_BRANCHES.find((b) => String(b.id) === branchId)?.label ||
-    TRIAL_BRANCHES.find((b) => b.id === branchId)?.name ||
-    session.branch;
-  const [pending, setPending] = useState(false);
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState("");
-
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError("");
-    setPending(true);
-    const form = new FormData(e.currentTarget);
-    try {
-      const res = await sendTrial({
-        data: {
-          parent: String(form.get("parent") || ""),
-          child: String(form.get("child") || ""),
-          dob: String(form.get("dob") || ""),
-          phone: String(form.get("phone") || ""),
-          email: String(form.get("email") || ""),
-          course: session.courseId || trialCourseForPath(path),
-          branch: branchId,
-          gid: String(session.groupId || ""),
-          groupName: session.group,
-          date: next ? isoDate(next) : "",
-          time: session.timeFrom || "",
-          kind: mode,
-        },
-      });
-      if (res.ok) setDone(true);
-      else setError(res.error || "Не отправилось.");
-    } catch {
-      setError("Не удалось отправить. Позвоните нам.");
-    } finally {
-      setPending(false);
-    }
-  }
-
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-3 sm:items-center" onClick={onClose}>
       <div
-        className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-[1.6rem] bg-surface p-5 shadow-2xl"
+        className="flex max-h-[min(92dvh,40rem)] w-full max-w-lg flex-col overflow-hidden rounded-[1.6rem] bg-surface shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
         <p className="kicker text-primary">{mode === "group" ? "Группа" : "Пробное занятие"}</p>
         <h2 className="display mt-1 text-2xl">{mode === "group" ? "Запись в группу" : "Запись на пробное"}</h2>
         <div className="mt-3 rounded-2xl bg-bg px-3.5 py-3 text-sm">
@@ -102,14 +36,16 @@ export function TrialModal({
               <span className="text-[0.7rem] font-semibold uppercase tracking-wider text-muted">Дата рождения</span>
               <input name="dob" type="date" required className={field} />
             </label>
-            <label>
-              <span className="text-[0.7rem] font-semibold uppercase tracking-wider text-muted">Телефон</span>
-              <input name="phone" type="tel" required autoComplete="tel" className={field} />
-            </label>
-            <label>
-              <span className="text-[0.7rem] font-semibold uppercase tracking-wider text-muted">Почта</span>
-              <input name="email" type="email" autoComplete="email" className={field} />
-            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label>
+                <span className="text-[0.7rem] font-semibold uppercase tracking-wider text-muted">Телефон</span>
+                <input name="phone" type="tel" required autoComplete="tel" className={field} />
+              </label>
+              <label>
+                <span className="text-[0.7rem] font-semibold uppercase tracking-wider text-muted">Почта</span>
+                <input name="email" type="email" autoComplete="email" className={field} />
+              </label>
+            </div>
             <label>
               <span className="text-[0.7rem] font-semibold uppercase tracking-wider text-muted">Филиал</span>
               <input readOnly value={branchLabel} className={cn(field, "bg-white text-fg")} />
@@ -125,7 +61,7 @@ export function TrialModal({
             </div>
           </form>
         )}
+        </div>
       </div>
     </div>
   );
-}
