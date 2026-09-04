@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
 import type { CrmTariff } from "./crm-tariffs.ts";
 
@@ -369,6 +369,13 @@ describe("мастер абонементов учеников", () => {
     const list = uniqueLiveGroups([slot({ taken: 0, takenStudy: 3, takenLead: 2 })]);
     assert.equal(list[0].taken, 5);
     assert.equal(groupHasBoundPupils(list[0].taken, 0, 0), true);
+  });
+
+  it("состав группы — quantity с карточки CRM, не group_ids клиента", () => {
+    assert.equal(crmGroupQuantity({ quantity: 3, limit: 8 }), 3);
+    assert.equal(crmGroupQuantity({ cnt: 3 }), 3);
+    assert.equal(crmGroupQuantity({ group_ids: [647] }), 0);
+    assert.equal(Math.max(0, crmGroupQuantity({ quantity: 3 })), 3);
   });
 
   it("удаление схлопывает человека из двух групп в одну строку", () => {

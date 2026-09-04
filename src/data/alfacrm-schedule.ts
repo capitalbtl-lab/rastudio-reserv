@@ -30,6 +30,9 @@ type Group = {
   name: string;
   note?: string;
   limit?: number;
+  quantity?: number;
+  cnt?: number;
+  customers_count?: number;
   status_id?: number;
   teacher_ids?: Array<number | string>;
   branch_ids?: number[];
@@ -436,7 +439,8 @@ async function loadCrm(force = false): Promise<CacheBag> {
       if (!groupsById.has(g.id)) groupsById.set(g.id, { g, fromBranch: branch });
       const study = roster.study.get(g.id) || 0;
       const lead = roster.lead.get(g.id) || 0;
-      seats.set(seatKey(branch, g.id), { limit: Number(g.limit) || 0, taken: study + lead, study, lead });
+      const qty = Number(g.quantity ?? g.cnt ?? g.customers_count ?? 0) || 0;
+      seats.set(seatKey(branch, g.id), { limit: Number(g.limit) || 0, taken: Math.max(qty, study + lead), study: study || qty, lead });
     }
     lessons.push(...(await paged<Lesson>(`/v2api/${branch}/regular-lesson/index`, t)));
   }

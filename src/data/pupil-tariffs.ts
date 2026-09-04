@@ -56,6 +56,13 @@ export function assignEtaMin(n: number) {
   return Math.max(1, Math.ceil(ms / 60000));
 }
 
+/** Состав группы в CRM: quantity / limit на карточке, не customer.group_ids. */
+export function crmGroupQuantity(g: Record<string, unknown> | { quantity?: unknown; cnt?: unknown; customers_count?: unknown } | null | undefined) {
+  if (!g || typeof g !== "object") return 0;
+  const rec = g as Record<string, unknown>;
+  return Number(rec.quantity ?? rec.cnt ?? rec.customers_count ?? 0) || 0;
+}
+
 export function uniqueLiveGroups(slots: CrmSlot[]): PupilGroup[] {
   const seen = new Set<string>();
   const out: PupilGroup[] = [];
