@@ -1656,16 +1656,13 @@ export function AdminSchedule() {
         courses: [{ course: "Без курса", courseId: "other#loose", href: "", items: orphan }],
       });
     }
+    if (onlyMismatch) {
+      return rows
+        .map((sch) => ({ ...sch, courses: sch.courses.filter((c) => c.items.length) }))
+        .filter((sch) => sch.courses.length);
+    }
     return rows;
   }, [slots, branchFilter, onlyMismatch, siteTree]);
-
-  useEffect(() => {
-    if (!onlyMismatch) return;
-    const t = window.setTimeout(() => {
-      document.getElementById("ra-mismatch-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 40);
-    return () => window.clearTimeout(t);
-  }, [onlyMismatch, tree.length]);
 
   const mismatchCount = useMemo(() => {
     let hard = 0;
@@ -1682,6 +1679,16 @@ export function AdminSchedule() {
     }
     return { hard, soft, all: hard + soft, lines, ids };
   }, [slots]);
+
+  useEffect(() => {
+    if (!onlyMismatch) return;
+    const t = window.setTimeout(() => {
+      const first = mismatchCount.ids[0];
+      const el = (first && document.getElementById(`ra-slot-${first}`)) || document.getElementById("ra-mismatch-list");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [onlyMismatch, tree.length, mismatchCount.ids]);
 
   const branchOpts = useMemo(() => {
     const main = [
@@ -2530,6 +2537,8 @@ export function AdminSchedule() {
                   showPane("groups");
                   if (next) {
                     setOpenAll(true);
+                    setOpenSchool("");
+                    setOpenCourse("");
                     setAddOpen(false);
                   }
                 }}
