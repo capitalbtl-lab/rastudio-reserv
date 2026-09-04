@@ -175,8 +175,8 @@ export function AdminCoursePrices() {
   return (
     <section className="mt-4 space-y-4">
       <AdminSectionHead section="prices" title="Цены курсов">
-        <p className="mt-1 max-w-2xl text-sm text-muted">
-          Колонка «Все» на сайте. КБМ, ТМХ и другие корпоративные клиенты — отдельные столбцы. Минуты и «в неделю» сами не подтягиваются: кнопка «Подгрузить из групп».
+        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
+          Базовый прайс студии. Администратор заполняет его сам по текущим ценам. Колонка «Все» — цена на сайте, в расписании и в абонементах (по courseId курса). КБМ, ТМХ и другие клиенты считаются формулой от «Все». Минуты и «в неделю» можно подтянуть из групп — это длительность, не цена.
         </p>
       </AdminSectionHead>
       {err ? <p className="text-sm text-primary">{err}</p> : null}
@@ -239,13 +239,16 @@ export function AdminCoursePrices() {
 
       <div className="overflow-hidden rounded-2xl bg-surface ring-1 ring-black/8">
         <button type="button" onClick={() => setFormulasOpen((v) => !v)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left">
-          <span className="text-sm font-semibold">Формулы корпоративных клиентов и правка группой</span>
-          <InfoTip text="Наценка суммой: 500 → корпоративная = публичная + 500 ₽. Умножение: 90 → 90% от «Все». Сначала сохраните формулу, потом «Пересчитать»." />
+          <span className="text-sm font-semibold">Формула формирования цены</span>
+          <InfoTip text="Продвинутый режим. Наценка суммой: 500 → корпоративная = «Все» + 500 ₽. Умножение: 90 → 90% от «Все». Сначала «Сохранить», потом «Пересчитать». Ниже — правка группой по школе." />
           <span className="ml-auto text-[0.72rem] font-semibold text-muted">{formulasOpen ? "Скрыть" : "Показать"}</span>
           <span className={cn("text-muted transition-transform", formulasOpen ? "rotate-180" : "")}>▾</span>
         </button>
         {formulasOpen ? (
           <div className="space-y-3 border-t border-black/6 px-4 pb-3 pt-3">
+            <p className="text-[0.78rem] leading-relaxed text-muted">
+              Продвинутый режим: как из колонки «Все» получаются цены КБМ, ТМХ и других клиентов, и правка группой по школе. Саму колонку «Все» администратор ставит вручную.
+            </p>
             <div className="flex flex-wrap items-end gap-2">
               {(["kbm", "tmx"] as const).map((who) => (
                 <div key={who} className="flex flex-wrap items-end gap-2 rounded-xl bg-surface-2 px-2.5 py-2">
