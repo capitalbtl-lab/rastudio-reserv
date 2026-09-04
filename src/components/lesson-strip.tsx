@@ -75,12 +75,18 @@ function LessonTile({
       )}
     >
       {isToday && !cancelled ? (
-        <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/90">сегодня</span>
+        <>
+          <span className="text-[0.83rem] font-semibold tabular-nums text-white">{d.getDate()}</span>
+          <span className="text-[0.6rem] font-medium text-white/85">{MONTHS_SHORT[d.getMonth()]}</span>
+          <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/90">сегодня</span>
+        </>
       ) : (
-        <span className={cn("text-[0.6rem] font-semibold uppercase tracking-wider", cancelled ? "text-neutral-400" : "text-neutral-500")}>{WD[(d.getDay() + 6) % 7]}</span>
+        <>
+          <span className={cn("text-[0.6rem] font-semibold uppercase tracking-wider", cancelled ? "text-neutral-400" : "text-neutral-500")}>{WD[(d.getDay() + 6) % 7]}</span>
+          <span className="text-[0.83rem] font-semibold tabular-nums">{d.getDate()}</span>
+          <span className={cn("text-[0.6rem] font-medium", cancelled ? "text-neutral-400" : "text-neutral-500")}>{MONTHS_SHORT[d.getMonth()]}</span>
+        </>
       )}
-      <span className={cn("text-[0.83rem] font-semibold tabular-nums", isToday && !cancelled && "text-white")}>{d.getDate()}</span>
-      <span className={cn("text-[0.6rem] font-medium", isToday && !cancelled ? "text-white/85" : "text-neutral-500")}>{MONTHS_SHORT[d.getMonth()]}</span>
     </div>
   );
 }

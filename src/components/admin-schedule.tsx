@@ -3553,8 +3553,12 @@ export function AdminSchedule() {
                       </h2>
                     )}
                     <p className="mt-1 text-[0.78rem] text-muted">
-                      № {detail.groupId || "на сайте"} · {detail.slot.city}, {detail.slot.branch}
-                      <span className="ml-2">Учится {detail.slot.takenStudy ?? "—"} · лиды {detail.slot.takenLead ?? "—"} · всего {detail.slot.taken}</span>
+                      <span className="font-bold text-fg">№ {detail.groupId || "на сайте"}</span>
+                      {" · "}
+                      {detail.slot.city}, {detail.slot.branch}
+                    </p>
+                    <p className="mt-0.5 whitespace-nowrap text-[0.78rem] text-muted">
+                      Учится {detail.slot.takenStudy ?? "—"} · лиды {detail.slot.takenLead ?? "—"} · всего {detail.slot.taken}
                     </p>
                   </div>
                   <div className="ml-auto flex shrink-0 items-start gap-1.5">
