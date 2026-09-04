@@ -260,24 +260,27 @@ async function loadBranchActiveTariffs(
   request: typeof import("./alfacrm").request,
   t: string,
   branch: number,
+  catalog?: { id: number; name: string }[],
 ): Promise<BranchTariffMap> {
-  const bag = globalThis as { __raCTar?: Map<number, { at: number; byCustomer: BranchTariffMap }> };
+  const bag = globalThis as { __raCTar?: Map<number, { at: number; items: Record<string, unknown>[] }> };
   if (!bag.__raCTar) bag.__raCTar = new Map();
   const hit = bag.__raCTar.get(branch);
-  if (hit && Date.now() - hit.at < 8 * 60 * 1000) return hit.byCustomer;
-  const { pagedIndex } = await import("./alfacrm");
-  const { indexActiveTariffsByCustomer, customerTariffIndexBranchPath } = await import("./pupil-tariffs");
-  const items: Record<string, unknown>[] = [];
-  await pagedIndex(
-    customerTariffIndexBranchPath(branch),
-    { removed: 0 },
-    t,
-    (it: Record<string, unknown>) => items.push(it),
-    { pageSize: 50, pages: 30 },
-  );
-  const byCustomer = indexActiveTariffsByCustomer(items);
-  if (byCustomer.size) bag.__raCTar.set(branch, { at: Date.now(), byCustomer });
-  return byCustomer;
+  let items = hit && Date.now() - hit.at < 8 * 60 * 1000 ? hit.items : null;
+  if (!items) {
+    const { pagedIndex } = await import("./alfacrm");
+    const { customerTariffIndexBranchPath } = await import("./pupil-tariffs");
+    items = [];
+    await pagedIndex(
+      customerTariffIndexBranchPath(branch),
+      { removed: 0 },
+      t,
+      (it: Record<string, unknown>) => items!.push(it),
+      { pageSize: 50, pages: 30 },
+    );
+    if (items.length) bag.__raCTar.set(branch, { at: Date.now(), items });
+  }
+  const { indexActiveTariffsByCustomer } = await import("./pupil-tariffs");
+  return indexActiveTariffsByCustomer(items, catalog);
 }
 
 async function loadCustomerRaw(
@@ -1939,11 +1942,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
         }
       }
       if (data.onlyActive) {
-        const { customerTariffIndexPath, activeCustomerTariffs, keepPupilsWithActiveTariffs } = await import("./pupil-tariffs");
+        const { customerTariffIndexPath, activeCustomerTariffs, keepPupilsWithActiveTariffs, withCatalogNames, formatTariffNames } = await import("./pupil-tariffs");
+        const catalog = tariffs.map((x) => ({ id: x.id, name: x.name }));
         const byCustomer = new Map<string, { id: number; tariffId: number; name: string }[]>();
         const branches = [...new Set(items.map((row) => row.branchId))];
         for (const branch of branches) {
-          const bulk = await loadBranchActiveTariffs(request, t, branch);
+          const bulk = await loadBranchActiveTariffs(request, t, branch, catalog);
           if (bulk.size) {
             for (const [cid, list] of bulk) byCustomer.set(`${branch}:${cid}`, list);
             continue;
@@ -1957,13 +1961,19 @@ export const adminSchedule = createServerFn({ method: "POST" })
               { page: 0, pageSize: 50, customer_id: row.customerId },
               t,
             ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-            byCustomer.set(key, activeCustomerTariffs(json.items));
+            byCustomer.set(key, activeCustomerTariffs(json.items, catalog));
           }
         }
-        const kept = keepPupilsWithActiveTariffs(items, byCustomer).map((row) => ({
-          ...row,
-          tariffName: row.activeTariffs.map((x) => x.name).filter(Boolean).join(", ") || row.tariffName,
-        }));
+        const kept = keepPupilsWithActiveTariffs(items, byCustomer).map((row) => {
+          const activeTariffs = withCatalogNames(row.activeTariffs, catalog);
+          const offer = activeTariffs[0] && catalog.length ? tariffs.find((x) => x.id === activeTariffs[0].tariffId) : null;
+          return {
+            ...row,
+            activeTariffs,
+            tariffName: formatTariffNames(activeTariffs) || row.tariffName,
+            price: offer?.price || row.price,
+          };
+        });
         return { ok: true as const, items: kept, byGroup, total: kept.length, onlyActive: true };
       }
       return { ok: true as const, items, byGroup, total: items.length };

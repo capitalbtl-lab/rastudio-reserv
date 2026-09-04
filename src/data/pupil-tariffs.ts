@@ -172,28 +172,85 @@ export function customerTariffDeletePath(branch: number, tariffRowId: number, cu
   return `/v2api/${Number(branch) || 1}/customer-tariff/delete?id=${Number(tariffRowId) || 0}&customer_id=${Number(customerId) || 0}`;
 }
 
-export function activeCustomerTariffs(items: Record<string, unknown>[] | undefined) {
-  return (items || [])
-    .filter((it) => Number(it.removed || it.is_archived || 0) !== 1 && Number(it.id) > 0)
-    .map((it) => ({
-      id: Number(it.id),
-      tariffId: Number(it.tariff_id || it.tariffId || 0),
-      name: String(it.tariff_name || it.name || "абонемент"),
-    }));
+export function tariffDateToIso(raw: string) {
+  const s = String(raw || "").trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
+  return "";
+}
+
+export function customerTariffLive(it: Record<string, unknown>, today = todayIso()) {
+  if (Number(it.removed || it.is_archived || 0) === 1) return false;
+  if (!(Number(it.id) > 0)) return false;
+  const end = tariffDateToIso(String(it.e_date || it.eDate || ""));
+  if (!end) return true;
+  return end >= today;
+}
+
+export function customerTariffLabel(it: Record<string, unknown>, catalog?: { id: number; name: string }[]) {
+  const tariffId = Number(it.tariff_id || it.tariffId || 0);
+  const raw = String(it.tariff_name || it.tariffName || "").trim();
+  if (raw && !/^абонемент$/i.test(raw)) return raw;
+  const hit = catalog?.find((t) => t.id === tariffId);
+  if (hit?.name) return hit.name;
+  return tariffId ? `абонемент #${tariffId}` : "абонемент";
+}
+
+export function withCatalogNames(
+  list: { id: number; tariffId: number; name: string }[],
+  catalog?: { id: number; name: string }[],
+) {
+  if (!catalog?.length) return list;
+  return list.map((t) => {
+    const hit = catalog.find((c) => c.id === t.tariffId);
+    if (hit?.name) return { ...t, name: hit.name };
+    if (t.name && !/^абонемент$/i.test(t.name)) return t;
+    return { ...t, name: t.tariffId ? `абонемент #${t.tariffId}` : "абонемент" };
+  });
+}
+
+export function formatTariffNames(list: { name: string }[] | undefined) {
+  const order: string[] = [];
+  const count = new Map<string, number>();
+  for (const t of list || []) {
+    const name = String(t.name || "").trim() || "абонемент";
+    if (!count.has(name)) order.push(name);
+    count.set(name, (count.get(name) || 0) + 1);
+  }
+  return order.map((n) => {
+    const c = count.get(n) || 1;
+    return c > 1 ? `${n} ×${c}` : n;
+  }).join(", ");
+}
+
+export function activeCustomerTariffs(
+  items: Record<string, unknown>[] | undefined,
+  catalog?: { id: number; name: string }[],
+) {
+  return (items || []).filter((it) => customerTariffLive(it)).map((it) => ({
+    id: Number(it.id),
+    tariffId: Number(it.tariff_id || it.tariffId || 0),
+    name: customerTariffLabel(it, catalog),
+  }));
 }
 
 /** Индекс живых абонементов филиала: customer_id → список. Один index вместо запроса на каждого ученика. */
-export function indexActiveTariffsByCustomer(items: Record<string, unknown>[] | undefined) {
+export function indexActiveTariffsByCustomer(
+  items: Record<string, unknown>[] | undefined,
+  catalog?: { id: number; name: string }[],
+) {
   const map = new Map<number, { id: number; tariffId: number; name: string }[]>();
   for (const it of items || []) {
-    if (Number(it.removed || it.is_archived || 0) === 1) continue;
+    if (!customerTariffLive(it)) continue;
     const id = Number(it.id) || 0;
     const customerId = Number(it.customer_id ?? it.customerId ?? 0);
     if (!id || !customerId) continue;
     const row = {
       id,
       tariffId: Number(it.tariff_id || it.tariffId || 0),
-      name: String(it.tariff_name || it.name || "абонемент"),
+      name: customerTariffLabel(it, catalog),
     };
     const list = map.get(customerId) || [];
     list.push(row);

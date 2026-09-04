@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
 import type { CrmTariff } from "./crm-tariffs.ts";
 
@@ -232,16 +232,38 @@ describe("мастер абонементов учеников", () => {
   });
 
   it("закрыть и удалить берут только живые абонементы", () => {
-    const list = activeCustomerTariffs([
-      { id: 1, tariff_id: 10, name: "живой" },
-      { id: 2, tariff_id: 11, removed: 1 },
-      { id: 0, tariff_id: 12 },
-      { id: 3, is_archived: 1 },
-    ]);
+    const list = activeCustomerTariffs(
+      [
+        { id: 1, tariff_id: 10, tariff_name: "живой" },
+        { id: 2, tariff_id: 11, removed: 1 },
+        { id: 0, tariff_id: 12 },
+        { id: 3, is_archived: 1 },
+        { id: 4, tariff_id: 10, e_date: "01.01.2020" },
+      ],
+      [{ id: 10, name: "Абонемент 3850" }],
+    );
     assert.deepEqual(
       list.map((x) => x.id),
       [1],
     );
+    assert.equal(list[0].name, "живой");
+  });
+
+  it("имя абонемента берётся из каталога, повтор схлопывается", () => {
+    assert.equal(customerTariffLabel({ tariff_id: 386 }, [{ id: 386, name: "Абонемент 3850/4/90" }]), "Абонемент 3850/4/90");
+    assert.equal(customerTariffLabel({ tariff_id: 9 }), "абонемент #9");
+    const named = withCatalogNames(
+      [
+        { id: 1, tariffId: 386, name: "абонемент" },
+        { id: 2, tariffId: 386, name: "абонемент" },
+        { id: 3, tariffId: 400, name: "абонемент" },
+      ],
+      [
+        { id: 386, name: "Абонемент 3850/4/90" },
+        { id: 400, name: "Абонемент 2950" },
+      ],
+    );
+    assert.equal(formatTariffNames(named), "Абонемент 3850/4/90 ×2, Абонемент 2950");
   });
 
   it("изменение и удаление оставляют только детей с живым абонементом", () => {
@@ -268,13 +290,20 @@ describe("мастер абонементов учеников", () => {
 
   it("чтение абонементов идёт пачками по филиалу, не по каждому ученику", () => {
     assert.equal(PLAN_GROUP_CHUNK, 6);
-    const map = indexActiveTariffsByCustomer([
-      { id: 1, customer_id: 10, tariff_id: 5, tariff_name: "A" },
-      { id: 2, customer_id: 10, tariff_id: 6, name: "B" },
-      { id: 3, customer_id: 11, removed: 1 },
-      { id: 4, customerId: 12, tariffId: 7, name: "C" },
-      { id: 5, customer_id: 0, tariff_id: 8 },
-    ]);
+    const map = indexActiveTariffsByCustomer(
+      [
+        { id: 1, customer_id: 10, tariff_id: 5, tariff_name: "A" },
+        { id: 2, customer_id: 10, tariff_id: 6, tariff_name: "B" },
+        { id: 3, customer_id: 11, removed: 1 },
+        { id: 4, customerId: 12, tariffId: 7, tariff_name: "C" },
+        { id: 5, customer_id: 0, tariff_id: 8 },
+      ],
+      [
+        { id: 5, name: "A" },
+        { id: 6, name: "B" },
+        { id: 7, name: "C" },
+      ],
+    );
     assert.equal(map.get(10)?.length, 2);
     assert.equal(map.has(11), false);
     assert.equal(map.get(12)?.[0].name, "C");

@@ -577,11 +577,6 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                     <span className="mt-0.5 block text-[0.7rem] text-muted">
                       {it.groupName}
                       {it.school ? ` · ${it.school}` : ""}
-                      {path !== "add" && it.activeTariffs?.length
-                        ? ` · ${it.activeTariffs.map((t) => t.name).join(", ")}`
-                        : path !== "add" && it.tariffName
-                          ? ` · ${it.tariffName}`
-                          : ""}
                     </span>
                   </span>
                   <span className="shrink-0 text-right text-[0.72rem] text-muted">
