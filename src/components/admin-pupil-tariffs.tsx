@@ -130,7 +130,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [calcType, setCalcType] = useState(1);
   const [skipExisting, setSkipExisting] = useState(true);
   const [job, setJob] = useState<"assign" | "close" | "delete">("assign");
-  const [path, setPath] = useState<"add" | "remove">("add");
+  const [path, setPath] = useState<"add" | "change" | "remove">("add");
   const [closeDate, setCloseDate] = useState(todayIso);
   const [result, setResult] = useState<{ done: number; skipped: number; failed: { name: string; error: string }[] } | null>(null);
   const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
@@ -235,7 +235,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       if (ok) setStep(2);
       return;
     }
-    if (step === 2 && path === "remove") {
+    if (step === 2 && path !== "add") {
       setStep(3);
       return;
     }
@@ -355,7 +355,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         <div>
           <p className="font-display text-xl text-primary">Мастер абонементов учеников</p>
           <p className="mt-0.5 text-sm text-muted">
-            Режим сверху, шаги под ним. Добавление выдаёт абонементы, завершение закрывает текущие.
+            Режим сверху: добавить, изменить срок или удалить текущие.
           </p>
         </div>
         <button type="button" className="text-sm text-muted hover:text-fg" onClick={onClose}>
@@ -364,7 +364,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <span className="shrink-0 text-sm font-medium text-muted">Выбор режима работы мастера</span>
-        <div className="grid w-[20rem] grid-cols-2 gap-2">
+        <div className="grid w-[30rem] max-w-full grid-cols-3 gap-2">
           <button
             type="button"
             onClick={() => {
@@ -380,14 +380,26 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={() => {
-              setPath("remove");
+              setPath("change");
               setJob("close");
+              setResult(null);
+              setStep(1);
+            }}
+            className={cn("h-9 w-full rounded-[8px] text-sm font-semibold", path === "change" ? "bg-primary text-white" : "bg-surface-2 text-muted")}
+          >
+            Изменение
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPath("remove");
+              setJob("delete");
               setResult(null);
               setStep(1);
             }}
             className={cn("h-9 w-full rounded-[8px] text-sm font-semibold", path === "remove" ? "bg-primary text-white" : "bg-surface-2 text-muted")}
           >
-            Завершение
+            Удаление
           </button>
         </div>
       </div>
@@ -406,7 +418,9 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           <p className="text-sm text-muted">
             {path === "add"
               ? "Выдать ученикам новые абонементы."
-              : "Снять текущие абонементы: завершить выбранной датой или удалить из CRM."}
+              : path === "change"
+                ? "Закрыть текущие абонементы выбранной датой. CRM пересчитает остаток."
+                : "Удалить текущие абонементы из AlfaCRM. Это необратимо."}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <select value={school} onChange={(e) => setSchool(e.target.value)} className="h-10 rounded-xl bg-surface-2 px-3 text-sm ring-1 ring-black/10">
@@ -718,7 +732,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         </div>
       ) : null}
 
-      {(path === "add" && step === 4) || (path === "remove" && step === 3) ? (
+      {(path === "add" && step === 4) || (path !== "add" && step === 3) ? (
         <div className="mt-4 space-y-3">
           {result ? (
             <div className="rounded-2xl bg-emerald-50 p-4 text-sm ring-1 ring-emerald-200">
@@ -738,40 +752,19 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             </div>
           ) : (
             <>
-              <div className="flex flex-wrap gap-2">
-                {path === "add" ? (
-                  <span className="rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-white">Выдать новые</span>
-                ) : (
-                  (
-                    [
-                      ["close", "Завершить датой"],
-                      ["delete", "Удалить из CRM"],
-                    ] as const
-                  ).map(([id, label]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setJob(id)}
-                      className={cn("rounded-full px-3 py-1.5 text-sm font-semibold", job === id ? "bg-primary text-white" : "bg-surface-2 text-muted")}
-                    >
-                      {label}
-                    </button>
-                  ))
-                )}
-              </div>
-              {path === "add" || job === "assign" ? (
+              {path === "add" ? (
                 <p className="text-sm text-muted">
                   Выдать {ready.length} абонементов с {date.split("-").reverse().join(".")}. По {ASSIGN_CHUNK} шт., около {assignEtaMin(ready.length)} мин. Дубликаты {skipExisting ? "пропустим" : "создадим ещё раз"}.
                 </p>
               ) : null}
-              {job === "close" ? (
+              {path === "change" ? (
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="text-muted">Текущие абонементы {selected.length} учеников закроются датой</span>
                   <input type="date" value={closeDate} onChange={(e) => setCloseDate(e.target.value)} className="h-9 rounded-[8px] bg-white px-2 text-sm ring-1 ring-black/10" />
                   <span className="text-muted">· CRM пересчитает остаток. Около {assignEtaMin(selected.length)} мин.</span>
                 </div>
               ) : null}
-              {job === "delete" ? (
+              {path === "remove" ? (
                 <p className="text-sm text-rose-800">
                   Текущие абонементы {selected.length} учеников удалятся из AlfaCRM. Это необратимо. Около {assignEtaMin(selected.length)} мин, с паузой.
                 </p>
