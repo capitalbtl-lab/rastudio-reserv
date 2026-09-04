@@ -29,7 +29,7 @@ import { AdminPublicSite } from "@/components/admin-public-site";
 import { CrmClientCard } from "@/components/crm-client-card";
 import { CrmGroupMembers } from "@/components/crm-group-card";
 import { GroupLessonStrip } from "@/components/lesson-strip";
-import { clientCardId, groupCardId } from "@/data/ids";
+import { clientCardId, groupCardId, CRM_BRANCH } from "@/data/ids";
 import { displayPersonName } from "@/data/client-display";
 
 type SiteTree = {
@@ -38,6 +38,14 @@ type SiteTree = {
   assign: Record<string, string>;
 };
 const EMPTY_TREE: SiteTree = { schools: [], courses: [], assign: {} };
+
+function branchTwoLine(s: { branchId?: number; city?: string; branch?: string }) {
+  const hit = CRM_BRANCH[Number(s.branchId) || 0];
+  const city = (s.city || hit?.name.split(",")[0] || "").trim();
+  const short = (hit?.short || s.branch || "").trim();
+  if (city && short && !short.includes(city)) return `${city}\n${short}`;
+  return short || city || "—";
+}
 
 function wantedSubjectName(s: CrmSlot) {
   return String(s.course || s.groupName || "")
@@ -2981,13 +2989,13 @@ export function AdminSchedule() {
                         <table className={cn("w-full text-left", groupsWide ? "text-[0.95rem]" : "text-[0.9rem]")}>
                           <colgroup>
                             <col className="w-10" />
-                            <col className={groupsWide ? "w-[22rem]" : undefined} />
+                            <col className={groupsWide ? "w-[18rem]" : undefined} />
                             <col className="w-[4.6rem]" />
                             <col className="w-[3.4rem]" />
                             <col className="w-[7.2rem]" />
                             <col className="w-[5.2rem]" />
-                            {groupsWide ? <col /> : null}
-                            <col className={groupsWide ? "w-72" : "w-36"} />
+                            <col className="w-[7.6rem]" />
+                            <col className={groupsWide ? "w-56" : "w-36"} />
                             <col className="w-[4.4rem]" />
                             <col className="w-[5.5rem]" />
                             <col className="w-10" />
@@ -3000,7 +3008,7 @@ export function AdminSchedule() {
                               <th className="px-1 py-2 text-center">День</th>
                               <th className="px-1 py-2 text-center">С / до</th>
                               <th className="px-1 py-2 text-center">×нед</th>
-                              {groupsWide ? <th className="px-2 py-2">Филиал</th> : null}
+                              <th className={cn("px-2 py-2", !groupsWide && "hidden lg:table-cell")}>Филиал</th>
                               <th className="whitespace-nowrap px-2 py-2">Педагог</th>
                               <th className="px-1 py-2 text-center">Места</th>
                               <th className="px-2 py-2">Кто учится</th>
@@ -3065,11 +3073,15 @@ export function AdminSchedule() {
                                     onAdd={(b) => addBeat(s, b)}
                                   />
                                 </td>
-                                {groupsWide ? (
-                                <td className="w-full px-2 py-1.5 align-middle text-[0.85rem] leading-snug text-muted">
-                                  <span className="block min-w-0">{[s.city, s.branch].filter(Boolean).join(", ")}</span>
+                                <td
+                                  className={cn(
+                                    "px-2 py-1.5 align-middle text-[0.78rem] leading-tight text-muted",
+                                    !groupsWide && "hidden lg:table-cell",
+                                  )}
+                                  title={[s.city, s.branch].filter(Boolean).join(", ")}
+                                >
+                                  <span className="line-clamp-2 whitespace-pre-line">{branchTwoLine(s)}</span>
                                 </td>
-                                ) : null}
                                 <td className="px-2 py-1.5 align-middle">
                                   <select
                                     value={s.teacher}
@@ -3116,7 +3128,7 @@ export function AdminSchedule() {
                               </tr>
                               {open ? (
                                 <tr className="bg-[#e8f3ff]">
-                                  <td colSpan={groupsWide ? 11 : 10} className="px-4 py-3 text-sm">
+                                  <td colSpan={11} className="px-4 py-3 text-sm">
                                     <p className="font-medium">Группа {s.groupId} · {s.groupName}</p>
                                     <p className="mt-1 text-muted">
                                       {s.age} · {s.dayLabel} {s.timeFrom && s.timeTo ? `${s.timeFrom}–${s.timeTo}` : "время не указано"} · {s.city}, {s.branch} · {s.teacher} · места {s.limit}/{s.taken}
