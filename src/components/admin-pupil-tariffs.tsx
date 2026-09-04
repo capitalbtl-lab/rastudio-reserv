@@ -142,7 +142,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [school, setSchool] = useState("");
   const [unbound, setUnbound] = useState(0);
   const [byBranch, setByBranch] = useState<Record<number, { total: number; withPeople: number; kids?: number }>>({});
-  const [kidsTotal, setKidsTotal] = useState(0);
+  const [countsLive, setCountsLive] = useState(false);
   const [branch, setBranch] = useState(0);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -200,7 +200,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           setSchools(res.schools || []);
           setUnbound(Number(res.unbound || 0));
           setByBranch(res.byBranch || {});
-          setKidsTotal(Number(res.kids || 0));
+          setCountsLive(false);
         } else setMsg(res.error || "Не удалось прочитать группы.");
         if (sub && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects);
       } catch (e) {
@@ -290,6 +290,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           return n ? { ...g, taken: n } : g;
         }),
       );
+      setCountsLive(true);
       setByGroup(grouped);
       setChosen(new Set(path === "add" ? list.filter((r) => r.status === "учится" || r.status === "лид").map(pupilKey) : list.map(pupilKey)));
       setSubjectOf(Object.fromEntries(groups.filter((g) => picked.has(g.key)).map((g) => [g.key, g.subjectId || 0])));
@@ -560,7 +561,6 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               ] as const
             ).map(([id, label]) => {
               const n = id ? byBranch[id]?.total || 0 : groups.length;
-              const people = id ? byBranch[id]?.kids || 0 : kidsTotal || groups.reduce((s, g) => s + (g.taken || 0), 0);
               return (
               <button
                 key={id}
@@ -571,7 +571,6 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                 {label}
                 <span className={cn("ml-1.5 text-[0.7rem]", branch === id ? "text-white/80" : "text-muted")}>
                   {n}
-                  {people ? ` · ${people} чел.` : ""}
                 </span>
               </button>
             );
@@ -627,7 +626,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                   </span>
                 </span>
                 <span className="shrink-0 text-right text-[0.72rem] text-muted">
-                  {g.taken ? `${g.taken}${g.limit ? `/${g.limit}` : ""}` : "состав →"}
+                  {countsLive && g.taken ? `${g.taken}${g.limit ? `/${g.limit}` : ""}` : "состав →"}
                 </span>
               </label>
             ))}

@@ -370,15 +370,17 @@ async function loadGroupMembers(
   t: string,
   branch: number,
   gid: number,
-  opts?: { skipArchive?: boolean },
+  opts?: { skipArchive?: boolean; fresh?: boolean },
 ) {
   const key = `${branch}:${gid}${opts?.skipArchive ? ":lite" : ""}`;
   const bag = globalThis as { __raGMem?: Map<string, { at: number; active: GroupMember[]; archive: GroupMember[] }> };
   if (!bag.__raGMem) bag.__raGMem = new Map();
-  const full = bag.__raGMem.get(`${branch}:${gid}`);
-  if (full && Date.now() - full.at < 8 * 60 * 1000) return { active: full.active, archive: full.archive };
-  const hit = bag.__raGMem.get(key);
-  if (hit && Date.now() - hit.at < 8 * 60 * 1000) return { active: hit.active, archive: hit.archive };
+  if (!opts?.fresh) {
+    const full = bag.__raGMem.get(`${branch}:${gid}`);
+    if (full && Date.now() - full.at < 8 * 60 * 1000) return { active: full.active, archive: full.archive };
+    const hit = bag.__raGMem.get(key);
+    if (hit && Date.now() - hit.at < 8 * 60 * 1000) return { active: hit.active, archive: hit.archive };
+  }
   const fresh = await pullGroupMembersCrm(request, t, branch, gid, opts);
   bag.__raGMem.set(key, { at: Date.now(), active: fresh.active, archive: fresh.archive });
   return fresh;
@@ -456,11 +458,12 @@ async function loadBranchActiveTariffs(
   t: string,
   branch: number,
   catalog?: { id: number; name: string; archive?: boolean; price?: number }[],
+  opts?: { fresh?: boolean },
 ) {
   const bag = globalThis as { __raCTar?: Map<number, { at: number; items: Record<string, unknown>[] }> };
   if (!bag.__raCTar) bag.__raCTar = new Map();
   const hit = bag.__raCTar.get(branch);
-  let items = hit && Date.now() - hit.at < 8 * 60 * 1000 ? hit.items : null;
+  let items = !opts?.fresh && hit && Date.now() - hit.at < 8 * 60 * 1000 ? hit.items : null;
   if (!items) {
     const { pagedIndex } = await import("./alfacrm");
     const { customerTariffIndexBranchPath } = await import("./pupil-tariffs");
@@ -2092,7 +2095,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
     }
     if (data.action === "pupilTariffGroups") {
       const { uniqueLiveGroups } = await import("./pupil-tariffs");
-      return packPupilGroups(applyCachedTaken(uniqueLiveGroups(listAdminSlots())));
+      return packPupilGroups(uniqueLiveGroups(listAdminSlots()).map((g) => ({ ...g, taken: 0 })));
     }
     if (data.action === "pupilTariffCounts") {
       const { uniqueLiveGroups } = await import("./pupil-tariffs");
@@ -2165,9 +2168,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
             };
           }),
         };
-        const mem = await loadGroupMembers(request, t, g.branchId, g.groupId, { skipArchive: true });
+        const mem = await loadGroupMembers(request, t, g.branchId, g.groupId, { skipArchive: true, fresh: true });
         g.taken = mem.active.length;
-        saveTaken([g]);
         for (const m of mem.active) {
           const row = pupilRowFromMember(m, g, offer, includeLeads);
           if (row) items.push(row);
@@ -2180,7 +2182,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         const byArchived = new Map<string, { id: number; tariffId: number; name: string }[]>();
         const branches = [...new Set(items.map((row) => row.branchId))];
         for (const branch of branches) {
-          const bulk = await loadBranchActiveTariffs(request, t, branch, catalog);
+          const bulk = await loadBranchActiveTariffs(request, t, branch, catalog, { fresh: true });
           if (bulk.live.size || bulk.archived.size) {
             for (const [cid, list] of bulk.live) byCustomer.set(`${branch}:${cid}`, list);
             for (const [cid, list] of bulk.archived) byArchived.set(`${branch}:${cid}`, list);
