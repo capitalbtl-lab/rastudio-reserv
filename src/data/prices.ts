@@ -4,8 +4,10 @@ import {
   hydratePrices,
   listPriceRows,
   normPath,
+  tidyCourseName,
   type PriceRow,
 } from "./prices-core";
+import { addTreeSchool, addTreeCourse, loadSiteTree } from "./site-tree";
 
 export {
   formatRub,
@@ -124,4 +126,53 @@ export function updateGroupPrice(opts: {
   }
   savePriceRows(rows);
   return { ok: true as const, count: hit.length, names: hit.map((r) => r.name) };
+}
+
+export function priceRowFromCourse(
+  school: { id: string; label: string },
+  course: { id: string; label: string; href?: string; age?: string },
+): PriceRow {
+  const split = tidyCourseName(course.label) || course.label;
+  return {
+    id: course.id,
+    name: split,
+    age: course.age || "",
+    path: course.href || course.id,
+    courseId: course.id,
+    direction: school.label,
+    all: 0,
+    kbm: 0,
+    tmx: 0,
+    mins: 0,
+    perWeek: 0,
+    extra: {},
+  };
+}
+
+export function addPriceSchool(label: string) {
+  const name = String(label || "").trim();
+  if (name.length < 2) return { ok: false as const, error: "Название школы — минимум 2 символа." };
+  addTreeSchool(name);
+  return { ok: true as const, tree: loadSiteTree(), rows: listPriceRows() };
+}
+
+export function addPriceCourse(schoolId: string, name: string, age: string) {
+  const school = loadSiteTree().schools.find((s) => s.id === schoolId);
+  if (!school) return { ok: false as const, error: "Сначала выберите школу — ту же, что в разделе «Группы»." };
+  const n = String(name || "").trim();
+  if (n.length < 2) return { ok: false as const, error: "Название курса — минимум 2 символа." };
+  const a = String(age || "").trim();
+  const label = a && !n.toLowerCase().includes(a.toLowerCase().slice(0, 5)) ? `${n} · ${a}` : n;
+  const before = new Set(loadSiteTree().courses.map((c) => c.id));
+  addTreeCourse(school.id, label, undefined, a);
+  const tree = loadSiteTree();
+  const created = tree.courses.find((c) => c.schoolId === school.id && !before.has(c.id));
+  if (!created) return { ok: false as const, error: "Не удалось создать курс в дереве сайта." };
+  ensureLivePrices();
+  const rows = listPriceRows().map((r) => ({ ...r }));
+  if (!rows.some((r) => r.courseId === created.id || r.path === created.id)) {
+    rows.push(priceRowFromCourse(school, created));
+    savePriceRows(rows);
+  }
+  return { ok: true as const, tree, rows: listPriceRows(), courseId: created.id };
 }

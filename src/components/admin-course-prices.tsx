@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { adminGroupDurations, adminPrices, adminSaveAll, adminSaveGroup } from "@/data/admin";
+import { adminGroupDurations, adminPrices, adminSaveAll, adminSaveGroup, adminAddPriceCourse } from "@/data/admin";
 import { PRICE_DIRECTIONS, hydratePrices, listPriceRows, matchDuration, type PriceRow } from "@/data/prices-core";
 import { Button } from "@/components/ui/button";
 import { AdminSectionHead } from "@/components/admin-self-test";
@@ -31,6 +31,11 @@ export function AdminCoursePrices() {
   const [formulasOpen, setFormulasOpen] = useState(false);
   const [pull, setPull] = useState<CrmPullState>(emptyPull("prices"));
   const [addName, setAddName] = useState("");
+  const [schools, setSchools] = useState<{ id: string; label: string }[]>([]);
+  const [newSchool, setNewSchool] = useState("");
+  const [newCourseSchool, setNewCourseSchool] = useState("");
+  const [newCourse, setNewCourse] = useState("");
+  const [newAge, setNewAge] = useState("");
 
   async function load() {
     setBusy(true);
@@ -45,6 +50,7 @@ export function AdminCoursePrices() {
         setRows(next);
         hydratePrices(next);
       }
+      if ("schools" in res && Array.isArray(res.schools)) setSchools(res.schools);
       setErr(next.length ? "" : "Файл цен пуст — показаны курсы с сайта.");
       const form = await adminPriceFormulas({ data: { token: token(), action: "get" } });
       if (form.ok && "formulas" in form && form.formulas) {
@@ -143,6 +149,58 @@ export function AdminCoursePrices() {
     if (res.ok) setAddName("");
   }
 
+  async function addSchool() {
+    const label = newSchool.trim();
+    if (label.length < 2) {
+      setErr("Название школы — минимум 2 символа.");
+      return;
+    }
+    setBusy(true);
+    const res = await adminAddPriceCourse({ data: { token: token(), kind: "school", label } });
+    setBusy(false);
+    if (!res.ok) {
+      setErr(res.error || "Не удалось добавить школу.");
+      return;
+    }
+    if ("schools" in res && res.schools) setSchools(res.schools);
+    if ("rows" in res && res.rows) {
+      setRows(res.rows);
+      hydratePrices(res.rows);
+    }
+    const created = ("schools" in res ? res.schools : []).find((s) => s.label === label);
+    if (created) setNewCourseSchool(created.id);
+    setNewSchool("");
+    setErr(`Школа «${label}» появилась здесь и в разделе «Группы». Добавьте курс.`);
+  }
+
+  async function addCourse() {
+    const schoolId = newCourseSchool;
+    const label = newCourse.trim();
+    if (!schoolId) {
+      setErr("Выберите школу — ту же, что в «Группах».");
+      return;
+    }
+    if (label.length < 2) {
+      setErr("Название курса — минимум 2 символа.");
+      return;
+    }
+    setBusy(true);
+    const res = await adminAddPriceCourse({ data: { token: token(), kind: "course", schoolId, label, age: newAge.trim() } });
+    setBusy(false);
+    if (!res.ok) {
+      setErr(res.error || "Не удалось добавить курс.");
+      return;
+    }
+    if ("schools" in res && res.schools) setSchools(res.schools);
+    if ("rows" in res && res.rows) {
+      setRows(res.rows);
+      hydratePrices(res.rows);
+    }
+    setNewCourse("");
+    setNewAge("");
+    setErr("Курс записан в дерево сайта (Группы) и в прайс. В абонементах его можно привязать по ID курса.");
+  }
+
   async function pullFromGroups() {
     setBusy(true);
     try {
@@ -234,6 +292,59 @@ export function AdminCoursePrices() {
         </Button>
         <Button type="button" className="ml-auto h-10 px-5" disabled={busy || !rows.length} onClick={() => void saveAll()}>
           Сохранить
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2 rounded-[8px] bg-white p-3 ring-1 ring-black/8">
+        <p className="w-full text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Школа и курс — то же дерево, что у групп</p>
+        <label className="text-[0.72rem] text-muted">
+          Новая школа
+          <input
+            value={newSchool}
+            onChange={(e) => setNewSchool(e.target.value)}
+            placeholder="Танцевальная школа"
+            className="mt-0.5 block h-9 w-52 rounded-[8px] bg-surface-2 px-2 text-sm ring-1 ring-black/10"
+          />
+        </label>
+        <Button type="button" variant="secondary" className="h-9" disabled={busy} onClick={() => void addSchool()}>
+          Добавить школу
+        </Button>
+        <span className="hidden h-9 w-px bg-black/10 sm:block" />
+        <label className="text-[0.72rem] text-muted">
+          Школа
+          <select
+            value={newCourseSchool}
+            onChange={(e) => setNewCourseSchool(e.target.value)}
+            className="mt-0.5 block h-9 min-w-[12rem] rounded-[8px] bg-surface-2 px-2 text-sm ring-1 ring-black/10"
+          >
+            <option value="">выберите</option>
+            {(schools.length ? schools : [...new Set(rows.map((r) => r.direction))].map((label) => ({ id: label, label }))).map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-[0.72rem] text-muted">
+          Курс
+          <input
+            value={newCourse}
+            onChange={(e) => setNewCourse(e.target.value)}
+            placeholder="Бальные танцы"
+            className="mt-0.5 block h-9 w-48 rounded-[8px] bg-surface-2 px-2 text-sm ring-1 ring-black/10"
+          />
+        </label>
+        <label className="text-[0.72rem] text-muted">
+          Возраст
+          <input
+            value={newAge}
+            onChange={(e) => setNewAge(e.target.value)}
+            placeholder="5-6 лет"
+            className="mt-0.5 block h-9 w-28 rounded-[8px] bg-surface-2 px-2 text-sm ring-1 ring-black/10"
+          />
+        </label>
+        <Button type="button" variant="secondary" className="h-9" disabled={busy} onClick={() => void addCourse()}>
+          Добавить курс
         </Button>
       </div>
 
@@ -374,7 +485,7 @@ export function AdminCoursePrices() {
               <label className="text-[0.72rem] text-muted">
                 Школа
                 <select className="mt-0.5 block h-8 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/10" value={dir} onChange={(e) => setDir(e.target.value)}>
-                  {PRICE_DIRECTIONS.map((d) => (
+                  {[...new Set([...PRICE_DIRECTIONS, ...rows.map((r) => r.direction), ...schools.map((s) => s.label)])].filter(Boolean).map((d) => (
                     <option key={d}>{d}</option>
                   ))}
                 </select>

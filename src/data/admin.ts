@@ -33,7 +33,8 @@ export const adminPrices = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
     ensureLivePrices();
-    return { ok: true as const, rows: listPriceRows() };
+    const { loadSiteTree } = await import("./site-tree");
+    return { ok: true as const, rows: listPriceRows(), schools: loadSiteTree().schools };
   });
 
 export const adminGroupDurations = createServerFn({ method: "POST" })
@@ -62,6 +63,28 @@ export const adminSavePrice = createServerFn({ method: "POST" })
     });
     if (saved.ok) logAdmin(`Цена: ${saved.row.name} → ${saved.row.all} ₽ · ${saved.row.mins || "—"} мин · ${saved.row.perWeek || "—"}/нед`);
     return saved;
+  });
+
+export const adminAddPriceCourse = createServerFn({ method: "POST" })
+  .validator(
+    (data: unknown) =>
+      data as { token?: string; kind: "school" | "course"; label?: string; schoolId?: string; age?: string },
+  )
+  .handler(async ({ data }) => {
+    if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
+    const { addPriceSchool, addPriceCourse } = await import("./prices");
+    if (data.kind === "school") {
+      const res = addPriceSchool(String(data.label || ""));
+      if (res.ok) logAdmin(`Цены: школа «${data.label}» — то же дерево, что у групп`);
+      return res.ok
+        ? { ok: true as const, rows: res.rows, schools: res.tree.schools }
+        : { ok: false as const, error: res.error };
+    }
+    const res = addPriceCourse(String(data.schoolId || ""), String(data.label || ""), String(data.age || ""));
+    if (res.ok) logAdmin(`Цены: курс «${data.label}» → ${res.courseId} (группы и абонементы по courseId)`);
+    return res.ok
+      ? { ok: true as const, rows: res.rows, schools: res.tree.schools, courseId: res.courseId }
+      : { ok: false as const, error: res.error };
   });
 
 export const adminSaveGroup = createServerFn({ method: "POST" })
