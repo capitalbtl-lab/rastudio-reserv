@@ -358,7 +358,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               const res = (await retryFetch(
                 () =>
                   adminSchedule({
-                    data: { token: token(), action: "pupilTariffPlan", includeLeads: path === "add" && includeLeads, groupKeys: part } as never,
+                    data: { token: token(), action: "pupilTariffPlan", includeLeads: path === "add" ? includeLeads : true, groupKeys: part } as never,
                   }),
                 1,
                 40000,
@@ -887,7 +887,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             Включить лидов в группах (по умолчанию да — все привязанные)
           </label>
           ) : (
-            <p className="text-sm text-muted">Изменение и удаление — только ученики с живым абонементом в CRM. Лиды без абонемента не входят.</p>
+            <p className="text-sm text-muted">Удаление и изменение: все, у кого в CRM живой абонемент, в том числе лиды с выписанным абонементом. Без абонемента (как Майоров) не входят.</p>
           )}
         </div>
       ) : null}

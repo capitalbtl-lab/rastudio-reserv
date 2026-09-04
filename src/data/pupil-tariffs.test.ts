@@ -135,9 +135,11 @@ describe("мастер абонементов учеников", () => {
     const listed = changeListRows([
       row,
       { ...row, customerId: 2, name: "Учится", status: "учится", activeTariffs: [{ id: 1, tariffId: 12, name: "12" }] },
+      { ...row, customerId: 3, name: "Лид с абонементом", status: "лид", activeTariffs: [{ id: 2, tariffId: 12, name: "12" }] },
     ]);
-    assert.equal(listed.length, 1);
-    assert.equal(listed[0].name, "Учится");
+    assert.equal(listed.length, 2);
+    assert.ok(listed.some((x) => x.name === "Учится"));
+    assert.ok(listed.some((x) => x.name === "Лид с абонементом"));
   });
 
   it("только что назначенный абонемент с датой старта завтра — живой", async () => {
