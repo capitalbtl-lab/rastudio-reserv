@@ -97,7 +97,17 @@ export function pickBestTariff(slot: Pick<CrmSlot, "subjectId" | "branchId" | "t
     const hit = list.find((t) => t.id === saved && !t.archive);
     if (hit && tariffFitsSlot(hit, slot as CrmSlot)) return hit;
   }
-  return matchTariffs(slot as CrmSlot, list)[0] || null;
+  const exact = matchTariffs(slot as CrmSlot, list)[0];
+  if (exact) return exact;
+  const sid = Number(slot.subjectId) || 0;
+  const bid = Number(slot.branchId) || 0;
+  const loose = list.filter((t) => {
+    if (t.archive) return false;
+    if (bid && t.branchIds.length && !t.branchIds.includes(bid)) return false;
+    if (t.lessonTypeIds.length && !t.lessonTypeIds.includes(2)) return false;
+    return sid > 0 && t.subjectIds.includes(sid);
+  });
+  return loose.sort((a, b) => a.price - b.price || a.name.localeCompare(b.name, "ru"))[0] || null;
 }
 
 export function pupilRowFromMember(

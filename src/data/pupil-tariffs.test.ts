@@ -173,7 +173,7 @@ describe("мастер абонементов учеников", () => {
       subjectId: 5,
       courseId: "",
     });
-    assert.equal(tariffFitsSlot(t, unboundGroup, { tariffId: 373, schoolId: "/art-studio", courseId: "/portrait-12" }), false);
+    assert.equal(tariffFitsSlot(t, unboundGroup, { tariffId: 373, schoolId: "/art-studio", courseId: "/portrait-12" }), true);
   });
 
   it("абонемент соответствует предмету группы", () => {

@@ -1916,26 +1916,30 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const byGroup: Record<string, { tariffId: number; tariffName: string; options: { id: number; name: string; price: number }[] }> = {};
       for (const g of groups) {
         const slot = slots.find((s) => s.groupId === g.groupId && s.branchId === g.branchId);
-        const options = slot ? matchTariffs(slot, tariffs) : [];
-        const best = slot ? pickBestTariff(slot, tariffs) : options[0] || null;
+        const pack = groupTariffPack(slot);
+        const best = slot ? pickBestTariff(slot, tariffs) : null;
+        const offer = best || tariffs.find((t) => t.id === pack.tariffId) || null;
         byGroup[g.key] = {
-          tariffId: best?.id || 0,
-          tariffName: best?.name || "",
-          options: options.map((x) => ({
-            id: x.id,
-            name: x.name,
-            price: x.price,
-            subjectIds: x.subjectIds,
-            lessonTypeIds: x.lessonTypeIds,
-            periodCount: x.periodCount,
-            periodType: x.periodType,
-            calculationType: x.calculationType,
-            lessonsCount: x.lessonsCount,
-          })),
+          tariffId: offer?.id || 0,
+          tariffName: offer?.name || "",
+          options: pack.tariffs.map((o) => {
+            const t = tariffs.find((x) => x.id === o.id);
+            return {
+              id: o.id,
+              name: o.name,
+              price: o.price,
+              subjectIds: t?.subjectIds || [],
+              lessonTypeIds: t?.lessonTypeIds || [2],
+              periodCount: t?.periodCount || 0,
+              periodType: t?.periodType || 3,
+              calculationType: t?.calculationType || 0,
+              lessonsCount: t?.lessonsCount || o.lessonsCount,
+            };
+          }),
         };
         const mem = await loadGroupMembers(request, t, g.branchId, g.groupId, { skipArchive: true });
         for (const m of mem.active) {
-          const row = pupilRowFromMember(m, g, best, includeLeads);
+          const row = pupilRowFromMember(m, g, offer, includeLeads);
           if (row) items.push(row);
         }
       }

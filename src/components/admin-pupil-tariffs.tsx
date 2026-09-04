@@ -650,6 +650,8 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                         {it.tariffName}
                         <span className="block">{money(it.price)}</span>
                       </>
+                    ) : path === "add" ? (
+                      <span className="text-muted">на шаге «Абонемент»</span>
                     ) : (
                       <span className="text-rose-700">нет абонемента студии</span>
                     )}
