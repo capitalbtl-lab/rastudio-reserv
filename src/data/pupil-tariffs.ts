@@ -63,6 +63,33 @@ export function crmGroupQuantity(g: Record<string, unknown> | { quantity?: unkno
   return Number(rec.quantity ?? rec.cnt ?? rec.customers_count ?? 0) || 0;
 }
 
+export function cgiRecordLive(it: Record<string, unknown>, today = todayIso()) {
+  if (Number(it.removed || it.is_removed || 0)) return false;
+  const raw = String(it.e_date || it.date_to || "").trim();
+  if (!raw || raw.startsWith("0000")) return true;
+  const iso = raw.includes(".") ? raw.split(".").reverse().join("-").slice(0, 10) : raw.slice(0, 10);
+  return iso >= today;
+}
+
+/** Участие клиент↔группа (cgi): сколько живых в каждой gid. */
+export function countCgiByGroup(items: Record<string, unknown>[], today = todayIso()) {
+  const map = new Map<number, number>();
+  for (const it of items) {
+    if (!cgiRecordLive(it, today)) continue;
+    const gid = Number(it.group_id || it.groupId || 0);
+    if (!gid) continue;
+    map.set(gid, (map.get(gid) || 0) + 1);
+  }
+  return map;
+}
+
+export function crmIndexTotal(res: { total?: unknown; count?: unknown; items?: unknown[] } | null | undefined) {
+  const items = Array.isArray(res?.items) ? res!.items!.length : 0;
+  const total = Number(res?.total);
+  const count = Number(res?.count);
+  return Math.max(Number.isFinite(total) ? total : 0, Number.isFinite(count) ? count : 0, items);
+}
+
 export function uniqueLiveGroups(slots: CrmSlot[]): PupilGroup[] {
   const seen = new Set<string>();
   const out: PupilGroup[] = [];

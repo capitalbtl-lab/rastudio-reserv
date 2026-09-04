@@ -200,6 +200,42 @@ function packComm(it: Record<string, unknown>): CustomerComm {
   };
 }
 
+async function overlayGroupHeadcount(
+  groups: import("./pupil-tariffs").PupilGroup[],
+  request: typeof import("./alfacrm").request,
+  t: string,
+) {
+  const { countCgiByGroup, crmIndexTotal } = await import("./pupil-tariffs");
+  const cgi = new Map<number, number>();
+  for (const branch of [1, 2, 3, 4]) {
+    for (let page = 0; page < 12; page += 1) {
+      const res = await request<{ items?: Record<string, unknown>[] }>(
+        `/v2api/${branch}/cgi/index`,
+        { page, pageSize: 200 },
+        t,
+      ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+      const items = res.items || [];
+      for (const [gid, n] of countCgiByGroup(items)) cgi.set(gid, (cgi.get(gid) || 0) + n);
+      if (items.length < 200) break;
+    }
+  }
+  const next = groups.map((g) => ({ ...g, taken: Math.max(g.taken, cgi.get(g.groupId) || 0) }));
+  const zeros = next.filter((g) => !g.taken);
+  for (let i = 0; i < zeros.length; i += 5) {
+    await Promise.all(
+      zeros.slice(i, i + 5).map(async (g) => {
+        const res = await request<{ items?: unknown[]; total?: number; count?: number }>(
+          `/v2api/${g.branchId}/customer/index`,
+          { page: 0, pageSize: 50, group_id: g.groupId },
+          t,
+        ).catch(() => ({ items: [] as unknown[] }));
+        g.taken = crmIndexTotal(res);
+      }),
+    );
+  }
+  return next;
+}
+
 async function loadGroupMembers(
   request: typeof import("./alfacrm").request,
   t: string,
@@ -1895,9 +1931,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
     if (data.action === "pupilTariffGroups") {
       const { uniqueLiveGroups, crmGroupQuantity } = await import("./pupil-tariffs");
       const { token, request } = await import("./alfacrm");
+      const t = await token();
       const qty = new Map<number, { taken: number; limit: number }>();
       try {
-        const t = await token();
         for (const branch of [1, 2, 3, 4]) {
           for (let page = 0; page < 8; page += 1) {
             const res = await request<{ items?: Record<string, unknown>[] }>(
@@ -1918,23 +1954,18 @@ export const adminSchedule = createServerFn({ method: "POST" })
           }
         }
       } catch {
-        /* слот taken, если CRM не ответила */
+        /* */
       }
-      const groups = uniqueLiveGroups(listAdminSlots())
-        .map((g) => {
-          const hit = qty.get(g.groupId);
-          return {
-            ...g,
-            taken: Math.max(g.taken, hit?.taken || 0),
-            limit: g.limit || hit?.limit || 0,
-          };
-        })
-        .sort(
-          (a, b) =>
-            Number(b.taken > 0) - Number(a.taken > 0) ||
-            a.school.localeCompare(b.school, "ru") ||
-            a.name.localeCompare(b.name, "ru"),
-        );
+      const base = uniqueLiveGroups(listAdminSlots()).map((g) => {
+        const hit = qty.get(g.groupId);
+        return { ...g, taken: Math.max(g.taken, hit?.taken || 0), limit: g.limit || hit?.limit || 0 };
+      });
+      const groups = (await overlayGroupHeadcount(base, request, t).catch(() => base)).sort(
+        (a, b) =>
+          Number(b.taken > 0) - Number(a.taken > 0) ||
+          a.school.localeCompare(b.school, "ru") ||
+          a.name.localeCompare(b.name, "ru"),
+      );
       const schools = [...new Set(groups.map((g) => g.school).filter(Boolean))];
       const unbound = groups.filter((g) => g.school === "Без школы на сайте").length;
       const byBranch: Record<number, { total: number; withPeople: number }> = {};
