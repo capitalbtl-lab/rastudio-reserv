@@ -728,6 +728,13 @@ export function AdminSchedule() {
   const openingRef = useRef("");
   const [pupil, setPupil] = useState<CustomerCard | null>(null);
   const [pupilLoading, setPupilLoading] = useState(false);
+  const [addPupil, setAddPupil] = useState(false);
+  const [addQ, setAddQ] = useState("");
+  const [addHits, setAddHits] = useState<{ crmId: number; branchId: number; child: string; parent: string; phone: string; age: number | null; status: string }[]>([]);
+  const [addForm, setAddForm] = useState({ name: "", parent: "", phone: "" });
+  const [addBusy, setAddBusy] = useState(false);
+  const [addErr, setAddErr] = useState("");
+  const [memberBusy, setMemberBusy] = useState(0);
   const [subjects, setSubjects] = useState<CrmSubject[]>([]);
   const [creatingSubject, setCreatingSubject] = useState(false);
   const [levels, setLevels] = useState<{ id: number; name: string }[]>(SEED_LEVELS);
@@ -856,6 +863,36 @@ export function AdminSchedule() {
   useEffect(() => {
     slotsRef.current = slots;
   }, [slots]);
+  useEffect(() => {
+    if (!addPupil) return;
+    const q = addQ.trim();
+    if (q.length < 2) {
+      setAddHits([]);
+      return;
+    }
+    const branchId = detail?.branchId || 0;
+    const inGroup = new Set((detail?.members || []).map((m) => m.id).concat((detail?.archive || []).map((m) => m.id)));
+    const handle = window.setTimeout(() => {
+      void adminSchedule({ data: { token: token(), action: "customersSearch", q, branchId } as never }).then((res) => {
+        if (!res.ok || !("items" in res) || !Array.isArray(res.items)) return;
+        setAddHits(
+          (res.items as { crmId?: number; branchId?: number; child?: string; parent?: string; phone?: string; age?: number | null; status?: string }[])
+            .map((x) => ({
+              crmId: Number(x.crmId || 0),
+              branchId: Number(x.branchId || 0),
+              child: String(x.child || ""),
+              parent: String(x.parent || ""),
+              phone: String(x.phone || ""),
+              age: x.age ?? null,
+              status: String(x.status || ""),
+            }))
+            .filter((x) => x.crmId && !inGroup.has(x.crmId))
+            .slice(0, 8),
+        );
+      });
+    }, 280);
+    return () => window.clearTimeout(handle);
+  }, [addQ, addPupil, detail?.branchId, detail?.members, detail?.archive]);
   useEffect(() => {
     const el = promptEl.current;
     if (!el) return;
@@ -1111,6 +1148,118 @@ export function AdminSchedule() {
     });
     if (!res.ok) throw new Error(("error" in res && res.error) || "AlfaCRM не приняла изменение.");
     if ("customer" in res && res.customer) setPupil(res.customer as CustomerCard);
+  }
+
+  function resetAddPupil() {
+    setAddPupil(false);
+    setAddQ("");
+    setAddHits([]);
+    setAddForm({ name: "", parent: "", phone: "" });
+    setAddBusy(false);
+    setAddErr("");
+    setMemberBusy(0);
+  }
+
+  function applyMembers(slotId: string, active: GroupMember[], archive: GroupMember[]) {
+    setDetail((d) => (d && d.id === slotId ? { ...d, members: active, archive } : d));
+    setSlots((list) =>
+      list.map((row) =>
+        row.id === slotId
+          ? {
+              ...row,
+              taken: active.length,
+              takenStudy: active.filter((m) => m.status !== "лид").length,
+              takenLead: active.filter((m) => m.status === "лид").length,
+            }
+          : row,
+      ),
+    );
+  }
+
+  async function reloadMembers() {
+    if (!detail?.groupId) return;
+    const slotId = detail.id;
+    const res = await adminSchedule({ data: { token: token(), action: "groupMembers", groupId: detail.groupId, branchId: detail.branchId } as never });
+    if (res.ok && "active" in res) {
+      applyMembers(slotId, (res.active || []) as GroupMember[], (res.archive || []) as GroupMember[]);
+    }
+  }
+
+  async function attachPupil(customerId: number, branchId: number) {
+    if (!detail?.groupId) {
+      setAddErr("Сначала сохраните группу в AlfaCRM.");
+      return;
+    }
+    setAddBusy(true);
+    setAddErr("");
+    const res = await adminSchedule({
+      data: {
+        token: token(),
+        action: "customerGroup",
+        customerId,
+        groupId: detail.groupId,
+        branchId: branchId || detail.branchId,
+        bDate: detail.bDate,
+        eDate: detail.eDate,
+      } as never,
+    });
+    setAddBusy(false);
+    if (!res.ok) {
+      setAddErr(("error" in res && res.error) || "AlfaCRM не добавила ученика.");
+      return;
+    }
+    resetAddPupil();
+    await reloadMembers();
+  }
+
+  async function createAndAttach() {
+    const name = addForm.name.trim();
+    if (!name) {
+      setAddErr("Укажите имя ученика.");
+      return;
+    }
+    if (!detail?.groupId) {
+      setAddErr("Сначала сохраните группу в AlfaCRM.");
+      return;
+    }
+    setAddBusy(true);
+    setAddErr("");
+    const res = await adminSchedule({
+      data: {
+        token: token(),
+        action: "customerCreate",
+        name,
+        parent: addForm.parent.trim(),
+        phone: addForm.phone.trim(),
+        branchId: detail.branchId,
+        groupId: detail.groupId,
+        bDate: detail.bDate,
+        eDate: detail.eDate,
+      } as never,
+    });
+    setAddBusy(false);
+    if (!res.ok) {
+      setAddErr(("error" in res && res.error) || "AlfaCRM не создала ученика.");
+      return;
+    }
+    resetAddPupil();
+    await reloadMembers();
+  }
+
+  async function removePupil(m: GroupMember) {
+    if (!detail?.groupId) return;
+    const title = displayPersonName(m.name, m.parent, m.phone);
+    if (!window.confirm(`Снять «${title}» с группы? Карточка в AlfaCRM останется.`)) return;
+    setMemberBusy(m.id);
+    const res = await adminSchedule({
+      data: { token: token(), action: "customerGroup", customerId: m.id, groupId: detail.groupId, branchId: detail.branchId, remove: true } as never,
+    });
+    setMemberBusy(0);
+    if (!res.ok) {
+      setDetail((d) => (d ? { ...d, error: ("error" in res && res.error) || "Не удалось снять с группы." } : d));
+      return;
+    }
+    await reloadMembers();
   }
 
   function openGroupFromLink(gid: number, branchId: number) {
@@ -3288,6 +3437,7 @@ export function AdminSchedule() {
               onClick={() => {
                 if (Date.now() < closeGuard.current) return;
                 setPupil(null);
+                resetAddPupil();
                 setDetail(null);
               }}
             >
@@ -3332,7 +3482,7 @@ export function AdminSchedule() {
                     >
                       {detail.saving ? "Сохраняю…" : detail.groupId ? "Сохранить в AlfaCRM" : "Создать в AlfaCRM"}
                     </button>
-                    <button type="button" className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-muted ring-1 ring-black/8" onClick={() => { setPupil(null); setDetail(null); }}>
+                    <button type="button" className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-muted ring-1 ring-black/8" onClick={() => { setPupil(null); resetAddPupil(); setDetail(null); }}>
                       Закрыть
                     </button>
                   </div>
@@ -3625,9 +3775,107 @@ export function AdminSchedule() {
                     </div>
                   </div>
                   <section className="mt-3 rounded-xl bg-white/80 p-3 ring-1 ring-black/6">
-                    <CrmGroupMembers title="Ученики" items={detail.members.filter((m) => m.status !== "лид")} onOpen={(m) => void openPupil(m, detail.branchId)} />
-                    <CrmGroupMembers title="Лиды" items={detail.members.filter((m) => m.status === "лид")} onOpen={(m) => void openPupil(m, detail.branchId)} variant="lead" />
-                    <CrmGroupMembers title="Архивные ученики" items={detail.archive} onOpen={(m) => void openPupil(m, detail.branchId)} variant="archive" />
+                    {addPupil ? (
+                      <div className="mb-3 rounded-xl bg-[#eef2f7] p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Добавить ученика</p>
+                          <button type="button" className="text-sm font-semibold text-muted hover:text-fg" onClick={resetAddPupil}>
+                            закрыть
+                          </button>
+                        </div>
+                        {!detail.groupId ? (
+                          <p className="mt-2 text-sm text-muted">Сначала сохраните группу в AlfaCRM — без номера группы ученика не привязать.</p>
+                        ) : (
+                          <>
+                            <input
+                              value={addQ}
+                              onChange={(e) => setAddQ(e.target.value)}
+                              placeholder="Найти по имени или телефону"
+                              className="mt-2 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none focus:ring-primary/35"
+                            />
+                            {addHits.length ? (
+                              <ul className="mt-1.5 divide-y divide-black/6 overflow-hidden rounded-xl bg-white ring-1 ring-black/6">
+                                {addHits.map((h) => (
+                                  <li key={`${h.branchId}-${h.crmId}`}>
+                                    <button
+                                      type="button"
+                                      disabled={addBusy}
+                                      onClick={() => void attachPupil(h.crmId, h.branchId)}
+                                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-primary/5 disabled:opacity-50"
+                                    >
+                                      <span className="min-w-0">
+                                        <span className="block truncate text-sm font-medium">{h.child || "без имени"}</span>
+                                        <span className="block truncate text-[0.72rem] text-muted">
+                                          {[h.age ? `${h.age} лет` : "", h.parent, h.phone].filter(Boolean).join(" · ")}
+                                        </span>
+                                      </span>
+                                      <span className="shrink-0 text-[0.72rem] font-semibold text-primary">в группу</span>
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : addQ.trim().length >= 2 ? (
+                              <p className="mt-1.5 text-[0.75rem] text-muted">Никого не нашла — можно завести нового.</p>
+                            ) : null}
+                            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                              <input
+                                value={addForm.name}
+                                onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
+                                placeholder="Имя ученика"
+                                className="h-8 rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none focus:ring-primary/35"
+                              />
+                              <input
+                                value={addForm.parent}
+                                onChange={(e) => setAddForm((f) => ({ ...f, parent: e.target.value }))}
+                                placeholder="Родитель"
+                                className="h-8 rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none focus:ring-primary/35"
+                              />
+                              <input
+                                value={addForm.phone}
+                                onChange={(e) => setAddForm((f) => ({ ...f, phone: e.target.value }))}
+                                placeholder="Телефон"
+                                className="h-8 rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none focus:ring-primary/35"
+                              />
+                            </div>
+                            <div className="mt-2 flex items-center gap-2">
+                              <button
+                                type="button"
+                                disabled={addBusy}
+                                onClick={() => void createAndAttach()}
+                                className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white disabled:opacity-50"
+                              >
+                                {addBusy ? "Сохраняю…" : "Создать и добавить"}
+                              </button>
+                              {addErr ? <p className="text-sm text-red-600">{addErr}</p> : <p className="text-[0.72rem] text-muted">Создаёт ученика в AlfaCRM и сразу ставит в эту группу.</p>}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ) : null}
+                    <CrmGroupMembers
+                      title="Ученики"
+                      items={detail.members.filter((m) => m.status !== "лид")}
+                      onOpen={(m) => void openPupil(m, detail.branchId)}
+                      onAdd={() => setAddPupil(true)}
+                      onRemove={(m) => void removePupil(m)}
+                      busyId={memberBusy}
+                    />
+                    <CrmGroupMembers
+                      title="Лиды"
+                      items={detail.members.filter((m) => m.status === "лид")}
+                      onOpen={(m) => void openPupil(m, detail.branchId)}
+                      onRemove={(m) => void removePupil(m)}
+                      variant="lead"
+                      busyId={memberBusy}
+                    />
+                    <CrmGroupMembers
+                      title="Архивные ученики"
+                      items={detail.archive}
+                      onOpen={(m) => void openPupil(m, detail.branchId)}
+                      onRemove={(m) => void removePupil(m)}
+                      variant="archive"
+                      busyId={memberBusy}
+                    />
                   </section>
                 </div>
               </article>

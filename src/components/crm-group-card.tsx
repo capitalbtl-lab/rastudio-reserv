@@ -47,16 +47,22 @@ export function CrmGroupMembers({
   title,
   items,
   onOpen,
+  onRemove,
+  onAdd,
   archive,
   variant,
   loading,
+  busyId,
 }: {
   title: string;
   items: GroupMember[];
   onOpen: (m: GroupMember) => void;
+  onRemove?: (m: GroupMember) => void;
+  onAdd?: () => void;
   archive?: boolean;
   variant?: "active" | "lead" | "archive";
   loading?: boolean;
+  busyId?: number;
 }) {
   const kind = variant || (archive ? "archive" : "active");
   const wrap =
@@ -87,21 +93,33 @@ export function CrmGroupMembers({
   const label = kind === "archive" ? "архив" : kind === "lead" ? "лид" : "";
   return (
     <div className={wrap}>
-      <p className={cn("text-[0.72rem] font-semibold uppercase tracking-wider", head)}>
-        {title} · {loading && !items.length ? "…" : items.length}
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className={cn("text-[0.72rem] font-semibold uppercase tracking-wider", head)}>
+          {title} · {loading && !items.length ? "…" : items.length}
+        </p>
+        {onAdd ? (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="rounded-full bg-white px-2.5 py-0.5 text-[0.72rem] font-semibold text-primary ring-1 ring-black/8 hover:ring-primary/30"
+          >
+            + добавить
+          </button>
+        ) : null}
+      </div>
       {loading && !items.length ? (
         <MemberSkeleton n={kind === "archive" ? 2 : 4} />
       ) : items.length ? (
         <ul className={cn("mt-1.5 divide-y overflow-hidden rounded-2xl ring-1", list)}>
           {items.map((m) => {
             const titleName = displayPersonName(m.name, m.parent, m.phone);
+            const busy = busyId === m.id;
             return (
-              <li key={m.id}>
+              <li key={m.id} className="flex items-center">
                 <button
                   type="button"
                   onClick={() => onOpen(m)}
-                  className={cn("flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left", kind === "archive" ? "text-[#5a6169] hover:bg-black/[0.04]" : "hover:bg-primary/5")}
+                  className={cn("flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2.5 text-left", kind === "archive" ? "text-[#5a6169] hover:bg-black/[0.04]" : "hover:bg-primary/5")}
                   title={clientCardId(m.id)}
                 >
                   <span className="flex min-w-0 items-center gap-2.5">
@@ -119,6 +137,18 @@ export function CrmGroupMembers({
                     {label || m.status || "учится"}
                   </span>
                 </button>
+                {onRemove ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    title="Удалить из группы"
+                    aria-label={`Удалить ${titleName} из группы`}
+                    onClick={() => onRemove(m)}
+                    className="mr-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[1.05rem] leading-none text-muted/70 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                  >
+                    {busy ? "…" : "×"}
+                  </button>
+                ) : null}
               </li>
             );
           })}

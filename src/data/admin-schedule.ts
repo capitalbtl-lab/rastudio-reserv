@@ -358,6 +358,66 @@ function groupIdsFromCustomer(c: Record<string, unknown>) {
   return [...out];
 }
 
+async function setGroupMembership(
+  request: <T = { success?: boolean; errors?: unknown }>(path: string, body: unknown, t?: string) => Promise<T>,
+  t: string,
+  opts: { customerId: number; groupId: number; branch: number; drop: boolean; bDate?: string; eDate?: string; current?: Record<string, unknown> },
+) {
+  const ids = new Set(groupIdsFromCustomer(opts.current || {}));
+  if (!opts.drop && ids.has(opts.groupId)) return { ok: true as const, already: true };
+  if (opts.drop) ids.delete(opts.groupId);
+  else ids.add(opts.groupId);
+  const next = [...ids];
+  const period: Record<string, unknown> = {};
+  if (!opts.drop) {
+    if (opts.bDate) period.b_date = opts.bDate;
+    if (opts.eDate) period.e_date = opts.eDate;
+  }
+  const tries: [string, Record<string, unknown>][] = [
+    [`/v2api/${opts.branch}/customer/update?id=${opts.customerId}`, { id: opts.customerId, group_ids: next, ...period }],
+  ];
+  if (!opts.drop) {
+    tries.push([`/v2api/${opts.branch}/customer/update?id=${opts.customerId}`, { id: opts.customerId, group_ids: next, is_study: 1, ...period }]);
+  } else {
+    tries.push([`/v2api/${opts.branch}/customer/update?id=${opts.customerId}`, { id: opts.customerId, group_ids: next, groups: next }]);
+  }
+  try {
+    const les = await request(
+      `/v2api/${opts.branch}/regular-lesson/index`,
+      { page: 0, pageSize: 20, group_id: opts.groupId },
+      t,
+    ) as { items?: Record<string, unknown>[] };
+    for (const it of les.items || []) {
+      const lid = Number(it.id || 0);
+      if (!lid) continue;
+      const cids = Array.isArray(it.customer_ids) ? it.customer_ids.map(Number).filter(Boolean) : [];
+      if (opts.drop && cids.includes(opts.customerId)) {
+        tries.push([`/v2api/${opts.branch}/regular-lesson/update?id=${lid}`, { id: lid, customer_ids: cids.filter((x) => x !== opts.customerId) }]);
+      } else if (!opts.drop && !cids.includes(opts.customerId)) {
+        tries.push([`/v2api/${opts.branch}/regular-lesson/update?id=${lid}`, { id: lid, customer_ids: [...cids, opts.customerId] }]);
+      }
+    }
+  } catch {
+    /* fallback customer/update only */
+  }
+  let last = "";
+  let ok = false;
+  for (const [path, body] of tries) {
+    try {
+      const res = await request(path, body, t);
+      if (res.success === false) {
+        last = JSON.stringify(res.errors || res);
+        continue;
+      }
+      ok = true;
+    } catch (e) {
+      last = e instanceof Error ? e.message : String(e);
+    }
+  }
+  if (!ok) return { ok: false as const, error: last || (opts.drop ? "AlfaCRM не сняла с группы." : "AlfaCRM не добавила в группу.") };
+  return { ok: true as const, already: false };
+}
+
 function packGroupLink(id: number, branchId: number, name = "", active = true): CustomerCard["groups"][number] {
   const slots = listAdminSlots();
   const slot = slots.find((s) => s.groupId === id && s.branchId === branchId) || slots.find((s) => s.groupId === id);
@@ -838,6 +898,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "customerPay"
           | "customerTariff"
           | "customerGroup"
+          | "customerCreate"
           | "add"
           | "remove"
           | "subjectsGet"
@@ -936,6 +997,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
         statusId?: number;
         subjectId?: number;
         name?: string;
+        parent?: string;
+        phone?: string;
         description?: string;
         remarks?: string;
         bDate?: string;
@@ -1318,6 +1381,46 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const customer = await loadCustomerCard(request, t, branch, customerId);
       return { ok: true as const, customer };
     }
+    if (data.action === "customerCreate") {
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const groupId = Number(data.groupId) || 0;
+      const name = String(data.name || "").trim();
+      const parent = String(data.parent || "").trim();
+      const phone = String(data.phone || "").trim();
+      if (!name) return { ok: false as const, error: "Укажите имя ученика." };
+      const created = await request<{ success?: boolean; errors?: unknown; model?: { id?: number } }>(
+        `/v2api/${branch}/customer/create`,
+        {
+          name,
+          legal_name: parent,
+          legal_type: 1,
+          ...(phone ? { phone: [phone] } : {}),
+          is_study: 1,
+          branch_ids: [branch],
+        },
+        t,
+      );
+      const customerId = Number(created.model?.id || 0);
+      if (created.success === false || !customerId) {
+        return { ok: false as const, error: JSON.stringify(created.errors || created) || "AlfaCRM не создала ученика." };
+      }
+      if (groupId) {
+        const attached = await setGroupMembership(request, t, {
+          customerId,
+          groupId,
+          branch,
+          drop: false,
+          bDate: String(data.bDate || "").trim(),
+          eDate: String(data.eDate || "").trim(),
+        });
+        if (!attached.ok) return { ok: false as const, error: attached.error };
+      }
+      logAdmin(`Клиент ${customerId}: создан${groupId ? `, группа ${groupId}` : ""}`);
+      const customer = await loadCustomerCard(request, t, branch, customerId);
+      return { ok: true as const, customer, customerId };
+    }
     if (data.action === "customerGroup") {
       const { token, request } = await import("./alfacrm");
       const t = await token();
@@ -1329,63 +1432,16 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!groupId) return { ok: false as const, error: "Выберите группу." };
       const found = await loadCustomerRaw(request, t, branch, customerId);
       const useBranch = found?.branch || branch;
-      const ids = new Set(groupIdsFromCustomer(found?.c || {}));
-      if (!drop && ids.has(groupId)) {
-        const customer = await loadCustomerCard(request, t, useBranch, customerId);
-        return { ok: true as const, customer };
-      }
-      if (drop) ids.delete(groupId);
-      else ids.add(groupId);
-      const next = [...ids];
-      const bDate = String(data.bDate || "").trim();
-      const eDate = String(data.eDate || "").trim();
-      const period: Record<string, unknown> = {};
-      if (!drop) {
-        if (bDate) period.b_date = bDate;
-        if (eDate) period.e_date = eDate;
-      }
-      const tries: [string, Record<string, unknown>][] = [
-        [`/v2api/${useBranch}/customer/update?id=${customerId}`, { id: customerId, group_ids: next, ...period }],
-      ];
-      if (!drop) {
-        tries.push([`/v2api/${useBranch}/customer/update?id=${customerId}`, { id: customerId, group_ids: next, is_study: 1, ...period }]);
-      } else {
-        tries.push([`/v2api/${useBranch}/customer/update?id=${customerId}`, { id: customerId, group_ids: next, groups: next }]);
-      }
-      try {
-        const les = await request<{ items?: Record<string, unknown>[] }>(
-          `/v2api/${useBranch}/regular-lesson/index`,
-          { page: 0, pageSize: 20, group_id: groupId },
-          t,
-        );
-        for (const it of les.items || []) {
-          const lid = Number(it.id || 0);
-          if (!lid) continue;
-          const cids = Array.isArray(it.customer_ids) ? it.customer_ids.map(Number).filter(Boolean) : [];
-          if (drop && cids.includes(customerId)) {
-            tries.push([`/v2api/${useBranch}/regular-lesson/update?id=${lid}`, { id: lid, customer_ids: cids.filter((x) => x !== customerId) }]);
-          } else if (!drop && !cids.includes(customerId)) {
-            tries.push([`/v2api/${useBranch}/regular-lesson/update?id=${lid}`, { id: lid, customer_ids: [...cids, customerId] }]);
-          }
-        }
-      } catch {
-        /* fallback customer/update only */
-      }
-      let last = "";
-      let ok = false;
-      for (const [path, body] of tries) {
-        try {
-          const res = await request<{ success?: boolean; errors?: unknown }>(path, body, t);
-          if (res.success === false) {
-            last = JSON.stringify(res.errors || res);
-            continue;
-          }
-          ok = true;
-        } catch (e) {
-          last = e instanceof Error ? e.message : String(e);
-        }
-      }
-      if (!ok) return { ok: false as const, error: last || (drop ? "AlfaCRM не сняла с группы." : "AlfaCRM не добавила в группу.") };
+      const attached = await setGroupMembership(request, t, {
+        customerId,
+        groupId,
+        branch: useBranch,
+        drop,
+        bDate: String(data.bDate || "").trim(),
+        eDate: String(data.eDate || "").trim(),
+        current: found?.c,
+      });
+      if (!attached.ok) return { ok: false as const, error: attached.error };
       const slot = listAdminSlots().find((s) => s.groupId === groupId);
       try {
         upsertDossier({
