@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, type PupilGroup } from "./pupil-tariffs.ts";
-import type { CrmSlot } from "./crm-slots-core.ts";
+import { tariffFitsSlot } from "./crm-tariffs.ts";
+import type { CrmTariff } from "./crm-tariffs.ts";
 
 function slot(over: Partial<CrmSlot> = {}): CrmSlot {
   return {
@@ -142,6 +143,25 @@ describe("мастер абонементов учеников", () => {
     assert.equal(auto?.id, 1);
     const chosen = pickBestTariff(slot({ timeFrom: "16:00", timeTo: "17:00", tariffId: 2 }), [a, b]);
     assert.equal(chosen?.id, 2);
+  });
+
+  it("абонемент другого курса сайта не ставится в группу художественной школы", () => {
+    const t = {
+      archive: false,
+      branchIds: [2],
+      duration: 180,
+      lessonTypeIds: [2],
+      subjectIds: [5],
+    } as CrmTariff;
+    const group = slot({
+      branchId: 2,
+      timeFrom: "16:00",
+      timeTo: "19:00",
+      subjectId: 5,
+      courseId: "/art-studio",
+    });
+    assert.equal(tariffFitsSlot(t, group, { tariffId: 373, schoolId: "/art-studio", courseId: "/portrait-12" }), false);
+    assert.equal(tariffFitsSlot(t, group, { tariffId: 400, schoolId: "/art-studio", courseId: "/art-studio" }), true);
   });
 
   it("абонемент соответствует предмету группы", () => {

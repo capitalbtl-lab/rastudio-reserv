@@ -128,7 +128,7 @@ export function tariffFitsSlot(t: CrmTariff, slot: CrmSlot, link?: TariffLink | 
   if (mins && t.duration && Math.abs(mins - t.duration) > 5) return false;
   if (t.lessonTypeIds.length && !t.lessonTypeIds.includes(2)) return false;
   const bind = link === undefined ? guessTariffLinks([t])[0] : link;
-  if (bind?.courseId && slot.courseId && bind.courseId === slot.courseId) return true;
+  if (bind?.courseId && slot.courseId) return bind.courseId === slot.courseId;
   if (!slot.subjectId || !t.subjectIds.includes(slot.subjectId)) return false;
   return true;
 }

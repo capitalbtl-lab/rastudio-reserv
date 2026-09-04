@@ -89,7 +89,7 @@ export function groupHasBoundPupils(taken: number, active: number, archive: numb
   return Number(taken) > 0 || Number(active) > 0 || Number(archive) > 0;
 }
 
-export function pickBestTariff(slot: Pick<CrmSlot, "subjectId" | "branchId" | "timeFrom" | "timeTo" | "tariffId">, list: CrmTariff[]) {
+export function pickBestTariff(slot: Pick<CrmSlot, "subjectId" | "branchId" | "timeFrom" | "timeTo" | "tariffId" | "courseId">, list: CrmTariff[]) {
   const saved = Number(slot.tariffId) || 0;
   if (saved) {
     const hit = list.find((t) => t.id === saved && !t.archive);
