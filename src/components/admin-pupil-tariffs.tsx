@@ -200,6 +200,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     setPath(next);
     setJob(next === "add" ? "assign" : next === "change" ? "close" : "delete");
     setIncludeLeads(next === "add");
+    if (next === "add") setCalcType(1);
   }
 
   function clock() {
@@ -433,7 +434,6 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         const unit = Number(sample.periodType) || 3;
         setPeriodCount(count);
         setPeriodType(unit);
-        setCalcType(Number(sample.calcType) || 0);
         setDateTo(addPeriod(date, count, unit));
       }
       const parts = [`Прочитано ${loadedGroupsRef.current.size} групп`, `${stats.unique} учеников`];
