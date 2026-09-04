@@ -1261,35 +1261,26 @@ export function AdminTariffs() {
               return (
                 <Fragment key={`${t.id}-${branch}`}>
                   {schoolHead ? (
-                    <tr className={schoolId ? "bg-[#e8f3fc]" : "bg-[#f3f5f8]"}>
-                      <td colSpan={9} className="px-4 py-2.5">
-                        <div className="flex items-center gap-3">
-                          <span className={cn("h-5 w-1 shrink-0 rounded-full", schoolId ? "bg-primary" : "bg-black/20")} />
-                          <span className={cn("font-display text-[1.02rem] leading-none", schoolId ? "text-primary" : "text-muted")}>
-                            {schoolLabelOf(schoolId)}
-                          </span>
-                          <span className={cn(
-                            "rounded-full px-2 py-0.5 text-[0.7rem] font-medium tabular-nums",
-                            schoolId ? "bg-white/90 text-primary ring-1 ring-primary/15" : "bg-white text-muted ring-1 ring-black/8",
-                          )}>
-                            {schoolCount}
-                          </span>
-                          <span className={cn("h-px min-w-8 flex-1", schoolId ? "bg-primary/20" : "bg-black/10")} />
+                    <tr className="bg-[#f4f5f7]">
+                      <td colSpan={9} className="px-4 py-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[0.8rem] font-semibold text-fg">{schoolLabelOf(schoolId)}</span>
+                          <span className="text-[0.75rem] tabular-nums text-muted">{schoolCount}</span>
                         </div>
                       </td>
                     </tr>
                   ) : null}
-                  <tr className={cn("border-t border-black/6 align-middle transition-colors hover:bg-sky-50", t.archive && "opacity-55", isOpen && "bg-sky-50", picked.has(t.id) && !isOpen && "bg-sky-50/40")}>
+                  <tr className={cn("border-t border-black/6 align-middle transition-colors hover:bg-black/[0.02]", t.archive && "opacity-55", isOpen && "bg-[#f6f7f9]", picked.has(t.id) && !isOpen && "bg-black/[0.02]")}>
                     <td className="px-3 py-2">
                       <input type="checkbox" checked={picked.has(t.id)} onChange={() => togglePick(t.id)} />
                     </td>
-                    <td className="py-2 font-mono text-xs text-muted">{t.id > 0 ? t.id : "новый"}</td>
+                    <td className="py-2 font-mono text-[0.75rem] text-muted">{t.id > 0 ? t.id : "новый"}</td>
                     <td className="py-2 pr-3">
-                      <div className="truncate font-medium">
+                      <div className="truncate text-[0.82rem] font-medium leading-snug">
                         {t.name}
                         {dirty.has(t.id) ? <span className="ml-1 text-[0.7rem] text-amber-600">●</span> : null}
                       </div>
-                      <div className="text-[0.7rem] text-muted">
+                      <div className="text-[0.72rem] leading-snug text-muted">
                         {t.typeName || TYPE_NAMES[t.type] || "Поурочная"}
                         {t.periodLabel ? ` · ${t.periodLabel}` : ""}
                         {t.eDate ? ` · до ${isoToRu(t.eDate)}` : ""}
@@ -1297,20 +1288,20 @@ export function AdminTariffs() {
                         {t.branchIds.map((id) => tabs.find((b) => b.id === id)?.short || id).join(" · ") || "филиал не указан"}
                       </div>
                     </td>
-                    <td className="py-2 whitespace-nowrap">
+                    <td className="py-2 whitespace-nowrap text-[0.82rem]">
                       <div>{money(t.price)}</div>
-                      {t.pricePerLesson ? <div className="text-[0.7rem] text-muted">{money(t.pricePerLesson)} / урок</div> : null}
+                      {t.pricePerLesson ? <div className="text-[0.72rem] text-muted">{money(t.pricePerLesson)} / урок</div> : null}
                     </td>
-                    <td className="py-2 whitespace-nowrap text-muted">{t.lessonsCount} зан. / {t.duration} мин</td>
+                    <td className="py-2 whitespace-nowrap text-[0.82rem] text-muted">{t.lessonsCount} зан. / {t.duration} мин</td>
                     <td className="py-2 pr-3">
                       {empty ? (
-                        <span className="text-[0.75rem] font-semibold text-rose-600">нет предметов</span>
+                        <span className="text-[0.75rem] text-rose-700">нет предметов</span>
                       ) : (
                         <div className="flex flex-wrap gap-1">
                           {t.subjectIds.slice(0, 2).map((id) => (
-                            <span key={id} className="rounded-md bg-sky-50 px-1.5 py-0.5 text-[0.7rem] text-sky-900 ring-1 ring-sky-100">{nameOf(id)}</span>
+                            <span key={id} className="rounded-[8px] bg-[#f3f5f8] px-1.5 py-0.5 text-[0.75rem] leading-snug text-fg ring-1 ring-black/[0.06]">{nameOf(id)}</span>
                           ))}
-                          {t.subjectIds.length > 2 ? <span className="text-[0.7rem] text-muted">+{t.subjectIds.length - 2}</span> : null}
+                          {t.subjectIds.length > 2 ? <span className="text-[0.75rem] text-muted">+{t.subjectIds.length - 2}</span> : null}
                         </div>
                       )}
                     </td>
@@ -1507,7 +1498,7 @@ function CourseChips({
           links.map((l) => {
             const c = courses.find((x) => x.id === l.courseId);
             return (
-              <span key={l.courseId} className="inline-flex max-w-full items-center gap-0.5 rounded-[8px] bg-sky-50 px-1.5 py-0.5 text-[0.7rem] text-sky-950 ring-1 ring-sky-100">
+              <span key={l.courseId} className="inline-flex max-w-full items-center gap-0.5 rounded-[8px] bg-[#f3f5f8] px-1.5 py-0.5 text-[0.75rem] leading-snug text-fg ring-1 ring-black/[0.06]">
                 <span className="truncate">{c?.label || l.courseId}</span>
                 {editing ? (
                   <button type="button" className="shrink-0 text-muted hover:text-rose-700" onClick={() => onRemove(l.courseId)}>
@@ -1613,7 +1604,7 @@ function Editor({
             {courseIds.length ? courseIds.map((id) => {
               const c = allCourses.find((x) => x.id === id);
               return (
-                <span key={id} className="inline-flex items-center gap-1 rounded-[8px] bg-sky-50 px-2 py-1 text-[0.75rem] text-sky-950 ring-1 ring-sky-100">
+                <span key={id} className="inline-flex items-center gap-1 rounded-[8px] bg-[#f3f5f8] px-2 py-1 text-[0.8rem] text-fg ring-1 ring-black/[0.06]">
                   {c?.label || id}
                   <button type="button" className="text-muted hover:text-rose-700" onClick={() => onRemoveCourse(id)} title="Убрать курс">
                     ×
