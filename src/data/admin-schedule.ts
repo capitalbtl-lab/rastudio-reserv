@@ -695,6 +695,7 @@ function packCrmLesson(
     teacher_ids?: number[];
     subject_id?: number;
     topic?: string | null;
+    note?: string | null;
     homework?: string | null;
     details?: { is_attend?: number | null }[];
     customer_ids?: number[];
@@ -731,9 +732,15 @@ function packCrmLesson(
     group: ctx.groupName,
     topic: String(item.topic || "").trim(),
     homework: String(item.homework || "").trim(),
+    note: String(item.note || "").trim(),
     attend,
     total,
     lessonId: Number(item.id || 0) || undefined,
+    roomId: Number(item.room_id || 0) || undefined,
+    teacherIds: (item.teacher_ids || []).map(Number).filter((n) => n > 0),
+    subjectId: Number(item.subject_id || 0) || undefined,
+    groupIds: (item.group_ids || []).map(Number).filter((n) => n > 0),
+    customerIds: (item.customer_ids || []).map(Number).filter((n) => n > 0),
   };
 }
 
@@ -912,6 +919,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "groupGet"
           | "groupSave"
           | "groupFlags"
+          | "lessonGet"
+          | "lessonSave"
+          | "lessonStatus"
           | "leadsBoard"
           | "leadMove"
           | "leadArchive"
@@ -1031,6 +1041,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
         href?: string;
         label?: string;
         age?: string;
+        customerIds?: number[];
+        groupIds?: number[];
+        timeTo?: string;
+        lessonId?: number;
       };
     },
   )
@@ -2470,6 +2484,156 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const signup = saveSiteSignup(raw);
       logAdmin(`Сайт: пробное ${signup.trialOn ? "вкл" : "выкл"}, запись в группу ${signup.groupOn ? "вкл" : "выкл"}`);
       return { ok: true as const, signup };
+    }
+    if (data.action === "lessonGet") {
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const lessonId = Number(data.lessonId || 0);
+      if (!lessonId) return { ok: false as const, error: "Нет номера занятия." };
+      async function findLesson() {
+        const tries: Record<string, unknown>[] = [{ id: lessonId }, { ids: [lessonId] }, { page: 0, pageSize: 50, group_id: Number(data.groupId) || undefined }];
+        for (const extra of tries) {
+          const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/lesson/index`, { page: 0, pageSize: 50, ...extra }, t).catch(() => ({ items: [] as Record<string, unknown>[] }));
+          const hit = (json.items || []).find((x) => Number(x.id) === lessonId);
+          if (hit) return hit;
+        }
+        return null;
+      }
+      const raw = await findLesson();
+      if (!raw) return { ok: false as const, error: "Занятие не найдено в AlfaCRM." };
+      const from = hm(String(raw.time_from || ""));
+      const to = hm(String(raw.time_to || ""));
+      const teacherIds = (Array.isArray(raw.teacher_ids) ? raw.teacher_ids : []).map(Number).filter((n) => n > 0);
+      const customerIds = (Array.isArray(raw.customer_ids) ? raw.customer_ids : []).map(Number).filter((n) => n > 0);
+      const groupIds = (Array.isArray(raw.group_ids) ? raw.group_ids : []).map(Number).filter((n) => n > 0);
+      const customers: { id: number; name: string }[] = [];
+      for (const cid of customerIds.slice(0, 20)) {
+        try {
+          const pack = await request<{ items?: { id?: number; name?: string }[] }>(`/v2api/${branch}/customer/index`, { page: 0, pageSize: 1, id: cid }, t);
+          const row = (pack.items || []).find((x) => Number(x.id) === cid);
+          customers.push({ id: cid, name: String(row?.name || `клиент ${cid}`) });
+        } catch {
+          customers.push({ id: cid, name: `клиент ${cid}` });
+        }
+      }
+      const rooms = await roomsOfBranch(request, t, branch);
+      const catalog = lessonCatalogOf(branch);
+      const groups = listAdminSlots()
+        .filter((s) => s.branchId === branch && s.groupId)
+        .map((s) => ({ id: s.groupId, name: s.groupName || `группа ${s.groupId}` }));
+      const seen = new Set<number>();
+      const groupList = groups.filter((g) => (seen.has(g.id) ? false : (seen.add(g.id), true)));
+      return {
+        ok: true as const,
+        lesson: {
+          id: lessonId,
+          date: isoish(String(raw.date || raw.lesson_date || "")),
+          from,
+          to,
+          duration: Number(raw.duration) || durationMins(from, to) || 90,
+          status: Number(raw.status || 1),
+          typeId: Number(raw.lesson_type_id || 2),
+          type: String(raw.lesson_type_name || "Групповое"),
+          roomId: Number(raw.room_id || 0),
+          groupIds,
+          customerIds,
+          customers,
+          subjectId: Number(raw.subject_id || 0),
+          teacherIds,
+          topic: String(raw.topic || ""),
+          note: String(raw.note || ""),
+          customers,
+        },
+        rooms,
+        teachers: catalog.teachers,
+        subjects: catalog.subjects,
+        groups: groupList,
+      };
+    }
+    if (data.action === "lessonSave") {
+      const { token, request, formatRuDob } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const lessonId = Number(data.lessonId || 0);
+      if (!lessonId) return { ok: false as const, error: "Нет номера занятия." };
+      const from = String(data.time || "").slice(0, 5);
+      const duration = Number(data.duration) || 90;
+      const to = String(data.timeTo || "").slice(0, 5);
+      const dateIso = isoish(String(data.date || ""));
+      const dateRu = formatRuDob(dateIso);
+      const body: Record<string, unknown> = {
+        id: lessonId,
+        date: dateIso,
+        lesson_date: dateRu,
+        time_from: from,
+        time_to: to,
+        duration,
+        room_id: Number(data.roomId) || null,
+        group_ids: (data.groupIds || []).map(Number).filter((n) => n > 0),
+        customer_ids: (data.customerIds || []).map(Number).filter((n) => n > 0),
+        subject_id: Number(data.subjectId) || undefined,
+        teacher_ids: (data.teacherIds || []).map(Number).filter((n) => n > 0),
+        topic: String(data.topic || ""),
+        note: String(data.note || ""),
+        lesson_type_id: 2,
+      };
+      if (data.groupId) {
+        const gids = body.group_ids as number[];
+        if (!gids.length) body.group_ids = [Number(data.groupId)];
+      }
+      let last = "";
+      const tries = [
+        { ...body, lesson_type_id: 2 },
+        { id: lessonId, date: dateIso, time_from: from, time_to: to, duration, subject_id: body.subject_id, teacher_ids: body.teacher_ids, room_id: body.room_id, group_ids: body.group_ids, customer_ids: body.customer_ids, topic: body.topic, note: body.note },
+      ];
+      let ok = false;
+      for (const payload of tries) {
+        try {
+          const res = await request<{ success?: boolean; errors?: unknown }>(`/v2api/${branch}/lesson/update?id=${lessonId}`, payload, t);
+          if (res.success === false) {
+            last = JSON.stringify(res.errors || res);
+            continue;
+          }
+          ok = true;
+          break;
+        } catch (e) {
+          last = e instanceof Error ? e.message : String(e);
+        }
+      }
+      if (!ok) return { ok: false as const, error: last || "AlfaCRM не приняла занятие." };
+      logAdmin(`Занятие ${lessonId}: сохранено в AlfaCRM`);
+      return { ok: true as const, lessonId, date: dateIso, from, to, duration };
+    }
+    if (data.action === "lessonStatus") {
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const lessonId = Number(data.lessonId || 0);
+      const status = Number(data.statusId || 0);
+      if (!lessonId || !status) return { ok: false as const, error: "Нет занятия или статуса." };
+      let last = "";
+      const tries: [string, Record<string, unknown>][] = [
+        [`/v2api/${branch}/lesson/update?id=${lessonId}`, { id: lessonId, status }],
+        [`/v2api/${branch}/lesson/update?id=${lessonId}`, { id: lessonId, status, init: status === 3 ? 1 : undefined }],
+      ];
+      let ok = false;
+      for (const [path, body] of tries) {
+        try {
+          const res = await request<{ success?: boolean; errors?: unknown }>(path, body, t);
+          if (res.success === false) {
+            last = JSON.stringify(res.errors || res);
+            continue;
+          }
+          ok = true;
+          break;
+        } catch (e) {
+          last = e instanceof Error ? e.message : String(e);
+        }
+      }
+      if (!ok) return { ok: false as const, error: last || "AlfaCRM не сменила статус занятия." };
+      logAdmin(`Занятие ${lessonId}: статус ${status}`);
+      return { ok: true as const, lessonId, status };
     }
     if (data.action === "groupFlags") {
       const { token, request } = await import("./alfacrm");

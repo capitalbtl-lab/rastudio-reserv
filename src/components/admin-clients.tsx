@@ -1525,7 +1525,15 @@ export function AdminClients({
               </p>
               {groupInfo?.calendar?.length ? (
                 <div className="mt-3">
-                  <LessonStrip lessons={groupInfo.calendar} />
+                  <LessonStrip
+                    lessons={groupInfo.calendar}
+                    group={pickedGroup.groupName}
+                    subject={pickedGroup.subject}
+                    teacher={pickedGroup.teacher}
+                    branchId={pickedGroup.branchId}
+                    groupId={pickedGroup.groupId}
+                    onLessons={(calendar) => setGroupInfo((g) => (g ? { ...g, calendar } : g))}
+                  />
                 </div>
               ) : null}
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
