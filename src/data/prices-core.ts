@@ -15,8 +15,6 @@ export type PriceRow = {
   tmx: number;
   mins?: number;
   perWeek?: number;
-  /** Длительности занятий одной недели, если в неделю 2+ урока разной длины: [90, 180]. */
-  minsList?: number[];
   extra?: Record<string, number>;
 };
 
@@ -67,44 +65,15 @@ export function foldCourseLabel(s: string) {
     .trim();
 }
 
-export function parseMinsList(raw: string | number | number[] | undefined): number[] {
-  if (Array.isArray(raw)) return raw.map((n) => Math.round(Number(n) || 0)).filter((n) => n > 0 && n <= 480);
-  if (typeof raw === "number") return raw > 0 ? [Math.round(raw)] : [];
-  const s = String(raw || "").trim();
-  if (!s) return [];
-  const times = s.match(/^(\d+)\s*[x×*]\s*(\d+)$/i);
-  if (times) {
-    const mins = Math.round(Number(times[1]) || 0);
-    const count = Math.min(7, Math.max(1, Math.round(Number(times[2]) || 0)));
-    return mins > 0 ? Array.from({ length: count }, () => mins) : [];
-  }
-  return s
-    .split(/[+/,;]|и/i)
-    .map((p) => Math.round(Number(p.replace(/[^\d.]/g, "")) || 0))
-    .filter((n) => n > 0 && n <= 480);
-}
-
-export function formatMinsList(list?: number[], fallback = 0) {
-  const xs = parseMinsList(list?.length ? list : fallback);
-  if (!xs.length) return "";
-  if (xs.length === 1) return String(xs[0]);
-  if (xs.every((n) => n === xs[0])) return `${xs[0]} × ${xs.length}`;
-  return xs.join(" + ");
-}
-
 export function hydratePrices(rows: PriceRow[]) {
-  cache = rows.map((r) => {
-    const minsList = parseMinsList(r.minsList?.length ? r.minsList : r.mins);
-    return {
-      ...r,
-      name: tidyCourseName(r.name),
-      courseId: r.courseId || r.path || r.id,
-      mins: minsList[0] || Math.max(0, Math.round(Number(r.mins) || 0)),
-      minsList,
-      perWeek: Math.max(minsList.length > 1 ? minsList.length : 0, Math.max(0, Math.round(Number(r.perWeek) || 0))),
-      extra: cleanExtra(r.extra),
-    };
-  });
+  cache = rows.map((r) => ({
+    ...r,
+    name: tidyCourseName(r.name),
+    courseId: r.courseId || r.path || r.id,
+    mins: Math.max(0, Math.round(Number(r.mins) || 0)),
+    perWeek: Math.max(0, Math.round(Number(r.perWeek) || 0)),
+    extra: cleanExtra(r.extra),
+  }));
 }
 
 function cleanExtra(raw?: Record<string, number>) {
@@ -179,7 +148,7 @@ export function priceForPath(path: string) {
   );
 }
 
-export type GroupDuration = { path: string; course: string; mins: number; perWeek: number; minsList?: number[]; groups: number };
+export type GroupDuration = { path: string; course: string; mins: number; perWeek: number; groups: number };
 
 /** Длительность к цене: только courseId / path. Имя курса не склеивает. */
 export function matchDuration(row: PriceRow, items: GroupDuration[]) {
