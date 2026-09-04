@@ -160,7 +160,7 @@ function LessonCard({
     ["Домашнее задание", l.homework || ""],
   ];
   if (l.status === 3 && (l.total || 0) > 0) rows.push(["Присутствие", `${l.attend || 0} из ${l.total}`]);
-  const canAct = Boolean(pinned && l.lessonId && onOpen);
+  const canAct = Boolean(pinned && onOpen);
   return (
     <div
       className={cn("fixed z-[240] w-[20.5rem] p-3 text-left text-[0.78rem] leading-snug text-fg", RA_POP)}
@@ -227,16 +227,17 @@ const FIELD = "mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-med
 function LessonEdit({
   branchId,
   groupId,
-  lessonId,
+  seed,
   onClose,
   onSaved,
 }: {
   branchId: number;
   groupId: number;
-  lessonId: number;
+  seed: GroupCalLesson;
   onClose: () => void;
   onSaved: (patch: Partial<GroupCalLesson>) => void;
 }) {
+  const lessonId = seed.lessonId || 0;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -251,10 +252,42 @@ function LessonEdit({
   useEffect(() => {
     let live = true;
     setLoading(true);
-    void adminSchedule({ data: { token: token(), action: "lessonGet", branchId, groupId, lessonId } as never }).then((res) => {
+    void adminSchedule({
+      data: {
+        token: token(),
+        action: "lessonGet",
+        branchId,
+        groupId,
+        lessonId,
+        date: seed.date,
+        time: seed.from,
+        timeTo: seed.to,
+        duration: seed.duration,
+        roomId: seed.roomId,
+        subjectId: seed.subjectId,
+        teacherIds: seed.teacherIds,
+        topic: seed.topic,
+        note: seed.note,
+      } as never,
+    }).then((res) => {
       if (!live) return;
       if (!res.ok) {
-        setError(("error" in res && res.error) || "Не удалось открыть занятие.");
+        setForm({
+          id: lessonId,
+          date: toYmd(seed.date),
+          from: seed.from || "",
+          to: seed.to || "",
+          duration: seed.duration || 90,
+          roomId: seed.roomId || 0,
+          groupIds: seed.groupIds?.length ? seed.groupIds : groupId ? [groupId] : [],
+          customerIds: seed.customerIds || [],
+          customers: [],
+          subjectId: seed.subjectId || 0,
+          teacherIds: seed.teacherIds || [],
+          topic: seed.topic || "",
+          note: seed.note || "",
+        });
+        setError(("error" in res && res.error) || "");
         setLoading(false);
         return;
       }
@@ -282,7 +315,7 @@ function LessonEdit({
     return () => {
       live = false;
     };
-  }, [branchId, groupId, lessonId]);
+  }, [branchId, groupId, lessonId, seed.date, seed.from]);
 
   useEffect(() => {
     const qq = q.trim();
@@ -364,7 +397,7 @@ function LessonEdit({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[260] flex items-start justify-center overflow-y-auto bg-black/35 p-3 pt-[8vh]" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-[400] flex items-start justify-center overflow-y-auto bg-black/40 p-3 pt-[6vh]" onMouseDown={onClose}>
       <div className={cn("w-full max-w-lg p-5", RA_POP)} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-display text-lg font-semibold text-fg">Групповое — занятие</h3>
@@ -522,7 +555,7 @@ export function LessonStrip({
   const [range, setRange] = useState<(typeof RANGE_OPTS)[number]["id"]>("10");
   const [tip, setTip] = useState<{ lesson: GroupCalLesson; top: number; left: number } | null>(null);
   const [pin, setPin] = useState<{ lesson: GroupCalLesson; top: number; left: number } | null>(null);
-  const [editId, setEditId] = useState<number | null>(null);
+  const [edit, setEdit] = useState<GroupCalLesson | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pinRef = useRef(pin);
@@ -645,7 +678,7 @@ export function LessonStrip({
           <span className="h-2.5 w-2.5 rounded-[3px] bg-neutral-200 ring-1 ring-neutral-300" /> отменено
         </span>
       </p>
-      {pop
+      {pop && !edit
         ? createPortal(
             <div data-op="lesson-pop">
               <LessonCard
@@ -662,7 +695,7 @@ export function LessonStrip({
                   setPin(null);
                   setError("");
                 }}
-                onOpen={branchId && pop.lesson.lessonId ? () => setEditId(pop.lesson.lessonId || null) : undefined}
+                onOpen={branchId ? () => { setEdit(pop.lesson); setPin(null); setTip(null); } : undefined}
                 onConduct={() => void setStatus(3)}
                 onCancel={() => void setStatus(2)}
               />
@@ -670,15 +703,16 @@ export function LessonStrip({
             document.body,
           )
         : null}
-      {editId && branchId ? (
+      {edit && branchId ? (
         <div data-op="lesson-edit">
           <LessonEdit
             branchId={branchId}
             groupId={groupId || 0}
-            lessonId={editId}
-            onClose={() => setEditId(null)}
+            seed={edit}
+            onClose={() => setEdit(null)}
             onSaved={(patch) => {
-              patchLesson(editId, patch);
+              if (edit.lessonId) patchLesson(edit.lessonId, patch);
+              setEdit(null);
               setPin(null);
             }}
           />

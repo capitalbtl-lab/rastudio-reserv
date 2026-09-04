@@ -2486,27 +2486,41 @@ export const adminSchedule = createServerFn({ method: "POST" })
       return { ok: true as const, signup };
     }
     if (data.action === "lessonGet") {
-      const { token, request } = await import("./alfacrm");
+      const { token, request, formatRuDob } = await import("./alfacrm");
       const t = await token();
       const branch = Number(data.branchId) || 1;
       const lessonId = Number(data.lessonId || 0);
-      if (!lessonId) return { ok: false as const, error: "Нет номера занятия." };
+      const gid = Number(data.groupId) || 0;
+      const dateIso = isoish(String(data.date || ""));
+      const dateRu = dateIso ? formatRuDob(dateIso) : "";
       async function findLesson() {
-        const tries: Record<string, unknown>[] = [{ id: lessonId }, { ids: [lessonId] }, { page: 0, pageSize: 50, group_id: Number(data.groupId) || undefined }];
-        for (const extra of tries) {
-          const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/lesson/index`, { page: 0, pageSize: 50, ...extra }, t).catch(() => ({ items: [] as Record<string, unknown>[] }));
-          const hit = (json.items || []).find((x) => Number(x.id) === lessonId);
-          if (hit) return hit;
+        const filters: Record<string, unknown>[] = [];
+        for (const status of [1, 2, 3]) {
+          if (gid && dateRu) filters.push({ status, group_id: gid, date_from: dateRu, date_to: dateRu });
+          if (gid && dateIso) filters.push({ status, group_id: gid, date: dateIso });
+          if (gid) filters.push({ status, group_id: gid });
+        }
+        for (const extra of filters) {
+          for (let page = 0; page < 8; page++) {
+            const json = await request<{ items?: Record<string, unknown>[] }>(
+              `/v2api/${branch}/lesson/index`,
+              { page, pageSize: 100, ...extra },
+              t,
+            ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+            const hit = (json.items || []).find((x) => (lessonId ? Number(x.id) === lessonId : isoish(String(x.date || x.lesson_date || "")) === dateIso));
+            if (hit) return hit;
+            if ((json.items || []).length < 100) break;
+          }
         }
         return null;
       }
-      const raw = await findLesson();
-      if (!raw) return { ok: false as const, error: "Занятие не найдено в AlfaCRM." };
-      const from = hm(String(raw.time_from || ""));
-      const to = hm(String(raw.time_to || ""));
-      const teacherIds = (Array.isArray(raw.teacher_ids) ? raw.teacher_ids : []).map(Number).filter((n) => n > 0);
-      const customerIds = (Array.isArray(raw.customer_ids) ? raw.customer_ids : []).map(Number).filter((n) => n > 0);
-      const groupIds = (Array.isArray(raw.group_ids) ? raw.group_ids : []).map(Number).filter((n) => n > 0);
+      const raw = lessonId || dateIso ? await findLesson() : null;
+      const from = hm(String(raw?.time_from || data.time || ""));
+      const to = hm(String(raw?.time_to || data.timeTo || ""));
+      const teacherIds = (Array.isArray(raw?.teacher_ids) ? raw!.teacher_ids : data.teacherIds || []).map(Number).filter((n) => n > 0);
+      const customerIds = (Array.isArray(raw?.customer_ids) ? raw!.customer_ids : data.customerIds || []).map(Number).filter((n) => n > 0);
+      const groupIds = (Array.isArray(raw?.group_ids) ? raw!.group_ids : []).map(Number).filter((n) => n > 0);
+      if (!groupIds.length && gid) groupIds.push(gid);
       const customers: { id: number; name: string }[] = [];
       for (const cid of customerIds.slice(0, 20)) {
         try {
@@ -2527,23 +2541,22 @@ export const adminSchedule = createServerFn({ method: "POST" })
       return {
         ok: true as const,
         lesson: {
-          id: lessonId,
-          date: isoish(String(raw.date || raw.lesson_date || "")),
+          id: Number(raw?.id || lessonId || 0),
+          date: isoish(String(raw?.date || raw?.lesson_date || dateIso)),
           from,
           to,
-          duration: Number(raw.duration) || durationMins(from, to) || 90,
-          status: Number(raw.status || 1),
-          typeId: Number(raw.lesson_type_id || 2),
-          type: String(raw.lesson_type_name || "Групповое"),
-          roomId: Number(raw.room_id || 0),
+          duration: Number(raw?.duration || data.duration) || durationMins(from, to) || 90,
+          status: Number(raw?.status || 1),
+          typeId: Number(raw?.lesson_type_id || 2),
+          type: String(raw?.lesson_type_name || "Групповое"),
+          roomId: Number(raw?.room_id || data.roomId || 0),
           groupIds,
           customerIds,
           customers,
-          subjectId: Number(raw.subject_id || 0),
+          subjectId: Number(raw?.subject_id || data.subjectId || 0),
           teacherIds,
-          topic: String(raw.topic || ""),
-          note: String(raw.note || ""),
-          customers,
+          topic: String(raw?.topic || data.topic || ""),
+          note: String(raw?.note || data.note || ""),
         },
         rooms,
         teachers: catalog.teachers,
