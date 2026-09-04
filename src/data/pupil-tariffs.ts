@@ -328,6 +328,40 @@ export function keepPupilsWithActiveTariffs<T extends { customerId: number; bran
   }
   return out;
 }
+
+/** Удаление/изменение — по человеку, не по «человек × группа». Кто в двух группах, одна строка. */
+export function collapsePupilsByCustomer(items: PupilTariffItem[]) {
+  const map = new Map<string, PupilTariffItem>();
+  for (const it of items) {
+    const key = `${it.branchId}:${it.customerId}`;
+    const prev = map.get(key);
+    if (!prev) {
+      map.set(key, { ...it });
+      continue;
+    }
+    const groups = [...new Set([prev.groupName, it.groupName].filter(Boolean))];
+    const tariffs = [...(prev.activeTariffs || []), ...(it.activeTariffs || [])].filter(
+      (t, i, a) => a.findIndex((x) => x.id === t.id) === i,
+    );
+    map.set(key, {
+      ...prev,
+      groupName: groups.join(" · "),
+      activeTariffs: tariffs.length ? tariffs : prev.activeTariffs,
+    });
+  }
+  return [...map.values()];
+}
+
+export function pupilListStats(items: PupilTariffItem[]) {
+  const people = new Set(items.map((it) => `${it.branchId}:${it.customerId}`));
+  const leads = new Set(items.filter((it) => it.status === "лид").map((it) => `${it.branchId}:${it.customerId}`));
+  return {
+    rows: items.length,
+    unique: people.size,
+    dual: Math.max(0, items.length - people.size),
+    leads: leads.size,
+  };
+}
 export function customerTariffPayload(opts: {
   customerId: number;
   tariffId: number;

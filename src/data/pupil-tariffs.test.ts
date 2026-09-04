@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
 import type { CrmTariff } from "./crm-tariffs.ts";
 
@@ -362,5 +362,34 @@ describe("мастер абонементов учеников", () => {
     const list = uniqueLiveGroups([slot({ taken: 0, takenStudy: 3, takenLead: 2 })]);
     assert.equal(list[0].taken, 5);
     assert.equal(groupHasBoundPupils(list[0].taken, 0, 0), true);
+  });
+
+  it("удаление схлопывает человека из двух групп в одну строку", () => {
+    const a = {
+      customerId: 7,
+      name: "Иванов",
+      status: "учится",
+      groupId: 586,
+      branchId: 2,
+      groupName: "группа 586",
+      school: "ЦМИТ",
+      tariffId: 385,
+      tariffName: "3850",
+      price: 3850,
+      periodCount: 0,
+      periodType: 3,
+      calcType: 0,
+      subjectIds: [1],
+      lessonTypeIds: [2],
+      lessonsCount: 4,
+    };
+    const b = { ...a, groupId: 592, groupName: "группа 592" };
+    const stats = pupilListStats([a, b, { ...a, customerId: 8, name: "Петров", groupId: 586, groupName: "группа 586" }]);
+    assert.equal(stats.rows, 3);
+    assert.equal(stats.unique, 2);
+    assert.equal(stats.dual, 1);
+    const collapsed = collapsePupilsByCustomer([a, b]);
+    assert.equal(collapsed.length, 1);
+    assert.equal(collapsed[0].groupName, "группа 586 · группа 592");
   });
 });

@@ -5,7 +5,7 @@ import { adminSchedule } from "@/data/admin-schedule";
 import { retryFetch } from "@/lib/retry-fetch";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK } from "@/data/pupil-tariffs";
+import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, collapsePupilsByCustomer, pupilListStats } from "@/data/pupil-tariffs";
 import { ISO_DATE_MAX, ISO_DATE_MIN, clampIsoDate } from "@/data/admin-ui";
 
 type PupilGroup = {
@@ -138,11 +138,11 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
   const [subjectOf, setSubjectOf] = useState<Record<string, number>>({});
   const [progress, setProgress] = useState<{
-    groupsDone: number;
-    groupsTotal: number;
-    live: number;
-    scanned: number;
-    archived: number;
+    done: number;
+    total: number;
+    label: string;
+    unit: string;
+    extra: string;
   } | null>(null);
   const [summary, setSummary] = useState("");
 
@@ -200,7 +200,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     const grouped: Record<string, GroupTariff> = {};
     let scanned = 0;
     let archived = 0;
-    setProgress({ groupsDone: 0, groupsTotal: keys.length, live: 0, scanned: 0, archived: 0 });
+    setProgress({ done: 0, total: keys.length, label: "Читаю CRM", unit: "групп", extra: "" });
     setSummary("");
     try {
       for (let i = 0; i < keys.length; i += PLAN_GROUP_CHUNK) {
@@ -237,19 +237,22 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         Object.assign(grouped, res.byGroup || {});
         scanned += Number(res.scanned || res.items?.length || 0);
         archived += Number(res.archivedOnly || 0);
+        const mid = pupilListStats(rows);
         setProgress({
-          groupsDone: to,
-          groupsTotal: keys.length,
-          live: rows.length,
-          scanned,
-          archived,
+          done: to,
+          total: keys.length,
+          label: "Читаю CRM",
+          unit: "групп",
+          extra: path === "add" ? `строк ${rows.length}` : `актуальных ${mid.unique} чел.${mid.dual ? ` · ${mid.dual} в двух группах` : ""}`,
         });
       }
-      setItems(rows);
+      const list = path === "add" ? rows : collapsePupilsByCustomer(rows);
+      const stats = pupilListStats(rows);
+      setItems(list);
       setByGroup(grouped);
-      setChosen(new Set(path === "add" ? rows.filter((r) => r.tariffId && r.status === "учится").map(pupilKey) : rows.map(pupilKey)));
+      setChosen(new Set(path === "add" ? list.filter((r) => r.tariffId && r.status === "учится").map(pupilKey) : list.map(pupilKey)));
       setSubjectOf(Object.fromEntries(groups.filter((g) => picked.has(g.key)).map((g) => [g.key, g.subjectId || 0])));
-      const sample = rows.find((r) => r.tariffId);
+      const sample = list.find((r) => r.tariffId);
       if (sample) {
         const count = Number(sample.periodCount) || 0;
         const unit = Number(sample.periodType) || 3;
@@ -258,13 +261,11 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         setCalcType(Number(sample.calcType) || 0);
         setDateTo(addPeriod(date, count, unit));
       }
-      if (path !== "add" && archived) {
-        setSummary(
-          `Прочитано ${keys.length} групп, ${scanned} учеников в CRM. Актуальных на сегодня: ${rows.length}. Истекших или ещё не начатых: ${archived}.`,
-        );
-      } else {
-        setSummary(`Прочитано ${keys.length} групп, учеников: ${rows.length}.`);
-      }
+      const parts = [`Прочитано ${keys.length} групп`, `${stats.unique} учеников`];
+      if (stats.dual) parts.push(`${stats.dual} ходят в две выбранные группы — в удалении это один человек`);
+      if (stats.leads) parts.push(`лидов ${stats.leads}`);
+      if (path !== "add" && archived) parts.push(`истекших пропущено ${archived}`);
+      setSummary(parts.join(". ") + ".");
       setMsg("");
       return true;
     } catch (e) {
@@ -351,11 +352,19 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     setResult(acc);
     const verb = mode === "delete" ? "Удаляю" : mode === "close" ? "Завершаю" : "Назначаю";
     const mins = assignEtaMin(total);
-    setMsg(`${verb} ${total} учеников потихоньку, по ${ASSIGN_CHUNK} шт. Около ${mins} мин.`);
+    setProgress({ done: 0, total, label: verb, unit: "учеников", extra: `около ${mins} мин, по ${ASSIGN_CHUNK}` });
+    setMsg("");
     try {
       for (let i = 0; i < pack.length; i += ASSIGN_CHUNK) {
         const chunk = pack.slice(i, i + ASSIGN_CHUNK);
-        setMsg(`AlfaCRM: ${Math.min(i + chunk.length, total)} / ${total} · готово ${acc.done} · пауза`);
+        const at = Math.min(i + chunk.length, total);
+        setProgress({
+          done: at,
+          total,
+          label: verb,
+          unit: "учеников",
+          extra: `готово ${acc.done} · пропуск ${acc.skipped} · ошибок ${acc.failed.length}`,
+        });
         const res = (await retryFetch(
           () =>
             adminSchedule({
@@ -386,6 +395,13 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           acc.failed.push(...(res.failed || []).map((f) => ({ name: f.name, error: f.error })));
         }
         setResult({ ...acc, failed: [...acc.failed] });
+        setProgress({
+          done: at,
+          total,
+          label: verb,
+          unit: "учеников",
+          extra: `готово ${acc.done} · пропуск ${acc.skipped} · ошибок ${acc.failed.length}`,
+        });
         if (i + ASSIGN_CHUNK < pack.length) await new Promise((r) => setTimeout(r, ASSIGN_BATCH_PAUSE_MS));
       }
       setMsg("");
@@ -462,22 +478,18 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       {busy && progress ? (
         <div className="mt-3 rounded-[12px] bg-surface-2 p-3 ring-1 ring-black/8">
           <div className="flex items-center justify-between gap-3 text-sm">
-            <span className="font-medium">Загрузка из CRM</span>
+            <span className="font-medium">{progress.label}</span>
             <span className="text-muted">
-              {progress.groupsDone} / {progress.groupsTotal} групп
+              {progress.done} / {progress.total} {progress.unit}
             </span>
           </div>
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-white ring-1 ring-black/6">
             <div
               className="h-full rounded-full bg-primary transition-[width] duration-300"
-              style={{ width: `${progress.groupsTotal ? Math.round((progress.groupsDone / progress.groupsTotal) * 100) : 0}%` }}
+              style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }}
             />
           </div>
-          <p className="mt-2 text-[0.75rem] text-muted">
-            {path === "add"
-              ? `Учеников в выборке: ${progress.live}`
-              : `Актуальных на сегодня: ${progress.live} · учеников в CRM: ${progress.scanned} · истекших пропущено: ${progress.archived}`}
-          </p>
+          {progress.extra ? <p className="mt-2 text-[0.75rem] text-muted">{progress.extra}</p> : null}
         </div>
       ) : null}
 
