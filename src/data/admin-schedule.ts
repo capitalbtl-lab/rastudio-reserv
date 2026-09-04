@@ -205,23 +205,36 @@ async function overlayGroupHeadcount(
   request: typeof import("./alfacrm").request,
   t: string,
 ) {
-  const { crmIndexTotal } = await import("./pupil-tariffs");
+  const { crmIndexTotal, countCgiParticipants } = await import("./pupil-tariffs");
   const next = groups.map((g) => ({ ...g }));
   for (let i = 0; i < next.length; i += 6) {
     await Promise.all(
       next.slice(i, i + 6).map(async (g) => {
+        const cgiItems: Record<string, unknown>[] = [];
+        let cgiTotal = 0;
+        for (let page = 0; page < 5; page += 1) {
+          const cgi = await request<{ items?: Record<string, unknown>[]; total?: number; count?: number }>(
+            `/v2api/${g.branchId}/cgi/index?group_id=${g.groupId}`,
+            { page, pageSize: 100, group_id: g.groupId },
+            t,
+          ).catch(() => null);
+          const batch = cgi?.items || [];
+          cgiItems.push(...batch);
+          cgiTotal = Math.max(cgiTotal, Number(cgi?.total) || 0, crmIndexTotal(cgi));
+          if (batch.length < 100) break;
+        }
+        const cgiN = Math.max(countCgiParticipants(cgiItems), cgiTotal);
+        if (cgiN > 0) {
+          g.taken = cgiN;
+          return;
+        }
         const json = await request<{ items?: Record<string, unknown>[]; total?: number; count?: number }>(
           `/v2api/${g.branchId}/customer/index?group_id=${g.groupId}`,
           { page: 0, pageSize: 50, group_id: g.groupId },
           t,
         ).catch(() => null);
         if (!json) return;
-        const ids = new Set<number>();
-        for (const c of json.items || []) {
-          const id = Number(c.id || 0);
-          if (id) ids.add(id);
-        }
-        g.taken = Math.max(crmIndexTotal(json), ids.size);
+        g.taken = Math.max(crmIndexTotal(json), (json.items || []).length);
       }),
     );
   }
@@ -279,6 +292,34 @@ async function pullGroupMembersCrm(
   await pull({});
   if (!active.some((m) => m.status === "лид")) await pull({ is_study: 0 });
   if (!opts?.skipArchive && !archive.length) await pull({ is_study: 2 }, true);
+  const { cgiCustomerId } = await import("./pupil-tariffs");
+  const cgiItems: Record<string, unknown>[] = [];
+  for (let page = 0; page < 5; page += 1) {
+    const json = await request<{ items?: Record<string, unknown>[] }>(
+      `/v2api/${branch}/cgi/index?group_id=${gid}`,
+      { page, pageSize: 50, group_id: gid },
+      t,
+    ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+    const batch = json.items || [];
+    cgiItems.push(...batch);
+    if (batch.length < 50) break;
+  }
+  const missing = [
+    ...new Set(cgiItems.map(cgiCustomerId).filter((id) => id && !seen.has(id))),
+  ];
+  for (const id of missing) {
+    const json = await request<{ items?: Record<string, unknown>[] }>(
+      `/v2api/${branch}/customer/index`,
+      { page: 0, pageSize: 5, id },
+      t,
+    ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+    const c = (json.items || []).find((x) => Number(x.id) === id) || { id, name: "", is_study: 0 };
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const m = packMember(c, Number(c.is_study) === 2);
+    if (m.archived) archive.push(m);
+    else active.push(m);
+  }
   return { active, archive };
 }
 
