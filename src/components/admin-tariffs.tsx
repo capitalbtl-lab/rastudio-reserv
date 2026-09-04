@@ -1,7 +1,6 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { adminSchedule } from "@/data/admin-schedule";
 import { adminScheduleMap } from "@/data/admin-schedule-map";
 import { retryFetch } from "@/lib/retry-fetch";
@@ -98,17 +97,73 @@ type SiteCourse = { id: string; schoolId: string; label: string; href?: string; 
 type SiteSchool = { id: string; label: string };
 type SubjectRow = { id: number; name: string; href?: string; courseId?: string };
 
-function courseSelectOptions(courses: SiteCourse[], schools: SiteSchool[], schoolId: string) {
+function courseSelectOptions(courses: SiteCourse[], schools: SiteSchool[], schoolId: string, selected?: string) {
   const list = schoolId ? courses.filter((c) => c.schoolId === schoolId) : courses;
+  const keyOf = (c: SiteCourse) => `${c.schoolId}\0${c.label}\0${c.age || ""}`;
+  const score = (c: SiteCourse) => (c.id.includes("#") ? 0 : 2) + (c.href && c.href === c.id ? 1 : 0);
+  const best = new Map<string, SiteCourse>();
+  for (const c of list) {
+    const k = keyOf(c);
+    const prev = best.get(k);
+    if (!prev || score(c) > score(prev)) best.set(k, c);
+  }
+  const shown = list.filter((c) => best.get(keyOf(c))?.id === c.id || c.id === selected);
   const nByLabel = new Map<string, number>();
-  for (const c of list) nByLabel.set(c.label, (nByLabel.get(c.label) || 0) + 1);
-  return list.map((c) => {
+  for (const c of shown) nByLabel.set(c.label, (nByLabel.get(c.label) || 0) + 1);
+  return shown.map((c) => {
     const school = schools.find((s) => s.id === c.schoolId);
     const head = schoolId ? c.label : `${(school?.label || "").replace(/^Школа\s+/i, "")} · ${c.label}`;
     const dup = (nByLabel.get(c.label) || 0) > 1;
-    const extra = c.age && !head.includes(c.age) ? c.age : c.id;
-    return { value: c.id, label: dup ? `${head} · ${extra}` : head };
+    const extra = c.age && !head.includes(c.age) ? c.age : "";
+    return { value: c.id, label: dup && extra ? `${head} · ${extra}` : head };
   });
+}
+
+function canonicalCourse(courses: SiteCourse[], courseId: string) {
+  const course = courses.find((c) => c.id === courseId);
+  if (!course) return undefined;
+  return (
+    courses.find(
+      (c) =>
+        c.schoolId === course.schoolId &&
+        c.label === course.label &&
+        (c.age || "") === (course.age || "") &&
+        !c.id.includes("#"),
+    ) || course
+  );
+}
+
+function subjectIdsOfCourse(
+  courseId: string,
+  courses: SiteCourse[],
+  courseSubjects: Record<string, number[]>,
+  subjects: SubjectRow[],
+) {
+  const course = canonicalCourse(courses, courseId) || courses.find((c) => c.id === courseId);
+  const keys = new Set<string>();
+  if (courseId) keys.add(courseId);
+  if (course?.id) keys.add(course.id);
+  if (course?.href) keys.add(course.href);
+  if (course) {
+    for (const s of courses) {
+      if (s.schoolId !== course.schoolId) continue;
+      const same =
+        s.id === course.id ||
+        (course.href && s.href === course.href) ||
+        (s.label === course.label && (s.age || "") === (course.age || ""));
+      if (!same) continue;
+      keys.add(s.id);
+      if (s.href) keys.add(s.href);
+    }
+  }
+  const ids = new Set<number>();
+  for (const k of keys) for (const id of courseSubjects[k] || []) ids.add(Number(id) || 0);
+  for (const s of subjects) {
+    if (s.courseId && keys.has(s.courseId)) ids.add(s.id);
+    if (s.href && keys.has(s.href)) ids.add(s.id);
+  }
+  ids.delete(0);
+  return { course, ids: [...ids] };
 }
 type Probe = {
   id: number;
@@ -234,98 +289,56 @@ function PeriodPicker({
   type: number;
   onChange: (count: number, type: number) => void;
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState(count ? String(count) : "");
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 160, maxH: 160, up: false });
   useEffect(() => {
     setText(count ? String(count) : "");
   }, [count]);
   const n = Number(String(text).replace(/\D/g, "")) || 0;
-  function plural(n: number, one: string, few: string, many: string) {
-    const m10 = n % 10;
-    const m100 = n % 100;
+  function plural(num: number, one: string, few: string, many: string) {
+    const m10 = num % 10;
+    const m100 = num % 100;
     if (m10 === 1 && m100 !== 11) return one;
     if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 > 20)) return few;
     return many;
   }
-  const options = n
-    ? [
-        { id: 1, label: `${n} ${plural(n, "день", "дня", "дней")}` },
-        { id: 2, label: `${n} ${plural(n, "неделя", "недели", "недель")}` },
-        { id: 3, label: `${n} ${plural(n, "месяц", "месяца", "месяцев")}` },
-      ]
-    : [];
-  const picked = options.find((o) => o.id === type && n === count);
-  function place() {
-    const el = wrapRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const width = Math.max(r.width, 160);
-    const spaceBelow = window.innerHeight - r.bottom - 8;
-    const spaceAbove = r.top - 8;
-    const up = spaceBelow < 140 && spaceAbove > spaceBelow;
-    const maxH = Math.min(200, Math.max(up ? spaceAbove : spaceBelow, 96));
-    setPos({
-      top: up ? r.top - 4 : r.bottom + 4,
-      left: r.left,
-      width,
-      maxH,
-      up,
-    });
+  const units = [
+    { id: 1, one: "день", few: "дня", many: "дней" },
+    { id: 2, one: "неделя", few: "недели", many: "недель" },
+    { id: 3, one: "месяц", few: "месяца", many: "месяцев" },
+  ];
+  function setDigits(raw: string) {
+    const digits = raw.replace(/\D/g, "").slice(0, 4);
+    setText(digits);
+    const next = Number(digits) || 0;
+    if (!next) onChange(0, 0);
+    else onChange(next, type || 3);
   }
-  useEffect(() => {
-    if (!open) return;
-    place();
-  }, [open, text]);
-  const hint = picked ? picked.label : count ? `${count} ${PERIOD_UNITS.find((u) => u.id === type)?.name || ""}` : "";
-  const menu = open && options.length ? (
-    <div
-      className={cn("fixed z-[400] py-1", RA_POP)}
-      style={{
-        top: pos.up ? pos.top - pos.maxH : pos.top,
-        left: pos.left,
-        width: pos.width,
-        maxHeight: pos.maxH,
-      }}
-    >
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          className={cn("block w-full px-3 py-1.5 text-left text-sm hover:bg-sky-50", o.id === type && n === count && "bg-sky-50 font-medium")}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => {
-            onChange(n, o.id);
-            setText(String(n));
-            setOpen(false);
-          }}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  ) : null;
   return (
-    <div ref={wrapRef} className="relative">
+    <div>
       <input
         className="h-10 w-full rounded-xl bg-white px-3 text-sm outline-none ring-1 ring-black/10 focus:ring-2 focus:ring-primary/30"
         inputMode="numeric"
-        placeholder="Введите цифру"
+        placeholder="Число"
         value={text}
-        onChange={(e) => {
-          const digits = e.target.value.replace(/\D/g, "").slice(0, 4);
-          setText(digits);
-          setOpen(Boolean(digits));
-          if (!digits) onChange(0, 0);
-        }}
-        onFocus={() => {
-          if (n) setOpen(true);
-        }}
-        onBlur={() => window.setTimeout(() => setOpen(false), 160)}
+        onChange={(e) => setDigits(e.target.value)}
       />
-      <p className="mt-1 h-4 text-[0.7rem] leading-4 text-muted">{!open && hint ? `Выбрано: ${hint}` : "\u00a0"}</p>
-      {menu && typeof document !== "undefined" ? createPortal(menu, document.body) : null}
+      <div className="mt-1 flex min-h-7 flex-wrap items-center gap-1">
+        {n
+          ? units.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[0.72rem] ring-1",
+                  type === u.id ? "bg-primary text-white ring-primary" : "bg-white text-fg ring-black/10 hover:bg-sky-50",
+                )}
+                onClick={() => onChange(n, u.id)}
+              >
+                {n} {plural(n, u.one, u.few, u.many)}
+              </button>
+            ))
+          : <span className="text-[0.7rem] text-muted">число, затем дни / недели / месяцы</span>}
+      </div>
     </div>
   );
 }
@@ -541,26 +554,20 @@ export function AdminTariffs() {
   }, [items, q, showArchive, subjects, branch, orderLock]);
 
   async function bindTariff(tariffId: number, courseId: string) {
-    const course = tree.courses.find((c) => c.id === courseId);
+    const resolved = subjectIdsOfCourse(courseId, tree.courses, courseSubjects, subjects);
+    const course = resolved.course || tree.courses.find((c) => c.id === courseId);
     const next = [
       ...tariffMap.filter((x) => x.tariffId !== tariffId),
       { tariffId, courseId: course?.id || "", schoolId: course?.schoolId || "" },
     ];
     setTariffMap(next);
-    let mappedCount = 0;
-    if (course?.id) {
-      const mapped = [
-        ...(courseSubjects[course.id] || []),
-        ...subjects.filter((s) => s.courseId === course.id).map((s) => s.id),
-      ].filter(Boolean);
-      const ids = [...new Set(mapped)];
-      mappedCount = ids.length;
-      if (ids.length) {
-        const have = items.find((t) => t.id === tariffId)?.subjectIds || [];
-        const merged = have.length ? [...new Set([...have, ...ids])] : ids;
-        if (merged.length !== have.length || merged.some((id) => !have.includes(id))) {
-          patch(tariffId, { subjectIds: merged });
-        }
+    const ids = resolved.ids;
+    const mappedCount = ids.length;
+    if (course?.id && ids.length) {
+      const have = items.find((t) => t.id === tariffId)?.subjectIds || [];
+      const merged = have.length ? [...new Set([...have, ...ids])] : ids;
+      if (merged.length !== have.length || merged.some((id) => !have.includes(id))) {
+        patch(tariffId, { subjectIds: merged });
       }
     }
     const persist = next.filter((x) => x.tariffId !== 0);
@@ -580,6 +587,20 @@ export function AdminTariffs() {
       setMsg(res.ok ? "Курс сайта записан. AlfaCRM не менялась." : res.error || "Не сохранилось.");
     }
   }
+
+  useEffect(() => {
+    if (open == null) return;
+    const t = items.find((x) => x.id === open);
+    const link = tariffMap.find((x) => x.tariffId === open);
+    if (!t || !link?.courseId || t.subjectIds.length) return;
+    const { ids, course } = subjectIdsOfCourse(link.courseId, tree.courses, courseSubjects, subjects);
+    if (ids.length) patch(t.id, { subjectIds: ids });
+    if (course && course.id !== link.courseId) {
+      setTariffMap((m) =>
+        m.map((x) => (x.tariffId === open ? { ...x, courseId: course.id, schoolId: course.schoolId || x.schoolId } : x)),
+      );
+    }
+  }, [open, courseSubjects, subjects, tree.courses]);
 
   function patch(id: number, next: Partial<Row>) {
     setItems((list) =>
@@ -1053,7 +1074,7 @@ export function AdminTariffs() {
                         className="h-8 w-full rounded-[8px] text-[0.75rem]"
                         groups={siteSchools.map((sc) => ({
                           label: sc.label,
-                          options: courseSelectOptions(siteCourses, siteSchools, sc.id),
+                          options: courseSelectOptions(siteCourses, siteSchools, sc.id, tariffMap.find((x) => x.tariffId === t.id)?.courseId || ""),
                         }))}
                         onChange={(v) => void bindTariff(t.id, v)}
                       />
@@ -1278,7 +1299,7 @@ function Editor({
             value={courseId}
             placeholder="нет курса"
             menuMinWidth={280}
-            options={courseSelectOptions(schoolId ? schoolCourses : allCourses, schools, schoolId)}
+            options={courseSelectOptions(schoolId ? schoolCourses : allCourses, schools, schoolId, courseId)}
             onChange={onBind}
           />
         </Field>

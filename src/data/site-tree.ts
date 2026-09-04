@@ -120,13 +120,21 @@ export function addTreeCourse(schoolId: string, label: string, href?: string, ag
   const tree = loadSiteTree();
   const school = tree.schools.find((s) => s.id === schoolId);
   if (!school) return tree;
+  const name = label.trim();
+  const pretty = prettyAge(age || splitCourseAge(label).age);
+  const byHref = href ? tree.courses.find((c) => c.id === href || c.href === href) : undefined;
+  if (byHref) return tree;
+  const twin = tree.courses.find(
+    (c) => c.schoolId === schoolId && c.label === name && (c.age || "") === pretty,
+  );
+  if (twin) return tree;
   const id = (href || `${schoolId}#${Date.now()}`).trim();
   tree.courses.push({
     id,
     schoolId,
-    label: label.trim(),
+    label: name,
     href: href || "",
-    age: prettyAge(age || splitCourseAge(label).age),
+    age: pretty,
   });
   return saveSiteTree(tree);
 }

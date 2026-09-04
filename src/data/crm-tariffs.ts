@@ -680,6 +680,19 @@ export function courseSubjectIndex(): Record<string, number[]> {
     const cid = String(s.courseId || tree.assign[slotTreeKey(s)] || "");
     add(cid, Number(s.subjectId) || 0);
   }
+  for (const c of tree.courses) {
+    if (out.get(c.id)?.size) continue;
+    const twin = tree.courses.find(
+      (x) =>
+        x.id !== c.id &&
+        x.schoolId === c.schoolId &&
+        x.label === c.label &&
+        (x.age || "") === (c.age || "") &&
+        (out.get(x.id)?.size || out.get(x.href)?.size),
+    );
+    if (!twin) continue;
+    for (const sid of out.get(twin.id) || out.get(twin.href) || []) add(c.id, sid);
+  }
   return Object.fromEntries([...out.entries()].map(([k, v]) => [k, [...v]]));
 }
 
