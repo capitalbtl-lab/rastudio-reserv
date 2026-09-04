@@ -55,6 +55,15 @@ describe("мастер абонементов учеников", () => {
     );
   });
 
+  it("группа без школы сайта не пропадает из мастера", () => {
+    const list = uniqueLiveGroups([
+      slot({ id: "594", groupId: 594, groupName: "Модельная школа (2024)", school: "", course: "", statusId: 2 }),
+    ]);
+    assert.equal(list.length, 1);
+    assert.equal(list[0].groupId, 594);
+    assert.equal(list[0].school, "Без школы на сайте");
+  });
+
   it("по умолчанию только ученики, лиды — по флагу", () => {
     const g: PupilGroup = {
       key: "2:10",

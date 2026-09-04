@@ -115,6 +115,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [groups, setGroups] = useState<PupilGroup[]>([]);
   const [schools, setSchools] = useState<string[]>([]);
   const [school, setSchool] = useState("");
+  const [unbound, setUnbound] = useState(0);
   const [branch, setBranch] = useState(0);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -141,7 +142,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             () => adminSchedule({ data: { token: token(), action: "pupilTariffGroups", groupKeys: [] } as never }),
             2,
             20000,
-          ) as Promise<{ ok?: boolean; groups?: PupilGroup[]; schools?: string[]; error?: string }>,
+          ) as Promise<{ ok?: boolean; groups?: PupilGroup[]; schools?: string[]; unbound?: number; error?: string }>,
           retryFetch(
             () => adminSchedule({ data: { token: token(), action: "subjectsGet" } as never }),
             1,
@@ -151,6 +152,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         if (res.ok) {
           setGroups(res.groups || []);
           setSchools(res.schools || []);
+          setUnbound(Number(res.unbound || 0));
         } else setMsg(res.error || "Не удалось прочитать группы.");
         if (sub && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects);
       } catch (e) {
@@ -390,6 +392,11 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               отмечено {picked.size} · на экране {visible.length}
             </span>
           </div>
+          {unbound > 0 && school && school !== "Без школы на сайте" ? (
+            <p className="text-sm text-muted">
+              Ещё {unbound} {unbound === 1 ? "группа" : "групп"} без курса сайта. Откройте «Все школы» или «Без школы на сайте». Если группы нет совсем — «Загрузить из AlfaCRM» в расписании.
+            </p>
+          ) : null}
           <div className="max-h-72 overflow-auto rounded-2xl ring-1 ring-black/10">
             {visible.map((g) => (
               <label key={g.key} className={cn("flex cursor-pointer items-center gap-3 border-b border-black/5 px-3 py-2 text-sm last:border-0", picked.has(g.key) && "bg-sky-50")}>
@@ -406,7 +413,10 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                   }
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="font-medium">{g.name}</span>
+                  <span className="font-medium">
+                    {g.groupId ? `№ ${g.groupId} · ` : ""}
+                    {g.name}
+                  </span>
                   {g.age ? <span className="ml-1 text-muted">{g.age}</span> : null}
                   <span className="mt-0.5 block text-[0.7rem] text-muted">
                     {g.school}

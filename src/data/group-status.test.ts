@@ -9,6 +9,8 @@ import {
   slotPublicTrial,
   mergeStatusPublish,
 } from "./group-status.ts";
+import { inheritSchoolBySubject } from "./schedule-map.ts";
+import type { CrmSlot } from "./crm-slots-core.ts";
 
 describe("статусы групп CRM", () => {
   it("4 — обучается (набор завершен), не архив", () => {
@@ -38,5 +40,33 @@ describe("статусы групп CRM", () => {
     assert.equal(slotOnPublicSchedule(g4, pub), true);
     assert.equal(slotPublicGroup(g4, pub), false);
     assert.equal(slotOnPublicSchedule({ statusId: 2, priority: 1 }, pub), false);
+  });
+});
+
+describe("школа по subjectId", () => {
+  it("непривязанная группа берёт школу соседней с тем же предметом", () => {
+    const mapped = {
+      id: "592",
+      groupId: 592,
+      branchId: 1,
+      subjectId: 4,
+      schoolId: "/model-school",
+      school: "Модельная школа",
+      courseId: "/model-school-podium",
+    } as CrmSlot;
+    const loose = {
+      id: "594",
+      groupId: 594,
+      branchId: 1,
+      subjectId: 4,
+      schoolId: "",
+      school: "",
+      courseId: "",
+    } as CrmSlot;
+    const out = inheritSchoolBySubject([mapped, loose]);
+    const g594 = out.find((s) => s.groupId === 594);
+    assert.equal(g594?.school, "Модельная школа");
+    assert.equal(g594?.schoolId, "/model-school");
+    assert.equal(g594?.courseId, "");
   });
 });

@@ -44,6 +44,8 @@ export const GROUP_PRIORITY = [
   { id: 0, name: "0 · на сайт не выкладывать" },
 ] as const;
 
+export const UNMAPPED_SCHOOL = "Без школы на сайте";
+
 export function groupStatusName(id?: number) {
   return GROUP_STATUSES.find((s) => s.id === Number(id))?.name || "";
 }

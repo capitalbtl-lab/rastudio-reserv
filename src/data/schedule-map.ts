@@ -11,6 +11,7 @@ import { type CrmSlot } from "@/data/crm-slots-core";
 import { slotMismatch } from "@/data/slot-mismatch";
 import { loadSiteTree, courseIdOf } from "./site-tree";
 import { SUBJECT_TO_COURSE, courseIdOfSubject, resolveGroupCourseId } from "./ids";
+import { UNMAPPED_SCHOOL } from "./group-status";
 
 export type SchoolLink = { schedule: string; siteHref: string; schoolId?: string };
 export type CourseLink = {
@@ -206,7 +207,7 @@ export function canonicalCourse(
 export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
   const tree = loadSiteTree();
   const map = loadScheduleMap();
-  return slots.map((s) => {
+  const mapped = slots.map((s) => {
     const fromAssign = courseIdOf(s, tree);
     const cid = fromAssign || resolveGroupCourseId(s, tree, map.courses);
     const course = cid ? tree.courses.find((c) => c.id === cid || c.href === cid) : undefined;
@@ -233,5 +234,22 @@ export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
     };
     const mm = slotMismatch(next);
     return { ...next, mismatch: mm.level || undefined, mismatchText: mm.text || undefined };
+  });
+  return inheritSchoolBySubject(mapped);
+}
+
+/** Школа без курса: тот же subjectId, что у уже привязанной группы. Имя не смотрим. */
+export function inheritSchoolBySubject(slots: CrmSlot[]): CrmSlot[] {
+  const bySub = new Map<number, { schoolId: string; school: string }>();
+  for (const s of slots) {
+    if (s.subjectId && s.schoolId && s.school && s.school !== UNMAPPED_SCHOOL) {
+      bySub.set(s.subjectId, { schoolId: s.schoolId, school: s.school });
+    }
+  }
+  return slots.map((s) => {
+    if (s.schoolId) return s;
+    const hit = s.subjectId ? bySub.get(s.subjectId) : undefined;
+    if (hit) return { ...s, schoolId: hit.schoolId, school: hit.school };
+    return { ...s, school: s.school || UNMAPPED_SCHOOL };
   });
 }

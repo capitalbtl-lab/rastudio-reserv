@@ -1381,8 +1381,8 @@ export function AdminSchedule() {
     });
     const orphan = filtered.filter((s) => !used.has(s.id));
     if (orphan.length) {
-      rows.push({
-        school: "Прочее",
+      rows.unshift({
+        school: "Без курса сайта",
         schoolId: "other",
         courses: [{ course: "Без курса", courseId: "other#loose", href: "", items: orphan }],
       });

@@ -1699,7 +1699,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const { uniqueLiveGroups } = await import("./pupil-tariffs");
       const groups = uniqueLiveGroups(listAdminSlots());
       const schools = [...new Set(groups.map((g) => g.school).filter(Boolean))];
-      return { ok: true as const, groups, schools };
+      const unbound = groups.filter((g) => g.school === "Без школы на сайте").length;
+      return { ok: true as const, groups, schools, unbound };
     }
     if (data.action === "pupilTariffPlan") {
       const { uniqueLiveGroups, pupilRowFromMember, pickBestTariff } = await import("./pupil-tariffs");

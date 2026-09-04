@@ -1,7 +1,7 @@
 import type { CrmSlot } from "./crm-slots-core";
 import type { CrmTariff } from "./crm-tariffs";
 import { matchTariffs } from "./crm-tariffs";
-import { isAdminGroup } from "./group-status";
+import { isAdminGroup, UNMAPPED_SCHOOL } from "./group-status";
 
 export type PupilGroup = {
   key: string;
@@ -51,7 +51,7 @@ export function uniqueLiveGroups(slots: CrmSlot[]): PupilGroup[] {
       groupId: s.groupId,
       branchId: s.branchId,
       name: s.groupName || `группа ${s.groupId}`,
-      school: s.school || "",
+      school: s.school || UNMAPPED_SCHOOL,
       course: s.course || s.subject || "",
       age: s.age || "",
       teacher: s.teacher || "",
