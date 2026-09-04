@@ -101,6 +101,10 @@ export function cgiCustomerId(it: Record<string, unknown>) {
   return Number(it.customer_id || it.customerId || 0);
 }
 
+export function mergeGroupTaken(...n: number[]) {
+  return n.reduce((max, x) => Math.max(max, Number(x) || 0), 0);
+}
+
 export function crmIndexTotal(res: { total?: unknown; count?: unknown; items?: unknown[] } | null | undefined) {
   const items = Array.isArray(res?.items) ? res!.items!.length : 0;
   const total = Number(res?.total);

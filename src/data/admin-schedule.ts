@@ -285,44 +285,43 @@ async function overlayGroupHeadcount(
   request: typeof import("./alfacrm").request,
   t: string,
 ) {
-  const { countCgiParticipants, cgiCustomerId, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
-  const { UNMAPPED_SCHOOL } = await import("./group-status");
-  const bag = await loadPeopleBag(request, t);
-  if (!bag.cgiBranch) bag.cgiBranch = new Map();
-  const next = groups.map((g) => ({ ...g, taken: bag.cgi.get(g.groupId)?.length || 0 }));
-  const holes = next.filter((g) => !bag.cgi.has(g.groupId));
-  for (let i = 0; i < holes.length; i += 2) {
+  const { crmIndexTotal, countCgiParticipants, crmGroupQuantity, mergeGroupTaken, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
+  const qty = new Map<number, number>();
+  for (const branch of [1, 2, 3, 4]) {
+    const items = await pagedCrm(request, t, `/v2api/${branch}/group/index`, {});
+    for (const g of items) {
+      const id = Number(g.id) || 0;
+      if (!id) continue;
+      qty.set(id, Math.max(qty.get(id) || 0, crmGroupQuantity(g)));
+    }
+    await sleep(CRM_READ_GAP_MS);
+  }
+  const next = groups.map((g) => ({ ...g, taken: mergeGroupTaken(g.taken, qty.get(g.groupId) || 0) }));
+  for (let i = 0; i < next.length; i += 2) {
     await Promise.all(
-      holes.slice(i, i + 2).map(async (g) => {
-        const items = await pagedCrm(request, t, `/v2api/${g.branchId}/cgi/index`, { group_id: g.groupId });
-        const ids = [...new Set(items.map(cgiCustomerId).filter(Boolean))];
-        bag.cgi.set(g.groupId, ids);
-        bag.cgiBranch.set(g.groupId, g.branchId);
-        g.taken = ids.length || countCgiParticipants(items);
+      next.slice(i, i + 2).map(async (g) => {
+        const [cgi, cust] = await Promise.all([
+          request<{ items?: Record<string, unknown>[]; total?: number; count?: number }>(
+            `/v2api/${g.branchId}/cgi/index?group_id=${g.groupId}`,
+            { page: 0, pageSize: 100, group_id: g.groupId },
+            t,
+          ).catch(() => null),
+          request<{ items?: Record<string, unknown>[]; total?: number; count?: number }>(
+            `/v2api/${g.branchId}/customer/index?group_id=${g.groupId}`,
+            { page: 0, pageSize: 50, group_id: g.groupId },
+            t,
+          ).catch(() => null),
+        ]);
+        g.taken = mergeGroupTaken(
+          g.taken,
+          countCgiParticipants(cgi?.items || []),
+          crmIndexTotal(cgi),
+          crmIndexTotal(cust),
+        );
       }),
     );
     await sleep(CRM_READ_GAP_MS);
   }
-  const known = new Set(next.map((g) => g.groupId));
-  for (const [gid, ids] of bag.cgi) {
-    if (!ids.length || known.has(gid)) continue;
-    const branchId = bag.cgiBranch.get(gid) || 1;
-    next.push({
-      key: `${branchId}:${gid}`,
-      groupId: gid,
-      branchId,
-      name: `группа ${gid} · нет в расписании`,
-      school: UNMAPPED_SCHOOL,
-      course: "",
-      age: "",
-      teacher: "",
-      taken: ids.length,
-      limit: 0,
-      subjectId: 0,
-    });
-    known.add(gid);
-  }
-  peopleSlot().__raPeople = { ...bag, at: Date.now() };
   return next;
 }
 
