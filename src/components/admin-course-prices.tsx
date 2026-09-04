@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
-import { adminGroupDurations, adminPrices, adminSaveAll, adminSaveGroup, adminAddPriceCourse } from "@/data/admin";
+import { adminGroupDurations, adminPrices, adminSaveAll, adminSaveGroup, adminAddPriceCourse, adminDeletePrice } from "@/data/admin";
 import { PRICE_DIRECTIONS, hydratePrices, listPriceRows, matchDuration, type PriceRow } from "@/data/prices-core";
 import { Button } from "@/components/ui/button";
 import { AdminSectionHead } from "@/components/admin-self-test";
@@ -78,7 +78,8 @@ export function AdminCoursePrices() {
         setRows(next);
         hydratePrices(next);
       }
-      if ("schools" in res && Array.isArray(res.schools)) setSchools(res.schools);
+      if ("schools" in res && Array.isArray(res.schools) && res.schools.length) setSchools(res.schools);
+      else if (next.length) setSchools([...new Set(next.map((r) => r.direction))].filter(Boolean).map((label) => ({ id: label, label })));
       setErr(next.length ? "" : "Файл цен пуст — показаны курсы с сайта.");
       const form = await adminPriceFormulas({ data: { token: token(), action: "get" } });
       if (form.ok && "formulas" in form && form.formulas) {
@@ -97,18 +98,20 @@ export function AdminCoursePrices() {
   }, []);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, PriceRow[]>();
+    const map = new Map<string, { id: string; label: string; list: PriceRow[] }>();
     for (const row of rows) {
-      const list = map.get(row.direction) || [];
-      list.push(row);
-      map.set(row.direction, list);
+      const sch = schools.find((s) => s.label === row.direction) || { id: row.direction, label: row.direction };
+      const cur = map.get(sch.id) || { id: sch.id, label: sch.label, list: [] };
+      cur.list.push(row);
+      cur.label = sch.label;
+      map.set(sch.id, cur);
     }
-    return [...map.entries()];
-  }, [rows]);
+    return [...map.values()];
+  }, [rows, schools]);
 
   async function saveAll() {
     setBusy(true);
-    const res = await adminSaveAll({ data: { token: token(), rows } });
+    const res = await adminSaveAll({ data: { token: token(), rows, schools } });
     setBusy(false);
     if (!res.ok) {
       setErr(res.error || "Не удалось сохранить.");
@@ -149,6 +152,48 @@ export function AdminCoursePrices() {
         return { ...r, extra: { ...(r.extra || {}), [key]: num } };
       }),
     );
+  }
+
+  function renameSchoolById(id: string, label: string) {
+    const prev = schools.find((s) => s.id === id)?.label || id;
+    setSchools((s) => s.map((x) => (x.id === id ? { ...x, label } : x)));
+    setRows((r) => r.map((row) => (row.direction === prev ? { ...row, direction: label } : row)));
+  }
+
+  async function removeCourse(row: PriceRow) {
+    const id = row.courseId || row.path || row.id;
+    if (!id || !confirm(`Удалить курс «${row.name}» из прайса и из дерева групп?`)) return;
+    setBusy(true);
+    const res = await adminDeletePrice({ data: { token: token(), kind: "course", id } });
+    setBusy(false);
+    if (!res.ok) {
+      setErr(res.error || "Не удалось удалить курс.");
+      return;
+    }
+    if ("rows" in res && res.rows) {
+      setRows(res.rows);
+      hydratePrices(res.rows);
+    }
+    if ("schools" in res && res.schools) setSchools(res.schools);
+    setErr(`Курс «${row.name}» удалён.`);
+  }
+
+  async function removeSchool(label: string) {
+    const school = schools.find((s) => s.label === label);
+    if (!confirm(`Удалить школу «${label}» и все её курсы в прайсе и в группах?`)) return;
+    setBusy(true);
+    const res = await adminDeletePrice({ data: { token: token(), kind: "school", id: school?.id, label } });
+    setBusy(false);
+    if (!res.ok) {
+      setErr(res.error || "Не удалось удалить школу.");
+      return;
+    }
+    if ("rows" in res && res.rows) {
+      setRows(res.rows);
+      hydratePrices(res.rows);
+    }
+    if ("schools" in res && res.schools) setSchools(res.schools);
+    setErr(`Школа «${label}» удалена.`);
   }
 
   const extra = formulas.extra || [];
@@ -593,9 +638,23 @@ export function AdminCoursePrices() {
             {busy ? "Загружаю цены…" : "Таблица пуста. Обновите страницу или нажмите «Загрузить цены из CRM»."}
           </p>
         ) : null}
-        {grouped.map(([name, list]) => (
-          <section key={name}>
-            <h3 className="font-display text-xl">{name}</h3>
+        {grouped.map((g) => (
+          <section key={g.id}>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={g.label}
+                onChange={(e) => renameSchoolById(g.id, e.target.value)}
+                className="min-w-[12rem] flex-1 bg-transparent font-display text-xl text-fg outline-none ring-0"
+                title="Название школы"
+              />
+              <button
+                type="button"
+                className="rounded-[8px] px-2 py-1 text-[0.72rem] font-semibold text-muted hover:bg-rose-50 hover:text-rose-700"
+                onClick={() => void removeSchool(g.label)}
+              >
+                Удалить школу
+              </button>
+            </div>
             <div className="mt-3 overflow-x-auto rounded-2xl ring-1 ring-black/8">
               <table className="w-full min-w-[48rem] table-fixed text-left text-sm">
                 <thead className="bg-surface-2 text-[0.72rem] uppercase tracking-wider text-muted">
@@ -642,37 +701,27 @@ export function AdminCoursePrices() {
                         <PriceColHandle onDown={(e) => resizeCol(`x${c.id}`, 72, e)} />
                       </th>
                     ))}
+                    <th className="w-10 px-2 py-3" />
                   </tr>
                 </thead>
                 <tbody>
-                  {list.map((row) => (
+                  {g.list.map((row) => (
                     <tr key={row.courseId || row.path || row.id} className="border-t border-black/6">
                       <td className="px-4 py-3 align-middle">
                         <input
                           value={row.name}
                           onChange={(e) => patch(row.courseId || row.path, "name", e.target.value)}
                           className="h-8 w-full rounded-[8px] bg-surface-2 px-2 text-sm font-medium ring-1 ring-black/10"
+                          placeholder="Название курса"
+                          title="Название курса"
                         />
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          <input
-                            value={row.age || ""}
-                            placeholder="возраст"
-                            onChange={(e) => patch(row.courseId || row.path, "age", e.target.value)}
-                            className="h-7 min-w-[6rem] flex-1 rounded-[8px] bg-surface-2 px-2 text-xs text-muted ring-1 ring-black/10"
-                          />
-                          <select
-                            value={row.direction}
-                            onChange={(e) => patch(row.courseId || row.path, "direction", e.target.value)}
-                            className="h-7 max-w-[12rem] rounded-[8px] bg-surface-2 px-1 text-xs text-muted ring-1 ring-black/10"
-                            title="Школа на сайте"
-                          >
-                            {[...new Set([row.direction, ...schools.map((s) => s.label), ...PRICE_DIRECTIONS])].filter(Boolean).map((d) => (
-                              <option key={d} value={d}>
-                                {d}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                        <input
+                          value={row.age || ""}
+                          placeholder="Комментарий: курс для детей от 14 лет"
+                          onChange={(e) => patch(row.courseId || row.path, "age", e.target.value)}
+                          className="mt-1 h-7 w-full rounded-[8px] bg-surface-2 px-2 text-xs text-muted ring-1 ring-black/10"
+                          title="Комментарий к курсу"
+                        />
                       </td>
                       {(["mins", "perWeek", "all", "kbm", "tmx"] as const).map((k) => (
                         <td key={k} className="px-2 py-3 align-middle">
@@ -696,6 +745,16 @@ export function AdminCoursePrices() {
                           />
                         </td>
                       ))}
+                      <td className="px-1 py-3 align-middle">
+                        <button
+                          type="button"
+                          className="rounded-[8px] px-2 py-1 text-[0.72rem] font-semibold text-muted hover:bg-rose-50 hover:text-rose-700"
+                          title="Удалить курс"
+                          onClick={() => void removeCourse(row)}
+                        >
+                          ×
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

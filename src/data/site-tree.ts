@@ -157,6 +157,30 @@ export function syncTreeFromPriceRows(rows: { courseId?: string; path?: string; 
   return changed ? saveSiteTree(tree) : tree;
 }
 
+export function renameTreeSchool(fromLabel: string, toLabel: string) {
+  const next = String(toLabel || "").trim();
+  if (!next) return loadSiteTree();
+  const tree = loadSiteTree();
+  const hit = tree.schools.find((s) => s.label === fromLabel || s.id === fromLabel);
+  if (!hit || hit.label === next) return tree;
+  hit.label = next;
+  return saveSiteTree(tree);
+}
+
+export function applySchoolLabels(schools: { id?: string; label: string }[]) {
+  const tree = loadSiteTree();
+  let changed = false;
+  for (const s of schools) {
+    const label = String(s.label || "").trim();
+    if (!label) continue;
+    const hit = tree.schools.find((x) => (s.id && x.id === s.id) || x.label === s.label);
+    if (!hit || hit.label === label) continue;
+    hit.label = label;
+    changed = true;
+  }
+  return changed ? saveSiteTree(tree) : tree;
+}
+
 export function deleteTreeCourse(courseId: string) {
   const tree = loadSiteTree();
   tree.courses = tree.courses.filter((c) => c.id !== courseId);

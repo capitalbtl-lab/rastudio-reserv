@@ -113,14 +113,30 @@ export const adminSaveGroup = createServerFn({ method: "POST" })
   });
 
 export const adminSaveAll = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { token?: string; rows: PriceRow[] })
+  .validator((data: unknown) => data as { token?: string; rows: PriceRow[]; schools?: { id: string; label: string }[] })
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
     const rows = savePriceRows(data.rows || []);
-    const { syncTreeFromPriceRows } = await import("./site-tree");
+    const { syncTreeFromPriceRows, applySchoolLabels } = await import("./site-tree");
+    if (data.schools?.length) applySchoolLabels(data.schools);
     syncTreeFromPriceRows(rows);
     logAdmin(`Цены: сохранено ${rows.length} курсов, дерево групп обновлено`);
     return { ok: true as const, rows };
+  });
+
+export const adminDeletePrice = createServerFn({ method: "POST" })
+  .validator((data: unknown) => data as { token?: string; kind: "course" | "school"; id?: string; label?: string })
+  .handler(async ({ data }) => {
+    if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
+    const { deletePriceCourse, deletePriceSchool } = await import("./prices");
+    if (data.kind === "school") {
+      const res = deletePriceSchool(String(data.id || data.label || ""));
+      if (res.ok) logAdmin(`Цены: удалена школа ${data.label || data.id}`);
+      return res;
+    }
+    const res = deletePriceCourse(String(data.id || ""));
+    if (res.ok) logAdmin(`Цены: удалён курс ${data.id}`);
+    return res;
   });
 
 export const adminMeta = createServerFn({ method: "POST" })

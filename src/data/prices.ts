@@ -7,7 +7,7 @@ import {
   tidyCourseName,
   type PriceRow,
 } from "./prices-core";
-import { addTreeSchool, addTreeCourse, loadSiteTree } from "./site-tree";
+import { addTreeSchool, addTreeCourse, loadSiteTree, deleteTreeCourse, deleteTreeSchool } from "./site-tree";
 
 export {
   formatRub,
@@ -175,4 +175,32 @@ export function addPriceCourse(schoolId: string, name: string, age: string) {
     savePriceRows(rows);
   }
   return { ok: true as const, tree, rows: listPriceRows(), courseId: created.id };
+}
+
+export function deletePriceCourse(courseId: string) {
+  const id = String(courseId || "").trim();
+  if (!id) return { ok: false as const, error: "Нет курса." };
+  ensureLivePrices();
+  const rows = listPriceRows().filter((r) => (r.courseId || r.path) !== id && r.id !== id);
+  savePriceRows(rows);
+  deleteTreeCourse(id);
+  return { ok: true as const, rows: listPriceRows(), schools: loadSiteTree().schools };
+}
+
+export function deletePriceSchool(labelOrId: string) {
+  const key = String(labelOrId || "").trim();
+  if (!key) return { ok: false as const, error: "Нет школы." };
+  const school = loadSiteTree().schools.find((s) => s.id === key || s.label === key);
+  if (!school) {
+    ensureLivePrices();
+    const rows = listPriceRows().filter((r) => r.direction !== key);
+    savePriceRows(rows);
+    return { ok: true as const, rows: listPriceRows(), schools: loadSiteTree().schools };
+  }
+  const ids = new Set(loadSiteTree().courses.filter((c) => c.schoolId === school.id).map((c) => c.id));
+  ensureLivePrices();
+  const rows = listPriceRows().filter((r) => r.direction !== school.label && !ids.has(r.courseId || "") && !ids.has(r.path || "") && r.id !== school.id);
+  savePriceRows(rows);
+  deleteTreeSchool(school.id);
+  return { ok: true as const, rows: listPriceRows(), schools: loadSiteTree().schools };
 }
