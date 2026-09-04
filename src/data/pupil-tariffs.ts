@@ -38,6 +38,20 @@ export type PupilTariffItem = {
   skip?: "no-tariff" | "already" | "lead";
 };
 
+export const ASSIGN_CHUNK = 5;
+export const ASSIGN_GAP_MS = 900;
+export const ASSIGN_BATCH_PAUSE_MS = 2500;
+export const ASSIGN_REST_EVERY = 40;
+export const ASSIGN_REST_MS = 8000;
+
+export function assignEtaMin(n: number) {
+  const count = Math.max(0, Number(n) || 0);
+  const batches = Math.ceil(count / ASSIGN_CHUNK) || 0;
+  const rests = Math.floor(count / ASSIGN_REST_EVERY);
+  const ms = count * (ASSIGN_GAP_MS + 450) + batches * ASSIGN_BATCH_PAUSE_MS + rests * ASSIGN_REST_MS;
+  return Math.max(1, Math.ceil(ms / 60000));
+}
+
 export function uniqueLiveGroups(slots: CrmSlot[]): PupilGroup[] {
   const seen = new Set<string>();
   const out: PupilGroup[] = [];

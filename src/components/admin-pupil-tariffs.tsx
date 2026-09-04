@@ -5,7 +5,7 @@ import { adminSchedule } from "@/data/admin-schedule";
 import { retryFetch } from "@/lib/retry-fetch";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { tariffMatchesSubject } from "@/data/pupil-tariffs";
+import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin } from "@/data/pupil-tariffs";
 
 type PupilGroup = {
   key: string;
@@ -277,45 +277,54 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
 
   async function assign() {
     setBusy(true);
-    setMsg(`Назначаю ${ready.length} абонементов в AlfaCRM…`);
+    const pack = ready.map((it) => ({
+      ...it,
+      periodCount,
+      periodType,
+      calcType,
+      eDate: dateTo || addPeriod(date, periodCount, periodType),
+      lessonTypeIds: it.lessonTypeIds?.length ? it.lessonTypeIds : [2],
+    }));
+    const total = pack.length;
+    const acc = { done: 0, skipped: 0, failed: [] as { name: string; error: string }[] };
+    setResult(acc);
+    const mins = assignEtaMin(total);
+    setMsg(`Назначаю ${total} абонементов потихоньку, по ${ASSIGN_CHUNK} шт. Около ${mins} мин, CRM не заблокирует.`);
     try {
-      const res = (await retryFetch(
-        () =>
-          adminSchedule({
-            data: {
-              token: token(),
-              action: "pupilTariffAssign",
-              date,
-              skipExisting,
-              groupKeys: [],
-              pupilItems: ready.map((it) => ({
-                ...it,
-                periodCount,
-                periodType,
-                calcType,
-                eDate: dateTo || addPeriod(date, periodCount, periodType),
-                lessonTypeIds: it.lessonTypeIds?.length ? it.lessonTypeIds : [2],
-              })),
-            } as never,
-          }),
-        1,
-        180000,
-      )) as {
-        ok?: boolean;
-        done?: number;
-        skipped?: { id: number; name: string; reason: string }[];
-        failed?: { id: number; name: string; error: string }[];
-        error?: string;
-      };
-      if (!res.ok) {
-        setMsg(res.error || "AlfaCRM не приняла назначения.");
-        return;
+      for (let i = 0; i < pack.length; i += ASSIGN_CHUNK) {
+        const chunk = pack.slice(i, i + ASSIGN_CHUNK);
+        setMsg(`AlfaCRM: ${Math.min(i + chunk.length, total)} / ${total} · выдано ${acc.done} · пауза`);
+        const res = (await retryFetch(
+          () =>
+            adminSchedule({
+              data: {
+                token: token(),
+                action: "pupilTariffAssign",
+                date,
+                skipExisting,
+                groupKeys: [],
+                pupilItems: chunk,
+              } as never,
+            }),
+          1,
+          120000,
+        )) as {
+          ok?: boolean;
+          done?: number;
+          skipped?: { id: number; name: string; reason: string }[];
+          failed?: { id: number; name: string; error: string }[];
+          error?: string;
+        };
+        if (!res.ok) {
+          acc.failed.push({ name: `пачка ${i + 1}–${i + chunk.length}`, error: res.error || "AlfaCRM не приняла назначения." });
+        } else {
+          acc.done += Number(res.done || 0);
+          acc.skipped += (res.skipped || []).length;
+          acc.failed.push(...(res.failed || []).map((f) => ({ name: f.name, error: f.error })));
+        }
+        setResult({ ...acc, failed: [...acc.failed] });
+        if (i + ASSIGN_CHUNK < pack.length) await new Promise((r) => setTimeout(r, ASSIGN_BATCH_PAUSE_MS));
       }
-      setResult({
-        done: Number(res.done || 0),
-        skipped: (res.skipped || []).length,
-        failed: (res.failed || []).map((f) => ({ name: f.name, error: f.error })),
-      });
       setMsg("");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Не удалось назначить.");
@@ -663,7 +672,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         <div className="mt-4 space-y-3">
           {result ? (
             <div className="rounded-2xl bg-emerald-50 p-4 text-sm ring-1 ring-emerald-200">
-              <p className="font-display text-lg text-emerald-900">Готово</p>
+              <p className="font-display text-lg text-emerald-900">{busy ? "Идёт выгрузка…" : "Готово"}</p>
               <p className="mt-1">
                 Выдано {result.done}. Пропущено (уже были): {result.skipped}. Ошибок: {result.failed.length}.
               </p>
@@ -680,7 +689,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           ) : (
             <>
               <p className="text-sm text-muted">
-                Назначить {ready.length} абонементов с {date.split("-").reverse().join(".")}. Дубликаты {skipExisting ? "пропустим" : "создадим ещё раз"}.
+                Назначить {ready.length} абонементов с {date.split("-").reverse().join(".")}. Выгрузка по {ASSIGN_CHUNK} шт. с паузой — около {assignEtaMin(ready.length)} мин, API не заблокирует. Дубликаты {skipExisting ? "пропустим" : "создадим ещё раз"}.
               </p>
               <div className="max-h-72 overflow-auto rounded-2xl ring-1 ring-black/10">
                 <table className="w-full text-left text-sm">
@@ -719,7 +728,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           </Button>
         ) : result ? null : (
           <Button type="button" className="h-9 px-4 text-sm" disabled={busy || !ready.length} onClick={() => void assign()}>
-            {busy ? "Назначаю…" : `Назначить в CRM · ${ready.length}`}
+            {busy ? "Выгружаю потихоньку…" : `Назначить в CRM · ${ready.length}`}
           </Button>
         )}
       </div>

@@ -173,4 +173,15 @@ describe("мастер абонементов учеников", () => {
     assert.equal(empty.customer_id, 0);
     assert.deepEqual(empty.lesson_type_ids, [2]);
   });
+
+  it("массовая выгрузка идёт пачками с паузой", async () => {
+    const { ASSIGN_CHUNK, ASSIGN_GAP_MS, ASSIGN_BATCH_PAUSE_MS, ASSIGN_REST_EVERY, assignEtaMin } = await import("./pupil-tariffs.ts");
+    assert.equal(ASSIGN_CHUNK, 5);
+    assert.ok(ASSIGN_GAP_MS >= 800);
+    assert.ok(ASSIGN_BATCH_PAUSE_MS >= 2000);
+    assert.equal(ASSIGN_REST_EVERY, 40);
+    const n = 300;
+    assert.equal(Math.ceil(n / ASSIGN_CHUNK), 60);
+    assert.ok(assignEtaMin(n) >= 8);
+  });
 });

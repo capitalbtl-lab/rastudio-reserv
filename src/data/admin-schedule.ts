@@ -287,11 +287,7 @@ async function createCustomerTariff(
     ...(full.e_date ? { e_date: full.e_date } : {}),
     ...(full.group_id ? { group_id: full.group_id } : {}),
   };
-  const tries: Record<string, unknown>[] = [
-    core,
-    full,
-    { ...core, customer_id: String(customerId) },
-  ];
+  const tries: Record<string, unknown>[] = [core];
   let last = "";
   for (const body of tries) {
     if (body.customer_id == null || body.customer_id === "" || Number(body.customer_id) === 0) continue;
@@ -1893,7 +1889,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
     }
     if (data.action === "pupilTariffAssign") {
       const { token, request, formatRuDob } = await import("./alfacrm");
-      const { assignable, addPeriod } = await import("./pupil-tariffs");
+      const { assignable, addPeriod, ASSIGN_GAP_MS, ASSIGN_REST_EVERY, ASSIGN_REST_MS } = await import("./pupil-tariffs");
       const t = await token();
       const fromIso = String(data.date || "").slice(0, 10);
       const bDate = formatRuDob(fromIso) || formatRuDob(new Date().toISOString().slice(0, 10));
@@ -1903,7 +1899,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const skipped: { id: number; name: string; reason: string }[] = [];
       const failed: { id: number; name: string; error: string }[] = [];
       const catalog = loadTariffs().items;
+      let i = 0;
       for (const row of rows) {
+        i += 1;
         const customerId = Number(row.customerId || (row as { id?: number }).id || 0);
         const offer = catalog.find((x) => x.id === row.tariffId);
         const periodCount = Number(row.periodCount) || offer?.periodCount || 0;
@@ -1930,29 +1928,20 @@ export const adminSchedule = createServerFn({ method: "POST" })
         });
         if (skipExisting && /already|уже|duplicate|существ/i.test(made.ok ? "" : made.error)) {
           skipped.push({ id: row.customerId, name: row.name, reason: "уже есть" });
+          await new Promise((r) => setTimeout(r, ASSIGN_GAP_MS));
           continue;
         }
         if (!made.ok) {
-          if (skipExisting) {
-            try {
-              const have = await request<{ items?: Record<string, unknown>[] }>(
-                `/v2api/${row.branchId}/customer-tariff/index?customer_id=${customerId}`,
-                { page: 0, pageSize: 30, customer_id: customerId },
-                t,
-              ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-              const hit = (have.items || []).some((it) => Number(it.tariff_id || it.tariffId || 0) === row.tariffId && Number(it.removed || it.is_archived || 0) !== 1);
-              if (hit) {
-                skipped.push({ id: row.customerId, name: row.name, reason: "уже есть" });
-                continue;
-              }
-            } catch {
-              /* keep error */
-            }
+          if (/429|503|too many|слишком много/i.test(made.error)) {
+            await new Promise((r) => setTimeout(r, 4000));
           }
           failed.push({ id: row.customerId, name: row.name, error: made.error });
+          await new Promise((r) => setTimeout(r, ASSIGN_GAP_MS));
           continue;
         }
         done.push(row.customerId);
+        if (i % ASSIGN_REST_EVERY === 0) await new Promise((r) => setTimeout(r, ASSIGN_REST_MS));
+        else await new Promise((r) => setTimeout(r, ASSIGN_GAP_MS));
       }
       logAdmin(`Мастер учеников: выдано ${done.length}, пропуск ${skipped.length}, ошибок ${failed.length}`);
       return { ok: true as const, done: done.length, skipped, failed, total: rows.length };
