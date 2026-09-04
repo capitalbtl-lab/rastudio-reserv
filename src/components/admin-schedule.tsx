@@ -780,6 +780,7 @@ export function AdminSchedule() {
   const [addErr, setAddErr] = useState("");
   const [memberBusy, setMemberBusy] = useState(0);
   const [cardFields, setCardFields] = useState<Record<string, boolean>>(readCardFields);
+  const [nameEdit, setNameEdit] = useState(false);
   const [subjects, setSubjects] = useState<CrmSubject[]>([]);
   const [creatingSubject, setCreatingSubject] = useState(false);
   const [levels, setLevels] = useState<{ id: number; name: string }[]>(SEED_LEVELS);
@@ -3510,6 +3511,7 @@ export function AdminSchedule() {
                 if (Date.now() < closeGuard.current) return;
                 setPupil(null);
                 resetAddPupil();
+                setNameEdit(false);
                 setDetail(null);
               }}
             >
@@ -3521,27 +3523,39 @@ export function AdminSchedule() {
                 data-group-id={detail.groupId || undefined}
                 data-branch-id={detail.branchId || undefined}
               >
-                <div className="relative z-30 flex shrink-0 items-start gap-2 px-4 pt-3 md:px-5 md:pt-4">
-                  <div className="min-w-0 max-w-md">
+                <div className="relative z-30 flex shrink-0 items-start gap-3 px-4 pt-3 md:px-5 md:pt-4">
+                  <div className="min-w-0 flex-1 pr-2">
                     <p className="text-[0.62rem] font-semibold uppercase tracking-wider text-muted">Карточка группы · {groupCardId(detail.branchId, detail.groupId)}</p>
-                    <label className="mt-0.5 block">
-                      <span className="sr-only">Название группы</span>
+                    {nameEdit ? (
                       <input
+                        autoFocus
                         value={detail.slot.groupName}
                         onChange={(e) => patch(detail.id, "groupName", e.target.value)}
-                        className="h-8 w-full rounded-md bg-white px-2.5 font-display text-base font-semibold text-fg ring-1 ring-black/8"
+                        onBlur={() => setNameEdit(false)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === "Escape") setNameEdit(false);
+                        }}
+                        className="mt-0.5 h-9 w-full max-w-xl bg-transparent font-display text-[1.35rem] font-semibold leading-tight tracking-tight text-fg outline-none"
                       />
-                    </label>
-                    <p className="mt-0.5 text-[0.78rem] text-muted">
+                    ) : (
+                      <h2
+                        className="mt-0.5 cursor-text font-display text-[1.35rem] font-semibold leading-tight tracking-tight text-fg"
+                        title="Нажмите, чтобы переименовать"
+                        onClick={() => setNameEdit(true)}
+                      >
+                        {detail.slot.groupName || "Без названия"}
+                      </h2>
+                    )}
+                    <p className="mt-1 text-[0.78rem] text-muted">
                       № {detail.groupId || "на сайте"} · {detail.slot.city}, {detail.slot.branch}
                       <span className="ml-2">Учится {detail.slot.takenStudy ?? "—"} · лиды {detail.slot.takenLead ?? "—"} · всего {detail.slot.taken}</span>
                     </p>
                   </div>
-                  <div className="ml-auto flex shrink-0 items-start gap-1.5 pt-[1.15rem]">
+                  <div className="ml-auto flex shrink-0 items-start gap-1.5">
                     <button
                       type="button"
                       disabled={detail.saving}
-                      className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-fg ring-1 ring-black/8 disabled:opacity-50"
+                      className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white disabled:opacity-50"
                       onClick={() => void saveDetailSite()}
                     >
                       {detail.saving ? "Сохраняю…" : "Сохранить на сайте"}
@@ -3554,20 +3568,19 @@ export function AdminSchedule() {
                     >
                       {detail.saving ? "Сохраняю…" : detail.groupId ? "Сохранить в AlfaCRM" : "Создать в AlfaCRM"}
                     </button>
-                    <div className="flex flex-col items-end gap-1">
-                    <button type="button" className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-muted ring-1 ring-black/8" onClick={() => { setPupil(null); resetAddPupil(); setDetail(null); }}>
+                    <div className="flex flex-col items-end">
+                    <button type="button" className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white" onClick={() => { setPupil(null); resetAddPupil(); setNameEdit(false); setDetail(null); }}>
                       Закрыть
                     </button>
-                    <div className="group/gear relative">
+                    <div className="group/gear relative mt-2.5">
                       <button
                         type="button"
                         aria-label="Поля карточки"
                         title="Какие поля показать"
-                        className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-muted ring-1 ring-black/8 hover:text-fg"
+                        className="flex h-7 w-7 items-center justify-center rounded-full text-primary/80 hover:bg-white/70 hover:text-primary"
                       >
-                        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="3" />
-                          <path d="M12 3.2v2.2M12 18.6v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M3.2 12h2.2M18.6 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" />
+                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+                          <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.4.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.4-.96a.5.5 0 0 0-.6.22L2.71 8.84a.49.49 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94 0 .31.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.64l1.92 3.32c.14.24.4.34.6.22l2.4-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.25.42.49.42h3.84c.24 0 .44-.18.49-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.4.96c.22.1.48 0 .6-.22l1.92-3.32a.49.49 0 0 0-.12-.64l-2.03-1.58ZM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2Z" />
                         </svg>
                       </button>
                       <div className="pointer-events-none invisible absolute right-0 top-full z-[40] pt-1 opacity-0 transition group-hover/gear:pointer-events-auto group-hover/gear:visible group-hover/gear:opacity-100 group-focus-within/gear:pointer-events-auto group-focus-within/gear:visible group-focus-within/gear:opacity-100">
