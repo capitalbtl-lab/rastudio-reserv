@@ -1,6 +1,6 @@
 import type { CrmSlot } from "./crm-slots-core";
 import type { CrmTariff } from "./crm-tariffs";
-import { matchTariffs } from "./crm-tariffs";
+import { matchTariffs, tariffFitsSlot } from "./crm-tariffs";
 import { UNMAPPED_SCHOOL } from "./group-status";
 
 export type PupilGroup = {
@@ -89,11 +89,11 @@ export function groupHasBoundPupils(taken: number, active: number, archive: numb
   return Number(taken) > 0 || Number(active) > 0 || Number(archive) > 0;
 }
 
-export function pickBestTariff(slot: Pick<CrmSlot, "subjectId" | "branchId" | "timeFrom" | "timeTo" | "tariffId" | "courseId">, list: CrmTariff[]) {
+export function pickBestTariff(slot: Pick<CrmSlot, "subjectId" | "branchId" | "timeFrom" | "timeTo" | "tariffId" | "courseId" | "schoolId">, list: CrmTariff[]) {
   const saved = Number(slot.tariffId) || 0;
   if (saved) {
     const hit = list.find((t) => t.id === saved && !t.archive);
-    if (hit) return hit;
+    if (hit && tariffFitsSlot(hit, slot as CrmSlot)) return hit;
   }
   return matchTariffs(slot as CrmSlot, list)[0] || null;
 }

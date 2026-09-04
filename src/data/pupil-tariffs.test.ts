@@ -143,6 +143,10 @@ describe("мастер абонементов учеников", () => {
     assert.equal(auto?.id, 1);
     const chosen = pickBestTariff(slot({ timeFrom: "16:00", timeTo: "17:00", tariffId: 2 }), [a, b]);
     assert.equal(chosen?.id, 2);
+    const portrait = { ...a, id: 373, duration: 180, subjectIds: [92], price: 6450, name: "Основы портрета" };
+    const studio = { ...a, id: 400, duration: 90, subjectIds: [92], price: 3850, name: "Художественная студия" };
+    const wrongSaved = pickBestTariff(slot({ timeFrom: "16:00", timeTo: "17:30", subjectId: 92, tariffId: 373 }), [portrait, studio]);
+    assert.equal(wrongSaved?.id, 400);
   });
 
   it("абонемент другого курса сайта не ставится в группу художественной школы", () => {
