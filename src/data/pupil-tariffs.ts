@@ -192,24 +192,38 @@ export function tariffDateToIso(raw: string) {
 
 export type CatalogTariff = { id: number; name: string; archive?: boolean; price?: number };
 
-/** Живой: не удалён в CRM и шаблон абонемента не в архиве каталога. #177 и старые ID отсекаем. */
-export function customerTariffLive(it: Record<string, unknown>, catalog?: CatalogTariff[]) {
+/** Актуальный сегодня: не удалён, уже начался, ещё не закончился. Пустая «до» = бессрочный. */
+export function customerTariffLive(it: Record<string, unknown>, _catalog?: CatalogTariff[], today = todayIso()) {
   if (Number(it.removed || it.is_archived || it.is_archive || 0) === 1) return false;
   if (!(Number(it.id) > 0)) return false;
   const tariffId = Number(it.tariff_id || it.tariffId || 0);
   if (!tariffId) return false;
-  if (!catalog?.length) return true;
-  const hit = catalog.find((t) => t.id === tariffId);
-  if (!hit || hit.archive) return false;
+  const from = tariffDateToIso(String(it.b_date || it.bDate || ""));
+  const to = tariffDateToIso(String(it.e_date || it.eDate || ""));
+  if (from && from > today) return false;
+  if (to && to < today) return false;
   return true;
+}
+
+export function preferCurrentTariffs(
+  list: { id: number; tariffId: number; name: string }[],
+  catalog?: CatalogTariff[],
+) {
+  if (!list.length || !catalog?.length) return list;
+  const liveIds = new Set(catalog.filter((c) => !c.archive).map((c) => c.id));
+  if (!liveIds.size) return list;
+  const preferred = list.filter((t) => liveIds.has(t.tariffId));
+  return preferred.length ? preferred : list;
 }
 
 export function customerTariffLabel(it: Record<string, unknown>, catalog?: CatalogTariff[]) {
   const tariffId = Number(it.tariff_id || it.tariffId || 0);
   const raw = String(it.tariff_name || it.tariffName || "").trim();
-  if (raw && !/^абонемент$/i.test(raw)) return raw;
-  const hit = catalog?.find((t) => t.id === tariffId);
-  if (hit?.name) return hit.name;
+  if (raw && !/^абонемент(#\s*\d+)?$/i.test(raw)) return raw;
+  const live = catalog?.find((t) => t.id === tariffId && !t.archive);
+  if (live?.name) return live.name;
+  const any = catalog?.find((t) => t.id === tariffId);
+  if (any?.name) return any.name;
   return tariffId ? `абонемент #${tariffId}` : "абонемент";
 }
 
@@ -219,8 +233,10 @@ export function withCatalogNames(
 ) {
   if (!catalog?.length) return list;
   return list.map((t) => {
-    const hit = catalog.find((c) => c.id === t.tariffId && !c.archive);
-    if (hit?.name) return { ...t, name: hit.name };
+    const live = catalog.find((c) => c.id === t.tariffId && !c.archive);
+    if (live?.name) return { ...t, name: live.name };
+    const any = catalog.find((c) => c.id === t.tariffId);
+    if (any?.name) return { ...t, name: any.name };
     if (t.name && !/^абонемент(#\s*\d+)?$/i.test(t.name)) return t;
     return { ...t, name: t.tariffId ? `абонемент #${t.tariffId}` : "абонемент" };
   });
@@ -269,6 +285,9 @@ export function splitCustomerTariffs(
     const list = bucket.get(customerId) || [];
     list.push(row);
     bucket.set(customerId, list);
+  }
+  if (catalog?.length) {
+    for (const [cid, list] of live) live.set(cid, preferCurrentTariffs(list, catalog));
   }
   return { live, archived };
 }

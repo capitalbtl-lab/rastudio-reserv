@@ -244,41 +244,42 @@ describe("мастер абонементов учеников", () => {
     );
     assert.deepEqual(
       list.map((x) => x.id),
-      [1, 4],
+      [1],
     );
     assert.equal(list[0].name, "живой");
   });
 
-  it("архивный шаблон абонемента в изменении не предлагается", () => {
+  it("изменяем только абонементы, действующие сегодня", () => {
+    const catalog = [
+      { id: 385, name: "Абонемент 3850/4/90 Скульптурная студия", archive: false },
+      { id: 177, name: "старый", archive: true },
+    ];
     const list = activeCustomerTariffs(
       [
-        { id: 1, customer_id: 8, tariff_id: 385 },
-        { id: 2, customer_id: 8, tariff_id: 177 },
+        { id: 1, customer_id: 8, tariff_id: 385, e_date: "30.06.2027" },
+        { id: 2, customer_id: 8, tariff_id: 177, e_date: "01.01.2020" },
         { id: 3, customer_id: 8, tariff_id: 385, is_archive: 1 },
-        { id: 4, customer_id: 8, tariff_id: 174 },
+        { id: 4, customer_id: 8, tariff_id: 174, b_date: "01.01.2028" },
       ],
-      [
-        { id: 385, name: "Абонемент 3850/4/90 Скульптурная студия", archive: false },
-        { id: 177, name: "старый", archive: true },
-      ],
+      catalog,
     );
     assert.deepEqual(
       list.map((x) => x.tariffId),
       [385],
     );
-    assert.equal(list[0].name, "Абонемент 3850/4/90 Скульптурная студия");
-    const split = splitCustomerTariffs(
+    const bothCurrent = splitCustomerTariffs(
       [
         { id: 1, customer_id: 8, tariff_id: 385 },
-        { id: 2, customer_id: 9, tariff_id: 177 },
+        { id: 2, customer_id: 8, tariff_id: 177 },
       ],
-      [
-        { id: 385, name: "Абонемент 3850/4/90 Скульптурная студия" },
-        { id: 177, name: "старый", archive: true },
-      ],
+      catalog,
     );
-    assert.equal(split.live.has(8), true);
-    assert.equal(split.archived.has(9), true);
+    assert.deepEqual(
+      bothCurrent.live.get(8)?.map((x) => x.tariffId),
+      [385],
+    );
+    const onlyOld = splitCustomerTariffs([{ id: 2, customer_id: 9, tariff_id: 177 }], catalog);
+    assert.equal(onlyOld.live.get(9)?.[0].tariffId, 177);
     const n = countArchivedOnlyPupils(
       [
         { customerId: 8, branchId: 2 },

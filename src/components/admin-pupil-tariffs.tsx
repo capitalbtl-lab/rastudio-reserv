@@ -260,7 +260,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       }
       if (path !== "add" && archived) {
         setSummary(
-          `Прочитано ${keys.length} групп, ${scanned} учеников в CRM. Живых абонементов: ${rows.length}. Только архивные шаблоны (не трогаем): ${archived}.`,
+          `Прочитано ${keys.length} групп, ${scanned} учеников в CRM. Актуальных на сегодня: ${rows.length}. Истекших или ещё не начатых: ${archived}.`,
         );
       } else {
         setSummary(`Прочитано ${keys.length} групп, учеников: ${rows.length}.`);
@@ -476,7 +476,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           <p className="mt-2 text-[0.75rem] text-muted">
             {path === "add"
               ? `Учеников в выборке: ${progress.live}`
-              : `Живых абонементов: ${progress.live} · прочитано учеников: ${progress.scanned} · архивных пропущено: ${progress.archived}`}
+              : `Актуальных на сегодня: ${progress.live} · учеников в CRM: ${progress.scanned} · истекших пропущено: ${progress.archived}`}
           </p>
         </div>
       ) : null}
