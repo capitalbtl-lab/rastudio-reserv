@@ -1062,6 +1062,20 @@ export function AdminSchedule() {
         return;
       }
       if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as CrmSubject[]);
+      if ("teachers" in res && Array.isArray((res as { teachers?: CrmTeacher[] }).teachers) && (res as { teachers: CrmTeacher[] }).teachers.length) {
+        const incoming = (res as { teachers: CrmTeacher[] }).teachers;
+        setCrmTeachers((prev) => {
+          const map = new Map(prev.map((t) => [t.id, { ...t, branchIds: [...(t.branchIds || [])] }]));
+          for (const t of incoming) {
+            const hit = map.get(t.id);
+            if (hit) {
+              if (t.name) hit.name = t.name;
+              for (const b of t.branchIds || []) if (!hit.branchIds.includes(b)) hit.branchIds.push(b);
+            } else map.set(t.id, { id: t.id, name: t.name, branchIds: [...(t.branchIds || [])] });
+          }
+          return [...map.values()];
+        });
+      }
       if ("levels" in res && Array.isArray((res as { levels?: { id: number; name: string }[] }).levels) && (res as { levels: { id: number; name: string }[] }).levels.length) {
         setLevels((res as { levels: { id: number; name: string }[] }).levels);
       }

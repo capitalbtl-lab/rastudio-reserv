@@ -33,7 +33,7 @@ import { rememberLessons } from "./crm-lessons";
 import { loadGroupCard, saveGroupCard } from "./group-cards";
 import { scheduleVoiceTurn } from "./schedule-voice";
 import { loadSiteTree, addTreeSchool, addTreeCourse, deleteTreeCourse, deleteTreeSchool, moveSlotsToCourse, saveSiteTree, slotTreeKey } from "./site-tree";
-import { listTeachers, teachersAtBranch } from "./crm-teachers";
+import { listTeachers, teachersAtBranch, mergeTeacher, saveTeachers, loadTeachers } from "./crm-teachers";
 import { searchClientViews, findDossier, upsertDossier, applyCrmCustomer } from "./dossiers";
 import { isPhoneLike } from "./client-display";
 import { clientCardId, CRM_BRANCH } from "./ids";
@@ -312,6 +312,7 @@ async function createCustomerTariff(
 }
 
 const roomCache = new Map<number, { at: number; items: { id: number; name: string }[] }>();
+const teacherCache = new Map<number, { at: number; items: { id: number; name: string }[] }>();
 
 async function roomsOfBranch(request: typeof import("./alfacrm").request, t: string, branch: number) {
   const hit = roomCache.get(branch);
@@ -330,6 +331,34 @@ async function roomsOfBranch(request: typeof import("./alfacrm").request, t: str
     return items;
   } catch {
     return hit?.items || [];
+  }
+}
+
+async function teachersOfBranch(request: typeof import("./alfacrm").request, t: string, branch: number) {
+  const hit = teacherCache.get(branch);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.items;
+  const items: { id: number; name: string }[] = [];
+  const seen = new Set<number>();
+  try {
+    for (let page = 0; page < 4; page++) {
+      const pack = await request<{ items?: { id?: number; name?: string }[] }>(`/v2api/${branch}/teacher/index`, { page, pageSize: 100 }, t);
+      const chunk = pack.items || [];
+      for (const x of chunk) {
+        const id = Number(x.id || 0);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        items.push({ id, name: String(x.name || "").trim() || `педагог ${id}` });
+      }
+      if (chunk.length < 100) break;
+    }
+    items.sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    teacherCache.set(branch, { at: Date.now(), items });
+    const bag = loadTeachers();
+    for (const x of items) mergeTeacher(bag, x.id, x.name, branch);
+    saveTeachers(bag);
+    return items;
+  } catch {
+    return hit?.items || teachersAtBranch(branch, listTeachers(listAdminSlots())).map((x) => ({ id: x.id, name: x.name }));
   }
 }
 
@@ -2049,12 +2078,14 @@ export const adminSchedule = createServerFn({ method: "POST" })
           at: new Date().toISOString(),
       };
       saveGroupCard(group);
+      const liveTeachers = await teachersOfBranch(request, t, branch).catch(() => [] as { id: number; name: string }[]);
       return {
         ok: true as const,
         fromCache: false,
         subjects: loadSubjects(),
         levels,
         group,
+        teachers: liveTeachers.map((x) => ({ id: x.id, name: x.name, branchIds: [branch] })),
         ...groupTariffPack(slot),
       };
     }
@@ -2532,6 +2563,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         }
       }
       const rooms = await roomsOfBranch(request, t, branch);
+      const teachers = await teachersOfBranch(request, t, branch);
       const catalog = lessonCatalogOf(branch);
       const groups = listAdminSlots()
         .filter((s) => s.branchId === branch && s.groupId)
@@ -2559,7 +2591,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           note: String(raw?.note || data.note || ""),
         },
         rooms,
-        teachers: catalog.teachers,
+        teachers,
         subjects: catalog.subjects,
         groups: groupList,
       };
