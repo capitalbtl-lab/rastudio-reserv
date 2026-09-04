@@ -362,7 +362,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           Закрыть
         </button>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
+      <div className="mt-6 flex flex-wrap items-center gap-3">
         <span className="shrink-0 text-sm font-medium text-muted">Выбор режима работы мастера</span>
         <div className="grid w-[30rem] max-w-full grid-cols-3 gap-2">
           <button
@@ -403,7 +403,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
-      <div className="mt-2 flex flex-wrap gap-2 text-[0.78rem]">
+      <div className="mt-6 flex flex-wrap gap-2 text-[0.78rem]">
         {stepLabels.map((label, i) => (
           <span key={label} className={cn("rounded-full px-3 py-1", step === i + 1 ? "bg-primary text-white" : "bg-surface-2 text-muted")}>
             {i + 1}. {label}
