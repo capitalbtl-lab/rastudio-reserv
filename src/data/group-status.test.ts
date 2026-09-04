@@ -11,7 +11,7 @@ import {
 } from "./group-status.ts";
 import { inheritSchoolBySubject } from "./schedule-map.ts";
 import { resolveGroupCourseId } from "./ids.ts";
-import { bulkPriorityFromPrompt } from "./crm-slots.ts";
+import { bulkPriorityFromPrompt } from "./schedule-bulk.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 
 describe("статусы групп CRM", () => {
@@ -120,16 +120,21 @@ describe("массовый приоритет голосом", () => {
     g(580, 1, 0, "2026 Художественная студия (5-6 лет)"),
     g(701, 1, 0, "Проверка rastudio.org"),
     g(453, 1, 0, "Художественная студия (5-6 лет)"),
+    g(454, 1, 0, "2026 Художественная студия (7-9 лет)"),
+    g(583, 1, 0, "2026 Художественная студия (7-9 лет)"),
+    g(441, 1, 0, "2026 Художественная студия (8-10 лет)"),
     g(392, 2, 1, "Художественная студия (5-6 лет)"),
+    g(393, 2, 1, "Художественная студия (7-9 лет)"),
   ];
 
   it("на Гражданской ставит 1 и группе 580, ЦМИТ не трогает", () => {
     const out = bulkPriorityFromPrompt("во всех группах на гражданской поставить приоритет 1", slots);
     assert.ok(out);
     const ids = out.changes.map((c) => c.id).sort();
-    assert.deepEqual(ids, ["crm-453", "crm-580", "crm-701"]);
+    assert.deepEqual(ids, ["crm-441", "crm-453", "crm-454", "crm-580", "crm-583", "crm-701"]);
     assert.ok(out.changes.every((c) => c.to === "1"));
     assert.equal(out.changes.find((c) => c.id === "crm-392"), undefined);
+    assert.equal(out.changes.find((c) => c.id === "crm-393"), undefined);
   });
 
   it("год в названии не фильтр", () => {

@@ -32,6 +32,7 @@ import { GroupLessonStrip } from "@/components/lesson-strip";
 import { clientCardId, groupCardId, CRM_BRANCH, groupAssignKey } from "@/data/ids";
 import { displayPersonName } from "@/data/client-display";
 import { GROUP_STATUSES, GROUP_PRIORITY } from "@/data/group-status";
+import { bulkPreviewFromPrompt } from "@/data/schedule-bulk";
 
 type SiteTree = {
   schools: { id: string; label: string; href: string }[];
@@ -192,31 +193,11 @@ function leftoverAfterReject(s: string) {
 function leftoverLooksLikeEdit(s: string) {
   const w = voiceNorm(s);
   if (w.length < 3) return false;
-  return /лимит|мест|групп|дет|человек|возраст|день|время|педагог|филиал|курс|поставь|поменяй|измени|сделай|максимум|минимум|\d/.test(w);
+  return /лимит|мест|групп|дет|человек|возраст|день|время|педагог|филиал|курс|приоритет|поставь|поменяй|измени|сделай|максимум|минимум|\d/.test(w);
 }
 
 function localLimitPreview(prompt: string, slots: CrmSlot[], selectedIds: string[]) {
-  const t = String(prompt || "")
-    .toLowerCase()
-    .replace(/ё/g, "е");
-  if (!/мест|лимит|столбц|цифр|вместим|свободн|количеств|детей|человек/.test(t)) return null;
-  const tagged = t.match(/цифр[а-я]*\s*(\d{1,3})/);
-  const nums = [...t.matchAll(/\b(\d{1,3})\b/g)].map((m) => Number(m[1])).filter((n) => n >= 1 && n <= 200);
-  const to = tagged ? Number(tagged[1]) : nums.length ? nums[nums.length - 1] : NaN;
-  if (!Number.isFinite(to) || to < 1 || to > 200) return null;
-  const all = /у\s+всех|во\s+всех|всем|все\s+групп|каждую|каждой|массово|по\s+всем|столбц/.test(t);
-  let pool = selectedIds.length ? slots.filter((s) => selectedIds.includes(s.id)) : slots.slice();
-  if (all || !selectedIds.length) pool = slots.slice();
-  const changes = pool
-    .filter((s) => Number(s.limit) !== to)
-    .map((s) => ({ id: s.id, field: "limit", from: String(s.limit ?? 0), to: String(to) }));
-  return {
-    comment: changes.length
-      ? `Лимит мест ${to} у ${changes.length} групп.`
-      : `Лимит ${to} уже стоит у всех этих групп — менять нечего.`,
-    changes,
-    adds: [] as Draft[],
-  };
+  return bulkPreviewFromPrompt(prompt, slots, selectedIds);
 }
 
 function isPreviewReject(s: string) {
@@ -1449,6 +1430,23 @@ export function AdminSchedule() {
     }
   }
 
+  async function applyPriorityNow(comment: string, changes: Change[], viaVoice: boolean) {
+    setAiComment(comment);
+    setAiChanges(changes);
+    setAiAdds([]);
+    changesRef.current = changes;
+    addsRef.current = [];
+    setMsg(comment);
+    if (!changes.length) {
+      if (viaVoice) await say(comment);
+      return;
+    }
+    await applyPreview();
+    const done = `${comment} Записала в AlfaCRM.`;
+    setMsg(done);
+    if (viaVoice) await say(done);
+  }
+
   const DAYS_SHORT = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
   const previewOn = aiAdds.length > 0 || aiChanges.length > 0;
   const shrinkPage = previewOn || voiceMode;
@@ -1706,7 +1704,7 @@ export function AdminSchedule() {
       const w = wizardRef.current;
       const miss = missingScheduleFields(w);
       const text = promptRef.current.trim() || flushed;
-      const looksEdit = /во\s+всех|у\s+всех|лимит|мест|цифр|поменя|измени|постав/i.test(text);
+      const looksEdit = /во\s+всех|у\s+всех|лимит|мест|цифр|поменя|измени|постав|приоритет/i.test(text);
       if (!miss.length && w.course && !looksEdit) {
         setAiAdds([w]);
         addsRef.current = [w];
@@ -1722,6 +1720,10 @@ export function AdminSchedule() {
       }
       const local = localLimitPreview(text, slotsRef.current, pickedRef.current);
       if (local) {
+        if (local.changes.every((c) => c.field === "priority") || /приоритет/.test(text.toLowerCase())) {
+          await applyPriorityNow(local.comment, local.changes, voiceModeRef.current);
+          return;
+        }
         setAiComment(local.comment);
         setAiChanges(local.changes);
         setAiAdds(local.adds);
@@ -1975,6 +1977,10 @@ export function AdminSchedule() {
       }
       const local = localLimitPreview(q, slotsRef.current, pickedRef.current);
       if (local) {
+        if (local.changes.every((c) => c.field === "priority") || /приоритет/.test(q.toLowerCase())) {
+          await applyPriorityNow(local.comment, local.changes, true);
+          return;
+        }
         setAiComment(local.comment);
         setAiChanges(local.changes);
         setAiAdds(local.adds);
@@ -1987,8 +1993,13 @@ export function AdminSchedule() {
       const preview = await run("aiPreview", { prompt: q, ids: pickedRef.current });
       const n = preview && "changes" in preview && Array.isArray(preview.changes) ? preview.changes.length : 0;
       const comment = preview && "comment" in preview ? String(preview.comment || "") : "";
+      const rows = preview && "changes" in preview && Array.isArray(preview.changes) ? (preview.changes as Change[]) : [];
+      if (rows.length && rows.every((c) => c.field === "priority")) {
+        await applyPriorityNow(comment || `Приоритет у ${rows.length} групп.`, rows, true);
+        return;
+      }
       if (!n) {
-        await say(comment || "Не нашла, что менять. Повторите: лимит мест и число.");
+        await say(comment || "Не нашла, что менять. Повторите: приоритет 1 на Гражданской.");
         return;
       }
       if (voiceModeRef.current) await say(`${comment || `Готово, ${n} групп.`} Скажите опубликовать.`);
