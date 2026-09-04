@@ -203,23 +203,6 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           setKidsTotal(Number(res.kids || 0));
         } else setMsg(res.error || "Не удалось прочитать группы.");
         if (sub && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects);
-        setBusy(false);
-        if (res.ok) {
-          setProgress({ done: 0, total: 1, label: "Уточняю состав в CRM", unit: "", extra: "" });
-          const counts = (await retryFetch(
-            () => adminSchedule({ data: { token: token(), action: "pupilTariffCounts", groupKeys: [] } as never }),
-            1,
-            45000,
-          ).catch(() => null)) as typeof res | null;
-          if (counts?.ok) {
-            setGroups(counts.groups || []);
-            setSchools(counts.schools || []);
-            setUnbound(Number(counts.unbound || 0));
-            setByBranch(counts.byBranch || {});
-            setKidsTotal(Number(counts.kids || 0));
-          }
-          setProgress(null);
-        }
       } catch (e) {
         setMsg(e instanceof Error ? friendlyErr(e, "Не удалось прочитать группы. Обновите страницу.") : "Не удалось прочитать группы.");
       } finally {
@@ -252,14 +235,14 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     const grouped: Record<string, GroupTariff> = {};
     let scanned = 0;
     let archived = 0;
-    setProgress({ done: 0, total: keys.length, label: "Читаю CRM", unit: "групп", extra: "" });
+    setProgress({ done: 0, total: keys.length, label: path === "add" ? "Читаю учеников" : "Читаю учеников и абонементы", unit: "групп", extra: "" });
     setSummary("");
     try {
       for (let i = 0; i < keys.length; i += PLAN_GROUP_CHUNK) {
         const part = keys.slice(i, i + PLAN_GROUP_CHUNK);
         const from = i + 1;
         const to = Math.min(i + PLAN_GROUP_CHUNK, keys.length);
-        setMsg(`Читаю CRM: группы ${from}–${to} из ${keys.length}`);
+        setMsg(`Ученики: группы ${from}–${to} из ${keys.length}`);
         const res = (await retryFetch(
           () =>
             adminSchedule({
@@ -293,7 +276,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         setProgress({
           done: to,
           total: keys.length,
-          label: "Читаю CRM",
+          label: path === "add" ? "Читаю учеников" : "Читаю учеников и абонементы",
           unit: "групп",
           extra: path === "add" ? `строк ${rows.length}` : `актуальных ${mid.unique} чел.${mid.dual ? ` · ${mid.dual} в двух группах` : ""}`,
         });
@@ -301,6 +284,12 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       const list = path === "add" ? rows : collapsePupilsByCustomer(rows);
       const stats = pupilListStats(rows);
       setItems(list);
+      setGroups((prev) =>
+        prev.map((g) => {
+          const n = rows.filter((r) => r.groupId === g.groupId && r.branchId === g.branchId).length;
+          return n ? { ...g, taken: n } : g;
+        }),
+      );
       setByGroup(grouped);
       setChosen(new Set(path === "add" ? list.filter((r) => r.status === "учится" || r.status === "лид").map(pupilKey) : list.map(pupilKey)));
       setSubjectOf(Object.fromEntries(groups.filter((g) => picked.has(g.key)).map((g) => [g.key, g.subjectId || 0])));
@@ -549,10 +538,10 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         <div className="mt-4 space-y-3">
           <p className="text-sm text-muted">
             {path === "add"
-              ? "Выдать ученикам новые абонементы."
+              ? "Отметьте группы и нажмите «Далее» — тогда прочитаем учеников в CRM."
               : path === "change"
-                ? "Закрыть текущие абонементы выбранной датой. CRM пересчитает остаток."
-                : "Удалить текущие абонементы из AlfaCRM. Это необратимо."}
+                ? "Отметьте группы. Учеников и живые абонементы прочитаем на следующем шаге."
+                : "Отметьте группы. Учеников и абонементы к удалению прочитаем на следующем шаге."}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <select value={school} onChange={(e) => setSchool(e.target.value)} className="h-10 rounded-xl bg-surface-2 px-3 text-sm ring-1 ring-black/10">
@@ -637,8 +626,8 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                     {g.teacher ? ` · ${g.teacher}` : ""}
                   </span>
                 </span>
-                <span className={cn("shrink-0 text-right text-[0.72rem]", g.taken ? "text-muted" : "text-rose-700")}>
-                  {g.taken ? `${g.taken}/${g.limit || "—"}` : "0 детей"}
+                <span className="shrink-0 text-right text-[0.72rem] text-muted">
+                  {g.taken ? `${g.taken}${g.limit ? `/${g.limit}` : ""}` : "состав →"}
                 </span>
               </label>
             ))}

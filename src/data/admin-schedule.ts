@@ -402,32 +402,21 @@ async function pullGroupMembersCrm(
     if (m.archived) archive.push(m);
     else active.push(m);
   }
-  const bag = await loadPeopleBag(request, t);
-  const fromCgi = bag.cgi.get(gid) || [];
-  if (fromCgi.length) {
-    const missing: number[] = [];
-    for (const id of fromCgi) {
-      const c = bag.customer.get(id);
-      if (c) take(c);
-      else missing.push(id);
+  const { cgiCustomerId, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
+  const cgiIds: number[] = [];
+  for (let page = 0; page < 5; page += 1) {
+    if (page) await sleep(CRM_READ_GAP_MS);
+    const json = await request<{ items?: Record<string, unknown>[] }>(
+      `/v2api/${branch}/cgi/index?group_id=${gid}`,
+      { page, pageSize: 50, group_id: gid },
+      t,
+    ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+    const batch = json.items || [];
+    for (const it of batch) {
+      const id = cgiCustomerId(it);
+      if (id && !cgiIds.includes(id) && !Number(it.removed || it.is_removed || 0)) cgiIds.push(id);
     }
-    const { CRM_READ_GAP_MS } = await import("./pupil-tariffs");
-    for (let i = 0; i < missing.length; i += 3) {
-      if (i) await sleep(CRM_READ_GAP_MS);
-      await Promise.all(
-        missing.slice(i, i + 3).map(async (id) => {
-          const json = await request<{ items?: Record<string, unknown>[] }>(
-            `/v2api/${branch}/customer/index`,
-            { page: 0, pageSize: 5, id },
-            t,
-          ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-          const c = (json.items || []).find((x) => Number(x.id) === id) || { id, name: "", is_study: 0 };
-          bag.customer.set(id, c);
-          take(c);
-        }),
-      );
-    }
-    return { active, archive };
+    if (batch.length < 50) break;
   }
   async function pull(extra: Record<string, unknown>, forceArchive = false) {
     for (let page = 0; page < 3; page += 1) {
@@ -444,6 +433,21 @@ async function pullGroupMembersCrm(
   await pull({});
   if (!active.some((m) => m.status === "лид")) await pull({ is_study: 0 });
   if (!opts?.skipArchive && !archive.length) await pull({ is_study: 2 }, true);
+  const missing = cgiIds.filter((id) => !seen.has(id));
+  for (let i = 0; i < missing.length; i += 3) {
+    if (i) await sleep(CRM_READ_GAP_MS);
+    await Promise.all(
+      missing.slice(i, i + 3).map(async (id) => {
+        const json = await request<{ items?: Record<string, unknown>[] }>(
+          `/v2api/${branch}/customer/index`,
+          { page: 0, pageSize: 5, id },
+          t,
+        ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+        const c = (json.items || []).find((x) => Number(x.id) === id) || { id, name: "", is_study: 0 };
+        take(c);
+      }),
+    );
+  }
   return { active, archive };
 }
 
@@ -2162,6 +2166,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
           }),
         };
         const mem = await loadGroupMembers(request, t, g.branchId, g.groupId, { skipArchive: true });
+        g.taken = mem.active.length;
+        saveTaken([g]);
         for (const m of mem.active) {
           const row = pupilRowFromMember(m, g, offer, includeLeads);
           if (row) items.push(row);
