@@ -270,7 +270,7 @@ async function createCustomerTariff(
     lessonsCount?: number;
   },
 ) {
-  const { customerTariffPayload } = await import("./pupil-tariffs");
+  const { customerTariffPayload, customerTariffCreatePath } = await import("./pupil-tariffs");
   const customerId = Number(opts.customerId) || 0;
   const tariffId = Number(opts.tariffId) || 0;
   const branch = Number(opts.branch) || 1;
@@ -296,7 +296,7 @@ async function createCustomerTariff(
   for (const body of tries) {
     if (body.customer_id == null || body.customer_id === "" || Number(body.customer_id) === 0) continue;
     try {
-      const res = await request<{ success?: boolean; errors?: unknown }>(`/v2api/${branch}/customer-tariff/create`, body, t);
+      const res = await request<{ success?: boolean; errors?: unknown }>(customerTariffCreatePath(branch, customerId), body, t);
       if (res.success === false) {
         last = JSON.stringify(res.errors || res);
         continue;
@@ -644,7 +644,7 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
   const tariffs: NonNullable<CustomerCard["tariffs"]> = [];
   try {
     const json = await request<{ items?: Record<string, unknown>[] }>(
-      `/v2api/${useBranch}/customer-tariff/index`,
+      `/v2api/${useBranch}/customer-tariff/index?customer_id=${customerId}`,
       { page: 0, pageSize: 20, customer_id: customerId },
       t,
     );
@@ -1936,8 +1936,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
           if (skipExisting) {
             try {
               const have = await request<{ items?: Record<string, unknown>[] }>(
-                `/v2api/${row.branchId}/customer-tariff/index`,
-                { page: 0, pageSize: 30, customer_id: row.customerId },
+                `/v2api/${row.branchId}/customer-tariff/index?customer_id=${customerId}`,
+                { page: 0, pageSize: 30, customer_id: customerId },
                 t,
               ).catch(() => ({ items: [] as Record<string, unknown>[] }));
               const hit = (have.items || []).some((it) => Number(it.tariff_id || it.tariffId || 0) === row.tariffId && Number(it.removed || it.is_archived || 0) !== 1);

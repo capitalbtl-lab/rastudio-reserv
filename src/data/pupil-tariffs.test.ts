@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, type PupilGroup } from "./pupil-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 
 function slot(over: Partial<CrmSlot> = {}): CrmSlot {
@@ -168,6 +168,7 @@ describe("мастер абонементов учеников", () => {
     assert.deepEqual(body.subject_ids, [13]);
     assert.equal(body.group_id, 701);
     assert.equal(body.b_date, "04.09.2026");
+    assert.equal(customerTariffCreatePath(1, 7759), "/v2api/1/customer-tariff/create?customer_id=7759");
     const empty = customerTariffPayload({ customerId: 0, tariffId: 1, bDate: "01.01.2026" });
     assert.equal(empty.customer_id, 0);
     assert.deepEqual(empty.lesson_type_ids, [2]);

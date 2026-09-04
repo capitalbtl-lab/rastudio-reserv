@@ -128,7 +128,11 @@ export function assignable(items: PupilTariffItem[]) {
   return items.filter((x) => x.tariffId && x.customerId && x.skip !== "no-tariff" && x.skip !== "already");
 }
 
-/** Тело customer-tariff/create. customer_id и lesson_type_ids всегда в корне. */
+/** Тело customer-tariff/create. customer_id и lesson_type_ids всегда в корне.
+ *  В AlfaCRM customer_id ещё и в query: /create?customer_id= */
+export function customerTariffCreatePath(branch: number, customerId: number) {
+  return `/v2api/${Number(branch) || 1}/customer-tariff/create?customer_id=${Number(customerId) || 0}`;
+}
 export function customerTariffPayload(opts: {
   customerId: number;
   tariffId: number;
