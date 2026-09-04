@@ -168,6 +168,15 @@ describe("мастер абонементов учеников", () => {
     assert.deepEqual(body.subject_ids, [13]);
     assert.equal(body.group_id, 701);
     assert.equal(body.b_date, "04.09.2026");
+    assert.equal(body.is_separate_balance, 0);
+    const separate = customerTariffPayload({
+      customerId: 1,
+      tariffId: 1,
+      bDate: "04.09.2026",
+      calcType: 1,
+    });
+    assert.equal(separate.is_separate_balance, 1);
+    assert.equal(separate.calculation_type, 2);
     assert.equal(customerTariffCreatePath(1, 7759), "/v2api/1/customer-tariff/create?customer_id=7759");
     assert.equal(customerTariffIndexPath(1, 7759), "/v2api/1/customer-tariff/index?customer_id=7759");
     assert.equal(customerTariffUpdatePath(1, 88, 7759), "/v2api/1/customer-tariff/update?id=88&customer_id=7759");

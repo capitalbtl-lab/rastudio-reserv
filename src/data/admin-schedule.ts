@@ -278,16 +278,11 @@ async function createCustomerTariff(
   if (!tariffId) return { ok: false as const, error: "Выберите абонемент." };
   if (!String(opts.bDate || "").trim()) return { ok: false as const, error: "Нет даты начала абонемента." };
   const full = customerTariffPayload(opts);
-  const core = {
-    customer_id: customerId,
-    tariff_id: tariffId,
-    b_date: full.b_date,
-    lesson_type_ids: full.lesson_type_ids,
-    ...(full.subject_ids ? { subject_ids: full.subject_ids } : {}),
-    ...(full.e_date ? { e_date: full.e_date } : {}),
-    ...(full.group_id ? { group_id: full.group_id } : {}),
-  };
-  const tries: Record<string, unknown>[] = [core];
+  const tries: Record<string, unknown>[] = [
+    full,
+    { ...full, is_separate_balance: 1, calculation_type: 2 },
+    { ...full, is_separate_balance: 0, calculation_type: 1 },
+  ];
   let last = "";
   for (const body of tries) {
     if (body.customer_id == null || body.customer_id === "" || Number(body.customer_id) === 0) continue;

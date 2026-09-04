@@ -213,8 +213,8 @@ export function customerTariffPayload(opts: {
   if (subjectIds.length) body.subject_ids = subjectIds;
   if (Number(opts.lessonsCount) > 0) body.lesson_count = Number(opts.lessonsCount);
   if (opts.note) body.note = String(opts.note);
-  const calcType = Number(opts.calcType) || 0;
-  body.is_separate_balance = calcType ? 1 : 0;
+  const calcType = Number(opts.calcType) ? 1 : 0;
+  body.is_separate_balance = calcType;
   body.calculation_type = calcType ? 2 : 1;
   const periodType = Number(opts.periodType) || 0;
   const periodCount = Number(opts.periodCount) || 0;
