@@ -3357,27 +3357,28 @@ export function AdminSchedule() {
                   </div>
                 ) : null}
                 <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:px-5 md:pb-5">
-                <div className="mt-2 grid gap-2 md:grid-cols-2">
-                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                <div className="mt-2 grid gap-3 md:grid-cols-2">
+                    <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Примечания
-                      <input value={detail.remarks} onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                      <input value={detail.remarks} onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
                     </label>
-                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                    <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Описание
-                      <input value={detail.description} onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                      <input value={detail.description} onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
                     </label>
                     <GroupLessonStrip className="md:col-span-2" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} />
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:col-span-2 md:grid-cols-6">
-                      <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                    <div className="grid gap-3 md:col-span-2">
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-[7.25rem_9.25rem_minmax(12.5rem,1.35fr)_8.5rem_auto]">
+                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Возраст
-                        <input value={detail.slot.age} onChange={(e) => patch(detail.id, "age", e.target.value)} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                        <input value={detail.slot.age} onChange={(e) => patch(detail.id, "age", e.target.value)} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
                       </label>
-                      <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         День
                         <select
                           value={shownBeat(detail.slot).day}
                           onChange={(e) => patchBeat(detail.slot, "day", Number(e.target.value))}
-                          className="mt-0.5 h-8 w-full rounded-md bg-white px-1.5 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                          className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35"
                         >
                           {[1, 2, 3, 4, 5, 6, 7].map((d) => (
                             <option key={d} value={d}>
@@ -3386,24 +3387,25 @@ export function AdminSchedule() {
                           ))}
                         </select>
                       </label>
-                      <label className="col-span-2 block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      <label className="col-span-2 block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80 sm:col-auto">
                         Период
-                        <span className="mt-0.5 flex items-center gap-1">
-                          <input value={detail.bDate} onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))} placeholder="02.09.2026" className="h-8 w-full rounded-md bg-white px-1.5 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
-                          <span className="shrink-0 text-[0.65rem] font-medium normal-case text-muted">до</span>
-                          <input value={detail.eDate} onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))} placeholder="31.05.2027" className="h-8 w-full rounded-md bg-white px-1.5 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                        <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
+                          <input value={detail.bDate} onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))} placeholder="01.09.2026" className="h-full min-w-0 flex-1 bg-transparent px-2 text-center text-[0.8rem] font-medium text-fg outline-none" />
+                          <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
+                          <input value={detail.eDate} onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))} placeholder="30.06.2027" className="h-full min-w-0 flex-1 bg-transparent px-2 text-center text-[0.8rem] font-medium text-fg outline-none" />
                         </span>
                       </label>
-                      <label className="col-span-2 block text-[0.62rem] font-semibold uppercase tracking-wider text-muted sm:col-span-1">
-                        С / до
-                        <span className="mt-0.5 flex items-center gap-1">
-                          <input value={shownBeat(detail.slot).timeFrom} onChange={(e) => patchBeat(detail.slot, "timeFrom", e.target.value)} className="h-8 w-full rounded-md bg-white px-1.5 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
-                          <input value={shownBeat(detail.slot).timeTo} onChange={(e) => patchBeat(detail.slot, "timeTo", e.target.value)} className="h-8 w-full rounded-md bg-white px-1.5 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                        Время
+                        <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
+                          <input value={shownBeat(detail.slot).timeFrom} onChange={(e) => patchBeat(detail.slot, "timeFrom", e.target.value)} className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.8rem] font-medium text-fg outline-none" />
+                          <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
+                          <input value={shownBeat(detail.slot).timeTo} onChange={(e) => patchBeat(detail.slot, "timeTo", e.target.value)} className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.8rem] font-medium text-fg outline-none" />
                         </span>
                       </label>
-                      <div className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      <div className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         ×нед
-                        <div className="mt-0.5 flex h-8 items-center">
+                        <div className="mt-1 flex h-8 items-center">
                           <WeekDots
                             s={detail.slot}
                             index={view[detail.slot.id] || 0}
@@ -3412,9 +3414,9 @@ export function AdminSchedule() {
                           />
                         </div>
                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:col-span-2">
-                      <label className="col-span-2 block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1.15fr)_6.5rem]">
+                      <label className="col-span-2 block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80 sm:col-auto">
                         Филиал
                         <select
                           value={detail.slot.branchId || ""}
@@ -3427,7 +3429,7 @@ export function AdminSchedule() {
                             setDirty((d) => new Set(d).add(detail.id));
                             setDetail((d) => (d ? { ...d, branchId, slot: { ...d.slot, branchId, city, branch } } : d));
                           }}
-                          className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                          className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35"
                         >
                           <option value="">— филиал —</option>
                           {Object.entries(CRM_BRANCH).map(([id, b]) => (
@@ -3437,7 +3439,7 @@ export function AdminSchedule() {
                           ))}
                         </select>
                       </label>
-                      <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Педагог
                         <select
                           value={detail.slot.teacher}
@@ -3449,7 +3451,7 @@ export function AdminSchedule() {
                             setDirty((d) => new Set(d).add(detail.id));
                             setDetail((d) => (d ? { ...d, slot: next } : d));
                           }}
-                          className="mt-0.5 h-8 w-full rounded-md bg-white px-1.5 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                          className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35"
                         >
                           <option value="">— педагог —</option>
                           {teachersForBranch(detail.slot.branchId).map((t) => (
@@ -3462,24 +3464,25 @@ export function AdminSchedule() {
                           ) : null}
                         </select>
                       </label>
-                      <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Места
-                        <span className="mt-0.5 flex items-center gap-1">
+                        <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
                           <input
                             value={detail.slot.limit}
                             onChange={(e) => patch(detail.id, "limit", Number(e.target.value) || 0)}
-                            className="h-8 w-full rounded-md bg-white px-2 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                            className="h-full min-w-0 flex-1 bg-transparent px-2 text-center text-[0.8rem] font-medium text-fg outline-none"
                           />
-                          <span className="shrink-0 text-[0.8rem] font-medium normal-case text-muted">/ {detail.slot.taken}</span>
+                          <span className="shrink-0 pr-2.5 text-[0.75rem] font-medium text-muted">/ {detail.slot.taken}</span>
                         </span>
                       </label>
-                    </div>
-                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      </div>
+                      <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
+                    <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Абонемент
                       <select
                         value={detail.tariffId || ""}
                         onChange={(e) => setDetail((d) => (d ? { ...d, tariffId: Number(e.target.value) || 0 } : d))}
-                        className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                        className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35"
                       >
                         <option value="">— не выбран —</option>
                         {detail.tariffs.some((t) => t.fit) ? (
@@ -3502,12 +3505,12 @@ export function AdminSchedule() {
                         ) : null}
                       </select>
                     </label>
-                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                    <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Хэштеги
-                      <span className="ml-1 font-normal normal-case tracking-normal text-muted">не для привязок</span>
-                      <input value={detail.hashtags} onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                      <span className="ml-1 font-normal normal-case tracking-normal text-muted/60">не для привязок</span>
+                      <input value={detail.hashtags} onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
                     </label>
-                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                    <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Курс на сайте
                       <select
                         value={siteCourseValue(detail.slot, siteTree)}
@@ -3533,7 +3536,7 @@ export function AdminSchedule() {
                             if (next?.courseId) setDetail((d) => (d ? { ...d, slot: next } : d));
                           });
                         }}
-                        className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                        className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35"
                       >
                         <option value="">— не выбран —</option>
                         {siteTree.schools.map((sc) => (
@@ -3549,13 +3552,13 @@ export function AdminSchedule() {
                         ))}
                       </select>
                     </label>
-                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                    <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Предмет
                       {(() => {
                         const branchSubs = branchSubjectList(slots, detail.branchId, subjects, detail.id);
                         const others = subjects.filter((s) => !branchSubs.some((b) => b.id === s.id));
                         return (
-                          <select value={detail.subjectId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, subjectId: Number(e.target.value) || 0 } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                          <select value={detail.subjectId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, subjectId: Number(e.target.value) || 0 } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35">
                             <option value="">— выберите предмет филиала —</option>
                             {branchSubs.length ? (
                               <optgroup label="В этом филиале">
@@ -3575,16 +3578,17 @@ export function AdminSchedule() {
                         );
                       })()}
                     </label>
-                    <div className="flex flex-wrap items-end gap-2 md:col-span-2 md:flex-nowrap">
-                      <label className="block min-w-[9rem] shrink-0 text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-[9.25rem_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_5.75rem]">
+                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Запись
-                        <a href={detail.signup || leadHref(detail.slot)} target="_blank" rel="noreferrer" className="mt-0.5 flex h-8 items-center justify-center whitespace-nowrap rounded-md bg-white px-2 text-[0.75rem] font-semibold normal-case tracking-normal text-primary ring-1 ring-black/8">
-                          запись в группу {detail.groupId || "—"}
+                        <a href={detail.signup || leadHref(detail.slot)} target="_blank" rel="noreferrer" className="mt-1 flex h-8 items-center justify-center whitespace-nowrap rounded-lg bg-white px-2.5 text-[0.75rem] font-semibold text-primary ring-1 ring-black/[0.07] transition hover:ring-primary/30">
+                          в группу {detail.groupId || "—"}
                         </a>
                       </label>
-                      <label className="block min-w-0 flex-1 text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
-                        Уровень знаний
-                        <select value={detail.levelId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, levelId: Number(e.target.value) || 0 } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-1.5 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                      <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                        Уровень
+                        <select value={detail.levelId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, levelId: Number(e.target.value) || 0 } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35">
                           <option value="">— не задан —</option>
                           {levels.map((lv) => (
                             <option key={lv.id} value={lv.id}>{lv.name}</option>
@@ -3592,32 +3596,33 @@ export function AdminSchedule() {
                           {detail.levelId && !levels.some((lv) => lv.id === detail.levelId) ? <option value={detail.levelId}>Уровень {detail.levelId}</option> : null}
                         </select>
                       </label>
-                      <label className="block min-w-0 flex-[1.2] text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Статус
-                        <select value={detail.statusId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, statusId: Number(e.target.value) || 0 } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-1.5 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                        <select value={detail.statusId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, statusId: Number(e.target.value) || 0 } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35">
                           <option value="">— не задан —</option>
                           {GROUP_STATUS.map((st) => (
                             <option key={st.id} value={st.id}>{st.name}</option>
                           ))}
                         </select>
                       </label>
-                      <label className="block min-w-0 flex-1 text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Приоритет
-                        <select value={detail.priority} onChange={(e) => setDetail((d) => (d ? { ...d, priority: Number(e.target.value) } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-1.5 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                        <select value={detail.priority} onChange={(e) => setDetail((d) => (d ? { ...d, priority: Number(e.target.value) } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35">
                           {GROUP_PRIORITY.map((p) => (
                             <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
                         </select>
                       </label>
-                      <label className="block min-w-0 flex-1 text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Отработка
-                        <input value={detail.makeup} onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-1.5 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                        <input value={detail.makeup} onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
                       </label>
-                    </div>
-                    {detail.error ? <p className="w-full text-sm text-red-600 md:col-span-2">{detail.error}</p> : null}
+                      </div>
+                    {detail.error ? <p className="text-sm text-red-600">{detail.error}</p> : null}
                     {!detail.groupId ? (
-                      <p className="w-full text-sm text-muted md:col-span-2">Группа пока только на сайте. «Сохранить в AlfaCRM» создаст её. Если предмет не выбран — заведём по названию курса.</p>
+                      <p className="text-sm text-muted">Группа пока только на сайте. «Сохранить в AlfaCRM» создаст её. Если предмет не выбран — заведём по названию курса.</p>
                     ) : null}
+                    </div>
                   </div>
                   <section className="mt-3 rounded-xl bg-white/80 p-3 ring-1 ring-black/6">
                     <CrmGroupMembers title="Ученики" items={detail.members.filter((m) => m.status !== "лид")} onOpen={(m) => void openPupil(m, detail.branchId)} />
