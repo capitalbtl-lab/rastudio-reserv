@@ -762,6 +762,21 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                   ))}
                 </ul>
               ) : null}
+              {!busy ? (
+                <div className="mt-3">
+                  <Button
+                    type="button"
+                    className="h-9 px-4 text-sm"
+                    onClick={() => {
+                      setResult(null);
+                      setMsg("");
+                      setStep(1);
+                    }}
+                  >
+                    Продолжить работу с мастером
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <>
@@ -816,6 +831,18 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         {step < lastStep ? (
           <Button type="button" className="h-9 px-4 text-sm" disabled={busy || (step === 1 && !picked.size) || (step === 2 && !chosen.size)} onClick={() => void goNext()}>
             {busy && step === 1 ? "Читаю состав…" : "Далее"}
+          </Button>
+        ) : result && !busy ? (
+          <Button
+            type="button"
+            className="h-9 px-4 text-sm"
+            onClick={() => {
+              setResult(null);
+              setMsg("");
+              setStep(1);
+            }}
+          >
+            Продолжить работу с мастером
           </Button>
         ) : result ? null : (
           <Button
