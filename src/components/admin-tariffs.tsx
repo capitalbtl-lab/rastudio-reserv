@@ -1466,17 +1466,17 @@ function Editor({
               setNote("Сохраняю на сайте…");
               const res = await onSave();
               setNote(res && res.ok === false ? res.error || "Не сохранилось." : "Сохранено на сайте.");
-            }}>На сайте</Button>
+            }}>Сохранить на сайте</Button>
             <Button type="button" className="h-8 px-3 text-[0.78rem]" disabled={busy} onClick={async () => {
-              setNote("Выгружаю в AlfaCRM…");
+              setNote("Экспортирую в Alpha CRM…");
               const res = await onPush();
               if (!res) {
                 setNote("Нет ответа. Обновите страницу и войдите снова.");
                 return;
               }
-              if (res.ok) setNote("Выгружен в AlfaCRM.");
-              else setNote(res.error || "Не выгрузилось в AlfaCRM.");
-            }}>{busy ? "Выгружаю…" : "В AlfaCRM"}</Button>
+              if (res.ok) setNote("Экспортирован в Alpha CRM.");
+              else setNote(res.error || "Не экспортировалось в Alpha CRM.");
+            }}>{busy ? "Экспортирую…" : "Экспортировать в Alpha CRM"}</Button>
           </div>
         </div>
       </div>
