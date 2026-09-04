@@ -16,6 +16,7 @@ import type { SiteTree } from "@/data/site-tree";
 import type { TariffLink } from "@/data/tariff-map";
 import { siteCourseOptions, siteSchoolOptions } from "@/data/site-bind-core";
 import { PupilTariffWizard } from "@/components/admin-pupil-tariffs";
+import { RaSelect } from "@/components/ra-select";
 import { RA_POP } from "@/data/admin-ui";
 
 const CALC_NAMES: Record<number, string> = { 0: "Любой", 1: "Базовый счет", 2: "Отдельный счет" };
@@ -839,24 +840,19 @@ export function AdminTariffs() {
                       )}
                     </td>
                     <td className="py-2 pr-2">
-                      <select
+                      <RaSelect
                         value={tariffMap.find((x) => x.tariffId === t.id)?.courseId || ""}
-                        onChange={(e) => void bindTariff(t.id, e.target.value)}
-                        className="h-8 max-w-[14rem] rounded-lg bg-white px-2 text-[0.75rem] ring-1 ring-black/10"
-                      >
-                        <option value="">— курс сайта —</option>
-                        {siteSchools.map((sc) => (
-                          <optgroup key={sc.id} label={sc.label}>
-                            {siteCourses
-                              .filter((c) => c.schoolId === sc.id)
-                              .map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {c.label}
-                                </option>
-                              ))}
-                          </optgroup>
-                        ))}
-                      </select>
+                        placeholder="нет курса"
+                        menuMinWidth={280}
+                        className="h-8 max-w-[14rem] rounded-[8px] text-[0.75rem]"
+                        groups={siteSchools.map((sc) => ({
+                          label: sc.label,
+                          options: siteCourses
+                            .filter((c) => c.schoolId === sc.id)
+                            .map((c) => ({ value: c.id, label: c.label })),
+                        }))}
+                        onChange={(v) => void bindTariff(t.id, v)}
+                      />
                     </td>
                     <td className="py-2 text-center text-sm text-muted">{groups.length || "—"}</td>
                     <td className="px-2 py-2">
@@ -1036,36 +1032,32 @@ function Editor({
 
         <div className="md:col-span-12 flex flex-wrap items-end gap-2">
         <Field label="Школа сайта" className="w-full sm:w-56 shrink-0">
-          <select
+          <RaSelect
             className={box}
             value={schoolId}
-            title="Школа сайта. В AlfaCRM не уходит."
-            onChange={(e) => {
-              const next = e.target.value;
+            placeholder="нет школы"
+            options={schools.map((s) => ({ value: s.id, label: s.label }))}
+            onChange={(next) => {
               setSchoolPick(next);
               if (!next || (course && course.schoolId !== next)) onBind("");
             }}
-          >
-            <option value="">— школа —</option>
-            {schools.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+          />
         </Field>
         <Field label="Курс сайта" className="min-w-[14rem] flex-1">
-          <select className={box} value={courseId} title="Курс сайта. В AlfaCRM не уходит." onChange={(e) => onBind(e.target.value)}>
-            <option value="">— курс —</option>
-            {(schoolId ? schoolCourses : allCourses).map((c) => {
+          <RaSelect
+            className={box}
+            value={courseId}
+            placeholder="нет курса"
+            menuMinWidth={280}
+            options={(schoolId ? schoolCourses : allCourses).map((c) => {
               const school = schools.find((s) => s.id === c.schoolId);
-              return (
-                <option key={c.id} value={c.id}>
-                  {schoolId ? c.label : `${(school?.label || "").replace(/^Школа\s+/i, "")} · ${c.label}`}
-                </option>
-              );
+              return {
+                value: c.id,
+                label: schoolId ? c.label : `${(school?.label || "").replace(/^Школа\s+/i, "")} · ${c.label}`,
+              };
             })}
-          </select>
+            onChange={onBind}
+          />
         </Field>
         </div>
 

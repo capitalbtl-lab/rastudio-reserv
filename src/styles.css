@@ -104,8 +104,12 @@
     border-radius: var(--radius-pop);
   }
 
+  /* Нативные OS-меню select квадратные — всплывашки только через RA_POP / RaSelect. */
   [role="listbox"],
   [role="menu"],
+  [role="dialog"],
+  dialog,
+  .ra-pop,
   [data-radix-select-content],
   [data-radix-dropdown-menu-content],
   [data-radix-popover-content],
