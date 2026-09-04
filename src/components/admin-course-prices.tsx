@@ -107,7 +107,10 @@ export function AdminCoursePrices() {
       cur.label = sch.label;
       map.set(sch.id, cur);
     }
-    return [...map.values()];
+    return [...map.values()].map((g) => ({
+      ...g,
+      list: [...g.list].sort((a, b) => a.name.localeCompare(b.name, "ru", { sensitivity: "base" })),
+    }));
   }, [rows, schools]);
 
   async function saveAll() {
