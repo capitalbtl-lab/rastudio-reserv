@@ -44,6 +44,8 @@ export const ASSIGN_GAP_MS = 900;
 export const ASSIGN_BATCH_PAUSE_MS = 2500;
 export const ASSIGN_REST_EVERY = 40;
 export const ASSIGN_REST_MS = 8000;
+/** Сколько групп мастер читает за один запрос к CRM — иначе прокси обрывает длинное чтение. */
+export const PLAN_GROUP_CHUNK = 6;
 
 export function assignEtaMin(n: number) {
   const count = Math.max(0, Number(n) || 0);
@@ -158,6 +160,10 @@ export function customerTariffIndexPath(branch: number, customerId: number) {
   return `/v2api/${Number(branch) || 1}/customer-tariff/index?customer_id=${Number(customerId) || 0}`;
 }
 
+export function customerTariffIndexBranchPath(branch: number) {
+  return `/v2api/${Number(branch) || 1}/customer-tariff/index`;
+}
+
 export function customerTariffUpdatePath(branch: number, tariffRowId: number, customerId: number) {
   return `/v2api/${Number(branch) || 1}/customer-tariff/update?id=${Number(tariffRowId) || 0}&customer_id=${Number(customerId) || 0}`;
 }
@@ -174,6 +180,26 @@ export function activeCustomerTariffs(items: Record<string, unknown>[] | undefin
       tariffId: Number(it.tariff_id || it.tariffId || 0),
       name: String(it.tariff_name || it.name || "абонемент"),
     }));
+}
+
+/** Индекс живых абонементов филиала: customer_id → список. Один index вместо запроса на каждого ученика. */
+export function indexActiveTariffsByCustomer(items: Record<string, unknown>[] | undefined) {
+  const map = new Map<number, { id: number; tariffId: number; name: string }[]>();
+  for (const it of items || []) {
+    if (Number(it.removed || it.is_archived || 0) === 1) continue;
+    const id = Number(it.id) || 0;
+    const customerId = Number(it.customer_id ?? it.customerId ?? 0);
+    if (!id || !customerId) continue;
+    const row = {
+      id,
+      tariffId: Number(it.tariff_id || it.tariffId || 0),
+      name: String(it.tariff_name || it.name || "абонемент"),
+    };
+    const list = map.get(customerId) || [];
+    list.push(row);
+    map.set(customerId, list);
+  }
+  return map;
 }
 
 export function keepPupilsWithActiveTariffs<T extends { customerId: number; branchId: number }>(

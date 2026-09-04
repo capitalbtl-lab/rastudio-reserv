@@ -96,15 +96,59 @@ export function resolveLessonType(raw?: string) {
 type TokenCache = { token: string; exp: number };
 let cache: TokenCache | null = null;
 let lastAt = 0;
+let gate: Promise<void> = Promise.resolve();
+const GAP_MS = 400;
+const INDEX_TTL = 45_000;
+const indexCache = new Map<string, { at: number; json: unknown }>();
+const inflight = new Map<string, Promise<unknown>>();
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function throttle() {
-  const wait = 300 - (Date.now() - lastAt);
+function stableBody(body: unknown) {
+  try {
+    return JSON.stringify(body ?? {});
+  } catch {
+    return "";
+  }
+}
+
+function indexKey(path: string, body: unknown) {
+  if (!/\/index(\?|$)/.test(path)) return "";
+  return `${path}|${stableBody(body)}`;
+}
+
+function dropIndexCache(path?: string) {
+  if (!path) {
+    indexCache.clear();
+    return;
+  }
+  const stem = path.replace(/\?.*$/, "").replace(/\/(create|update|delete).*$/, "/index");
+  for (const k of [...indexCache.keys()]) {
+    if (k.startsWith(stem) || k.includes(stem)) indexCache.delete(k);
+  }
+}
+
+async function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = gate;
+  let release!: () => void;
+  gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await prev;
+  const wait = GAP_MS - (Date.now() - lastAt);
   if (wait > 0) await sleep(wait);
   lastAt = Date.now();
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
+async function throttle() {
+  await enqueue(async () => undefined);
 }
 
 export async function pace() {
@@ -135,33 +179,70 @@ export function leadUrl(branch: number, id: number) {
 }
 
 export async function request<T>(path: string, body: unknown, tok?: string): Promise<T> {
-  await throttle();
   let url = path;
   if (body && typeof body === "object" && /\/(update|delete)(\?|$)/.test(url) && !/[?&]id=/.test(url)) {
     const id = Number((body as { id?: unknown }).id);
     if (id) url += `${url.includes("?") ? "&" : "?"}id=${id}`;
   }
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  };
-  if (tok) headers["X-ALFACRM-TOKEN"] = tok;
-  const res = await fetch(`${HOST()}${url}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body ?? {}),
+  const write = /\/(create|update|delete)(\?|$)/.test(url);
+  const key = write ? "" : indexKey(url, body);
+  if (key) {
+    const hit = indexCache.get(key);
+    if (hit && Date.now() - hit.at < INDEX_TTL) return hit.json as T;
+    const pending = inflight.get(key);
+    if (pending) return pending as Promise<T>;
+  }
+  const run = enqueue(async () => {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+    if (tok) headers["X-ALFACRM-TOKEN"] = tok;
+    const send = () =>
+      fetch(`${HOST()}${url}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body ?? {}),
+        signal: AbortSignal.timeout(18000),
+      });
+    let res: Response;
+    try {
+      res = await send();
+    } catch {
+      await sleep(700);
+      lastAt = Date.now();
+      res = await send();
+    }
+    if (res.status === 429 || res.status === 503) {
+      await sleep(2000);
+      lastAt = Date.now();
+      res = await send();
+    }
+    const text = await res.text();
+    let json: unknown = {};
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch {
+      json = { message: text.slice(0, 200) };
+    }
+    if (!res.ok) {
+      throw new Error(`alfacrm ${res.status} ${path} ${text.slice(0, 240)}`);
+    }
+    return json as T;
   });
-  const text = await res.text();
-  let json: unknown = {};
-  try {
-    json = text ? JSON.parse(text) : {};
-  } catch {
-    json = { message: text.slice(0, 200) };
+  if (key) {
+    inflight.set(key, run);
+    try {
+      const json = await run;
+      indexCache.set(key, { at: Date.now(), json });
+      return json;
+    } finally {
+      inflight.delete(key);
+    }
   }
-  if (!res.ok) {
-    throw new Error(`alfacrm ${res.status} ${path} ${text.slice(0, 240)}`);
-  }
-  return json as T;
+  const json = await run;
+  if (write) dropIndexCache(url);
+  return json;
 }
 
 /** AlfaCRM index: page с 0, pageSize до 500, в ответе total (все) и count (страница). */

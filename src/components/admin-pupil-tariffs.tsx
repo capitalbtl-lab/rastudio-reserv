@@ -5,7 +5,7 @@ import { adminSchedule } from "@/data/admin-schedule";
 import { retryFetch } from "@/lib/retry-fetch";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin } from "@/data/pupil-tariffs";
+import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK } from "@/data/pupil-tariffs";
 import { ISO_DATE_MAX, ISO_DATE_MIN, clampIsoDate } from "@/data/admin-ui";
 
 type PupilGroup = {
@@ -182,34 +182,47 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
 
   async function loadPlan() {
     setBusy(true);
-    setMsg(path === "add" ? "Читаю состав групп и подбираю абонементы…" : "Читаю активные абонементы в CRM…");
+    const keys = [...picked]
+      .map((k) => {
+        const [branchId, groupId] = k.split(":").map(Number);
+        return { branchId, groupId };
+      })
+      .filter((k) => Number(k.branchId) && Number(k.groupId));
+    const rows: PupilTariffItem[] = [];
+    const grouped: Record<string, GroupTariff> = {};
     try {
-      const res = (await retryFetch(
-        () =>
-          adminSchedule({
-            data: {
-              token: token(),
-              action: "pupilTariffPlan",
-              includeLeads,
-              onlyActive: path !== "add",
-              groupKeys: [...picked]
-                .map((k) => {
-                  const [branchId, groupId] = k.split(":").map(Number);
-                  return { branchId, groupId };
-                })
-                .filter((k) => Number(k.branchId) && Number(k.groupId)),
-            } as never,
-          }),
-        1,
-        path === "add" ? 180000 : 360000,
-      )) as { ok?: boolean; items?: PupilTariffItem[]; byGroup?: Record<string, GroupTariff>; error?: string };
-      if (!res.ok) {
-        setMsg(res.error || "Не удалось собрать список учеников.");
-        return false;
+      for (let i = 0; i < keys.length; i += PLAN_GROUP_CHUNK) {
+        const part = keys.slice(i, i + PLAN_GROUP_CHUNK);
+        const from = i + 1;
+        const to = Math.min(i + PLAN_GROUP_CHUNK, keys.length);
+        setMsg(
+          path === "add"
+            ? `Читаю состав групп ${from}–${to} из ${keys.length}…`
+            : `Читаю абонементы CRM, группы ${from}–${to} из ${keys.length}…`,
+        );
+        const res = (await retryFetch(
+          () =>
+            adminSchedule({
+              data: {
+                token: token(),
+                action: "pupilTariffPlan",
+                includeLeads,
+                onlyActive: path !== "add",
+                groupKeys: part,
+              } as never,
+            }),
+          1,
+          90000,
+        )) as { ok?: boolean; items?: PupilTariffItem[]; byGroup?: Record<string, GroupTariff>; error?: string };
+        if (!res.ok) {
+          setMsg(res.error || "Не удалось собрать список учеников.");
+          return false;
+        }
+        rows.push(...(res.items || []));
+        Object.assign(grouped, res.byGroup || {});
       }
-      const rows = res.items || [];
       setItems(rows);
-      setByGroup(res.byGroup || {});
+      setByGroup(grouped);
       setChosen(new Set(path === "add" ? rows.filter((r) => r.tariffId && r.status === "учится").map(pupilKey) : rows.map(pupilKey)));
       setSubjectOf(Object.fromEntries(groups.filter((g) => picked.has(g.key)).map((g) => [g.key, g.subjectId || 0])));
       const sample = rows.find((r) => r.tariffId);
@@ -837,7 +850,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         </Button>
         {step < lastStep ? (
           <Button type="button" className="h-9 px-4 text-sm" disabled={busy || (step === 1 && !picked.size) || (step === 2 && !chosen.size)} onClick={() => void goNext()}>
-            {busy && step === 1 ? "Читаю состав…" : "Далее"}
+            {busy && step === 1 ? "Читаю…" : "Далее"}
           </Button>
         ) : result && !busy ? (
           <Button

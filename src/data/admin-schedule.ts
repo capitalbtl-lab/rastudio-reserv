@@ -200,18 +200,32 @@ function packComm(it: Record<string, unknown>): CustomerComm {
   };
 }
 
-async function loadGroupMembers(request: typeof import("./alfacrm").request, t: string, branch: number, gid: number) {
-  const key = `${branch}:${gid}`;
+async function loadGroupMembers(
+  request: typeof import("./alfacrm").request,
+  t: string,
+  branch: number,
+  gid: number,
+  opts?: { skipArchive?: boolean },
+) {
+  const key = `${branch}:${gid}${opts?.skipArchive ? ":lite" : ""}`;
   const bag = globalThis as { __raGMem?: Map<string, { at: number; active: GroupMember[]; archive: GroupMember[] }> };
   if (!bag.__raGMem) bag.__raGMem = new Map();
+  const full = bag.__raGMem.get(`${branch}:${gid}`);
+  if (full && Date.now() - full.at < 8 * 60 * 1000) return { active: full.active, archive: full.archive };
   const hit = bag.__raGMem.get(key);
   if (hit && Date.now() - hit.at < 8 * 60 * 1000) return { active: hit.active, archive: hit.archive };
-  const fresh = await pullGroupMembersCrm(request, t, branch, gid);
+  const fresh = await pullGroupMembersCrm(request, t, branch, gid, opts);
   bag.__raGMem.set(key, { at: Date.now(), active: fresh.active, archive: fresh.archive });
   return fresh;
 }
 
-async function pullGroupMembersCrm(request: typeof import("./alfacrm").request, t: string, branch: number, gid: number) {
+async function pullGroupMembersCrm(
+  request: typeof import("./alfacrm").request,
+  t: string,
+  branch: number,
+  gid: number,
+  opts?: { skipArchive?: boolean },
+) {
   const seen = new Set<number>();
   const active: GroupMember[] = [];
   const archive: GroupMember[] = [];
@@ -236,8 +250,34 @@ async function pullGroupMembersCrm(request: typeof import("./alfacrm").request, 
   }
   await pull({});
   if (!active.some((m) => m.status === "лид")) await pull({ is_study: 0 });
-  if (!archive.length) await pull({ is_study: 2 }, true);
+  if (!opts?.skipArchive && !archive.length) await pull({ is_study: 2 }, true);
   return { active, archive };
+}
+
+type BranchTariffMap = Map<number, { id: number; tariffId: number; name: string }[]>;
+
+async function loadBranchActiveTariffs(
+  request: typeof import("./alfacrm").request,
+  t: string,
+  branch: number,
+): Promise<BranchTariffMap> {
+  const bag = globalThis as { __raCTar?: Map<number, { at: number; byCustomer: BranchTariffMap }> };
+  if (!bag.__raCTar) bag.__raCTar = new Map();
+  const hit = bag.__raCTar.get(branch);
+  if (hit && Date.now() - hit.at < 8 * 60 * 1000) return hit.byCustomer;
+  const { pagedIndex } = await import("./alfacrm");
+  const { indexActiveTariffsByCustomer, customerTariffIndexBranchPath } = await import("./pupil-tariffs");
+  const items: Record<string, unknown>[] = [];
+  await pagedIndex(
+    customerTariffIndexBranchPath(branch),
+    { removed: 0 },
+    t,
+    (it: Record<string, unknown>) => items.push(it),
+    { pageSize: 50, pages: 30 },
+  );
+  const byCustomer = indexActiveTariffsByCustomer(items);
+  if (byCustomer.size) bag.__raCTar.set(branch, { at: Date.now(), byCustomer });
+  return byCustomer;
 }
 
 async function loadCustomerRaw(
@@ -1866,14 +1906,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const t = await token();
       const keys = Array.isArray(data.groupKeys) ? data.groupKeys : [];
       const includeLeads = Boolean(data.includeLeads);
-      const all = uniqueLiveGroups(listAdminSlots());
+      const slots = listAdminSlots();
+      const all = uniqueLiveGroups(slots);
       const want = new Set(keys.map((k) => `${Number(k.branchId)}:${Number(k.groupId)}`));
       const groups = all.filter((g) => want.has(g.key));
       const tariffs = loadTariffs().items;
       const items = [];
       const byGroup: Record<string, { tariffId: number; tariffName: string; options: { id: number; name: string; price: number }[] }> = {};
       for (const g of groups) {
-        const slot = listAdminSlots().find((s) => s.groupId === g.groupId && s.branchId === g.branchId);
+        const slot = slots.find((s) => s.groupId === g.groupId && s.branchId === g.branchId);
         const options = slot ? matchTariffs(slot, tariffs) : [];
         const best = slot ? pickBestTariff(slot, tariffs) : options[0] || null;
         byGroup[g.key] = {
@@ -1891,7 +1932,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
             lessonsCount: x.lessonsCount,
           })),
         };
-        const mem = await loadGroupMembers(request, t, g.branchId, g.groupId);
+        const mem = await loadGroupMembers(request, t, g.branchId, g.groupId, { skipArchive: true });
         for (const m of mem.active) {
           const row = pupilRowFromMember(m, g, best, includeLeads);
           if (row) items.push(row);
@@ -1900,15 +1941,24 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (data.onlyActive) {
         const { customerTariffIndexPath, activeCustomerTariffs, keepPupilsWithActiveTariffs } = await import("./pupil-tariffs");
         const byCustomer = new Map<string, { id: number; tariffId: number; name: string }[]>();
-        for (const row of items) {
-          const key = `${row.branchId}:${row.customerId}`;
-          if (byCustomer.has(key)) continue;
-          const json = await request<{ items?: Record<string, unknown>[] }>(
-            customerTariffIndexPath(row.branchId, row.customerId),
-            { page: 0, pageSize: 50, customer_id: row.customerId },
-            t,
-          ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-          byCustomer.set(key, activeCustomerTariffs(json.items));
+        const branches = [...new Set(items.map((row) => row.branchId))];
+        for (const branch of branches) {
+          const bulk = await loadBranchActiveTariffs(request, t, branch);
+          if (bulk.size) {
+            for (const [cid, list] of bulk) byCustomer.set(`${branch}:${cid}`, list);
+            continue;
+          }
+          for (const row of items) {
+            if (row.branchId !== branch) continue;
+            const key = `${row.branchId}:${row.customerId}`;
+            if (byCustomer.has(key)) continue;
+            const json = await request<{ items?: Record<string, unknown>[] }>(
+              customerTariffIndexPath(row.branchId, row.customerId),
+              { page: 0, pageSize: 50, customer_id: row.customerId },
+              t,
+            ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+            byCustomer.set(key, activeCustomerTariffs(json.items));
+          }
         }
         const kept = keepPupilsWithActiveTariffs(items, byCustomer).map((row) => ({
           ...row,

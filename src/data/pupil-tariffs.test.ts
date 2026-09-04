@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
 import type { CrmTariff } from "./crm-tariffs.ts";
 
@@ -212,6 +212,7 @@ describe("мастер абонементов учеников", () => {
     assert.equal(separate.calculation_type, 2);
     assert.equal(customerTariffCreatePath(1, 7759), "/v2api/1/customer-tariff/create?customer_id=7759");
     assert.equal(customerTariffIndexPath(1, 7759), "/v2api/1/customer-tariff/index?customer_id=7759");
+    assert.equal(customerTariffIndexBranchPath(2), "/v2api/2/customer-tariff/index");
     assert.equal(customerTariffUpdatePath(1, 88, 7759), "/v2api/1/customer-tariff/update?id=88&customer_id=7759");
     assert.equal(customerTariffDeletePath(1, 88, 7759), "/v2api/1/customer-tariff/delete?id=88&customer_id=7759");
     const empty = customerTariffPayload({ customerId: 0, tariffId: 1, bDate: "01.01.2026" });
@@ -263,6 +264,21 @@ describe("мастер абонементов учеников", () => {
     assert.equal(groupHasBoundPupils(0, 2, 0), true);
     assert.equal(groupHasBoundPupils(0, 0, 4), true);
     assert.equal(groupHasBoundPupils(0, 0, 0), false);
+  });
+
+  it("чтение абонементов идёт пачками по филиалу, не по каждому ученику", () => {
+    assert.equal(PLAN_GROUP_CHUNK, 6);
+    const map = indexActiveTariffsByCustomer([
+      { id: 1, customer_id: 10, tariff_id: 5, tariff_name: "A" },
+      { id: 2, customer_id: 10, tariff_id: 6, name: "B" },
+      { id: 3, customer_id: 11, removed: 1 },
+      { id: 4, customerId: 12, tariffId: 7, name: "C" },
+      { id: 5, customer_id: 0, tariff_id: 8 },
+    ]);
+    assert.equal(map.get(10)?.length, 2);
+    assert.equal(map.has(11), false);
+    assert.equal(map.get(12)?.[0].name, "C");
+    assert.equal(map.has(0), false);
   });
 
   it("места в мастере: лиды и ученики из слота, без запроса CRM на каждую группу", () => {
