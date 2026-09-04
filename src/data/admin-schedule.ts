@@ -850,6 +850,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "subjectsAiApply"
           | "groupGet"
           | "groupSave"
+          | "groupFlags"
           | "leadsBoard"
           | "leadMove"
           | "leadArchive"
@@ -2376,6 +2377,28 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const signup = saveSiteSignup(raw);
       logAdmin(`Сайт: пробное ${signup.trialOn ? "вкл" : "выкл"}, запись в группу ${signup.groupOn ? "вкл" : "выкл"}`);
       return { ok: true as const, signup };
+    }
+    if (data.action === "groupFlags") {
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const branch = Number(data.branchId) || 1;
+      const gid = Number(data.groupId) || 0;
+      if (!gid) return { ok: false as const, error: "Нет номера группы." };
+      const body: Record<string, unknown> = { id: gid };
+      if (data.statusId != null) body.status_id = Number(data.statusId);
+      if (data.priority != null) body.custom_prioritet = readPriority(data.priority);
+      if (Object.keys(body).length < 2) return { ok: false as const, error: "Нечего сохранять." };
+      await request(`/v2api/${branch}/group/update`, body, t);
+      const slots = listAdminSlots().map((s) => {
+        if (s.groupId !== gid || s.branchId !== branch) return s;
+        return {
+          ...s,
+          ...(data.statusId != null ? { statusId: Number(data.statusId) } : {}),
+          ...(data.priority != null ? { priority: readPriority(data.priority) } : {}),
+        };
+      });
+      saveAdminSlots(slots);
+      return { ok: true as const, slots };
     }
     return { ok: false as const, error: "Неизвестное действие." };
   });

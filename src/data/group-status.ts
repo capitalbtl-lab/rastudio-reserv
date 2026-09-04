@@ -3,16 +3,16 @@
  * Имя группы не участвует. Только statusId + priority.
  */
 export const GROUP_STATUSES = [
-  { id: 1, name: "Идет набор (ожидает старта)", admin: true },
-  { id: 6, name: "Старт занятий", admin: true },
-  { id: 2, name: "Обучается (идет набор)", admin: true },
-  { id: 4, name: "Обучается (набор завершен)", admin: true },
-  { id: 5, name: "Набор приостановлен", admin: true },
-  { id: 10, name: "Не обучается (набор завершен)", admin: true },
-  { id: 3, name: "Обучение завершено", admin: false },
-  { id: 7, name: "Набор смены", admin: false },
-  { id: 8, name: "Смена идет", admin: false },
-  { id: 9, name: "Смена завершена", admin: false },
+  { id: 1, name: "Идет набор (ожидает старта)", short: "Набор", admin: true },
+  { id: 6, name: "Старт занятий", short: "Старт", admin: true },
+  { id: 2, name: "Обучается (идет набор)", short: "Обучается", admin: true },
+  { id: 4, name: "Обучается (набор завершен)", short: "Набор закрыт", admin: true },
+  { id: 5, name: "Набор приостановлен", short: "Пауза", admin: true },
+  { id: 10, name: "Не обучается (набор завершен)", short: "Не учится", admin: true },
+  { id: 3, name: "Обучение завершено", short: "Завершено", admin: false },
+  { id: 7, name: "Набор смены", short: "Смена", admin: false },
+  { id: 8, name: "Смена идет", short: "Смена идёт", admin: false },
+  { id: 9, name: "Смена завершена", short: "Смена конец", admin: false },
 ] as const;
 
 export type GroupStatusId = (typeof GROUP_STATUSES)[number]["id"];

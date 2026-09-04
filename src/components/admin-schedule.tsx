@@ -946,6 +946,29 @@ export function AdminSchedule() {
     setDirty((d) => new Set(d).add(id));
   }
 
+  async function patchFlags(s: CrmSlot, field: "statusId" | "priority", value: number) {
+    setSlots((list) => list.map((row) => (row.id === s.id ? { ...row, [field]: value } : row)));
+    if (detail?.id === s.id) setDetail((d) => (d ? { ...d, [field]: value } : d));
+    if (!s.groupId) {
+      setDirty((d) => new Set(d).add(s.id));
+      return;
+    }
+    const res = (await adminSchedule({
+      data: {
+        token: token(),
+        action: "groupFlags",
+        groupId: s.groupId,
+        branchId: s.branchId,
+        statusId: field === "statusId" ? value : s.statusId,
+        priority: field === "priority" ? value : s.priority,
+      } as never,
+    })) as { ok?: boolean; error?: string };
+    if (!res.ok) {
+      setDirty((d) => new Set(d).add(s.id));
+      setMsg(res.error || "Статус не записался в AlfaCRM.");
+    }
+  }
+
   async function openDetail(s: CrmSlot) {
     if (detail?.id === s.id) {
       setDetail(null);
@@ -3013,6 +3036,8 @@ export function AdminSchedule() {
                             <col className="w-[5.2rem]" />
                             <col className="w-[7.6rem]" />
                             <col className={groupsWide ? "w-56" : "w-36"} />
+                            <col className="w-[8.5rem]" />
+                            <col className="w-[3.6rem]" />
                             <col className="w-[4.4rem]" />
                             <col className="w-[5.5rem]" />
                             <col className="w-10" />
@@ -3027,6 +3052,8 @@ export function AdminSchedule() {
                               <th className="px-1 py-2 text-center">×нед</th>
                               <th className={cn("px-2 py-2", !groupsWide && "hidden lg:table-cell")}>Филиал</th>
                               <th className="whitespace-nowrap px-2 py-2">Педагог</th>
+                              <th className="px-1 py-2">Статус</th>
+                              <th className="px-1 py-2 text-center">Приоритет</th>
                               <th className="px-1 py-2 text-center">Места</th>
                               <th className="px-2 py-2">Кто учится</th>
                               <th className="px-1 py-2 text-center">Подробно</th>
@@ -3127,6 +3154,34 @@ export function AdminSchedule() {
                                   </select>
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
+                                  <select
+                                    value={s.statusId || ""}
+                                    title={GROUP_STATUS.find((st) => st.id === s.statusId)?.name || "Статус группы"}
+                                    onChange={(e) => void patchFlags(s, "statusId", Number(e.target.value) || 0)}
+                                    className="h-8 w-full min-w-[7.5rem] rounded-md bg-surface-2 px-1 text-[0.72rem] ring-1 ring-black/8"
+                                  >
+                                    <option value="">— статус —</option>
+                                    {GROUP_STATUS.map((st) => (
+                                      <option key={st.id} value={st.id}>{st.short}</option>
+                                    ))}
+                                    {s.statusId && !GROUP_STATUS.some((st) => st.id === s.statusId) ? (
+                                      <option value={s.statusId}>ID {s.statusId}</option>
+                                    ) : null}
+                                  </select>
+                                </td>
+                                <td className="px-1 py-1.5 align-middle">
+                                  <select
+                                    value={s.priority ?? 1}
+                                    title={GROUP_PRIORITY.find((p) => p.id === (s.priority ?? 1))?.name || "Приоритет набора"}
+                                    onChange={(e) => void patchFlags(s, "priority", Number(e.target.value))}
+                                    className="h-8 w-full rounded-md bg-surface-2 px-0.5 text-center text-[0.8rem] font-semibold ring-1 ring-black/8"
+                                  >
+                                    {GROUP_PRIORITY.map((p) => (
+                                      <option key={p.id} value={p.id}>{p.id}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="px-1 py-1.5 align-middle">
                                   <div className="flex items-center justify-center gap-1.5">
                                     <input value={s.limit} onChange={(e) => patch(s.id, "limit", Number(e.target.value) || 0)} className={cn(cell, "w-7")} />
                                     <span className="text-[0.8rem] text-muted">/{s.taken}</span>
@@ -3145,7 +3200,7 @@ export function AdminSchedule() {
                               </tr>
                               {open ? (
                                 <tr className="bg-[#e8f3ff]">
-                                  <td colSpan={11} className="px-4 py-3 text-sm">
+                                  <td colSpan={13} className="px-4 py-3 text-sm">
                                     <p className="font-medium">Группа {s.groupId} · {s.groupName}</p>
                                     <p className="mt-1 text-muted">
                                       {s.age} · {s.dayLabel} {s.timeFrom && s.timeTo ? `${s.timeFrom}–${s.timeTo}` : "время не указано"} · {s.city}, {s.branch} · {s.teacher} · места {s.limit}/{s.taken}

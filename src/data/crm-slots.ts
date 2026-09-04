@@ -944,6 +944,7 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
         status_id: s.statusId || 1,
         b_date: formatRuDob(startIso),
         e_date: formatRuDob(endIso),
+        custom_prioritet: s.priority ?? 1,
         ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
       };
       if (!groupId) {
