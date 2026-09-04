@@ -141,7 +141,8 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [schools, setSchools] = useState<string[]>([]);
   const [school, setSchool] = useState("");
   const [unbound, setUnbound] = useState(0);
-  const [byBranch, setByBranch] = useState<Record<number, { total: number; withPeople: number }>>({});
+  const [byBranch, setByBranch] = useState<Record<number, { total: number; withPeople: number; kids?: number }>>({});
+  const [kidsTotal, setKidsTotal] = useState(0);
   const [branch, setBranch] = useState(0);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -184,7 +185,8 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             groups?: PupilGroup[];
             schools?: string[];
             unbound?: number;
-            byBranch?: Record<number, { total: number; withPeople: number }>;
+            byBranch?: Record<number, { total: number; withPeople: number; kids?: number }>;
+            kids?: number;
             error?: string;
           }>,
           retryFetch(
@@ -198,6 +200,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           setSchools(res.schools || []);
           setUnbound(Number(res.unbound || 0));
           setByBranch(res.byBranch || {});
+          setKidsTotal(Number(res.kids || 0));
         } else setMsg(res.error || "Не удалось прочитать группы.");
         if (sub && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects);
       } catch (e) {
@@ -551,7 +554,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               ] as const
             ).map(([id, label]) => {
               const n = id ? byBranch[id]?.total || 0 : groups.length;
-              const kids = id ? byBranch[id]?.withPeople || 0 : groups.filter((g) => g.taken > 0).length;
+              const people = id ? byBranch[id]?.kids || 0 : kidsTotal || groups.reduce((s, g) => s + (g.taken || 0), 0);
               return (
               <button
                 key={id}
@@ -562,7 +565,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                 {label}
                 <span className={cn("ml-1.5 text-[0.7rem]", branch === id ? "text-white/80" : "text-muted")}>
                   {n}
-                  {n ? ` · ${kids} с детьми` : ""}
+                  {people ? ` · ${people} чел.` : ""}
                 </span>
               </button>
             );

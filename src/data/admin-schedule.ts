@@ -1968,11 +1968,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
       );
       const schools = [...new Set(groups.map((g) => g.school).filter(Boolean))];
       const unbound = groups.filter((g) => g.school === "Без школы на сайте").length;
-      const byBranch: Record<number, { total: number; withPeople: number }> = {};
+      const byBranch: Record<number, { total: number; withPeople: number; kids: number }> = {};
       for (const g of groups) {
-        const b = byBranch[g.branchId] || { total: 0, withPeople: 0 };
+        const b = byBranch[g.branchId] || { total: 0, withPeople: 0, kids: 0 };
         b.total += 1;
         if (g.taken > 0) b.withPeople += 1;
+        b.kids += Number(g.taken) || 0;
         byBranch[g.branchId] = b;
       }
       return {
@@ -1982,6 +1983,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         unbound,
         byBranch,
         withPeople: groups.filter((g) => g.taken > 0).length,
+        kids: groups.reduce((n, g) => n + (Number(g.taken) || 0), 0),
       };
     }
     if (data.action === "pupilTariffPlan") {
