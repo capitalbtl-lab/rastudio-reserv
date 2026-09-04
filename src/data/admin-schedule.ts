@@ -1893,13 +1893,30 @@ export const adminSchedule = createServerFn({ method: "POST" })
       return { ok: true as const, rules, hint: funnelAutoHint(rules) };
     }
     if (data.action === "pupilTariffGroups") {
-      const { uniqueLiveGroups, groupHasBoundPupils } = await import("./pupil-tariffs");
-      const all = uniqueLiveGroups(listAdminSlots());
-      const withPeople = all.filter((g) => groupHasBoundPupils(g.taken, 0, 0));
-      const groups = withPeople.length ? withPeople : all;
+      const { uniqueLiveGroups } = await import("./pupil-tariffs");
+      const groups = uniqueLiveGroups(listAdminSlots()).sort(
+        (a, b) =>
+          Number(b.taken > 0) - Number(a.taken > 0) ||
+          a.school.localeCompare(b.school, "ru") ||
+          a.name.localeCompare(b.name, "ru"),
+      );
       const schools = [...new Set(groups.map((g) => g.school).filter(Boolean))];
       const unbound = groups.filter((g) => g.school === "Без школы на сайте").length;
-      return { ok: true as const, groups, schools, unbound };
+      const byBranch: Record<number, { total: number; withPeople: number }> = {};
+      for (const g of groups) {
+        const b = byBranch[g.branchId] || { total: 0, withPeople: 0 };
+        b.total += 1;
+        if (g.taken > 0) b.withPeople += 1;
+        byBranch[g.branchId] = b;
+      }
+      return {
+        ok: true as const,
+        groups,
+        schools,
+        unbound,
+        byBranch,
+        withPeople: groups.filter((g) => g.taken > 0).length,
+      };
     }
     if (data.action === "pupilTariffPlan") {
       const { uniqueLiveGroups, pupilRowFromMember, pickBestTariff } = await import("./pupil-tariffs");

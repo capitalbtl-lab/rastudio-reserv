@@ -141,6 +141,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [schools, setSchools] = useState<string[]>([]);
   const [school, setSchool] = useState("");
   const [unbound, setUnbound] = useState(0);
+  const [byBranch, setByBranch] = useState<Record<number, { total: number; withPeople: number }>>({});
   const [branch, setBranch] = useState(0);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -178,7 +179,14 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             () => adminSchedule({ data: { token: token(), action: "pupilTariffGroups", groupKeys: [] } as never }),
             2,
             60000,
-          ) as Promise<{ ok?: boolean; groups?: PupilGroup[]; schools?: string[]; unbound?: number; error?: string }>,
+          ) as Promise<{
+            ok?: boolean;
+            groups?: PupilGroup[];
+            schools?: string[];
+            unbound?: number;
+            byBranch?: Record<number, { total: number; withPeople: number }>;
+            error?: string;
+          }>,
           retryFetch(
             () => adminSchedule({ data: { token: token(), action: "subjectsGet" } as never }),
             1,
@@ -189,6 +197,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           setGroups(res.groups || []);
           setSchools(res.schools || []);
           setUnbound(Number(res.unbound || 0));
+          setByBranch(res.byBranch || {});
         } else setMsg(res.error || "Не удалось прочитать группы.");
         if (sub && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects);
       } catch (e) {
@@ -540,7 +549,10 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                 [3, "Луховицы"],
                 [4, "Лето"],
               ] as const
-            ).map(([id, label]) => (
+            ).map(([id, label]) => {
+              const n = id ? byBranch[id]?.total || 0 : groups.length;
+              const kids = id ? byBranch[id]?.withPeople || 0 : groups.filter((g) => g.taken > 0).length;
+              return (
               <button
                 key={id}
                 type="button"
@@ -548,8 +560,13 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                 className={cn("rounded-full px-3 py-1.5 text-sm", branch === id ? "bg-primary text-white" : "bg-surface-2")}
               >
                 {label}
+                <span className={cn("ml-1.5 text-[0.7rem]", branch === id ? "text-white/80" : "text-muted")}>
+                  {n}
+                  {n ? ` · ${kids} с детьми` : ""}
+                </span>
               </button>
-            ))}
+            );
+            })}
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -600,8 +617,8 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                     {g.teacher ? ` · ${g.teacher}` : ""}
                   </span>
                 </span>
-                <span className="shrink-0 text-right text-[0.72rem] text-muted">
-                  {g.taken || "—"}/{g.limit || "—"}
+                <span className={cn("shrink-0 text-right text-[0.72rem]", g.taken ? "text-muted" : "text-rose-700")}>
+                  {g.taken ? `${g.taken}/${g.limit || "—"}` : "0 детей"}
                 </span>
               </label>
             ))}
