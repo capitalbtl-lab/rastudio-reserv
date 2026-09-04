@@ -9,7 +9,7 @@ import { request } from "@/data/alfacrm";
 import { yandexJson } from "@/data/agent-channels";
 import { loadSubjects, pickSubjectForSlot } from "@/data/crm-subjects";
 import { teacherAllowed, teachersAtBranch, listTeachers } from "@/data/crm-teachers";
-import { type CrmSlot, type SlotVersion, type LessonBeat, beatsOf, validBeat } from "@/data/crm-slots-core";
+import { type CrmSlot, type SlotVersion, type LessonBeat, beatsOf, validBeat, levelName } from "@/data/crm-slots-core";
 import { loadSiteTree } from "@/data/site-tree";
 import { subjectIdOfCourse } from "@/data/ids";
 import { loadScheduleMap } from "@/data/schedule-map";
@@ -168,7 +168,7 @@ export function toSession(s: CrmSlot): CmsSession {
     age: s.age,
     when,
     teacherId: String(s.teacherId || ""),
-    signup: s.signup || (s.groupId ? signupOf(s.branchId, s.groupId) : s.path),
+    signup: s.path || "#trial",
     city: s.city,
     branch: s.branch,
     directionId: String(s.subjectId),
@@ -176,6 +176,17 @@ export function toSession(s: CrmSlot): CmsSession {
     ageTag: s.age,
     courseFilter: s.course || s.subject,
     path: s.path,
+    teacher: s.teacher || "",
+    groupId: s.groupId || 0,
+    branchId: s.branchId || 0,
+    limit: s.limit || 0,
+    taken: s.taken || 0,
+    levelId: s.levelId || 0,
+    level: levelName(s.levelId),
+    timeFrom: s.timeFrom,
+    timeTo: s.timeTo,
+    day: s.day,
+    siteCourseId: s.courseId || "",
   };
 }
 

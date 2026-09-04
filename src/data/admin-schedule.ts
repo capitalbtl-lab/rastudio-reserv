@@ -907,7 +907,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "treeDeleteSchool"
           | "treeDeleteSelected"
           | "treeMove"
-          | "saveSettings";
+          | "saveSettings"
+          | "publicSiteGet";
         slots?: CrmSlot[];
         text?: string;
         prompt?: string;
@@ -2328,6 +2329,50 @@ export const adminSchedule = createServerFn({ method: "POST" })
       pushVersion("Группы перенесены в другой курс", slots);
       logAdmin(`Перенос ${ids.length} групп`);
       return pack(slots, { tree: moved.tree });
+    }
+    if (data.action === "publicSiteGet") {
+      const tree = loadSiteTree();
+      const slots = listAdminSlots();
+      const { guessTariffLinks } = await import("./tariff-map");
+      const { loadTariffs } = await import("./crm-tariffs");
+      const { listTeachers } = await import("./crm-teachers");
+      const tariffs = guessTariffLinks(loadTariffs().items);
+      const teachers = listTeachers(slots);
+      const schools = tree.schools.map((s) => {
+        const courses = tree.courses.filter((c) => c.schoolId === s.id).map((c) => {
+          const groups = slots.filter((g) => g.courseId === c.id);
+          return {
+            id: c.id,
+            label: c.label,
+            age: c.age,
+            groups: groups.length,
+            emptyTeacher: groups.filter((g) => !g.teacher).length,
+            noPlaces: groups.filter((g) => !g.limit).length,
+            tariffs: tariffs.filter((t) => t.courseId === c.id).map((t) => t.tariffId),
+          };
+        });
+        return { id: s.id, label: s.label, courses };
+      });
+      const loose = slots.filter((g) => !g.courseId).map((g) => ({
+        id: g.id,
+        groupId: g.groupId,
+        name: g.groupName,
+        branchId: g.branchId,
+      }));
+      return {
+        ok: true as const,
+        schools,
+        loose,
+        teachers: teachers.map((t) => ({ id: t.id, name: t.name })),
+        stats: {
+          schools: tree.schools.length,
+          courses: tree.courses.length,
+          groups: slots.length,
+          loose: loose.length,
+          tariffs: tariffs.filter((t) => t.courseId).length,
+          teachers: teachers.length,
+        },
+      };
     }
     return { ok: false as const, error: "Неизвестное действие." };
   });

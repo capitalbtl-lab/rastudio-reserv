@@ -20,7 +20,7 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-04-tariff-school-course";
+export const GUIDE_REV = "2026-09-04-public-trial";
 
 const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Филиал", idField: "branchId 1–4", link: "1 Гражданская · 2 ЦМИТ · 3 Луховицы · 4 лето" },
@@ -150,7 +150,7 @@ ${graph}
 ${SCHEDULE_CASCADE.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 
 Единые карточки:
-- Кабинет: cabinetId = cabinet:admin. Вкладки pane: groups | clients | subjects | prices | tariffs | map. Полноэкранный режим скрывает неактивный pane через display:none, не lg:flex поверх hidden.
+- Кабинет: cabinetId = cabinet:admin. Вкладки pane: groups | clients | subjects | prices | tariffs | map | public | crm. Полноэкранный режим скрывает неактивный pane через display:none, не lg:flex поверх hidden.
 - Клиент: clientCardId = card:customer:{customerId}. Компонент CrmClientCard.
 - Группа: groupCardId = card:group:{branchId}:{groupId}. Состав — три списка CrmGroupMembers.
 - Ассистент: kind=openClient + customerId; kind=openGroup + groupId+branchId; kind=openTab pane=clients|groups [+status] [+view]; события ra-open-client, ra-clients-query, ra-clients-filter.

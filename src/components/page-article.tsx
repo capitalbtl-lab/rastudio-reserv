@@ -206,6 +206,7 @@ function CinematicPage({
   trajectory?: CmsTrajectoryStep[];
   teachers?: TeacherCard[];
 }) {
+  const [bookId, setBookId] = useState("");
   const heading = splitCourseHeading(page.h1);
   const path = page.pathDecoded || page.path;
   const current = courses.find((c) => c.href === path);
@@ -283,12 +284,12 @@ function CinematicPage({
             ) : null}
             {schedule.length ? (
               <div className="pt-10">
-                <ScheduleBlock sessions={schedule} />
+                <ScheduleBlock sessions={schedule} selectedId={bookId} onPick={setBookId} />
               </div>
             ) : null}
             {page.kind === "school" ? null : <Related page={page} courses={courses} />}
           </div>
-          <ConvertAside />
+          <ConvertAside sessions={schedule} selectedId={bookId} onPick={setBookId} path={path} />
         </div>
         <div className="mt-16">
           <TrialForm compact courseId={trialCourseForPath(page.pathDecoded || page.path)} />

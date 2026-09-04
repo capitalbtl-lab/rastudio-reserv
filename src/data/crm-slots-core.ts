@@ -62,6 +62,22 @@ export type CrmSlot = {
   mismatchText?: string;
 };
 
+export const GROUP_LEVELS = [
+  { id: 7, name: "1 класс" },
+  { id: 8, name: "2 класс" },
+  { id: 9, name: "3 класс" },
+  { id: 10, name: "4 класс" },
+  { id: 11, name: "5 класс" },
+  { id: 15, name: "Ознакомительный" },
+  { id: 12, name: "Начальный" },
+  { id: 13, name: "Средний" },
+  { id: 14, name: "Продвинутый" },
+] as const;
+
+export function levelName(id?: number) {
+  return GROUP_LEVELS.find((x) => x.id === Number(id))?.name || "";
+}
+
 export type GroupCalLesson = {
   date: string;
   from: string;

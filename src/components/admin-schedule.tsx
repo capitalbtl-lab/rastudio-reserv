@@ -25,6 +25,7 @@ import type { GroupCalLesson } from "@/data/crm-slots-core";
 import type { CrmTeacher } from "@/data/crm-teachers";
 import { AdminClients } from "@/components/admin-clients";
 import { AdminCrmSettings } from "@/components/admin-crm-settings";
+import { AdminPublicSite } from "@/components/admin-public-site";
 import { CrmClientCard } from "@/components/crm-client-card";
 import { CrmGroupMembers } from "@/components/crm-group-card";
 import { GroupLessonStrip } from "@/components/lesson-strip";
@@ -750,8 +751,8 @@ export function AdminSchedule() {
   const [view, setView] = useState<Record<string, number>>({});
   const [fileOpen, setFileOpen] = useState(false);
   const [pull, setPull] = useState<CrmPullState>(emptyPull("groups"));
-  const [pane, setPane] = useState<"groups" | "clients" | "subjects" | "prices" | "tariffs" | "map" | "crm">("groups");
-  const [seen, setSeen] = useState({ groups: true, clients: false, subjects: false, prices: false, tariffs: false, map: false, crm: false });
+  const [pane, setPane] = useState<"groups" | "clients" | "subjects" | "prices" | "tariffs" | "map" | "crm" | "public">("groups");
+  const [seen, setSeen] = useState({ groups: true, clients: false, subjects: false, prices: false, tariffs: false, map: false, crm: false, public: false });
   function showPane(id: typeof pane) {
     setPane(id);
     setSeen((s) => (s[id] ? s : { ...s, [id]: true }));
@@ -2210,6 +2211,7 @@ export function AdminSchedule() {
           ["prices", "Цены курсов"],
           ["tariffs", "Абонементы"],
           ["map", "Соответствия"],
+          ["public", "Сайт"],
           ["crm", "Настройка CRM"],
         ] as const).map(([id, label]) => (
           <button
@@ -2250,6 +2252,11 @@ export function AdminSchedule() {
       {seen.map ? (
         <div className={cn(groupsWide && pane === "map" && "min-h-0 flex-1 overflow-y-auto")} style={pane === "map" ? undefined : { display: "none" }} hidden={pane !== "map"}>
           <AdminScheduleMap embedded />
+        </div>
+      ) : null}
+      {seen.public ? (
+        <div className={cn(groupsWide && pane === "public" && "min-h-0 flex-1 overflow-y-auto")} style={pane === "public" ? undefined : { display: "none" }} hidden={pane !== "public"}>
+          <AdminPublicSite />
         </div>
       ) : null}
       {seen.crm ? (

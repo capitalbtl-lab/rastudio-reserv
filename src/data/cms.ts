@@ -90,6 +90,17 @@ export type CmsSession = {
   ageTag: string;
   courseFilter: string;
   path?: string;
+  teacher?: string;
+  groupId?: number;
+  branchId?: number;
+  limit?: number;
+  taken?: number;
+  levelId?: number;
+  level?: string;
+  timeFrom?: string;
+  timeTo?: string;
+  day?: number;
+  siteCourseId?: string;
 };
 
 export type CmsMaster = {

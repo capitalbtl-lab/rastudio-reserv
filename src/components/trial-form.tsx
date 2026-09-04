@@ -62,7 +62,7 @@ export function TrialForm({
   }
 
   return (
-    <section id="trial" className="overflow-hidden rounded-[1.75rem] bg-surface px-5 py-8 shadow-[var(--shadow-border)] md:px-10 md:py-11">
+    <section id={compact ? undefined : "trial"} className="overflow-hidden rounded-[1.75rem] bg-surface px-5 py-8 shadow-[var(--shadow-border)] md:px-10 md:py-11">
       <div className={`grid gap-8 ${compact ? "" : "lg:grid-cols-[0.9fr_1.1fr] lg:items-start"}`}>
         <div>
           <p className="kicker text-primary">Пробное занятие</p>

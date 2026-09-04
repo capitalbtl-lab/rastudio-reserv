@@ -1,18 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowUpRight, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import type { CmsSession } from "@/data/cms";
 import { AGE_BANDS, type AgeBandId } from "@/data/ages";
 import { cn } from "@/lib/utils";
-import {
-  branchMeta,
-  branchRank,
-  compactWhen,
-  matchesAgeBand,
-} from "@/lib/schedule";
+import { branchMeta, branchRank, compactWhen, matchesAgeBand } from "@/lib/schedule";
+import { freePlaces, formatTrialDate, nextLessonDate, tidyGroupName, whenShort } from "@/lib/trial-slot";
 
-export function ScheduleBlock({ sessions, heading = true }: { sessions: CmsSession[]; heading?: boolean }) {
+export function ScheduleBlock({
+  sessions,
+  heading = true,
+  selectedId,
+  onPick,
+}: {
+  sessions: CmsSession[];
+  heading?: boolean;
+  selectedId?: string;
+  onPick?: (id: string) => void;
+}) {
   const cities = useMemo(
     () => [...new Set(sessions.map((s) => branchMeta(s).city).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru")),
     [sessions],
@@ -95,30 +101,40 @@ export function ScheduleBlock({ sessions, heading = true }: { sessions: CmsSessi
               </div>
               <ul>
                 {group.items.map((s) => {
-                  const row = (
-                    <span className="flex items-center gap-3 px-3.5 py-2.5 md:gap-4 md:px-4">
-                      <span className="inline-flex min-w-[4.75rem] justify-center rounded-full bg-primary/10 px-2 py-1 text-[0.68rem] font-semibold text-primary">
-                        {s.age || "группа"}
-                      </span>
-                      <span className="min-w-0 flex-1 text-[0.95rem] font-medium leading-snug">
-                        {compactWhen(s.when)}
-                      </span>
-                      {s.signup ? (
-                        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-fg text-bg transition-colors duration-[var(--motion-fast)] group-hover:bg-primary">
-                          <ArrowUpRight className="size-3.5" strokeWidth={2.2} />
-                        </span>
-                      ) : null}
-                    </span>
-                  );
+                  const next = nextLessonDate(s);
+                  const seats = freePlaces(s);
+                  const on = selectedId === s.id;
                   return (
                     <li key={s.id} className="border-t border-border/70">
-                      {s.signup ? (
-                        <a href={s.signup} className="group block transition-colors hover:bg-[#f3f5f8]">
-                          {row}
-                        </a>
-                      ) : (
-                        row
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onPick?.(s.id);
+                          document.getElementById("trial")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }}
+                        className={cn(
+                          "block w-full px-3.5 py-2.5 text-left transition-colors md:px-4",
+                          on ? "bg-primary/8" : "hover:bg-[#f3f5f8]",
+                        )}
+                      >
+                        <span className="flex items-start gap-3">
+                          <span className="mt-0.5 inline-flex min-w-[4.75rem] justify-center rounded-full bg-primary/10 px-2 py-1 text-[0.68rem] font-semibold text-primary">
+                            {s.age || "группа"}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[0.95rem] font-semibold leading-snug">{tidyGroupName(s.group) || whenShort(s)}</span>
+                            <span className="mt-0.5 block text-[0.78rem] text-muted">
+                              {whenShort(s)}
+                              {s.teacher ? ` · ${s.teacher}` : ""}
+                              {s.level ? ` · ${s.level}` : ""}
+                            </span>
+                            <span className="mt-0.5 block text-[0.75rem] text-muted">
+                              {seats.label}
+                              {next ? ` · пробное ${formatTrialDate(next)}` : ""}
+                            </span>
+                          </span>
+                        </span>
+                      </button>
                     </li>
                   );
                 })}
