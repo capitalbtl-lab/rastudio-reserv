@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { adminSchedule } from "@/data/admin-schedule";
 import { adminScheduleMap } from "@/data/admin-schedule-map";
 import { retryFetch } from "@/lib/retry-fetch";
@@ -233,8 +234,10 @@ function PeriodPicker({
   type: number;
   onChange: (count: number, type: number) => void;
 }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState(count ? String(count) : "");
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 160, maxH: 160, up: false });
   useEffect(() => {
     setText(count ? String(count) : "");
   }, [count]);
@@ -254,8 +257,57 @@ function PeriodPicker({
       ]
     : [];
   const picked = options.find((o) => o.id === type && n === count);
+  function place() {
+    const el = wrapRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = Math.max(r.width, 160);
+    const spaceBelow = window.innerHeight - r.bottom - 8;
+    const spaceAbove = r.top - 8;
+    const up = spaceBelow < 140 && spaceAbove > spaceBelow;
+    const maxH = Math.min(200, Math.max(up ? spaceAbove : spaceBelow, 96));
+    setPos({
+      top: up ? r.top - 4 : r.bottom + 4,
+      left: r.left,
+      width,
+      maxH,
+      up,
+    });
+  }
+  useEffect(() => {
+    if (!open) return;
+    place();
+  }, [open, text]);
+  const hint = picked ? picked.label : count ? `${count} ${PERIOD_UNITS.find((u) => u.id === type)?.name || ""}` : "";
+  const menu = open && options.length ? (
+    <div
+      className={cn("fixed z-[400] py-1", RA_POP)}
+      style={{
+        top: pos.up ? pos.top - pos.maxH : pos.top,
+        left: pos.left,
+        width: pos.width,
+        maxHeight: pos.maxH,
+      }}
+    >
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          className={cn("block w-full px-3 py-1.5 text-left text-sm hover:bg-sky-50", o.id === type && n === count && "bg-sky-50 font-medium")}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            onChange(n, o.id);
+            setText(String(n));
+            setOpen(false);
+          }}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  ) : null;
   return (
-    <div className="relative">
+    <div ref={wrapRef} className="relative">
       <input
         className="h-10 w-full rounded-xl bg-white px-3 text-sm outline-none ring-1 ring-black/10 focus:ring-2 focus:ring-primary/30"
         inputMode="numeric"
@@ -272,26 +324,8 @@ function PeriodPicker({
         }}
         onBlur={() => window.setTimeout(() => setOpen(false), 160)}
       />
-      {open && options.length ? (
-        <div className={cn("absolute z-30 mt-1 w-full py-1", RA_POP)}>
-          {options.map((o) => (
-            <button
-              key={o.id}
-              type="button"
-              className={cn("block w-full px-3 py-1.5 text-left text-sm hover:bg-sky-50", o.id === type && n === count && "bg-sky-50 font-medium")}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onChange(n, o.id);
-                setText(String(n));
-                setOpen(false);
-              }}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      {count && picked && !open ? <p className="mt-1 text-[0.7rem] text-muted">Выбрано: {picked.label}</p> : count && !open ? <p className="mt-1 text-[0.7rem] text-muted">Выбрано: {count} {PERIOD_UNITS.find((u) => u.id === type)?.name || ""}</p> : null}
+      <p className="mt-1 h-4 text-[0.7rem] leading-4 text-muted">{!open && hint ? `Выбрано: ${hint}` : "\u00a0"}</p>
+      {menu && typeof document !== "undefined" ? createPortal(menu, document.body) : null}
     </div>
   );
 }
@@ -339,6 +373,7 @@ export function AdminTariffs() {
   const [subQ, setSubQ] = useState("");
   const [showArchive, setShowArchive] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
+  const [orderLock, setOrderLock] = useState<number[] | null>(null);
   const [branch, setBranch] = useState<number>(2);
   const [dirty, setDirty] = useState<Set<number>>(new Set());
   const [picked, setPicked] = useState<Set<number>>(new Set());
@@ -482,16 +517,28 @@ export function AdminTariffs() {
 
   const view = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return items
-      .filter((t) => {
-        if (!showArchive && t.archive) return false;
-        if (branch && !t.branchIds.includes(branch)) return false;
-        if (!needle) return true;
-        const hay = `${t.name} ${t.subjectIds.map(nameOf).join(" ")} ${t.id}`.toLowerCase();
-        return hay.includes(needle);
-      })
-      .sort((a, b) => (a.id < 0 ? -1 : 0) || a.price - b.price || a.name.localeCompare(b.name, "ru"));
-  }, [items, q, showArchive, subjects, branch]);
+    const filtered = items.filter((t) => {
+      if (!showArchive && t.archive) return false;
+      if (branch && !t.branchIds.includes(branch)) return false;
+      if (!needle) return true;
+      const hay = `${t.name} ${t.subjectIds.map(nameOf).join(" ")} ${t.id}`.toLowerCase();
+      return hay.includes(needle);
+    });
+    if (orderLock?.length) {
+      const pos = new Map(orderLock.map((id, i) => [id, i]));
+      return [...filtered].sort((a, b) => {
+        const ia = pos.has(a.id) ? pos.get(a.id)! : orderLock.length + 1;
+        const ib = pos.has(b.id) ? pos.get(b.id)! : orderLock.length + 1;
+        return ia - ib || a.id - b.id;
+      });
+    }
+    return [...filtered].sort((a, b) => {
+      const aDraft = a.id < 0;
+      const bDraft = b.id < 0;
+      if (aDraft !== bDraft) return aDraft ? -1 : 1;
+      return a.price - b.price || a.name.localeCompare(b.name, "ru") || a.id - b.id;
+    });
+  }, [items, q, showArchive, subjects, branch, orderLock]);
 
   async function bindTariff(tariffId: number, courseId: string) {
     const course = tree.courses.find((c) => c.id === courseId);
@@ -579,6 +626,7 @@ export function AdminTariffs() {
     const t = blank(branch || 2);
     setItems((list) => [t, ...list]);
     setOpen(t.id);
+    setOrderLock((lock) => [t.id, ...(lock && lock.length ? lock : view.map((x) => x.id))]);
     setPicked((s) => new Set(s).add(t.id));
     setDirty((d) => new Set(d).add(t.id));
     setMsg("Новая карточка на сайте. Заполните и нажмите «Выгрузить в AlfaCRM».");
@@ -635,7 +683,7 @@ export function AdminTariffs() {
   const pickedList = items.filter((t) => picked.has(t.id));
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 [overflow-anchor:none]">
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" disabled={busy} onClick={addLocal}>
           Добавить абонемент вручную
@@ -896,12 +944,12 @@ export function AdminTariffs() {
 
       <div className="flex flex-wrap items-end gap-1 border-b border-black/10">
         {tabs.map((b) => (
-          <button key={b.id} type="button" title={b.name} onClick={() => setBranch(b.id)} className={cn("rounded-t-xl px-5 py-2 text-sm font-semibold transition-colors", branch === b.id ? "bg-primary text-white" : "bg-surface-2 text-fg hover:bg-white")}>
+          <button key={b.id} type="button" title={b.name} onClick={() => { setBranch(b.id); setOrderLock(null); }} className={cn("rounded-t-xl px-5 py-2 text-sm font-semibold transition-colors", branch === b.id ? "bg-primary text-white" : "bg-surface-2 text-fg hover:bg-white")}>
             {b.short}
             <span className={cn("ml-1.5 text-[0.7rem] font-medium", branch === b.id ? "text-white/80" : "text-muted")}>{counts[b.id] || 0}</span>
           </button>
         ))}
-        <button type="button" onClick={() => setBranch(0)} className={cn("rounded-t-xl px-5 py-2 text-sm font-semibold", branch === 0 ? "bg-primary text-white" : "bg-surface-2 text-fg hover:bg-white")}>
+        <button type="button" onClick={() => { setBranch(0); setOrderLock(null); }} className={cn("rounded-t-xl px-5 py-2 text-sm font-semibold", branch === 0 ? "bg-primary text-white" : "bg-surface-2 text-fg hover:bg-white")}>
           Все
           <span className={cn("ml-1.5 text-[0.7rem]", branch === 0 ? "text-white/80" : "text-muted")}>{items.filter((t) => showArchive || !t.archive).length}</span>
         </button>
@@ -909,7 +957,7 @@ export function AdminTariffs() {
 
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
 
-      <div className="overflow-x-auto rounded-3xl bg-surface shadow-[var(--shadow-border)]">
+      <div className="overflow-x-auto rounded-3xl bg-surface shadow-[var(--shadow-border)] [overflow-anchor:none]">
         <table className="text-left text-sm" style={{ width: tableW, minWidth: "100%", tableLayout: "fixed" }}>
           <thead className="text-[0.65rem] uppercase tracking-wider text-muted">
             <tr>
@@ -1015,7 +1063,16 @@ export function AdminTariffs() {
                       <button
                         type="button"
                         title={isOpen ? "Свернуть" : "Открыть карточку"}
-                        onClick={() => { setOpen(isOpen ? null : t.id); setSubQ(""); }}
+                        onClick={() => {
+                          if (isOpen) {
+                            setOpen(null);
+                            setOrderLock(null);
+                          } else {
+                            setOpen(t.id);
+                            setOrderLock(view.map((x) => x.id));
+                          }
+                          setSubQ("");
+                        }}
                         className={cn("flex h-8 w-8 items-center justify-center rounded-full text-lg leading-none ring-1 ring-black/10 transition-colors", isOpen ? "bg-primary text-white" : "bg-black/[0.05] text-fg hover:bg-primary hover:text-white")}
                       >
                         {isOpen ? "−" : "+"}
@@ -1069,6 +1126,7 @@ export function AdminTariffs() {
                                 setTariffMap(next);
                                 await adminScheduleMap({ data: { token: token(), action: "saveTariffs", tariffs: next.filter((x) => x.tariffId > 0) } });
                                 setOpen(to);
+                                setOrderLock((lock) => (lock ? lock.map((id) => (id === oldId ? to : id)) : lock));
                               }
                               setMsg(to ? `Абонемент ${to} выгружен в AlfaCRM.` : opened.id > 0 ? `Абонемент ${opened.id} выгружен в AlfaCRM.` : "Новый абонемент создан в AlfaCRM.");
                             }
@@ -1079,6 +1137,7 @@ export function AdminTariffs() {
                             const res = await run("tariffsDelete", { ids: [String(opened.id)] });
                             if (res.ok) {
                               setOpen(null);
+                              setOrderLock(null);
                               setPicked((s) => { const n = new Set(s); n.delete(opened.id); return n; });
                               setMsg("Абонемент удалён.");
                             }

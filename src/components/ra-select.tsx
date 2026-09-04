@@ -70,6 +70,9 @@ export function RaSelect({
     if (!open) return;
     place();
     setQ("");
+    const focusSearch = window.requestAnimationFrame(() => {
+      menuRef.current?.querySelector("input")?.focus({ preventScroll: true });
+    });
     const close = (e: MouseEvent) => {
       const t = e.target as Node;
       if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
@@ -83,6 +86,7 @@ export function RaSelect({
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
     return () => {
+      window.cancelAnimationFrame(focusSearch);
       window.removeEventListener("mousedown", close);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", place);
@@ -112,7 +116,6 @@ export function RaSelect({
       {searchable ? (
         <div className="border-b border-black/8 p-2">
           <input
-            autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="поиск…"
