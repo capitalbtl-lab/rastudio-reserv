@@ -200,44 +200,106 @@ function packComm(it: Record<string, unknown>): CustomerComm {
   };
 }
 
+const PEOPLE_TTL_MS = 12 * 60 * 1000;
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+type PeopleBag = {
+  at: number;
+  cgi: Map<number, number[]>;
+  customer: Map<number, Record<string, unknown>>;
+};
+
+function peopleSlot() {
+  return globalThis as { __raPeople?: PeopleBag };
+}
+
+async function pagedCrm(
+  request: typeof import("./alfacrm").request,
+  t: string,
+  path: string,
+  body: Record<string, unknown>,
+) {
+  const { CRM_READ_GAP_MS } = await import("./pupil-tariffs");
+  const items: Record<string, unknown>[] = [];
+  for (let page = 0; page < 12; page += 1) {
+    if (page) await sleep(CRM_READ_GAP_MS);
+    const res = await request<{ items?: Record<string, unknown>[] }>(path, { page, pageSize: 200, ...body }, t).catch(
+      () => ({ items: [] as Record<string, unknown>[] }),
+    );
+    const batch = res.items || [];
+    items.push(...batch);
+    if (batch.length < 200) break;
+  }
+  return items;
+}
+
+async function loadPeopleBag(
+  request: typeof import("./alfacrm").request,
+  t: string,
+): Promise<PeopleBag> {
+  const slot = peopleSlot();
+  if (slot.__raPeople && Date.now() - slot.__raPeople.at < PEOPLE_TTL_MS && slot.__raPeople.cgi.size > 5) {
+    return slot.__raPeople;
+  }
+  const { cgiCustomerId, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
+  const cgi = new Map<number, number[]>();
+  const customer = new Map<number, Record<string, unknown>>();
+  function addCgi(gid: number, cid: number) {
+    if (!gid || !cid) return;
+    const list = cgi.get(gid) || [];
+    if (!list.includes(cid)) list.push(cid);
+    cgi.set(gid, list);
+  }
+  for (const branch of [1, 2, 3, 4]) {
+    await sleep(CRM_READ_GAP_MS);
+    const rows = await pagedCrm(request, t, `/v2api/${branch}/cgi/index`, {});
+    for (const it of rows) {
+      if (Number(it.removed || it.is_removed || 0)) continue;
+      const rec = it as { group?: { id?: number } };
+      const gid = Number(it.group_id || it.groupId || rec.group?.id || 0);
+      addCgi(gid, cgiCustomerId(it));
+    }
+    for (const study of [1, 0] as const) {
+      await sleep(CRM_READ_GAP_MS);
+      const people = await pagedCrm(request, t, `/v2api/${branch}/customer/index`, { is_study: study, removed: 0 });
+      for (const c of people) {
+        const id = Number(c.id || 0);
+        if (id && !customer.has(id)) customer.set(id, c);
+      }
+    }
+  }
+  const bag = { at: Date.now(), cgi, customer };
+  if (cgi.size > 5) slot.__raPeople = bag;
+  return bag;
+}
+
 async function overlayGroupHeadcount(
   groups: import("./pupil-tariffs").PupilGroup[],
   request: typeof import("./alfacrm").request,
   t: string,
 ) {
-  const { crmIndexTotal, countCgiParticipants } = await import("./pupil-tariffs");
-  const next = groups.map((g) => ({ ...g }));
-  for (let i = 0; i < next.length; i += 6) {
+  const { countCgiParticipants, cgiCustomerId, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
+  const bag = await loadPeopleBag(request, t);
+  const next = groups.map((g) => ({ ...g, taken: bag.cgi.get(g.groupId)?.length || 0 }));
+  if (bag.cgi.size > 5) {
+    peopleSlot().__raPeople = bag;
+    return next;
+  }
+  for (let i = 0; i < next.length; i += 2) {
     await Promise.all(
-      next.slice(i, i + 6).map(async (g) => {
-        const cgiItems: Record<string, unknown>[] = [];
-        let cgiTotal = 0;
-        for (let page = 0; page < 5; page += 1) {
-          const cgi = await request<{ items?: Record<string, unknown>[]; total?: number; count?: number }>(
-            `/v2api/${g.branchId}/cgi/index?group_id=${g.groupId}`,
-            { page, pageSize: 100, group_id: g.groupId },
-            t,
-          ).catch(() => null);
-          const batch = cgi?.items || [];
-          cgiItems.push(...batch);
-          cgiTotal = Math.max(cgiTotal, Number(cgi?.total) || 0, crmIndexTotal(cgi));
-          if (batch.length < 100) break;
-        }
-        const cgiN = Math.max(countCgiParticipants(cgiItems), cgiTotal);
-        if (cgiN > 0) {
-          g.taken = cgiN;
-          return;
-        }
-        const json = await request<{ items?: Record<string, unknown>[]; total?: number; count?: number }>(
-          `/v2api/${g.branchId}/customer/index?group_id=${g.groupId}`,
-          { page: 0, pageSize: 50, group_id: g.groupId },
-          t,
-        ).catch(() => null);
-        if (!json) return;
-        g.taken = Math.max(crmIndexTotal(json), (json.items || []).length);
+      next.slice(i, i + 2).map(async (g) => {
+        const items = await pagedCrm(request, t, `/v2api/${g.branchId}/cgi/index`, { group_id: g.groupId });
+        const ids = [...new Set(items.map(cgiCustomerId).filter(Boolean))];
+        if (ids.length) bag.cgi.set(g.groupId, ids);
+        g.taken = ids.length || countCgiParticipants(items);
       }),
     );
+    await sleep(CRM_READ_GAP_MS);
   }
+  peopleSlot().__raPeople = { ...bag, at: Date.now() };
   return next;
 }
 
@@ -270,6 +332,41 @@ async function pullGroupMembersCrm(
   const seen = new Set<number>();
   const active: GroupMember[] = [];
   const archive: GroupMember[] = [];
+  function take(c: Record<string, unknown>, forceArchive = false) {
+    const id = Number(c.id || 0);
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    const m = packMember(c, forceArchive);
+    if (m.archived) archive.push(m);
+    else active.push(m);
+  }
+  const bag = await loadPeopleBag(request, t);
+  const fromCgi = bag.cgi.get(gid) || [];
+  if (fromCgi.length) {
+    const missing: number[] = [];
+    for (const id of fromCgi) {
+      const c = bag.customer.get(id);
+      if (c) take(c);
+      else missing.push(id);
+    }
+    const { CRM_READ_GAP_MS } = await import("./pupil-tariffs");
+    for (let i = 0; i < missing.length; i += 3) {
+      if (i) await sleep(CRM_READ_GAP_MS);
+      await Promise.all(
+        missing.slice(i, i + 3).map(async (id) => {
+          const json = await request<{ items?: Record<string, unknown>[] }>(
+            `/v2api/${branch}/customer/index`,
+            { page: 0, pageSize: 5, id },
+            t,
+          ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+          const c = (json.items || []).find((x) => Number(x.id) === id) || { id, name: "", is_study: 0 };
+          bag.customer.set(id, c);
+          take(c);
+        }),
+      );
+    }
+    return { active, archive };
+  }
   async function pull(extra: Record<string, unknown>, forceArchive = false) {
     for (let page = 0; page < 3; page += 1) {
       const json = await request<{ items?: Record<string, unknown>[] }>(
@@ -278,48 +375,13 @@ async function pullGroupMembersCrm(
         t,
       ).catch(() => ({ items: [] as Record<string, unknown>[] }));
       const items = json.items || [];
-      for (const c of items) {
-        const id = Number(c.id || 0);
-        if (!id || seen.has(id)) continue;
-        seen.add(id);
-        const m = packMember(c, forceArchive);
-        if (m.archived) archive.push(m);
-        else active.push(m);
-      }
+      for (const c of items) take(c, forceArchive);
       if (items.length < 50) break;
     }
   }
   await pull({});
   if (!active.some((m) => m.status === "лид")) await pull({ is_study: 0 });
   if (!opts?.skipArchive && !archive.length) await pull({ is_study: 2 }, true);
-  const { cgiCustomerId } = await import("./pupil-tariffs");
-  const cgiItems: Record<string, unknown>[] = [];
-  for (let page = 0; page < 5; page += 1) {
-    const json = await request<{ items?: Record<string, unknown>[] }>(
-      `/v2api/${branch}/cgi/index?group_id=${gid}`,
-      { page, pageSize: 50, group_id: gid },
-      t,
-    ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-    const batch = json.items || [];
-    cgiItems.push(...batch);
-    if (batch.length < 50) break;
-  }
-  const missing = [
-    ...new Set(cgiItems.map(cgiCustomerId).filter((id) => id && !seen.has(id))),
-  ];
-  for (const id of missing) {
-    const json = await request<{ items?: Record<string, unknown>[] }>(
-      `/v2api/${branch}/customer/index`,
-      { page: 0, pageSize: 5, id },
-      t,
-    ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-    const c = (json.items || []).find((x) => Number(x.id) === id) || { id, name: "", is_study: 0 };
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const m = packMember(c, Number(c.is_study) === 2);
-    if (m.archived) archive.push(m);
-    else active.push(m);
-  }
   return { active, archive };
 }
 
