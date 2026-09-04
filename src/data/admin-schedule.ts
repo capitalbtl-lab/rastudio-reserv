@@ -39,7 +39,7 @@ import { isPhoneLike } from "./client-display";
 import { clientCardId, CRM_BRANCH } from "./ids";
 import { loadTariffs, pullTariffsFromCrm, matchTariffs, groupTariffPack, subjectTariffStats, saveTariffEdits, pushTariffsToCrm, archiveTariffsInCrm, aiTariffsParse, applyTariffChanges, probeCreateTariff, probeDeleteTariff, subjectsWithHref, tariffGroupHits } from "./crm-tariffs";
 import { loadScheduleMap, saveScheduleMap } from "./schedule-map";
-import { courseIdOfSubject } from "./ids";
+import { packSubjectRows, bindSubjectCourse } from "./subject-admin";
 
 function isoish(raw: string) {
   const s = String(raw || "").trim();
@@ -791,29 +791,8 @@ function ensureAutoPullTimer() {
   }
 }
 
-function decorateSubjects(subjects: { id: number; name: string; local?: boolean }[]) {
-  const { bySubject, branches } = subjectTariffStats();
-  const map = loadScheduleMap();
-  const tree = loadSiteTree();
-  const bySub = new Map(map.courses.map((c) => [c.subjectId, c]));
-  return {
-    ok: true as const,
-    subjects: subjects.map((s) => {
-      const st = bySubject.get(s.id) || { total: 0, byBranch: {} as Record<number, number>, names: [] as string[] };
-      const link = bySub.get(s.id);
-      const courseId = link?.courseId || courseIdOfSubject(s.id, tree);
-      const course = courseId ? tree.courses.find((c) => c.id === courseId || c.href === courseId) : undefined;
-      return {
-        ...s,
-        tariffTotal: st.total,
-        tariffByBranch: st.byBranch,
-        tariffNames: st.names,
-        courseId: course?.id || courseId || "",
-        courseLabel: course?.label || "",
-      };
-    }),
-    tariffBranches: branches,
-  };
+function decorateSubjects(subjects?: { id: number; name: string; local?: boolean }[]) {
+  return packSubjectRows(subjects);
 }
 
 function pinNewSlots(slots: { id: string; course?: string; courseId?: string; school?: string; path?: string; groupId?: number; branchId?: number; groupName?: string }[], ids: string[]) {
@@ -876,6 +855,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "remove"
           | "subjectsGet"
           | "subjectCreate"
+          | "subjectsBind"
           | "subjectsPull"
           | "subjectsSave"
           | "subjectsPush"
@@ -1447,6 +1427,18 @@ export const adminSchedule = createServerFn({ method: "POST" })
         return decorateSubjects(loadSubjects());
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось прочитать предметы." };
+      }
+    }
+    if (data.action === "subjectsBind") {
+      try {
+        const subjectId = Number(data.subjectId) || 0;
+        const courseId = String(data.courseId || "");
+        if (!subjectId) return { ok: false as const, error: "Нет предмета." };
+        const packed = bindSubjectCourse(subjectId, courseId);
+        logAdmin(`Предмет ${subjectId} → курс сайта ${courseId || "—"}`);
+        return packed;
+      } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось записать курс сайта." };
       }
     }
     if (data.action === "subjectCreate") {

@@ -22,7 +22,14 @@ type Row = CrmSubject & {
   tariffNames?: string[];
   courseId?: string;
   courseLabel?: string;
+  schoolLabel?: string;
+  groupByBranch?: Record<number, number>;
+  groupTotal?: number;
+  studentByBranch?: Record<number, number>;
+  studentTotal?: number;
 };
+type SiteCourse = { id: string; label: string; schoolId: string; href?: string };
+type SiteSchool = { id: string; label: string };
 type Change = { id: number; field: string; from: string; to: string };
 
 const FALLBACK: BranchCol[] = [
@@ -48,6 +55,8 @@ export function AdminSubjects() {
   const [aiAdds, setAiAdds] = useState<{ name: string }[]>([]);
   const [listen, setListen] = useState(false);
   const [pull, setPull] = useState<CrmPullState>(emptyPull("subjects"));
+  const [schools, setSchools] = useState<SiteSchool[]>([]);
+  const [courses, setCourses] = useState<SiteCourse[]>([]);
   const recRef = useRef<{ stop: () => void } | null>(null);
   const dictBase = useRef("");
 
@@ -60,6 +69,11 @@ export function AdminSubjects() {
         return;
       }
       if ("subjects" in res && Array.isArray(res.subjects)) setItems(res.subjects as Row[]);
+      if ("tree" in res && res.tree && typeof res.tree === "object") {
+        const tree = res.tree as { schools?: SiteSchool[]; courses?: SiteCourse[] };
+        if (tree.schools?.length) setSchools(tree.schools);
+        if (tree.courses?.length) setCourses(tree.courses);
+      }
       if ("tariffBranches" in res && Array.isArray(res.tariffBranches) && res.tariffBranches.length) {
         setBranches(
           [...(res.tariffBranches as BranchCol[])].sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id)),
@@ -74,7 +88,7 @@ export function AdminSubjects() {
   }
 
   async function run(
-    action: "subjectsSave" | "subjectsPush" | "subjectsAiPreview" | "subjectsAiApply",
+    action: "subjectsSave" | "subjectsPush" | "subjectsAiPreview" | "subjectsAiApply" | "subjectsBind",
     extra?: Record<string, unknown>,
   ) {
     setBusy(true);
@@ -90,6 +104,11 @@ export function AdminSubjects() {
         return res;
       }
       if ("subjects" in res && Array.isArray(res.subjects)) setItems(res.subjects as Row[]);
+      if ("tree" in res && res.tree && typeof res.tree === "object") {
+        const tree = res.tree as { schools?: SiteSchool[]; courses?: SiteCourse[] };
+        if (tree.schools?.length) setSchools(tree.schools);
+        if (tree.courses?.length) setCourses(tree.courses);
+      }
       return res;
     } catch (e) {
       const fail = { ok: false as const, error: e instanceof Error ? e.message : "Не удалось выполнить действие." };
@@ -108,6 +127,19 @@ export function AdminSubjects() {
     setItems((list) =>
       list.map((s) => (s.id !== id ? s : { ...s, [field]: field === "id" ? Number(value) || 0 : value })),
     );
+  }
+
+  async function bindCourse(subjectId: number, courseId: string) {
+    setItems((list) =>
+      list.map((s) => {
+        if (s.id !== subjectId) return s;
+        const course = courses.find((c) => c.id === courseId);
+        const school = course ? schools.find((x) => x.id === course.schoolId) : undefined;
+        return { ...s, courseId, courseLabel: course?.label || "", schoolLabel: school?.label || "" };
+      }),
+    );
+    const res = await run("subjectsBind", { subjectId, courseId });
+    if (res?.ok) setMsg("Курс сайта записан. В AlfaCRM не уходил.");
   }
 
   function toggleDictation() {
@@ -176,7 +208,7 @@ export function AdminSubjects() {
     const src = tab === "with" ? withTariff : withoutTariff;
     const needle = q.trim().toLowerCase();
     if (!needle) return src;
-    return src.filter((s) => `${s.id} ${s.name}`.toLowerCase().includes(needle));
+    return src.filter((s) => `${s.id} ${s.name} ${s.courseLabel || ""} ${s.schoolLabel || ""}`.toLowerCase().includes(needle));
   }, [tab, withTariff, withoutTariff, q]);
 
   const cols = (branches.length ? branches : FALLBACK).slice().sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
@@ -185,7 +217,7 @@ export function AdminSubjects() {
   return (
     <section className="space-y-4">
       <p className="max-w-3xl text-sm text-muted">
-        Две вкладки: предметы, которые стоят в абонементах, и предметы без абонементов. Название абонемента само по себе предмет не создаёт.
+        Курс сайта подставляется из соответствий предмета и карточки группы. Справа — сколько живых групп и учеников с этим предметом в филиале. Загрузка берёт предметы из AlfaCRM и сразу подставляет курс сайта. Выгрузка отправляет в CRM только id и название — курс сайта на сайте остаётся.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button
@@ -219,14 +251,14 @@ export function AdminSubjects() {
         </Button>
         <Button type="button" variant="secondary" disabled={busy} onClick={async () => {
           await run("subjectsSave", { subjects: items });
-          setMsg("Справочник сохранён на сайте.");
+          setMsg("Справочник сохранён на сайте. Курсы сайта в CRM не уходили.");
         }}>
           Сохранить на сайте
         </Button>
         <Button type="button" variant="secondary" disabled={busy} onClick={async () => {
           const list = picked.size ? items.filter((s) => picked.has(s.id)) : items;
           const res = await run("subjectsPush", { subjects: list });
-          if (res?.ok) setMsg(picked.size ? `Выгружено выбранных: ${list.length}.` : "Выгружено в AlfaCRM.");
+          if (res?.ok) setMsg(picked.size ? `В AlfaCRM ушли названия выбранных: ${list.length}. Курс сайта не выгружается.` : "Названия выгружены в AlfaCRM. Курс сайта остался на сайте.");
         }}>
           Выгрузить в AlfaCRM{picked.size ? ` · ${picked.size}` : ""}
         </Button>
@@ -339,13 +371,17 @@ export function AdminSubjects() {
               </th>
               <th className="w-20 px-2 py-3 font-medium">ID</th>
               <th className="px-4 py-3 font-medium">Название предмета</th>
-              <th className="w-[12rem] px-3 py-3 font-medium">Курс сайта</th>
+              <th className="w-[14rem] px-3 py-3 font-medium">Курс сайта</th>
               {cols.map((b) => (
                 <th key={b.id} className="w-[6.5rem] px-2 py-3 text-center font-medium whitespace-nowrap">
                   {b.short}
+                  <span className="mt-0.5 block text-[0.6rem] font-normal normal-case tracking-normal text-muted/80">гр / уч</span>
                 </th>
               ))}
-              <th className="w-[5.5rem] px-2 py-3 text-center font-medium whitespace-nowrap">Всего</th>
+              <th className="w-[5.5rem] px-2 py-3 text-center font-medium whitespace-nowrap">
+                Всего
+                <span className="mt-0.5 block text-[0.6rem] font-normal normal-case tracking-normal text-muted/80">гр / уч</span>
+              </th>
               <th className="w-10 px-2 py-3" />
             </tr>
           </thead>
@@ -366,19 +402,41 @@ export function AdminSubjects() {
                 <td className="px-4 py-2">
                   <input value={s.name} onChange={(e) => patch(s.id, "name", e.target.value)} className="h-9 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
                 </td>
-                <td className="px-3 py-2 text-xs text-muted">
-                  {s.courseLabel ? <span title={s.courseId}>{s.courseLabel}</span> : <span className="text-rose-600/80">нет courseId</span>}
+                <td className="px-3 py-2">
+                  <select
+                    value={s.courseId || ""}
+                    title="Курс сайта из соответствий. В AlfaCRM не уходит."
+                    onChange={(e) => void bindCourse(s.id, e.target.value)}
+                    className="h-9 w-full max-w-[14rem] rounded-[8px] bg-surface-2 px-2 text-[0.78rem] ring-1 ring-black/10"
+                  >
+                    <option value="">— курс сайта —</option>
+                    {schools.map((sc) => (
+                      <optgroup key={sc.id} label={sc.label}>
+                        {courses
+                          .filter((c) => c.schoolId === sc.id)
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.label}
+                            </option>
+                          ))}
+                      </optgroup>
+                    ))}
+                    {s.courseId && !courses.some((c) => c.id === s.courseId) ? (
+                      <option value={s.courseId}>{s.courseLabel || s.courseId}</option>
+                    ) : null}
+                  </select>
                 </td>
                 {cols.map((b) => {
-                  const n = Number(s.tariffByBranch?.[b.id] || 0);
+                  const groups = Number(s.groupByBranch?.[b.id] || 0);
+                  const students = Number(s.studentByBranch?.[b.id] || 0);
                   return (
                     <td key={b.id} className="px-2 py-2 text-center">
-                      <Count n={n} title={n ? (s.tariffNames || []).join("\n") : ""} />
+                      <Usage groups={groups} students={students} />
                     </td>
                   );
                 })}
                 <td className="px-2 py-2 text-center">
-                  <Count n={Number(s.tariffTotal || 0)} strong title={(s.tariffNames || []).join("\n")} />
+                  <Usage groups={Number(s.groupTotal || 0)} students={Number(s.studentTotal || 0)} strong />
                 </td>
                 <td className="px-2 py-2 text-center">
                   <button type="button" className="text-muted hover:text-red-600" onClick={() => setItems((list) => list.filter((x) => x.id !== s.id))}>
@@ -401,23 +459,20 @@ export function AdminSubjects() {
   );
 }
 
-function Count({ n, title, strong }: { n: number; title?: string; strong?: boolean }) {
-  if (!n) {
-    return (
-      <span className="inline-flex h-9 min-w-9 items-center justify-center text-muted/50" title={title || ""}>
-        —
-      </span>
-    );
+function Usage({ groups, students, strong }: { groups: number; students: number; strong?: boolean }) {
+  if (!groups && !students) {
+    return <span className="inline-flex h-9 min-w-9 items-center justify-center text-muted/50">—</span>;
   }
   return (
     <span
-      title={title || ""}
+      title={`${groups} групп · ${students} учеников`}
       className={cn(
-        "inline-flex h-9 min-w-9 items-center justify-center rounded-xl px-2 text-sm font-semibold",
+        "inline-flex min-h-9 min-w-9 flex-col items-center justify-center rounded-[8px] px-2 leading-tight",
         strong ? "bg-sky-100 text-sky-900" : "bg-black/[0.04] text-fg",
       )}
     >
-      {n}
+      <span className="text-sm font-semibold">{groups}</span>
+      <span className={cn("text-[0.65rem]", strong ? "text-sky-800/80" : "text-muted")}>{students} уч</span>
     </span>
   );
 }

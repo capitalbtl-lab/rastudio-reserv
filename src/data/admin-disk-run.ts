@@ -65,25 +65,6 @@ function itemsOf(name: string): unknown[] {
   return [];
 }
 
-function decorateSubjects(list: { id?: number; name?: string; local?: boolean }[]) {
-  const tariffs = itemsOf("crm-tariffs.json") as { subjectIds?: number[]; branchIds?: number[]; archive?: boolean }[];
-  const bySubject = new Map<number, { total: number; byBranch: Record<number, number> }>();
-  for (const t of tariffs) {
-    if (t.archive) continue;
-    for (const sid of t.subjectIds || []) {
-      const st = bySubject.get(sid) || { total: 0, byBranch: {} as Record<number, number> };
-      st.total += 1;
-      for (const b of t.branchIds || []) st.byBranch[b] = (st.byBranch[b] || 0) + 1;
-      bySubject.set(sid, st);
-    }
-  }
-  return list.map((s) => {
-    const id = Number(s.id || 0);
-    const st = bySubject.get(id) || { total: 0, byBranch: {} as Record<number, number> };
-    return { ...s, tariffTotal: st.total, tariffByBranch: st.byBranch, tariffNames: [] as string[] };
-  });
-}
-
 async function runPull(kind: PullKind) {
   const lines: PullLine[] = [];
   try {
@@ -91,7 +72,13 @@ async function runPull(kind: PullKind) {
       setJob({ step: "Читаю предметы в AlfaCRM…" });
       const { pullSubjectsFromCrm } = await import("./crm-subjects");
       const list = await pullSubjectsFromCrm();
+      const { packSubjectRows } = await import("./subject-admin");
+      const packed = packSubjectRows(list);
+      const withCourse = packed.subjects.filter((s) => s.courseId).length;
+      const groups = packed.subjects.reduce((n, s) => n + Number(s.groupTotal || 0), 0);
       lines.push({ ok: true, text: `Предметы: загружено ${list.length}` });
+      lines.push({ ok: true, text: `Курс сайта подставлен у ${withCourse} из соответствий. В CRM не уходит.` });
+      lines.push({ ok: true, text: `Групп с этими предметами: ${groups}` });
       setJob({ done: true, running: false, total: list.length, added: list.length, lines, step: "" });
       logAdmin(`Предметы из AlfaCRM: ${list.length}`);
       return;
@@ -192,9 +179,9 @@ export async function handleAdminDisk(data: DiskReq) {
   }
   try {
     if (kind === "subjects") {
-      const list = itemsOf("crm-subjects.json") as { id?: number; name?: string; local?: boolean }[];
-      const subjects = decorateSubjects(list);
-      return { ok: true as const, subjects, tariffBranches: BRANCHES, total: subjects.length };
+      const { packSubjectRows } = await import("./subject-admin");
+      const packed = packSubjectRows();
+      return { ok: true as const, ...packed, total: packed.subjects.length };
     }
     if (kind === "tariffs") {
       const raw = readJson("crm-tariffs.json") || {};
