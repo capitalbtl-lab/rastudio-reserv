@@ -254,14 +254,12 @@ async function pullGroupMembersCrm(
   return { active, archive };
 }
 
-type BranchTariffMap = Map<number, { id: number; tariffId: number; name: string }[]>;
-
 async function loadBranchActiveTariffs(
   request: typeof import("./alfacrm").request,
   t: string,
   branch: number,
   catalog?: { id: number; name: string; archive?: boolean; price?: number }[],
-): Promise<BranchTariffMap> {
+) {
   const bag = globalThis as { __raCTar?: Map<number, { at: number; items: Record<string, unknown>[] }> };
   if (!bag.__raCTar) bag.__raCTar = new Map();
   const hit = bag.__raCTar.get(branch);
@@ -279,8 +277,8 @@ async function loadBranchActiveTariffs(
     );
     if (items.length) bag.__raCTar.set(branch, { at: Date.now(), items });
   }
-  const { indexActiveTariffsByCustomer } = await import("./pupil-tariffs");
-  return indexActiveTariffsByCustomer(items, catalog);
+  const { splitCustomerTariffs } = await import("./pupil-tariffs");
+  return splitCustomerTariffs(items, catalog);
 }
 
 async function loadCustomerRaw(
@@ -1942,26 +1940,30 @@ export const adminSchedule = createServerFn({ method: "POST" })
         }
       }
       if (data.onlyActive) {
-        const { customerTariffIndexPath, activeCustomerTariffs, keepPupilsWithActiveTariffs, withCatalogNames, formatTariffNames } = await import("./pupil-tariffs");
+        const { customerTariffIndexPath, activeCustomerTariffs, keepPupilsWithActiveTariffs, withCatalogNames, formatTariffNames, countArchivedOnlyPupils, splitCustomerTariffs } = await import("./pupil-tariffs");
         const catalog = tariffs.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price }));
         const byCustomer = new Map<string, { id: number; tariffId: number; name: string }[]>();
+        const byArchived = new Map<string, { id: number; tariffId: number; name: string }[]>();
         const branches = [...new Set(items.map((row) => row.branchId))];
         for (const branch of branches) {
           const bulk = await loadBranchActiveTariffs(request, t, branch, catalog);
-          if (bulk.size) {
-            for (const [cid, list] of bulk) byCustomer.set(`${branch}:${cid}`, list);
+          if (bulk.live.size || bulk.archived.size) {
+            for (const [cid, list] of bulk.live) byCustomer.set(`${branch}:${cid}`, list);
+            for (const [cid, list] of bulk.archived) byArchived.set(`${branch}:${cid}`, list);
             continue;
           }
           for (const row of items) {
             if (row.branchId !== branch) continue;
             const key = `${row.branchId}:${row.customerId}`;
-            if (byCustomer.has(key)) continue;
+            if (byCustomer.has(key) || byArchived.has(key)) continue;
             const json = await request<{ items?: Record<string, unknown>[] }>(
               customerTariffIndexPath(row.branchId, row.customerId),
               { page: 0, pageSize: 50, customer_id: row.customerId },
               t,
             ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-            byCustomer.set(key, activeCustomerTariffs(json.items, catalog));
+            const split = splitCustomerTariffs(json.items, catalog);
+            byCustomer.set(key, split.live.get(row.customerId) || activeCustomerTariffs(json.items, catalog));
+            byArchived.set(key, split.archived.get(row.customerId) || []);
           }
         }
         const kept = keepPupilsWithActiveTariffs(items, byCustomer).map((row) => {
@@ -1974,9 +1976,19 @@ export const adminSchedule = createServerFn({ method: "POST" })
             price: offer?.price || row.price,
           };
         });
-        return { ok: true as const, items: kept, byGroup, total: kept.length, onlyActive: true };
+        const archivedOnly = countArchivedOnlyPupils(items, byCustomer, byArchived);
+        return {
+          ok: true as const,
+          items: kept,
+          byGroup,
+          total: kept.length,
+          onlyActive: true,
+          scanned: items.length,
+          archivedOnly,
+          groups: groups.length,
+        };
       }
-      return { ok: true as const, items, byGroup, total: items.length };
+      return { ok: true as const, items, byGroup, total: items.length, scanned: items.length, groups: groups.length, archivedOnly: 0 };
     }
     if (data.action === "pupilTariffAssign") {
       const { token, request, formatRuDob } = await import("./alfacrm");

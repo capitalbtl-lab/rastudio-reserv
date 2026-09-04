@@ -252,26 +252,49 @@ export function activeCustomerTariffs(
 }
 
 /** Индекс живых абонементов филиала: customer_id → список. Один index вместо запроса на каждого ученика. */
+export function splitCustomerTariffs(
+  items: Record<string, unknown>[] | undefined,
+  catalog?: CatalogTariff[],
+) {
+  const live = new Map<number, { id: number; tariffId: number; name: string }[]>();
+  const archived = new Map<number, { id: number; tariffId: number; name: string }[]>();
+  for (const it of items || []) {
+    if (Number(it.removed || it.is_archived || it.is_archive || 0) === 1) continue;
+    const id = Number(it.id) || 0;
+    const customerId = Number(it.customer_id ?? it.customerId ?? 0);
+    const tariffId = Number(it.tariff_id || it.tariffId || 0);
+    if (!id || !customerId || !tariffId) continue;
+    const row = { id, tariffId, name: customerTariffLabel(it, catalog) };
+    const bucket = customerTariffLive(it, catalog) ? live : archived;
+    const list = bucket.get(customerId) || [];
+    list.push(row);
+    bucket.set(customerId, list);
+  }
+  return { live, archived };
+}
+
 export function indexActiveTariffsByCustomer(
   items: Record<string, unknown>[] | undefined,
   catalog?: CatalogTariff[],
 ) {
-  const map = new Map<number, { id: number; tariffId: number; name: string }[]>();
-  for (const it of items || []) {
-    if (!customerTariffLive(it, catalog)) continue;
-    const id = Number(it.id) || 0;
-    const customerId = Number(it.customer_id ?? it.customerId ?? 0);
-    if (!id || !customerId) continue;
-    const row = {
-      id,
-      tariffId: Number(it.tariff_id || it.tariffId || 0),
-      name: customerTariffLabel(it, catalog),
-    };
-    const list = map.get(customerId) || [];
-    list.push(row);
-    map.set(customerId, list);
+  return splitCustomerTariffs(items, catalog).live;
+}
+
+export function countArchivedOnlyPupils<T extends { customerId: number; branchId: number }>(
+  pupils: T[],
+  live: Map<string, unknown[]>,
+  archived: Map<string, unknown[]>,
+) {
+  const seen = new Set<string>();
+  let n = 0;
+  for (const row of pupils) {
+    const key = `${row.branchId}:${row.customerId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if ((live.get(key) || []).length) continue;
+    if ((archived.get(key) || []).length) n += 1;
   }
-  return map;
+  return n;
 }
 
 export function keepPupilsWithActiveTariffs<T extends { customerId: number; branchId: number }>(

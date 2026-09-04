@@ -137,6 +137,14 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState<{ done: number; skipped: number; failed: { name: string; error: string }[] } | null>(null);
   const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
   const [subjectOf, setSubjectOf] = useState<Record<string, number>>({});
+  const [progress, setProgress] = useState<{
+    groupsDone: number;
+    groupsTotal: number;
+    live: number;
+    scanned: number;
+    archived: number;
+  } | null>(null);
+  const [summary, setSummary] = useState("");
 
   useEffect(() => {
     void (async () => {
@@ -190,16 +198,16 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       .filter((k) => Number(k.branchId) && Number(k.groupId));
     const rows: PupilTariffItem[] = [];
     const grouped: Record<string, GroupTariff> = {};
+    let scanned = 0;
+    let archived = 0;
+    setProgress({ groupsDone: 0, groupsTotal: keys.length, live: 0, scanned: 0, archived: 0 });
+    setSummary("");
     try {
       for (let i = 0; i < keys.length; i += PLAN_GROUP_CHUNK) {
         const part = keys.slice(i, i + PLAN_GROUP_CHUNK);
         const from = i + 1;
         const to = Math.min(i + PLAN_GROUP_CHUNK, keys.length);
-        setMsg(
-          path === "add"
-            ? `Читаю состав групп ${from}–${to} из ${keys.length}…`
-            : `Читаю абонементы CRM, группы ${from}–${to} из ${keys.length}…`,
-        );
+        setMsg(`Читаю CRM: группы ${from}–${to} из ${keys.length}`);
         const res = (await retryFetch(
           () =>
             adminSchedule({
@@ -213,13 +221,29 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             }),
           1,
           90000,
-        )) as { ok?: boolean; items?: PupilTariffItem[]; byGroup?: Record<string, GroupTariff>; error?: string };
+        )) as {
+          ok?: boolean;
+          items?: PupilTariffItem[];
+          byGroup?: Record<string, GroupTariff>;
+          error?: string;
+          scanned?: number;
+          archivedOnly?: number;
+        };
         if (!res.ok) {
           setMsg(res.error || "Не удалось собрать список учеников.");
           return false;
         }
         rows.push(...(res.items || []));
         Object.assign(grouped, res.byGroup || {});
+        scanned += Number(res.scanned || res.items?.length || 0);
+        archived += Number(res.archivedOnly || 0);
+        setProgress({
+          groupsDone: to,
+          groupsTotal: keys.length,
+          live: rows.length,
+          scanned,
+          archived,
+        });
       }
       setItems(rows);
       setByGroup(grouped);
@@ -233,6 +257,13 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         setPeriodType(unit);
         setCalcType(Number(sample.calcType) || 0);
         setDateTo(addPeriod(date, count, unit));
+      }
+      if (path !== "add" && archived) {
+        setSummary(
+          `Прочитано ${keys.length} групп, ${scanned} учеников в CRM. Живых абонементов: ${rows.length}. Только архивные шаблоны (не трогаем): ${archived}.`,
+        );
+      } else {
+        setSummary(`Прочитано ${keys.length} групп, учеников: ${rows.length}.`);
       }
       setMsg("");
       return true;
@@ -428,6 +459,27 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       </div>
 
       {msg ? <p className="mt-3 text-sm text-amber-800">{msg}</p> : null}
+      {busy && progress ? (
+        <div className="mt-3 rounded-[12px] bg-surface-2 p-3 ring-1 ring-black/8">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="font-medium">Загрузка из CRM</span>
+            <span className="text-muted">
+              {progress.groupsDone} / {progress.groupsTotal} групп
+            </span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white ring-1 ring-black/6">
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-300"
+              style={{ width: `${progress.groupsTotal ? Math.round((progress.groupsDone / progress.groupsTotal) * 100) : 0}%` }}
+            />
+          </div>
+          <p className="mt-2 text-[0.75rem] text-muted">
+            {path === "add"
+              ? `Учеников в выборке: ${progress.live}`
+              : `Живых абонементов: ${progress.live} · прочитано учеников: ${progress.scanned} · архивных пропущено: ${progress.archived}`}
+          </p>
+        </div>
+      ) : null}
 
       {step === 1 ? (
         <div className="mt-4 space-y-3">
@@ -533,6 +585,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
 
       {step === 2 ? (
         <div className="mt-4 space-y-3">
+          {summary ? <p className="rounded-[12px] bg-surface-2 px-3 py-2 text-sm text-muted">{summary}</p> : null}
           <div className="flex gap-3 text-sm">
             <button
               type="button"

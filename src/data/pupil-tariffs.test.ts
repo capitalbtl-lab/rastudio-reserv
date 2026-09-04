@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
 import type { CrmTariff } from "./crm-tariffs.ts";
 
@@ -267,6 +267,33 @@ describe("мастер абонементов учеников", () => {
       [385],
     );
     assert.equal(list[0].name, "Абонемент 3850/4/90 Скульптурная студия");
+    const split = splitCustomerTariffs(
+      [
+        { id: 1, customer_id: 8, tariff_id: 385 },
+        { id: 2, customer_id: 9, tariff_id: 177 },
+      ],
+      [
+        { id: 385, name: "Абонемент 3850/4/90 Скульптурная студия" },
+        { id: 177, name: "старый", archive: true },
+      ],
+    );
+    assert.equal(split.live.has(8), true);
+    assert.equal(split.archived.has(9), true);
+    const n = countArchivedOnlyPupils(
+      [
+        { customerId: 8, branchId: 2 },
+        { customerId: 9, branchId: 2 },
+      ],
+      new Map([
+        ["2:8", [{}]],
+        ["2:9", []],
+      ]),
+      new Map([
+        ["2:8", []],
+        ["2:9", [{}]],
+      ]),
+    );
+    assert.equal(n, 1);
   });
 
   it("имя абонемента берётся из каталога, повтор схлопывается", () => {
