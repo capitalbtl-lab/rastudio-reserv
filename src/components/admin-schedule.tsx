@@ -518,7 +518,7 @@ function WeekDots({
         ? createPortal(
             <div
               ref={box}
-              className={cn("fixed z-[90] w-[15rem] p-3.5 text-fg", RA_POP)}
+              className={cn("fixed z-[220] w-[15rem] p-3.5 text-fg", RA_POP)}
               style={{ top: pos.top, left: pos.left }}
             >
               <p className="text-sm font-semibold">Второе занятие</p>
@@ -889,15 +889,14 @@ export function AdminSchedule() {
   }, [detail, pupil]);
 
   function patch(id: string, field: keyof CrmSlot, value: string | number) {
-    setSlots((list) =>
-      list.map((s) => {
-        if (s.id !== id) return s;
-        const next = { ...s, [field]: value };
-        if (field === "day") next.dayLabel = ["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"][Number(value)] || s.dayLabel;
-        return next;
-      }),
-    );
+    const apply = (s: CrmSlot) => {
+      const next = { ...s, [field]: value };
+      if (field === "day") next.dayLabel = ["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"][Number(value)] || s.dayLabel;
+      return next;
+    };
+    setSlots((list) => list.map((s) => (s.id !== id ? s : apply(s))));
     setDirty((d) => new Set(d).add(id));
+    setDetail((d) => (d && d.id === id ? { ...d, slot: apply(d.slot) } : d));
   }
 
   async function patchFlags(s: CrmSlot, field: "statusId" | "priority", value: number) {
@@ -1199,9 +1198,37 @@ export function AdminSchedule() {
     }
   }
 
+  function slotFromDetail(d: GroupDetail): CrmSlot {
+    return {
+      ...d.slot,
+      subjectId: d.subjectId,
+      statusId: d.statusId,
+      priority: d.priority,
+      tariffId: d.tariffId,
+      description: d.description,
+      groupNote: d.description,
+      remarks: d.remarks,
+      hashtags: d.hashtags,
+      makeup: d.makeup,
+      bDate: d.bDate,
+      eDate: d.eDate,
+      levelId: d.levelId,
+      signup: d.signup || d.slot.signup,
+      branchId: d.branchId || d.slot.branchId,
+    };
+  }
+
   async function saveDetail() {
     if (!detail) return;
     setDetail((d) => (d ? { ...d, saving: true, error: "" } : d));
+    const slot = slotFromDetail(detail);
+    const nextSlots = slots.map((s) => (s.id === slot.id ? slot : s));
+    const site = await adminSchedule({ data: { token: token(), action: "save", slots: nextSlots } as never });
+    take(site as never);
+    if (!site.ok) {
+      setDetail((d) => (d ? { ...d, saving: false, error: site.error || "Не сохранилось на сайте." } : d));
+      return;
+    }
     const res = await adminSchedule({
       data: {
         token: token(),
@@ -1251,6 +1278,26 @@ export function AdminSchedule() {
     setMsg(detail.groupId ? "Подробности группы сохранены в AlfaCRM." : `Группа создана в AlfaCRM · gid ${gid}.`);
   }
 
+  async function saveDetailSite() {
+    if (!detail) return;
+    setDetail((d) => (d ? { ...d, saving: true, error: "" } : d));
+    const slot = slotFromDetail(detail);
+    const next = slots.map((s) => (s.id === slot.id ? slot : s));
+    const res = await run("save", { slots: next });
+    if (!res.ok) {
+      setDetail((d) => (d ? { ...d, saving: false, error: res.error || "Не сохранилось на сайте." } : d));
+      setMsg(res.error || "Не сохранилось на сайте.");
+      return;
+    }
+    setDirty((d) => {
+      const n = new Set(d);
+      n.delete(slot.id);
+      return n;
+    });
+    setDetail((d) => (d ? { ...d, saving: false, slot, error: "" } : d));
+    setMsg("Группа сохранена на сайте. В AlfaCRM — отдельной кнопкой.");
+  }
+
   function shownBeat(s: CrmSlot) {
     const raw = beatsOf(s);
     const beats = raw.filter((b) => b.lessonId || /^\d{1,2}:\d{2}$/.test(b.timeFrom || ""));
@@ -1264,29 +1311,30 @@ export function AdminSchedule() {
     const i = view[s.id] || 0;
     const next = beats.map((b, n) => (n === i ? { ...b, [field]: value } : b));
     const cur = next[i];
-    setSlots((list) =>
-      list.map((row) =>
-        row.id === s.id
-          ? {
-              ...row,
-              beats: next,
-              timesPerWeek: next.length,
-              day: i === 0 ? Number(cur.day) : row.day,
-              dayLabel: i === 0 ? ["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"][Number(cur.day)] || row.dayLabel : row.dayLabel,
-              timeFrom: i === 0 ? cur.timeFrom : row.timeFrom,
-              timeTo: i === 0 ? cur.timeTo : row.timeTo,
-            }
-          : row,
-      ),
-    );
+    const apply = (row: CrmSlot) =>
+      row.id !== s.id
+        ? row
+        : {
+            ...row,
+            beats: next,
+            timesPerWeek: next.length,
+            day: i === 0 ? Number(cur.day) : row.day,
+            dayLabel: i === 0 ? ["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"][Number(cur.day)] || row.dayLabel : row.dayLabel,
+            timeFrom: i === 0 ? cur.timeFrom : row.timeFrom,
+            timeTo: i === 0 ? cur.timeTo : row.timeTo,
+          };
+    setSlots((list) => list.map(apply));
     setDirty((d) => new Set(d).add(s.id));
+    setDetail((d) => (d && d.id === s.id ? { ...d, slot: apply(d.slot) } : d));
   }
 
   function addBeat(s: CrmSlot, b: LessonBeat) {
     const beats = [...beatsOf(s), b];
-    setSlots((list) => list.map((row) => (row.id === s.id ? { ...row, beats, timesPerWeek: beats.length } : row)));
+    const apply = (row: CrmSlot) => (row.id === s.id ? { ...row, beats, timesPerWeek: beats.length } : row);
+    setSlots((list) => list.map(apply));
     setView((v) => ({ ...v, [s.id]: beats.length - 1 }));
     setDirty((d) => new Set(d).add(s.id));
+    setDetail((d) => (d && d.id === s.id ? { ...d, slot: apply(d.slot) } : d));
   }
 
   const tree = useMemo(() => {
@@ -3242,11 +3290,18 @@ export function AdminSchedule() {
                 data-branch-id={detail.branchId || undefined}
               >
                 <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5 md:px-6 md:pt-6">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Карточка группы · {groupCardId(detail.branchId, detail.groupId)}</p>
-                    <h3 className="font-display text-2xl">{detail.slot.groupName}</h3>
+                    <label className="mt-1 block">
+                      <span className="sr-only">Название группы</span>
+                      <input
+                        value={detail.slot.groupName}
+                        onChange={(e) => patch(detail.id, "groupName", e.target.value)}
+                        className="h-11 w-full rounded-md bg-white px-3 font-display text-xl font-semibold text-fg ring-1 ring-black/8"
+                      />
+                    </label>
                     <p className="mt-1 text-sm text-muted">
-                      {detail.slot.age} · {detail.slot.teacher} · {detail.slot.city}, {detail.slot.branch}
+                      № {detail.groupId || "на сайте"} · {detail.slot.city}, {detail.slot.branch}
                     </p>
                   </div>
                   <button type="button" className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-muted ring-1 ring-black/8" onClick={() => { setPupil(null); setDetail(null); }}>
@@ -3303,11 +3358,107 @@ export function AdminSchedule() {
                         ))}
                       </select>
                     </label>
-                    <p className="md:col-span-2 rounded-xl bg-white/70 px-3 py-2 text-sm text-fg ring-1 ring-black/6">
-                      Регулярно: {detail.slot.dayLabel || "день недели"} {detail.slot.timeFrom}–{detail.slot.timeTo}
-                      {detail.slot.timesPerWeek > 1 ? ` · ${detail.slot.timesPerWeek} раза в неделю` : ""}
-                      {" · "}групповое
-                      {detail.slot.bDate || detail.slot.eDate ? ` · период ${detail.slot.bDate || "…"} – ${detail.slot.eDate || "…"}` : ""}
+                    <div className="grid gap-3 sm:grid-cols-2 md:col-span-2 md:grid-cols-4">
+                      <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                        Возраст
+                        <input value={detail.slot.age} onChange={(e) => patch(detail.id, "age", e.target.value)} className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                      </label>
+                      <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                        День
+                        <select
+                          value={shownBeat(detail.slot).day}
+                          onChange={(e) => patchBeat(detail.slot, "day", Number(e.target.value))}
+                          className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                            <option key={d} value={d}>
+                              {["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"][d]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted sm:col-span-2 md:col-span-1">
+                        С / до
+                        <span className="mt-1 flex items-center gap-1">
+                          <input value={shownBeat(detail.slot).timeFrom} onChange={(e) => patchBeat(detail.slot, "timeFrom", e.target.value)} className="h-10 w-full rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                          <input value={shownBeat(detail.slot).timeTo} onChange={(e) => patchBeat(detail.slot, "timeTo", e.target.value)} className="h-10 w-full rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                        </span>
+                      </label>
+                      <div className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                        ×нед
+                        <div className="mt-1 flex h-10 items-center">
+                          <WeekDots
+                            s={detail.slot}
+                            index={view[detail.slot.id] || 0}
+                            onView={(i) => setView((v) => ({ ...v, [detail.slot.id]: i }))}
+                            onAdd={(b) => addBeat(detail.slot, b)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2 md:col-span-2 md:grid-cols-4">
+                      <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted md:col-span-2">
+                        Филиал
+                        <select
+                          value={detail.slot.branchId || ""}
+                          onChange={(e) => {
+                            const branchId = Number(e.target.value) || 0;
+                            const hit = CRM_BRANCH[branchId];
+                            const city = hit?.name.split(",")[0] || "";
+                            const branch = hit?.short || "";
+                            setSlots((list) => list.map((row) => (row.id === detail.id ? { ...row, branchId, city, branch } : row)));
+                            setDirty((d) => new Set(d).add(detail.id));
+                            setDetail((d) => (d ? { ...d, branchId, slot: { ...d.slot, branchId, city, branch } } : d));
+                          }}
+                          className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                        >
+                          <option value="">— филиал —</option>
+                          {Object.entries(CRM_BRANCH).map(([id, b]) => (
+                            <option key={id} value={id}>
+                              {b.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                        Педагог
+                        <select
+                          value={detail.slot.teacher}
+                          onChange={(e) => {
+                            const name = e.target.value;
+                            const hit = teachersForBranch(detail.slot.branchId).find((t) => t.name === name);
+                            const next = { ...detail.slot, teacher: name, teacherId: hit?.id || 0, teacherIds: hit ? [hit.id] : [] };
+                            setSlots((list) => list.map((row) => (row.id === detail.id ? next : row)));
+                            setDirty((d) => new Set(d).add(detail.id));
+                            setDetail((d) => (d ? { ...d, slot: next } : d));
+                          }}
+                          className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                        >
+                          <option value="">— филиал —</option>
+                          {teachersForBranch(detail.slot.branchId).map((t) => (
+                            <option key={t.id} value={t.name}>
+                              {t.name}
+                            </option>
+                          ))}
+                          {detail.slot.teacher && !teachersForBranch(detail.slot.branchId).some((t) => t.name === detail.slot.teacher) ? (
+                            <option value={detail.slot.teacher}>{detail.slot.teacher} · нет в филиале</option>
+                          ) : null}
+                        </select>
+                      </label>
+                      <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                        Места
+                        <span className="mt-1 flex items-center gap-1">
+                          <input
+                            value={detail.slot.limit}
+                            onChange={(e) => patch(detail.id, "limit", Number(e.target.value) || 0)}
+                            className="h-10 w-full rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                          />
+                          <span className="shrink-0 text-sm font-medium normal-case text-muted">/ {detail.slot.taken}</span>
+                        </span>
+                      </label>
+                    </div>
+                    <p className="md:col-span-2 text-sm text-muted">
+                      Учится {detail.slot.takenStudy ?? "—"} · лиды {detail.slot.takenLead ?? "—"} · всего в составе {detail.slot.taken}
                     </p>
                     <div className="md:col-span-2">
                     <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
@@ -3426,11 +3577,14 @@ export function AdminSchedule() {
                         <input value={detail.makeup} onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                       </label>
                     </div>
-                    <div className="flex flex-col items-end gap-2 md:col-span-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2 md:col-span-2">
                       {detail.error ? <p className="w-full text-sm text-red-600">{detail.error}</p> : null}
                       {!detail.groupId ? (
-                        <p className="w-full text-sm text-muted">Группа пока только на сайте. Кнопка создаст её в AlfaCRM. Если предмет не выбран — заведём по названию курса.</p>
+                        <p className="w-full text-sm text-muted">Группа пока только на сайте. «Сохранить в AlfaCRM» создаст её. Если предмет не выбран — заведём по названию курса.</p>
                       ) : null}
+                      <Button type="button" variant="secondary" disabled={detail.saving} onClick={() => void saveDetailSite()}>
+                        {detail.saving ? "Сохраняю…" : "Сохранить на сайте"}
+                      </Button>
                       <Button type="button" disabled={detail.saving} onClick={() => void saveDetail()}>
                         {detail.saving ? "Сохраняю…" : detail.groupId ? "Сохранить в AlfaCRM" : "Создать в AlfaCRM"}
                       </Button>
