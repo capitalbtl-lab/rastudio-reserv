@@ -3523,7 +3523,7 @@ export function AdminSchedule() {
                 data-group-id={detail.groupId || undefined}
                 data-branch-id={detail.branchId || undefined}
               >
-                <div className="relative z-30 flex shrink-0 items-start gap-3 px-4 pt-3 md:px-5 md:pt-4">
+                <div className="relative z-30 flex shrink-0 items-start gap-3 px-4 pt-5 md:px-5 md:pt-6">
                   <div className="min-w-0 flex-1 pr-2">
                     <p className="text-[0.62rem] font-semibold uppercase tracking-wider text-muted">Карточка группы · {groupCardId(detail.branchId, detail.groupId)}</p>
                     {nameEdit ? (
@@ -3630,7 +3630,7 @@ export function AdminSchedule() {
                   </div>
                 ) : null}
                 <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:px-5 md:pb-5">
-                <div className="mt-2">
+                <div className="mt-5">
                     <div className="grid gap-3 md:grid-cols-2">
                     {showField("remarks") ? (
                     <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
