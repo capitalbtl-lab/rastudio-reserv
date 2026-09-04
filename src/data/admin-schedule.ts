@@ -270,33 +270,31 @@ async function createCustomerTariff(
     lessonsCount?: number;
   },
 ) {
+  const { customerTariffPayload } = await import("./pupil-tariffs");
   const customerId = Number(opts.customerId) || 0;
   const tariffId = Number(opts.tariffId) || 0;
   const branch = Number(opts.branch) || 1;
-  if (!customerId) return { ok: false as const, error: "Нет customerId." };
+  if (!customerId) return { ok: false as const, error: "Нет customer_id ученика." };
   if (!tariffId) return { ok: false as const, error: "Выберите абонемент." };
-  const groupId = Number(opts.groupId) || 0;
-  const calcType = Number(opts.calcType) || 0;
-  const subjectIds = (opts.subjectIds || []).map(Number).filter(Boolean);
-  const lessonTypeIds = (opts.lessonTypeIds || []).map(Number).filter(Boolean);
-  const extra: Record<string, unknown> = {};
-  if (opts.eDate) extra.e_date = opts.eDate;
-  if (groupId) extra.group_id = groupId;
-  extra.is_separate_balance = calcType ? 1 : 0;
-  extra.calculation_type = calcType ? 2 : 1;
-  if (subjectIds.length) extra.subject_ids = subjectIds;
-  if (lessonTypeIds.length) extra.lesson_type_ids = lessonTypeIds;
-  if (opts.lessonsCount) extra.lesson_count = opts.lessonsCount;
-  if (opts.note) extra.note = String(opts.note);
-  const unit = Number(opts.periodType) === 2 ? "weeks" : Number(opts.periodType) === 3 ? "months" : Number(opts.periodType) === 4 ? "years" : "days";
-  if (Number(opts.periodCount)) extra.unit = unit;
+  if (!String(opts.bDate || "").trim()) return { ok: false as const, error: "Нет даты начала абонемента." };
+  const full = customerTariffPayload(opts);
+  const core = {
+    customer_id: customerId,
+    tariff_id: tariffId,
+    b_date: full.b_date,
+    lesson_type_ids: full.lesson_type_ids,
+    ...(full.subject_ids ? { subject_ids: full.subject_ids } : {}),
+    ...(full.e_date ? { e_date: full.e_date } : {}),
+    ...(full.group_id ? { group_id: full.group_id } : {}),
+  };
   const tries: Record<string, unknown>[] = [
-    { customer_id: customerId, tariff_id: tariffId, b_date: opts.bDate, ...extra },
-    { customer_id: customerId, tariff_id: tariffId, b_date: opts.bDate, e_date: opts.eDate || undefined, group_id: groupId || undefined },
-    { related_id: customerId, related_class: "Customer", tariff_id: tariffId, b_date: opts.bDate, ...extra },
+    core,
+    full,
+    { ...core, customer_id: String(customerId) },
   ];
   let last = "";
   for (const body of tries) {
+    if (body.customer_id == null || body.customer_id === "" || Number(body.customer_id) === 0) continue;
     try {
       const res = await request<{ success?: boolean; errors?: unknown }>(`/v2api/${branch}/customer-tariff/create`, body, t);
       if (res.success === false) {
@@ -1906,20 +1904,26 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const failed: { id: number; name: string; error: string }[] = [];
       const catalog = loadTariffs().items;
       for (const row of rows) {
+        const customerId = Number(row.customerId || (row as { id?: number }).id || 0);
         const offer = catalog.find((x) => x.id === row.tariffId);
         const periodCount = Number(row.periodCount) || offer?.periodCount || 0;
         const periodType = Number(row.periodType) || offer?.periodType || 1;
         const eIso = row.eDate || addPeriod(fromIso, periodCount, periodType);
+        const lessonTypeIds = (row.lessonTypeIds?.length ? row.lessonTypeIds : offer?.lessonTypeIds?.length ? offer.lessonTypeIds : [2]).map(Number).filter((n) => n > 0);
+        if (!customerId) {
+          failed.push({ id: 0, name: row.name, error: "Нет customer_id ученика." });
+          continue;
+        }
         const made = await createCustomerTariff(request, t, {
           branch: row.branchId,
-          customerId: Number(row.customerId),
+          customerId,
           tariffId: Number(row.tariffId),
           bDate,
           eDate: formatRuDob(eIso) || "",
           groupId: Number(row.groupId) || 0,
           calcType: Number(row.calcType) || 0,
           subjectIds: row.subjectIds?.length ? row.subjectIds : offer?.subjectIds,
-          lessonTypeIds: row.lessonTypeIds?.length ? row.lessonTypeIds : offer?.lessonTypeIds?.length ? offer.lessonTypeIds : [2],
+          lessonTypeIds,
           periodCount,
           periodType,
           lessonsCount: row.lessonsCount || offer?.lessonsCount,

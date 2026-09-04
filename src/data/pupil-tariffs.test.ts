@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, type PupilGroup } from "./pupil-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 
 function slot(over: Partial<CrmSlot> = {}): CrmSlot {
@@ -148,5 +148,28 @@ describe("мастер абонементов учеников", () => {
     assert.equal(tariffMatchesSubject({ subjectIds: [12, 13] }, 37), false);
     assert.equal(tariffMatchesSubject({ subjectIds: [] }, 12), false);
     assert.equal(tariffMatchesSubject(null, 0), true);
+  });
+
+  it("выгрузка в CRM всегда шлёт customer_id и тип урока", () => {
+    const body = customerTariffPayload({
+      customerId: 7759,
+      tariffId: 386,
+      bDate: "04.09.2026",
+      eDate: "03.10.2026",
+      groupId: 701,
+      subjectIds: [13],
+      lessonTypeIds: [],
+      periodCount: 10,
+      periodType: 3,
+    });
+    assert.equal(body.customer_id, 7759);
+    assert.equal(body.tariff_id, 386);
+    assert.deepEqual(body.lesson_type_ids, [2]);
+    assert.deepEqual(body.subject_ids, [13]);
+    assert.equal(body.group_id, 701);
+    assert.equal(body.b_date, "04.09.2026");
+    const empty = customerTariffPayload({ customerId: 0, tariffId: 1, bDate: "01.01.2026" });
+    assert.equal(empty.customer_id, 0);
+    assert.deepEqual(empty.lesson_type_ids, [2]);
   });
 });

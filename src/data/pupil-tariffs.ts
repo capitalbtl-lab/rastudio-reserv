@@ -128,6 +128,50 @@ export function assignable(items: PupilTariffItem[]) {
   return items.filter((x) => x.tariffId && x.customerId && x.skip !== "no-tariff" && x.skip !== "already");
 }
 
+/** Тело customer-tariff/create. customer_id и lesson_type_ids всегда в корне. */
+export function customerTariffPayload(opts: {
+  customerId: number;
+  tariffId: number;
+  bDate: string;
+  eDate?: string;
+  groupId?: number;
+  calcType?: number;
+  subjectIds?: number[];
+  lessonTypeIds?: number[];
+  periodCount?: number;
+  periodType?: number;
+  note?: string;
+  lessonsCount?: number;
+}) {
+  const customerId = Number(opts.customerId) || 0;
+  const tariffId = Number(opts.tariffId) || 0;
+  const lessonTypeIds = (opts.lessonTypeIds || []).map(Number).filter((n) => n > 0);
+  const subjectIds = (opts.subjectIds || []).map(Number).filter((n) => n > 0);
+  const body: Record<string, unknown> = {
+    customer_id: customerId,
+    tariff_id: tariffId,
+    b_date: String(opts.bDate || "").trim(),
+    lesson_type_ids: lessonTypeIds.length ? lessonTypeIds : [2],
+  };
+  if (opts.eDate) body.e_date = String(opts.eDate);
+  const groupId = Number(opts.groupId) || 0;
+  if (groupId) body.group_id = groupId;
+  if (subjectIds.length) body.subject_ids = subjectIds;
+  if (Number(opts.lessonsCount) > 0) body.lesson_count = Number(opts.lessonsCount);
+  if (opts.note) body.note = String(opts.note);
+  const calcType = Number(opts.calcType) || 0;
+  body.is_separate_balance = calcType ? 1 : 0;
+  body.calculation_type = calcType ? 2 : 1;
+  const periodType = Number(opts.periodType) || 0;
+  const periodCount = Number(opts.periodCount) || 0;
+  if (periodCount) {
+    body.period = periodCount;
+    body.period_type = periodType || 1;
+    body.unit = periodType === 2 ? "weeks" : periodType === 3 ? "months" : periodType === 4 ? "years" : "days";
+  }
+  return body;
+}
+
 /** Абонемент подходит к предмету группы, если предмет не задан или входит в карту абонемента. */
 export function tariffMatchesSubject(tariff: { subjectIds?: number[] } | null | undefined, subjectId: number) {
   const id = Number(subjectId) || 0;
