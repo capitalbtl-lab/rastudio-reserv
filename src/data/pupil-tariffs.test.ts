@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, stampLiveTariff, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, stampLiveTariff, changeListRows, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 import type { CrmTariff } from "./crm-tariffs.ts";
@@ -132,6 +132,12 @@ describe("мастер абонементов учеников", () => {
     const live = stampLiveTariff({ ...row, activeTariffs: [{ id: 9, tariffId: 12, name: "абонемент 12" }] });
     assert.equal(live.tariffId, 12);
     assert.match(live.tariffName, /12/);
+    const listed = changeListRows([
+      row,
+      { ...row, customerId: 2, name: "Учится", status: "учится", activeTariffs: [{ id: 1, tariffId: 12, name: "12" }] },
+    ]);
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0].name, "Учится");
   });
 
   it("по умолчанию только ученики, лиды — по флагу", () => {

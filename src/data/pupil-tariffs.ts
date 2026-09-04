@@ -243,6 +243,15 @@ export function stampLiveTariff(row: PupilTariffItem): PupilTariffItem {
   return { ...row, tariffId: live[0].tariffId, tariffName: formatTariffNames(live) || "" };
 }
 
+/** Изменение/удаление: только ученики с живым абонементом CRM. Лиды вроде Майорова — нет. */
+export function changeListRows(rows: PupilTariffItem[]) {
+  return collapsePupilsByCustomer(
+    rows
+      .map(stampLiveTariff)
+      .filter((r) => r.status !== "лид" && (r.activeTariffs || []).length),
+  );
+}
+
 export function addPeriod(iso: string, count: number, type: number) {
   if (!iso || !count) return "";
   const d = new Date(`${iso}T12:00:00`);

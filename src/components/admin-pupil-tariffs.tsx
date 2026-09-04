@@ -6,7 +6,7 @@ import { retryFetch } from "@/lib/retry-fetch";
 import { RaSelect } from "@/components/ra-select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, TARIFF_READ_CHUNK, collapsePupilsByCustomer, pupilListStats, groupsBySchoolId, bySchoolId, dropoutsAfterJob, personKey, stampLiveTariff } from "@/data/pupil-tariffs";
+import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, TARIFF_READ_CHUNK, collapsePupilsByCustomer, pupilListStats, groupsBySchoolId, bySchoolId, dropoutsAfterJob, personKey, stampLiveTariff, changeListRows } from "@/data/pupil-tariffs";
 import { ISO_DATE_MAX, ISO_DATE_MIN, clampIsoDate } from "@/data/admin-ui";
 
 type PupilGroup = {
@@ -310,7 +310,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               const res = (await retryFetch(
                 () =>
                   adminSchedule({
-                    data: { token: token(), action: "pupilTariffPlan", includeLeads, groupKeys: part } as never,
+                    data: { token: token(), action: "pupilTariffPlan", includeLeads: path === "add" && includeLeads, groupKeys: part } as never,
                   }),
                 1,
                 40000,
@@ -358,11 +358,10 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           }
         }
       }
-      const stamped = path === "add" ? rows : rows.map(stampLiveTariff);
-      const live = stamped.filter((r) => (r.activeTariffs || []).length);
-      const list = path === "add" ? rows : collapsePupilsByCustomer(live);
+      const live = path === "add" ? rows : changeListRows(rows);
+      const list = path === "add" ? rows : live;
       if (path !== "add" && rows.length && !live.length) {
-        setMsg("Живые абонементы в CRM не нашлись. Показан пустой список изменения — не тариф группы.");
+        setMsg("В CRM нет учеников с живым абонементом. Лиды без абонемента (как Майоров) в изменении не участвуют.");
       }
       if (!rows.length) {
         setMsg("Не удалось прочитать учеников. Нажмите «Далее» ещё раз.");
@@ -629,6 +628,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             onClick={() => {
               setPath("change");
               setJob("close");
+              setIncludeLeads(false);
               setResult(null);
               setStep(1);
             }}
@@ -641,6 +641,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             onClick={() => {
               setPath("remove");
               setJob("delete");
+              setIncludeLeads(false);
               setResult(null);
               setStep(1);
             }}
@@ -780,10 +781,14 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               </p>
             ) : null}
           </div>
+          {path === "add" ? (
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={includeLeads} onChange={(e) => setIncludeLeads(e.target.checked)} />
             Включить лидов в группах (по умолчанию да — все привязанные)
           </label>
+          ) : (
+            <p className="text-sm text-muted">Изменение и удаление — только ученики с живым абонементом в CRM. Лиды без абонемента не входят.</p>
+          )}
         </div>
       ) : null}
 
