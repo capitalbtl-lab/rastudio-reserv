@@ -120,7 +120,13 @@ export function slotMinutes(slot: Pick<CrmSlot, "timeFrom" | "timeTo">) {
   return n > 0 ? n : 0;
 }
 
-/** Абонемент подходит к группе: филиал + минуты + (курс сайта ИЛИ предмет CRM). Имя не смотрим. */
+/**
+ * «Подходит к группе» — не ИИ, жёсткий фильтр по ID:
+ *   филиал, длительность ±5 мин, тип урока 2,
+ *   курс сайта абонемента = курс группы (если курс у абонемента задан),
+ *   иначе предмет CRM.
+ * Имя и возраст из названия не смотрим.
+ */
 export function tariffFitsSlot(t: CrmTariff, slot: CrmSlot, link?: TariffLink | null) {
   if (t.archive) return false;
   if (t.branchIds.length && slot.branchId && !t.branchIds.includes(slot.branchId)) return false;
@@ -128,7 +134,8 @@ export function tariffFitsSlot(t: CrmTariff, slot: CrmSlot, link?: TariffLink | 
   if (mins && t.duration && Math.abs(mins - t.duration) > 5) return false;
   if (t.lessonTypeIds.length && !t.lessonTypeIds.includes(2)) return false;
   const bind = link === undefined ? guessTariffLinks([t])[0] : link;
-  if (bind?.courseId && slot.courseId) return bind.courseId === slot.courseId;
+  if (bind?.schoolId && slot.schoolId && bind.schoolId !== slot.schoolId) return false;
+  if (bind?.courseId) return Boolean(slot.courseId) && bind.courseId === slot.courseId;
   if (!slot.subjectId || !t.subjectIds.includes(slot.subjectId)) return false;
   return true;
 }
@@ -162,7 +169,7 @@ export function groupTariffPack(slot?: CrmSlot | null) {
     fit: fit.has(t.id),
   }));
   const saved = Number(slot?.tariffId) || 0;
-  const tariffId = saved && tariffs.some((t) => t.id === saved) ? saved : matched[0]?.id || 0;
+  const tariffId = saved && tariffs.some((t) => t.id === saved) ? saved : 0;
   return { tariffId, tariffs };
 }
 
