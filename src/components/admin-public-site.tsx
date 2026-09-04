@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
 import { cn } from "@/lib/utils";
+import { SITE_BRANCHES, SITE_SIGNUP_DEFAULT, type SiteSignup } from "@/data/site-signup-core";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -19,6 +20,8 @@ export function AdminPublicSite() {
   const [stats, setStats] = useState({ schools: 0, courses: 0, groups: 0, loose: 0, tariffs: 0, teachers: 0 });
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState("");
+  const [signup, setSignup] = useState<SiteSignup>(SITE_SIGNUP_DEFAULT);
+  const [saved, setSaved] = useState("");
 
   async function load() {
     setBusy(true);
@@ -28,15 +31,28 @@ export function AdminPublicSite() {
         schools?: SchoolRow[];
         loose?: { id: string; groupId: number; name: string; branchId: number }[];
         stats?: typeof stats;
+        signup?: SiteSignup;
       };
       if (res.ok) {
         setSchools(res.schools || []);
         setLoose(res.loose || []);
         if (res.stats) setStats(res.stats);
+        if (res.signup) setSignup(res.signup);
       }
     } finally {
       setBusy(false);
     }
+  }
+
+  async function saveSignup(next: SiteSignup) {
+    setSignup(next);
+    const res = (await adminSchedule({
+      data: { token: token(), action: "publicSiteSave", signup: next } as never,
+    })) as { ok?: boolean; signup?: SiteSignup; error?: string };
+    if (res.ok && res.signup) {
+      setSignup(res.signup);
+      setSaved("Сохранено. На сайте сразу.");
+    } else setSaved(res.error || "Не сохранилось.");
   }
 
   useEffect(() => {
@@ -46,11 +62,56 @@ export function AdminPublicSite() {
   return (
     <section className="space-y-4">
       <div>
-        <h2 className="font-display text-2xl">Публичный сайт</h2>
+        <h2 className="font-display text-2xl">Сайт</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted">
-          Что видит клиент на страницах школ и курсов. Соответствия только по ID: школа → курс → группа → педагог → абонемент. Форма пробного берёт группу из этого списка.
+          Сайт — то, что видят родители. Админка — группы, CRM и эти настройки. Кнопки записи на сайте можно выключить.
         </p>
       </div>
+      <section className="rounded-2xl bg-white p-4 ring-1 ring-black/8">
+        <h3 className="font-semibold">Кнопки записи на сайте</h3>
+        <p className="mt-1 text-sm text-muted">
+          «Запись на пробное» открывает форму в стиле сайта, филиал уже выбран. «Запись в группу» — ссылка из карточки группы в AlfaCRM.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={signup.trialOn}
+              onChange={(e) => void saveSignup({ ...signup, trialOn: e.target.checked })}
+            />
+            Пробное на сайте
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={signup.groupOn}
+              onChange={(e) => void saveSignup({ ...signup, groupOn: e.target.checked })}
+            />
+            Запись в группу на сайте
+          </label>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {SITE_BRANCHES.map((b) => (
+            <label key={b.id} className="block text-sm">
+              <span className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Форма пробного · {b.label}</span>
+              <input
+                className="mt-1 h-10 w-full rounded-xl bg-bg px-3 text-xs ring-1 ring-black/8"
+                value={signup.trialByBranch[String(b.id)] || ""}
+                onChange={(e) =>
+                  setSignup((s) => ({ ...s, trialByBranch: { ...s.trialByBranch, [String(b.id)]: e.target.value } }))
+                }
+                onBlur={(e) =>
+                  void saveSignup({
+                    ...signup,
+                    trialByBranch: { ...signup.trialByBranch, [String(b.id)]: e.target.value },
+                  })
+                }
+              />
+            </label>
+          ))}
+        </div>
+        {saved ? <p className="mt-2 text-sm text-muted">{saved}</p> : null}
+      </section>
       <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {[
           ["Школы", stats.schools],

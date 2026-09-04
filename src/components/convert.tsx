@@ -1,19 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CmsSession } from "@/data/cms";
 import { SITE } from "@/data/site";
 import { OBJECTIONS, TRIAL_PROMISE } from "@/data/course-offer";
 import { reviewsForPath, YANDEX_RATING } from "@/data/reviews";
 import { branchMeta, nextSlots } from "@/lib/schedule";
-import { freePlaces, formatTrialDate, isoDate, nextLessonDate, tidyGroupName, whenShort } from "@/lib/trial-slot";
-import { sendTrial, TRIAL_BRANCHES } from "@/data/trial";
-import { Button } from "@/components/ui/button";
+import { freePlaces, formatTrialDate, nextLessonDate, tidyGroupName, whenShort } from "@/lib/trial-slot";
+import { GroupCtas } from "@/components/group-ctas";
+import { SITE_SIGNUP_DEFAULT, type SiteSignup } from "@/data/site-signup-core";
 import { CoursePrice } from "@/components/course-price";
 import { cn } from "@/lib/utils";
-import { trialCourseForPath } from "@/data/trial";
 
-export function ConvertBand({ path, sessions }: { path: string; sessions: CmsSession[] }) {
+export function ConvertBand({
+  path,
+  sessions,
+  onTrial,
+  signup = SITE_SIGNUP_DEFAULT,
+}: {
+  path: string;
+  sessions: CmsSession[];
+  onTrial?: (id: string) => void;
+  signup?: SiteSignup;
+}) {
   const slots = nextSlots(sessions, 3);
   const review = reviewsForPath(path)[0];
 
@@ -58,13 +67,18 @@ export function ConvertBand({ path, sessions }: { path: string; sessions: CmsSes
                         {next ? ` · пробное ${formatTrialDate(next)}` : ""}
                       </span>
                     </span>
+                    {signup.trialOn ? (
                     <a
                       href="#trial"
-                      onClick={() => window.dispatchEvent(new CustomEvent("ra-pick-group", { detail: slot.session.id }))}
-                      className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-fg/65 transition-colors hover:border-fg/25 hover:text-fg"
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent("ra-pick-group", { detail: slot.session.id }));
+                        onTrial?.(slot.session.id);
+                      }}
+                      className="shrink-0 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white"
                     >
-                      Записаться
+                      Запись на пробное
                     </a>
+                    ) : null}
                   </div>
                 </li>
               );
@@ -109,12 +123,14 @@ export function ConvertAside({
   sessions = [],
   selectedId,
   onPick,
-  path = "",
+  onTrial,
+  signup = SITE_SIGNUP_DEFAULT,
 }: {
   sessions?: CmsSession[];
   selectedId?: string;
   onPick?: (id: string) => void;
-  path?: string;
+  onTrial?: (id: string) => void;
+  signup?: SiteSignup;
 }) {
   const [pick, setPick] = useState(selectedId || sessions[0]?.id || "");
   useEffect(() => {
@@ -134,48 +150,11 @@ export function ConvertAside({
   const group = useMemo(() => sessions.find((s) => s.id === pick) || sessions[0], [sessions, pick]);
   const next = group ? nextLessonDate(group) : null;
   const seats = group ? freePlaces(group) : { n: -1, label: "" };
-  const [pending, setPending] = useState(false);
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState("");
-
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!group) return;
-    setError("");
-    setPending(true);
-    const form = new FormData(e.currentTarget);
-    try {
-      const res = await sendTrial({
-        data: {
-          parent: String(form.get("parent") || ""),
-          child: String(form.get("child") || ""),
-          dob: String(form.get("dob") || ""),
-          phone: String(form.get("phone") || ""),
-          email: String(form.get("email") || ""),
-          course: group.courseId || trialCourseForPath(path),
-          branch: String(group.branchId || TRIAL_BRANCHES[0].id),
-          gid: String(group.groupId || ""),
-          groupName: group.group,
-          date: next ? isoDate(next) : "",
-          time: group.timeFrom || "",
-          kind: "trial",
-        },
-      });
-      if (res.ok) setDone(true);
-      else setError(res.error || "Не отправилось.");
-    } catch {
-      setError("Не удалось отправить. Позвоните нам.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  const field = "mt-1 h-10 w-full rounded-xl bg-bg px-3 text-sm outline-none ring-1 ring-black/8 focus:ring-2 focus:ring-primary/30";
 
   return (
     <aside id="trial" className="h-fit rounded-[1.75rem] bg-surface p-5 shadow-[var(--shadow-border)] lg:sticky lg:top-24">
-      <p className="kicker text-primary">Пробное</p>
-      <p className="display mt-2 text-2xl">Записаться</p>
+      <p className="kicker text-primary">Запись</p>
+      <p className="display mt-2 text-2xl">Группа</p>
       {group ? (
         <div className="mt-3 rounded-2xl bg-bg px-3.5 py-3">
           <p className="font-semibold leading-snug">{tidyGroupName(group.group)}</p>
@@ -194,7 +173,7 @@ export function ConvertAside({
       )}
       {sessions.length > 1 ? (
         <select
-          className={cn(field, "mt-3")}
+          className="mt-3 h-10 w-full rounded-xl bg-bg px-3 text-sm outline-none ring-1 ring-black/8"
           value={group?.id || ""}
           onChange={(e) => {
             setPick(e.target.value);
@@ -208,23 +187,10 @@ export function ConvertAside({
           ))}
         </select>
       ) : null}
-
-      {done ? (
-        <p className="mt-4 text-sm text-fg">Заявку приняли. Напишем в течение 15 минут.</p>
-      ) : (
-        <form onSubmit={onSubmit} className="mt-3 grid gap-2">
-          <input name="parent" required placeholder="ФИО родителя" autoComplete="name" className={field} />
-          <input name="child" required placeholder="ФИО ребёнка" className={field} />
-          <input name="dob" type="date" required className={field} />
-          <input name="phone" type="tel" required placeholder="Телефон" autoComplete="tel" className={field} />
-          <input name="email" type="email" placeholder="Почта" autoComplete="email" className={field} />
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          <Button type="submit" className="mt-1 w-full" size="lg" disabled={pending || !group}>
-            {pending ? "Отправляем…" : "Оставить заявку"}
-          </Button>
-        </form>
-      )}
-      <p className="mt-3 text-center text-sm font-semibold">
+      {group ? (
+        <GroupCtas className="mt-4 w-full [&_a]:w-full [&_button]:w-full" session={group} signup={signup} onTrial={() => onTrial?.(group.id)} />
+      ) : null}
+      <p className="mt-4 text-center text-sm font-semibold">
         <a href={SITE.phoneHref}>{SITE.phone}</a>
       </p>
       <a

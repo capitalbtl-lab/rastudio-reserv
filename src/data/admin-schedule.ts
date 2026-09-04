@@ -908,7 +908,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "treeDeleteSelected"
           | "treeMove"
           | "saveSettings"
-          | "publicSiteGet";
+          | "publicSiteGet"
+          | "publicSiteSave";
         slots?: CrmSlot[];
         text?: string;
         prompt?: string;
@@ -2372,7 +2373,16 @@ export const adminSchedule = createServerFn({ method: "POST" })
           tariffs: tariffs.filter((t) => t.courseId).length,
           teachers: teachers.length,
         },
+        signup: (await import("./site-signup")).loadSiteSignup(),
       };
+    }
+    if (data.action === "publicSiteSave") {
+      const { saveSiteSignup } = await import("./site-signup");
+      const raw = (data as { signup?: import("./site-signup-core").SiteSignup }).signup;
+      if (!raw) return { ok: false as const, error: "Нет настроек сайта." };
+      const signup = saveSiteSignup(raw);
+      logAdmin(`Сайт: пробное ${signup.trialOn ? "вкл" : "выкл"}, запись в группу ${signup.groupOn ? "вкл" : "выкл"}`);
+      return { ok: true as const, signup };
     }
     return { ok: false as const, error: "Неизвестное действие." };
   });

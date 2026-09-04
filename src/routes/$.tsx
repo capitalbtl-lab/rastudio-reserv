@@ -51,6 +51,7 @@ function CatchAll() {
         trajectory={data.trajectory}
         schedule={data.schedule}
         edits={data.edits}
+        signup={data.signup}
       />
     </SiteShell>
   );

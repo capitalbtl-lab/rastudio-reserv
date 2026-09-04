@@ -13,6 +13,7 @@ import { type CrmSlot, type SlotVersion, type LessonBeat, beatsOf, validBeat, le
 import { loadSiteTree } from "@/data/site-tree";
 import { subjectIdOfCourse } from "@/data/ids";
 import { loadScheduleMap } from "@/data/schedule-map";
+import { groupSignupUrl } from "@/data/site-signup-core";
 
 export { SCHOOL_ORDER, beatsOf, validBeat, type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
 
@@ -168,7 +169,11 @@ export function toSession(s: CrmSlot): CmsSession {
     age: s.age,
     when,
     teacherId: String(s.teacherId || ""),
-    signup: s.path || "#trial",
+    signup: /^https?:\/\//i.test(String(s.signup || ""))
+      ? String(s.signup)
+      : s.groupId
+        ? groupSignupUrl(s.branchId, s.groupId)
+        : "",
     city: s.city,
     branch: s.branch,
     directionId: String(s.subjectId),

@@ -7,17 +7,23 @@ import { AGE_BANDS, type AgeBandId } from "@/data/ages";
 import { cn } from "@/lib/utils";
 import { branchMeta, branchRank, compactWhen, matchesAgeBand } from "@/lib/schedule";
 import { freePlaces, formatTrialDate, nextLessonDate, tidyGroupName, whenShort } from "@/lib/trial-slot";
+import { GroupCtas } from "@/components/group-ctas";
+import { SITE_SIGNUP_DEFAULT, type SiteSignup } from "@/data/site-signup-core";
 
 export function ScheduleBlock({
   sessions,
   heading = true,
   selectedId,
   onPick,
+  onTrial,
+  signup = SITE_SIGNUP_DEFAULT,
 }: {
   sessions: CmsSession[];
   heading?: boolean;
   selectedId?: string;
   onPick?: (id: string) => void;
+  onTrial?: (id: string) => void;
+  signup?: SiteSignup;
 }) {
   const cities = useMemo(
     () => [...new Set(sessions.map((s) => branchMeta(s).city).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru")),
@@ -106,18 +112,17 @@ export function ScheduleBlock({
                   const on = selectedId === s.id;
                   return (
                     <li key={s.id} className="border-t border-border/70">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onPick?.(s.id);
-                          document.getElementById("trial")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                        }}
+                      <div
                         className={cn(
-                          "block w-full px-3.5 py-2.5 text-left transition-colors md:px-4",
+                          "flex items-start gap-3 px-3.5 py-2.5 md:px-4",
                           on ? "bg-primary/8" : "hover:bg-[#f3f5f8]",
                         )}
                       >
-                        <span className="flex items-start gap-3">
+                        <button
+                          type="button"
+                          onClick={() => onPick?.(s.id)}
+                          className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                        >
                           <span className="mt-0.5 inline-flex min-w-[4.75rem] justify-center rounded-full bg-primary/10 px-2 py-1 text-[0.68rem] font-semibold text-primary">
                             {s.age || "группа"}
                           </span>
@@ -133,8 +138,9 @@ export function ScheduleBlock({
                               {next ? ` · пробное ${formatTrialDate(next)}` : ""}
                             </span>
                           </span>
-                        </span>
-                      </button>
+                        </button>
+                        <GroupCtas session={s} signup={signup} onTrial={() => onTrial?.(s.id)} />
+                      </div>
                     </li>
                   );
                 })}

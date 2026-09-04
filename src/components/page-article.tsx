@@ -6,6 +6,8 @@ import type { CmsCourse, CmsMaster, CmsSession, CmsTrajectoryStep } from "@/data
 import { PageLink } from "@/components/page-link";
 import { SeoImage } from "@/components/seo-image";
 import { TrialForm } from "@/components/trial-form";
+import { TrialModal } from "@/components/trial-modal";
+import { SITE_SIGNUP_DEFAULT, type SiteSignup } from "@/data/site-signup-core";
 import { ProgrammingCoursePage } from "@/components/programming-course";
 import { MasterClassPage, MasterListPageCms } from "@/components/master-class";
 import { ScheduleBlock, CoursePageHero, CourseStory, RelatedAgeCourses, SchoolCourseList, Trajectory } from "@/components/cms-blocks";
@@ -40,6 +42,7 @@ export type PageArticleProps = {
   trajectory?: CmsTrajectoryStep[];
   schedule?: CmsSession[];
   edits?: EditsStore;
+  signup?: SiteSignup;
 };
 
 function Gallery({ page }: { page: SitePage }) {
@@ -109,6 +112,7 @@ export function PageArticle({
   trajectory = [],
   schedule = [],
   edits,
+  signup = SITE_SIGNUP_DEFAULT,
 }: PageArticleProps) {
   if (edits) hydrateEdits(edits);
   const path = page.pathDecoded || page.path;
@@ -173,7 +177,7 @@ export function PageArticle({
     return (
       <>
         {seo}
-        <CinematicPage page={page} schedule={schedule} courses={courses} trajectory={trajectory} teachers={teachers} />
+        <CinematicPage page={page} schedule={schedule} courses={courses} trajectory={trajectory} teachers={teachers} signup={signup} />
       </>
     );
   }
@@ -199,20 +203,24 @@ function CinematicPage({
   courses,
   trajectory = [],
   teachers = [],
+  signup = SITE_SIGNUP_DEFAULT,
 }: {
   page: SitePage;
   schedule: CmsSession[];
   courses: CourseCard[];
   trajectory?: CmsTrajectoryStep[];
   teachers?: TeacherCard[];
+  signup?: SiteSignup;
 }) {
   const [bookId, setBookId] = useState("");
+  const [trialId, setTrialId] = useState("");
   const heading = splitCourseHeading(page.h1);
   const path = page.pathDecoded || page.path;
   const current = courses.find((c) => c.href === path);
   const age = heading.age || current?.age || null;
   const edit = pageEdit(path);
   const body = edit.about ? [edit.about] : COURSE_STORY[path] ?? page.paragraphs;
+  const trialSession = schedule.find((s) => s.id === trialId);
 
   return (
     <article>
@@ -241,7 +249,7 @@ function CinematicPage({
         path={page.kind === "course" || page.kind === "school" ? page.pathDecoded || page.path : undefined}
       />
       {page.kind === "course" || page.kind === "school" ? (
-        <ConvertBand path={page.pathDecoded || page.path} sessions={schedule} />
+        <ConvertBand path={page.pathDecoded || page.path} sessions={schedule} onTrial={setTrialId} signup={signup} />
       ) : null}
 
       <div className="page-wrap py-12 md:py-16">
@@ -284,17 +292,22 @@ function CinematicPage({
             ) : null}
             {schedule.length ? (
               <div className="pt-10">
-                <ScheduleBlock sessions={schedule} selectedId={bookId} onPick={setBookId} />
+                <ScheduleBlock sessions={schedule} selectedId={bookId} onPick={setBookId} onTrial={setTrialId} signup={signup} />
               </div>
             ) : null}
             {page.kind === "school" ? null : <Related page={page} courses={courses} />}
           </div>
-          <ConvertAside sessions={schedule} selectedId={bookId} onPick={setBookId} path={path} />
+          <ConvertAside sessions={schedule} selectedId={bookId} onPick={setBookId} onTrial={setTrialId} signup={signup} />
         </div>
-        <div className="mt-16">
-          <TrialForm compact courseId={trialCourseForPath(page.pathDecoded || page.path)} />
-        </div>
+        {!schedule.length && signup.trialOn ? (
+          <div className="mt-16">
+            <TrialForm compact courseId={trialCourseForPath(page.pathDecoded || page.path)} />
+          </div>
+        ) : null}
       </div>
+      {trialSession && signup.trialOn ? (
+        <TrialModal session={trialSession} path={path} onClose={() => setTrialId("")} />
+      ) : null}
     </article>
   );
 }

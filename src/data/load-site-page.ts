@@ -15,6 +15,7 @@ import {
 import { sessionsFromCrm, filterCrmSessions } from "./alfacrm-schedule";
 import { ensureLivePrices } from "./prices";
 import { ensureLiveEdits, snapshotEdits } from "./edits";
+import { loadSiteSignup } from "./site-signup";
 
 export const loadSitePage = createServerFn({ method: "GET" })
   .validator((splat: unknown) => (typeof splat === "string" ? splat : undefined))
@@ -45,6 +46,7 @@ export const loadSitePage = createServerFn({ method: "GET" })
           : [],
       schedule: await scheduleWithCrm(data),
       edits: snapshotEdits(),
+      signup: loadSiteSignup(),
     };
   });
 
