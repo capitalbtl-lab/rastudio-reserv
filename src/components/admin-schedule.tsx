@@ -393,7 +393,7 @@ function GroupNameField({ value, onChange, subject, large }: { value: string; on
         onBlur={hide}
         className={cn(
           "w-full rounded-md bg-surface-2 px-2 ring-1 ring-black/8",
-          large ? "h-8 text-[0.85rem]" : "h-[26px] text-[0.64rem]",
+          large ? "h-8 text-[0.85rem]" : "h-8 text-[0.82rem]",
         )}
       />
       {shown
@@ -669,7 +669,7 @@ function WhoTip({ names, onNeed }: { names?: string[]; onNeed: () => void }) {
       <span
         ref={btn}
         tabIndex={0}
-        className="inline-flex h-8 w-full min-w-[5.6rem] cursor-default items-center justify-center rounded-full bg-surface-2 px-2 text-center text-[0.72rem] text-muted ring-1 ring-black/8"
+        className="inline-flex h-8 w-full min-w-[5.6rem] cursor-default items-center justify-center rounded-full bg-surface-2 px-2 text-center text-[0.8rem] text-muted ring-1 ring-black/8"
         onMouseEnter={show}
         onMouseLeave={() => setOpen(false)}
         onFocus={show}
@@ -1436,7 +1436,7 @@ export function AdminSchedule() {
   const shrinkPage = previewOn || voiceMode;
   const box = groupsWide
     ? "h-8 w-[4.6rem] shrink-0 rounded-full bg-surface-2 px-1.5 text-center text-[0.82rem] leading-8 ring-1 ring-black/8"
-    : "h-[26px] w-[3.7rem] shrink-0 rounded-full bg-surface-2 px-1 text-center text-[0.6rem] leading-[26px] ring-1 ring-black/8";
+    : "h-8 w-[4.4rem] shrink-0 rounded-full bg-surface-2 px-1.5 text-center text-[0.82rem] leading-8 ring-1 ring-black/8";
   const cell = box;
   const FIELD_RU: Record<string, string> = {
     limit: "места",
@@ -2448,7 +2448,7 @@ export function AdminSchedule() {
           </div>
         </div>
         {shrinkPage ? null : (
-        <p className="mt-2 text-[0.78rem] leading-relaxed text-muted">
+        <p className="mt-2 text-sm leading-relaxed text-muted">
           Курс, возраст, день, время, ×нед, филиал, педагог, места — можно сказать или написать. Стрелка — предпросмотр.
         </p>
         )}
@@ -2846,7 +2846,7 @@ export function AdminSchedule() {
         </article>
       )}
 
-      <div id="ra-mismatch-list" className={cn("mt-8 space-y-4 scroll-mt-24", groupsWide && "mt-3 min-h-0 flex-1 overflow-y-auto pretty-scroll", shrinkPage && !groupsWide && "origin-top [zoom:0.88]")}>
+      <div id="ra-mismatch-list" className={cn("mt-8 space-y-4 scroll-mt-24", groupsWide && "mt-3 min-h-0 flex-1 overflow-y-auto pretty-scroll", shrinkPage && !groupsWide && "origin-top [zoom:0.92]")}>
         <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-surface px-4 py-3 shadow-[var(--shadow-border)]">
           <label className="mr-auto flex items-center gap-2 text-[0.8rem] font-semibold text-muted">
             Филиал
@@ -2953,8 +2953,8 @@ export function AdminSchedule() {
                         }}
                       />
                       <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => setOpenCourse((v) => (v === c.courseId ? "" : c.courseId))}>
-                        <span className={cn("font-medium", groupsWide && "text-base")}>{c.course}</span>
-                        <span className={cn("text-muted", groupsWide ? "text-sm" : "text-xs")}>{c.items.length}</span>
+                        <span className={cn("font-medium", groupsWide ? "text-base" : "text-[0.95rem]")}>{c.course}</span>
+                        <span className={cn("text-muted", groupsWide ? "text-sm" : "text-[0.85rem]")}>{c.items.length}</span>
                       </button>
                       {canEdit ? (
                         <button
@@ -2975,7 +2975,7 @@ export function AdminSchedule() {
                     </div>
                     {openAll || openCourse === c.courseId ? (
                       <div>
-                        <table className={cn("text-left", groupsWide ? "w-max max-w-full text-[0.95rem]" : "w-full text-sm")}>
+                        <table className={cn("text-left", groupsWide ? "w-max max-w-full text-[0.95rem]" : "w-full text-[0.9rem]")}>
                           <colgroup>
                             <col className="w-10" />
                             <col className={groupsWide ? "w-[22rem]" : undefined} />
@@ -2989,7 +2989,7 @@ export function AdminSchedule() {
                             <col className="w-[5.5rem]" />
                             <col className="w-10" />
                           </colgroup>
-                          <thead className={cn("uppercase tracking-wider text-muted", groupsWide ? "text-[0.75rem]" : "text-[0.65rem]")}>
+                          <thead className="uppercase tracking-wider text-muted text-[0.75rem]">
                             <tr>
                               <th className="px-2 py-2" />
                               <th className="px-2 py-2">Группа · №</th>
@@ -3031,9 +3031,9 @@ export function AdminSchedule() {
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
                                   <div className={cn("flex items-center gap-1.5", groupsWide ? "w-[22rem] max-w-[22rem]" : "min-w-0")}>
-                                    {s.groupId ? <span className={cn("w-8 shrink-0 text-right font-semibold tabular-nums text-muted", groupsWide ? "text-[0.8rem]" : "text-[0.7rem]")}>{s.groupId}</span> : <span className="w-8 shrink-0" />}
+                                    {s.groupId ? <span className="w-8 shrink-0 text-right font-semibold tabular-nums text-[0.8rem] text-muted">{s.groupId}</span> : <span className="w-8 shrink-0" />}
                                     {mm.level ? <MismatchDot text={mismatchHint(s)} /> : null}
-                                    <GroupNameField large={groupsWide} value={s.groupName} subject={s.subject} onChange={(v) => patch(s.id, "groupName", v)} />
+                                    <GroupNameField large value={s.groupName} subject={s.subject} onChange={(v) => patch(s.id, "groupName", v)} />
                                   </div>
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
@@ -3062,7 +3062,7 @@ export function AdminSchedule() {
                                     onAdd={(b) => addBeat(s, b)}
                                   />
                                 </td>
-                                <td className={cn("px-2 py-1.5 align-middle leading-tight text-muted", groupsWide ? "whitespace-nowrap text-[0.85rem]" : "text-[0.7rem]")}>
+                                <td className={cn("px-2 py-1.5 align-middle leading-tight text-muted", groupsWide ? "whitespace-nowrap text-[0.85rem]" : "text-[0.82rem]")}>
                                   {groupsWide ? (
                                     <span>{[s.city, s.branch].filter(Boolean).join(", ")}</span>
                                   ) : (
@@ -3088,10 +3088,7 @@ export function AdminSchedule() {
                                       );
                                       setDirty((d) => new Set(d).add(s.id));
                                     }}
-                                    className={cn(
-                                      "w-full rounded-md bg-surface-2 px-1 ring-1 ring-black/8",
-                                      groupsWide ? "h-8 text-[0.8rem]" : "h-[26px] text-[0.6rem]",
-                                    )}
+                                    className="h-8 w-full rounded-md bg-surface-2 px-1 text-[0.8rem] ring-1 ring-black/8"
                                   >
                                     <option value="">— филиал —</option>
                                     {teachersForBranch(s.branchId).map((t) => (
@@ -3105,7 +3102,7 @@ export function AdminSchedule() {
                                 <td className="px-1 py-1.5 align-middle">
                                   <div className="flex items-center justify-center gap-1.5">
                                     <input value={s.limit} onChange={(e) => patch(s.id, "limit", Number(e.target.value) || 0)} className={cn(cell, "w-7")} />
-                                    <span className={cn("text-muted", groupsWide ? "text-[0.8rem]" : "text-[0.65rem]")}>/{s.taken}</span>
+                                    <span className="text-[0.8rem] text-muted">/{s.taken}</span>
                                   </div>
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
