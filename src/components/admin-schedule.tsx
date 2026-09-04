@@ -28,6 +28,7 @@ import { AdminCrmSettings } from "@/components/admin-crm-settings";
 import { AdminPublicSite } from "@/components/admin-public-site";
 import { CrmClientCard } from "@/components/crm-client-card";
 import { CrmGroupMembers } from "@/components/crm-group-card";
+import { RaSelect } from "@/components/ra-select";
 import { GroupLessonStrip } from "@/components/lesson-strip";
 import { clientCardId, groupCardId, CRM_BRANCH, groupAssignKey } from "@/data/ids";
 import { displayPersonName } from "@/data/client-display";
@@ -112,6 +113,11 @@ const CARD_FIELDS = [
   { id: "leads", label: "Лиды" },
   { id: "archive", label: "Архивные ученики" },
 ] as const;
+
+const CARD_SEL =
+  "mt-1 h-8 rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07]";
+
+const DAYS_RU = ["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 
 const CARD_FIELDS_KEY = "ra_group_card_fields";
 
@@ -3636,17 +3642,13 @@ export function AdminSchedule() {
                       {showField("day") ? (
                       <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         День
-                        <select
-                          value={shownBeat(detail.slot).day}
-                          onChange={(e) => patchBeat(detail.slot, "day", Number(e.target.value))}
-                          className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35"
-                        >
-                          {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                            <option key={d} value={d}>
-                              {["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"][d]}
-                            </option>
-                          ))}
-                        </select>
+                        <RaSelect
+                          value={String(shownBeat(detail.slot).day || "")}
+                          onChange={(v) => patchBeat(detail.slot, "day", Number(v))}
+                          placeholder="день"
+                          className={CARD_SEL}
+                          options={[1, 2, 3, 4, 5, 6, 7].map((d) => ({ value: String(d), label: DAYS_RU[d] }))}
+                        />
                       </label>
                       ) : null}
                       {showField("period") ? (
@@ -3700,10 +3702,13 @@ export function AdminSchedule() {
                       {showField("branch") ? (
                       <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Филиал
-                        <select
-                          value={detail.slot.branchId || ""}
-                          onChange={(e) => {
-                            const branchId = Number(e.target.value) || 0;
+                        <RaSelect
+                          value={detail.slot.branchId ? String(detail.slot.branchId) : ""}
+                          placeholder="— филиал —"
+                          className={CARD_SEL}
+                          options={Object.entries(CRM_BRANCH).map(([id, b]) => ({ value: id, label: b.name }))}
+                          onChange={(v) => {
+                            const branchId = Number(v) || 0;
                             const hit = CRM_BRANCH[branchId];
                             const city = hit?.name.split(",")[0] || "";
                             const branch = hit?.short || "";
@@ -3711,42 +3716,31 @@ export function AdminSchedule() {
                             setDirty((d) => new Set(d).add(detail.id));
                             setDetail((d) => (d ? { ...d, branchId, slot: { ...d.slot, branchId, city, branch } } : d));
                           }}
-                          className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35"
-                        >
-                          <option value="">— филиал —</option>
-                          {Object.entries(CRM_BRANCH).map(([id, b]) => (
-                            <option key={id} value={id}>
-                              {b.name}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </label>
                       ) : null}
                       {showField("teacher") ? (
                       <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Педагог
-                        <select
+                        <RaSelect
                           value={detail.slot.teacher}
-                          onChange={(e) => {
-                            const name = e.target.value;
+                          placeholder="— педагог —"
+                          className={CARD_SEL}
+                          menuMinWidth={280}
+                          options={[
+                            ...teachersForBranch(detail.slot.branchId).map((t) => ({ value: t.name, label: t.name })),
+                            ...(detail.slot.teacher && !teachersForBranch(detail.slot.branchId).some((t) => t.name === detail.slot.teacher)
+                              ? [{ value: detail.slot.teacher, label: `${detail.slot.teacher} · нет в филиале` }]
+                              : []),
+                          ]}
+                          onChange={(name) => {
                             const hit = teachersForBranch(detail.slot.branchId).find((t) => t.name === name);
                             const next = { ...detail.slot, teacher: name, teacherId: hit?.id || 0, teacherIds: hit ? [hit.id] : [] };
                             setSlots((list) => list.map((row) => (row.id === detail.id ? next : row)));
                             setDirty((d) => new Set(d).add(detail.id));
                             setDetail((d) => (d ? { ...d, slot: next } : d));
                           }}
-                          className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35"
-                        >
-                          <option value="">— педагог —</option>
-                          {teachersForBranch(detail.slot.branchId).map((t) => (
-                            <option key={t.id} value={t.name}>
-                              {t.name}
-                            </option>
-                          ))}
-                          {detail.slot.teacher && !teachersForBranch(detail.slot.branchId).some((t) => t.name === detail.slot.teacher) ? (
-                            <option value={detail.slot.teacher}>{detail.slot.teacher} · нет в филиале</option>
-                          ) : null}
-                        </select>
+                        />
                       </label>
                       ) : null}
                       </div>
@@ -3754,31 +3748,33 @@ export function AdminSchedule() {
                     {showField("tariff") ? (
                     <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Абонемент
-                      <select
-                        value={detail.tariffId || ""}
-                        onChange={(e) => setDetail((d) => (d ? { ...d, tariffId: Number(e.target.value) || 0 } : d))}
-                        className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35"
-                      >
-                        <option value="">— не выбран —</option>
-                        {detail.tariffs.some((t) => t.fit) ? (
-                          <optgroup label="Подходят к этой группе">
-                            {detail.tariffs.filter((t) => t.fit).map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name} · {Math.round(t.price).toLocaleString("ru-RU")} ₽
-                              </option>
-                            ))}
-                          </optgroup>
-                        ) : null}
-                        {detail.tariffs.some((t) => !t.fit) ? (
-                          <optgroup label="Остальные абонементы">
-                            {detail.tariffs.filter((t) => !t.fit).map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name} · {Math.round(t.price).toLocaleString("ru-RU")} ₽
-                              </option>
-                            ))}
-                          </optgroup>
-                        ) : null}
-                      </select>
+                      <RaSelect
+                        value={detail.tariffId ? String(detail.tariffId) : ""}
+                        placeholder="— не выбран —"
+                        className={CARD_SEL}
+                        menuMinWidth={320}
+                        groups={[
+                          ...(detail.tariffs.some((t) => t.fit)
+                            ? [{
+                                label: "Подходят к этой группе",
+                                options: detail.tariffs.filter((t) => t.fit).map((t) => ({
+                                  value: String(t.id),
+                                  label: `${t.name} · ${Math.round(t.price).toLocaleString("ru-RU")} ₽`,
+                                })),
+                              }]
+                            : []),
+                          ...(detail.tariffs.some((t) => !t.fit)
+                            ? [{
+                                label: "Остальные абонементы",
+                                options: detail.tariffs.filter((t) => !t.fit).map((t) => ({
+                                  value: String(t.id),
+                                  label: `${t.name} · ${Math.round(t.price).toLocaleString("ru-RU")} ₽`,
+                                })),
+                              }]
+                            : []),
+                        ]}
+                        onChange={(v) => setDetail((d) => (d ? { ...d, tariffId: Number(v) || 0 } : d))}
+                      />
                     </label>
                     ) : null}
                     {showField("hashtags") ? (
@@ -3791,10 +3787,18 @@ export function AdminSchedule() {
                     {showField("course") ? (
                     <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                       Курс на сайте
-                      <select
+                      <RaSelect
                         value={siteCourseValue(detail.slot, siteTree)}
-                        onChange={(e) => {
-                          const to = e.target.value;
+                        placeholder="— не выбран —"
+                        className={CARD_SEL}
+                        menuMinWidth={280}
+                        groups={siteTree.schools.map((sc) => ({
+                          label: sc.label,
+                          options: siteTree.courses
+                            .filter((x) => x.schoolId === sc.id)
+                            .map((x) => ({ value: x.id, label: x.label })),
+                        })).filter((g) => g.options.length)}
+                        onChange={(to) => {
                           const course = siteTree.courses.find((c) => c.id === to);
                           const school = course ? siteTree.schools.find((x) => x.id === course.schoolId) : undefined;
                           const patchSlot = {
@@ -3815,21 +3819,7 @@ export function AdminSchedule() {
                             if (next?.courseId) setDetail((d) => (d ? { ...d, slot: next } : d));
                           });
                         }}
-                        className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35"
-                      >
-                        <option value="">— не выбран —</option>
-                        {siteTree.schools.map((sc) => (
-                          <optgroup key={sc.id} label={sc.label}>
-                            {siteTree.courses
-                              .filter((x) => x.schoolId === sc.id)
-                              .map((x) => (
-                                <option key={x.id} value={x.id}>
-                                  {x.label}
-                                </option>
-                              ))}
-                          </optgroup>
-                        ))}
-                      </select>
+                      />
                     </label>
                     ) : null}
                     {showField("subject") ? (
@@ -3838,24 +3828,23 @@ export function AdminSchedule() {
                       {(() => {
                         const branchSubs = branchSubjectList(slots, detail.branchId, subjects, detail.id);
                         const others = subjects.filter((s) => !branchSubs.some((b) => b.id === s.id));
+                        const groups = [
+                          ...(branchSubs.length
+                            ? [{ label: "В этом филиале", options: branchSubs.map((sub) => ({ value: String(sub.id), label: sub.name })) }]
+                            : []),
+                          ...(others.length
+                            ? [{ label: "Все предметы CRM", options: others.map((sub) => ({ value: String(sub.id), label: sub.name })) }]
+                            : []),
+                        ];
                         return (
-                          <select value={detail.subjectId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, subjectId: Number(e.target.value) || 0 } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35">
-                            <option value="">— выберите предмет филиала —</option>
-                            {branchSubs.length ? (
-                              <optgroup label="В этом филиале">
-                                {branchSubs.map((sub) => (
-                                  <option key={sub.id} value={sub.id}>{sub.name}</option>
-                                ))}
-                              </optgroup>
-                            ) : null}
-                            {others.length ? (
-                              <optgroup label="Все предметы CRM">
-                                {others.map((sub) => (
-                                  <option key={sub.id} value={sub.id}>{sub.name}</option>
-                                ))}
-                              </optgroup>
-                            ) : null}
-                          </select>
+                          <RaSelect
+                            value={detail.subjectId ? String(detail.subjectId) : ""}
+                            placeholder="— выберите предмет филиала —"
+                            className={CARD_SEL}
+                            menuMinWidth={260}
+                            groups={groups}
+                            onChange={(v) => setDetail((d) => (d ? { ...d, subjectId: Number(v) || 0 } : d))}
+                          />
                         );
                       })()}
                     </label>
@@ -3873,34 +3862,44 @@ export function AdminSchedule() {
                       {showField("level") ? (
                       <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Уровень
-                        <select value={detail.levelId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, levelId: Number(e.target.value) || 0 } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35">
-                          <option value="">— не задан —</option>
-                          {levels.map((lv) => (
-                            <option key={lv.id} value={lv.id}>{lv.name}</option>
-                          ))}
-                          {detail.levelId && !levels.some((lv) => lv.id === detail.levelId) ? <option value={detail.levelId}>Уровень {detail.levelId}</option> : null}
-                        </select>
+                        <RaSelect
+                          value={detail.levelId ? String(detail.levelId) : ""}
+                          placeholder="— не задан —"
+                          className={CARD_SEL}
+                          options={[
+                            ...levels.map((lv) => ({ value: String(lv.id), label: lv.name })),
+                            ...(detail.levelId && !levels.some((lv) => lv.id === detail.levelId)
+                              ? [{ value: String(detail.levelId), label: `Уровень ${detail.levelId}` }]
+                              : []),
+                          ]}
+                          onChange={(v) => setDetail((d) => (d ? { ...d, levelId: Number(v) || 0 } : d))}
+                        />
                       </label>
                       ) : null}
                       {showField("status") ? (
                       <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Статус
-                        <select value={detail.statusId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, statusId: Number(e.target.value) || 0 } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35">
-                          <option value="">— не задан —</option>
-                          {GROUP_STATUS.map((st) => (
-                            <option key={st.id} value={st.id}>{st.name}</option>
-                          ))}
-                        </select>
+                        <RaSelect
+                          value={detail.statusId ? String(detail.statusId) : ""}
+                          placeholder="— не задан —"
+                          className={CARD_SEL}
+                          menuMinWidth={220}
+                          options={GROUP_STATUS.map((st) => ({ value: String(st.id), label: st.name }))}
+                          onChange={(v) => setDetail((d) => (d ? { ...d, statusId: Number(v) || 0 } : d))}
+                        />
                       </label>
                       ) : null}
                       {showField("priority") ? (
                       <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Приоритет
-                        <select value={detail.priority} onChange={(e) => setDetail((d) => (d ? { ...d, priority: Number(e.target.value) } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35">
-                          {GROUP_PRIORITY.map((p) => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                        </select>
+                        <RaSelect
+                          value={String(detail.priority)}
+                          placeholder="приоритет"
+                          className={CARD_SEL}
+                          menuMinWidth={200}
+                          options={GROUP_PRIORITY.map((p) => ({ value: String(p.id), label: p.name }))}
+                          onChange={(v) => setDetail((d) => (d ? { ...d, priority: Number(v) } : d))}
+                        />
                       </label>
                       ) : null}
                       {showField("makeup") ? (

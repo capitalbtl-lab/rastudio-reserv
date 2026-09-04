@@ -163,7 +163,7 @@ export function RaSelect({
         aria-expanded={open}
         onClick={() => !disabled && setOpen((v) => !v)}
         className={cn(
-          "flex h-9 w-full items-center justify-between gap-2 rounded-md bg-white px-2 text-left text-sm ring-1 ring-black/10 disabled:opacity-50",
+          "flex h-9 w-full items-center justify-between gap-2 rounded-lg bg-white px-2 text-left text-sm ring-1 ring-black/10 disabled:opacity-50",
           className,
         )}
       >
