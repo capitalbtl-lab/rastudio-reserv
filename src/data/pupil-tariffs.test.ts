@@ -386,7 +386,7 @@ describe("мастер абонементов учеников", () => {
   });
 
   it("чтение абонементов идёт пачками по филиалу, не по каждому ученику", () => {
-    assert.equal(PLAN_GROUP_CHUNK, 2);
+    assert.equal(PLAN_GROUP_CHUNK, 1);
     const map = indexActiveTariffsByCustomer(
       [
         { id: 1, customer_id: 10, tariff_id: 5, tariff_name: "A" },

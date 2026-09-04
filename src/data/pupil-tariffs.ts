@@ -48,7 +48,7 @@ export const ASSIGN_BATCH_PAUSE_MS = 2500;
 export const ASSIGN_REST_EVERY = 40;
 export const ASSIGN_REST_MS = 8000;
 /** Сколько групп мастер читает за один запрос к CRM — иначе прокси обрывает длинное чтение. */
-export const PLAN_GROUP_CHUNK = 2;
+export const PLAN_GROUP_CHUNK = 1;
 /** Абонементы школы читаем пачками, иначе 166 чел. вешают nginx. */
 export const TARIFF_READ_CHUNK = 8;
 /** Пауза между пачками чтения AlfaCRM, чтобы не упереться в лимит API. */

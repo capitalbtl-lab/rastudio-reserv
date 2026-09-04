@@ -249,6 +249,43 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     setProgress({ done: loadedGroupsRef.current.size, total, label: "Читаю учеников", unit: "групп", extra: "" });
     setSummary("");
     const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+    const readTariffs = async (list: PupilTariffItem[], label: string) => {
+      for (let t = 0; t < list.length; t += TARIFF_READ_CHUNK) {
+        const part = list.slice(t, t + TARIFF_READ_CHUNK);
+        setProgress({
+          done: t,
+          total: list.length,
+          label: `${label}: абонементы`,
+          unit: "чел. группы",
+          extra: `${Math.min(t + part.length, list.length)} из ${list.length} этой группы`,
+        });
+        setMsg(`${label}: абонементы ${t + 1}–${Math.min(t + part.length, list.length)} из ${list.length}`);
+        let partOk = false;
+        for (let attempt = 0; attempt < 5 && !partOk; attempt += 1) {
+          try {
+            const active = (await retryFetch(
+              () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: part } as never }),
+              1,
+              25000,
+            )) as { ok?: boolean; items?: PupilTariffItem[]; archivedOnly?: number };
+            if (active.ok) {
+              archived += Number(active.archivedOnly || 0);
+              const byKey = new Map((active.items || []).map((r) => [`${r.branchId}:${r.customerId}`, r]));
+              for (let ri = 0; ri < rows.length; ri += 1) {
+                const hit = byKey.get(`${rows[ri].branchId}:${rows[ri].customerId}`);
+                if (hit) rows[ri] = { ...rows[ri], ...hit };
+              }
+              partOk = true;
+            } else await wait(600 * (attempt + 1));
+          } catch (e) {
+            setMsg(friendlyErr(e, `${label}: абонементы, повтор ${attempt + 1}`));
+            await wait(700 * (attempt + 1));
+          }
+        }
+        if (!partOk) return false;
+      }
+      return true;
+    };
     try {
       for (const [, schoolGroups] of waves) {
         const title = allPicked ? schoolGroups[0]?.school || "Школа сайта" : "Ученики";
@@ -279,9 +316,10 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                 40000,
               )) as { ok?: boolean; items?: PupilTariffItem[]; byGroup?: Record<string, GroupTariff>; scanned?: number };
               if (res.ok) {
-                rows.push(...(res.items || []));
+                const fresh = res.items || [];
+                rows.push(...fresh);
                 Object.assign(grouped, res.byGroup || {});
-                scanned += Number(res.scanned || res.items?.length || 0);
+                scanned += Number(res.scanned || fresh.length);
                 for (const g of slice) loadedGroupsRef.current.add(g.key);
                 setGroups((prev) =>
                   prev.map((g) => {
@@ -291,6 +329,17 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                 );
                 i += slice.length;
                 ok = true;
+                if (path !== "add" && fresh.length) {
+                  const tag = `${title} · № ${slice.map((g) => g.groupId).join(", ")}`;
+                  const tariffsOk = await readTariffs(fresh, tag);
+                  if (!tariffsOk) {
+                    for (const g of slice) loadedGroupsRef.current.delete(g.key);
+                    setMsg(`${tag}: абонементы группы не прочитались. Нажмите «Далее» — эту группу повторим.`);
+                    setItems(collapsePupilsByCustomer(rows));
+                    setByGroup(grouped);
+                    return false;
+                  }
+                }
               } else {
                 await wait(700 * (attempt + 1));
               }
@@ -306,63 +355,6 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               setByGroup(grouped);
             }
             return false;
-          }
-        }
-        if (path !== "add") {
-          const schoolRows = rows.filter((r) => schoolGroups.some((g) => g.groupId === r.groupId && g.branchId === r.branchId));
-          if (schoolRows.length) {
-            let tariffsOk = true;
-            for (let i = 0; i < schoolRows.length; i += TARIFF_READ_CHUNK) {
-              const part = schoolRows.slice(i, i + TARIFF_READ_CHUNK);
-              setProgress({
-                done: i,
-                total: schoolRows.length,
-                label: `${title}: абонементы`,
-                unit: "чел. этой школы",
-                extra: `${Math.min(i + part.length, schoolRows.length)} из ${schoolRows.length} · не завис, пачки по ${TARIFF_READ_CHUNK}`,
-              });
-              setMsg(`${title}: абонементы ${i + 1}–${Math.min(i + part.length, schoolRows.length)} из ${schoolRows.length}`);
-              let partOk = false;
-              for (let attempt = 0; attempt < 5 && !partOk; attempt += 1) {
-                try {
-                  const active = (await retryFetch(
-                    () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: part } as never }),
-                    1,
-                    25000,
-                  )) as { ok?: boolean; items?: PupilTariffItem[]; archivedOnly?: number };
-                  if (active.ok) {
-                    archived += Number(active.archivedOnly || 0);
-                    const returned = active.items || [];
-                    const byKey = new Map(returned.map((r) => [`${r.branchId}:${r.customerId}`, r]));
-                    for (let ri = 0; ri < rows.length; ri += 1) {
-                      const hit = byKey.get(`${rows[ri].branchId}:${rows[ri].customerId}`);
-                      if (hit) rows[ri] = { ...rows[ri], ...hit };
-                    }
-                    partOk = true;
-                  } else await wait(600 * (attempt + 1));
-                } catch (e) {
-                  setMsg(friendlyErr(e, `${title}: абонементы, повтор ${attempt + 1}`));
-                  await wait(700 * (attempt + 1));
-                }
-              }
-              if (!partOk) {
-                tariffsOk = false;
-                break;
-              }
-            }
-            if (!tariffsOk) {
-              setMsg(`${title}: абонементы не прочитались. Нажмите «Далее» — продолжим с этой школы.`);
-              setItems(collapsePupilsByCustomer(rows));
-              setByGroup(grouped);
-              return false;
-            }
-            setProgress({
-              done: schoolRows.length,
-              total: schoolRows.length,
-              label: `${title}: абонементы`,
-              unit: "чел. этой школы",
-              extra: `${schoolRows.length} чел. этой школы сайта · всего ${loadedGroupsRef.current.size} из ${total}`,
-            });
           }
         }
       }
