@@ -298,7 +298,7 @@ function CinematicPage({
             ) : null}
             {schedule.length ? (
               <div className="pt-10">
-                <ScheduleBlock sessions={schedule} selectedId={bookId} onPick={setBookId} onTrial={(id) => openSign(id, "trial")} onGroup={(id) => openSign(id, "group")} signup={signup} />
+                <ScheduleBlock sessions={schedule} scope={page.kind === "school" ? "school" : "course"} selectedId={bookId} onPick={setBookId} onTrial={(id) => openSign(id, "trial")} onGroup={(id) => openSign(id, "group")} signup={signup} />
               </div>
             ) : null}
             {page.kind === "school" ? null : <Related page={page} courses={courses} />}
@@ -358,7 +358,7 @@ function PlainPage({
       <Gallery page={page} />
       {schedule.length ? (
         <div className="mt-12">
-          <ScheduleBlock sessions={schedule} />
+          <ScheduleBlock sessions={schedule} scope={page.kind === "school" ? "school" : "course"} />
         </div>
       ) : null}
       <Related page={page} courses={courses} />

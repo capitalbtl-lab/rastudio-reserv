@@ -118,18 +118,22 @@ export function TrialForm({
                 ))}
               </select>
             </Field>
-            <div className="sm:col-span-2">
-              <Field label="Курс">
-                <select name="course" defaultValue={courseId} className={fieldClass}>
-                  <option value="">Помочь выбрать</option>
-                  {TRIAL_COURSES.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
+            {courseId ? (
+              <input type="hidden" name="course" value={courseId} />
+            ) : (
+              <div className="sm:col-span-2">
+                <Field label="Курс">
+                  <select name="course" defaultValue="" className={fieldClass}>
+                    <option value="">Помочь выбрать</option>
+                    {TRIAL_COURSES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            )}
             {error ? <p className="sm:col-span-2 text-sm text-red-600">{error}</p> : null}
             <div className="sm:col-span-2 pt-1">
               <Button type="submit" size="lg" disabled={pending}>

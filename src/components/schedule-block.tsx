@@ -18,6 +18,7 @@ export function ScheduleBlock({
   onTrial,
   onGroup,
   signup = SITE_SIGNUP_DEFAULT,
+  scope = "course",
 }: {
   sessions: CmsSession[];
   heading?: boolean;
@@ -26,6 +27,8 @@ export function ScheduleBlock({
   onTrial?: (id: string) => void;
   onGroup?: (id: string) => void;
   signup?: SiteSignup;
+  /** course — только этот курс, без чужих возрастов. school / all — фильтр по возрастам школы. */
+  scope?: "course" | "school" | "all";
 }) {
   const cities = useMemo(
     () => [...new Set(sessions.map((s) => branchMeta(s).city).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru")),
@@ -34,6 +37,11 @@ export function ScheduleBlock({
 
   const [city, setCity] = useState("");
   const [age, setAge] = useState<AgeBandId | "">("");
+  const ageBands = useMemo(
+    () => AGE_BANDS.filter((band) => sessions.some((s) => matchesAgeBand(s.age, band.id))),
+    [sessions],
+  );
+  const showAge = scope !== "course" && ageBands.length > 1;
 
   if (!sessions.length) return null;
 
@@ -63,7 +71,9 @@ export function ScheduleBlock({
       {heading ? (
         <>
           <p className="kicker">Расписание</p>
-          <h2 className="display mt-2 text-xl md:text-2xl">Группы этого курса</h2>
+          <h2 className="display mt-2 text-xl md:text-2xl">
+            {scope === "school" || scope === "all" ? "Группы школы" : "Группы этого курса"}
+          </h2>
         </>
       ) : null}
 
@@ -80,16 +90,18 @@ export function ScheduleBlock({
         </div>
       ) : null}
 
-      <div className={cn("flex flex-wrap gap-2", cities.length > 1 ? "mt-2" : "mt-4")}>
-        <FilterChip on={!age} onClick={() => setAge("")}>
-          Все возраста
-        </FilterChip>
-        {AGE_BANDS.map((band) => (
-          <FilterChip key={band.id} on={age === band.id} onClick={() => setAge(band.id)}>
-            {band.label}
+      {showAge ? (
+        <div className={cn("flex flex-wrap gap-2", cities.length > 1 ? "mt-2" : "mt-4")}>
+          <FilterChip on={!age} onClick={() => setAge("")}>
+            Все возраста
           </FilterChip>
-        ))}
-      </div>
+          {ageBands.map((band) => (
+            <FilterChip key={band.id} on={age === band.id} onClick={() => setAge(band.id)}>
+              {band.label}
+            </FilterChip>
+          ))}
+        </div>
+      ) : null}
 
       <div className="mt-5 space-y-3">
         {groups.length ? (

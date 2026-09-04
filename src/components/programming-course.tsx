@@ -229,7 +229,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
 
         <PageReviews path={course.pathDecoded || course.path || page.path} />
 
-        <ScheduleBlock sessions={schedule} />
+        <ScheduleBlock sessions={schedule} scope="course" />
 
         <p className="text-sm text-muted">
           Вопросы по программе:{" "}
