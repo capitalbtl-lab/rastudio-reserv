@@ -267,6 +267,7 @@ export function mergeCrmIntoSite(incoming: CrmSlot[], existing: CrmSlot[]) {
         bDate: s.bDate || old.bDate || "",
         eDate: s.eDate || old.eDate || "",
         levelId: s.levelId || old.levelId || 0,
+        tariffId: old.tariffId || s.tariffId || 0,
       });
       updated += 1;
     } else {

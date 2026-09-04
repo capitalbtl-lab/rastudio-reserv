@@ -130,6 +130,34 @@ export function matchTariffs(slot: CrmSlot, list = loadTariffs().items) {
   return list.filter((t) => tariffFitsSlot(t, slot)).sort((a, b) => a.price - b.price || a.name.localeCompare(b.name, "ru"));
 }
 
+export type GroupTariffOption = {
+  id: number;
+  name: string;
+  price: number;
+  lessonsCount: number;
+  duration: number;
+  fit: boolean;
+};
+
+/** Список для выбора на карточке группы: сначала подходящие, потом остальные. */
+export function groupTariffPack(slot?: CrmSlot | null) {
+  const all = loadTariffs().items.filter((t) => !t.archive);
+  const matched = slot ? matchTariffs(slot, all) : [];
+  const fit = new Set(matched.map((t) => t.id));
+  const rest = all.filter((t) => !fit.has(t.id)).sort((a, b) => a.name.localeCompare(b.name, "ru"));
+  const tariffs: GroupTariffOption[] = [...matched, ...rest].map((t) => ({
+    id: t.id,
+    name: t.name,
+    price: t.price,
+    lessonsCount: t.lessonsCount,
+    duration: t.duration,
+    fit: fit.has(t.id),
+  }));
+  const saved = Number(slot?.tariffId) || 0;
+  const tariffId = saved && tariffs.some((t) => t.id === saved) ? saved : matched[0]?.id || 0;
+  return { tariffId, tariffs };
+}
+
 export function groupsForTariff(t: CrmTariff, slots = listAdminSlots()) {
   return slots.filter((s) => tariffFitsSlot(t, s));
 }

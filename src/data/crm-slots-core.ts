@@ -56,6 +56,8 @@ export type CrmSlot = {
   description?: string;
   remarks?: string;
   levelId?: number;
+  /** Выбранный абонемент студии для этой группы. Не поле AlfaCRM — живёт на сайте. */
+  tariffId?: number;
   mismatch?: "soft" | "hard";
   mismatchText?: string;
 };

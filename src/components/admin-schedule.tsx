@@ -322,7 +322,8 @@ type GroupDetail = {
   saving: boolean;
   error?: string;
   slot: CrmSlot;
-  tariffs: { id: number; name: string; price: number; lessonsCount: number; duration: number }[];
+  tariffId: number;
+  tariffs: { id: number; name: string; price: number; lessonsCount: number; duration: number; fit?: boolean }[];
 };
 
 function GroupNameField({ value, onChange, subject, large }: { value: string; onChange: (v: string) => void; subject?: string; large?: boolean }) {
@@ -972,6 +973,7 @@ export function AdminSchedule() {
       archive: [],
       saving: false,
       slot: s,
+      tariffId: s.tariffId || 0,
       tariffs: [],
     });
     setDetail(base());
@@ -1033,6 +1035,7 @@ export function AdminSchedule() {
         calendar: g?.calendar?.length ? g.calendar : [],
         members: active,
         archive,
+        tariffId: Number((res as { tariffId?: number }).tariffId) || s.tariffId || 0,
         tariffs: "tariffs" in res && Array.isArray(res.tariffs) ? (res.tariffs as GroupDetail["tariffs"]) : [],
       };
       setDetail(next);
@@ -1162,6 +1165,7 @@ export function AdminSchedule() {
             signup: g.signup || d.signup,
             subjectId: g.subjectId || d.subjectId,
             calendar: g.calendar?.length ? g.calendar : d.calendar,
+            tariffId: Number((res as { tariffId?: number }).tariffId) || d.tariffId,
             tariffs: "tariffs" in res && Array.isArray(res.tariffs) ? (res.tariffs as GroupDetail["tariffs"]) : d.tariffs,
           }
         : d,
@@ -1216,6 +1220,7 @@ export function AdminSchedule() {
         bDate: detail.bDate,
         eDate: detail.eDate,
         levelId: detail.levelId,
+        tariffId: detail.tariffId,
       } as never,
     });
     take(res as never);
@@ -1236,6 +1241,7 @@ export function AdminSchedule() {
             groupId: gid || d.groupId,
             slot: nextSlot || d.slot,
             subjectId: nextSlot?.subjectId || d.subjectId,
+            tariffId: nextSlot?.tariffId ?? d.tariffId,
             signup: nextSlot?.signup || d.signup,
             bDate: nextSlot?.bDate || d.bDate || period.bDate,
             eDate: nextSlot?.eDate || d.eDate || period.eDate,
@@ -3260,14 +3266,32 @@ export function AdminSchedule() {
                     </div>
                     <GroupLessonStrip className="md:col-span-2" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} />
                     <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                      Абонементы
-                      <div className="mt-1 flex min-h-10 flex-wrap items-center gap-1 rounded-md bg-white px-2 py-1.5 ring-1 ring-black/8">
-                        {detail.tariffs.length ? detail.tariffs.map((t) => (
-                          <span key={t.id} className="rounded-md bg-sky-50 px-1.5 py-0.5 text-[0.75rem] font-medium normal-case tracking-normal text-sky-900">
-                            {t.name} · {Math.round(t.price).toLocaleString("ru-RU")} ₽
-                          </span>
-                        )) : <span className="text-sm font-medium normal-case tracking-normal text-muted">нет совпадения по предмету и минутам</span>}
-                      </div>
+                      Абонемент
+                      <select
+                        value={detail.tariffId || ""}
+                        onChange={(e) => setDetail((d) => (d ? { ...d, tariffId: Number(e.target.value) || 0 } : d))}
+                        className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                      >
+                        <option value="">— не выбран —</option>
+                        {detail.tariffs.some((t) => t.fit) ? (
+                          <optgroup label="Подходят к этой группе">
+                            {detail.tariffs.filter((t) => t.fit).map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name} · {Math.round(t.price).toLocaleString("ru-RU")} ₽
+                              </option>
+                            ))}
+                          </optgroup>
+                        ) : null}
+                        {detail.tariffs.some((t) => !t.fit) ? (
+                          <optgroup label="Остальные абонементы">
+                            {detail.tariffs.filter((t) => !t.fit).map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name} · {Math.round(t.price).toLocaleString("ru-RU")} ₽
+                              </option>
+                            ))}
+                          </optgroup>
+                        ) : null}
+                      </select>
                     </label>
                     <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                       Описание

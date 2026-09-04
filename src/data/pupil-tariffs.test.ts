@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, type PupilGroup } from "./pupil-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 
 function slot(over: Partial<CrmSlot> = {}): CrmSlot {
@@ -100,5 +100,36 @@ describe("мастер абонементов учеников", () => {
     assert.equal(leadOn?.skip, "lead");
     assert.equal(arch, null);
     assert.equal(assignable([pupil!, leadOn!]).length, 2);
+  });
+
+  it("выбор абонемента на группе важнее автоподбора", () => {
+    const a = {
+      id: 1,
+      name: "дешёвый",
+      price: 1000,
+      lessonsCount: 4,
+      duration: 60,
+      type: 1,
+      typeName: "",
+      archive: false,
+      branchIds: [2],
+      subjectIds: [37],
+      lessonTypeIds: [2],
+      calculationType: 2,
+      calculationName: "",
+      periodCount: 1,
+      periodType: 3,
+      periodLabel: "",
+      pricePerLesson: 250,
+      bDate: "",
+      eDate: "",
+      added: "",
+      cardOk: true,
+    };
+    const b = { ...a, id: 2, name: "выбранный", price: 3850 };
+    const auto = pickBestTariff(slot({ timeFrom: "16:00", timeTo: "17:00" }), [a, b]);
+    assert.equal(auto?.id, 1);
+    const chosen = pickBestTariff(slot({ timeFrom: "16:00", timeTo: "17:00", tariffId: 2 }), [a, b]);
+    assert.equal(chosen?.id, 2);
   });
 });

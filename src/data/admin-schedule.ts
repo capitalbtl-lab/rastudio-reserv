@@ -37,7 +37,7 @@ import { listTeachers, teachersAtBranch } from "./crm-teachers";
 import { searchClientViews, findDossier, upsertDossier, applyCrmCustomer } from "./dossiers";
 import { isPhoneLike } from "./client-display";
 import { clientCardId, CRM_BRANCH } from "./ids";
-import { loadTariffs, pullTariffsFromCrm, matchTariffs, subjectTariffStats, saveTariffEdits, pushTariffsToCrm, archiveTariffsInCrm, aiTariffsParse, applyTariffChanges, probeCreateTariff, probeDeleteTariff, subjectsWithHref, tariffGroupHits } from "./crm-tariffs";
+import { loadTariffs, pullTariffsFromCrm, matchTariffs, groupTariffPack, subjectTariffStats, saveTariffEdits, pushTariffsToCrm, archiveTariffsInCrm, aiTariffsParse, applyTariffChanges, probeCreateTariff, probeDeleteTariff, subjectsWithHref, tariffGroupHits } from "./crm-tariffs";
 import { loadScheduleMap, saveScheduleMap } from "./schedule-map";
 import { courseIdOfSubject } from "./ids";
 
@@ -1836,7 +1836,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           subjects: subjectsWithHref(),
           levels: SEED_LEVELS,
           group: cached,
-          tariffs: slot ? matchTariffs(slot) : [],
+          ...groupTariffPack(slot),
         };
       }
       async function fetchGroupRow() {
@@ -1877,7 +1877,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           subjects: loadSubjects(),
           levels: SEED_LEVELS,
           group,
-          tariffs: slot ? matchTariffs(slot) : [],
+          ...groupTariffPack(slot),
         };
       }
       const byDate = new Map<string, GroupCalLesson>();
@@ -1980,7 +1980,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         subjects: loadSubjects(),
         levels,
         group,
-        tariffs: slot ? matchTariffs(slot) : [],
+        ...groupTariffPack(slot),
       };
     }
     if (data.action === "groupSave") {
@@ -1999,6 +1999,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const bDate = String(data.bDate || "").trim() || period.bDate;
       const eDate = String(data.eDate || "").trim() || period.eDate;
       const levelId = Number(data.levelId || 0);
+      const tariffId = Number(data.tariffId) || 0;
       if (!gid) {
         if (!slotId) return { ok: false as const, error: "Группа ещё без номера. Закройте карточку, отметьте строку и нажмите «Выгрузить в AlfaCRM» — или сохраните ещё раз, мы создадим её сами." };
         const current = listAdminSlots();
@@ -2061,6 +2062,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
               bDate: bDate || s.bDate,
               eDate: eDate || s.eDate,
               levelId: levelId || s.levelId,
+              tariffId,
               subjectId: subjectId || s.subjectId,
               subject: subject?.name || s.subject,
               signup: s.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
@@ -2079,6 +2081,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           bDate: bDate || s.bDate,
           eDate: eDate || s.eDate,
           levelId: levelId || s.levelId,
+          tariffId: tariffId || s.tariffId,
           subjectId: subjectId || s.subjectId,
           subject: subject?.name || s.subject,
         };

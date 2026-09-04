@@ -68,7 +68,12 @@ export function uniqueLiveGroups(slots: CrmSlot[]): PupilGroup[] {
   return out;
 }
 
-export function pickBestTariff(slot: Pick<CrmSlot, "subjectId" | "branchId" | "timeFrom" | "timeTo">, list: CrmTariff[]) {
+export function pickBestTariff(slot: Pick<CrmSlot, "subjectId" | "branchId" | "timeFrom" | "timeTo" | "tariffId">, list: CrmTariff[]) {
+  const saved = Number(slot.tariffId) || 0;
+  if (saved) {
+    const hit = list.find((t) => t.id === saved && !t.archive);
+    if (hit) return hit;
+  }
   return matchTariffs(slot as CrmSlot, list)[0] || null;
 }
 
