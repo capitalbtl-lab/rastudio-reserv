@@ -314,19 +314,65 @@ async function createCustomerTariff(
 const roomCache = new Map<number, { at: number; items: { id: number; name: string }[] }>();
 const teacherCache = new Map<number, { at: number; items: { id: number; name: string }[] }>();
 
+const BRANCH_ROOM_HINTS: Record<number, string[]> = {
+  1: ["гражданск"],
+  2: ["цмит", "октябрьск", "революц"],
+  3: ["луховиц", "пушкин"],
+  4: ["летн", "лагер"],
+};
+
+function roomArchived(x: Record<string, unknown>) {
+  if ([x.removed, x.is_removed, x.archived, x.is_archived, x.is_delete].some((v) => Number(v) === 1 || v === true)) return true;
+  if (x.is_active === 0 || x.enabled === 0 || x.is_enabled === 0 || x.state === 0) return true;
+  const blob = `${x.name || ""} ${x.note || ""}`.toLowerCase();
+  return /архив/.test(blob);
+}
+
+function roomBelongsToBranch(x: Record<string, unknown>, branch: number) {
+  const ids: number[] = [];
+  if (Array.isArray(x.branch_ids)) for (const v of x.branch_ids) if (Number(v)) ids.push(Number(v));
+  if (Number(x.branch_id)) ids.push(Number(x.branch_id));
+  if (ids.length) return ids.includes(branch);
+  const loc = Number(x.location_id || x.filial_id || 0);
+  if (loc >= 1 && loc <= 4) return loc === branch;
+  const blob = `${x.name || ""} ${x.note || ""} ${x.location_name || ""} ${x.branch_name || ""}`.toLowerCase().replace(/ё/g, "е");
+  for (const [id, keys] of Object.entries(BRANCH_ROOM_HINTS)) {
+    if (Number(id) === branch) continue;
+    if (keys.some((k) => blob.includes(k))) return false;
+  }
+  const mine = BRANCH_ROOM_HINTS[branch] || [];
+  if (mine.length && blob && mine.some((k) => blob.includes(k))) return true;
+  return true;
+}
+
+function packRoomName(x: Record<string, unknown>) {
+  const name = String(x.name || "").trim();
+  return name || `аудитория ${Number(x.id) || ""}`.trim();
+}
+
 async function roomsOfBranch(request: typeof import("./alfacrm").request, t: string, branch: number) {
   const hit = roomCache.get(branch);
   if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.items;
   try {
-    const rm = await request<{ items?: { id?: number; name?: string; note?: string }[] }>(`/v2api/${branch}/room/index`, { page: 0, pageSize: 100 }, t);
-    const items: { id: number; name: string }[] = [];
-    for (const x of rm.items || []) {
-      const id = Number(x.id || 0);
-      if (!id) continue;
-      const name = String(x.name || "").trim();
-      const note = String(x.note || "").split("|")[0].trim();
-      items.push({ id, name: note ? `${name} · ${note}` : name || `аудитория ${id}` });
+    const raw: Record<string, unknown>[] = [];
+    for (const extra of [{}, { branch_id: branch }] as Record<string, unknown>[]) {
+      const rm = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/room/index`, { page: 0, pageSize: 100, ...extra }, t);
+      if (rm.items?.length) {
+        raw.push(...rm.items);
+        break;
+      }
     }
+    const seen = new Set<number>();
+    const all: { id: number; name: string; raw: Record<string, unknown> }[] = [];
+    for (const x of raw) {
+      const id = Number(x.id || 0);
+      if (!id || seen.has(id) || roomArchived(x)) continue;
+      seen.add(id);
+      all.push({ id, name: packRoomName(x), raw: x });
+    }
+    const mine = all.filter((x) => roomBelongsToBranch(x.raw, branch));
+    const items = (mine.length ? mine : all).map((x) => ({ id: x.id, name: x.name }));
+    items.sort((a, b) => a.name.localeCompare(b.name, "ru"));
     roomCache.set(branch, { at: Date.now(), items });
     return items;
   } catch {
@@ -1989,14 +2035,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         const teachers = new Map<number, string>();
         const subjects = new Map<number, string>(loadSubjects().map((s) => [s.id, s.name]));
         try {
-          const rm = await request<{ items?: { id?: number; name?: string; note?: string }[] }>(`/v2api/${branch}/room/index`, { page: 0, pageSize: 100 }, t);
-          for (const x of rm.items || []) {
-            const id = Number(x.id || 0);
-            if (!id) continue;
-            const name = String(x.name || "").trim();
-            const note = String(x.note || "").split("|")[0].trim();
-            rooms.set(id, note ? `${name} · ${note}` : name);
-          }
+          for (const x of await roomsOfBranch(request, t, branch)) rooms.set(x.id, x.name);
         } catch { /* rooms optional */ }
         try {
           for (let page = 0; page < 4; page++) {
