@@ -1058,10 +1058,21 @@ export function AdminTariffs() {
               return (
                 <Fragment key={`${t.id}-${branch}`}>
                   {schoolHead ? (
-                    <tr className="border-t border-black/8 bg-[#f3f6fa]">
-                      <td colSpan={9} className="px-4 py-1.5">
-                        <span className="text-[0.78rem] font-semibold text-fg">{schoolLabelOf(schoolId)}</span>
-                        <span className="ml-2 text-[0.72rem] text-muted">{schoolCount}</span>
+                    <tr className={schoolId ? "bg-[#e8f3fc]" : "bg-[#f3f5f8]"}>
+                      <td colSpan={9} className="px-4 py-2.5">
+                        <div className="flex items-center gap-3">
+                          <span className={cn("h-5 w-1 shrink-0 rounded-full", schoolId ? "bg-primary" : "bg-black/20")} />
+                          <span className={cn("font-display text-[1.02rem] leading-none", schoolId ? "text-primary" : "text-muted")}>
+                            {schoolLabelOf(schoolId)}
+                          </span>
+                          <span className={cn(
+                            "rounded-full px-2 py-0.5 text-[0.7rem] font-medium tabular-nums",
+                            schoolId ? "bg-white/90 text-primary ring-1 ring-primary/15" : "bg-white text-muted ring-1 ring-black/8",
+                          )}>
+                            {schoolCount}
+                          </span>
+                          <span className={cn("h-px min-w-8 flex-1", schoolId ? "bg-primary/20" : "bg-black/10")} />
+                        </div>
                       </td>
                     </tr>
                   ) : null}
