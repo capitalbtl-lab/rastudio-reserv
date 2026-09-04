@@ -3341,76 +3341,6 @@ export function AdminSchedule() {
                 <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:px-5 md:pb-5">
                 <div className="mt-2 grid gap-2 md:grid-cols-2">
                     <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
-                      Курс на сайте
-                      <select
-                        value={siteCourseValue(detail.slot, siteTree)}
-                        onChange={(e) => {
-                          const to = e.target.value;
-                          const course = siteTree.courses.find((c) => c.id === to);
-                          const school = course ? siteTree.schools.find((x) => x.id === course.schoolId) : undefined;
-                          const patchSlot = {
-                            ...detail.slot,
-                            courseId: to,
-                            schoolId: school?.id || "",
-                            school: school?.label || "",
-                            course: course?.label || "",
-                            path: course?.href || "",
-                          };
-                          setSlots((list) => list.map((row) => (row.id === detail.id ? patchSlot : row)));
-                          setDirty((d) => new Set(d).add(detail.id));
-                          setDetail((d) => (d ? { ...d, slot: patchSlot } : d));
-                          if (!to) return;
-                          void run("treeMove", { ids: [detail.slot.id], courseId: to }).then((res) => {
-                            if (!res.ok || !("slots" in res) || !Array.isArray(res.slots)) return;
-                            const next = (res.slots as CrmSlot[]).find((row) => row.id === detail.slot.id);
-                            if (next?.courseId) setDetail((d) => (d ? { ...d, slot: next } : d));
-                          });
-                        }}
-                        className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                      >
-                        <option value="">— не выбран —</option>
-                        {siteTree.schools.map((sc) => (
-                          <optgroup key={sc.id} label={sc.label}>
-                            {siteTree.courses
-                              .filter((x) => x.schoolId === sc.id)
-                              .map((x) => (
-                                <option key={x.id} value={x.id}>
-                                  {x.label}
-                                </option>
-                              ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                    </label>
-                    <div>
-                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
-                      Предмет
-                      {(() => {
-                        const branchSubs = branchSubjectList(slots, detail.branchId, subjects, detail.id);
-                        const others = subjects.filter((s) => !branchSubs.some((b) => b.id === s.id));
-                        return (
-                          <select value={detail.subjectId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, subjectId: Number(e.target.value) || 0 } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
-                            <option value="">— выберите предмет филиала —</option>
-                            {branchSubs.length ? (
-                              <optgroup label="В этом филиале">
-                                {branchSubs.map((sub) => (
-                                  <option key={sub.id} value={sub.id}>{sub.name}</option>
-                                ))}
-                              </optgroup>
-                            ) : null}
-                            {others.length ? (
-                              <optgroup label="Все предметы CRM">
-                                {others.map((sub) => (
-                                  <option key={sub.id} value={sub.id}>{sub.name}</option>
-                                ))}
-                              </optgroup>
-                            ) : null}
-                          </select>
-                        );
-                      })()}
-                    </label>
-                    </div>
-                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                       Примечания
                       <input value={detail.remarks} onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                     </label>
@@ -3550,6 +3480,74 @@ export function AdminSchedule() {
                       Хэштеги
                       <span className="ml-1 font-normal normal-case tracking-normal text-muted">не для привязок</span>
                       <input value={detail.hashtags} onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                    </label>
+                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      Курс на сайте
+                      <select
+                        value={siteCourseValue(detail.slot, siteTree)}
+                        onChange={(e) => {
+                          const to = e.target.value;
+                          const course = siteTree.courses.find((c) => c.id === to);
+                          const school = course ? siteTree.schools.find((x) => x.id === course.schoolId) : undefined;
+                          const patchSlot = {
+                            ...detail.slot,
+                            courseId: to,
+                            schoolId: school?.id || "",
+                            school: school?.label || "",
+                            course: course?.label || "",
+                            path: course?.href || "",
+                          };
+                          setSlots((list) => list.map((row) => (row.id === detail.id ? patchSlot : row)));
+                          setDirty((d) => new Set(d).add(detail.id));
+                          setDetail((d) => (d ? { ...d, slot: patchSlot } : d));
+                          if (!to) return;
+                          void run("treeMove", { ids: [detail.slot.id], courseId: to }).then((res) => {
+                            if (!res.ok || !("slots" in res) || !Array.isArray(res.slots)) return;
+                            const next = (res.slots as CrmSlot[]).find((row) => row.id === detail.slot.id);
+                            if (next?.courseId) setDetail((d) => (d ? { ...d, slot: next } : d));
+                          });
+                        }}
+                        className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                      >
+                        <option value="">— не выбран —</option>
+                        {siteTree.schools.map((sc) => (
+                          <optgroup key={sc.id} label={sc.label}>
+                            {siteTree.courses
+                              .filter((x) => x.schoolId === sc.id)
+                              .map((x) => (
+                                <option key={x.id} value={x.id}>
+                                  {x.label}
+                                </option>
+                              ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                      Предмет
+                      {(() => {
+                        const branchSubs = branchSubjectList(slots, detail.branchId, subjects, detail.id);
+                        const others = subjects.filter((s) => !branchSubs.some((b) => b.id === s.id));
+                        return (
+                          <select value={detail.subjectId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, subjectId: Number(e.target.value) || 0 } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                            <option value="">— выберите предмет филиала —</option>
+                            {branchSubs.length ? (
+                              <optgroup label="В этом филиале">
+                                {branchSubs.map((sub) => (
+                                  <option key={sub.id} value={sub.id}>{sub.name}</option>
+                                ))}
+                              </optgroup>
+                            ) : null}
+                            {others.length ? (
+                              <optgroup label="Все предметы CRM">
+                                {others.map((sub) => (
+                                  <option key={sub.id} value={sub.id}>{sub.name}</option>
+                                ))}
+                              </optgroup>
+                            ) : null}
+                          </select>
+                        );
+                      })()}
                     </label>
                     <div className="flex flex-wrap items-end gap-2 md:col-span-2 md:flex-nowrap">
                       <label className="block shrink-0 text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
