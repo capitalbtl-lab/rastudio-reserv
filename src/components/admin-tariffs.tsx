@@ -1230,13 +1230,12 @@ export function AdminTariffs() {
                   title={tableEdit ? "Закрыть правку таблицы" : "Править курсы в таблице"}
                   onClick={() => setTableEdit((v) => !v)}
                   className={cn(
-                    "ml-auto flex h-8 w-8 items-center justify-center rounded-[8px] ring-1 transition-colors",
-                    tableEdit ? "bg-primary text-white ring-primary" : "bg-black/[0.04] text-muted ring-black/10 hover:text-fg",
+                    "ml-auto flex h-8 w-8 items-center justify-center rounded-full ring-1 transition-colors",
+                    tableEdit ? "bg-primary text-white ring-primary" : "bg-black/[0.05] text-muted ring-black/10 hover:bg-primary hover:text-white",
                   )}
                 >
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" />
-                    <path d="M19.4 13.5a1.6 1.6 0 0 0 .3 1.7l.05.05a2 2 0 0 1-2.8 2.8l-.05-.05a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V19.5a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.05.05a2 2 0 1 1-2.8-2.8l.05-.05a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H4.5a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.05-.05a2 2 0 1 1 2.8-2.8l.05.05a1.6 1.6 0 0 0 1.7.3h.05A1.6 1.6 0 0 0 11 4.6V4.5a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.05-.05a2 2 0 1 1 2.8 2.8l-.05.05a1.6 1.6 0 0 0-.3 1.7v.05a1.6 1.6 0 0 0 1.5 1h.1a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z" />
+                  <svg viewBox="0 0 24 24" className="h-[15px] w-[15px]" fill="currentColor" aria-hidden>
+                    <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.4.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.4-.96a.5.5 0 0 0-.6.22L2.71 8.84a.49.49 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94 0 .31.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.64l1.92 3.32c.14.24.4.34.6.22l2.4-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.25.42.49.42h3.84c.24 0 .44-.18.49-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.4.96c.22.1.48 0 .6-.22l1.92-3.32a.49.49 0 0 0-.12-.64l-2.03-1.58ZM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2Z" />
                   </svg>
                 </button>
               </th>
