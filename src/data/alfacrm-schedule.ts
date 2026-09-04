@@ -86,22 +86,6 @@ function endedOn(raw?: string) {
   return end < today;
 }
 
-function subjectIdFromNote(note?: string) {
-  const t = String(note || "")
-    .replace(/https?:\/\//gi, "")
-    .replace(/\bwww\./gi, "");
-  const m = t.match(/rastudio\.org(\/[\w\-./%]+)/i);
-  if (!m) return 0;
-  let path = m[1].split(/[?\s#]/)[0];
-  try {
-    path = decodeURIComponent(path);
-  } catch {
-    /* */
-  }
-  const hit = Object.entries(SUBJECT_TO_COURSE).find(([, p]) => p === path || path.startsWith(`${p}/`));
-  return hit ? Number(hit[0]) : 0;
-}
-
 function isLiveGroup(group?: Group): group is Group {
   if (!group) return false;
   const st = Number(group.status_id || 0);
@@ -475,8 +459,7 @@ async function loadCrm(force = false): Promise<CacheBag> {
     const first = groupLessons[0];
     const lessonSid = Number(first?.subject_id) || 0;
     const groupSid = Number(g.subject_id) || 0;
-    const noteSid = subjectIdFromNote(g.note);
-    const sid = groupSid || lessonSid || noteSid || 0;
+    const sid = groupSid || lessonSid || 0;
     const subjectName = (sid && subjects.get(sid)) || g.name;
     const path = SUBJECT_TO_COURSE[sid] || "";
     const teach = teacherOf(first?.teacher_ids || g.teacher_ids, teachers);

@@ -20,7 +20,7 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-04-roles";
+export const GUIDE_REV = "2026-09-04-id";
 
 const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Сайт", idField: "rastudio.org", link: "то, что видят родители. Админка = /admin + AlfaCRM" },
@@ -64,7 +64,7 @@ const SCHEDULE_TABS: GuideTab[] = [
   {
     id: "groups",
     title: "Группы",
-    body: "Ключ группы — пара groupId + branchId, не название. gid:{branchId}:{groupId}. Карточка groupCardId = card:group:{branchId}:{groupId}. DOM: data-card-id, data-group-id, data-branch-id. Два места: (1) вкладка pane=groups — расписание слотов CRM (создание, выгрузка, папки courseId). (2) внутри Клиенты переключатель view=группы — слева список групп выбранного status+филиал+возраст, справа карточка группы. Состав CrmGroupMembers всегда три списка: Ученики (is_study=1), Лиды (is_study=0), Архивные ученики (is_study=2 / archived). Счётчик = все привязанные, не явка. Админка: все status кроме 3 (завершено) и смен 7–9. Status 4 = обучается, набор закрыт, не архив. custom_prioritet 1/2/3/0. Имя и «2024» не фильтр. Клик по человеку — только customerId → CrmClientCard; закрытие на десктопе возвращает карточку группы. Новая группа: courseId + branchId + teacherId. Предмет из карты курса, не из названия. Перенос: treeMove { ids, courseId }.",
+    body: "Ключ группы — пара groupId + branchId, не название. gid:{branchId}:{groupId}. Карточка groupCardId = card:group:{branchId}:{groupId}. DOM: data-card-id, data-group-id, data-branch-id. Два места: (1) вкладка pane=groups — расписание слотов CRM (создание, выгрузка, папки courseId). (2) внутри Клиенты переключатель view=группы — слева список групп выбранного status+филиал+возраст, справа карточка группы. Состав CrmGroupMembers всегда три списка: Ученики (is_study=1), Лиды (is_study=0), Архивные ученики (is_study=2 / archived). Счётчик = все привязанные, не явка. Админка: все status кроме 3 (завершено) и смен 7–9. Status 4 = обучается, набор закрыт, не архив. custom_prioritet 1/2/3/0. Имя, «2024» и хэштеги не фильтр и не филиал. Предмет = subject_id CRM, не из названия. Перенос: treeMove { ids, courseId }.",
   },
   {
     id: "clients",
@@ -168,7 +168,8 @@ const SCHEDULE_NEVER = [
   "Не ждать почту, чтобы отправить заявку. Хватает parent + child + phone + branch_id.",
   "Не говорить «мы перезвоним», если заявка уже в CRM. Сказать: приняли, занятие на дату и время, педагог.",
   "Не считать status 4 архивом. 4 = обучается, набор закрыт. Архив только status 3.",
-  "Не фильтровать группы по имени, году в скобках, «2024», «модельн». Только ID и statusId.",
+  "Не фильтровать группы по имени, году в скобках, «2024», «модельн», хэштегам. Только ID и statusId.",
+  "Не читать custom_hashtagkursa / хэштеги для филиала, школы, курса, предмета. Филиал = branchId.",
   "Не выдавать явку на уроке за состав. taken = все привязанные (учится + лиды).",
   "Не прятать группу с priority 0 от консультанта, если consultantCanSeeAllGroups включён. На витрине её нет — в речи есть.",
   "Не записывать с сайта в группу priority 0. Предложить priority 1 или администратора.",

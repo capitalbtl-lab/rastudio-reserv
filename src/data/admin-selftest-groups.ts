@@ -648,7 +648,6 @@ export const GROUPS_PROBES: GroupsProbe[] = [
       const row = {
         gid: slots.filter((s) => s.groupId).length,
         subject: slots.filter((s) => s.subjectId).length,
-        hash: slots.filter((s) => s.hashtags).length,
         note: slots.filter((s) => s.description || s.groupNote).length,
         period: slots.filter((s) => s.bDate || s.eDate).length,
         status: slots.filter((s) => s.statusId).length,
@@ -656,7 +655,7 @@ export const GROUPS_PROBES: GroupsProbe[] = [
         teacher: slots.filter((s) => s.teacherId || s.teacher).length,
         courseId: slots.filter((s) => s.courseId).length,
       };
-      return ok(`из ${n}: gid ${row.gid}, subjectId ${row.subject}, courseId ${row.courseId}, хэштеги ${row.hash}, описание ${row.note}, период ${row.period}, статус ${row.status}, время ${row.time}, педагог ${row.teacher}`);
+      return ok(`из ${n}: gid ${row.gid}, subjectId ${row.subject}, courseId ${row.courseId}, описание ${row.note}, период ${row.period}, статус ${row.status}, время ${row.time}, педагог ${row.teacher}`);
     },
   },
   {

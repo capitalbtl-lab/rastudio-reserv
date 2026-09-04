@@ -343,13 +343,12 @@ const PROBES: Probe[] = [
       if (!slots.length) return fail("нет групп", "Снимок расписания пуст — проверять поля нечего.", "Загрузить из AlfaCRM.", ["schedule"]);
       const withGid = slots.filter((s) => s.groupId).length;
       const withSub = slots.filter((s) => s.subjectId).length;
-      const withHash = slots.filter((s) => s.hashtags).length;
       const withDesc = slots.filter((s) => s.description || s.groupNote).length;
       const withDates = slots.filter((s) => s.bDate || s.eDate).length;
       const withStatus = slots.filter((s) => s.statusId).length;
       const withTime = slots.filter((s) => s.timeFrom).length;
       return ok(
-        `gid ${withGid}/${slots.length}, предмет ${withSub}, хэштеги ${withHash}, описание ${withDesc}, период ${withDates}, статус ${withStatus}, время ${withTime}`,
+        `gid ${withGid}/${slots.length}, предмет ${withSub}, описание ${withDesc}, период ${withDates}, статус ${withStatus}, время ${withTime}. Хэштеги не ключ.`,
         ["schedule"],
       );
     },

@@ -66,37 +66,6 @@ function branchSubjectList(slots: CrmSlot[], branchId: number, list: CrmSubject[
   return list.filter((s) => ids.has(s.id));
 }
 
-function guessSubjectId(slot: CrmSlot, list: CrmSubject[]) {
-  if (slot.subjectId && list.some((s) => s.id === slot.subjectId)) return slot.subjectId;
-  const fold = (x: string) =>
-    String(x || "")
-      .toLowerCase()
-      .replace(/ё/g, "е")
-      .replace(/^20\d{2}\s+/, "")
-      .replace(/[·•]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  const hay = fold(`${slot.groupName} ${slot.course}`);
-  const quoted = [...`${slot.groupName} ${slot.course}`.matchAll(/["«]([^"»]{2,40})["»]/g)].map((m) => fold(m[1]));
-  const stop = new Set(["курс", "для", "лет", "год", "года", "детей", "школа", "студия", "язык", "языка", "английского", "английский", "носителем", "носитель", "группа"]);
-  const words = (x: string) => fold(x).split(/[^a-zа-я0-9+]+/).filter((w) => w.length > 2 && !stop.has(w));
-  const hw = words(hay);
-  let best = 0;
-  let score = 0;
-  for (const s of list) {
-    const m = fold(s.name);
-    let sc = 0;
-    if (quoted.some((q) => q && m.includes(q))) sc += 500;
-    const hit = words(s.name).filter((w) => hw.includes(w));
-    sc += hit.reduce((n, w) => n + (w.length > 5 ? 90 : 45), 0);
-    if (sc > score) {
-      score = sc;
-      best = s.id;
-    }
-  }
-  return score >= 80 ? best : 0;
-}
-
 function subjectFitsCourse(slot: CrmSlot, sub?: CrmSubject | null) {
   if (!sub) return false;
   if (slot.subjectId) return slot.subjectId === sub.id;
@@ -1000,7 +969,7 @@ export function AdminSchedule() {
       eDate: s.eDate || period.eDate,
       levelId: s.levelId || 0,
       signup: leadHref(s),
-      subjectId: s.groupId ? guessSubjectId(s, branchSubjectList(slots, s.branchId, subjects, s.id)) || s.subjectId || 0 : 0,
+      subjectId: s.subjectId || 0,
       calendar: [],
       members: [],
       archive: [],
@@ -1016,10 +985,7 @@ export function AdminSchedule() {
       if (!s.groupId) {
         const sub = await adminSchedule({ data: { token: token(), action: "subjectsGet" } as never });
         if (sub.ok && "subjects" in sub && Array.isArray(sub.subjects)) {
-          const list = sub.subjects as CrmSubject[];
-          setSubjects(list);
-          const sid = guessSubjectId(s, branchSubjectList(slots, s.branchId, list, s.id));
-          if (sid && s.groupId) setDetail((d) => (d && d.id === s.id && !d.subjectId ? { ...d, subjectId: sid } : d));
+          setSubjects(sub.subjects as CrmSubject[]);
         }
         return;
       }
@@ -3395,6 +3361,7 @@ export function AdminSchedule() {
                     </label>
                     <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                       Хэштеги
+                      <span className="ml-1 font-normal normal-case tracking-normal text-muted">не для привязок</span>
                       <input value={detail.hashtags} onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                     </label>
                     <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">

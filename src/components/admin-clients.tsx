@@ -1543,6 +1543,7 @@ export function AdminClients({
                 </label>
                 <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
                   Хэштеги
+                  <span className="ml-1 font-normal normal-case tracking-normal text-muted">не для привязок</span>
                   <p className="mt-1 min-h-10 rounded-md bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
                     {groupInfo?.hashtags || "—"}
                   </p>
