@@ -11,6 +11,7 @@ import { courseOf, dayLabel, schoolOf, slotFromSession, stampTimes, toSession, n
 import { applyScheduleMap } from "@/data/schedule-map";
 import { mergeTeacher, saveTeachers, type CrmTeacher } from "@/data/crm-teachers";
 import { SUBJECT_TO_COURSE } from "@/data/ids";
+import { nextLessonDate } from "@/lib/trial-slot";
 
 const SKIP_SUBJECT = new Set([7, 54, 104, 85, 81, 1, 77, 106, 82, 105, 83, 90, 84, 88, 87]);
 const DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
@@ -549,6 +550,11 @@ export type LiveGroup = {
   taken: number;
   seats: string;
   wait: number;
+  teacher: string;
+  timeFrom: string;
+  timeTo: string;
+  nextDate: string;
+  courseId: string;
 };
 
 function seatsText(limit: number, taken: number) {
@@ -577,8 +583,8 @@ export async function groupsForQuery(q: { age?: number; branch?: string; course?
   const seen = new Set<string>();
   const out: LiveGroup[] = [];
   for (const session of bag.sessions) {
-    const gid = session.signup.match(/gid=(\d+)/)?.[1];
-    const branchId = Number(session.signup.match(/common\/(\d+)\//)?.[1] || 0);
+    const gid = String(session.groupId || session.signup.match(/gid=(\d+)/)?.[1] || "");
+    const branchId = Number(session.branchId || session.signup.match(/common\/(\d+)\//)?.[1] || 0);
     if (!gid || !branchId) continue;
     if (bid && branchId !== bid) continue;
     if (kolomnaOnly && branchId === 3) continue;
@@ -592,6 +598,10 @@ export async function groupsForQuery(q: { age?: number; branch?: string; course?
     seen.add(key);
     const seat = bag.seats.get(seatKey(branchId, gid)) || { limit: 0, taken: 0 };
     const seats = seatsText(seat.limit, seat.taken);
+    const next = nextLessonDate(session);
+    const nextDate = next
+      ? `${String(next.getDate()).padStart(2, "0")}.${String(next.getMonth() + 1).padStart(2, "0")}.${next.getFullYear()}`
+      : "";
     out.push({
       gid,
       branchId,
@@ -608,6 +618,11 @@ export async function groupsForQuery(q: { age?: number; branch?: string; course?
       taken: seat.taken,
       seats,
       wait: waitDays(crmDayOf(session.when)),
+      teacher: session.teacher || "",
+      timeFrom: session.timeFrom || "",
+      timeTo: session.timeTo || "",
+      nextDate,
+      courseId: session.directionId || session.courseId || "",
     });
   }
   out.sort((a, b) => a.wait - b.wait || a.when.localeCompare(b.when, "ru"));
@@ -625,12 +640,12 @@ export function formatGroups(list: LiveGroup[], age?: number) {
   const open = list.filter((g) => g.seats !== "мест нет");
   const lines = list.map(
     (g, i) =>
-      `${i + 1}. gid=${g.gid} филиал=${g.branchId} · ${g.name} · ${g.short} · ${g.when} · ${g.seats} · через ${g.wait} дн.`,
+      `${i + 1}. gid=${g.gid} филиал=${g.branchId} · ${g.name} · ${g.short} · ${g.when}${g.teacher ? ` · ${g.teacher}` : ""} · ${g.seats} · ближайшее ${g.nextDate || "—"} ${g.timeFrom || ""} · через ${g.wait} дн.`,
   );
   return [
-    `Живое расписание, ${list.length} слотов (${open.length} со свободными местами), сначала ближайшие. Назови 5–8: день, время, филиал, места. Не выдумывай.`,
+    `Живое расписание, ${list.length} слотов (${open.length} со свободными местами), сначала ближайшие. Назови 5–8: день, время, педагог, филиал, места, ближайшая дата. gid вслух не читай, в инструмент передай.`,
     open.length
-      ? "Есть места — предложи конкретные слоты и open_group."
+      ? "Есть места — предложи слот и запиши сам: пробное = submit_trial, в группу = book_lesson lesson_type=group. Форму AlfaCRM не открывай."
       : "Во всех найденных группах мест сейчас нет. Скажи это честно и предложи пробное в свободный день или другой филиал.",
     ...lines,
   ].join("\n");

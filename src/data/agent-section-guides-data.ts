@@ -20,10 +20,15 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-04-site-signup-btns";
+export const GUIDE_REV = "2026-09-04-site-book";
 
 const SCHEDULE_GRAPH: GuideRow[] = [
+  { entity: "Сайт", idField: "rastudio.org", link: "то, что видят родители. Админка = /admin + AlfaCRM" },
   { entity: "Филиал", idField: "branchId 1–4", link: "1 Гражданская · 2 ЦМИТ · 3 Луховицы · 4 лето" },
+  { entity: "Кнопка пробного", idField: "trialOn", link: "Админка → Сайт. Форма rastudio.org, филиал = branchId группы" },
+  { entity: "Кнопка в группу", idField: "groupOn", link: "Админка → Сайт. Тот же gid, kind=group" },
+  { entity: "Пробное", idField: "kind=trial / lessonTypeId=3", link: "submit_trial + gid + date ближайшего занятия + timeFrom" },
+  { entity: "Запись в группу", idField: "kind=group / lessonTypeId=2", link: "book_lesson lesson_type=group + gid. Не iframe AlfaCRM" },
   { entity: "Группа", idField: "groupId", link: "ключ gid:{branchId}:{groupId}" },
   { entity: "Карточка группы", idField: "groupCardId", link: "card:group:{branchId}:{groupId}" },
   { entity: "Предмет", idField: "subjectId", link: "карта → courseId" },
@@ -80,6 +85,11 @@ const SCHEDULE_TABS: GuideTab[] = [
     body: "Карточка абонемента CRM (tariffId) живёт во вкладке Абонементы. Привязка к школе и курсу сайта — отдельная карта storage/tariff-map.json: tariffId → schoolId + courseId. Это соответствие только на сайте, в AlfaCRM не выгружается. Колонка «Курс сайта» в таблице абонементов и вкладка Соответствия → Абонементы правят одну карту. Первая привязка угадывается по subjectIds через карту предметов, дальше только вручную по ID курса. Группа подходит к абонементу если: филиал ∈ tariff.branchIds, минуты ±5, тип урока 2 (групповое), и (courseId группы = courseId карты ИЛИ subjectId группы ∈ tariff.subjectIds). Имя абонемента не участвует. Архив не загружать. slot.tariffId — явный выбор на карточке группы, важнее автоподбора.",
   },
   {
+    id: "site",
+    title: "Сайт · запись",
+    body: "Сайт rastudio.org — родители. Админка — /admin и AlfaCRM. На странице курса расписание из админки: название группы, педагог, день и время, свободные места (limit−taken), уровень, ближайшая дата занятия этой группы. Справа две кнопки (если включены в Админка → Сайт): «Запись на пробное» и «Запись в группу». Обе открывают одно окно в стиле сайта: ФИО родителя, ФИО ребёнка, дата рождения, телефон+почта в ряд, филиал только для чтения = branchId группы. Пробное → sendTrial kind=trial. В группу → kind=group. gid, date, timeFrom, courseId/subjectId уходят в AlfaCRM. Родителю iframe CRM не показывать. Ссылка группы /common/{branchId}/lead/create?gid={groupId} — запасная, не основной путь. Форма пробного CRM id=20 настраивается по филиалу в Админка → Сайт (trialByBranch). Выкл trialOn/groupOn — кнопок на сайте нет.",
+  },
+  {
     id: "map",
     title: "Соответствия",
     body: "Две карты, обе только на сайте, CRM не меняют. 1) Предметы CRM: subjectId → courseId + schoolId (schedule-map.json), живой оверрайд SUBJECT_TO_COURSE. 2) Абонементы: tariffId → courseId + schoolId (tariff-map.json). Переключатель Предметы CRM / Абонементы. Слева школы сайта, сверху курсы дерева, справа список с select курса. Сохранить абонементы — action saveTariffs. Не склеивать по названию абонемента или курса.",
@@ -103,6 +113,10 @@ const SCHEDULE_OPS: GuideOp[] = [
   { id: "assign-lesson", title: "Назначить занятие", body: "popup data-op=lesson-dialog. Поля: lessonType, date, time, duration, roomId, groupId, subjectId*, teacherId, topic, note. customerLesson. Нет subjectId — ошибка." },
   { id: "add-tariff", title: "Добавить абонемент ученика", body: "popup data-op=tariff-dialog. Поля: groupId ученика* (может быть в нескольких группах), tariffId*, b_date, periodCount+periodType (1 день / 2 неделя / 3 месяц, e_date = start+N единиц −1 день), calcType 0|1 (is_separate_balance), subjectIds[], lessonTypeIds[], note. customerTariff. Не угадывать tariffId по имени." },
   { id: "add-group", title: "Добавить в группу", body: "popup data-op=group-dialog. Поля: branchId*, фильтр школы, groupId* как {branchId}:{groupId}, bDate, eDate. customerGroup. Список групп = филиал+возраст слева. Не писать по названию группы." },
+  { id: "list-live-groups", title: "Живые группы для записи", body: "list_groups { age, branch?, course? }. Вернёт gid, branchId, педагог, день, timeFrom, места, ближайшую дату. Назови 5–8 слотов. Не выдумывай gid и дату." },
+  { id: "book-trial", title: "Записать на пробное", body: "submit_trial. Обязательно: parent, child, phone, branch_id (= branchId группы). Передай gid, date=ближайшее занятие этой группы ДД.ММ.ГГГГ, time=timeFrom, course_id=subjectId, group_name, dob если есть. kind=trial. Почта не обязательна. Филиал чужой группы не подставляй. Если мест нет — скажи и предложи другой слот." },
+  { id: "book-group", title: "Записать в группу", body: "book_lesson lesson_type=group. Те же поля, gid обязателен. Не вызывай open_group и не отдавай родителю URL AlfaCRM. Это заявка в группу, не пробный урок. Если просят абонемент / «сразу ходить» — group, не trial." },
+  { id: "site-signup-settings", title: "Настройки записи на сайте", body: "Админка → Сайт. trialOn / groupOn. trialByBranch[1..4] — URL формы CRM id=20 по филиалу. Сайт всегда рисует своё окно и шлёт лид через API, не iframe." },
   { id: "pull-push", title: "AlfaCRM расписание", body: "Загрузить — снимок групп на сайт. Выгрузить — только отмеченные чекбоксом. Сначала группа, потом регулярный урок с subjectId." },
 ];
 
@@ -127,7 +141,13 @@ const SCHEDULE_NEVER = [
   "Не смешивать native <select> в попапах — только RaSelect с RA_POP.",
   "Не выгружать карту абонемент→курс в AlfaCRM. tariff-map.json только сайт.",
   "Не искать абонемент для группы по названию. Сначала slot.tariffId, затем tariff-map.courseId, затем subjectId+филиал+минуты.",
-  "Не удалять тестовые группы CRM автоматически (остаток gid 694 — оператору).",
+  "Не открывать родителю форму AlfaCRM (/lead/create, iframe id=20). Записывать самому: submit_trial или book_lesson.",
+  "Не выдумывать gid, дату и время. Дата пробного = ближайшее занятие выбранной группы, время = timeFrom слота.",
+  "Не путать филиалы Коломны: 1 Гражданская, 2 ЦМИТ Октябрьской. Филиал заявки = branchId группы.",
+  "Не ставить пробное, если просят сразу в группу / абонемент. kind=group, lessonTypeId=2.",
+  "Не записывать молча в группу без мест. Сказать «мест нет» и предложить другой слот или свободный день.",
+  "Не ждать почту, чтобы отправить заявку. Хватает parent + child + phone + branch_id.",
+  "Не говорить «мы перезвоним», если заявка уже в CRM. Сказать: приняли, занятие на дату и время, педагог.",
 ];
 
 function scheduleBody() {
@@ -215,6 +235,21 @@ ra-open-client { customerId, branchId, q? }
 ra-clients-query { q }
 ra-clients-filter { status?, view?, branchId?, ageBand? }
 
+ПРОТОКОЛ ЗАПИСИ НА САЙТЕ (родители, Олег/Ольга)
+Сайт = rastudio.org. Админка = /admin + AlfaCRM. Данные групп на сайте берутся из админки, не из «названия на странице».
+Строка расписания: group, teacher, when (день+timeFrom–timeTo), freePlaces=limit−taken, level, nextLessonDate (ближайший день недели этой группы), branchId, groupId, age.
+Кнопки (Админка → Сайт, trialOn/groupOn): «Запись на пробное» / «Запись в группу». Одно окно rastudio.org, филиал locked = branchId группы.
+Поля окна: parent*, child*, dob*, phone*, email, branch readonly.
+Пробное: submit_trial kind=trial lessonTypeId=3. gid, date=nextLesson ДД.ММ.ГГГГ, time=timeFrom, course_id=subjectId, branch_id=branchId.
+В группу: book_lesson lesson_type=group lessonTypeId=2. gid обязателен. Не open_group, не URL /lead/create родителю.
+Свободный день: заявка без gid, в note «дату согласуем». Не выдумывать время.
+Обязательный минимум: parent + child + phone + branch_id. Почту не ждать. dob если сказали, иначе возраст → 01.09 года рождения.
+Филиалы: 1 Гражданская · 2 ЦМИТ Октябрьской 340 · 3 Луховицы Пушкина 202А · 4 лето (апрель–август).
+После успеха: «заявку приняли, {пробное|групповое} на {дата} {время}, {педагог}, {филиал}». URL не читать. «Перезвоним» — запрещено.
+Мест нет: не записывать молча. Предложить другой слот / свободный день / другой филиал.
+list_groups {age, branch?, course?} → живые слоты. Назвать 5–8: день, время, педагог, филиал, места, ближайшая дата. gid не произносить вслух родителю, но передать в инструмент.
+Настройки: storage/site-signup.json trialOn groupOn trialByBranch. CRM форма id=20 — запас, сайт шлёт API.
+
 Вкладки раздела:
 ${tabs}
 
@@ -241,6 +276,21 @@ export const FACTORY_GUIDES: SectionGuide[] = [
     ops: SCHEDULE_OPS,
     never: SCHEDULE_NEVER,
     body: scheduleBody(),
+  },
+  {
+    id: "site",
+    section: "site",
+    title: "Сайт · запись",
+    on: true,
+    updatedAt: "",
+    summary:
+      "Пробное и запись в группу с сайта: живое расписание, филиал группы, педагог, ближайшая дата. ИИ записывает сам, без формы AlfaCRM.",
+    graph: SCHEDULE_GRAPH.filter((r) => /Сайт|Филиал|Группа|Пробное|Запись|Кнопка|Предмет|Курс/.test(r.entity)),
+    cascade: [],
+    tabs: SCHEDULE_TABS.filter((t) => t.id === "site" || t.id === "groups"),
+    ops: SCHEDULE_OPS.filter((o) => /list-live|book-trial|book-group|site-signup/.test(o.id)),
+    never: SCHEDULE_NEVER.filter((n) => /AlfaCRM|gid|филиал|пробн|мест нет|почт|перезвон/i.test(n)),
+    body: siteBookBody(),
   },
   {
     id: "clients",
@@ -311,6 +361,72 @@ ${groups}
 Создать группу: courseId + branchId + teacherId. Предмет из карты курса.
 Перенос: treeMove { ids, courseId }.
 Абонемент группы: карта tariffId → courseId (Соответствия → Абонементы), не имя. CRM не меняется.
+`;
+}
+
+function siteBookBody() {
+  return `ИНСТРУКЦИЯ РАЗДЕЛА «Сайт · запись» для ИИ. Карта ID. REV ${GUIDE_REV}.
+Где лежит: Ассистент ИИ → База знаний ИИ → Сайт · запись.
+Точка восстановления: ромашка 3.
+
+Это инструкция, по которой ИИ САМ записывает ребёнка на пробное или в группу, без администратора и без формы AlfaCRM на экране родителя.
+
+ТЕРМИНЫ
+Сайт — rastudio.org, родители выбирают курс и группу.
+Админка — /admin (дерево школ, группы, соответствия) + AlfaCRM.
+Данные на сайте (педагог, день, время, места, уровень, ближайшая дата, филиал) берутся из админки. Названия на витрине — подпись.
+
+ФИЛИАЛЫ (branchId)
+1 Коломна, Гражданская, 2
+2 Коломна, ЦМИТ, Октябрьской революции, 340
+3 Луховицы, Пушкина, 202А
+4 летние программы (только апрель–август)
+Заявка всегда в branchId выбранной группы. Гражданскую и ЦМИТ не путать.
+
+ЧТО ВИДИТ РОДИТЕЛЬ НА СТРАНИЦЕ КУРСА
+Слева список групп: возраст, имя группы, день timeFrom–timeTo, педагог, уровень, свободные места, ближайшая дата пробного.
+Справа две кнопки, если включены в Админка → Сайт:
+  trialOn — «Запись на пробное»
+  groupOn — «Запись в группу»
+Окно в стиле сайта (не iframe CRM): родитель, ребёнок, дата рождения, телефон и почта в один ряд, филиал только чтение.
+Пробное шлёт kind=trial. В группу — kind=group. gid, date ближайшего занятия, timeFrom, subjectId.
+
+ИНСТРУМЕНТЫ
+1) list_groups { age, branch?, course? }
+   Живые слоты. Поля: gid, branchId, name, teacher, when, timeFrom, seats, nextDate, wait.
+   Назови родителю 5–8: день, время, педагог, филиал, места, ближайшая дата. gid вслух не читай.
+2) submit_trial — первое посещение, пробное (lessonTypeId=3).
+   Обязательно: parent, child, phone, branch_id.
+   Передай: gid, date ДД.ММ.ГГГГ (= nextDate слота), time=timeFrom, course_id=subjectId, group_name, dob если есть, kind=trial.
+3) book_lesson lesson_type=group — сразу в группу (lessonTypeId=2). gid обязателен. Те же поля.
+4) open_group — НЕ использовать. Форму AlfaCRM /common/{branch}/lead/create?gid= родителю не открывать.
+Свободный день: submit_trial без gid, в комментарии «дату согласуем». Время не выдумывать.
+
+ПОРЯДОК БЕЗ АДМИНИСТРАТОРА
+Возраст → направление (2–3 варианта) → list_groups.
+Родитель выбрал слот → собрать parent, child, phone (dob если сказал).
+Сразу вызвать инструмент. Почту не ждать.
+Если данных не хватает — один короткий вопрос, не анкета.
+Мест нет (seats=«мест нет») — не записывать. Другой слот / свободный день / другой филиал.
+После ok: «Заявку приняли. {Пробное|Групповое} на {дата} в {время}, педагог {имя}, {филиал}.» Не «перезвоним». URL не читать.
+
+НАСТРОЙКИ АДМИНКИ → Сайт
+storage/site-signup.json: trialOn, groupOn, trialByBranch[1..4] (URL формы CRM id=20).
+Сайт всегда своё окно + API. iframe id=20 — только запас в настройках.
+
+СВЯЗИ ID
+Группа: gid:{branchId}:{groupId}
+Курс сайта: courseId дерева (path). На публичном слоте CmsSession.courseId иногда = subjectId — для заявки бери subjectId/directionId.
+Педагог: teacher / teacherId слота.
+Абонемент к курсу сайта: tariff-map, в CRM не уходит. Для записи на пробное/в группу абонемент не нужен.
+
+ЗАПРЕТЫ
+- Не открывать родителю AlfaCRM.
+- Не выдумывать gid, дату, время.
+- Не ставить пробное, если просят сразу в группу.
+- Не менять филиал группы.
+- Не ждать почту.
+- Не склеивать группу по названию.
 `;
 }
 
