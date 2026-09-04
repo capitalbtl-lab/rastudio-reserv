@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import type { CrmTariff, CrmLessonType, CrmBranch } from "@/data/crm-tariffs";
 import type { SiteTree } from "@/data/site-tree";
 import type { TariffLink } from "@/data/tariff-map";
+import { siteCourseOptions, siteSchoolOptions } from "@/data/site-bind-core";
 import { PupilTariffWizard } from "@/components/admin-pupil-tariffs";
 
 const CALC_NAMES: Record<number, string> = { 0: "Любой", 1: "Базовый счет", 2: "Отдельный счет" };
@@ -362,6 +363,8 @@ export function AdminTariffs() {
   const tabs = (branches.length ? branches : FALLBACK_BRANCHES).slice().sort((a, b) => BRANCH_ORDER.indexOf(a.id) - BRANCH_ORDER.indexOf(b.id));
   const typeList = sortLessonTypes(types.length ? types : FALLBACK_TYPES);
   const subjectList = useMemo(() => [...subjects].sort((a, b) => a.name.localeCompare(b.name, "ru")), [subjects]);
+  const siteSchools = tree.schools.length ? tree.schools : siteSchoolOptions();
+  const siteCourses = tree.courses.length ? tree.courses : siteCourseOptions();
 
   const counts = useMemo(() => {
     const live = items.filter((t) => showArchive || !t.archive);
@@ -841,9 +844,9 @@ export function AdminTariffs() {
                         className="h-8 max-w-[14rem] rounded-lg bg-white px-2 text-[0.75rem] ring-1 ring-black/10"
                       >
                         <option value="">— курс сайта —</option>
-                        {tree.schools.map((sc) => (
+                        {siteSchools.map((sc) => (
                           <optgroup key={sc.id} label={sc.label}>
-                            {tree.courses
+                            {siteCourses
                               .filter((c) => c.schoolId === sc.id)
                               .map((c) => (
                                 <option key={c.id} value={c.id}>
@@ -1004,7 +1007,9 @@ function Editor({
   const [note, setNote] = useState("");
   const [moreTypes, setMoreTypes] = useState(false);
   const [subOpen, setSubOpen] = useState(false);
-  const course = tree.courses.find((c) => c.id === courseId);
+  const course = (tree.courses.length ? tree.courses : siteCourseOptions()).find((c) => c.id === courseId);
+  const schools = tree.schools.length ? tree.schools : siteSchoolOptions();
+  const allCourses = tree.courses.length ? tree.courses : siteCourseOptions();
   const [schoolPick, setSchoolPick] = useState(course?.schoolId || "");
   useEffect(() => {
     setSchoolPick(course?.schoolId || "");
@@ -1016,7 +1021,7 @@ function Editor({
   const per = t.lessonsCount ? Math.round((Number(t.price) / Number(t.lessonsCount)) * 100) / 100 : 0;
   const box = "h-9 w-full rounded-xl bg-white px-3 text-sm ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-primary/30";
   const schoolId = schoolPick || course?.schoolId || "";
-  const schoolCourses = tree.courses.filter((c) => !schoolId || c.schoolId === schoolId);
+  const schoolCourses = allCourses.filter((c) => !schoolId || c.schoolId === schoolId);
   const mainTypes = typeList.filter((lt) => t.lessonTypeIds.includes(lt.id) || [2, 5, 10, 11].includes(lt.id));
   const extraTypes = typeList.filter((lt) => !mainTypes.some((x) => x.id === lt.id));
   const shownTypes = moreTypes ? typeList : mainTypes;
@@ -1028,29 +1033,31 @@ function Editor({
           <input className={cn(box, "font-medium")} value={t.name} onChange={(e) => onPatch({ name: e.target.value })} />
         </Field>
 
-        <Field label="Школа сайта" className="md:col-span-4">
+        <div className="md:col-span-12 flex flex-wrap items-end gap-2">
+        <Field label="Школа сайта" className="w-full sm:w-56 shrink-0">
           <select
             className={box}
             value={schoolId}
+            title="Школа сайта. В AlfaCRM не уходит."
             onChange={(e) => {
               const next = e.target.value;
               setSchoolPick(next);
               if (!next || (course && course.schoolId !== next)) onBind("");
             }}
           >
-            <option value="">— не привязана —</option>
-            {tree.schools.map((s) => (
+            <option value="">— школа —</option>
+            {schools.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.label}
               </option>
             ))}
           </select>
         </Field>
-        <Field label="Курс сайта" className="md:col-span-8">
-          <select className={box} value={courseId} onChange={(e) => onBind(e.target.value)}>
-            <option value="">— выберите курс —</option>
-            {(schoolId ? schoolCourses : tree.courses).map((c) => {
-              const school = tree.schools.find((s) => s.id === c.schoolId);
+        <Field label="Курс сайта" className="min-w-[14rem] flex-1">
+          <select className={box} value={courseId} title="Курс сайта. В AlfaCRM не уходит." onChange={(e) => onBind(e.target.value)}>
+            <option value="">— курс —</option>
+            {(schoolId ? schoolCourses : allCourses).map((c) => {
+              const school = schools.find((s) => s.id === c.schoolId);
               return (
                 <option key={c.id} value={c.id}>
                   {schoolId ? c.label : `${(school?.label || "").replace(/^Школа\s+/i, "")} · ${c.label}`}
@@ -1058,8 +1065,8 @@ function Editor({
               );
             })}
           </select>
-          <p className="mt-1 text-[0.68rem] text-muted">Только сайт. В AlfaCRM не уходит.</p>
         </Field>
+        </div>
 
         <Field label="Уроков" className="md:col-span-2">
           <input className={box} inputMode="numeric" value={t.lessonsCount || ""} onChange={(e) => onPatch({ lessonsCount: Number(e.target.value) || 0 })} />

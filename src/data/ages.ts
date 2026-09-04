@@ -42,6 +42,8 @@ export function coursePlace(href: string) {
 }
 
 export function courseLength(href: string) {
+  const row = listPriceRows().find((r) => r.path === href || r.courseId === href);
+  if (row?.mins) return `${row.mins} мин`;
   if (/art-studio-3-4|art-studio-5-6|happybricks|preparation-for-school/i.test(href)) return "60 мин";
   return "90 мин";
 }

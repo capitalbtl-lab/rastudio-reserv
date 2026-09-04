@@ -200,6 +200,10 @@ export async function handleAdminDisk(data: DiskReq) {
       const raw = readJson("crm-tariffs.json") || {};
       const items = Array.isArray(raw.items) ? raw.items : [];
       const subjects = itemsOf("crm-subjects.json");
+      const { loadSiteTree } = await import("./site-tree");
+      const { guessTariffLinks, readTariffMap, saveTariffMap } = await import("./tariff-map");
+      let tariffMap = guessTariffLinks(items as { id: number; subjectIds: number[]; archive?: boolean }[]);
+      if (!readTariffMap().length && tariffMap.some((x) => x.courseId)) tariffMap = saveTariffMap(tariffMap);
       return {
         ok: true as const,
         at: String(raw.at || ""),
@@ -208,6 +212,8 @@ export async function handleAdminDisk(data: DiskReq) {
         branches: Array.isArray(raw.branches) && raw.branches.length ? raw.branches : BRANCHES,
         subjects,
         total: items.length,
+        tree: loadSiteTree(),
+        tariffMap,
       };
     }
     if (kind === "clients") {

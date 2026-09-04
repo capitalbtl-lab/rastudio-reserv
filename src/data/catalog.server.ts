@@ -11,6 +11,7 @@ import {
   type CmsSession,
 } from "./cms";
 import { applyPageEdits, applyCmsEdits } from "./edits";
+import { publicCoursesMeta } from "./public-bind";
 
 const catalog = raw as Catalog;
 const cms = cmsRaw as CmsPayload;
@@ -64,11 +65,17 @@ export function allTeachers() {
 }
 
 export function allCourses() {
+  let meta: { courseId: string; age: string; cities?: string[]; mins?: number }[] = [];
+  try {
+    meta = publicCoursesMeta();
+  } catch {
+    meta = [];
+  }
   return catalog.courses.map((c) => {
-    if (c.href === "/art-studio-9-13") {
-      return { ...c, label: "Художественная школа 10–15 лет", age: "10–15 лет" };
-    }
-    return c;
+    const hit = meta.find((m) => m.courseId === c.href);
+    const age = hit?.age || (c.href === "/art-studio-9-13" ? "10–15 лет" : c.age);
+    const label = c.href === "/art-studio-9-13" ? "Художественная школа 10–15 лет" : c.label;
+    return { ...c, label, age, cities: hit?.cities, mins: hit?.mins };
   });
 }
 

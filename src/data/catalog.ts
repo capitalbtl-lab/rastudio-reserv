@@ -41,6 +41,8 @@ export type CourseCard = {
   alt: string;
   filename: string;
   age?: string;
+  cities?: string[];
+  mins?: number;
 };
 
 export type Catalog = {

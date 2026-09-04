@@ -4,6 +4,7 @@ import { isAdminRequest } from "./admin-auth";
 import { logAdmin } from "./admin-settings";
 import { IDS_FOR_AGENT } from "./ids";
 import { FACTORY_GUIDES, factoryGuide, GUIDE_REV, type SectionGuide } from "./agent-section-guides-data";
+import { tariffMapForAgent } from "./public-bind";
 
 type Overlay = { id: string; on?: boolean; body?: string; updatedAt?: string };
 type Store = { items: Overlay[] };
@@ -50,8 +51,12 @@ export function guidePrompt(sectionId: string) {
 
 export function scheduleGuidePrompt() {
   const all = loadGuides().filter((g) => g.on && String(g.body || "").trim());
-  if (!all.length) return IDS_FOR_AGENT;
-  return all.map((g) => String(g.body).trim()).join("\n\n----\n\n");
+  const base = all.length ? all.map((g) => String(g.body).trim()).join("\n\n----\n\n") : IDS_FOR_AGENT;
+  try {
+    return `${base}\n\n${tariffMapForAgent()}`;
+  } catch {
+    return base;
+  }
 }
 
 export async function handleAdminSectionGuides(data: {

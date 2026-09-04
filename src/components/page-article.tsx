@@ -400,7 +400,7 @@ function CatalogPage({ page, courses }: { page: SitePage; courses: CourseCard[] 
     return courses.filter((c) => {
       if (!g.test(c.href)) return false;
       if (band && !agesOverlap(`${c.age || ""} ${c.label} ${c.title}`, band.min, band.max)) return false;
-      if (city && !coursePlace(c.href).includes(city)) return false;
+      if (city && !(c.cities?.length ? c.cities.includes(city) : coursePlace(c.href).includes(city))) return false;
       if (!s) return true;
       return (
         c.label.toLowerCase().includes(s) ||
