@@ -32,6 +32,9 @@ function norm(s: string) {
 
 function localLimitTurn(prompt: string): ScheduleVoiceResult | null {
   const t = norm(prompt);
+  if (/приоритет|prioritet|выклад/.test(t) && /[0-3]|перв|втор|трет|ноль|нулев/.test(t)) {
+    return { kind: "edit", reason: "", answer: "", action: "preview" };
+  }
   if (!/мест|лимит|свободн|набор|вместимост|максимальн|количеств|детей|человек|ребен/.test(t)) return null;
   if (!/\d/.test(t)) return null;
   return { kind: "edit", reason: "", answer: "", action: "preview" };
@@ -216,6 +219,7 @@ ${scheduleGuidePrompt() || IDS_FOR_AGENT}
 «покажи соответствия» = kind=openTab pane=map.
 «сколько групп по предмету» = kind=question, ответить гр/уч по филиалам из карты предметов, не абонементами.
 «максимальное количество детей на 15» = правка лимита, kind=edit, action=preview.
+«во всех группах на гражданской приоритет 1» = kind=edit, action=preview. Филиал по branchId (1 Гражданская, 2 ЦМИТ). Имя и год в названии не фильтр. Поле priority, не лимит.
 Свои фразы «привет что будем делать», «хорошо сейчас всё поправим», «скажите опубликовать» — не запросы, kind=refuse reason=это эхо.
 Если запрос не про расписание/группы/клиентов/предметы — kind=refuse и точная причина.
 Вопрос сколько/когда/кто в группе — kind=question.

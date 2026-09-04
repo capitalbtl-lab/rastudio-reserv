@@ -14,6 +14,7 @@ import { loadSiteTree } from "@/data/site-tree";
 import { subjectIdOfCourse } from "@/data/ids";
 import { loadScheduleMap } from "@/data/schedule-map";
 import { groupSignupUrl } from "@/data/site-signup-core";
+import { readPriority } from "./group-status";
 
 export { SCHOOL_ORDER, beatsOf, validBeat, type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
 
@@ -597,10 +598,56 @@ export function buildSlot(draft: SlotDraft, catalog: CrmSlot[]): CrmSlot {
   };
 }
 
-const EDITABLE = new Set(["groupName", "age", "day", "timeFrom", "timeTo", "teacher", "limit", "groupNote", "course", "school", "branch"]);
+const EDITABLE = new Set(["groupName", "age", "day", "timeFrom", "timeTo", "teacher", "limit", "groupNote", "course", "school", "branch", "priority", "statusId"]);
 
 export async function aiSchedulePatch(slots: CrmSlot[], prompt: string) {
   return aiScheduleParse(slots, prompt, slots.map((s) => s.id));
+}
+
+function branchIdFromPrompt(t: string): number | null {
+  if (/гражданск/.test(t)) return 1;
+  if (/цмит|октябрь|340/.test(t)) return 2;
+  if (/луховиц|пушкин/.test(t)) return 3;
+  if (/(^|\s)лет(о|ний|ние|них|ом)?(\s|$)|филиал.{0,12}лет/.test(t) && !/граждан|цмит|луховиц|лет\s+\d/.test(t)) return 4;
+  return null;
+}
+
+/** Массовый приоритет по ID филиала. Имя группы и «2024/2026» не фильтр. */
+export function bulkPriorityFromPrompt(prompt: string, slots: CrmSlot[], selectedIds: string[] = []) {
+  const t = String(prompt || "")
+    .toLowerCase()
+    .replace(/ё/g, "е");
+  if (!/приоритет|prioritet|выклад/.test(t)) return null;
+  const tagged = t.match(/приоритет(?:\s*(?:номер|равен|=|:))?\s*([0-3])/);
+  let to = tagged ? Number(tagged[1]) : NaN;
+  if (!Number.isFinite(to)) {
+    if (/\b0\b|ноль|нулев|не выклад|не на сайт|снять с сайта/.test(t)) to = 0;
+    else if (/\b1\b|перв(ый|ая|ую|ое)|вылож/.test(t)) to = 1;
+    else if (/\b2\b|втор/.test(t)) to = 2;
+    else if (/\b3\b|трет|запасн/.test(t)) to = 3;
+  }
+  if (!Number.isFinite(to) || to < 0 || to > 3) return null;
+  const all = /у\s+всех|во\s+всех|всем|все\s+групп|каждую\s+групп|каждой\s+групп|массово|по\s+всем/.test(t);
+  let pool = selectedIds.length && !all ? slots.filter((s) => selectedIds.includes(s.id)) : slots.slice();
+  pool = pool.filter((s) => Number(s.groupId) > 0);
+  const branchId = branchIdFromPrompt(t);
+  if (branchId) pool = pool.filter((s) => s.branchId === branchId);
+  const want = readPriority(to);
+  const changes = pool
+    .filter((s) => readPriority(s.priority) !== want)
+    .map((s) => ({ id: s.id, field: "priority", from: String(readPriority(s.priority)), to: String(want) }));
+  if (!changes.length) {
+    return {
+      comment: `Приоритет ${want} уже стоит у ${pool.length} групп${branchId ? ` филиала ${branchId}` : ""}.`,
+      changes: [],
+      adds: [] as SlotDraft[],
+    };
+  }
+  return {
+    comment: `Приоритет ${want} у ${changes.length} групп${branchId ? ` филиала ${branchId}` : ""}. Имена не смотрел.`,
+    changes,
+    adds: [] as SlotDraft[],
+  };
 }
 
 function bulkLimitFromPrompt(prompt: string, slots: CrmSlot[], selectedIds: string[]) {
@@ -632,6 +679,8 @@ function bulkLimitFromPrompt(prompt: string, slots: CrmSlot[], selectedIds: stri
 }
 
 export async function aiScheduleParse(slots: CrmSlot[], prompt: string, selectedIds: string[] = []) {
+  const bulkPriority = bulkPriorityFromPrompt(prompt, slots, selectedIds);
+  if (bulkPriority) return bulkPriority;
   const bulk = bulkLimitFromPrompt(prompt, slots, selectedIds);
   if (bulk) return bulk;
   const catalog = {
@@ -657,6 +706,9 @@ export async function aiScheduleParse(slots: CrmSlot[], prompt: string, selected
     limit: s.limit,
     branch: `${s.city}, ${s.branch}`,
     city: s.city,
+    groupId: s.groupId,
+    branchId: s.branchId,
+    priority: readPriority(s.priority),
   }));
   const llm = await yandexJson<{
     changes?: { id?: string; field?: string; to?: string | number }[];
@@ -670,10 +722,10 @@ export async function aiScheduleParse(slots: CrmSlot[], prompt: string, selected
 - Возраст только из справочника: ${JSON.stringify(catalog.ages).slice(0, 500)}
 - Время кружков вечером: «с 6:30 до 8:30» = 18:30 и 20:30. Всегда ЧЧ:ММ с двоеточием. Часы 1–9 без «утра» считай вечерними (+12).
 - Педагога бери точным ФИО из справочника.
-- «места», «лимит», «свободные места», «количество мест» = поле limit. Если сказано «все группы» / «у всех» — change на КАЖДЫЙ id из списка, не одну строку.
+- «места», «лимит» = поле limit. «приоритет 1/0» = поле priority. Если сказано «все группы» / «на Гражданской» — change на каждый подходящий id, не одну строку. Филиал только по branchId: 1 Гражданская, 2 ЦМИТ, 3 Луховицы, 4 лето. Имя и год в названии не фильтр.
 - adds только если оператор явно просит ДОБАВИТЬ / СОЗДАТЬ группу. Несколько групп — отдельный объект adds на каждую.
 - Если правит существующие — только changes с id из списка. Не выдумывай id и не добавляй лишние группы.
-- Разрешённые id для правки: ${selectedIds.length ? `${selectedIds.length} штук, все перечислены в слотах` : "нет — только adds, существующие не трогай"}.
+- Разрешённые id: все слоты ниже, если сказано «все» / филиал, иначе отмеченные.
 Ответ JSON.`,
     `Запрос: ${asked.slice(0, 2000)}
 JSON: {"comment":"что сделали","changes":[{"id":"crm-…","field":"limit","to":"8"}],"adds":[]}
@@ -739,6 +791,8 @@ export function applyChanges(slots: CrmSlot[], changes: { id: string; field: str
       hit.day = Math.max(1, Math.min(7, Number(c.to) || hit.day));
       hit.dayLabel = dayLabel(hit.day);
     } else if (c.field === "limit") hit.limit = Math.max(0, Number(c.to) || 0);
+    else if (c.field === "priority") hit.priority = readPriority(c.to);
+    else if (c.field === "statusId") hit.statusId = Number(c.to) || hit.statusId;
     else if (c.field === "branch") {
       const br = matchBranch(c.to);
       hit.branch = br.branch;

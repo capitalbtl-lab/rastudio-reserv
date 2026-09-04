@@ -1082,6 +1082,19 @@ export const adminSchedule = createServerFn({ method: "POST" })
         return { ok: false as const, error: "В предпросмотре нет правок. Нажмите стрелку отправки, затем «Опубликовать изменения»." };
       }
       let next = allowed.length ? applyChanges(slots, allowed) : slots.map((s) => ({ ...s }));
+      const flagChanges = allowed.filter((c) => c.field === "priority" || c.field === "statusId");
+      if (flagChanges.length) {
+        const { token, request } = await import("./alfacrm");
+        const t = await token();
+        for (const c of flagChanges) {
+          const s = next.find((x) => x.id === c.id);
+          if (!s?.groupId) continue;
+          const body: Record<string, unknown> = { id: s.groupId };
+          if (c.field === "priority") body.custom_prioritet = readPriority(c.to);
+          if (c.field === "statusId") body.status_id = Number(c.to);
+          await request(`/v2api/${s.branchId || 1}/group/update`, body, t).catch(() => undefined);
+        }
+      }
       const created: string[] = [];
       for (const d of drafts) {
         const slot = buildSlot(d, next);
