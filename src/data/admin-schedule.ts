@@ -2192,10 +2192,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const byCustomer = new Map<string, { id: number; tariffId: number; name: string }[]>();
       const byArchived = new Map<string, { id: number; tariffId: number; name: string }[]>();
       const branches = [...new Set(items.map((row) => Number(row.branchId) || 0).filter(Boolean))];
-      for (const branch of branches) {
-        const bulk = await loadBranchActiveTariffs(request, t, branch, catalog);
-        for (const [cid, list] of bulk.live) byCustomer.set(`${branch}:${cid}`, list);
-        for (const [cid, list] of bulk.archived) byArchived.set(`${branch}:${cid}`, list);
+      if (items.length > 24) {
+        for (const branch of branches) {
+          const bulk = await loadBranchActiveTariffs(request, t, branch, catalog);
+          for (const [cid, list] of bulk.live) byCustomer.set(`${branch}:${cid}`, list);
+          for (const [cid, list] of bulk.archived) byArchived.set(`${branch}:${cid}`, list);
+        }
       }
       const missing = items.filter((row) => {
         const k = `${Number(row.branchId)}:${Number(row.customerId)}`;

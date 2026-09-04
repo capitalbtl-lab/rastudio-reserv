@@ -6,7 +6,7 @@ import { retryFetch } from "@/lib/retry-fetch";
 import { RaSelect } from "@/components/ra-select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, collapsePupilsByCustomer, pupilListStats, groupsBySchoolId, bySchoolId, dropoutsAfterJob, personKey } from "@/data/pupil-tariffs";
+import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, TARIFF_READ_CHUNK, collapsePupilsByCustomer, pupilListStats, groupsBySchoolId, bySchoolId, dropoutsAfterJob, personKey } from "@/data/pupil-tariffs";
 import { ISO_DATE_MAX, ISO_DATE_MIN, clampIsoDate } from "@/data/admin-ui";
 
 type PupilGroup = {
@@ -311,36 +311,43 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         if (path !== "add") {
           const schoolRows = rows.filter((r) => schoolGroups.some((g) => g.groupId === r.groupId && g.branchId === r.branchId));
           if (schoolRows.length) {
-            setProgress({
-              done: schoolGroups.length,
-              total: schoolGroups.length,
-              label: `${title}: абонементы`,
-              unit: "групп этой школы",
-              extra: `${schoolRows.length} чел. этой школы сайта · всего ${loadedGroupsRef.current.size} из ${total}`,
-            });
-            let tariffsOk = false;
-            for (let attempt = 0; attempt < 6 && !tariffsOk; attempt += 1) {
-              try {
-                const active = (await retryFetch(
-                  () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: schoolRows } as never }),
-                  1,
-                  50000,
-                )) as { ok?: boolean; items?: PupilTariffItem[]; archivedOnly?: number };
-                if (active.ok) {
-                  archived += Number(active.archivedOnly || 0);
-                  const returned = active.items || [];
-                  const byKey = new Map(returned.map((r) => [`${r.branchId}:${r.customerId}`, r]));
-                  for (let ri = 0; ri < rows.length; ri += 1) {
-                    const hit = byKey.get(`${rows[ri].branchId}:${rows[ri].customerId}`);
-                    if (hit && schoolGroups.some((g) => g.groupId === rows[ri].groupId && g.branchId === rows[ri].branchId)) {
-                      rows[ri] = { ...rows[ri], ...hit };
+            let tariffsOk = true;
+            for (let i = 0; i < schoolRows.length; i += TARIFF_READ_CHUNK) {
+              const part = schoolRows.slice(i, i + TARIFF_READ_CHUNK);
+              setProgress({
+                done: i,
+                total: schoolRows.length,
+                label: `${title}: абонементы`,
+                unit: "чел. этой школы",
+                extra: `${Math.min(i + part.length, schoolRows.length)} из ${schoolRows.length} · не завис, пачки по ${TARIFF_READ_CHUNK}`,
+              });
+              setMsg(`${title}: абонементы ${i + 1}–${Math.min(i + part.length, schoolRows.length)} из ${schoolRows.length}`);
+              let partOk = false;
+              for (let attempt = 0; attempt < 5 && !partOk; attempt += 1) {
+                try {
+                  const active = (await retryFetch(
+                    () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: part } as never }),
+                    1,
+                    25000,
+                  )) as { ok?: boolean; items?: PupilTariffItem[]; archivedOnly?: number };
+                  if (active.ok) {
+                    archived += Number(active.archivedOnly || 0);
+                    const returned = active.items || [];
+                    const byKey = new Map(returned.map((r) => [`${r.branchId}:${r.customerId}`, r]));
+                    for (let ri = 0; ri < rows.length; ri += 1) {
+                      const hit = byKey.get(`${rows[ri].branchId}:${rows[ri].customerId}`);
+                      if (hit) rows[ri] = { ...rows[ri], ...hit };
                     }
-                  }
-                  tariffsOk = true;
+                    partOk = true;
+                  } else await wait(600 * (attempt + 1));
+                } catch (e) {
+                  setMsg(friendlyErr(e, `${title}: абонементы, повтор ${attempt + 1}`));
+                  await wait(700 * (attempt + 1));
                 }
-              } catch (e) {
-                setMsg(friendlyErr(e, `${title}: абонементы, повтор ${attempt + 1}`));
-                await wait(800 * (attempt + 1));
+              }
+              if (!partOk) {
+                tariffsOk = false;
+                break;
               }
             }
             if (!tariffsOk) {
@@ -349,6 +356,13 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               setByGroup(grouped);
               return false;
             }
+            setProgress({
+              done: schoolRows.length,
+              total: schoolRows.length,
+              label: `${title}: абонементы`,
+              unit: "чел. этой школы",
+              extra: `${schoolRows.length} чел. этой школы сайта · всего ${loadedGroupsRef.current.size} из ${total}`,
+            });
           }
         }
       }
