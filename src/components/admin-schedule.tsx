@@ -3348,6 +3348,7 @@ export function AdminSchedule() {
                       Описание
                       <input value={detail.description} onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                     </label>
+                    <GroupLessonStrip className="md:col-span-2" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} />
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:col-span-2 md:grid-cols-5">
                       <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                         Возраст
@@ -3447,7 +3448,6 @@ export function AdminSchedule() {
                         </span>
                       </label>
                     </div>
-                    <GroupLessonStrip className="md:col-span-2" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} />
                     <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                       Абонемент
                       <select
