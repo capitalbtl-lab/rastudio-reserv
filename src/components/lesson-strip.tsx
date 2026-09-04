@@ -102,8 +102,8 @@ function LessonTile({
       {isToday && !cancelled ? (
         <>
           <span className="text-[0.83rem] font-semibold tabular-nums text-white">{d.getDate()}</span>
-          <span className="text-[0.6rem] font-medium text-white/85">{MONTHS_SHORT[d.getMonth()]}</span>
           <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/90">сегодня</span>
+          <span className="text-[0.6rem] font-medium text-white/85">{MONTHS_SHORT[d.getMonth()]}</span>
         </>
       ) : (
         <>
@@ -689,8 +689,8 @@ export function LessonStrip({
         ) : (
           <div className="ra-today-tile flex h-[3.35rem] w-[2.4rem] min-w-[2.4rem] flex-col items-center justify-center rounded-lg px-0.5 text-center text-white" title="Сегодня">
             <span className="text-[0.83rem] font-semibold tabular-nums">{Number(today.slice(8))}</span>
-            <span className="text-[0.6rem] font-medium text-white/90">{MONTHS_SHORT[Number(today.slice(5, 7)) - 1]}</span>
             <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/95">сегодня</span>
+            <span className="text-[0.6rem] font-medium text-white/90">{MONTHS_SHORT[Number(today.slice(5, 7)) - 1]}</span>
           </div>
         )}
         {future.map((l) => (
