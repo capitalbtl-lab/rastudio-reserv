@@ -36,6 +36,7 @@ export type PupilTariffItem = {
   lessonsCount: number;
   eDate?: string;
   skip?: "no-tariff" | "already" | "lead";
+  activeTariffs?: { id: number; tariffId: number; name: string }[];
 };
 
 export const ASSIGN_CHUNK = 5;
@@ -168,6 +169,19 @@ export function activeCustomerTariffs(items: Record<string, unknown>[] | undefin
       tariffId: Number(it.tariff_id || it.tariffId || 0),
       name: String(it.tariff_name || it.name || "абонемент"),
     }));
+}
+
+export function keepPupilsWithActiveTariffs<T extends { customerId: number; branchId: number }>(
+  items: T[],
+  byCustomer: Map<string, { id: number; tariffId: number; name: string }[]>,
+) {
+  const out: (T & { activeTariffs: { id: number; tariffId: number; name: string }[] })[] = [];
+  for (const row of items) {
+    const list = byCustomer.get(`${row.branchId}:${row.customerId}`) || [];
+    if (!list.length) continue;
+    out.push({ ...row, activeTariffs: list });
+  }
+  return out;
 }
 export function customerTariffPayload(opts: {
   customerId: number;

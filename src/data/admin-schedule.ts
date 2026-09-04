@@ -1094,6 +1094,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         pupilItems?: import("./pupil-tariffs").PupilTariffItem[];
         includeLeads?: boolean;
         skipExisting?: boolean;
+        onlyActive?: boolean;
         mode?: "create" | "close" | "delete";
         subjectIds?: number[];
         lessonTypeIds?: number[];
@@ -1886,6 +1887,25 @@ export const adminSchedule = createServerFn({ method: "POST" })
           const row = pupilRowFromMember(m, g, best, includeLeads);
           if (row) items.push(row);
         }
+      }
+      if (data.onlyActive) {
+        const { customerTariffIndexPath, activeCustomerTariffs, keepPupilsWithActiveTariffs } = await import("./pupil-tariffs");
+        const byCustomer = new Map<string, { id: number; tariffId: number; name: string }[]>();
+        for (const row of items) {
+          const key = `${row.branchId}:${row.customerId}`;
+          if (byCustomer.has(key)) continue;
+          const json = await request<{ items?: Record<string, unknown>[] }>(
+            customerTariffIndexPath(row.branchId, row.customerId),
+            { page: 0, pageSize: 50, customer_id: row.customerId },
+            t,
+          ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+          byCustomer.set(key, activeCustomerTariffs(json.items));
+        }
+        const kept = keepPupilsWithActiveTariffs(items, byCustomer).map((row) => ({
+          ...row,
+          tariffName: row.activeTariffs.map((x) => x.name).filter(Boolean).join(", ") || row.tariffName,
+        }));
+        return { ok: true as const, items: kept, byGroup, total: kept.length, onlyActive: true };
       }
       return { ok: true as const, items, byGroup, total: items.length };
     }

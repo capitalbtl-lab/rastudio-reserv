@@ -40,6 +40,7 @@ type PupilTariffItem = {
   lessonsCount: number;
   eDate?: string;
   skip?: "no-tariff" | "already" | "lead";
+  activeTariffs?: { id: number; tariffId: number; name: string }[];
 };
 
 function friendlyErr(e: unknown, fallback: string) {
@@ -180,7 +181,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
 
   async function loadPlan() {
     setBusy(true);
-    setMsg("Читаю состав групп и подбираю абонементы…");
+    setMsg(path === "add" ? "Читаю состав групп и подбираю абонементы…" : "Читаю активные абонементы в CRM…");
     try {
       const res = (await retryFetch(
         () =>
@@ -189,6 +190,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               token: token(),
               action: "pupilTariffPlan",
               includeLeads,
+              onlyActive: path !== "add",
               groupKeys: [...picked]
                 .map((k) => {
                   const [branchId, groupId] = k.split(":").map(Number);
@@ -198,7 +200,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             } as never,
           }),
         1,
-        180000,
+        path === "add" ? 180000 : 360000,
       )) as { ok?: boolean; items?: PupilTariffItem[]; byGroup?: Record<string, GroupTariff>; error?: string };
       if (!res.ok) {
         setMsg(res.error || "Не удалось собрать список учеников.");
@@ -207,7 +209,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       const rows = res.items || [];
       setItems(rows);
       setByGroup(res.byGroup || {});
-      setChosen(new Set(rows.filter((r) => r.tariffId && r.status === "учится").map(pupilKey)));
+      setChosen(new Set(path === "add" ? rows.filter((r) => r.tariffId && r.status === "учится").map(pupilKey) : rows.map(pupilKey)));
       setSubjectOf(Object.fromEntries(groups.filter((g) => picked.has(g.key)).map((g) => [g.key, g.subjectId || 0])));
       const sample = rows.find((r) => r.tariffId);
       if (sample) {
@@ -517,7 +519,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               className="text-primary hover:underline"
-              onClick={() => setChosen(new Set(items.filter((it) => it.tariffId).map(pupilKey)))}
+              onClick={() => setChosen(new Set((path === "add" ? items.filter((it) => it.tariffId) : items).map(pupilKey)))}
             >
               всех с абонементом
             </button>
@@ -526,9 +528,15 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             </button>
             <span className="text-muted">
               отмечено {chosen.size} из {items.length}
+              {path !== "add" ? " с активным абонементом" : ""}
             </span>
           </div>
           <div className="max-h-72 overflow-auto rounded-2xl ring-1 ring-black/10">
+            {!items.length ? (
+              <p className="px-3 py-4 text-sm text-muted">
+                {path === "add" ? "В выбранных группах нет учеников." : "В выбранных группах нет детей с активным абонементом в CRM."}
+              </p>
+            ) : null}
             {items.map((it) => {
               const k = pupilKey(it);
               return (
@@ -551,6 +559,11 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                     <span className="mt-0.5 block text-[0.7rem] text-muted">
                       {it.groupName}
                       {it.school ? ` · ${it.school}` : ""}
+                      {path !== "add" && it.activeTariffs?.length
+                        ? ` · ${it.activeTariffs.map((t) => t.name).join(", ")}`
+                        : path !== "add" && it.tariffName
+                          ? ` · ${it.tariffName}`
+                          : ""}
                     </span>
                   </span>
                   <span className="shrink-0 text-right text-[0.72rem] text-muted">

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, type PupilGroup } from "./pupil-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 
 function slot(over: Partial<CrmSlot> = {}): CrmSlot {
@@ -199,5 +199,20 @@ describe("мастер абонементов учеников", () => {
       list.map((x) => x.id),
       [1],
     );
+  });
+
+  it("изменение и удаление оставляют только детей с живым абонементом", () => {
+    const rows = [
+      { customerId: 1, branchId: 1, name: "есть" },
+      { customerId: 2, branchId: 1, name: "нет" },
+    ];
+    const by = new Map([
+      ["1:1", [{ id: 10, tariffId: 386, name: "Абонемент 2950" }]],
+      ["1:2", [] as { id: number; tariffId: number; name: string }[]],
+    ]);
+    const kept = keepPupilsWithActiveTariffs(rows, by);
+    assert.equal(kept.length, 1);
+    assert.equal(kept[0].customerId, 1);
+    assert.equal(kept[0].activeTariffs[0].name, "Абонемент 2950");
   });
 });
