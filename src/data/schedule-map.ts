@@ -9,8 +9,8 @@ import { listPriceRows, SCHOOL_DIRECTION, tidyCourseName } from "@/data/prices-c
 import { SEED_SUBJECTS, loadSubjects } from "@/data/crm-subjects";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { slotMismatch } from "@/data/slot-mismatch";
-import { loadSiteTree, courseIdOf } from "./site-tree";
-import { SUBJECT_TO_COURSE, resolveGroupCourseId } from "./ids";
+import { loadSiteTree, saveSiteTree } from "./site-tree";
+import { SUBJECT_TO_COURSE, resolveGroupCourseId, groupAssignKey } from "./ids";
 import { UNMAPPED_SCHOOL } from "./group-status";
 
 export type SchoolLink = { schedule: string; siteHref: string; schoolId?: string };
@@ -205,20 +205,29 @@ export function canonicalCourse(
   return n;
 }
 
-/** Раскладывает группы по courseId / subjectId. Имена не участвуют. */
+/** Раскладывает группы по courseId / subjectId. Карта предмета важнее старого assign. */
 export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
   const tree = loadSiteTree();
   const map = loadScheduleMap();
+  let assignDirty = false;
   const mapped = slots.map((s) => {
-    const fromAssign = courseIdOf(s, tree);
-    const cid = fromAssign || resolveGroupCourseId(s, tree, map.courses);
+    const cid = resolveGroupCourseId(s, tree, map.courses);
+    const key = groupAssignKey(s);
+    if (key && cid && tree.assign[key] !== cid) {
+      tree.assign[key] = cid;
+      assignDirty = true;
+    }
+    if (key && !cid && tree.assign[key]) {
+      delete tree.assign[key];
+      assignDirty = true;
+    }
     const course = cid ? tree.courses.find((c) => c.id === cid || c.href === cid) : undefined;
     const schoolNode = course ? tree.schools.find((x) => x.id === course.schoolId) : undefined;
     if (!course || !schoolNode) {
       const mm = slotMismatch(s);
       return {
         ...s,
-        courseId: cid || "",
+        courseId: "",
         schoolId: "",
         school: "",
         path: "",
@@ -238,6 +247,7 @@ export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
     const mm = slotMismatch(next);
     return { ...next, mismatch: mm.level || undefined, mismatchText: mm.text || undefined };
   });
+  if (assignDirty) saveSiteTree(tree);
   return inheritSchoolBySubject(mapped);
 }
 

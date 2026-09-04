@@ -50,10 +50,10 @@
  *                         + .subjectId + .courseId
  *
  * КАК РЕЗОЛВИТЬ courseId ГРУППЫ (порядок, без имён):
- *   1. tree.assign[gid:{branchId}:{groupId}]
- *   2. slot.courseId, если такой курс есть в дереве
- *   3. schedule-map.courses[subjectId].courseId (админка → Соответствия)
- *      пустая запись = «нет курса»
+ *   1. schedule-map.courses[subjectId].courseId (Админка → Соответствия)
+ *      непустое = этот курс; пустая запись = «нет курса», assign не держит чужой курс
+ *   2. tree.assign[gid:{branchId}:{groupId}] — ручной перенос, если карты нет
+ *   3. slot.courseId, если такой курс есть в дереве
  *   иначе — «Без курса». Оператор выбирает папку (treeMove) или карту.
  *   Заводская таблица SUBJECT_TO_COURSE — только посев пустого schedule-map.json.
  *
@@ -166,25 +166,25 @@ export function courseIdOfSubject(subjectId: number, tree: SiteTree, mapCourses?
 }
 
 /**
- * Единая резолюция courseId группы. Порядок: assign → slot.courseId → карта админки.
- * Имя курса / группы не участвует. SUBJECT_TO_COURSE не читается.
+ * Единая резолюция courseId группы.
+ * Порядок: карта предмета → assign → slot.courseId. Имя не участвует.
  */
 export function resolveGroupCourseId(
   s: Pick<CrmSlot, "id" | "groupId" | "branchId" | "courseId" | "subjectId">,
   tree: SiteTree,
   mapCourses?: IdMapCourse[],
 ): string {
-  const assigned = courseIdOfGroup(s, tree);
-  if (assigned) return assigned;
-  if (s.courseId) {
-    const own = courseIdInTree(tree, s.courseId);
-    if (own) return own;
-  }
   if (s.subjectId && mapCourses?.length) {
     const fromMap = courseIdOfSubject(s.subjectId, tree, mapCourses);
     if (fromMap) return fromMap;
     const link = mapCourses.find((c) => c.subjectId === s.subjectId);
     if (link) return "";
+  }
+  const assigned = courseIdOfGroup(s, tree);
+  if (assigned) return assigned;
+  if (s.courseId) {
+    const own = courseIdInTree(tree, s.courseId);
+    if (own) return own;
   }
   return "";
 }

@@ -56,7 +56,7 @@ function wantedSubjectName(s: CrmSlot) {
 }
 
 function siteCourseValue(s: CrmSlot, tree: SiteTree) {
-  const id = String(tree.assign?.[groupAssignKey(s)] || s.courseId || "");
+  const id = String(s.courseId || tree.assign?.[groupAssignKey(s)] || "");
   return tree.courses.some((c) => c.id === id) ? id : "";
 }
 
@@ -1316,7 +1316,7 @@ export function AdminSchedule() {
       for (const s of filtered) {
         if (used.has(s.id)) continue;
         const key = Number(s.groupId) > 0 ? `gid:${Number(s.branchId) || 0}:${s.groupId}` : s.id;
-        const cid = (siteTree.assign?.[key] || s.courseId || "") as string;
+        const cid = (s.courseId || siteTree.assign?.[key] || "") as string;
         const byHit = courses.find((c) => c.courseId && c.courseId === cid);
         if (byHit) {
           byHit.items.push(s);

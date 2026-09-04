@@ -101,8 +101,26 @@ describe("курс группы из карты админки", () => {
     assert.equal(resolveGroupCourseId(slot, tree, [{ subjectId: 13, courseId: "/art-studio-5-6" }]), "/art-studio-5-6");
   });
 
-  it("пустая запись в карте = нет курса", () => {
-    assert.equal(resolveGroupCourseId(slot, tree, [{ subjectId: 13, courseId: "" }]), "");
+  it("карта предмета важнее старого assign в Подиум", () => {
+    const withAssign = {
+      ...tree,
+      assign: { "gid:2:433": "/model-school-podium" },
+      courses: [
+        ...tree.courses,
+        { id: "/model-school-podium", href: "/model-school-podium", schoolId: "/model-school", label: "Подиум", age: "9-14" },
+      ],
+      schools: [...tree.schools, { id: "/model-school", label: "Модельная школа", href: "/model-school" }],
+    };
+    const stuck = { ...slot, courseId: "/model-school-podium" };
+    assert.equal(
+      resolveGroupCourseId(stuck, withAssign, [{ subjectId: 13, courseId: "/art-studio-5-6" }]),
+      "/art-studio-5-6",
+    );
+  });
+
+  it("пустая запись в карте = нет курса, даже если assign Подиум", () => {
+    const withAssign = { ...tree, assign: { "gid:2:433": "/art-studio-5-6" } };
+    assert.equal(resolveGroupCourseId(slot, withAssign, [{ subjectId: 13, courseId: "" }]), "");
   });
 });
 

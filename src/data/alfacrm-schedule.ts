@@ -1,6 +1,6 @@
 /**
  * Загрузка групп из AlfaCRM. subjectId = group.subject_id || lesson.subject_id.
- * courseId = assign / слот / schedule-map (админка). Имя и хэштеги не склеивают курс.
+ * courseId = карта предмета (schedule-map), иначе assign / слот. Имя и хэштеги не склеивают курс.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
