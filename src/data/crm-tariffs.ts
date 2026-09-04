@@ -361,9 +361,9 @@ export const PERIOD_TYPES: Record<number, string> = { 1: "дней", 2: "нед�
 
 function toIsoDate(s: string) {
   const v = String(s || "").trim();
-  const iso = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const iso = v.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const ru = v.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})$/);
+  const ru = v.match(/(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})/);
   if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
   return "";
 }

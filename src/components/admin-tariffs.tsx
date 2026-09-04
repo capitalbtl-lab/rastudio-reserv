@@ -18,7 +18,7 @@ import type { TariffLink } from "@/data/tariff-map";
 import { siteCourseOptions, siteSchoolOptions } from "@/data/site-bind-core";
 import { PupilTariffWizard } from "@/components/admin-pupil-tariffs";
 import { RaSelect } from "@/components/ra-select";
-import { RA_POP } from "@/data/admin-ui";
+import { ISO_DATE_MAX, ISO_DATE_MIN, RA_POP, clampIsoDate } from "@/data/admin-ui";
 
 const CALC_NAMES: Record<number, string> = { 0: "Любой", 1: "Базовый счет", 2: "Отдельный счет" };
 const TYPE_NAMES: Record<number, string> = { 1: "Поурочная", 2: "Помесячная", 3: "Недельная" };
@@ -215,12 +215,19 @@ function money(n: number) {
 }
 
 function isoToRu(iso: string) {
-  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m ? `${m[3]}.${m[2]}.${m[1]}` : "";
+  const v = String(iso || "").trim();
+  const m = v.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+  const ru = v.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})/);
+  if (ru) return `${ru[1].padStart(2, "0")}.${ru[2].padStart(2, "0")}.${ru[3]}`;
+  return "";
 }
 
 function ruToIso(ru: string) {
-  const m = String(ru || "").trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  const v = String(ru || "").trim();
+  const iso = v.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if (!m) return "";
   return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
 }
@@ -241,32 +248,70 @@ function RuDateField({
   onChange: (iso: string) => void;
   className?: string;
 }) {
-  const [text, setText] = useState(isoToRu(value));
+  const shown = isoToRu(value);
+  const iso = ruToIso(shown) || ruToIso(value);
+  const [text, setText] = useState(shown);
+  const focused = useRef(false);
   useEffect(() => {
+    if (focused.current) return;
     setText(isoToRu(value));
   }, [value]);
+  function commit(raw: string) {
+    const nextIso = ruToIso(raw);
+    if (nextIso) {
+      setText(isoToRu(nextIso));
+      onChange(nextIso);
+    } else if (!raw.trim()) {
+      setText("");
+      onChange("");
+    } else {
+      setText(isoToRu(value));
+    }
+  }
   return (
-    <input
-      className={className}
-      inputMode="numeric"
-      placeholder="26.09.2026"
-      value={text}
-      onChange={(e) => {
-        const next = maskRuDate(e.target.value);
-        setText(next);
-        if (!next) onChange("");
-        else if (next.length === 10) onChange(ruToIso(next));
-      }}
-      onBlur={() => {
-        const iso = ruToIso(text);
-        if (iso) {
-          setText(isoToRu(iso));
-          onChange(iso);
-        } else if (text.trim()) {
-          setText(isoToRu(value));
-        }
-      }}
-    />
+    <div className="relative">
+      <input
+        className={cn(className, "pr-9")}
+        inputMode="numeric"
+        placeholder="26.09.2026"
+        value={text}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onChange={(e) => {
+          const next = maskRuDate(e.target.value);
+          setText(next);
+          if (!next) onChange("");
+          else if (next.length === 10) {
+            const nextIso = ruToIso(next);
+            if (nextIso) onChange(nextIso);
+          }
+        }}
+        onBlur={() => {
+          focused.current = false;
+          commit(text);
+        }}
+      />
+      <input
+        type="date"
+        min={ISO_DATE_MIN}
+        max={ISO_DATE_MAX}
+        value={iso}
+        title="Календарь"
+        onChange={(e) => {
+          const next = clampIsoDate(e.target.value);
+          setText(isoToRu(next));
+          onChange(next);
+        }}
+        className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 cursor-pointer opacity-0"
+      />
+      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted" aria-hidden>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M8 3v4M16 3v4M3 10h18" />
+        </svg>
+      </span>
+    </div>
   );
 }
 
