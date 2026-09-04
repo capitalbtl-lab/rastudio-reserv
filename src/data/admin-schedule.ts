@@ -2564,51 +2564,52 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const dateIso = isoish(String(data.date || ""));
       const dateRu = dateIso ? formatRuDob(dateIso) : "";
       async function findLesson() {
-        const filters: Record<string, unknown>[] = [];
-        for (const status of [1, 2, 3]) {
-          if (gid && dateRu) filters.push({ status, group_id: gid, date_from: dateRu, date_to: dateRu });
-          if (gid && dateIso) filters.push({ status, group_id: gid, date: dateIso });
-          if (gid) filters.push({ status, group_id: gid });
-        }
-        for (const extra of filters) {
-          for (let page = 0; page < 8; page++) {
-            const json = await request<{ items?: Record<string, unknown>[] }>(
+        if (!lessonId && !dateIso) return null;
+        const packs = await Promise.all(
+          [1, 2, 3].map((status) =>
+            request<{ items?: Record<string, unknown>[] }>(
               `/v2api/${branch}/lesson/index`,
-              { page, pageSize: 100, ...extra },
+              {
+                page: 0,
+                pageSize: 50,
+                status,
+                ...(gid ? { group_id: gid } : {}),
+                ...(dateRu ? { date_from: dateRu, date_to: dateRu } : {}),
+              },
               t,
-            ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-            const hit = (json.items || []).find((x) => (lessonId ? Number(x.id) === lessonId : isoish(String(x.date || x.lesson_date || "")) === dateIso));
-            if (hit) return hit;
-            if ((json.items || []).length < 100) break;
-          }
+            ).catch(() => ({ items: [] as Record<string, unknown>[] })),
+          ),
+        );
+        for (const json of packs) {
+          const hit = (json.items || []).find((x) =>
+            lessonId ? Number(x.id) === lessonId : isoish(String(x.date || x.lesson_date || "")) === dateIso,
+          );
+          if (hit) return hit;
         }
         return null;
       }
-      const raw = lessonId || dateIso ? await findLesson() : null;
+      const [raw, rooms, teachers] = await Promise.all([
+        findLesson(),
+        roomsOfBranch(request, t, branch),
+        teachersOfBranch(request, t, branch),
+      ]);
       const from = hm(String(raw?.time_from || data.time || ""));
       const to = hm(String(raw?.time_to || data.timeTo || ""));
       const teacherIds = (Array.isArray(raw?.teacher_ids) ? raw!.teacher_ids : data.teacherIds || []).map(Number).filter((n) => n > 0);
       const customerIds = (Array.isArray(raw?.customer_ids) ? raw!.customer_ids : data.customerIds || []).map(Number).filter((n) => n > 0);
       const groupIds = (Array.isArray(raw?.group_ids) ? raw!.group_ids : []).map(Number).filter((n) => n > 0);
       if (!groupIds.length && gid) groupIds.push(gid);
-      const customers: { id: number; name: string }[] = [];
-      for (const cid of customerIds.slice(0, 20)) {
-        try {
-          const pack = await request<{ items?: { id?: number; name?: string }[] }>(`/v2api/${branch}/customer/index`, { page: 0, pageSize: 1, id: cid }, t);
-          const row = (pack.items || []).find((x) => Number(x.id) === cid);
-          customers.push({ id: cid, name: String(row?.name || `клиент ${cid}`) });
-        } catch {
-          customers.push({ id: cid, name: `клиент ${cid}` });
-        }
-      }
-      const rooms = await roomsOfBranch(request, t, branch);
-      const teachers = await teachersOfBranch(request, t, branch);
+      const customers = customerIds.map((cid) => {
+        const d = findDossier({ crmId: cid });
+        const name = String(d?.child?.fio || d?.parent?.fio || "").trim();
+        return { id: cid, name: name || `клиент ${cid}` };
+      });
       const catalog = lessonCatalogOf(branch);
-      const groups = listAdminSlots()
-        .filter((s) => s.branchId === branch && s.groupId)
-        .map((s) => ({ id: s.groupId, name: s.groupName || `группа ${s.groupId}` }));
       const seen = new Set<number>();
-      const groupList = groups.filter((g) => (seen.has(g.id) ? false : (seen.add(g.id), true)));
+      const groupList = listAdminSlots()
+        .filter((s) => s.branchId === branch && s.groupId)
+        .map((s) => ({ id: s.groupId, name: s.groupName || `группа ${s.groupId}` }))
+        .filter((g) => (seen.has(g.id) ? false : (seen.add(g.id), true)));
       return {
         ok: true as const,
         lesson: {

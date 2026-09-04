@@ -254,10 +254,25 @@ function LessonEdit({
   onSaved: (patch: Partial<GroupCalLesson>) => void;
 }) {
   const lessonId = seed.lessonId || 0;
+  const seedForm: LessonForm = {
+    id: lessonId,
+    date: toYmd(seed.date),
+    from: seed.from || "",
+    to: seed.to || "",
+    duration: seed.duration || 90,
+    roomId: seed.roomId || 0,
+    groupIds: seed.groupIds?.length ? seed.groupIds : groupId ? [groupId] : [],
+    customerIds: seed.customerIds || [],
+    customers: [],
+    subjectId: seed.subjectId || 0,
+    teacherIds: seed.teacherIds || [],
+    topic: seed.topic || "",
+    note: seed.note || "",
+  };
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState<LessonForm | null>(null);
+  const [form, setForm] = useState<LessonForm>(seedForm);
   const [rooms, setRooms] = useState<{ id: number; name: string }[]>([]);
   const [teachers, setTeachers] = useState<{ id: number; name: string }[]>([]);
   const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
@@ -288,21 +303,6 @@ function LessonEdit({
     }).then((res) => {
       if (!live) return;
       if (!res.ok) {
-        setForm({
-          id: lessonId,
-          date: toYmd(seed.date),
-          from: seed.from || "",
-          to: seed.to || "",
-          duration: seed.duration || 90,
-          roomId: seed.roomId || 0,
-          groupIds: seed.groupIds?.length ? seed.groupIds : groupId ? [groupId] : [],
-          customerIds: seed.customerIds || [],
-          customers: [],
-          subjectId: seed.subjectId || 0,
-          teacherIds: seed.teacherIds || [],
-          topic: seed.topic || "",
-          note: seed.note || "",
-        });
         setError(("error" in res && res.error) || "");
         setLoading(false);
         return;
@@ -421,10 +421,8 @@ function LessonEdit({
             Закрыть
           </button>
         </div>
-        {loading || !form ? (
-          <p className="mt-6 text-sm text-muted">{error || "Загружаю занятие из AlfaCRM…"}</p>
-        ) : (
-          <div className="mt-4 grid gap-3">
+        {loading ? <p className="mt-2 text-[0.75rem] text-muted">Сверяю с AlfaCRM…</p> : null}
+        <div className="mt-4 grid gap-3">
             <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
               Дата
               <input value={form.date} onChange={(e) => set("date", toYmd(e.target.value))} className={FIELD} />
@@ -539,7 +537,6 @@ function LessonEdit({
               </button>
             </div>
           </div>
-        )}
       </div>
     </div>,
     document.body,
