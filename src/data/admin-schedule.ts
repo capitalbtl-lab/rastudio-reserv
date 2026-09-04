@@ -205,31 +205,23 @@ async function overlayGroupHeadcount(
   request: typeof import("./alfacrm").request,
   t: string,
 ) {
-  const { countCgiByGroup, crmIndexTotal } = await import("./pupil-tariffs");
-  const cgi = new Map<number, number>();
-  for (const branch of [1, 2, 3, 4]) {
-    for (let page = 0; page < 12; page += 1) {
-      const res = await request<{ items?: Record<string, unknown>[] }>(
-        `/v2api/${branch}/cgi/index`,
-        { page, pageSize: 200 },
-        t,
-      ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-      const items = res.items || [];
-      for (const [gid, n] of countCgiByGroup(items)) cgi.set(gid, (cgi.get(gid) || 0) + n);
-      if (items.length < 200) break;
-    }
-  }
-  const next = groups.map((g) => ({ ...g, taken: Math.max(g.taken, cgi.get(g.groupId) || 0) }));
-  const zeros = next.filter((g) => !g.taken);
-  for (let i = 0; i < zeros.length; i += 5) {
+  const { crmIndexTotal } = await import("./pupil-tariffs");
+  const next = groups.map((g) => ({ ...g }));
+  for (let i = 0; i < next.length; i += 6) {
     await Promise.all(
-      zeros.slice(i, i + 5).map(async (g) => {
-        const res = await request<{ items?: unknown[]; total?: number; count?: number }>(
-          `/v2api/${g.branchId}/customer/index`,
+      next.slice(i, i + 6).map(async (g) => {
+        const json = await request<{ items?: Record<string, unknown>[]; total?: number; count?: number }>(
+          `/v2api/${g.branchId}/customer/index?group_id=${g.groupId}`,
           { page: 0, pageSize: 50, group_id: g.groupId },
           t,
-        ).catch(() => ({ items: [] as unknown[] }));
-        g.taken = crmIndexTotal(res);
+        ).catch(() => null);
+        if (!json) return;
+        const ids = new Set<number>();
+        for (const c of json.items || []) {
+          const id = Number(c.id || 0);
+          if (id) ids.add(id);
+        }
+        g.taken = Math.max(crmIndexTotal(json), ids.size);
       }),
     );
   }
@@ -1929,37 +1921,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
       return { ok: true as const, rules, hint: funnelAutoHint(rules) };
     }
     if (data.action === "pupilTariffGroups") {
-      const { uniqueLiveGroups, crmGroupQuantity } = await import("./pupil-tariffs");
+      const { uniqueLiveGroups } = await import("./pupil-tariffs");
       const { token, request } = await import("./alfacrm");
       const t = await token();
-      const qty = new Map<number, { taken: number; limit: number }>();
-      try {
-        for (const branch of [1, 2, 3, 4]) {
-          for (let page = 0; page < 8; page += 1) {
-            const res = await request<{ items?: Record<string, unknown>[] }>(
-              `/v2api/${branch}/group/index`,
-              { page, pageSize: 200 },
-              t,
-            ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-            const items = res.items || [];
-            for (const g of items) {
-              const id = Number(g.id) || 0;
-              if (!id) continue;
-              const taken = crmGroupQuantity(g);
-              const limit = Number(g.limit) || 0;
-              const prev = qty.get(id);
-              qty.set(id, { taken: Math.max(prev?.taken || 0, taken), limit: prev?.limit || limit });
-            }
-            if (items.length < 200) break;
-          }
-        }
-      } catch {
-        /* */
-      }
-      const base = uniqueLiveGroups(listAdminSlots()).map((g) => {
-        const hit = qty.get(g.groupId);
-        return { ...g, taken: Math.max(g.taken, hit?.taken || 0), limit: g.limit || hit?.limit || 0 };
-      });
+      const base = uniqueLiveGroups(listAdminSlots());
       const groups = (await overlayGroupHeadcount(base, request, t).catch(() => base)).sort(
         (a, b) =>
           Number(b.taken > 0) - Number(a.taken > 0) ||
