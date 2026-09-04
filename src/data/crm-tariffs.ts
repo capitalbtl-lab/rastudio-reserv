@@ -15,7 +15,8 @@ import { loadSubjects, pullSubjectsFromCrm } from "./crm-subjects";
 import { listAdminSlots } from "./alfacrm-schedule";
 import { loadScheduleMap } from "./schedule-map";
 import type { CrmSlot } from "./crm-slots-core";
-import { guessTariffLinks, type TariffLink } from "./tariff-map";
+import { guessTariffLinks, readTariffMap, saveTariffMap, type TariffLink } from "./tariff-map";
+import { loadSiteTree, slotTreeKey } from "./site-tree";
 
 export type CrmLessonType = { id: number; name: string };
 export type CrmBranch = { id: number; name: string; short: string };
@@ -659,6 +660,29 @@ export function subjectsWithHref() {
   });
 }
 
+/** subjectId CRM, которые сидят на курсе сайта: карта Соответствий + группы с этим courseId. Имя не смотрим. */
+export function courseSubjectIndex(): Record<string, number[]> {
+  const map = loadScheduleMap();
+  const tree = loadSiteTree();
+  const out = new Map<string, Set<number>>();
+  const add = (raw: string, sid: number) => {
+    if (!raw || !sid) return;
+    const id = tree.courses.find((c) => c.id === raw || c.href === raw)?.id || raw;
+    let set = out.get(id);
+    if (!set) {
+      set = new Set();
+      out.set(id, set);
+    }
+    set.add(sid);
+  };
+  for (const c of map.courses) add(c.courseId || c.siteHref, Number(c.subjectId) || 0);
+  for (const s of listAdminSlots()) {
+    const cid = String(s.courseId || tree.assign[slotTreeKey(s)] || "");
+    add(cid, Number(s.subjectId) || 0);
+  }
+  return Object.fromEntries([...out.entries()].map(([k, v]) => [k, [...v]]));
+}
+
 export const LESSON_TYPE_ORDER = [2, 5, 10, 11, 3, 4, 1, 15, 13, 7, 6, 8, 12, 9, 14];
 
 export function sortLessonTypes(list: CrmLessonType[]) {
@@ -711,7 +735,26 @@ export function saveTariffEdits(incoming: CrmTariff[], dropLocalIds: number[] = 
     if (!id) continue;
     byId.set(id, normalizeTariff({ ...(byId.get(id) || raw), ...raw, id }));
   }
-  return saveTariffs({ ...store, at: new Date().toISOString(), items: [...byId.values()] });
+  const packed = saveTariffs({ ...store, at: new Date().toISOString(), items: [...byId.values()] });
+  const to = Number(incoming.find((t) => Number(t.id) > 0)?.id) || 0;
+  if (to && drop.size) {
+    const map = readTariffMap();
+    let changed = false;
+    const next: TariffLink[] = [];
+    const seen = new Set<number>();
+    for (const x of map) {
+      const id = drop.has(x.tariffId) ? to : x.tariffId;
+      if (!id || seen.has(id)) {
+        if (drop.has(x.tariffId)) changed = true;
+        continue;
+      }
+      if (id !== x.tariffId) changed = true;
+      seen.add(id);
+      next.push({ ...x, tariffId: id });
+    }
+    if (changed) saveTariffMap(next);
+  }
+  return packed;
 }
 
 function formFields(html: string) {
@@ -977,6 +1020,7 @@ export async function pushTariffsToCrm(list: CrmTariff[]) {
   let cookie = login.cookie;
   const results: { id: number; ok: boolean; error?: string }[] = [];
   const created: CrmTariff[] = [];
+  const remaps: { from: number; to: number }[] = [];
   const seenNames = new Set<string>();
   for (const t of unique) {
     const key = t.name.trim().toLowerCase();
@@ -989,6 +1033,7 @@ export async function pushTariffsToCrm(list: CrmTariff[]) {
       const localId = t.id;
       const made = await createTariffInCrm(t);
       results.push({ id: made.id || 0, ok: made.ok, error: made.ok ? undefined : made.error });
+      if (made.id) remaps.push({ from: localId, to: made.id });
       if (made.tariff) {
         created.push(made.tariff);
         saveTariffEdits([made.tariff], [localId]);
@@ -1008,6 +1053,7 @@ export async function pushTariffsToCrm(list: CrmTariff[]) {
     failed: failed.length,
     results,
     created,
+    remaps,
   };
 }
 

@@ -37,7 +37,7 @@ import { listTeachers, teachersAtBranch, mergeTeacher, saveTeachers, loadTeacher
 import { searchClientViews, findDossier, upsertDossier, applyCrmCustomer } from "./dossiers";
 import { isPhoneLike } from "./client-display";
 import { clientCardId, CRM_BRANCH } from "./ids";
-import { loadTariffs, pullTariffsFromCrm, matchTariffs, groupTariffPack, subjectTariffStats, saveTariffEdits, pushTariffsToCrm, archiveTariffsInCrm, aiTariffsParse, applyTariffChanges, probeCreateTariff, probeDeleteTariff, subjectsWithHref, tariffGroupHits } from "./crm-tariffs";
+import { loadTariffs, pullTariffsFromCrm, matchTariffs, groupTariffPack, subjectTariffStats, saveTariffEdits, pushTariffsToCrm, archiveTariffsInCrm, aiTariffsParse, applyTariffChanges, probeCreateTariff, probeDeleteTariff, subjectsWithHref, tariffGroupHits, courseSubjectIndex } from "./crm-tariffs";
 import { loadScheduleMap, saveScheduleMap } from "./schedule-map";
 import { packSubjectRows, bindSubjectCourse } from "./subject-admin";
 import { isAdminGroup, readPriority, crmPriorityOf } from "./group-status";
@@ -2370,6 +2370,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           subjects: subjectsWithHref(),
           tree: (await import("./site-tree")).loadSiteTree(),
           tariffMap: (await import("./tariff-map")).guessTariffLinks(store.items),
+          courseSubjects: courseSubjectIndex(),
         };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось прочитать абонементы." };
@@ -2438,6 +2439,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           subjects: subjectsWithHref(),
           pushed: res.pushed,
           failed: res.failed,
+          remaps: res.remaps || [],
           error: res.error || undefined,
         };
       } catch (e) {

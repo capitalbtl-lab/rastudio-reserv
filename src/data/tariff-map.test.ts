@@ -27,4 +27,12 @@ describe("карта абонемент → курс сайта", () => {
     );
     assert.equal(out.length, 0);
   });
+
+  it("черновик абонемента держит привязку курса по id, не по имени", () => {
+    const saved = [{ tariffId: -42, schoolId: "/art-studio", courseId: "/art-studio-9-13" }];
+    const out = guessTariffLinks([{ id: 10, subjectIds: [1] }], saved);
+    const draft = out.find((x) => x.tariffId === -42);
+    assert.equal(draft?.courseId, "/art-studio-9-13");
+    assert.equal(out.find((x) => x.tariffId === 10)?.courseId || "", "");
+  });
 });

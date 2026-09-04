@@ -186,9 +186,9 @@ export async function handleAdminDisk(data: DiskReq) {
     if (kind === "tariffs") {
       const raw = readJson("crm-tariffs.json") || {};
       const items = Array.isArray(raw.items) ? raw.items : [];
-      const subjects = itemsOf("crm-subjects.json");
       const { loadSiteTree } = await import("./site-tree");
       const { guessTariffLinks, readTariffMap, saveTariffMap } = await import("./tariff-map");
+      const { subjectsWithHref, courseSubjectIndex } = await import("./crm-tariffs");
       let tariffMap = guessTariffLinks(items as { id: number; subjectIds: number[]; archive?: boolean }[]);
       if (!readTariffMap().length && tariffMap.some((x) => x.courseId)) tariffMap = saveTariffMap(tariffMap);
       return {
@@ -197,7 +197,8 @@ export async function handleAdminDisk(data: DiskReq) {
         tariffs: items.map((t) => ({ ...(t as object), groups: [] })),
         lessonTypes: Array.isArray(raw.lessonTypes) ? raw.lessonTypes : [],
         branches: Array.isArray(raw.branches) && raw.branches.length ? raw.branches : BRANCHES,
-        subjects,
+        subjects: subjectsWithHref(),
+        courseSubjects: courseSubjectIndex(),
         total: items.length,
         tree: loadSiteTree(),
         tariffMap,

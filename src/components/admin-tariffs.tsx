@@ -93,6 +93,22 @@ function token() {
 type GroupHit = { id: string; gid: number; name: string; branch: string; branchId?: number; age: string; mins: number; subjectId?: number; courseId?: string };
 type Row = CrmTariff & { groups: GroupHit[] };
 type Change = { id: number; field: string; from: string; to: string };
+type SiteCourse = { id: string; schoolId: string; label: string; href?: string; age?: string };
+type SiteSchool = { id: string; label: string };
+type SubjectRow = { id: number; name: string; href?: string; courseId?: string };
+
+function courseSelectOptions(courses: SiteCourse[], schools: SiteSchool[], schoolId: string) {
+  const list = schoolId ? courses.filter((c) => c.schoolId === schoolId) : courses;
+  const nByLabel = new Map<string, number>();
+  for (const c of list) nByLabel.set(c.label, (nByLabel.get(c.label) || 0) + 1);
+  return list.map((c) => {
+    const school = schools.find((s) => s.id === c.schoolId);
+    const head = schoolId ? c.label : `${(school?.label || "").replace(/^Школа\s+/i, "")} · ${c.label}`;
+    const dup = (nByLabel.get(c.label) || 0) > 1;
+    const extra = c.age && !head.includes(c.age) ? c.age : c.id;
+    return { value: c.id, label: dup ? `${head} · ${extra}` : head };
+  });
+}
 type Probe = {
   id: number;
   name: string;
@@ -314,7 +330,7 @@ function blank(branchId: number): Row {
 export function AdminTariffs() {
   const [items, setItems] = useState<Row[]>([]);
   const [types, setTypes] = useState<CrmLessonType[]>([]);
-  const [subjects, setSubjects] = useState<{ id: number; name: string; href?: string }[]>([]);
+  const [subjects, setSubjects] = useState<SubjectRow[]>([]);
   const [branches, setBranches] = useState<CrmBranch[]>(FALLBACK_BRANCHES);
   const [at, setAt] = useState("");
   const [busy, setBusy] = useState(false);
@@ -342,6 +358,7 @@ export function AdminTariffs() {
   colWRef.current = colW;
   const [tree, setTree] = useState<SiteTree>({ schools: [], courses: [], assign: {} });
   const [tariffMap, setTariffMap] = useState<TariffLink[]>([]);
+  const [courseSubjects, setCourseSubjects] = useState<Record<string, number[]>>({});
 
   async function loadLocal() {
     setBusy(true);
@@ -353,11 +370,14 @@ export function AdminTariffs() {
       }
       if ("tariffs" in res && Array.isArray(res.tariffs)) setItems(res.tariffs as Row[]);
       if ("lessonTypes" in res && Array.isArray(res.lessonTypes)) setTypes(res.lessonTypes as CrmLessonType[]);
-      if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as { id: number; name: string; href?: string }[]);
+      if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as SubjectRow[]);
       if ("branches" in res && Array.isArray(res.branches) && res.branches.length) setBranches(res.branches as CrmBranch[]);
       if ("at" in res && res.at) setAt(String(res.at));
       if ("tree" in res && res.tree) setTree(res.tree as SiteTree);
       if ("tariffMap" in res && Array.isArray((res as { tariffMap?: TariffLink[] }).tariffMap)) setTariffMap((res as { tariffMap: TariffLink[] }).tariffMap);
+      if ("courseSubjects" in res && (res as { courseSubjects?: Record<string, number[]> }).courseSubjects) {
+        setCourseSubjects((res as { courseSubjects: Record<string, number[]> }).courseSubjects);
+      }
       setMsg("");
       return res;
     } catch (e) {
@@ -394,7 +414,7 @@ export function AdminTariffs() {
     }
     if ("tariffs" in res && Array.isArray(res.tariffs)) setItems(res.tariffs as Row[]);
     if ("lessonTypes" in res && Array.isArray(res.lessonTypes)) setTypes(res.lessonTypes as CrmLessonType[]);
-    if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as { id: number; name: string; href?: string }[]);
+    if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as SubjectRow[]);
     if ("branches" in res && Array.isArray(res.branches) && res.branches.length) setBranches(res.branches as CrmBranch[]);
     if ("at" in res && res.at) setAt(String(res.at));
     return res;
@@ -480,9 +500,38 @@ export function AdminTariffs() {
       { tariffId, courseId: course?.id || "", schoolId: course?.schoolId || "" },
     ];
     setTariffMap(next);
-    const res = await adminScheduleMap({ data: { token: token(), action: "saveTariffs", tariffs: next } });
-    if (res.ok && "tariffs" in res && Array.isArray(res.tariffs)) setTariffMap(res.tariffs as TariffLink[]);
-    setMsg(res.ok ? "Курс сайта записан. AlfaCRM не менялась." : res.error || "Не сохранилось.");
+    let mappedCount = 0;
+    if (course?.id) {
+      const mapped = [
+        ...(courseSubjects[course.id] || []),
+        ...subjects.filter((s) => s.courseId === course.id).map((s) => s.id),
+      ].filter(Boolean);
+      const ids = [...new Set(mapped)];
+      mappedCount = ids.length;
+      if (ids.length) {
+        const have = items.find((t) => t.id === tariffId)?.subjectIds || [];
+        const merged = have.length ? [...new Set([...have, ...ids])] : ids;
+        if (merged.length !== have.length || merged.some((id) => !have.includes(id))) {
+          patch(tariffId, { subjectIds: merged });
+        }
+      }
+    }
+    const persist = next.filter((x) => x.tariffId !== 0);
+    const res = await adminScheduleMap({ data: { token: token(), action: "saveTariffs", tariffs: persist } });
+    if (res.ok && "tariffs" in res && Array.isArray(res.tariffs)) {
+      const server = res.tariffs as TariffLink[];
+      const pending = next.filter((x) => x.tariffId < 0 && !server.some((s) => s.tariffId === x.tariffId));
+      setTariffMap([...server, ...pending]);
+      setMsg(
+        !course?.id
+          ? "Курс сайта снят."
+          : mappedCount
+            ? "Курс сайта записан по ID. Предметы CRM подставлены из соответствий курса."
+            : "Курс записан по ID. Предметов у курса в соответствиях нет — выберите предмет CRM вручную.",
+      );
+    } else {
+      setMsg(res.ok ? "Курс сайта записан. AlfaCRM не менялась." : res.error || "Не сохранилось.");
+    }
   }
 
   function patch(id: number, next: Partial<Row>) {
@@ -956,9 +1005,7 @@ export function AdminTariffs() {
                         className="h-8 w-full rounded-[8px] text-[0.75rem]"
                         groups={siteSchools.map((sc) => ({
                           label: sc.label,
-                          options: siteCourses
-                            .filter((c) => c.schoolId === sc.id)
-                            .map((c) => ({ value: c.id, label: c.label })),
+                          options: courseSelectOptions(siteCourses, siteSchools, sc.id),
                         }))}
                         onChange={(v) => void bindTariff(t.id, v)}
                       />
@@ -1004,12 +1051,26 @@ export function AdminTariffs() {
                           onPush={async () => {
                             const current = items.find((x) => x.id === opened.id) || opened;
                             const { groups: _g, ...tariff } = current;
+                            const oldId = opened.id;
+                            const pending = tariffMap.find((x) => x.tariffId === oldId);
                             const saved = await run("tariffsSave", { tariff });
                             if (!saved.ok) return saved;
                             const res = await run("tariffsPush", { tariff });
                             if (res.ok) {
-                              setDirty((d) => { const n = new Set(d); n.delete(opened.id); return n; });
-                              setMsg(opened.id > 0 ? `Абонемент ${opened.id} выгружен в AlfaCRM.` : "Новый абонемент создан в AlfaCRM.");
+                              setDirty((d) => { const n = new Set(d); n.delete(oldId); return n; });
+                              const remaps = ((res as { remaps?: { from: number; to: number }[] }).remaps || []).filter((r) => r.to > 0);
+                              const to = remaps.find((r) => r.from === oldId)?.to
+                                || (oldId < 0 ? ((res as { tariffs?: Row[] }).tariffs || []).find((t) => t.id > 0 && t.name === current.name)?.id || 0 : 0);
+                              if (to && pending?.courseId) {
+                                const next = [
+                                  ...tariffMap.filter((x) => x.tariffId !== oldId && x.tariffId !== to),
+                                  { tariffId: to, courseId: pending.courseId, schoolId: pending.schoolId },
+                                ];
+                                setTariffMap(next);
+                                await adminScheduleMap({ data: { token: token(), action: "saveTariffs", tariffs: next.filter((x) => x.tariffId > 0) } });
+                                setOpen(to);
+                              }
+                              setMsg(to ? `Абонемент ${to} выгружен в AlfaCRM.` : opened.id > 0 ? `Абонемент ${opened.id} выгружен в AlfaCRM.` : "Новый абонемент создан в AlfaCRM.");
                             }
                             return res;
                           }}
@@ -1098,7 +1159,7 @@ function Editor({
   busy: boolean;
   tabs: CrmBranch[];
   typeList: CrmLessonType[];
-  subjectList: { id: number; name: string; href?: string }[];
+  subjectList: SubjectRow[];
   tree: SiteTree;
   courseId: string;
   onBind: (courseId: string) => void;
@@ -1118,7 +1179,7 @@ function Editor({
   const allCourses = tree.courses.length ? tree.courses : siteCourseOptions();
   const [schoolPick, setSchoolPick] = useState(course?.schoolId || "");
   useEffect(() => {
-    setSchoolPick(course?.schoolId || "");
+    if (course?.schoolId) setSchoolPick(course.schoolId);
   }, [courseId, course?.schoolId]);
   const needle = subQ.trim().toLowerCase();
   const selectedSubs = subjectList.filter((s) => t.subjectIds.includes(s.id));
@@ -1158,13 +1219,7 @@ function Editor({
             value={courseId}
             placeholder="нет курса"
             menuMinWidth={280}
-            options={(schoolId ? schoolCourses : allCourses).map((c) => {
-              const school = schools.find((s) => s.id === c.schoolId);
-              return {
-                value: c.id,
-                label: schoolId ? c.label : `${(school?.label || "").replace(/^Школа\s+/i, "")} · ${c.label}`,
-              };
-            })}
+            options={courseSelectOptions(schoolId ? schoolCourses : allCourses, schools, schoolId)}
             onChange={onBind}
           />
         </Field>
@@ -1278,7 +1333,11 @@ function Editor({
             ))}
           </div>
         ) : (
-          <p className="mb-1.5 text-[0.75rem] text-rose-600">Нет предметов CRM — без карты курса группа не подхватит абонемент.</p>
+          <p className="mb-1.5 text-[0.75rem] text-rose-600">
+            {courseId
+              ? "У этого курса сайта нет предметов CRM в соответствиях. Выберите предмет по ID — тогда группы его подхватят."
+              : "Выберите курс сайта — предметы подставятся из соответствий курса, не из названия."}
+          </p>
         )}
         {subOpen || needle ? (
           <div className="overflow-hidden rounded-xl ring-1 ring-black/10">
@@ -1393,7 +1452,7 @@ function TariffWizard({
   busy: boolean;
   tabs: CrmBranch[];
   typeList: CrmLessonType[];
-  subjectList: { id: number; name: string; href?: string }[];
+  subjectList: SubjectRow[];
   existing: Row[];
   onClose: () => void;
   onCreate: (drafts: Row[], push: boolean) => Promise<void>;

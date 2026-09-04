@@ -46,8 +46,8 @@ export function saveTariffMap(items: TariffLink[]) {
   const packed: TariffLink[] = [];
   const seen = new Set<number>();
   for (const x of items) {
-    const id = Number(x.tariffId) || 0;
-    if (!id || seen.has(id)) continue;
+    const id = Number(x.tariffId);
+    if (!Number.isFinite(id) || id === 0 || seen.has(id)) continue;
     seen.add(id);
     const course = tree.courses.find((c) => c.id === x.courseId || c.href === x.courseId);
     packed.push({
@@ -69,8 +69,11 @@ export function guessTariffLinks(
   const tree = loadSiteTree();
   const byId = new Map(saved.map((x) => [x.tariffId, x]));
   const out: TariffLink[] = [];
+  const seen = new Set<number>();
   for (const t of tariffs) {
-    if (!t.id || t.id < 0 || t.archive) continue;
+    if (!t.id || t.archive) continue;
+    if (t.id < 0 && !byId.get(t.id)) continue;
+    seen.add(t.id);
     const prev = byId.get(t.id);
     if (prev) {
       const course = tree.courses.find((c) => c.id === prev.courseId);
@@ -82,6 +85,16 @@ export function guessTariffLinks(
       continue;
     }
     out.push({ tariffId: t.id, courseId: "", schoolId: "" });
+  }
+  for (const prev of saved) {
+    if (prev.tariffId >= 0 || seen.has(prev.tariffId)) continue;
+    if (!prev.courseId && !prev.schoolId) continue;
+    const course = tree.courses.find((c) => c.id === prev.courseId);
+    out.push({
+      tariffId: prev.tariffId,
+      courseId: course?.id || prev.courseId || "",
+      schoolId: course?.schoolId || prev.schoolId || "",
+    });
   }
   return out;
 }
