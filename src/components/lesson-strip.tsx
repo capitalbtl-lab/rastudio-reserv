@@ -67,7 +67,7 @@ function LessonTile({
       data-lesson-id={l.lessonId || undefined}
       data-lesson-status={l.status}
       className={cn(
-        "flex h-[4.025rem] w-[2.82rem] min-w-[2.82rem] cursor-default flex-col items-center justify-center rounded-[0.9rem] px-0.5 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
+        "flex h-[3.35rem] w-[2.4rem] min-w-[2.4rem] cursor-default flex-col items-center justify-center rounded-lg px-0.5 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
         isToday && !cancelled && "ra-today-tile text-white",
         !isToday && done && "bg-emerald-100 text-fg ring-1 ring-emerald-400/80",
         !isToday && planned && "bg-white text-fg ring-1 ring-neutral-500/55",
@@ -216,7 +216,7 @@ export function LessonStrip({
         {todayHit ? (
           <LessonTile key={`${todayHit.date}-${todayHit.lessonId || todayHit.from}`} lesson={todayHit} today={today} onEnter={showTip} onLeave={() => setTip(null)} />
         ) : (
-          <div className="ra-today-tile flex h-[4.025rem] w-[2.82rem] min-w-[2.82rem] flex-col items-center justify-center rounded-[0.9rem] px-0.5 text-center text-white" title="Сегодня">
+          <div className="ra-today-tile flex h-[3.35rem] w-[2.4rem] min-w-[2.4rem] flex-col items-center justify-center rounded-lg px-0.5 text-center text-white" title="Сегодня">
             <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/95">сегодня</span>
             <span className="text-[0.83rem] font-semibold tabular-nums">{Number(today.slice(8))}</span>
             <span className="text-[0.6rem] font-medium text-white/90">{MONTHS_SHORT[Number(today.slice(5, 7)) - 1]}</span>

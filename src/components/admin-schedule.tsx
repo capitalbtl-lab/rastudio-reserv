@@ -3299,19 +3299,20 @@ export function AdminSchedule() {
                 data-group-id={detail.groupId || undefined}
                 data-branch-id={detail.branchId || undefined}
               >
-                <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5 md:px-6 md:pt-6">
+                <div className="flex shrink-0 items-center justify-between gap-3 px-4 pt-3 md:px-5 md:pt-4">
                   <div className="min-w-0 flex-1">
-                    <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Карточка группы · {groupCardId(detail.branchId, detail.groupId)}</p>
-                    <label className="mt-1 block">
+                    <p className="text-[0.62rem] font-semibold uppercase tracking-wider text-muted">Карточка группы · {groupCardId(detail.branchId, detail.groupId)}</p>
+                    <label className="mt-0.5 block">
                       <span className="sr-only">Название группы</span>
                       <input
                         value={detail.slot.groupName}
                         onChange={(e) => patch(detail.id, "groupName", e.target.value)}
-                        className="h-11 w-full rounded-md bg-white px-3 font-display text-xl font-semibold text-fg ring-1 ring-black/8"
+                        className="h-9 w-full rounded-md bg-white px-2.5 font-display text-lg font-semibold text-fg ring-1 ring-black/8"
                       />
                     </label>
-                    <p className="mt-1 text-sm text-muted">
+                    <p className="mt-0.5 text-[0.78rem] text-muted">
                       № {detail.groupId || "на сайте"} · {detail.slot.city}, {detail.slot.branch}
+                      <span className="ml-2">Учится {detail.slot.takenStudy ?? "—"} · лиды {detail.slot.takenLead ?? "—"} · всего {detail.slot.taken}</span>
                     </p>
                   </div>
                   <button type="button" className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-muted ring-1 ring-black/8" onClick={() => { setPupil(null); setDetail(null); }}>
@@ -3337,9 +3338,9 @@ export function AdminSchedule() {
                     {detail.error ? <p className="mt-2 text-sm font-semibold text-red-800">{detail.error}</p> : null}
                   </div>
                 ) : null}
-                <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 md:px-6 md:pb-6">
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted md:col-span-2">
+                <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:px-5 md:pb-5">
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                       Курс на сайте
                       <select
                         value={siteCourseValue(detail.slot, siteTree)}
@@ -3365,7 +3366,7 @@ export function AdminSchedule() {
                             if (next?.courseId) setDetail((d) => (d ? { ...d, slot: next } : d));
                           });
                         }}
-                        className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                        className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                       >
                         <option value="">— не выбран —</option>
                         {siteTree.schools.map((sc) => (
@@ -3381,116 +3382,14 @@ export function AdminSchedule() {
                         ))}
                       </select>
                     </label>
-                    <div className="grid gap-3 sm:grid-cols-2 md:col-span-2 md:grid-cols-4">
-                      <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                        Возраст
-                        <input value={detail.slot.age} onChange={(e) => patch(detail.id, "age", e.target.value)} className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
-                      </label>
-                      <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                        День
-                        <select
-                          value={shownBeat(detail.slot).day}
-                          onChange={(e) => patchBeat(detail.slot, "day", Number(e.target.value))}
-                          className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                        >
-                          {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                            <option key={d} value={d}>
-                              {["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"][d]}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted sm:col-span-2 md:col-span-1">
-                        С / до
-                        <span className="mt-1 flex items-center gap-1">
-                          <input value={shownBeat(detail.slot).timeFrom} onChange={(e) => patchBeat(detail.slot, "timeFrom", e.target.value)} className="h-10 w-full rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
-                          <input value={shownBeat(detail.slot).timeTo} onChange={(e) => patchBeat(detail.slot, "timeTo", e.target.value)} className="h-10 w-full rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
-                        </span>
-                      </label>
-                      <div className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                        ×нед
-                        <div className="mt-1 flex h-10 items-center">
-                          <WeekDots
-                            s={detail.slot}
-                            index={view[detail.slot.id] || 0}
-                            onView={(i) => setView((v) => ({ ...v, [detail.slot.id]: i }))}
-                            onAdd={(b) => addBeat(detail.slot, b)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2 md:col-span-2 md:grid-cols-4">
-                      <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted md:col-span-2">
-                        Филиал
-                        <select
-                          value={detail.slot.branchId || ""}
-                          onChange={(e) => {
-                            const branchId = Number(e.target.value) || 0;
-                            const hit = CRM_BRANCH[branchId];
-                            const city = hit?.name.split(",")[0] || "";
-                            const branch = hit?.short || "";
-                            setSlots((list) => list.map((row) => (row.id === detail.id ? { ...row, branchId, city, branch } : row)));
-                            setDirty((d) => new Set(d).add(detail.id));
-                            setDetail((d) => (d ? { ...d, branchId, slot: { ...d.slot, branchId, city, branch } } : d));
-                          }}
-                          className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                        >
-                          <option value="">— филиал —</option>
-                          {Object.entries(CRM_BRANCH).map(([id, b]) => (
-                            <option key={id} value={id}>
-                              {b.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                        Педагог
-                        <select
-                          value={detail.slot.teacher}
-                          onChange={(e) => {
-                            const name = e.target.value;
-                            const hit = teachersForBranch(detail.slot.branchId).find((t) => t.name === name);
-                            const next = { ...detail.slot, teacher: name, teacherId: hit?.id || 0, teacherIds: hit ? [hit.id] : [] };
-                            setSlots((list) => list.map((row) => (row.id === detail.id ? next : row)));
-                            setDirty((d) => new Set(d).add(detail.id));
-                            setDetail((d) => (d ? { ...d, slot: next } : d));
-                          }}
-                          className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                        >
-                          <option value="">— филиал —</option>
-                          {teachersForBranch(detail.slot.branchId).map((t) => (
-                            <option key={t.id} value={t.name}>
-                              {t.name}
-                            </option>
-                          ))}
-                          {detail.slot.teacher && !teachersForBranch(detail.slot.branchId).some((t) => t.name === detail.slot.teacher) ? (
-                            <option value={detail.slot.teacher}>{detail.slot.teacher} · нет в филиале</option>
-                          ) : null}
-                        </select>
-                      </label>
-                      <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-                        Места
-                        <span className="mt-1 flex items-center gap-1">
-                          <input
-                            value={detail.slot.limit}
-                            onChange={(e) => patch(detail.id, "limit", Number(e.target.value) || 0)}
-                            className="h-10 w-full rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
-                          />
-                          <span className="shrink-0 text-sm font-medium normal-case text-muted">/ {detail.slot.taken}</span>
-                        </span>
-                      </label>
-                    </div>
-                    <p className="md:col-span-2 text-sm text-muted">
-                      Учится {detail.slot.takenStudy ?? "—"} · лиды {detail.slot.takenLead ?? "—"} · всего в составе {detail.slot.taken}
-                    </p>
-                    <div className="md:col-span-2">
-                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                    <div>
+                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                       Предмет
                       {(() => {
                         const branchSubs = branchSubjectList(slots, detail.branchId, subjects, detail.id);
                         const others = subjects.filter((s) => !branchSubs.some((b) => b.id === s.id));
                         return (
-                          <select value={detail.subjectId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, subjectId: Number(e.target.value) || 0 } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                          <select value={detail.subjectId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, subjectId: Number(e.target.value) || 0 } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
                             <option value="">— выберите предмет филиала —</option>
                             {branchSubs.length ? (
                               <optgroup label="В этом филиале">
@@ -3511,13 +3410,112 @@ export function AdminSchedule() {
                       })()}
                     </label>
                     </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:col-span-2 md:grid-cols-5">
+                      <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                        Возраст
+                        <input value={detail.slot.age} onChange={(e) => patch(detail.id, "age", e.target.value)} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                      </label>
+                      <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                        День
+                        <select
+                          value={shownBeat(detail.slot).day}
+                          onChange={(e) => patchBeat(detail.slot, "day", Number(e.target.value))}
+                          className="mt-0.5 h-8 w-full rounded-md bg-white px-1.5 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                            <option key={d} value={d}>
+                              {["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"][d]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="col-span-2 block text-[0.62rem] font-semibold uppercase tracking-wider text-muted sm:col-span-1">
+                        С / до
+                        <span className="mt-0.5 flex items-center gap-1">
+                          <input value={shownBeat(detail.slot).timeFrom} onChange={(e) => patchBeat(detail.slot, "timeFrom", e.target.value)} className="h-8 w-full rounded-md bg-white px-1.5 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                          <input value={shownBeat(detail.slot).timeTo} onChange={(e) => patchBeat(detail.slot, "timeTo", e.target.value)} className="h-8 w-full rounded-md bg-white px-1.5 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                        </span>
+                      </label>
+                      <div className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                        ×нед
+                        <div className="mt-0.5 flex h-8 items-center">
+                          <WeekDots
+                            s={detail.slot}
+                            index={view[detail.slot.id] || 0}
+                            onView={(i) => setView((v) => ({ ...v, [detail.slot.id]: i }))}
+                            onAdd={(b) => addBeat(detail.slot, b)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:col-span-2">
+                      <label className="col-span-2 block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                        Филиал
+                        <select
+                          value={detail.slot.branchId || ""}
+                          onChange={(e) => {
+                            const branchId = Number(e.target.value) || 0;
+                            const hit = CRM_BRANCH[branchId];
+                            const city = hit?.name.split(",")[0] || "";
+                            const branch = hit?.short || "";
+                            setSlots((list) => list.map((row) => (row.id === detail.id ? { ...row, branchId, city, branch } : row)));
+                            setDirty((d) => new Set(d).add(detail.id));
+                            setDetail((d) => (d ? { ...d, branchId, slot: { ...d.slot, branchId, city, branch } } : d));
+                          }}
+                          className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                        >
+                          <option value="">— филиал —</option>
+                          {Object.entries(CRM_BRANCH).map(([id, b]) => (
+                            <option key={id} value={id}>
+                              {b.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                        Педагог
+                        <select
+                          value={detail.slot.teacher}
+                          onChange={(e) => {
+                            const name = e.target.value;
+                            const hit = teachersForBranch(detail.slot.branchId).find((t) => t.name === name);
+                            const next = { ...detail.slot, teacher: name, teacherId: hit?.id || 0, teacherIds: hit ? [hit.id] : [] };
+                            setSlots((list) => list.map((row) => (row.id === detail.id ? next : row)));
+                            setDirty((d) => new Set(d).add(detail.id));
+                            setDetail((d) => (d ? { ...d, slot: next } : d));
+                          }}
+                          className="mt-0.5 h-8 w-full rounded-md bg-white px-1.5 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                        >
+                          <option value="">— педагог —</option>
+                          {teachersForBranch(detail.slot.branchId).map((t) => (
+                            <option key={t.id} value={t.name}>
+                              {t.name}
+                            </option>
+                          ))}
+                          {detail.slot.teacher && !teachersForBranch(detail.slot.branchId).some((t) => t.name === detail.slot.teacher) ? (
+                            <option value={detail.slot.teacher}>{detail.slot.teacher} · нет в филиале</option>
+                          ) : null}
+                        </select>
+                      </label>
+                      <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                        Места
+                        <span className="mt-0.5 flex items-center gap-1">
+                          <input
+                            value={detail.slot.limit}
+                            onChange={(e) => patch(detail.id, "limit", Number(e.target.value) || 0)}
+                            className="h-8 w-full rounded-md bg-white px-2 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                          />
+                          <span className="shrink-0 text-[0.8rem] font-medium normal-case text-muted">/ {detail.slot.taken}</span>
+                        </span>
+                      </label>
+                    </div>
                     <GroupLessonStrip className="md:col-span-2" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} />
-                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                       Абонемент
                       <select
                         value={detail.tariffId || ""}
                         onChange={(e) => setDetail((d) => (d ? { ...d, tariffId: Number(e.target.value) || 0 } : d))}
-                        className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
+                        className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"
                       >
                         <option value="">— не выбран —</option>
                         {detail.tariffs.some((t) => t.fit) ? (
@@ -3540,37 +3538,37 @@ export function AdminSchedule() {
                         ) : null}
                       </select>
                     </label>
-                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                       Описание
-                      <input value={detail.description} onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                      <input value={detail.description} onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                     </label>
-                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                       Хэштеги
                       <span className="ml-1 font-normal normal-case tracking-normal text-muted">не для привязок</span>
-                      <input value={detail.hashtags} onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                      <input value={detail.hashtags} onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                     </label>
-                    <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                    <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                       Примечания
-                      <input value={detail.remarks} onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                      <input value={detail.remarks} onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                     </label>
                     <div className="flex flex-wrap items-end gap-2 md:col-span-2 md:flex-nowrap">
-                      <label className="block shrink-0 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                      <label className="block shrink-0 text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                         Период
-                        <span className="mt-1 flex items-center gap-1">
-                          <input value={detail.bDate} onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))} placeholder="02.09.2026" className="h-10 w-[7.4rem] rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
-                          <span className="text-[0.7rem] font-medium normal-case text-muted">до</span>
-                          <input value={detail.eDate} onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))} placeholder="31.05.2027" className="h-10 w-[7.4rem] rounded-md bg-white px-2 text-center text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                        <span className="mt-0.5 flex items-center gap-1">
+                          <input value={detail.bDate} onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))} placeholder="02.09.2026" className="h-8 w-[6.8rem] rounded-md bg-white px-1.5 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                          <span className="text-[0.65rem] font-medium normal-case text-muted">до</span>
+                          <input value={detail.eDate} onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))} placeholder="31.05.2027" className="h-8 w-[6.8rem] rounded-md bg-white px-1.5 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                         </span>
                       </label>
-                      <label className="block min-w-[9.5rem] shrink-0 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                      <label className="block min-w-[9rem] shrink-0 text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                         Запись
-                        <a href={detail.signup || leadHref(detail.slot)} target="_blank" rel="noreferrer" className="mt-1 flex h-10 items-center justify-center whitespace-nowrap rounded-md bg-white px-2.5 text-[0.8rem] font-semibold normal-case tracking-normal text-primary ring-1 ring-black/8">
+                        <a href={detail.signup || leadHref(detail.slot)} target="_blank" rel="noreferrer" className="mt-0.5 flex h-8 items-center justify-center whitespace-nowrap rounded-md bg-white px-2 text-[0.75rem] font-semibold normal-case tracking-normal text-primary ring-1 ring-black/8">
                           запись в группу {detail.groupId || "—"}
                         </a>
                       </label>
-                      <label className="block min-w-0 flex-1 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                      <label className="block min-w-0 flex-1 text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                         Уровень знаний
-                        <select value={detail.levelId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, levelId: Number(e.target.value) || 0 } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                        <select value={detail.levelId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, levelId: Number(e.target.value) || 0 } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-1.5 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
                           <option value="">— не задан —</option>
                           {levels.map((lv) => (
                             <option key={lv.id} value={lv.id}>{lv.name}</option>
@@ -3578,26 +3576,26 @@ export function AdminSchedule() {
                           {detail.levelId && !levels.some((lv) => lv.id === detail.levelId) ? <option value={detail.levelId}>Уровень {detail.levelId}</option> : null}
                         </select>
                       </label>
-                      <label className="block min-w-0 flex-[1.2] text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                      <label className="block min-w-0 flex-[1.2] text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                         Статус
-                        <select value={detail.statusId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, statusId: Number(e.target.value) || 0 } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                        <select value={detail.statusId || ""} onChange={(e) => setDetail((d) => (d ? { ...d, statusId: Number(e.target.value) || 0 } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-1.5 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
                           <option value="">— не задан —</option>
                           {GROUP_STATUS.map((st) => (
                             <option key={st.id} value={st.id}>{st.name}</option>
                           ))}
                         </select>
                       </label>
-                      <label className="block min-w-0 flex-1 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                      <label className="block min-w-0 flex-1 text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                         Приоритет
-                        <select value={detail.priority} onChange={(e) => setDetail((d) => (d ? { ...d, priority: Number(e.target.value) } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                        <select value={detail.priority} onChange={(e) => setDetail((d) => (d ? { ...d, priority: Number(e.target.value) } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-1.5 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
                           {GROUP_PRIORITY.map((p) => (
                             <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
                         </select>
                       </label>
-                      <label className="block min-w-0 flex-1 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                      <label className="block min-w-0 flex-1 text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                         Отработка
-                        <input value={detail.makeup} onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                        <input value={detail.makeup} onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-1.5 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                       </label>
                     </div>
                     <div className="flex flex-wrap items-center justify-end gap-2 md:col-span-2">
@@ -3613,7 +3611,7 @@ export function AdminSchedule() {
                       </Button>
                     </div>
                   </div>
-                  <section className="mt-5 rounded-2xl bg-white/80 p-4 ring-1 ring-black/6">
+                  <section className="mt-3 rounded-xl bg-white/80 p-3 ring-1 ring-black/6">
                     <CrmGroupMembers title="Ученики" items={detail.members.filter((m) => m.status !== "лид")} onOpen={(m) => void openPupil(m, detail.branchId)} />
                     <CrmGroupMembers title="Лиды" items={detail.members.filter((m) => m.status === "лид")} onOpen={(m) => void openPupil(m, detail.branchId)} variant="lead" />
                     <CrmGroupMembers title="Архивные ученики" items={detail.archive} onOpen={(m) => void openPupil(m, detail.branchId)} variant="archive" />
