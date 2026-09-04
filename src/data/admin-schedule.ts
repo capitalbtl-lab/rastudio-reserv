@@ -272,10 +272,10 @@ async function loadBranchActiveTariffs(
     items = [];
     await pagedIndex(
       customerTariffIndexBranchPath(branch),
-      { removed: 0 },
+      {},
       t,
       (it: Record<string, unknown>) => items!.push(it),
-      { pageSize: 50, pages: 30 },
+      { pageSize: 50, pages: 40 },
     );
     if (items.length) bag.__raCTar.set(branch, { at: Date.now(), items });
   }

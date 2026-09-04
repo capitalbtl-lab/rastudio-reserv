@@ -174,19 +174,26 @@ export function customerTariffDeletePath(branch: number, tariffRowId: number, cu
 
 export function tariffDateToIso(raw: string) {
   const s = String(raw || "").trim();
+  if (!s || /^0{2,4}[-.]0{1,2}[-.]0{1,4}/.test(s)) return "";
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  if (iso) {
+    const y = Number(iso[1]);
+    if (y < 2000) return "";
+    return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  }
   const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-  if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
+  if (ru) {
+    const y = Number(ru[3]);
+    if (y < 2000) return "";
+    return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
+  }
   return "";
 }
 
-export function customerTariffLive(it: Record<string, unknown>, today = todayIso()) {
+/** Живой = не удалён в CRM. Пустая/нулевая «до» — это бессрочный, не просроченный. */
+export function customerTariffLive(it: Record<string, unknown>) {
   if (Number(it.removed || it.is_archived || 0) === 1) return false;
-  if (!(Number(it.id) > 0)) return false;
-  const end = tariffDateToIso(String(it.e_date || it.eDate || ""));
-  if (!end) return true;
-  return end >= today;
+  return Number(it.id) > 0;
 }
 
 export function customerTariffLabel(it: Record<string, unknown>, catalog?: { id: number; name: string }[]) {

@@ -244,7 +244,7 @@ describe("мастер абонементов учеников", () => {
     );
     assert.deepEqual(
       list.map((x) => x.id),
-      [1],
+      [1, 4],
     );
     assert.equal(list[0].name, "живой");
   });
