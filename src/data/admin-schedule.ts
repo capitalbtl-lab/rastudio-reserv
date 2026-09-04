@@ -209,6 +209,7 @@ function sleep(ms: number) {
 type PeopleBag = {
   at: number;
   cgi: Map<number, number[]>;
+  cgiBranch: Map<number, number>;
   customer: Map<number, Record<string, unknown>>;
 };
 
@@ -224,14 +225,15 @@ async function pagedCrm(
 ) {
   const { CRM_READ_GAP_MS } = await import("./pupil-tariffs");
   const items: Record<string, unknown>[] = [];
-  for (let page = 0; page < 12; page += 1) {
+  for (let page = 0; page < 40; page += 1) {
     if (page) await sleep(CRM_READ_GAP_MS);
-    const res = await request<{ items?: Record<string, unknown>[] }>(path, { page, pageSize: 200, ...body }, t).catch(
+    const res = await request<{ items?: Record<string, unknown>[]; total?: number }>(path, { page, pageSize: 200, ...body }, t).catch(
       () => ({ items: [] as Record<string, unknown>[] }),
     );
     const batch = res.items || [];
     items.push(...batch);
-    if (batch.length < 200) break;
+    const total = Number(res.total || 0);
+    if (batch.length < 200 || (total > 0 && items.length >= total)) break;
   }
   return items;
 }
@@ -241,17 +243,19 @@ async function loadPeopleBag(
   t: string,
 ): Promise<PeopleBag> {
   const slot = peopleSlot();
-  if (slot.__raPeople && Date.now() - slot.__raPeople.at < PEOPLE_TTL_MS && slot.__raPeople.cgi.size > 5) {
+  if (slot.__raPeople && Date.now() - slot.__raPeople.at < PEOPLE_TTL_MS) {
     return slot.__raPeople;
   }
   const { cgiCustomerId, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
   const cgi = new Map<number, number[]>();
+  const cgiBranch = new Map<number, number>();
   const customer = new Map<number, Record<string, unknown>>();
-  function addCgi(gid: number, cid: number) {
+  function addCgi(gid: number, cid: number, branch: number) {
     if (!gid || !cid) return;
     const list = cgi.get(gid) || [];
     if (!list.includes(cid)) list.push(cid);
     cgi.set(gid, list);
+    if (!cgiBranch.has(gid)) cgiBranch.set(gid, branch);
   }
   for (const branch of [1, 2, 3, 4]) {
     await sleep(CRM_READ_GAP_MS);
@@ -260,7 +264,7 @@ async function loadPeopleBag(
       if (Number(it.removed || it.is_removed || 0)) continue;
       const rec = it as { group?: { id?: number } };
       const gid = Number(it.group_id || it.groupId || rec.group?.id || 0);
-      addCgi(gid, cgiCustomerId(it));
+      addCgi(gid, cgiCustomerId(it), branch);
     }
     for (const study of [1, 0] as const) {
       await sleep(CRM_READ_GAP_MS);
@@ -271,8 +275,8 @@ async function loadPeopleBag(
       }
     }
   }
-  const bag = { at: Date.now(), cgi, customer };
-  if (cgi.size > 5) slot.__raPeople = bag;
+  const bag = { at: Date.now(), cgi, cgiBranch, customer };
+  slot.__raPeople = bag;
   return bag;
 }
 
@@ -282,22 +286,41 @@ async function overlayGroupHeadcount(
   t: string,
 ) {
   const { countCgiParticipants, cgiCustomerId, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
+  const { UNMAPPED_SCHOOL } = await import("./group-status");
   const bag = await loadPeopleBag(request, t);
+  if (!bag.cgiBranch) bag.cgiBranch = new Map();
   const next = groups.map((g) => ({ ...g, taken: bag.cgi.get(g.groupId)?.length || 0 }));
-  if (bag.cgi.size > 5) {
-    peopleSlot().__raPeople = bag;
-    return next;
-  }
-  for (let i = 0; i < next.length; i += 2) {
+  const holes = next.filter((g) => !bag.cgi.has(g.groupId));
+  for (let i = 0; i < holes.length; i += 2) {
     await Promise.all(
-      next.slice(i, i + 2).map(async (g) => {
+      holes.slice(i, i + 2).map(async (g) => {
         const items = await pagedCrm(request, t, `/v2api/${g.branchId}/cgi/index`, { group_id: g.groupId });
         const ids = [...new Set(items.map(cgiCustomerId).filter(Boolean))];
-        if (ids.length) bag.cgi.set(g.groupId, ids);
+        bag.cgi.set(g.groupId, ids);
+        bag.cgiBranch.set(g.groupId, g.branchId);
         g.taken = ids.length || countCgiParticipants(items);
       }),
     );
     await sleep(CRM_READ_GAP_MS);
+  }
+  const known = new Set(next.map((g) => g.groupId));
+  for (const [gid, ids] of bag.cgi) {
+    if (!ids.length || known.has(gid)) continue;
+    const branchId = bag.cgiBranch.get(gid) || 1;
+    next.push({
+      key: `${branchId}:${gid}`,
+      groupId: gid,
+      branchId,
+      name: `группа ${gid} · нет в расписании`,
+      school: UNMAPPED_SCHOOL,
+      course: "",
+      age: "",
+      teacher: "",
+      taken: ids.length,
+      limit: 0,
+      subjectId: 0,
+    });
+    known.add(gid);
   }
   peopleSlot().__raPeople = { ...bag, at: Date.now() };
   return next;
@@ -2063,7 +2086,26 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const slots = listAdminSlots();
       const all = uniqueLiveGroups(slots);
       const want = new Set(keys.map((k) => `${Number(k.branchId)}:${Number(k.groupId)}`));
-      const groups = all.filter((g) => want.has(g.key));
+      const groups = keys
+        .map((k) => {
+          const key = `${Number(k.branchId)}:${Number(k.groupId)}`;
+          return (
+            all.find((g) => g.key === key) || {
+              key,
+              groupId: Number(k.groupId) || 0,
+              branchId: Number(k.branchId) || 1,
+              name: `группа ${k.groupId}`,
+              school: "Без школы на сайте",
+              course: "",
+              age: "",
+              teacher: "",
+              taken: 0,
+              limit: 0,
+              subjectId: 0,
+            }
+          );
+        })
+        .filter((g) => want.has(g.key) && g.groupId);
       const tariffs = loadTariffs().items;
       const { guessTariffLinks } = await import("./tariff-map");
       const { loadSiteTree } = await import("./site-tree");
