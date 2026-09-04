@@ -2126,6 +2126,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
               branchId: Number(k.branchId) || 1,
               name: `группа ${k.groupId}`,
               school: "Без школы на сайте",
+              schoolId: "",
               course: "",
               age: "",
               teacher: "",

@@ -10,6 +10,7 @@ export type PupilGroup = {
   branchId: number;
   name: string;
   school: string;
+  schoolId: string;
   course: string;
   age: string;
   teacher: string;
@@ -126,6 +127,7 @@ export function uniqueLiveGroups(slots: CrmSlot[]): PupilGroup[] {
       branchId: s.branchId,
       name: s.groupName || `группа ${s.groupId}`,
       school: s.school || UNMAPPED_SCHOOL,
+      schoolId: String(s.schoolId || ""),
       course: s.course || s.subject || "",
       age: s.age || "",
       teacher: s.teacher || "",
@@ -136,11 +138,29 @@ export function uniqueLiveGroups(slots: CrmSlot[]): PupilGroup[] {
   }
   out.sort(
     (a, b) =>
+      (a.schoolId || a.school).localeCompare(b.schoolId || b.school, "ru") ||
       a.school.localeCompare(b.school, "ru") ||
       a.course.localeCompare(b.course, "ru") ||
       a.name.localeCompare(b.name, "ru"),
   );
   return out;
+}
+
+/** Школа за школой по ID сайта, без школы — в конце. */
+export function groupsBySchoolId(list: PupilGroup[]) {
+  const map = new Map<string, PupilGroup[]>();
+  for (const g of list) {
+    const id = String(g.schoolId || "").trim() || `name:${g.school || "_"}`;
+    const cur = map.get(id) || [];
+    cur.push(g);
+    map.set(id, cur);
+  }
+  return [...map.entries()].sort(([a], [b]) => {
+    const aMiss = a.startsWith("name:");
+    const bMiss = b.startsWith("name:");
+    if (aMiss !== bMiss) return aMiss ? 1 : -1;
+    return a.localeCompare(b, "ru");
+  });
 }
 
 /** Группа в мастере, если есть хоть кто-то: ученик, лид или архив. */

@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
+import type { CrmSlot } from "./crm-slots-core.ts";
 import type { CrmTariff } from "./crm-tariffs.ts";
 
 function slot(over: Partial<CrmSlot> = {}): CrmSlot {
@@ -66,6 +67,20 @@ describe("мастер абонементов учеников", () => {
     assert.equal(list[0].school, "Без школы на сайте");
   });
 
+  it("мастер обрабатывает группы школой за школой по ID", () => {
+    const list = uniqueLiveGroups([
+      slot({ groupId: 1, schoolId: "art", school: "Художественная школа" }),
+      slot({ groupId: 2, schoolId: "robots", school: "Школа робототехники", groupName: "Роботы" }),
+      slot({ groupId: 3, schoolId: "art", school: "Художественная школа", groupName: "Худ 2" }),
+      slot({ groupId: 4, schoolId: "", school: "", groupName: "без школы" }),
+    ]);
+    const packed = groupsBySchoolId(list);
+    assert.equal(packed[0][0], "art");
+    assert.equal(packed[0][1].length, 2);
+    assert.equal(packed[1][0], "robots");
+    assert.ok(String(packed.at(-1)?.[0] || "").startsWith("name:"));
+  });
+
   it("по умолчанию только ученики, лиды — по флагу", () => {
     const g: PupilGroup = {
       key: "2:10",
@@ -73,7 +88,7 @@ describe("мастер абонементов учеников", () => {
       branchId: 2,
       name: "Роботы",
       school: "Школа робототехники",
-      course: "Роботы",
+      schoolId: "robots",
       age: "7-9",
       teacher: "",
       taken: 8,

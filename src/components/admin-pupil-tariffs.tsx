@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
 import { retryFetch } from "@/lib/retry-fetch";
 import { RaSelect } from "@/components/ra-select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, collapsePupilsByCustomer, pupilListStats } from "@/data/pupil-tariffs";
+import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, collapsePupilsByCustomer, pupilListStats, groupsBySchoolId } from "@/data/pupil-tariffs";
 import { ISO_DATE_MAX, ISO_DATE_MIN, clampIsoDate } from "@/data/admin-ui";
 
 type PupilGroup = {
@@ -15,6 +15,7 @@ type PupilGroup = {
   branchId: number;
   name: string;
   school: string;
+  schoolId?: string;
   course: string;
   age: string;
   teacher: string;
@@ -172,6 +173,8 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     extra: string;
   } | null>(null);
   const [summary, setSummary] = useState("");
+  const loadedGroupsRef = useRef(new Set<string>());
+  const pickSigRef = useRef("");
 
   useEffect(() => {
     void (async () => {
@@ -227,102 +230,129 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
 
   async function loadPlan() {
     setBusy(true);
-    const keys = [...picked]
-      .map((k) => {
-        const [branchId, groupId] = k.split(":").map(Number);
-        return { branchId, groupId };
-      })
-      .filter((k) => Number(k.branchId) && Number(k.groupId));
+    const pickSig = [...picked].sort().join("|");
+    if (pickSigRef.current !== pickSig) {
+      pickSigRef.current = pickSig;
+      loadedGroupsRef.current = new Set();
+    }
+    const selected = groups.filter((g) => picked.has(g.key));
+    const schools = groupsBySchoolId(selected);
+    const total = selected.length;
     const rows: PupilTariffItem[] = [];
     const grouped: Record<string, GroupTariff> = {};
     let scanned = 0;
     let archived = 0;
-    setProgress({ done: 0, total: keys.length, label: "Читаю учеников", unit: "групп", extra: "" });
+    setProgress({ done: loadedGroupsRef.current.size, total, label: "Читаю учеников", unit: "групп", extra: "" });
     setSummary("");
+    const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
     try {
-      for (let i = 0; i < keys.length; i += PLAN_GROUP_CHUNK) {
-        const part = keys.slice(i, i + PLAN_GROUP_CHUNK);
-        const from = i + 1;
-        const to = Math.min(i + PLAN_GROUP_CHUNK, keys.length);
-        setMsg(`Ученики: группы ${from}–${to} из ${keys.length}`);
-        let res: {
-          ok?: boolean;
-          items?: PupilTariffItem[];
-          byGroup?: Record<string, GroupTariff>;
-          error?: string;
-          scanned?: number;
-        } | null = null;
-        for (let attempt = 0; attempt < 2 && !res?.ok; attempt += 1) {
-          try {
-            res = (await retryFetch(
-              () =>
-                adminSchedule({
-                  data: {
-                    token: token(),
-                    action: "pupilTariffPlan",
-                    includeLeads,
-                    groupKeys: part,
-                  } as never,
-                }),
-              1,
-              45000,
-            )) as typeof res;
-          } catch (e) {
-            res = { ok: false, error: friendlyErr(e, "Не удалось прочитать пачку групп.") };
+      for (const [, schoolGroups] of schools) {
+        const title = schoolGroups[0]?.school || "Школа";
+        const pending = schoolGroups.filter((g) => !loadedGroupsRef.current.has(g.key));
+        for (let i = 0; i < pending.length; ) {
+          let take = Math.min(PLAN_GROUP_CHUNK, pending.length - i);
+          let ok = false;
+          for (let attempt = 0; attempt < 8 && !ok; attempt += 1) {
+            if (attempt >= 2) take = 1;
+            const slice = pending.slice(i, i + take);
+            const part = slice.map((g) => ({ branchId: g.branchId, groupId: g.groupId }));
+            setMsg(`${title}: № ${slice.map((g) => g.groupId).join(", ")}`);
+            setProgress({
+              done: loadedGroupsRef.current.size,
+              total,
+              label: title,
+              unit: "групп",
+              extra: `${loadedGroupsRef.current.size} из ${total}`,
+            });
+            try {
+              const res = (await retryFetch(
+                () =>
+                  adminSchedule({
+                    data: { token: token(), action: "pupilTariffPlan", includeLeads, groupKeys: part } as never,
+                  }),
+                1,
+                40000,
+              )) as { ok?: boolean; items?: PupilTariffItem[]; byGroup?: Record<string, GroupTariff>; scanned?: number };
+              if (res.ok) {
+                rows.push(...(res.items || []));
+                Object.assign(grouped, res.byGroup || {});
+                scanned += Number(res.scanned || res.items?.length || 0);
+                for (const g of slice) loadedGroupsRef.current.add(g.key);
+                setGroups((prev) =>
+                  prev.map((g) => {
+                    const n = rows.filter((r) => r.groupId === g.groupId && r.branchId === g.branchId).length;
+                    return n ? { ...g, taken: n } : g;
+                  }),
+                );
+                i += slice.length;
+                ok = true;
+              } else {
+                await wait(700 * (attempt + 1));
+              }
+            } catch (e) {
+              setMsg(friendlyErr(e, `${title}: повтор ${attempt + 1}`));
+              await wait(700 * (attempt + 1));
+            }
+          }
+          if (!ok) {
+            setMsg(`${title}: не прочитал группу. Нажмите «Далее» — продолжим с этой школы.`);
+            if (rows.length) {
+              setItems(path === "add" ? rows : collapsePupilsByCustomer(rows));
+              setByGroup(grouped);
+            }
+            return false;
           }
         }
-        if (!res?.ok) {
-          setMsg(friendlyErr(res?.error, "Пачка не прочиталась, иду дальше."));
-          continue;
-        }
-        rows.push(...(res.items || []));
-        Object.assign(grouped, res.byGroup || {});
-        scanned += Number(res.scanned || res.items?.length || 0);
-        const mid = pupilListStats(rows);
-        setGroups((prev) =>
-          prev.map((g) => {
-            const n = rows.filter((r) => r.groupId === g.groupId && r.branchId === g.branchId).length;
-            return n ? { ...g, taken: n } : g;
-          }),
-        );
-        setProgress({
-          done: to,
-          total: keys.length,
-          label: "Читаю учеников",
-          unit: "групп",
-          extra: `строк ${rows.length}${mid.unique ? ` · ${mid.unique} чел.` : ""}`,
-        });
-      }
-      let list = path === "add" ? rows : collapsePupilsByCustomer(rows);
-      if (path !== "add" && rows.length) {
-        setProgress({ done: 0, total: 1, label: "Читаю абонементы", unit: "", extra: `${list.length} чел.` });
-        setMsg("Читаю абонементы в CRM…");
-        try {
-          const active = (await retryFetch(
-            () =>
-              adminSchedule({
-                data: {
-                  token: token(),
-                  action: "pupilTariffActive",
-                  pupilItems: rows,
-                } as never,
-              }),
-            1,
-            60000,
-          )) as { ok?: boolean; items?: PupilTariffItem[]; archivedOnly?: number };
-          if (active.ok) {
-            list = collapsePupilsByCustomer(active.items || []);
-            archived += Number(active.archivedOnly || 0);
+        if (path !== "add") {
+          const schoolRows = rows.filter((r) => schoolGroups.some((g) => g.groupId === r.groupId && g.branchId === r.branchId));
+          if (schoolRows.length) {
+            setProgress({
+              done: loadedGroupsRef.current.size,
+              total,
+              label: `${title}: абонементы`,
+              unit: "групп",
+              extra: `${schoolRows.length} чел.`,
+            });
+            let tariffsOk = false;
+            for (let attempt = 0; attempt < 6 && !tariffsOk; attempt += 1) {
+              try {
+                const active = (await retryFetch(
+                  () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: schoolRows } as never }),
+                  1,
+                  50000,
+                )) as { ok?: boolean; items?: PupilTariffItem[]; archivedOnly?: number };
+                if (active.ok) {
+                  archived += Number(active.archivedOnly || 0);
+                  const kept = collapsePupilsByCustomer(active.items || []);
+                  const byKey = new Map(kept.map((r) => [`${r.branchId}:${r.customerId}`, r]));
+                  for (let ri = 0; ri < rows.length; ri += 1) {
+                    const hit = byKey.get(`${rows[ri].branchId}:${rows[ri].customerId}`);
+                    if (hit && schoolGroups.some((g) => g.groupId === rows[ri].groupId && g.branchId === rows[ri].branchId)) {
+                      rows[ri] = { ...rows[ri], ...hit };
+                    }
+                  }
+                  tariffsOk = true;
+                }
+              } catch (e) {
+                setMsg(friendlyErr(e, `${title}: абонементы, повтор ${attempt + 1}`));
+                await wait(800 * (attempt + 1));
+              }
+            }
+            if (!tariffsOk) {
+              setMsg(`${title}: абонементы не прочитались. Нажмите «Далее» — продолжим с этой школы.`);
+              setItems(collapsePupilsByCustomer(rows));
+              setByGroup(grouped);
+              return false;
+            }
           }
-        } catch (e) {
-          setMsg(friendlyErr(e, "Учеников прочитал, абонементы не успел. Нажмите «Далее» ещё раз."));
         }
       }
+      const list = path === "add" ? rows : collapsePupilsByCustomer(rows.filter((r) => (r.activeTariffs || []).length));
       if (!rows.length) {
         setMsg("Не удалось прочитать учеников. Нажмите «Далее» ещё раз.");
         return false;
       }
-      const stats = pupilListStats(rows);
+      const stats = pupilListStats(path === "add" ? rows : list);
       setItems(list);
       setGroups((prev) =>
         prev.map((g) => {
@@ -343,7 +373,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         setCalcType(Number(sample.calcType) || 0);
         setDateTo(addPeriod(date, count, unit));
       }
-      const parts = [`Прочитано ${keys.length} групп`, `${stats.unique} учеников`];
+      const parts = [`Прочитано ${loadedGroupsRef.current.size} групп`, `${stats.unique} учеников`];
       if (stats.dual) parts.push(`${stats.dual} ходят в две выбранные группы — в удалении это один человек`);
       if (stats.leads) parts.push(`лидов ${stats.leads}`);
       if (path !== "add" && archived) parts.push(`истекших пропущено ${archived}`);
@@ -579,10 +609,10 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         <div className="mt-4 space-y-3">
           <p className="text-sm text-muted">
             {path === "add"
-              ? "Отметьте группы и нажмите «Далее» — тогда прочитаем учеников в CRM."
+              ? "Отметьте группы. «Выбрать все» — читаем школу за школой по ID."
               : path === "change"
-                ? "Отметьте группы. Учеников и живые абонементы прочитаем на следующем шаге."
-                : "Отметьте группы. Учеников и абонементы к удалению прочитаем на следующем шаге."}
+                ? "Отметьте группы. Все сразу — школа за школой по ID, без пропуска."
+                : "Отметьте группы. Все сразу — школа за школой по ID, без пропуска."}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <select value={school} onChange={(e) => setSchool(e.target.value)} className="h-10 rounded-xl bg-surface-2 px-3 text-sm ring-1 ring-black/10">
