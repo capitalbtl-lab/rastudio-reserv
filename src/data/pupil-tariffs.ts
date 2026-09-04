@@ -430,7 +430,29 @@ export function keepPupilsWithActiveTariffs<T extends { customerId: number; bran
   return out;
 }
 
-/** Удаление/изменение — по человеку, не по «человек × группа». Кто в двух группах, одна строка. */
+export function personKey(branchId: number, customerId: number) {
+  return `${branchId}:${customerId}`;
+}
+
+/** Кто выпал после круга школы: назначение без этого тарифа, удаление/закрытие — тариф ещё живой. */
+export function dropoutsAfterJob<
+  T extends { customerId: number; branchId: number; tariffId?: number },
+>(
+  mode: "assign" | "close" | "delete",
+  sent: T[],
+  live: { customerId: number; branchId: number; activeTariffs?: { tariffId: number }[] }[],
+  closeDate = "",
+) {
+  const by = new Map(live.map((r) => [personKey(r.branchId, r.customerId), r.activeTariffs || []]));
+  const today = todayIso();
+  return sent.filter((p) => {
+    const list = by.get(personKey(p.branchId, p.customerId)) || [];
+    if (mode === "assign") return !list.some((t) => t.tariffId === p.tariffId);
+    if (mode === "close" && (!closeDate || closeDate >= today)) return false;
+    return list.length > 0;
+  });
+}
+
 export function collapsePupilsByCustomer(items: PupilTariffItem[]) {
   const map = new Map<string, PupilTariffItem>();
   for (const it of items) {

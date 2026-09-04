@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 import type { CrmTariff } from "./crm-tariffs.ts";
@@ -85,6 +85,26 @@ describe("мастер абонементов учеников", () => {
       { schoolId: "art", school: "Художественная школа", n: 3 },
     ]);
     assert.deepEqual(jobs.map(([id, list]) => [id, list.length]), [["art", 2], ["robots", 1]]);
+  });
+
+  it("после круга школы ловит выпавших", () => {
+    const sent = [
+      { customerId: 1, branchId: 2, tariffId: 10 },
+      { customerId: 2, branchId: 2, tariffId: 10 },
+      { customerId: 3, branchId: 2, tariffId: 10 },
+    ];
+    const live = [
+      { customerId: 1, branchId: 2, activeTariffs: [{ tariffId: 10 }] },
+      { customerId: 2, branchId: 2, activeTariffs: [] },
+    ];
+    const miss = dropoutsAfterJob("assign", sent, live);
+    assert.deepEqual(miss.map((x) => x.customerId), [2, 3]);
+    const still = dropoutsAfterJob("delete", sent, [
+      { customerId: 1, branchId: 2, activeTariffs: [{ tariffId: 10 }] },
+      { customerId: 2, branchId: 2, activeTariffs: [] },
+      { customerId: 3, branchId: 2, activeTariffs: [] },
+    ]);
+    assert.deepEqual(still.map((x) => x.customerId), [1]);
   });
 
   it("по умолчанию только ученики, лиды — по флагу", () => {

@@ -6,7 +6,7 @@ import { retryFetch } from "@/lib/retry-fetch";
 import { RaSelect } from "@/components/ra-select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, collapsePupilsByCustomer, pupilListStats, groupsBySchoolId, bySchoolId } from "@/data/pupil-tariffs";
+import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, collapsePupilsByCustomer, pupilListStats, groupsBySchoolId, bySchoolId, dropoutsAfterJob, personKey } from "@/data/pupil-tariffs";
 import { ISO_DATE_MAX, ISO_DATE_MIN, clampIsoDate } from "@/data/admin-ui";
 
 type PupilGroup = {
@@ -476,63 +476,99 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       let doneN = 0;
       for (const [, schoolPack] of waves) {
         const title = bySchoolRun.current ? schoolPack[0]?.school || verb : verb;
-        for (let i = 0; i < schoolPack.length; ) {
-          const chunk = schoolPack.slice(i, i + ASSIGN_CHUNK);
-          let ok = false;
-          for (let attempt = 0; attempt < 8 && !ok; attempt += 1) {
-            setProgress({
-              done: doneN,
-              total,
-              label: `${verb} · ${title}`,
-              unit: "учеников",
-              extra: `готово ${acc.done} · пропуск ${acc.skipped} · ошибок ${acc.failed.length}`,
-            });
-            setMsg(`${title}: ${i + 1}–${Math.min(i + chunk.length, schoolPack.length)} из ${schoolPack.length}`);
-            try {
-              const res = (await retryFetch(
-                () =>
-                  adminSchedule({
-                    data: {
-                      token: token(),
-                      action: mode === "assign" ? "pupilTariffAssign" : "pupilTariffClear",
-                      mode: mode === "assign" ? "create" : mode,
-                      date: mode === "close" ? closeDate : date,
-                      skipExisting,
-                      groupKeys: [],
-                      pupilItems: chunk,
-                    } as never,
-                  }),
-                1,
-                180000,
-              )) as {
-                ok?: boolean;
-                done?: number;
-                skipped?: { id: number; name: string; reason: string }[];
-                failed?: { id: number; name: string; error: string }[];
-                error?: string;
-              };
-              if (res.ok) {
-                acc.done += Number(res.done || 0);
-                acc.skipped += (res.skipped || []).length;
-                acc.failed.push(...(res.failed || []).map((f) => ({ name: f.name, error: f.error })));
-                i += chunk.length;
-                doneN += chunk.length;
-                ok = true;
-              } else await wait(800 * (attempt + 1));
-            } catch (e) {
-              setMsg(friendlyErr(e, `${title}: повтор ${attempt + 1}`));
-              await wait(800 * (attempt + 1));
+        const send = async (list: typeof schoolPack) => {
+          const failedKeys = new Set<string>();
+          for (let i = 0; i < list.length; ) {
+            const chunk = list.slice(i, i + ASSIGN_CHUNK);
+            let ok = false;
+            for (let attempt = 0; attempt < 8 && !ok; attempt += 1) {
+              setProgress({
+                done: doneN,
+                total,
+                label: `${verb} · ${title}`,
+                unit: "учеников",
+                extra: `готово ${acc.done} · пропуск ${acc.skipped} · ошибок ${acc.failed.length}`,
+              });
+              setMsg(`${title}: ${i + 1}–${Math.min(i + chunk.length, list.length)} из ${list.length}`);
+              try {
+                const res = (await retryFetch(
+                  () =>
+                    adminSchedule({
+                      data: {
+                        token: token(),
+                        action: mode === "assign" ? "pupilTariffAssign" : "pupilTariffClear",
+                        mode: mode === "assign" ? "create" : mode,
+                        date: mode === "close" ? closeDate : date,
+                        skipExisting,
+                        groupKeys: [],
+                        pupilItems: chunk,
+                      } as never,
+                    }),
+                  1,
+                  180000,
+                )) as {
+                  ok?: boolean;
+                  done?: number;
+                  skipped?: { id: number; name: string; reason: string }[];
+                  failed?: { id: number; name: string; error: string }[];
+                  error?: string;
+                };
+                if (res.ok) {
+                  acc.done += Number(res.done || 0);
+                  acc.skipped += (res.skipped || []).length;
+                  for (const f of res.failed || []) {
+                    acc.failed.push({ name: f.name, error: f.error });
+                    failedKeys.add(personKey(chunk.find((x) => x.customerId === f.id)?.branchId || chunk[0].branchId, f.id));
+                  }
+                  i += chunk.length;
+                  doneN += chunk.length;
+                  ok = true;
+                } else await wait(800 * (attempt + 1));
+              } catch (e) {
+                setMsg(friendlyErr(e, `${title}: повтор ${attempt + 1}`));
+                await wait(800 * (attempt + 1));
+              }
             }
-          }
-          if (!ok) {
-            setMsg(`${title}: выгрузка не прошла. Нажмите кнопку ещё раз — продолжим эту школу.`);
+            if (!ok) {
+              for (const p of chunk) failedKeys.add(personKey(p.branchId, p.customerId));
+              i += chunk.length;
+            }
             setResult({ ...acc, failed: [...acc.failed] });
-            return;
+            if (i < list.length) await wait(ASSIGN_BATCH_PAUSE_MS);
           }
-          setResult({ ...acc, failed: [...acc.failed] });
-          if (i < schoolPack.length) await wait(ASSIGN_BATCH_PAUSE_MS);
+          return failedKeys;
+        };
+        let leftover = [...schoolPack];
+        for (let round = 0; round < 3 && leftover.length; round += 1) {
+          setMsg(`${title}: круг ${round + 1}, ${leftover.length} чел.`);
+          const failedKeys = await send(leftover);
+          let miss: typeof leftover = [];
+          try {
+            const active = (await retryFetch(
+              () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: leftover } as never }),
+              1,
+              50000,
+            )) as { ok?: boolean; items?: PupilTariffItem[] };
+            if (active.ok) {
+              miss = dropoutsAfterJob(mode === "assign" ? "assign" : mode, leftover, active.items || [], closeDate);
+            } else miss = leftover.filter((p) => failedKeys.has(personKey(p.branchId, p.customerId)));
+          } catch {
+            miss = leftover.filter((p) => failedKeys.has(personKey(p.branchId, p.customerId)));
+          }
+          const keys = new Set([...failedKeys, ...miss.map((p) => personKey(p.branchId, p.customerId))]);
+          leftover = leftover.filter((p) => keys.has(personKey(p.branchId, p.customerId)));
+          if (leftover.length) {
+            setMsg(`${title}: выпали ${leftover.length}, перепроверяю`);
+            await wait(1200);
+          }
         }
-        setMsg(`${title}: готово`);
+        if (leftover.length) {
+          acc.failed.push(...leftover.map((p) => ({ name: p.name, error: "выпал после круга школы" })));
+          setResult({ ...acc, failed: [...acc.failed] });
+          setMsg(`${title}: после проверки выпали ${leftover.length}. Нажмите ещё раз — эту школу добьём.`);
+          return;
+        }
+        setMsg(`${title}: круг закрыт`);
       }
       setMsg("");
     } catch (e) {
@@ -627,7 +663,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         <div className="mt-4 space-y-3">
           <p className="text-sm text-muted">
             {path === "add"
-              ? "Отметьте группы. «Выбрать все» — полный круг по школе: прочитали и выгрузили, затем следующая."
+              ? "Отметьте группы. «Выбрать все» — полный круг по школе, выпавших перепроверяем, затем следующая."
               : path === "change"
                 ? "Не всё — обычный режим. «Выбрать все» — школа за школой до конца (изменение)."
                 : "Не всё — обычный режим. «Выбрать все» — школа за школой до конца (удаление)."}
