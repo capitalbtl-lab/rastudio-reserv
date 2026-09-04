@@ -36,9 +36,37 @@ function slotMins(s: CrmSlot) {
   return mode((s.beats || []).map((b) => minsOf(b.timeFrom, b.timeTo)));
 }
 
+function slotDurations(s: CrmSlot) {
+  const beats = Array.isArray(s.beats) && s.beats.length ? s.beats : [{ timeFrom: s.timeFrom, timeTo: s.timeTo }];
+  const list = beats.map((b) => minsOf(b.timeFrom, b.timeTo)).filter((n) => n > 0);
+  if (list.length) return list;
+  const one = slotMins(s);
+  return one ? [one] : [];
+}
+
 function slotWeek(s: CrmSlot) {
   const n = Number(s.timesPerWeek) || (Array.isArray(s.beats) && s.beats.length ? s.beats.length : 0);
   return n > 0 ? n : 0;
+}
+
+function modePattern(lists: number[][]) {
+  const c = new Map<string, { n: number; list: number[] }>();
+  for (const list of lists) {
+    if (!list.length) continue;
+    const k = list.join("|");
+    const cur = c.get(k) || { n: 0, list };
+    cur.n += 1;
+    c.set(k, cur);
+  }
+  let best: number[] = [];
+  let bestN = 0;
+  for (const { n, list } of c.values()) {
+    if (n > bestN) {
+      bestN = n;
+      best = list;
+    }
+  }
+  return best;
 }
 
 function skipGroup(s: CrmSlot) {
@@ -84,12 +112,17 @@ export function groupDurations() {
     buckets.set(key, list);
     used += 1;
   }
-  const items: GroupDuration[] = [...buckets.entries()].map(([path, hits]) => ({
-    path,
-    course: tidyCourseName(hits[0]?.course || hits[0]?.groupName || byKey.get(path)?.name || ""),
-    mins: mode(hits.map(slotMins)),
-    perWeek: mode(hits.map(slotWeek)),
-    groups: hits.length,
-  }));
+  const items: GroupDuration[] = [...buckets.entries()].map(([path, hits]) => {
+    const pattern = modePattern(hits.map(slotDurations));
+    const perWeek = mode(hits.map(slotWeek)) || pattern.length;
+    return {
+      path,
+      course: tidyCourseName(hits[0]?.course || hits[0]?.groupName || byKey.get(path)?.name || ""),
+      mins: pattern[0] || mode(hits.map(slotMins)),
+      minsList: pattern,
+      perWeek,
+      groups: hits.length,
+    };
+  });
   return { items, groups: slots.length, used, courses: items.length };
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { adminGroupDurations, adminPrices, adminSaveAll, adminSaveGroup, adminAddPriceCourse, adminDeletePrice } from "@/data/admin";
-import { PRICE_DIRECTIONS, hydratePrices, listPriceRows, matchDuration, type PriceRow } from "@/data/prices-core";
+import { PRICE_DIRECTIONS, formatMinsList, hydratePrices, listPriceRows, matchDuration, parseMinsList, type PriceRow } from "@/data/prices-core";
 import { Button } from "@/components/ui/button";
 import { AdminSectionHead } from "@/components/admin-self-test";
 import { adminPriceFormulas, type CorpFormulas } from "@/data/price-formulas";
@@ -149,7 +149,16 @@ export function AdminCoursePrices() {
       prev.map((r) => {
         if ((r.courseId || r.path) !== path) return r;
         if (key === "name" || key === "age" || key === "direction") return { ...r, [key]: value };
-        if (key === "all" || key === "kbm" || key === "tmx" || key === "mins" || key === "perWeek") return { ...r, [key]: num };
+        if (key === "mins") {
+          const list = parseMinsList(value);
+          return {
+            ...r,
+            minsList: list,
+            mins: list[0] || 0,
+            perWeek: list.length > 1 ? Math.max(r.perWeek || 0, list.length) : r.perWeek,
+          };
+        }
+        if (key === "all" || key === "kbm" || key === "tmx" || key === "perWeek") return { ...r, [key]: num };
         return { ...r, extra: { ...(r.extra || {}), [key]: num } };
       }),
     );
@@ -325,7 +334,7 @@ export function AdminCoursePrices() {
         const hit = matchDuration(r, items);
         if (!hit) return r;
         filled += 1;
-        return { ...r, mins: hit.mins || 0, perWeek: hit.perWeek || 0 };
+        return { ...r, mins: hit.mins || 0, perWeek: hit.perWeek || 0, minsList: hit.minsList || (hit.mins ? [hit.mins] : []) };
       });
       setRows(next);
       setErr(
@@ -344,7 +353,7 @@ export function AdminCoursePrices() {
     <section className="mt-4 space-y-4">
       <AdminSectionHead section="prices" title="Цены курсов">
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
-          Базовый прайс студии. Администратор заполняет его сам по текущим ценам. Колонка «Все» — цена на сайте, в расписании и в абонементах (по courseId курса). КБМ, ТМХ и другие клиенты считаются формулой от «Все». Минуты и «в неделю» можно подтянуть из групп — это длительность, не цена.
+          Базовый прайс студии. Администратор заполняет его сам по текущим ценам. Колонка «Все» — цена на сайте, в расписании и в абонементах (по courseId курса). КБМ, ТМХ и другие клиенты считаются формулой от «Все». Минуты: одно занятие — «90», два одинаковых — «90 × 2», два разных — «90 + 180». «Подгрузить из групп» берёт длительности из расписания занятий недели.
         </p>
       </AdminSectionHead>
       {err ? <p className="text-sm text-primary">{err}</p> : null}
@@ -675,9 +684,9 @@ export function AdminCoursePrices() {
                       Курс
                       <PriceColHandle onDown={(e) => resizeCol("course", 140, e)} />
                     </th>
-                    <th className="group/col relative px-2 py-3 text-center font-semibold" style={{ width: colPx("mins", 80) }}>
+                    <th className="group/col relative px-2 py-3 text-center font-semibold" style={{ width: colPx("mins", 110) }}>
                       Минут
-                      <PriceColHandle onDown={(e) => resizeCol("mins", 56, e)} />
+                      <PriceColHandle onDown={(e) => resizeCol("mins", 72, e)} />
                     </th>
                     <th className="group/col relative px-2 py-3 text-center font-semibold" style={{ width: colPx("week", 96) }}>
                       В неделю
@@ -745,11 +754,15 @@ export function AdminCoursePrices() {
                       {(["mins", "perWeek", "all", "kbm", "tmx"] as const).map((k) => (
                         <td key={k} className="px-2 py-3 align-middle">
                           <input
-                            value={row[k] || ""}
-                            inputMode="numeric"
+                            value={k === "mins" ? formatMinsList(row.minsList, row.mins) : row[k] || ""}
+                            inputMode={k === "mins" ? "text" : "numeric"}
                             placeholder="—"
+                            title={k === "mins" ? "Одно занятие: 90. Два разных: 90 + 180. Два одинаковых: 90 × 2" : undefined}
                             onChange={(e) => patch(row.courseId || row.path, k, e.target.value)}
-                            className="mx-auto block h-10 w-[4.75rem] rounded-lg bg-surface-2 px-2 text-center tabular-nums ring-1 ring-black/10"
+                            className={cn(
+                              "mx-auto block h-10 rounded-lg bg-surface-2 px-2 text-center tabular-nums ring-1 ring-black/10",
+                              k === "mins" ? "w-[6.5rem] text-[0.8rem]" : "w-[4.75rem]",
+                            )}
                           />
                         </td>
                       ))}
