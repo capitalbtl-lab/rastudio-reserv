@@ -67,19 +67,12 @@ export function guessTariffLinks(
   saved = readTariffMap(),
 ): TariffLink[] {
   const tree = loadSiteTree();
-  const bySub = new Map<number, { courseId: string; schoolId: string }>();
-  for (const c of loadScheduleMap().courses) {
-    if (!c.subjectId || !c.courseId) continue;
-    const course = tree.courses.find((x) => x.id === c.courseId || x.href === c.siteHref);
-    if (!course) continue;
-    bySub.set(c.subjectId, { courseId: course.id, schoolId: course.schoolId });
-  }
   const byId = new Map(saved.map((x) => [x.tariffId, x]));
   const out: TariffLink[] = [];
   for (const t of tariffs) {
     if (!t.id || t.id < 0 || t.archive) continue;
     const prev = byId.get(t.id);
-    if (prev && (prev.courseId || prev.schoolId)) {
+    if (prev) {
       const course = tree.courses.find((c) => c.id === prev.courseId);
       out.push({
         tariffId: t.id,
@@ -88,14 +81,28 @@ export function guessTariffLinks(
       });
       continue;
     }
-    const hit = t.subjectIds.map((id) => bySub.get(id)).find(Boolean);
-    out.push({
-      tariffId: t.id,
-      courseId: hit?.courseId || "",
-      schoolId: hit?.schoolId || "",
-    });
+    out.push({ tariffId: t.id, courseId: "", schoolId: "" });
   }
   return out;
+}
+
+/** Первый запуск: посеять карту из subjectId → courseId админки и записать файл. */
+export function seedTariffMapIfEmpty(tariffs: { id: number; subjectIds: number[]; archive?: boolean }[]) {
+  if (existsSync(fileOf()) && readTariffMap().length) return guessTariffLinks(tariffs);
+  const tree = loadSiteTree();
+  const bySub = new Map<number, { courseId: string; schoolId: string }>();
+  for (const c of loadScheduleMap().courses) {
+    if (!c.subjectId || !c.courseId) continue;
+    const course = tree.courses.find((x) => x.id === c.courseId || x.href === c.siteHref);
+    if (!course) continue;
+    bySub.set(c.subjectId, { courseId: course.id, schoolId: course.schoolId });
+  }
+  const seeded = guessTariffLinks(tariffs, []).map((row) => {
+    const t = tariffs.find((x) => x.id === row.tariffId);
+    const hit = t?.subjectIds.map((id) => bySub.get(id)).find(Boolean);
+    return hit ? { tariffId: row.tariffId, courseId: hit.courseId, schoolId: hit.schoolId } : row;
+  });
+  return saveTariffMap(seeded);
 }
 
 export function linkOfTariff(tariffId: number, list = readTariffMap()) {

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { clientCardId, CRM_BRANCH, groupCardId, SUBJECT_TO_COURSE } from "@/data/ids";
+import { clientCardId, CRM_BRANCH, groupCardId } from "@/data/ids";
 import { ADMIN_PANEL_BLUE, RA_POP } from "@/data/admin-ui";
 import { displayPersonName, displayParent, initialsOf } from "@/data/client-display";
 import {
@@ -51,28 +51,14 @@ function ruIso(iso: string) {
   return `${d}.${m}.${y}`;
 }
 
-function schoolOfSubject(id: number, path?: string) {
-  const p = String(path || SUBJECT_TO_COURSE[id] || "");
-  if (/art-studio|sculptural|digitalart|hudvuz|portrait/i.test(p)) return "Художественная школа";
-  if (/robot/i.test(p)) return "Школа робототехники";
-  if (/programmirovaniya|it-школ|it-лаборатор|start-scratch|scratch/i.test(p)) return "Школа программирования";
-  if (/3d-modeling|science|tesla|radio|gamedesign|mental|kinder-master/i.test(p)) return "Школа наук и инженерии";
-  if (/model-school|podium/i.test(p)) return "Модельная школа";
-  if (/preparation|happybricks|planet-steam|prep-school/i.test(p)) return "Школа раннего развития";
-  if (/english|korean|japanese|vitamin|language/i.test(p)) return "Школа иностранных языков";
-  return "Прочее";
-}
-
 const SCHOOL_LABELS = SCHOOLS.map((s) => s.label);
 
-function resolveSchool(g: { school?: string; schoolId?: string; subjectId?: number; courseId?: string }) {
+function resolveSchool(g: { school?: string; schoolId?: string }) {
   if (g.school && SCHOOL_LABELS.includes(g.school)) return g.school;
   if (g.schoolId) {
     const hit = SCHOOLS.find((s) => s.href === g.schoolId || s.href === `/${String(g.schoolId).replace(/^\//, "")}`);
     if (hit) return hit.label;
   }
-  const from = schoolOfSubject(g.subjectId || 0, g.courseId);
-  if (from && from !== "Прочее") return from;
   return g.school && g.school !== "Прочее" ? g.school : "";
 }
 

@@ -87,34 +87,12 @@ export function courseOf(subject: string, group: string, path: string) {
   return (subject || group || path || "Курс").replace(/\s+/g, " ").trim();
 }
 
-const ART_SCHOOL_PATH = "/art-studio-9-13";
-const ART_SCHOOL_COURSE = "Художественная школа 10–15 лет";
-const HUDVUZ_PATH = "/podgotovka-v-hudvuz";
-const HUDVUZ_COURSE = "Подготовка в художественные вузы";
-
-/** В CRM часть групп 10–15 лет ошибочно висит на предмете «подготовка в вуз». URL /art-studio-9-13 не меняем. */
 export function normalizeArtSlot(s: CrmSlot): CrmSlot {
-  const hay = `${s.groupName} ${s.subject} ${s.course} ${s.age} ${s.path}`.toLowerCase().replace(/ё/g, "е");
-  const tenFifteen = /10\s*[-–]\s*1[45]/.test(hay);
-  const schoolByName = /художественн/.test(hay) && /школ/.test(hay) && tenFifteen;
-  const portrait = /портрет/.test(hay);
-  const isSchool =
-    s.subjectId === 92 ||
-    s.subjectId === 115 ||
-    schoolByName ||
-    portrait ||
-    (s.path === ART_SCHOOL_PATH && !(/вуз/.test(hay) && !tenFifteen));
-  if (isSchool) {
-    return { ...s, path: ART_SCHOOL_PATH, course: ART_SCHOOL_COURSE, subject: ART_SCHOOL_COURSE, age: "10–15 лет" };
+  if (s.subjectId === 92 || s.subjectId === 115) {
+    return { ...s, age: s.age || "10–15 лет" };
   }
-  if (s.subjectId === 5 || s.path === HUDVUZ_PATH || (/вуз/.test(hay) && !tenFifteen)) {
-    return {
-      ...s,
-      path: HUDVUZ_PATH,
-      course: HUDVUZ_COURSE,
-      subject: HUDVUZ_COURSE,
-      age: s.age && /1[4-7]/.test(s.age) ? s.age : "от 14 лет",
-    };
+  if (s.subjectId === 5) {
+    return { ...s, age: s.age && /1[4-7]/.test(s.age) ? s.age : "от 14 лет" };
   }
   return s;
 }
@@ -900,7 +878,7 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
     const branchSubs = subjects.filter((x) => next.some((slot) => slot.branchId === branch && slot.subjectId === x.id));
     const picked =
       (Number(s.subjectId) ? subjects.find((x) => x.id === Number(s.subjectId) && !x.local) : undefined) ||
-      pickSubjectForSlot(s, branchSubs);
+      pickSubjectForSlot(s, branchSubs, loadScheduleMap().courses);
     const sub = picked;
     const subjectId = Number(sub?.id || 0);
     if (!subjectId) {

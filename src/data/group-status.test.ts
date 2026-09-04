@@ -10,6 +10,7 @@ import {
   mergeStatusPublish,
 } from "./group-status.ts";
 import { inheritSchoolBySubject } from "./schedule-map.ts";
+import { resolveGroupCourseId } from "./ids.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 
 describe("статусы групп CRM", () => {
@@ -80,5 +81,26 @@ describe("школа по subjectId", () => {
     const g433 = out.find((s) => s.groupId === 433);
     assert.equal(g433?.school, "Без школы на сайте");
     assert.equal(g433?.schoolId || "", "");
+  });
+});
+
+describe("курс группы из карты админки", () => {
+  const tree = {
+    schools: [{ id: "/art-studio", label: "Художественная школа", href: "/art-studio" }],
+    courses: [{ id: "/art-studio-5-6", href: "/art-studio-5-6", schoolId: "/art-studio", label: "5-6", age: "5-6" }],
+    assign: {},
+  };
+  const slot = { id: "433", groupId: 433, branchId: 2, courseId: "", subjectId: 13 };
+
+  it("без карты админки заводская таблица не подставляет курс", () => {
+    assert.equal(resolveGroupCourseId(slot, tree), "");
+  });
+
+  it("карта subjectId → courseId", () => {
+    assert.equal(resolveGroupCourseId(slot, tree, [{ subjectId: 13, courseId: "/art-studio-5-6" }]), "/art-studio-5-6");
+  });
+
+  it("пустая запись в карте = нет курса", () => {
+    assert.equal(resolveGroupCourseId(slot, tree, [{ subjectId: 13, courseId: "" }]), "");
   });
 });

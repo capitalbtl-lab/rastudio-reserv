@@ -1,6 +1,6 @@
 /**
- * Загрузка групп из AlfaCRM. subjectId = group.subject_id || lesson.subject_id || URL в заметке.
- * courseId = SUBJECT_TO_COURSE[subjectId] / карта / assign. Имя группы не склеивает курс.
+ * Загрузка групп из AlfaCRM. subjectId = group.subject_id || lesson.subject_id.
+ * courseId = assign / слот / schedule-map (админка). Имя и хэштеги не склеивают курс.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -9,8 +9,6 @@ import { request, token } from "@/data/alfacrm";
 import { agesOverlap } from "@/data/ages";
 import { dayLabel, slotFromSession, stampTimes, toSession, normalizeArtSlot, beatsOf, stampSubjects, type CrmSlot } from "@/data/crm-slots";
 import { applyScheduleMap } from "@/data/schedule-map";
-import { mergeTeacher, saveTeachers, type CrmTeacher } from "@/data/crm-teachers";
-import { SUBJECT_TO_COURSE } from "@/data/ids";
 import { nextLessonDate } from "@/lib/trial-slot";
 import { isAdminGroup, isArchivedGroup, isCampStatus, readPriority, slotOnPublicSchedule } from "./group-status";
 import { loadSiteSignup } from "./site-signup";
@@ -270,11 +268,11 @@ export function mergeCrmIntoSite(incoming: CrmSlot[], existing: CrmSlot[]) {
         ...s,
         subjectId: Number(s.subjectId) || Number(old.subjectId) || 0,
         subject: s.subject || old.subject,
-        school: s.school && s.school !== "Прочее" ? s.school : old.school,
+        school: "",
         course: s.course || old.course,
-        courseId: s.courseId || old.courseId || "",
-        schoolId: s.schoolId || old.schoolId || "",
-        path: s.path || old.path,
+        courseId: "",
+        schoolId: "",
+        path: "",
         age: s.age || old.age,
         beats: s.beats?.length ? s.beats : old.beats,
         remarks: old.remarks || s.remarks || "",
@@ -461,7 +459,6 @@ async function loadCrm(force = false): Promise<CacheBag> {
     const groupSid = Number(g.subject_id) || 0;
     const sid = groupSid || lessonSid || 0;
     const subjectName = (sid && subjects.get(sid)) || g.name;
-    const path = SUBJECT_TO_COURSE[sid] || "";
     const teach = teacherOf(first?.teacher_ids || g.teacher_ids, teachers);
     const seat = seats.get(seatKey(branchId, g.id)) || seats.get(seatKey(fromBranch, g.id));
     const beats = groupLessons
@@ -491,8 +488,8 @@ async function loadCrm(force = false): Promise<CacheBag> {
         subject: subjectName,
         school: "",
         course: subjectName || g.name,
-        courseId: path,
-        path,
+        courseId: "",
+        path: "",
         age: ageOf(g.name) || ageOf(subjectName),
         day: a.day,
         dayLabel: dayLabel(a.day),

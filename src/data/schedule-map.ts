@@ -10,7 +10,7 @@ import { SEED_SUBJECTS, loadSubjects } from "@/data/crm-subjects";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { slotMismatch } from "@/data/slot-mismatch";
 import { loadSiteTree, courseIdOf } from "./site-tree";
-import { SUBJECT_TO_COURSE, courseIdOfSubject, resolveGroupCourseId } from "./ids";
+import { SUBJECT_TO_COURSE, resolveGroupCourseId } from "./ids";
 import { UNMAPPED_SCHOOL } from "./group-status";
 
 export type SchoolLink = { schedule: string; siteHref: string; schoolId?: string };
@@ -77,7 +77,7 @@ function defaultSchools(): SchoolLink[] {
   return SCHOOLS.map((s) => ({ schedule: s.label, siteHref: s.href, schoolId: s.href }));
 }
 
-function defaultCourses(): CourseLink[] {
+function seedCourses(): CourseLink[] {
   const tree = loadSiteTree();
   const prices = listPriceRows();
   const out: CourseLink[] = [];
@@ -85,11 +85,11 @@ function defaultCourses(): CourseLink[] {
   const list = subjects.length ? subjects : SEED_SUBJECTS;
   for (const sub of list) {
     const path = SUBJECT_TO_COURSE[sub.id] || "";
-    const course = tree.courses.find((c) => c.id === path || c.href === path) || tree.courses.find((c) => c.id === courseIdOfSubject(sub.id, tree));
+    const course = path ? tree.courses.find((c) => c.id === path || c.href === path) : undefined;
     const price = prices.find((r) => (r.courseId || r.path) === (course?.id || path) || r.path === path);
     const href = course?.href || path || price?.path || "";
     const schoolNode = course ? tree.schools.find((s) => s.id === course.schoolId) : undefined;
-    const school = schoolNode?.label || price?.direction || schoolByPath(href) || "Прочее";
+    const school = schoolNode?.label || price?.direction || schoolByPath(href) || "";
     out.push({
       subjectId: sub.id,
       subjectName: sub.name,
@@ -102,53 +102,55 @@ function defaultCourses(): CourseLink[] {
   return out;
 }
 
+function emptyCourses(): CourseLink[] {
+  const subjects = loadSubjects();
+  const list = subjects.length ? subjects : SEED_SUBJECTS;
+  return list.map((sub) => ({
+    subjectId: sub.id,
+    subjectName: sub.name,
+    courseId: "",
+    schoolId: "",
+    siteHref: "",
+    school: "",
+  }));
+}
+
+function packLink(c: Partial<CourseLink>, name = ""): CourseLink {
+  return {
+    subjectId: Number(c.subjectId) || 0,
+    subjectName: c.subjectName || name,
+    courseId: String(c.courseId || c.siteHref || "").trim(),
+    schoolId: String(c.schoolId || ""),
+    siteHref: String(c.siteHref || c.courseId || ""),
+    school: String(c.school || ""),
+  };
+}
+
 export function loadScheduleMap(): MapFile {
-  const fallback: MapFile = { schools: defaultSchools(), courses: defaultCourses() };
+  const schools = defaultSchools();
   try {
-    if (!existsSync(fileOf())) return fallback;
+    if (!existsSync(fileOf())) {
+      const seeded: MapFile = { schools, courses: seedCourses() };
+      mkdirSync(dirname(fileOf()), { recursive: true });
+      writeFileSync(fileOf(), JSON.stringify(seeded, null, 2));
+      return seeded;
+    }
     const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Partial<MapFile>;
-    const schools = defaultSchools().map((d) => {
+    const schoolRows = schools.map((d) => {
       const hit = raw.schools?.find((s) => (s.schoolId && s.schoolId === d.schoolId) || s.siteHref === d.siteHref) || d;
       return { ...d, ...hit, schoolId: hit.schoolId || d.schoolId };
     });
-    const courses = defaultCourses().map((d) => {
+    const courses = emptyCourses().map((d) => {
       const hit = raw.courses?.find((c) => c.subjectId === d.subjectId);
       if (!hit) return d;
-      const none = !String(hit.courseId || "").trim() && !String(hit.siteHref || "").trim();
-      if (none) {
-        return {
-          ...d,
-          courseId: "",
-          schoolId: "",
-          siteHref: "",
-          school: hit.school || "",
-          subjectName: hit.subjectName || d.subjectName,
-        };
-      }
-      return {
-        ...d,
-        courseId: hit.courseId || hit.siteHref || d.courseId,
-        schoolId: hit.schoolId || d.schoolId,
-        siteHref: hit.siteHref || d.siteHref,
-        school: hit.school || d.school,
-        subjectName: hit.subjectName || d.subjectName,
-      };
+      return packLink(hit, hit.subjectName || d.subjectName);
     });
     for (const c of raw.courses || []) {
-      if (!courses.some((x) => x.subjectId === c.subjectId)) {
-        courses.push({
-          subjectId: c.subjectId,
-          subjectName: c.subjectName,
-          courseId: c.courseId || c.siteHref || "",
-          schoolId: c.schoolId || "",
-          siteHref: c.siteHref || "",
-          school: c.school || "",
-        });
-      }
+      if (!courses.some((x) => x.subjectId === c.subjectId)) courses.push(packLink(c, c.subjectName));
     }
-    return { schools, courses };
+    return { schools: schoolRows, courses };
   } catch {
-    return fallback;
+    return { schools, courses: seedCourses() };
   }
 }
 
@@ -156,7 +158,7 @@ export function saveScheduleMap(data: MapFile) {
   mkdirSync(dirname(fileOf()), { recursive: true });
   const next: MapFile = {
     schools: data.schools?.length ? data.schools : defaultSchools(),
-    courses: (data.courses?.length ? data.courses : defaultCourses()).map((c) => ({
+    courses: (data.courses?.length ? data.courses : emptyCourses()).map((c) => ({
       subjectId: c.subjectId,
       subjectName: c.subjectName,
       courseId: c.courseId || c.siteHref || "",

@@ -52,9 +52,10 @@
  * КАК РЕЗОЛВИТЬ courseId ГРУППЫ (порядок, без имён):
  *   1. tree.assign[gid:{branchId}:{groupId}]
  *   2. slot.courseId, если такой курс есть в дереве
- *   3. schedule-map.courses[subjectId].courseId — пустая запись = «нет курса», шаг 4 не брать
- *   4. SUBJECT_TO_COURSE[subjectId] — только если предмета нет в карте
+ *   3. schedule-map.courses[subjectId].courseId (админка → Соответствия)
+ *      пустая запись = «нет курса»
  *   иначе — «Без курса». Оператор выбирает папку (treeMove) или карту.
+ *   Заводская таблица SUBJECT_TO_COURSE — только посев пустого schedule-map.json.
  *
  * КАК РЕЗОЛВИТЬ subjectId ГРУППЫ:
  *   1. group.subject_id из CRM
@@ -95,9 +96,8 @@ export const CRM_BRANCH: Record<number, { short: string; name: string }> = {
 };
 
 /**
- * Предмет CRM → courseId сайта (path = id курса в дереве).
- * Новые предметы добавлять сюда по subjectId, не по названию.
- * Живой оверрайд — storage/schedule-map.json (вкладка Соответствия).
+ * Посев пустого schedule-map.json (админка → Соответствия → Предметы).
+ * В рантайме не читается: живая карта — storage/schedule-map.json.
  */
 export const SUBJECT_TO_COURSE: Record<number, string> = {
   12: "/art-studio-3-4",
@@ -156,16 +156,18 @@ export function courseIdOfGroup(s: Pick<CrmSlot, "id" | "groupId" | "branchId" |
   return courseIdInTree(tree, id);
 }
 
-/** courseId по subjectId: таблица, затем дерево (id или href). */
-export function courseIdOfSubject(subjectId: number, tree: SiteTree) {
-  const path = SUBJECT_TO_COURSE[subjectId] || "";
-  if (!path) return "";
-  return courseIdInTree(tree, path) || path;
+/** courseId по subjectId из карты админки. Без заводской таблицы. */
+export function courseIdOfSubject(subjectId: number, tree: SiteTree, mapCourses?: IdMapCourse[]) {
+  if (!subjectId || !mapCourses?.length) return "";
+  const link = mapCourses.find((c) => c.subjectId === subjectId);
+  const raw = String(link?.courseId || link?.siteHref || "").trim();
+  if (!raw) return "";
+  return courseIdInTree(tree, raw);
 }
 
 /**
- * Единая резолюция courseId группы. Порядок: assign → slot.courseId → карта subjectId (пустая = нет курса) → SUBJECT_TO_COURSE.
- * Имя курса / группы не участвует.
+ * Единая резолюция courseId группы. Порядок: assign → slot.courseId → карта админки.
+ * Имя курса / группы не участвует. SUBJECT_TO_COURSE не читается.
  */
 export function resolveGroupCourseId(
   s: Pick<CrmSlot, "id" | "groupId" | "branchId" | "courseId" | "subjectId">,
@@ -179,35 +181,28 @@ export function resolveGroupCourseId(
     if (own) return own;
   }
   if (s.subjectId && mapCourses?.length) {
+    const fromMap = courseIdOfSubject(s.subjectId, tree, mapCourses);
+    if (fromMap) return fromMap;
     const link = mapCourses.find((c) => c.subjectId === s.subjectId);
-    if (link) {
-      const raw = String(link.courseId || link.siteHref || "").trim();
-      if (!raw) return "";
-      const fromMap = courseIdInTree(tree, raw);
-      if (fromMap) return fromMap;
-    }
+    if (link) return "";
   }
-  if (s.subjectId) return courseIdOfSubject(s.subjectId, tree);
   return "";
 }
 
-/** Обратная связь: какие subjectId привязаны к этому courseId в статичной таблице. */
-export function subjectIdsOfCourse(courseId: string): number[] {
-  if (!courseId) return [];
-  return Object.entries(SUBJECT_TO_COURSE)
-    .filter(([, p]) => p === courseId)
-    .map(([id]) => Number(id));
+/** Обратная связь: какие subjectId привязаны к этому courseId в карте админки. */
+export function subjectIdsOfCourse(courseId: string, mapCourses?: IdMapCourse[]): number[] {
+  if (!courseId || !mapCourses?.length) return [];
+  return mapCourses
+    .filter((c) => c.courseId === courseId || c.siteHref === courseId)
+    .map((c) => c.subjectId)
+    .filter(Boolean);
 }
 
-/** subjectId курса из живой карты Соответствия, иначе из SUBJECT_TO_COURSE (если ровно один). */
+/** subjectId курса из карты Соответствия в админке. */
 export function subjectIdOfCourse(courseId: string, mapCourses?: IdMapCourse[]): number {
   if (!courseId) return 0;
-  if (mapCourses?.length) {
-    const hit = mapCourses.find((c) => c.courseId === courseId || c.siteHref === courseId);
-    if (hit?.subjectId) return hit.subjectId;
-  }
-  const ids = subjectIdsOfCourse(courseId);
-  return ids.length === 1 ? ids[0] : 0;
+  const ids = subjectIdsOfCourse(courseId, mapCourses);
+  return ids.length === 1 ? ids[0] : ids[0] || 0;
 }
 
 /** Ключ строки цены = courseId сайта. */

@@ -20,7 +20,7 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-04-id";
+export const GUIDE_REV = "2026-09-04-map";
 
 const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Сайт", idField: "rastudio.org", link: "то, что видят родители. Админка = /admin + AlfaCRM" },
@@ -56,7 +56,7 @@ const SCHEDULE_CASCADE = [
   "tree.assign[gid:{branchId}:{groupId}]",
   "slot.courseId, если такой курс есть в дереве",
   "карта соответствий subjectId → courseId",
-  "таблица SUBJECT_TO_COURSE[subjectId]",
+  "карта админки schedule-map.courses[subjectId].courseId (пусто = нет курса)",
   "иначе — «Без курса», без угадывания по тексту",
 ];
 
@@ -79,7 +79,7 @@ const SCHEDULE_TABS: GuideTab[] = [
   {
     id: "subjects",
     title: "Предметы",
-    body: "pane=subjects. Справочник AlfaCRM: subjectId + имя (подпись). Колонка «Курс сайта» — RaSelect courseId из дерева, первая строка «нет курса» (пустой courseId, без отката на SUBJECT_TO_COURSE). Файл schedule-map.json, живой оверрайд SUBJECT_TO_COURSE. В AlfaCRM курс не уходит. Вкладки таблицы: «С абонементами» (tariffTotal>0) / «Без абонементов». Справа ЦМИТ / Гражданская / Луховицы / Лето / Всего = неархивные группы (statusId≠3 и не смены 7–9, ключ branchId:groupId) и сумма roster (taken=учится+лиды), не явка и не число абонементов. Подпись колонок «гр / уч». Status 4 входит в счёт. Загрузить из AlfaCRM = pull предметов + pack: курс из карты, счётчики из слотов. Сохранить на сайте = id и имя. Выгрузить в AlfaCRM = только id и имя. Привязка: subjectsBind { subjectId, courseId }. Пустой courseId = снять соответствие. Создание из карточки группы сразу пишет карту subjectId→courseId группы. Голос: «открой предметы» = openTab pane=subjects. Родителю: предмет = направление, курс сайта = страница, группы = слоты с этим subjectId в филиале. Не склеивать по названию.",
+    body: "pane=subjects. Справочник AlfaCRM: subjectId + имя (подпись). Колонка «Курс сайта» — RaSelect courseId из дерева, первая строка «нет курса» (пустой courseId). Файл schedule-map.json — единственная живая карта. В AlfaCRM курс не уходит. Вкладки таблицы: «С абонементами» (tariffTotal>0) / «Без абонементов». Справа ЦМИТ / Гражданская / Луховицы / Лето / Всего = неархивные группы (statusId≠3 и не смены 7–9, ключ branchId:groupId) и сумма roster (taken=учится+лиды), не явка и не число абонементов. Подпись колонок «гр / уч». Status 4 входит в счёт. Загрузить из AlfaCRM = pull предметов + pack: курс из карты, счётчики из слотов. Сохранить на сайте = id и имя. Выгрузить в AlfaCRM = только id и имя. Привязка: subjectsBind { subjectId, courseId }. Пустой courseId = снять соответствие. Создание из карточки группы сразу пишет карту subjectId→courseId группы. Голос: «открой предметы» = openTab pane=subjects. Родителю: предмет = направление, курс сайта = страница, группы = слоты с этим subjectId в филиале. Не склеивать по названию.",
   },
   {
     id: "prices",
@@ -99,7 +99,7 @@ const SCHEDULE_TABS: GuideTab[] = [
   {
     id: "map",
     title: "Соответствия",
-    body: "Две карты, обе только на сайте, CRM не меняют. 1) Предметы CRM: subjectId → courseId + schoolId (schedule-map.json), живой оверрайд SUBJECT_TO_COURSE. 2) Абонементы: tariffId → courseId + schoolId (tariff-map.json). Переключатель Предметы CRM / Абонементы. Слева школы сайта, сверху курсы дерева, справа список с select курса. Сохранить абонементы — action saveTariffs. Не склеивать по названию абонемента или курса.",
+    body: "Две карты, обе только на сайте, правятся в админке, CRM не меняют. 1) Предметы CRM: subjectId → courseId + schoolId (schedule-map.json). 2) Абонементы: tariffId → courseId + schoolId (tariff-map.json). Переключатель Предметы CRM / Абонементы. Слева школы сайта, сверху курсы дерева, справа список с select курса. Сохранить абонементы — action saveTariffs. Не склеивать по названию абонемента или курса.",
   },
 ];
 
@@ -291,7 +291,7 @@ list_groups {age, branch?, course?} → все неархивные слоты. 
 
 ПРОТОКОЛ ПРЕДМЕТОВ pane=subjects
 Справочник CRM: subjectId + имя. Имя — подпись.
-Курс сайта: schedule-map.json subjectId → courseId (+ SUBJECT_TO_COURSE). Select в колонке. subjectsBind. В CRM не уходит.
+Курс сайта: schedule-map.json subjectId → courseId. Select в колонке. subjectsBind. В CRM не уходит.
 Справа ЦМИТ / Гражданская / Луховицы / Лето / Всего = неархивные группы (уникально branchId:groupId, statusId≠3) / сумма roster. Status 4 входит. Не абонементы. Не явка.
 Вкладки: С абонементами (tariffTotal>0) | Без абонементов.
 Загрузка AlfaCRM = предметы + pack курса и счётчиков. Выгрузка = только id и имя.
@@ -350,8 +350,7 @@ export const FACTORY_GUIDES: SectionGuide[] = [
     graph: SCHEDULE_GRAPH.filter((r) => /Предмет|Курс|Школа|Групп|Филиал|Сайт|Абонемент/.test(r.entity)),
     cascade: [
       "schedule-map.courses[subjectId].courseId",
-      "SUBJECT_TO_COURSE[subjectId]",
-      "иначе курс сайта пуст — не угадывать по имени",
+      "иначе курс сайта пуст — править в админке, не угадывать по имени",
     ],
     tabs: SCHEDULE_TABS.filter((t) => t.id === "subjects" || t.id === "map" || t.id === "groups"),
     ops: SCHEDULE_OPS.filter((o) => /subject|ask-subject|open-subjects/.test(o.id)),
@@ -496,14 +495,13 @@ function subjectsBody() {
 ${tab}
 
 КАСКАД courseId ПРЕДМЕТА
-1. storage/schedule-map.json courses[subjectId].courseId. Пустая запись = «нет курса», шаг 2 не брать.
-2. таблица SUBJECT_TO_COURSE[subjectId] в ids.ts — только если предмета нет в карте.
-3. иначе пусто. Не подбирать «похожий» курс по словам «художка», «роботы».
+1. storage/schedule-map.json courses[subjectId].courseId. Пустая запись = «нет курса».
+2. иначе пусто. Не подбирать курс по словам «художка», «роботы». Не читать ids.ts.
 
 КОЛОНКИ ВКЛАДКИ
 ID — subjectId, правится на сайте, выгружается в CRM.
 Название — подпись.
-Курс сайта — RaSelect дерева, сгруппирован по школам. Первая строка «нет курса» снимает соответствие: в карту пишется пустой courseId, SUBJECT_TO_COURSE не подставляется обратно.
+Курс сайта — RaSelect дерева, сгруппирован по школам. Первая строка «нет курса» снимает соответствие: в карту пишется пустой courseId.
 ЦМИТ (branchId=2), Гражданская (1), Луховицы (3), Лето (4), Всего — две цифры: группы / ученики.
 Не абонементы. tariffTotal живёт только как фильтр вкладок «С абонементами» / «Без абонементов».
 
@@ -540,7 +538,7 @@ subjectsBind { subjectId, courseId }. Колонка «Курс сайта» и�
 storage/crm-subjects.json — справочник.
 storage/schedule-map.json — subjectId → courseId / schoolId.
 storage/crm-schedule.json — слоты, subjectId, taken.
-src/data/ids.ts SUBJECT_TO_COURSE — заводская таблица.
+Заводской посев SUBJECT_TO_COURSE — только если schedule-map.json ещё нет.
 
 СЕРВЕР adminSchedule / adminDisk
 subjectsGet → packSubjectRows (курс + гр/уч)

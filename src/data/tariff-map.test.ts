@@ -14,7 +14,7 @@ describe("карта абонемент → курс сайта", () => {
     assert.equal(a?.courseId, "/art-studio-7-8");
     assert.equal(a?.schoolId, "/art-studio");
     const b = out.find((x) => x.tariffId === 11);
-    assert.ok(b);
+    assert.equal(b?.courseId || "", "");
   });
 
   it("архив и отрицательные id не берёт", () => {

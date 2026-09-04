@@ -5,13 +5,13 @@ import { applyScheduleMap, loadScheduleMap, saveScheduleMap, siteCourses, siteSc
 import { listAdminSlots, saveAdminSlots } from "./alfacrm-schedule";
 import { stampSubjects } from "./crm-slots";
 import { loadSiteTree, pinAllGuesses } from "./site-tree";
-import { guessTariffLinks, saveTariffMap, type TariffLink } from "./tariff-map";
+import { guessTariffLinks, saveTariffMap, seedTariffMapIfEmpty, type TariffLink } from "./tariff-map";
 import { loadTariffs } from "./crm-tariffs";
 
 function pack() {
   const map = loadScheduleMap();
   const store = loadTariffs();
-  const tariffs = guessTariffLinks(store.items);
+  const tariffs = seedTariffMapIfEmpty(store.items);
   return {
     ...map,
     siteSchools: siteSchools(),

@@ -2,7 +2,6 @@ import type { CrmSubject } from "./crm-subjects";
 import { loadSubjects } from "./crm-subjects";
 import { loadScheduleMap, saveScheduleMap } from "./schedule-map";
 import { loadSiteTree } from "./site-tree";
-import { courseIdOfSubject } from "./ids";
 import { subjectTariffStats } from "./crm-tariffs";
 import { listAdminSlots } from "./alfacrm-schedule";
 import { countSubjectUsage } from "./subject-usage";
@@ -19,8 +18,7 @@ export function packSubjectRows(list?: CrmSubject[]) {
     subjects: subjects.map((s) => {
       const st = bySubject.get(s.id) || { total: 0, byBranch: {} as Record<number, number>, names: [] as string[] };
       const link = bySub.get(s.id);
-      const none = Boolean(link) && !link?.courseId && !link?.siteHref;
-      const courseId = none ? "" : link?.courseId || courseIdOfSubject(s.id, tree);
+      const courseId = link?.courseId || "";
       const course = courseId ? tree.courses.find((c) => c.id === courseId || c.href === courseId) : undefined;
       const school = course ? tree.schools.find((x) => x.id === course.schoolId) : undefined;
       const gs = usage.get(s.id);

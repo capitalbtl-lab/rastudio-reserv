@@ -222,45 +222,24 @@ function quotedOf(s: string) {
   return out;
 }
 
-/** Предмет группы: сначала slot.subjectId, затем карта courseId → subjectId. Имя — запасной поиск. */
+/** Предмет группы: slot.subjectId, затем карта courseId → subjectId. Имя не ищем. */
 export function pickSubjectForSlot(
-  slot: { subjectId?: number; subject?: string; course?: string; courseId?: string; groupName?: string },
+  slot: { subjectId?: number; courseId?: string },
   list: CrmSubject[],
+  mapCourses?: { subjectId: number; courseId?: string; siteHref?: string }[],
 ) {
   if (Number(slot.subjectId)) {
     const hit = list.find((s) => s.id === Number(slot.subjectId) && !s.local);
     if (hit) return hit;
   }
   if (slot.courseId) {
-    const sid = subjectIdOfCourse(slot.courseId);
+    const sid = subjectIdOfCourse(slot.courseId, mapCourses);
     if (sid) {
       const hit = list.find((s) => s.id === sid && !s.local);
       if (hit) return hit;
     }
   }
-  const hay = foldSubject(`${slot.groupName || ""} ${slot.course || ""} ${slot.subject || ""}`);
-  const hw = tokensOf(hay);
-  const quoted = quotedOf(`${slot.groupName || ""} ${slot.course || ""} ${slot.subject || ""}`);
-  let best: CrmSubject | undefined;
-  let score = 0;
-  for (const s of list) {
-    if (s.local) continue;
-    const m = foldSubject(s.name);
-    const sw = tokensOf(s.name);
-    let sc = 0;
-    if (quoted.some((q) => q && (m.includes(q) || q.includes(m)))) sc += 500;
-    const hit = sw.filter((w) => hw.includes(w) || hay.includes(w));
-    for (const w of hit) sc += w.length > 5 ? 90 : 45;
-    if (sw.length && hit.length === sw.length) sc += 80;
-    const ages = ageHit(hay, m);
-    if (ages.both && ages.n) sc += 25;
-    if (ages.both && !ages.n) sc -= 100;
-    if (sc > score) {
-      score = sc;
-      best = s;
-    }
-  }
-  return score >= 80 ? best : undefined;
+  return undefined;
 }
 
 function crmId(res: unknown) {
@@ -507,11 +486,7 @@ export async function ensureCrmSubject(name: string, hintId = 0, branch = 2, mod
     return liveHit;
   }
   if (mode === "auto") {
-    const guessed = pickSubjectForSlot({ course: cleaned, groupName: name }, live.length ? live : list);
-    if (guessed) {
-      void activateCrmSubject(guessed.id, [br, 1, 2, 3, 4]).catch(() => undefined);
-      return guessed;
-    }
+    throw new Error(`В филиале нет предмета «${cleaned}». Создайте его в карточке группы.`);
   }
   const made = await createSubjectHtml(cleaned, br);
   const next = { id: made.id, name: made.name };
