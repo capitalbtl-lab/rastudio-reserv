@@ -242,7 +242,7 @@ export const IDS_FOR_AGENT = `КАРТА ID (обязательно). Не ищ�
 клиенты: две оси status=учится|лид и view=дети|группы; архив тихий; автолиды каждые 5 мин только новые customerId
 кабинет cabinetId = cabinet:admin
 цена курса price.courseId = path курса
-соответствие subjectId → courseId в карте (вкладка Соответствия → Предметы CRM)
+соответствие subjectId → courseId в карте (вкладка Предметы, колонка «Курс сайта», файл schedule-map.json, не CRM). Справа на вкладке Предметы — группы/ученики по филиалам, не абонементы.
 соответствие tariffId → schoolId + courseId (вкладка Соответствия → Абонементы, файл tariff-map.json, не CRM)
 
 Создать группу: courseId + branchId + teacherId. Предмет: subjectId этого курса (карта или таблица).

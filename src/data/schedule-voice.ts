@@ -11,7 +11,7 @@ export type ScheduleVoiceResult = {
   reason: string;
   answer: string;
   action: "preview" | "pull" | "push" | "none";
-  pane?: "groups" | "clients";
+  pane?: "groups" | "clients" | "subjects" | "tariffs" | "map" | "prices" | "public" | "crm";
   query?: string;
   customerId?: number;
   branchId?: number;
@@ -57,6 +57,15 @@ function localPeopleTurn(prompt: string): ScheduleVoiceResult | null {
   }
   if (/вкладк.{0,16}клиент|покажи клиент|перечень клиент|список клиент|открой клиент(ов|ами)?$/.test(t)) {
     return { kind: "openTab", reason: "", answer: "Открываю клиентов.", action: "none", pane: "clients", status: "учится" };
+  }
+  if (/вкладк.{0,16}предмет|покажи предмет|открой предмет|справочник предмет/.test(t) && !/клиент/.test(t)) {
+    return { kind: "openTab", reason: "", answer: "Открываю предметы.", action: "none", pane: "subjects" };
+  }
+  if (/вкладк.{0,16}абонемент|покажи абонемент|открой абонемент/.test(t) && !/клиент|ученик/.test(t)) {
+    return { kind: "openTab", reason: "", answer: "Открываю абонементы.", action: "none", pane: "tariffs" };
+  }
+  if (/вкладк.{0,16}соответств|покажи соответств|открой соответств/.test(t)) {
+    return { kind: "openTab", reason: "", answer: "Открываю соответствия.", action: "none", pane: "map" };
   }
   if (/вкладк.{0,16}групп|покажи групп|перечень групп|список групп/.test(t) && !/клиент/.test(t)) {
     return { kind: "openTab", reason: "", answer: "Открываю группы.", action: "none", pane: "groups" };
@@ -191,23 +200,27 @@ export async function scheduleVoiceTurn(prompt: string, selectedIds: string[]): 
     status?: string;
     ageBand?: string;
   }>(
-    `Ты голосовой агент кабинета студии «Развивайся»: расписание, группы и клиенты.
+    `Ты голосовой агент кабинета студии «Развивайся»: расписание, группы, клиенты, предметы, абонементы.
 Ты НЕ Олег и НЕ Ольга. Ты НЕ консультируешь родителей. Ты НЕ записываешь детей.
-Умеешь: менять расписание и лимит мест, добавлять группы, открывать карточку группы, искать карточку клиента, открывать вкладки «группы» и «клиенты», фильтровать текущих/лидов/архив, загрузить/выгрузить AlfaCRM.
+Умеешь: менять расписание и лимит мест, добавлять группы, открывать карточку группы, искать карточку клиента, открывать вкладки «группы», «клиенты», «предметы», «абонементы», «соответствия», фильтровать текущих/лидов/архив, загрузить/выгрузить AlfaCRM.
 Карточка клиента на десктопе — правая панель, не popup. Overlay только на телефоне.
 ${scheduleGuidePrompt() || IDS_FOR_AGENT}
-Открывать группу только по groupId+branchId (groupCardId = card:group:{branchId}:{groupId}). Клиента — только по customerId (clientCardId = card:customer:{customerId}). Курс — courseId, предмет — subjectId.
+Открывать группу только по groupId+branchId (groupCardId = card:group:{branchId}:{groupId}). Клиента — только по customerId (clientCardId = card:customer:{customerId}). Курс — courseId, предмет — subjectId. Курс сайта в CRM не уходит.
 «найди Иванова» / «открой карточку Маши» = kind=openClient, если один человек (подставь customerId); если несколько — kind=openTab pane=clients и query.
 «открой группу 405» = kind=openGroup, groupId=405.
 «покажи клиентов» / «текущих» = kind=openTab pane=clients status=учится.
 «покажи лиды» = kind=openTab pane=clients status=лид. Не выгружать AlfaCRM.
 «покажи архив» = kind=openTab pane=clients status=архив. Не выгружать AlfaCRM.
+«покажи предметы» = kind=openTab pane=subjects.
+«покажи абонементы» = kind=openTab pane=tariffs.
+«покажи соответствия» = kind=openTab pane=map.
+«сколько групп по предмету» = kind=question, ответить гр/уч по филиалам из карты предметов, не абонементами.
 «максимальное количество детей на 15» = правка лимита, kind=edit, action=preview.
 Свои фразы «привет что будем делать», «хорошо сейчас всё поправим», «скажите опубликовать» — не запросы, kind=refuse reason=это эхо.
-Если запрос не про расписание/группы/клиентов — kind=refuse и точная причина.
+Если запрос не про расписание/группы/клиентов/предметы — kind=refuse и точная причина.
 Вопрос сколько/когда/кто в группе — kind=question.
 Отмечено групп: ${selectedIds.length}. Филиалы: ${BRANCHES.map((b) => `${b.city}, ${b.address}`).join(" | ")}
-JSON: {"kind":"edit|question|refuse|openClient|openGroup|openTab","reason":"","answer":"","action":"preview|pull|push|none","pane":"groups|clients","query":"","customerId":0,"branchId":0,"groupId":0,"slotId":"","status":"учится|лид|архив","ageBand":""}`,
+JSON: {"kind":"edit|question|refuse|openClient|openGroup|openTab","reason":"","answer":"","action":"preview|pull|push|none","pane":"groups|clients|subjects|tariffs|map","query":"","customerId":0,"branchId":0,"groupId":0,"slotId":"","status":"учится|лид|архив","ageBand":""}`,
     `Запрос оператора: ${String(prompt || "").slice(0, 1500)}
 Карточки групп:
 ${cards.join("\n").slice(0, 3500)}
@@ -237,7 +250,14 @@ ${JSON.stringify(slim).slice(0, 9000)}`,
     reason: String(llm?.reason || (kind === "refuse" ? "не разобрала запрос по расписанию, группам или клиентам." : "")).trim(),
     answer: String(llm?.answer || "").trim(),
     action: kind === "refuse" || kind === "openClient" || kind === "openGroup" || kind === "openTab" ? "none" : action,
-    pane: llm?.pane === "clients" || llm?.pane === "groups" ? llm.pane : kind === "openClient" ? "clients" : kind === "openGroup" ? "groups" : undefined,
+    pane:
+      llm?.pane === "clients" || llm?.pane === "groups" || llm?.pane === "subjects" || llm?.pane === "tariffs" || llm?.pane === "map" || llm?.pane === "prices" || llm?.pane === "public" || llm?.pane === "crm"
+        ? llm.pane
+        : kind === "openClient"
+          ? "clients"
+          : kind === "openGroup"
+            ? "groups"
+            : undefined,
     query: String(llm?.query || "").trim() || undefined,
     customerId: Number(llm?.customerId) || undefined,
     branchId: Number(llm?.branchId) || undefined,

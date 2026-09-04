@@ -20,7 +20,7 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-04-site-book";
+export const GUIDE_REV = "2026-09-04-subjects";
 
 const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Сайт", idField: "rastudio.org", link: "то, что видят родители. Админка = /admin + AlfaCRM" },
@@ -31,9 +31,10 @@ const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Запись в группу", idField: "kind=group / lessonTypeId=2", link: "book_lesson lesson_type=group + gid. Не iframe AlfaCRM" },
   { entity: "Группа", idField: "groupId", link: "ключ gid:{branchId}:{groupId}" },
   { entity: "Карточка группы", idField: "groupCardId", link: "card:group:{branchId}:{groupId}" },
-  { entity: "Предмет", idField: "subjectId", link: "карта → courseId" },
-  { entity: "Курс сайта", idField: "courseId", link: "папка в дереве школ" },
+  { entity: "Предмет", idField: "subjectId", link: "CRM Настройки→Предметы. Карта → courseId. Имя — подпись" },
+  { entity: "Курс сайта", idField: "courseId", link: "папка в дереве школ. В CRM не уходит" },
   { entity: "Школа", idField: "schoolId", link: "course.schoolId" },
+  { entity: "Группы предмета", idField: "groupTotal / studentTotal", link: "живые группы и taken по branchId, вкладка Предметы" },
   { entity: "Абонемент", idField: "tariffId", link: "tariff-map → courseId/schoolId (сайт); fallback subjectIds + branchIds + минуты ±5" },
   { entity: "Клиент", idField: "customerId", link: "dossier.crmId; groupLinks[].id = groupId" },
   { entity: "Карточка клиента", idField: "clientCardId", link: "card:customer:{customerId}" },
@@ -72,7 +73,7 @@ const SCHEDULE_TABS: GuideTab[] = [
   {
     id: "subjects",
     title: "Предметы",
-    body: "Колонка «Курс сайта» по courseId. Создание предмета из группы сразу пишет соответствие subjectId → courseId. Имя предмета — подпись. Если в филиале нет нужного subjectId — сначала предложить выбрать из списка филиала, иначе создать и включить.",
+    body: "pane=subjects. Справочник AlfaCRM: subjectId + имя (подпись). Колонка «Курс сайта» — select courseId из дерева, файл schedule-map.json, живой оверрайд SUBJECT_TO_COURSE. В AlfaCRM курс не уходит. Вкладки таблицы: «С абонементами» (tariffTotal>0) / «Без абонементов». Справа ЦМИТ / Гражданская / Луховицы / Лето / Всего = живые группы (statusId∉{3,4}, ключ branchId:groupId) и сумма taken учеников, не число абонементов. Подпись колонок «гр / уч». Загрузить из AlfaCRM = pull предметов + pack: курс из карты, счётчики из слотов. Сохранить на сайте = id и имя. Выгрузить в AlfaCRM = только id и имя. Привязка: subjectsBind { subjectId, courseId }. Создание из карточки группы сразу пишет карту subjectId→courseId группы. Голос: «открой предметы» = openTab pane=subjects. Родителю: предмет = направление, курс сайта = страница, группы = слоты с этим subjectId в филиале. Не склеивать по названию.",
   },
   {
     id: "prices",
@@ -99,7 +100,12 @@ const SCHEDULE_TABS: GuideTab[] = [
 const SCHEDULE_OPS: GuideOp[] = [
   { id: "create-group", title: "Создать группу", body: "Нужны courseId + branchId + teacherId. subjectId — из карты этого курса. Нет subjectId в филиале — спросить / создать, не подставлять первый попавшийся." },
   { id: "move-group", title: "Перенести группу", body: "Сменить courseId / treeMove. Не склеивать по словам." },
-  { id: "bind-subject", title: "Привязать предмет", body: "Карта subjectId → courseId на вкладке Соответствия → Предметы CRM." },
+  { id: "bind-subject", title: "Привязать предмет к курсу сайта", body: "Карта subjectId → courseId + schoolId. Вкладка Предметы, колонка «Курс сайта», или Соответствия → Предметы CRM. subjectsBind { subjectId, courseId }. Файл schedule-map.json. В AlfaCRM не уходит. Нет ID курса — спросить, не угадывать по имени предмета." },
+  { id: "open-subjects", title: "Открыть предметы", body: "kind=openTab pane=subjects. Голос: «покажи предметы», «открой справочник предметов»." },
+  { id: "pull-subjects", title: "Загрузить предметы из AlfaCRM", body: "Кнопка «Загрузить из AlfaCRM» на вкладке Предметы. pull kind=subjects → crm-subjects.json, затем pack: курс сайта из карты, группы/ученики из слотов. Расписание групп не трогает." },
+  { id: "push-subjects", title: "Выгрузить предметы в AlfaCRM", body: "Кнопка «Выгрузить в AlfaCRM». Уходит только subjectId + имя. Курс сайта, школа, счётчики групп — только сайт. Отмеченные галкой, иначе все." },
+  { id: "save-subjects", title: "Сохранить предметы на сайте", body: "subjectsSave { subjects }. Имена и id. Курс сайта сохраняется отдельно subjectsBind." },
+  { id: "ask-subject-usage", title: "Сколько групп / учеников по предмету", body: "kind=question. Ответ из живой карты: subjectId, курс сайта, по филиалам группы и taken. Не путать с числом абонементов (tariffTotal — только вкладка «С абонементами»)." },
   { id: "bind-tariff", title: "Привязать абонемент к курсу сайта", body: "Карта tariffId → schoolId + courseId. Соответствия → Абонементы или колонка «Курс сайта» во вкладке Абонементы. saveTariffs. Файл tariff-map.json. В AlfaCRM не уходит. Не привязывать по имени." },
   { id: "open-group", title: "Открыть группу", body: "Только groupId + branchId. Карточка groupCardId = card:group:{branchId}:{groupId}. Состав: три списка Ученики / Лиды / Архивные ученики, клик = customerId. Голос: kind=openGroup. Из клиента: onOpenGroup(groupId, branchId)." },
   { id: "open-client", title: "Открыть клиента", body: "Только customerId. clientCardId = card:customer:{customerId}. Событие ra-open-client { customerId, branchId }. Несколько ФИО в поиске — вкладка clients + query, карточку открывать когда остался один customerId. Desktop = panel, не popup." },
@@ -139,7 +145,11 @@ const SCHEDULE_NEVER = [
   "Не скроллить всю страницу внутри блока клиентов. Дальше крутятся список и карточка.",
   "Не перечитывать всех лидов каждые 5 минут. Только customerId, которых нет на сайте.",
   "Не смешивать native <select> в попапах — только RaSelect с RA_POP.",
-  "Не выгружать карту абонемент→курс в AlfaCRM. tariff-map.json только сайт.",
+  "Не выгружать курс сайта в AlfaCRM. schedule-map.json и колонка «Курс сайта» только сайт.",
+  "Не считать правые цифры вкладки Предметы абонементами. Это группы и ученики (taken) по филиалу.",
+  "Не склеивать предмет с курсом по названию. Только subjectId → courseId.",
+  "Не открывать справочник предметов по имени. pane=subjects, правка — subjectId.",
+  "Не путать tariffTotal (абонементы с этим предметом) и groupTotal (живые группы).",
   "Не искать абонемент для группы по названию. Сначала slot.tariffId, затем tariff-map.courseId, затем subjectId+филиал+минуты.",
   "Не открывать родителю форму AlfaCRM (/lead/create, iframe id=20). Записывать самому: submit_trial или book_lesson.",
   "Не выдумывать gid, дату и время. Дата пробного = ближайшее занятие выбранной группы, время = timeFrom слота.",
@@ -250,6 +260,15 @@ ra-clients-filter { status?, view?, branchId?, ageBand? }
 list_groups {age, branch?, course?} → живые слоты. Назвать 5–8: день, время, педагог, филиал, места, ближайшая дата. gid не произносить вслух родителю, но передать в инструмент.
 Настройки: storage/site-signup.json trialOn groupOn trialByBranch. CRM форма id=20 — запас, сайт шлёт API.
 
+ПРОТОКОЛ ПРЕДМЕТОВ pane=subjects
+Справочник CRM: subjectId + имя. Имя — подпись.
+Курс сайта: schedule-map.json subjectId → courseId (+ SUBJECT_TO_COURSE). Select в колонке. subjectsBind. В CRM не уходит.
+Справа ЦМИТ / Гражданская / Луховицы / Лето / Всего = живые группы (уникально branchId:groupId, statusId∉{3,4}) / сумма taken. Не абонементы.
+Вкладки: С абонементами (tariffTotal>0) | Без абонементов.
+Загрузка AlfaCRM = предметы + pack курса и счётчиков. Выгрузка = только id и имя.
+Нет курса у предмета с группами — сказать «курс сайта не привязан», предложить subjectsBind, не угадывать.
+Родителю: направление = subjectId, страница = courseId, слоты = группы этого subjectId в филиале.
+
 Вкладки раздела:
 ${tabs}
 
@@ -276,6 +295,25 @@ export const FACTORY_GUIDES: SectionGuide[] = [
     ops: SCHEDULE_OPS,
     never: SCHEDULE_NEVER,
     body: scheduleBody(),
+  },
+  {
+    id: "subjects",
+    section: "subjects",
+    title: "Предметы",
+    on: true,
+    updatedAt: "",
+    summary:
+      "subjectId CRM, курс сайта по ID, группы и ученики по филиалам. Загрузка/выгрузка без курса в CRM. Голос и консультации родителей.",
+    graph: SCHEDULE_GRAPH.filter((r) => /Предмет|Курс|Школа|Групп|Филиал|Сайт|Абонемент/.test(r.entity)),
+    cascade: [
+      "schedule-map.courses[subjectId].courseId",
+      "SUBJECT_TO_COURSE[subjectId]",
+      "иначе курс сайта пуст — не угадывать по имени",
+    ],
+    tabs: SCHEDULE_TABS.filter((t) => t.id === "subjects" || t.id === "map" || t.id === "groups"),
+    ops: SCHEDULE_OPS.filter((o) => /subject|ask-subject|open-subjects/.test(o.id)),
+    never: SCHEDULE_NEVER.filter((n) => /предмет|курс сайта|групп|абонемент|назван/i.test(n)),
+    body: subjectsBody(),
   },
   {
     id: "site",
@@ -361,6 +399,95 @@ ${groups}
 Создать группу: courseId + branchId + teacherId. Предмет из карты курса.
 Перенос: treeMove { ids, courseId }.
 Абонемент группы: карта tariffId → courseId (Соответствия → Абонементы), не имя. CRM не меняется.
+Предмет группы: slot.subjectId. Счётчики «сколько групп/учеников по предмету» — вкладка Предметы, не абонементы.
+`;
+}
+
+function subjectsBody() {
+  const tab = SCHEDULE_TABS.find((t) => t.id === "subjects")?.body || "";
+  const ops = SCHEDULE_OPS.filter((o) => /subject|ask-subject|open-subjects/.test(o.id))
+    .map((o) => `- ${o.id} · ${o.title}: ${o.body}`)
+    .join("\n");
+  return `ИНСТРУКЦИЯ РАЗДЕЛА «Предметы» для ИИ. Карта ID. REV ${GUIDE_REV}.
+Где лежит: Ассистент ИИ → База знаний ИИ → Предметы.
+Точка восстановления: ромашка 3.
+
+Это справочник дисциплин AlfaCRM и мост к курсам rastudio.org. Нужен и родителям (какой курс, в каком филиале есть группы), и голосу админки (открыть вкладку, загрузить, привязать курс).
+
+ТЕРМИНЫ
+Сайт — rastudio.org, страницы курсов.
+Админка — /admin + AlfaCRM.
+Предмет CRM — subjectId, имя только подпись. Настройки AlfaCRM → Предметы.
+Курс сайта — courseId папки дерева. Школа — schoolId = course.schoolId.
+Группа — gid:{branchId}:{groupId}, несёт subjectId из карточки группы.
+Ученики группы — taken живого слота (statusId не 3 и не 4).
+
+${tab}
+
+КАСКАД courseId ПРЕДМЕТА
+1. storage/schedule-map.json courses[subjectId].courseId
+2. таблица SUBJECT_TO_COURSE[subjectId] в ids.ts
+3. иначе пусто. Не подбирать «похожий» курс по словам «художка», «роботы».
+
+КОЛОНКИ ВКЛАДКИ
+ID — subjectId, правится на сайте, выгружается в CRM.
+Название — подпись.
+Курс сайта — select дерева, сгруппирован по школам. Пусто = нет соответствия.
+ЦМИТ (branchId=2), Гражданская (1), Луховицы (3), Лето (4), Всего — две цифры: группы / ученики.
+Не абонементы. tariffTotal живёт только как фильтр вкладок «С абонементами» / «Без абонементов».
+
+СЧЁТЧИКИ
+Уникальная группа: ключ branchId:groupId. Дубли слотов одного gid не считать дважды.
+Архив statusId 3 и 4 пропускать.
+Ученики = сумма taken этих групп.
+ИИ на вопрос «есть ли в ЦМИТ художественная студия 3–4» смотрит subjectId (12 или 116) → courseId /art-studio-3-4 → groupByBranch[2] и studentByBranch[2]. Нет групп — сказать «сейчас набора нет», предложить другой филиал или возраст.
+
+ЗАГРУЗКА И ВЫГРУЗКА
+Загрузить из AlfaCRM: pull kind=subjects. После загрузки сайт сам подставляет курс из карты и пересчитывает группы. Расписание не перечитывает.
+Сохранить на сайте: subjectsSave — id и имена.
+Выгрузить в AlfaCRM: subjectsPush — только id и имя. Курс сайта, школа, гр/уч в CRM не едут.
+Голосовой помощник админки: «открой предметы» = openTab pane=subjects. «Загрузи предметы» — кнопка на этой вкладке, не путать с загрузкой групп.
+
+ПРИВЯЗКА
+subjectsBind { subjectId, courseId }. Колонка «Курс сайта» или Соответствия → Предметы CRM.
+Создание предмета из карточки группы: ensureCrmSubject + сразу map.courseId = courseId этой группы.
+Мастер абонементов учеников: школа и курс — из карточки группы, предмет — из этого справочника (select). В CRM уходит subjectIds абонемента, не курс сайта.
+
+ГОЛОС АДМИНКИ
+«покажи предметы» / «открой справочник предметов» = kind=openTab pane=subjects.
+«сколько групп по предмету 12» = kind=question, ответить цифрами филиалов.
+«привяжи предмет 12 к курсу» — нужен courseId, не название. Нет ID — спросить.
+Не консультировать родителей из агента расписания — это не Олег/Ольга. Но факты (courseId, филиалы, места) те же.
+
+КОНСУЛЬТАЦИЯ РОДИТЕЛЕЙ (Олег / Ольга)
+Предмет = направление. Курс сайта = страница rastudio.org. Живые группы = слоты с этим subjectId.
+Порядок: возраст → направление (2–3 курса) → list_groups. gid вслух не читать.
+Абонемент для записи на пробное не нужен. Абонемент — оплата, предмет — дисциплина.
+Если курс сайта у предмета пуст — всё равно можно назвать группы по subjectId слотов. Страницу сайта не выдумывать.
+
+ФАЙЛЫ
+storage/crm-subjects.json — справочник.
+storage/schedule-map.json — subjectId → courseId / schoolId.
+storage/crm-schedule.json — слоты, subjectId, taken.
+src/data/ids.ts SUBJECT_TO_COURSE — заводская таблица.
+
+СЕРВЕР adminSchedule / adminDisk
+subjectsGet → packSubjectRows (курс + гр/уч)
+subjectsBind { subjectId, courseId }
+subjectsSave { subjects }
+subjectsPush { subjects }
+subjectsAiPreview / subjectsAiApply — только переименование, не курсы.
+
+ОПЕРАЦИИ
+${ops}
+
+ЗАПРЕТЫ
+- Не искать предмет или курс по названию.
+- Не выгружать courseId в AlfaCRM.
+- Не называть правые цифры «абонементами».
+- Не путать tariffTotal и groupTotal.
+- Не путать CmsSession.courseId на сайте (иногда = subjectId) с courseId дерева.
+- Нет ID — спросить, не подбирать похожий.
 `;
 }
 

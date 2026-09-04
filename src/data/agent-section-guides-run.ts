@@ -6,6 +6,7 @@ import { IDS_FOR_AGENT } from "./ids";
 import { FACTORY_GUIDES, factoryGuide, GUIDE_REV, type SectionGuide } from "./agent-section-guides-data";
 import { tariffMapForAgent } from "./public-bind";
 import { loadSiteSignup } from "./site-signup";
+import { subjectMapForAgent } from "./subject-admin";
 
 type Overlay = { id: string; on?: boolean; body?: string; updatedAt?: string };
 type Store = { items: Overlay[] };
@@ -56,6 +57,11 @@ export function scheduleGuidePrompt() {
   let extra = "";
   try {
     extra += `\n\n${tariffMapForAgent()}`;
+  } catch {
+    /* */
+  }
+  try {
+    extra += `\n\n${subjectMapForAgent()}`;
   } catch {
     /* */
   }

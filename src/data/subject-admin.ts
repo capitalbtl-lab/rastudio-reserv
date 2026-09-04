@@ -65,3 +65,21 @@ export function bindSubjectCourse(subjectId: number, courseId: string) {
   saveScheduleMap({ ...map, courses: next });
   return packSubjectRows();
 }
+
+export function subjectMapForAgent() {
+  const packed = packSubjectRows();
+  const rows = packed.subjects.filter((s) => s.id && (s.courseId || s.groupTotal));
+  if (!rows.length) return "Предметы: карта курса сайта пуста. Вкладка Предметы → Загрузить из AlfaCRM и привязать курс.";
+  const br = (s: (typeof rows)[0], id: number) => {
+    const g = Number(s.groupByBranch[id] || 0);
+    const u = Number(s.studentByBranch[id] || 0);
+    return g || u ? `${g}/${u}` : "—";
+  };
+  return [
+    "Предметы сейчас (subjectId → курс сайта · гр/уч ЦМИТ / Гражданская / Луховицы / Лето / всего). Курс сайта в CRM не уходит:",
+    ...rows.map((s) => {
+      const course = s.courseId ? `${s.courseId}${s.courseLabel ? ` «${s.courseLabel}»` : ""}` : "нет курса сайта";
+      return `${s.id} «${s.name}» → ${course} · ${br(s, 2)} · ${br(s, 1)} · ${br(s, 3)} · ${br(s, 4)} · ${s.groupTotal}гр/${s.studentTotal}уч`;
+    }),
+  ].join("\n");
+}

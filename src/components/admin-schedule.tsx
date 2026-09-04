@@ -1906,7 +1906,10 @@ export function AdminSchedule() {
       const ageBand = "ageBand" in res ? String((res as { ageBand?: string }).ageBand || "") : "";
       if (kind === "openTab" || kind === "openClient" || kind === "openGroup") {
         if (paneTo === "clients" || kind === "openClient") showPane("clients");
-        if (paneTo === "groups" || kind === "openGroup") showPane("groups");
+        else if (paneTo === "groups" || kind === "openGroup") showPane("groups");
+        else if (paneTo === "subjects" || paneTo === "tariffs" || paneTo === "map" || paneTo === "prices" || paneTo === "public" || paneTo === "crm") {
+          showPane(paneTo);
+        }
         if (kind === "openClient" && customerId) {
           window.setTimeout(() => {
             window.dispatchEvent(new CustomEvent("ra-open-client", { detail: { customerId, branchId: branchId || 1, q: query } }));

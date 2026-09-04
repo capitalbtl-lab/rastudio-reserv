@@ -627,6 +627,7 @@ const PROBES: Probe[] = [
           ["agent-guides", "schedule"],
         );
       }
+      const sub = list.find((g) => g.id === "subjects");
       if (!sch.body.includes("groupId") || !sch.body.includes("courseId")) {
         return fail(
           "инструкция без ID",
@@ -636,8 +637,16 @@ const PROBES: Probe[] = [
           sch.body.slice(0, 400),
         );
       }
+      if (!sub?.body.includes("subjectId") || !sub.body.includes("Курс сайта") || !sub.body.includes("групп")) {
+        return fail(
+          "нет инструкции предметов",
+          "В базе знаний нет полного протокола вкладки Предметы. Ассистент не отличит курс сайта от абонементов.",
+          "Ассистент ИИ → База знаний → Предметы. Вернуть заводской.",
+          ["agent-guides", "schedule"],
+        );
+      }
       return ok(
-        `разделов ${list.length}, расписание ${sch.on ? "в промпте" : "выкл"} · ${sch.body.length} знаков`,
+        `разделов ${list.length}, расписание ${sch.on ? "в промпте" : "выкл"} · ${sch.body.length} знаков, предметы ${sub.body.length}`,
         ["agent-guides", "schedule"],
       );
     },
