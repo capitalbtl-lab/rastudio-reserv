@@ -527,10 +527,12 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         const title = bySchoolRun.current || pace === "slow" ? schoolPack[0]?.school || verb : verb;
         const ids = [...new Set(schoolPack.map((p) => p.groupId))].join(", ");
         note(`${title}: выгрузка групп № ${ids}, ${schoolPack.length} чел.`);
+        const sentOk = new Set<string>();
         const send = async (list: typeof schoolPack) => {
           const failedKeys = new Set<string>();
-          for (let i = 0; i < list.length; ) {
-            const chunk = list.slice(i, i + ASSIGN_CHUNK);
+          const toSend = list.filter((p) => !sentOk.has(personKey(p.branchId, p.customerId)));
+          for (let i = 0; i < toSend.length; ) {
+            const chunk = toSend.slice(i, i + ASSIGN_CHUNK);
             let ok = false;
             for (let attempt = 0; attempt < 8 && !ok; attempt += 1) {
               setProgress({
@@ -540,7 +542,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                 unit: "учеников",
                 extra: `готово ${acc.done} · пропуск ${acc.skipped} · ошибок ${acc.failed.length}`,
               });
-              setMsg(`${title}: ${i + 1}–${Math.min(i + chunk.length, list.length)} из ${list.length}`);
+              setMsg(`${title}: ${i + 1}–${Math.min(i + chunk.length, toSend.length)} из ${toSend.length}`);
               for (const p of chunk) {
                 note(`${verb} ${p.name} · группа № ${p.groupId} · ${p.tariffName || "абонемент CRM"}`);
               }
@@ -574,6 +576,10 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                     acc.failed.push({ name: f.name, error: f.error });
                     failedKeys.add(personKey(chunk.find((x) => x.customerId === f.id)?.branchId || chunk[0].branchId, f.id));
                   }
+                  for (const p of chunk) {
+                    const k = personKey(p.branchId, p.customerId);
+                    if (!failedKeys.has(k)) sentOk.add(k);
+                  }
                   i += chunk.length;
                   doneN += chunk.length;
                   ok = true;
@@ -588,29 +594,36 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               i += chunk.length;
             }
             setResult({ ...acc, failed: [...acc.failed] });
-            if (i < list.length) await pause(ASSIGN_BATCH_PAUSE_MS);
+            if (i < toSend.length) await pause(ASSIGN_BATCH_PAUSE_MS);
           }
           return failedKeys;
         };
         let leftover = [...schoolPack];
         for (let round = 0; round < rounds; round += 1) {
-          if (round === 0 || leftover.length) {
-            note(`${title} № ${ids}: ${round === 0 ? "вношу" : "добиваю выпавших"} · ${leftover.length} чел.`);
-            const failedKeys = await send(leftover);
-            leftover = leftover.filter((p) => failedKeys.has(personKey(p.branchId, p.customerId)));
+          const pending = leftover.filter((p) => !sentOk.has(personKey(p.branchId, p.customerId)));
+          if (pending.length) {
+            note(`${title} № ${ids}: ${round === 0 ? "вношу" : "добиваю выпавших"} · ${pending.length} чел.`);
+            await send(pending);
+          } else if (round === 0) {
+            note(`${title} № ${ids}: некого вносить`);
           }
-          note(`${title} № ${ids}: сверка ${round + 1}/${rounds}`);
+          note(`${title} № ${ids}: сверка ${round + 1}/${rounds} (повторно не назначаю)`);
+          await pause(800);
           try {
             const active = (await retryFetch(
               () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: schoolPack } as never }),
               1,
               50000,
             )) as { ok?: boolean; items?: PupilTariffItem[] };
-            leftover = active.ok
+            const crmDrop = active.ok
               ? dropoutsAfterJob(mode === "assign" ? "assign" : mode, schoolPack, active.items || [], closeDate)
               : leftover;
+            leftover = crmDrop.filter((p) => !sentOk.has(personKey(p.branchId, p.customerId)));
+            if (crmDrop.length && !leftover.length) {
+              note(`${title} № ${ids}: CRM ещё не догнала ${crmDrop.length} чел. — второй раз не пишу`);
+            }
           } catch {
-            /* leftover as is */
+            leftover = leftover.filter((p) => !sentOk.has(personKey(p.branchId, p.customerId)));
           }
           if (leftover.length) {
             note(`${title} № ${ids}: выпали ${leftover.map((p) => p.name).join(", ")}`);
