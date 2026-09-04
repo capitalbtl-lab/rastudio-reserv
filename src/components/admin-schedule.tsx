@@ -3561,7 +3561,7 @@ export function AdminSchedule() {
                     <button
                       type="button"
                       disabled={detail.saving}
-                      className="rounded-full bg-neutral-400 px-3 py-1 text-sm font-semibold text-white disabled:opacity-50"
+                      className="rounded-full bg-[#d8dce3] px-3 py-1 text-sm font-semibold text-[#5c636c] disabled:opacity-50"
                       onClick={() => void saveDetailSite()}
                     >
                       {detail.saving ? "Сохраняю…" : "Сохранить на сайте"}
@@ -3569,7 +3569,7 @@ export function AdminSchedule() {
                     <button
                       type="button"
                       disabled={detail.saving}
-                      className="rounded-full bg-neutral-400 px-3 py-1 text-sm font-semibold text-white disabled:opacity-50"
+                      className="rounded-full bg-[#d8dce3] px-3 py-1 text-sm font-semibold text-[#5c636c] disabled:opacity-50"
                       onClick={() => void saveDetail()}
                     >
                       {detail.saving ? "Сохраняю…" : detail.groupId ? "Сохранить в AlfaCRM" : "Создать в AlfaCRM"}
