@@ -16,6 +16,7 @@ import type { SiteTree } from "@/data/site-tree";
 import type { TariffLink } from "@/data/tariff-map";
 import { siteCourseOptions, siteSchoolOptions } from "@/data/site-bind-core";
 import { PupilTariffWizard } from "@/components/admin-pupil-tariffs";
+import { RA_POP } from "@/data/admin-ui";
 
 const CALC_NAMES: Record<number, string> = { 0: "Любой", 1: "Базовый счет", 2: "Отдельный счет" };
 const TYPE_NAMES: Record<number, string> = { 1: "Поурочная", 2: "Помесячная", 3: "Недельная" };
@@ -208,7 +209,7 @@ function PeriodPicker({
         onBlur={() => window.setTimeout(() => setOpen(false), 160)}
       />
       {open && options.length ? (
-        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl bg-white py-1 shadow-lg ring-1 ring-black/10">
+        <div className={cn("absolute z-30 mt-1 w-full py-1", RA_POP)}>
           {options.map((o) => (
             <button
               key={o.id}

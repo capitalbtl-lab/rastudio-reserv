@@ -41,6 +41,14 @@ type PupilTariffItem = {
   skip?: "no-tariff" | "already" | "lead";
 };
 
+function friendlyErr(e: unknown, fallback: string) {
+  const raw = e instanceof Error ? e.message : typeof e === "string" ? e : "";
+  if (/groupKeys|invalid input|invalid_type/i.test(raw)) {
+    return fallback;
+  }
+  return raw.trim() || fallback;
+}
+
 function token() {
   if (typeof document === "undefined") return "";
   const m = document.cookie.match(/(?:^|;\s*)ra_admin=([^;]+)/);
@@ -126,7 +134,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       setBusy(true);
       try {
         const res = (await retryFetch(
-          () => adminSchedule({ data: { token: token(), action: "pupilTariffGroups" } as never }),
+          () => adminSchedule({ data: { token: token(), action: "pupilTariffGroups", groupKeys: [] } as never }),
           2,
           20000,
         )) as { ok?: boolean; groups?: PupilGroup[]; schools?: string[]; error?: string };
@@ -135,7 +143,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           setSchools(res.schools || []);
         } else setMsg(res.error || "Не удалось прочитать группы.");
       } catch (e) {
-        setMsg(e instanceof Error ? e.message : "Не удалось прочитать группы.");
+        setMsg(e instanceof Error ? friendlyErr(e, "Не удалось прочитать группы. Обновите страницу.") : "Не удалось прочитать группы.");
       } finally {
         setBusy(false);
       }
@@ -165,10 +173,12 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               token: token(),
               action: "pupilTariffPlan",
               includeLeads,
-              groupKeys: [...picked].map((k) => {
-                const [branchId, groupId] = k.split(":").map(Number);
-                return { branchId, groupId };
-              }),
+              groupKeys: [...picked]
+                .map((k) => {
+                  const [branchId, groupId] = k.split(":").map(Number);
+                  return { branchId, groupId };
+                })
+                .filter((k) => Number(k.branchId) && Number(k.groupId)),
             } as never,
           }),
         1,
@@ -194,7 +204,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       setMsg("");
       return true;
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Не удалось собрать список.");
+      setMsg(e instanceof Error ? friendlyErr(e, "Не удалось собрать список учеников. Отметьте группы и нажмите «Далее» ещё раз.") : "Не удалось собрать список.");
       return false;
     } finally {
       setBusy(false);
@@ -251,6 +261,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               action: "pupilTariffAssign",
               date,
               skipExisting,
+              groupKeys: [],
               pupilItems: ready.map((it) => ({
                 ...it,
                 periodCount,

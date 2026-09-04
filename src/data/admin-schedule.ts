@@ -843,8 +843,13 @@ function pinNewSlots(slots: { id: string; course?: string; courseId?: string; sc
 
 export const adminSchedule = createServerFn({ method: "POST" })
   .validator(
-    (data: unknown) =>
-      data as {
+    (data: unknown) => {
+      const raw = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
+      return {
+        ...raw,
+        groupKeys: Array.isArray(raw.groupKeys) ? raw.groupKeys : [],
+        pupilItems: Array.isArray(raw.pupilItems) ? raw.pupilItems : [],
+      } as {
         token?: string;
         action:
           | "get"
@@ -990,7 +995,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
         href?: string;
         label?: string;
         age?: string;
-      },
+      };
+    },
   )
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };

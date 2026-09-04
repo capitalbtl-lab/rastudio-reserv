@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export const TIP_BOX =
-  "rounded-[19.6px] bg-[#12141a] px-5 py-4 text-left text-[0.78rem] font-normal leading-relaxed text-white shadow-[0_10px_28px_rgba(15,23,42,0.28)]";
+  "rounded-[8px] bg-[#12141a] px-5 py-4 text-left text-[0.78rem] font-normal leading-relaxed text-white shadow-[0_10px_28px_rgba(15,23,42,0.28)]";
 
 export function InfoTip({ text, className }: { text: string; className?: string }) {
   return (
