@@ -4,6 +4,7 @@ import {
   isAdminGroup,
   isArchivedGroup,
   readPriority,
+  crmPriorityOf,
   slotOnPublicSchedule,
   slotPublicGroup,
   slotPublicTrial,
@@ -23,12 +24,16 @@ describe("статусы групп CRM", () => {
     assert.equal(isAdminGroup(7), false);
   });
 
-  it("пустой приоритет = 1, явный 0 сохраняется", () => {
-    assert.equal(readPriority(undefined), 1);
-    assert.equal(readPriority(""), 1);
+  it("пустой приоритет = 0, явный 0 сохраняется", () => {
+    assert.equal(readPriority(undefined), 0);
+    assert.equal(readPriority(""), 0);
     assert.equal(readPriority(0), 0);
     assert.equal(readPriority("0"), 0);
     assert.equal(readPriority("2"), 2);
+    assert.equal(crmPriorityOf({ custom_prioritet: 0 }), 0);
+    assert.equal(crmPriorityOf({ custom_prioritet: "1" }), 1);
+    assert.equal(crmPriorityOf({}), undefined);
+    assert.equal(crmPriorityOf({ custom: { prioritet: 2 } }), 2);
   });
 
   it("витрина: status 2 + priority 1 на сайте, 0 — нет, 4 без записи в группу", () => {

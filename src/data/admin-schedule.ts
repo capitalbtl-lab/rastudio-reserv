@@ -40,7 +40,7 @@ import { clientCardId, CRM_BRANCH } from "./ids";
 import { loadTariffs, pullTariffsFromCrm, matchTariffs, groupTariffPack, subjectTariffStats, saveTariffEdits, pushTariffsToCrm, archiveTariffsInCrm, aiTariffsParse, applyTariffChanges, probeCreateTariff, probeDeleteTariff, subjectsWithHref, tariffGroupHits } from "./crm-tariffs";
 import { loadScheduleMap, saveScheduleMap } from "./schedule-map";
 import { packSubjectRows, bindSubjectCourse } from "./subject-admin";
-import { isAdminGroup, readPriority } from "./group-status";
+import { isAdminGroup, readPriority, crmPriorityOf } from "./group-status";
 
 function isoish(raw: string) {
   const s = String(raw || "").trim();
@@ -354,14 +354,8 @@ async function roomsOfBranch(request: typeof import("./alfacrm").request, t: str
   const hit = roomCache.get(branch);
   if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.items;
   try {
-    const raw: Record<string, unknown>[] = [];
-    for (const extra of [{}, { branch_id: branch }] as Record<string, unknown>[]) {
-      const rm = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/room/index`, { page: 0, pageSize: 100, ...extra }, t);
-      if (rm.items?.length) {
-        raw.push(...rm.items);
-        break;
-      }
-    }
+    const rm = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/room/index`, { page: 0, pageSize: 100 }, t);
+    const raw = rm.items || [];
     const seen = new Set<number>();
     const all: { id: number; name: string; raw: Record<string, unknown> }[] = [];
     for (const x of raw) {
@@ -386,8 +380,8 @@ async function teachersOfBranch(request: typeof import("./alfacrm").request, t: 
   const items: { id: number; name: string }[] = [];
   const seen = new Set<number>();
   try {
-    for (let page = 0; page < 4; page++) {
-      const pack = await request<{ items?: { id?: number; name?: string }[] }>(`/v2api/${branch}/teacher/index`, { page, pageSize: 100 }, t);
+    for (let page = 0; page < 2; page++) {
+      const pack = await request<{ items?: { id?: number; name?: string }[] }>(`/v2api/${branch}/teacher/index`, { page, pageSize: 200 }, t);
       const chunk = pack.items || [];
       for (const x of chunk) {
         const id = Number(x.id || 0);
@@ -1998,6 +1992,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
       }
       const g = await fetchGroupRow();
       if (!g) return { ok: false as const, error: "Группа не найдена в AlfaCRM." };
+      const crmPriority = crmPriorityOf(g);
+      if (crmPriority != null && slot && slot.priority !== crmPriority) {
+        saveAdminSlots(
+          listAdminSlots().map((s) => (s.groupId === gid && s.branchId === branch ? { ...s, priority: crmPriority } : s)),
+        );
+      }
       if (data.lite) {
         const group = {
           id: gid,
@@ -2012,7 +2012,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           bDate: String(g.b_date || slot?.bDate || ""),
           eDate: String(g.e_date || slot?.eDate || ""),
           levelId: Number(g.level_id || slot?.levelId || 0),
-          priority: readPriority(g.custom_prioritet ?? slot?.priority),
+          priority: crmPriority ?? readPriority(slot?.priority),
           signup: slot?.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
           subjectId: Number(slot?.subjectId || g.subject_id || 0),
           subject: slot?.subject || "",
@@ -2038,12 +2038,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           for (const x of await roomsOfBranch(request, t, branch)) rooms.set(x.id, x.name);
         } catch { /* rooms optional */ }
         try {
-          for (let page = 0; page < 4; page++) {
-            const pack = await request<{ items?: { id?: number; name?: string }[] }>(`/v2api/${branch}/teacher/index`, { page, pageSize: 100 }, t);
-            const chunk = pack.items || [];
-            for (const x of chunk) if (x.id) teachers.set(Number(x.id), String(x.name || "").trim());
-            if (chunk.length < 100) break;
-          }
+          for (const x of await teachersOfBranch(request, t, branch)) teachers.set(x.id, x.name);
         } catch { /* teachers optional */ }
         const regs: {
           id?: number;
@@ -2052,13 +2047,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
           time_from_v?: string;
           time_to_v?: string;
         }[] = [];
-        for (let page = 0; page < 8; page++) {
-          const pack = await request<{ items?: typeof regs }>(`/v2api/${branch}/regular-lesson/index`, { page, pageSize: 100 }, t);
-          const chunk = pack.items || [];
-          regs.push(...chunk);
-          if (chunk.length < 100) break;
-        }
-        const mine = regs.filter((r) => Number(r.related_id) === gid);
+        const packRegs = await request<{ items?: typeof regs }>(`/v2api/${branch}/regular-lesson/index`, { page: 0, pageSize: 50, related_id: gid }, t).catch(() => ({ items: [] as typeof regs }));
+        for (const r of packRegs.items || []) if (Number(r.related_id) === gid) regs.push(r);
+        const mine = regs.length ? regs : [];
         const groupName = String(g.name || slot?.groupName || "");
         const fallbackTeacher = String(slot?.teacher || "");
         const fallbackFrom = hm(mine[0]?.time_from_v) || String(slot?.timeFrom || "");
@@ -2066,10 +2057,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
         const ctx = { rooms, teachers, subjects, groupName, fallbackFrom, fallbackTo, fallbackTeacher };
         async function pullLessons(extra: Record<string, unknown>) {
           for (const status of [1, 2, 3]) {
-            for (let page = 0; page < 8; page++) {
+            for (let page = 0; page < 2; page++) {
               const les = await request<{ items?: Parameters<typeof packCrmLesson>[0][] }>(
                 `/v2api/${branch}/lesson/index`,
-                { page, pageSize: 100, status, ...extra },
+                { page, pageSize: 200, status, ...extra },
                 t,
               );
               const chunk = les.items || [];
@@ -2079,17 +2070,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
                 const packed = packCrmLesson(item, ctx);
                 if (packed) byDate.set(packed.date, packed);
               }
-              if (chunk.length < 100) break;
+              if (chunk.length < 200) break;
             }
           }
         }
         await pullLessons({ group_id: gid });
-        if (!byDate.size) {
-          for (const r of mine) {
-            if (!r.id) continue;
-            await pullLessons({ regular_id: r.id });
-          }
-        }
       } catch {
         /* календарь не должен ломать карточку */
       }
@@ -2109,7 +2094,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           bDate: String(g.b_date || slot?.bDate || ""),
           eDate: String(g.e_date || slot?.eDate || ""),
           levelId: Number(g.level_id || slot?.levelId || 0),
-          priority: readPriority(g.custom_prioritet ?? slot?.priority),
+          priority: crmPriority ?? readPriority(slot?.priority),
           signup: slot?.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
           subjectId: Number(slot?.subjectId || 0),
           subject: slot?.subject || "",

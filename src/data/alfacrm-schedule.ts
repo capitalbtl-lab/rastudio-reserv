@@ -10,7 +10,7 @@ import { agesOverlap } from "@/data/ages";
 import { dayLabel, slotFromSession, stampTimes, toSession, normalizeArtSlot, beatsOf, stampSubjects, type CrmSlot } from "@/data/crm-slots";
 import { applyScheduleMap } from "@/data/schedule-map";
 import { nextLessonDate } from "@/lib/trial-slot";
-import { isAdminGroup, isArchivedGroup, isCampStatus, readPriority, slotOnPublicSchedule } from "./group-status";
+import { isAdminGroup, isArchivedGroup, isCampStatus, readPriority, crmPriorityOf, slotOnPublicSchedule } from "./group-status";
 import { loadSiteSignup } from "./site-signup";
 import { mergeTeacher, saveTeachers, type CrmTeacher } from "./crm-teachers";
 
@@ -189,10 +189,10 @@ async function loadRoster(branch: number, t: string) {
   const study = new Map<number, number>();
   const lead = new Map<number, number>();
   async function pull(isStudy: 0 | 1, into: Map<number, number>) {
-    for (let page = 0; page < 40; page += 1) {
+    for (let page = 0; page < 8; page += 1) {
       const res = await request<{ items?: Record<string, unknown>[] }>(
         `/v2api/${branch}/customer/index`,
-        { page, pageSize: 50, is_study: isStudy, removed: 0 },
+        { page, pageSize: 200, is_study: isStudy, removed: 0 },
         t,
       ).catch(() => ({ items: [] as Record<string, unknown>[] }));
       const items = res.items || [];
@@ -201,7 +201,7 @@ async function loadRoster(branch: number, t: string) {
           into.set(gid, (into.get(gid) || 0) + 1);
         }
       }
-      if (items.length < 50) break;
+      if (items.length < 200) break;
     }
   }
   await pull(1, study);
@@ -381,12 +381,12 @@ export function saveAdminSlots(slots: CrmSlot[]) {
 
 async function paged<T>(path: string, t: string): Promise<T[]> {
   const items: T[] = [];
-  for (let page = 0; page < 30; page += 1) {
-    const res = await request<{ items?: T[]; total?: number }>(path, { page, pageSize: 100 }, t);
+  for (let page = 0; page < 15; page += 1) {
+    const res = await request<{ items?: T[]; total?: number }>(path, { page, pageSize: 200 }, t);
     const batch = res.items || [];
     items.push(...batch);
     const total = Number(res.total || 0);
-    if (!batch.length || (total > 0 && items.length >= total) || batch.length < 100) break;
+    if (!batch.length || (total > 0 && items.length >= total) || batch.length < 200) break;
   }
   return items;
 }
@@ -440,6 +440,15 @@ async function loadCrm(force = false): Promise<CacheBag> {
     }
     lessons.push(...(await paged<Lesson>(`/v2api/${branch}/regular-lesson/index`, t)));
   }
+  for (const [id, wrap] of groupsById) {
+    if (!isLiveGroup(wrap.g)) continue;
+    const branch = Number(wrap.g.branch_ids?.[0]) || wrap.fromBranch;
+    const json = await request<{ items?: Group[] }>(`/v2api/${branch}/group/index`, { id, page: 0, pageSize: 1 }, t).catch(
+      () => ({ items: [] as Group[] }),
+    );
+    const hit = (json.items || []).find((x) => Number(x.id) === id);
+    if (hit) wrap.g = { ...wrap.g, ...hit };
+  }
   saveTeachers(teacherBag);
   const lessonsByGid = new Map<number, Lesson[]>();
   for (const lesson of lessons) {
@@ -484,7 +493,7 @@ async function loadCrm(force = false): Promise<CacheBag> {
         taken: seat?.taken || 0,
         takenStudy: seat?.study || 0,
         takenLead: seat?.lead || 0,
-        priority: readPriority(g.custom_prioritet),
+        priority: crmPriorityOf(g as unknown as Record<string, unknown>) ?? readPriority(g.custom_prioritet),
         subjectId: sid,
         subject: subjectName,
         school: "",

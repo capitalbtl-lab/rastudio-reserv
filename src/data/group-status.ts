@@ -68,12 +68,27 @@ export function isAdminGroup(statusId?: number) {
 }
 
 export function readPriority(raw: unknown): number {
-  if (raw == null || raw === "") return 1;
+  if (raw == null || raw === "") return 0;
   const n = Number(raw);
-  if (!Number.isFinite(n)) return 1;
+  if (!Number.isFinite(n)) return 0;
   if (n < 0) return 0;
   if (n > 3) return 3;
   return n;
+}
+
+/** Приоритет из карточки группы CRM. undefined — поля в ответе не было. */
+export function crmPriorityOf(g: Record<string, unknown> | { custom_prioritet?: unknown } | null | undefined): number | undefined {
+  if (!g || typeof g !== "object") return undefined;
+  const rec = g as Record<string, unknown>;
+  const nested = rec.custom && typeof rec.custom === "object" ? (rec.custom as Record<string, unknown>) : null;
+  const raw =
+    rec.custom_prioritet ??
+    rec.custom_priority ??
+    rec.prioritet ??
+    nested?.prioritet ??
+    nested?.custom_prioritet;
+  if (raw == null || raw === "") return undefined;
+  return readPriority(raw);
 }
 
 export function publishOf(
