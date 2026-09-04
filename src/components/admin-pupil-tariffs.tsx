@@ -550,11 +550,12 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         const ids = [...new Set(schoolPack.map((p) => p.groupId))].join(", ");
         note(`${title}: выгрузка групп № ${ids}, ${schoolPack.length} чел.`);
         const sentOk = new Set<string>();
+        const chunkSize = mode === "assign" ? ASSIGN_CHUNK : 1;
         const send = async (list: typeof schoolPack) => {
           const failedKeys = new Set<string>();
           const toSend = list.filter((p) => !sentOk.has(personKey(p.branchId, p.customerId)));
           for (let i = 0; i < toSend.length; ) {
-            const chunk = toSend.slice(i, i + ASSIGN_CHUNK);
+            const chunk = toSend.slice(i, i + chunkSize);
             let ok = false;
             for (let attempt = 0; attempt < 8 && !ok; attempt += 1) {
               setProgress({
@@ -656,12 +657,12 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           }
         }
         if (leftover.length) {
-          acc.failed.push(...leftover.map((p) => ({ name: p.name, error: "выпал после круга школы" })));
+          acc.failed.push(...leftover.map((p) => ({ name: p.name, error: "не подтвердилось в CRM" })));
           setResult({ ...acc, failed: [...acc.failed] });
-          setMsg(`${title}: после проверки выпали ${leftover.length}. Нажмите ещё раз — эту школу добьём.`);
-          return;
+          note(`${title} № ${ids}: ${leftover.length} не подтвердились — иду к следующей пачке`);
+        } else {
+          note(`${title} № ${ids}: пачка закрыта`);
         }
-        setMsg(`${title}: круг закрыт`);
       }
       setMsg("");
     } catch (e) {
