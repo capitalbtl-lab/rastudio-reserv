@@ -130,6 +130,9 @@ function LessonCard({
   onOpen,
   onConduct,
   onCancel,
+  onReturn,
+  onEnter,
+  onLeave,
 }: {
   lesson: GroupCalLesson;
   top: number;
@@ -144,32 +147,39 @@ function LessonCard({
   onOpen?: () => void;
   onConduct?: () => void;
   onCancel?: () => void;
+  onReturn?: () => void;
+  onEnter?: () => void;
+  onLeave?: () => void;
 }) {
-  const statusRu = l.status === 3 ? "Проведено" : l.status === 2 ? "Отменено" : l.status === -1 ? "Сегодня нет занятия" : "Запланировано";
+  const done = l.status === 3;
+  const cancelled = l.status === 2;
+  const statusRu = done ? "проведен" : cancelled ? "отменен" : l.status === -1 ? "сегодня нет занятия" : "запланирован";
   const time = l.from && l.to ? `с ${l.from} до ${l.to}` : l.from || "";
   const mins = l.duration ? ` (${l.duration} мин.)` : "";
   const rows: [string, string][] = [
     ["Тип", l.type || "Групповое"],
-    ["Статус", statusRu],
     ["Время", time ? `${time}${mins}` : "—"],
-    ["Аудитория", l.room || ""],
-    ["Педагог", l.teacher || teacher || ""],
+    ["Аудитория", l.room || "(не задан)"],
+    ["Педагог", l.teacher || teacher || "(не задан)"],
     ["Предмет", l.subject || subject || ""],
     ["Группа", l.group || group || ""],
     ["Тема", l.topic || ""],
     ["Домашнее задание", l.homework || ""],
   ];
-  if (l.status === 3 && (l.total || 0) > 0) rows.push(["Присутствие", `${l.attend || 0} из ${l.total}`]);
-  const canAct = Boolean(pinned && onOpen);
+  if (done && (l.total || 0) > 0) rows.push(["Присутствие", `${l.attend || 0} из ${l.total}`]);
+  const canAct = Boolean(onOpen);
+  const btn = "h-8 rounded-lg bg-[#d8dce3] text-[0.75rem] font-semibold text-[#5c636c] disabled:opacity-45";
   return (
     <div
       className={cn("fixed z-[240] w-[20.5rem] p-3 text-left text-[0.78rem] leading-snug text-fg", RA_POP)}
       style={{ top, left }}
       onMouseDown={(e) => e.stopPropagation()}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
     >
       <div className="mb-1 flex items-start justify-between gap-2">
         <p className="text-[0.72rem] font-semibold text-fg">
-          {l.type || "Групповое"} — {statusRu.toLowerCase()}
+          {l.type || "Групповое"} — {statusRu}
         </p>
         {pinned ? (
           <button type="button" className="text-lg leading-none text-muted hover:text-fg" onClick={onClose} aria-label="Закрыть">
@@ -184,22 +194,28 @@ function LessonCard({
           .map(([k, v]) => (
             <div key={k} className="grid grid-cols-[5.4rem_1fr] gap-x-2">
               <dt className="text-[0.68rem] text-muted">{k}</dt>
-              <dd className={cn("font-medium", k === "Тема" || k === "Домашнее задание" ? "whitespace-pre-wrap" : "")}>{v}</dd>
+              <dd className={cn("font-medium", k === "Тема" || k === "Домашнее задание" ? "whitespace-pre-wrap" : v === "(не задан)" ? "text-muted" : "")}>{v}</dd>
             </div>
           ))}
       </dl>
       {error ? <p className="mt-2 text-[0.75rem] text-red-600">{error}</p> : null}
       {canAct ? (
         <div className="mt-3 grid grid-cols-3 gap-1.5">
-          <button type="button" disabled={busy} className="h-8 rounded-lg bg-[#d8dce3] text-[0.75rem] font-semibold text-[#5c636c] disabled:opacity-50" onClick={onOpen}>
+          <button type="button" disabled={busy} className={btn} onClick={onOpen}>
             Открыть
           </button>
-          <button type="button" disabled={busy || l.status === 3} className="h-8 rounded-lg bg-[#d8dce3] text-[0.75rem] font-semibold text-[#5c636c] disabled:opacity-50" onClick={onConduct}>
+          <button type="button" disabled={busy || done} className={btn} onClick={onConduct}>
             {busy ? "…" : "Провести"}
           </button>
-          <button type="button" disabled={busy || l.status === 2} className="h-8 rounded-lg bg-[#d8dce3] text-[0.75rem] font-semibold text-[#5c636c] disabled:opacity-50" onClick={onCancel}>
-            Отменить
-          </button>
+          {done ? (
+            <button type="button" disabled={busy} className={btn} onClick={onReturn}>
+              Вернуть
+            </button>
+          ) : (
+            <button type="button" disabled={busy || cancelled} className={btn} onClick={onCancel}>
+              Отменить
+            </button>
+          )}
         </div>
       ) : null}
     </div>
@@ -560,6 +576,7 @@ export function LessonStrip({
   const [error, setError] = useState("");
   const pinRef = useRef(pin);
   pinRef.current = pin;
+  const hideRef = useRef<number>(0);
   const all = useMemo(() => [...lessons].sort((a, b) => a.date.localeCompare(b.date)), [lessons]);
   const { past, future, todayHit } = useMemo(() => {
     let pool = all;
@@ -590,11 +607,23 @@ export function LessonStrip({
 
   function showTip(el: HTMLElement, lesson: GroupCalLesson) {
     if (pinRef.current) return;
+    window.clearTimeout(hideRef.current);
     setTip({ lesson, ...place(el) });
+  }
+
+  function hideTipSoon() {
+    if (pinRef.current) return;
+    window.clearTimeout(hideRef.current);
+    hideRef.current = window.setTimeout(() => setTip(null), 180);
+  }
+
+  function keepTip() {
+    window.clearTimeout(hideRef.current);
   }
 
   function clickTile(el: HTMLElement, lesson: GroupCalLesson) {
     setError("");
+    window.clearTimeout(hideRef.current);
     setTip(null);
     setPin({ lesson, ...place(el) });
   }
@@ -603,10 +632,11 @@ export function LessonStrip({
     const next = lessons.map((l) => (l.lessonId === id ? { ...l, ...patch } : l));
     onLessons?.(next);
     setPin((p) => (p && p.lesson.lessonId === id ? { ...p, lesson: { ...p.lesson, ...patch } } : p));
+    setTip((p) => (p && p.lesson.lessonId === id ? { ...p, lesson: { ...p.lesson, ...patch } } : p));
   }
 
   async function setStatus(status: number) {
-    const id = pin?.lesson.lessonId;
+    const id = (pin || tip)?.lesson.lessonId;
     if (!id || !branchId) return;
     setBusy(true);
     setError("");
@@ -652,10 +682,10 @@ export function LessonStrip({
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {past.map((l) => (
-          <LessonTile key={`${l.date}-${l.lessonId || l.from}`} lesson={l} today={today} onEnter={showTip} onLeave={() => setTip(null)} onClick={clickTile} />
+          <LessonTile key={`${l.date}-${l.lessonId || l.from}`} lesson={l} today={today} onEnter={showTip} onLeave={hideTipSoon} onClick={clickTile} />
         ))}
         {todayHit ? (
-          <LessonTile key={`${todayHit.date}-${todayHit.lessonId || todayHit.from}`} lesson={todayHit} today={today} onEnter={showTip} onLeave={() => setTip(null)} onClick={clickTile} />
+          <LessonTile key={`${todayHit.date}-${todayHit.lessonId || todayHit.from}`} lesson={todayHit} today={today} onEnter={showTip} onLeave={hideTipSoon} onClick={clickTile} />
         ) : (
           <div className="ra-today-tile flex h-[3.35rem] w-[2.4rem] min-w-[2.4rem] flex-col items-center justify-center rounded-lg px-0.5 text-center text-white" title="Сегодня">
             <span className="text-[0.83rem] font-semibold tabular-nums">{Number(today.slice(8))}</span>
@@ -664,7 +694,7 @@ export function LessonStrip({
           </div>
         )}
         {future.map((l) => (
-          <LessonTile key={`${l.date}-${l.lessonId || l.from}`} lesson={l} today={today} onEnter={showTip} onLeave={() => setTip(null)} onClick={clickTile} />
+          <LessonTile key={`${l.date}-${l.lessonId || l.from}`} lesson={l} today={today} onEnter={showTip} onLeave={hideTipSoon} onClick={clickTile} />
         ))}
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-3 text-[0.68rem] text-muted">
@@ -698,6 +728,9 @@ export function LessonStrip({
                 onOpen={branchId ? () => { setEdit(pop.lesson); setPin(null); setTip(null); } : undefined}
                 onConduct={() => void setStatus(3)}
                 onCancel={() => void setStatus(2)}
+                onReturn={() => void setStatus(1)}
+                onEnter={keepTip}
+                onLeave={hideTipSoon}
               />
             </div>,
             document.body,
