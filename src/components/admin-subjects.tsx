@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
 import { retryFetch } from "@/lib/retry-fetch";
 import { loadFromDisk, pullFromCrm } from "@/lib/crm-pull";
@@ -41,6 +41,34 @@ const FALLBACK: BranchCol[] = [
 ];
 
 const ORDER = [2, 1, 3, 4];
+const COLS_KEY = "ra_subjects_cols";
+const COL_DEF: Record<string, number> = { pick: 40, id: 80, name: 340, course: 224, total: 88, del: 40 };
+const COL_MIN: Record<string, number> = { pick: 36, id: 56, name: 140, course: 120, total: 64, del: 32, branch: 72 };
+
+function readCols(): Record<string, number> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = JSON.parse(localStorage.getItem(COLS_KEY) || "{}") as Record<string, number>;
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function ColHandle({ onDown }: { onDown: (e: PointerEvent<HTMLSpanElement>) => void }) {
+  return (
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Ширина столбца"
+      title="Потяните, чтобы изменить ширину"
+      className="absolute right-0 top-0 z-20 flex h-full w-3 cursor-col-resize touch-none items-center justify-center"
+      onPointerDown={onDown}
+    >
+      <span className="pointer-events-none h-[1.4rem] w-px rounded-full bg-black/20 group-hover/col:bg-primary/70" />
+    </span>
+  );
+}
 
 export function AdminSubjects() {
   const [items, setItems] = useState<Row[]>([]);
@@ -58,8 +86,11 @@ export function AdminSubjects() {
   const [pull, setPull] = useState<CrmPullState>(emptyPull("subjects"));
   const [schools, setSchools] = useState<SiteSchool[]>([]);
   const [courses, setCourses] = useState<SiteCourse[]>([]);
+  const [colW, setColW] = useState<Record<string, number>>({});
   const recRef = useRef<{ stop: () => void } | null>(null);
   const dictBase = useRef("");
+  const colWRef = useRef(colW);
+  colWRef.current = colW;
 
   async function loadLocal() {
     setBusy(true);
@@ -122,6 +153,7 @@ export function AdminSubjects() {
 
   useEffect(() => {
     void loadLocal();
+    setColW(readCols());
   }, []);
 
   function patch(id: number, field: "id" | "name", value: string) {
@@ -224,11 +256,55 @@ export function AdminSubjects() {
 
   const cols = (branches.length ? branches : FALLBACK).slice().sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
   const pickedInView = view.filter((s) => picked.has(s.id));
+  const colPx = (key: string, fallback: number) => {
+    const n = Number(colW[key]);
+    return n > 0 ? n : fallback;
+  };
+  const tableW =
+    colPx("pick", COL_DEF.pick) +
+    colPx("id", COL_DEF.id) +
+    colPx("name", COL_DEF.name) +
+    colPx("course", COL_DEF.course) +
+    cols.reduce((n, b) => n + colPx(`b${b.id}`, 104), 0) +
+    colPx("total", COL_DEF.total) +
+    colPx("del", COL_DEF.del);
+
+  function resizeCol(key: string, min: number, e: PointerEvent<HTMLSpanElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    const handle = e.currentTarget;
+    handle.setPointerCapture?.(e.pointerId);
+    const startX = e.clientX;
+    const startW = colPx(key, min);
+    const prevUser = document.body.style.userSelect;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    const move = (ev: globalThis.PointerEvent) => {
+      const next = Math.round(Math.min(720, Math.max(min, startW + ev.clientX - startX)));
+      setColW((cur) => ({ ...cur, [key]: next }));
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      document.body.style.userSelect = prevUser;
+      document.body.style.cursor = prevCursor;
+      try {
+        localStorage.setItem(COLS_KEY, JSON.stringify(colWRef.current));
+      } catch {
+        /* */
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }
 
   return (
     <section className="space-y-4">
       <p className="max-w-3xl text-sm text-muted">
-        Курс сайта подставляется из соответствий предмета и карточки группы. В списке первая строка — «нет курса», она снимает привязку и в AlfaCRM не уходит. Справа — сколько живых групп и учеников с этим предметом в филиале. Загрузка берёт предметы из AlfaCRM и сразу подставляет курс сайта. Выгрузка отправляет в CRM только id и название — курс сайта на сайте остаётся.
+        Курс сайта подставляется из соответствий предмета и карточки группы. В списке первая строка — «нет курса», она снимает привязку и в AlfaCRM не уходит. Ширину столбцов можно потянуть за край заголовка. Справа — сколько живых групп и учеников с этим предметом в филиале. Загрузка берёт предметы из AlfaCRM и сразу подставляет курс сайта. Выгрузка отправляет в CRM только id и название — курс сайта на сайте остаётся.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button
@@ -370,30 +446,53 @@ export function AdminSubjects() {
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
 
       <div className="overflow-x-auto overflow-y-hidden rounded-3xl bg-surface shadow-[var(--shadow-border)]">
-        <table className="w-full min-w-[52rem] text-left text-sm">
+        <table className="text-left text-sm" style={{ tableLayout: "fixed", width: tableW }}>
+          <colgroup>
+            <col style={{ width: colPx("pick", COL_DEF.pick) }} />
+            <col style={{ width: colPx("id", COL_DEF.id) }} />
+            <col style={{ width: colPx("name", COL_DEF.name) }} />
+            <col style={{ width: colPx("course", COL_DEF.course) }} />
+            {cols.map((b) => (
+              <col key={b.id} style={{ width: colPx(`b${b.id}`, 104) }} />
+            ))}
+            <col style={{ width: colPx("total", COL_DEF.total) }} />
+            <col style={{ width: colPx("del", COL_DEF.del) }} />
+          </colgroup>
           <thead>
-            <tr className="text-[0.7rem] font-medium uppercase tracking-wide text-muted">
-              <th className="w-10 px-3 py-3">
+            <tr className="select-none text-[0.7rem] font-medium uppercase tracking-wide text-muted">
+              <th className="group/col relative px-3 py-3">
                 <input
                   type="checkbox"
                   checked={view.length > 0 && view.every((s) => picked.has(s.id))}
                   onChange={(e) => setPicked(e.target.checked ? new Set(view.map((s) => s.id)) : new Set())}
                 />
+                <ColHandle onDown={(e) => resizeCol("pick", COL_MIN.pick, e)} />
               </th>
-              <th className="w-20 px-2 py-3 font-medium">ID</th>
-              <th className="px-4 py-3 font-medium">Название предмета</th>
-              <th className="w-[14rem] px-3 py-3 font-medium">Курс сайта</th>
+              <th className="group/col relative px-2 py-3 font-medium">
+                ID
+                <ColHandle onDown={(e) => resizeCol("id", COL_MIN.id, e)} />
+              </th>
+              <th className="group/col relative px-4 py-3 font-medium">
+                Название предмета
+                <ColHandle onDown={(e) => resizeCol("name", COL_MIN.name, e)} />
+              </th>
+              <th className="group/col relative px-3 py-3 font-medium">
+                Курс сайта
+                <ColHandle onDown={(e) => resizeCol("course", COL_MIN.course, e)} />
+              </th>
               {cols.map((b) => (
-                <th key={b.id} className="w-[6.5rem] px-2 py-3 text-center font-medium whitespace-nowrap">
-                  {b.short}
+                <th key={b.id} className="group/col relative px-2 py-3 text-center font-medium">
+                  <span className="block truncate">{b.short}</span>
                   <span className="mt-0.5 block text-[0.6rem] font-normal normal-case tracking-normal text-muted/80">гр / уч</span>
+                  <ColHandle onDown={(e) => resizeCol(`b${b.id}`, COL_MIN.branch, e)} />
                 </th>
               ))}
-              <th className="w-[5.5rem] px-2 py-3 text-center font-medium whitespace-nowrap">
+              <th className="group/col relative px-2 py-3 text-center font-medium">
                 Всего
                 <span className="mt-0.5 block text-[0.6rem] font-normal normal-case tracking-normal text-muted/80">гр / уч</span>
+                <ColHandle onDown={(e) => resizeCol("total", COL_MIN.total, e)} />
               </th>
-              <th className="w-10 px-2 py-3" />
+              <th className="px-2 py-3" />
             </tr>
           </thead>
           <tbody>
@@ -407,19 +506,19 @@ export function AdminSubjects() {
                     return n;
                   })} />
                 </td>
-                <td className="px-2 py-2">
-                  <input value={s.id || ""} onChange={(e) => patch(s.id, "id", e.target.value)} className="h-9 w-[4.5rem] rounded-xl bg-surface-2 px-2 text-center ring-1 ring-black/10" />
+                <td className="overflow-hidden px-2 py-2">
+                  <input value={s.id || ""} onChange={(e) => patch(s.id, "id", e.target.value)} className="h-9 w-full min-w-0 rounded-xl bg-surface-2 px-2 text-center ring-1 ring-black/10" />
                 </td>
-                <td className="px-4 py-2">
-                  <input value={s.name} onChange={(e) => patch(s.id, "name", e.target.value)} className="h-9 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
+                <td className="overflow-hidden px-4 py-2">
+                  <input value={s.name} onChange={(e) => patch(s.id, "name", e.target.value)} className="h-9 w-full min-w-0 rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
                 </td>
-                <td className="px-3 py-2">
+                <td className="overflow-hidden px-3 py-2">
                   <div title="Курс сайта из соответствий. «нет курса» снимает привязку. В AlfaCRM не уходит.">
                     <RaSelect
                       value={s.courseId || ""}
                       placeholder="нет курса"
                       menuMinWidth={320}
-                      className="max-w-[14rem] rounded-[8px] bg-surface-2 text-[0.78rem]"
+                      className="w-full min-w-0 rounded-[8px] bg-surface-2 text-[0.78rem]"
                       onChange={(v) => void bindCourse(s.id, v)}
                       groups={
                         s.courseId && !courses.some((c) => c.id === s.courseId)
