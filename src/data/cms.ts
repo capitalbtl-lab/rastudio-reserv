@@ -101,6 +101,8 @@ export type CmsSession = {
   timeTo?: string;
   day?: number;
   siteCourseId?: string;
+  statusId?: number;
+  priority?: number;
 };
 
 export type CmsMaster = {

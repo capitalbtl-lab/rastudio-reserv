@@ -31,6 +31,7 @@ import { CrmGroupMembers } from "@/components/crm-group-card";
 import { GroupLessonStrip } from "@/components/lesson-strip";
 import { clientCardId, groupCardId, CRM_BRANCH } from "@/data/ids";
 import { displayPersonName } from "@/data/client-display";
+import { GROUP_STATUSES, GROUP_PRIORITY } from "@/data/group-status";
 
 type SiteTree = {
   schools: { id: string; label: string; href: string }[];
@@ -98,12 +99,7 @@ function subjectFitsCourse(slot: CrmSlot, sub?: CrmSubject | null) {
   return false;
 }
 
-const GROUP_STATUS = [
-  { id: 1, name: "Идет набор (ожидает старта)" },
-  { id: 2, name: "Обучается (идет набор)" },
-  { id: 3, name: "Завершена" },
-  { id: 4, name: "Приостановлена" },
-];
+const GROUP_STATUS = GROUP_STATUSES.filter((s) => s.admin || s.id === 3);
 
 const SEED_LEVELS = [
   { id: 7, name: "1 класс" },
@@ -333,6 +329,7 @@ type GroupDetail = {
   slot: CrmSlot;
   tariffId: number;
   tariffs: { id: number; name: string; price: number; lessonsCount: number; duration: number; fit?: boolean }[];
+  priority: number;
 };
 
 function GroupNameField({ value, onChange, subject, large }: { value: string; onChange: (v: string) => void; subject?: string; large?: boolean }) {
@@ -984,6 +981,7 @@ export function AdminSchedule() {
       slot: s,
       tariffId: s.tariffId || 0,
       tariffs: [],
+      priority: s.priority ?? 1,
     });
     setDetail(base());
     setMsg(`Карточка группы ${s.groupId || ""}`);
@@ -1020,11 +1018,12 @@ export function AdminSchedule() {
             makeup: string;
             statusId: number;
             signup: string;
-            subjectId: number;
+            subjectId?: number;
             bDate?: string;
             eDate?: string;
             levelId?: number;
             calendar?: GroupCalLesson[];
+            priority?: number;
           })
         : null;
       const active = people.ok && "active" in people ? ((people.active || []) as GroupMember[]) : [];
@@ -1046,8 +1045,23 @@ export function AdminSchedule() {
         archive,
         tariffId: Number((res as { tariffId?: number }).tariffId) || s.tariffId || 0,
         tariffs: "tariffs" in res && Array.isArray(res.tariffs) ? (res.tariffs as GroupDetail["tariffs"]) : [],
+        priority: Number(g?.priority ?? s.priority ?? 1),
       };
       setDetail(next);
+      setSlots((list) =>
+        list.map((row) =>
+          row.id === s.id
+            ? {
+                ...row,
+                taken: active.length,
+                takenStudy: active.filter((m) => m.status !== "лид").length,
+                takenLead: active.filter((m) => m.status === "лид").length,
+                priority: next.priority,
+                statusId: next.statusId || row.statusId,
+              }
+            : row,
+        ),
+      );
       if (active.length) {
         const key = `${s.branchId}-${s.groupId}`;
         const names = active.map((m) => m.name);
@@ -1158,6 +1172,7 @@ export function AdminSchedule() {
       eDate?: string;
       levelId?: number;
       calendar?: GroupCalLesson[];
+      priority?: number;
     };
     setDetail((d) =>
       d && d.id === id
@@ -1176,6 +1191,7 @@ export function AdminSchedule() {
             calendar: g.calendar?.length ? g.calendar : d.calendar,
             tariffId: Number((res as { tariffId?: number }).tariffId) || d.tariffId,
             tariffs: "tariffs" in res && Array.isArray(res.tariffs) ? (res.tariffs as GroupDetail["tariffs"]) : d.tariffs,
+            priority: g.priority ?? d.priority,
           }
         : d,
     );
@@ -1230,6 +1246,7 @@ export function AdminSchedule() {
         eDate: detail.eDate,
         levelId: detail.levelId,
         tariffId: detail.tariffId,
+        priority: detail.priority,
       } as never,
     });
     take(res as never);
@@ -3354,6 +3371,14 @@ export function AdminSchedule() {
                           <option value="">— не задан —</option>
                           {GROUP_STATUS.map((st) => (
                             <option key={st.id} value={st.id}>{st.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block min-w-0 flex-1 text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                        Приоритет
+                        <select value={detail.priority} onChange={(e) => setDetail((d) => (d ? { ...d, priority: Number(e.target.value) } : d))} className="mt-1 h-10 w-full rounded-md bg-white px-2 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8">
+                          {GROUP_PRIORITY.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
                         </select>
                       </label>

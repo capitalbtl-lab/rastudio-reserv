@@ -213,7 +213,14 @@ export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
     const schoolNode = course ? tree.schools.find((x) => x.id === course.schoolId) : undefined;
     if (!course || !schoolNode) {
       const mm = slotMismatch(s);
-      return { ...s, courseId: cid || s.courseId, mismatch: mm.level || undefined, mismatchText: mm.text || undefined };
+      return {
+        ...s,
+        courseId: cid || "",
+        schoolId: "",
+        school: "",
+        mismatch: mm.level || undefined,
+        mismatchText: mm.text || undefined,
+      };
     }
     const next = {
       ...s,

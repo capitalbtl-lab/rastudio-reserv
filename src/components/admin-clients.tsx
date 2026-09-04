@@ -20,6 +20,7 @@ import type { ClientRow, CustomerCard, GroupMember } from "@/data/crm-cards";
 import { LEAD_STAGES, mergeStages, reorderLeads, filterLeadCards, mergeBranchLeadCards, type LeadCard, type LeadStage } from "@/data/crm-leads";
 import { crmSyncMinutes } from "@/components/admin-crm-settings";
 import type { CrmSlot, GroupCalLesson } from "@/data/crm-slots-core";
+import { GROUP_STATUSES, isAdminGroup } from "@/data/group-status";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -147,12 +148,7 @@ const GROUP_LEVELS = [
   { id: 14, name: "Продвинутый" },
 ];
 
-const GROUP_STATUS = [
-  { id: 1, name: "Идет набор (ожидает старта)" },
-  { id: 2, name: "Обучается (идет набор)" },
-  { id: 3, name: "Завершена" },
-  { id: 4, name: "Приостановлена" },
-];
+const GROUP_STATUS = GROUP_STATUSES.filter((s) => s.admin);
 
 type GroupInfo = {
   description: string;
@@ -757,7 +753,7 @@ export function AdminClients({
     const seen = new Set<string>();
     const out: CrmSlot[] = [];
     for (const s of slots) {
-      if (!s.groupId || s.statusId === 3 || s.statusId === 4) continue;
+      if (!s.groupId || !isAdminGroup(s.statusId)) continue;
       if (branch && s.branchId !== branch) continue;
       if (!ageMatches(s, age)) continue;
       const key = `${s.branchId}:${s.groupId}`;

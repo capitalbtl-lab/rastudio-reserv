@@ -192,6 +192,8 @@ export function toSession(s: CrmSlot): CmsSession {
     timeTo: s.timeTo,
     day: s.day,
     siteCourseId: s.courseId || "",
+    statusId: s.statusId || 0,
+    priority: s.priority ?? 1,
   };
 }
 

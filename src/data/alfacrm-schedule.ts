@@ -7,11 +7,13 @@ import { dirname, join } from "node:path";
 import type { CmsSession } from "@/data/cms";
 import { request, token } from "@/data/alfacrm";
 import { agesOverlap } from "@/data/ages";
-import { courseOf, dayLabel, schoolOf, slotFromSession, stampTimes, toSession, normalizeArtSlot, beatsOf, stampSubjects, type CrmSlot } from "@/data/crm-slots";
+import { dayLabel, slotFromSession, stampTimes, toSession, normalizeArtSlot, beatsOf, stampSubjects, type CrmSlot } from "@/data/crm-slots";
 import { applyScheduleMap } from "@/data/schedule-map";
 import { mergeTeacher, saveTeachers, type CrmTeacher } from "@/data/crm-teachers";
 import { SUBJECT_TO_COURSE } from "@/data/ids";
 import { nextLessonDate } from "@/lib/trial-slot";
+import { isAdminGroup, isArchivedGroup, isCampStatus, readPriority, slotOnPublicSchedule } from "./group-status";
+import { loadSiteSignup } from "./site-signup";
 
 const SKIP_SUBJECT = new Set([7, 54, 104, 85, 81, 1, 77, 106, 82, 105, 83, 90, 84, 88, 87]);
 const DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
@@ -37,6 +39,7 @@ type Group = {
   subject_id?: number;
   custom_hashtagkursa?: string;
   custom_workingout?: string;
+  custom_prioritet?: number | string;
   level_id?: number;
 };
 type Lesson = {
@@ -54,9 +57,8 @@ type Lesson = {
 };
 type Subject = { id: number; name: string };
 type Teacher = { id: number; name?: string };
-type CrmLesson = { group_ids?: number[]; customer_ids?: number[]; date?: string };
 
-type SeatInfo = { limit: number; taken: number };
+type SeatInfo = { limit: number; taken: number; study?: number; lead?: number };
 type CacheBag = { at: number; sessions: CmsSession[]; seats: Map<string, SeatInfo>; slots: CrmSlot[] };
 
 let cache: CacheBag | null = null;
@@ -102,14 +104,13 @@ function subjectIdFromNote(note?: string) {
 
 function isLiveGroup(group?: Group): group is Group {
   if (!group) return false;
-  if (/отложен/i.test(group.name || "")) return false;
-  if (/\(2024\)|\b2024\b/.test(group.name || "") && /модельн/i.test(group.name || "")) return false;
+  const st = Number(group.status_id || 0);
+  if (isArchivedGroup(st) || isCampStatus(st)) return false;
   return true;
 }
 
 function isLiveSlot(s: CrmSlot) {
-  if (/отложен/i.test(s.groupName || "")) return false;
-  return true;
+  return isAdminGroup(s.statusId);
 }
 
 function snapFile() {
@@ -155,10 +156,6 @@ function readSnap(): CacheBag | null {
   }
 }
 
-function iso(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
 function seatKey(branch: number, gid: string | number) {
   return `${branch}:${gid}`;
 }
@@ -174,25 +171,59 @@ function crmDayOf(when: string) {
   return i >= 0 ? i + 1 : 1;
 }
 
-async function loadSeats(branch: number, t: string) {
-  const taken = new Map<number, number>();
-  const from = iso(new Date(Date.now() - 100 * 86400000));
-  const to = iso(new Date(Date.now() + 50 * 86400000));
-  for (let page = 0; page < 5; page++) {
-    const res = await request<{ items?: CrmLesson[] }>(
-      `/v2api/${branch}/lesson/index`,
-      { page, pageSize: 100, date_from: from, date_to: to },
-      t,
-    );
-    for (const lesson of res.items || []) {
-      const gid = Number(lesson.group_ids?.[0] || 0);
-      if (!gid) continue;
-      const n = (lesson.customer_ids || []).length;
-      taken.set(gid, Math.max(taken.get(gid) || 0, n));
+function groupIdsOfCustomer(c: Record<string, unknown>): number[] {
+  const ids = new Set<number>();
+  const gids = c.group_ids;
+  if (Array.isArray(gids)) {
+    for (const x of gids) {
+      const n = Number(x);
+      if (n) ids.add(n);
     }
-    if ((res.items || []).length < 100) break;
   }
-  return taken;
+  let raw: unknown = c.groups;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = [];
+    }
+  }
+  const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw as Record<string, unknown>) : [];
+  for (const one of list) {
+    if (one && typeof one === "object") {
+      const rec = one as { id?: number; group_id?: number };
+      const n = Number(rec.id || rec.group_id || 0);
+      if (n) ids.add(n);
+    } else {
+      const n = Number(one);
+      if (n) ids.add(n);
+    }
+  }
+  return [...ids];
+}
+
+async function loadRoster(branch: number, t: string) {
+  const study = new Map<number, number>();
+  const lead = new Map<number, number>();
+  async function pull(isStudy: 0 | 1, into: Map<number, number>) {
+    for (let page = 0; page < 40; page += 1) {
+      const res = await request<{ items?: Record<string, unknown>[] }>(
+        `/v2api/${branch}/customer/index`,
+        { page, pageSize: 50, is_study: isStudy, removed: 0 },
+        t,
+      ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+      const items = res.items || [];
+      for (const c of items) {
+        for (const gid of groupIdsOfCustomer(c)) {
+          into.set(gid, (into.get(gid) || 0) + 1);
+        }
+      }
+      if (items.length < 50) break;
+    }
+  }
+  await pull(1, study);
+  await pull(0, lead);
+  return { study, lead };
 }
 
 function ageOf(name: string) {
@@ -212,8 +243,9 @@ export function signupUrl(branch: number, gid: string | number) {
 }
 
 export function sessionsFromSlots(slots: CrmSlot[]): CmsSession[] {
+  const pub = loadSiteSignup().statusPublish;
   return stampTimes(slots.map((s) => normalizeArtSlot({ ...s })))
-    .filter((s) => s.school !== "Прочее" && !/отложен/i.test(s.groupName) && !SKIP_SUBJECT.has(s.subjectId))
+    .filter((s) => slotOnPublicSchedule(s, pub) && !SKIP_SUBJECT.has(s.subjectId))
     .flatMap((s) => {
       const beats = beatsOf(s).filter((b) => /^\d{1,2}:\d{2}$/.test(b.timeFrom || ""));
       return beats.map((b, i) =>
@@ -269,6 +301,9 @@ export function mergeCrmIntoSite(incoming: CrmSlot[], existing: CrmSlot[]) {
         eDate: s.eDate || old.eDate || "",
         levelId: s.levelId || old.levelId || 0,
         tariffId: old.tariffId || s.tariffId || 0,
+        priority: s.priority ?? old.priority,
+        takenStudy: s.takenStudy ?? old.takenStudy,
+        takenLead: s.takenLead ?? old.takenLead,
       });
       updated += 1;
     } else {
@@ -413,10 +448,12 @@ async function loadCrm(force = false): Promise<CacheBag> {
       mergeTeacher(teacherBag, p.id, p.name || String(p.id), branch);
     }
     const groups = await paged<Group>(`/v2api/${branch}/group/index`, t);
-    const taken = await loadSeats(branch, t).catch(() => new Map<number, number>());
+    const roster = await loadRoster(branch, t).catch(() => ({ study: new Map<number, number>(), lead: new Map<number, number>() }));
     for (const g of groups) {
       if (!groupsById.has(g.id)) groupsById.set(g.id, { g, fromBranch: branch });
-      seats.set(seatKey(branch, g.id), { limit: Number(g.limit) || 0, taken: taken.get(g.id) || 0 });
+      const study = roster.study.get(g.id) || 0;
+      const lead = roster.lead.get(g.id) || 0;
+      seats.set(seatKey(branch, g.id), { limit: Number(g.limit) || 0, taken: study + lead, study, lead });
     }
     lessons.push(...(await paged<Lesson>(`/v2api/${branch}/regular-lesson/index`, t)));
   }
@@ -464,10 +501,13 @@ async function loadCrm(force = false): Promise<CacheBag> {
         statusId: Number(g.status_id || 0),
         limit: seat?.limit || Number(g.limit) || 0,
         taken: seat?.taken || 0,
+        takenStudy: seat?.study || 0,
+        takenLead: seat?.lead || 0,
+        priority: readPriority(g.custom_prioritet),
         subjectId: sid,
         subject: subjectName,
-        school: schoolOf(path, subjectName, g.name),
-        course: courseOf(subjectName, g.name, path),
+        school: "",
+        course: subjectName || g.name,
         courseId: path,
         path,
         age: ageOf(g.name) || ageOf(subjectName),
@@ -558,6 +598,8 @@ export type LiveGroup = {
   timeTo: string;
   nextDate: string;
   courseId: string;
+  priority: number;
+  statusId: number;
 };
 
 function seatsText(limit: number, taken: number) {
@@ -580,14 +622,18 @@ function chipLabel(session: CmsSession, branchId: number, seats: string) {
 }
 
 export async function groupsForQuery(q: { age?: number; branch?: string; course?: string }) {
-  const bag = await loadCrm();
+  if (!listAdminSlots().length) {
+    await loadCrm().catch(() => null);
+  }
+  const slots = listAdminSlots().filter((s) => isAdminGroup(s.statusId) && s.groupId);
   const bid = branchIdOf(q.branch || "");
   const kolomnaOnly = /коломн/.test((q.branch || "").toLowerCase()) && !bid;
   const seen = new Set<string>();
   const out: LiveGroup[] = [];
-  for (const session of bag.sessions) {
-    const gid = String(session.groupId || session.signup.match(/gid=(\d+)/)?.[1] || "");
-    const branchId = Number(session.branchId || session.signup.match(/common\/(\d+)\//)?.[1] || 0);
+  for (const slot of slots) {
+    const session = toSession(slot);
+    const gid = String(slot.groupId);
+    const branchId = Number(slot.branchId) || 0;
     if (!gid || !branchId) continue;
     if (bid && branchId !== bid) continue;
     if (kolomnaOnly && branchId === 3) continue;
@@ -599,39 +645,43 @@ export async function groupsForQuery(q: { age?: number; branch?: string; course?
     const key = `${gid}-${session.when}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const seat = bag.seats.get(seatKey(branchId, gid)) || { limit: 0, taken: 0 };
-    const seats = seatsText(seat.limit, seat.taken);
+    const seats = seatsText(slot.limit, slot.taken);
     const next = nextLessonDate(session);
     const nextDate = next
       ? `${String(next.getDate()).padStart(2, "0")}.${String(next.getMonth() + 1).padStart(2, "0")}.${next.getFullYear()}`
       : "";
+    const priority = readPriority(slot.priority);
     out.push({
       gid,
       branchId,
-      name: session.group,
-      age: session.age,
+      name: slot.groupName,
+      age: slot.age,
       when: session.when,
-      city: session.city,
-      branch: session.branch,
-      short: BRANCH[branchId]?.short || session.city,
-      path: session.path || "",
-      signup: session.signup,
+      city: slot.city,
+      branch: slot.branch,
+      short: BRANCH[branchId]?.short || slot.city,
+      path: slot.path || "",
+      signup: slot.signup,
       chip: chipLabel(session, branchId, seats),
-      limit: seat.limit,
-      taken: seat.taken,
+      limit: slot.limit,
+      taken: slot.taken,
       seats,
       wait: waitDays(crmDayOf(session.when)),
-      teacher: session.teacher || "",
-      timeFrom: session.timeFrom || "",
-      timeTo: session.timeTo || "",
+      teacher: slot.teacher || "",
+      timeFrom: slot.timeFrom || "",
+      timeTo: slot.timeTo || "",
       nextDate,
-      courseId: session.directionId || session.courseId || "",
+      courseId: slot.courseId || String(slot.subjectId || ""),
+      priority,
+      statusId: slot.statusId || 0,
     });
   }
-  out.sort((a, b) => a.wait - b.wait || a.when.localeCompare(b.when, "ru"));
-  const open = out.filter((g) => g.seats !== "мест нет");
-  const full = out.filter((g) => g.seats === "мест нет");
-  return [...open, ...full].slice(0, 12);
+  out.sort((a, b) => {
+    const pa = a.priority === 0 ? 99 : a.priority;
+    const pb = b.priority === 0 ? 99 : b.priority;
+    return pa - pb || a.wait - b.wait || a.when.localeCompare(b.when, "ru");
+  });
+  return out.slice(0, 24);
 }
 
 export function formatGroups(list: LiveGroup[], age?: number) {
@@ -640,16 +690,17 @@ export function formatGroups(list: LiveGroup[], age?: number) {
       ? `По фильтру живых групп на ${age} лет сейчас не видно. Это НЕ «мест нет». Не говори, что набор закрыт. Предложи заявку на пробное (дату согласуем) и другие направления на этот возраст. Телефон 8 (800) 511-34-01.`
       : "Группы не найдены. Спроси возраст и филиал.";
   }
-  const open = list.filter((g) => g.seats !== "мест нет");
+  const first = list.filter((g) => g.priority === 1);
   const lines = list.map(
     (g, i) =>
-      `${i + 1}. gid=${g.gid} филиал=${g.branchId} · ${g.name} · ${g.short} · ${g.when}${g.teacher ? ` · ${g.teacher}` : ""} · ${g.seats} · ближайшее ${g.nextDate || "—"} ${g.timeFrom || ""} · через ${g.wait} дн.`,
+      `${i + 1}. gid=${g.gid} филиал=${g.branchId} · приоритет=${g.priority} · ${g.name} · ${g.short} · ${g.when}${g.teacher ? ` · ${g.teacher}` : ""} · состав ${g.taken}/${g.limit || "—"} · ${g.seats} · ближайшее ${g.nextDate || "—"} ${g.timeFrom || ""} · через ${g.wait} дн.${g.priority === 0 ? " · набор с сайта закрыт" : ""}`,
   );
   return [
-    `Живое расписание, ${list.length} слотов (${open.length} со свободными местами), сначала ближайшие. Назови 5–8: день, время, педагог, филиал, места, ближайшая дата. gid вслух не читай, в инструмент передай.`,
-    open.length
-      ? "Есть места — предложи слот и запиши сам: пробное = submit_trial, в группу = book_lesson lesson_type=group. Форму AlfaCRM не открывай."
-      : "Во всех найденных группах мест сейчас нет. Скажи это честно и предложи пробное в свободный день или другой филиал.",
+    `Все подходящие группы (${list.length}), сначала приоритет 1. Назови родителю ВСЕ, не только первые. gid вслух не читай.`,
+    first.length
+      ? `В первую очередь предлагай запись в группы с приоритетом 1 (${first.map((g) => g.name).join("; ")}). Остальные тоже перечисли.`
+      : "Среди найденных нет приоритета 1 — назови все и уточни, куда удобнее.",
+    "Пробное = submit_trial, в группу = book_lesson lesson_type=group. Форму AlfaCRM не открывай. Приоритет 0 — с сайта не записывать, скажи что набор через администратора или предложи группу с приоритетом 1.",
     ...lines,
   ].join("\n");
 }

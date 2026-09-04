@@ -118,7 +118,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [branch, setBranch] = useState(0);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [includeLeads, setIncludeLeads] = useState(false);
+  const [includeLeads, setIncludeLeads] = useState(true);
   const [items, setItems] = useState<PupilTariffItem[]>([]);
   const [byGroup, setByGroup] = useState<Record<string, GroupTariff>>({});
   const [chosen, setChosen] = useState<Set<string>>(new Set());
@@ -423,7 +423,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={includeLeads} onChange={(e) => setIncludeLeads(e.target.checked)} />
-            Включить лидов в группах
+            Включить лидов в группах (по умолчанию да — все привязанные)
           </label>
         </div>
       ) : null}

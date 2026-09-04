@@ -4,6 +4,7 @@ import { isAdminRequest } from "./admin-auth";
 import { formatRuPhone, leadUrl, request, token as alfaToken } from "./alfacrm";
 import type { SessionNote } from "./session-note";
 import { loadVersions } from "./crm-slots";
+import { isAdminGroup } from "./group-status";
 import { isPhoneLike, displayPersonName, membershipIds } from "./client-display";
 import { clientCardId } from "./ids";
 import type { DossiersReq } from "./dossiers-fn";
@@ -854,7 +855,7 @@ export async function syncSliceFromCrm(opts: { branchId: number; isStudy?: numbe
 }
 
 export async function syncMembershipsSlice(offset = 0, take = 8) {
-  const slots = (loadVersions()[0]?.slots || []).filter((s) => Number(s.groupId) > 0 && Number(s.statusId) !== 3 && Number(s.statusId) !== 4);
+  const slots = (loadVersions()[0]?.slots || []).filter((s) => Number(s.groupId) > 0 && isAdminGroup(s.statusId));
   const seen = new Set<string>();
   const groups: { id: number; branchId: number; name: string; school: string; subjectId: number; courseId: string }[] = [];
   for (const s of slots) {

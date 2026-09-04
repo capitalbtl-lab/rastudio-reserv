@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { SITE_SIGNUP_DEFAULT, trialFormUrl, type SiteSignup } from "./site-signup-core";
+import { mergeStatusPublish } from "./group-status";
 
 export { SITE_SIGNUP_DEFAULT, trialFormUrl, groupSignupUrl, trialUrlFor, resolveGroupSignup, SITE_BRANCHES, type SiteSignup } from "./site-signup-core";
 
@@ -10,7 +11,13 @@ function fileOf() {
 
 export function loadSiteSignup(): SiteSignup {
   try {
-    if (!existsSync(fileOf())) return { ...SITE_SIGNUP_DEFAULT, trialByBranch: { ...SITE_SIGNUP_DEFAULT.trialByBranch } };
+    if (!existsSync(fileOf())) {
+      return {
+        ...SITE_SIGNUP_DEFAULT,
+        trialByBranch: { ...SITE_SIGNUP_DEFAULT.trialByBranch },
+        statusPublish: mergeStatusPublish(null),
+      };
+    }
     const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Partial<SiteSignup>;
     const trialByBranch = { ...SITE_SIGNUP_DEFAULT.trialByBranch, ...(raw.trialByBranch || {}) };
     for (const id of ["1", "2", "3", "4"]) {
@@ -20,9 +27,14 @@ export function loadSiteSignup(): SiteSignup {
       trialOn: raw.trialOn !== false,
       groupOn: raw.groupOn !== false,
       trialByBranch,
+      statusPublish: mergeStatusPublish(raw.statusPublish),
     };
   } catch {
-    return { ...SITE_SIGNUP_DEFAULT, trialByBranch: { ...SITE_SIGNUP_DEFAULT.trialByBranch } };
+    return {
+      ...SITE_SIGNUP_DEFAULT,
+      trialByBranch: { ...SITE_SIGNUP_DEFAULT.trialByBranch },
+      statusPublish: mergeStatusPublish(null),
+    };
   }
 }
 
@@ -38,6 +50,7 @@ export function saveSiteSignup(next: Partial<SiteSignup>) {
     trialOn: next.trialOn ?? cur.trialOn,
     groupOn: next.groupOn ?? cur.groupOn,
     trialByBranch,
+    statusPublish: mergeStatusPublish(next.statusPublish ?? cur.statusPublish),
   };
   mkdirSync(dirname(fileOf()), { recursive: true });
   writeFileSync(fileOf(), JSON.stringify(saved, null, 2));

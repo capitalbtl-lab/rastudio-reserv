@@ -45,12 +45,13 @@ describe("мастер абонементов учеников", () => {
       slot({ id: "2", day: 3 }),
       slot({ id: "3", groupId: 11, groupName: "Роботы 5-6" }),
       slot({ id: "4", statusId: 3, groupId: 99, groupName: "архив" }),
+      slot({ id: "6", statusId: 4, groupId: 12, groupName: "набор закрыт" }),
       slot({ id: "5", branchId: 1, groupName: "Роботы Гражданская" }),
     ]);
-    assert.equal(list.length, 3);
+    assert.equal(list.length, 4);
     assert.deepEqual(
       list.map((g) => g.key).sort(),
-      ["1:10", "2:10", "2:11"],
+      ["1:10", "2:10", "2:11", "2:12"],
     );
   });
 

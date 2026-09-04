@@ -1,3 +1,5 @@
+import { isAdminGroup } from "./group-status";
+
 export type SubjectUsage = {
   groups: Record<number, number>;
   students: Record<number, number>;
@@ -11,7 +13,7 @@ export function countSubjectUsage(
   const seen = new Set<string>();
   const by = new Map<number, SubjectUsage>();
   for (const s of slots) {
-    if (!s.groupId || s.statusId === 3 || s.statusId === 4) continue;
+    if (!s.groupId || !isAdminGroup(s.statusId)) continue;
     const key = `${Number(s.branchId) || 0}:${s.groupId}`;
     if (seen.has(key)) continue;
     seen.add(key);

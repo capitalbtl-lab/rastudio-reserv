@@ -40,6 +40,7 @@ import { clientCardId, CRM_BRANCH } from "./ids";
 import { loadTariffs, pullTariffsFromCrm, matchTariffs, groupTariffPack, subjectTariffStats, saveTariffEdits, pushTariffsToCrm, archiveTariffsInCrm, aiTariffsParse, applyTariffChanges, probeCreateTariff, probeDeleteTariff, subjectsWithHref, tariffGroupHits } from "./crm-tariffs";
 import { loadScheduleMap, saveScheduleMap } from "./schedule-map";
 import { packSubjectRows, bindSubjectCourse } from "./subject-admin";
+import { isAdminGroup, readPriority } from "./group-status";
 
 function isoish(raw: string) {
   const s = String(raw || "").trim();
@@ -193,20 +194,6 @@ async function loadGroupMembers(request: typeof import("./alfacrm").request, t: 
   if (!bag.__raGMem) bag.__raGMem = new Map();
   const hit = bag.__raGMem.get(key);
   if (hit && Date.now() - hit.at < 8 * 60 * 1000) return { active: hit.active, archive: hit.archive };
-  const { groupRoster } = await import("./dossiers");
-  const local = groupRoster(branch, gid);
-  if (local.active.length || local.archive.length) {
-    bag.__raGMem.set(key, { at: Date.now(), active: local.active, archive: local.archive });
-    void (async () => {
-      try {
-        const fresh = await pullGroupMembersCrm(request, t, branch, gid);
-        bag.__raGMem?.set(key, { at: Date.now(), active: fresh.active, archive: fresh.archive });
-      } catch {
-        /* cache stays local */
-      }
-    })();
-    return local;
-  }
   const fresh = await pullGroupMembersCrm(request, t, branch, gid);
   bag.__raGMem.set(key, { at: Date.now(), active: fresh.active, archive: fresh.archive });
   return fresh;
@@ -389,7 +376,7 @@ function catalogGroups(branch: number) {
   const seen = new Set<string>();
   const out: { id: number; name: string; branchId: number; subjectId?: number; teacher?: string; day?: string; from?: string; to?: string }[] = [];
   for (const s of listAdminSlots()) {
-    if (!s.groupId || s.statusId === 3 || s.statusId === 4) continue;
+    if (!s.groupId || !isAdminGroup(s.statusId)) continue;
     const key = `${s.branchId}:${s.groupId}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -953,6 +940,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         bDate?: string;
         eDate?: string;
         levelId?: number;
+        priority?: number;
         tariff?: import("./crm-tariffs").CrmTariff;
         tariffs?: import("./crm-tariffs").CrmTariff[];
         pullN?: number;
@@ -1864,6 +1852,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           bDate: String(g.b_date || slot?.bDate || ""),
           eDate: String(g.e_date || slot?.eDate || ""),
           levelId: Number(g.level_id || slot?.levelId || 0),
+          priority: readPriority(g.custom_prioritet ?? slot?.priority),
           signup: slot?.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
           subjectId: Number(slot?.subjectId || g.subject_id || 0),
           subject: slot?.subject || "",
@@ -1967,6 +1956,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           bDate: String(g.b_date || slot?.bDate || ""),
           eDate: String(g.e_date || slot?.eDate || ""),
           levelId: Number(g.level_id || slot?.levelId || 0),
+          priority: readPriority(g.custom_prioritet ?? slot?.priority),
           signup: slot?.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
           subjectId: Number(slot?.subjectId || 0),
           subject: slot?.subject || "",
@@ -2000,6 +1990,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const eDate = String(data.eDate || "").trim() || period.eDate;
       const levelId = Number(data.levelId || 0);
       const tariffId = Number(data.tariffId) || 0;
+      const priority = readPriority(data.priority);
       if (!gid) {
         if (!slotId) return { ok: false as const, error: "Группа ещё без номера. Закройте карточку, отметьте строку и нажмите «Выгрузить в AlfaCRM» — или сохраните ещё раз, мы создадим её сами." };
         const current = listAdminSlots();
@@ -2023,6 +2014,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
                 hashtags,
                 makeup,
                 levelId: levelId || s.levelId,
+                priority,
               }
             : s,
         );
@@ -2043,6 +2035,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         custom_workingout: makeup,
         b_date: bDate,
         e_date: eDate,
+        custom_prioritet: priority,
         ...(levelId ? { level_id: levelId } : { level_id: null }),
       }, t);
       const current = listAdminSlots();
@@ -2066,6 +2059,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
               subjectId: subjectId || s.subjectId,
               subject: subject?.name || s.subject,
               signup: s.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
+              priority,
             };
           }
           return s;
@@ -2084,6 +2078,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           tariffId: tariffId || s.tariffId,
           subjectId: subjectId || s.subjectId,
           subject: subject?.name || s.subject,
+          priority,
         };
       });
       if (subjectId) {

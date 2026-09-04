@@ -20,7 +20,7 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-04-prices";
+export const GUIDE_REV = "2026-09-04-groups";
 
 const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Сайт", idField: "rastudio.org", link: "то, что видят родители. Админка = /admin + AlfaCRM" },
@@ -58,7 +58,7 @@ const SCHEDULE_TABS: GuideTab[] = [
   {
     id: "groups",
     title: "Группы",
-    body: "Ключ группы — пара groupId + branchId, не название. gid:{branchId}:{groupId}. Карточка groupCardId = card:group:{branchId}:{groupId}. DOM: data-card-id, data-group-id, data-branch-id. Два места: (1) вкладка pane=groups — расписание слотов CRM (создание, выгрузка, папки courseId). (2) внутри Клиенты переключатель view=группы — слева список групп выбранного status+филиал+возраст, справа карточка группы. Состав CrmGroupMembers всегда три списка: Ученики (is_study=1), Лиды (is_study=0), Архивные ученики (is_study=2 / archived). Клик по человеку — только customerId → CrmClientCard; закрытие на десктопе возвращает карточку группы. Новая группа: courseId + branchId + teacherId. Предмет из карты курса, не из названия. Перенос: treeMove { ids, courseId }.",
+    body: "Ключ группы — пара groupId + branchId, не название. gid:{branchId}:{groupId}. Карточка groupCardId = card:group:{branchId}:{groupId}. DOM: data-card-id, data-group-id, data-branch-id. Два места: (1) вкладка pane=groups — расписание слотов CRM (создание, выгрузка, папки courseId). (2) внутри Клиенты переключатель view=группы — слева список групп выбранного status+филиал+возраст, справа карточка группы. Состав CrmGroupMembers всегда три списка: Ученики (is_study=1), Лиды (is_study=0), Архивные ученики (is_study=2 / archived). Счётчик = все привязанные, не явка. Админка: все status кроме 3 (завершено) и смен 7–9. Status 4 = обучается, набор закрыт, не архив. custom_prioritet 1/2/3/0. Имя и «2024» не фильтр. Клик по человеку — только customerId → CrmClientCard; закрытие на десктопе возвращает карточку группы. Новая группа: courseId + branchId + teacherId. Предмет из карты курса, не из названия. Перенос: treeMove { ids, courseId }.",
   },
   {
     id: "clients",
@@ -88,7 +88,7 @@ const SCHEDULE_TABS: GuideTab[] = [
   {
     id: "site",
     title: "Сайт · запись",
-    body: "Сайт rastudio.org — родители. Админка — /admin и AlfaCRM. Страница курса: расписание только этого курса и возраста, без чипов чужих возрастов. Страница школы: расписание всей школы. Формы записи и боковая карточка группы берут те же слоты страницы. На странице курса расписание из админки: название группы, педагог, день и время, свободные места (limit−taken), уровень, ближайшая дата занятия этой группы. Справа две кнопки (если включены в Админка → Сайт): «Запись на пробное» и «Запись в группу». Обе открывают одно окно в стиле сайта: ФИО родителя, ФИО ребёнка, дата рождения, телефон+почта в ряд, филиал только для чтения = branchId группы. Пробное → sendTrial kind=trial. В группу → kind=group. gid, date, timeFrom, courseId/subjectId уходят в AlfaCRM. Родителю iframe CRM не показывать. Ссылка группы /common/{branchId}/lead/create?gid={groupId} — запасная, не основной путь. Форма пробного CRM id=20 настраивается по филиалу в Админка → Сайт (trialByBranch). Выкл trialOn/groupOn — кнопок на сайте нет.",
+    body: "Сайт rastudio.org — родители. Админка — /admin и AlfaCRM. Витрина расписания: статусы из Админка → Сайт (матрица schedule/trial/group по status_id) и custom_prioritet ≥ 1. Приоритет 0 на сайт не выкладывается, ИИ всё равно называет группу. Страница курса: только этот курс и возраст. Страница школы: курсы школы по тем же правилам. Состав на сайте = roster (учится+лиды), не явка. Кнопки trialOn/groupOn глобально, плюс флаги статуса. Пробное → sendTrial kind=trial. В группу → kind=group. iframe CRM родителю не показывать.",
   },
   {
     id: "map",
@@ -119,7 +119,7 @@ const SCHEDULE_OPS: GuideOp[] = [
   { id: "assign-lesson", title: "Назначить занятие", body: "popup data-op=lesson-dialog. Поля: lessonType, date, time, duration, roomId, groupId, subjectId*, teacherId, topic, note. customerLesson. Нет subjectId — ошибка." },
   { id: "add-tariff", title: "Добавить абонемент ученика", body: "popup data-op=tariff-dialog. Поля: groupId ученика* (может быть в нескольких группах), tariffId*, b_date, periodCount+periodType (1 день / 2 неделя / 3 месяц, e_date = start+N единиц −1 день), calcType 0|1 (is_separate_balance), subjectIds[], lessonTypeIds[], note. customerTariff. Не угадывать tariffId по имени." },
   { id: "add-group", title: "Добавить в группу", body: "popup data-op=group-dialog. Поля: branchId*, фильтр школы, groupId* как {branchId}:{groupId}, bDate, eDate. customerGroup. Список групп = филиал+возраст слева. Не писать по названию группы." },
-  { id: "list-live-groups", title: "Живые группы для записи", body: "list_groups { age, branch?, course? }. Вернёт gid, branchId, педагог, день, timeFrom, места, ближайшую дату. Назови 5–8 слотов. Не выдумывай gid и дату." },
+  { id: "list-live-groups", title: "Живые группы для записи", body: "list_groups { age, branch?, course? }. Все неархивные группы (status ≠ 3), включая набор закрыт (4) и priority 0. Сортировка: приоритет 1 → 2 → 3 → 0. Назови ВСЕ подходящие. В первую очередь предлагай priority=1. priority=0 — набор с сайта закрыт, не open_group. Состав = учится+лиды, не явка. gid вслух не читай." },
   { id: "book-trial", title: "Записать на пробное", body: "submit_trial. Обязательно: parent, child, phone, branch_id (= branchId группы). Передай gid, date=ближайшее занятие этой группы ДД.ММ.ГГГГ, time=timeFrom, course_id=subjectId, group_name, dob если есть. kind=trial. Почта не обязательна. Филиал чужой группы не подставляй. Если мест нет — скажи и предложи другой слот." },
   { id: "book-group", title: "Записать в группу", body: "book_lesson lesson_type=group. Те же поля, gid обязателен. Не вызывай open_group и не отдавай родителю URL AlfaCRM. Это заявка в группу, не пробный урок. Если просят абонемент / «сразу ходить» — group, не trial." },
   { id: "site-signup-settings", title: "Настройки записи на сайте", body: "Админка → Сайт. trialOn / groupOn. trialByBranch[1..4] — URL формы CRM id=20 по филиалу. Сайт всегда рисует своё окно и шлёт лид через API, не iframe." },
@@ -395,7 +395,11 @@ function groupsBody() {
 
 ${groups}
 
-Состав (groupMembers): Ученики is_study=1, Лиды is_study=0, Архивные is_study=2.
+Состав (groupMembers): сразу CRM, не досье. Ученики is_study=1, Лиды is_study=0, Архивные is_study=2. Счётчик группы = все привязанные, не явка на уроке.
+Статусы CRM: 1 набор, 6 старт, 2 обучается (набор идёт), 4 обучается (набор завершён) — ЖИВАЯ, не архив. 5 пауза набора. 10 не обучается. 3 обучение завершено = архив, в основном списке нет.
+Приоритет custom_prioritet: 1 первая для записи, 2–3 очередь, 0 не выкладывать на сайт. ИИ называет все группы, писать первой — priority 1.
+Витрина сайта: Админка → Сайт, матрица статусов + priority ≥ 1 + courseId.
+Имя группы и «2024» не фильтр.
 Клик по человеку — customerId. Закрытие карточки клиента при view=группы возвращает карточку группы.
 Создать группу: courseId + branchId + teacherId. Предмет из карты курса.
 Перенос: treeMove { ids, courseId }.
@@ -513,8 +517,9 @@ function siteBookBody() {
 
 ЧТО ВИДИТ РОДИТЕЛЬ НА СТРАНИЦЕ КУРСА
 Слева только группы ЭТОГО курса и возраста. Чипов «3–4 / 5–6 / 7–9» нет — это не каталог. Форма записи и боковая «Группа» тоже только слоты этой страницы.
-На странице школы (/art-studio, /robototehnika-v-kolomne, …) — расписание всей школы, фильтр по возрасту можно.
-Страница /schedule — все курсы, фильтры город/возраст/день.
+На странице школы (/art-studio, /robototehnika-v-kolomne, …) — расписание школы: статусы, включённые в Админка → Сайт, и priority ≥ 1.
+Страница /schedule — те же правила.
+Приоритет 0: на витрине нет, ИИ всё равно называет («набор с сайта закрыт»).
 Слева список групп: возраст, имя группы, день timeFrom–timeTo, педагог, уровень, свободные места, ближайшая дата пробного.
 Справа две кнопки, если включены в Админка → Сайт:
   trialOn — «Запись на пробное»

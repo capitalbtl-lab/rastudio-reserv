@@ -1,4 +1,4 @@
-/** Запись на сайте: пробное (форма филиала) и запись в группу (ссылка из AlfaCRM). */
+import { DEFAULT_STATUS_PUBLISH, type StatusPublish } from "./group-status";
 export const ALFA_HOST = "https://studiyarazvivaysya.s20.online";
 
 export const SITE_BRANCHES = [
@@ -27,6 +27,8 @@ export type SiteSignup = {
   groupOn: boolean;
   /** Ссылка формы пробного по филиалу (id 1–4). Пусто = шаблон trialFormUrl. */
   trialByBranch: Record<string, string>;
+  /** По каждому status_id CRM: витрина / пробное / запись в группу. */
+  statusPublish: Record<string, StatusPublish>;
 };
 
 export const SITE_SIGNUP_DEFAULT: SiteSignup = {
@@ -38,6 +40,7 @@ export const SITE_SIGNUP_DEFAULT: SiteSignup = {
     "3": trialFormUrl(3),
     "4": trialFormUrl(4),
   },
+  statusPublish: { ...DEFAULT_STATUS_PUBLISH },
 };
 
 export function trialUrlFor(signup: SiteSignup, branchId?: number) {

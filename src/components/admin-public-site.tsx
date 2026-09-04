@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
 import { cn } from "@/lib/utils";
 import { SITE_BRANCHES, SITE_SIGNUP_DEFAULT, type SiteSignup } from "@/data/site-signup-core";
+import { GROUP_STATUSES, mergeStatusPublish, type StatusPublish } from "@/data/group-status";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -71,6 +72,7 @@ export function AdminPublicSite() {
         <h3 className="font-semibold">Кнопки записи на сайте</h3>
         <p className="mt-1 text-sm text-muted">
           «Запись на пробное» открывает форму в стиле сайта, филиал уже выбран. «Запись в группу» — ссылка из карточки группы в AlfaCRM.
+          Какие статусы видны на сайте — таблица ниже. Приоритет 0 у группы всегда прячет её с витрины, ИИ всё равно называет все группы.
         </p>
         <div className="mt-3 flex flex-wrap gap-3">
           <label className="flex items-center gap-2 text-sm">
@@ -111,6 +113,48 @@ export function AdminPublicSite() {
           ))}
         </div>
         {saved ? <p className="mt-2 text-sm text-muted">{saved}</p> : null}
+      </section>
+      <section className="rounded-2xl bg-white p-4 ring-1 ring-black/8">
+        <h3 className="font-semibold">Статусы групп на сайте</h3>
+        <p className="mt-1 text-sm text-muted">
+          Админка показывает все группы, кроме «Обучение завершено». Здесь — только витрина rastudio.org. Смены (7–9) в CRM выключены.
+        </p>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[32rem] text-left text-sm">
+            <thead>
+              <tr className="text-[0.68rem] uppercase tracking-wider text-muted">
+                <th className="py-1.5 pr-2 font-semibold">Статус CRM</th>
+                <th className="px-2 py-1.5 font-semibold">Расписание</th>
+                <th className="px-2 py-1.5 font-semibold">Пробное</th>
+                <th className="px-2 py-1.5 font-semibold">В группу</th>
+              </tr>
+            </thead>
+            <tbody>
+              {GROUP_STATUSES.filter((s) => s.id !== 7 && s.id !== 8 && s.id !== 9).map((st) => {
+                const row = (signup.statusPublish || mergeStatusPublish(null))[String(st.id)] || { schedule: false, trial: false, group: false };
+                const patch = (field: keyof StatusPublish, on: boolean) => {
+                  const next = mergeStatusPublish({
+                    ...signup.statusPublish,
+                    [String(st.id)]: { ...row, [field]: on },
+                  });
+                  void saveSignup({ ...signup, statusPublish: next });
+                };
+                return (
+                  <tr key={st.id} className="border-t border-black/6">
+                    <td className="py-2 pr-2">
+                      {st.name} <span className="text-[0.7rem] text-muted">[{st.id}]</span>
+                    </td>
+                    {(["schedule", "trial", "group"] as const).map((field) => (
+                      <td key={field} className="px-2 py-2">
+                        <input type="checkbox" checked={Boolean(row[field])} onChange={(e) => patch(field, e.target.checked)} />
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
       <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {[

@@ -1,6 +1,7 @@
 import type { CrmSlot } from "./crm-slots-core";
 import type { CrmTariff } from "./crm-tariffs";
 import { matchTariffs } from "./crm-tariffs";
+import { isAdminGroup } from "./group-status";
 
 export type PupilGroup = {
   key: string;
@@ -41,7 +42,7 @@ export function uniqueLiveGroups(slots: CrmSlot[]): PupilGroup[] {
   const seen = new Set<string>();
   const out: PupilGroup[] = [];
   for (const s of slots) {
-    if (!s.groupId || s.statusId === 3 || s.statusId === 4) continue;
+    if (!s.groupId || !isAdminGroup(s.statusId)) continue;
     const key = `${s.branchId}:${s.groupId}`;
     if (seen.has(key)) continue;
     seen.add(key);

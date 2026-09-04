@@ -25,6 +25,12 @@ export type CrmSlot = {
   statusId: number;
   limit: number;
   taken: number;
+  /** Учится в группе (is_study=1). Состав, не явка. */
+  takenStudy?: number;
+  /** Лиды в группе (is_study=0). */
+  takenLead?: number;
+  /** custom_prioritet: 1 первая запись, 0 не выкладывать на сайт. Пусто = 1. */
+  priority?: number;
   subjectId: number;
   subject: string;
   school: string;
