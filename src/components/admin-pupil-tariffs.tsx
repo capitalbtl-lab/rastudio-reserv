@@ -130,6 +130,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [calcType, setCalcType] = useState(1);
   const [skipExisting, setSkipExisting] = useState(true);
   const [job, setJob] = useState<"assign" | "close" | "delete">("assign");
+  const [path, setPath] = useState<"add" | "remove">("add");
   const [closeDate, setCloseDate] = useState(todayIso);
   const [result, setResult] = useState<{ done: number; skipped: number; failed: { name: string; error: string }[] } | null>(null);
   const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
@@ -234,8 +235,15 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       if (ok) setStep(2);
       return;
     }
+    if (step === 2 && path === "remove") {
+      setStep(3);
+      return;
+    }
     setStep((s) => s + 1);
   }
+
+  const lastStep = path === "add" ? 4 : 3;
+  const stepLabels = path === "add" ? ["Группы", "Ученики", "Абонемент", "Выгрузка"] : ["Группы", "Ученики", "Выгрузка"];
 
   function applyTariff(groupKey: string, opt: TariffOpt | null) {
     const tariffId = opt?.id || 0;
@@ -347,7 +355,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         <div>
           <p className="font-display text-xl text-primary">Мастер абонементов учеников</p>
           <p className="mt-0.5 text-sm text-muted">
-            Группы → ученики → выдать новые, завершить текущие датой или удалить. Выгрузка в CRM с паузой.
+            Сначала режим: добавить абонементы или снять текущие. Дальше группы и ученики.
           </p>
         </div>
         <button type="button" className="text-sm text-muted hover:text-fg" onClick={onClose}>
@@ -355,7 +363,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-[0.78rem]">
-        {["Группы", "Ученики", "Абонемент", "Выгрузка"].map((label, i) => (
+        {stepLabels.map((label, i) => (
           <span key={label} className={cn("rounded-full px-3 py-1", step === i + 1 ? "bg-primary text-white" : "bg-surface-2 text-muted")}>
             {i + 1}. {label}
           </span>
@@ -366,6 +374,33 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
 
       {step === 1 ? (
         <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setPath("add");
+                setJob("assign");
+              }}
+              className={cn("rounded-[8px] px-4 py-2 text-sm font-semibold", path === "add" ? "bg-primary text-white" : "bg-surface-2 text-muted")}
+            >
+              Добавление
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPath("remove");
+                setJob("close");
+              }}
+              className={cn("rounded-[8px] px-4 py-2 text-sm font-semibold", path === "remove" ? "bg-primary text-white" : "bg-surface-2 text-muted")}
+            >
+              Удаление
+            </button>
+          </div>
+          <p className="text-sm text-muted">
+            {path === "add"
+              ? "Выдать ученикам новые абонементы."
+              : "Снять текущие абонементы: завершить выбранной датой или удалить из CRM."}
+          </p>
           <div className="flex flex-wrap items-center gap-2">
             <select value={school} onChange={(e) => setSchool(e.target.value)} className="h-10 rounded-xl bg-surface-2 px-3 text-sm ring-1 ring-black/10">
               <option value="">Все школы</option>
@@ -515,7 +550,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         </div>
       ) : null}
 
-      {step === 3 ? (
+      {path === "add" && step === 3 ? (
         <div className="mt-4 space-y-4">
           <div>
             <span className="mb-1.5 block text-[0.72rem] font-medium text-muted">Период у всех *</span>
@@ -676,7 +711,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         </div>
       ) : null}
 
-      {step === 4 ? (
+      {(path === "add" && step === 4) || (path === "remove" && step === 3) ? (
         <div className="mt-4 space-y-3">
           {result ? (
             <div className="rounded-2xl bg-emerald-50 p-4 text-sm ring-1 ring-emerald-200">
@@ -697,24 +732,27 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           ) : (
             <>
               <div className="flex flex-wrap gap-2">
-                {(
-                  [
-                    ["assign", "Выдать новые"],
-                    ["close", "Завершить текущие"],
-                    ["delete", "Удалить текущие"],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setJob(id)}
-                    className={cn("rounded-full px-3 py-1.5 text-sm font-semibold", job === id ? "bg-primary text-white" : "bg-surface-2 text-muted")}
-                  >
-                    {label}
-                  </button>
-                ))}
+                {path === "add" ? (
+                  <span className="rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-white">Выдать новые</span>
+                ) : (
+                  (
+                    [
+                      ["close", "Завершить датой"],
+                      ["delete", "Удалить из CRM"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setJob(id)}
+                      className={cn("rounded-full px-3 py-1.5 text-sm font-semibold", job === id ? "bg-primary text-white" : "bg-surface-2 text-muted")}
+                    >
+                      {label}
+                    </button>
+                  ))
+                )}
               </div>
-              {job === "assign" ? (
+              {path === "add" || job === "assign" ? (
                 <p className="text-sm text-muted">
                   Выдать {ready.length} абонементов с {date.split("-").reverse().join(".")}. По {ASSIGN_CHUNK} шт., около {assignEtaMin(ready.length)} мин. Дубликаты {skipExisting ? "пропустим" : "создадим ещё раз"}.
                 </p>
@@ -742,12 +780,12 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {ready.map((it) => (
+                    {(job === "assign" ? ready : selected).map((it) => (
                       <tr key={pupilKey(it)} className="border-t border-black/6">
                         <td className="px-3 py-2">{it.name}</td>
                         <td className="px-3 py-2">{it.groupName}</td>
-                        <td className="px-3 py-2">{it.tariffName}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{money(it.price)}</td>
+                        <td className="px-3 py-2">{it.tariffName || "текущий абонемент CRM"}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{it.price ? money(it.price) : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -762,7 +800,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         <Button type="button" variant="ghost" className="h-9 px-4 text-sm" onClick={step === 1 || result ? onClose : () => setStep((s) => s - 1)}>
           {step === 1 || result ? "Закрыть" : "Назад"}
         </Button>
-        {step < 4 ? (
+        {step < lastStep ? (
           <Button type="button" className="h-9 px-4 text-sm" disabled={busy || (step === 1 && !picked.size) || (step === 2 && !chosen.size)} onClick={() => void goNext()}>
             {busy && step === 1 ? "Читаю состав…" : "Далее"}
           </Button>
