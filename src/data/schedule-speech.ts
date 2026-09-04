@@ -1,25 +1,20 @@
 import type { CrmSlot, SlotDraft } from "@/data/crm-slots-core";
 
 function eveningTime(raw: string) {
-  const m = String(raw || "").replace(".", ":").replace(",", ":").match(/(\d{1,2}):(\d{2})/);
+  const m = String(raw || "")
+    .replace(".", ":")
+    .replace(",", ":")
+    .match(/(\d{1,2}):(\d{2})/);
   if (!m) return String(raw || "").slice(0, 5);
   let h = Number(m[1]);
   if (h >= 1 && h <= 9) h += 12;
   return `${String(h).padStart(2, "0")}:${m[2]}`;
 }
 
-function schoolOf(path: string, subject: string, group: string) {
-  const t = `${path} ${subject} ${group}`.toLowerCase();
-  if (/худож|рисов|лепк|аним|манг/.test(t)) return "Художественная школа";
-  if (/робот/.test(t)) return "Школа робототехники";
-  if (/python|scratch|питон|скретч|програм|gamedev|blender/.test(t)) return "Школа программирования";
-  if (/наук|физик|steam|радио|инженер/.test(t)) return "Школа наук и инженерии";
-  if (/англий|язык|япон|коре/.test(t)) return "Школа иностранных языков";
-  return "";
-}
-
 export function parseDraftFromSpeech(text: string, catalog: CrmSlot[], prev?: Partial<SlotDraft>): SlotDraft {
-  const t = String(text || "").toLowerCase().replace(/ё/g, "е");
+  const t = String(text || "")
+    .toLowerCase()
+    .replace(/ё/g, "е");
   const next: SlotDraft = {
     school: prev?.school || "",
     course: prev?.course || "",
@@ -56,7 +51,8 @@ export function parseDraftFromSpeech(text: string, catalog: CrmSlot[], prev?: Pa
   if (teach) next.teacher = teach;
   const age = t.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})/);
   if (age) next.age = `${age[1]}-${age[2]} лет`;
-  const hit = catalog.find((s) => s.course && t.includes(s.course.toLowerCase().slice(0, 18)));
+  const hit = catalog.find((s) => s.courseId && t.includes(String(s.courseId).toLowerCase()))
+    || catalog.find((s) => s.course && t.includes(s.course.toLowerCase().slice(0, 18)));
   if (hit) {
     next.course = hit.course;
     next.courseId = hit.courseId || next.courseId;
@@ -65,6 +61,5 @@ export function parseDraftFromSpeech(text: string, catalog: CrmSlot[], prev?: Pa
     next.subjectId = hit.subjectId || next.subjectId;
     next.age = hit.age || next.age;
   }
-  if (!next.school && next.course) next.school = schoolOf("", next.course, "");
   return next;
 }

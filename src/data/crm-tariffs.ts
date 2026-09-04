@@ -1154,7 +1154,7 @@ function matchBranchIds(text: string, branches: CrmBranch[]) {
   const ids: number[] = [];
   for (const b of branches) {
     if (q.includes("цмит") && b.id === 2) ids.push(2);
-    if ((q.includes("граждан") || q.includes("студия")) && b.id === 1) ids.push(1);
+    if (q.includes("граждан") && b.id === 1) ids.push(1);
     if (q.includes("луховиц") && b.id === 3) ids.push(3);
     if (q.includes("лет") && b.id === 4) ids.push(4);
     if (q.includes(b.short.toLowerCase())) ids.push(b.id);

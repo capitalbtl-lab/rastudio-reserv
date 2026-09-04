@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { upsertAlfaLead } from "@/data/alfacrm";
-import { trialCourseOptions, subjectIdOfCoursePath } from "@/data/site-bind-core";
+import { trialCourseOptions, courseIdOfPath } from "@/data/site-bind-core";
 
 export const TRIAL_BRANCHES = [
   { id: "2", name: "ЦМИТ · Коломна, Октябрьской революции, 340" },
@@ -12,7 +12,7 @@ export const TRIAL_BRANCHES = [
 export const TRIAL_COURSES = trialCourseOptions().map((c) => ({ id: c.id, name: c.name }));
 
 export function trialCourseForPath(path: string) {
-  return subjectIdOfCoursePath(path);
+  return courseIdOfPath(path);
 }
 
 export type TrialPayload = {
@@ -34,6 +34,23 @@ export type TrialPayload = {
 
 function courseName(id: string) {
   return TRIAL_COURSES.find((c) => c.id === id)?.name || "";
+}
+
+async function resolveTrialCourse(raw: string) {
+  const id = String(raw || "").trim();
+  if (!id) return { subjectId: "", courseId: "", name: "" };
+  if (/^\d+$/.test(id)) {
+    return { subjectId: id, courseId: "", name: courseName(id) };
+  }
+  try {
+    const { loadScheduleMap } = await import("./schedule-map");
+    const { subjectIdOfCourse } = await import("./ids");
+    const map = loadScheduleMap();
+    const sid = subjectIdOfCourse(id, map.courses);
+    return { subjectId: sid ? String(sid) : "", courseId: id, name: courseName(id) };
+  } catch {
+    return { subjectId: "", courseId: id, name: courseName(id) };
+  }
 }
 
 function dobFromAge(age?: number) {
@@ -86,6 +103,7 @@ export async function saveTrialLead(data: TrialPayload) {
   if (!dob && data.age) dob = dobFromAge(data.age);
   const [y, m, d] = dob.split("-");
   const dobRu = d && m && y ? `${d}.${m}.${y}` : dob || dobFromAge(data.age);
+  const resolved = await resolveTrialCourse(data.course);
   try {
     const saved = await upsertAlfaLead({
       parent,
@@ -94,8 +112,8 @@ export async function saveTrialLead(data: TrialPayload) {
       email,
       dobRu,
       branchId: branch,
-      courseName: courseName(data.course) || data.groupName || "",
-      courseId: data.course,
+      courseName: resolved.name || data.groupName || "",
+      courseId: resolved.subjectId || resolved.courseId,
       gid: data.gid,
       groupName: data.groupName,
       kind: data.kind || "trial",
@@ -121,7 +139,7 @@ export async function saveTrialLead(data: TrialPayload) {
         phone,
         email: email || `lead+${phone.replace(/\D/g, "").slice(-10)}@rastudio.org`,
         branch,
-        course: data.course,
+        course: resolved.subjectId || resolved.courseId,
       });
       if (form.ok) return { ok: true as const, id: 0, duplicate: false, branch: Number(branch) || 2 };
       return form;

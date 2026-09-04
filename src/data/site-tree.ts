@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { SCHOOLS, SCHOOL_COURSE_MATCH } from "./site";
 import { listPriceRows, splitCourseAge, tidyCourseName } from "./prices-core";
-import { schoolFromHay } from "./slot-mismatch";
 import type { CrmSlot } from "./crm-slots-core";
 import { groupAssignKey } from "./ids";
 
@@ -101,140 +100,6 @@ export function saveSiteTree(tree: SiteTree) {
   return next;
 }
 
-function ageNums(s: string) {
-  const n: number[] = [];
-  for (const m of String(s || "").matchAll(/(\d{1,2})/g)) {
-    const v = Number(m[1]);
-    if (v && v < 20) n.push(v);
-  }
-  return n;
-}
-
-function familyKey(s: string) {
-  const t = String(s || "")
-    .toLowerCase()
-    .replace(/ё/g, "е");
-  if (/билингв|на английск|roboticsinenglish/.test(t) && /робот|английск/.test(t)) return "robot-en";
-  if (/робототех/.test(t)) return "robot";
-  if (/digital|цифров/.test(t)) return "digital";
-  if (/скульп/.test(t)) return "sculpt";
-  if (/вуз|портрет/.test(t)) return "hudvuz";
-  if (/художественн\w*\s*школ/.test(t) && !/студ/.test(t)) return "art-school";
-  if (/художествен|студ/.test(t) && !/digital|цифров|скульп|вуз/.test(t)) return "art-studio";
-  if (/python|питон|codebook/.test(t)) return "python";
-  if (/scratch|startschool|старт скул/.test(t)) return "scratch";
-  if (/start:|первые шаги/.test(t)) return "it-start";
-  if (/create:|создатель игр/.test(t)) return "it-create";
-  if (/dev:|юный разработчик/.test(t)) return "it-dev";
-  if (/c\+\+|си\+\+/.test(t)) return "cpp";
-  if (/unity|gamedev/.test(t)) return "gamedev";
-  if (/лего|happybricks/.test(t)) return "lego";
-  if (/steam|планет/.test(t)) return "steam";
-  if (/подготовк.*школ|к школе готовы/.test(t)) return "prep";
-  if (/go getter/.test(t)) return "english-gg";
-  if (/super minds/.test(t)) return "english-sm";
-  if (/коре|vitamin/.test(t)) return "korean";
-  if (/япон|nihongo/.test(t)) return "japanese";
-  if (/радио/.test(t)) return "radio";
-  if (/физик|tesla/.test(t)) return "physics";
-  if (/blender|game-дизайн/.test(t)) return "blender";
-  if (/компас/.test(t)) return "compass";
-  if (/киндер|kinder/.test(t)) return "kinder";
-  if (/беспилот/.test(t)) return "drone";
-  if (/макияж/.test(t)) return "makeup";
-  if (/личностн/.test(t)) return "growth";
-  if (/модельн|подиум/.test(t)) return "model";
-  if (/балн|танц|хорео|балет/.test(t)) return "dance";
-  if (/наук|эксперимент/.test(t)) return "science";
-  return tidyCourseName(s).toLowerCase().slice(0, 24);
-}
-
-export function ageFromGroup(s: { groupName?: string; subject?: string; age?: string }) {
-  const pick = (t: string) => {
-    const m = String(t || "").match(/(\d{1,2})\s*[-–—]\s*(\d{1,2})\s*(лет|года|год)?/i);
-    if (m) return `${m[1]}-${m[2]} лет`;
-    const o = String(t || "").match(/от\s*(\d{1,2})/i);
-    if (o) return `от ${o[1]} лет`;
-    const p = String(t || "").match(/\((\d{1,2})\s*\+\)/);
-    if (p) return `от ${p[1]} лет`;
-    return "";
-  };
-  return pick(s.groupName || "") || pick(s.subject || "") || pick(s.age || "") || String(s.age || "");
-}
-
-function bandOf(family: string, age: string) {
-  const n = ageNums(age);
-  if (!n.length) return "";
-  const lo = Math.min(...n);
-  if (family === "art-studio") {
-    if (lo <= 4) return "3-4";
-    if (lo <= 6) return "5-6";
-    return "7-9";
-  }
-  if (family === "art-school") return "10-15";
-  if (family === "robot") {
-    if (lo <= 6) return "5-7";
-    if (lo <= 8) return "7-9";
-    return "9-14";
-  }
-  if (family === "robot-en") return "en";
-  return String(lo);
-}
-
-function ageFit(groupAge: string, courseAge: string) {
-  const g = ageNums(groupAge);
-  const c = ageNums(courseAge);
-  if (!g.length || !c.length) return 0;
-  const glo = Math.min(...g);
-  const ghi = Math.max(...g);
-  const clo = Math.min(...c);
-  const chi = Math.max(...c);
-  const mid = (glo + ghi) / 2;
-  if (mid >= clo - 0.4 && mid <= chi + 0.4) return 200 - (chi - clo) - Math.abs(mid - (clo + chi) / 2);
-  const lo = Math.max(glo, clo);
-  const hi = Math.min(ghi, chi);
-  if (hi >= lo) return 30 + (hi - lo);
-  const dist = mid < clo ? clo - mid : mid - chi;
-  return Math.max(0, 10 - dist);
-}
-
-/** НЕ вызывать автоматически. Голосовой черновик → ID. Живые связи — courseId / assign. */
-export function guessCourseId(s: CrmSlot, tree: SiteTree): string {
-  const name = String(s.groupName || "");
-  const hay = `${name} ${s.subject || ""}`.toLowerCase().replace(/ё/g, "е");
-  const schoolLabel = s.school || schoolFromHay(`${name} ${s.subject} ${s.path}`);
-  const school = tree.schools.find((x) => x.label === schoolLabel) || tree.schools.find((x) => x.id === s.path);
-  const courses = school ? tree.courses.filter((c) => c.schoolId === school.id) : tree.courses;
-  if (!courses.length) return "";
-  const bilingual = /билингв|на английск/.test(name.toLowerCase().replace(/ё/g, "е"));
-  const fam = bilingual ? "robot-en" : familyKey(name) || familyKey(hay);
-  const siblings = courses.filter((c) => familyKey(c.label) === fam);
-  const pool = siblings.length ? siblings : courses.filter((c) => familyKey(c.label) === familyKey(hay));
-  const use = pool.length ? pool : courses;
-  const age = ageFromGroup(s);
-  const band = bandOf(fam, age);
-  let best = "";
-  let score = -1;
-  for (const c of use) {
-    let n = ageFit(age, `${c.age} ${c.label}`);
-    const cBand = bandOf(familyKey(c.label), `${c.age} ${c.label}`);
-    if (band && cBand && band === cBand) n += 80;
-    if (siblings.length && familyKey(c.label) !== fam) n -= 400;
-    if (fam !== "hudvuz" && familyKey(c.label) === "hudvuz") n -= 400;
-    const cn = tidyCourseName(c.label).toLowerCase().replace(/ё/g, "е");
-    const gn = tidyCourseName(name).toLowerCase().replace(/ё/g, "е");
-    if (cn.length > 6 && gn.includes(cn.slice(0, 14))) n += 20;
-    if (cn.length > 6 && cn.includes(gn.slice(0, 14))) n += 12;
-    if (n > score) {
-      score = n;
-      best = c.id;
-    }
-  }
-  if (score > 0) return best;
-  if (use.length === 1) return use[0].id;
-  return "";
-}
-
 /** courseId группы: assign[gid:branch:group] либо slot.courseId, если курс есть в дереве. Имя не смотрим. */
 export function courseIdOf(s: CrmSlot, tree: SiteTree) {
   const key = slotTreeKey(s);
@@ -284,36 +149,6 @@ export function deleteTreeSchool(schoolId: string) {
     if (ids.has(tree.assign[k])) delete tree.assign[k];
   }
   return saveSiteTree(tree);
-}
-
-export function pinAllGuesses(slots: CrmSlot[]) {
-  const tree = loadSiteTree();
-  let n = 0;
-  for (const s of slots) {
-    const key = slotTreeKey(s);
-    const id = courseIdOf(s, tree);
-    if (!id) continue;
-    if (key && tree.assign[key] !== id) {
-      tree.assign[key] = id;
-      n += 1;
-    }
-    if (s.courseId !== id) {
-      s.courseId = id;
-      n += 1;
-    }
-    const hit = tree.courses.find((c) => c.id === id);
-    if (hit && s.course !== hit.label) s.course = hit.label;
-    const sch = hit ? tree.schools.find((x) => x.id === hit.schoolId) : undefined;
-    if (sch) {
-      if (s.school !== sch.label) s.school = sch.label;
-      if (s.schoolId !== sch.id) {
-        s.schoolId = sch.id;
-        n += 1;
-      }
-    }
-  }
-  if (n) saveSiteTree(tree);
-  return n;
 }
 
 export function moveSlotsToCourse(slots: CrmSlot[], ids: string[], courseId: string) {

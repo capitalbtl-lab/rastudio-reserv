@@ -32,7 +32,7 @@ import { beatsOf } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { loadGroupCard, saveGroupCard } from "./group-cards";
 import { scheduleVoiceTurn } from "./schedule-voice";
-import { loadSiteTree, addTreeSchool, addTreeCourse, deleteTreeCourse, deleteTreeSchool, moveSlotsToCourse, pinAllGuesses, saveSiteTree, slotTreeKey } from "./site-tree";
+import { loadSiteTree, addTreeSchool, addTreeCourse, deleteTreeCourse, deleteTreeSchool, moveSlotsToCourse, saveSiteTree, slotTreeKey } from "./site-tree";
 import { listTeachers, teachersAtBranch } from "./crm-teachers";
 import { searchClientViews, findDossier, upsertDossier, applyCrmCustomer } from "./dossiers";
 import { isPhoneLike } from "./client-display";
@@ -1009,10 +1009,6 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const cached = g.__raGetPack;
       if (cached && Date.now() - cached.at < 2500) return cached.body as never;
       let slots = listAdminSlots();
-      if (pinAllGuesses(slots)) {
-        resetSlotCache();
-        slots = saveAdminSlots(listAdminSlots()).slots;
-      }
       const body = pack(slots);
       g.__raGetPack = { at: Date.now(), body };
       return body;

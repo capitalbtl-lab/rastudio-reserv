@@ -74,17 +74,8 @@ export function stampSubjects(slots: CrmSlot[]): CrmSlot[] {
   });
 }
 
-export function schoolOf(path: string, subject: string, group: string) {
-  const t = `${path} ${subject} ${group}`.toLowerCase();
-  if (/art-studio|hudvuz|sculptural|digitalart|манг|аним|живопис|лепк|худож|рисов|академическ/.test(t)) return "Художественная школа";
-  if (/robot|робот/.test(t)) return "Школа робототехники";
-  if (/python|scratch|питон|скретч|create|криэйт|junior|gamedev|unity|blender|codebook|програм|си\+\+|c\+\+|gamedesign|3d-model/.test(t))
-    return "Школа программирования";
-  if (/наук|физик|steam|радио|tesla|science|беспилот|дрон|инженер/.test(t)) return "Школа наук и инженерии";
-  if (/подготовк|preparation|happybricks|лего|ранн/.test(t)) return "Школа раннего развития";
-  if (/англий|язык|english|japanese|vitamin|япон|коре/.test(t)) return "Школа иностранных языков";
-  if (/модельн|подиум|model|макияж|личностн/.test(t)) return "Модельная школа";
-  return "Прочее";
+export function schoolOf(_path: string, _subject: string, _group: string) {
+  return "";
 }
 
 export function courseOf(subject: string, group: string, path: string) {
@@ -193,7 +184,7 @@ export function slotFromSession(s: CmsSession): CrmSlot {
     taken: 0,
     subjectId: Number(s.courseId) || 0,
     subject: s.courseFilter,
-    school: schoolOf(s.path || "", s.courseFilter, s.group),
+    school: "",
     course: s.courseFilter || s.group,
     path: s.path || "",
     age: s.age,
@@ -315,7 +306,7 @@ export function parseSlotsCsv(text: string, current: CrmSlot[]) {
       ...prev,
       groupName: rec.groupName || prev.groupName,
       subject: rec.subject || prev.subject,
-      school: rec.school || prev.school || schoolOf(prev.path, rec.subject || prev.subject, rec.groupName || prev.groupName),
+      school: rec.school || prev.school,
       course: rec.course || prev.course,
       age: rec.age || prev.age,
       day,
@@ -503,14 +494,7 @@ export function parseDraftFromSpeech(text: string, catalog: CrmSlot[], prev?: Pa
     next.subjectId = snapped.subjectId || next.subjectId;
     next.school = snapped.school || next.school;
     next.age = snapped.age || next.age;
-  } else if (/художественн|студи/.test(t)) {
-    next.school = next.school || "Художественная школа";
-    next.course = formatCourseName("Художественная студия", next.age);
-  } else if (/робот/.test(t)) {
-    next.school = next.school || "Школа робототехники";
-    next.course = next.course || "Робототехника";
   }
-  if (!next.school && next.course) next.school = schoolOf("", next.course, "");
   return next;
 }
 
@@ -552,7 +536,7 @@ export function buildSlot(draft: SlotDraft, catalog: CrmSlot[]): CrmSlot {
     tree.schools.find((s) => s.id && (s.id === draft.schoolId || s.id === courseRow?.schoolId)) ||
     tree.schools.find((s) => draft.school && s.label === draft.school);
   const br = matchBranch(`${draft.branch} ${courseRow?.label || draft.course}`);
-  const school = schoolRow?.label || draft.school || schoolOf("", draft.course, draft.groupName || "");
+  const school = schoolRow?.label || draft.school || "";
   const age = draft.age || courseRow?.age || (draft.course.match(/\(([^)]+)\)/)?.[1] || "");
   const course = courseRow?.label || (draft.course ? String(draft.course).trim() : formatCourseName("Курс", age));
   const twin =
@@ -689,7 +673,7 @@ ${JSON.stringify(slim).slice(0, 14000)}`,
     adds.push(
       snapAdd(
         {
-          school: a.school || schoolOf("", String(a.course || ""), ""),
+          school: a.school || "",
           course: String(a.course || a.groupName || "Курс"),
           age: String(a.age || ""),
           day: Math.max(1, Math.min(7, Number(a.day) || 1)),

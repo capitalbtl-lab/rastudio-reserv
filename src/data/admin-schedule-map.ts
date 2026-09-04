@@ -4,7 +4,7 @@ import { logAdmin } from "./admin-settings";
 import { applyScheduleMap, loadScheduleMap, saveScheduleMap, siteCourses, siteSchools, type CourseLink, type SchoolLink } from "./schedule-map";
 import { listAdminSlots, saveAdminSlots } from "./alfacrm-schedule";
 import { stampSubjects } from "./crm-slots";
-import { loadSiteTree, pinAllGuesses } from "./site-tree";
+import { loadSiteTree } from "./site-tree";
 import { guessTariffLinks, saveTariffMap, seedTariffMapIfEmpty, type TariffLink } from "./tariff-map";
 import { loadTariffs } from "./crm-tariffs";
 
@@ -41,7 +41,6 @@ export const adminScheduleMap = createServerFn({ method: "POST" })
         courses: data.courses || [],
       });
       const slots = applyScheduleMap(stampSubjects(listAdminSlots()));
-      pinAllGuesses(slots);
       saveAdminSlots(slots);
       logAdmin("Соответствия школ и курсов сохранены, расписание на сайте обновлено");
       return { ok: true as const, ...pack(), count: slots.length, schools: map.schools, courses: map.courses };
@@ -53,7 +52,6 @@ export const adminScheduleMap = createServerFn({ method: "POST" })
     }
     if (data.action === "apply") {
       const slots = applyScheduleMap(stampSubjects(listAdminSlots()));
-      pinAllGuesses(slots);
       saveAdminSlots(slots);
       logAdmin("Соответствия применены к расписанию на сайте");
       return { ok: true as const, ...pack(), count: slots.length };

@@ -7,6 +7,7 @@ import { loadVersions } from "./crm-slots";
 import { isAdminGroup } from "./group-status";
 import { isPhoneLike, displayPersonName, membershipIds } from "./client-display";
 import { clientCardId } from "./ids";
+import { schoolLabelOfSubject } from "./schedule-map";
 import type { DossiersReq } from "./dossiers-fn";
 import { logAdmin } from "./admin-settings";
 
@@ -234,17 +235,7 @@ export function ageBandOf(age?: number) {
   return "18+";
 }
 
-export function schoolOfText(text: string) {
-  const t = text.toLowerCase();
-  if (/худ|рис|живоп|скульп|манг|аним|digital|давинч|наследие|акварель|гуашь|подготовк.{0,12}вуз|арт-програм/.test(t)) return "Художественная школа";
-  if (/робот|arduino|wedo|\blego\b/.test(t)) return "Школа робототехники";
-  if (/программ|scratch|python|c\+\+|unity|компьютер|gamedev|startschool|juniorschool|майнкрафт/.test(t)) return "Школа программирования";
-  if (/физик|радио|беспил|steam|наук|инженер|компас|3d|фиджитал/.test(t)) return "Школа наук и инженерии";
-  if (/модел|подиум|beauty|бьюти/.test(t)) return "Модельная школа";
-  if (/английск|язык|super minds|go getter/.test(t)) return "Иностранные языки";
-  if (/подготовк.{0,12}школ|лего-матем|ранн/.test(t)) return "Раннее развитие";
-  if (/мастер/.test(t)) return "Мастер-классы";
-  if (/лагер|смен|летн/.test(t)) return "Летние программы";
+export function schoolOfText(_text: string) {
   return "";
 }
 
@@ -357,13 +348,14 @@ function groupsFromItem(item: Record<string, unknown>, branchId: number): GroupL
     if (seen.has(k)) continue;
     seen.add(k);
     const name = String(rec.name || `группа ${id}`);
+    const subjectId = Number(rec.subject_id || 0) || undefined;
     out.push({
       id,
       name,
       branchId: bid,
-      school: schoolOfText(name),
+      school: subjectId ? schoolLabelOfSubject(subjectId) : "",
       active: true,
-      subjectId: Number(rec.subject_id || 0) || undefined,
+      subjectId,
     });
   }
   return out;
@@ -444,7 +436,7 @@ export function upsertDossier(patch: {
     coursesPast: uniq([...(cur.coursesPast || []), patch.coursePast || ""]),
     services: uniq([...(cur.services || []), patch.service || ""]),
     teachers: uniq([...(cur.teachers || []), patch.teacher || "", ...(patch.teachers || [])]),
-    schools: uniq([...(cur.schools || []), patch.school || "", schoolOfText(patch.course || ""), schoolOfText(patch.coursePast || "")]),
+    schools: uniq([...(cur.schools || []), patch.school || ""]),
     groupLinks: (() => {
       const list = [...(cur.groupLinks || [])];
       const incoming = [...(patch.groupLinks || []), ...(patch.groupLink ? [patch.groupLink] : [])];
@@ -593,8 +585,8 @@ export function applyCrmCustomer(item: Record<string, unknown>, branchId: number
     .map((n) => teacherMap[String(n)] || "")
     .filter(Boolean);
   const teachers = uniq([...fromGroup.teachers, ...teacherFromIds]);
-  const school = schoolOfText(courseName);
   const groupLinks = groupsFromItem(item, branchId);
+  const school = groupLinks.map((g) => g.school).find(Boolean) || (groupLinks[0]?.subjectId ? schoolLabelOfSubject(groupLinks[0].subjectId) : "");
   return upsertDossier({
     crmId: id,
     branchId,
@@ -868,7 +860,7 @@ export async function syncMembershipsSlice(offset = 0, take = 8) {
       id,
       branchId,
       name: s.groupName || s.course || `группа ${id}`,
-      school: s.school || schoolOfText(s.groupName || s.course || ""),
+      school: s.school || (s.subjectId ? schoolLabelOfSubject(s.subjectId) : ""),
       subjectId: Number(s.subjectId) || 0,
       courseId: s.courseId || "",
     });
@@ -1032,8 +1024,6 @@ function viewOf(d: Dossier) {
   const schools = uniq([
     ...(d.schools || []),
     ...(d.groupLinks || []).map((g) => g.school),
-    ...coursesNow.map(schoolOfText),
-    ...coursesPast.map(schoolOfText),
   ].filter(Boolean));
   const age = d.age || ageFromDob(d.child.dob);
   const gender = d.child.gender || genderFromFio(d.child.fio) || "";

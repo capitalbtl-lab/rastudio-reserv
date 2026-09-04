@@ -62,6 +62,12 @@ function resolveSchool(g: { school?: string; schoolId?: string }) {
   return g.school && g.school !== "Прочее" ? g.school : "";
 }
 
+function schoolOfSubject(subjectId?: number, courseId?: string, groups: GroupOffer[] = []) {
+  const hit = groups.find((g) => (subjectId && g.subjectId === subjectId) || (courseId && g.courseId === courseId));
+  if (hit) return resolveSchool(hit) || hit.school || "";
+  return "";
+}
+
 const PERIOD_HINTS = [
   { id: 1, one: "день", few: "дня", many: "дней" },
   { id: 2, one: "неделя", few: "недели", many: "недель" },
@@ -368,12 +374,12 @@ export function CrmClientCard({
     for (const g of groupOffers) {
       if (g.subjectId) {
         const name = catalog.subjects.find((s) => s.id === g.subjectId)?.name || g.course || `предмет ${g.subjectId}`;
-        push(g.school || schoolOfSubject(g.subjectId, g.courseId), g.subjectId, name);
+        push(g.school || schoolOfSubject(g.subjectId, g.courseId, groupOffers), g.subjectId, name);
         seen.add(g.subjectId);
       }
     }
     for (const s of catalog.subjects || []) {
-      push(schoolOfSubject(s.id), s.id, s.name);
+      push(schoolOfSubject(s.id, undefined, groupOffers) || "Без школы на сайте", s.id, s.name);
     }
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], "ru"));
   }, [catalog.subjects, groupOffers]);
@@ -466,7 +472,7 @@ export function CrmClientCard({
     setTariffLessons(t?.lessonTypeIds?.length ? [...t.lessonTypeIds] : [2]);
     setTariffNote("");
     const firstSub = (t?.subjectIds || [])[0];
-    setTariffSchool(firstSub ? schoolOfSubject(firstSub) : "");
+    setTariffSchool(firstSub ? schoolOfSubject(firstSub, undefined, groupOffers) : "");
   }
 
   function openTariff() {

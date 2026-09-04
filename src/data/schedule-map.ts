@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { SCHOOLS, SCHOOL_COURSE_MATCH } from "@/data/site";
-import { listPriceRows, SCHOOL_DIRECTION, tidyCourseName } from "@/data/prices-core";
+import { listPriceRows, SCHOOL_DIRECTION } from "@/data/prices-core";
 import { SEED_SUBJECTS, loadSubjects } from "@/data/crm-subjects";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { slotMismatch } from "@/data/slot-mismatch";
@@ -185,24 +185,16 @@ export function robotCourseOrder(a: string, b: string) {
   return a.localeCompare(b, "ru");
 }
 
-export function canonicalCourse(
-  name: string,
-  school?: string,
-  extra?: { age?: string; path?: string; subject?: string },
-) {
-  const n = tidyCourseName(name);
-  const hay = `${name} ${n} ${extra?.subject || ""} ${extra?.path || ""} ${extra?.age || ""} ${school || ""}`
-    .toLowerCase()
-    .replace(/ё/g, "е");
-  if (school === "Школа робототехники" || /робототех|билингв/.test(hay)) {
-    if (/англий|билингв|roboticsinenglish/.test(hay)) return "Робототехника на английском";
-    const ageHay = `${extra?.age || ""} ${extra?.path || ""} ${name} ${extra?.subject || ""}`;
-    if (/robototehnika-5/.test(ageHay) || /(?:^|[^\d])5\s*[-–]\s*[67](?:[^\d]|$)/.test(ageHay)) return "Робототехника 5–6 лет";
-    if (/robototehnika-7/.test(ageHay) || /(?:^|[^\d])7\s*[-–]\s*9(?:[^\d]|$)/.test(ageHay)) return "Робототехника 7–9 лет";
-    if (/robototehnika-10/.test(ageHay) || /(?:9|10|11)\s*[-–]\s*1[1-4]/.test(ageHay)) return "Робототехника 10–14 лет";
-    return n || "Робототехника";
-  }
-  return n;
+/** Школа сайта по subjectId из карты. Имя не смотрим. */
+export function schoolLabelOfSubject(subjectId: number) {
+  if (!subjectId) return "";
+  const map = loadScheduleMap();
+  const link = map.courses.find((c) => c.subjectId === subjectId);
+  if (link?.school) return link.school;
+  const tree = loadSiteTree();
+  const course = link?.courseId ? tree.courses.find((c) => c.id === link.courseId) : undefined;
+  const school = tree.schools.find((s) => s.id === (link?.schoolId || course?.schoolId));
+  return school?.label || "";
 }
 
 /** Раскладывает группы по courseId / subjectId. Карта предмета важнее старого assign. */
