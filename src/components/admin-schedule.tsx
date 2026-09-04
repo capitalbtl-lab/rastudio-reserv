@@ -3299,15 +3299,15 @@ export function AdminSchedule() {
                 data-group-id={detail.groupId || undefined}
                 data-branch-id={detail.branchId || undefined}
               >
-                <div className="flex shrink-0 items-center justify-between gap-3 px-4 pt-3 md:px-5 md:pt-4">
-                  <div className="min-w-0 flex-1">
+                <div className="flex shrink-0 items-start gap-2 px-4 pt-3 md:px-5 md:pt-4">
+                  <div className="min-w-0 max-w-md">
                     <p className="text-[0.62rem] font-semibold uppercase tracking-wider text-muted">Карточка группы · {groupCardId(detail.branchId, detail.groupId)}</p>
                     <label className="mt-0.5 block">
                       <span className="sr-only">Название группы</span>
                       <input
                         value={detail.slot.groupName}
                         onChange={(e) => patch(detail.id, "groupName", e.target.value)}
-                        className="h-9 w-full rounded-md bg-white px-2.5 font-display text-lg font-semibold text-fg ring-1 ring-black/8"
+                        className="h-8 w-full rounded-md bg-white px-2.5 font-display text-base font-semibold text-fg ring-1 ring-black/8"
                       />
                     </label>
                     <p className="mt-0.5 text-[0.78rem] text-muted">
@@ -3315,9 +3315,27 @@ export function AdminSchedule() {
                       <span className="ml-2">Учится {detail.slot.takenStudy ?? "—"} · лиды {detail.slot.takenLead ?? "—"} · всего {detail.slot.taken}</span>
                     </p>
                   </div>
-                  <button type="button" className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-muted ring-1 ring-black/8" onClick={() => { setPupil(null); setDetail(null); }}>
-                    Закрыть
-                  </button>
+                  <div className="ml-auto flex shrink-0 items-center gap-1.5 pt-[1.15rem]">
+                    <button
+                      type="button"
+                      disabled={detail.saving}
+                      className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-fg ring-1 ring-black/8 disabled:opacity-50"
+                      onClick={() => void saveDetailSite()}
+                    >
+                      {detail.saving ? "Сохраняю…" : "Сохранить на сайте"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={detail.saving}
+                      className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white disabled:opacity-50"
+                      onClick={() => void saveDetail()}
+                    >
+                      {detail.saving ? "Сохраняю…" : detail.groupId ? "Сохранить в AlfaCRM" : "Создать в AlfaCRM"}
+                    </button>
+                    <button type="button" className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-muted ring-1 ring-black/8" onClick={() => { setPupil(null); setDetail(null); }}>
+                      Закрыть
+                    </button>
+                  </div>
                 </div>
                 {subjectOffer && !subjectOffer.ok ? (
                   <div
@@ -3596,18 +3614,10 @@ export function AdminSchedule() {
                         <input value={detail.makeup} onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-1.5 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                       </label>
                     </div>
-                    <div className="flex flex-wrap items-center justify-end gap-2 md:col-span-2">
-                      {detail.error ? <p className="w-full text-sm text-red-600">{detail.error}</p> : null}
-                      {!detail.groupId ? (
-                        <p className="w-full text-sm text-muted">Группа пока только на сайте. «Сохранить в AlfaCRM» создаст её. Если предмет не выбран — заведём по названию курса.</p>
-                      ) : null}
-                      <Button type="button" variant="secondary" disabled={detail.saving} onClick={() => void saveDetailSite()}>
-                        {detail.saving ? "Сохраняю…" : "Сохранить на сайте"}
-                      </Button>
-                      <Button type="button" disabled={detail.saving} onClick={() => void saveDetail()}>
-                        {detail.saving ? "Сохраняю…" : detail.groupId ? "Сохранить в AlfaCRM" : "Создать в AlfaCRM"}
-                      </Button>
-                    </div>
+                    {detail.error ? <p className="w-full text-sm text-red-600 md:col-span-2">{detail.error}</p> : null}
+                    {!detail.groupId ? (
+                      <p className="w-full text-sm text-muted md:col-span-2">Группа пока только на сайте. «Сохранить в AlfaCRM» создаст её. Если предмет не выбран — заведём по названию курса.</p>
+                    ) : null}
                   </div>
                   <section className="mt-3 rounded-xl bg-white/80 p-3 ring-1 ring-black/6">
                     <CrmGroupMembers title="Ученики" items={detail.members.filter((m) => m.status !== "лид")} onOpen={(m) => void openPupil(m, detail.branchId)} />
