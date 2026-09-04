@@ -875,6 +875,9 @@ export function AdminTariffs() {
                           tabs={tabs}
                           typeList={typeList}
                           subjectList={subjectList}
+                          tree={tree}
+                          courseId={tariffMap.find((x) => x.tariffId === opened.id)?.courseId || ""}
+                          onBind={(id) => void bindTariff(opened.id, id)}
                           subQ={subQ}
                           setSubQ={setSubQ}
                           groups={groups}
@@ -947,7 +950,7 @@ function Chip({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-full px-3 py-1.5 text-left text-[0.8rem] leading-tight transition-colors",
+        "rounded-full px-2.5 py-1 text-left text-[0.75rem] leading-tight transition-colors",
         on ? "bg-primary text-white shadow-sm" : "bg-white text-fg ring-1 ring-black/10 hover:bg-sky-50",
       )}
     >
@@ -971,6 +974,9 @@ function Editor({
   tabs,
   typeList,
   subjectList,
+  tree,
+  courseId,
+  onBind,
   subQ,
   setSubQ,
   groups,
@@ -984,6 +990,9 @@ function Editor({
   tabs: CrmBranch[];
   typeList: CrmLessonType[];
   subjectList: { id: number; name: string; href?: string }[];
+  tree: SiteTree;
+  courseId: string;
+  onBind: (courseId: string) => void;
   subQ: string;
   setSubQ: (v: string) => void;
   groups: GroupHit[];
@@ -993,89 +1002,118 @@ function Editor({
   onDelete: () => Promise<{ ok?: boolean; error?: string } | void>;
 }) {
   const [note, setNote] = useState("");
+  const [moreTypes, setMoreTypes] = useState(false);
+  const [subOpen, setSubOpen] = useState(false);
+  const course = tree.courses.find((c) => c.id === courseId);
+  const [schoolPick, setSchoolPick] = useState(course?.schoolId || "");
+  useEffect(() => {
+    setSchoolPick(course?.schoolId || "");
+  }, [courseId, course?.schoolId]);
   const needle = subQ.trim().toLowerCase();
   const selectedSubs = subjectList.filter((s) => t.subjectIds.includes(s.id));
-  const filtered = (needle ? subjectList.filter((s) => s.name.toLowerCase().includes(needle)) : subjectList);
+  const filtered = needle ? subjectList.filter((s) => s.name.toLowerCase().includes(needle)) : subjectList;
   const catalog = [...filtered].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   const per = t.lessonsCount ? Math.round((Number(t.price) / Number(t.lessonsCount)) * 100) / 100 : 0;
-  const box = "h-10 w-full rounded-xl bg-white px-3 text-sm ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-primary/30";
+  const box = "h-9 w-full rounded-xl bg-white px-3 text-sm ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-primary/30";
+  const schoolId = schoolPick || course?.schoolId || "";
+  const schoolCourses = tree.courses.filter((c) => !schoolId || c.schoolId === schoolId);
+  const mainTypes = typeList.filter((lt) => t.lessonTypeIds.includes(lt.id) || [2, 5, 10, 11].includes(lt.id));
+  const extraTypes = typeList.filter((lt) => !mainTypes.some((x) => x.id === lt.id));
+  const shownTypes = moreTypes ? typeList : mainTypes;
 
   return (
-    <div className="rounded-[1.35rem] bg-white p-5 shadow-[0_8px_28px_rgba(15,23,42,0.08)] ring-1 ring-black/[0.06]">
-      <div className="grid items-end gap-3 md:grid-cols-12">
+    <div className="rounded-2xl bg-white p-4 ring-1 ring-black/[0.06]">
+      <div className="grid items-end gap-2 md:grid-cols-12">
         <Field label="Название" className="md:col-span-12">
           <input className={cn(box, "font-medium")} value={t.name} onChange={(e) => onPatch({ name: e.target.value })} />
         </Field>
 
-        <Field label="Уроков в пакете" className="md:col-span-2">
-          <input className={box} inputMode="numeric" value={t.lessonsCount || ""} onChange={(e) => onPatch({ lessonsCount: Number(e.target.value) || 0 })} />
-        </Field>
-        <Field label="Минут урока" className="md:col-span-2">
-          <input className={box} inputMode="numeric" value={t.duration || ""} onChange={(e) => onPatch({ duration: Number(e.target.value) || 0 })} />
-        </Field>
-        <Field label="Стоимость пакета" className="md:col-span-3">
-          <input className={box} inputMode="decimal" value={t.price || ""} onChange={(e) => onPatch({ price: Number(e.target.value) || 0 })} />
-        </Field>
-        <div className="md:col-span-5">
-          <span className="mb-1 block text-[0.72rem] font-medium text-muted">Цена за урок</span>
-          <div className="flex h-10 items-center rounded-xl bg-sky-50 px-3 ring-1 ring-sky-100">
-            <span className="text-base font-semibold text-sky-950">{per ? money(per) : "—"}</span>
-            <span className="ml-2 text-[0.75rem] text-muted">считается из стоимости и числа уроков</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-5 grid gap-4 md:grid-cols-12">
-        <div className="md:col-span-4">
-          <div className="mb-1.5 text-[0.72rem] font-medium text-muted">Тарификация</div>
-          <div className="flex rounded-xl bg-[#f3f6fa] p-1">
-            {([
-              [1, "Поурочная"],
-              [2, "Помесячная"],
-              [3, "Недельная"],
-            ] as const).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => onPatch({ type: id, typeName: label })}
-                className={cn(
-                  "h-9 flex-1 rounded-[0.7rem] text-[0.82rem] font-medium transition-colors",
-                  Number(t.type || 1) === id ? "bg-white text-fg shadow-sm" : "text-muted hover:text-fg",
-                )}
-              >
-                {label}
-              </button>
+        <Field label="Школа сайта" className="md:col-span-4">
+          <select
+            className={box}
+            value={schoolId}
+            onChange={(e) => {
+              const next = e.target.value;
+              setSchoolPick(next);
+              if (!next || (course && course.schoolId !== next)) onBind("");
+            }}
+          >
+            <option value="">— не привязана —</option>
+            {tree.schools.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
             ))}
-          </div>
-        </div>
-        <Field label="Клиентский счёт" className="md:col-span-2">
-          <select className={box} value={t.calculationType || 0} onChange={(e) => onPatch({ calculationType: Number(e.target.value) })}>
-            <option value={0}>Любой</option>
-            <option value={1}>Базовый счет</option>
-            <option value={2}>Отдельный счет</option>
           </select>
         </Field>
-        <Field label="Период действия" className="md:col-span-4">
+        <Field label="Курс сайта" className="md:col-span-8">
+          <select className={box} value={courseId} onChange={(e) => onBind(e.target.value)}>
+            <option value="">— выберите курс —</option>
+            {(schoolId ? schoolCourses : tree.courses).map((c) => {
+              const school = tree.schools.find((s) => s.id === c.schoolId);
+              return (
+                <option key={c.id} value={c.id}>
+                  {schoolId ? c.label : `${(school?.label || "").replace(/^Школа\s+/i, "")} · ${c.label}`}
+                </option>
+              );
+            })}
+          </select>
+          <p className="mt-1 text-[0.68rem] text-muted">Только сайт. В AlfaCRM не уходит.</p>
+        </Field>
+
+        <Field label="Уроков" className="md:col-span-2">
+          <input className={box} inputMode="numeric" value={t.lessonsCount || ""} onChange={(e) => onPatch({ lessonsCount: Number(e.target.value) || 0 })} />
+        </Field>
+        <Field label="Минут" className="md:col-span-2">
+          <input className={box} inputMode="numeric" value={t.duration || ""} onChange={(e) => onPatch({ duration: Number(e.target.value) || 0 })} />
+        </Field>
+        <Field label="Стоимость" className="md:col-span-2">
+          <input className={box} inputMode="decimal" value={t.price || ""} onChange={(e) => onPatch({ price: Number(e.target.value) || 0 })} />
+        </Field>
+        <div className="md:col-span-2">
+          <span className="mb-1 block text-[0.72rem] font-medium text-muted">За урок</span>
+          <div className="flex h-9 items-center rounded-xl bg-sky-50 px-3 text-sm font-semibold text-sky-950 ring-1 ring-sky-100">
+            {per ? money(per) : "—"}
+          </div>
+        </div>
+        <Field label="Период" className="md:col-span-2">
           <PeriodPicker
             count={Number(t.periodCount || 0)}
             type={Number(t.periodType || 1)}
             onChange={(count, type) => onPatch({ periodCount: count, periodType: type, periodLabel: "" })}
           />
-          <p className="mt-1 text-[0.7rem] text-muted">Цифра → дни / недели / месяцы.</p>
         </Field>
-        <Field label="Конец действия" className="md:col-span-2">
-          <RuDateField
-            value={t.eDate || ""}
-            onChange={(iso) => onPatch({ eDate: iso })}
-            className={box}
-          />
-          <p className="mt-1 text-[0.7rem] text-muted">дд.мм.гггг. В CRM это «Конец действия», не путать с кнопкой «Завершить с».</p>
+        <Field label="До" className="md:col-span-2">
+          <RuDateField value={t.eDate || ""} onChange={(iso) => onPatch({ eDate: iso })} className={box} />
         </Field>
       </div>
 
-      <div className="mt-5">
-        <div className="mb-1.5 text-[0.72rem] font-medium text-muted">Филиалы</div>
-        <div className="flex flex-wrap gap-1.5">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="flex rounded-xl bg-[#f3f6fa] p-0.5">
+          {([
+            [1, "Поурочная"],
+            [2, "Помесячная"],
+            [3, "Недельная"],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onPatch({ type: id, typeName: label })}
+              className={cn(
+                "h-8 rounded-lg px-3 text-[0.78rem] font-medium",
+                Number(t.type || 1) === id ? "bg-white text-fg shadow-sm" : "text-muted hover:text-fg",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <select className={cn(box, "w-auto min-w-[9rem]")} value={t.calculationType || 0} onChange={(e) => onPatch({ calculationType: Number(e.target.value) })}>
+          <option value={0}>Счёт: любой</option>
+          <option value={1}>Базовый счет</option>
+          <option value={2}>Отдельный счет</option>
+        </select>
+        <div className="flex flex-wrap gap-1">
           {tabs.map((b) => (
             <Chip key={b.id} on={t.branchIds.includes(b.id)} onClick={() => onPatch({ branchIds: toggleId(t.branchIds, b.id) })}>
               {b.short}
@@ -1084,13 +1122,18 @@ function Editor({
         </div>
       </div>
 
-      <div className="mt-5">
-        <div className="mb-1.5 flex items-baseline gap-2">
+      <div className="mt-3">
+        <div className="mb-1 flex items-baseline gap-2">
           <span className="text-[0.72rem] font-medium text-muted">Типы уроков</span>
-          <span className="text-[0.72rem] text-muted">{t.lessonTypeIds.length} из {typeList.length}</span>
+          <span className="text-[0.72rem] text-muted">{t.lessonTypeIds.length}</span>
+          {extraTypes.length ? (
+            <button type="button" className="text-[0.72rem] text-primary hover:underline" onClick={() => setMoreTypes((v) => !v)}>
+              {moreTypes ? "свернуть" : `ещё ${extraTypes.length}`}
+            </button>
+          ) : null}
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {typeList.map((lt) => (
+        <div className="flex flex-wrap gap-1">
+          {shownTypes.map((lt) => (
             <Chip key={lt.id} on={t.lessonTypeIds.includes(lt.id)} onClick={() => onPatch({ lessonTypeIds: toggleId(t.lessonTypeIds, lt.id) })}>
               {lt.name}
             </Chip>
@@ -1098,100 +1141,106 @@ function Editor({
         </div>
       </div>
 
-      <div className="mt-5">
-        <div className="mb-1.5 flex flex-wrap items-center gap-2">
-          <span className="text-[0.72rem] font-medium text-muted">Предметы</span>
-          <span className="text-[0.72rem] text-muted">{t.subjectIds.length} выбрано</span>
+      <div className="mt-3">
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          <span className="text-[0.72rem] font-medium text-muted">Предметы CRM</span>
+          <span className="text-[0.72rem] text-muted">{t.subjectIds.length}</span>
           {selectedSubs.length ? (
             <button type="button" className="text-[0.72rem] text-primary hover:underline" onClick={() => onPatch({ subjectIds: [] })}>
-              снять все
+              снять
             </button>
           ) : null}
-          {needle && filtered.length ? (
-            <button
-              type="button"
-              className="text-[0.72rem] text-primary hover:underline"
-              onClick={() => onPatch({ subjectIds: [...new Set([...t.subjectIds, ...filtered.map((s) => s.id)])] })}
-            >
-              выбрать найденные
-            </button>
-          ) : null}
+          <button type="button" className="text-[0.72rem] text-primary hover:underline" onClick={() => setSubOpen((v) => !v)}>
+            {subOpen || needle ? "скрыть список" : "добавить"}
+          </button>
         </div>
         {selectedSubs.length ? (
-          <div className="mb-2 flex flex-wrap gap-1.5">
+          <div className="mb-1.5 flex flex-wrap gap-1">
             {selectedSubs.map((s) => (
               <button
                 key={s.id}
                 type="button"
                 title="Убрать предмет"
                 onClick={() => onPatch({ subjectIds: t.subjectIds.filter((id) => id !== s.id) })}
-                className="max-w-full truncate rounded-full bg-sky-50 px-2.5 py-1 text-[0.75rem] text-sky-950 ring-1 ring-sky-100 hover:bg-rose-50 hover:text-rose-800"
+                className="max-w-full truncate rounded-full bg-sky-50 px-2 py-0.5 text-[0.72rem] text-sky-950 ring-1 ring-sky-100 hover:bg-rose-50 hover:text-rose-800"
               >
                 {s.name} ×
               </button>
             ))}
           </div>
         ) : (
-          <p className="mb-2 text-[0.78rem] text-rose-600">Предметы не выбраны — абонемент не привяжется к группам.</p>
+          <p className="mb-1.5 text-[0.75rem] text-rose-600">Нет предметов CRM — без карты курса группа не подхватит абонемент.</p>
         )}
-        <div className="overflow-hidden rounded-2xl ring-1 ring-black/10">
-          <div className="flex items-center gap-2 bg-[#f6f8fb] px-3 py-2">
-            <input
-              value={subQ}
-              onChange={(e) => setSubQ(e.target.value)}
-              placeholder="Найти предмет"
-              className="h-8 flex-1 rounded-lg bg-white px-3 text-sm outline-none ring-1 ring-black/8"
-            />
-            <span className="shrink-0 text-[0.7rem] text-muted">{catalog.length}</span>
-          </div>
-          <div className="max-h-48 overflow-auto bg-white px-2 py-1.5 [scrollbar-width:thin]">
-            <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-2">
-              {catalog.map((s) => {
-                const on = t.subjectIds.includes(s.id);
-                return (
-                  <label
-                    key={s.id}
-                    className={cn(
-                      "flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-[0.8rem] leading-snug",
-                      on ? "bg-sky-50 text-sky-950" : "hover:bg-[#f6f8fb]",
-                    )}
-                  >
-                    <input type="checkbox" className="mt-0.5" checked={on} onChange={() => onPatch({ subjectIds: toggleId(t.subjectIds, s.id) })} />
-                    <span>{s.name}</span>
-                  </label>
-                );
-              })}
+        {subOpen || needle ? (
+          <div className="overflow-hidden rounded-xl ring-1 ring-black/10">
+            <div className="flex items-center gap-2 bg-[#f6f8fb] px-2 py-1.5">
+              <input
+                value={subQ}
+                onChange={(e) => setSubQ(e.target.value)}
+                placeholder="Найти предмет"
+                className="h-8 flex-1 rounded-lg bg-white px-3 text-sm outline-none ring-1 ring-black/8"
+              />
+              {needle && filtered.length ? (
+                <button
+                  type="button"
+                  className="text-[0.72rem] text-primary hover:underline"
+                  onClick={() => onPatch({ subjectIds: [...new Set([...t.subjectIds, ...filtered.map((s) => s.id)])] })}
+                >
+                  взять найденные
+                </button>
+              ) : null}
+              <span className="shrink-0 text-[0.7rem] text-muted">{catalog.length}</span>
+            </div>
+            <div className="max-h-36 overflow-auto bg-white px-2 py-1 [scrollbar-width:thin]">
+              <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-2">
+                {catalog.map((s) => {
+                  const on = t.subjectIds.includes(s.id);
+                  return (
+                    <label
+                      key={s.id}
+                      className={cn(
+                        "flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1 text-[0.78rem] leading-snug",
+                        on ? "bg-sky-50 text-sky-950" : "hover:bg-[#f6f8fb]",
+                      )}
+                    >
+                      <input type="checkbox" className="mt-0.5" checked={on} onChange={() => onPatch({ subjectIds: toggleId(t.subjectIds, s.id) })} />
+                      <span>{s.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
       </div>
 
-      <div className="mt-5 flex flex-wrap items-end justify-between gap-3 border-t border-black/[0.06] pt-4">
+      <div className="mt-3 flex flex-wrap items-end justify-between gap-3 border-t border-black/[0.06] pt-3">
         <div className="min-w-0 flex-1">
-          <div className="mb-1.5 text-[0.72rem] font-medium text-muted">Группы филиала</div>
+          <div className="mb-1 text-[0.72rem] font-medium text-muted">Группы филиала · {groups.length}</div>
           {groups.length ? (
-            <div className="flex flex-wrap gap-1.5">
-              {groups.map((g) => (
-                <span key={g.id} className="rounded-full bg-[#f3f6fa] px-2.5 py-1 text-[0.75rem] text-fg">
+            <div className="flex flex-wrap gap-1">
+              {groups.slice(0, 8).map((g) => (
+                <span key={g.id} className="rounded-full bg-[#f3f6fa] px-2 py-0.5 text-[0.72rem] text-fg">
                   {g.name.replace(/^2026\s+/, "")}
                   {g.age ? ` · ${g.age}` : ""}
                 </span>
               ))}
+              {groups.length > 8 ? <span className="text-[0.72rem] text-muted">+{groups.length - 8}</span> : null}
             </div>
           ) : (
-            <p className="text-[0.78rem] text-muted">Нет групп с этим предметом и длительностью в филиале.</p>
+            <p className="text-[0.75rem] text-muted">Нет групп с этим предметом и длительностью.</p>
           )}
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          {note ? <p className={cn("max-w-xs text-right text-[0.78rem]", /не |ошиб|сбой|сесс/i.test(note) ? "text-rose-700" : "text-primary")}>{note}</p> : null}
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button type="button" variant="ghost" className="h-9 px-4 text-[0.8rem] text-rose-700 hover:bg-rose-50" disabled={busy} onClick={() => void onDelete()}>Удалить</Button>
-            <Button type="button" variant="secondary" className="h-9 px-4 text-[0.8rem]" disabled={busy} onClick={async () => {
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          {note ? <p className={cn("max-w-xs text-right text-[0.75rem]", /не |ошиб|сбой|сесс/i.test(note) ? "text-rose-700" : "text-primary")}>{note}</p> : null}
+          <div className="flex flex-wrap justify-end gap-1.5">
+            <Button type="button" variant="ghost" className="h-8 px-3 text-[0.78rem] text-rose-700 hover:bg-rose-50" disabled={busy} onClick={() => void onDelete()}>Удалить</Button>
+            <Button type="button" variant="secondary" className="h-8 px-3 text-[0.78rem]" disabled={busy} onClick={async () => {
               setNote("Сохраняю на сайте…");
               const res = await onSave();
               setNote(res && res.ok === false ? res.error || "Не сохранилось." : "Сохранено на сайте.");
-            }}>Сохранить на сайте</Button>
-            <Button type="button" className="h-9 px-4 text-[0.8rem]" disabled={busy} onClick={async () => {
+            }}>На сайте</Button>
+            <Button type="button" className="h-8 px-3 text-[0.78rem]" disabled={busy} onClick={async () => {
               setNote("Выгружаю в AlfaCRM…");
               const res = await onPush();
               if (!res) {
@@ -1200,7 +1249,7 @@ function Editor({
               }
               if (res.ok) setNote("Выгружен в AlfaCRM.");
               else setNote(res.error || "Не выгрузилось в AlfaCRM.");
-            }}>{busy ? "Выгружаю…" : "Выгрузить в AlfaCRM"}</Button>
+            }}>{busy ? "Выгружаю…" : "В AlfaCRM"}</Button>
           </div>
         </div>
       </div>
