@@ -3367,7 +3367,7 @@ export function AdminSchedule() {
                       <input value={detail.description} onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
                     </label>
                     <GroupLessonStrip className="md:col-span-2" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} />
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:col-span-2 md:grid-cols-5">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:col-span-2 md:grid-cols-6">
                       <label className="block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                         Возраст
                         <input value={detail.slot.age} onChange={(e) => patch(detail.id, "age", e.target.value)} className="mt-0.5 h-8 w-full rounded-md bg-white px-2 text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
@@ -3385,6 +3385,14 @@ export function AdminSchedule() {
                             </option>
                           ))}
                         </select>
+                      </label>
+                      <label className="col-span-2 block text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
+                        Период
+                        <span className="mt-0.5 flex items-center gap-1">
+                          <input value={detail.bDate} onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))} placeholder="02.09.2026" className="h-8 w-full rounded-md bg-white px-1.5 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                          <span className="shrink-0 text-[0.65rem] font-medium normal-case text-muted">до</span>
+                          <input value={detail.eDate} onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))} placeholder="31.05.2027" className="h-8 w-full rounded-md bg-white px-1.5 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
+                        </span>
                       </label>
                       <label className="col-span-2 block text-[0.62rem] font-semibold uppercase tracking-wider text-muted sm:col-span-1">
                         С / до
@@ -3568,14 +3576,6 @@ export function AdminSchedule() {
                       })()}
                     </label>
                     <div className="flex flex-wrap items-end gap-2 md:col-span-2 md:flex-nowrap">
-                      <label className="block shrink-0 text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
-                        Период
-                        <span className="mt-0.5 flex items-center gap-1">
-                          <input value={detail.bDate} onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))} placeholder="02.09.2026" className="h-8 w-[6.8rem] rounded-md bg-white px-1.5 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
-                          <span className="text-[0.65rem] font-medium normal-case text-muted">до</span>
-                          <input value={detail.eDate} onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))} placeholder="31.05.2027" className="h-8 w-[6.8rem] rounded-md bg-white px-1.5 text-center text-[0.8rem] font-medium normal-case tracking-normal text-fg ring-1 ring-black/8" />
-                        </span>
-                      </label>
                       <label className="block min-w-[9rem] shrink-0 text-[0.62rem] font-semibold uppercase tracking-wider text-muted">
                         Запись
                         <a href={detail.signup || leadHref(detail.slot)} target="_blank" rel="noreferrer" className="mt-0.5 flex h-8 items-center justify-center whitespace-nowrap rounded-md bg-white px-2 text-[0.75rem] font-semibold normal-case tracking-normal text-primary ring-1 ring-black/8">
