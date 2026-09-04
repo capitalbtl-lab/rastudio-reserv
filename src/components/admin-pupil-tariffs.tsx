@@ -47,9 +47,11 @@ type PupilTariffItem = {
 
 function friendlyErr(e: unknown, fallback: string) {
   const raw = e instanceof Error ? e.message : typeof e === "string" ? e : "";
-  if (/groupKeys|invalid input|invalid_type/i.test(raw)) {
-    return fallback;
+  if (/502|504|Bad Gateway|timeout|таймаут|<!DOCTYPE|<html|nginx/i.test(raw)) {
+    return "Сервер оборвал длинный запрос. Нажмите «Далее» ещё раз — продолжим.";
   }
+  if (/groupKeys|invalid input|invalid_type/i.test(raw)) return fallback;
+  if (raw.length > 160 || /<[a-z][\s\S]*>/i.test(raw)) return fallback;
   return raw.trim() || fallback;
 }
 
@@ -235,7 +237,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     const grouped: Record<string, GroupTariff> = {};
     let scanned = 0;
     let archived = 0;
-    setProgress({ done: 0, total: keys.length, label: path === "add" ? "Читаю учеников" : "Читаю учеников и абонементы", unit: "групп", extra: "" });
+    setProgress({ done: 0, total: keys.length, label: "Читаю учеников", unit: "групп", extra: "" });
     setSummary("");
     try {
       for (let i = 0; i < keys.length; i += PLAN_GROUP_CHUNK) {
@@ -243,45 +245,83 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         const from = i + 1;
         const to = Math.min(i + PLAN_GROUP_CHUNK, keys.length);
         setMsg(`Ученики: группы ${from}–${to} из ${keys.length}`);
-        const res = (await retryFetch(
-          () =>
-            adminSchedule({
-              data: {
-                token: token(),
-                action: "pupilTariffPlan",
-                includeLeads,
-                onlyActive: path !== "add",
-                groupKeys: part,
-              } as never,
-            }),
-          1,
-          90000,
-        )) as {
+        let res: {
           ok?: boolean;
           items?: PupilTariffItem[];
           byGroup?: Record<string, GroupTariff>;
           error?: string;
           scanned?: number;
-          archivedOnly?: number;
-        };
-        if (!res.ok) {
-          setMsg(res.error || "Не удалось собрать список учеников.");
-          return false;
+        } | null = null;
+        for (let attempt = 0; attempt < 2 && !res?.ok; attempt += 1) {
+          try {
+            res = (await retryFetch(
+              () =>
+                adminSchedule({
+                  data: {
+                    token: token(),
+                    action: "pupilTariffPlan",
+                    includeLeads,
+                    groupKeys: part,
+                  } as never,
+                }),
+              1,
+              45000,
+            )) as typeof res;
+          } catch (e) {
+            res = { ok: false, error: friendlyErr(e, "Не удалось прочитать пачку групп.") };
+          }
+        }
+        if (!res?.ok) {
+          setMsg(friendlyErr(res?.error, "Пачка не прочиталась, иду дальше."));
+          continue;
         }
         rows.push(...(res.items || []));
         Object.assign(grouped, res.byGroup || {});
         scanned += Number(res.scanned || res.items?.length || 0);
-        archived += Number(res.archivedOnly || 0);
         const mid = pupilListStats(rows);
+        setGroups((prev) =>
+          prev.map((g) => {
+            const n = rows.filter((r) => r.groupId === g.groupId && r.branchId === g.branchId).length;
+            return n ? { ...g, taken: n } : g;
+          }),
+        );
         setProgress({
           done: to,
           total: keys.length,
-          label: path === "add" ? "Читаю учеников" : "Читаю учеников и абонементы",
+          label: "Читаю учеников",
           unit: "групп",
-          extra: path === "add" ? `строк ${rows.length}` : `актуальных ${mid.unique} чел.${mid.dual ? ` · ${mid.dual} в двух группах` : ""}`,
+          extra: `строк ${rows.length}${mid.unique ? ` · ${mid.unique} чел.` : ""}`,
         });
       }
-      const list = path === "add" ? rows : collapsePupilsByCustomer(rows);
+      let list = path === "add" ? rows : collapsePupilsByCustomer(rows);
+      if (path !== "add" && rows.length) {
+        setProgress({ done: 0, total: 1, label: "Читаю абонементы", unit: "", extra: `${list.length} чел.` });
+        setMsg("Читаю абонементы в CRM…");
+        try {
+          const active = (await retryFetch(
+            () =>
+              adminSchedule({
+                data: {
+                  token: token(),
+                  action: "pupilTariffActive",
+                  pupilItems: rows,
+                } as never,
+              }),
+            1,
+            60000,
+          )) as { ok?: boolean; items?: PupilTariffItem[]; archivedOnly?: number };
+          if (active.ok) {
+            list = collapsePupilsByCustomer(active.items || []);
+            archived += Number(active.archivedOnly || 0);
+          }
+        } catch (e) {
+          setMsg(friendlyErr(e, "Учеников прочитал, абонементы не успел. Нажмите «Далее» ещё раз."));
+        }
+      }
+      if (!rows.length) {
+        setMsg("Не удалось прочитать учеников. Нажмите «Далее» ещё раз.");
+        return false;
+      }
       const stats = pupilListStats(rows);
       setItems(list);
       setGroups((prev) =>

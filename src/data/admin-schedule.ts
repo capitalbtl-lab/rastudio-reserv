@@ -473,7 +473,7 @@ async function loadBranchActiveTariffs(
       {},
       t,
       (it: Record<string, unknown>) => items!.push(it),
-      { pageSize: 50, pages: 40 },
+      { pageSize: 100, pages: 16 },
     );
     if (items.length) bag.__raCTar.set(branch, { at: Date.now(), items });
   }
@@ -1245,6 +1245,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "pupilTariffGroups"
           | "pupilTariffCounts"
           | "pupilTariffPlan"
+          | "pupilTariffActive"
           | "pupilTariffAssign"
           | "pupilTariffClear"
           | "voiceAsk"
@@ -2175,56 +2176,40 @@ export const adminSchedule = createServerFn({ method: "POST" })
           if (row) items.push(row);
         }
       }
-      if (data.onlyActive) {
-        const { customerTariffIndexPath, activeCustomerTariffs, keepPupilsWithActiveTariffs, withCatalogNames, formatTariffNames, countArchivedOnlyPupils, splitCustomerTariffs } = await import("./pupil-tariffs");
-        const catalog = tariffs.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price }));
-        const byCustomer = new Map<string, { id: number; tariffId: number; name: string }[]>();
-        const byArchived = new Map<string, { id: number; tariffId: number; name: string }[]>();
-        const branches = [...new Set(items.map((row) => row.branchId))];
-        for (const branch of branches) {
-          const bulk = await loadBranchActiveTariffs(request, t, branch, catalog, { fresh: true });
-          if (bulk.live.size || bulk.archived.size) {
-            for (const [cid, list] of bulk.live) byCustomer.set(`${branch}:${cid}`, list);
-            for (const [cid, list] of bulk.archived) byArchived.set(`${branch}:${cid}`, list);
-            continue;
-          }
-          for (const row of items) {
-            if (row.branchId !== branch) continue;
-            const key = `${row.branchId}:${row.customerId}`;
-            if (byCustomer.has(key) || byArchived.has(key)) continue;
-            const json = await request<{ items?: Record<string, unknown>[] }>(
-              customerTariffIndexPath(row.branchId, row.customerId),
-              { page: 0, pageSize: 50, customer_id: row.customerId },
-              t,
-            ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-            const split = splitCustomerTariffs(json.items, catalog);
-            byCustomer.set(key, split.live.get(row.customerId) || activeCustomerTariffs(json.items, catalog));
-            byArchived.set(key, split.archived.get(row.customerId) || []);
-          }
-        }
-        const kept = keepPupilsWithActiveTariffs(items, byCustomer).map((row) => {
-          const activeTariffs = withCatalogNames(row.activeTariffs, catalog);
-          const offer = activeTariffs[0] && catalog.length ? tariffs.find((x) => x.id === activeTariffs[0].tariffId) : null;
-          return {
-            ...row,
-            activeTariffs,
-            tariffName: formatTariffNames(activeTariffs) || row.tariffName,
-            price: offer?.price || row.price,
-          };
-        });
-        const archivedOnly = countArchivedOnlyPupils(items, byCustomer, byArchived);
-        return {
-          ok: true as const,
-          items: kept,
-          byGroup,
-          total: kept.length,
-          onlyActive: true,
-          scanned: items.length,
-          archivedOnly,
-          groups: groups.length,
-        };
-      }
       return { ok: true as const, items, byGroup, total: items.length, scanned: items.length, groups: groups.length, archivedOnly: 0 };
+    }
+    if (data.action === "pupilTariffActive") {
+      const { keepPupilsWithActiveTariffs, withCatalogNames, formatTariffNames, countArchivedOnlyPupils } = await import("./pupil-tariffs");
+      const { token, request } = await import("./alfacrm");
+      const t = await token();
+      const items = Array.isArray(data.pupilItems) ? data.pupilItems : [];
+      const tariffs = loadTariffs().items;
+      const catalog = tariffs.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price }));
+      const byCustomer = new Map<string, { id: number; tariffId: number; name: string }[]>();
+      const byArchived = new Map<string, { id: number; tariffId: number; name: string }[]>();
+      const branches = [...new Set(items.map((row) => Number(row.branchId) || 0).filter(Boolean))];
+      for (const branch of branches) {
+        const bulk = await loadBranchActiveTariffs(request, t, branch, catalog);
+        for (const [cid, list] of bulk.live) byCustomer.set(`${branch}:${cid}`, list);
+        for (const [cid, list] of bulk.archived) byArchived.set(`${branch}:${cid}`, list);
+      }
+      const kept = keepPupilsWithActiveTariffs(items, byCustomer).map((row) => {
+        const activeTariffs = withCatalogNames(row.activeTariffs, catalog);
+        const offer = activeTariffs[0] && catalog.length ? tariffs.find((x) => x.id === activeTariffs[0].tariffId) : null;
+        return {
+          ...row,
+          activeTariffs,
+          tariffName: formatTariffNames(activeTariffs) || row.tariffName,
+          price: offer?.price || row.price,
+        };
+      });
+      return {
+        ok: true as const,
+        items: kept,
+        total: kept.length,
+        scanned: items.length,
+        archivedOnly: countArchivedOnlyPupils(items, byCustomer, byArchived),
+      };
     }
     if (data.action === "pupilTariffAssign") {
       const { token, request, formatRuDob } = await import("./alfacrm");
