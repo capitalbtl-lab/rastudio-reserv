@@ -144,6 +144,7 @@ export function AdminCoursePrices() {
     setRows((prev) =>
       prev.map((r) => {
         if ((r.courseId || r.path) !== path) return r;
+        if (key === "name" || key === "age" || key === "direction") return { ...r, [key]: value };
         if (key === "all" || key === "kbm" || key === "tmx" || key === "mins" || key === "perWeek") return { ...r, [key]: num };
         return { ...r, extra: { ...(r.extra || {}), [key]: num } };
       }),
@@ -647,8 +648,31 @@ export function AdminCoursePrices() {
                   {list.map((row) => (
                     <tr key={row.courseId || row.path || row.id} className="border-t border-black/6">
                       <td className="px-4 py-3 align-middle">
-                        <p className="font-medium leading-snug">{row.name}</p>
-                        <p className="mt-0.5 text-xs text-muted">{row.age}</p>
+                        <input
+                          value={row.name}
+                          onChange={(e) => patch(row.courseId || row.path, "name", e.target.value)}
+                          className="h-8 w-full rounded-[8px] bg-surface-2 px-2 text-sm font-medium ring-1 ring-black/10"
+                        />
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          <input
+                            value={row.age || ""}
+                            placeholder="возраст"
+                            onChange={(e) => patch(row.courseId || row.path, "age", e.target.value)}
+                            className="h-7 min-w-[6rem] flex-1 rounded-[8px] bg-surface-2 px-2 text-xs text-muted ring-1 ring-black/10"
+                          />
+                          <select
+                            value={row.direction}
+                            onChange={(e) => patch(row.courseId || row.path, "direction", e.target.value)}
+                            className="h-7 max-w-[12rem] rounded-[8px] bg-surface-2 px-1 text-xs text-muted ring-1 ring-black/10"
+                            title="Школа на сайте"
+                          >
+                            {[...new Set([row.direction, ...schools.map((s) => s.label), ...PRICE_DIRECTIONS])].filter(Boolean).map((d) => (
+                              <option key={d} value={d}>
+                                {d}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </td>
                       {(["mins", "perWeek", "all", "kbm", "tmx"] as const).map((k) => (
                         <td key={k} className="px-2 py-3 align-middle">

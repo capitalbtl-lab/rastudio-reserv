@@ -116,7 +116,11 @@ export const adminSaveAll = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string; rows: PriceRow[] })
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
-    return { ok: true as const, rows: savePriceRows(data.rows || []) };
+    const rows = savePriceRows(data.rows || []);
+    const { syncTreeFromPriceRows } = await import("./site-tree");
+    syncTreeFromPriceRows(rows);
+    logAdmin(`Цены: сохранено ${rows.length} курсов, дерево групп обновлено`);
+    return { ok: true as const, rows };
   });
 
 export const adminMeta = createServerFn({ method: "POST" })

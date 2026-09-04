@@ -131,6 +131,32 @@ export function addTreeCourse(schoolId: string, label: string, href?: string, ag
   return saveSiteTree(tree);
 }
 
+/** Правка курса на странице цен → то же дерево, что у групп и абонементов. ID курса не меняем. */
+export function syncTreeFromPriceRows(rows: { courseId?: string; path?: string; id?: string; name: string; age?: string; direction?: string }[]) {
+  const tree = loadSiteTree();
+  let changed = false;
+  for (const r of rows) {
+    const id = String(r.courseId || r.path || r.id || "");
+    if (!id) continue;
+    const i = tree.courses.findIndex((c) => c.id === id || c.href === id);
+    if (i < 0) continue;
+    const age = prettyAge(r.age || "");
+    const name = tidyCourseName(r.name) || String(r.name || "").trim();
+    const label = age && name && !name.toLowerCase().includes(age.toLowerCase().slice(0, 5)) ? `${name} · ${age}` : name || tree.courses[i].label;
+    const school = tree.schools.find((s) => s.label === r.direction || s.id === r.direction);
+    const next = {
+      ...tree.courses[i],
+      label,
+      age: age || tree.courses[i].age,
+      schoolId: school?.id || tree.courses[i].schoolId,
+    };
+    if (next.label === tree.courses[i].label && next.age === tree.courses[i].age && next.schoolId === tree.courses[i].schoolId) continue;
+    tree.courses[i] = next;
+    changed = true;
+  }
+  return changed ? saveSiteTree(tree) : tree;
+}
+
 export function deleteTreeCourse(courseId: string) {
   const tree = loadSiteTree();
   tree.courses = tree.courses.filter((c) => c.id !== courseId);
