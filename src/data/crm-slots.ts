@@ -808,6 +808,13 @@ async function regularsOfGroup(branch: number, gid: number, t: string, request: 
   return items;
 }
 
+function groupNoteOf(s: CrmSlot) {
+  const a = String(s.description || s.groupNote || "").trim();
+  const b = String(s.remarks || "").trim();
+  if (a && b && a !== b) return `${a}\n${b}`;
+  return a || b;
+}
+
 export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
   const { token, request, formatRuDob } = await import("@/data/alfacrm");
   const t = await token();
@@ -881,8 +888,8 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
       const teacherIds = teachers.map(Number).filter((n) => n > 0);
       const groupBody = {
         name: s.groupName || s.course,
-        note: s.groupNote || "",
-        limit: s.limit || 8,
+        note: groupNoteOf(s),
+        limit: Number(s.limit) || 0,
         branch_ids: [branch],
         subject_id: subjectId,
         subject_ids: [subjectId],
@@ -890,6 +897,9 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
         b_date: formatRuDob(startIso),
         e_date: formatRuDob(endIso),
         custom_prioritet: s.priority ?? 1,
+        custom_hashtagkursa: String(s.hashtags || ""),
+        custom_workingout: String(s.makeup || ""),
+        ...(s.levelId ? { level_id: s.levelId } : { level_id: null }),
         ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
       };
       if (!groupId) {

@@ -1005,6 +1005,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
         eDate?: string;
         levelId?: number;
         priority?: number;
+        limit?: number;
+        groupName?: string;
+        teacher?: string;
+        teacherIds?: number[];
         tariff?: import("./crm-tariffs").CrmTariff;
         tariffs?: import("./crm-tariffs").CrmTariff[];
         pullN?: number;
@@ -2058,82 +2062,115 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const levelId = Number(data.levelId || 0);
       const tariffId = Number(data.tariffId) || 0;
       const priority = readPriority(data.priority);
-      if (!gid) {
-        if (!slotId) return { ok: false as const, error: "Группа ещё без номера. Закройте карточку, отметьте строку и нажмите «Выгрузить в AlfaCRM» — или сохраните ещё раз, мы создадим её сами." };
-        const current = listAdminSlots();
-        const found = current.find((s) => s.id === slotId);
-        if (!found) return { ok: false as const, error: "Группа не найдена в расписании на сайте." };
-        const picked = subjectId || 0;
-        if (!picked) {
-          return { ok: false as const, error: "Выберите предмет филиала или нажмите «Создать предмет»." };
-        }
-        const patched = current.map((s) =>
-          s.id === slotId
-            ? {
-                ...s,
-                subjectId: picked || s.subjectId,
-                statusId: statusId || s.statusId || 1,
-                bDate: bDate || s.bDate,
-                eDate: eDate || s.eDate,
-                groupNote: description || s.groupNote,
-                description,
-                remarks,
-                hashtags,
-                makeup,
-                levelId: levelId || s.levelId,
-                priority,
-              }
-            : s,
-        );
-        const { results, slots: createdSlots } = await pushSlotsToCrm(patched, [slotId]);
-        const r = results[0];
-        saveAdminSlots(createdSlots);
-        if (!r?.ok || !r.groupId) {
-          return { ok: false as const, error: r?.error || "AlfaCRM не создала группу. Проверьте предмет, филиал и время занятий." };
-        }
-        gid = r.groupId;
-        branch = createdSlots.find((s) => s.id === slotId)?.branchId || branch;
-      }
-      await request(`/v2api/${branch}/group/update`, {
-        id: gid,
-        note: description,
-        status_id: statusId || undefined,
-        custom_hashtagkursa: hashtags,
-        custom_workingout: makeup,
-        b_date: bDate,
-        e_date: eDate,
-        custom_prioritet: priority,
-        ...(levelId ? { level_id: levelId } : { level_id: null }),
-      }, t);
       const current = listAdminSlots();
-      const subject = loadSubjects().find((x) => x.id === subjectId);
-      const next = current.map((s) => {
-        if (s.groupId !== gid || s.branchId !== branch) {
-          if (slotId && s.id === slotId) {
-            return {
+      const found =
+        (slotId ? current.find((s) => s.id === slotId) : undefined) ||
+        (gid ? current.find((s) => s.groupId === gid && s.branchId === branch) : undefined) ||
+        (gid ? current.find((s) => s.groupId === gid) : undefined);
+      if (!found) return { ok: false as const, error: "Группа не найдена в расписании на сайте." };
+      branch = Number(found.branchId) || branch;
+      const subject = loadSubjects().find((x) => x.id === (subjectId || found.subjectId));
+      const teacherIds = Array.isArray(data.teacherIds)
+        ? data.teacherIds.map(Number).filter((n) => n > 0)
+        : found.teacherIds || [];
+      const teacherName = data.teacher != null ? String(data.teacher) : found.teacher;
+      const teacherId = data.teacherId != null ? Number(data.teacherId) : found.teacherId;
+      const groupName = String(data.groupName || found.groupName || "");
+      const limit = data.limit != null ? Number(data.limit) || 0 : found.limit;
+      const age = data.age != null ? String(data.age) : found.age;
+      const patched = current.map((s) =>
+        s.id === found.id
+          ? {
               ...s,
-              groupId: gid,
-              groupNote: description,
+              groupName: groupName || s.groupName,
+              limit,
+              age,
+              teacher: teacherName,
+              teacherId,
+              teacherIds,
+              subjectId: subjectId || s.subjectId,
+              subject: subject?.name || s.subject,
+              statusId: statusId || s.statusId || 1,
+              bDate: bDate || s.bDate,
+              eDate: eDate || s.eDate,
+              groupNote: description || s.groupNote,
               description,
               remarks,
               hashtags,
               makeup,
-              statusId: statusId || s.statusId,
-              bDate: bDate || s.bDate,
-              eDate: eDate || s.eDate,
               levelId: levelId || s.levelId,
               tariffId,
-              subjectId: subjectId || s.subjectId,
-              subject: subject?.name || s.subject,
-              signup: s.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
               priority,
-            };
-          }
-          return s;
+            }
+          : s,
+      );
+      const { results, slots: createdSlots } = await pushSlotsToCrm(patched, [found.id]);
+      const r = results[0];
+      gid = Number(r?.groupId || createdSlots.find((s) => s.id === found.id)?.groupId || gid || 0);
+      branch = createdSlots.find((s) => s.id === found.id)?.branchId || branch;
+      let next = createdSlots;
+      const slotNow = next.find((s) => s.id === found.id) || patched.find((s) => s.id === found.id) || found;
+      const note = [description, remarks].map((x) => x.trim()).filter((x, i, a) => x && a.indexOf(x) === i).join("\n");
+      if (gid) {
+        await request(
+          `/v2api/${branch}/group/update`,
+          {
+            id: gid,
+            name: slotNow.groupName || groupName,
+            note,
+            limit: slotNow.limit || 0,
+            branch_ids: [branch],
+            status_id: statusId || slotNow.statusId || undefined,
+            b_date: bDate,
+            e_date: eDate,
+            custom_hashtagkursa: hashtags,
+            custom_workingout: makeup,
+            custom_prioritet: priority,
+            ...(levelId ? { level_id: levelId } : { level_id: null }),
+            ...(subjectId || slotNow.subjectId
+              ? { subject_id: subjectId || slotNow.subjectId, subject_ids: [subjectId || slotNow.subjectId] }
+              : {}),
+            ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+          },
+          t,
+        ).catch(() => null);
+        for (const b of slotNow.beats?.length ? slotNow.beats : [{ day: slotNow.day, timeFrom: slotNow.timeFrom, timeTo: slotNow.timeTo, lessonId: slotNow.lessonId }]) {
+          if (!b.lessonId) continue;
+          await request(
+            `/v2api/${branch}/regular-lesson/update?id=${b.lessonId}`,
+            {
+              id: b.lessonId,
+              related_class: "Group",
+              related_id: gid,
+              ...(subjectId || slotNow.subjectId ? { subject_id: subjectId || slotNow.subjectId } : {}),
+              day: b.day,
+              days: [b.day],
+              time_from_v: b.timeFrom,
+              time_to_v: b.timeTo,
+              b_date: isoish(bDate),
+              e_date: isoish(eDate),
+              ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+            },
+            t,
+          ).catch(() => null);
         }
+      }
+      if (!r?.ok && !gid) {
+        return { ok: false as const, error: r?.error || "AlfaCRM не приняла группу. Проверьте предмет, филиал и время занятий." };
+      }
+      if (!r?.ok && gid && r?.error && /предмета|филиал не доступен/i.test(r.error)) {
+        /* группа записана, урок без предмета/педагога — не роняем карточку */
+      } else if (!r?.ok && r?.error) {
+        saveAdminSlots(next);
+        return { ok: false as const, error: r.error };
+      }
+      next = next.map((s) => {
+        if (s.id !== found.id && !(gid && s.groupId === gid && s.branchId === branch)) return s;
         return {
           ...s,
-          groupNote: description,
+          groupId: gid || s.groupId,
+          groupName: groupName || s.groupName,
+          groupNote: description || s.groupNote,
           description,
           remarks,
           hashtags,
@@ -2142,54 +2179,44 @@ export const adminSchedule = createServerFn({ method: "POST" })
           bDate: bDate || s.bDate,
           eDate: eDate || s.eDate,
           levelId: levelId || s.levelId,
-          tariffId: tariffId || s.tariffId,
+          tariffId,
           subjectId: subjectId || s.subjectId,
           subject: subject?.name || s.subject,
+          signup: s.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
           priority,
+          limit,
+          age,
+          teacher: teacherName,
+          teacherId,
+          teacherIds,
         };
       });
-      if (subjectId) {
-        const slot = next.find((s) => s.groupId === gid && s.branchId === branch) || next.find((s) => s.id === slotId);
-        for (const b of (slot?.beats?.length ? slot.beats : slot ? [{ day: slot.day, timeFrom: slot.timeFrom, timeTo: slot.timeTo, lessonId: slot.lessonId }] : [])) {
-          if (!b.lessonId) continue;
-          await request(
-            `/v2api/${branch}/regular-lesson/update?id=${b.lessonId}`,
-            {
-              id: b.lessonId,
-              related_class: "Group",
-              related_id: gid,
-              subject_id: subjectId,
-              day: b.day,
-              days: [b.day],
-              time_from_v: b.timeFrom,
-              time_to_v: b.timeTo,
-              b_date: isoish(bDate),
-              e_date: isoish(eDate),
-            },
-            t,
-          ).catch(() => null);
-        }
-      }
       const saved = saveAdminSlots(next).slots;
-      const prev = loadGroupCard(branch, gid);
-      if (prev) {
+      const prev = gid ? loadGroupCard(branch, gid) : null;
+      if (gid) {
         saveGroupCard({
-          ...prev,
-          note: description,
+          id: gid,
+          branchId: branch,
+          name: groupName || prev?.name || "",
+          note,
           description,
           remarks,
           hashtags,
           makeup,
-          statusId: statusId || prev.statusId,
-          bDate: bDate || prev.bDate,
-          eDate: eDate || prev.eDate,
-          levelId: levelId || prev.levelId,
-          subjectId: subjectId || prev.subjectId,
-          subject: subject?.name || prev.subject,
+          statusId: statusId || prev?.statusId || 0,
+          bDate: bDate || prev?.bDate || "",
+          eDate: eDate || prev?.eDate || "",
+          levelId: levelId || prev?.levelId || 0,
+          signup: prev?.signup || `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`,
+          subjectId: subjectId || prev?.subjectId || 0,
+          subject: subject?.name || prev?.subject || "",
+          priority,
+          calendar: prev?.calendar || [],
+          at: new Date().toISOString(),
         });
       }
       logAdmin(`Группа ${gid}: подробности сохранены в AlfaCRM`);
-      return pack(saved, { groupId: gid });
+      return pack(saved, { groupId: gid, error: r?.ok ? undefined : r?.error });
     }
     if (data.action === "rollback" && data.at) {
       const prev = versionSlots(data.at);

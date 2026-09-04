@@ -1458,6 +1458,7 @@ export function AdminSchedule() {
         ids: [detail.id],
         groupId: detail.groupId,
         branchId: detail.branchId,
+        groupName: detail.slot.groupName,
         note: detail.description,
         description: detail.description,
         remarks: detail.remarks,
@@ -1470,6 +1471,11 @@ export function AdminSchedule() {
         levelId: detail.levelId,
         tariffId: detail.tariffId,
         priority: detail.priority,
+        limit: detail.slot.limit,
+        age: detail.slot.age,
+        teacher: detail.slot.teacher,
+        teacherId: detail.slot.teacherId,
+        teacherIds: detail.slot.teacherIds,
       } as never,
     });
     take(res as never);
