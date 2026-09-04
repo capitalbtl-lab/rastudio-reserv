@@ -20,7 +20,7 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-04-groups";
+export const GUIDE_REV = "2026-09-04-roles";
 
 const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Сайт", idField: "rastudio.org", link: "то, что видят родители. Админка = /admin + AlfaCRM" },
@@ -44,6 +44,12 @@ const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Тип занятия", idField: "lessonTypeId / lessonType", link: "см. таблицу LESSON в протоколе" },
   { entity: "Платёж", idField: "payKind", link: "income · product · refund · correct" },
   { entity: "Цена", idField: "price.courseId", link: "= courseId курса. Колонка «Все» — сайт, расписание, абонементы" },
+  { entity: "Статус группы", idField: "statusId", link: "1 набор · 6 старт · 2 обучается набор идёт · 4 обучается набор закрыт (живая) · 5 пауза · 10 не учится · 3 архив. Не путать 4 с архивом" },
+  { entity: "Приоритет", idField: "custom_prioritet / priority", link: "1 первая запись · 2–3 очередь · 0 не на витрине. Пусто = 1. Колонка в таблице групп, сразу в CRM" },
+  { entity: "Состав", idField: "taken = roster", link: "все customer с group_id: учится+лиды. Не явка урока" },
+  { entity: "Витрина сайта", idField: "statusPublish + priority≥1", link: "Админка → Сайт, матрица schedule/trial/group по statusId" },
+  { entity: "Консультант", idField: "Олег/Ольга channel=site", link: "родители. Настройки ROLE_FLAGS. Не кабинет" },
+  { entity: "Голос админки", idField: "schedule-voice", link: "сотрудник. Не Олег/Ольга, если adminVoiceCanConsult=выкл" },
 ];
 
 const SCHEDULE_CASCADE = [
@@ -73,7 +79,7 @@ const SCHEDULE_TABS: GuideTab[] = [
   {
     id: "subjects",
     title: "Предметы",
-    body: "pane=subjects. Справочник AlfaCRM: subjectId + имя (подпись). Колонка «Курс сайта» — RaSelect courseId из дерева, первая строка «нет курса» (пустой courseId, без отката на SUBJECT_TO_COURSE). Файл schedule-map.json, живой оверрайд SUBJECT_TO_COURSE. В AlfaCRM курс не уходит. Вкладки таблицы: «С абонементами» (tariffTotal>0) / «Без абонементов». Справа ЦМИТ / Гражданская / Луховицы / Лето / Всего = живые группы (statusId∉{3,4}, ключ branchId:groupId) и сумма taken учеников, не число абонементов. Подпись колонок «гр / уч». Загрузить из AlfaCRM = pull предметов + pack: курс из карты, счётчики из слотов. Сохранить на сайте = id и имя. Выгрузить в AlfaCRM = только id и имя. Привязка: subjectsBind { subjectId, courseId }. Пустой courseId = снять соответствие. Создание из карточки группы сразу пишет карту subjectId→courseId группы. Голос: «открой предметы» = openTab pane=subjects. Родителю: предмет = направление, курс сайта = страница, группы = слоты с этим subjectId в филиале. Не склеивать по названию.",
+    body: "pane=subjects. Справочник AlfaCRM: subjectId + имя (подпись). Колонка «Курс сайта» — RaSelect courseId из дерева, первая строка «нет курса» (пустой courseId, без отката на SUBJECT_TO_COURSE). Файл schedule-map.json, живой оверрайд SUBJECT_TO_COURSE. В AlfaCRM курс не уходит. Вкладки таблицы: «С абонементами» (tariffTotal>0) / «Без абонементов». Справа ЦМИТ / Гражданская / Луховицы / Лето / Всего = неархивные группы (statusId≠3 и не смены 7–9, ключ branchId:groupId) и сумма roster (taken=учится+лиды), не явка и не число абонементов. Подпись колонок «гр / уч». Status 4 входит в счёт. Загрузить из AlfaCRM = pull предметов + pack: курс из карты, счётчики из слотов. Сохранить на сайте = id и имя. Выгрузить в AlfaCRM = только id и имя. Привязка: subjectsBind { subjectId, courseId }. Пустой courseId = снять соответствие. Создание из карточки группы сразу пишет карту subjectId→courseId группы. Голос: «открой предметы» = openTab pane=subjects. Родителю: предмет = направление, курс сайта = страница, группы = слоты с этим subjectId в филиале. Не склеивать по названию.",
   },
   {
     id: "prices",
@@ -88,7 +94,7 @@ const SCHEDULE_TABS: GuideTab[] = [
   {
     id: "site",
     title: "Сайт · запись",
-    body: "Сайт rastudio.org — родители. Админка — /admin и AlfaCRM. Витрина расписания: статусы из Админка → Сайт (матрица schedule/trial/group по status_id) и custom_prioritet ≥ 1. Приоритет 0 на сайт не выкладывается, ИИ всё равно называет группу. Страница курса: только этот курс и возраст. Страница школы: курсы школы по тем же правилам. Состав на сайте = roster (учится+лиды), не явка. Кнопки trialOn/groupOn глобально, плюс флаги статуса. Пробное → sendTrial kind=trial. В группу → kind=group. iframe CRM родителю не показывать.",
+    body: "Сайт rastudio.org — родители. Админка — /admin и AlfaCRM. Витрина: Админка → Сайт, матрица statusPublish (schedule / trial / group) по каждому statusId + custom_prioritet ≥ 1 + courseId привязан. Приоритет 0 на витрине нет, консультант всё равно называет (настройка consultantCanSeeAllGroups). Страница курса: только этот courseId и возраст, без чужих чипов возраста. Страница школы: курсы школы по тем же правилам. Состав = roster. Кнопки trialOn/groupOn глобально, плюс флаги статуса. Пробное → submit_trial kind=trial. В группу → book_lesson kind=group. iframe CRM родителю не показывать. Консультант не правит матрицу и приоритет — это сотрудник в админке.",
   },
   {
     id: "map",
@@ -119,10 +125,12 @@ const SCHEDULE_OPS: GuideOp[] = [
   { id: "assign-lesson", title: "Назначить занятие", body: "popup data-op=lesson-dialog. Поля: lessonType, date, time, duration, roomId, groupId, subjectId*, teacherId, topic, note. customerLesson. Нет subjectId — ошибка." },
   { id: "add-tariff", title: "Добавить абонемент ученика", body: "popup data-op=tariff-dialog. Поля: groupId ученика* (может быть в нескольких группах), tariffId*, b_date, periodCount+periodType (1 день / 2 неделя / 3 месяц, e_date = start+N единиц −1 день), calcType 0|1 (is_separate_balance), subjectIds[], lessonTypeIds[], note. customerTariff. Не угадывать tariffId по имени." },
   { id: "add-group", title: "Добавить в группу", body: "popup data-op=group-dialog. Поля: branchId*, фильтр школы, groupId* как {branchId}:{groupId}, bDate, eDate. customerGroup. Список групп = филиал+возраст слева. Не писать по названию группы." },
-  { id: "list-live-groups", title: "Живые группы для записи", body: "list_groups { age, branch?, course? }. Все неархивные группы (status ≠ 3), включая набор закрыт (4) и priority 0. Сортировка: приоритет 1 → 2 → 3 → 0. Назови ВСЕ подходящие. В первую очередь предлагай priority=1. priority=0 — набор с сайта закрыт, не open_group. Состав = учится+лиды, не явка. gid вслух не читай." },
-  { id: "book-trial", title: "Записать на пробное", body: "submit_trial. Обязательно: parent, child, phone, branch_id (= branchId группы). Передай gid, date=ближайшее занятие этой группы ДД.ММ.ГГГГ, time=timeFrom, course_id=subjectId, group_name, dob если есть. kind=trial. Почта не обязательна. Филиал чужой группы не подставляй. Если мест нет — скажи и предложи другой слот." },
-  { id: "book-group", title: "Записать в группу", body: "book_lesson lesson_type=group. Те же поля, gid обязателен. Не вызывай open_group и не отдавай родителю URL AlfaCRM. Это заявка в группу, не пробный урок. Если просят абонемент / «сразу ходить» — group, не trial." },
-  { id: "site-signup-settings", title: "Настройки записи на сайте", body: "Админка → Сайт. trialOn / groupOn. trialByBranch[1..4] — URL формы CRM id=20 по филиалу. Сайт всегда рисует своё окно и шлёт лид через API, не iframe." },
+  { id: "list-live-groups", title: "Живые группы для записи", body: "list_groups { age, branch?, course? }. Все неархивные (status ≠ 3, не смены 7–9), включая 4 и priority 0. Сортировка 1→2→3→0. Назови ВСЕ. Первой — priority 1. priority 0 — «набор с сайта закрыт», не open_group. Состав taken = учится+лиды. gid вслух не читай. Если consultantCanSeeAllGroups=выкл — только priority≥1." },
+  { id: "set-group-flags", title: "Статус и приоритет в таблице", body: "Только голос админки, если adminVoiceCanWrite. Колонки Статус и Приоритет в расписании. action=groupFlags { groupId, branchId, statusId?, priority? }. Сразу AlfaCRM. Не консультант сайта." },
+  { id: "book-trial", title: "Записать на пробное", body: "Только консультант сайта, если consultantCanBook. submit_trial. Обязательно: parent, child, phone, branch_id (= branchId группы). gid, date=ближайшее занятие ДД.ММ.ГГГГ, time=timeFrom, course_id=subjectId, group_name, dob если есть. kind=trial. Почта не обязательна. Филиал чужой группы не подставляй. Если мест нет — скажи и предложи другой слот. Выкл настройки — телефон, не заявка." },
+  { id: "book-group", title: "Записать в группу", body: "Только консультант сайта, если consultantCanBook. book_lesson lesson_type=group. Те же поля, gid обязателен. Не open_group и не URL AlfaCRM. Если просят абонемент / «сразу ходить» — group, не trial. Приоритет 0 — не записывать с сайта, предложи priority 1 или «через администратора»." },
+  { id: "site-signup-settings", title: "Настройки записи на сайте", body: "Админка → Сайт. trialOn / groupOn. trialByBranch[1..4]. Матрица statusPublish: по каждому statusId галочки расписание / пробное / в группу. Приоритет 0 всегда прячет витрину. Сайт рисует своё окно, не iframe. Меняет сотрудник, не консультант." },
+  { id: "ai-roles", title: "Роли ИИ", body: "Ассистент ИИ → Окно: ROLE_FLAGS. Консультант (сайт) ≠ голос админки. consultantCanBook, consultantCanSeeAllGroups, consultantCanManage, adminVoiceCanWrite, adminVoiceCanConsult. Не смешивать миры без галочки." },
   { id: "edit-price", title: "Править цену курса", body: "Вкладка Цены курсов, колонка «Все» по courseId. Сохранить. Формула формирования цены — продвинутый режим КБМ/ТМХ. Не угадывать сумму по названию курса." },
   { id: "pull-push", title: "AlfaCRM расписание", body: "Загрузить — снимок групп на сайт. Выгрузить — только отмеченные чекбоксом. Сначала группа, потом регулярный урок с subjectId." },
 ];
@@ -159,6 +167,14 @@ const SCHEDULE_NEVER = [
   "Не записывать молча в группу без мест. Сказать «мест нет» и предложить другой слот или свободный день.",
   "Не ждать почту, чтобы отправить заявку. Хватает parent + child + phone + branch_id.",
   "Не говорить «мы перезвоним», если заявка уже в CRM. Сказать: приняли, занятие на дату и время, педагог.",
+  "Не считать status 4 архивом. 4 = обучается, набор закрыт. Архив только status 3.",
+  "Не фильтровать группы по имени, году в скобках, «2024», «модельн». Только ID и statusId.",
+  "Не выдавать явку на уроке за состав. taken = все привязанные (учится + лиды).",
+  "Не прятать группу с priority 0 от консультанта, если consultantCanSeeAllGroups включён. На витрине её нет — в речи есть.",
+  "Не записывать с сайта в группу priority 0. Предложить priority 1 или администратора.",
+  "Не менять статус, приоритет, цены, соответствия, выгрузку CRM из чата родителя. Это кабинет, если adminVoiceCanWrite.",
+  "Не консультировать родителей голосом админки, пока adminVoiceCanConsult выключен.",
+  "Не быть Олегом/Ольгой в кабинете и не быть кабинетом на сайте.",
 ];
 
 function scheduleBody() {
@@ -171,6 +187,11 @@ function scheduleBody() {
 
 Правило: сущность ищется, открывается, пишется и связывается ТОЛЬКО по ID. Имя — подпись на экране, не ключ.
 Конфликт ID: customerId и groupId — разные сущности CRM, даже если числа совпали. Всегда пространство имён: card:customer:{customerId} vs card:group:{branchId}:{groupId}. Группу всегда адресовать парой groupId+branchId (gid:{branchId}:{groupId}). Клиента — только customerId.
+
+ДВА МИРА (не смешивать без галочки в настройках)
+Сайт rastudio.org = консультант Олег/Ольга, родитель. Можно: курсы, цены «Все», list_groups, запись если consultantCanBook. Нельзя: статус, приоритет, соответствия, выгрузка, карточки CRM.
+Админка /admin = голос кабинета, сотрудник. Можно: вкладки, карточки по ID, запись в CRM если adminVoiceCanWrite. Нельзя консультировать родителей, пока adminVoiceCanConsult выкл.
+Настройки: Ассистент ИИ → Окно → «Граница: консультант и админка».
 
 ${IDS_FOR_AGENT}
 
@@ -195,7 +216,7 @@ sort.branchId = 0|1|2|3|4
 sort.ageBand = ""|3-4|5-6|7-9|10-12|13-17|18+
 Матрица:
   учится+дети   → список customerId is_study=1 + CrmClientCard
-  учится+группы → список групп (statusId∉{3,4}) + карточка группы
+  учится+группы → список групп (statusId≠3, не смены) + карточка группы
   лид+дети      → список customerId is_study=0 + CrmClientCard
   лид+группы    → группы с лидами (leadKeys из groupLinks лидов) + карточка группы
 autoload.disk = is_study=1. Обновить CRM = is_study=1 removed=0.
@@ -205,9 +226,12 @@ chip филиала = primary branchId.
 
 ПРОТОКОЛ КАРТОЧКИ ГРУППЫ card:group:{branchId}:{groupId}
 DOM data-card-id data-group-id data-branch-id
-состав: Ученики (status=учится) · Лиды (status=лид) · Архивные ученики (archived)
-клик по человеку = customerGet { customerId, branchId группы }. Закрытие карточки клиента на desktop при view=группы возвращает карточку группы.
-календарь = LessonStrip groupInfo.calendar
+Админка видит все группы кроме status 3 и смен 7–9. Status 4 живая.
+Состав: сразу CRM groupMembers, не досье. Ученики is_study=1 · Лиды is_study=0 · Архивные is_study=2. taken = active.length (учится+лиды), не customer_ids урока.
+Приоритет custom_prioritet: колонка таблицы и карточка, action=groupFlags, сразу CRM. 1 первая, 2–3 очередь, 0 не на витрине.
+Статус: колонка таблицы, те же ID что в AlfaCRM. groupFlags или groupSave.
+клик по человеку = customerGet { customerId, branchId группы }.
+календарь = LessonStrip
 абонементы группы = slot.tariffId, иначе match: филиал+минуты и (tariff-map.courseId = group.courseId ИЛИ subjectId ∈ tariff.subjectIds). Карта tariff-map только сайт.
 
 ПРОТОКОЛ КАРТОЧКИ card:customer:{id}
@@ -227,7 +251,9 @@ customerLesson { customerId, branchId, lessonType, date, time, duration?, groupI
 customerTariff { customerId, branchId, tariffId, date, groupId?, periodCount?, periodType?, calcType?, subjectIds?, lessonTypeIds?, note? }
 customerGroup  { customerId, branchId, groupId, bDate?, eDate? }
 groupGet       { groupId, branchId }
-groupMembers   { groupId, branchId } → { active[], archive[] } active делить по status учится|лид
+groupMembers   { groupId, branchId } → { active[], archive[] } active делить по status учится|лид. Сразу CRM.
+groupSave      { groupId, branchId, statusId, priority, … }
+groupFlags     { groupId, branchId, statusId?, priority? } — только статус и приоритет, сразу CRM. Голос админки / таблица.
 voiceAsk       { prompt, ids[] } → kind openClient|openGroup|openTab|edit|question|refuse
 
 LESSON (lessonType key = type AlfaCRM)
@@ -258,13 +284,14 @@ ra-clients-filter { status?, view?, branchId?, ageBand? }
 Филиалы: 1 Гражданская · 2 ЦМИТ Октябрьской 340 · 3 Луховицы Пушкина 202А · 4 лето (апрель–август).
 После успеха: «заявку приняли, {пробное|групповое} на {дата} {время}, {педагог}, {филиал}». URL не читать. «Перезвоним» — запрещено.
 Мест нет: не записывать молча. Предложить другой слот / свободный день / другой филиал.
-list_groups {age, branch?, course?} → живые слоты. Назвать 5–8: день, время, педагог, филиал, места, ближайшая дата. gid не произносить вслух родителю, но передать в инструмент.
-Настройки: storage/site-signup.json trialOn groupOn trialByBranch. CRM форма id=20 — запас, сайт шлёт API.
+list_groups {age, branch?, course?} → все неархивные слоты. Назвать ВСЕ: день, время, педагог, филиал, состав taken/limit, ближайшая дата, приоритет. Первой — priority 1. gid не произносить вслух родителю, но передать в инструмент.
+Настройки: storage/site-signup.json trialOn groupOn trialByBranch statusPublish. CRM форма id=20 — запас, сайт шлёт API.
+Роли: Ассистент ИИ → Окно → «Граница: консультант и админка». consultantCanBook / SeeAllGroups / CanManage. adminVoiceCanWrite / CanConsult.
 
 ПРОТОКОЛ ПРЕДМЕТОВ pane=subjects
 Справочник CRM: subjectId + имя. Имя — подпись.
 Курс сайта: schedule-map.json subjectId → courseId (+ SUBJECT_TO_COURSE). Select в колонке. subjectsBind. В CRM не уходит.
-Справа ЦМИТ / Гражданская / Луховицы / Лето / Всего = живые группы (уникально branchId:groupId, statusId∉{3,4}) / сумма taken. Не абонементы.
+Справа ЦМИТ / Гражданская / Луховицы / Лето / Всего = неархивные группы (уникально branchId:groupId, statusId≠3) / сумма roster. Status 4 входит. Не абонементы. Не явка.
 Вкладки: С абонементами (tariffTotal>0) | Без абонементов.
 Загрузка AlfaCRM = предметы + pack курса и счётчиков. Выгрузка = только id и имя.
 Нет курса у предмета с группами — сказать «курс сайта не привязан», предложить subjectsBind, не угадывать.
@@ -282,6 +309,20 @@ ${never}
 }
 
 export const FACTORY_GUIDES: SectionGuide[] = [
+  {
+    id: "roles",
+    section: "roles",
+    title: "Роли ИИ",
+    on: true,
+    updatedAt: "",
+    summary: "Консультант сайта ≠ голос админки. Граница в настройках Окна.",
+    graph: SCHEDULE_GRAPH.filter((r) => /Консультант|Голос|Сайт|Витрина|Приоритет|Статус/.test(r.entity)),
+    cascade: [],
+    tabs: [],
+    ops: SCHEDULE_OPS.filter((o) => /ai-roles|list-live|book-trial|book-group|set-group|site-signup/.test(o.id)),
+    never: SCHEDULE_NEVER.filter((n) => /Олег|кабинет|priority 0|консульт|админк/i.test(n)),
+    body: rolesBody(),
+  },
   {
     id: "schedule",
     section: "schedule",
@@ -391,20 +432,44 @@ function groupsBody() {
 Где лежит: Ассистент ИИ → База знаний ИИ → Группы.
 
 Ключ группы — groupId + branchId. gid:{branchId}:{groupId}. Карточка groupCardId = card:group:{branchId}:{groupId}.
-Не склеивать по названию. courseId — папка дерева, не subjectId.
+Не склеивать по названию, году, «модельн». courseId — папка дерева, не subjectId.
 
 ${groups}
 
-Состав (groupMembers): сразу CRM, не досье. Ученики is_study=1, Лиды is_study=0, Архивные is_study=2. Счётчик группы = все привязанные, не явка на уроке.
-Статусы CRM: 1 набор, 6 старт, 2 обучается (набор идёт), 4 обучается (набор завершён) — ЖИВАЯ, не архив. 5 пауза набора. 10 не обучается. 3 обучение завершено = архив, в основном списке нет.
-Приоритет custom_prioritet: 1 первая для записи, 2–3 очередь, 0 не выкладывать на сайт. ИИ называет все группы, писать первой — priority 1.
-Витрина сайта: Админка → Сайт, матрица статусов + priority ≥ 1 + courseId.
-Имя группы и «2024» не фильтр.
-Клик по человеку — customerId. Закрытие карточки клиента при view=группы возвращает карточку группы.
-Создать группу: courseId + branchId + teacherId. Предмет из карты курса.
-Перенос: treeMove { ids, courseId }.
-Абонемент группы: карта tariffId → courseId (Соответствия → Абонементы), не имя. CRM не меняется.
-Предмет группы: slot.subjectId. Счётчики «сколько групп/учеников по предмету» — вкладка Предметы, не абонементы.
+АДМИНКА vs САЙТ
+Админка (таблица расписания, мастер абонементов, предметы, клиенты→группы): все группы кроме архива status 3 и выключенных смен 7–9. Status 4 «Обучается (набор завершен)» — ЖИВАЯ.
+Сайт (страницы курса/школы/расписание): только statusPublish.schedule и priority ≥ 1 и courseId.
+Консультант называет и те, что не на витрине, если consultantCanSeeAllGroups.
+
+СТАТУСЫ AlfaCRM (не выдумывать свои)
+1 Идет набор (ожидает старта) — админка да, витрина по матрице (по умолчанию да, запись да)
+6 Старт занятий — то же
+2 Обучается (идет набор) — то же
+4 Обучается (набор завершен) — админка да, витрина да, запись с сайта по умолчанию нет
+5 Набор приостановлен — админка да, витрина по умолчанию нет
+10 Не обучается (набор завершен) — админка да, витрина нет
+3 Обучение завершено — архив, в основном списке нет
+7–9 смены — в CRM выкл, не тянем
+Колонка «Статус» в таблице: короткое имя, выбор сразу groupFlags → CRM.
+
+ПРИОРИТЕТ custom_prioritet
+1 — первая для записи, ИИ предлагает её первой
+2, 3 — очередь
+0 — на rastudio.org не выкладывать; консультант говорит «набор с сайта закрыт», с сайта не записывает
+пусто в CRM = 1 (чтобы старые группы не исчезли с витрины)
+Колонка «Приоритет» в таблице: 0/1/2/3, сразу CRM.
+
+СОСТАВ
+groupMembers всегда CRM, не локальное досье. Три полки: учится / лиды / архив.
+Счётчик в таблице Места: limit / taken, taken = учится+лиды (все привязанные).
+Явка customer_ids урока — не состав.
+
+ГОЛОС АДМИНКИ
+Открыть группу: groupId+branchId. Сменить статус/приоритет: колонка или groupFlags, если adminVoiceCanWrite.
+Не консультировать родителей (adminVoiceCanConsult выкл).
+
+КОНСУЛЬТАНТ
+list_groups. Назвать все подходящие. Первой priority 1. Запись — если consultantCanBook и не priority 0.
 `;
 }
 
@@ -425,7 +490,7 @@ function subjectsBody() {
 Предмет CRM — subjectId, имя только подпись. Настройки AlfaCRM → Предметы.
 Курс сайта — courseId папки дерева. Школа — schoolId = course.schoolId.
 Группа — gid:{branchId}:{groupId}, несёт subjectId из карточки группы.
-Ученики группы — taken живого слота (statusId не 3 и не 4).
+Ученики группы — roster: все customer с этим group_id (is_study 0 и 1). Не явка. Status 4 входит, status 3 нет.
 
 ${tab}
 
@@ -443,8 +508,8 @@ ID — subjectId, правится на сайте, выгружается в CR
 
 СЧЁТЧИКИ
 Уникальная группа: ключ branchId:groupId. Дубли слотов одного gid не считать дважды.
-Архив statusId 3 и 4 пропускать.
-Ученики = сумма taken этих групп.
+Архив только statusId 3. Status 4 — живая, набор закрыт, в счёт входит.
+Ученики = сумма taken этих групп (roster, учится+лиды).
 ИИ на вопрос «есть ли в ЦМИТ художественная студия 3–4» смотрит subjectId (12 или 116) → courseId /art-studio-3-4 → groupByBranch[2] и studentByBranch[2]. Нет групп — сказать «сейчас набора нет», предложить другой филиал или возраст.
 
 ЗАГРУЗКА И ВЫГРУЗКА
@@ -493,6 +558,7 @@ ${ops}
 - Не путать tariffTotal и groupTotal.
 - Не путать CmsSession.courseId на сайте (иногда = subjectId) с courseId дерева.
 - Нет ID — спросить, не подбирать похожий.
+- Не пропускать status 4 в счётчиках (это не архив).
 `;
 }
 
@@ -529,26 +595,29 @@ function siteBookBody() {
 
 ИНСТРУМЕНТЫ
 1) list_groups { age, branch?, course? }
-   Живые слоты. Поля: gid, branchId, name, teacher, when, timeFrom, seats, nextDate, wait.
-   Назови родителю 5–8: день, время, педагог, филиал, места, ближайшая дата. gid вслух не читай.
-2) submit_trial — первое посещение, пробное (lessonTypeId=3).
+   Все неархивные слоты (не только витрина). Поля: gid, branchId, name, teacher, when, timeFrom, seats, taken, limit, nextDate, wait, priority, statusId.
+   Назови родителю ВСЕ подходящие: день, время, педагог, филиал, состав, ближайшая дата. Первой — priority 1. gid вслух не читай.
+   priority 0: «эта группа на сайт не выложена, набор через администратора» — и всё равно назови.
+2) submit_trial — первое посещение, пробное (lessonTypeId=3). Только если consultantCanBook.
    Обязательно: parent, child, phone, branch_id.
    Передай: gid, date ДД.ММ.ГГГГ (= nextDate слота), time=timeFrom, course_id=subjectId, group_name, dob если есть, kind=trial.
-3) book_lesson lesson_type=group — сразу в группу (lessonTypeId=2). gid обязателен. Те же поля.
-4) open_group — НЕ использовать. Форму AlfaCRM /common/{branch}/lead/create?gid= родителю не открывать.
+3) book_lesson lesson_type=group — сразу в группу (lessonTypeId=2). gid обязателен. Не в priority 0.
+4) open_group — НЕ использовать. Форму AlfaCRM родителю не открывать.
 Свободный день: submit_trial без gid, в комментарии «дату согласуем». Время не выдумывать.
 
 ПОРЯДОК БЕЗ АДМИНИСТРАТОРА
 Возраст → направление (2–3 варианта) → list_groups.
 Родитель выбрал слот → собрать parent, child, phone (dob если сказал).
-Сразу вызвать инструмент. Почту не ждать.
+Если consultantCanBook — сразу инструмент. Иначе телефон 8 (800) 511-34-01.
+Почту не ждать.
 Если данных не хватает — один короткий вопрос, не анкета.
-Мест нет (seats=«мест нет») — не записывать. Другой слот / свободный день / другой филиал.
+Мест нет — не записывать. Другой слот / свободный день / другой филиал.
 После ok: «Заявку приняли. {Пробное|Групповое} на {дата} в {время}, педагог {имя}, {филиал}.» Не «перезвоним». URL не читать.
 
-НАСТРОЙКИ АДМИНКИ → Сайт
-storage/site-signup.json: trialOn, groupOn, trialByBranch[1..4] (URL формы CRM id=20).
-Сайт всегда своё окно + API. iframe id=20 — только запас в настройках.
+НАСТРОЙКИ
+Админка → Сайт: trialOn, groupOn, trialByBranch, матрица статусов (schedule/trial/group).
+Админка → Ассистент ИИ → Окно: consultantCanBook, consultantCanSeeAllGroups, consultantCanManage.
+Матрицу и приоритет меняет сотрудник, не консультант.
 
 СВЯЗИ ID
 Группа: gid:{branchId}:{groupId}
@@ -563,6 +632,58 @@ storage/site-signup.json: trialOn, groupOn, trialByBranch[1..4] (URL формы 
 - Не менять филиал группы.
 - Не ждать почту.
 - Не склеивать группу по названию.
+- Не менять матрицу сайта и приоритет из чата родителя.
+- Не записывать в группу с priority 0.
+`;
+}
+
+function rolesBody() {
+  return `ИНСТРУКЦИЯ «Роли ИИ» REV ${GUIDE_REV}.
+Где лежит: Ассистент ИИ → База знаний ИИ → Роли. Настройки: Ассистент ИИ → Окно → «Граница: консультант и админка».
+
+ДВА АГЕНТА, ДВА МИРА
+1) Консультант сайта — Олег и Ольга в чате rastudio.org. Собеседник — родитель.
+2) Голос админки — микрофон кабинета /admin. Собеседник — сотрудник студии.
+Их нельзя подменять, пока в настройках не стоит галочка.
+
+НАСТРОЙКИ (источник истины)
+consultantCanBook — консультант сам submit_trial / book_lesson. Выкл: слоты голосом + телефон 8 (800) 511-34-01.
+consultantCanSeeAllGroups — называть группы с priority 0 и status 4. Выкл: только витрина (матрица Сайт + priority ≥ 1).
+consultantCanManage — можно позвать в «административный режим», если человек сказал, что он сотрудник. Выкл: кабинет не предлагать.
+adminVoiceCanWrite — голос кабинета пишет status_id, custom_prioritet, лимит, выгрузку, абонемент ученика. Выкл: только открывает вкладки и карточки.
+adminVoiceCanConsult — голос кабинета подбирает курс родителю. По умолчанию выкл.
+
+ЧТО КОНСУЛЬТАНТ ДЕЛАЕТ САМ
+Возраст → город → филиал → 2–3 направления → list_groups → назвать ВСЕ подходящие группы (день, время, педагог, филиал, места, ближайшая дата). Первой — приоритет 1.
+Пробное / в группу — если consultantCanBook и родитель дал ФИО, телефон, филиал. Передать gid, date, timeFrom, subjectId, branchId группы.
+Цены — колонка «Все» по courseId. Не выдумывать.
+Страницы курсов — кнопка open_course.
+Жалобы и «поменять цену» — телефон. Не кабинет, если consultantCanManage выкл.
+
+ЧТО КОНСУЛЬТАНТ НЕ ДЕЛАЕТ
+Не меняет статус и приоритет групп.
+Не открывает вкладки Предметы / Соответствия / CRM.
+Не выгружает AlfaCRM.
+Не открывает карточку клиента по ФИО.
+Не показывает iframe /lead/create.
+Не записывает в priority 0.
+Не врёт, что группы нет, если она просто не на витрине.
+
+ЧТО ДЕЛАЕТ ГОЛОС АДМИНКИ
+Открыть pane groups|clients|subjects|prices|tariffs|map|public|crm.
+Открыть группу groupId+branchId, клиента customerId.
+Сменить статус/приоритет в таблице (groupFlags), если adminVoiceCanWrite.
+Загрузить/выгрузить расписание, предметы, абонементы.
+Мастер абонементов: все привязанные, status 4 и 594 входят.
+«Сколько в группе» — roster CRM, не явка.
+
+ЧТО ГОЛОС АДМИНКИ НЕ ДЕЛАЕТ (adminVoiceCanConsult выкл)
+Не спрашивает «сколько лет ребёнку».
+Не вызывает submit_trial / book_lesson.
+Не представляется Олегом или Ольгой.
+
+СВЯЗАННЫЕ РАЗДЕЛЫ
+Группы — статусы и приоритет. Сайт · запись — матрица витрины. Предметы / Соответствия — courseId только сайт. Клиенты — customerId.
 `;
 }
 

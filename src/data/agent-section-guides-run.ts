@@ -7,6 +7,8 @@ import { FACTORY_GUIDES, factoryGuide, GUIDE_REV, type SectionGuide } from "./ag
 import { tariffMapForAgent } from "./public-bind";
 import { loadSiteSignup } from "./site-signup";
 import { subjectMapForAgent } from "./subject-admin";
+import { GROUP_STATUSES } from "./group-status";
+import { rolesPrompt } from "./agent-config";
 
 type Overlay = { id: string; on?: boolean; body?: string; updatedAt?: string };
 type Store = { items: Overlay[] };
@@ -67,7 +69,18 @@ export function scheduleGuidePrompt() {
   }
   try {
     const s = loadSiteSignup();
-    extra += `\n\nЗапись на сайте сейчас: пробное ${s.trialOn ? "ВКЛ" : "выкл"}, в группу ${s.groupOn ? "ВКЛ" : "выкл"}.`;
+    const rows = GROUP_STATUSES.filter((st) => st.id !== 7 && st.id !== 8 && st.id !== 9)
+      .map((st) => {
+        const p = s.statusPublish?.[String(st.id)];
+        return `${st.id} ${st.short}: сайт ${p?.schedule ? "да" : "нет"}, пробное ${p?.trial ? "да" : "нет"}, в группу ${p?.group ? "да" : "нет"}`;
+      })
+      .join("; ");
+    extra += `\n\nЗапись на сайте сейчас: пробное ${s.trialOn ? "ВКЛ" : "выкл"}, в группу ${s.groupOn ? "ВКЛ" : "выкл"}.\nМатрица статусов (Админка → Сайт): ${rows}.`;
+  } catch {
+    /* */
+  }
+  try {
+    extra += `\n\n${rolesPrompt("admin")}`;
   } catch {
     /* */
   }

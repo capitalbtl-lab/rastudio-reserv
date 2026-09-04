@@ -26,6 +26,16 @@ export type AgentSettings = {
   matchChipsToMessage: boolean;
   keepAssistantReplies: boolean;
   speakEveryReply: boolean;
+  /** Олег/Ольга сами пишут пробное и в группу. Выкл — только телефон. */
+  consultantCanBook: boolean;
+  /** Называть родителю группы с приоритетом 0 (на сайт не выложены). */
+  consultantCanSeeAllGroups: boolean;
+  /** Консультант может звать в админку. Выкл — только «это кабинет сотрудника». */
+  consultantCanManage: boolean;
+  /** Голос кабинета пишет в CRM (статус, приоритет, выгрузка). */
+  adminVoiceCanWrite: boolean;
+  /** Голос кабинета отвечает родителям как Олег/Ольга. По умолчанию нет. */
+  adminVoiceCanConsult: boolean;
 };
 
 export type AgentUiFlags = Pick<
@@ -56,6 +66,40 @@ export const WINDOW_FLAGS: { id: keyof AgentUiFlags; title: string; hint: string
   { id: "matchChipsToMessage", title: "Кнопки только под текст", hint: "Подсказки совпадают с последней фразой.", tip: "Влияет на логику чипов, не на видимость окна." },
   { id: "keepAssistantReplies", title: "Не удалять ответы ассистента", hint: "Каждая реплика остаётся в ленте.", tip: "Логика ленты. В отладке можно включить отдельно." },
   { id: "speakEveryReply", title: "Озвучивать каждый вопрос", hint: "Голосовой режим читает всю фразу.", tip: "На сайте выключено — молчит. В отладке можно слушать." },
+];
+
+/** Граница консультант (сайт) ↔ админка. Меняется здесь, не в коде промпта. */
+export const ROLE_FLAGS: { id: keyof AgentSettings; title: string; hint: string; tip: string }[] = [
+  {
+    id: "consultantCanBook",
+    title: "Консультант записывает сам",
+    hint: "Олег/Ольга вызывают пробное и запись в группу без администратора.",
+    tip: "Выключено — называют слоты и дают телефон 8 (800) 511-34-01, заявку не создают.",
+  },
+  {
+    id: "consultantCanSeeAllGroups",
+    title: "Консультант называет все группы",
+    hint: "В том числе приоритет 0 (на сайт не выложены) и набор закрыт.",
+    tip: "Выключено — только витрина: статус из матрицы Сайт и приоритет ≥ 1.",
+  },
+  {
+    id: "consultantCanManage",
+    title: "Консультант зовёт в админку",
+    hint: "Ссылка «войти в административный режим», если человек сказал, что он сотрудник.",
+    tip: "Выключено — консультант не предлагает кабинет и не правит CRM. Только консультация.",
+  },
+  {
+    id: "adminVoiceCanWrite",
+    title: "Голос админки пишет в CRM",
+    hint: "Статус, приоритет, лимит, выгрузка, абонемент ученика.",
+    tip: "Выключено — голос только открывает вкладки и карточки, в AlfaCRM не пишет.",
+  },
+  {
+    id: "adminVoiceCanConsult",
+    title: "Голос админки консультирует родителей",
+    hint: "Подбор курса и запись из кабинета, как Олег/Ольга.",
+    tip: "По умолчанию выкл: кабинет — сотруднику, сайт — родителю. Включать только если один агент на оба мира.",
+  },
 ];
 
 export type TrainExample = {
@@ -94,6 +138,11 @@ const DEFAULT_SETTINGS: AgentSettings = {
   matchChipsToMessage: true,
   keepAssistantReplies: true,
   speakEveryReply: true,
+  consultantCanBook: true,
+  consultantCanSeeAllGroups: true,
+  consultantCanManage: false,
+  adminVoiceCanWrite: true,
+  adminVoiceCanConsult: false,
 };
 
 function fileOf() {
@@ -155,10 +204,30 @@ const STYLE: Record<AgentSettings["style"], string> = {
   detailed: "Можно на предложение длиннее, но всё равно один вопрос за реплику, потом пауза.",
 };
 
+export function rolesPrompt(kind: "site" | "admin") {
+  const s = loadBrain().settings;
+  if (kind === "site") {
+    return [
+      "РОЛЬ СЕЙЧАС: консультант сайта (Олег/Ольга). Собеседник — родитель rastudio.org.",
+      `Запись: ${s.consultantCanBook !== false ? "МОЖНО submit_trial и book_lesson" : "НЕЛЬЗЯ записывать. Назови слоты и телефон 8 (800) 511-34-01"}.`,
+      `Группы: ${s.consultantCanSeeAllGroups !== false ? "называй ВСЕ подходящие, включая приоритет 0 («набор с сайта закрыт») и статус 4 (набор закрыт). Первой предлагай priority=1." : "только витрина: приоритет ≥ 1 и статус из матрицы Админка → Сайт."}`,
+      `Админка: ${s.consultantCanManage ? "если человек сказал, что он сотрудник — ссылка «войти в административный режим»." : "НЕ предлагай кабинет, НЕ правь статусы, приоритет, цены, соответствия, CRM. Это делает сотрудник в админке."}`,
+      "Не будь голосом кабинета. Не вызывай openTab, groupFlags, выгрузку.",
+    ].join("\n");
+  }
+  return [
+    "РОЛЬ СЕЙЧАС: голос админки. Собеседник — сотрудник студии, не родитель.",
+    `Запись в CRM: ${s.adminVoiceCanWrite !== false ? "можно статус, приоритет, лимит, выгрузка, абонемент ученика — только по ID." : "только смотреть. В AlfaCRM не писать."}`,
+    `Консультация родителей: ${s.adminVoiceCanConsult ? "можно коротко, как Олег/Ольга." : "ЗАПРЕЩЕНО. Ты не Олег и не Ольга. Не спрашивай возраст ребёнка и не записывай на пробное."}`,
+    "Группы админки: все кроме status 3. Status 4 — живая. Состав = roster. Имя не ключ.",
+  ].join("\n");
+}
+
 export function agentPromptAddons(facts?: SessionFacts, channel = "site") {
   const brain = loadBrain();
   const s = brain.settings;
   const parts: string[] = ["", STYLE[s.style] || STYLE.warm];
+  parts.push(rolesPrompt(channel === "admin" ? "admin" : "site"));
   parts.push(playbookPrompt(brain.scripts, facts));
   if (s.askOnce) {
     parts.push(
@@ -229,6 +298,11 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
         matchChipsToMessage: flag(data.settings?.matchChipsToMessage, brain.settings.matchChipsToMessage),
         keepAssistantReplies: flag(data.settings?.keepAssistantReplies, brain.settings.keepAssistantReplies),
         speakEveryReply: flag(data.settings?.speakEveryReply, brain.settings.speakEveryReply),
+        consultantCanBook: flag(data.settings?.consultantCanBook, brain.settings.consultantCanBook),
+        consultantCanSeeAllGroups: flag(data.settings?.consultantCanSeeAllGroups, brain.settings.consultantCanSeeAllGroups),
+        consultantCanManage: flag(data.settings?.consultantCanManage, brain.settings.consultantCanManage),
+        adminVoiceCanWrite: flag(data.settings?.adminVoiceCanWrite, brain.settings.adminVoiceCanWrite),
+        adminVoiceCanConsult: flag(data.settings?.adminVoiceCanConsult, brain.settings.adminVoiceCanConsult),
         updatedAt: new Date().toISOString(),
       };
       saveBrain(brain);

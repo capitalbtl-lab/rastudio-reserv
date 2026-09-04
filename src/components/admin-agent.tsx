@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { adminAgentBrain, type AgentSettings, WINDOW_FLAGS } from "@/data/agent-config";
+import { adminAgentBrain, type AgentSettings, WINDOW_FLAGS, ROLE_FLAGS } from "@/data/agent-config";
 import { Button } from "@/components/ui/button";
 import { AdminChats } from "@/components/admin-chats";
 import { AdminVoices } from "@/components/admin-voices";
@@ -140,6 +140,24 @@ export function AdminAgent() {
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
             {WINDOW_FLAGS.map((f) => (
+              <Toggle
+                key={f.id}
+                on={Boolean(settings[f.id])}
+                set={(v) => setSettings({ ...settings, [f.id]: v })}
+                title={f.title}
+                hint={f.hint}
+                tip={f.tip}
+              />
+            ))}
+          </div>
+          <div>
+            <h3 className="font-display text-xl">Граница: консультант и админка</h3>
+            <p className="mt-1 max-w-2xl text-sm text-muted">
+              Олег и Ольга на сайте — родителям. Голос кабинета — сотруднику. Что можно каждому — эти переключатели, не код.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {ROLE_FLAGS.map((f) => (
               <Toggle
                 key={f.id}
                 on={Boolean(settings[f.id])}

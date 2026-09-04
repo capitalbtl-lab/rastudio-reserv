@@ -65,7 +65,7 @@ ${who === "oleg" ? "Вы хорошо рассказываете про техн
 ЭТА РЕПЛИКА — только текущий шаг: ${step}
 Если в фактах уже есть город — ни слова «какой город», «Коломна или Луховицы».
 Не возвращайся к закрытым шагам.
-list_groups вызывай только когда направление уже рассказано и родитель хочет пробное в группе или сразу в группу.
+list_groups вызывай когда направление уже рассказано и родитель хочет слот. Назови ВСЕ подходящие группы, первой — с приоритетом 1. gid вслух не читай.
 Пробное в свободный день: заявка без слота, в комментарии «дату согласуем по телефону». Не выдумывай время.
 История сессии полная до сброса диалога. Прежде чем спросить — посмотри факты: что уже назвали, того не спрашивай.
 На запись нужны: ФИО ребёнка, ФИО родителя (заказчика), телефон, филиал. Дата рождения — целиком, как 01.01.2021. Возраст подойдёт, если даты нет: подставим 01.09 года рождения.
@@ -343,6 +343,11 @@ const TOOLS = [
   },
 ];
 
+function siteTools(canBook: boolean) {
+  if (canBook) return TOOLS;
+  return TOOLS.filter((t) => t.function.name !== "submit_trial" && t.function.name !== "book_lesson");
+}
+
 type ChatMsg = { role: "user" | "assistant" | "system" | "tool"; content: string; tool_call_id?: string; tool_calls?: unknown };
 
 const buckets = new Map<string, number[]>();
@@ -593,7 +598,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     const messages: ChatMsg[] = [{ role: "system", content: system }, ...trimmed];
     try {
       for (let step = 0; step < 4; step++) {
-        const tools = admin ? ADMIN_TOOLS : TOOLS;
+        const tools = admin ? ADMIN_TOOLS : siteTools(loadBrain().settings.consultantCanBook !== false);
         const json = await complete(messages, tools);
         if (!json) break;
         const msg = json.choices?.[0]?.message;
@@ -612,6 +617,14 @@ export const chatAgent = createServerFn({ method: "POST" })
               args = {};
             }
             if (call.function.name === "submit_trial" || call.function.name === "book_lesson") {
+              if (loadBrain().settings.consultantCanBook === false) {
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: "Запись консультантом выключена в настройках. Назови слоты и телефон 8 (800) 511-34-01. Заявку не создавай.",
+                });
+                continue;
+              }
               const saved = await saveTrialLead({
                 parent: String(args.parent || ""),
                 child: String(args.child || ""),
@@ -677,7 +690,9 @@ export const chatAgent = createServerFn({ method: "POST" })
                         branch: String(args.branch || ""),
                       })
                     : [];
-                const shown = list.length ? list : fallback;
+                const shownRaw = list.length ? list : fallback;
+                const seeAll = loadBrain().settings.consultantCanSeeAllGroups !== false;
+                const shown = seeAll ? shownRaw : shownRaw.filter((g) => g.priority >= 1);
                 groups = [
                   { label: "Пробное занятие", send: "Хочу записаться на пробное занятие", primary: true },
                   { label: "Сразу в группу", send: "Запишите сразу в группу" },
