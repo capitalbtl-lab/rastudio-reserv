@@ -1281,20 +1281,30 @@ export function AdminSchedule() {
   async function saveDetailSite() {
     if (!detail) return;
     setDetail((d) => (d ? { ...d, saving: true, error: "" } : d));
-    const slot = slotFromDetail(detail);
-    const next = slots.map((s) => (s.id === slot.id ? slot : s));
-    const res = await run("save", { slots: next });
+    let slot = slotFromDetail(detail);
+    let list = slots;
+    if (slot.courseId) {
+      const moved = await adminSchedule({
+        data: { token: token(), action: "treeMove", ids: [slot.id], courseId: slot.courseId } as never,
+      });
+      take(moved as never);
+      if (moved.ok && "slots" in moved && Array.isArray(moved.slots)) list = moved.slots as CrmSlot[];
+    }
+    const next = list.map((s) => (s.id === slot.id ? { ...s, ...slot, courseId: slot.courseId || s.courseId } : s));
+    const res = await adminSchedule({ data: { token: token(), action: "save", slots: next } as never });
+    take(res as never);
     if (!res.ok) {
       setDetail((d) => (d ? { ...d, saving: false, error: res.error || "Не сохранилось на сайте." } : d));
       setMsg(res.error || "Не сохранилось на сайте.");
       return;
     }
+    const saved = ((res as { slots?: CrmSlot[] }).slots || next).find((s) => s.id === slot.id) || slot;
     setDirty((d) => {
       const n = new Set(d);
       n.delete(slot.id);
       return n;
     });
-    setDetail((d) => (d ? { ...d, saving: false, slot, error: "" } : d));
+    setDetail((d) => (d ? { ...d, saving: false, slot: saved, error: "" } : d));
     setMsg("Группа сохранена на сайте. В AlfaCRM — отдельной кнопкой.");
   }
 
@@ -3335,11 +3345,24 @@ export function AdminSchedule() {
                         value={siteCourseValue(detail.slot, siteTree)}
                         onChange={(e) => {
                           const to = e.target.value;
+                          const course = siteTree.courses.find((c) => c.id === to);
+                          const school = course ? siteTree.schools.find((x) => x.id === course.schoolId) : undefined;
+                          const patchSlot = {
+                            ...detail.slot,
+                            courseId: to,
+                            schoolId: school?.id || "",
+                            school: school?.label || "",
+                            course: course?.label || "",
+                            path: course?.href || "",
+                          };
+                          setSlots((list) => list.map((row) => (row.id === detail.id ? patchSlot : row)));
+                          setDirty((d) => new Set(d).add(detail.id));
+                          setDetail((d) => (d ? { ...d, slot: patchSlot } : d));
                           if (!to) return;
                           void run("treeMove", { ids: [detail.slot.id], courseId: to }).then((res) => {
                             if (!res.ok || !("slots" in res) || !Array.isArray(res.slots)) return;
                             const next = (res.slots as CrmSlot[]).find((row) => row.id === detail.slot.id);
-                            if (next) setDetail((d) => (d ? { ...d, slot: next } : d));
+                            if (next?.courseId) setDetail((d) => (d ? { ...d, slot: next } : d));
                           });
                         }}
                         className="mt-1 h-10 w-full rounded-md bg-white px-3 text-sm font-medium normal-case tracking-normal text-fg ring-1 ring-black/8"

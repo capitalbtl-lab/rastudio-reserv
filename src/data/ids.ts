@@ -167,7 +167,8 @@ export function courseIdOfSubject(subjectId: number, tree: SiteTree, mapCourses?
 
 /**
  * Единая резолюция courseId группы.
- * Порядок: карта предмета → assign → slot.courseId. Имя не участвует.
+ * Карта с реальным курсом важнее assign. Пустая строка в карте — «ещё не задано»,
+ * не «снять курс»: тогда действует treeMove / assign.
  */
 export function resolveGroupCourseId(
   s: Pick<CrmSlot, "id" | "groupId" | "branchId" | "courseId" | "subjectId">,
@@ -177,8 +178,6 @@ export function resolveGroupCourseId(
   if (s.subjectId && mapCourses?.length) {
     const fromMap = courseIdOfSubject(s.subjectId, tree, mapCourses);
     if (fromMap) return fromMap;
-    const link = mapCourses.find((c) => c.subjectId === s.subjectId);
-    if (link) return "";
   }
   const assigned = courseIdOfGroup(s, tree);
   if (assigned) return assigned;

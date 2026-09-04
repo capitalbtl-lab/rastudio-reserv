@@ -118,9 +118,12 @@ describe("курс группы из карты админки", () => {
     );
   });
 
-  it("пустая запись в карте = нет курса, даже если assign Подиум", () => {
-    const withAssign = { ...tree, assign: { "gid:2:433": "/art-studio-5-6" } };
-    assert.equal(resolveGroupCourseId(slot, withAssign, [{ subjectId: 13, courseId: "" }]), "");
+  it("пустая запись в карте не стирает assign — курс выбран в карточке группы", () => {
+    const withAssign = {
+      ...tree,
+      assign: { "gid:2:433": "/art-studio-5-6" },
+    };
+    assert.equal(resolveGroupCourseId(slot, withAssign, [{ subjectId: 13, courseId: "" }]), "/art-studio-5-6");
   });
 });
 

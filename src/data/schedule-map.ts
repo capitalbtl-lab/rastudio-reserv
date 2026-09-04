@@ -209,7 +209,7 @@ export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
       tree.assign[key] = cid;
       assignDirty = true;
     }
-    if (key && !cid && tree.assign[key]) {
+    if (key && !cid && tree.assign[key] && !tree.courses.some((c) => c.id === tree.assign[key] || c.href === tree.assign[key])) {
       delete tree.assign[key];
       assignDirty = true;
     }
