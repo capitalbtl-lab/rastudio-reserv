@@ -317,26 +317,6 @@ async function overlayGroupHeadcount(
   return next;
 }
 
-function takenSlot() {
-  return globalThis as { __raTaken?: Map<number, { at: number; n: number }> };
-}
-
-function applyCachedTaken(groups: import("./pupil-tariffs").PupilGroup[]) {
-  const m = takenSlot().__raTaken;
-  if (!m) return groups;
-  return groups.map((g) => {
-    const hit = m.get(g.groupId);
-    if (!hit || Date.now() - hit.at > 10 * 60 * 1000) return g;
-    return { ...g, taken: Math.max(g.taken, hit.n) };
-  });
-}
-
-function saveTaken(groups: import("./pupil-tariffs").PupilGroup[]) {
-  const slot = takenSlot();
-  if (!slot.__raTaken) slot.__raTaken = new Map();
-  for (const g of groups) slot.__raTaken.set(g.groupId, { at: Date.now(), n: g.taken });
-}
-
 function packPupilGroups(groups: import("./pupil-tariffs").PupilGroup[]) {
   const sorted = [...groups].sort(
     (a, b) =>
@@ -372,18 +352,7 @@ async function loadGroupMembers(
   gid: number,
   opts?: { skipArchive?: boolean; fresh?: boolean },
 ) {
-  const key = `${branch}:${gid}${opts?.skipArchive ? ":lite" : ""}`;
-  const bag = globalThis as { __raGMem?: Map<string, { at: number; active: GroupMember[]; archive: GroupMember[] }> };
-  if (!bag.__raGMem) bag.__raGMem = new Map();
-  if (!opts?.fresh) {
-    const full = bag.__raGMem.get(`${branch}:${gid}`);
-    if (full && Date.now() - full.at < 8 * 60 * 1000) return { active: full.active, archive: full.archive };
-    const hit = bag.__raGMem.get(key);
-    if (hit && Date.now() - hit.at < 8 * 60 * 1000) return { active: hit.active, archive: hit.archive };
-  }
-  const fresh = await pullGroupMembersCrm(request, t, branch, gid, opts);
-  bag.__raGMem.set(key, { at: Date.now(), active: fresh.active, archive: fresh.archive });
-  return fresh;
+  return pullGroupMembersCrm(request, t, branch, gid, opts);
 }
 
 async function pullGroupMembersCrm(
@@ -461,26 +430,18 @@ async function loadBranchActiveTariffs(
   t: string,
   branch: number,
   catalog?: { id: number; name: string; archive?: boolean; price?: number }[],
-  opts?: { fresh?: boolean },
+  _opts?: { fresh?: boolean },
 ) {
-  const bag = globalThis as { __raCTar?: Map<number, { at: number; items: Record<string, unknown>[] }> };
-  if (!bag.__raCTar) bag.__raCTar = new Map();
-  const hit = bag.__raCTar.get(branch);
-  let items = !opts?.fresh && hit && Date.now() - hit.at < 8 * 60 * 1000 ? hit.items : null;
-  if (!items) {
-    const { pagedIndex } = await import("./alfacrm");
-    const { customerTariffIndexBranchPath } = await import("./pupil-tariffs");
-    items = [];
-    await pagedIndex(
-      customerTariffIndexBranchPath(branch),
-      {},
-      t,
-      (it: Record<string, unknown>) => items!.push(it),
-      { pageSize: 100, pages: 16 },
-    );
-    if (!opts?.fresh && items.length) bag.__raCTar.set(branch, { at: Date.now(), items });
-  }
-  const { splitCustomerTariffs } = await import("./pupil-tariffs");
+  const { pagedIndex } = await import("./alfacrm");
+  const { customerTariffIndexBranchPath, splitCustomerTariffs } = await import("./pupil-tariffs");
+  const items: Record<string, unknown>[] = [];
+  await pagedIndex(
+    customerTariffIndexBranchPath(branch),
+    {},
+    t,
+    (it: Record<string, unknown>) => items.push(it),
+    { pageSize: 100, pages: 16 },
+  );
   return splitCustomerTariffs(items, catalog);
 }
 
@@ -2105,10 +2066,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const { uniqueLiveGroups } = await import("./pupil-tariffs");
       const { token, request } = await import("./alfacrm");
       const t = await token();
-      const base = applyCachedTaken(uniqueLiveGroups(listAdminSlots()));
-      const groups = await overlayGroupHeadcount(base, request, t).catch(() => base);
-      saveTaken(groups);
-      return packPupilGroups(groups);
+      const groups = uniqueLiveGroups(listAdminSlots());
+      const counted = await overlayGroupHeadcount(groups, request, t).catch(() => groups);
+      return packPupilGroups(counted);
     }
     if (data.action === "pupilTariffPlan") {
       const { uniqueLiveGroups, pupilRowFromMember, pickBestTariff } = await import("./pupil-tariffs");

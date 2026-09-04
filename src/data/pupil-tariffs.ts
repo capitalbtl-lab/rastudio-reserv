@@ -322,15 +322,13 @@ export function tariffDateToIso(raw: string) {
 
 export type CatalogTariff = { id: number; name: string; archive?: boolean; price?: number };
 
-/** На карточке ученика: не снят (removed). Архив шаблона в CRM — не снятие с человека. */
+/** На карточке: не снят (removed) и не истёк. Дата старта в будущем — всё равно живой (только что назначили). */
 export function customerTariffLive(it: Record<string, unknown>, _catalog?: CatalogTariff[], today = todayIso()) {
   if (Number(it.removed || 0) === 1) return false;
   if (!(Number(it.id) > 0)) return false;
   const tariffId = Number(it.tariff_id || it.tariffId || 0);
   if (!tariffId) return false;
-  const from = tariffDateToIso(String(it.b_date || it.bDate || ""));
   const to = tariffDateToIso(String(it.e_date || it.eDate || ""));
-  if (from && from > today) return false;
   if (to && to < today) return false;
   return true;
 }
@@ -567,6 +565,5 @@ export function tariffMatchesSubject(tariff: { subjectIds?: number[] } | null | 
 }
 
 export function todayIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Moscow" });
 }

@@ -140,6 +140,22 @@ describe("мастер абонементов учеников", () => {
     assert.equal(listed[0].name, "Учится");
   });
 
+  it("только что назначенный абонемент с датой старта завтра — живой", async () => {
+    const { customerTariffLive } = await import("./pupil-tariffs.ts");
+    assert.equal(
+      customerTariffLive(
+        { id: 1, tariff_id: 12, removed: 0, b_date: "06.09.2026", e_date: "04.07.2027" },
+        [],
+        "2026-09-05",
+      ),
+      true,
+    );
+    assert.equal(
+      customerTariffLive({ id: 1, tariff_id: 12, removed: 0, b_date: "01.01.2026", e_date: "04.09.2026" }, [], "2026-09-05"),
+      false,
+    );
+  });
+
   it("все медленно — пачки по 3 группы по номеру", () => {
     const pack = batchesOfThree([
       { groupId: 594 },
