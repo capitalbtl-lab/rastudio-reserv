@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { adminSchedule } from "@/data/admin-schedule";
 import { adminScheduleMap } from "@/data/admin-schedule-map";
 import { retryFetch } from "@/lib/retry-fetch";
@@ -289,8 +290,13 @@ function PeriodPicker({
   type: number;
   onChange: (count: number, type: number) => void;
 }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState(count ? String(count) : "");
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 200, maxH: 148, up: false });
   useEffect(() => {
+    if (document.activeElement && wrapRef.current?.contains(document.activeElement)) return;
     setText(count ? String(count) : "");
   }, [count]);
   const n = Number(String(text).replace(/\D/g, "")) || 0;
@@ -301,44 +307,110 @@ function PeriodPicker({
     if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 > 20)) return few;
     return many;
   }
-  const units = [
-    { id: 1, one: "день", few: "дня", many: "дней" },
-    { id: 2, one: "неделя", few: "недели", many: "недель" },
-    { id: 3, one: "месяц", few: "месяца", many: "месяцев" },
-  ];
-  function setDigits(raw: string) {
-    const digits = raw.replace(/\D/g, "").slice(0, 4);
-    setText(digits);
-    const next = Number(digits) || 0;
-    if (!next) onChange(0, 0);
-    else onChange(next, type || 3);
+  const options = n
+    ? [
+        { id: 1, label: `${n} ${plural(n, "день", "дня", "дней")}` },
+        { id: 2, label: `${n} ${plural(n, "неделя", "недели", "недель")}` },
+        { id: 3, label: `${n} ${plural(n, "месяц", "месяца", "месяцев")}` },
+      ]
+    : [];
+  const picked = options.find((o) => o.id === type && n === count);
+  function place() {
+    const el = wrapRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = Math.max(r.width, 180);
+    const spaceBelow = window.innerHeight - r.bottom - 8;
+    const spaceAbove = r.top - 8;
+    const up = spaceBelow < 132 && spaceAbove > spaceBelow;
+    const maxH = Math.min(160, Math.max(up ? spaceAbove : spaceBelow, 96));
+    setPos({
+      top: up ? r.top - 4 : r.bottom + 4,
+      left: Math.min(r.left, window.innerWidth - width - 8),
+      width,
+      maxH,
+      up,
+    });
   }
+  function pick(id: number) {
+    onChange(n, id);
+    setText(String(n));
+    setOpen(false);
+  }
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const close = (e: MouseEvent) => {
+      const node = e.target as Node;
+      if (wrapRef.current?.contains(node) || menuRef.current?.contains(node)) return;
+      setOpen(false);
+    };
+    window.addEventListener("mousedown", close);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
+  const hint = picked
+    ? picked.label
+    : count
+      ? `${count} ${PERIOD_UNITS.find((u) => u.id === type)?.name || ""}`
+      : "";
+  const menu = open && options.length ? (
+    <div
+      ref={menuRef}
+      className={cn("fixed z-[400] py-1", RA_POP)}
+      style={{
+        top: pos.up ? pos.top - pos.maxH : pos.top,
+        left: pos.left,
+        width: pos.width,
+        maxHeight: pos.maxH,
+      }}
+    >
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          className={cn("block w-full px-3 py-1.5 text-left text-sm hover:bg-sky-50", o.id === type && n === count && "bg-sky-50 font-medium")}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => pick(o.id)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  ) : null;
   return (
-    <div>
+    <div ref={wrapRef} className="relative">
       <input
-        className="h-10 w-full rounded-xl bg-white px-3 text-sm outline-none ring-1 ring-black/10 focus:ring-2 focus:ring-primary/30"
+        className="h-9 w-full rounded-xl bg-white px-3 text-sm outline-none ring-1 ring-black/10 focus:ring-2 focus:ring-primary/30"
         inputMode="numeric"
-        placeholder="Число"
+        placeholder="Введите цифру"
         value={text}
-        onChange={(e) => setDigits(e.target.value)}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/\D/g, "").slice(0, 4);
+          setText(digits);
+          setOpen(Boolean(digits));
+          if (!digits) onChange(0, 0);
+        }}
+        onFocus={() => {
+          if (n) setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && n) {
+            e.preventDefault();
+            pick(type && options.some((o) => o.id === type) ? type : 3);
+          }
+        }}
+        onBlur={() => {
+          if (n && type) onChange(n, type);
+        }}
       />
-      <div className="mt-1 flex min-h-7 flex-wrap items-center gap-1">
-        {n
-          ? units.map((u) => (
-              <button
-                key={u.id}
-                type="button"
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[0.72rem] ring-1",
-                  type === u.id ? "bg-primary text-white ring-primary" : "bg-white text-fg ring-black/10 hover:bg-sky-50",
-                )}
-                onClick={() => onChange(n, u.id)}
-              >
-                {n} {plural(n, u.one, u.few, u.many)}
-              </button>
-            ))
-          : <span className="text-[0.7rem] text-muted">число, затем дни / недели / месяцы</span>}
-      </div>
+      <p className="mt-1 h-4 text-[0.7rem] leading-4 text-muted">{!open && hint ? `Выбрано: ${hint}` : "\u00a0"}</p>
+      {menu && typeof document !== "undefined" ? createPortal(menu, document.body) : null}
     </div>
   );
 }
@@ -1350,6 +1422,7 @@ function Editor({
         </Field>
         </div>
 
+        <div className="md:col-span-12 grid items-start gap-2 md:grid-cols-12">
         <Field label="Уроков" className="md:col-span-2">
           <input className={box} inputMode="numeric" value={t.lessonsCount || ""} onChange={(e) => onPatch({ lessonsCount: Number(e.target.value) || 0 })} />
         </Field>
@@ -1368,13 +1441,14 @@ function Editor({
         <Field label="Период" className="md:col-span-2">
           <PeriodPicker
             count={Number(t.periodCount || 0)}
-            type={Number(t.periodType || 1)}
+            type={Number(t.periodType || 0)}
             onChange={(count, type) => onPatch({ periodCount: count, periodType: type, periodLabel: "" })}
           />
         </Field>
         <Field label="До" className="md:col-span-2">
           <RuDateField value={t.eDate || ""} onChange={(iso) => onPatch({ eDate: iso })} className={box} />
         </Field>
+        </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
