@@ -251,7 +251,8 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
     try {
       for (const [, schoolGroups] of waves) {
-        const title = allPicked ? schoolGroups[0]?.school || "Школа" : "Ученики";
+        const title = allPicked ? schoolGroups[0]?.school || "Школа сайта" : "Ученики";
+        const schoolDone = () => schoolGroups.filter((g) => loadedGroupsRef.current.has(g.key)).length;
         const pending = schoolGroups.filter((g) => !loadedGroupsRef.current.has(g.key));
         for (let i = 0; i < pending.length; ) {
           let take = Math.min(PLAN_GROUP_CHUNK, pending.length - i);
@@ -260,13 +261,13 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             if (attempt >= 2) take = 1;
             const slice = pending.slice(i, i + take);
             const part = slice.map((g) => ({ branchId: g.branchId, groupId: g.groupId }));
-            setMsg(`${title}: № ${slice.map((g) => g.groupId).join(", ")}`);
+            setMsg(`${title}: группа № ${slice.map((g) => g.groupId).join(", ")}`);
             setProgress({
-              done: loadedGroupsRef.current.size,
-              total,
+              done: schoolDone(),
+              total: schoolGroups.length,
               label: title,
-              unit: "групп",
-              extra: `${loadedGroupsRef.current.size} из ${total}`,
+              unit: "групп этой школы",
+              extra: allPicked ? `всего ${loadedGroupsRef.current.size} из ${total} по всем школам сайта` : `${loadedGroupsRef.current.size} из ${total}`,
             });
             try {
               const res = (await retryFetch(
@@ -311,11 +312,11 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           const schoolRows = rows.filter((r) => schoolGroups.some((g) => g.groupId === r.groupId && g.branchId === r.branchId));
           if (schoolRows.length) {
             setProgress({
-              done: loadedGroupsRef.current.size,
-              total,
+              done: schoolGroups.length,
+              total: schoolGroups.length,
               label: `${title}: абонементы`,
-              unit: "групп",
-              extra: `${schoolRows.length} чел.`,
+              unit: "групп этой школы",
+              extra: `${schoolRows.length} чел. этой школы сайта · всего ${loadedGroupsRef.current.size} из ${total}`,
             });
             let tariffsOk = false;
             for (let attempt = 0; attempt < 6 && !tariffsOk; attempt += 1) {
@@ -669,11 +670,13 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       {step === 1 ? (
         <div className="mt-4 space-y-3">
           <p className="text-sm text-muted">
-            {path === "add"
-              ? "Отметьте группы. «Выбрать все» — полный круг по школе, выпавших перепроверяем, затем следующая."
-              : path === "change"
-                ? "Не всё — обычный режим. «Выбрать все» — школа за школой до конца (изменение)."
-                : "Не всё — обычный режим. «Выбрать все» — школа за школой до конца (удаление)."}
+            {groups.length > 0 && picked.size === groups.length
+              ? "Выбраны все группы: полный круг по школам сайта (как в дереве школ). Счётчик справа — группы этой школы, ниже — всего."
+              : path === "add"
+                ? "Отмечены не все — обычный режим, одним списком."
+                : path === "change"
+                  ? "Отмечены не все — обычный режим. «Выбрать все» — школа сайта за школой."
+                  : "Отмечены не все — обычный режим. «Выбрать все» — школа сайта за школой."}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <select value={school} onChange={(e) => setSchool(e.target.value)} className="h-10 rounded-xl bg-surface-2 px-3 text-sm ring-1 ring-black/10">
