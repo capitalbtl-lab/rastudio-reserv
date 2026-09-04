@@ -531,6 +531,9 @@ export function filterCrmSessions(sessions: CmsSession[], splat?: string | null)
   if (decoded === "/promising-professions") {
     return sessions.filter((s) => /tesla|science|radio|3d-modeling/.test(hrefOf(s)));
   }
+  if (decoded === "/model-school") {
+    return sessions.filter((s) => /model-school/.test(hrefOf(s)));
+  }
   return sessions.filter((s) => hrefOf(s) === decoded);
 }
 
@@ -664,7 +667,7 @@ const COURSE_ALIAS: { ask: RegExp; hay: RegExp }[] = [
   { ask: /худож|рисов|живопис|лепк|скульпт|манг|аним/, hay: /худож|рисов|живопис|лепк|скульпт|манг|аним|art-studio|sculptural|hudvuz|digitalart/ },
   { ask: /програм|питон|скретч|python|scratch|айти|\bit\b|create|криэйт|джуниор/, hay: /програм|python|scratch|питон|скретч|create|junior|gamedev|unity|blender|codebook/ },
   { ask: /наук|физик|steam|радио|беспилот|дрон/, hay: /наук|физик|steam|радио|tesla|science|radio|беспилот|дрон/ },
-  { ask: /модельн|подиум/, hay: /модельн|подиум|model/ },
+  { ask: /модельн|подиум|макияж|личностн/, hay: /модельн|подиум|model|макияж|личностн/ },
   { ask: /англий|язык|япон|коре/, hay: /англий|язык|english|japanese|vitamin|япон|коре/ },
   { ask: /подготовк|школ/, hay: /подготовк|preparation|happybricks|лего-матем/ },
 ];

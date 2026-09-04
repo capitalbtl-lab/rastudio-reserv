@@ -1484,5 +1484,111 @@
       "filename": "01.jpg",
       "alt": "Занятия в студии «Развивайся» в Коломне"
     }
+  ],
+  "/model-school-podium": [
+    {
+      "src": "/media/courses/model-school/01.jpg",
+      "filename": "01.jpg",
+      "alt": "Модельная школа «Подиум» в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/02.jpg",
+      "filename": "02.jpg",
+      "alt": "Модельная школа «Подиум» в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/03.jpg",
+      "filename": "03.jpg",
+      "alt": "Модельная школа «Подиум» в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/04.jpg",
+      "filename": "04.jpg",
+      "alt": "Модельная школа «Подиум» в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/05.jpg",
+      "filename": "05.jpg",
+      "alt": "Модельная школа «Подиум» в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/06.jpg",
+      "filename": "06.jpg",
+      "alt": "Модельная школа «Подиум» в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/15.jpg",
+      "filename": "15.jpg",
+      "alt": "Модельная школа «Подиум» в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/16.jpg",
+      "filename": "16.jpg",
+      "alt": "Модельная школа «Подиум» в Коломне"
+    }
+  ],
+  "/model-school-makeup": [
+    {
+      "src": "/media/courses/model-school/07.jpg",
+      "filename": "07.jpg",
+      "alt": "Курс макияжа в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/model-school/08.jpg",
+      "filename": "08.jpg",
+      "alt": "Курс макияжа в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/model-school/09.jpg",
+      "filename": "09.jpg",
+      "alt": "Курс макияжа в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/model-school/10.jpg",
+      "filename": "10.jpg",
+      "alt": "Курс макияжа в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/model-school/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Курс макияжа в студии «Развивайся»"
+    },
+    {
+      "src": "/media/courses/model-school/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Курс макияжа в студии «Развивайся»"
+    }
+  ],
+  "/model-school-growth": [
+    {
+      "src": "/media/courses/model-school/11.jpg",
+      "filename": "11.jpg",
+      "alt": "Курс личностного роста в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/12.jpg",
+      "filename": "12.jpg",
+      "alt": "Курс личностного роста в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/13.jpg",
+      "filename": "13.jpg",
+      "alt": "Курс личностного роста в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/14.jpg",
+      "filename": "14.jpg",
+      "alt": "Курс личностного роста в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/15.jpg",
+      "filename": "15.jpg",
+      "alt": "Курс личностного роста в Коломне"
+    },
+    {
+      "src": "/media/courses/model-school/16.jpg",
+      "filename": "16.jpg",
+      "alt": "Курс личностного роста в Коломне"
+    }
   ]
 }

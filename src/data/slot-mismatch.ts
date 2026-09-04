@@ -8,7 +8,7 @@ export function schoolFromHay(hay: string) {
   if (/наук|физик|радио|беспилот|компас|blender|инженер|steam/.test(t) && !/лего|планет/.test(t)) return "Школа наук и инженерии";
   if (/лего|подготовк|к школе|планет/.test(t)) return "Школа раннего развития";
   if (/англий|япон|коре|язык|go getter|super minds|vitamin|nihongo/.test(t)) return "Школа иностранных языков";
-  if (/модельн|подиум/.test(t)) return "Модельная школа";
+  if (/модельн|подиум|макияж|личностн/.test(t)) return "Модельная школа";
   return "Прочее";
 }
 
@@ -33,6 +33,8 @@ function programFamily(hay: string) {
   if (/наук|физик/.test(t)) return "science";
   if (/радио/.test(t)) return "radio";
   if (/беспилот/.test(t)) return "drone";
+  if (/макияж/.test(t)) return "makeup";
+  if (/личностн/.test(t)) return "growth";
   if (/модельн|подиум/.test(t)) return "model";
   if (/англий|go getter|super minds/.test(t)) return "english";
   if (/коре|vitamin/.test(t)) return "korean";

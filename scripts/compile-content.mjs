@@ -310,6 +310,30 @@ const FALLBACKS = [
     h1: "Валерий Янович Гильман",
     clone: "/team",
   },
+  {
+    path: "/model-school-podium",
+    title: 'Модельная школа «Подиум» 9–14 лет в Коломне | Студия «Развивайся»',
+    description:
+      "Курс «Подиум» для девочек 9–14 лет в Коломне: дефиле, позирование, съёмка, показ и портфолио. Студия «Развивайся», пробное занятие.",
+    h1: 'Модельная школа «Подиум» в Коломне',
+    clone: "/model-school",
+  },
+  {
+    path: "/model-school-makeup",
+    title: "Курс макияжа для девочек 13–17 лет в Коломне | Студия «Развивайся»",
+    description:
+      "Макияж для девочек 13–17 лет в Коломне: уход, цветотип, дневной и съёмочный образ. Модельная школа студии «Развивайся», пробное занятие.",
+    h1: "Курс макияжа для девочек 13–17 лет",
+    clone: "/model-school",
+  },
+  {
+    path: "/model-school-growth",
+    title: "Личностный рост для девочек 13–17 лет в Коломне | Студия «Развивайся»",
+    description:
+      "Курс личностного роста для девочек 13–17 лет в Коломне: уверенность, границы, эмоции. Модельная школа студии «Развивайся», пробное занятие.",
+    h1: "Личностный рост для девочек 13–17 лет",
+    clone: "/model-school",
+  },
 ];
 
 for (const fb of FALLBACKS) {
@@ -333,7 +357,10 @@ for (const fb of FALLBACKS) {
             "Преподаватель робототехники для детей старшего возраста, 3D моделирования, методическая работа, наставник.",
           ]
         : clone.paragraphs.slice(0, 8),
-    images: clone.images.slice(0, 4),
+    images:
+      COURSE_EXTRAS[fb.path] || COURSE_HEROES[fb.path]
+        ? []
+        : clone.images.slice(0, 4),
     related: [],
   };
   const idx = compiled.findIndex((x) => x.path === fb.path);
@@ -367,6 +394,20 @@ function applyLocalHeroes(page) {
 }
 
 for (const page of compiled) applyLocalHeroes(page);
+
+const PAGE_OVERRIDES = {
+  "/model-school": {
+    title: "Модельная школа в Коломне | Студия «Развивайся»",
+    description:
+      "Модельная школа в Коломне: курс «Подиум» 9–14 лет, макияж и личностный рост для девочек 13–17. Студия «Развивайся», пробное занятие.",
+    ogTitle: "Модельная школа в Коломне | Студия «Развивайся»",
+    h1: "Модельная школа в Коломне",
+  },
+};
+for (const page of compiled) {
+  const o = PAGE_OVERRIDES[page.path];
+  if (o) Object.assign(page, o);
+}
 
 const teamPage = byPath.get("/team");
 const teachers = [];
@@ -467,7 +508,9 @@ const COURSE_ORDER = [
   ["/preparation-for-school", "Подготовка к школе «Умный карандашик»"],
   ["/happybricks", "Кирпичики счастья"],
   ["/kinder-master", "Киндер-мастер"],
-  ["/model-school", "Модельная школа «Подиум»"],
+  ["/model-school-podium", "Модельная школа «Подиум»"],
+  ["/model-school-makeup", "Макияж"],
+  ["/model-school-growth", "Личностный рост"],
   ["/englishlanguagegg", "Английский Go Getter"],
   ["/englishlanguagesm", "Английский Super Minds"],
   ["/japanese", "Японский язык Kodomo no Nihongo"],
@@ -503,7 +546,10 @@ const AGE_HINTS = {
   "/preparation-for-school": "5–7 лет",
   "/happybricks": "3–6 лет",
   "/kinder-master": "10–16 лет",
-  "/model-school": "9–14 лет",
+  "/model-school": "9–17 лет",
+  "/model-school-podium": "9–14 лет",
+  "/model-school-makeup": "13–17 лет",
+  "/model-school-growth": "13–17 лет",
   "/englishlanguagegg": "9–14 лет",
   "/englishlanguagesm": "6–8 лет",
   "/japanese": "9–16 лет",

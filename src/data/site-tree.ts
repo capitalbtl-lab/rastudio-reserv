@@ -141,6 +141,8 @@ function familyKey(s: string) {
   if (/компас/.test(t)) return "compass";
   if (/киндер|kinder/.test(t)) return "kinder";
   if (/беспилот/.test(t)) return "drone";
+  if (/макияж/.test(t)) return "makeup";
+  if (/личностн/.test(t)) return "growth";
   if (/модельн|подиум/.test(t)) return "model";
   if (/балн|танц|хорео|балет/.test(t)) return "dance";
   if (/наук|эксперимент/.test(t)) return "science";

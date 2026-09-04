@@ -103,10 +103,10 @@ export const SCHOOLS = [
   {
     href: "/model-school",
     label: "Модельная школа",
-    kicker: "9-14 лет",
-    blurb: "Подиум, стиль, этикет и уверенная самопрезентация.",
+    kicker: "9-17 лет",
+    blurb: "Подиум 9–14, макияж и личностный рост для девочек 13–17.",
     image: "/courses/podium.jpg",
-    alt: "Модельная школа «Подиум» в Коломне",
+    alt: "Модельная школа в Коломне",
     filename: "Развивайся - Модельная школа Подиум в Коломне.png",
   },
   {
@@ -137,7 +137,7 @@ export const SCHOOL_COURSE_MATCH: Record<string, (href: string) => boolean> = {
   "/promising-professions": (href) =>
     /radioengineering|science-course|teslaphysics|3d-modeling|gamedesign|mentalarithmetic|kinder-master/i.test(href),
   "/early-childhood-care": (href) => /preparation-for-school|happybricks|planet-steam/i.test(href),
-  "/model-school": (href) => /model-school/i.test(href),
+  "/model-school": (href) => /model-school-/i.test(href),
   "/languageschool": (href) => /englishlanguage|japanese|vitaminkorean/i.test(href),
 };
 
@@ -293,10 +293,10 @@ export const SHOWCASE = [
   {
     href: "/model-school",
     title: "Модельная школа",
-    age: "9–14 лет",
+    age: "9–17 лет",
     src: "/courses/podium.jpg",
     filename: "Развивайся - Модельная школа Подиум в Коломне.png",
-    alt: "Модельная школа «Подиум» в Коломне",
+    alt: "Модельная школа в Коломне",
   },
 ] as const;
 

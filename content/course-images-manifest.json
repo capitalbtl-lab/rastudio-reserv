@@ -266,7 +266,8 @@
       1024
     ],
     "paths": [
-      "/model-school"
+      "/model-school",
+      "/model-school-podium"
     ]
   },
   {
@@ -422,5 +423,23 @@
       1067
     ],
     "paths": []
+  },
+  {
+    "src": "/courses/model-makeup.jpg",
+    "filename": "Развивайся - Курс макияжа в Коломне.jpg",
+    "alt": "Курс макияжа для девочек в Коломне",
+    "slug": "model-makeup",
+    "paths": [
+      "/model-school-makeup"
+    ]
+  },
+  {
+    "src": "/courses/model-growth.jpg",
+    "filename": "Развивайся - Курс личностного роста в Коломне.jpg",
+    "alt": "Курс личностного роста для девочек в Коломне",
+    "slug": "model-growth",
+    "paths": [
+      "/model-school-growth"
+    ]
   }
 ]

@@ -112,7 +112,7 @@
   "/model-school": {
     "src": "/courses/podium.jpg",
     "filename": "Развивайся - Модельная школа Подиум в Коломне.png",
-    "alt": "Модельная школа «Подиум» в Коломне"
+    "alt": "Модельная школа в Коломне"
   },
   "/kinder-master": {
     "src": "/courses/handwork.jpg",
@@ -183,5 +183,20 @@
     "src": "/courses/intro-computers.jpg",
     "filename": "Развивайся - Знакомство с компьютером и информационными технологиями в Коломне.png",
     "alt": "Знакомство с компьютером и информационными технологиями"
+  },
+  "/model-school-podium": {
+    "src": "/courses/podium.jpg",
+    "filename": "Развивайся - Модельная школа Подиум в Коломне.png",
+    "alt": "Модельная школа «Подиум» в Коломне"
+  },
+  "/model-school-makeup": {
+    "src": "/courses/model-makeup.jpg",
+    "filename": "Развивайся - Курс макияжа в Коломне.jpg",
+    "alt": "Курс макияжа для девочек в Коломне"
+  },
+  "/model-school-growth": {
+    "src": "/courses/model-growth.jpg",
+    "filename": "Развивайся - Курс личностного роста в Коломне.jpg",
+    "alt": "Курс личностного роста для девочек в Коломне"
   }
 }

@@ -21,6 +21,35 @@ function storagePath() {
   return join(process.cwd(), "storage", "prices.json");
 }
 
+/** Школа /model-school больше не курс: «Подиум» + макияж + личностный рост. Живой prices.json без этого шага оставит старый path. */
+function migrateModelSchoolSplit(rows: PriceRow[]): { rows: PriceRow[]; changed: boolean } {
+  const next = rows.map((r) => ({ ...r }));
+  let changed = false;
+  const podium = next.find((r) => r.id === "6001") || next.find((r) => r.path === "/model-school");
+  if (podium && (podium.path === "/model-school" || podium.courseId === "/model-school")) {
+    podium.path = "/model-school-podium";
+    podium.courseId = "/model-school-podium";
+    changed = true;
+  }
+  const add = (id: string, name: string, age: string, path: string) => {
+    if (next.some((r) => r.id === id || r.path === path)) return;
+    next.push({
+      id,
+      name,
+      age,
+      path,
+      direction: "Модельная школа",
+      all: podium?.all || 0,
+      kbm: podium?.kbm || 0,
+      tmx: podium?.tmx || 0,
+    });
+    changed = true;
+  };
+  add("6002", "Макияж", "Курс для девочек 13-17 лет", "/model-school-makeup");
+  add("6003", "Личностный рост", "Курс для девочек 13-17 лет", "/model-school-growth");
+  return { rows: next, changed };
+}
+
 export function ensureLivePrices() {
   try {
     if (existsSync(storagePath())) {
@@ -29,6 +58,8 @@ export function ensureLivePrices() {
   } catch {
     /* seed already in memory */
   }
+  const { rows, changed } = migrateModelSchoolSplit(listPriceRows());
+  if (changed) savePriceRows(rows);
   return listPriceRows();
 }
 

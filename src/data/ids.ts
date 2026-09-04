@@ -128,7 +128,7 @@ export const SUBJECT_TO_COURSE: Record<number, string> = {
   16: "/preparation-for-school",
   108: "/happybricks",
   109: "/planet-steam",
-  4: "/model-school",
+  4: "/model-school-podium",
   110: "/englishlanguagesm",
   111: "/englishlanguagegg",
   112: "/vitaminkorean",

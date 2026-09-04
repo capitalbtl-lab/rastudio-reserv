@@ -29,7 +29,7 @@ export function siteCourseOptions(): SiteCourseOpt[] {
     if (!id || seen.has(id)) continue;
     const schoolId = schoolIdOfPath(id);
     if (!schoolId) continue;
-    if (schoolId === id && !SCHOOL_COURSE_MATCH[id] && id !== "/model-school") continue;
+    if (schoolId === id && !SCHOOL_COURSE_MATCH[id]) continue;
     seen.add(id);
     const age = String(r.age || "").replace(/^Для детей\s*/i, "").trim();
     const name = tidyCourseName(r.name) || r.name;

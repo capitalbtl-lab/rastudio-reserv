@@ -98,7 +98,7 @@ function takeSchool(text: string) {
   if (/программ|scratch|python|unity|код|gamedev| scratch/i.test(text)) return "программирование";
   if (/наук|физик|инженер|радио|беспил|3d|компас/i.test(text)) return "науки и инженерия";
   if (/подготовк\w* к школе|ранн(ее|его) развит|лего-матем|steam/i.test(text)) return "раннее развитие";
-  if (/модельн|подиум/i.test(text)) return "модельная школа";
+  if (/модельн|подиум|макияж|личностн/i.test(text)) return "модельная школа";
   if (/англий|япон|коре|язык/i.test(text)) return "языки";
   if (/мастер-класс|мастер класс/i.test(text)) return "мастер-классы";
   if (/летн(ий|яя|ие)|лагер/i.test(text)) return "летние программы";

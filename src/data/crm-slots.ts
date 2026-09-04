@@ -79,7 +79,7 @@ export function schoolOf(path: string, subject: string, group: string) {
   if (/наук|физик|steam|радио|tesla|science|беспилот|дрон|инженер/.test(t)) return "Школа наук и инженерии";
   if (/подготовк|preparation|happybricks|лего|ранн/.test(t)) return "Школа раннего развития";
   if (/англий|язык|english|japanese|vitamin|япон|коре/.test(t)) return "Школа иностранных языков";
-  if (/модельн|подиум|model/.test(t)) return "Модельная школа";
+  if (/модельн|подиум|model|макияж|личностн/.test(t)) return "Модельная школа";
   return "Прочее";
 }
 
