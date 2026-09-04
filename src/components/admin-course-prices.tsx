@@ -203,7 +203,7 @@ export function AdminCoursePrices() {
   async function addClient() {
     const name = addName.trim();
     if (name.length < 2) {
-      setErr("Название клиента — минимум 2 символа.");
+      setErr("Название корп. клиента — минимум 2 символа.");
       return;
     }
     setBusy(true);
@@ -348,11 +348,11 @@ export function AdminCoursePrices() {
               void addClient();
             }
           }}
-          placeholder="Название клиента"
+          placeholder="Название корп. клиента"
           className="h-10 w-44 rounded-xl bg-white px-3 text-sm ring-1 ring-black/10"
         />
         <Button type="button" variant="secondary" className="h-10" disabled={busy} onClick={() => void addClient()}>
-          Добавить клиента
+          Добавить корп.клиента
         </Button>
         <Button type="button" className="ml-auto h-10 px-5" disabled={busy || !rows.length} onClick={() => void saveAll()}>
           Сохранить
