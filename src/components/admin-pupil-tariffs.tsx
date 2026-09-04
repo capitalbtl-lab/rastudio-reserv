@@ -6,7 +6,7 @@ import { retryFetch } from "@/lib/retry-fetch";
 import { RaSelect } from "@/components/ra-select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, TARIFF_READ_CHUNK, collapsePupilsByCustomer, pupilListStats, groupsBySchoolId, bySchoolId, dropoutsAfterJob, personKey, stampLiveTariff, changeListRows } from "@/data/pupil-tariffs";
+import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, TARIFF_READ_CHUNK, collapsePupilsByCustomer, pupilListStats, groupsBySchoolId, bySchoolId, dropoutsAfterJob, personKey, changeListRows, batchesOfThree, SLOW_VERIFY, SLOW_SPEED } from "@/data/pupil-tariffs";
 import { ISO_DATE_MAX, ISO_DATE_MIN, clampIsoDate } from "@/data/admin-ui";
 
 type PupilGroup = {
@@ -162,6 +162,8 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [skipExisting, setSkipExisting] = useState(true);
   const [job, setJob] = useState<"assign" | "close" | "delete">("assign");
   const [path, setPath] = useState<"add" | "change" | "remove">("add");
+  const [pace, setPace] = useState<"select" | "fast" | "slow">("select");
+  const [log, setLog] = useState<{ at: string; text: string }[]>([]);
   const [closeDate, setCloseDate] = useState(todayIso);
   const [result, setResult] = useState<{ done: number; skipped: number; failed: { name: string; error: string }[] } | null>(null);
   const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
@@ -178,44 +180,59 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const pickSigRef = useRef("");
   const bySchoolRun = useRef(false);
 
+  function clock() {
+    return new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+  function note(text: string) {
+    setLog((prev) => [...prev.slice(-120), { at: clock(), text }]);
+    setMsg(text);
+  }
+
+  async function loadGroups() {
+    setBusy(true);
+    setMsg("");
+    try {
+      const [res, sub] = await Promise.all([
+        retryFetch(
+          () => adminSchedule({ data: { token: token(), action: "pupilTariffGroups", groupKeys: [] } as never }),
+          2,
+          12000,
+        ) as Promise<{
+          ok?: boolean;
+          groups?: PupilGroup[];
+          schools?: string[];
+          unbound?: number;
+          byBranch?: Record<number, { total: number; withPeople: number; kids?: number }>;
+          kids?: number;
+          error?: string;
+        }>,
+        retryFetch(
+          () => adminSchedule({ data: { token: token(), action: "subjectsGet" } as never }),
+          1,
+          15000,
+        ).catch(() => null) as Promise<{ ok?: boolean; subjects?: { id: number; name: string }[] } | null>,
+      ]);
+      if (res.ok) {
+        const list = res.groups || [];
+        setGroups(list);
+        setSchools(res.schools || []);
+        setUnbound(Number(res.unbound || 0));
+        setByBranch(res.byBranch || {});
+        setCountsLive(false);
+        loadedGroupsRef.current = new Set();
+        if (pace === "fast" || pace === "slow") setPicked(new Set(list.map((g) => g.key)));
+        note(`Список групп обновлён: ${list.length}`);
+      } else setMsg(res.error || "Не удалось прочитать группы.");
+      if (sub && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects);
+    } catch (e) {
+      setMsg(e instanceof Error ? friendlyErr(e, "Не удалось прочитать группы. Нажмите «Перезагрузить список».") : "Не удалось прочитать группы.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   useEffect(() => {
-    void (async () => {
-      setBusy(true);
-      try {
-        const [res, sub] = await Promise.all([
-          retryFetch(
-            () => adminSchedule({ data: { token: token(), action: "pupilTariffGroups", groupKeys: [] } as never }),
-            2,
-            12000,
-          ) as Promise<{
-            ok?: boolean;
-            groups?: PupilGroup[];
-            schools?: string[];
-            unbound?: number;
-            byBranch?: Record<number, { total: number; withPeople: number; kids?: number }>;
-            kids?: number;
-            error?: string;
-          }>,
-          retryFetch(
-            () => adminSchedule({ data: { token: token(), action: "subjectsGet" } as never }),
-            1,
-            15000,
-          ).catch(() => null) as Promise<{ ok?: boolean; subjects?: { id: number; name: string }[] } | null>,
-        ]);
-        if (res.ok) {
-          setGroups(res.groups || []);
-          setSchools(res.schools || []);
-          setUnbound(Number(res.unbound || 0));
-          setByBranch(res.byBranch || {});
-          setCountsLive(false);
-        } else setMsg(res.error || "Не удалось прочитать группы.");
-        if (sub && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects);
-      } catch (e) {
-        setMsg(e instanceof Error ? friendlyErr(e, "Не удалось прочитать группы. Обновите страницу.") : "Не удалось прочитать группы.");
-      } finally {
-        setBusy(false);
-      }
-    })();
+    void loadGroups();
   }, []);
 
   const visible = useMemo(() => {
@@ -239,8 +256,12 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     }
     const selected = groups.filter((g) => picked.has(g.key));
     const allPicked = groups.length > 0 && picked.size === groups.length;
-    bySchoolRun.current = allPicked;
-    const waves = allPicked ? groupsBySchoolId(selected) : ([[ "", selected ]] as [string, typeof selected][]);
+    const slow = pace === "slow";
+    bySchoolRun.current = allPicked || pace === "fast" || slow;
+    const schoolWaves = allPicked || pace === "fast" || slow ? groupsBySchoolId(selected) : ([[ "", selected ]] as [string, typeof selected][]);
+    const waves = slow
+      ? schoolWaves.flatMap(([sid, list]) => batchesOfThree(list).map((part, i) => [`${sid}:${i}`, part] as [string, typeof selected]))
+      : schoolWaves;
     const total = selected.length;
     const rows: PupilTariffItem[] = [];
     const grouped: Record<string, GroupTariff> = {};
@@ -248,7 +269,9 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     let archived = 0;
     setProgress({ done: loadedGroupsRef.current.size, total, label: "Читаю учеников", unit: "групп", extra: "" });
     setSummary("");
+    setLog([]);
     const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+    const pause = (ms: number) => wait(slow ? ms * SLOW_SPEED : ms);
     const readTariffs = async (list: PupilTariffItem[], label: string) => {
       for (let t = 0; t < list.length; t += TARIFF_READ_CHUNK) {
         const part = list.slice(t, t + TARIFF_READ_CHUNK);
@@ -276,10 +299,10 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                 if (hit) rows[ri] = { ...rows[ri], ...hit };
               }
               partOk = true;
-            } else await wait(600 * (attempt + 1));
+            } else await pause(600 * (attempt + 1));
           } catch (e) {
             setMsg(friendlyErr(e, `${label}: абонементы, повтор ${attempt + 1}`));
-            await wait(700 * (attempt + 1));
+            await pause(700 * (attempt + 1));
           }
         }
         if (!partOk) return false;
@@ -288,7 +311,9 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     };
     try {
       for (const [, schoolGroups] of waves) {
-        const title = allPicked ? schoolGroups[0]?.school || "Школа сайта" : "Ученики";
+        const title = bySchoolRun.current ? schoolGroups[0]?.school || "Школа сайта" : "Ученики";
+        const ids = schoolGroups.map((g) => g.groupId).join(", ");
+        note(slow ? `${title}: пачка № ${ids}` : `${title}`);
         const schoolDone = () => schoolGroups.filter((g) => loadedGroupsRef.current.has(g.key)).length;
         const pending = schoolGroups.filter((g) => !loadedGroupsRef.current.has(g.key));
         for (let i = 0; i < pending.length; ) {
@@ -299,6 +324,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             const slice = pending.slice(i, i + take);
             const part = slice.map((g) => ({ branchId: g.branchId, groupId: g.groupId }));
             setMsg(`${title}: группа № ${slice.map((g) => g.groupId).join(", ")}`);
+            note(`${title}: читаю группу № ${slice.map((g) => g.groupId).join(", ")}`);
             setProgress({
               done: schoolDone(),
               total: schoolGroups.length,
@@ -341,11 +367,11 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                   }
                 }
               } else {
-                await wait(700 * (attempt + 1));
+                await pause(700 * (attempt + 1));
               }
             } catch (e) {
               setMsg(friendlyErr(e, `${title}: повтор ${attempt + 1}`));
-              await wait(700 * (attempt + 1));
+              await pause(700 * (attempt + 1));
             }
           }
           if (!ok) {
@@ -484,15 +510,23 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     const acc = { done: 0, skipped: 0, failed: [] as { name: string; error: string }[] };
     setResult(acc);
     const verb = mode === "delete" ? "Удаляю" : mode === "close" ? "Завершаю" : "Назначаю";
-    const mins = assignEtaMin(total);
-    const waves = bySchoolRun.current ? bySchoolId(pack) : ([[ "", pack ]] as [string, typeof pack][]);
-    setProgress({ done: 0, total, label: verb, unit: "учеников", extra: `около ${mins} мин, по ${ASSIGN_CHUNK}` });
+    const mins = assignEtaMin(total) * (pace === "slow" ? SLOW_SPEED : 1);
+    const schoolWaves = bySchoolRun.current || pace === "slow" ? bySchoolId(pack) : ([[ "", pack ]] as [string, typeof pack][]);
+    const waves =
+      pace === "slow"
+        ? schoolWaves.flatMap(([sid, list]) => batchesOfThree(list).map((part, i) => [`${sid}:${i}`, part] as [string, typeof pack]))
+        : schoolWaves;
+    setProgress({ done: 0, total, label: verb, unit: "учеников", extra: pace === "slow" ? `медленно, по 3 группы, около ${mins} мин` : `около ${mins} мин, по ${ASSIGN_CHUNK}` });
     setMsg("");
     const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+    const pause = (ms: number) => wait(pace === "slow" ? ms * SLOW_SPEED : ms);
+    const rounds = pace === "slow" ? SLOW_VERIFY : 3;
     try {
       let doneN = 0;
       for (const [, schoolPack] of waves) {
-        const title = bySchoolRun.current ? schoolPack[0]?.school || verb : verb;
+        const title = bySchoolRun.current || pace === "slow" ? schoolPack[0]?.school || verb : verb;
+        const ids = [...new Set(schoolPack.map((p) => p.groupId))].join(", ");
+        note(`${title}: выгрузка групп № ${ids}, ${schoolPack.length} чел.`);
         const send = async (list: typeof schoolPack) => {
           const failedKeys = new Set<string>();
           for (let i = 0; i < list.length; ) {
@@ -507,6 +541,9 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                 extra: `готово ${acc.done} · пропуск ${acc.skipped} · ошибок ${acc.failed.length}`,
               });
               setMsg(`${title}: ${i + 1}–${Math.min(i + chunk.length, list.length)} из ${list.length}`);
+              for (const p of chunk) {
+                note(`${verb} ${p.name} · группа № ${p.groupId} · ${p.tariffName || "абонемент CRM"}`);
+              }
               try {
                 const res = (await retryFetch(
                   () =>
@@ -540,10 +577,10 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                   i += chunk.length;
                   doneN += chunk.length;
                   ok = true;
-                } else await wait(800 * (attempt + 1));
+                } else await pause(800 * (attempt + 1));
               } catch (e) {
                 setMsg(friendlyErr(e, `${title}: повтор ${attempt + 1}`));
-                await wait(800 * (attempt + 1));
+                await pause(800 * (attempt + 1));
               }
             }
             if (!ok) {
@@ -551,32 +588,36 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               i += chunk.length;
             }
             setResult({ ...acc, failed: [...acc.failed] });
-            if (i < list.length) await wait(ASSIGN_BATCH_PAUSE_MS);
+            if (i < list.length) await pause(ASSIGN_BATCH_PAUSE_MS);
           }
           return failedKeys;
         };
         let leftover = [...schoolPack];
-        for (let round = 0; round < 3 && leftover.length; round += 1) {
-          setMsg(`${title}: круг ${round + 1}, ${leftover.length} чел.`);
-          const failedKeys = await send(leftover);
-          let miss: typeof leftover = [];
+        for (let round = 0; round < rounds; round += 1) {
+          if (round === 0 || leftover.length) {
+            note(`${title} № ${ids}: ${round === 0 ? "вношу" : "добиваю выпавших"} · ${leftover.length} чел.`);
+            const failedKeys = await send(leftover);
+            leftover = leftover.filter((p) => failedKeys.has(personKey(p.branchId, p.customerId)));
+          }
+          note(`${title} № ${ids}: сверка ${round + 1}/${rounds}`);
           try {
             const active = (await retryFetch(
-              () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: leftover } as never }),
+              () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: schoolPack } as never }),
               1,
               50000,
             )) as { ok?: boolean; items?: PupilTariffItem[] };
-            if (active.ok) {
-              miss = dropoutsAfterJob(mode === "assign" ? "assign" : mode, leftover, active.items || [], closeDate);
-            } else miss = leftover.filter((p) => failedKeys.has(personKey(p.branchId, p.customerId)));
+            leftover = active.ok
+              ? dropoutsAfterJob(mode === "assign" ? "assign" : mode, schoolPack, active.items || [], closeDate)
+              : leftover;
           } catch {
-            miss = leftover.filter((p) => failedKeys.has(personKey(p.branchId, p.customerId)));
+            /* leftover as is */
           }
-          const keys = new Set([...failedKeys, ...miss.map((p) => personKey(p.branchId, p.customerId))]);
-          leftover = leftover.filter((p) => keys.has(personKey(p.branchId, p.customerId)));
           if (leftover.length) {
-            setMsg(`${title}: выпали ${leftover.length}, перепроверяю`);
-            await wait(1200);
+            note(`${title} № ${ids}: выпали ${leftover.map((p) => p.name).join(", ")}`);
+            await pause(1200);
+          } else {
+            note(`${title} № ${ids}: сверка ${round + 1}/${rounds} — все на месте`);
+            if (pace !== "slow") break;
           }
         }
         if (leftover.length) {
@@ -651,6 +692,35 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <span className="shrink-0 text-sm font-medium text-muted">Темп</span>
+        {(
+          [
+            ["select", "Выборочно"],
+            ["fast", "Все быстро"],
+            ["slow", "Все медленно"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => {
+              setPace(id);
+              if (id === "fast" || id === "slow") setPicked(new Set(groups.map((g) => g.key)));
+            }}
+            className={cn("h-9 rounded-[8px] px-3 text-sm font-semibold", pace === id ? "bg-primary text-white" : "bg-surface-2 text-muted")}
+          >
+            {label}
+          </button>
+        ))}
+        <span className="text-[0.75rem] text-muted">
+          {pace === "slow"
+            ? "По 3 группы по номеру: опрос → изменение → сверка 3 раза, вдвое медленнее, лог по каждому."
+            : pace === "fast"
+              ? "Все группы, школа за школой, обычная скорость."
+              : "Отметьте нужные группы сами."}
+        </span>
+      </div>
       <div className="mt-6 flex flex-wrap gap-2 text-[0.78rem]">
         {stepLabels.map((label, i) => (
           <span key={label} className={cn("rounded-full px-3 py-1", step === i + 1 ? "bg-primary text-white" : "bg-surface-2 text-muted")}>
@@ -677,17 +747,25 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           {progress.extra ? <p className="mt-2 text-[0.75rem] text-muted">{progress.extra}</p> : null}
         </div>
       ) : null}
+      {log.length ? (
+        <div className="mt-3 max-h-40 overflow-auto rounded-[12px] bg-surface-2 p-3 text-[0.75rem] leading-5 ring-1 ring-black/8">
+          {log.map((row, i) => (
+            <p key={`${row.at}-${i}`}>
+              <span className="text-muted">{row.at}</span>
+              <span className="ml-2 text-fg">{row.text}</span>
+            </p>
+          ))}
+        </div>
+      ) : null}
 
       {step === 1 ? (
         <div className="mt-4 space-y-3">
           <p className="text-sm text-muted">
             {groups.length > 0 && picked.size === groups.length
-              ? "Выбраны все группы: полный круг по школам сайта (как в дереве школ). Счётчик справа — группы этой школы, ниже — всего."
-              : path === "add"
-                ? "Отмечены не все — обычный режим, одним списком."
-                : path === "change"
-                  ? "Отмечены не все — обычный режим. «Выбрать все» — школа сайта за школой."
-                  : "Отмечены не все — обычный режим. «Выбрать все» — школа сайта за школой."}
+              ? pace === "slow"
+                ? "Все медленно: школа сайта, группы по номеру пачками по 3, сверка трижды."
+                : "Выбраны все группы: полный круг по школам сайта."
+              : "Выборочно — отметьте группы. «Все быстро» / «Все медленно» отмечают все."}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <select value={school} onChange={(e) => setSchool(e.target.value)} className="h-10 rounded-xl bg-surface-2 px-3 text-sm ring-1 ring-black/10">
@@ -737,6 +815,9 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             <span className="text-muted">
               отмечено {picked.size} · на экране {visible.length}
             </span>
+            <button type="button" className="text-primary hover:underline" disabled={busy} onClick={() => void loadGroups()}>
+              Перезагрузить список
+            </button>
           </div>
           {unbound > 0 && school && school !== "Без школы на сайте" ? (
             <p className="text-sm text-muted">

@@ -53,6 +53,17 @@ export const PLAN_GROUP_CHUNK = 1;
 export const TARIFF_READ_CHUNK = 8;
 /** Пауза между пачками чтения AlfaCRM, чтобы не упереться в лимит API. */
 export const CRM_READ_GAP_MS = 200;
+export const SLOW_GROUP_BATCH = 3;
+export const SLOW_VERIFY = 3;
+export const SLOW_SPEED = 2;
+
+/** Группы по номеру, пачки по 3 — режим «Все медленно». */
+export function batchesOfThree<T extends { groupId: number }>(list: T[], size = SLOW_GROUP_BATCH) {
+  const sorted = [...list].sort((a, b) => a.groupId - b.groupId);
+  const out: T[][] = [];
+  for (let i = 0; i < sorted.length; i += size) out.push(sorted.slice(i, i + size));
+  return out;
+}
 
 export function assignEtaMin(n: number) {
   const count = Math.max(0, Number(n) || 0);
