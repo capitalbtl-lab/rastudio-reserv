@@ -1912,8 +1912,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const want = new Set(keys.map((k) => `${Number(k.branchId)}:${Number(k.groupId)}`));
       const groups = all.filter((g) => want.has(g.key));
       const tariffs = loadTariffs().items;
+      const { guessTariffLinks } = await import("./tariff-map");
+      const { loadSiteTree } = await import("./site-tree");
+      const tree = loadSiteTree();
+      const linkBy = new Map(guessTariffLinks(tariffs).map((l) => [l.tariffId, l]));
       const items = [];
-      const byGroup: Record<string, { tariffId: number; tariffName: string; options: { id: number; name: string; price: number }[] }> = {};
+      const byGroup: Record<string, { tariffId: number; tariffName: string; options: { id: number; name: string; price: number; school?: string }[] }> = {};
       for (const g of groups) {
         const slot = slots.find((s) => s.groupId === g.groupId && s.branchId === g.branchId);
         const pack = groupTariffPack(slot);
@@ -1924,10 +1928,13 @@ export const adminSchedule = createServerFn({ method: "POST" })
           tariffName: offer?.name || "",
           options: pack.tariffs.map((o) => {
             const t = tariffs.find((x) => x.id === o.id);
+            const schoolId = linkBy.get(o.id)?.schoolId || "";
+            const school = tree.schools.find((s) => s.id === schoolId)?.label || "";
             return {
               id: o.id,
               name: o.name,
               price: o.price,
+              school,
               subjectIds: t?.subjectIds || [],
               lessonTypeIds: t?.lessonTypeIds || [2],
               periodCount: t?.periodCount || 0,

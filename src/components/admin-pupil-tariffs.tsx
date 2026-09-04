@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
 import { retryFetch } from "@/lib/retry-fetch";
-import { Button } from "@/components/ui/button";
+import { RaSelect } from "@/components/ra-select";
 import { cn } from "@/lib/utils";
 import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, collapsePupilsByCustomer, pupilListStats } from "@/data/pupil-tariffs";
 import { ISO_DATE_MAX, ISO_DATE_MIN, clampIsoDate } from "@/data/admin-ui";
@@ -62,6 +62,27 @@ function money(n: number) {
   return `${Math.round(n).toLocaleString("ru-RU")} ₽`;
 }
 
+function tariffSelectGroups(options: TariffOpt[], school: string) {
+  const map = new Map<string, { value: string; label: string }[]>();
+  for (const o of options) {
+    const key = o.school || "Без школы";
+    const list = map.get(key) || [];
+    list.push({ value: String(o.id), label: `${o.name} · ${money(o.price)}` });
+    map.set(key, list);
+  }
+  const names = [...map.keys()].sort((a, b) => {
+    if (school && a === school) return -1;
+    if (school && b === school) return 1;
+    if (a === "Без школы") return 1;
+    if (b === "Без школы") return -1;
+    return a.localeCompare(b, "ru");
+  });
+  return names.map((n) => ({
+    label: n,
+    options: (map.get(n) || []).sort((a, b) => a.label.localeCompare(b.label, "ru")),
+  }));
+}
+
 function todayIso() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -100,6 +121,7 @@ type TariffOpt = {
   id: number;
   name: string;
   price: number;
+  school?: string;
   subjectIds?: number[];
   lessonTypeIds?: number[];
   periodCount?: number;
@@ -754,15 +776,32 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               <span>Курс</span>
               <span>Предмет</span>
             </div>
-            {Object.entries(byGroup).map(([key, info]) => {
+            {Object.entries(byGroup)
+              .sort(([ka], [kb]) => {
+                const a = groups.find((g) => g.key === ka);
+                const b = groups.find((g) => g.key === kb);
+                return (
+                  (a?.school || "").localeCompare(b?.school || "", "ru") ||
+                  (a?.course || "").localeCompare(b?.course || "", "ru") ||
+                  (a?.name || "").localeCompare(b?.name || "", "ru")
+                );
+              })
+              .map(([key, info], i, rows) => {
               const g = groups.find((x) => x.key === key);
+              const prev = i ? groups.find((x) => x.key === rows[i - 1][0]) : null;
+              const schoolHead = g?.school && g.school !== prev?.school ? g.school : "";
               const subjectId = subjectOf[key] || g?.subjectId || 0;
               const opt = info.options.find((o) => o.id === info.tariffId);
               const match = tariffMatchesSubject(opt, subjectId);
               const box = "h-9 w-full rounded-[8px] bg-surface-2 px-2 text-sm ring-1 ring-black/10";
               return (
+                <div key={key}>
+                  {schoolHead ? (
+                    <p className="bg-[#eef4fb] px-3 py-1.5 text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-primary">
+                      {schoolHead}
+                    </p>
+                  ) : null}
                 <div
-                  key={key}
                   className="grid items-center gap-2 border-b border-black/5 px-3 py-2 text-sm last:border-0 lg:grid-cols-[minmax(9rem,1.1fr)_minmax(11rem,1fr)_7.5rem_7.5rem_minmax(10rem,1.1fr)]"
                 >
                   <div className="min-w-0">
@@ -771,21 +810,17 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                     </p>
                     {g?.age ? <p className="text-[0.7rem] text-muted">{g.age}</p> : null}
                   </div>
-                  <select
+                  <RaSelect
                     className={box}
-                    value={info.tariffId || ""}
-                    onChange={(e) => {
-                      const id = Number(e.target.value);
+                    menuMinWidth={420}
+                    value={info.tariffId ? String(info.tariffId) : ""}
+                    placeholder="— нет —"
+                    groups={tariffSelectGroups(info.options, g?.school || "")}
+                    onChange={(v) => {
+                      const id = Number(v);
                       applyTariff(key, info.options.find((o) => o.id === id) || null);
                     }}
-                  >
-                    <option value="">— нет —</option>
-                    {info.options.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.name} · {money(o.price)}
-                      </option>
-                    ))}
-                  </select>
+                  />
                   <div>
                     <p className="mb-0.5 text-[0.65rem] text-muted lg:hidden">Школа · карточка группы</p>
                     <div className={cn(box, "flex items-center truncate text-[0.78rem] text-muted")} title="Из карточки группы">
@@ -800,23 +835,24 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                   </div>
                   <div>
                     <p className="mb-0.5 text-[0.65rem] text-muted lg:hidden">Предмет</p>
-                    <select
+                    <RaSelect
                       className={cn(box, info.tariffId && !match && "ring-amber-400")}
-                      value={subjectId || ""}
-                      title={match || !info.tariffId ? "Предмет из раздела «Предметы»" : "Этот абонемент в CRM к предмету не привязан"}
-                      onChange={(e) => setGroupSubject(key, Number(e.target.value) || 0)}
-                    >
-                      <option value="">— предмет —</option>
-                      {subjects.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                      {subjectId && !subjects.some((s) => s.id === subjectId) ? (
-                        <option value={subjectId}>предмет {subjectId}</option>
-                      ) : null}
-                    </select>
+                      menuMinWidth={280}
+                      value={subjectId ? String(subjectId) : ""}
+                      placeholder="— предмет —"
+                      options={[
+                        ...subjects
+                          .slice()
+                          .sort((a, b) => a.name.localeCompare(b.name, "ru"))
+                          .map((s) => ({ value: String(s.id), label: s.name })),
+                        ...(subjectId && !subjects.some((s) => s.id === subjectId)
+                          ? [{ value: String(subjectId), label: `предмет ${subjectId}` }]
+                          : []),
+                      ]}
+                      onChange={(v) => setGroupSubject(key, Number(v) || 0)}
+                    />
                   </div>
+                </div>
                 </div>
               );
             })}
