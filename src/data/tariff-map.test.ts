@@ -35,4 +35,16 @@ describe("карта абонемент → курс сайта", () => {
     assert.equal(draft?.courseId, "/art-studio-9-13");
     assert.equal(out.find((x) => x.tariffId === 10)?.courseId || "", "");
   });
+
+  it("у абонемента несколько курсов сайта", () => {
+    const out = guessTariffLinks(
+      [{ id: 10, subjectIds: [37], archive: false }],
+      [
+        { tariffId: 10, schoolId: "/robototehnika-v-kolomne", courseId: "/robototehnika-7-9" },
+        { tariffId: 10, schoolId: "/robototehnika-v-kolomne", courseId: "/robototehnika-10-14" },
+      ],
+    );
+    const ids = out.filter((x) => x.tariffId === 10).map((x) => x.courseId).sort();
+    assert.deepEqual(ids, ["/robototehnika-10-14", "/robototehnika-7-9"]);
+  });
 });

@@ -166,6 +166,13 @@ describe("мастер абонементов учеников", () => {
     });
     assert.equal(tariffFitsSlot(t, group, { tariffId: 373, schoolId: "/art-studio", courseId: "/portrait-12" }), false);
     assert.equal(tariffFitsSlot(t, group, { tariffId: 400, schoolId: "/art-studio", courseId: "/art-studio" }), true);
+    assert.equal(
+      tariffFitsSlot(t, group, [
+        { tariffId: 400, schoolId: "/art-studio", courseId: "/portrait-12" },
+        { tariffId: 400, schoolId: "/art-studio", courseId: "/art-studio" },
+      ]),
+      true,
+    );
     const unboundGroup = slot({
       branchId: 2,
       timeFrom: "16:00",

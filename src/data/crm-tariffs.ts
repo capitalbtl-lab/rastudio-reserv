@@ -128,21 +128,27 @@ export function slotMinutes(slot: Pick<CrmSlot, "timeFrom" | "timeTo">) {
  *   иначе предмет CRM.
  * Имя и возраст из названия не смотрим.
  */
-export function tariffFitsSlot(t: CrmTariff, slot: CrmSlot, link?: TariffLink | null) {
+export function tariffFitsSlot(t: CrmTariff, slot: CrmSlot, link?: TariffLink | TariffLink[] | null) {
   if (t.archive) return false;
   if (t.branchIds.length && slot.branchId && !t.branchIds.includes(slot.branchId)) return false;
   const mins = slotMinutes(slot);
   if (mins && t.duration && Math.abs(mins - t.duration) > 5) return false;
   if (t.lessonTypeIds.length && !t.lessonTypeIds.includes(2)) return false;
-  const bind = link === undefined ? guessTariffLinks([t])[0] : link;
-  if (bind?.courseId && slot.courseId) return bind.courseId === slot.courseId;
+  const links = Array.isArray(link) ? link : link ? [link] : link === undefined ? guessTariffLinks([t]) : [];
+  const courseIds = [...new Set(links.map((l) => l.courseId).filter(Boolean))];
+  if (courseIds.length && slot.courseId) return courseIds.includes(slot.courseId);
   if (!slot.subjectId || !t.subjectIds.includes(slot.subjectId)) return false;
   return true;
 }
 
 export function matchTariffs(slot: CrmSlot, list = loadTariffs().items) {
-  const links = new Map(guessTariffLinks(list).map((x) => [x.tariffId, x]));
-  return list.filter((t) => tariffFitsSlot(t, slot, links.get(t.id) || null)).sort((a, b) => a.price - b.price || a.name.localeCompare(b.name, "ru"));
+  const grouped = new Map<number, TariffLink[]>();
+  for (const x of guessTariffLinks(list)) {
+    const arr = grouped.get(x.tariffId) || [];
+    arr.push(x);
+    grouped.set(x.tariffId, arr);
+  }
+  return list.filter((t) => tariffFitsSlot(t, slot, grouped.get(t.id) || [])).sort((a, b) => a.price - b.price || a.name.localeCompare(b.name, "ru"));
 }
 
 export type GroupTariffOption = {

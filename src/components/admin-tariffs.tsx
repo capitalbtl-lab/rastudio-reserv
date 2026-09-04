@@ -558,6 +558,7 @@ export function AdminTariffs() {
   const [tree, setTree] = useState<SiteTree>({ schools: [], courses: [], assign: {} });
   const [tariffMap, setTariffMap] = useState<TariffLink[]>([]);
   const [courseSubjects, setCourseSubjects] = useState<Record<string, number[]>>({});
+  const [tableEdit, setTableEdit] = useState(false);
 
   async function loadLocal() {
     setBusy(true);
@@ -647,17 +648,37 @@ export function AdminTariffs() {
   const siteSchools = tree.schools.length ? tree.schools : siteSchoolOptions();
   const siteCourses = tree.courses.length ? tree.courses : siteCourseOptions();
   const schoolOrder = useMemo(() => new Map(siteSchools.map((s, i) => [s.id, i])), [siteSchools]);
+  function linksOf(tariffId: number) {
+    return tariffMap.filter((x) => x.tariffId === tariffId && x.courseId);
+  }
   function schoolIdOf(tariffId: number) {
-    const link = tariffMap.find((x) => x.tariffId === tariffId);
-    const course = siteCourses.find((c) => c.id === link?.courseId);
-    return course?.schoolId || link?.schoolId || "";
+    const ids = linksOf(tariffId)
+      .map((l) => siteCourses.find((c) => c.id === l.courseId)?.schoolId || l.schoolId)
+      .filter(Boolean);
+    if (!ids.length) return "";
+    return [...new Set(ids)].sort((a, b) => (schoolOrder.get(a) ?? 500) - (schoolOrder.get(b) ?? 500))[0] || "";
   }
   function schoolLabelOf(id: string) {
     return siteSchools.find((s) => s.id === id)?.label || "Без школы сайта";
   }
   function courseLabelOf(tariffId: number) {
-    const link = tariffMap.find((x) => x.tariffId === tariffId);
-    return siteCourses.find((c) => c.id === link?.courseId)?.label || "";
+    return linksOf(tariffId)
+      .map((l) => siteCourses.find((c) => c.id === l.courseId)?.label || l.courseId)
+      .filter(Boolean)
+      .join(" · ");
+  }
+  function suggestCourses(t: Row) {
+    const have = new Set(linksOf(t.id).map((l) => l.courseId));
+    const sub = new Set(t.subjectIds);
+    return siteCourses
+      .filter((c) => !have.has(c.id))
+      .map((c) => ({
+        c,
+        hit: subjectIdsOfCourse(c.id, tree.courses, courseSubjects, subjects).ids.filter((id) => sub.has(id)).length,
+      }))
+      .filter((x) => x.hit)
+      .sort((a, b) => b.hit - a.hit || a.c.label.localeCompare(b.c.label, "ru"))
+      .map((x) => x.c);
   }
   const colPx = (key: string) => {
     const n = Number(colW[key]);
@@ -735,53 +756,60 @@ export function AdminTariffs() {
     });
   }, [items, q, showArchive, subjects, branch, orderLock, tariffMap, siteCourses, schoolOrder]);
 
-  async function bindTariff(tariffId: number, courseId: string) {
-    const resolved = subjectIdsOfCourse(courseId, tree.courses, courseSubjects, subjects);
-    const course = resolved.course || tree.courses.find((c) => c.id === courseId);
-    const next = [
-      ...tariffMap.filter((x) => x.tariffId !== tariffId),
-      { tariffId, courseId: course?.id || "", schoolId: course?.schoolId || "" },
-    ];
+  async function persistTariffMap(next: TariffLink[], okMsg: string) {
     setTariffMap(next);
-    const ids = resolved.ids;
-    const mappedCount = ids.length;
-    if (course?.id && ids.length) {
-      const have = items.find((t) => t.id === tariffId)?.subjectIds || [];
-      const merged = have.length ? [...new Set([...have, ...ids])] : ids;
-      if (merged.length !== have.length || merged.some((id) => !have.includes(id))) {
-        patch(tariffId, { subjectIds: merged });
-      }
-    }
     const persist = next.filter((x) => x.tariffId !== 0);
     const res = await adminScheduleMap({ data: { token: token(), action: "saveTariffs", tariffs: persist } });
     if (res.ok && "tariffs" in res && Array.isArray(res.tariffs)) {
       const server = res.tariffs as TariffLink[];
-      const pending = next.filter((x) => x.tariffId < 0 && !server.some((s) => s.tariffId === x.tariffId));
-      setTariffMap([...server, ...pending]);
-      setMsg(
-        !course?.id
-          ? "Курс сайта снят."
-          : mappedCount
-            ? "Курс сайта записан по ID. Предметы CRM подставлены из соответствий курса."
-            : "Курс записан по ID. Предметов у курса в соответствиях нет — выберите предмет CRM вручную.",
-      );
-    } else {
-      setMsg(res.ok ? "Курс сайта записан. AlfaCRM не менялась." : res.error || "Не сохранилось.");
-    }
+      const pending = next.filter((x) => x.tariffId < 0 && x.courseId && !server.some((s) => s.tariffId === x.tariffId && s.courseId === x.courseId));
+      setTariffMap([...server.filter((s) => s.courseId), ...pending]);
+      setMsg(okMsg);
+    } else setMsg(res.ok ? okMsg : res.error || "Не сохранилось.");
+  }
+
+  function mergeCourseSubjects(tariffId: number, courseId: string) {
+    const { ids } = subjectIdsOfCourse(courseId, tree.courses, courseSubjects, subjects);
+    if (!ids.length) return 0;
+    const have = items.find((t) => t.id === tariffId)?.subjectIds || [];
+    const merged = [...new Set([...have, ...ids])];
+    if (merged.length !== have.length) patch(tariffId, { subjectIds: merged });
+    return ids.length;
+  }
+
+  async function addTariffCourse(tariffId: number, courseId: string) {
+    if (!courseId) return;
+    const { course } = subjectIdsOfCourse(courseId, tree.courses, courseSubjects, subjects);
+    const id = course?.id || courseId;
+    if (tariffMap.some((x) => x.tariffId === tariffId && x.courseId === id)) return;
+    const next = [
+      ...tariffMap.filter((x) => !(x.tariffId === tariffId && !x.courseId)),
+      { tariffId, courseId: id, schoolId: course?.schoolId || "" },
+    ];
+    const mapped = mergeCourseSubjects(tariffId, id);
+    await persistTariffMap(
+      next,
+      mapped
+        ? "Курс сайта добавлен. Предметы CRM подставлены из соответствий."
+        : "Курс сайта добавлен. Предметов у курса в соответствиях нет — выберите предмет вручную.",
+    );
+  }
+
+  async function removeTariffCourse(tariffId: number, courseId: string) {
+    await persistTariffMap(
+      tariffMap.filter((x) => !(x.tariffId === tariffId && x.courseId === courseId)),
+      "Курс сайта снят с абонемента.",
+    );
   }
 
   useEffect(() => {
     if (open == null) return;
     const t = items.find((x) => x.id === open);
-    const link = tariffMap.find((x) => x.tariffId === open);
-    if (!t || !link?.courseId || t.subjectIds.length) return;
-    const { ids, course } = subjectIdsOfCourse(link.courseId, tree.courses, courseSubjects, subjects);
-    if (ids.length) patch(t.id, { subjectIds: ids });
-    if (course && course.id !== link.courseId) {
-      setTariffMap((m) =>
-        m.map((x) => (x.tariffId === open ? { ...x, courseId: course.id, schoolId: course.schoolId || x.schoolId } : x)),
-      );
-    }
+    const links = tariffMap.filter((x) => x.tariffId === open && x.courseId);
+    if (!t || !links.length || t.subjectIds.length) return;
+    const ids = new Set<number>();
+    for (const l of links) for (const id of subjectIdsOfCourse(l.courseId, tree.courses, courseSubjects, subjects).ids) ids.add(id);
+    if (ids.size) patch(t.id, { subjectIds: [...ids] });
   }, [open, courseSubjects, subjects, tree.courses]);
 
   function patch(id: number, next: Partial<Row>) {
@@ -1196,7 +1224,22 @@ export function AdminTariffs() {
                 Группы
                 <ColHandle onDown={(e) => resizeCol("groups", e)} />
               </th>
-              <th className="relative py-3" style={{ width: colPx("open") }} />
+              <th className="relative py-3 pr-2" style={{ width: colPx("open") }}>
+                <button
+                  type="button"
+                  title={tableEdit ? "Закрыть правку таблицы" : "Править курсы в таблице"}
+                  onClick={() => setTableEdit((v) => !v)}
+                  className={cn(
+                    "ml-auto flex h-8 w-8 items-center justify-center rounded-[8px] ring-1 transition-colors",
+                    tableEdit ? "bg-primary text-white ring-primary" : "bg-black/[0.04] text-muted ring-black/10 hover:text-fg",
+                  )}
+                >
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" />
+                    <path d="M19.4 13.5a1.6 1.6 0 0 0 .3 1.7l.05.05a2 2 0 0 1-2.8 2.8l-.05-.05a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V19.5a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.05.05a2 2 0 1 1-2.8-2.8l.05-.05a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H4.5a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.05-.05a2 2 0 1 1 2.8-2.8l.05.05a1.6 1.6 0 0 0 1.7.3h.05A1.6 1.6 0 0 0 11 4.6V4.5a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.05-.05a2 2 0 1 1 2.8 2.8l-.05.05a1.6 1.6 0 0 0-.3 1.7v.05a1.6 1.6 0 0 0 1.5 1h.1a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z" />
+                  </svg>
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -1272,16 +1315,14 @@ export function AdminTariffs() {
                       )}
                     </td>
                     <td className="py-2 pr-2">
-                      <RaSelect
-                        value={tariffMap.find((x) => x.tariffId === t.id)?.courseId || ""}
-                        placeholder="нет курса"
-                        menuMinWidth={280}
-                        className="h-8 w-full rounded-[8px] text-[0.75rem]"
-                        groups={siteSchools.map((sc) => ({
-                          label: sc.label,
-                          options: courseSelectOptions(siteCourses, siteSchools, sc.id, tariffMap.find((x) => x.tariffId === t.id)?.courseId || ""),
-                        }))}
-                        onChange={(v) => void bindTariff(t.id, v)}
+                      <CourseChips
+                        links={linksOf(t.id)}
+                        courses={siteCourses}
+                        editing={tableEdit}
+                        suggest={suggestCourses(t)}
+                        schools={siteSchools}
+                        onAdd={(id) => void addTariffCourse(t.id, id)}
+                        onRemove={(id) => void removeTariffCourse(t.id, id)}
                       />
                     </td>
                     <td className="py-2 text-center text-sm text-muted">{groups.length || "—"}</td>
@@ -1315,8 +1356,10 @@ export function AdminTariffs() {
                           typeList={typeList}
                           subjectList={subjectList}
                           tree={tree}
-                          courseId={tariffMap.find((x) => x.tariffId === opened.id)?.courseId || ""}
-                          onBind={(id) => void bindTariff(opened.id, id)}
+                          courseIds={linksOf(opened.id).map((l) => l.courseId)}
+                          suggest={suggestCourses(opened)}
+                          onAddCourse={(id) => void addTariffCourse(opened.id, id)}
+                          onRemoveCourse={(id) => void removeTariffCourse(opened.id, id)}
                           subQ={subQ}
                           setSubQ={setSubQ}
                           groups={groups}
@@ -1335,7 +1378,7 @@ export function AdminTariffs() {
                             const current = items.find((x) => x.id === opened.id) || opened;
                             const { groups: _g, ...tariff } = current;
                             const oldId = opened.id;
-                            const pending = tariffMap.find((x) => x.tariffId === oldId);
+                            const pending = tariffMap.filter((x) => x.tariffId === oldId && x.courseId);
                             const saved = await run("tariffsSave", { tariff });
                             if (!saved.ok) return saved;
                             const res = await run("tariffsPush", { tariff });
@@ -1344,10 +1387,10 @@ export function AdminTariffs() {
                               const remaps = ((res as { remaps?: { from: number; to: number }[] }).remaps || []).filter((r) => r.to > 0);
                               const to = remaps.find((r) => r.from === oldId)?.to
                                 || (oldId < 0 ? ((res as { tariffs?: Row[] }).tariffs || []).find((t) => t.id > 0 && t.name === current.name)?.id || 0 : 0);
-                              if (to && pending?.courseId) {
+                              if (to && pending.length) {
                                 const next = [
                                   ...tariffMap.filter((x) => x.tariffId !== oldId && x.tariffId !== to),
-                                  { tariffId: to, courseId: pending.courseId, schoolId: pending.schoolId },
+                                  ...pending.map((p) => ({ ...p, tariffId: to })),
                                 ];
                                 setTariffMap(next);
                                 await adminScheduleMap({ data: { token: token(), action: "saveTariffs", tariffs: next.filter((x) => x.tariffId > 0) } });
@@ -1423,6 +1466,75 @@ function Field({ label, children, className }: { label: string; children: ReactN
   );
 }
 
+function CourseChips({
+  links,
+  courses,
+  editing,
+  suggest,
+  schools,
+  onAdd,
+  onRemove,
+}: {
+  links: TariffLink[];
+  courses: SiteCourse[];
+  editing: boolean;
+  suggest: SiteCourse[];
+  schools: SiteSchool[];
+  onAdd: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const have = new Set(links.map((l) => l.courseId));
+  const addGroups = [
+    ...(suggest.filter((c) => !have.has(c.id)).length
+      ? [
+          {
+            label: "Предлагаем",
+            options: suggest.filter((c) => !have.has(c.id)).map((c) => ({ value: c.id, label: c.label })),
+          },
+        ]
+      : []),
+    ...schools
+      .map((sc) => ({
+        label: sc.label,
+        options: courseSelectOptions(courses, schools, sc.id).filter((o) => !have.has(o.value)),
+      }))
+      .filter((g) => g.options.length),
+  ];
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex flex-wrap gap-1">
+        {links.length ? (
+          links.map((l) => {
+            const c = courses.find((x) => x.id === l.courseId);
+            return (
+              <span key={l.courseId} className="inline-flex max-w-full items-center gap-0.5 rounded-[8px] bg-sky-50 px-1.5 py-0.5 text-[0.7rem] text-sky-950 ring-1 ring-sky-100">
+                <span className="truncate">{c?.label || l.courseId}</span>
+                {editing ? (
+                  <button type="button" className="shrink-0 text-muted hover:text-rose-700" onClick={() => onRemove(l.courseId)}>
+                    ×
+                  </button>
+                ) : null}
+              </span>
+            );
+          })
+        ) : (
+          <span className="text-[0.75rem] text-muted">нет курса</span>
+        )}
+      </div>
+      {editing ? (
+        <RaSelect
+          value=""
+          placeholder="добавить курс"
+          menuMinWidth={300}
+          className="h-8 w-full rounded-[8px] text-[0.75rem]"
+          groups={addGroups}
+          onChange={onAdd}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function Editor({
   t,
   busy,
@@ -1430,8 +1542,10 @@ function Editor({
   typeList,
   subjectList,
   tree,
-  courseId,
-  onBind,
+  courseIds,
+  suggest,
+  onAddCourse,
+  onRemoveCourse,
   subQ,
   setSubQ,
   groups,
@@ -1446,8 +1560,10 @@ function Editor({
   typeList: CrmLessonType[];
   subjectList: SubjectRow[];
   tree: SiteTree;
-  courseId: string;
-  onBind: (courseId: string) => void;
+  courseIds: string[];
+  suggest: SiteCourse[];
+  onAddCourse: (courseId: string) => void;
+  onRemoveCourse: (courseId: string) => void;
   subQ: string;
   setSubQ: (v: string) => void;
   groups: GroupHit[];
@@ -1459,24 +1575,30 @@ function Editor({
   const [note, setNote] = useState("");
   const [moreTypes, setMoreTypes] = useState(false);
   const [subOpen, setSubOpen] = useState(false);
-  const course = (tree.courses.length ? tree.courses : siteCourseOptions()).find((c) => c.id === courseId);
   const schools = tree.schools.length ? tree.schools : siteSchoolOptions();
   const allCourses = tree.courses.length ? tree.courses : siteCourseOptions();
-  const [schoolPick, setSchoolPick] = useState(course?.schoolId || "");
-  useEffect(() => {
-    if (course?.schoolId) setSchoolPick(course.schoolId);
-  }, [courseId, course?.schoolId]);
+  const [schoolPick, setSchoolPick] = useState("");
   const needle = subQ.trim().toLowerCase();
   const selectedSubs = subjectList.filter((s) => t.subjectIds.includes(s.id));
   const filtered = needle ? subjectList.filter((s) => s.name.toLowerCase().includes(needle)) : subjectList;
   const catalog = [...filtered].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   const per = t.lessonsCount ? Math.round((Number(t.price) / Number(t.lessonsCount)) * 100) / 100 : 0;
   const box = "h-9 w-full rounded-xl bg-white px-3 text-sm ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-primary/30";
-  const schoolId = schoolPick || course?.schoolId || "";
+  const schoolId = schoolPick;
   const schoolCourses = allCourses.filter((c) => !schoolId || c.schoolId === schoolId);
   const mainTypes = typeList.filter((lt) => t.lessonTypeIds.includes(lt.id) || [2, 5, 10, 11].includes(lt.id));
   const extraTypes = typeList.filter((lt) => !mainTypes.some((x) => x.id === lt.id));
   const shownTypes = moreTypes ? typeList : mainTypes;
+  const have = new Set(courseIds);
+  const addGroups = [
+    ...(suggest.filter((c) => !have.has(c.id)).length
+      ? [{ label: "Предлагаем", options: suggest.filter((c) => !have.has(c.id)).map((c) => ({ value: c.id, label: c.label })) }]
+      : []),
+    ...schools.map((sc) => ({
+      label: sc.label,
+      options: courseSelectOptions(schoolId ? schoolCourses : allCourses, schools, sc.id).filter((o) => !have.has(o.value)),
+    })).filter((g) => g.options.length),
+  ];
 
   return (
     <div className="rounded-2xl bg-white p-4 ring-1 ring-black/[0.06] [overflow-anchor:none]">
@@ -1485,29 +1607,38 @@ function Editor({
           <input className={cn(box, "font-medium")} value={t.name} onChange={(e) => onPatch({ name: e.target.value })} />
         </Field>
 
-        <div className="md:col-span-12 flex flex-wrap items-end gap-2">
-        <Field label="Школа сайта" className="w-full sm:w-56 shrink-0">
-          <RaSelect
-            className={box}
-            value={schoolId}
-            placeholder="нет школы"
-            options={schools.map((s) => ({ value: s.id, label: s.label }))}
-            onChange={(next) => {
-              setSchoolPick(next);
-              if (!next || (course && course.schoolId !== next)) onBind("");
-            }}
-          />
-        </Field>
-        <Field label="Курс сайта" className="min-w-[14rem] flex-1">
-          <RaSelect
-            className={box}
-            value={courseId}
-            placeholder="нет курса"
-            menuMinWidth={280}
-            options={courseSelectOptions(schoolId ? schoolCourses : allCourses, schools, schoolId, courseId)}
-            onChange={onBind}
-          />
-        </Field>
+        <div className="md:col-span-12">
+          <span className="mb-1 block text-[0.72rem] font-medium text-muted">Курсы сайта</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {courseIds.length ? courseIds.map((id) => {
+              const c = allCourses.find((x) => x.id === id);
+              return (
+                <span key={id} className="inline-flex items-center gap-1 rounded-[8px] bg-sky-50 px-2 py-1 text-[0.75rem] text-sky-950 ring-1 ring-sky-100">
+                  {c?.label || id}
+                  <button type="button" className="text-muted hover:text-rose-700" onClick={() => onRemoveCourse(id)} title="Убрать курс">
+                    ×
+                  </button>
+                </span>
+              );
+            }) : <span className="text-sm text-muted">нет курса</span>}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <RaSelect
+              className={cn(box, "sm:w-52")}
+              value={schoolPick}
+              placeholder="школа для поиска"
+              options={schools.map((s) => ({ value: s.id, label: s.label }))}
+              onChange={setSchoolPick}
+            />
+            <RaSelect
+              className={cn(box, "min-w-[16rem] flex-1")}
+              value=""
+              placeholder="добавить курс"
+              menuMinWidth={320}
+              groups={addGroups}
+              onChange={onAddCourse}
+            />
+          </div>
         </div>
 
         <div className="md:col-span-12 grid items-start gap-2 md:grid-cols-12">
@@ -1626,9 +1757,9 @@ function Editor({
           </div>
         ) : (
           <p className="mb-1.5 text-[0.75rem] text-rose-600">
-            {courseId
-              ? "У этого курса сайта нет предметов CRM в соответствиях. Выберите предмет по ID — тогда группы его подхватят."
-              : "Выберите курс сайта — предметы подставятся из соответствий курса, не из названия."}
+            {courseIds.length
+              ? "У этих курсов сайта нет предметов CRM в соответствиях. Выберите предмет по ID — тогда группы его подхватят."
+              : "Добавьте курс сайта — предметы подставятся из соответствий курса, не из названия."}
           </p>
         )}
         {subOpen || needle ? (
