@@ -486,6 +486,19 @@ export function AdminTariffs() {
   const subjectList = useMemo(() => [...subjects].sort((a, b) => a.name.localeCompare(b.name, "ru")), [subjects]);
   const siteSchools = tree.schools.length ? tree.schools : siteSchoolOptions();
   const siteCourses = tree.courses.length ? tree.courses : siteCourseOptions();
+  const schoolOrder = useMemo(() => new Map(siteSchools.map((s, i) => [s.id, i])), [siteSchools]);
+  function schoolIdOf(tariffId: number) {
+    const link = tariffMap.find((x) => x.tariffId === tariffId);
+    const course = siteCourses.find((c) => c.id === link?.courseId);
+    return course?.schoolId || link?.schoolId || "";
+  }
+  function schoolLabelOf(id: string) {
+    return siteSchools.find((s) => s.id === id)?.label || "Без школы сайта";
+  }
+  function courseLabelOf(tariffId: number) {
+    const link = tariffMap.find((x) => x.tariffId === tariffId);
+    return siteCourses.find((c) => c.id === link?.courseId)?.label || "";
+  }
   const colPx = (key: string) => {
     const n = Number(colW[key]);
     return n > 0 ? n : TARIFF_COL_DEF[key] || 100;
@@ -534,7 +547,9 @@ export function AdminTariffs() {
       if (!showArchive && t.archive) return false;
       if (branch && !t.branchIds.includes(branch)) return false;
       if (!needle) return true;
-      const hay = `${t.name} ${t.subjectIds.map(nameOf).join(" ")} ${t.id}`.toLowerCase();
+      const school = schoolLabelOf(schoolIdOf(t.id));
+      const course = courseLabelOf(t.id);
+      const hay = `${t.name} ${t.subjectIds.map(nameOf).join(" ")} ${t.id} ${school} ${course}`.toLowerCase();
       return hay.includes(needle);
     });
     if (orderLock?.length) {
@@ -546,12 +561,19 @@ export function AdminTariffs() {
       });
     }
     return [...filtered].sort((a, b) => {
+      const sa = schoolIdOf(a.id);
+      const sb = schoolIdOf(b.id);
+      const ra = sa ? schoolOrder.get(sa) ?? 500 : 999;
+      const rb = sb ? schoolOrder.get(sb) ?? 500 : 999;
+      if (ra !== rb) return ra - rb;
       const aDraft = a.id < 0;
       const bDraft = b.id < 0;
       if (aDraft !== bDraft) return aDraft ? -1 : 1;
-      return a.price - b.price || a.name.localeCompare(b.name, "ru") || a.id - b.id;
+      const ca = courseLabelOf(a.id);
+      const cb = courseLabelOf(b.id);
+      return ca.localeCompare(cb, "ru") || a.price - b.price || a.name.localeCompare(b.name, "ru") || a.id - b.id;
     });
-  }, [items, q, showArchive, subjects, branch, orderLock]);
+  }, [items, q, showArchive, subjects, branch, orderLock, tariffMap, siteCourses, schoolOrder]);
 
   async function bindTariff(tariffId: number, courseId: string) {
     const resolved = subjectIdsOfCourse(courseId, tree.courses, courseSubjects, subjects);
@@ -1025,12 +1047,24 @@ export function AdminTariffs() {
                 </td>
               </tr>
             ) : null}
-            {view.map((t) => {
+            {view.map((t, i) => {
               const empty = !t.subjectIds.length;
               const groups = branch ? t.groups.filter((g) => g.branchId === branch) : t.groups;
               const isOpen = open === t.id;
+              const schoolId = schoolIdOf(t.id);
+              const prevSchool = i ? schoolIdOf(view[i - 1].id) : "\0";
+              const schoolHead = schoolId !== prevSchool;
+              const schoolCount = view.filter((x) => schoolIdOf(x.id) === schoolId).length;
               return (
                 <Fragment key={`${t.id}-${branch}`}>
+                  {schoolHead ? (
+                    <tr className="border-t border-black/8 bg-[#f3f6fa]">
+                      <td colSpan={9} className="px-4 py-1.5">
+                        <span className="text-[0.78rem] font-semibold text-fg">{schoolLabelOf(schoolId)}</span>
+                        <span className="ml-2 text-[0.72rem] text-muted">{schoolCount}</span>
+                      </td>
+                    </tr>
+                  ) : null}
                   <tr className={cn("border-t border-black/6 align-middle transition-colors hover:bg-sky-50", t.archive && "opacity-55", isOpen && "bg-sky-50", picked.has(t.id) && !isOpen && "bg-sky-50/40")}>
                     <td className="px-3 py-2">
                       <input type="checkbox" checked={picked.has(t.id)} onChange={() => togglePick(t.id)} />
