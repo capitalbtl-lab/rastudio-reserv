@@ -236,6 +236,13 @@ export function pupilRowFromMember(
   };
 }
 
+/** В изменении/удалении на строке только живой абонемент CRM, не тариф группы. */
+export function stampLiveTariff(row: PupilTariffItem): PupilTariffItem {
+  const live = row.activeTariffs || [];
+  if (!live.length) return { ...row, tariffId: 0, tariffName: "", price: 0 };
+  return { ...row, tariffId: live[0].tariffId, tariffName: formatTariffNames(live) || "" };
+}
+
 export function addPeriod(iso: string, count: number, type: number) {
   if (!iso || !count) return "";
   const d = new Date(`${iso}T12:00:00`);

@@ -6,7 +6,7 @@ import { retryFetch } from "@/lib/retry-fetch";
 import { RaSelect } from "@/components/ra-select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, TARIFF_READ_CHUNK, collapsePupilsByCustomer, pupilListStats, groupsBySchoolId, bySchoolId, dropoutsAfterJob, personKey } from "@/data/pupil-tariffs";
+import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, TARIFF_READ_CHUNK, collapsePupilsByCustomer, pupilListStats, groupsBySchoolId, bySchoolId, dropoutsAfterJob, personKey, stampLiveTariff } from "@/data/pupil-tariffs";
 import { ISO_DATE_MAX, ISO_DATE_MIN, clampIsoDate } from "@/data/admin-ui";
 
 type PupilGroup = {
@@ -358,13 +358,11 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           }
         }
       }
-      const live = rows.filter((r) => (r.activeTariffs || []).length);
-      const list =
-        path === "add"
-          ? rows
-          : collapsePupilsByCustomer(live.length ? live : rows);
+      const stamped = path === "add" ? rows : rows.map(stampLiveTariff);
+      const live = stamped.filter((r) => (r.activeTariffs || []).length);
+      const list = path === "add" ? rows : collapsePupilsByCustomer(live);
       if (path !== "add" && rows.length && !live.length) {
-        setMsg("Живые абонементы по индексу не нашлись — показал всех учеников. Отметьте, кого менять, и нажмите Далее ещё раз, если список неполный.");
+        setMsg("Живые абонементы в CRM не нашлись. Показан пустой список изменения — не тариф группы.");
       }
       if (!rows.length) {
         setMsg("Не удалось прочитать учеников. Нажмите «Далее» ещё раз.");
@@ -392,7 +390,13 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         setDateTo(addPeriod(date, count, unit));
       }
       const parts = [`Прочитано ${loadedGroupsRef.current.size} групп`, `${stats.unique} учеников`];
-      if (stats.dual) parts.push(`${stats.dual} ходят в две выбранные группы — в удалении это один человек`);
+      if (stats.dual) {
+        parts.push(
+          path === "add"
+            ? `${stats.dual} ходят в две группы — две строки`
+            : `${stats.dual} ходят в две группы — в изменении/удалении это один человек`,
+        );
+      }
       if (stats.leads) parts.push(`лидов ${stats.leads}`);
       if (path !== "add" && archived) parts.push(`истекших пропущено ${archived}`);
       setSummary(parts.join(". ") + ".");
@@ -833,7 +837,12 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                     </span>
                   </span>
                   <span className="shrink-0 text-right text-[0.72rem] text-muted">
-                    {it.tariffName ? (
+                    {path !== "add" && (it.activeTariffs || []).length ? (
+                      <>
+                        {it.tariffName}
+                        <span className="block">{money(it.price)}</span>
+                      </>
+                    ) : it.tariffName && path === "add" ? (
                       <>
                         {it.tariffName}
                         <span className="block">{money(it.price)}</span>
@@ -841,7 +850,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                     ) : path === "add" ? (
                       <span className="text-muted">на шаге «Абонемент»</span>
                     ) : (
-                      <span className="text-rose-700">нет абонемента студии</span>
+                      <span className="text-rose-700">нет в CRM</span>
                     )}
                   </span>
                 </label>

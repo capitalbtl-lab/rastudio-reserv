@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, stampLiveTariff, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 import type { CrmTariff } from "./crm-tariffs.ts";
@@ -105,6 +105,33 @@ describe("мастер абонементов учеников", () => {
       { customerId: 3, branchId: 2, activeTariffs: [] },
     ]);
     assert.deepEqual(still.map((x) => x.customerId), [1]);
+  });
+
+  it("изменение не подставляет тариф группы, если в CRM у человека его нет", () => {
+    const row = {
+      customerId: 1,
+      name: "Майоров",
+      status: "лид",
+      groupId: 589,
+      branchId: 2,
+      groupName: "589",
+      school: "ЦМИТ",
+      tariffId: 3850,
+      tariffName: "Абонемент 3850/8/90",
+      price: 3850,
+      periodCount: 0,
+      periodType: 3,
+      calcType: 0,
+      subjectIds: [],
+      lessonTypeIds: [2],
+      lessonsCount: 8,
+    };
+    const empty = stampLiveTariff(row);
+    assert.equal(empty.tariffId, 0);
+    assert.equal(empty.tariffName, "");
+    const live = stampLiveTariff({ ...row, activeTariffs: [{ id: 9, tariffId: 12, name: "абонемент 12" }] });
+    assert.equal(live.tariffId, 12);
+    assert.match(live.tariffName, /12/);
   });
 
   it("по умолчанию только ученики, лиды — по флагу", () => {
