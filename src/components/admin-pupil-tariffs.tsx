@@ -179,7 +179,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           retryFetch(
             () => adminSchedule({ data: { token: token(), action: "pupilTariffGroups", groupKeys: [] } as never }),
             2,
-            60000,
+            12000,
           ) as Promise<{
             ok?: boolean;
             groups?: PupilGroup[];
@@ -203,6 +203,23 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           setKidsTotal(Number(res.kids || 0));
         } else setMsg(res.error || "Не удалось прочитать группы.");
         if (sub && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects);
+        setBusy(false);
+        if (res.ok) {
+          setProgress({ done: 0, total: 1, label: "Уточняю состав в CRM", unit: "", extra: "" });
+          const counts = (await retryFetch(
+            () => adminSchedule({ data: { token: token(), action: "pupilTariffCounts", groupKeys: [] } as never }),
+            1,
+            45000,
+          ).catch(() => null)) as typeof res | null;
+          if (counts?.ok) {
+            setGroups(counts.groups || []);
+            setSchools(counts.schools || []);
+            setUnbound(Number(counts.unbound || 0));
+            setByBranch(counts.byBranch || {});
+            setKidsTotal(Number(counts.kids || 0));
+          }
+          setProgress(null);
+        }
       } catch (e) {
         setMsg(e instanceof Error ? friendlyErr(e, "Не удалось прочитать группы. Обновите страницу.") : "Не удалось прочитать группы.");
       } finally {

@@ -285,19 +285,11 @@ async function overlayGroupHeadcount(
   request: typeof import("./alfacrm").request,
   t: string,
 ) {
-  const { crmIndexTotal, countCgiParticipants, crmGroupQuantity, mergeGroupTaken, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
-  const qty = new Map<number, number>();
-  for (const branch of [1, 2, 3, 4]) {
-    const items = await pagedCrm(request, t, `/v2api/${branch}/group/index`, {});
-    for (const g of items) {
-      const id = Number(g.id) || 0;
-      if (!id) continue;
-      qty.set(id, Math.max(qty.get(id) || 0, crmGroupQuantity(g)));
-    }
-    await sleep(CRM_READ_GAP_MS);
-  }
-  const next = groups.map((g) => ({ ...g, taken: mergeGroupTaken(g.taken, qty.get(g.groupId) || 0) }));
+  const { crmIndexTotal, countCgiParticipants, mergeGroupTaken, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
+  const next = groups.map((g) => ({ ...g }));
+  const started = Date.now();
   for (let i = 0; i < next.length; i += 2) {
+    if (Date.now() - started > 22000) break;
     await Promise.all(
       next.slice(i, i + 2).map(async (g) => {
         const [cgi, cust] = await Promise.all([
@@ -323,6 +315,54 @@ async function overlayGroupHeadcount(
     await sleep(CRM_READ_GAP_MS);
   }
   return next;
+}
+
+function takenSlot() {
+  return globalThis as { __raTaken?: Map<number, { at: number; n: number }> };
+}
+
+function applyCachedTaken(groups: import("./pupil-tariffs").PupilGroup[]) {
+  const m = takenSlot().__raTaken;
+  if (!m) return groups;
+  return groups.map((g) => {
+    const hit = m.get(g.groupId);
+    if (!hit || Date.now() - hit.at > 10 * 60 * 1000) return g;
+    return { ...g, taken: Math.max(g.taken, hit.n) };
+  });
+}
+
+function saveTaken(groups: import("./pupil-tariffs").PupilGroup[]) {
+  const slot = takenSlot();
+  if (!slot.__raTaken) slot.__raTaken = new Map();
+  for (const g of groups) slot.__raTaken.set(g.groupId, { at: Date.now(), n: g.taken });
+}
+
+function packPupilGroups(groups: import("./pupil-tariffs").PupilGroup[]) {
+  const sorted = [...groups].sort(
+    (a, b) =>
+      Number(b.taken > 0) - Number(a.taken > 0) ||
+      a.school.localeCompare(b.school, "ru") ||
+      a.name.localeCompare(b.name, "ru"),
+  );
+  const schools = [...new Set(sorted.map((g) => g.school).filter(Boolean))];
+  const unbound = sorted.filter((g) => g.school === "Без школы на сайте").length;
+  const byBranch: Record<number, { total: number; withPeople: number; kids: number }> = {};
+  for (const g of sorted) {
+    const b = byBranch[g.branchId] || { total: 0, withPeople: 0, kids: 0 };
+    b.total += 1;
+    if (g.taken > 0) b.withPeople += 1;
+    b.kids += Number(g.taken) || 0;
+    byBranch[g.branchId] = b;
+  }
+  return {
+    ok: true as const,
+    groups: sorted,
+    schools,
+    unbound,
+    byBranch,
+    withPeople: sorted.filter((g) => g.taken > 0).length,
+    kids: sorted.reduce((n, g) => n + (Number(g.taken) || 0), 0),
+  };
 }
 
 async function loadGroupMembers(
@@ -1196,6 +1236,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "funnelAutoGet"
           | "funnelAutoSave"
           | "pupilTariffGroups"
+          | "pupilTariffCounts"
           | "pupilTariffPlan"
           | "pupilTariffAssign"
           | "pupilTariffClear"
@@ -2047,34 +2088,16 @@ export const adminSchedule = createServerFn({ method: "POST" })
     }
     if (data.action === "pupilTariffGroups") {
       const { uniqueLiveGroups } = await import("./pupil-tariffs");
+      return packPupilGroups(applyCachedTaken(uniqueLiveGroups(listAdminSlots())));
+    }
+    if (data.action === "pupilTariffCounts") {
+      const { uniqueLiveGroups } = await import("./pupil-tariffs");
       const { token, request } = await import("./alfacrm");
       const t = await token();
-      const base = uniqueLiveGroups(listAdminSlots());
-      const groups = (await overlayGroupHeadcount(base, request, t).catch(() => base)).sort(
-        (a, b) =>
-          Number(b.taken > 0) - Number(a.taken > 0) ||
-          a.school.localeCompare(b.school, "ru") ||
-          a.name.localeCompare(b.name, "ru"),
-      );
-      const schools = [...new Set(groups.map((g) => g.school).filter(Boolean))];
-      const unbound = groups.filter((g) => g.school === "Без школы на сайте").length;
-      const byBranch: Record<number, { total: number; withPeople: number; kids: number }> = {};
-      for (const g of groups) {
-        const b = byBranch[g.branchId] || { total: 0, withPeople: 0, kids: 0 };
-        b.total += 1;
-        if (g.taken > 0) b.withPeople += 1;
-        b.kids += Number(g.taken) || 0;
-        byBranch[g.branchId] = b;
-      }
-      return {
-        ok: true as const,
-        groups,
-        schools,
-        unbound,
-        byBranch,
-        withPeople: groups.filter((g) => g.taken > 0).length,
-        kids: groups.reduce((n, g) => n + (Number(g.taken) || 0), 0),
-      };
+      const base = applyCachedTaken(uniqueLiveGroups(listAdminSlots()));
+      const groups = await overlayGroupHeadcount(base, request, t).catch(() => base);
+      saveTaken(groups);
+      return packPupilGroups(groups);
     }
     if (data.action === "pupilTariffPlan") {
       const { uniqueLiveGroups, pupilRowFromMember, pickBestTariff } = await import("./pupil-tariffs");
