@@ -129,6 +129,8 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [dateTo, setDateTo] = useState("");
   const [calcType, setCalcType] = useState(1);
   const [skipExisting, setSkipExisting] = useState(true);
+  const [job, setJob] = useState<"assign" | "close" | "delete">("assign");
+  const [closeDate, setCloseDate] = useState(todayIso);
   const [result, setResult] = useState<{ done: number; skipped: number; failed: { name: string; error: string }[] } | null>(null);
   const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
   const [subjectOf, setSubjectOf] = useState<Record<string, number>>({});
@@ -275,39 +277,45 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const ready = selected.filter((it) => it.tariffId);
   const noTariffGroups = Object.entries(byGroup).filter(([, v]) => !v.tariffId).length;
 
-  async function assign() {
+  async function runJob(mode: "assign" | "close" | "delete") {
+    const pack =
+      mode === "assign"
+        ? ready.map((it) => ({
+            ...it,
+            periodCount,
+            periodType,
+            calcType,
+            eDate: dateTo || addPeriod(date, periodCount, periodType),
+            lessonTypeIds: it.lessonTypeIds?.length ? it.lessonTypeIds : [2],
+          }))
+        : selected;
+    if (!pack.length) return;
     setBusy(true);
-    const pack = ready.map((it) => ({
-      ...it,
-      periodCount,
-      periodType,
-      calcType,
-      eDate: dateTo || addPeriod(date, periodCount, periodType),
-      lessonTypeIds: it.lessonTypeIds?.length ? it.lessonTypeIds : [2],
-    }));
     const total = pack.length;
     const acc = { done: 0, skipped: 0, failed: [] as { name: string; error: string }[] };
     setResult(acc);
+    const verb = mode === "delete" ? "Удаляю" : mode === "close" ? "Завершаю" : "Назначаю";
     const mins = assignEtaMin(total);
-    setMsg(`Назначаю ${total} абонементов потихоньку, по ${ASSIGN_CHUNK} шт. Около ${mins} мин, CRM не заблокирует.`);
+    setMsg(`${verb} ${total} учеников потихоньку, по ${ASSIGN_CHUNK} шт. Около ${mins} мин.`);
     try {
       for (let i = 0; i < pack.length; i += ASSIGN_CHUNK) {
         const chunk = pack.slice(i, i + ASSIGN_CHUNK);
-        setMsg(`AlfaCRM: ${Math.min(i + chunk.length, total)} / ${total} · выдано ${acc.done} · пауза`);
+        setMsg(`AlfaCRM: ${Math.min(i + chunk.length, total)} / ${total} · готово ${acc.done} · пауза`);
         const res = (await retryFetch(
           () =>
             adminSchedule({
               data: {
                 token: token(),
-                action: "pupilTariffAssign",
-                date,
+                action: mode === "assign" ? "pupilTariffAssign" : "pupilTariffClear",
+                mode: mode === "assign" ? "create" : mode,
+                date: mode === "close" ? closeDate : date,
                 skipExisting,
                 groupKeys: [],
                 pupilItems: chunk,
               } as never,
             }),
           1,
-          120000,
+          180000,
         )) as {
           ok?: boolean;
           done?: number;
@@ -316,7 +324,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           error?: string;
         };
         if (!res.ok) {
-          acc.failed.push({ name: `пачка ${i + 1}–${i + chunk.length}`, error: res.error || "AlfaCRM не приняла назначения." });
+          acc.failed.push({ name: `пачка ${i + 1}–${i + chunk.length}`, error: res.error || "AlfaCRM не приняла." });
         } else {
           acc.done += Number(res.done || 0);
           acc.skipped += (res.skipped || []).length;
@@ -327,7 +335,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       }
       setMsg("");
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Не удалось назначить.");
+      setMsg(e instanceof Error ? e.message : "Не удалось выполнить.");
     } finally {
       setBusy(false);
     }
@@ -339,7 +347,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         <div>
           <p className="font-display text-xl text-primary">Мастер абонементов учеников</p>
           <p className="mt-0.5 text-sm text-muted">
-            Группы разных школ → ученики → абонемент подбирается сам по предмету, филиалу и минутам. Выгрузка в CRM одним нажатием.
+            Группы → ученики → выдать новые, завершить текущие датой или удалить. Выгрузка в CRM с паузой.
           </p>
         </div>
         <button type="button" className="text-sm text-muted hover:text-fg" onClick={onClose}>
@@ -688,9 +696,41 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             </div>
           ) : (
             <>
-              <p className="text-sm text-muted">
-                Назначить {ready.length} абонементов с {date.split("-").reverse().join(".")}. Выгрузка по {ASSIGN_CHUNK} шт. с паузой — около {assignEtaMin(ready.length)} мин, API не заблокирует. Дубликаты {skipExisting ? "пропустим" : "создадим ещё раз"}.
-              </p>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ["assign", "Выдать новые"],
+                    ["close", "Завершить текущие"],
+                    ["delete", "Удалить текущие"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setJob(id)}
+                    className={cn("rounded-full px-3 py-1.5 text-sm font-semibold", job === id ? "bg-primary text-white" : "bg-surface-2 text-muted")}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {job === "assign" ? (
+                <p className="text-sm text-muted">
+                  Выдать {ready.length} абонементов с {date.split("-").reverse().join(".")}. По {ASSIGN_CHUNK} шт., около {assignEtaMin(ready.length)} мин. Дубликаты {skipExisting ? "пропустим" : "создадим ещё раз"}.
+                </p>
+              ) : null}
+              {job === "close" ? (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="text-muted">Текущие абонементы {selected.length} учеников закроются датой</span>
+                  <input type="date" value={closeDate} onChange={(e) => setCloseDate(e.target.value)} className="h-9 rounded-[8px] bg-white px-2 text-sm ring-1 ring-black/10" />
+                  <span className="text-muted">· CRM пересчитает остаток. Около {assignEtaMin(selected.length)} мин.</span>
+                </div>
+              ) : null}
+              {job === "delete" ? (
+                <p className="text-sm text-rose-800">
+                  Текущие абонементы {selected.length} учеников удалятся из AlfaCRM. Это необратимо. Около {assignEtaMin(selected.length)} мин, с паузой.
+                </p>
+              ) : null}
               <div className="max-h-72 overflow-auto rounded-2xl ring-1 ring-black/10">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-surface-2 text-[0.68rem] uppercase tracking-wider text-muted">
@@ -727,8 +767,19 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             {busy && step === 1 ? "Читаю состав…" : "Далее"}
           </Button>
         ) : result ? null : (
-          <Button type="button" className="h-9 px-4 text-sm" disabled={busy || !ready.length} onClick={() => void assign()}>
-            {busy ? "Выгружаю потихоньку…" : `Назначить в CRM · ${ready.length}`}
+          <Button
+            type="button"
+            className="h-9 px-4 text-sm"
+            disabled={busy || (job === "assign" ? !ready.length : !selected.length)}
+            onClick={() => void runJob(job)}
+          >
+            {busy
+              ? "Выгружаю потихоньку…"
+              : job === "close"
+                ? `Завершить · ${selected.length}`
+                : job === "delete"
+                  ? `Удалить · ${selected.length}`
+                  : `Назначить в CRM · ${ready.length}`}
           </Button>
         )}
       </div>

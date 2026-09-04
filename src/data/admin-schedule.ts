@@ -997,6 +997,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "pupilTariffGroups"
           | "pupilTariffPlan"
           | "pupilTariffAssign"
+          | "pupilTariffClear"
           | "voiceAsk"
           | "customersSearch"
           | "tariffsGet"
@@ -1093,6 +1094,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         pupilItems?: import("./pupil-tariffs").PupilTariffItem[];
         includeLeads?: boolean;
         skipExisting?: boolean;
+        mode?: "create" | "close" | "delete";
         subjectIds?: number[];
         lessonTypeIds?: number[];
         periodCount?: number;
@@ -1945,6 +1947,57 @@ export const adminSchedule = createServerFn({ method: "POST" })
       }
       logAdmin(`Мастер учеников: выдано ${done.length}, пропуск ${skipped.length}, ошибок ${failed.length}`);
       return { ok: true as const, done: done.length, skipped, failed, total: rows.length };
+    }
+    if (data.action === "pupilTariffClear") {
+      const { token, request, formatRuDob } = await import("./alfacrm");
+      const { ASSIGN_GAP_MS, ASSIGN_REST_EVERY, ASSIGN_REST_MS, customerTariffIndexPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs } = await import("./pupil-tariffs");
+      const t = await token();
+      const mode = data.mode === "delete" ? "delete" : "close";
+      const eDate = formatRuDob(String(data.date || "").slice(0, 10)) || formatRuDob(new Date().toISOString().slice(0, 10));
+      const rows = (Array.isArray(data.pupilItems) ? data.pupilItems : []).filter((x) => Number(x.customerId) > 0);
+      const done: number[] = [];
+      const skipped: { id: number; name: string; reason: string }[] = [];
+      const failed: { id: number; name: string; error: string }[] = [];
+      let i = 0;
+      for (const row of rows) {
+        i += 1;
+        const customerId = Number(row.customerId) || 0;
+        const branch = Number(row.branchId) || 1;
+        try {
+          const json = await request<{ items?: Record<string, unknown>[] }>(
+            customerTariffIndexPath(branch, customerId),
+            { page: 0, pageSize: 50, customer_id: customerId },
+            t,
+          );
+          const list = activeCustomerTariffs(json.items);
+          if (!list.length) {
+            skipped.push({ id: customerId, name: row.name, reason: "нет абонемента" });
+          } else {
+            let okAll = true;
+            let last = "";
+            for (const tar of list) {
+              try {
+                if (mode === "delete") {
+                  await request(customerTariffDeletePath(branch, tar.id, customerId), { id: tar.id, customer_id: customerId }, t);
+                } else {
+                  await request(customerTariffUpdatePath(branch, tar.id, customerId), { id: tar.id, customer_id: customerId, e_date: eDate }, t);
+                }
+              } catch (e) {
+                okAll = false;
+                last = e instanceof Error ? e.message : String(e);
+              }
+              await new Promise((r) => setTimeout(r, ASSIGN_GAP_MS));
+            }
+            if (okAll) done.push(customerId);
+            else failed.push({ id: customerId, name: row.name, error: last || "AlfaCRM не изменила абонемент." });
+          }
+        } catch (e) {
+          failed.push({ id: customerId, name: row.name, error: e instanceof Error ? e.message : String(e) });
+        }
+        if (i % ASSIGN_REST_EVERY === 0) await new Promise((r) => setTimeout(r, ASSIGN_REST_MS));
+      }
+      logAdmin(`Мастер учеников: ${mode === "delete" ? "удалено" : "закрыто"} ${done.length}, пропуск ${skipped.length}, ошибок ${failed.length}`);
+      return { ok: true as const, done: done.length, skipped, failed, total: rows.length, mode };
     }
     if (data.action === "voiceAsk") {
       const prompt = String(data.prompt || "").trim();

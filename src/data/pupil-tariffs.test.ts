@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, type PupilGroup } from "./pupil-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 
 function slot(over: Partial<CrmSlot> = {}): CrmSlot {
@@ -169,6 +169,9 @@ describe("мастер абонементов учеников", () => {
     assert.equal(body.group_id, 701);
     assert.equal(body.b_date, "04.09.2026");
     assert.equal(customerTariffCreatePath(1, 7759), "/v2api/1/customer-tariff/create?customer_id=7759");
+    assert.equal(customerTariffIndexPath(1, 7759), "/v2api/1/customer-tariff/index?customer_id=7759");
+    assert.equal(customerTariffUpdatePath(1, 88, 7759), "/v2api/1/customer-tariff/update?id=88&customer_id=7759");
+    assert.equal(customerTariffDeletePath(1, 88, 7759), "/v2api/1/customer-tariff/delete?id=88&customer_id=7759");
     const empty = customerTariffPayload({ customerId: 0, tariffId: 1, bDate: "01.01.2026" });
     assert.equal(empty.customer_id, 0);
     assert.deepEqual(empty.lesson_type_ids, [2]);
@@ -183,5 +186,18 @@ describe("мастер абонементов учеников", () => {
     const n = 300;
     assert.equal(Math.ceil(n / ASSIGN_CHUNK), 60);
     assert.ok(assignEtaMin(n) >= 8);
+  });
+
+  it("закрыть и удалить берут только живые абонементы", () => {
+    const list = activeCustomerTariffs([
+      { id: 1, tariff_id: 10, name: "живой" },
+      { id: 2, tariff_id: 11, removed: 1 },
+      { id: 0, tariff_id: 12 },
+      { id: 3, is_archived: 1 },
+    ]);
+    assert.deepEqual(
+      list.map((x) => x.id),
+      [1],
+    );
   });
 });

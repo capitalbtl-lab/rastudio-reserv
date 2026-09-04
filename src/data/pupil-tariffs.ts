@@ -147,6 +147,28 @@ export function assignable(items: PupilTariffItem[]) {
 export function customerTariffCreatePath(branch: number, customerId: number) {
   return `/v2api/${Number(branch) || 1}/customer-tariff/create?customer_id=${Number(customerId) || 0}`;
 }
+
+export function customerTariffIndexPath(branch: number, customerId: number) {
+  return `/v2api/${Number(branch) || 1}/customer-tariff/index?customer_id=${Number(customerId) || 0}`;
+}
+
+export function customerTariffUpdatePath(branch: number, tariffRowId: number, customerId: number) {
+  return `/v2api/${Number(branch) || 1}/customer-tariff/update?id=${Number(tariffRowId) || 0}&customer_id=${Number(customerId) || 0}`;
+}
+
+export function customerTariffDeletePath(branch: number, tariffRowId: number, customerId: number) {
+  return `/v2api/${Number(branch) || 1}/customer-tariff/delete?id=${Number(tariffRowId) || 0}&customer_id=${Number(customerId) || 0}`;
+}
+
+export function activeCustomerTariffs(items: Record<string, unknown>[] | undefined) {
+  return (items || [])
+    .filter((it) => Number(it.removed || it.is_archived || 0) !== 1 && Number(it.id) > 0)
+    .map((it) => ({
+      id: Number(it.id),
+      tariffId: Number(it.tariff_id || it.tariffId || 0),
+      name: String(it.tariff_name || it.name || "абонемент"),
+    }));
+}
 export function customerTariffPayload(opts: {
   customerId: number;
   tariffId: number;
