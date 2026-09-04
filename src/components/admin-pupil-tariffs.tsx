@@ -250,7 +250,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       const stats = pupilListStats(rows);
       setItems(list);
       setByGroup(grouped);
-      setChosen(new Set(path === "add" ? list.filter((r) => r.tariffId && r.status === "учится").map(pupilKey) : list.map(pupilKey)));
+      setChosen(new Set(path === "add" ? list.filter((r) => r.status === "учится" || r.status === "лид").map(pupilKey) : list.map(pupilKey)));
       setSubjectOf(Object.fromEntries(groups.filter((g) => picked.has(g.key)).map((g) => [g.key, g.subjectId || 0])));
       const sample = list.find((r) => r.tariffId);
       if (sample) {
@@ -602,9 +602,9 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               className="text-primary hover:underline"
-              onClick={() => setChosen(new Set((path === "add" ? items.filter((it) => it.tariffId) : items).map(pupilKey)))}
+              onClick={() => setChosen(new Set(items.map(pupilKey)))}
             >
-              всех с абонементом
+              {path === "add" ? "всех" : "всех с абонементом"}
             </button>
             <button type="button" className="text-muted hover:underline" onClick={() => setChosen(new Set())}>
               снять
@@ -743,7 +743,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           </label>
           {noTariffGroups ? (
             <p className="text-sm text-amber-800">
-              У {noTariffGroups} групп нет подходящего абонемента студии (предмет + филиал + минуты). Сначала мастер студии или выберите абонемент вручную.
+              У {noTariffGroups} групп абонемент не подобрался сам (часто робототехника: минуты или предмет в карточке не совпали). Выберите тариф в списке ниже — он уйдёт всем отмеченным детям этой группы.
             </p>
           ) : null}
           <div className="max-h-[28rem] overflow-auto rounded-[8px] ring-1 ring-black/10">

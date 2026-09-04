@@ -1,6 +1,7 @@
 import type { CrmSlot } from "./crm-slots-core";
 import type { CrmTariff } from "./crm-tariffs";
 import { matchTariffs, tariffFitsSlot } from "./crm-tariffs";
+import { guessTariffLinks } from "./tariff-map";
 import { UNMAPPED_SCHOOL } from "./group-status";
 
 export type PupilGroup = {
@@ -101,13 +102,21 @@ export function pickBestTariff(slot: Pick<CrmSlot, "subjectId" | "branchId" | "t
   if (exact) return exact;
   const sid = Number(slot.subjectId) || 0;
   const bid = Number(slot.branchId) || 0;
-  const loose = list.filter((t) => {
+  const live = list.filter((t) => {
     if (t.archive) return false;
     if (bid && t.branchIds.length && !t.branchIds.includes(bid)) return false;
     if (t.lessonTypeIds.length && !t.lessonTypeIds.includes(2)) return false;
-    return sid > 0 && t.subjectIds.includes(sid);
+    return true;
   });
-  return loose.sort((a, b) => a.price - b.price || a.name.localeCompare(b.name, "ru"))[0] || null;
+  const bySubject = sid ? live.filter((t) => t.subjectIds.includes(sid)) : [];
+  if (bySubject.length) return bySubject.sort((a, b) => a.price - b.price || a.name.localeCompare(b.name, "ru"))[0];
+  const courseId = String(slot.courseId || "");
+  if (courseId) {
+    const ids = new Set(guessTariffLinks(list).filter((l) => l.courseId === courseId).map((l) => l.tariffId));
+    const byCourse = live.filter((t) => ids.has(t.id));
+    if (byCourse.length) return byCourse.sort((a, b) => a.price - b.price || a.name.localeCompare(b.name, "ru"))[0];
+  }
+  return null;
 }
 
 export function pupilRowFromMember(
