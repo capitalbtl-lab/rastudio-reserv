@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, type PupilGroup } from "./pupil-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 
 function slot(over: Partial<CrmSlot> = {}): CrmSlot {
@@ -131,5 +131,12 @@ describe("мастер абонементов учеников", () => {
     assert.equal(auto?.id, 1);
     const chosen = pickBestTariff(slot({ timeFrom: "16:00", timeTo: "17:00", tariffId: 2 }), [a, b]);
     assert.equal(chosen?.id, 2);
+  });
+
+  it("абонемент соответствует предмету группы", () => {
+    assert.equal(tariffMatchesSubject({ subjectIds: [12, 13] }, 12), true);
+    assert.equal(tariffMatchesSubject({ subjectIds: [12, 13] }, 37), false);
+    assert.equal(tariffMatchesSubject({ subjectIds: [] }, 12), false);
+    assert.equal(tariffMatchesSubject(null, 0), true);
   });
 });

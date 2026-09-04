@@ -127,6 +127,15 @@ export function assignable(items: PupilTariffItem[]) {
   return items.filter((x) => x.tariffId && x.customerId && x.skip !== "no-tariff" && x.skip !== "already");
 }
 
+/** Абонемент подходит к предмету группы, если предмет не задан или входит в карту абонемента. */
+export function tariffMatchesSubject(tariff: { subjectIds?: number[] } | null | undefined, subjectId: number) {
+  const id = Number(subjectId) || 0;
+  if (!id) return true;
+  const ids = tariff?.subjectIds || [];
+  if (!ids.length) return false;
+  return ids.includes(id);
+}
+
 export function todayIso() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

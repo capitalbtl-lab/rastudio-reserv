@@ -5,6 +5,7 @@ import { adminSchedule } from "@/data/admin-schedule";
 import { retryFetch } from "@/lib/retry-fetch";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { tariffMatchesSubject } from "@/data/pupil-tariffs";
 
 type PupilGroup = {
   key: string;
@@ -128,20 +129,30 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [calcType, setCalcType] = useState(1);
   const [skipExisting, setSkipExisting] = useState(true);
   const [result, setResult] = useState<{ done: number; skipped: number; failed: { name: string; error: string }[] } | null>(null);
+  const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
+  const [subjectOf, setSubjectOf] = useState<Record<string, number>>({});
 
   useEffect(() => {
     void (async () => {
       setBusy(true);
       try {
-        const res = (await retryFetch(
-          () => adminSchedule({ data: { token: token(), action: "pupilTariffGroups", groupKeys: [] } as never }),
-          2,
-          20000,
-        )) as { ok?: boolean; groups?: PupilGroup[]; schools?: string[]; error?: string };
+        const [res, sub] = await Promise.all([
+          retryFetch(
+            () => adminSchedule({ data: { token: token(), action: "pupilTariffGroups", groupKeys: [] } as never }),
+            2,
+            20000,
+          ) as Promise<{ ok?: boolean; groups?: PupilGroup[]; schools?: string[]; error?: string }>,
+          retryFetch(
+            () => adminSchedule({ data: { token: token(), action: "subjectsGet" } as never }),
+            1,
+            15000,
+          ).catch(() => null) as Promise<{ ok?: boolean; subjects?: { id: number; name: string }[] } | null>,
+        ]);
         if (res.ok) {
           setGroups(res.groups || []);
           setSchools(res.schools || []);
         } else setMsg(res.error || "Не удалось прочитать группы.");
+        if (sub && "subjects" in sub && Array.isArray(sub.subjects)) setSubjects(sub.subjects);
       } catch (e) {
         setMsg(e instanceof Error ? friendlyErr(e, "Не удалось прочитать группы. Обновите страницу.") : "Не удалось прочитать группы.");
       } finally {
@@ -192,6 +203,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       setItems(rows);
       setByGroup(res.byGroup || {});
       setChosen(new Set(rows.filter((r) => r.tariffId && r.status === "учится").map(pupilKey)));
+      setSubjectOf(Object.fromEntries(groups.filter((g) => picked.has(g.key)).map((g) => [g.key, g.subjectId || 0])));
       const sample = rows.find((r) => r.tariffId);
       if (sample) {
         const count = Number(sample.periodCount) || 0;
@@ -223,11 +235,12 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
 
   function applyTariff(groupKey: string, opt: TariffOpt | null) {
     const tariffId = opt?.id || 0;
+    const subjectId = subjectOf[groupKey] || opt?.subjectIds?.[0] || 0;
     setByGroup((m) => ({ ...m, [groupKey]: { ...(m[groupKey] || { options: [] }), tariffId, tariffName: opt?.name || "" } }));
     setItems((list) =>
       list.map((it) => {
         if (`${it.branchId}:${it.groupId}` !== groupKey) return it;
-        const subjects = [...new Set([...(opt?.subjectIds || []), it.subjectIds?.[0] || 0].filter(Boolean))];
+        const subjects = [...new Set([subjectId, ...(opt?.subjectIds || []), it.subjectIds?.[0] || 0].filter(Boolean))];
         return {
           ...it,
           tariffId,
@@ -241,6 +254,17 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           lessonsCount: opt?.lessonsCount || 0,
           skip: tariffId ? (it.status === "лид" ? "lead" : undefined) : "no-tariff",
         };
+      }),
+    );
+  }
+
+  function setGroupSubject(groupKey: string, subjectId: number) {
+    setSubjectOf((m) => ({ ...m, [groupKey]: subjectId }));
+    setItems((list) =>
+      list.map((it) => {
+        if (`${it.branchId}:${it.groupId}` !== groupKey) return it;
+        const rest = (it.subjectIds || []).filter((id) => id && id !== it.subjectIds[0]);
+        return { ...it, subjectIds: subjectId ? [subjectId, ...rest] : rest };
       }),
     );
   }
@@ -544,14 +568,33 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               У {noTariffGroups} групп нет подходящего абонемента студии (предмет + филиал + минуты). Сначала мастер студии или выберите абонемент вручную.
             </p>
           ) : null}
-          <div className="max-h-64 overflow-auto rounded-2xl ring-1 ring-black/10">
+          <div className="max-h-[28rem] overflow-auto rounded-[8px] ring-1 ring-black/10">
+            <div className="sticky top-0 z-10 hidden grid-cols-[minmax(9rem,1.1fr)_minmax(11rem,1fr)_7.5rem_7.5rem_minmax(10rem,1.1fr)] gap-2 bg-surface-2 px-3 py-1.5 text-[0.68rem] font-medium uppercase tracking-wider text-muted lg:grid">
+              <span>Группа</span>
+              <span>Абонемент</span>
+              <span>Школа</span>
+              <span>Курс</span>
+              <span>Предмет</span>
+            </div>
             {Object.entries(byGroup).map(([key, info]) => {
               const g = groups.find((x) => x.key === key);
+              const subjectId = subjectOf[key] || g?.subjectId || 0;
+              const opt = info.options.find((o) => o.id === info.tariffId);
+              const match = tariffMatchesSubject(opt, subjectId);
+              const box = "h-9 w-full rounded-[8px] bg-surface-2 px-2 text-sm ring-1 ring-black/10";
               return (
-                <div key={key} className="flex flex-wrap items-center gap-3 border-b border-black/5 px-3 py-2 text-sm last:border-0">
-                  <span className="min-w-[12rem] flex-1 font-medium">{g?.name || key}</span>
+                <div
+                  key={key}
+                  className="grid items-center gap-2 border-b border-black/5 px-3 py-2 text-sm last:border-0 lg:grid-cols-[minmax(9rem,1.1fr)_minmax(11rem,1fr)_7.5rem_7.5rem_minmax(10rem,1.1fr)]"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium" title={g?.name || key}>
+                      {g?.name || key}
+                    </p>
+                    {g?.age ? <p className="text-[0.7rem] text-muted">{g.age}</p> : null}
+                  </div>
                   <select
-                    className="h-9 min-w-[16rem] flex-1 rounded-xl bg-surface-2 px-2 text-sm ring-1 ring-black/10"
+                    className={box}
                     value={info.tariffId || ""}
                     onChange={(e) => {
                       const id = Number(e.target.value);
@@ -565,10 +608,44 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                       </option>
                     ))}
                   </select>
+                  <div>
+                    <p className="mb-0.5 text-[0.65rem] text-muted lg:hidden">Школа · карточка группы</p>
+                    <div className={cn(box, "flex items-center truncate text-[0.78rem] text-muted")} title="Из карточки группы">
+                      {g?.school || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-0.5 text-[0.65rem] text-muted lg:hidden">Курс · карточка группы</p>
+                    <div className={cn(box, "flex items-center truncate text-[0.78rem] text-muted")} title="Из карточки группы">
+                      {g?.course || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-0.5 text-[0.65rem] text-muted lg:hidden">Предмет</p>
+                    <select
+                      className={cn(box, info.tariffId && !match && "ring-amber-400")}
+                      value={subjectId || ""}
+                      title={match || !info.tariffId ? "Предмет из раздела «Предметы»" : "Этот абонемент в CRM к предмету не привязан"}
+                      onChange={(e) => setGroupSubject(key, Number(e.target.value) || 0)}
+                    >
+                      <option value="">— предмет —</option>
+                      {subjects.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                      {subjectId && !subjects.some((s) => s.id === subjectId) ? (
+                        <option value={subjectId}>предмет {subjectId}</option>
+                      ) : null}
+                    </select>
+                  </div>
                 </div>
               );
             })}
           </div>
+          <p className="text-[0.72rem] text-muted">
+            Школа и курс — из карточки группы. Предмет — из раздела «Предметы». В AlfaCRM уходит только предмет абонемента.
+          </p>
         </div>
       ) : null}
 
