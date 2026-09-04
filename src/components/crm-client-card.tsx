@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { clientCardId, CRM_BRANCH, groupCardId } from "@/data/ids";
-import { ADMIN_PANEL_BLUE, RA_POP } from "@/data/admin-ui";
+import { ADMIN_PANEL_BLUE, ISO_DATE_MAX, ISO_DATE_MIN, RA_POP, clampIsoDate } from "@/data/admin-ui";
 import { displayPersonName, displayParent, initialsOf } from "@/data/client-display";
 import {
   CARD_LESSON_TYPES,
@@ -948,7 +948,7 @@ export function CrmClientCard({
             />
           </Field>
           <Field label="Дата" required>
-            <input type="date" value={lessonDate} onChange={(e) => setLessonDate(e.target.value)} className={fieldCtl} />
+            <input type="date" min={ISO_DATE_MIN} max={ISO_DATE_MAX} value={lessonDate} onChange={(e) => setLessonDate(clampIsoDate(e.target.value))} className={fieldCtl} />
           </Field>
           <Field label="Время" required>
             <div className="flex items-center gap-2">
@@ -1094,9 +1094,11 @@ export function CrmClientCard({
               <span className="shrink-0 pl-1.5 text-[0.75rem] font-medium text-muted">с</span>
               <input
                 type="date"
+                min={ISO_DATE_MIN}
+                max={ISO_DATE_MAX}
                 value={tariffFrom}
                 onChange={(e) => {
-                  const from = e.target.value;
+                  const from = clampIsoDate(e.target.value);
                   setTariffFrom(from);
                   setTariffTo(addPeriod(from, tariffPeriod, tariffPeriodType));
                 }}
@@ -1135,8 +1137,10 @@ export function CrmClientCard({
               <span className="shrink-0 text-[0.75rem] font-medium text-muted">до</span>
               <input
                 type="date"
+                min={ISO_DATE_MIN}
+                max={ISO_DATE_MAX}
                 value={tariffTo}
-                onChange={(e) => setTariffTo(e.target.value)}
+                onChange={(e) => setTariffTo(clampIsoDate(e.target.value))}
                 className="h-10 w-[9.4rem] shrink-0 rounded-[12px] bg-white px-2 text-sm outline-none ring-1 ring-black/8 focus:ring-2 focus:ring-primary/35"
               />
             </div>
@@ -1383,9 +1387,9 @@ export function CrmClientCard({
           ) : null}
           <Field label="Период">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-              <input type="date" value={groupFrom} onChange={(e) => setGroupFrom(e.target.value)} className={fieldCtl} />
+              <input type="date" min={ISO_DATE_MIN} max={ISO_DATE_MAX} value={groupFrom} onChange={(e) => setGroupFrom(clampIsoDate(e.target.value))} className={fieldCtl} />
               <span className="text-sm text-muted">—</span>
-              <input type="date" value={groupTo} onChange={(e) => setGroupTo(e.target.value)} className={fieldCtl} />
+              <input type="date" min={ISO_DATE_MIN} max={ISO_DATE_MAX} value={groupTo} onChange={(e) => setGroupTo(clampIsoDate(e.target.value))} className={fieldCtl} />
             </div>
           </Field>
         </div>

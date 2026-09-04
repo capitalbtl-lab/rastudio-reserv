@@ -6,6 +6,7 @@ import { retryFetch } from "@/lib/retry-fetch";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin } from "@/data/pupil-tariffs";
+import { ISO_DATE_MAX, ISO_DATE_MIN, clampIsoDate } from "@/data/admin-ui";
 
 type PupilGroup = {
   key: string;
@@ -592,9 +593,11 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               <span className="shrink-0 pl-1.5 text-[0.75rem] font-medium text-muted">с</span>
               <input
                 type="date"
+                min={ISO_DATE_MIN}
+                max={ISO_DATE_MAX}
                 value={date}
                 onChange={(e) => {
-                  const from = e.target.value;
+                  const from = clampIsoDate(e.target.value);
                   setDate(from);
                   setDateTo(addPeriod(from, periodCount, periodType));
                 }}
@@ -631,7 +634,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
               <span className="text-[0.75rem] font-medium text-muted">до</span>
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-10 w-[9.4rem] rounded-[12px] bg-white px-2 text-sm ring-1 ring-black/8" />
+              <input type="date" min={ISO_DATE_MIN} max={ISO_DATE_MAX} value={dateTo} onChange={(e) => setDateTo(clampIsoDate(e.target.value))} className="h-10 w-[9.4rem] rounded-[12px] bg-white px-2 text-sm ring-1 ring-black/8" />
             </div>
           </div>
           <div>
@@ -788,7 +791,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
               {path === "change" ? (
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="text-muted">Текущие абонементы {selected.length} учеников закроются датой</span>
-                  <input type="date" value={closeDate} onChange={(e) => setCloseDate(e.target.value)} className="h-9 rounded-[8px] bg-white px-2 text-sm ring-1 ring-black/10" />
+                  <input type="date" min={ISO_DATE_MIN} max={ISO_DATE_MAX} value={closeDate} onChange={(e) => setCloseDate(clampIsoDate(e.target.value))} className="h-9 rounded-[8px] bg-white px-2 text-sm ring-1 ring-black/10" />
                   <span className="text-muted">· CRM пересчитает остаток. Около {assignEtaMin(selected.length)} мин.</span>
                 </div>
               ) : null}

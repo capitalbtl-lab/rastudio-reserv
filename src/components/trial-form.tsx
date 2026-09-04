@@ -98,7 +98,7 @@ export function TrialForm({
               <input name="child" required className={fieldClass} />
             </Field>
             <Field label="Дата рождения *">
-              <input name="dob" type="date" required className={fieldClass} />
+              <input name="dob" type="date" min="1900-01-01" max="2099-12-31" required className={fieldClass} />
             </Field>
             <Field label="Телефон *">
               <input name="phone" type="tel" required autoComplete="tel" inputMode="tel" className={fieldClass} />

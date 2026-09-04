@@ -113,7 +113,7 @@ export function TrialModal({
               </label>
               <label>
                 <span className={label}>Дата рождения</span>
-                <input name="dob" type="date" required className={field} />
+                <input name="dob" type="date" min="1900-01-01" max="2099-12-31" required className={field} />
               </label>
             </div>
             <div className="grid grid-cols-2 gap-2">
