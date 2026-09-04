@@ -16,6 +16,7 @@ export function ScheduleBlock({
   selectedId,
   onPick,
   onTrial,
+  onGroup,
   signup = SITE_SIGNUP_DEFAULT,
 }: {
   sessions: CmsSession[];
@@ -23,6 +24,7 @@ export function ScheduleBlock({
   selectedId?: string;
   onPick?: (id: string) => void;
   onTrial?: (id: string) => void;
+  onGroup?: (id: string) => void;
   signup?: SiteSignup;
 }) {
   const cities = useMemo(
@@ -139,7 +141,7 @@ export function ScheduleBlock({
                             </span>
                           </span>
                         </button>
-                        <GroupCtas session={s} signup={signup} onTrial={() => onTrial?.(s.id)} />
+                        <GroupCtas session={s} signup={signup} onTrial={() => onTrial?.(s.id)} onGroup={() => onGroup?.(s.id)} />
                       </div>
                     </li>
                   );

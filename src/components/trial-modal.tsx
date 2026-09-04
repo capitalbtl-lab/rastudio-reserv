@@ -15,10 +15,12 @@ const field =
 export function TrialModal({
   session,
   path = "",
+  mode = "trial",
   onClose,
 }: {
   session: CmsSession;
   path?: string;
+  mode?: "trial" | "group";
   onClose: () => void;
 }) {
   const next = nextLessonDate(session);
@@ -51,7 +53,7 @@ export function TrialModal({
           groupName: session.group,
           date: next ? isoDate(next) : "",
           time: session.timeFrom || "",
-          kind: "trial",
+          kind: mode,
         },
       });
       if (res.ok) setDone(true);
@@ -69,8 +71,8 @@ export function TrialModal({
         className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-[1.6rem] bg-surface p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="kicker text-primary">Пробное занятие</p>
-        <h2 className="display mt-1 text-2xl">Запись на пробное</h2>
+        <p className="kicker text-primary">{mode === "group" ? "Группа" : "Пробное занятие"}</p>
+        <h2 className="display mt-1 text-2xl">{mode === "group" ? "Запись в группу" : "Запись на пробное"}</h2>
         <div className="mt-3 rounded-2xl bg-bg px-3.5 py-3 text-sm">
           <p className="font-semibold">{tidyGroupName(session.group)}</p>
           <p className="mt-1 text-muted">
@@ -115,7 +117,7 @@ export function TrialModal({
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
             <div className="mt-1 flex gap-2">
               <Button type="submit" className="flex-1" disabled={pending}>
-                {pending ? "Отправляем…" : "Отправить заявку"}
+                {pending ? "Отправляем…" : mode === "group" ? "Записать в группу" : "Отправить заявку"}
               </Button>
               <Button type="button" variant="secondary" onClick={onClose}>
                 Закрыть

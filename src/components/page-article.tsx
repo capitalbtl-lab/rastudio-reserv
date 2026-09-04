@@ -214,6 +214,7 @@ function CinematicPage({
 }) {
   const [bookId, setBookId] = useState("");
   const [trialId, setTrialId] = useState("");
+  const [signMode, setSignMode] = useState<"trial" | "group">("trial");
   const heading = splitCourseHeading(page.h1);
   const path = page.pathDecoded || page.path;
   const current = courses.find((c) => c.href === path);
@@ -221,6 +222,11 @@ function CinematicPage({
   const edit = pageEdit(path);
   const body = edit.about ? [edit.about] : COURSE_STORY[path] ?? page.paragraphs;
   const trialSession = schedule.find((s) => s.id === trialId);
+  function openSign(id: string, mode: "trial" | "group") {
+    setSignMode(mode);
+    setTrialId(id);
+    setBookId(id);
+  }
 
   return (
     <article>
@@ -249,7 +255,7 @@ function CinematicPage({
         path={page.kind === "course" || page.kind === "school" ? page.pathDecoded || page.path : undefined}
       />
       {page.kind === "course" || page.kind === "school" ? (
-        <ConvertBand path={page.pathDecoded || page.path} sessions={schedule} onTrial={setTrialId} signup={signup} />
+        <ConvertBand path={page.pathDecoded || page.path} sessions={schedule} onTrial={(id) => openSign(id, "trial")} signup={signup} />
       ) : null}
 
       <div className="page-wrap py-12 md:py-16">
@@ -292,12 +298,12 @@ function CinematicPage({
             ) : null}
             {schedule.length ? (
               <div className="pt-10">
-                <ScheduleBlock sessions={schedule} selectedId={bookId} onPick={setBookId} onTrial={setTrialId} signup={signup} />
+                <ScheduleBlock sessions={schedule} selectedId={bookId} onPick={setBookId} onTrial={(id) => openSign(id, "trial")} onGroup={(id) => openSign(id, "group")} signup={signup} />
               </div>
             ) : null}
             {page.kind === "school" ? null : <Related page={page} courses={courses} />}
           </div>
-          <ConvertAside sessions={schedule} selectedId={bookId} onPick={setBookId} onTrial={setTrialId} signup={signup} />
+          <ConvertAside sessions={schedule} selectedId={bookId} onPick={setBookId} onTrial={(id) => openSign(id, "trial")} onGroup={(id) => openSign(id, "group")} signup={signup} />
         </div>
         {!schedule.length && signup.trialOn ? (
           <div className="mt-16">
@@ -305,8 +311,8 @@ function CinematicPage({
           </div>
         ) : null}
       </div>
-      {trialSession && signup.trialOn ? (
-        <TrialModal session={trialSession} path={path} onClose={() => setTrialId("")} />
+      {trialSession && (signMode === "trial" ? signup.trialOn : signup.groupOn) ? (
+        <TrialModal session={trialSession} path={path} mode={signMode} onClose={() => setTrialId("")} />
       ) : null}
     </article>
   );

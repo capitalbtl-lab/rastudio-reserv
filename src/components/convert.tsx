@@ -124,12 +124,14 @@ export function ConvertAside({
   selectedId,
   onPick,
   onTrial,
+  onGroup,
   signup = SITE_SIGNUP_DEFAULT,
 }: {
   sessions?: CmsSession[];
   selectedId?: string;
   onPick?: (id: string) => void;
   onTrial?: (id: string) => void;
+  onGroup?: (id: string) => void;
   signup?: SiteSignup;
 }) {
   const [pick, setPick] = useState(selectedId || sessions[0]?.id || "");
@@ -188,7 +190,13 @@ export function ConvertAside({
         </select>
       ) : null}
       {group ? (
-        <GroupCtas className="mt-4 w-full [&_a]:w-full [&_button]:w-full" session={group} signup={signup} onTrial={() => onTrial?.(group.id)} />
+        <GroupCtas
+          className="mt-4 w-full [&_button]:w-full"
+          session={group}
+          signup={signup}
+          onTrial={() => onTrial?.(group.id)}
+          onGroup={() => onGroup?.(group.id)}
+        />
       ) : null}
       <p className="mt-4 text-center text-sm font-semibold">
         <a href={SITE.phoneHref}>{SITE.phone}</a>
