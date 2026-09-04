@@ -1432,6 +1432,8 @@ export function AdminSchedule() {
   }
 
   const DAYS_SHORT = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+  const previewOn = aiAdds.length > 0 || aiChanges.length > 0;
+  const shrinkPage = previewOn || voiceMode;
   const box = groupsWide
     ? "h-8 w-[4.6rem] shrink-0 rounded-full bg-surface-2 px-1.5 text-center text-[0.82rem] leading-8 ring-1 ring-black/8"
     : "h-[26px] w-[3.7rem] shrink-0 rounded-full bg-surface-2 px-1 text-center text-[0.6rem] leading-[26px] ring-1 ring-black/8";
@@ -2429,11 +2431,11 @@ export function AdminSchedule() {
       {msg ? <p className="text-sm text-primary">{msg}</p> : null}
 
       {onlyMismatch || groupsWide ? null : (
-      <article id="ra-sched-ai" className="sticky top-20 z-20 mt-6 rounded-3xl bg-gradient-to-br from-[#e8f0ff] via-white to-[#eef4ff] p-4 ring-2 ring-primary/35 shadow-[0_10px_28px_rgba(32,94,220,0.18)] md:p-5">
+      <article id="ra-sched-ai" className={cn("sticky top-20 z-20 mt-6 rounded-3xl bg-gradient-to-br from-[#e8f0ff] via-white to-[#eef4ff] ring-2 ring-primary/35 shadow-[0_10px_28px_rgba(32,94,220,0.18)]", shrinkPage ? "p-3 md:p-3" : "p-4 md:p-5")}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <p className="font-display text-xl text-primary">Добавить / исправить расписание</p>
-            <InfoTip text="Стрелка отправляет запрос агенту и открывает предпросмотр. «Опубликовать изменения» записывает их в расписание на сайте. В CRM — отдельной выгрузкой." />
+            <InfoTip text="Стрелка — предпросмотр. Да, хорошо, делай, опубликовать — на сайт. Нет, не надо, по-другому — скажет, что правим. В CRM — отдельной выгрузкой. Можно назвать курс, возраст, день, время, сколько раз в неделю, филиал, педагога, места." />
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[0.72rem] text-muted">
             <span>отмечено {pickedIds.length}</span>
@@ -2445,9 +2447,11 @@ export function AdminSchedule() {
             </button>
           </div>
         </div>
+        {shrinkPage ? null : (
         <p className="mt-2 text-[0.78rem] leading-relaxed text-muted">
-          Стрелка — предпросмотр. После предпросмотра: <b>да</b>, <b>хорошо</b>, <b>делай</b>, <b>опубликовать</b> — применить. <b>нет</b>, <b>не надо</b>, <b>по-другому</b> — скажет, что меняем.
+          Курс, возраст, день, время, ×нед, филиал, педагог, места — можно сказать или написать. Стрелка — предпросмотр.
         </p>
+        )}
         {ask ? <p className="mt-2 rounded-xl bg-primary/10 px-3 py-2 text-sm font-medium text-fg">{ask}</p> : null}
         {wizard.course || wizard.day || wizard.branch || wizard.teacher ? (
           <p className="mt-2 flex flex-wrap gap-1.5 text-[0.72rem] text-muted">
@@ -2842,7 +2846,7 @@ export function AdminSchedule() {
         </article>
       )}
 
-      <div id="ra-mismatch-list" className={cn("mt-8 space-y-4 scroll-mt-24", groupsWide && "mt-3 min-h-0 flex-1 overflow-y-auto pretty-scroll")}>
+      <div id="ra-mismatch-list" className={cn("mt-8 space-y-4 scroll-mt-24", groupsWide && "mt-3 min-h-0 flex-1 overflow-y-auto pretty-scroll", shrinkPage && !groupsWide && "origin-top [zoom:0.88]")}>
         <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-surface px-4 py-3 shadow-[var(--shadow-border)]">
           <label className="mr-auto flex items-center gap-2 text-[0.8rem] font-semibold text-muted">
             Филиал
