@@ -3645,7 +3645,7 @@ export function AdminSchedule() {
                     </label>
                     ) : null}
                     </div>
-                    {showField("calendar") ? <GroupLessonStrip className="mt-5" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} /> : null}
+                    {showField("calendar") ? <GroupLessonStrip className="mt-[1.06rem]" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} /> : null}
                     <div className="mt-5 grid gap-3">
                       <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-[6.75rem_8.75rem_minmax(10.5rem,1fr)_8.25rem_auto_5.5rem]">
                       {showField("age") ? (
