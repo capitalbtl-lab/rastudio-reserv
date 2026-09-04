@@ -2975,7 +2975,7 @@ export function AdminSchedule() {
                     </div>
                     {openAll || openCourse === c.courseId ? (
                       <div>
-                        <table className={cn("text-left", groupsWide ? "w-max max-w-full text-[0.95rem]" : "w-full text-[0.9rem]")}>
+                        <table className={cn("w-full text-left", groupsWide ? "text-[0.95rem]" : "text-[0.9rem]")}>
                           <colgroup>
                             <col className="w-10" />
                             <col className={groupsWide ? "w-[22rem]" : undefined} />
@@ -2983,7 +2983,7 @@ export function AdminSchedule() {
                             <col className="w-[3.4rem]" />
                             <col className="w-[7.2rem]" />
                             <col className="w-[5.2rem]" />
-                            <col className={groupsWide ? "w-[12rem]" : "w-[7.5rem]"} />
+                            {groupsWide ? <col /> : null}
                             <col className={groupsWide ? "w-72" : "w-36"} />
                             <col className="w-[4.4rem]" />
                             <col className="w-[5.5rem]" />
@@ -2997,7 +2997,7 @@ export function AdminSchedule() {
                               <th className="px-1 py-2 text-center">День</th>
                               <th className="px-1 py-2 text-center">С / до</th>
                               <th className="px-1 py-2 text-center">×нед</th>
-                              <th className="whitespace-nowrap px-2 py-2">Филиал</th>
+                              {groupsWide ? <th className="px-2 py-2">Филиал</th> : null}
                               <th className="whitespace-nowrap px-2 py-2">Педагог</th>
                               <th className="px-1 py-2 text-center">Места</th>
                               <th className="px-2 py-2">Кто учится</th>
@@ -3030,7 +3030,7 @@ export function AdminSchedule() {
                                   </div>
                                 </td>
                                 <td className="px-2 py-1.5 align-middle">
-                                  <div className={cn("flex items-center gap-1.5", groupsWide ? "w-[22rem] max-w-[22rem]" : "min-w-0")}>
+                                  <div className={cn("flex items-center gap-1.5", groupsWide ? "min-w-0" : "min-w-0")}>
                                     {s.groupId ? <span className="w-8 shrink-0 text-right font-semibold tabular-nums text-[0.8rem] text-muted">{s.groupId}</span> : <span className="w-8 shrink-0" />}
                                     {mm.level ? <MismatchDot text={mismatchHint(s)} /> : null}
                                     <GroupNameField large value={s.groupName} subject={s.subject} onChange={(v) => patch(s.id, "groupName", v)} />
@@ -3062,16 +3062,11 @@ export function AdminSchedule() {
                                     onAdd={(b) => addBeat(s, b)}
                                   />
                                 </td>
-                                <td className={cn("px-2 py-1.5 align-middle leading-tight text-muted", groupsWide ? "whitespace-nowrap text-[0.85rem]" : "text-[0.82rem]")}>
-                                  {groupsWide ? (
-                                    <span>{[s.city, s.branch].filter(Boolean).join(", ")}</span>
-                                  ) : (
-                                    <>
-                                      <span className="block">{s.city}</span>
-                                      <span className="block">{s.branch}</span>
-                                    </>
-                                  )}
+                                {groupsWide ? (
+                                <td className="w-full px-2 py-1.5 align-middle text-[0.85rem] leading-snug text-muted">
+                                  <span className="block min-w-0">{[s.city, s.branch].filter(Boolean).join(", ")}</span>
                                 </td>
+                                ) : null}
                                 <td className="px-2 py-1.5 align-middle">
                                   <select
                                     value={s.teacher}
@@ -3118,7 +3113,7 @@ export function AdminSchedule() {
                               </tr>
                               {open ? (
                                 <tr className="bg-[#e8f3ff]">
-                                  <td colSpan={11} className="px-4 py-3 text-sm">
+                                  <td colSpan={groupsWide ? 11 : 10} className="px-4 py-3 text-sm">
                                     <p className="font-medium">Группа {s.groupId} · {s.groupName}</p>
                                     <p className="mt-1 text-muted">
                                       {s.age} · {s.dayLabel} {s.timeFrom && s.timeTo ? `${s.timeFrom}–${s.timeTo}` : "время не указано"} · {s.city}, {s.branch} · {s.teacher} · места {s.limit}/{s.taken}
