@@ -113,6 +113,17 @@ export function loadScheduleMap(): MapFile {
     const courses = defaultCourses().map((d) => {
       const hit = raw.courses?.find((c) => c.subjectId === d.subjectId);
       if (!hit) return d;
+      const none = !String(hit.courseId || "").trim() && !String(hit.siteHref || "").trim();
+      if (none) {
+        return {
+          ...d,
+          courseId: "",
+          schoolId: "",
+          siteHref: "",
+          school: hit.school || "",
+          subjectName: hit.subjectName || d.subjectName,
+        };
+      }
       return {
         ...d,
         courseId: hit.courseId || hit.siteHref || d.courseId,

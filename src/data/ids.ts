@@ -50,8 +50,8 @@
  * КАК РЕЗОЛВИТЬ courseId ГРУППЫ (порядок, без имён):
  *   1. tree.assign[gid:{branchId}:{groupId}]
  *   2. slot.courseId, если такой курс есть в дереве
- *   3. schedule-map.courses[subjectId].courseId
- *   4. SUBJECT_TO_COURSE[subjectId]
+ *   3. schedule-map.courses[subjectId].courseId — пустая запись = «нет курса», шаг 4 не брать
+ *   4. SUBJECT_TO_COURSE[subjectId] — только если предмета нет в карте
  *   иначе — «Без курса». Оператор выбирает папку (treeMove) или карту.
  *
  * КАК РЕЗОЛВИТЬ subjectId ГРУППЫ:
@@ -164,7 +164,7 @@ export function courseIdOfSubject(subjectId: number, tree: SiteTree) {
 }
 
 /**
- * Единая резолюция courseId группы. Порядок: assign → slot.courseId → карта subjectId → SUBJECT_TO_COURSE.
+ * Единая резолюция courseId группы. Порядок: assign → slot.courseId → карта subjectId (пустая = нет курса) → SUBJECT_TO_COURSE.
  * Имя курса / группы не участвует.
  */
 export function resolveGroupCourseId(
@@ -180,8 +180,12 @@ export function resolveGroupCourseId(
   }
   if (s.subjectId && mapCourses?.length) {
     const link = mapCourses.find((c) => c.subjectId === s.subjectId);
-    const fromMap = courseIdInTree(tree, link?.courseId || link?.siteHref || "");
-    if (fromMap) return fromMap;
+    if (link) {
+      const raw = String(link.courseId || link.siteHref || "").trim();
+      if (!raw) return "";
+      const fromMap = courseIdInTree(tree, raw);
+      if (fromMap) return fromMap;
+    }
   }
   if (s.subjectId) return courseIdOfSubject(s.subjectId, tree);
   return "";

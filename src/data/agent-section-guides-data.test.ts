@@ -8,7 +8,7 @@ describe("база знаний: предметы", () => {
     assert.match(src, /GUIDE_REV = "2026-09-04-prices"/);
     assert.match(src, /id: "subjects"/);
     assert.match(src, /function subjectsBody/);
-    assert.match(src, /subjectsBind/);
+    assert.match(src, /нет курса/);
     assert.match(src, /pane=subjects/);
     assert.match(src, /schedule-map\.json/);
     assert.match(src, /groupByBranch/);

@@ -121,9 +121,9 @@ export function RaSelect({
         </div>
       ) : null}
       <ul className="pretty-scroll overflow-y-auto py-1" style={{ maxHeight: searchable ? pos.maxH - 48 : pos.maxH }}>
-        <li>
+        <li className={groups?.length ? "border-b border-black/8 mb-1 pb-1" : undefined}>
           <button type="button" className={itemCls(!value)} onClick={() => pick("")}>
-            <span className="text-muted">{placeholder}</span>
+            <span className={value ? "text-muted" : "font-semibold"}>{placeholder}</span>
           </button>
         </li>
         {groups

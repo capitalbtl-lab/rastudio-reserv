@@ -5,6 +5,7 @@ import { adminSchedule } from "@/data/admin-schedule";
 import { retryFetch } from "@/lib/retry-fetch";
 import { loadFromDisk, pullFromCrm } from "@/lib/crm-pull";
 import { CrmPullDialog, emptyPull, type CrmPullState } from "@/components/crm-pull-dialog";
+import { RaSelect } from "@/components/ra-select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CrmSubject } from "@/data/crm-subjects";
@@ -139,7 +140,7 @@ export function AdminSubjects() {
       }),
     );
     const res = await run("subjectsBind", { subjectId, courseId });
-    if (res?.ok) setMsg("Курс сайта записан. В AlfaCRM не уходил.");
+    if (res?.ok) setMsg(courseId ? "Курс сайта записан. В AlfaCRM не уходил." : "Курс сайта снят. В AlfaCRM не уходил.");
   }
 
   function toggleDictation() {
@@ -204,6 +205,16 @@ export function AdminSubjects() {
 
   const withTariff = items.filter((s) => Number(s.tariffTotal || 0) > 0);
   const withoutTariff = items.filter((s) => !Number(s.tariffTotal || 0));
+  const courseGroups = useMemo(
+    () =>
+      schools
+        .map((sc) => ({
+          label: sc.label,
+          options: courses.filter((c) => c.schoolId === sc.id).map((c) => ({ value: c.id, label: c.label })),
+        }))
+        .filter((g) => g.options.length),
+    [schools, courses],
+  );
   const view = useMemo(() => {
     const src = tab === "with" ? withTariff : withoutTariff;
     const needle = q.trim().toLowerCase();
@@ -217,7 +228,7 @@ export function AdminSubjects() {
   return (
     <section className="space-y-4">
       <p className="max-w-3xl text-sm text-muted">
-        Курс сайта подставляется из соответствий предмета и карточки группы. Справа — сколько живых групп и учеников с этим предметом в филиале. Загрузка берёт предметы из AlfaCRM и сразу подставляет курс сайта. Выгрузка отправляет в CRM только id и название — курс сайта на сайте остаётся.
+        Курс сайта подставляется из соответствий предмета и карточки группы. В списке первая строка — «нет курса», она снимает привязку и в AlfaCRM не уходит. Справа — сколько живых групп и учеников с этим предметом в филиале. Загрузка берёт предметы из AlfaCRM и сразу подставляет курс сайта. Выгрузка отправляет в CRM только id и название — курс сайта на сайте остаётся.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button
@@ -403,28 +414,23 @@ export function AdminSubjects() {
                   <input value={s.name} onChange={(e) => patch(s.id, "name", e.target.value)} className="h-9 w-full rounded-xl bg-surface-2 px-3 ring-1 ring-black/10" />
                 </td>
                 <td className="px-3 py-2">
-                  <select
-                    value={s.courseId || ""}
-                    title="Курс сайта из соответствий. В AlfaCRM не уходит."
-                    onChange={(e) => void bindCourse(s.id, e.target.value)}
-                    className="h-9 w-full max-w-[14rem] rounded-[8px] bg-surface-2 px-2 text-[0.78rem] ring-1 ring-black/10"
-                  >
-                    <option value="">— курс сайта —</option>
-                    {schools.map((sc) => (
-                      <optgroup key={sc.id} label={sc.label}>
-                        {courses
-                          .filter((c) => c.schoolId === sc.id)
-                          .map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.label}
-                            </option>
-                          ))}
-                      </optgroup>
-                    ))}
-                    {s.courseId && !courses.some((c) => c.id === s.courseId) ? (
-                      <option value={s.courseId}>{s.courseLabel || s.courseId}</option>
-                    ) : null}
-                  </select>
+                  <div title="Курс сайта из соответствий. «нет курса» снимает привязку. В AlfaCRM не уходит.">
+                    <RaSelect
+                      value={s.courseId || ""}
+                      placeholder="нет курса"
+                      menuMinWidth={320}
+                      className="max-w-[14rem] rounded-[8px] bg-surface-2 text-[0.78rem]"
+                      onChange={(v) => void bindCourse(s.id, v)}
+                      groups={
+                        s.courseId && !courses.some((c) => c.id === s.courseId)
+                          ? [
+                              { label: "Сейчас", options: [{ value: s.courseId, label: s.courseLabel || s.courseId }] },
+                              ...courseGroups,
+                            ]
+                          : courseGroups
+                      }
+                    />
+                  </div>
                 </td>
                 {cols.map((b) => {
                   const groups = Number(s.groupByBranch?.[b.id] || 0);
