@@ -232,6 +232,17 @@ function ruToIso(ru: string) {
   return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
 }
 
+function addPeriodIso(count: number, type: number, from = "") {
+  const d = from ? new Date(`${from}T12:00:00`) : new Date();
+  if (Number.isNaN(d.getTime()) || !count) return "";
+  if (type === 1) d.setDate(d.getDate() + count);
+  else if (type === 2) d.setDate(d.getDate() + count * 7);
+  else if (type === 3) d.setMonth(d.getMonth() + count);
+  else if (type === 4) d.setFullYear(d.getFullYear() + count);
+  else return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function maskRuDate(raw: string) {
   const d = raw.replace(/\D/g, "").slice(0, 8);
   if (d.length <= 2) return d;
@@ -273,7 +284,7 @@ function RuDateField({
       <input
         className={cn(className, "pr-9")}
         inputMode="numeric"
-        placeholder="26.09.2026"
+        placeholder="дд.мм.гггг"
         value={text}
         onFocus={() => {
           focused.current = true;
@@ -600,7 +611,16 @@ export function AdminTariffs() {
       setMsg(res.error || "Ошибка");
       return res;
     }
-    if ("tariffs" in res && Array.isArray(res.tariffs)) setItems(res.tariffs as Row[]);
+    if ("tariffs" in res && Array.isArray(res.tariffs)) {
+      const incoming = res.tariffs as Row[];
+      setItems((prev) =>
+        incoming.map((t) => {
+          const old = prev.find((p) => p.id === t.id) || (t.id > 0 ? prev.find((p) => p.name === t.name && p.id < 0) : undefined);
+          if (!old) return t;
+          return { ...t, eDate: t.eDate || old.eDate, bDate: t.bDate || old.bDate };
+        }),
+      );
+    }
     if ("lessonTypes" in res && Array.isArray(res.lessonTypes)) setTypes(res.lessonTypes as CrmLessonType[]);
     if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as SubjectRow[]);
     if ("branches" in res && Array.isArray(res.branches) && res.branches.length) setBranches(res.branches as CrmBranch[]);
@@ -1511,7 +1531,11 @@ function Editor({
             count={Number(t.periodCount || 0)}
             type={Number(t.periodType || 0)}
             tariffType={Number(t.type || 1)}
-            onChange={(count, type) => onPatch({ periodCount: count, periodType: type, periodLabel: "" })}
+            onChange={(count, type) => {
+              const next: Partial<Row> = { periodCount: count, periodType: type, periodLabel: "" };
+              if (count && type) next.eDate = addPeriodIso(count, type, t.bDate);
+              onPatch(next);
+            }}
           />
         </Field>
         <Field label="До" className="md:col-span-2">

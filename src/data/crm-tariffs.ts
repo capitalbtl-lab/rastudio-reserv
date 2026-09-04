@@ -440,8 +440,12 @@ function parseTariffForm(html: string, id: number) {
     periodCount,
     periodType,
     periodLabel: periodLabel(periodCount, periodType),
-    bDate: toIsoDate(inputValue(html, "Tariff[b_date]")),
-    eDate: toIsoDate(inputValue(html, "Tariff[e_date]")),
+    bDate: toIsoDate(inputValue(html, "Tariff[b_date]") || inputValue(html, "ActionForm[date_start]")),
+    eDate: toIsoDate(
+      inputValue(html, "Tariff[e_date]") ||
+        inputValue(html, "ActionForm[date_end]") ||
+        inputValue(html, "Tariff[ended_at]"),
+    ),
     subjectIds: checkedIds(html, "subject_ids"),
     lessonTypeIds: checkedIds(html, "lesson_type_ids"),
     branchIds: checkedIds(html, "branch_ids"),
@@ -746,7 +750,11 @@ export function saveTariffEdits(incoming: CrmTariff[], dropLocalIds: number[] = 
   for (const raw of incoming) {
     const id = Number(raw.id);
     if (!id) continue;
-    byId.set(id, normalizeTariff({ ...(byId.get(id) || raw), ...raw, id }));
+    const prev = byId.get(id);
+    const next = normalizeTariff({ ...(prev || raw), ...raw, id });
+    if (!next.eDate && prev?.eDate) next.eDate = prev.eDate;
+    if (!next.bDate && prev?.bDate) next.bDate = prev.bDate;
+    byId.set(id, next);
   }
   const packed = saveTariffs({ ...store, at: new Date().toISOString(), items: [...byId.values()] });
   const to = Number(incoming.find((t) => Number(t.id) > 0)?.id) || 0;
@@ -996,7 +1004,7 @@ export async function pushTariffToCrm(tariff: CrmTariff, cookieIn?: string) {
   }
 
   const page = await openTariffForm(t.id, cookie);
-  const parsed = page ? parseTariffForm(page.html, t.id) : null;
+  let parsed = page ? parseTariffForm(page.html, t.id) : null;
   if (page) cookie = page.cookie;
   const missingSub = t.subjectIds.filter((id) => !parsed?.subjectIds?.includes(id));
   const missingType = t.lessonTypeIds.filter((id) => !parsed?.lessonTypeIds?.includes(id));
@@ -1004,10 +1012,11 @@ export async function pushTariffToCrm(tariff: CrmTariff, cookieIn?: string) {
   if (missingSub.length || missingType.length || calcMiss) {
     last = await write();
     const again = await openTariffForm(t.id, last.cookie || cookie);
-    const parsed2 = again ? parseTariffForm(again.html, t.id) : parsed;
-    const stillSub = t.subjectIds.filter((id) => !parsed2?.subjectIds?.includes(id));
-    const stillType = t.lessonTypeIds.filter((id) => !parsed2?.lessonTypeIds?.includes(id));
-    const stillCalc = t.calculationType && Number(parsed2?.calculationType || 0) !== Number(t.calculationType);
+    parsed = again ? parseTariffForm(again.html, t.id) : parsed;
+    if (again) cookie = again.cookie;
+    const stillSub = t.subjectIds.filter((id) => !parsed?.subjectIds?.includes(id));
+    const stillType = t.lessonTypeIds.filter((id) => !parsed?.lessonTypeIds?.includes(id));
+    const stillCalc = t.calculationType && Number(parsed?.calculationType || 0) !== Number(t.calculationType);
     const bits = [
       stillSub.length ? "предметы" : "",
       stillType.length ? "типы уроков" : "",
@@ -1017,7 +1026,16 @@ export async function pushTariffToCrm(tariff: CrmTariff, cookieIn?: string) {
       return { ok: false as const, id: t.id, error: `В CRM не записались: ${bits.join(", ")}.`, cookie: last.cookie };
     }
   }
-  saveTariffEdits([t]);
+  saveTariffEdits([
+    {
+      ...t,
+      eDate: toIsoDate(parsed?.eDate || t.eDate),
+      bDate: toIsoDate(parsed?.bDate || t.bDate),
+      periodCount: Number(parsed?.periodCount || t.periodCount || 0),
+      periodType: Number(parsed?.periodType || t.periodType || 0),
+      periodLabel: periodLabel(Number(parsed?.periodCount || t.periodCount || 0), Number(parsed?.periodType || t.periodType || 0)) || t.periodLabel,
+    },
+  ]);
   return { ok: true as const, id: t.id, title: t.name, cookie };
 }
 
