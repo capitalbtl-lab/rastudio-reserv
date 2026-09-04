@@ -29,7 +29,7 @@ import { AdminPublicSite } from "@/components/admin-public-site";
 import { CrmClientCard } from "@/components/crm-client-card";
 import { CrmGroupMembers } from "@/components/crm-group-card";
 import { GroupLessonStrip } from "@/components/lesson-strip";
-import { clientCardId, groupCardId, CRM_BRANCH } from "@/data/ids";
+import { clientCardId, groupCardId, CRM_BRANCH, groupAssignKey } from "@/data/ids";
 import { displayPersonName } from "@/data/client-display";
 import { GROUP_STATUSES, GROUP_PRIORITY } from "@/data/group-status";
 
@@ -49,10 +49,14 @@ function branchTwoLine(s: { branchId?: number; city?: string; branch?: string })
 }
 
 function wantedSubjectName(s: CrmSlot) {
-  return String(s.course || s.groupName || "")
-    .replace(/^20\d{2}\s+/, "")
+  return String(s.subject || "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function siteCourseValue(s: CrmSlot, tree: SiteTree) {
+  const id = String(tree.assign?.[groupAssignKey(s)] || s.courseId || "");
+  return tree.courses.some((c) => c.id === id) ? id : "";
 }
 
 function branchSubjectList(slots: CrmSlot[], branchId: number, list: CrmSubject[], exceptId = "") {
@@ -2184,7 +2188,9 @@ export function AdminSchedule() {
   const subjectOffer = detail
     ? {
         wanted: wantedSubjectName(detail.slot),
-        ok: subjectFitsCourse(detail.slot, subjects.find((s) => s.id === detail.subjectId)),
+        ok:
+          !siteCourseValue(detail.slot, siteTree) ||
+          subjectFitsCourse(detail.slot, subjects.find((s) => s.id === detail.subjectId)),
       }
     : null;
 
@@ -3294,7 +3300,7 @@ export function AdminSchedule() {
                     <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted md:col-span-2">
                       Курс на сайте
                       <select
-                        value={siteTree.courses.find((x) => x.href === detail.slot.path || x.label === detail.slot.course)?.id || ""}
+                        value={siteCourseValue(detail.slot, siteTree)}
                         onChange={(e) => {
                           const to = e.target.value;
                           if (!to) return;

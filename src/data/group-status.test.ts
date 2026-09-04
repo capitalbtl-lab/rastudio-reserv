@@ -63,10 +63,22 @@ describe("школа по subjectId", () => {
       school: "",
       courseId: "",
     } as CrmSlot;
-    const out = inheritSchoolBySubject([mapped, loose]);
+    const otherBranch = {
+      id: "433",
+      groupId: 433,
+      branchId: 2,
+      subjectId: 4,
+      schoolId: "",
+      school: "",
+      courseId: "",
+    } as CrmSlot;
+    const out = inheritSchoolBySubject([mapped, loose, otherBranch]);
     const g594 = out.find((s) => s.groupId === 594);
     assert.equal(g594?.school, "Модельная школа");
     assert.equal(g594?.schoolId, "/model-school");
     assert.equal(g594?.courseId, "");
+    const g433 = out.find((s) => s.groupId === 433);
+    assert.equal(g433?.school, "Без школы на сайте");
+    assert.equal(g433?.schoolId || "", "");
   });
 });

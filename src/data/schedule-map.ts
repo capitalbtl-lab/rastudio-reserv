@@ -219,6 +219,7 @@ export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
         courseId: cid || "",
         schoolId: "",
         school: "",
+        path: "",
         mismatch: mm.level || undefined,
         mismatchText: mm.text || undefined,
       };
@@ -240,15 +241,15 @@ export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
 
 /** Школа без курса: тот же subjectId, что у уже привязанной группы. Имя не смотрим. */
 export function inheritSchoolBySubject(slots: CrmSlot[]): CrmSlot[] {
-  const bySub = new Map<number, { schoolId: string; school: string }>();
+  const bySub = new Map<string, { schoolId: string; school: string }>();
   for (const s of slots) {
     if (s.subjectId && s.schoolId && s.school && s.school !== UNMAPPED_SCHOOL) {
-      bySub.set(s.subjectId, { schoolId: s.schoolId, school: s.school });
+      bySub.set(`${s.branchId}:${s.subjectId}`, { schoolId: s.schoolId, school: s.school });
     }
   }
   return slots.map((s) => {
     if (s.schoolId) return s;
-    const hit = s.subjectId ? bySub.get(s.subjectId) : undefined;
+    const hit = s.subjectId ? bySub.get(`${s.branchId}:${s.subjectId}`) : undefined;
     if (hit) return { ...s, schoolId: hit.schoolId, school: hit.school };
     return { ...s, school: s.school || UNMAPPED_SCHOOL };
   });
