@@ -61,6 +61,7 @@ export function AdminCoursePrices() {
   const [newCourseSchool, setNewCourseSchool] = useState("");
   const [newCourse, setNewCourse] = useState("");
   const [newAge, setNewAge] = useState("");
+  const [editing, setEditing] = useState(false);
   const [colW, setColW] = useState<Record<string, number>>({});
   const colWRef = useRef(colW);
   colWRef.current = colW;
@@ -399,11 +400,15 @@ export function AdminCoursePrices() {
         <Button type="button" variant="secondary" className="h-10" disabled={busy} onClick={() => void addClient()}>
           Добавить корп.клиента
         </Button>
-        <Button type="button" className="ml-auto h-10 px-5" disabled={busy || !rows.length} onClick={() => void saveAll()}>
+        <Button type="button" variant={editing ? "default" : "secondary"} className="ml-auto h-10 px-5" disabled={busy} onClick={() => setEditing((v) => !v)}>
+          {editing ? "Готово" : "Редактировать"}
+        </Button>
+        <Button type="button" className="h-10 px-5" disabled={busy || !rows.length} onClick={() => void saveAll()}>
           Сохранить
         </Button>
       </div>
 
+      {editing ? (
       <div className="flex flex-wrap items-end gap-2 rounded-[8px] bg-white p-3 ring-1 ring-black/8">
         <p className="w-full text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Школа и курс — то же дерево, что у групп</p>
         <label className="text-[0.72rem] text-muted">
@@ -456,6 +461,7 @@ export function AdminCoursePrices() {
           Добавить курс
         </Button>
       </div>
+      ) : null}
 
       <div className="overflow-hidden rounded-2xl bg-surface ring-1 ring-black/8">
         <button type="button" onClick={() => setFormulasOpen((v) => !v)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left">
@@ -641,19 +647,25 @@ export function AdminCoursePrices() {
         {grouped.map((g) => (
           <section key={g.id}>
             <div className="flex flex-wrap items-center gap-2">
-              <input
-                value={g.label}
-                onChange={(e) => renameSchoolById(g.id, e.target.value)}
-                className="min-w-[12rem] flex-1 bg-transparent font-display text-xl text-fg outline-none ring-0"
-                title="Название школы"
-              />
-              <button
-                type="button"
-                className="rounded-[8px] px-2 py-1 text-[0.72rem] font-semibold text-muted hover:bg-rose-50 hover:text-rose-700"
-                onClick={() => void removeSchool(g.label)}
-              >
-                Удалить школу
-              </button>
+              {editing ? (
+                <>
+                  <input
+                    value={g.label}
+                    onChange={(e) => renameSchoolById(g.id, e.target.value)}
+                    className="min-w-[12rem] flex-1 rounded-[8px] bg-white px-2 font-display text-xl text-fg ring-1 ring-black/10"
+                    title="Название школы"
+                  />
+                  <button
+                    type="button"
+                    className="rounded-[8px] px-2 py-1 text-[0.72rem] font-semibold text-muted hover:bg-rose-50 hover:text-rose-700"
+                    onClick={() => void removeSchool(g.label)}
+                  >
+                    Удалить школу
+                  </button>
+                </>
+              ) : (
+                <h3 className="font-display text-xl">{g.label}</h3>
+              )}
             </div>
             <div className="mt-3 overflow-x-auto rounded-2xl ring-1 ring-black/8">
               <table className="w-full min-w-[48rem] table-fixed text-left text-sm">
@@ -701,27 +713,34 @@ export function AdminCoursePrices() {
                         <PriceColHandle onDown={(e) => resizeCol(`x${c.id}`, 72, e)} />
                       </th>
                     ))}
-                    <th className="w-10 px-2 py-3" />
+                    {editing ? <th className="w-10 px-2 py-3" /> : null}
                   </tr>
                 </thead>
                 <tbody>
                   {g.list.map((row) => (
                     <tr key={row.courseId || row.path || row.id} className="border-t border-black/6">
                       <td className="px-4 py-3 align-middle">
-                        <input
-                          value={row.name}
-                          onChange={(e) => patch(row.courseId || row.path, "name", e.target.value)}
-                          className="h-8 w-full rounded-[8px] bg-surface-2 px-2 text-sm font-medium ring-1 ring-black/10"
-                          placeholder="Название курса"
-                          title="Название курса"
-                        />
-                        <input
-                          value={row.age || ""}
-                          placeholder="Комментарий: курс для детей от 14 лет"
-                          onChange={(e) => patch(row.courseId || row.path, "age", e.target.value)}
-                          className="mt-1 h-7 w-full rounded-[8px] bg-surface-2 px-2 text-xs text-muted ring-1 ring-black/10"
-                          title="Комментарий к курсу"
-                        />
+                        {editing ? (
+                          <>
+                            <input
+                              value={row.name}
+                              onChange={(e) => patch(row.courseId || row.path, "name", e.target.value)}
+                              className="h-8 w-full rounded-[8px] bg-surface-2 px-2 text-sm font-medium ring-1 ring-black/10"
+                              placeholder="Название курса"
+                            />
+                            <input
+                              value={row.age || ""}
+                              placeholder="Курс для детей от 14 лет"
+                              onChange={(e) => patch(row.courseId || row.path, "age", e.target.value)}
+                              className="mt-1 h-7 w-full rounded-[8px] bg-surface-2 px-2 text-xs text-muted ring-1 ring-black/10"
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-medium leading-snug">{row.name}</p>
+                            {row.age ? <p className="mt-0.5 text-xs text-muted">{row.age}</p> : null}
+                          </>
+                        )}
                       </td>
                       {(["mins", "perWeek", "all", "kbm", "tmx"] as const).map((k) => (
                         <td key={k} className="px-2 py-3 align-middle">
@@ -745,6 +764,7 @@ export function AdminCoursePrices() {
                           />
                         </td>
                       ))}
+                      {editing ? (
                       <td className="px-1 py-3 align-middle">
                         <button
                           type="button"
@@ -755,6 +775,7 @@ export function AdminCoursePrices() {
                           ×
                         </button>
                       </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
