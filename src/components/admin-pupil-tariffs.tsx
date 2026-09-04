@@ -146,7 +146,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           retryFetch(
             () => adminSchedule({ data: { token: token(), action: "pupilTariffGroups", groupKeys: [] } as never }),
             2,
-            20000,
+            60000,
           ) as Promise<{ ok?: boolean; groups?: PupilGroup[]; schools?: string[]; unbound?: number; error?: string }>,
           retryFetch(
             () => adminSchedule({ data: { token: token(), action: "subjectsGet" } as never }),

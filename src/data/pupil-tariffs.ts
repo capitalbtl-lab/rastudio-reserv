@@ -1,7 +1,7 @@
 import type { CrmSlot } from "./crm-slots-core";
 import type { CrmTariff } from "./crm-tariffs";
 import { matchTariffs } from "./crm-tariffs";
-import { isAdminGroup, UNMAPPED_SCHOOL } from "./group-status";
+import { UNMAPPED_SCHOOL } from "./group-status";
 
 export type PupilGroup = {
   key: string;
@@ -57,7 +57,7 @@ export function uniqueLiveGroups(slots: CrmSlot[]): PupilGroup[] {
   const seen = new Set<string>();
   const out: PupilGroup[] = [];
   for (const s of slots) {
-    if (!s.groupId || !isAdminGroup(s.statusId)) continue;
+    if (!s.groupId) continue;
     const key = `${s.branchId}:${s.groupId}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -82,6 +82,11 @@ export function uniqueLiveGroups(slots: CrmSlot[]): PupilGroup[] {
       a.name.localeCompare(b.name, "ru"),
   );
   return out;
+}
+
+/** Группа в мастере, если есть хоть кто-то: ученик, лид или архив. */
+export function groupHasBoundPupils(taken: number, active: number, archive: number) {
+  return Number(taken) > 0 || Number(active) > 0 || Number(archive) > 0;
 }
 
 export function pickBestTariff(slot: Pick<CrmSlot, "subjectId" | "branchId" | "timeFrom" | "timeTo" | "tariffId">, list: CrmTariff[]) {

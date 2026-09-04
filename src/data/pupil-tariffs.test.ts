@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, type PupilGroup } from "./pupil-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 
 function slot(over: Partial<CrmSlot> = {}): CrmSlot {
@@ -39,19 +39,20 @@ function slot(over: Partial<CrmSlot> = {}): CrmSlot {
 }
 
 describe("мастер абонементов учеников", () => {
-  it("группы уникальны по филиалу+id, архив не берёт", () => {
+  it("группы уникальны по филиалу+id, архивные тоже в списке", () => {
     const list = uniqueLiveGroups([
       slot(),
       slot({ id: "2", day: 3 }),
       slot({ id: "3", groupId: 11, groupName: "Роботы 5-6" }),
-      slot({ id: "4", statusId: 3, groupId: 99, groupName: "архив" }),
+      slot({ id: "4", statusId: 3, groupId: 99, groupName: "архив", taken: 2 }),
       slot({ id: "6", statusId: 4, groupId: 12, groupName: "набор закрыт" }),
       slot({ id: "5", branchId: 1, groupName: "Роботы Гражданская" }),
     ]);
-    assert.equal(list.length, 4);
+    assert.equal(list.length, 5);
+    assert.ok(list.some((g) => g.groupId === 99));
     assert.deepEqual(
       list.map((g) => g.key).sort(),
-      ["1:10", "2:10", "2:11", "2:12"],
+      ["1:10", "2:10", "2:11", "2:12", "2:99"],
     );
   });
 
@@ -223,5 +224,12 @@ describe("мастер абонементов учеников", () => {
     assert.equal(kept.length, 1);
     assert.equal(kept[0].customerId, 1);
     assert.equal(kept[0].activeTariffs[0].name, "Абонемент 2950");
+  });
+
+  it("в мастере только группы с учениками, лидами или архивом", () => {
+    assert.equal(groupHasBoundPupils(3, 0, 0), true);
+    assert.equal(groupHasBoundPupils(0, 2, 0), true);
+    assert.equal(groupHasBoundPupils(0, 0, 4), true);
+    assert.equal(groupHasBoundPupils(0, 0, 0), false);
   });
 });
