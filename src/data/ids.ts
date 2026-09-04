@@ -65,15 +65,18 @@
  *   создать группу     courseId + branchId + teacherId [+ subjectId]
  *   перенести группу   treeMove { ids, courseId } — не переименовывать
  *   предмет к курсу    map.courses[subjectId].courseId = courseId
- *   абонемент к группе tariff.subjectIds ∋ group.subjectId
- *                      и tariff.branchIds ∋ group.branchId
- *                      и |duration − минут группы| ≤ 5
+ *   абонемент к группе 1) slot.tariffId
+ *                      2) tariff-map.tariffId → courseId = group.courseId
+ *                      3) tariff.subjectIds ∋ group.subjectId
+ *                         и tariff.branchIds ∋ group.branchId
+ *                         и |duration − минут группы| ≤ 5
+ *   абонемент к курсу  tariff-map.json (сайт, не CRM)
  *   клиент в группе    customerId + groupId + branchId, не ФИО
  *   цена курса         price.courseId = course.id (path)
  *   нет ID             спросить уточнение, не подбирать «похожий»
  *
  * Файлы: site-tree.json, crm-schedule.json, crm-subjects.json, prices.json,
- *        crm-tariffs.json, schedule-map.json, dossiers.json
+ *        crm-tariffs.json, schedule-map.json, tariff-map.json, dossiers.json
  */
 import type { CrmSlot } from "./crm-slots-core";
 import type { SiteTree } from "./site-tree";
@@ -228,7 +231,10 @@ export const IDS_FOR_AGENT = `КАРТА ID (обязательно). Не ищ�
 предмет subjectId — Настройки→Предметы CRM
 курс сайта courseId — папка в дереве школ. Группа лежит в курсе только если group.courseId или assign[ключ] = courseId
 школа schoolId — course.schoolId
-абонемент tariffId; действует на группу если subjectId группы ∈ tariff.subjectIds и branchId ∈ tariff.branchIds и длительность ±5 мин
+абонемент tariffId
+  к курсу сайта: tariff-map.json tariffId → schoolId + courseId (вкладка Соответствия → Абонементы или колонка «Курс сайта»). Только сайт, в CRM не уходит.
+  к группе: 1) slot.tariffId  2) courseId группы = courseId карты  3) subjectId ∈ tariff.subjectIds и branchId ∈ tariff.branchIds и минуты ±5
+  имя абонемента не ключ
 клиент customerId = dossier.crmId; группы клиента — groupLinks[].id (это groupId) + branchId + subjectId + courseId
 карточка клиента clientCardId = card:customer:{customerId} — открывать только по customerId
 карточка группы groupCardId = card:group:{branchId}:{groupId} — открывать только по groupId+branchId
@@ -236,11 +242,13 @@ export const IDS_FOR_AGENT = `КАРТА ID (обязательно). Не ищ�
 клиенты: две оси status=учится|лид и view=дети|группы; архив тихий; автолиды каждые 5 мин только новые customerId
 кабинет cabinetId = cabinet:admin
 цена курса price.courseId = path курса
-соответствие subjectId → courseId в карте (вкладка Соответствия)
+соответствие subjectId → courseId в карте (вкладка Соответствия → Предметы CRM)
+соответствие tariffId → schoolId + courseId (вкладка Соответствия → Абонементы, файл tariff-map.json, не CRM)
 
 Создать группу: courseId + branchId + teacherId. Предмет: subjectId этого курса (карта или таблица).
 Перенести группу: не переименовывать, сменить courseId / treeMove.
 Привязать предмет к курсу: карта subjectId→courseId, не по названию.
+Привязать абонемент к курсу сайта: карта tariffId→courseId, не по названию, не в CRM.
 Клиента открывать по customerId, группу — по groupId.
 Карточка клиента: clientCardId = card:customer:{customerId}. Одна форма везде (список, группа, ассистент). На десктопе — широкая правая панель (список ≤22rem), не popup.
 Карточка группы: groupCardId = card:group:{branchId}:{groupId}. Из карточки клиента открывать группу по groupId, из группы — клиента по customerId.

@@ -20,7 +20,7 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-03-clients-groups-id";
+export const GUIDE_REV = "2026-09-04-tariff-site-map";
 
 const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Филиал", idField: "branchId 1–4", link: "1 Гражданская · 2 ЦМИТ · 3 Луховицы · 4 лето" },
@@ -29,7 +29,7 @@ const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Предмет", idField: "subjectId", link: "карта → courseId" },
   { entity: "Курс сайта", idField: "courseId", link: "папка в дереве школ" },
   { entity: "Школа", idField: "schoolId", link: "course.schoolId" },
-  { entity: "Абонемент", idField: "tariffId", link: "subjectIds + branchIds + длительность ±5 мин" },
+  { entity: "Абонемент", idField: "tariffId", link: "tariff-map → courseId/schoolId (сайт); fallback subjectIds + branchIds + минуты ±5" },
   { entity: "Клиент", idField: "customerId", link: "dossier.crmId; groupLinks[].id = groupId" },
   { entity: "Карточка клиента", idField: "clientCardId", link: "card:customer:{customerId}" },
   { entity: "Кабинет", idField: "cabinetId", link: "cabinet:admin" },
@@ -77,19 +77,20 @@ const SCHEDULE_TABS: GuideTab[] = [
   {
     id: "tariffs",
     title: "Абонементы",
-    body: "Группа подходит к абонементу, если совпали subjectId, branchId и минуты (±5). Имя абонемента не участвует. Архивные абонементы не загружать.",
+    body: "Карточка абонемента CRM (tariffId) живёт во вкладке Абонементы. Привязка к школе и курсу сайта — отдельная карта storage/tariff-map.json: tariffId → schoolId + courseId. Это соответствие только на сайте, в AlfaCRM не выгружается. Колонка «Курс сайта» в таблице абонементов и вкладка Соответствия → Абонементы правят одну карту. Первая привязка угадывается по subjectIds через карту предметов, дальше только вручную по ID курса. Группа подходит к абонементу если: филиал ∈ tariff.branchIds, минуты ±5, тип урока 2 (групповое), и (courseId группы = courseId карты ИЛИ subjectId группы ∈ tariff.subjectIds). Имя абонемента не участвует. Архив не загружать. slot.tariffId — явный выбор на карточке группы, важнее автоподбора.",
   },
   {
     id: "map",
     title: "Соответствия",
-    body: "Перенос предмета пишет courseId + schoolId. После сохранения группы раскладываются по этим ID. Это живой оверрайд таблицы SUBJECT_TO_COURSE.",
+    body: "Две карты, обе только на сайте, CRM не меняют. 1) Предметы CRM: subjectId → courseId + schoolId (schedule-map.json), живой оверрайд SUBJECT_TO_COURSE. 2) Абонементы: tariffId → courseId + schoolId (tariff-map.json). Переключатель Предметы CRM / Абонементы. Слева школы сайта, сверху курсы дерева, справа список с select курса. Сохранить абонементы — action saveTariffs. Не склеивать по названию абонемента или курса.",
   },
 ];
 
 const SCHEDULE_OPS: GuideOp[] = [
   { id: "create-group", title: "Создать группу", body: "Нужны courseId + branchId + teacherId. subjectId — из карты этого курса. Нет subjectId в филиале — спросить / создать, не подставлять первый попавшийся." },
   { id: "move-group", title: "Перенести группу", body: "Сменить courseId / treeMove. Не склеивать по словам." },
-  { id: "bind-subject", title: "Привязать предмет", body: "Карта subjectId → courseId на вкладке Соответствия." },
+  { id: "bind-subject", title: "Привязать предмет", body: "Карта subjectId → courseId на вкладке Соответствия → Предметы CRM." },
+  { id: "bind-tariff", title: "Привязать абонемент к курсу сайта", body: "Карта tariffId → schoolId + courseId. Соответствия → Абонементы или колонка «Курс сайта» во вкладке Абонементы. saveTariffs. Файл tariff-map.json. В AlfaCRM не уходит. Не привязывать по имени." },
   { id: "open-group", title: "Открыть группу", body: "Только groupId + branchId. Карточка groupCardId = card:group:{branchId}:{groupId}. Состав: три списка Ученики / Лиды / Архивные ученики, клик = customerId. Голос: kind=openGroup. Из клиента: onOpenGroup(groupId, branchId)." },
   { id: "open-client", title: "Открыть клиента", body: "Только customerId. clientCardId = card:customer:{customerId}. Событие ra-open-client { customerId, branchId }. Несколько ФИО в поиске — вкладка clients + query, карточку открывать когда остался один customerId. Desktop = panel, не popup." },
   { id: "filter-clients", title: "Сортировка клиентов", body: "Две независимые оси. status: учится|лид (Текущие/Лиды), архив тихо. view: дети|группы. Событие ra-clients-filter { status, view, branchId, ageBand }. Матрица status×view обязательна. branchId 0 = все, 1–4 филиал. ageBand пусто = все." },
@@ -124,6 +125,8 @@ const SCHEDULE_NEVER = [
   "Не скроллить всю страницу внутри блока клиентов. Дальше крутятся список и карточка.",
   "Не перечитывать всех лидов каждые 5 минут. Только customerId, которых нет на сайте.",
   "Не смешивать native <select> в попапах — только RaSelect с RA_POP.",
+  "Не выгружать карту абонемент→курс в AlfaCRM. tariff-map.json только сайт.",
+  "Не искать абонемент для группы по названию. Сначала slot.tariffId, затем tariff-map.courseId, затем subjectId+филиал+минуты.",
   "Не удалять тестовые группы CRM автоматически (остаток gid 694 — оператору).",
 ];
 
@@ -174,7 +177,7 @@ DOM data-card-id data-group-id data-branch-id
 состав: Ученики (status=учится) · Лиды (status=лид) · Архивные ученики (archived)
 клик по человеку = customerGet { customerId, branchId группы }. Закрытие карточки клиента на desktop при view=группы возвращает карточку группы.
 календарь = LessonStrip groupInfo.calendar
-абонементы группы = match по subjectId, не по имени
+абонементы группы = slot.tariffId, иначе match: филиал+минуты и (tariff-map.courseId = group.courseId ИЛИ subjectId ∈ tariff.subjectIds). Карта tariff-map только сайт.
 
 ПРОТОКОЛ КАРТОЧКИ card:customer:{id}
 DOM: [data-card-id="card:customer:{id}"] [data-customer-id="{id}"]
@@ -231,7 +234,7 @@ export const FACTORY_GUIDES: SectionGuide[] = [
     on: true,
     updatedAt: "",
     summary:
-      "Карта ID: группы, клиенты, занятия, абонементы, вкладки pane. Источник: Ассистент ИИ → База знаний ИИ → Расписание занятий.",
+      "Карта ID: группы, клиенты, занятия, абонементы→курс сайта (tariff-map, не CRM), вкладки pane.",
     graph: SCHEDULE_GRAPH,
     cascade: SCHEDULE_CASCADE,
     tabs: SCHEDULE_TABS,
@@ -260,10 +263,10 @@ export const FACTORY_GUIDES: SectionGuide[] = [
     on: true,
     updatedAt: "",
     summary: "groupId+branchId, карточка группы, три списка состава, без склейки по названию.",
-    graph: SCHEDULE_GRAPH.filter((r) => /Группа|Филиал|Предмет|Курс|Клиент|Абонемент/.test(r.entity)),
+    graph: SCHEDULE_GRAPH.filter((r) => /Группа|Филиал|Предмет|Курс|Школа|Клиент|Абонемент/.test(r.entity)),
     cascade: SCHEDULE_CASCADE,
-    tabs: SCHEDULE_TABS.filter((t) => t.id === "groups"),
-    ops: SCHEDULE_OPS.filter((o) => /group|subject|pull-push/.test(o.id)),
+    tabs: SCHEDULE_TABS.filter((t) => t.id === "groups" || t.id === "map" || t.id === "tariffs"),
+    ops: SCHEDULE_OPS.filter((o) => /group|subject|tariff|pull-push/.test(o.id)),
     never: SCHEDULE_NEVER.filter((n) => /групп|groupId|курс|названи/i.test(n)),
     body: groupsBody(),
   },
@@ -307,6 +310,7 @@ ${groups}
 Клик по человеку — customerId. Закрытие карточки клиента при view=группы возвращает карточку группы.
 Создать группу: courseId + branchId + teacherId. Предмет из карты курса.
 Перенос: treeMove { ids, courseId }.
+Абонемент группы: карта tariffId → courseId (Соответствия → Абонементы), не имя. CRM не меняется.
 `;
 }
 

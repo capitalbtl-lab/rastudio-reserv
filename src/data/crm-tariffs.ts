@@ -1,6 +1,10 @@
 /**
- * Абонементы AlfaCRM. Привязка к группе только по ID:
- * subjectId ∈ tariff.subjectIds, branchId ∈ tariff.branchIds, длительность ±5 мин, lessonType 2.
+ * Абонементы AlfaCRM.
+ * Привязка к группе:
+ *   1) slot.tariffId — явный выбор на карточке группы;
+ *   2) tariff-map.json: tariffId → schoolId + courseId сайта (не CRM);
+ *   3) fallback CRM: subjectId ∈ tariff.subjectIds, branchId ∈ tariff.branchIds,
+ *      длительность ±5 мин, lessonType 2.
  * Имя абонемента не участвует в сопоставлении.
  */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
