@@ -11,6 +11,7 @@ import { loadSubjects, pullSubjectsFromCrm } from "./crm-subjects";
 import { listAdminSlots } from "./alfacrm-schedule";
 import { loadScheduleMap } from "./schedule-map";
 import type { CrmSlot } from "./crm-slots-core";
+import { guessTariffLinks, type TariffLink } from "./tariff-map";
 
 export type CrmLessonType = { id: number; name: string };
 export type CrmBranch = { id: number; name: string; short: string };
@@ -115,19 +116,22 @@ export function slotMinutes(slot: Pick<CrmSlot, "timeFrom" | "timeTo">) {
   return n > 0 ? n : 0;
 }
 
-/** Абонемент подходит к группе только по ID: subjectId + branchId + длительность. Имя не смотрим. */
-export function tariffFitsSlot(t: CrmTariff, slot: CrmSlot) {
+/** Абонемент подходит к группе: филиал + минуты + (курс сайта ИЛИ предмет CRM). Имя не смотрим. */
+export function tariffFitsSlot(t: CrmTariff, slot: CrmSlot, link?: TariffLink | null) {
   if (t.archive) return false;
-  if (!slot.subjectId || !t.subjectIds.includes(slot.subjectId)) return false;
   if (t.branchIds.length && slot.branchId && !t.branchIds.includes(slot.branchId)) return false;
   const mins = slotMinutes(slot);
   if (mins && t.duration && Math.abs(mins - t.duration) > 5) return false;
   if (t.lessonTypeIds.length && !t.lessonTypeIds.includes(2)) return false;
+  const bind = link === undefined ? guessTariffLinks([t])[0] : link;
+  if (bind?.courseId && slot.courseId && bind.courseId === slot.courseId) return true;
+  if (!slot.subjectId || !t.subjectIds.includes(slot.subjectId)) return false;
   return true;
 }
 
 export function matchTariffs(slot: CrmSlot, list = loadTariffs().items) {
-  return list.filter((t) => tariffFitsSlot(t, slot)).sort((a, b) => a.price - b.price || a.name.localeCompare(b.name, "ru"));
+  const links = new Map(guessTariffLinks(list).map((x) => [x.tariffId, x]));
+  return list.filter((t) => tariffFitsSlot(t, slot, links.get(t.id) || null)).sort((a, b) => a.price - b.price || a.name.localeCompare(b.name, "ru"));
 }
 
 export type GroupTariffOption = {

@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
+import { adminScheduleMap } from "@/data/admin-schedule-map";
 import { retryFetch } from "@/lib/retry-fetch";
 import { loadFromDisk, pullFromCrm } from "@/lib/crm-pull";
 import { CrmPullDialog, emptyPull, type CrmPullState } from "@/components/crm-pull-dialog";
@@ -11,6 +12,8 @@ import { PRICE_DIRECTIONS, type PriceRow } from "@/data/prices-core";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CrmTariff, CrmLessonType, CrmBranch } from "@/data/crm-tariffs";
+import type { SiteTree } from "@/data/site-tree";
+import type { TariffLink } from "@/data/tariff-map";
 import { PupilTariffWizard } from "@/components/admin-pupil-tariffs";
 
 const CALC_NAMES: Record<number, string> = { 0: "Любой", 1: "Базовый счет", 2: "Отдельный счет" };
@@ -284,6 +287,8 @@ export function AdminTariffs() {
   const [wiz, setWiz] = useState(false);
   const [pupilWiz, setPupilWiz] = useState(false);
   const [pull, setPull] = useState<CrmPullState>(emptyPull("tariffs"));
+  const [tree, setTree] = useState<SiteTree>({ schools: [], courses: [], assign: {} });
+  const [tariffMap, setTariffMap] = useState<TariffLink[]>([]);
 
   async function loadLocal() {
     setBusy(true);
@@ -298,6 +303,8 @@ export function AdminTariffs() {
       if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as { id: number; name: string; href?: string }[]);
       if ("branches" in res && Array.isArray(res.branches) && res.branches.length) setBranches(res.branches as CrmBranch[]);
       if ("at" in res && res.at) setAt(String(res.at));
+      if ("tree" in res && res.tree) setTree(res.tree as SiteTree);
+      if ("tariffMap" in res && Array.isArray((res as { tariffMap?: TariffLink[] }).tariffMap)) setTariffMap((res as { tariffMap: TariffLink[] }).tariffMap);
       setMsg("");
       return res;
     } catch (e) {
@@ -373,6 +380,18 @@ export function AdminTariffs() {
       })
       .sort((a, b) => (a.id < 0 ? -1 : 0) || a.price - b.price || a.name.localeCompare(b.name, "ru"));
   }, [items, q, showArchive, subjects, branch]);
+
+  async function bindTariff(tariffId: number, courseId: string) {
+    const course = tree.courses.find((c) => c.id === courseId);
+    const next = [
+      ...tariffMap.filter((x) => x.tariffId !== tariffId),
+      { tariffId, courseId: course?.id || "", schoolId: course?.schoolId || "" },
+    ];
+    setTariffMap(next);
+    const res = await adminScheduleMap({ data: { token: token(), action: "saveTariffs", tariffs: next } });
+    if (res.ok && "tariffs" in res && Array.isArray(res.tariffs)) setTariffMap(res.tariffs as TariffLink[]);
+    setMsg(res.ok ? "Курс сайта записан. AlfaCRM не менялась." : res.error || "Не сохранилось.");
+  }
 
   function patch(id: number, next: Partial<Row>) {
     setItems((list) =>
@@ -761,6 +780,7 @@ export function AdminTariffs() {
               <th className="w-28 py-3">Цена</th>
               <th className="w-32 py-3">Пакет</th>
               <th className="py-3">Предметы</th>
+              <th className="py-3">Курс сайта</th>
               <th className="w-16 py-3 text-center">Группы</th>
               <th className="w-12 py-3" />
             </tr>
@@ -768,7 +788,7 @@ export function AdminTariffs() {
           <tbody>
             {!view.length ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-sm text-muted">
+                <td colSpan={9} className="px-4 py-8 text-sm text-muted">
                   {busy ? "Загружаю абонементы…" : "В этой выборке абонементов нет. Нажмите «Все» или «Загрузить из AlfaCRM»."}
                 </td>
               </tr>
@@ -814,6 +834,26 @@ export function AdminTariffs() {
                         </div>
                       )}
                     </td>
+                    <td className="py-2 pr-2">
+                      <select
+                        value={tariffMap.find((x) => x.tariffId === t.id)?.courseId || ""}
+                        onChange={(e) => void bindTariff(t.id, e.target.value)}
+                        className="h-8 max-w-[14rem] rounded-lg bg-white px-2 text-[0.75rem] ring-1 ring-black/10"
+                      >
+                        <option value="">— курс сайта —</option>
+                        {tree.schools.map((sc) => (
+                          <optgroup key={sc.id} label={sc.label}>
+                            {tree.courses
+                              .filter((c) => c.schoolId === sc.id)
+                              .map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.label}
+                                </option>
+                              ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </td>
                     <td className="py-2 text-center text-sm text-muted">{groups.length || "—"}</td>
                     <td className="px-2 py-2">
                       <button
@@ -828,7 +868,7 @@ export function AdminTariffs() {
                   </tr>
                   {isOpen && opened ? (
                     <tr className="bg-[#edf4fb]">
-                      <td colSpan={8} className="px-4 pb-5 pt-2">
+                      <td colSpan={9} className="px-4 pb-5 pt-2">
                         <Editor
                           t={opened}
                           busy={busy}
@@ -880,7 +920,7 @@ export function AdminTariffs() {
             })}
             {view.length ? null : (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted">
+                <td colSpan={9} className="px-4 py-8 text-center text-sm text-muted">
                   {busy ? "Читаю абонементы с сайта…" : items.length ? "В этом филиале нет абонементов под фильтр." : "На сайте пока нет абонементов. Нажмите «Загрузить из AlfaCRM»."}
                 </td>
               </tr>

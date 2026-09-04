@@ -39,6 +39,7 @@
  *   group  N—1 branch     group.branchId
  *   group  N—1 teacher    group.teacherId
  *   subject N—1 course    map.courses[].subjectId → courseId   (вкладка Соответствия)
+ *   tariff  N—1 course    tariff-map.tariffId → courseId       (сайт, не CRM)
  *   price  N—1 course     price.courseId || price.path === course.id|href
  *   tariff N—M subject    tariff.subjectIds
  *   tariff N—M branch     tariff.branchIds

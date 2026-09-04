@@ -2147,6 +2147,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
           lessonTypes: store.lessonTypes,
           branches: store.branches,
           subjects: subjectsWithHref(),
+          tree: (await import("./site-tree")).loadSiteTree(),
+          tariffMap: (await import("./tariff-map")).guessTariffLinks(store.items),
         };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось прочитать абонементы." };
