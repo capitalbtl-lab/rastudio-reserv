@@ -329,21 +329,20 @@ const PACKS = [
 function PeriodPicker({
   count,
   type,
+  tariffType,
   onChange,
 }: {
   count: number;
   type: number;
+  tariffType: number;
   onChange: (count: number, type: number) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [text, setText] = useState(count ? String(count) : "");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 200, maxH: 148, up: false });
-  useEffect(() => {
-    if (document.activeElement && wrapRef.current?.contains(document.activeElement)) return;
-    setText(count ? String(count) : "");
-  }, [count]);
+  const [pos, setPos] = useState({ left: 0, width: 220, maxH: 160, up: false, top: 0, bottom: 0 });
   const n = Number(String(text).replace(/\D/g, "")) || 0;
   function plural(num: number, one: string, few: string, many: string) {
     const m10 = num % 10;
@@ -352,35 +351,49 @@ function PeriodPicker({
     if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 > 20)) return few;
     return many;
   }
-  const options = n
-    ? [
-        { id: 1, label: `${n} ${plural(n, "день", "дня", "дней")}` },
-        { id: 2, label: `${n} ${plural(n, "неделя", "недели", "недель")}` },
-        { id: 3, label: `${n} ${plural(n, "месяц", "месяца", "месяцев")}` },
-      ]
-    : [];
-  const picked = options.find((o) => o.id === type && n === count);
+  function optionsFor(c: number) {
+    if (!c) return [];
+    const tt = Number(tariffType || 1);
+    const out: { id: number; label: string; unit: string }[] = [];
+    if (tt === 1) out.push({ id: 1, label: `${c} ${plural(c, "день", "дня", "дней")}`, unit: "дней" });
+    if (tt !== 2 && c < 1000) out.push({ id: 2, label: `${c} ${plural(c, "неделя", "недели", "недель")}`, unit: "недель" });
+    if (tt !== 3 && c < 100) out.push({ id: 3, label: `${c} ${plural(c, "месяц", "месяца", "месяцев")}`, unit: "месяцев" });
+    if (tt !== 3 && c < 10) out.push({ id: 4, label: `${c} ${plural(c, "год", "года", "лет")}`, unit: "лет" });
+    if (!out.length) out.push({ id: 1, label: `${c} ${plural(c, "день", "дня", "дней")}`, unit: "дней" });
+    return out;
+  }
+  const options = optionsFor(n || (open ? count : 0));
+  const unitName = PERIOD_UNITS.find((u) => u.id === type)?.name || "";
+  const showHint = count > 0 && type > 0 && !text;
   function place() {
     const el = wrapRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const width = Math.max(r.width, 180);
+    const width = Math.max(r.width, 200);
+    const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
     const spaceBelow = window.innerHeight - r.bottom - 8;
     const spaceAbove = r.top - 8;
-    const up = spaceBelow < 132 && spaceAbove > spaceBelow;
-    const maxH = Math.min(160, Math.max(up ? spaceAbove : spaceBelow, 96));
+    const up = spaceBelow < 140 && spaceAbove > spaceBelow;
+    const maxH = Math.min(200, Math.max(up ? spaceAbove : spaceBelow, 88));
     setPos({
-      top: up ? r.top - 4 : r.bottom + 4,
-      left: Math.min(r.left, window.innerWidth - width - 8),
+      left,
       width,
       maxH,
       up,
+      top: r.bottom + 4,
+      bottom: window.innerHeight - r.top + 4,
     });
   }
-  function pick(id: number) {
-    onChange(n, id);
-    setText(String(n));
+  function pick(item: { id: number; count?: number }) {
+    const c = item.count || n || count;
+    onChange(c, item.id);
+    setText("");
     setOpen(false);
+  }
+  function openList(seed?: number) {
+    const c = seed || n || count;
+    if (c && !text) setText(String(c));
+    setOpen(true);
   }
   useEffect(() => {
     if (!open) return;
@@ -389,39 +402,32 @@ function PeriodPicker({
       const node = e.target as Node;
       if (wrapRef.current?.contains(node) || menuRef.current?.contains(node)) return;
       setOpen(false);
+      if (text && !count) setText("");
     };
     window.addEventListener("mousedown", close);
     window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
     return () => {
       window.removeEventListener("mousedown", close);
       window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
     };
-  }, [open]);
-  const hint = picked
-    ? picked.label
-    : count
-      ? `${count} ${PERIOD_UNITS.find((u) => u.id === type)?.name || ""}`
-      : "";
+  }, [open, text, count]);
   const menu = open && options.length ? (
     <div
       ref={menuRef}
       className={cn("fixed z-[400] py-1", RA_POP)}
-      style={{
-        top: pos.up ? pos.top - pos.maxH : pos.top,
-        left: pos.left,
-        width: pos.width,
-        maxHeight: pos.maxH,
-      }}
+      style={
+        pos.up
+          ? { bottom: pos.bottom, left: pos.left, width: pos.width, maxHeight: pos.maxH }
+          : { top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxH }
+      }
     >
       {options.map((o) => (
         <button
           key={o.id}
           type="button"
-          className={cn("block w-full px-3 py-1.5 text-left text-sm hover:bg-sky-50", o.id === type && n === count && "bg-sky-50 font-medium")}
+          className={cn("block w-full px-3 py-1.5 text-left text-sm hover:bg-sky-50", o.id === type && (n || count) === count && "bg-sky-50 font-medium")}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => pick(o.id)}
+          onClick={() => pick({ id: o.id, count: n || count })}
         >
           {o.label}
         </button>
@@ -429,32 +435,49 @@ function PeriodPicker({
     </div>
   ) : null;
   return (
-    <div ref={wrapRef} className="relative">
+    <div ref={wrapRef} className="relative" style={{ overflowAnchor: "none" }}>
+      {showHint ? (
+        <div className="pointer-events-none absolute inset-0 z-[1] flex items-center px-3 text-sm text-fg">
+          <span>{count}&nbsp;</span>
+          <button
+            type="button"
+            className="pointer-events-auto border-b border-dashed border-black/45 leading-tight"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => openList(count)}
+          >
+            {unitName}
+          </button>
+        </div>
+      ) : null}
       <input
+        ref={inputRef}
         className="h-9 w-full rounded-xl bg-white px-3 text-sm outline-none ring-1 ring-black/10 focus:ring-2 focus:ring-primary/30"
         inputMode="numeric"
-        placeholder="Введите цифру"
+        maxLength={4}
+        placeholder={showHint ? "" : "Введите цифру"}
         value={text}
         onChange={(e) => {
           const digits = e.target.value.replace(/\D/g, "").slice(0, 4);
           setText(digits);
           setOpen(Boolean(digits));
-          if (!digits) onChange(0, 0);
         }}
         onFocus={() => {
-          if (n) setOpen(true);
+          if (text || n) setOpen(true);
         }}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && n) {
-            e.preventDefault();
-            pick(type && options.some((o) => o.id === type) ? type : 3);
+          if (showHint && e.key.length === 1) {
+            onChange(0, 0);
           }
+          if (e.key === "Enter" && (n || count) && options[0]) {
+            e.preventDefault();
+            pick({ id: type && options.some((o) => o.id === type) ? type : options[0].id, count: n || count });
+          }
+          if (e.key === "Escape") setOpen(false);
         }}
         onBlur={() => {
-          if (n && type) onChange(n, type);
+          if (!text && !count) setOpen(false);
         }}
       />
-      <p className="mt-1 h-4 text-[0.7rem] leading-4 text-muted">{!open && hint ? `Выбрано: ${hint}` : "\u00a0"}</p>
       {menu && typeof document !== "undefined" ? createPortal(menu, document.body) : null}
     </div>
   );
@@ -1436,7 +1459,7 @@ function Editor({
   const shownTypes = moreTypes ? typeList : mainTypes;
 
   return (
-    <div className="rounded-2xl bg-white p-4 ring-1 ring-black/[0.06]">
+    <div className="rounded-2xl bg-white p-4 ring-1 ring-black/[0.06] [overflow-anchor:none]">
       <div className="grid items-end gap-2 md:grid-cols-12">
         <Field label="Название" className="md:col-span-12">
           <input className={cn(box, "font-medium")} value={t.name} onChange={(e) => onPatch({ name: e.target.value })} />
@@ -1487,6 +1510,7 @@ function Editor({
           <PeriodPicker
             count={Number(t.periodCount || 0)}
             type={Number(t.periodType || 0)}
+            tariffType={Number(t.type || 1)}
             onChange={(count, type) => onPatch({ periodCount: count, periodType: type, periodLabel: "" })}
           />
         </Field>
