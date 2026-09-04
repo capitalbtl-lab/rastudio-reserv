@@ -180,6 +180,28 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const pickSigRef = useRef("");
   const bySchoolRun = useRef(false);
 
+  function resetRun() {
+    setItems([]);
+    setChosen(new Set());
+    setByGroup({});
+    setResult(null);
+    setLog([]);
+    setSummary("");
+    setProgress(null);
+    setMsg("");
+    setStep(1);
+    loadedGroupsRef.current = new Set();
+    pickSigRef.current = "";
+  }
+
+  function switchPath(next: "add" | "change" | "remove") {
+    if (next !== path) resetRun();
+    else if (step !== 1) resetRun();
+    setPath(next);
+    setJob(next === "add" ? "assign" : next === "change" ? "close" : "delete");
+    setIncludeLeads(next === "add");
+  }
+
   function clock() {
     return new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   }
@@ -249,7 +271,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
 
   async function loadPlan() {
     setBusy(true);
-    const pickSig = [...picked].sort().join("|");
+    const pickSig = `${path}|${pace}|${[...picked].sort().join("|")}`;
     if (pickSigRef.current !== pickSig) {
       pickSigRef.current = pickSig;
       loadedGroupsRef.current = new Set();
@@ -287,7 +309,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         for (let attempt = 0; attempt < 5 && !partOk; attempt += 1) {
           try {
             const active = (await retryFetch(
-              () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: part } as never }),
+              () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: part, fresh: true } as never }),
               1,
               25000,
             )) as { ok?: boolean; items?: PupilTariffItem[]; archivedOnly?: number };
@@ -611,7 +633,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           await pause(800);
           try {
             const active = (await retryFetch(
-              () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: schoolPack } as never }),
+              () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: schoolPack, fresh: true } as never }),
               1,
               50000,
             )) as { ok?: boolean; items?: PupilTariffItem[] };
@@ -667,38 +689,21 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         <div className="grid w-[30rem] max-w-full grid-cols-3 gap-2">
           <button
             type="button"
-            onClick={() => {
-              setPath("add");
-              setJob("assign");
-              setResult(null);
-              setStep(1);
-            }}
+            onClick={() => switchPath("add")}
             className={cn("h-9 w-full rounded-[8px] text-sm font-semibold", path === "add" ? "bg-primary text-white" : "bg-surface-2 text-muted")}
           >
             Добавление
           </button>
           <button
             type="button"
-            onClick={() => {
-              setPath("change");
-              setJob("close");
-              setIncludeLeads(false);
-              setResult(null);
-              setStep(1);
-            }}
+            onClick={() => switchPath("change")}
             className={cn("h-9 w-full rounded-[8px] text-sm font-semibold", path === "change" ? "bg-primary text-white" : "bg-surface-2 text-muted")}
           >
             Изменение
           </button>
           <button
             type="button"
-            onClick={() => {
-              setPath("remove");
-              setJob("delete");
-              setIncludeLeads(false);
-              setResult(null);
-              setStep(1);
-            }}
+            onClick={() => switchPath("remove")}
             className={cn("h-9 w-full rounded-[8px] text-sm font-semibold", path === "remove" ? "bg-primary text-white" : "bg-surface-2 text-muted")}
           >
             Удаление

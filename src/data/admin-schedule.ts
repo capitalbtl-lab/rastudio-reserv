@@ -478,7 +478,7 @@ async function loadBranchActiveTariffs(
       (it: Record<string, unknown>) => items!.push(it),
       { pageSize: 100, pages: 16 },
     );
-    if (items.length) bag.__raCTar.set(branch, { at: Date.now(), items });
+    if (!opts?.fresh && items.length) bag.__raCTar.set(branch, { at: Date.now(), items });
   }
   const { splitCustomerTariffs } = await import("./pupil-tariffs");
   return splitCustomerTariffs(items, catalog);
@@ -2194,7 +2194,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const branches = [...new Set(items.map((row) => Number(row.branchId) || 0).filter(Boolean))];
       if (items.length > 24) {
         for (const branch of branches) {
-          const bulk = await loadBranchActiveTariffs(request, t, branch, catalog);
+          const bulk = await loadBranchActiveTariffs(request, t, branch, catalog, { fresh: Boolean(data.fresh) });
           for (const [cid, list] of bulk.live) byCustomer.set(`${branch}:${cid}`, list);
           for (const [cid, list] of bulk.archived) byArchived.set(`${branch}:${cid}`, list);
         }
