@@ -12,6 +12,7 @@ import { applyScheduleMap } from "@/data/schedule-map";
 import { nextLessonDate } from "@/lib/trial-slot";
 import { isAdminGroup, isArchivedGroup, isCampStatus, readPriority, slotOnPublicSchedule } from "./group-status";
 import { loadSiteSignup } from "./site-signup";
+import { mergeTeacher, saveTeachers, type CrmTeacher } from "./crm-teachers";
 
 const SKIP_SUBJECT = new Set([7, 54, 104, 85, 81, 1, 77, 106, 82, 105, 83, 90, 84, 88, 87]);
 const DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
