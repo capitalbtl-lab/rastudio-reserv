@@ -327,8 +327,8 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                 )) as { ok?: boolean; items?: PupilTariffItem[]; archivedOnly?: number };
                 if (active.ok) {
                   archived += Number(active.archivedOnly || 0);
-                  const kept = collapsePupilsByCustomer(active.items || []);
-                  const byKey = new Map(kept.map((r) => [`${r.branchId}:${r.customerId}`, r]));
+                  const returned = active.items || [];
+                  const byKey = new Map(returned.map((r) => [`${r.branchId}:${r.customerId}`, r]));
                   for (let ri = 0; ri < rows.length; ri += 1) {
                     const hit = byKey.get(`${rows[ri].branchId}:${rows[ri].customerId}`);
                     if (hit && schoolGroups.some((g) => g.groupId === rows[ri].groupId && g.branchId === rows[ri].branchId)) {
@@ -351,7 +351,14 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           }
         }
       }
-      const list = path === "add" ? rows : collapsePupilsByCustomer(rows.filter((r) => (r.activeTariffs || []).length));
+      const live = rows.filter((r) => (r.activeTariffs || []).length);
+      const list =
+        path === "add"
+          ? rows
+          : collapsePupilsByCustomer(live.length ? live : rows);
+      if (path !== "add" && rows.length && !live.length) {
+        setMsg("Живые абонементы по индексу не нашлись — показал всех учеников. Отметьте, кого менять, и нажмите Далее ещё раз, если список неполный.");
+      }
       if (!rows.length) {
         setMsg("Не удалось прочитать учеников. Нажмите «Далее» ещё раз.");
         return false;
@@ -831,7 +838,6 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                 </label>
               );
             })}
-            {!items.length ? <p className="px-3 py-6 text-center text-sm text-muted">В выбранных группах нет учеников.</p> : null}
           </div>
         </div>
       ) : null}

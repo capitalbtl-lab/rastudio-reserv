@@ -445,10 +445,13 @@ async function pullGroupMembersCrm(
           { page: 0, pageSize: 5, id },
           t,
         ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-        const c = (json.items || []).find((x) => Number(x.id) === id) || { id, name: "", is_study: 0 };
+        const c = (json.items || []).find((x) => Number(x.id) === id) || { id, name: `ученик ${id}`, is_study: 1 };
         take(c);
       }),
     );
+  }
+  if (!active.length && cgiIds.length) {
+    for (const id of cgiIds) take({ id, name: `ученик ${id}`, is_study: 1 });
   }
   return { active, archive };
 }
@@ -2180,7 +2183,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       return { ok: true as const, items, byGroup, total: items.length, scanned: items.length, groups: groups.length, archivedOnly: 0 };
     }
     if (data.action === "pupilTariffActive") {
-      const { keepPupilsWithActiveTariffs, withCatalogNames, formatTariffNames, countArchivedOnlyPupils } = await import("./pupil-tariffs");
+      const { keepPupilsWithActiveTariffs, withCatalogNames, formatTariffNames, countArchivedOnlyPupils, customerTariffIndexPath, splitCustomerTariffs, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
       const { token, request } = await import("./alfacrm");
       const t = await token();
       const items = Array.isArray(data.pupilItems) ? data.pupilItems : [];
@@ -2194,8 +2197,31 @@ export const adminSchedule = createServerFn({ method: "POST" })
         for (const [cid, list] of bulk.live) byCustomer.set(`${branch}:${cid}`, list);
         for (const [cid, list] of bulk.archived) byArchived.set(`${branch}:${cid}`, list);
       }
-      const kept = keepPupilsWithActiveTariffs(items, byCustomer).map((row) => {
-        const activeTariffs = withCatalogNames(row.activeTariffs, catalog);
+      const missing = items.filter((row) => {
+        const k = `${Number(row.branchId)}:${Number(row.customerId)}`;
+        return Number(row.customerId) && !byCustomer.has(k) && !byArchived.has(k);
+      });
+      for (let i = 0; i < missing.length; i += 3) {
+        if (i) await sleep(CRM_READ_GAP_MS);
+        await Promise.all(
+          missing.slice(i, i + 3).map(async (row) => {
+            const branch = Number(row.branchId) || 1;
+            const customerId = Number(row.customerId) || 0;
+            const json = await request<{ items?: Record<string, unknown>[] }>(
+              customerTariffIndexPath(branch, customerId),
+              { page: 0, pageSize: 50, customer_id: customerId },
+              t,
+            ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+            const split = splitCustomerTariffs(json.items, catalog);
+            const k = `${branch}:${customerId}`;
+            byCustomer.set(k, split.live.get(customerId) || []);
+            byArchived.set(k, split.archived.get(customerId) || []);
+          }),
+        );
+      }
+      const decorated = items.map((row) => {
+        const k = `${Number(row.branchId)}:${Number(row.customerId)}`;
+        const activeTariffs = withCatalogNames(byCustomer.get(k) || [], catalog);
         const offer = activeTariffs[0] && catalog.length ? tariffs.find((x) => x.id === activeTariffs[0].tariffId) : null;
         return {
           ...row,
@@ -2204,10 +2230,13 @@ export const adminSchedule = createServerFn({ method: "POST" })
           price: offer?.price || row.price,
         };
       });
+      const kept = keepPupilsWithActiveTariffs(decorated, byCustomer);
       return {
         ok: true as const,
-        items: kept,
-        total: kept.length,
+        items: decorated,
+        live: kept,
+        total: decorated.length,
+        liveCount: kept.length,
         scanned: items.length,
         archivedOnly: countArchivedOnlyPupils(items, byCustomer, byArchived),
       };
