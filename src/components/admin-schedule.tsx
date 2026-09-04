@@ -3518,7 +3518,7 @@ export function AdminSchedule() {
                     </label>
                     <GroupLessonStrip className="md:col-span-2" lessons={detail.calendar} group={detail.slot.groupName} subject={detail.slot.subject} teacher={detail.slot.teacher} />
                     <div className="grid gap-3 md:col-span-2">
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-[7.25rem_9.25rem_minmax(12.5rem,1.35fr)_8.5rem_auto]">
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-[6.75rem_8.75rem_minmax(10.5rem,1fr)_8.25rem_auto_5.5rem]">
                       <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Возраст
                         <input value={detail.slot.age} onChange={(e) => patch(detail.id, "age", e.target.value)} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
@@ -3540,9 +3540,9 @@ export function AdminSchedule() {
                       <label className="col-span-2 block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80 sm:col-auto">
                         Период
                         <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
-                          <input value={detail.bDate} onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))} placeholder="01.09.2026" className="h-full min-w-0 flex-1 bg-transparent px-2 text-center text-[0.8rem] font-medium text-fg outline-none" />
+                          <input value={detail.bDate} onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))} placeholder="01.09.2026" className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none" />
                           <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
-                          <input value={detail.eDate} onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))} placeholder="30.06.2027" className="h-full min-w-0 flex-1 bg-transparent px-2 text-center text-[0.8rem] font-medium text-fg outline-none" />
+                          <input value={detail.eDate} onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))} placeholder="30.06.2027" className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none" />
                         </span>
                       </label>
                       <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
@@ -3564,9 +3564,20 @@ export function AdminSchedule() {
                           />
                         </div>
                       </div>
+                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                        Места
+                        <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
+                          <input
+                            value={detail.slot.limit}
+                            onChange={(e) => patch(detail.id, "limit", Number(e.target.value) || 0)}
+                            className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.8rem] font-medium text-fg outline-none"
+                          />
+                          <span className="shrink-0 pr-2 text-[0.75rem] font-medium text-muted">/ {detail.slot.taken}</span>
+                        </span>
+                      </label>
                       </div>
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1.15fr)_6.5rem]">
-                      <label className="col-span-2 block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80 sm:col-auto">
+                      <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
+                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
                         Филиал
                         <select
                           value={detail.slot.branchId || ""}
@@ -3613,17 +3624,6 @@ export function AdminSchedule() {
                             <option value={detail.slot.teacher}>{detail.slot.teacher} · нет в филиале</option>
                           ) : null}
                         </select>
-                      </label>
-                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
-                        Места
-                        <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
-                          <input
-                            value={detail.slot.limit}
-                            onChange={(e) => patch(detail.id, "limit", Number(e.target.value) || 0)}
-                            className="h-full min-w-0 flex-1 bg-transparent px-2 text-center text-[0.8rem] font-medium text-fg outline-none"
-                          />
-                          <span className="shrink-0 pr-2.5 text-[0.75rem] font-medium text-muted">/ {detail.slot.taken}</span>
-                        </span>
                       </label>
                       </div>
                       <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
