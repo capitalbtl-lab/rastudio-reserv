@@ -245,13 +245,14 @@ describe("мастер абонементов учеников", () => {
         { id: 2, tariff_id: 11, removed: 1 },
         { id: 0, tariff_id: 12 },
         { id: 3, is_archived: 1 },
+        { id: 5, tariff_id: 10, is_archived: 1, tariff_name: "шаблон в архиве CRM" },
         { id: 4, tariff_id: 10, e_date: "01.01.2020" },
       ],
-      [{ id: 10, name: "Абонемент 3850" }],
+      [{ id: 10, name: "Абонемент 3850", archive: true }],
     );
     assert.deepEqual(
       list.map((x) => x.id),
-      [1],
+      [1, 5],
     );
     assert.equal(list[0].name, "живой");
   });

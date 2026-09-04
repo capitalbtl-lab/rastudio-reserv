@@ -263,9 +263,9 @@ export function tariffDateToIso(raw: string) {
 
 export type CatalogTariff = { id: number; name: string; archive?: boolean; price?: number };
 
-/** Актуальный сегодня: не удалён, уже начался, ещё не закончился. Пустая «до» = бессрочный. */
+/** На карточке ученика: не снят (removed). Архив шаблона в CRM — не снятие с человека. */
 export function customerTariffLive(it: Record<string, unknown>, _catalog?: CatalogTariff[], today = todayIso()) {
-  if (Number(it.removed || it.is_archived || it.is_archive || 0) === 1) return false;
+  if (Number(it.removed || 0) === 1) return false;
   if (!(Number(it.id) > 0)) return false;
   const tariffId = Number(it.tariff_id || it.tariffId || 0);
   if (!tariffId) return false;
@@ -346,7 +346,7 @@ export function splitCustomerTariffs(
   const live = new Map<number, { id: number; tariffId: number; name: string }[]>();
   const archived = new Map<number, { id: number; tariffId: number; name: string }[]>();
   for (const it of items || []) {
-    if (Number(it.removed || it.is_archived || it.is_archive || 0) === 1) continue;
+    if (Number(it.removed || 0) === 1) continue;
     const id = Number(it.id) || 0;
     const customerId = Number(it.customer_id ?? it.customerId ?? 0);
     const tariffId = Number(it.tariff_id || it.tariffId || 0);
