@@ -2463,12 +2463,19 @@ export function AdminSchedule() {
   }
 
   const subjectOffer = detail
-    ? {
-        wanted: wantedSubjectName(detail.slot),
-        ok:
-          !siteCourseValue(detail.slot, siteTree) ||
-          subjectFitsCourse(detail.slot, subjects.find((s) => s.id === detail.subjectId)),
-      }
+    ? (() => {
+        const courseId = siteCourseValue(detail.slot, siteTree);
+        const course = siteTree.courses.find((c) => c.id === courseId);
+        const sub = subjects.find((s) => s.id === detail.subjectId);
+        const missingInCrm = Boolean(sub === undefined && wantedSubjectName(detail.slot));
+        return {
+          wanted: sub?.name || wantedSubjectName(detail.slot),
+          courseLabel: course?.label || "",
+          mismatch: Boolean(course && sub && course.label && sub.name && course.label !== sub.name),
+          missingInCrm,
+          ok: !courseId || Boolean(sub),
+        };
+      })()
     : null;
 
   return (
@@ -3634,7 +3641,7 @@ export function AdminSchedule() {
                     </div>
                   </div>
                 </div>
-                {subjectOffer && !subjectOffer.ok ? (
+                {subjectOffer && !subjectOffer.ok && subjectOffer.missingInCrm ? (
                   <div
                     className="mx-5 mt-3 shrink-0 rounded-xl px-4 py-3 md:mx-6"
                     style={{ background: "#FFD54A", color: "#1A1408", boxShadow: "inset 0 0 0 2px #E6B000" }}
@@ -3866,7 +3873,22 @@ export function AdminSchedule() {
                           void run("treeMove", { ids: [detail.slot.id], courseId: to }).then((res) => {
                             if (!res.ok || !("slots" in res) || !Array.isArray(res.slots)) return;
                             const next = (res.slots as CrmSlot[]).find((row) => row.id === detail.slot.id);
-                            if (next?.courseId) setDetail((d) => (d ? { ...d, slot: next } : d));
+                            if (!next) return;
+                            setDetail((d) =>
+                              d
+                                ? {
+                                    ...d,
+                                    slot: {
+                                      ...next,
+                                      courseId: to,
+                                      schoolId: school?.id || next.schoolId,
+                                      school: school?.label || next.school,
+                                      course: course?.label || next.course,
+                                      path: course?.href || next.path,
+                                    },
+                                  }
+                                : d,
+                            );
                           });
                         }}
                       />

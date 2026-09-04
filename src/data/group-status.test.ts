@@ -106,7 +106,7 @@ describe("курс группы из карты админки", () => {
     assert.equal(resolveGroupCourseId(slot, tree, [{ subjectId: 13, courseId: "/art-studio-5-6" }]), "/art-studio-5-6");
   });
 
-  it("карта предмета важнее старого assign в Подиум", () => {
+  it("перенос в карточке важнее карты предмета", () => {
     const withAssign = {
       ...tree,
       assign: { "gid:2:433": "/model-school-podium" },
@@ -119,7 +119,7 @@ describe("курс группы из карты админки", () => {
     const stuck = { ...slot, courseId: "/model-school-podium" };
     assert.equal(
       resolveGroupCourseId(stuck, withAssign, [{ subjectId: 13, courseId: "/art-studio-5-6" }]),
-      "/art-studio-5-6",
+      "/model-school-podium",
     );
   });
 

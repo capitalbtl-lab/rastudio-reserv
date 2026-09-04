@@ -197,7 +197,7 @@ export function schoolLabelOfSubject(subjectId: number) {
   return school?.label || "";
 }
 
-/** Раскладывает группы по courseId / subjectId. Карта предмета важнее старого assign. */
+/** Раскладывает группы по courseId. Сначала assign (карточка), иначе карта subjectId. */
 export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
   const tree = loadSiteTree();
   const map = loadScheduleMap();
