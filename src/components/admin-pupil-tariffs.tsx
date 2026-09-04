@@ -6,7 +6,7 @@ import { retryFetch } from "@/lib/retry-fetch";
 import { RaSelect } from "@/components/ra-select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, collapsePupilsByCustomer, pupilListStats, groupsBySchoolId } from "@/data/pupil-tariffs";
+import { tariffMatchesSubject, ASSIGN_CHUNK, ASSIGN_BATCH_PAUSE_MS, assignEtaMin, PLAN_GROUP_CHUNK, collapsePupilsByCustomer, pupilListStats, groupsBySchoolId, bySchoolId } from "@/data/pupil-tariffs";
 import { ISO_DATE_MAX, ISO_DATE_MIN, clampIsoDate } from "@/data/admin-ui";
 
 type PupilGroup = {
@@ -32,6 +32,7 @@ type PupilTariffItem = {
   branchId: number;
   groupName: string;
   school: string;
+  schoolId?: string;
   tariffId: number;
   tariffName: string;
   price: number;
@@ -175,6 +176,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
   const [summary, setSummary] = useState("");
   const loadedGroupsRef = useRef(new Set<string>());
   const pickSigRef = useRef("");
+  const bySchoolRun = useRef(false);
 
   useEffect(() => {
     void (async () => {
@@ -236,7 +238,9 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
       loadedGroupsRef.current = new Set();
     }
     const selected = groups.filter((g) => picked.has(g.key));
-    const schools = groupsBySchoolId(selected);
+    const allPicked = groups.length > 0 && picked.size === groups.length;
+    bySchoolRun.current = allPicked;
+    const waves = allPicked ? groupsBySchoolId(selected) : ([[ "", selected ]] as [string, typeof selected][]);
     const total = selected.length;
     const rows: PupilTariffItem[] = [];
     const grouped: Record<string, GroupTariff> = {};
@@ -246,8 +250,8 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     setSummary("");
     const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
     try {
-      for (const [, schoolGroups] of schools) {
-        const title = schoolGroups[0]?.school || "Школа";
+      for (const [, schoolGroups] of waves) {
+        const title = allPicked ? schoolGroups[0]?.school || "Школа" : "Ученики";
         const pending = schoolGroups.filter((g) => !loadedGroupsRef.current.has(g.key));
         for (let i = 0; i < pending.length; ) {
           let take = Math.min(PLAN_GROUP_CHUNK, pending.length - i);
@@ -464,61 +468,75 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
     setResult(acc);
     const verb = mode === "delete" ? "Удаляю" : mode === "close" ? "Завершаю" : "Назначаю";
     const mins = assignEtaMin(total);
+    const waves = bySchoolRun.current ? bySchoolId(pack) : ([[ "", pack ]] as [string, typeof pack][]);
     setProgress({ done: 0, total, label: verb, unit: "учеников", extra: `около ${mins} мин, по ${ASSIGN_CHUNK}` });
     setMsg("");
+    const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
     try {
-      for (let i = 0; i < pack.length; i += ASSIGN_CHUNK) {
-        const chunk = pack.slice(i, i + ASSIGN_CHUNK);
-        const at = Math.min(i + chunk.length, total);
-        setProgress({
-          done: at,
-          total,
-          label: verb,
-          unit: "учеников",
-          extra: `готово ${acc.done} · пропуск ${acc.skipped} · ошибок ${acc.failed.length}`,
-        });
-        const res = (await retryFetch(
-          () =>
-            adminSchedule({
-              data: {
-                token: token(),
-                action: mode === "assign" ? "pupilTariffAssign" : "pupilTariffClear",
-                mode: mode === "assign" ? "create" : mode,
-                date: mode === "close" ? closeDate : date,
-                skipExisting,
-                groupKeys: [],
-                pupilItems: chunk,
-              } as never,
-            }),
-          1,
-          180000,
-        )) as {
-          ok?: boolean;
-          done?: number;
-          skipped?: { id: number; name: string; reason: string }[];
-          failed?: { id: number; name: string; error: string }[];
-          error?: string;
-        };
-        if (!res.ok) {
-          acc.failed.push({ name: `пачка ${i + 1}–${i + chunk.length}`, error: res.error || "AlfaCRM не приняла." });
-        } else {
-          acc.done += Number(res.done || 0);
-          acc.skipped += (res.skipped || []).length;
-          acc.failed.push(...(res.failed || []).map((f) => ({ name: f.name, error: f.error })));
+      let doneN = 0;
+      for (const [, schoolPack] of waves) {
+        const title = bySchoolRun.current ? schoolPack[0]?.school || verb : verb;
+        for (let i = 0; i < schoolPack.length; ) {
+          const chunk = schoolPack.slice(i, i + ASSIGN_CHUNK);
+          let ok = false;
+          for (let attempt = 0; attempt < 8 && !ok; attempt += 1) {
+            setProgress({
+              done: doneN,
+              total,
+              label: `${verb} · ${title}`,
+              unit: "учеников",
+              extra: `готово ${acc.done} · пропуск ${acc.skipped} · ошибок ${acc.failed.length}`,
+            });
+            setMsg(`${title}: ${i + 1}–${Math.min(i + chunk.length, schoolPack.length)} из ${schoolPack.length}`);
+            try {
+              const res = (await retryFetch(
+                () =>
+                  adminSchedule({
+                    data: {
+                      token: token(),
+                      action: mode === "assign" ? "pupilTariffAssign" : "pupilTariffClear",
+                      mode: mode === "assign" ? "create" : mode,
+                      date: mode === "close" ? closeDate : date,
+                      skipExisting,
+                      groupKeys: [],
+                      pupilItems: chunk,
+                    } as never,
+                  }),
+                1,
+                180000,
+              )) as {
+                ok?: boolean;
+                done?: number;
+                skipped?: { id: number; name: string; reason: string }[];
+                failed?: { id: number; name: string; error: string }[];
+                error?: string;
+              };
+              if (res.ok) {
+                acc.done += Number(res.done || 0);
+                acc.skipped += (res.skipped || []).length;
+                acc.failed.push(...(res.failed || []).map((f) => ({ name: f.name, error: f.error })));
+                i += chunk.length;
+                doneN += chunk.length;
+                ok = true;
+              } else await wait(800 * (attempt + 1));
+            } catch (e) {
+              setMsg(friendlyErr(e, `${title}: повтор ${attempt + 1}`));
+              await wait(800 * (attempt + 1));
+            }
+          }
+          if (!ok) {
+            setMsg(`${title}: выгрузка не прошла. Нажмите кнопку ещё раз — продолжим эту школу.`);
+            setResult({ ...acc, failed: [...acc.failed] });
+            return;
+          }
+          setResult({ ...acc, failed: [...acc.failed] });
+          if (i < schoolPack.length) await wait(ASSIGN_BATCH_PAUSE_MS);
         }
-        setResult({ ...acc, failed: [...acc.failed] });
-        setProgress({
-          done: at,
-          total,
-          label: verb,
-          unit: "учеников",
-          extra: `готово ${acc.done} · пропуск ${acc.skipped} · ошибок ${acc.failed.length}`,
-        });
-        if (i + ASSIGN_CHUNK < pack.length) await new Promise((r) => setTimeout(r, ASSIGN_BATCH_PAUSE_MS));
+        setMsg(`${title}: готово`);
       }
       setMsg("");
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Не удалось выполнить.");
+      setMsg(e instanceof Error ? friendlyErr(e, "Не удалось выполнить.") : "Не удалось выполнить.");
     } finally {
       setBusy(false);
     }
@@ -609,10 +627,10 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         <div className="mt-4 space-y-3">
           <p className="text-sm text-muted">
             {path === "add"
-              ? "Отметьте группы. «Выбрать все» — читаем школу за школой по ID."
+              ? "Отметьте группы. «Выбрать все» — полный круг по школе: прочитали и выгрузили, затем следующая."
               : path === "change"
-                ? "Отметьте группы. Все сразу — школа за школой по ID, без пропуска."
-                : "Отметьте группы. Все сразу — школа за школой по ID, без пропуска."}
+                ? "Не всё — обычный режим. «Выбрать все» — школа за школой до конца (изменение)."
+                : "Не всё — обычный режим. «Выбрать все» — школа за школой до конца (удаление)."}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <select value={school} onChange={(e) => setSchool(e.target.value)} className="h-10 rounded-xl bg-surface-2 px-3 text-sm ring-1 ring-black/10">

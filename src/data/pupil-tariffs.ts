@@ -27,6 +27,7 @@ export type PupilTariffItem = {
   branchId: number;
   groupName: string;
   school: string;
+  schoolId?: string;
   tariffId: number;
   tariffName: string;
   price: number;
@@ -147,8 +148,8 @@ export function uniqueLiveGroups(slots: CrmSlot[]): PupilGroup[] {
 }
 
 /** Школа за школой по ID сайта, без школы — в конце. */
-export function groupsBySchoolId(list: PupilGroup[]) {
-  const map = new Map<string, PupilGroup[]>();
+export function bySchoolId<T extends { schoolId?: string; school?: string }>(list: T[]) {
+  const map = new Map<string, T[]>();
   for (const g of list) {
     const id = String(g.schoolId || "").trim() || `name:${g.school || "_"}`;
     const cur = map.get(id) || [];
@@ -161,6 +162,10 @@ export function groupsBySchoolId(list: PupilGroup[]) {
     if (aMiss !== bMiss) return aMiss ? 1 : -1;
     return a.localeCompare(b, "ru");
   });
+}
+
+export function groupsBySchoolId(list: PupilGroup[]) {
+  return bySchoolId(list);
 }
 
 /** Группа в мастере, если есть хоть кто-то: ученик, лид или архив. */
@@ -215,6 +220,7 @@ export function pupilRowFromMember(
     branchId: group.branchId,
     groupName: group.name,
     school: group.school,
+    schoolId: group.schoolId,
     tariffId: tariff?.id || 0,
     tariffName: tariff?.name || "",
     price: tariff?.price || 0,
