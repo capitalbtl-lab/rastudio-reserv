@@ -626,7 +626,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
                   </span>
                 </span>
                 <span className="shrink-0 text-right text-[0.72rem] text-muted">
-                  {countsLive && g.taken ? `${g.taken}${g.limit ? `/${g.limit}` : ""}` : "состав →"}
+                  {g.taken ? `${g.taken}${g.limit ? `/${g.limit}` : ""}` : busy ? "…" : "—"}
                 </span>
               </label>
             ))}
