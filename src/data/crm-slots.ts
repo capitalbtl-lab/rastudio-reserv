@@ -8,7 +8,7 @@ import type { CmsSession } from "@/data/cms";
 import { request } from "@/data/alfacrm";
 import { yandexJson } from "@/data/agent-channels";
 import { loadSubjects, pickSubjectForSlot } from "@/data/crm-subjects";
-import { teacherAllowed, teachersAtBranch, listTeachers } from "@/data/crm-teachers";
+import { teachersAtBranch, listTeachers, teacherIdsOfSlot } from "@/data/crm-teachers";
 import { type CrmSlot, type SlotVersion, type LessonBeat, beatsOf, validBeat, levelName } from "@/data/crm-slots-core";
 import { loadSiteTree } from "@/data/site-tree";
 import { subjectIdOfCourse } from "@/data/ids";
@@ -150,7 +150,7 @@ export function toSession(s: CrmSlot): CmsSession {
     city: s.city,
     branch: s.branch,
     directionId: String(s.subjectId),
-    courseId: String(s.subjectId),
+    courseId: s.courseId || "",
     ageTag: s.age,
     courseFilter: s.course || s.subject,
     path: s.path,
@@ -164,9 +164,9 @@ export function toSession(s: CrmSlot): CmsSession {
     timeFrom: s.timeFrom,
     timeTo: s.timeTo,
     day: s.day,
-    siteCourseId: s.courseId || "",
+    siteCourseId: s.courseId || s.path || "",
     statusId: s.statusId || 0,
-    priority: s.priority ?? 1,
+    priority: readPriority(s.priority),
   };
 }
 
@@ -182,11 +182,12 @@ export function slotFromSession(s: CmsSession): CrmSlot {
     statusId: 0,
     limit: 0,
     taken: 0,
-    subjectId: Number(s.courseId) || 0,
+    subjectId: Number(s.directionId) || (String(s.courseId || "").startsWith("/") ? 0 : Number(s.courseId)) || 0,
     subject: s.courseFilter,
     school: "",
     course: s.courseFilter || s.group,
-    path: s.path || "",
+    courseId: s.siteCourseId || (String(s.courseId || "").startsWith("/") ? s.courseId : ""),
+    path: s.path || s.siteCourseId || "",
     age: s.age,
     day,
     dayLabel: dayLabel(day),
@@ -532,9 +533,7 @@ export function buildSlot(draft: SlotDraft, catalog: CrmSlot[]): CrmSlot {
   const courseRow =
     tree.courses.find((c) => c.id && c.id === draft.courseId) ||
     tree.courses.find((c) => draft.courseId && c.href === draft.courseId);
-  const schoolRow =
-    tree.schools.find((s) => s.id && (s.id === draft.schoolId || s.id === courseRow?.schoolId)) ||
-    tree.schools.find((s) => draft.school && s.label === draft.school);
+  const schoolRow = tree.schools.find((s) => s.id && (s.id === draft.schoolId || s.id === courseRow?.schoolId));
   const br = matchBranch(`${draft.branch} ${courseRow?.label || draft.course}`);
   const school = schoolRow?.label || draft.school || "";
   const age = draft.age || courseRow?.age || (draft.course.match(/\(([^)]+)\)/)?.[1] || "");
@@ -866,11 +865,7 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
     s.subjectId = subjectId;
     if (sub?.name) s.subject = sub.name;
     const roster = teachersAtBranch(branch, listTeachers(next));
-    const rawIds = s.teacherIds.length ? s.teacherIds : s.teacherId ? [s.teacherId] : [];
-    const byName = s.teacher
-      ? roster.find((t) => t.name.toLowerCase() === s.teacher.toLowerCase())
-      : undefined;
-    const teachers = (rawIds.length ? rawIds : byName ? [byName.id] : []).filter((id) => teacherAllowed(id, branch, roster));
+    const teachers = teacherIdsOfSlot(s, branch, roster);
     if (s.teacher && !teachers.length) {
       s.teacherId = 0;
       s.teacherIds = [];
@@ -896,7 +891,7 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
         status_id: s.statusId || 1,
         b_date: formatRuDob(startIso),
         e_date: formatRuDob(endIso),
-        custom_prioritet: s.priority ?? 1,
+        custom_prioritet: readPriority(s.priority),
         custom_hashtagkursa: String(s.hashtags || ""),
         custom_workingout: String(s.makeup || ""),
         ...(s.levelId ? { level_id: s.levelId } : { level_id: null }),

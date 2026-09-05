@@ -1,10 +1,11 @@
-/** Публичные факты курса из админки: дерево, цены, слоты, абонементы. */
+/** Публичные факты курса из админки: дерево, цены, слоты, абонементы. Только ID. */
 import { listAdminSlots } from "./alfacrm-schedule";
 import { listPriceRows } from "./prices-core";
 import { loadSiteTree } from "./site-tree";
 import { guessTariffLinks } from "./tariff-map";
 import { loadTariffs } from "./crm-tariffs";
-import { schoolIdOfPath } from "./site-bind-core";
+import { canonCourseId, canonSchoolId } from "./ids";
+import { publicGroupsOfCourse, publicSiteBoard } from "./public-bind-core";
 
 export type CourseMeta = {
   courseId: string;
@@ -14,6 +15,9 @@ export type CourseMeta = {
   cities: string[];
   tariffIds: number[];
 };
+
+export { publicGroupsOfCourse, publicSiteBoard } from "./public-bind-core";
+export type { PublicCourseRow, PublicSchoolRow, PublicLooseGroup } from "./public-bind-core";
 
 function cityOfBranch(id?: number) {
   if (id === 3) return "Луховицы";
@@ -26,21 +30,20 @@ export function publicCoursesMeta(): CourseMeta[] {
   const prices = listPriceRows();
   const slots = listAdminSlots();
   const links = guessTariffLinks(loadTariffs().items);
-  const paths = new Set<string>([...tree.courses.map((c) => c.id), ...prices.map((r) => r.courseId || r.path).filter(Boolean)]);
   const out: CourseMeta[] = [];
-  for (const path of paths) {
-    const course = tree.courses.find((c) => c.id === path || c.href === path);
-    const price = prices.find((r) => r.path === path || r.courseId === path);
-    const id = course?.id || path;
-    const groupSlots = slots.filter((s) => s.courseId === id || s.courseId === path);
+  for (const course of tree.courses) {
+    const id = canonCourseId(tree, course.id);
+    if (!id) continue;
+    const groupSlots = publicGroupsOfCourse(slots, id, tree);
+    const price = prices.find((r) => canonCourseId(tree, r.courseId || r.path || "") === id);
     const cities = [...new Set(groupSlots.map((s) => cityOfBranch(s.branchId)).filter(Boolean))];
     out.push({
       courseId: id,
-      schoolId: course?.schoolId || schoolIdOfPath(path),
-      age: course?.age || price?.age || "",
+      schoolId: canonSchoolId(tree, course.schoolId),
+      age: course.age || price?.age || "",
       mins: Number(price?.mins) || 0,
       cities,
-      tariffIds: links.filter((t) => t.courseId === id).map((t) => t.tariffId),
+      tariffIds: links.filter((t) => canonCourseId(tree, t.courseId) === id).map((t) => t.tariffId),
     });
   }
   return out;
@@ -53,9 +56,10 @@ export function tariffMapForAgent() {
   return [
     "Соответствие абонементов сайта (tariffId → schoolId / courseId). Только сайт, не CRM:",
     ...links.map((l) => {
-      const c = tree.courses.find((x) => x.id === l.courseId);
-      const s = tree.schools.find((x) => x.id === (l.schoolId || c?.schoolId));
-      return `${l.tariffId} → ${s?.id || l.schoolId} / ${c?.id || l.courseId}`;
+      const courseId = canonCourseId(tree, l.courseId);
+      const c = tree.courses.find((x) => x.id === courseId);
+      const schoolId = canonSchoolId(tree, l.schoolId || c?.schoolId || "");
+      return `${l.tariffId} → ${schoolId || l.schoolId} / ${courseId || l.courseId}`;
     }),
   ].join("\n");
 }

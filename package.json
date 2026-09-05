@@ -19,7 +19,7 @@
     "preview:stop": "node scripts/preview.mjs stop",
     "typecheck": "tsc --noEmit",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/auth/gate-identity.test.ts src/data/crm-leads.test.ts src/data/crm-leads-sync.test.ts",
+    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/auth/gate-identity.test.ts src/data/crm-leads.test.ts src/data/crm-leads-sync.test.ts src/data/crm-membership.test.ts src/data/crm-tariff-row.test.ts src/data/crm-packet-queue-core.test.ts src/data/crm-person-role.test.ts src/data/schedule-page.test.ts src/data/agent-groups.test.ts src/data/agent-section-guides-data.test.ts src/data/crm-rooms.test.ts src/data/site-signup-ids.test.ts src/data/arch-acceptance.test.ts src/data/crm-export-queue-core.test.ts src/data/crm-cache-policy-core.test.ts src/data/crm-map-board.test.ts src/data/crm-group-disk.test.ts src/data/tariff-map.test.ts src/data/public-bind.test.ts src/data/price-row.test.ts src/data/crm-teachers.test.ts src/data/trial-disk.test.ts src/data/agent-courses.test.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

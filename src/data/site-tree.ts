@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { SCHOOLS, SCHOOL_COURSE_MATCH } from "./site";
+import { SCHOOLS } from "./site";
 import { listPriceRows, splitCourseAge, tidyCourseName } from "./prices-core";
 import type { CrmSlot } from "./crm-slots-core";
 import { groupAssignKey } from "./ids";
@@ -38,12 +38,10 @@ function seed(): SiteTree {
   const courses: TreeCourse[] = [];
   const seen = new Set<string>();
   for (const r of listPriceRows()) {
-    const href = r.path || "";
+    const href = r.courseId || r.path || "";
     if (!href || seen.has(href)) continue;
-    const school =
-      schools.find((s) => s.label === r.direction) ||
-      schools.find((s) => s.href !== href && SCHOOL_COURSE_MATCH[s.href]?.(href));
-    if (!school || school.href === href) continue;
+    const school = schools.find((s) => s.id === r.schoolId);
+    if (!school || school.id === href) continue;
     seen.add(href);
     courses.push({
       id: href,
@@ -111,7 +109,7 @@ export function courseIdOf(s: CrmSlot, tree: SiteTree) {
 export function addTreeSchool(label: string, href?: string) {
   const tree = loadSiteTree();
   const id = (href || `/school-${Date.now()}`).replace(/\s+/g, "-");
-  if (tree.schools.some((s) => s.id === id || s.label === label.trim())) return tree;
+  if (tree.schools.some((s) => s.id === id)) return tree;
   tree.schools.push({ id, label: label.trim(), href: href || id });
   return saveSiteTree(tree);
 }
@@ -122,12 +120,8 @@ export function addTreeCourse(schoolId: string, label: string, href?: string, ag
   if (!school) return tree;
   const name = label.trim();
   const pretty = prettyAge(age || splitCourseAge(label).age);
-  const byHref = href ? tree.courses.find((c) => c.id === href || c.href === href) : undefined;
+  const byHref = href ? tree.courses.find((c) => c.id === href || c.id === href.trim()) : undefined;
   if (byHref) return tree;
-  const twin = tree.courses.find(
-    (c) => c.schoolId === schoolId && c.label === name && (c.age || "") === pretty,
-  );
-  if (twin) return tree;
   const id = (href || `${schoolId}#${Date.now()}`).trim();
   tree.courses.push({
     id,
@@ -140,18 +134,18 @@ export function addTreeCourse(schoolId: string, label: string, href?: string, ag
 }
 
 /** Правка курса на странице цен → то же дерево, что у групп и абонементов. ID курса не меняем. */
-export function syncTreeFromPriceRows(rows: { courseId?: string; path?: string; id?: string; name: string; age?: string; direction?: string }[]) {
+export function syncTreeFromPriceRows(rows: { courseId?: string; path?: string; id?: string; name: string; age?: string; direction?: string; schoolId?: string }[]) {
   const tree = loadSiteTree();
   let changed = false;
   for (const r of rows) {
     const id = String(r.courseId || r.path || r.id || "");
     if (!id) continue;
-    const i = tree.courses.findIndex((c) => c.id === id || c.href === id);
+    const i = tree.courses.findIndex((c) => c.id === id);
     if (i < 0) continue;
     const age = prettyAge(r.age || "");
     const name = tidyCourseName(r.name) || String(r.name || "").trim();
     const label = age && name && !name.toLowerCase().includes(age.toLowerCase().slice(0, 5)) ? `${name} · ${age}` : name || tree.courses[i].label;
-    const school = tree.schools.find((s) => s.label === r.direction || s.id === r.direction);
+    const school = tree.schools.find((s) => s.id === r.schoolId);
     const next = {
       ...tree.courses[i],
       label,
@@ -169,7 +163,7 @@ export function renameTreeSchool(fromLabel: string, toLabel: string) {
   const next = String(toLabel || "").trim();
   if (!next) return loadSiteTree();
   const tree = loadSiteTree();
-  const hit = tree.schools.find((s) => s.label === fromLabel || s.id === fromLabel);
+  const hit = tree.schools.find((s) => s.id === fromLabel);
   if (!hit || hit.label === next) return tree;
   hit.label = next;
   return saveSiteTree(tree);
@@ -181,7 +175,7 @@ export function applySchoolLabels(schools: { id?: string; label: string }[]) {
   for (const s of schools) {
     const label = String(s.label || "").trim();
     if (!label) continue;
-    const hit = tree.schools.find((x) => (s.id && x.id === s.id) || x.label === s.label);
+    const hit = tree.schools.find((x) => s.id && x.id === s.id);
     if (!hit || hit.label === label) continue;
     hit.label = label;
     changed = true;

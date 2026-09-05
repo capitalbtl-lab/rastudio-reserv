@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { debugSession, unlockDebug, debugSessionChanged, type DebugToolId } from "@/data/debug-mode";
+import { debugSession, unlockDebug } from "@/data/debug-fn";
+import { debugSessionChanged, type DebugToolId } from "@/data/debug-client";
 import { slotsFromMessages } from "@/data/funnel-state";
 import { Button } from "@/components/ui/button";
 

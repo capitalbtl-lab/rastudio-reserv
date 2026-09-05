@@ -5,6 +5,7 @@ import {
   listPriceRows,
   normPath,
   tidyCourseName,
+  SCHOOL_OF_DIRECTION,
   type PriceRow,
 } from "./prices-core";
 import { addTreeSchool, addTreeCourse, loadSiteTree, deleteTreeCourse, deleteTreeSchool } from "./site-tree";
@@ -52,10 +53,31 @@ function migrateModelSchoolSplit(rows: PriceRow[]): { rows: PriceRow[]; changed:
   return { rows: next, changed };
 }
 
+function stampSchoolIds(rows: PriceRow[]): PriceRow[] {
+  try {
+    const tree = loadSiteTree();
+    return rows.map((r) => {
+      const cid = r.courseId || r.path || r.id;
+      const course = tree.courses.find((c) => c.id === cid);
+      const school =
+        (course && tree.schools.find((s) => s.id === course.schoolId)) ||
+        tree.schools.find((s) => s.id === r.schoolId);
+      return {
+        ...r,
+        courseId: cid,
+        schoolId: school?.id || r.schoolId || "",
+        direction: school?.label || r.direction,
+      };
+    });
+  } catch {
+    return rows;
+  }
+}
+
 export function ensureLivePrices() {
   try {
     if (existsSync(storagePath())) {
-      hydratePrices(JSON.parse(readFileSync(storagePath(), "utf8")) as PriceRow[]);
+      hydratePrices(stampSchoolIds(JSON.parse(readFileSync(storagePath(), "utf8")) as PriceRow[]));
     }
   } catch {
     /* seed already in memory */
@@ -66,7 +88,7 @@ export function ensureLivePrices() {
 }
 
 export function savePriceRows(rows: PriceRow[]) {
-  hydratePrices(rows);
+  hydratePrices(stampSchoolIds(rows));
   try {
     const file = storagePath();
     mkdirSync(dirname(file), { recursive: true });
@@ -99,6 +121,7 @@ export function updateOnePrice(
 
 export function updateGroupPrice(opts: {
   direction?: string;
+  schoolId?: string;
   query?: string;
   field: string;
   set?: number;
@@ -106,12 +129,17 @@ export function updateGroupPrice(opts: {
 }) {
   ensureLivePrices();
   const rows = listPriceRows().map((r) => ({ ...r, extra: { ...(r.extra || {}) } }));
-  const dir = (opts.direction || "").toLowerCase().trim();
-  const q = (opts.query || "").toLowerCase().trim();
+  const schoolId = String(opts.schoolId || SCHOOL_OF_DIRECTION[String(opts.direction || "").trim()] || "").trim();
+  const q = String(opts.query || "").trim();
+  const qPath = q ? normPath(q) : "";
   const hit = rows.filter((r) => {
-    if (dir && r.direction.toLowerCase() !== dir && !r.direction.toLowerCase().includes(dir)) return false;
-    if (q && !`${r.name} ${r.direction} ${r.path}`.toLowerCase().includes(q)) return false;
-    return Boolean(dir || q);
+    if (schoolId && r.schoolId !== schoolId) return false;
+    if (!schoolId && opts.direction && r.direction !== opts.direction) return false;
+    if (q) {
+      const cid = normPath(r.courseId || r.path || "");
+      return cid === qPath || r.id === q || r.path === q;
+    }
+    return Boolean(schoolId || opts.direction);
   });
   if (!hit.length) return { ok: false as const, error: "Нет курсов в этой группе", count: 0 };
   const fields: string[] =
@@ -139,6 +167,7 @@ export function priceRowFromCourse(
     age: course.age || "",
     path: course.href || course.id,
     courseId: course.id,
+    schoolId: school.id,
     direction: school.label,
     all: 0,
     kbm: 0,
@@ -190,16 +219,18 @@ export function deletePriceCourse(courseId: string) {
 export function deletePriceSchool(labelOrId: string) {
   const key = String(labelOrId || "").trim();
   if (!key) return { ok: false as const, error: "Нет школы." };
-  const school = loadSiteTree().schools.find((s) => s.id === key || s.label === key);
+  const school = loadSiteTree().schools.find((s) => s.id === key);
   if (!school) {
     ensureLivePrices();
-    const rows = listPriceRows().filter((r) => r.direction !== key);
+    const rows = listPriceRows().filter((r) => r.schoolId !== key);
     savePriceRows(rows);
     return { ok: true as const, rows: listPriceRows(), schools: loadSiteTree().schools };
   }
   const ids = new Set(loadSiteTree().courses.filter((c) => c.schoolId === school.id).map((c) => c.id));
   ensureLivePrices();
-  const rows = listPriceRows().filter((r) => r.direction !== school.label && !ids.has(r.courseId || "") && !ids.has(r.path || "") && r.id !== school.id);
+  const rows = listPriceRows().filter(
+    (r) => r.schoolId !== school.id && !ids.has(r.courseId || "") && !ids.has(r.path || "") && r.id !== school.id,
+  );
   savePriceRows(rows);
   deleteTreeSchool(school.id);
   return { ok: true as const, rows: listPriceRows(), schools: loadSiteTree().schools };

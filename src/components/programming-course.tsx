@@ -4,7 +4,7 @@ import { inkOn } from "@/data/cms";
 import { SITE } from "@/data/site";
 import { PageLink } from "@/components/page-link";
 import { TrialForm } from "@/components/trial-form";
-import { trialCourseForPath } from "@/data/trial";
+import { trialCourseForPath } from "@/data/trial-public";
 import {
   BulletList,
   CmsImg,

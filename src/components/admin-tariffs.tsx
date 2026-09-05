@@ -100,68 +100,29 @@ type SubjectRow = { id: number; name: string; href?: string; courseId?: string }
 
 function courseSelectOptions(courses: SiteCourse[], schools: SiteSchool[], schoolId: string, selected?: string) {
   const list = schoolId ? courses.filter((c) => c.schoolId === schoolId) : courses;
-  const keyOf = (c: SiteCourse) => `${c.schoolId}\0${c.label}\0${c.age || ""}`;
-  const score = (c: SiteCourse) => (c.id.includes("#") ? 0 : 2) + (c.href && c.href === c.id ? 1 : 0);
-  const best = new Map<string, SiteCourse>();
-  for (const c of list) {
-    const k = keyOf(c);
-    const prev = best.get(k);
-    if (!prev || score(c) > score(prev)) best.set(k, c);
-  }
-  const shown = list.filter((c) => best.get(keyOf(c))?.id === c.id || c.id === selected);
   const nByLabel = new Map<string, number>();
-  for (const c of shown) nByLabel.set(c.label, (nByLabel.get(c.label) || 0) + 1);
-  return shown.map((c) => {
-    const school = schools.find((s) => s.id === c.schoolId);
-    const head = schoolId ? c.label : `${(school?.label || "").replace(/^Школа\s+/i, "")} · ${c.label}`;
-    const dup = (nByLabel.get(c.label) || 0) > 1;
-    const extra = c.age && !head.includes(c.age) ? c.age : "";
-    return { value: c.id, label: dup && extra ? `${head} · ${extra}` : head };
-  });
-}
-
-function canonicalCourse(courses: SiteCourse[], courseId: string) {
-  const course = courses.find((c) => c.id === courseId);
-  if (!course) return undefined;
-  return (
-    courses.find(
-      (c) =>
-        c.schoolId === course.schoolId &&
-        c.label === course.label &&
-        (c.age || "") === (course.age || "") &&
-        !c.id.includes("#"),
-    ) || course
-  );
+  for (const c of list) nByLabel.set(c.label, (nByLabel.get(c.label) || 0) + 1);
+  return list
+    .filter((c, i, arr) => arr.findIndex((x) => x.id === c.id) === i || c.id === selected)
+    .map((c) => {
+      const school = schools.find((s) => s.id === c.schoolId);
+      const head = schoolId ? c.label : `${(school?.label || "").replace(/^Школа\s+/i, "")} · ${c.label}`;
+      const dup = (nByLabel.get(c.label) || 0) > 1;
+      return { value: c.id, label: dup ? `${head} · ${c.id}` : head };
+    });
 }
 
 function subjectIdsOfCourse(
   courseId: string,
-  courses: SiteCourse[],
+  _courses: SiteCourse[],
   courseSubjects: Record<string, number[]>,
   subjects: SubjectRow[],
 ) {
-  const course = canonicalCourse(courses, courseId) || courses.find((c) => c.id === courseId);
-  const keys = new Set<string>();
-  if (courseId) keys.add(courseId);
-  if (course?.id) keys.add(course.id);
-  if (course?.href) keys.add(course.href);
-  if (course) {
-    for (const s of courses) {
-      if (s.schoolId !== course.schoolId) continue;
-      const same =
-        s.id === course.id ||
-        (course.href && s.href === course.href) ||
-        (s.label === course.label && (s.age || "") === (course.age || ""));
-      if (!same) continue;
-      keys.add(s.id);
-      if (s.href) keys.add(s.href);
-    }
-  }
+  const course = _courses.find((c) => c.id === courseId);
   const ids = new Set<number>();
-  for (const k of keys) for (const id of courseSubjects[k] || []) ids.add(Number(id) || 0);
+  for (const id of courseSubjects[courseId] || []) ids.add(Number(id) || 0);
   for (const s of subjects) {
-    if (s.courseId && keys.has(s.courseId)) ids.add(s.id);
-    if (s.href && keys.has(s.href)) ids.add(s.id);
+    if (s.courseId === courseId) ids.add(s.id);
   }
   ids.delete(0);
   return { course, ids: [...ids] };
@@ -1838,19 +1799,15 @@ function Editor({
   );
 }
 
-/** Предмет к строке цены: subjectId / courseId / path. Имя не склеивает. */
+/** Предмет к строке цены: subjectId, иначе courseId. Имя и href не ключ. */
 function matchSubject(row: PriceRow, subjects: { id: number; name: string; href?: string; courseId?: string }[]) {
   if (row.subjectId) {
     const byId = subjects.find((s) => s.id === row.subjectId);
     if (byId) return byId;
   }
-  const path = String(row.courseId || row.path || "").replace(/\/+$/, "");
-  if (!path) return null;
-  return (
-    subjects.find((s) => s.courseId && s.courseId.replace(/\/+$/, "") === path) ||
-    subjects.find((s) => s.href && s.href.replace(/\/+$/, "") === path) ||
-    null
-  );
+  const id = String(row.courseId || "").replace(/\/+$/, "");
+  if (!id) return null;
+  return subjects.find((s) => s.courseId === id) || null;
 }
 
 function TariffWizard({

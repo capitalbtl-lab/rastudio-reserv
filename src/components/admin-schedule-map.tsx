@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { adminScheduleMap } from "@/data/admin-schedule-map";
 import { Button } from "@/components/ui/button";
 import { AdminSectionHead } from "@/components/admin-self-test";
+import { RaSelect } from "@/components/ra-select";
 import type { CourseLink, SchoolLink } from "@/data/schedule-map";
 import type { TariffLink } from "@/data/tariff-map";
 import type { SiteTree } from "@/data/site-tree";
+import { groupMapByTree, type MapBoardSchool } from "@/data/crm-map-board";
 import { cn } from "@/lib/utils";
 
 function token() {
@@ -17,23 +19,7 @@ function token() {
 
 const EMPTY_TREE: SiteTree = { schools: [], courses: [], assign: {} };
 
-function ageLo(s: string) {
-  const m = String(s || "").match(/(\d{1,2})/);
-  return m ? Number(m[1]) : 99;
-}
-
-function hay(s: CourseLink) {
-  return `${s.subjectName} ${s.subjectId} ${s.school} ${s.siteHref}`.toLowerCase();
-}
-
-type CourseRow = {
-  course: string;
-  courseId: string;
-  href: string;
-  age: string;
-  items: CourseLink[];
-};
-type SchoolRow = { school: string; schoolId: string; courses: CourseRow[] };
+type SchoolRow = MapBoardSchool;
 
 export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
   const [schools, setSchools] = useState<SchoolLink[]>([]);
@@ -113,71 +99,33 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
   }
 
   const view = useMemo<SchoolRow[]>(() => {
-    const schoolsList = tree.schools.length ? tree.schools : siteSchools.map((s) => ({ id: s.href, label: s.label, href: s.href }));
-    const used = new Set<number>();
-    const hrefOf = (c: { href?: string; id?: string }) => c.href || c.id || "";
-    const rows = schoolsList.map((school) => {
-      const list = (
-        tree.courses.length
-          ? tree.courses.filter((c) => c.schoolId === school.id)
-          : siteCourses
-              .filter((c) => c.school === school.label || c.schoolId === school.id)
-              .map((c) => ({ id: c.courseId || c.href, schoolId: school.id, label: c.name, href: c.href, age: c.age || "" }))
-      )
-        .slice()
-        .sort((a, b) => ageLo(a.age || a.label) - ageLo(b.age || b.label) || a.label.localeCompare(b.label, "ru"));
-      const courseRows: CourseRow[] = list.map((c) => {
-        const href = hrefOf(c);
-        const items = courses.filter((s) => s.courseId && s.courseId === c.id);
-        items.forEach((s) => used.add(s.subjectId));
-        return { course: c.label, courseId: c.id, href, age: c.age || "", items };
-      });
-      const loose = courses.filter((s) => !used.has(s.subjectId) && (s.schoolId === school.id || s.school === school.label || (!s.schoolId && !s.school && !s.siteHref && !s.courseId)));
-      loose.forEach((s) => used.add(s.subjectId));
-      if (loose.length) courseRows.push({ course: "Без курса", courseId: `${school.id}#loose`, href: "", age: "", items: loose });
-      return { school: school.label, schoolId: school.id, courses: courseRows };
-    });
-    const orphan = courses.filter((s) => !used.has(s.subjectId));
-    if (orphan.length) {
-      rows.push({
-        school: "Прочее",
-        schoolId: "other",
-        courses: [{ course: "Без курса", courseId: "other#loose", href: "", age: "", items: orphan }],
-      });
-    }
-    return rows;
+    const schools = tree.schools.length ? tree.schools : siteSchools.map((s) => ({ id: s.href, label: s.label, href: s.href }));
+    const coursesTree = tree.courses.length
+      ? tree.courses
+      : siteCourses.map((c) => ({
+          id: c.courseId || c.href,
+          schoolId: c.schoolId || schools.find((s) => s.id === c.schoolId)?.id || "",
+          label: c.name,
+          age: c.age || "",
+          href: c.href,
+        }));
+    return groupMapByTree(
+      { schools, courses: coursesTree },
+      courses.map((s) => ({ id: s.subjectId, title: s.subjectName, courseId: s.courseId, schoolId: s.schoolId })),
+    );
   }, [tree, courses, siteSchools, siteCourses]);
 
   const tariffView = useMemo(() => {
-    const schoolsList = tree.schools.length ? tree.schools : siteSchools.map((s) => ({ id: s.href, label: s.label, href: s.href }));
-    const named = tariffs.map((t) => ({
-      ...t,
-      name: tariffNames.find((n) => n.id === t.tariffId)?.name || `абонемент ${t.tariffId}`,
-    }));
-    const used = new Set<number>();
-    const rows = schoolsList.map((school) => {
-      const list = (tree.courses.length ? tree.courses.filter((c) => c.schoolId === school.id) : [])
-        .slice()
-        .sort((a, b) => ageLo(a.age || a.label) - ageLo(b.age || b.label) || a.label.localeCompare(b.label, "ru"));
-      const courseRows = list.map((c) => {
-        const items = named.filter((t) => t.courseId && t.courseId === c.id);
-        items.forEach((t) => used.add(t.tariffId));
-        return { course: c.label, courseId: c.id, age: c.age || "", items };
-      });
-      const loose = named.filter((t) => !used.has(t.tariffId) && !t.courseId && t.schoolId === school.id);
-      loose.forEach((t) => used.add(t.tariffId));
-      if (loose.length) courseRows.push({ course: "Без курса", courseId: `${school.id}#loose`, age: "", items: loose });
-      return { school: school.label, schoolId: school.id, courses: courseRows };
-    });
-    const orphan = named.filter((t) => !used.has(t.tariffId));
-    if (orphan.length) {
-      rows.push({
-        school: "Прочее",
-        schoolId: "other",
-        courses: [{ course: "Без курса", courseId: "other#loose", age: "", items: orphan }],
-      });
-    }
-    return rows;
+    const schools = tree.schools.length ? tree.schools : siteSchools.map((s) => ({ id: s.href, label: s.label, href: s.href }));
+    return groupMapByTree(
+      { schools, courses: tree.courses },
+      tariffs.map((t) => ({
+        id: t.tariffId,
+        title: tariffNames.find((n) => n.id === t.tariffId)?.name || `абонемент ${t.tariffId}`,
+        courseId: t.courseId,
+        schoolId: t.schoolId,
+      })),
+    );
   }, [tree, tariffs, tariffNames, siteSchools]);
 
   const stats = useMemo(() => {
@@ -187,7 +135,7 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
       return { total, mapped, loose: total - mapped };
     }
     const total = courses.length;
-    const loose = view.reduce((n, s) => n + (s.courses.find((c) => c.course === "Без курса")?.items.length || 0), 0);
+    const loose = view.reduce((n, s) => n + (s.courses.find((c) => c.label === "Без курса")?.items.length || 0), 0);
     return { total, loose, mapped: total - loose };
   }, [kind, tariffs, courses.length, view]);
 
@@ -198,47 +146,48 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
 
   useEffect(() => {
     if (schoolId || !board.length) return;
-    const withLoose = board.find((s) => s.courses.some((c) => c.course === "Без курса" && c.items.length));
+    const withLoose = board.find((s) => s.courses.some((c) => c.label === "Без курса" && c.items.length));
     setSchoolId((withLoose || board[0]).schoolId);
   }, [board, schoolId]);
 
   const shown = useMemo(() => {
-    const rows: { school: string; course: string; id: number; title: string; hint: string; selected: string; loose: boolean }[] = [];
+    const rows: { school: string; schoolId: string; course: string; id: number; title: string; hint: string; selected: string; loose: boolean }[] = [];
     const walk = query ? board : active ? [active] : [];
     for (const sch of walk) {
       for (const c of sch.courses) {
         if (!query && courseId && c.courseId !== courseId) continue;
-        for (const item of c.items as { subjectId?: number; tariffId?: number; subjectName?: string; name?: string; siteHref?: string; courseId?: string }[]) {
-          const id = Number(item.tariffId || item.subjectId) || 0;
-          const title = String(item.name || item.subjectName || "");
-          const haystack = `${title} ${id} ${sch.school} ${c.course}`.toLowerCase();
+        for (const item of c.items) {
+          const haystack = `${item.title} ${item.id} ${item.courseId} ${item.schoolId} ${sch.label} ${c.label}`.toLowerCase();
           if (query && !haystack.includes(query)) continue;
-          const loose = c.course === "Без курса" || !item.courseId;
+          const loose = c.label === "Без курса" || !item.courseId;
           if (onlyLoose && !loose) continue;
           rows.push({
-            school: sch.school,
-            course: c.course,
-            id,
-            title,
-            hint: `id ${id}`,
-            selected: item.courseId && !String(item.courseId).includes("#") ? String(item.courseId) : "",
+            school: sch.label,
+            schoolId: sch.schoolId,
+            course: c.label,
+            id: item.id,
+            title: item.title,
+            hint: kind === "tariffs" ? `tariffId ${item.id}` : `subjectId ${item.id}`,
+            selected: item.courseId && !item.courseId.includes("#") ? item.courseId : "",
             loose,
           });
         }
       }
     }
     return rows;
-  }, [board, active, courseId, query, onlyLoose]);
+  }, [board, active, courseId, query, onlyLoose, kind]);
 
-  function moveItem(id: number, nextCourseId: string) {
+  function moveItem(id: number, nextCourseId: string, fromCourseId = "") {
     const course = tree.courses.find((c) => c.id === nextCourseId);
     const school = course ? tree.schools.find((s) => s.id === course.schoolId) : undefined;
     if (kind === "tariffs") {
-      setTariffs((list) =>
-        list.map((t) => (t.tariffId === id ? { ...t, courseId: course?.id || "", schoolId: school?.id || "" } : t)),
-      );
+      setTariffs((list) => {
+        const idx = list.findIndex((t) => t.tariffId === id && (t.courseId || "") === (fromCourseId || ""));
+        const row = { tariffId: id, courseId: course?.id || "", schoolId: school?.id || "" };
+        if (idx < 0) return [...list, row];
+        return list.map((t, i) => (i === idx ? row : t));
+      });
     } else {
-      const href = course?.href || course?.id || "";
       setCourses((list) =>
         list.map((c) =>
           c.subjectId === id
@@ -246,7 +195,7 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
                 ...c,
                 courseId: course?.id || "",
                 schoolId: school?.id || "",
-                siteHref: href,
+                siteHref: course?.href || "",
                 school: school?.label || "",
               }
             : c,
@@ -256,15 +205,24 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
     if (nextCourseId && school?.id) setSchoolId(school.id);
   }
 
-  function chipLabel(c: { course: string; age?: string }) {
-    if (c.course === "Без курса") return "Без курса";
+  function addTariffCourse(id: number) {
+    setTariffs((list) => [...list, { tariffId: id, courseId: "", schoolId: "" }]);
+  }
+
+  function chipLabel(c: { label: string; age?: string }) {
+    if (c.label === "Без курса") return "Без курса";
     const age = (c.age || "").replace(/^для детей\s*/i, "").trim();
-    return age || c.course.replace(/^художественная творческая студия\s*[·•]?\s*/i, "") || c.course;
+    return age || c.label;
+  }
+
+  function ageLo(s: string) {
+    const m = String(s || "").match(/(\d{1,2})/);
+    return m ? Number(m[1]) : 99;
   }
 
   const courseOptions = tree.schools.map((sc) => ({
     id: sc.id,
-    label: sc.label,
+    label: `${sc.label} · ${sc.id}`,
     courses: tree.courses
       .filter((x) => x.schoolId === sc.id)
       .slice()
@@ -334,13 +292,13 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
           <nav className="flex gap-1.5 overflow-x-auto border-b border-black/6 p-2 md:flex-col md:overflow-y-auto md:border-b-0 md:border-r md:p-3">
             {board.map((sch) => {
               const n = sch.courses.reduce((x, c) => x + c.items.length, 0);
-              const loose = sch.courses.find((c) => c.course === "Без курса")?.items.length || 0;
+              const loose = sch.courses.find((c) => c.label === "Без курса")?.items.length || 0;
               const on = schoolId === sch.schoolId && !query;
               return (
                 <button
                   key={sch.schoolId}
                   type="button"
-                  title={sch.school}
+                  title={`${sch.label} · ${sch.schoolId}`}
                   onClick={() => {
                     setSchoolId(sch.schoolId);
                     setCourseId("");
@@ -352,7 +310,7 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
                     on ? "bg-primary text-white" : "hover:bg-surface-2",
                   )}
                 >
-                  <span className="min-w-0 flex-1 truncate font-medium">{sch.school.replace(/^Школа\s+/i, "")}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{sch.label.replace(/^Школа\s+/i, "")}</span>
                   <span className={cn("tabular-nums text-[0.7rem]", on ? "text-white/80" : "text-muted")}>{n}</span>
                   {loose ? (
                     <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", on ? "bg-amber-200" : "bg-amber-500")} />
@@ -375,9 +333,9 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
                   <Chip
                     key={c.courseId}
                     on={courseId === c.courseId}
-                    warn={c.course === "Без курса"}
+                    warn={c.label === "Без курса"}
                     label={chipLabel(c)}
-                    title={c.course}
+                    title={`${c.label} · ${c.courseId}`}
                     count={c.items.length}
                     onClick={() => setCourseId(c.courseId)}
                   />
@@ -407,9 +365,9 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
               {shown.map((row) => {
                 return (
                   <li
-                    key={`${kind}-${row.id}`}
+                    key={`${kind}-${row.id}-${row.selected || "loose"}-${row.schoolId}`}
                     className={cn(
-                      "grid items-center gap-2 rounded-2xl bg-white px-3 py-2 ring-1 ring-black/6 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,16.5rem)]",
+                      "grid items-center gap-2 rounded-2xl bg-white px-3 py-2 ring-1 ring-black/6 sm:grid-cols-[minmax(0,1fr)_minmax(13rem,17rem)]",
                       row.loose && "ring-amber-200",
                     )}
                   >
@@ -418,28 +376,35 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
                         <span className={cn("h-2 w-2 shrink-0 rounded-full", row.loose ? "bg-amber-400" : "bg-emerald-500")} />
                         <span className="truncate font-medium leading-snug">{row.title}</span>
                       </p>
-                      <p className="mt-0.5 truncate pl-4 text-[0.68rem] text-muted">
+                      <p className="mt-0.5 truncate pl-4 font-mono text-[0.68rem] text-muted">
                         {row.hint}
-                        {query || courseId === "" ? ` · ${row.school.replace(/^Школа\s+/i, "")}` : ""}
+                        {row.selected ? ` → ${row.selected}` : ""}
+                        {query || courseId === "" ? ` · ${row.schoolId}` : ""}
                         {row.loose ? " · не привязан" : ""}
                       </p>
                     </div>
-                    <select
-                      value={row.selected}
-                      onChange={(e) => moveItem(row.id, e.target.value)}
-                      className="h-9 w-full rounded-xl bg-surface-2 px-2 text-sm outline-none ring-1 ring-black/8 focus:ring-2 focus:ring-primary/40"
-                    >
-                      <option value="">— без курса —</option>
-                      {courseOptions.map((sc) => (
-                        <optgroup key={sc.id} label={sc.label}>
-                          {sc.courses.map((x) => (
-                            <option key={x.id} value={x.id}>
-                              {x.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
+                    <div className="flex items-center gap-1">
+                      <RaSelect
+                        value={row.selected}
+                        onChange={(v) => moveItem(row.id, v, row.selected)}
+                        placeholder="без курса"
+                        groups={courseOptions.map((sc) => ({
+                          label: sc.label,
+                          options: sc.courses.map((x) => ({ value: x.id, label: x.label, hint: x.id })),
+                        }))}
+                        className="h-9 min-w-0 flex-1"
+                      />
+                      {kind === "tariffs" ? (
+                        <button
+                          type="button"
+                          title="Ещё один курс сайта"
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg text-muted ring-1 ring-black/8 hover:bg-surface-2 hover:text-fg"
+                          onClick={() => addTariffCourse(row.id)}
+                        >
+                          +
+                        </button>
+                      ) : null}
+                    </div>
                   </li>
                 );
               })}

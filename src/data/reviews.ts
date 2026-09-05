@@ -1,4 +1,4 @@
-import { SCHOOL_COURSE_MATCH } from "./site";
+import { schoolIdOfPath } from "./site-bind-core";
 
 export const YANDEX_REVIEWS =
   "https://yandex.ru/maps/org/razvivaysya/34620041541/reviews/?ll=38.793880%2C55.086244&z=17";
@@ -101,17 +101,10 @@ export function reviewsForPath(path: string): Review[] {
   const p = normPath(path);
   const exact = REVIEWS.filter((r) => r.paths.some((item) => normPath(item) === p));
   if (exact.length) return exact;
-
-  for (const [school, test] of Object.entries(SCHOOL_COURSE_MATCH)) {
-    if (test(p)) {
-      const inherited = REVIEWS.filter((r) => r.paths.includes(school));
-      if (inherited.length) return inherited;
-    }
+  const schoolId = schoolIdOfPath(p);
+  if (schoolId && schoolId !== p) {
+    const inherited = REVIEWS.filter((r) => r.paths.some((item) => normPath(item) === schoolId));
+    if (inherited.length) return inherited;
   }
-
-  if (p.includes("kursy-shkoly-programmirovaniya") || p === "/programming-school") {
-    return REVIEWS.filter((r) => r.paths.includes("/programming-school"));
-  }
-
   return [];
 }

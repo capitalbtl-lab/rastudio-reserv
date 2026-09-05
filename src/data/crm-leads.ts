@@ -1,4 +1,6 @@
 import { request, token as alfaToken, pagedIndex } from "./alfacrm";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { CRM_BRANCH } from "./ids";
 import {
   LEAD_PIPELINE as PIPELINE,
@@ -24,11 +26,16 @@ import {
   leadDeltaDrops,
   crmUpdatedAtFrom,
   mergeBranchLeadCards,
+  filterLeadCards,
+  reorderLeads,
+  leadYears,
+  leadAgeBand,
   type LeadStage,
+  type LeadCard,
 } from "./crm-leads-stages";
 import { crmHost, crmWebLogin, csrfOf, mergeCookies, setCookieList } from "./crm-web";
 
-export type { LeadStage } from "./crm-leads-stages";
+export type { LeadStage, LeadCard } from "./crm-leads-stages";
 export {
   CRM_STAGE_COLORS,
   LEAD_STAGES,
@@ -46,33 +53,120 @@ export {
   stageOf,
   LEAD_INDEX_QUERY,
   leadMoveFields,
-  isCrmLeadRecord,
+  filterLeadCards,
+  reorderLeads,
+  leadYears,
+  leadAgeBand,
   mergeBranchLeadCards,
+  isCrmLeadRecord,
 } from "./crm-leads-stages";
-
-export type LeadCard = {
-  id: number;
-  customerId: number;
-  branchId: number;
-  branches?: number[];
-  name: string;
-  age: string;
-  phone: string;
-  email: string;
-  note: string;
-  assigned: string;
-  statusId: number;
-  sort?: number;
-  at: string;
-  chats: number;
-};
 
 type Bag = { at: number; stages: LeadStage[]; items: LeadCard[]; note?: string };
 const g = globalThis as { __raLeads?: Map<string, Bag> };
 
+function fileOf() {
+  return join(process.cwd(), "storage", "crm-leads-board.json");
+}
+
+function hydrateLeads() {
+  try {
+    if (!existsSync(fileOf())) return;
+    const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as { keys?: Record<string, Bag> };
+    for (const [k, v] of Object.entries(raw.keys || {})) {
+      if (Array.isArray(v?.items) && v.items.length) g.__raLeads!.set(k, v);
+    }
+  } catch {
+    /* диск */
+  }
+}
+
+function persistLeads() {
+  try {
+    mkdirSync(dirname(fileOf()), { recursive: true });
+    const keys: Record<string, Bag> = {};
+    for (const [k, v] of bag()) keys[k] = v;
+    writeFileSync(fileOf(), JSON.stringify({ keys }), "utf8");
+  } catch {
+    /* диск */
+  }
+}
+
 function bag() {
-  if (!g.__raLeads) g.__raLeads = new Map();
+  if (!g.__raLeads) {
+    g.__raLeads = new Map();
+    hydrateLeads();
+  }
   return g.__raLeads;
+}
+
+function localStageId() {
+  const used = new Set<number>();
+  for (const v of bag().values()) for (const s of v.stages) used.add(s.id);
+  let id = -Math.abs((Date.now() % 1_000_000_000) || 1);
+  while (used.has(id) || id === 0) id -= 1;
+  return id;
+}
+
+export function cachedLeadBoard(branchId = 0) {
+  const hit = bag().get(String(branchId || 0)) || bag().get("0");
+  if (hit) return hit;
+  const empty: Bag = { at: Date.now(), stages: LEAD_STAGES.map((s) => ({ ...s })), items: [] };
+  bag().set("0", empty);
+  persistLeads();
+  return empty;
+}
+
+function touchStages(mut: (stages: LeadStage[], items: LeadCard[]) => void) {
+  const maps = bag();
+  if (!maps.size) maps.set("0", { at: Date.now(), stages: LEAD_STAGES.map((s) => ({ ...s })), items: [] });
+  for (const v of maps.values()) {
+    mut(v.stages, v.items);
+    v.at = Date.now();
+  }
+  persistLeads();
+}
+
+/** Этап воронки на диск сразу. Alfa — очередь lead-status.create. */
+export function diskCreateLeadStage(name: string, color = "#2563eb") {
+  const title = name.trim() || "Новый этап";
+  const id = localStageId();
+  let made: LeadStage = { id, name: title, color, pipelineId: PIPELINE };
+  touchStages((stages) => {
+    if (stages.some((s) => s.id === id)) return;
+    const maxW = Math.max(0, ...stages.map((s) => Number(s.weight) || 0));
+    made = { ...made, weight: maxW + 1 };
+    stages.push(made);
+  });
+  return made;
+}
+
+export function diskSaveLeadStage(id: number, patch: { name?: string; color?: string }) {
+  if (!Number.isFinite(id)) return;
+  touchStages((stages) => {
+    const hit = stages.find((s) => s.id === id);
+    if (!hit) return;
+    if (patch.name) hit.name = patch.name.trim();
+    if (patch.color) hit.color = patch.color;
+  });
+}
+
+export function diskDeleteLeadStage(id: number) {
+  if (id === 0) throw new Error("Системный столбец «Не разобрано» нельзя удалить.");
+  touchStages((stages, items) => {
+    const i = stages.findIndex((s) => s.id === id);
+    if (i >= 0) stages.splice(i, 1);
+    for (const it of items) if (it.statusId === id) it.statusId = 0;
+  });
+}
+
+export function applyCreatedLeadStage(localId: number, crmId: number) {
+  const from = Number(localId) || 0;
+  const to = Number(crmId) || 0;
+  if (!from || !to || from === to) return;
+  touchStages((stages, items) => {
+    for (const s of stages) if (s.id === from) s.id = to;
+    for (const it of items) if (it.statusId === from) it.statusId = to;
+  });
 }
 
 function asPhone(v: unknown) {
@@ -94,56 +188,6 @@ function asAge(it: Record<string, unknown>) {
   const months = (md + 12) % 12;
   if (years < 0) return "";
   return months ? `${years} лет +${months}мес` : `${years} лет`;
-}
-
-export function leadYears(age: string, extra = "") {
-  const fromAge = parseInt(String(age || ""), 10);
-  if (Number.isFinite(fromAge) && fromAge > 0 && fromAge < 90) return fromAge;
-  const blob = `${age} ${extra}`;
-  const m =
-    blob.match(/(\d{1,2})\s*(?:лет|года|год|г\.)\b/i) ||
-    blob.match(/(?:ребён\w*|ребен\w*|возраст|ему|ей)[^\d]{0,16}(\d{1,2})/i);
-  const n = m ? Number(m[1]) : 0;
-  return n > 0 && n < 90 ? n : 0;
-}
-
-export function leadAgeBand(age: string, extra = "") {
-  const years = leadYears(age, extra);
-  if (!years) return "";
-  if (years <= 4) return "3-4";
-  if (years <= 6) return "5-6";
-  if (years <= 9) return "7-9";
-  if (years <= 12) return "10-12";
-  if (years <= 17) return "13-17";
-  return "18+";
-}
-
-/** Клиентский фильтр доски. API «Текущие» уже отсёк removed и архив. */
-export function filterLeadCards(
-  items: LeadCard[],
-  opts: { branch?: number; age?: string; q?: string; gone?: Set<string> } = {},
-) {
-  const branch = Number(opts.branch || 0);
-  const age = String(opts.age || "");
-  const qq = String(opts.q || "")
-    .trim()
-    .toLowerCase()
-    .replace(/ё/g, "е");
-  const gone = opts.gone;
-  return items.filter((it) => {
-    if (!it.id) return false;
-    if (gone?.has(`${it.branchId}:${it.id}`)) return false;
-    if (branch && it.branchId !== branch && !(it.branches || []).includes(branch)) return false;
-    if (age) {
-      const band = leadAgeBand(it.age, `${it.name} ${it.note}`);
-      if (band && band !== age) return false;
-    }
-    if (!qq) return true;
-    const hay = `${it.name} ${it.phone} ${it.email} ${it.note} ${it.assigned} ${it.id} ${it.customerId}`
-      .toLowerCase()
-      .replace(/ё/g, "е");
-    return hay.includes(qq);
-  });
 }
 
 export function packLead(it: Record<string, unknown>, branchId: number): LeadCard | null {
@@ -383,13 +427,23 @@ export async function syncLeadsDelta(branchId = 0) {
       : "изменений в CRM нет";
   const next = { at: Date.now(), stages: hit.stages, items: merged.items, note, delta: true as const };
   bag().set(key, next);
+  persistLeads();
+  try {
+    const { stampFunnelOnDossiers } = await import("./dossiers");
+    stampFunnelOnDossiers(next.items.map((x) => x.id));
+  } catch {
+    /* диск */
+  }
   return next;
 }
 
 export async function loadLeadsBoard(branchId = 0, force = false, delta = false) {
   const key = String(branchId || 0);
   const hit = bag().get(key);
-  if (!force && !delta && hit && Date.now() - hit.at < 10 * 60 * 1000) return hit;
+  if (!force && hit?.items.length) {
+    if (delta || Date.now() - hit.at >= 10 * 60 * 1000) void syncLeadsDelta(branchId);
+    return hit;
+  }
   if ((!force || delta) && hit?.items.length) return syncLeadsDelta(branchId);
   const work = async () => {
     const t = await alfaToken();
@@ -437,6 +491,13 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
       : `${items.length} из API is_study=0 (${colText}). Доска CRM не открылась: ${[...new Set(boardErrors)].join("; ") || "нет сессии кабинета"}`;
     const built = { at: Date.now(), stages, items, note };
     bag().set(key, built);
+    persistLeads();
+    try {
+      const { stampFunnelOnDossiers } = await import("./dossiers");
+      stampFunnelOnDossiers(items.map((x) => x.id));
+    } catch {
+      /* диск */
+    }
     return built;
   };
   try {
@@ -454,6 +515,7 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
       }
     }
     bag().set(key, next);
+    persistLeads();
     return next;
   } catch (e) {
     if (hit) return { ...hit, note: "CRM отвечает медленно — показана предыдущая доска." };
@@ -507,6 +569,58 @@ async function patchLead(branch: number, id: number, fields: Record<string, unkn
   throw new Error(last || "AlfaCRM не приняла смену этапа воронки.");
 }
 
+export function cacheMoveLead(branchId: number, leadId: number, statusId: number, sort?: number) {
+  const branch = branchId || 1;
+  const id = Number(leadId) || 0;
+  for (const v of bag().values()) {
+    const hit = v.items.find((x) => x.id === id && x.branchId === branch);
+    if (hit) {
+      hit.statusId = Number(statusId);
+      if (Number.isFinite(Number(sort))) hit.sort = Number(sort);
+    }
+  }
+  persistLeads();
+}
+
+export function cachePutLead(card: LeadCard) {
+  if (!card?.id || !card.branchId) return;
+  const stamp = (key: string) => {
+    const cur = bag().get(key) || { at: Date.now(), stages: LEAD_STAGES, items: [] as LeadCard[] };
+    const i = cur.items.findIndex((x) => x.id === card.id && x.branchId === card.branchId);
+    if (i >= 0) cur.items[i] = { ...cur.items[i], ...card };
+    else cur.items.unshift(card);
+    cur.at = Date.now();
+    bag().set(key, cur);
+  };
+  stamp(String(card.branchId));
+  stamp("0");
+  persistLeads();
+}
+
+export function cacheReplaceLeadId(branchId: number, localId: number, crmId: number) {
+  const from = Number(localId);
+  const to = Number(crmId);
+  if (!from || !to || from === to) return;
+  for (const v of bag().values()) {
+    for (const it of v.items) {
+      if (it.id === from && (!branchId || it.branchId === branchId)) {
+        it.id = to;
+        it.customerId = to;
+      }
+    }
+  }
+  persistLeads();
+}
+
+export function cacheArchiveLead(branchId: number, leadId: number) {
+  const branch = branchId || 1;
+  const id = Number(leadId) || 0;
+  for (const v of bag().values()) {
+    v.items = v.items.filter((x) => !(x.id === id && x.branchId === branch));
+  }
+  persistLeads();
+}
+
 export async function moveLead(branchId: number, leadId: number, statusId: number, sort?: number) {
   const t = await alfaToken();
   const branch = branchId || 1;
@@ -522,46 +636,8 @@ export async function moveLead(branchId: number, leadId: number, statusId: numbe
       /* поле sort в филиале может отсутствовать */
     }
   }
-  for (const v of bag().values()) {
-    const hit = v.items.find((x) => x.id === id && x.branchId === branch);
-    if (hit) {
-      hit.statusId = Number(statusId);
-      if (Number.isFinite(Number(sort))) hit.sort = Number(sort);
-    }
-  }
+  cacheMoveLead(branch, id, statusId, sort);
   return { ok: true as const };
-}
-
-export function reorderLeads(list: LeadCard[], lead: LeadCard, statusId: number, beforeId?: number): LeadCard[] {
-  const keyOf = (x: LeadCard) => `${x.branchId}:${x.id}`;
-  const moving = keyOf(lead);
-  const rest = list.filter((x) => keyOf(x) !== moving);
-  const item: LeadCard = { ...(list.find((x) => keyOf(x) === moving) || lead), statusId };
-  const byCol = new Map<number, LeadCard[]>();
-  for (const x of rest) {
-    const arr = byCol.get(x.statusId) || [];
-    arr.push(x);
-    byCol.set(x.statusId, arr);
-  }
-  const col = byCol.get(statusId) || [];
-  let at = col.length;
-  if (beforeId) {
-    const bi = col.findIndex((x) => x.id === beforeId);
-    if (bi >= 0) at = bi;
-  }
-  col.splice(at, 0, item);
-  const ranked = col.map((x, i) => ({ ...x, sort: i * 10 }));
-  byCol.set(statusId, ranked);
-  const out: LeadCard[] = [];
-  const seen = new Set<number>();
-  for (const x of list) {
-    const sid = keyOf(x) === moving ? statusId : x.statusId;
-    if (seen.has(sid)) continue;
-    seen.add(sid);
-    out.push(...(byCol.get(sid) || []));
-  }
-  for (const [sid, arr] of byCol) if (!seen.has(sid)) out.push(...arr);
-  return out;
 }
 
 export async function archiveLead(branchId: number, leadId: number) {
@@ -574,9 +650,7 @@ export async function archiveLead(branchId: number, leadId: number) {
   } catch {
     await patchLead(branch, id, { is_study: 2, removed: 1 }, t);
   }
-  for (const v of bag().values()) {
-    v.items = v.items.filter((x) => !(x.id === id && x.branchId === branch));
-  }
+  cacheArchiveLead(branch, id);
   return { ok: true as const };
 }
 

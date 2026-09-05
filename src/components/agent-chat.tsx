@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { X, Send, Mic, Volume2, RotateCcw } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
-import { publicAgentUi, type AgentUiFlags } from "@/data/agent-config";
-import { debugSession } from "@/data/debug-mode";
+import { publicAgentUi } from "@/data/agent-config-fn";
+import type { AgentUiFlags } from "@/data/agent-config";
+import { debugSession } from "@/data/debug-fn";
 import { speakAgent } from "@/data/agent-voice";
-import { saveChatLog } from "@/data/chat-logs";
+import { saveChatLog } from "@/data/chat-logs-fn";
 import { nextChips } from "@/data/agent-chips";
-import { debugEmit } from "@/data/debug-mode";
+import { debugEmit } from "@/data/debug-client";
 import { parseTurns, faceOf, type Who } from "@/data/agent-turns";
 import { PageLink } from "@/components/page-link";
 import { SITE } from "@/data/site";

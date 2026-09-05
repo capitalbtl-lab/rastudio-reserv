@@ -1,4 +1,4 @@
-import seed from "./prices.seed.json";
+import seed from "./prices.seed.json" with { type: "json" };
 
 export type PriceRow = {
   id: string;
@@ -7,6 +7,8 @@ export type PriceRow = {
   path: string;
   /** = courseId в дереве (обычно path). Цена курса ищется по этому ID, не по имени. */
   courseId?: string;
+  /** schoolId дерева. direction — только подпись. */
+  schoolId?: string;
   /** Предмет AlfaCRM, если цена привязана к subjectId. */
   subjectId?: number;
   direction: string;
@@ -19,7 +21,31 @@ export type PriceRow = {
 };
 
 const SEED = seed as PriceRow[];
-let cache: PriceRow[] = SEED.map((r) => ({ ...r }));
+
+export const SCHOOL_DIRECTION: Record<string, string> = {
+  "/art-studio": "Художественная школа",
+  "/robototehnika-v-kolomne": "Школа робототехники",
+  "/programming-school": "Школа программирования",
+  "/promising-professions": "Школа наук и инженерии",
+  "/early-childhood-care": "Школа раннего развития",
+  "/languageschool": "Школа иностранных языков",
+  "/model-school": "Модельная школа",
+};
+
+/** Закрытая таблица посева: подпись direction → schoolId. Не живой поиск по имени. */
+export const SCHOOL_OF_DIRECTION: Record<string, string> = Object.fromEntries(
+  Object.entries(SCHOOL_DIRECTION).map(([id, label]) => [label, id]),
+);
+
+function cleanExtra(raw?: Record<string, number>) {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (!k || k === "all" || k === "kbm" || k === "tmx") continue;
+    out[k] = Math.max(0, Math.round(Number(v) || 0));
+  }
+  return out;
+}
 
 export function splitCourseAge(name: string): { name: string; age: string } {
   let n = String(name || "")
@@ -65,40 +91,28 @@ export function foldCourseLabel(s: string) {
     .trim();
 }
 
-export function hydratePrices(rows: PriceRow[]) {
-  cache = rows.map((r) => ({
+function withSchool(r: PriceRow): PriceRow {
+  const courseId = r.courseId || r.path || r.id;
+  return {
     ...r,
     name: tidyCourseName(r.name),
-    courseId: r.courseId || r.path || r.id,
+    courseId,
+    schoolId: r.schoolId || SCHOOL_OF_DIRECTION[r.direction] || "",
     mins: Math.max(0, Math.round(Number(r.mins) || 0)),
     perWeek: Math.max(0, Math.round(Number(r.perWeek) || 0)),
     extra: cleanExtra(r.extra),
-  }));
+  };
 }
 
-function cleanExtra(raw?: Record<string, number>) {
-  if (!raw || typeof raw !== "object") return {};
-  const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (!k || k === "all" || k === "kbm" || k === "tmx") continue;
-    out[k] = Math.max(0, Math.round(Number(v) || 0));
-  }
-  return out;
+let cache: PriceRow[] = SEED.map((r) => withSchool(r));
+
+export function hydratePrices(rows: PriceRow[]) {
+  cache = rows.map(withSchool);
 }
 
 export function listPriceRows() {
   return cache;
 }
-
-export const SCHOOL_DIRECTION: Record<string, string> = {
-  "/art-studio": "Художественная школа",
-  "/robototehnika-v-kolomne": "Школа робототехники",
-  "/programming-school": "Школа программирования",
-  "/promising-professions": "Школа наук и инженерии",
-  "/early-childhood-care": "Школа раннего развития",
-  "/languageschool": "Школа иностранных языков",
-  "/model-school": "Модельная школа",
-};
 
 export function formatAmount(n: number) {
   return n.toLocaleString("ru-RU");
@@ -108,12 +122,38 @@ export function formatRub(n: number) {
   return `${formatAmount(n)} ₽ / 4 нед.`;
 }
 
+export function normPath(path: string) {
+  const clean = (path.startsWith("/") ? path : `/${path}`).replace(/\/+$/, "") || "/";
+  try {
+    return decodeURIComponent(clean);
+  } catch {
+    return clean;
+  }
+}
+
+export function priceForPath(path: string) {
+  const p = normPath(path);
+  return (
+    cache.find((r) => normPath(r.courseId || "") === p) ||
+    cache.find((r) => normPath(r.path || r.id) === p) ||
+    null
+  );
+}
+
+/** schoolId курса сайта. Не regex URL и не название школы. */
+export function schoolIdOfCourse(path: string) {
+  const hit = priceForPath(path);
+  if (hit?.schoolId) return hit.schoolId;
+  const p = normPath(path);
+  return SCHOOL_DIRECTION[p] ? p : "";
+}
+
 export function priceInfo(path: string): { amount: number; from: boolean } | null {
   const hit = priceForPath(path);
   if (hit?.all) return { amount: hit.all, from: false };
-  const dir = SCHOOL_DIRECTION[normPath(path)];
-  if (!dir) return null;
-  const nums = cache.filter((r) => r.direction === dir).map((r) => r.all).filter(Boolean);
+  const schoolId = hit?.schoolId || schoolIdOfCourse(path);
+  if (!schoolId) return null;
+  const nums = cache.filter((r) => r.schoolId === schoolId).map((r) => r.all).filter(Boolean);
   if (!nums.length) return null;
   return { amount: Math.min(...nums), from: true };
 }
@@ -130,37 +170,14 @@ export function priceShort(path: string) {
   return `${info.from ? "от " : ""}${formatAmount(info.amount)} ₽`;
 }
 
-export function normPath(path: string) {
-  const clean = (path.startsWith("/") ? path : `/${path}`).replace(/\/+$/, "") || "/";
-  try {
-    return decodeURIComponent(clean);
-  } catch {
-    return clean;
-  }
-}
-
-export function priceForPath(path: string) {
-  const p = normPath(path);
-  return (
-    cache.find((r) => normPath(r.courseId || r.path || r.id) === p) ||
-    cache.find((r) => normPath(r.path) === p) ||
-    cache.find((r) => p.endsWith(normPath(r.path)) || normPath(r.path).endsWith(p))
-  );
-}
-
 export type GroupDuration = { path: string; course: string; mins: number; perWeek: number; groups: number };
 
 /** Длительность к цене: только courseId / path. Имя курса не склеивает. */
 export function matchDuration(row: PriceRow, items: GroupDuration[]) {
   const rp = normPath(row.courseId || row.path);
-  const byId = items.find((it) => {
-    const sp = normPath(it.path);
-    return Boolean(rp && sp && (rp === sp || sp.endsWith(rp) || rp.endsWith(sp)));
-  });
-  return byId || null;
+  if (!rp) return null;
+  return items.find((it) => normPath(it.path) === rp) || null;
 }
-
-export { priceRowKey } from "./ids";
 
 export const PRICE_DIRECTIONS = [
   "Художественная школа",

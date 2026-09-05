@@ -238,13 +238,15 @@ export function AdminSubjects() {
   const withTariff = items.filter((s) => Number(s.tariffTotal || 0) > 0);
   const withoutTariff = items.filter((s) => !Number(s.tariffTotal || 0));
   const courseGroups = useMemo(
-    () =>
-      schools
+    () => [
+      { label: "", options: [{ value: "", label: "нет курса" }] },
+      ...schools
         .map((sc) => ({
           label: sc.label,
           options: courses.filter((c) => c.schoolId === sc.id).map((c) => ({ value: c.id, label: c.label })),
         }))
         .filter((g) => g.options.length),
+    ],
     [schools, courses],
   );
   const view = useMemo(() => {
@@ -497,7 +499,7 @@ export function AdminSubjects() {
           </thead>
           <tbody>
             {view.map((s) => (
-              <tr key={`${s.id}-${s.name}`} className="border-t border-black/6">
+              <tr key={s.id || `new-${s.name}`} className="border-t border-black/6">
                 <td className="px-3 py-2">
                   <input type="checkbox" checked={picked.has(s.id)} onChange={() => setPicked((set) => {
                     const n = new Set(set);
@@ -523,7 +525,7 @@ export function AdminSubjects() {
                       groups={
                         s.courseId && !courses.some((c) => c.id === s.courseId)
                           ? [
-                              { label: "Сейчас", options: [{ value: s.courseId, label: s.courseLabel || s.courseId }] },
+                              { label: "Сейчас", options: [{ value: s.courseId, label: `${s.courseLabel || s.courseId} · id` }] },
                               ...courseGroups,
                             ]
                           : courseGroups

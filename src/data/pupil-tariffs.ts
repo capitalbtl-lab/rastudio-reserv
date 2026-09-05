@@ -3,6 +3,10 @@ import type { CrmTariff } from "./crm-tariffs";
 import { matchTariffs, tariffFitsSlot } from "./crm-tariffs";
 import { guessTariffLinks } from "./tariff-map";
 import { UNMAPPED_SCHOOL } from "./group-status";
+import { tariffRowLive, tariffRowCustomerId, tariffTodayIso } from "./crm-tariff-row";
+
+export { cgiCustomerId, cgiRecordLive } from "./crm-membership";
+export { tariffDateToIso, tariffRowLive, tariffRowHasTemplate, tariffRowCustomerId } from "./crm-tariff-row";
 
 export type PupilGroup = {
   key: string;
@@ -80,14 +84,6 @@ export function crmGroupQuantity(g: Record<string, unknown> | { quantity?: unkno
   return Number(rec.quantity ?? rec.cnt ?? rec.customers_count ?? 0) || 0;
 }
 
-export function cgiRecordLive(it: Record<string, unknown>, today = todayIso()) {
-  if (Number(it.removed || it.is_removed || 0)) return false;
-  const raw = String(it.e_date || it.date_to || "").trim();
-  if (!raw || raw.startsWith("0000")) return true;
-  const iso = raw.includes(".") ? raw.split(".").reverse().join("-").slice(0, 10) : raw.slice(0, 10);
-  return iso >= today;
-}
-
 /** Участие клиент↔группа (cgi): сколько живых в каждой gid. */
 export function countCgiByGroup(items: Record<string, unknown>[], today = todayIso()) {
   const map = new Map<number, number>();
@@ -110,12 +106,6 @@ export function countCgiParticipants(items: Record<string, unknown>[]) {
     if (id) ids.add(id);
   }
   return ids.size || rows;
-}
-
-export function cgiCustomerId(it: Record<string, unknown>) {
-  const nested =
-    it.customer && typeof it.customer === "object" ? Number((it.customer as { id?: unknown }).id || 0) : 0;
-  return Number(it.customer_id || it.customerId || nested || 0) || 0;
 }
 
 export function mergeGroupTaken(...n: number[]) {
@@ -188,31 +178,31 @@ export function groupHasBoundPupils(taken: number, active: number, archive: numb
   return Number(taken) > 0 || Number(active) > 0 || Number(archive) > 0;
 }
 
+/** UI 0 общий счёт → Alfa calculation_type 1; UI 1 раздельный → Alfa 2. */
+export function alfaCalculationType(uiCalcType: number) {
+  return Number(uiCalcType) ? 2 : 1;
+}
+
+/**
+ * 1) slot.tariffId, если живой и проходит филиал/минуты/тип.
+ * 2) карта tariff-map: courseId группы.
+ * 3) subjectId + филиал + минуты, только абонементы не привязанные к чужому курсу.
+ * Имя не участвует. Не берём «похожий» предмет другого курса сайта.
+ */
 export function pickBestTariff(slot: Pick<CrmSlot, "subjectId" | "branchId" | "timeFrom" | "timeTo" | "tariffId" | "courseId" | "schoolId">, list: CrmTariff[]) {
+  const live = list.filter((t) => !t.archive);
   const saved = Number(slot.tariffId) || 0;
   if (saved) {
-    const hit = list.find((t) => t.id === saved && !t.archive);
+    const hit = live.find((t) => t.id === saved);
     if (hit && tariffFitsSlot(hit, slot as CrmSlot)) return hit;
   }
-  const exact = matchTariffs(slot as CrmSlot, list)[0];
-  if (exact) return exact;
-  const sid = Number(slot.subjectId) || 0;
-  const bid = Number(slot.branchId) || 0;
-  const live = list.filter((t) => {
-    if (t.archive) return false;
-    if (bid && t.branchIds.length && !t.branchIds.includes(bid)) return false;
-    if (t.lessonTypeIds.length && !t.lessonTypeIds.includes(2)) return false;
-    return true;
-  });
-  const bySubject = sid ? live.filter((t) => t.subjectIds.includes(sid)) : [];
-  if (bySubject.length) return bySubject.sort((a, b) => a.price - b.price || a.name.localeCompare(b.name, "ru"))[0];
+  const matched = matchTariffs(slot as CrmSlot, live);
   const courseId = String(slot.courseId || "");
   if (courseId) {
-    const ids = new Set(guessTariffLinks(list).filter((l) => l.courseId === courseId).map((l) => l.tariffId));
-    const byCourse = live.filter((t) => ids.has(t.id));
-    if (byCourse.length) return byCourse.sort((a, b) => a.price - b.price || a.name.localeCompare(b.name, "ru"))[0];
+    const mapped = matched.filter((t) => guessTariffLinks([t]).some((l) => l.courseId === courseId));
+    if (mapped.length) return mapped[0];
   }
-  return null;
+  return matched[0] || null;
 }
 
 export function pupilRowFromMember(
@@ -302,53 +292,16 @@ export function customerTariffDeletePath(branch: number, tariffRowId: number, cu
   return `/v2api/${Number(branch) || 1}/customer-tariff/delete?id=${Number(tariffRowId) || 0}&customer_id=${Number(customerId) || 0}`;
 }
 
-export function tariffDateToIso(raw: string) {
-  const s = String(raw || "").trim();
-  if (!s || /^0{2,4}[-.]0{1,2}[-.]0{1,4}/.test(s)) return "";
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) {
-    const y = Number(iso[1]);
-    if (y < 2000) return "";
-    return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  }
-  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-  if (ru) {
-    const y = Number(ru[3]);
-    if (y < 2000) return "";
-    return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
-  }
-  return "";
-}
-
 export type CatalogTariff = { id: number; name: string; archive?: boolean; price?: number };
 
-/** На карточке: не снят (removed) и не истёк. Дата старта в будущем — всё равно живой (только что назначили). */
-export function customerTariffLive(it: Record<string, unknown>, _catalog?: CatalogTariff[], today = todayIso()) {
-  if (Number(it.removed || 0) === 1) return false;
-  if (!(Number(it.id) > 0)) return false;
-  const tariffId = Number(it.tariff_id || it.tariffId || 0);
-  if (!tariffId) return false;
-  const to = tariffDateToIso(String(it.e_date || it.eDate || ""));
-  if (to && to < today) return false;
-  return true;
+/** Живая строка — tariffRowLive. Каталог не участвует. */
+export function customerTariffLive(it: Record<string, unknown>, _catalog?: CatalogTariff[], today = tariffTodayIso()) {
+  return tariffRowLive(it, today);
 }
 
-export function tariffRowCustomerId(it: Record<string, unknown>) {
-  const nested =
-    it.customer && typeof it.customer === "object"
-      ? Number((it.customer as { id?: unknown }).id || 0)
-      : 0;
-  const listed = Array.isArray(it.customer_ids) ? Number(it.customer_ids[0] || 0) : 0;
-  return Number(it.customer_id ?? it.customerId ?? nested ?? listed ?? 0) || 0;
-}
-
-/** На карточке действует: не снят и не истёк. Пустой tariff_id (подпись «абонемент») всё равно живой. */
-export function customerTariffOnCard(it: Record<string, unknown>, today = todayIso()) {
-  if (Number(it.removed || it.is_removed || 0) === 1) return false;
-  if (!(Number(it.id) > 0)) return false;
-  const to = tariffDateToIso(String(it.e_date || it.eDate || ""));
-  if (to && to < today) return false;
-  return true;
+/** На карточке и в счётчике то же правило, что в мастере. */
+export function customerTariffOnCard(it: Record<string, unknown>, today = tariffTodayIso()) {
+  return tariffRowLive(it, today);
 }
 
 export function preferCurrentTariffs(
@@ -421,13 +374,13 @@ export function splitCustomerTariffs(
   const live = new Map<number, { id: number; tariffId: number; name: string }[]>();
   const archived = new Map<number, { id: number; tariffId: number; name: string }[]>();
   for (const it of items || []) {
-    if (Number(it.removed || 0) === 1) continue;
     const id = Number(it.id) || 0;
     const customerId = tariffRowCustomerId(it);
+    if (!id || !customerId) continue;
     const tariffId = Number(it.tariff_id || it.tariffId || 0);
-    if (!id || !customerId || !tariffId) continue;
     const row = { id, tariffId, name: customerTariffLabel(it, catalog) };
-    const bucket = customerTariffLive(it, catalog) ? live : archived;
+    const bucket = tariffRowLive(it) ? live : Number(it.removed || it.is_removed || 0) === 1 ? null : archived;
+    if (!bucket) continue;
     const list = bucket.get(customerId) || [];
     list.push(row);
     bucket.set(customerId, list);
@@ -481,7 +434,7 @@ export function personKey(branchId: number, customerId: number) {
 
 export type TariffHave = "all" | "with" | "without";
 
-/** Клиенты/лиды: живой абонемент на сегодня (removed≠1, не истёк). */
+/** Клиенты/лиды: живая строка на сегодня (tariffRowLive), не касса. */
 export function keepByLiveTariff<T>(
   items: T[],
   have: TariffHave,
@@ -580,7 +533,7 @@ export function customerTariffPayload(opts: {
   if (opts.note) body.note = String(opts.note);
   const calcType = Number(opts.calcType) ? 1 : 0;
   body.is_separate_balance = calcType;
-  body.calculation_type = calcType ? 2 : 1;
+  body.calculation_type = alfaCalculationType(calcType);
   const periodType = Number(opts.periodType) || 0;
   const periodCount = Number(opts.periodCount) || 0;
   if (periodCount) {
@@ -589,6 +542,40 @@ export function customerTariffPayload(opts: {
     body.unit = periodType === 2 ? "weeks" : periodType === 3 ? "months" : periodType === 4 ? "years" : "days";
   }
   return body;
+}
+
+export async function postCustomerTariff(
+  request: <T = { success?: boolean; errors?: unknown }>(path: string, body?: unknown, t?: string) => Promise<T>,
+  t: string,
+  opts: Parameters<typeof customerTariffPayload>[0] & { branch: number },
+) {
+  const customerId = Number(opts.customerId) || 0;
+  const tariffId = Number(opts.tariffId) || 0;
+  const branch = Number(opts.branch) || 1;
+  if (!customerId) return { ok: false as const, error: "Нет customer_id ученика." };
+  if (!tariffId) return { ok: false as const, error: "Выберите абонемент." };
+  if (!String(opts.bDate || "").trim()) return { ok: false as const, error: "Нет даты начала абонемента." };
+  const full = customerTariffPayload(opts);
+  const tries: Record<string, unknown>[] = [
+    full,
+    { ...full, is_separate_balance: 1, calculation_type: 2 },
+    { ...full, is_separate_balance: 0, calculation_type: 1 },
+  ];
+  let last = "";
+  for (const body of tries) {
+    if (body.customer_id == null || body.customer_id === "" || Number(body.customer_id) === 0) continue;
+    try {
+      const res = await request<{ success?: boolean; errors?: unknown }>(customerTariffCreatePath(branch, customerId), body, t);
+      if (res.success === false) {
+        last = JSON.stringify(res.errors || res);
+        continue;
+      }
+      return { ok: true as const };
+    } catch (e) {
+      last = e instanceof Error ? e.message : String(e);
+    }
+  }
+  return { ok: false as const, error: last || "AlfaCRM не приняла абонемент." };
 }
 
 /** Абонемент подходит к предмету группы, если предмет не задан или входит в карту абонемента. */

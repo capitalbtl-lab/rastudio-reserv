@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { SITE } from "@/data/site";
-import { saveTrialLead, TRIAL_BRANCHES, TRIAL_COURSES } from "@/data/trial";
+import { saveTrialLead } from "@/data/trial-save";
+import { TRIAL_BRANCHES, TRIAL_COURSES } from "@/data/trial-public";
 import { LESSON_TYPES } from "@/data/alfacrm";
 import { serverEnv } from "./server-env";
 import { type SessionFacts, nextStepOf } from "./agent-facts";
@@ -60,26 +61,25 @@ ${who === "oleg" ? "Вы хорошо рассказываете про техн
 Не пишите длинные адреса, пока не спросили как пройти.
 
 Телефон: ${SITE.phone}. Сайт: ${SITE.domain}.
-Филиалы AlfaCRM: 1 Гражданская, 2 Коломна; 2 ЦМИТ Октябрьской революции, 340; 3 Луховицы, Пушкина, 202А; 4 летние программы (только апрель–август).
-Курсы называй ТОЧНО как на сайте, не обобщай до «школы», когда уже внутри направления.
+Филиалы: 1 Гражданская; 2 ЦМИТ, Октябрьской революции, 340; 3 Луховицы, Пушкина, 202А; 4 лето (только апрель–август). Не путай 1 и 2.
+Курсы называй как на сайте. Курс = courseId дерева, предмет = subjectId CRM. Это разные id.
+Цены только из колонки «Все» по courseId. Не выдумывай и не бери сумму абонемента по названию.
 ЭТА РЕПЛИКА — только текущий шаг: ${step}
 Если в фактах уже есть город — ни слова «какой город», «Коломна или Луховицы».
 Не возвращайся к закрытым шагам.
-list_groups вызывай когда направление уже рассказано и родитель хочет слот. Назови ВСЕ подходящие группы, первой — с приоритетом 1. gid вслух не читай.
+list_groups когда направление уже ясно и родитель хочет слот. Передай course_id или school_id, если знаешь. Назови ВСЕ подходящие, первой — приоритет 1. gid вслух не читай. Группу по имени CRM не ищи.
 Пробное в свободный день: заявка без слота, в комментарии «дату согласуем по телефону». Не выдумывай время.
-История сессии полная до сброса диалога. Прежде чем спросить — посмотри факты: что уже назвали, того не спрашивай.
-На запись нужны: ФИО ребёнка, ФИО родителя (заказчика), телефон, филиал. Дата рождения — целиком, как 01.01.2021. Возраст подойдёт, если даты нет: подставим 01.09 года рождения.
-Когда есть имя родителя, ФИО ребёнка, телефон и филиал — сразу вызови book_lesson (или submit_trial для первого визита). Передай course_id, gid слота, дату и время ближайшего занятия этой группы. Не жди почту.
+История сессии полная до сброса диалога. Прежде чем спросить — посмотри факты.
+На запись нужны: ФИО ребёнка, ФИО родителя, телефон, филиал. Дата рождения целиком 01.01.2021; если нет — возраст.
+Когда есть имя родителя, ФИО ребёнка, телефон и филиал — сразу book_lesson (или submit_trial для первого визита). Передай course_id дерева, gid, date и time ближайшего занятия, subject_id слота, branch_id группы. Не жди почту и не жди ответ Alfa: заявка пишется на сайт сразу, CRM догонит очередью.
 Типы занятий AlfaCRM: ${LESSON_TYPES.map((t) => `${t.id} ${t.name} (${t.key})`).join("; ")}.
-Первый визит — пробное (trial, submit_trial). Постоянная группа — групповое (book_lesson lesson_type=group). Пропуск — отработка (makeup). Ещё бывают: вводное, дополнительное, сверхурочное, индивидуальное, собеседование, открытый урок, мастер-класс, экскурсия, мероприятие, летний лагерь, продленка, летняя программа. Не ставь пробное, если родитель явно просит другой тип.
-Не говори «мы перезвоним» и не отправляй на форму AlfaCRM, если можно записать самому. Скажи: заявку приняли, занятие поставили на дату и время, педагог, филиал. Не читай URL.
-Если есть gid группы — передай его вместе с date и time слота. Филиал заявки = branchId этой группы (1 Гражданская, 2 ЦМИТ, 3 Луховицы).
-Запись в группу — book_lesson lesson_type=group, не open_group. Форму /lead/create родителю не открывай.
-На сайте те же кнопки «Запись на пробное» и «Запись в группу»: окно rastudio.org, филиал уже выбран. Ты делаешь то же через инструменты.
+Первый визит — пробное (trial, submit_trial). Постоянная группа — групповое (book_lesson lesson_type=group). Не ставь пробное, если просят сразу в группу.
+Не говори «мы перезвоним» и не открывай форму AlfaCRM. Скажи: заявку приняли, дата, время, педагог, филиал.
+Запись в группу — book_lesson lesson_type=group, не open_group.
 id курсов для заявки: ${TRIAL_COURSES.map((c) => `${c.id} ${c.name}`).join("; ")}.
-Не открывай страницу курса в браузере. Только кнопка через open_course, когда курс выбран и нужны подробности.
+Не открывай страницу курса в браузере. Только кнопка open_course.
 Жалобы и деньги — телефон.
-Если просят править сайт, цены, голоса или говорят «я администратор» — не спрашивай код в этом чате и не путай с подбором курса. Скажи нажать ссылку «войти в административный режим» внизу окна.
+Если просят править сайт, статусы групп или CRM — это кабинет сотрудника, не этот чат. Не предлагай «войти в административный режим», пока человек сам не сказал, что он сотрудник.
 `;
 }
 
@@ -104,12 +104,12 @@ const ADMIN_TOOLS = [
     type: "function" as const,
     function: {
       name: "set_price",
-      description: "Изменить цену одного курса. Только администратор. path или точное имя, сумма в рублях за 4 недели.",
+      description: "Изменить цену одного курса. Только администратор. courseId дерева (path), сумма ₽ за 4 недели. Не по названию.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
-          path: { type: "string", description: "Путь или название курса" },
+          path: { type: "string", description: "courseId / path курса, не название" },
           field: { type: "string", description: "all | kbm | tmx, по умолчанию all" },
           amount: { type: "number", description: "Новая цена в рублях" },
         },
@@ -231,7 +231,8 @@ const TOOLS = [
           age: { type: "number", description: "Возраст ребёнка, если даты нет" },
           phone: { type: "string" },
           email: { type: "string" },
-          course_id: { type: "string", description: "ID курса/предмета, например 37" },
+          course_id: { type: "string", description: "courseId дерева сайта, не subjectId" },
+          subject_id: { type: "number", description: "subjectId предмета CRM из list_groups" },
           branch_id: { type: "string", description: "1 Гражданская, 2 ЦМИТ Октябрьской, 3 Луховицы, 4 лето" },
           gid: { type: "string", description: "Номер группы, если пробное в конкретный слот" },
           group_name: { type: "string", description: "Название группы" },
@@ -260,7 +261,8 @@ const TOOLS = [
           age: { type: "number" },
           phone: { type: "string" },
           email: { type: "string" },
-          course_id: { type: "string" },
+          course_id: { type: "string", description: "courseId дерева сайта" },
+          subject_id: { type: "number", description: "subjectId CRM из list_groups" },
           branch_id: { type: "string", description: "1 Гражданская, 2 ЦМИТ, 3 Луховицы, 4 лето" },
           gid: { type: "string" },
           group_name: { type: "string" },
@@ -295,14 +297,18 @@ const TOOLS = [
     function: {
       name: "list_groups",
       description:
-        "Живое расписание: gid, филиал, педагог, день, timeFrom, свободные места, ближайшая дата. Когда известен возраст. Филиал желателен.",
+        "Живые группы по ID: courseId/schoolId дерева, branchId, возраст. Не ищи по имени группы. Вернёт gid, courseId, schoolId, subjectId, состав с диска, приоритет.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
           age: { type: "number", description: "Возраст ребёнка" },
-          branch: { type: "string", description: "1 Гражданская, 2 Октябрьской, 3 Луховицы, или Коломна" },
-          course: { type: "string", description: "Название курса или путь страницы" },
+          branch: { type: "string", description: "1 Гражданская, 2 ЦМИТ, 3 Луховицы, или Коломна" },
+          branch_id: { type: "number", description: "branchId 1|2|3|4" },
+          course: { type: "string", description: "Речь родителя или courseId/schoolId дерева, не имя группы CRM" },
+          course_id: { type: "string", description: "courseId дерева, например /art-studio-10-14" },
+          school_id: { type: "string", description: "schoolId дерева, например /art-studio" },
+          subject_id: { type: "number", description: "subjectId AlfaCRM" },
         },
         required: ["age"],
       },
@@ -367,8 +373,12 @@ function limited(ip: string) {
 
 function resolveCourse(id?: string) {
   if (!id) return "";
-  const hit = TRIAL_COURSES.find((c) => c.id === String(id) || c.name.toLowerCase() === String(id).toLowerCase());
-  return hit?.id || "";
+  const raw = String(id).trim();
+  if (!raw) return "";
+  const withSlash = raw.startsWith("/") ? raw : `/${raw}`;
+  const hit = TRIAL_COURSES.find((c) => c.id === raw || c.id === withSlash);
+  if (hit) return hit.id;
+  return raw.startsWith("/") ? raw : "";
 }
 
 function resolveBranch(id?: string) {
@@ -582,7 +592,7 @@ export const chatAgent = createServerFn({ method: "POST" })
       }
     }
     const file = !admin ? findDossier({ phone: facts.phone }) : null;
-    const factsLessons = lessonFactsForAgent(12);
+    const factsLessons = admin ? lessonFactsForAgent(12) : [];
     const lessonBlock = factsLessons.length
       ? `\nТемы недавних занятий (из AlfaCRM, без ФИО учеников):\n${factsLessons.map((x) => `— ${x}`).join("\n")}\n`
       : "";
@@ -625,6 +635,29 @@ export const chatAgent = createServerFn({ method: "POST" })
                 });
                 continue;
               }
+              const kind = String(args.lesson_type || args.kind || "trial");
+              const gid = String(args.gid || "").replace(/\D/g, "");
+              if (gid && (kind === "group" || kind === "trial")) {
+                try {
+                  const { listAdminSlots } = await import("./alfacrm-schedule");
+                  const { readPriority } = await import("./group-status");
+                  const bid = Number(resolveBranch(String(args.branch_id || ""))) || 0;
+                  const hit = listAdminSlots().find(
+                    (s) => String(s.groupId) === gid && (!bid || Number(s.branchId) === bid),
+                  );
+                  if (hit && readPriority(hit.priority) === 0) {
+                    messages.push({
+                      role: "tool",
+                      tool_call_id: call.id,
+                      content:
+                        "Приоритет 0 — с сайта не записывать. Предложи группу с приоритетом 1 или запись через администратора 8 (800) 511-34-01.",
+                    });
+                    continue;
+                  }
+                } catch {
+                  /* слоты */
+                }
+              }
               const saved = await saveTrialLead({
                 parent: String(args.parent || ""),
                 child: String(args.child || ""),
@@ -640,19 +673,20 @@ export const chatAgent = createServerFn({ method: "POST" })
                 date: args.date ? String(args.date) : "",
                 time: args.time ? String(args.time) : "",
                 duration: args.duration != null ? Number(args.duration) : undefined,
+                subjectId: Number(args.subject_id) || undefined,
               });
               const lessonName = saved.ok && saved.lesson?.type ? saved.lesson.type : "занятие";
               if (saved.ok && "id" in saved && saved.id) {
                 try {
                   upsertDossier({
-                    crmId: Number(saved.id),
+                    crmId: Number(saved.id) > 0 ? Number(saved.id) : undefined,
                     branchId: Number(saved.branch) || undefined,
                     phone: String(args.phone || ""),
                     child: String(args.child || ""),
                     parent: String(args.parent || ""),
                     dob: String(args.dob || ""),
-                    course: String(args.group_name || args.course_id || ""),
-                    source: "alfacrm",
+                    course: String(args.course_id || ""),
+                    source: "site",
                     note: `Запись: ${lessonName}`,
                   });
                 } catch {
@@ -663,7 +697,7 @@ export const chatAgent = createServerFn({ method: "POST" })
                 role: "tool",
                 tool_call_id: call.id,
                 content: saved.ok
-                  ? `Лид в AlfaCRM id=${"id" in saved ? saved.id : ""} филиал=${saved.branch}${saved.duplicate ? ", карточка уже была — обновили" : ", новая карточка"}${saved.lesson ? `, ${lessonName} id=${saved.lesson.id} на ${saved.lesson.date} ${saved.lesson.time}` : ", урок не создался — лид есть"}. Ссылка для администратора: ${"url" in saved ? saved.url : ""}. Родителю URL не читай. Скажи: заявку приняли, ${lessonName.toLowerCase()} поставили.`
+                  ? `Заявку приняли на сайте${saved.pending ? ", AlfaCRM в очереди" : saved.duplicate ? ", карточка уже была — обновили" : ""}. Филиал=${saved.branch}${saved.lesson ? `, ${lessonName} на ${saved.lesson.date} ${saved.lesson.time}` : ""}. Родителю URL не читай. Скажи: заявку приняли, ${lessonName.toLowerCase()} поставили. Не жди ответ Alfa.`
                   : `Ошибка: ${saved.error}`,
               });
             } else if (call.function.name === "list_courses_by_age") {
@@ -681,66 +715,52 @@ export const chatAgent = createServerFn({ method: "POST" })
                 const list = await groupsForQuery({
                   age: Number.isFinite(age) ? age : undefined,
                   branch: String(args.branch || ""),
+                  branchId: Number(args.branch_id) || undefined,
                   course: String(args.course || ""),
+                  courseId: String(args.course_id || ""),
+                  schoolId: String(args.school_id || ""),
+                  subjectId: Number(args.subject_id) || undefined,
                 });
-                const fallback =
-                  !list.length && args.course
-                    ? await groupsForQuery({
-                        age: Number.isFinite(age) ? age : undefined,
-                        branch: String(args.branch || ""),
-                      })
-                    : [];
-                const shownRaw = list.length ? list : fallback;
+                const shownRaw = list;
                 const seeAll = loadBrain().settings.consultantCanSeeAllGroups !== false;
-                const shown = seeAll ? shownRaw : shownRaw.filter((g) => g.priority >= 1);
+                let shown = shownRaw;
+                if (!seeAll) {
+                  const { slotOnPublicSchedule } = await import("./group-status");
+                  const { loadSiteSignup } = await import("./site-signup");
+                  const pub = loadSiteSignup().statusPublish;
+                  shown = shownRaw.filter((g) => slotOnPublicSchedule(g, pub));
+                }
                 groups = [
                   { label: "Пробное занятие", send: "Хочу записаться на пробное занятие", primary: true },
                   { label: "Сразу в группу", send: "Запишите сразу в группу" },
                   ...shown.slice(0, 6).map((g) => ({
                     label: `Пробное · ${g.chip}`,
-                    send: `Запишите на пробное gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} группа ${g.name}`,
+                    send: `Запишите на пробное gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""}`,
                   })),
                 ];
                 messages.push({
                   role: "tool",
                   tool_call_id: call.id,
-                  content:
-                    (!list.length && fallback.length ? "По точному названию не нашли, ниже группы на этот возраст.\n" : "") +
-                    formatGroups(shown, age),
+                  content: formatGroups(shown, age),
                 });
               } catch {
                 messages.push({
                   role: "tool",
                   tool_call_id: call.id,
-                  content: "Расписание CRM сейчас недоступно. Предложи позвонить 8 (800) 511-34-01 или заявку на пробное.",
+                  content: "Расписание сейчас с сайта недоступно. Предложи позвонить 8 (800) 511-34-01 или заявку на пробное.",
                 });
               }
             } else if (call.function.name === "open_group") {
-              const { groupSignup, groupsForQuery } = await import("./alfacrm-schedule");
-              const gid = String(args.gid || "");
-              let hit = groupSignup(gid, String(args.branch || ""));
-              if (!hit) {
-                const list = await groupsForQuery({}).catch(() => []);
-                const found = list.find((g) => g.gid === gid.replace(/\D/g, ""));
-                if (found) hit = { gid: found.gid, branchId: found.branchId, signup: found.signup };
-              }
-              if (hit) {
-                signup = hit.signup;
-                messages.push({
-                  role: "tool",
-                  tool_call_id: call.id,
-                  content: `Открыли форму записи в группу ${hit.gid}, филиал ${hit.branchId}. Скажи родителю заполнить форму на экране. URL не читай.`,
-                });
-              } else {
-                messages.push({
-                  role: "tool",
-                  tool_call_id: call.id,
-                  content: "Группа не найдена. Вызови list_groups ещё раз.",
-                });
-              }
+              messages.push({
+                role: "tool",
+                tool_call_id: call.id,
+                content:
+                  "open_group запрещён. Запись: book_lesson lesson_type=group или submit_trial. Форму AlfaCRM родителю не открывать.",
+              });
             } else if (call.function.name === "open_course") {
               const { findCoursePage } = await import("./agent-courses");
-              const hit = findCoursePage(String(args.path || args.name || ""));
+              const { loadSiteTree } = await import("./site-tree");
+              const hit = findCoursePage(String(args.path || args.name || ""), loadSiteTree());
               if (hit) {
                 groups = [
                   ...groups.filter((g) => g.href !== hit.path),

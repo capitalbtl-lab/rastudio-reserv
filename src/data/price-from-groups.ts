@@ -5,7 +5,8 @@
 import { listAdminSlots } from "./alfacrm-schedule";
 import { ensureLivePrices, listPriceRows } from "./prices";
 import { loadScheduleMap } from "./schedule-map";
-import { normPath, priceRowKey, tidyCourseName, type GroupDuration, type PriceRow } from "./prices-core";
+import { normPath, tidyCourseName, type GroupDuration, type PriceRow } from "./prices-core";
+import { priceRowKey } from "./ids";
 import type { CrmSlot } from "./crm-slots-core";
 
 function minsOf(from: string, to: string) {

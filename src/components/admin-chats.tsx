@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { adminChatLogs } from "@/data/chat-logs";
+import { adminChatLogs } from "@/data/chat-logs-fn";
 import { adminAgentBrain } from "@/data/agent-config";
 import { parseTurns } from "@/data/agent-turns";
 import { cn } from "@/lib/utils";

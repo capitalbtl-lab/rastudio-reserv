@@ -4,6 +4,8 @@ export {
   FACTORY_GUIDES,
   GUIDE_REV,
   factoryGuide,
+  loadGuides,
+  consultantGuidePrompt,
   type GuideOp,
   type GuideRow,
   type GuideTab,

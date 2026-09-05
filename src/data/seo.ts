@@ -1,4 +1,5 @@
-import { SITE, SCHOOLS, BRANCHES, SCHOOL_COURSE_MATCH } from "@/data/site";
+import { SITE, SCHOOLS, BRANCHES } from "@/data/site";
+import { schoolIdOfPath } from "@/data/site-bind-core";
 import { SEO_COPY } from "@/data/seo-copy";
 import { YANDEX_RATING, YANDEX_REVIEWS } from "@/data/reviews";
 import { coursePrice } from "@/data/ages";
@@ -193,7 +194,8 @@ export function organizationJsonLd() {
 export function schoolForPath(path: string) {
   const found = SCHOOLS.find((s) => s.href === path);
   if (found) return found;
-  return SCHOOLS.find((s) => SCHOOL_COURSE_MATCH[s.href]?.(path)) || null;
+  const schoolId = schoolIdOfPath(path);
+  return SCHOOLS.find((s) => s.href === schoolId) || null;
 }
 
 export function breadcrumbJsonLd(path: string, title: string) {

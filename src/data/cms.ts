@@ -85,7 +85,7 @@ export type CmsSession = {
   city: string;
   branch: string;
   directionId: string;
-  /** Legacy публичного расписания: String(subjectId). НЕ courseId дерева сайта. */
+  /** courseId дерева сайта. Не subjectId. */
   courseId: string;
   ageTag: string;
   courseFilter: string;

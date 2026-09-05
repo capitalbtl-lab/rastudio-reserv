@@ -1,7 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { createServerFn } from "@tanstack/react-start";
-import { isAdminRequest } from "./admin-auth";
 import { buildSessionNote, type SessionNote } from "./session-note";
 import { dossierFromNote } from "./dossiers";
 
@@ -104,37 +102,19 @@ export function recentChatsForTrain(limit = 40) {
     }));
 }
 
-export const saveChatLog = createServerFn({ method: "POST" })
-  .validator(
-    (data: unknown) =>
-      data as {
-        id: string;
-        path?: string;
-        partner?: string;
-        voice?: boolean;
-        admin?: boolean;
-        closed?: boolean;
-        messages: ChatTurn[];
-      },
-  )
-  .handler(async ({ data }) => upsertSession(data));
-
-export const adminChatLogs = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { token?: string; id?: string })
-  .handler(async ({ data }) => {
-    if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
-    const all = loadAll();
-    if (data.id) {
-      const one = all.find((s) => s.id === data.id);
-      if (!one) return { ok: false as const, error: "Диалог не найден." };
-      return { ok: true as const, session: one, total: all.length };
-    }
-    return {
-      ok: true as const,
-      total: all.length,
-      sessions: all.slice(0, 120).map((s) => {
-        const note = s.note || buildSessionNote(s.messages);
-        return {
+export function adminChatLogsData(id?: string) {
+  const all = loadAll();
+  if (id) {
+    const one = all.find((s) => s.id === id);
+    if (!one) return { ok: false as const, error: "Диалог не найден." };
+    return { ok: true as const, session: one, total: all.length };
+  }
+  return {
+    ok: true as const,
+    total: all.length,
+    sessions: all.slice(0, 120).map((s) => {
+      const note = s.note || buildSessionNote(s.messages);
+      return {
         id: s.id,
         started: s.started,
         updated: s.updated,
@@ -155,6 +135,6 @@ export const adminChatLogs = createServerFn({ method: "POST" })
         course: note.course || "",
         service: note.service || "",
       };
-      }),
-    };
-  });
+    }),
+  };
+}

@@ -17,7 +17,7 @@ import { LessonStrip, GroupLessonStrip } from "@/components/lesson-strip";
 import { CrmGroupMembers, GroupLoadScene } from "@/components/crm-group-card";
 import { CrmLeadBoard } from "@/components/crm-lead-board";
 import type { ClientRow, CustomerCard, GroupMember } from "@/data/crm-cards";
-import { LEAD_STAGES, mergeStages, reorderLeads, filterLeadCards, mergeBranchLeadCards, type LeadCard, type LeadStage } from "@/data/crm-leads";
+import { LEAD_STAGES, mergeStages, reorderLeads, filterLeadCards, mergeBranchLeadCards, type LeadCard, type LeadStage } from "@/data/crm-leads-stages";
 import { crmSyncMinutes } from "@/components/admin-crm-settings";
 import type { CrmSlot, GroupCalLesson } from "@/data/crm-slots-core";
 import { GROUP_STATUSES, isAdminGroup } from "@/data/group-status";
@@ -30,9 +30,6 @@ function token() {
 }
 
 const FUNNEL_KEY = "ra_funnel_board";
-function funnelTtl() {
-  return crmSyncMinutes() * 60 * 1000;
-}
 
 type FunnelSnap = { at: number; branch: number; stages: LeadStage[]; items: LeadCard[] };
 
@@ -180,6 +177,50 @@ type ClientsSnap = {
 };
 
 let clientsSnap: ClientsSnap | null = null;
+const CLIENTS_KEY = "ra_clients_snap";
+const LIVE_KEY = "ra_live_tariff_ids";
+
+function readClientsSnap(): ClientsSnap | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(CLIENTS_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as ClientsSnap;
+    return Array.isArray(v?.items) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeClientsSnap(s: ClientsSnap) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(CLIENTS_KEY, JSON.stringify(s));
+  } catch {
+    /* quota */
+  }
+}
+
+function readLiveIds(): number[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(LIVE_KEY) || "[]");
+    return Array.isArray(raw) ? raw.map(Number).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLiveIds(ids: number[]) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(LIVE_KEY, JSON.stringify(ids.slice(0, 4000)));
+  } catch {
+    /* quota */
+  }
+}
+
+if (!clientsSnap) clientsSnap = readClientsSnap();
 
 function emptyRow(customerId: number, branchId: number): ClientRow {
   return {
@@ -277,9 +318,9 @@ export function AdminClients({
   const [addingGroup, setAddingGroup] = useState("");
   const [view, setView] = useState<"дети" | "группы">("дети");
   const [tariffHave, setTariffHave] = useState<TariffHave>("all");
-  const [liveTariffIds, setLiveTariffIds] = useState<Set<number>>(() => new Set());
+  const [liveTariffIds, setLiveTariffIds] = useState<Set<number>>(() => new Set(readLiveIds()));
   const [liveTariffBusy, setLiveTariffBusy] = useState(false);
-  const [liveReady, setLiveReady] = useState(false);
+  const [liveReady, setLiveReady] = useState(() => readLiveIds().length > 0);
   const [tariffProgress, setTariffProgress] = useState<{ done: number; total: number; extra: string } | null>(null);
   const [pickedGroup, setPickedGroup] = useState<CrmSlot | null>(null);
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
@@ -353,7 +394,10 @@ export function AdminClients({
     function merge(ids: number[] | undefined) {
       for (const id of ids || []) if (Number(id)) live.add(Number(id));
       setLiveTariffIds(new Set(live));
-      if (live.size) setLiveReady(true);
+      if (live.size) {
+        setLiveReady(true);
+        writeLiveIds([...live]);
+      }
     }
     try {
       const first = (await retryFetch(
@@ -362,29 +406,9 @@ export function AdminClients({
         45000,
       )) as Pack;
       merge(first.ids);
-      const total = Number(first.total) || 0;
-      setTariffProgress({ done: first.fromCache && first.done ? total : 0, total, extra: first.fromCache ? "из хранилища сайта" : "" });
-      if (first.done && !force) {
-        liveTariffAt.current = Date.now();
-        await load(qRef.current, statusRef.current, branchRef.current, ageRef.current);
-        return;
-      }
-      let offset = 0;
-      while (offset >= 0) {
-        const res = (await retryFetch(
-          () => adminSchedule({ data: { token: token(), action: "clientsLiveTariffs", offset, take: 3 } as never }),
-          1,
-          45000,
-        )) as Pack;
-        merge(res.ids);
-        const next = Number(res.next) || offset + 3;
-        const tot = Number(res.total) || total;
-        setTariffProgress({ done: Math.min(next, tot), total: tot, extra: res.extra || `${live.size} с абонементом` });
-        if (res.done || next >= tot) break;
-        offset = next;
-      }
       liveTariffAt.current = Date.now();
-      await load(qRef.current, statusRef.current, branchRef.current, ageRef.current);
+      setTariffProgress(null);
+      if (force) await load(qRef.current, statusRef.current, branchRef.current, ageRef.current);
     } finally {
       setLiveTariffBusy(false);
     }
@@ -395,14 +419,14 @@ export function AdminClients({
     if (next !== "all") void loadLiveTariffs();
   }
 
-  const overlayOnce = useRef(false);
   useEffect(() => {
-    if (overlayOnce.current || liveTariffBusy || !rows.length) return;
-    const missing = rows.filter((r) => !(r.groupLinks || []).some((g) => g.active !== false && g.id)).length;
-    if (missing < Math.max(8, rows.length * 0.2)) return;
-    overlayOnce.current = true;
-    void loadLiveTariffs(true);
-  }, [rows.length, liveTariffBusy]);
+    if (liveTariffIds.size) return;
+    const ids = rows.filter((r) => r.hasLiveTariff).map((r) => Number(r.crmId) || 0).filter(Boolean);
+    if (!ids.length) return;
+    setLiveTariffIds(new Set(ids));
+    setLiveReady(true);
+    writeLiveIds(ids);
+  }, [rows, liveTariffIds.size]);
 
   async function load(nextQ = q, nextStatus = status, nextBranch = branch, nextAge = age) {
     if (!rowsRef.current.length) setBusy(true);
@@ -436,6 +460,7 @@ export function AdminClients({
           synced: res.lastCrmSync || "",
           all: Number(res.all || 0),
         };
+        writeClientsSnap(clientsSnap);
         const all = Number(res.all || 0);
         if (!autoPull.current && !nextQ && nextStatus === "учится" && all === 0 && !res.items.length) {
           autoPull.current = true;
@@ -679,7 +704,7 @@ export function AdminClients({
   }
 
   useEffect(() => {
-    void load("", "учится", 0, "");
+    void load(qRef.current, statusRef.current, branchRef.current, ageRef.current);
   }, []);
 
   useEffect(() => {
@@ -717,11 +742,17 @@ export function AdminClients({
 
   useEffect(() => {
     if (!(status === "лид" && view === "дети")) return;
-    const at = funnelAt.current[branch] || 0;
-    if (at && Date.now() - at < funnelTtl()) return;
-    const local = filterLeadCards(funnelItemsRef.current, { branch });
-    if (local.length) void loadFunnel(branch, false, true);
-    else void loadFunnel(branch, true, false);
+    const snap = funnelSnapGet(branch) || funnelSnapGet(0);
+    if (snap?.items?.length) {
+      funnelAt.current[branch] = Number(snap.at) || Date.now();
+      if (!funnelItemsRef.current.length) {
+        funnelItemsRef.current = snap.items;
+        setFunnelItems(snap.items);
+        if (snap.stages?.length) setFunnelStages(mergeStages(snap.stages));
+      }
+      return;
+    }
+    void loadFunnel(branch, false, false);
   }, [status, view, branch]);
 
   useEffect(() => {
@@ -1039,7 +1070,7 @@ export function AdminClients({
     try {
       const [people, res] = await Promise.all([
         adminSchedule({
-          data: { token: token(), action: "groupMembers", groupId: s.groupId, branchId: s.branchId } as never,
+          data: { token: token(), action: "groupMembers", groupId: s.groupId, branchId: s.branchId, diskOnly: true } as never,
         }),
         adminSchedule({
           data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId, lite: true } as never,
@@ -1242,22 +1273,8 @@ export function AdminClients({
               );
             })}
           </div>
-          {tariffProgress ? (
-            <div className="min-w-[14rem] flex-1 basis-[14rem] px-1 py-1">
-              <div className="flex items-center justify-between gap-2 text-[0.72rem] text-muted">
-                <span>{liveTariffBusy ? "Читаю абонементы пакетами" : "Абонементы"}</span>
-                <span className="tabular-nums">
-                  {tariffProgress.done} / {tariffProgress.total} групп
-                </span>
-              </div>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white ring-1 ring-black/6">
-                <div
-                  className="h-full rounded-full bg-primary transition-[width] duration-300"
-                  style={{ width: `${tariffProgress.total ? Math.round((tariffProgress.done / tariffProgress.total) * 100) : 0}%` }}
-                />
-              </div>
-              {tariffProgress.extra ? <p className="mt-0.5 truncate text-[0.68rem] text-muted">{tariffProgress.extra}</p> : null}
-            </div>
+          {liveTariffBusy && tariffProgress && !tariffProgress.extra.includes("хранилищ") ? (
+            <p className="px-1 py-1 text-[0.72rem] text-muted">{tariffProgress.extra || "Обновляю абонементы…"}</p>
           ) : null}
 
           <div className="ml-auto flex flex-wrap items-center gap-1">

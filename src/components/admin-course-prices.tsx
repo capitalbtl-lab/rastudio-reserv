@@ -80,7 +80,14 @@ export function AdminCoursePrices() {
         hydratePrices(next);
       }
       if ("schools" in res && Array.isArray(res.schools) && res.schools.length) setSchools(res.schools);
-      else if (next.length) setSchools([...new Set(next.map((r) => r.direction))].filter(Boolean).map((label) => ({ id: label, label })));
+      else if (next.length) {
+        const seen = new Set<string>();
+        setSchools(
+          next
+            .map((r) => ({ id: r.schoolId || "", label: r.direction }))
+            .filter((s) => s.id && !seen.has(s.id) && (seen.add(s.id), true)),
+        );
+      }
       setErr(next.length ? "" : "Файл цен пуст — показаны курсы с сайта.");
       const form = await adminPriceFormulas({ data: { token: token(), action: "get" } });
       if (form.ok && "formulas" in form && form.formulas) {
@@ -101,7 +108,9 @@ export function AdminCoursePrices() {
   const grouped = useMemo(() => {
     const map = new Map<string, { id: string; label: string; list: PriceRow[] }>();
     for (const row of rows) {
-      const sch = schools.find((s) => s.label === row.direction) || { id: row.direction, label: row.direction };
+      const sch =
+        schools.find((s) => s.id && s.id === row.schoolId) ||
+        (row.schoolId ? { id: row.schoolId, label: row.direction || row.schoolId } : { id: "none", label: "Без школы сайта" });
       const cur = map.get(sch.id) || { id: sch.id, label: sch.label, list: [] };
       cur.list.push(row);
       cur.label = sch.label;
@@ -159,9 +168,8 @@ export function AdminCoursePrices() {
   }
 
   function renameSchoolById(id: string, label: string) {
-    const prev = schools.find((s) => s.id === id)?.label || id;
     setSchools((s) => s.map((x) => (x.id === id ? { ...x, label } : x)));
-    setRows((r) => r.map((row) => (row.direction === prev ? { ...row, direction: label } : row)));
+    setRows((r) => r.map((row) => (row.schoolId === id ? { ...row, direction: label } : row)));
   }
 
   async function removeCourse(row: PriceRow) {
@@ -182,11 +190,12 @@ export function AdminCoursePrices() {
     setErr(`Курс «${row.name}» удалён.`);
   }
 
-  async function removeSchool(label: string) {
-    const school = schools.find((s) => s.label === label);
-    if (!confirm(`Удалить школу «${label}» и все её курсы в прайсе и в группах?`)) return;
+  async function removeSchool(id: string) {
+    const school = schools.find((s) => s.id === id);
+    const label = school?.label || id;
+    if (!id || !confirm(`Удалить школу «${label}» и все её курсы в прайсе и в группах?`)) return;
     setBusy(true);
-    const res = await adminDeletePrice({ data: { token: token(), kind: "school", id: school?.id, label } });
+    const res = await adminDeletePrice({ data: { token: token(), kind: "school", id } });
     setBusy(false);
     if (!res.ok) {
       setErr(res.error || "Не удалось удалить школу.");
@@ -280,7 +289,8 @@ export function AdminCoursePrices() {
       setRows(res.rows);
       hydratePrices(res.rows);
     }
-    const created = ("schools" in res ? res.schools : []).find((s) => s.label === label);
+    const prevIds = new Set(schools.map((s) => s.id));
+    const created = ("schools" in res ? res.schools : []).find((s) => !prevIds.has(s.id));
     if (created) setNewCourseSchool(created.id);
     setNewSchool("");
     setErr(`Школа «${label}» появилась здесь и в разделе «Группы». Добавьте курс.`);
@@ -661,7 +671,7 @@ export function AdminCoursePrices() {
                   <button
                     type="button"
                     className="rounded-[8px] px-2 py-1 text-[0.72rem] font-semibold text-muted hover:bg-rose-50 hover:text-rose-700"
-                    onClick={() => void removeSchool(g.label)}
+                    onClick={() => void removeSchool(g.id)}
                   >
                     Удалить школу
                   </button>

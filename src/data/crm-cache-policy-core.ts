@@ -30,7 +30,7 @@ export const CACHE_KIND_META: { id: CacheKind; title: string; hint: string; live
     id: "pupilTariffs",
     title: "Абонементы учеников",
     hint: "У кого действующий абонемент сегодня. Для счётчика «с / без».",
-    liveHint: "Кэш даёт счётчик сразу. Обновление пакетами по 3 группы, как в мастере.",
+    liveHint: "Кэш даёт счётчик сразу. Пакеты по 8 групп, абонементы филиала одним индексом. Незаконченный круг продолжается, а не сначала.",
   },
   {
     id: "tariffCatalog",
@@ -60,3 +60,31 @@ export const DEFAULT_CACHE_RULES: Record<CacheKind, CacheRule> = {
   lessons: { cache: false, ttlMin: 5 },
   directory: { cache: true, ttlMin: 60 },
 };
+
+/** Круг абонементов: не начинать с нуля, если уже дошли до overlayNext. Готово — только полный круг и свежий TTL. */
+export function liveTariffsResume(opts: {
+  overlayNext: number;
+  overlayTotal: number;
+  overlayAt: string;
+  liveCount: number;
+  cache: boolean;
+  ttlMin: number;
+  force?: boolean;
+  now?: number;
+}) {
+  const finished = opts.overlayTotal > 0 && opts.overlayNext >= opts.overlayTotal;
+  const t = Date.parse(opts.overlayAt);
+  const fresh =
+    opts.cache &&
+    opts.liveCount > 0 &&
+    Number.isFinite(t) &&
+    t > 0 &&
+    (opts.now || Date.now()) - t < opts.ttlMin * 60_000;
+  const done = Boolean(!opts.force && fresh);
+  return {
+    done,
+    next: Math.max(0, Number(opts.overlayNext) || 0),
+    fromCache: true,
+    finished,
+  };
+}

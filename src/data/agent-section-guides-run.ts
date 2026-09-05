@@ -3,12 +3,14 @@ import { dirname, join } from "node:path";
 import { isAdminRequest } from "./admin-auth";
 import { logAdmin } from "./admin-settings";
 import { IDS_FOR_AGENT } from "./ids";
-import { FACTORY_GUIDES, factoryGuide, GUIDE_REV, type SectionGuide } from "./agent-section-guides-data";
+import { factoryGuide, loadGuides } from "./agent-section-guides-data";
 import { tariffMapForAgent } from "./public-bind";
 import { loadSiteSignup } from "./site-signup";
 import { subjectMapForAgent } from "./subject-admin";
 import { GROUP_STATUSES } from "./group-status";
 import { rolesPrompt } from "./agent-config";
+
+export { loadGuides };
 
 type Overlay = { id: string; on?: boolean; body?: string; updatedAt?: string };
 type Store = { items: Overlay[] };
@@ -30,22 +32,6 @@ function loadStore(): Store {
 function saveStore(store: Store) {
   mkdirSync(dirname(storeFile()), { recursive: true });
   writeFileSync(storeFile(), JSON.stringify(store, null, 2), "utf8");
-}
-
-export function loadGuides(): SectionGuide[] {
-  const store = loadStore();
-  return FACTORY_GUIDES.map((g) => {
-    const hit = store.items.find((x) => x.id === g.id);
-    if (!hit) return { ...g };
-    const body = String(hit.body || "");
-    const stale = !body.includes(`REV ${GUIDE_REV}`);
-    return {
-      ...g,
-      on: hit.on !== false,
-      body: stale ? g.body : body,
-      updatedAt: stale ? "" : hit.updatedAt || "",
-    };
-  });
 }
 
 export function guidePrompt(sectionId: string) {

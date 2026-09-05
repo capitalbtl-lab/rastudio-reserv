@@ -15,8 +15,7 @@
  *   AlfaCRM — числа: branchId, groupId, subjectId, tariffId, teacherId,
  *     customerId, lessonId, lessonTypeId.
  *   Сайт — строки: schoolId, courseId, priceId.
- *   CmsSession.courseId на публичном расписании = String(subjectId). Это
- *     ДРУГОЕ поле, не courseId дерева. В кабинете всегда CrmSlot.courseId.
+ *   CmsSession.courseId = courseId дерева. subjectId лежит в directionId.
  *
  * AlfaCRM:
  *   branchId     1 Гражданская · 2 ЦМИТ · 3 Луховицы · 4 лето
@@ -26,7 +25,7 @@
  *   teacherId    педагог CRM
  *   customerId   клиент CRM = dossier.crmId
  *   lessonId     конкретный урок
- *   lessonTypeId 2 групповое, 1 пробное, 3 индивидуальное, …
+ *   lessonTypeId 2 групповое, 3 пробное, 1 индивидуальное, …
  *
  * Сайт (storage/site-tree.json, prices.json):
  *   schoolId     школа в дереве, напр. /art-studio
@@ -50,12 +49,17 @@
  *                         + .subjectId + .courseId
  *
  * КАК РЕЗОЛВИТЬ courseId ГРУППЫ (порядок, без имён):
- *   1. schedule-map.courses[subjectId].courseId (Админка → Соответствия)
- *      непустое = этот курс; пустая запись = «нет курса», assign не держит чужой курс
- *   2. tree.assign[gid:{branchId}:{groupId}] — ручной перенос, если карты нет
- *   3. slot.courseId, если такой курс есть в дереве
- *   иначе — «Без курса». Оператор выбирает папку (treeMove) или карту.
+ *   1. tree.assign[gid:{branchId}:{groupId}] — ручной перенос в карточке
+ *   2. slot.courseId, если такой курс есть в дереве
+ *   3. schedule-map.courses[subjectId].courseId (Админка → Соответствия)
+ *      пустая запись карты не стирает assign
+ *   иначе — «Без курса». Не угадывать по тексту.
  *   Заводская таблица SUBJECT_TO_COURSE — только посев пустого schedule-map.json.
+ *
+ * ЧТЕНИЕ: диск сайта. Alfa не спрашивать, если есть customerId/groupId на диске.
+ * ЗАПИСЬ: диск сразу, Alfa очередью (customer.update, group.update,
+ *   regular-lesson.update, cgi.apply, customer-tariff.create).
+ * Живой абонемент: extras.live_tariff. Состав: groupLinks id+branchId.
  *
  * КАК РЕЗОЛВИТЬ subjectId ГРУППЫ:
  *   1. group.subject_id из CRM
@@ -149,6 +153,19 @@ function courseIdInTree(tree: SiteTree, id: string) {
   return hit?.id || "";
 }
 
+/** Канон courseId дерева. href сводим к id. Имя не смотрим. */
+export function canonCourseId(tree: SiteTree, raw: string) {
+  return courseIdInTree(tree, String(raw || "").trim());
+}
+
+/** Канон schoolId дерева. href сводим к id. */
+export function canonSchoolId(tree: SiteTree, raw: string) {
+  const id = String(raw || "").trim();
+  if (!id) return "";
+  const hit = tree.schools.find((s) => s.id === id || s.href === id);
+  return hit?.id || "";
+}
+
 /** courseId группы: сначала assign по gid, потом поле slot.courseId. Без угадывания по имени. */
 export function courseIdOfGroup(s: Pick<CrmSlot, "id" | "groupId" | "branchId" | "courseId">, tree: SiteTree) {
   const key = groupAssignKey(s);
@@ -191,7 +208,7 @@ export function resolveGroupCourseId(
 export function subjectIdsOfCourse(courseId: string, mapCourses?: IdMapCourse[]): number[] {
   if (!courseId || !mapCourses?.length) return [];
   return mapCourses
-    .filter((c) => c.courseId === courseId || c.siteHref === courseId)
+    .filter((c) => c.courseId === courseId)
     .map((c) => c.subjectId)
     .filter(Boolean);
 }
@@ -223,36 +240,28 @@ export function groupCardId(branchId: number, groupId: number) {
 
 export const IDS_FOR_AGENT = `КАРТА ID (обязательно). Не ищи сущности по названию. Точка восстановления: ${ARCH_REV}.
 
+ПРАВДА НА ДИСКЕ САЙТА: слоты, dossiers, site-tree, schedule-map, tariff-map, group-cards.
+AlfaCRM не источник ответа. Она догоняет очередью: customer.update · group.update · regular-lesson.update · cgi.apply · customer-tariff.create.
+Читать API CRM нельзя, если на диске уже есть customerId или groupId.
+Писать (админка): сначала диск, потом очередь. Не ждать ответ Alfa.
+
 филиал branchId: 1 Гражданская, 2 ЦМИТ, 3 Луховицы, 4 лето
-группа groupId = gid AlfaCRM. Ключ связи: gid:{branchId}:{groupId}
+группа groupId = gid. Ключ: gid:{branchId}:{groupId}
 предмет subjectId — Настройки→Предметы CRM
-курс сайта courseId — папка в дереве школ. Группа лежит в курсе только если group.courseId или assign[ключ] = courseId
-школа schoolId — course.schoolId
+курс сайта courseId — папка в дереве. Группа в курсе: assign, иначе slot.courseId, иначе карта subjectId→courseId
+школа schoolId — course.schoolId. Не склеивать по названию школы.
 абонемент tariffId
-  к курсу сайта: tariff-map.json tariffId → schoolId + courseId (вкладка Соответствия → Абонементы или колонка «Курс сайта»). Только сайт, в CRM не уходит.
+  к курсу сайта: tariff-map.json tariffId → schoolId + courseId (вкладка Соответствия → Абонементы). Несколько курсов у одного tariffId. В CRM не уходит.
   к группе: 1) slot.tariffId  2) courseId группы = courseId карты  3) subjectId ∈ tariff.subjectIds и branchId ∈ tariff.branchIds и минуты ±5
   имя абонемента не ключ
-клиент customerId = dossier.crmId; группы клиента — groupLinks[].id (это groupId) + branchId + subjectId + courseId
-карточка клиента clientCardId = card:customer:{customerId} — открывать только по customerId
-карточка группы groupCardId = card:group:{branchId}:{groupId} — открывать только по groupId+branchId
-не путать customerId и groupId (разные сущности, даже при равных числах)
-клиенты: две оси status=учится|лид и view=дети|группы; архив тихий; автолиды каждые 5 мин только новые customerId
-кабинет cabinetId = cabinet:admin
-цена курса price.courseId = path курса. Колонка «Все» вкладки Цены курсов — сайт, расписание, абонементы. КБМ/ТМХ — формула от «Все».
-соответствие subjectId → courseId в карте (вкладка Предметы, колонка «Курс сайта», файл schedule-map.json, не CRM). Справа на вкладке Предметы — группы/ученики по филиалам, не абонементы.
-соответствие tariffId → schoolId + courseId (вкладка Соответствия → Абонементы, файл tariff-map.json, не CRM)
-
-Создать группу: courseId + branchId + teacherId. Предмет: subjectId этого курса (карта или таблица).
-Перенести группу: не переименовывать, сменить courseId / treeMove.
-Привязать предмет к курсу: карта subjectId→courseId, не по названию.
-Привязать абонемент к курсу сайта: карта tariffId→courseId, не по названию, не в CRM.
-Клиента открывать по customerId, группу — по groupId.
-Карточка клиента: clientCardId = card:customer:{customerId}. Одна форма везде (список, группа, ассистент). На десктопе — широкая правая панель (список ≤22rem), не popup.
-Карточка группы: groupCardId = card:group:{branchId}:{groupId}. Из карточки клиента открывать группу по groupId, из группы — клиента по customerId.
-Кабинет администратора: cabinetId = cabinet:admin. Вкладка клиентов data-pane=clients data-layout=list-card.
-is_study: 0 лид · 1 клиент · 2 архив. studyStatusId — состояние обучения (1 Обучается …).
-Занятие: customerLesson { lessonType, date, time, duration, groupId, subjectId, roomId, teacherId, topic, note } — popup data-op=lesson-dialog. Абонемент: кнопка data-op=add-tariff, customerTariff { tariffId, date } — popup data-op=tariff-dialog. Деньги: customerPay { payKind, sum }. Сохранить: customerSave, кнопка в шапке. Контакты — две колонки равной ширины: ребёнок|заказчик, телефон|заметка, почта. На десктопе карточка всегда открыта (первая в списке), без «Скрыть».
-Календарь клиента: плитки LessonStrip как у группы (data-lesson-date, data-lesson-status). Сортировка клиентов: status учится|лид, затем branchId, затем ageBand. Архив и лиды из CRM — только по кнопке. «Загрузить лиды» ещё удаляет с сайта архивные лиды (is_study=2 и старые лиды не из активных).
-Нет ID — спросить уточнение, не подбирать «похожий» курс.
-
-CmsSession.courseId на сайте = subjectId (legacy). В кабинете courseId = id папки дерева.`;
+  живой у ученика: extras.live_tariff=1 (диск). Не пакеты CGI.
+клиент customerId = dossier.crmId; группы — groupLinks[].id (=groupId) + branchId + subjectId + courseId, active≠false
+карточка клиента clientCardId = card:customer:{customerId}
+карточка группы groupCardId = card:group:{branchId}:{groupId} — с диска/слота, fresh только «обновить»
+соответствие subjectId → courseId (schedule-map.json, вкладка Соответствия). href сводится к id дерева. Непривязанные не копировать в каждую школу.
+соответствие tariffId → courseId (tariff-map.json). Плюс — ещё один курс того же абонемента.
+приоритет/статус группы: groupFlags диск + очередь group.update. Пустой приоритет = 0.
+мастер абонементов: состав и счётчики с диска; назначение в очередь (до 400); CRM только если live_tariff не размечен.
+list_groups консультанта = слоты сайта, не API. Первой группу с priority=1. gid вслух не читай.
+CmsSession.courseId на сайте = courseId дерева. subjectId лежит в directionId. Число из CRM не курс сайта.
+Нет ID — спросить уточнение, не подбирать «похожий».`;

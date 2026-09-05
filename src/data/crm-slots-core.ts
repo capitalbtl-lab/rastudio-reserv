@@ -29,7 +29,7 @@ export type CrmSlot = {
   takenStudy?: number;
   /** Лиды в группе (is_study=0). */
   takenLead?: number;
-  /** custom_prioritet: 1 первая запись, 0 не выкладывать на сайт. Пусто = 1. */
+  /** custom_prioritet: 1 первая запись, 0 не выкладывать на сайт. Пусто = 0. */
   priority?: number;
   subjectId: number;
   subject: string;

@@ -132,7 +132,7 @@ export const DEFAULT_SCRIPTS: ScriptSection[] = [
     title: "Пробное занятие",
     body: `Два вида пробного.
 1) В слот группы. Вызови list_groups. Назови день, время, педагога, филиал, свободные места, ближайшую дату. gid вслух не читай.
-   Когда есть ФИО родителя, ФИО ребёнка, телефон — сразу submit_trial: branch_id = branchId группы, gid, date=nextDate ДД.ММ.ГГГГ, time=timeFrom, course_id если есть, kind=trial.
+   Когда есть ФИО родителя, ФИО ребёнка, телефон — сразу submit_trial: branch_id = branchId группы, gid, date=nextDate ДД.ММ.ГГГГ, time=timeFrom, course_id=courseId дерева, subject_id слота, kind=trial.
 2) Свободный день: submit_trial без gid, без времени, в заявке «дату согласуем по телефону».
 Филиал заявки = филиал группы (1 Гражданская, 2 ЦМИТ, 3 Луховицы). Почту не спрашивай. После успеха: заявку приняли, пробное на дату и время, педагог. Не «перезвоним», URL не читай. Форму AlfaCRM не открывай.`,
     updatedAt: "",
@@ -142,7 +142,7 @@ export const DEFAULT_SCRIPTS: ScriptSection[] = [
     step: "group",
     title: "Запись в действующую группу",
     body: `Сразу в группу — если просят абонемент / «сразу ходить», не пробное.
-Вызови list_groups, родитель выбрал слот. Нужны ФИО родителя, ребёнка, телефон. Сразу book_lesson lesson_type=group: gid обязателен, branch_id=branchId группы, date=nextDate, time=timeFrom.
+Вызови list_groups, родитель выбрал слот. Нужны ФИО родителя, ребёнка, телефон. Сразу book_lesson lesson_type=group: gid обязателен, branch_id=branchId группы, date=nextDate, time=timeFrom, course_id=courseId дерева, subject_id слота.
 Не вызывай open_group и не давай ссылку /lead/create. Записываешь сам. Мест нет — другой слот, не записывать молча.`,
     updatedAt: "",
   },

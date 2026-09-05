@@ -328,6 +328,105 @@ export function mergeBranchLeadCards<T extends { id: number; branchId: number }>
   return [...rest, ...incoming];
 }
 
+export type LeadCard = {
+  id: number;
+  customerId: number;
+  branchId: number;
+  branches?: number[];
+  name: string;
+  age: string;
+  phone: string;
+  email: string;
+  note: string;
+  assigned: string;
+  statusId: number;
+  sort?: number;
+  at: string;
+  chats: number;
+};
+
+export function leadYears(age: string, extra = "") {
+  const fromAge = parseInt(String(age || ""), 10);
+  if (Number.isFinite(fromAge) && fromAge > 0 && fromAge < 90) return fromAge;
+  const blob = `${age} ${extra}`;
+  const m =
+    blob.match(/(\d{1,2})\s*(?:лет|года|год|г\.)\b/i) ||
+    blob.match(/(?:ребён\w*|ребен\w*|возраст|ему|ей)[^\d]{0,16}(\d{1,2})/i);
+  const n = m ? Number(m[1]) : 0;
+  return n > 0 && n < 90 ? n : 0;
+}
+
+export function leadAgeBand(age: string, extra = "") {
+  const years = leadYears(age, extra);
+  if (!years) return "";
+  if (years <= 4) return "3-4";
+  if (years <= 6) return "5-6";
+  if (years <= 9) return "7-9";
+  if (years <= 12) return "10-12";
+  if (years <= 17) return "13-17";
+  return "18+";
+}
+
+/** Клиентский фильтр доски. API «Текущие» уже отсёк removed и архив. */
+export function filterLeadCards(
+  items: LeadCard[],
+  opts: { branch?: number; age?: string; q?: string; gone?: Set<string> } = {},
+) {
+  const branch = Number(opts.branch || 0);
+  const age = String(opts.age || "");
+  const qq = String(opts.q || "")
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, "е");
+  const gone = opts.gone;
+  return items.filter((it) => {
+    if (!it.id) return false;
+    if (gone?.has(`${it.branchId}:${it.id}`)) return false;
+    if (branch && it.branchId !== branch && !(it.branches || []).includes(branch)) return false;
+    if (age) {
+      const band = leadAgeBand(it.age, `${it.name} ${it.note}`);
+      if (band && band !== age) return false;
+    }
+    if (!qq) return true;
+    const hay = `${it.name} ${it.phone} ${it.email} ${it.note} ${it.assigned} ${it.id} ${it.customerId}`
+      .toLowerCase()
+      .replace(/ё/g, "е");
+    return hay.includes(qq);
+  });
+}
+
+export function reorderLeads(list: LeadCard[], lead: LeadCard, statusId: number, beforeId?: number): LeadCard[] {
+  const keyOf = (x: LeadCard) => `${x.branchId}:${x.id}`;
+  const moving = keyOf(lead);
+  const rest = list.filter((x) => keyOf(x) !== moving);
+  const item: LeadCard = { ...(list.find((x) => keyOf(x) === moving) || lead), statusId };
+  const byCol = new Map<number, LeadCard[]>();
+  for (const x of rest) {
+    const arr = byCol.get(x.statusId) || [];
+    arr.push(x);
+    byCol.set(x.statusId, arr);
+  }
+  const col = byCol.get(statusId) || [];
+  let at = col.length;
+  if (beforeId) {
+    const bi = col.findIndex((x) => x.id === beforeId);
+    if (bi >= 0) at = bi;
+  }
+  col.splice(at, 0, item);
+  const ranked = col.map((x, i) => ({ ...x, sort: i * 10 }));
+  byCol.set(statusId, ranked);
+  const out: LeadCard[] = [];
+  const seen = new Set<number>();
+  for (const x of list) {
+    const sid = keyOf(x) === moving ? statusId : x.statusId;
+    if (seen.has(sid)) continue;
+    seen.add(sid);
+    out.push(...(byCol.get(sid) || []));
+  }
+  for (const [sid, arr] of byCol) if (!seen.has(sid)) out.push(...arr);
+  return out;
+}
+
 export function crmUpdatedAtFrom(at: number, overlapMs = 5 * 60 * 1000) {
   const d = new Date(Math.max(0, at - overlapMs));
   const p = (n: number) => String(n).padStart(2, "0");

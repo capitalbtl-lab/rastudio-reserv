@@ -4,13 +4,12 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { SCHOOLS, SCHOOL_COURSE_MATCH } from "@/data/site";
-import { listPriceRows, SCHOOL_DIRECTION } from "@/data/prices-core";
+import { SCHOOLS } from "@/data/site";
 import { SEED_SUBJECTS, loadSubjects } from "@/data/crm-subjects";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { slotMismatch } from "@/data/slot-mismatch";
 import { loadSiteTree, saveSiteTree } from "./site-tree";
-import { SUBJECT_TO_COURSE, resolveGroupCourseId, groupAssignKey } from "./ids";
+import { SUBJECT_TO_COURSE, resolveGroupCourseId, groupAssignKey, canonCourseId, canonSchoolId } from "./ids";
 import { UNMAPPED_SCHOOL } from "./group-status";
 
 export type SchoolLink = { schedule: string; siteHref: string; schoolId?: string };
@@ -61,12 +60,10 @@ export function siteCourses() {
 
 export function schoolByPath(path: string) {
   const p = path || "";
-  const hit = SCHOOLS.find((s) => s.href === p);
-  if (hit) return hit.label;
-  for (const s of SCHOOLS) {
-    if (SCHOOL_COURSE_MATCH[s.href]?.(p)) return s.label;
-  }
-  return SCHOOL_DIRECTION[p] || "";
+  const tree = loadSiteTree();
+  const course = tree.courses.find((c) => c.id === p || c.href === p);
+  if (course) return tree.schools.find((s) => s.id === course.schoolId)?.label || "";
+  return tree.schools.find((s) => s.id === p || s.href === p)?.label || "";
 }
 
 function defaultSchools(): SchoolLink[] {
@@ -79,24 +76,20 @@ function defaultSchools(): SchoolLink[] {
 
 function seedCourses(): CourseLink[] {
   const tree = loadSiteTree();
-  const prices = listPriceRows();
   const out: CourseLink[] = [];
   const subjects = loadSubjects();
   const list = subjects.length ? subjects : SEED_SUBJECTS;
   for (const sub of list) {
     const path = SUBJECT_TO_COURSE[sub.id] || "";
     const course = path ? tree.courses.find((c) => c.id === path || c.href === path) : undefined;
-    const price = prices.find((r) => (r.courseId || r.path) === (course?.id || path) || r.path === path);
-    const href = course?.href || path || price?.path || "";
     const schoolNode = course ? tree.schools.find((s) => s.id === course.schoolId) : undefined;
-    const school = schoolNode?.label || price?.direction || schoolByPath(href) || "";
     out.push({
       subjectId: sub.id,
       subjectName: sub.name,
-      courseId: course?.id || path,
-      schoolId: course?.schoolId || schoolNode?.id || "",
-      siteHref: href,
-      school,
+      courseId: course?.id || "",
+      schoolId: course?.schoolId || "",
+      siteHref: course?.href || "",
+      school: schoolNode?.label || "",
     });
   }
   return out;
@@ -116,13 +109,18 @@ function emptyCourses(): CourseLink[] {
 }
 
 function packLink(c: Partial<CourseLink>, name = ""): CourseLink {
+  const tree = loadSiteTree();
+  const cid = canonCourseId(tree, String(c.courseId || "").trim()) || canonCourseId(tree, String(c.siteHref || "").trim());
+  const course = cid ? tree.courses.find((x) => x.id === cid) : undefined;
+  const schoolId = course?.schoolId || canonSchoolId(tree, String(c.schoolId || ""));
+  const school = schoolId ? tree.schools.find((s) => s.id === schoolId) : undefined;
   return {
     subjectId: Number(c.subjectId) || 0,
     subjectName: c.subjectName || name,
-    courseId: String(c.courseId || c.siteHref || "").trim(),
-    schoolId: String(c.schoolId || ""),
-    siteHref: String(c.siteHref || c.courseId || ""),
-    school: String(c.school || ""),
+    courseId: cid,
+    schoolId: schoolId || "",
+    siteHref: course?.href || "",
+    school: school?.label || "",
   };
 }
 
@@ -158,14 +156,7 @@ export function saveScheduleMap(data: MapFile) {
   mkdirSync(dirname(fileOf()), { recursive: true });
   const next: MapFile = {
     schools: data.schools?.length ? data.schools : defaultSchools(),
-    courses: (data.courses?.length ? data.courses : emptyCourses()).map((c) => ({
-      subjectId: c.subjectId,
-      subjectName: c.subjectName,
-      courseId: c.courseId || c.siteHref || "",
-      schoolId: c.schoolId || "",
-      siteHref: c.siteHref || c.courseId || "",
-      school: c.school || "",
-    })),
+    courses: (data.courses?.length ? data.courses : emptyCourses()).map((c) => packLink(c, c.subjectName)),
   };
   writeFileSync(fileOf(), JSON.stringify(next, null, 2));
   return next;

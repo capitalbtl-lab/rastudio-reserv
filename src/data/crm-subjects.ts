@@ -89,7 +89,7 @@ export function saveSubjects(items: CrmSubject[]) {
   let nextLocal = 9000;
   for (const s of items) {
     const id = Number(s.id) || nextLocal++;
-    uniq.set(id, { id, name: String(s.name || "").trim(), local: Boolean(s.local) && !s.id });
+    uniq.set(id, { id, name: String(s.name || "").trim(), ...(id >= 9000 || s.local ? { local: true } : {}) });
   }
   const list = [...uniq.values()].filter((s) => s.name).sort((a, b) => a.name.localeCompare(b.name, "ru"));
   writeFileSync(filePath(), JSON.stringify({ at: new Date().toISOString(), items: list }, null, 2));
@@ -303,6 +303,56 @@ function subjectTitle(name: string) {
     .slice(0, 120);
 }
 
+export function nextLocalSubjectId(list = loadSubjects()) {
+  let n = 9000;
+  for (const s of list) {
+    const id = Number(s.id) || 0;
+    if (id >= n) n = id + 1;
+  }
+  return n;
+}
+
+/** Предмет на диск сразу. Alfa — очередь subject.create. Не ищем CRM по похожему имени. */
+export function createLocalSubject(name: string) {
+  const cleaned = subjectTitle(name);
+  if (!cleaned) throw new Error("Нет названия предмета.");
+  const list = loadSubjects();
+  const localHit = list.find((s) => (s.local || s.id >= 9000) && foldSubject(s.name) === foldSubject(cleaned));
+  if (localHit) return localHit;
+  const next = { id: nextLocalSubjectId(list), name: cleaned, local: true as const };
+  saveSubjects([...list, next]);
+  return loadSubjects().find((s) => s.id === next.id) || next;
+}
+
+export async function applyCreatedSubject(localId: number, crmId: number, name?: string) {
+  const from = Number(localId) || 0;
+  const to = Number(crmId) || 0;
+  if (!from || !to || from === to) return loadSubjects();
+  const mapped = loadSubjects().map((s) =>
+    s.id === from ? { id: to, name: String(name || s.name).trim() } : s.id === to ? { id: to, name: String(name || s.name).trim() } : s,
+  );
+  const uniq = new Map<number, CrmSubject>();
+  for (const s of mapped) uniq.set(s.id, { id: s.id, name: s.name });
+  saveSubjects([...uniq.values()]);
+  try {
+    const { loadScheduleMap, saveScheduleMap } = await import("./schedule-map");
+    const map = loadScheduleMap();
+    saveScheduleMap({
+      ...map,
+      courses: map.courses.map((c) => (c.subjectId === from ? { ...c, subjectId: to } : c)),
+    });
+  } catch {
+    /* карта */
+  }
+  try {
+    const { listAdminSlots, saveAdminSlots } = await import("./alfacrm-schedule");
+    saveAdminSlots(listAdminSlots().map((s) => (s.subjectId === from ? { ...s, subjectId: to } : s)));
+  } catch {
+    /* слоты */
+  }
+  return loadSubjects();
+}
+
 async function listLive(branch: number) {
   const { token, request } = await import("./alfacrm");
   const t = await token();
@@ -312,10 +362,9 @@ async function listLive(branch: number) {
     .filter((s) => s.id && s.name);
 }
 
-function pickCreated(name: string, before: Set<number>, after: { id: number; name: string }[]) {
-  const fold = foldSubject(name);
+function pickCreated(_name: string, before: Set<number>, after: { id: number; name: string }[]) {
   const born = after.filter((s) => !before.has(s.id)).sort((a, b) => b.id - a.id);
-  return born.find((s) => foldSubject(s.name) === fold) || after.find((s) => foldSubject(s.name) === fold) || born[0];
+  return born[0];
 }
 
 async function crmWebLogin() {
@@ -476,17 +525,17 @@ export async function ensureCrmSubject(name: string, hintId = 0, branch = 2, mod
   const list = loadSubjects();
   const cleaned = subjectTitle(name);
   if (!cleaned) throw new Error("Нет названия предмета, чтобы создать его в AlfaCRM.");
-  const fold = foldSubject(cleaned);
   const br = Number(branch) || 1;
   const live = await listLive(br);
   if (live.length) saveSubjects([...list.filter((s) => !live.some((x) => x.id === s.id)), ...live]);
-  const liveHit = live.find((s) => foldSubject(s.name) === fold) || (hintId ? live.find((s) => s.id === hintId) : undefined);
+  const hint = Number(hintId) || 0;
+  const liveHit = hint ? live.find((s) => s.id === hint) : undefined;
   if (liveHit) {
     void activateCrmSubject(liveHit.id, [br, 1, 2, 3, 4]).catch(() => undefined);
     return liveHit;
   }
   if (mode === "auto") {
-    throw new Error(`В филиале нет предмета «${cleaned}». Создайте его в карточке группы.`);
+    throw new Error(hint ? `В филиале нет предмета id ${hint}.` : `Нет subjectId. Выберите предмет курса, не создавайте по имени.`);
   }
   const made = await createSubjectHtml(cleaned, br);
   const next = { id: made.id, name: made.name };

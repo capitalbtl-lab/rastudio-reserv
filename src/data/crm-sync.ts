@@ -1,10 +1,12 @@
 import { logAdmin } from "./admin-settings";
 import { refreshCrmSchedule, listAdminSlots } from "./alfacrm-schedule";
-import { loadSubjects, pullSubjectsFromCrm, foldSubject } from "./crm-subjects";
+import { loadSubjects, pullSubjectsFromCrm } from "./crm-subjects";
 import { loadTariffs, pullTariffsFromCrm } from "./crm-tariffs";
 import { syncAllFromCrm } from "./dossiers";
 import { listPriceRows, savePriceRows, ensureLivePrices } from "./prices";
 import { loadFormulas, applyCorpToRow } from "./price-formulas";
+import { loadScheduleMap } from "./schedule-map";
+import { subjectIdsOfCourse } from "./ids";
 
 export type SyncKind = "subjects" | "groups" | "tariffs" | "clients" | "prices" | "all";
 
@@ -157,19 +159,16 @@ async function one(kind: SyncKind) {
 
 export function applyPricesFromTariffs() {
   ensureLivePrices();
-  const subjects = loadSubjects();
+  const map = loadScheduleMap();
   const tariffs = loadTariffs().items.filter((t) => !t.archive && t.price > 0);
   const formulas = loadFormulas();
   let updated = 0;
   const rows = listPriceRows().map((row) => {
-    const key = foldSubject(row.name);
-    const sub = subjects.find((s) => {
-      const n = foldSubject(s.name);
-      return n === key || n.includes(key) || key.includes(n);
-    });
-    const pool = sub
-      ? tariffs.filter((t) => t.subjectIds.includes(sub.id))
-      : tariffs.filter((t) => foldSubject(t.name).includes(key));
+    const sids = new Set<number>();
+    if (Number(row.subjectId)) sids.add(Number(row.subjectId));
+    for (const id of subjectIdsOfCourse(String(row.courseId || row.path || ""), map.courses)) sids.add(id);
+    if (!sids.size) return row;
+    const pool = tariffs.filter((t) => t.subjectIds.some((id) => sids.has(id)));
     if (!pool.length) return row;
     const best = [...pool].sort((a, b) => {
       const pa = Math.abs((a.lessonsCount || 4) - 4);

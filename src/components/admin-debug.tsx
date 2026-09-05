@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { adminDebugMode, DEBUG_TOOLS } from "@/data/debug-mode";
+import { adminDebugMode } from "@/data/debug-fn";
+import { DEBUG_TOOLS } from "@/data/debug-client";
 import { WINDOW_FLAGS } from "@/data/agent-config";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/info-tip";

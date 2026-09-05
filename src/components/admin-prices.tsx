@@ -1,19 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import {
   adminLogin,
   adminCalls,
   adminMeta,
 } from "@/data/admin";
 import { Button } from "@/components/ui/button";
-import { AdminCalls } from "@/components/admin-calls";
-import { AdminAgent } from "@/components/admin-agent";
-import { AdminDossiers } from "@/components/admin-dossiers";
-import { AdminSchedule } from "@/components/admin-schedule";
-import { AdminIntegrations } from "@/components/admin-integrations";
 import { adminGhostBtn, AdminSelfTest } from "@/components/admin-self-test";
 import { cn } from "@/lib/utils";
+
+const AdminCalls = lazy(() => import("@/components/admin-calls").then((m) => ({ default: m.AdminCalls })));
+const AdminAgent = lazy(() => import("@/components/admin-agent").then((m) => ({ default: m.AdminAgent })));
+const AdminDossiers = lazy(() => import("@/components/admin-dossiers").then((m) => ({ default: m.AdminDossiers })));
+const AdminSchedule = lazy(() => import("@/components/admin-schedule").then((m) => ({ default: m.AdminSchedule })));
+const AdminIntegrations = lazy(() => import("@/components/admin-integrations").then((m) => ({ default: m.AdminIntegrations })));
 
 const KEY = "ra_admin";
 type Tab = "schedule" | "agent" | "calls" | "dossiers" | "apis";
@@ -282,11 +283,31 @@ export function AdminPrices() {
 
       {err ? <p className="mt-4 text-sm text-primary">{err}</p> : null}
 
-      {tab === "schedule" ? <AdminSchedule /> : null}
-      {tab === "calls" ? <AdminCalls /> : null}
-      {tab === "dossiers" ? <AdminDossiers /> : null}
-      {tab === "agent" ? <AdminAgent /> : null}
-      {tab === "apis" ? <AdminIntegrations /> : null}
+      {tab === "schedule" ? (
+        <Suspense fallback={<p className="mt-8 text-sm text-muted">Открываю кабинет…</p>}>
+          <AdminSchedule />
+        </Suspense>
+      ) : null}
+      {tab === "calls" ? (
+        <Suspense fallback={<p className="mt-8 text-sm text-muted">Открываю кабинет…</p>}>
+          <AdminCalls />
+        </Suspense>
+      ) : null}
+      {tab === "dossiers" ? (
+        <Suspense fallback={<p className="mt-8 text-sm text-muted">Открываю кабинет…</p>}>
+          <AdminDossiers />
+        </Suspense>
+      ) : null}
+      {tab === "agent" ? (
+        <Suspense fallback={<p className="mt-8 text-sm text-muted">Открываю кабинет…</p>}>
+          <AdminAgent />
+        </Suspense>
+      ) : null}
+      {tab === "apis" ? (
+        <Suspense fallback={<p className="mt-8 text-sm text-muted">Открываю кабинет…</p>}>
+          <AdminIntegrations />
+        </Suspense>
+      ) : null}
     </article>
   );
 }

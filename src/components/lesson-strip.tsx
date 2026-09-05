@@ -385,7 +385,7 @@ function LessonEdit({
     });
     setSaving(false);
     if (!res.ok) {
-      setError(("error" in res && res.error) || "AlfaCRM не приняла занятие.");
+      setError(("error" in res && res.error) || "Не удалось сохранить занятие.");
       return;
     }
     const room = rooms.find((r) => r.id === form.roomId)?.name || "";
@@ -408,6 +408,7 @@ function LessonEdit({
       topic: form.topic,
       note: form.note,
       customerIds: form.customerIds,
+      lessonId: Number((res as { lessonId?: number }).lessonId || form.id || 0) || form.id,
     });
     onClose();
   }
@@ -421,7 +422,7 @@ function LessonEdit({
             Закрыть
           </button>
         </div>
-        {loading ? <p className="mt-2 text-[0.75rem] text-muted">Сверяю с AlfaCRM…</p> : null}
+        {loading ? <p className="mt-2 text-[0.75rem] text-muted">Открываю занятие…</p> : null}
         <div className="mt-4 grid gap-3">
             <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
               Дата
@@ -741,7 +742,8 @@ export function LessonStrip({
             seed={edit}
             onClose={() => setEdit(null)}
             onSaved={(patch) => {
-              if (edit.lessonId) patchLesson(edit.lessonId, patch);
+              const id = Number(patch.lessonId || edit.lessonId || 0);
+              if (id) patchLesson(id, patch);
               setEdit(null);
               setPin(null);
             }}

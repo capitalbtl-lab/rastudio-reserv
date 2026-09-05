@@ -1,3 +1,5 @@
+import { listPriceRows, schoolIdOfCourse } from "./prices-core.ts";
+
 export const SITE = {
   name: "Студия «Развивайся»",
   shortName: "РАЗВИВАЙСЯ",
@@ -130,6 +132,7 @@ export const SCHOOLS = [
   },
 ] as const;
 
+/** Посев пустого прайса по префиксу URL. В рантайме курсы школы — только schoolId. */
 export const SCHOOL_COURSE_MATCH: Record<string, (href: string) => boolean> = {
   "/art-studio": (href) => /art-studio-|sculptural|hudvuz|digitalart/i.test(href),
   "/robototehnika-v-kolomne": (href) => /robototehnika-\d|roboticsinenglish/i.test(href),
@@ -142,49 +145,33 @@ export const SCHOOL_COURSE_MATCH: Record<string, (href: string) => boolean> = {
 };
 
 export function coursesForSchool<T extends { href: string }>(schoolPath: string, courses: T[]) {
-  const test = SCHOOL_COURSE_MATCH[schoolPath];
-  if (!test) return [];
-  return courses.filter((course) => course.href !== schoolPath && test(course.href));
+  const sid = String(schoolPath || "");
+  if (!sid) return [];
+  const ids = new Set(
+    listPriceRows()
+      .filter((r) => r.schoolId === sid)
+      .map((r) => r.courseId || r.path)
+      .filter(Boolean),
+  );
+  if (!ids.size) return [];
+  return courses.filter((course) => ids.has(course.href));
 }
 
 export const COURSE_GROUPS = [
-  { id: "all", label: "Все курсы", test: (_href: string) => true },
-  {
-    id: "art",
-    label: "Художество",
-    test: (href: string) => /art-studio|sculptural|hudvuz|digitalart/i.test(href),
-  },
-  {
-    id: "robot",
-    label: "Роботы и инженерия",
-    test: (href: string) => /robot|gamedesign|3d-modeling|oge-in/i.test(href),
-  },
-  {
-    id: "prog",
-    label: "Программирование",
-    test: (href: string) => /kursy-shkoly-programmirovaniya|programming-school/i.test(href),
-  },
-  {
-    id: "science",
-    label: "Науки",
-    test: (href: string) => /radio|science|tesla|mental/i.test(href),
-  },
-  {
-    id: "early",
-    label: "Дошколята",
-    test: (href: string) => /preparation-for-school|happybricks/i.test(href),
-  },
-  {
-    id: "model",
-    label: "Мода",
-    test: (href: string) => /model-school/i.test(href),
-  },
-  {
-    id: "lang",
-    label: "Языки",
-    test: (href: string) => /english|japanese|korean|vitamin/i.test(href),
-  },
+  { id: "all", label: "Все курсы", schoolIds: [] as string[] },
+  { id: "art", label: "Художество", schoolIds: ["/art-studio"] },
+  { id: "robot", label: "Роботы и инженерия", schoolIds: ["/robototehnika-v-kolomne"] },
+  { id: "prog", label: "Программирование", schoolIds: ["/programming-school"] },
+  { id: "science", label: "Науки", schoolIds: ["/promising-professions"] },
+  { id: "early", label: "Дошколята", schoolIds: ["/early-childhood-care"] },
+  { id: "model", label: "Мода", schoolIds: ["/model-school"] },
+  { id: "lang", label: "Языки", schoolIds: ["/languageschool"] },
 ] as const;
+
+export function courseInGroup(href: string, schoolIds: readonly string[]) {
+  if (!schoolIds.length) return true;
+  return schoolIds.includes(schoolIdOfCourse(href));
+}
 
 export const NAV = [
   { href: "/allcourses", label: "Курсы" },

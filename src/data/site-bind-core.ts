@@ -1,5 +1,5 @@
 /** Клиент и сервер: школы/курсы сайта по ID, без AlfaCRM и без заводской таблицы предметов. */
-import { SCHOOLS, SCHOOL_COURSE_MATCH } from "./site";
+import { SCHOOLS } from "./site";
 import { listPriceRows, tidyCourseName } from "./prices-core";
 
 export type SiteSchoolOpt = { id: string; label: string; href: string };
@@ -12,12 +12,10 @@ export function siteSchoolOptions(): SiteSchoolOpt[] {
 export function schoolIdOfPath(path: string) {
   const p = String(path || "");
   if (!p) return "";
-  if (SCHOOLS.some((s) => s.href === p)) {
-    const nested = SCHOOLS.find((s) => s.href !== p && SCHOOL_COURSE_MATCH[s.href]?.(p));
-    if (nested) return nested.href;
-    return p;
-  }
-  return SCHOOLS.find((s) => SCHOOL_COURSE_MATCH[s.href]?.(p))?.href || "";
+  const row = listPriceRows().find((r) => r.courseId === p || r.path === p || r.id === p);
+  if (row?.schoolId) return row.schoolId;
+  if (SCHOOLS.some((s) => s.href === p)) return p;
+  return "";
 }
 
 export function siteCourseOptions(): SiteCourseOpt[] {
@@ -26,9 +24,8 @@ export function siteCourseOptions(): SiteCourseOpt[] {
   for (const r of listPriceRows()) {
     const id = String(r.courseId || r.path || "");
     if (!id || seen.has(id)) continue;
-    const schoolId = schoolIdOfPath(id) || SCHOOLS.find((s) => s.label === r.direction)?.href || "";
-    if (!schoolId) continue;
-    if (schoolId === id && !SCHOOL_COURSE_MATCH[id]) continue;
+    const schoolId = String(r.schoolId || schoolIdOfPath(id));
+    if (!schoolId || schoolId === id) continue;
     seen.add(id);
     const age = String(r.age || "").replace(/^Для детей\s*/i, "").trim();
     const name = tidyCourseName(r.name) || r.name;
@@ -59,6 +56,6 @@ export function trialCourseOptions() {
 
 export function courseIdOfPath(path: string) {
   const n = `/${String(path || "").replace(/^\/+/, "")}`.replace(/\/+$/, "") || "";
-  const hit = siteCourseOptions().find((c) => c.id === n || c.href === n || c.id === path || c.href === path);
+  const hit = siteCourseOptions().find((c) => c.id === n || c.id === path);
   return hit?.id || "";
 }

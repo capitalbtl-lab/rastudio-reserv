@@ -32,7 +32,7 @@ import { RaSelect } from "@/components/ra-select";
 import { GroupLessonStrip } from "@/components/lesson-strip";
 import { clientCardId, groupCardId, CRM_BRANCH, groupAssignKey } from "@/data/ids";
 import { displayPersonName } from "@/data/client-display";
-import { GROUP_STATUSES, GROUP_PRIORITY } from "@/data/group-status";
+import { GROUP_STATUSES, GROUP_PRIORITY, readPriority } from "@/data/group-status";
 import { bulkPreviewFromPrompt } from "@/data/schedule-bulk";
 
 type SiteTree = {
@@ -48,12 +48,6 @@ function branchTwoLine(s: { branchId?: number; city?: string; branch?: string })
   const short = (hit?.short || s.branch || "").trim();
   if (city && short && !short.includes(city)) return `${city}\n${short}`;
   return short || city || "—";
-}
-
-function wantedSubjectName(s: CrmSlot) {
-  return String(s.subject || "")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 function siteCourseValue(s: CrmSlot, tree: SiteTree) {
@@ -76,7 +70,7 @@ function courseSubjectList(
   if (!courseId) return [] as typeof list;
   const ids = new Set<number>();
   for (const s of list) {
-    if (s.courseId === courseId || s.href === courseId) ids.add(s.id);
+    if (s.courseId === courseId) ids.add(s.id);
   }
   for (const s of slots) {
     if (s.courseId === courseId && s.subjectId) ids.add(s.subjectId);
@@ -1056,7 +1050,7 @@ export function AdminSchedule() {
       slot: s,
       tariffId: s.tariffId || 0,
       tariffs: [],
-      priority: s.priority ?? 1,
+      priority: readPriority(s.priority),
     });
     setDetail(base());
     setMsg(`Карточка группы ${s.groupId || ""}`);
@@ -1131,7 +1125,7 @@ export function AdminSchedule() {
         archive,
         tariffId: Number((res as { tariffId?: number }).tariffId) || s.tariffId || 0,
         tariffs: "tariffs" in res && Array.isArray(res.tariffs) ? (res.tariffs as GroupDetail["tariffs"]) : [],
-        priority: Number(g?.priority ?? s.priority ?? 1),
+        priority: readPriority(g?.priority ?? s.priority),
       };
       setDetail(next);
       setSlots((list) =>
@@ -1155,10 +1149,6 @@ export function AdminSchedule() {
         const names = active.map((m) => m.name);
         whoRef.current = { ...whoRef.current, [key]: names };
         setWho((w) => ({ ...w, [key]: names }));
-      }
-      if (res.ok && "fromCache" in res && res.fromCache) {
-        const fresh = await adminSchedule({ data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId, fresh: true } as never });
-        if (still()) applyGroupRes(s.id, s, fresh);
       }
     } catch {
       if (still()) setMsg("Карточка открыта по данным сайта. AlfaCRM не ответила.");
@@ -1310,7 +1300,7 @@ export function AdminSchedule() {
     });
     setAddBusy(false);
     if (!res.ok) {
-      setAddErr(("error" in res && res.error) || "AlfaCRM не добавила ученика.");
+      setAddErr(("error" in res && res.error) || "Не удалось добавить ученика.");
       return;
     }
     resetAddPupil();
@@ -1344,7 +1334,7 @@ export function AdminSchedule() {
     });
     setAddBusy(false);
     if (!res.ok) {
-      setAddErr(("error" in res && res.error) || "AlfaCRM не создала ученика.");
+      setAddErr(("error" in res && res.error) || "Не удалось записать ученика.");
       return;
     }
     resetAddPupil();
@@ -1377,65 +1367,20 @@ export function AdminSchedule() {
     void openDetail(s);
   }
 
-  function applyGroupRes(id: string, s: CrmSlot, res: Awaited<ReturnType<typeof adminSchedule>>) {
-    if (!res.ok || !("group" in res) || !res.group) {
-      if (!res.ok) setMsg(res.error || "Не удалось открыть группу в AlfaCRM.");
-      return;
-    }
-    if ("subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as CrmSubject[]);
-    if ("levels" in res && Array.isArray((res as { levels?: { id: number; name: string }[] }).levels) && (res as { levels: { id: number; name: string }[] }).levels.length) {
-      setLevels((res as { levels: { id: number; name: string }[] }).levels);
-    }
-    const g = res.group as {
-      note: string;
-      description?: string;
-      remarks?: string;
-      hashtags: string;
-      makeup: string;
-      statusId: number;
-      signup: string;
-      subjectId: number;
-      bDate?: string;
-      eDate?: string;
-      levelId?: number;
-      calendar?: GroupCalLesson[];
-      priority?: number;
-    };
-    setDetail((d) =>
-      d && d.id === id
-        ? {
-            ...d,
-            description: g.description || g.note || "",
-            remarks: g.remarks || "",
-            hashtags: (g.hashtags || "").replace(/\s+/g, " ").trim(),
-            makeup: g.makeup,
-            statusId: g.statusId,
-            bDate: g.bDate || d.bDate,
-            eDate: g.eDate || d.eDate,
-            levelId: g.levelId || d.levelId,
-            signup: g.signup || d.signup,
-            subjectId: g.subjectId || d.subjectId,
-            calendar: g.calendar?.length ? g.calendar : d.calendar,
-            tariffId: Number((res as { tariffId?: number }).tariffId) || d.tariffId,
-            tariffs: "tariffs" in res && Array.isArray(res.tariffs) ? (res.tariffs as GroupDetail["tariffs"]) : d.tariffs,
-            priority: g.priority ?? d.priority,
-          }
-        : d,
-    );
-  }
-
   async function createSubjectForBranch() {
     if (!detail) return;
-    const name = wantedSubjectName(detail.slot);
-    if (!name) {
-      setDetail((d) => (d ? { ...d, error: "Нет названия курса — нечего создавать." } : d));
+    const courseId = siteCourseValue(detail.slot, siteTree);
+    const course = siteTree.courses.find((c) => c.id === courseId);
+    const name = course?.label || "";
+    if (!courseId || !name) {
+      setDetail((d) => (d ? { ...d, error: "Нет courseId — выберите курс сайта, не создавайте предмет по имени группы." } : d));
       return;
     }
     setCreatingSubject(true);
     setDetail((d) => (d ? { ...d, error: "" } : d));
     try {
       const res = await adminSchedule({
-        data: { token: token(), action: "subjectCreate", name, branchId: detail.branchId, courseId: detail.slot.courseId || "" } as never,
+        data: { token: token(), action: "subjectCreate", name, branchId: detail.branchId, courseId, subjectId: detail.subjectId } as never,
       });
       if (res.ok && "subjects" in res && Array.isArray(res.subjects)) setSubjects(res.subjects as CrmSubject[]);
       const created = res.ok && "created" in res ? (res as { created?: { id?: number; name?: string } }).created : undefined;
@@ -1516,15 +1461,17 @@ export function AdminSchedule() {
       setMsg(res.error || "AlfaCRM не приняла группу.");
       return;
     }
-    const gid = Number((res as { groupId?: number }).groupId || detail.groupId || 0);
-    const nextSlot = ((res as { slots?: CrmSlot[] }).slots || []).find((s) => s.id === detail.id);
+    const extra = res as { groupId?: number; slots?: CrmSlot[]; queued?: boolean; local?: boolean; error?: string };
+    const gid = Number(extra.groupId || detail.groupId || 0);
+    const nextSlot = (extra.slots || []).find((s) => s.id === detail.id);
     const period = defaultPeriod(nextSlot?.bDate || detail.bDate, nextSlot?.eDate || detail.eDate);
+    const warn = String(extra.error || "");
     setDetail((d) =>
       d
         ? {
             ...d,
             saving: false,
-            error: "",
+            error: warn,
             groupId: gid || d.groupId,
             slot: nextSlot || d.slot,
             subjectId: nextSlot?.subjectId || d.subjectId,
@@ -1535,7 +1482,17 @@ export function AdminSchedule() {
           }
         : d,
     );
-    setMsg(detail.groupId ? "Подробности группы сохранены в AlfaCRM." : `Группа создана в AlfaCRM · gid ${gid}.`);
+    setMsg(
+      warn
+        ? warn
+        : extra.local || extra.queued
+          ? detail.groupId
+            ? "На сайте, AlfaCRM в очереди."
+            : "На сайте, создание группы в очереди AlfaCRM."
+          : detail.groupId
+            ? "Подробности группы сохранены в AlfaCRM."
+            : `Группа создана в AlfaCRM · gid ${gid}.`,
+    );
   }
 
   async function saveDetailSite() {
@@ -1641,7 +1598,7 @@ export function AdminSchedule() {
           used.add(s.id);
         }
       }
-      const loose = filtered.filter((s) => s.school === school.label && !used.has(s.id));
+      const loose = filtered.filter((s) => s.schoolId === school.id && !used.has(s.id));
       if (loose.length) {
         loose.forEach((s) => used.add(s.id));
         courses.push({ course: "Без курса", courseId: `${school.id}#loose`, href: "", items: loose });
@@ -2492,13 +2449,13 @@ export function AdminSchedule() {
         const courseId = siteCourseValue(detail.slot, siteTree);
         const course = siteTree.courses.find((c) => c.id === courseId);
         const sub = subjects.find((s) => s.id === detail.subjectId);
-        const missingInCrm = Boolean(sub === undefined && wantedSubjectName(detail.slot));
+        const missingInCrm = Boolean(detail.subjectId && sub === undefined);
         return {
-          wanted: sub?.name || wantedSubjectName(detail.slot),
+          wanted: course?.label || sub?.name || "",
+          courseId,
           courseLabel: course?.label || "",
-          mismatch: Boolean(course && sub && course.label && sub.name && course.label !== sub.name),
           missingInCrm,
-          ok: !courseId || Boolean(sub),
+          ok: !missingInCrm,
         };
       })()
     : null;
@@ -3488,8 +3445,8 @@ export function AdminSchedule() {
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
                                   <select
-                                    value={s.priority ?? 1}
-                                    title={GROUP_PRIORITY.find((p) => p.id === (s.priority ?? 1))?.name || "Приоритет набора"}
+                                    value={readPriority(s.priority)}
+                                    title={GROUP_PRIORITY.find((p) => p.id === readPriority(s.priority))?.name || "Приоритет набора"}
                                     onChange={(e) => void patchFlags(s, "priority", Number(e.target.value))}
                                     className="h-8 w-full rounded-md bg-surface-2 px-0.5 text-center text-[0.8rem] font-semibold ring-1 ring-black/8"
                                   >
@@ -3951,7 +3908,7 @@ export function AdminSchedule() {
                           });
                         }
                         const mapped = typed.find((s) => s.id === detail.subjectId);
-                        const mappedCourse = mapped?.courseId || mapped?.href || "";
+                        const mappedCourse = mapped?.courseId || "";
                         const mismatch = Boolean(courseId && mappedCourse && mappedCourse !== courseId);
                         return (
                           <>
@@ -4035,7 +3992,7 @@ export function AdminSchedule() {
                       </div>
                     {detail.error ? <p className="text-sm text-red-600">{detail.error}</p> : null}
                     {!detail.groupId ? (
-                      <p className="text-sm text-muted">Группа пока только на сайте. «Сохранить в AlfaCRM» создаст её. Если предмет не выбран — заведём по названию курса.</p>
+                      <p className="text-sm text-muted">Группа пока только на сайте. «Сохранить на сайте» пишет слот. Экспорт в AlfaCRM ставит создание в очередь — нужен subjectId филиала. Без предмета не создаём, имя курса не подставляем.</p>
                     ) : null}
                     </div>
                   </div>

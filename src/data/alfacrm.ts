@@ -1,4 +1,5 @@
 import { serverEnv } from "./server-env";
+import { formatRuPhone } from "./ru-phone";
 import { crmIndexAccumTotal, crmIndexShouldStop, crmUnwrapIndex } from "./crm-leads-stages";
 
 const HOST = () => (serverEnv("ALFACRM_HOST") || "https://studiyarazvivaysya.s20.online").replace(/\/$/, "");
@@ -155,15 +156,7 @@ export async function pace() {
   await throttle();
 }
 
-export function formatRuPhone(raw: string) {
-  let d = raw.replace(/\D/g, "");
-  if (d.length === 10 && d.startsWith("9")) d = `7${d}`;
-  if (d.length === 11 && d.startsWith("8")) d = `7${d.slice(1)}`;
-  if (d.length === 11 && d.startsWith("7")) {
-    return `+7(${d.slice(1, 4)})${d.slice(4, 7)}-${d.slice(7, 9)}-${d.slice(9, 11)}`;
-  }
-  return raw.trim();
-}
+export { formatRuPhone };
 
 export function formatRuDob(raw?: string) {
   const s = String(raw || "").trim();
@@ -337,7 +330,24 @@ function durationOf(from?: string, to?: string, fallback = 90) {
 async function findByPhone(phone: string): Promise<{ branch: number; customer: Customer } | null> {
   const t = await token();
   const variants = [phone, phone.replace(/\D/g, "")];
-  for (const branch of BRANCHES) {
+  let order = [...BRANCHES];
+  try {
+    const { findDossier } = await import("./dossiers");
+    const d = findDossier({ phone });
+    if (d?.branchId) order = [d.branchId, ...BRANCHES.filter((b) => b !== d.branchId)];
+    if (d?.crmId && d.branchId) {
+      const data = await request<{ items?: Customer[] }>(
+        `/v2api/${d.branchId}/customer/index`,
+        { page: 0, pageSize: 1, id: d.crmId },
+        t,
+      );
+      const hit = data.items?.find((x) => Number(x.id) === d.crmId) || data.items?.[0];
+      if (hit?.id) return { branch: d.branchId, customer: hit };
+    }
+  } catch {
+    /* живой индекс CRM */
+  }
+  for (const branch of order) {
     for (const q of variants) {
       const data = await request<{ items?: Customer[] }>(
         `/v2api/${branch}/customer/index`,
@@ -352,13 +362,30 @@ async function findByPhone(phone: string): Promise<{ branch: number; customer: C
 }
 
 async function slotFromGid(branch: number, gid: number, t: string): Promise<Regular | null> {
+  try {
+    const { listAdminSlots } = await import("./alfacrm-schedule");
+    const local = listAdminSlots().find((s) => Number(s.groupId) === gid && Number(s.branchId) === branch)
+      || listAdminSlots().find((s) => Number(s.groupId) === gid);
+    if (local?.subjectId) {
+      return {
+        related_id: gid,
+        subject_id: local.subjectId,
+        time_from_v: local.timeFrom,
+        time_to_v: local.timeTo,
+        teacher_ids: local.teacherIds?.length ? local.teacherIds : local.teacherId ? [local.teacherId] : [],
+        room_id: local.roomId,
+      } as Regular;
+    }
+  } catch {
+    /* диск пуст — один запрос Alfa */
+  }
   const res = await request<{ items?: Regular[] }>(
     `/v2api/${branch}/regular-lesson/index`,
-    { page: 0, pageSize: 200 },
+    { page: 0, pageSize: 20, group_id: gid },
     t,
   );
   const list = res.items || [];
-  return list.find((item) => Number(item.related_id) === gid) || null;
+  return list.find((item) => Number(item.related_id) === gid) || list[0] || null;
 }
 
 export async function createAlfaLesson(opts: {
@@ -431,6 +458,7 @@ export type AlfaLead = {
   branchId: string;
   courseName?: string;
   courseId?: string;
+  subjectId?: number;
   gid?: string;
   groupName?: string;
   kind?: string;
@@ -539,7 +567,7 @@ export async function upsertAlfaLead(lead: AlfaLead) {
         branch: usedBranch,
         customerId,
         type: lessonType.key,
-        subjectId: Number(lead.courseId) || undefined,
+        subjectId: Number(lead.subjectId) || undefined,
         gid: lead.gid,
         date: lead.date,
         time: lead.time,

@@ -676,7 +676,8 @@ export function courseSubjectIndex(): Record<string, number[]> {
   const out = new Map<string, Set<number>>();
   const add = (raw: string, sid: number) => {
     if (!raw || !sid) return;
-    const id = tree.courses.find((c) => c.id === raw || c.href === raw)?.id || raw;
+    const id = tree.courses.find((c) => c.id === raw)?.id;
+    if (!id) return;
     let set = out.get(id);
     if (!set) {
       set = new Set();
@@ -684,23 +685,10 @@ export function courseSubjectIndex(): Record<string, number[]> {
     }
     set.add(sid);
   };
-  for (const c of map.courses) add(c.courseId || c.siteHref, Number(c.subjectId) || 0);
+  for (const c of map.courses) add(c.courseId, Number(c.subjectId) || 0);
   for (const s of listAdminSlots()) {
     const cid = String(s.courseId || tree.assign[slotTreeKey(s)] || "");
     add(cid, Number(s.subjectId) || 0);
-  }
-  for (const c of tree.courses) {
-    if (out.get(c.id)?.size) continue;
-    const twin = tree.courses.find(
-      (x) =>
-        x.id !== c.id &&
-        x.schoolId === c.schoolId &&
-        x.label === c.label &&
-        (x.age || "") === (c.age || "") &&
-        (out.get(x.id)?.size || out.get(x.href)?.size),
-    );
-    if (!twin) continue;
-    for (const sid of out.get(twin.id) || out.get(twin.href) || []) add(c.id, sid);
   }
   return Object.fromEntries([...out.entries()].map(([k, v]) => [k, [...v]]));
 }
@@ -1231,11 +1219,12 @@ export type TariffChange = { id: number; field: string; from: string; to: string
 export type TariffAdd = Partial<CrmTariff> & { name?: string };
 
 function matchSubjectIds(text: string, subjects: { id: number; name: string }[]) {
-  const fold = (s: string) => s.toLowerCase().replace(/ё/g, "е").replace(/["«»]/g, "").replace(/\s+/g, " ").trim();
-  const q = fold(text);
-  if (!q) return [] as number[];
-  const hits = subjects.filter((s) => fold(s.name).includes(q) || q.includes(fold(s.name).slice(0, 18)));
-  return hits.map((s) => s.id);
+  const ids: number[] = [];
+  for (const m of String(text || "").matchAll(/\b(?:subject(?:Id)?|предмет)\s*[:=#]?\s*(\d{1,5})\b/gi)) {
+    ids.push(Number(m[1]));
+  }
+  const known = new Set(subjects.map((s) => s.id));
+  return [...new Set(ids)].filter((id) => known.has(id));
 }
 
 function matchBranchIds(text: string, branches: CrmBranch[]) {
@@ -1300,7 +1289,7 @@ changes только с id из списка. adds — только если п�
 Ответ JSON.`,
     `Запрос: ${asked.slice(0, 1500)}
 Выделены: ${JSON.stringify(slim).slice(0, 8000)}
-Предметы: ${JSON.stringify(subjects.map((s) => s.name)).slice(0, 2500)}
+Предметы: ${JSON.stringify(subjects.map((s) => ({ id: s.id, name: s.name }))).slice(0, 2500)}
 JSON: {"comment":"","changes":[{"id":179,"field":"price","to":3200}],"adds":[]}`,
     2500,
   );

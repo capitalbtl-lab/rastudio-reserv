@@ -5,6 +5,7 @@ import { loadSiteTree } from "./site-tree";
 import { subjectTariffStats } from "./crm-tariffs";
 import { listAdminSlots } from "./alfacrm-schedule";
 import { countSubjectUsage } from "./subject-usage";
+import { canonCourseId } from "./ids";
 
 export function packSubjectRows(list?: CrmSubject[]) {
   const subjects = list || loadSubjects();
@@ -18,8 +19,8 @@ export function packSubjectRows(list?: CrmSubject[]) {
     subjects: subjects.map((s) => {
       const st = bySubject.get(s.id) || { total: 0, byBranch: {} as Record<number, number>, names: [] as string[] };
       const link = bySub.get(s.id);
-      const courseId = link?.courseId || "";
-      const course = courseId ? tree.courses.find((c) => c.id === courseId || c.href === courseId) : undefined;
+      const courseId = canonCourseId(tree, link?.courseId || "");
+      const course = courseId ? tree.courses.find((c) => c.id === courseId) : undefined;
       const school = course ? tree.schools.find((x) => x.id === course.schoolId) : undefined;
       const gs = usage.get(s.id);
       return {
@@ -27,7 +28,7 @@ export function packSubjectRows(list?: CrmSubject[]) {
         tariffTotal: st.total,
         tariffByBranch: st.byBranch,
         tariffNames: st.names,
-        courseId: course?.id || courseId || "",
+        courseId: course?.id || "",
         courseLabel: course?.label || "",
         schoolLabel: school?.label || "",
         groupByBranch: gs?.groups || {},
@@ -46,19 +47,22 @@ export function packSubjectRows(list?: CrmSubject[]) {
 
 export function bindSubjectCourse(subjectId: number, courseId: string) {
   const tree = loadSiteTree();
-  const course = courseId ? tree.courses.find((c) => c.id === courseId || c.href === courseId) : undefined;
+  const cid = canonCourseId(tree, courseId);
+  const course = cid ? tree.courses.find((c) => c.id === cid) : undefined;
   const school = course ? tree.schools.find((s) => s.id === course.schoolId) : undefined;
   const map = loadScheduleMap();
   const sub = loadSubjects().find((s) => s.id === subjectId);
   const next = map.courses.filter((c) => c.subjectId !== subjectId);
-  next.push({
-    subjectId,
-    subjectName: sub?.name || "",
-    courseId: course?.id || courseId,
-    schoolId: school?.id || course?.schoolId || "",
-    siteHref: course?.href || "",
-    school: school?.label || "",
-  });
+  if (cid && course) {
+    next.push({
+      subjectId,
+      subjectName: sub?.name || "",
+      courseId: course.id,
+      schoolId: school?.id || course.schoolId,
+      siteHref: course.href || "",
+      school: school?.label || "",
+    });
+  }
   saveScheduleMap({ ...map, courses: next });
   return packSubjectRows();
 }

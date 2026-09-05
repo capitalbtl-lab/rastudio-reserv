@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import { dirname, join } from "node:path";
 import { loadScheduleMap } from "./schedule-map";
 import { loadSiteTree } from "./site-tree";
+import { canonCourseId, canonSchoolId } from "./ids";
 
 export type TariffLink = {
   tariffId: number;
@@ -48,16 +49,18 @@ export function saveTariffMap(items: TariffLink[]) {
   for (const x of items) {
     const id = Number(x.tariffId);
     if (!Number.isFinite(id) || id === 0) continue;
-    const course = tree.courses.find((c) => c.id === x.courseId || c.href === x.courseId);
-    const courseId = course?.id || String(x.courseId || "").trim();
-    if (!courseId) continue;
+    const courseId = canonCourseId(tree, String(x.courseId || ""));
+    if (!courseId) {
+      if (!packed.some((p) => p.tariffId === id && !p.courseId)) packed.push({ tariffId: id, courseId: "", schoolId: canonSchoolId(tree, x.schoolId) });
+      continue;
+    }
     const key = `${id}::${courseId}`;
     if (seen.has(key)) continue;
     seen.add(key);
     packed.push({
       tariffId: id,
       courseId,
-      schoolId: course?.schoolId || (tree.schools.some((s) => s.id === x.schoolId) ? x.schoolId : ""),
+      schoolId: tree.courses.find((c) => c.id === courseId)?.schoolId || canonSchoolId(tree, x.schoolId),
     });
   }
   mkdirSync(dirname(fileOf()), { recursive: true });
@@ -84,11 +87,12 @@ export function guessTariffLinks(
   const out: TariffLink[] = [];
   const seen = new Set<number>();
   function pack(id: number, row: TariffLink): TariffLink {
-    const course = tree.courses.find((c) => c.id === row.courseId || c.href === row.courseId);
+    const courseId = canonCourseId(tree, row.courseId);
+    const course = courseId ? tree.courses.find((c) => c.id === courseId) : undefined;
     return {
       tariffId: id,
-      courseId: course?.id || row.courseId || "",
-      schoolId: course?.schoolId || row.schoolId || "",
+      courseId: courseId,
+      schoolId: course?.schoolId || canonSchoolId(tree, row.schoolId),
     };
   }
   for (const t of tariffs) {
@@ -117,7 +121,7 @@ export function seedTariffMapIfEmpty(tariffs: { id: number; subjectIds: number[]
   const bySub = new Map<number, { courseId: string; schoolId: string }>();
   for (const c of loadScheduleMap().courses) {
     if (!c.subjectId || !c.courseId) continue;
-    const course = tree.courses.find((x) => x.id === c.courseId || x.href === c.siteHref);
+    const course = tree.courses.find((x) => x.id === c.courseId);
     if (!course) continue;
     bySub.set(c.subjectId, { courseId: course.id, schoolId: course.schoolId });
   }

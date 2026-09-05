@@ -2,7 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import type { CmsSession } from "@/data/cms";
-import { sendTrial, TRIAL_BRANCHES, trialCourseForPath } from "@/data/trial";
+import { sendTrial } from "@/data/trial";
+import { TRIAL_BRANCHES, trialCourseForPath } from "@/data/trial-public";
 import { SITE_BRANCHES } from "@/data/site-signup-core";
 import { freePlaces, formatTrialDate, isoDate, nextLessonDate, tidyGroupName, whenShort } from "@/lib/trial-slot";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,7 @@ export function TrialModal({
           dob: String(form.get("dob") || ""),
           phone: String(form.get("phone") || ""),
           email: String(form.get("email") || ""),
-          course: session.courseId || trialCourseForPath(path),
+          course: session.courseId || session.siteCourseId || (String(session.courseId || "").startsWith("/") ? session.courseId : "") || trialCourseForPath(path),
           branch: branchId,
           gid: String(session.groupId || ""),
           groupName: session.group,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearch } from "@tanstack/react-router";
-import { SITE, BRANCHES, COURSE_GROUPS } from "@/data/site";
+import { SITE, BRANCHES, COURSE_GROUPS, courseInGroup } from "@/data/site";
 import type { CourseCard, SitePage, TeacherCard } from "@/data/catalog";
 import type { CmsCourse, CmsMaster, CmsSession, CmsTrajectoryStep } from "@/data/cms";
 import { PageLink } from "@/components/page-link";
@@ -24,7 +24,7 @@ import { JsonLd } from "@/components/json-ld";
 import { AGE_BANDS, agesOverlap, coursePlace, ageBadge, courseNameOnly } from "@/data/ages";
 import { AgeChips } from "@/components/age-chips";
 import { CoursePrice } from "@/components/course-price";
-import { trialCourseForPath } from "@/data/trial";
+import { trialCourseForPath } from "@/data/trial-public";
 import { hydrateEdits, pageEdit, type EditsStore } from "@/data/edits-core";
 import { cn } from "@/lib/utils";
 
@@ -418,7 +418,7 @@ function CatalogPage({ page, courses }: { page: SitePage; courses: CourseCard[] 
     const g = COURSE_GROUPS.find((item) => item.id === group) ?? COURSE_GROUPS[0];
     const band = AGE_BANDS.find((item) => item.id === age);
     return courses.filter((c) => {
-      if (!g.test(c.href)) return false;
+      if (!courseInGroup(c.href, g.schoolIds)) return false;
       if (band && !agesOverlap(`${c.age || ""} ${c.label} ${c.title}`, band.min, band.max)) return false;
       if (city && !(c.cities?.length ? c.cities.includes(city) : coursePlace(c.href).includes(city))) return false;
       if (!s) return true;

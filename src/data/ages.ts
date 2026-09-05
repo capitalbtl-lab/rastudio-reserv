@@ -108,12 +108,13 @@ export function courseOfferFacts(path: string, age?: string | null) {
 
 export function coursesForAge(age: number) {
   const n = Math.round(Number(age));
-  const map = new Map<string, { name: string; age: string; path: string }[]>();
+  const map = new Map<string, { name: string; age: string; path: string; courseId: string; schoolId: string }[]>();
   if (!Number.isFinite(n) || n < 2 || n > 20) return [];
   for (const row of listPriceRows()) {
     if (!agesOverlap(row.age, n, n)) continue;
     const list = map.get(row.direction) || [];
-    list.push({ name: row.name, age: row.age, path: row.path });
+    const courseId = row.courseId || row.path;
+    list.push({ name: row.name, age: row.age, path: row.path, courseId, schoolId: row.schoolId || "" });
     map.set(row.direction, list);
   }
   return [...map.entries()].map(([direction, items]) => ({ direction, items }));
@@ -124,7 +125,10 @@ export function formatCoursesForAge(age: number) {
   const total = groups.reduce((n, g) => n + g.items.length, 0);
   if (!total) return `В каталоге нет курсов на ${age} лет. Уточните возраст.`;
   return [
-    `Все курсы для ${age} лет — ${total} программ. Перечисли родителю ВСЕ, по школам, без сокращения до двух.`,
-    ...groups.map((g) => `${g.direction}: ${g.items.map((i) => i.name).join("; ")}.`),
+    `Все курсы для ${age} лет — ${total} программ. Ключ — courseId дерева. Цена = колонка «Все». Перечисли родителю ВСЕ, по школам, без сокращения до двух.`,
+    ...groups.map(
+      (g) =>
+        `${g.direction}: ${g.items.map((i) => `${i.name} [courseId=${i.courseId}] ${coursePrice(i.courseId || i.path)}`).join("; ")}.`,
+    ),
   ].join("\n");
 }

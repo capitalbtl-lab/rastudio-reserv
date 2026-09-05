@@ -12,12 +12,22 @@ function token() {
   return m ? decodeURIComponent(m[1]) : localStorage.getItem("ra_admin") || "";
 }
 
-type CourseRow = { id: string; label: string; age: string; groups: number; emptyTeacher: number; noPlaces: number; tariffs: number[] };
+type CourseRow = {
+  id: string;
+  schoolId?: string;
+  label: string;
+  age: string;
+  groups: number;
+  emptyTeacher: number;
+  noPlaces: number;
+  tariffs: number[];
+  groupKeys?: { groupId: number; branchId: number }[];
+};
 type SchoolRow = { id: string; label: string; courses: CourseRow[] };
 
 export function AdminPublicSite() {
   const [schools, setSchools] = useState<SchoolRow[]>([]);
-  const [loose, setLoose] = useState<{ id: string; groupId: number; name: string; branchId: number }[]>([]);
+  const [loose, setLoose] = useState<{ id: string; groupId: number; name: string; branchId: number; subjectId?: number }[]>([]);
   const [stats, setStats] = useState({ schools: 0, courses: 0, groups: 0, loose: 0, tariffs: 0, teachers: 0 });
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState("");
@@ -65,14 +75,13 @@ export function AdminPublicSite() {
       <div>
         <h2 className="font-display text-2xl">Сайт</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted">
-          Сайт — то, что видят родители. Админка — группы, CRM и эти настройки. Кнопки записи на сайте можно выключить.
+          Сайт — то, что видят родители. Школа = schoolId, курс = courseId, группа = groupId+branchId, филиал = branchId. Имена — подписи.
         </p>
       </div>
       <section className="rounded-2xl bg-white p-4 ring-1 ring-black/8">
         <h3 className="font-semibold">Кнопки записи на сайте</h3>
         <p className="mt-1 text-sm text-muted">
-          «Запись на пробное» открывает форму в стиле сайта, филиал уже выбран. «Запись в группу» — ссылка из карточки группы в AlfaCRM.
-          Какие статусы видны на сайте — таблица ниже. Приоритет 0 у группы всегда прячет её с витрины, ИИ всё равно называет все группы.
+          «Запись на пробное» — форма сайта с branchId группы. «Запись в группу» — окно сайта, gid из слота. Витрина: statusId + priority ≥ 1 + courseId. Приоритет 0 прячет группу. ИИ называет все, если включено в настройках.
         </p>
         <div className="mt-3 flex flex-wrap gap-3">
           <label className="flex items-center gap-2 text-sm">
@@ -180,7 +189,10 @@ export function AdminPublicSite() {
               onClick={() => setOpen((v) => (v === s.id ? "" : s.id))}
               className="flex w-full items-center justify-between px-4 py-3 text-left"
             >
-              <span className="font-semibold">{s.label}</span>
+              <span className="min-w-0 flex-1">
+                <span className="font-semibold">{s.label}</span>
+                <span className="ml-2 font-mono text-[0.7rem] text-muted">{s.id}</span>
+              </span>
               <span className="text-sm text-muted">
                 {s.courses.length} курсов · {s.courses.reduce((n, c) => n + c.groups, 0)} групп
               </span>
@@ -189,13 +201,29 @@ export function AdminPublicSite() {
               <ul className="border-t border-black/6">
                 {s.courses.map((c) => (
                   <li key={c.id} className="flex flex-wrap items-baseline gap-2 px-4 py-2.5 text-sm">
-                    <span className="min-w-0 flex-1 font-medium">{c.label}</span>
+                    <span className="min-w-0 flex-1 font-medium">
+                      {c.label}
+                      <span className="ml-2 font-mono text-[0.68rem] font-normal text-muted">{c.id}</span>
+                    </span>
                     {c.age ? <span className="text-[0.75rem] text-muted">{c.age}</span> : null}
                     <span className={cn("text-[0.75rem]", c.groups ? "text-muted" : "text-rose-600")}>
                       {c.groups ? `${c.groups} групп` : "нет групп"}
                     </span>
-                    {c.tariffs.length ? <span className="text-[0.75rem] text-muted">абонемент {c.tariffs.join(", ")}</span> : <span className="text-[0.75rem] text-amber-700">без абонемента</span>}
+                    {c.tariffs.length ? (
+                      <span className="text-[0.75rem] text-muted">tariffId {c.tariffs.join(", ")}</span>
+                    ) : (
+                      <span className="text-[0.75rem] text-amber-700">без абонемента</span>
+                    )}
                     {c.emptyTeacher ? <span className="text-[0.75rem] text-amber-700">без педагога {c.emptyTeacher}</span> : null}
+                    {c.groupKeys?.length ? (
+                      <span className="w-full font-mono text-[0.68rem] text-muted">
+                        {c.groupKeys
+                          .slice(0, 8)
+                          .map((g) => `gid:${g.branchId}:${g.groupId}`)
+                          .join(" · ")}
+                        {c.groupKeys.length > 8 ? ` · +${c.groupKeys.length - 8}` : ""}
+                      </span>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -205,11 +233,13 @@ export function AdminPublicSite() {
       </div>
       {loose.length ? (
         <div className="rounded-2xl bg-amber-50 px-4 py-3 ring-1 ring-amber-200">
-          <p className="text-sm font-semibold text-amber-950">Группы без курса сайта — не попадут в форму записи</p>
+          <p className="text-sm font-semibold text-amber-950">Без courseId — не на витрине и не в форме записи</p>
           <ul className="mt-2 space-y-1 text-sm text-amber-900">
             {loose.slice(0, 12).map((g) => (
-              <li key={g.id}>
-                {g.name} · gid {g.groupId} · филиал {g.branchId}
+              <li key={g.id} className="font-mono text-[0.8rem]">
+                gid:{g.branchId}:{g.groupId}
+                {g.subjectId ? ` · subjectId ${g.subjectId}` : ""}
+                <span className="ml-2 font-sans">{g.name}</span>
               </li>
             ))}
             {loose.length > 12 ? <li>ещё {loose.length - 12}</li> : null}

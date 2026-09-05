@@ -107,8 +107,13 @@ export type PublicSlotHint = {
   siteCourseId?: string;
 };
 
-function boundToSite(s: PublicSlotHint) {
-  return Boolean(s.courseId || s.siteCourseId || s.path);
+/** Курс сайта слота: courseId дерева. Число CRM не курс. */
+export function sessionCourseId(s: { courseId?: string; siteCourseId?: string; path?: string }) {
+  for (const raw of [s.courseId, s.siteCourseId, s.path]) {
+    const id = String(raw || "").trim();
+    if (id && !/^\d+$/.test(id)) return id;
+  }
+  return "";
 }
 
 /** Витрина rastudio.org: статус пускает расписание и priority ≥ 1, курс сайта привязан. */
@@ -142,4 +147,47 @@ export function mergeStatusPublish(raw?: Record<string, Partial<StatusPublish>> 
     };
   }
   return out;
+}
+
+type PageTree = {
+  schools: { id: string; href: string }[];
+  courses: { id: string; href: string; schoolId: string }[];
+};
+
+/** Страница курса — только этот courseId. Школа — курсы этой школы. Не по имени. */
+function treeIdOf(raw?: string) {
+  const s = String(raw || "").trim();
+  if (!s || /^\d+$/.test(s)) return "";
+  return s;
+}
+
+function boundToSite(s: PublicSlotHint) {
+  return Boolean(sessionCourseId(s));
+}
+
+export function sessionMatchesPage(
+  s: { siteCourseId?: string; path?: string; courseId?: string },
+  page?: string | null,
+  tree?: PageTree | null,
+) {
+  if (!page) return true;
+  let decoded = page.startsWith("/") ? page : `/${page}`;
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch {
+    /* keep */
+  }
+  if (decoded === "/" || decoded === "/schedule" || decoded === "/allcourses") return true;
+  const idsOf = (c: PageTree["courses"][number]) => new Set([c.id, c.href].filter(Boolean));
+  const slotIds = [treeIdOf(sessionCourseId(s)), treeIdOf(s.courseId), treeIdOf(s.siteCourseId), treeIdOf(s.path)].filter(Boolean);
+  const of = (c: PageTree["courses"][number]) => {
+    const ids = idsOf(c);
+    return slotIds.some((id) => ids.has(id));
+  };
+  if (!tree) return slotIds.includes(decoded);
+  const course = tree.courses.find((c) => c.id === decoded || c.href === decoded);
+  if (course) return of(course);
+  const school = tree.schools.find((x) => x.id === decoded || x.href === decoded);
+  if (school) return tree.courses.some((c) => c.schoolId === school.id && of(c));
+  return slotIds.includes(decoded);
 }

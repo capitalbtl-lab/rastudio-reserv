@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 describe("база знаний: предметы и роли", () => {
   it("заводской текст содержит курс сайта, счётчики, роли и статусы", () => {
     const src = readFileSync(new URL("./agent-section-guides-data.ts", import.meta.url), "utf8");
-    assert.match(src, /GUIDE_REV = "2026-09-05-clients-tariff"/);
+    assert.match(src, /GUIDE_REV = "2026-09-05-card-disk"/);
     assert.match(src, /id: "subjects"/);
     assert.match(src, /id: "roles"/);
     assert.match(src, /function subjectsBody/);
@@ -28,5 +28,23 @@ describe("база знаний: предметы и роли", () => {
     assert.match(src, /is_separate_balance/);
     assert.match(src, /path add\|change\|remove/);
     assert.match(src, /clientsLiveTariffs/);
+    assert.match(src, /extras\.live_tariff/);
+    assert.match(src, /очередь/);
+    assert.match(src, /enqueueExport/);
+    assert.match(src, /groupLinks/);
+    assert.match(src, /consultantGuidePrompt/);
+    assert.match(src, /ОЛЕГ И ОЛЬГА/);
+    assert.match(src, /applyPricesFromTariffs/);
+    assert.match(src, /lesson.create/);
+    assert.match(src, /group.create/);
+    assert.match(src, /customer.create/);
+    assert.match(src, /lead-status.create/);
+    assert.match(src, /teacherId филиала/);
+    assert.match(src, /schoolId прайса/);
+    assert.doesNotMatch(src, /course_id=subjectId/);
+    assert.match(src, /function loadGuides/);
+    assert.match(src, /course_id=courseId дерева/);
+    assert.match(src, /loadGuides\(\)/);
+    assert.match(src, /\["roles", "site"\]/);
   });
 });

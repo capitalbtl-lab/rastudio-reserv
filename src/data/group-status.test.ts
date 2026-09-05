@@ -9,6 +9,8 @@ import {
   slotPublicGroup,
   slotPublicTrial,
   mergeStatusPublish,
+  sessionMatchesPage,
+  sessionCourseId,
 } from "./group-status.ts";
 import { inheritSchoolBySubject } from "./schedule-map.ts";
 import { resolveGroupCourseId } from "./ids.ts";
@@ -166,5 +168,39 @@ describe("массовый приоритет голосом", () => {
   it("год в названии не фильтр", () => {
     const out = bulkPriorityFromPrompt("всем на гражданской приоритет 1", slots);
     assert.ok(out?.changes.some((c) => c.id === "crm-580"));
+  });
+});
+
+describe("страница курса по courseId", () => {
+  const tree = {
+    schools: [
+      { id: "/art-studio", label: "Художественная", href: "/art-studio" },
+      { id: "/model-school", label: "Модельная", href: "/model-school" },
+    ],
+    courses: [
+      { id: "/art-studio-10-14", href: "/art-studio-10-14", schoolId: "/art-studio", label: "10-14", age: "10-14" },
+      { id: "/art-studio-5-6", href: "/art-studio-5-6", schoolId: "/art-studio", label: "5-6", age: "5-6" },
+      { id: "/model-school-podium", href: "/model-school-podium", schoolId: "/model-school", label: "Подиум", age: "9-14" },
+    ],
+  };
+  const art = { siteCourseId: "/art-studio-10-14", path: "/art-studio-10-14" };
+  const model = { siteCourseId: "/model-school-podium", path: "/model-school-podium" };
+
+  it("страница курса не тащит соседний возраст той же школы", () => {
+    assert.equal(sessionMatchesPage(art, "/art-studio-10-14", tree), true);
+    assert.equal(sessionMatchesPage(art, "/art-studio-5-6", tree), false);
+    assert.equal(sessionMatchesPage(model, "/art-studio-10-14", tree), false);
+  });
+
+  it("страница школы — все курсы школы, без regex по имени", () => {
+    assert.equal(sessionMatchesPage(art, "/art-studio", tree), true);
+    assert.equal(sessionMatchesPage(model, "/art-studio", tree), false);
+    assert.equal(sessionMatchesPage(model, "/model-school", tree), true);
+  });
+
+  it("число subjectId не считается курсом сайта", () => {
+    assert.equal(sessionCourseId({ courseId: "14" }), "");
+    assert.equal(sessionCourseId({ courseId: "/art-studio-10-14" }), "/art-studio-10-14");
+    assert.equal(sessionCourseId({ siteCourseId: "/art-studio-5-6", courseId: "14" }), "/art-studio-5-6");
   });
 });

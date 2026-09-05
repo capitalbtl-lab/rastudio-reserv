@@ -10,11 +10,14 @@ import { agesOverlap } from "@/data/ages";
 import { dayLabel, slotFromSession, stampTimes, toSession, normalizeArtSlot, beatsOf, stampSubjects, type CrmSlot } from "@/data/crm-slots";
 import { applyScheduleMap } from "@/data/schedule-map";
 import { nextLessonDate } from "@/lib/trial-slot";
-import { isAdminGroup, isArchivedGroup, isCampStatus, readPriority, crmPriorityOf, slotOnPublicSchedule } from "./group-status";
+import { isAdminGroup, isArchivedGroup, isCampStatus, readPriority, crmPriorityOf, slotOnPublicSchedule, sessionMatchesPage } from "./group-status";
 import { loadSiteSignup } from "./site-signup";
+import { loadSiteTree, saveSiteTree } from "./site-tree";
 import { mergeTeacher, saveTeachers, type CrmTeacher } from "./crm-teachers";
+import { listCgiBranch, takenByGroupFromCgi } from "./crm-membership";
+import { slotFitsAgent, agentGroupLine } from "./agent-groups";
+import { takenOfGroup } from "./crm-group-disk";
 
-const SKIP_SUBJECT = new Set([7, 54, 104, 85, 81, 1, 77, 106, 82, 105, 83, 90, 84, 88, 87]);
 const DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 const DAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
@@ -157,58 +160,13 @@ function crmDayOf(when: string) {
   return i >= 0 ? i + 1 : 1;
 }
 
-function groupIdsOfCustomer(c: Record<string, unknown>): number[] {
-  const ids = new Set<number>();
-  const gids = c.group_ids;
-  if (Array.isArray(gids)) {
-    for (const x of gids) {
-      const n = Number(x);
-      if (n) ids.add(n);
-    }
-  }
-  let raw: unknown = c.groups;
-  if (typeof raw === "string") {
-    try {
-      raw = JSON.parse(raw);
-    } catch {
-      raw = [];
-    }
-  }
-  const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw as Record<string, unknown>) : [];
-  for (const one of list) {
-    if (one && typeof one === "object") {
-      const rec = one as { id?: number; group_id?: number };
-      const n = Number(rec.id || rec.group_id || 0);
-      if (n) ids.add(n);
-    } else {
-      const n = Number(one);
-      if (n) ids.add(n);
-    }
-  }
-  return [...ids];
-}
-
 async function loadRoster(branch: number, t: string) {
   const study = new Map<number, number>();
   const lead = new Map<number, number>();
-  async function pull(isStudy: 0 | 1, into: Map<number, number>) {
-    for (let page = 0; page < 8; page += 1) {
-      const res = await request<{ items?: Record<string, unknown>[] }>(
-        `/v2api/${branch}/customer/index`,
-        { page, pageSize: 200, is_study: isStudy, removed: 0 },
-        t,
-      ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-      const items = res.items || [];
-      for (const c of items) {
-        for (const gid of groupIdsOfCustomer(c)) {
-          into.set(gid, (into.get(gid) || 0) + 1);
-        }
-      }
-      if (items.length < 200) break;
-    }
+  const items = await listCgiBranch(request, t, branch).catch(() => [] as Record<string, unknown>[]);
+  for (const [gid, n] of takenByGroupFromCgi(items)) {
+    study.set(gid, n);
   }
-  await pull(1, study);
-  await pull(0, lead);
   return { study, lead };
 }
 
@@ -231,7 +189,7 @@ export function signupUrl(branch: number, gid: string | number) {
 export function sessionsFromSlots(slots: CrmSlot[]): CmsSession[] {
   const pub = loadSiteSignup().statusPublish;
   return stampTimes(slots.map((s) => normalizeArtSlot({ ...s })))
-    .filter((s) => slotOnPublicSchedule(s, pub) && !SKIP_SUBJECT.has(s.subjectId))
+    .filter((s) => slotOnPublicSchedule(s, pub))
     .flatMap((s) => {
       const beats = beatsOf(s).filter((b) => /^\d{1,2}:\d{2}$/.test(b.timeFrom || ""));
       return beats.map((b, i) =>
@@ -382,6 +340,59 @@ export function saveAdminSlots(slots: CrmSlot[]) {
   return cache;
 }
 
+/** После group/create: слот получает groupId CRM, ключ assign переезжает. */
+export function applyCreatedGroup(slotId: string, groupId: number, branch: number) {
+  const gid = Number(groupId) || 0;
+  const bid = Number(branch) || 0;
+  const key = String(slotId || "");
+  if (!key || !gid) return listAdminSlots();
+  const neu = `gid:${bid}:${gid}`;
+  const signup = `https://studiyarazvivaysya.s20.online/common/${bid}/lead/create?gid=${gid}`;
+  const next = listAdminSlots().map((s) => {
+    if (s.id !== key) return s;
+    return { ...s, groupId: gid, branchId: bid || s.branchId, id: neu, signup: s.signup || signup };
+  });
+  saveAdminSlots(next);
+  try {
+    const tree = loadSiteTree();
+    if (tree.assign?.[key] && neu !== key) {
+      tree.assign[neu] = tree.assign[key];
+      delete tree.assign[key];
+      saveSiteTree(tree);
+    }
+  } catch {
+    /* дерево опционально */
+  }
+  return listAdminSlots();
+}
+
+export function applyCreatedLesson(slotId: string, day: number, timeFrom: string, lessonId: number) {
+  const lid = Number(lessonId) || 0;
+  const key = String(slotId || "");
+  if (!key || !lid) return listAdminSlots();
+  const next = listAdminSlots().map((s) => {
+    if (s.id !== key && !(s.groupId && key === `gid:${s.branchId}:${s.groupId}`)) return s;
+    const beats = beatsOf(s).map((b) =>
+      Number(b.day) === Number(day) && String(b.timeFrom) === String(timeFrom) && !b.lessonId ? { ...b, lessonId: lid } : b,
+    );
+    return { ...s, beats, lessonId: s.lessonId || lid };
+  });
+  saveAdminSlots(next);
+  return listAdminSlots();
+}
+
+export function bumpGroupTaken(branchId: number, groupId: number, delta: number) {
+  if (!groupId || !delta) return listAdminSlots();
+  const next = listAdminSlots().map((s) => {
+    if (s.groupId !== groupId || (branchId && s.branchId !== branchId)) return s;
+    const taken = Math.max(0, (Number(s.taken) || 0) + delta);
+    const study = Math.max(0, (Number(s.takenStudy) || 0) + delta);
+    return { ...s, taken, takenStudy: study };
+  });
+  saveAdminSlots(next);
+  return next;
+}
+
 async function paged<T>(path: string, t: string): Promise<T[]> {
   const items: T[] = [];
   for (let page = 0; page < 15; page += 1) {
@@ -440,7 +451,14 @@ async function loadCrm(force = false): Promise<CacheBag> {
       const study = roster.study.get(g.id) || 0;
       const lead = roster.lead.get(g.id) || 0;
       const qty = Number(g.quantity ?? g.cnt ?? g.customers_count ?? 0) || 0;
-      seats.set(seatKey(branch, g.id), { limit: Number(g.limit) || 0, taken: Math.max(qty, study + lead), study: study || qty, lead });
+      const cgiOk = roster.study.size + roster.lead.size > 0;
+      const cgiN = study + lead;
+      seats.set(seatKey(branch, g.id), {
+        limit: Number(g.limit) || 0,
+        taken: cgiOk ? cgiN : Math.max(qty, cgiN),
+        study: cgiOk ? study : study || qty,
+        lead,
+      });
     }
     lessons.push(...(await paged<Lesson>(`/v2api/${branch}/regular-lesson/index`, t)));
   }
@@ -530,7 +548,8 @@ async function loadCrm(force = false): Promise<CacheBag> {
     );
   }
   const stamped = stampTimes(slots.filter(isLiveSlot));
-  const sessions = stamped.filter((s) => s.subjectId && !SKIP_SUBJECT.has(s.subjectId)).map(toSession);
+  const pub = loadSiteSignup().statusPublish;
+  const sessions = stamped.filter((s) => slotOnPublicSchedule(s, pub)).map(toSession);
   cache = { at: Date.now(), sessions, seats, slots: stamped };
   try {
     writeSnap(cache);
@@ -541,34 +560,8 @@ async function loadCrm(force = false): Promise<CacheBag> {
 }
 
 export function filterCrmSessions(sessions: CmsSession[], splat?: string | null) {
-  if (!splat) return sessions;
-  let decoded = splat.startsWith("/") ? splat : `/${splat}`;
-  try {
-    decoded = decodeURIComponent(decoded);
-  } catch {
-    /* keep */
-  }
-  const hrefOf = (s: CmsSession) => s.path || (s.signup.startsWith("/") ? s.signup : "");
-  if (decoded === "/" || decoded === "/schedule" || decoded === "/allcourses") return sessions;
-  if (decoded === "/art-studio") {
-    return sessions.filter((s) => /art-studio|hudvuz|sculptural|digitalart/.test(hrefOf(s)));
-  }
-  if (decoded === "/robototehnika-v-kolomne") {
-    return sessions.filter((s) => /robot/.test(hrefOf(s)));
-  }
-  if (decoded === "/programming-school") {
-    return sessions.filter((s) => /kursy-shkoly-programmirovaniya|gamedesign|3d-modeling/.test(hrefOf(s)));
-  }
-  if (decoded === "/languageschool") {
-    return sessions.filter((s) => /english|vitamin|japanese/.test(hrefOf(s)));
-  }
-  if (decoded === "/promising-professions") {
-    return sessions.filter((s) => /tesla|science|radio|3d-modeling/.test(hrefOf(s)));
-  }
-  if (decoded === "/model-school") {
-    return sessions.filter((s) => /model-school/.test(hrefOf(s)));
-  }
-  return sessions.filter((s) => hrefOf(s) === decoded);
+  const tree = loadSiteTree();
+  return sessions.filter((s) => sessionMatchesPage(s, splat, tree));
 }
 
 export type LiveGroup = {
@@ -592,6 +585,8 @@ export type LiveGroup = {
   timeTo: string;
   nextDate: string;
   courseId: string;
+  schoolId?: string;
+  subjectId?: number;
   priority: number;
   statusId: number;
 };
@@ -615,13 +610,37 @@ function chipLabel(session: CmsSession, branchId: number, seats: string) {
   return seatBit ? `${when} · ${short} · ${seatBit}` : `${when} · ${short}`;
 }
 
-export async function groupsForQuery(q: { age?: number; branch?: string; course?: string }) {
+export async function groupsForQuery(q: {
+  age?: number;
+  branch?: string;
+  course?: string;
+  courseId?: string;
+  schoolId?: string;
+  branchId?: number;
+  subjectId?: number;
+}) {
   if (!listAdminSlots().length) {
     await loadCrm().catch(() => null);
   }
   const slots = listAdminSlots().filter((s) => isAdminGroup(s.statusId) && s.groupId);
-  const bid = branchIdOf(q.branch || "");
+  const bid = Number(q.branchId) || branchIdOf(q.branch || "");
   const kolomnaOnly = /коломн/.test((q.branch || "").toLowerCase()) && !bid;
+  const tree = loadSiteTree();
+  let diskTaken = new Map<string, number>();
+  try {
+    const { takenMapFromDossiers } = await import("./dossiers");
+    diskTaken = takenMapFromDossiers();
+  } catch {
+    /* диск */
+  }
+  const ask = {
+    age: q.age,
+    branchId: bid || undefined,
+    course: q.course,
+    courseId: q.courseId,
+    schoolId: q.schoolId,
+    subjectId: q.subjectId,
+  };
   const seen = new Set<string>();
   const out: LiveGroup[] = [];
   for (const slot of slots) {
@@ -629,17 +648,17 @@ export async function groupsForQuery(q: { age?: number; branch?: string; course?
     const gid = String(slot.groupId);
     const branchId = Number(slot.branchId) || 0;
     if (!gid || !branchId) continue;
-    if (bid && branchId !== bid) continue;
     if (kolomnaOnly && branchId === 3) continue;
+    if (!slotFitsAgent(slot, ask, tree)) continue;
     if (q.age) {
       if (session.age && !agesOverlap(session.age, q.age, q.age)) continue;
       if (!session.age) continue;
     }
-    if (q.course && !courseMatch(session, q.course)) continue;
     const key = `${gid}-${session.when}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const seats = seatsText(slot.limit, slot.taken);
+    const taken = takenOfGroup(diskTaken, branchId, Number(gid), slot.taken);
+    const seats = seatsText(slot.limit, taken);
     const next = nextLessonDate(session);
     const nextDate = next
       ? `${String(next.getDate()).padStart(2, "0")}.${String(next.getMonth() + 1).padStart(2, "0")}.${next.getFullYear()}`
@@ -658,14 +677,16 @@ export async function groupsForQuery(q: { age?: number; branch?: string; course?
       signup: slot.signup,
       chip: chipLabel(session, branchId, seats),
       limit: slot.limit,
-      taken: slot.taken,
+      taken,
       seats,
       wait: waitDays(crmDayOf(session.when)),
       teacher: slot.teacher || "",
       timeFrom: slot.timeFrom || "",
       timeTo: slot.timeTo || "",
       nextDate,
-      courseId: slot.courseId || String(slot.subjectId || ""),
+      courseId: slot.courseId || "",
+      schoolId: slot.schoolId || "",
+      subjectId: slot.subjectId || 0,
       priority,
       statusId: slot.statusId || 0,
     });
@@ -685,16 +706,13 @@ export function formatGroups(list: LiveGroup[], age?: number) {
       : "Группы не найдены. Спроси возраст и филиал.";
   }
   const first = list.filter((g) => g.priority === 1);
-  const lines = list.map(
-    (g, i) =>
-      `${i + 1}. gid=${g.gid} филиал=${g.branchId} · приоритет=${g.priority} · ${g.name} · ${g.short} · ${g.when}${g.teacher ? ` · ${g.teacher}` : ""} · состав ${g.taken}/${g.limit || "—"} · ${g.seats} · ближайшее ${g.nextDate || "—"} ${g.timeFrom || ""} · через ${g.wait} дн.${g.priority === 0 ? " · набор с сайта закрыт" : ""}`,
-  );
+  const lines = list.map((g, i) => `${i + 1}. ${agentGroupLine(g)}`);
   return [
-    `Все подходящие группы (${list.length}), сначала приоритет 1. Назови родителю ВСЕ, не только первые. gid вслух не читай.`,
+    `Все подходящие группы (${list.length}), сначала приоритет 1. Назови родителю ВСЕ, не только первые. Ключ — gid+филиал и courseId, не имя. gid вслух не читай.`,
     first.length
-      ? `В первую очередь предлагай запись в группы с приоритетом 1 (${first.map((g) => g.name).join("; ")}). Остальные тоже перечисли.`
+      ? `В первую очередь предлагай запись в группы с приоритетом 1 (${first.map((g) => g.courseId || g.name).join("; ")}). Остальные тоже перечисли.`
       : "Среди найденных нет приоритета 1 — назови все и уточни, куда удобнее.",
-    "Пробное = submit_trial, в группу = book_lesson lesson_type=group. Форму AlfaCRM не открывай. Приоритет 0 — с сайта не записывать, скажи что набор через администратора или предложи группу с приоритетом 1.",
+    "Пробное = submit_trial, в группу = book_lesson lesson_type=group. Форму AlfaCRM не открывай. Приоритет 0 — с сайта не записывать, скажи что набор через администратора или предложи группу с приоритетом 1. Состав = groupLinks/taken слота, не явка.",
     ...lines,
   ].join("\n");
 }
@@ -702,47 +720,10 @@ export function formatGroups(list: LiveGroup[], age?: number) {
 function branchIdOf(raw: string) {
   const s = (raw || "").toLowerCase();
   if (/^1$|гражданск/.test(s)) return 1;
-  if (/^2$|октябрь|340/.test(s)) return 2;
+  if (/^2$|октябрь|цмит|340/.test(s)) return 2;
   if (/^3$|луховиц|пушкин/.test(s)) return 3;
+  if (/^4$|летн/.test(s)) return 4;
   return 0;
-}
-
-const COURSE_ALIAS: { ask: RegExp; hay: RegExp }[] = [
-  { ask: /робот/, hay: /робот|robot/ },
-  { ask: /худож|рисов|живопис|лепк|скульпт|манг|аним/, hay: /худож|рисов|живопис|лепк|скульпт|манг|аним|art-studio|sculptural|hudvuz|digitalart/ },
-  { ask: /програм|питон|скретч|python|scratch|айти|\bit\b|create|криэйт|джуниор/, hay: /програм|python|scratch|питон|скретч|create|junior|gamedev|unity|blender|codebook/ },
-  { ask: /наук|физик|steam|радио|беспилот|дрон/, hay: /наук|физик|steam|радио|tesla|science|radio|беспилот|дрон/ },
-  { ask: /модельн|подиум|макияж|личностн/, hay: /модельн|подиум|model|макияж|личностн/ },
-  { ask: /англий|язык|япон|коре/, hay: /англий|язык|english|japanese|vitamin|япон|коре/ },
-  { ask: /подготовк|школ/, hay: /подготовк|preparation|happybricks|лего-матем/ },
-];
-
-function stemRu(word: string) {
-  const w = word.toLowerCase();
-  if (w.length <= 5) return w;
-  return w.replace(/(ами|ями|ах|ях|ов|ев|ом|ем|ой|ый|ий|ая|ое|ые|ие|ия|ию|ью|ии|[аеёиоуыэюяь])$/i, "");
-}
-
-function courseMatch(session: CmsSession, course: string) {
-  const q = course.trim().toLowerCase();
-  if (!q || q === "/") return true;
-  let decoded = q;
-  try {
-    decoded = decodeURIComponent(q);
-  } catch {
-    /* keep */
-  }
-  const path = (session.path || "").toLowerCase();
-  const hay = `${path} ${session.group} ${session.courseFilter}`.toLowerCase();
-  if (path && (decoded === path || decoded.endsWith(path) || path.endsWith(decoded))) return true;
-  for (const a of COURSE_ALIAS) {
-    if (a.ask.test(decoded) && a.hay.test(hay)) return true;
-  }
-  const words = decoded.split(/[^a-zа-яё0-9+]+/i).filter((w) => w.length > 3);
-  if (!words.length) return true;
-  const hit = (w: string) => hay.includes(w) || hay.includes(stemRu(w));
-  if (words.every(hit)) return true;
-  return words.filter(hit).length >= Math.min(2, words.length);
 }
 
 export function groupSignup(gid: string, branch?: string) {

@@ -36,15 +36,16 @@ describe("карта абонемент → курс сайта", () => {
     assert.equal(out.find((x) => x.tariffId === 10)?.courseId || "", "");
   });
 
-  it("у абонемента несколько курсов сайта", () => {
+  it("два курса с одним названием остаются разными id", () => {
     const out = guessTariffLinks(
-      [{ id: 10, subjectIds: [37], archive: false }],
+      [{ id: 10, subjectIds: [12], archive: false }],
       [
-        { tariffId: 10, schoolId: "/robototehnika-v-kolomne", courseId: "/robototehnika-7-9" },
-        { tariffId: 10, schoolId: "/robototehnika-v-kolomne", courseId: "/robototehnika-10-14" },
+        { tariffId: 10, schoolId: "/art-studio", courseId: "/art-studio-3-4" },
+        { tariffId: 10, schoolId: "/art-studio", courseId: "/art-studio-5-6" },
       ],
     );
     const ids = out.filter((x) => x.tariffId === 10).map((x) => x.courseId).sort();
-    assert.deepEqual(ids, ["/robototehnika-10-14", "/robototehnika-7-9"]);
+    assert.deepEqual(ids, ["/art-studio-3-4", "/art-studio-5-6"]);
+    assert.equal(ids.length, 2);
   });
 });

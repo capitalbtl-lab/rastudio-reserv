@@ -914,7 +914,7 @@ export function CrmClientCard({
               </button>
             ))}
           </div>
-          {loading && !card.comms.length ? <p className="mt-2 text-sm text-muted">Подгружаю карточку из AlfaCRM…</p> : null}
+          {loading && !card.comms.length ? <p className="mt-2 text-sm text-muted">Открываю карточку…</p> : null}
           {comms.length ? (
             <div className="mt-2 space-y-2">
               {comms.map((c, i) => (

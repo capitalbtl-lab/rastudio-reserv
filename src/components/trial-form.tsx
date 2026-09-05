@@ -2,7 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { SITE } from "@/data/site";
-import { sendTrial, TRIAL_BRANCHES, TRIAL_COURSES } from "@/data/trial";
+import { sendTrial } from "@/data/trial";
+import { TRIAL_BRANCHES, TRIAL_COURSES } from "@/data/trial-public";
 import { Button } from "@/components/ui/button";
 
 const fieldClass =

@@ -6,6 +6,7 @@ import { logAdmin } from "./admin-settings";
 import { DEFAULT_SCRIPTS, playbookPrompt, type ScriptSection } from "./agent-playbook";
 import type { SessionFacts } from "./agent-facts";
 import { docsPrompt } from "./agent-docs";
+import { consultantGuidePrompt } from "./agent-section-guides-data";
 
 export type AgentSettings = {
   updatedAt: string;
@@ -228,6 +229,10 @@ export function agentPromptAddons(facts?: SessionFacts, channel = "site") {
   const s = brain.settings;
   const parts: string[] = ["", STYLE[s.style] || STYLE.warm];
   parts.push(rolesPrompt(channel === "admin" ? "admin" : "site"));
+  if (channel !== "admin") {
+    const guide = consultantGuidePrompt();
+    if (guide.trim()) parts.push(guide);
+  }
   parts.push(playbookPrompt(brain.scripts, facts));
   if (s.askOnce) {
     parts.push(
@@ -483,8 +488,3 @@ export function uiFlagsOf(s: AgentSettings): AgentUiFlags {
     defaultPartner: s.defaultPartner === "oleg" ? "oleg" : "olga",
   };
 }
-
-export const publicAgentUi = createServerFn({ method: "GET" }).handler(async () => {
-  const s = loadBrain().settings;
-  return { ok: true as const, ui: uiFlagsOf(s) };
-});

@@ -51,6 +51,16 @@ export function teacherAllowed(id: number, branchId: number, list = loadTeachers
   return list.some((t) => t.id === id && t.branchIds.includes(branchId));
 }
 
+/** Только teacherId. Имя педагога — подпись, не ключ. */
+export function teacherIdsOfSlot(
+  s: { teacherId?: number; teacherIds?: number[] },
+  branchId: number,
+  list = loadTeachers(),
+) {
+  const raw = s.teacherIds?.length ? s.teacherIds : s.teacherId ? [s.teacherId] : [];
+  return [...new Set(raw.map(Number).filter((id) => teacherAllowed(id, branchId, list)))];
+}
+
 export function mergeTeacher(list: CrmTeacher[], id: number, name: string, branchId: number) {
   const hit = list.find((t) => t.id === id);
   if (hit) {

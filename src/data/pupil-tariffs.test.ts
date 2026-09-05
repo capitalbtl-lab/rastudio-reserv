@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, stampLiveTariff, changeListRows, batchesOfThree, keepByLiveTariff, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, stampLiveTariff, changeListRows, batchesOfThree, keepByLiveTariff, alfaCalculationType, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 import type { CrmTariff } from "./crm-tariffs.ts";
@@ -271,6 +271,11 @@ describe("мастер абонементов учеников", () => {
     const studio = { ...a, id: 400, duration: 90, subjectIds: [92], price: 3850, name: "Художественная студия" };
     const wrongSaved = pickBestTariff(slot({ timeFrom: "16:00", timeTo: "17:30", subjectId: 92, tariffId: 373 }), [portrait, studio]);
     assert.equal(wrongSaved?.id, 400);
+  });
+
+  it("раздельный счёт UI 1 → Alfa calculation_type 2", () => {
+    assert.equal(alfaCalculationType(1), 2);
+    assert.equal(alfaCalculationType(0), 1);
   });
 
   it("абонемент другого курса сайта не ставится в группу художественной школы", () => {

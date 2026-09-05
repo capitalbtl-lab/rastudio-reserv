@@ -310,7 +310,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
         for (let attempt = 0; attempt < 5 && !partOk; attempt += 1) {
           try {
             const active = (await retryFetch(
-              () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: part, fresh: true } as never }),
+              () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: part } as never }),
               1,
               25000,
             )) as { ok?: boolean; items?: PupilTariffItem[]; archivedOnly?: number };
@@ -634,7 +634,7 @@ export function PupilTariffWizard({ onClose }: { onClose: () => void }) {
           await pause(800);
           try {
             const active = (await retryFetch(
-              () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: schoolPack, fresh: true } as never }),
+              () => adminSchedule({ data: { token: token(), action: "pupilTariffActive", pupilItems: schoolPack } as never }),
               1,
               50000,
             )) as { ok?: boolean; items?: PupilTariffItem[] };

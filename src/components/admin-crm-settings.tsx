@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
-import { CRM_STAGE_COLORS, LEAD_STAGES, mergeStages, pinUnsorted, type LeadStage } from "@/data/crm-leads";
+import { CRM_STAGE_COLORS, LEAD_STAGES, mergeStages, pinUnsorted, type LeadStage } from "@/data/crm-leads-stages";
 import { FUNNEL_AUTO_DEFAULT, type FunnelAuto } from "@/data/funnel-auto-core";
 import { CRM_BRANCH } from "@/data/ids";
 import { cn } from "@/lib/utils";
@@ -43,6 +43,7 @@ export function AdminCrmSettings() {
   const [syncMin, setSyncMin] = useState(10);
   const [auto, setAuto] = useState<FunnelAuto>(FUNNEL_AUTO_DEFAULT);
   const [cache, setCache] = useState<CachePolicy | null>(null);
+  const [queue, setQueue] = useState<{ pending?: number; lastNote?: string; overlayNext?: number; overlayTotal?: number; busy?: boolean; exportPending?: number } | null>(null);
   const dragId = useRef(0);
 
   useEffect(() => {
@@ -80,8 +81,9 @@ export function AdminCrmSettings() {
     try {
       const res = (await adminSchedule({
         data: { token: token(), action: "cachePolicyGet" } as never,
-      })) as { ok?: boolean; policy?: CachePolicy };
+      })) as { ok?: boolean; policy?: CachePolicy; queue?: typeof queue };
       if (res.ok && res.policy) setCache(res.policy);
+      if (res.ok && res.queue) setQueue(res.queue);
     } catch {
       /* defaults */
     }
@@ -98,6 +100,20 @@ export function AdminCrmSettings() {
       return;
     }
     setMsg(res.error || "Не удалось сохранить кэш.");
+  }
+
+  async function tickQueue(force: boolean) {
+    setBusy(true);
+    try {
+      const res = (await adminSchedule({
+        data: { token: token(), action: "crmQueueTick", force } as never,
+      })) as { ok?: boolean; extra?: string; queue?: typeof queue; error?: string; live?: number };
+      if (res.queue) setQueue(res.queue);
+      setMsg(res.error || res.extra || (res.ok ? `Пакет прошёл${res.live != null ? `, живых ${res.live}` : ""}` : "Очередь не ответила."));
+      await loadCache();
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function loadStages() {
@@ -186,10 +202,10 @@ export function AdminCrmSettings() {
     if (res.ok && Array.isArray(res.stages)) {
       setStages(mergeStages(res.stages));
       setAddName("");
-      setMsg(`Этап «${title}» добавлен в AlfaCRM.`);
+      setMsg(`Этап «${title}» добавлен.`);
       return;
     }
-    setMsg(res.error || "AlfaCRM не создала этап.");
+    setMsg(res.error || "Не удалось создать этап.");
   }
 
   async function removeStage(id: number, name: string) {
@@ -449,7 +465,7 @@ export function AdminCrmSettings() {
 
       <Card
         title="Кэш сайта"
-        hint="Что читать из хранилища админки, а что каждый раз из AlfaCRM. Оперативные данные — на лету. Абонементы учеников можно кэшировать: счётчик «с / без» сразу живой, сверка идёт пакетами по 3 группы."
+        hint="Что читать из хранилища админки, а что каждый раз из AlfaCRM. Оперативные данные — на лету. Абонементы учеников: счётчик сразу с диска сайта, без пакетов. Сверка CRM — фоном по филиалам."
       >
         <ul className="space-y-2">
           {CACHE_KIND_META.map((k) => {
@@ -506,10 +522,34 @@ export function AdminCrmSettings() {
           <p className="mt-3 text-[0.75rem] text-muted">
             Последняя сверка абонементов: {new Date(cache.overlayAt).toLocaleString("ru-RU")}
             {cache.overlayTotal ? ` · ${cache.overlayNext}/${cache.overlayTotal} групп` : ""}
+            {queue?.exportPending ? ` · выгрузка в Alfa ${queue.exportPending}` : ""}
+            {queue?.pending && !queue.exportPending ? ` · в очереди ${queue.pending}` : ""}
+            {queue?.lastNote ? ` · ${queue.lastNote}` : ""}
           </p>
         ) : (
-          <p className="mt-3 text-[0.75rem] text-muted">Сверки абонементов ещё не было — счётчик заполнится пакетами на вкладке Клиенты.</p>
+          <p className="mt-3 text-[0.75rem] text-muted">
+            Сверки абонементов ещё не было — пакеты идут сами, вкладка Клиенты их не обязана держать открытой.
+            {queue?.exportPending ? ` Выгрузка в Alfa: ${queue.exportPending}.` : ""}
+          </p>
         )}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="h-9 rounded-full bg-black/8 px-4 text-sm"
+            disabled={busy}
+            onClick={() => void tickQueue(false)}
+          >
+            Пакет сейчас
+          </button>
+          <button
+            type="button"
+            className="h-9 rounded-full bg-black/8 px-4 text-sm"
+            disabled={busy}
+            onClick={() => void tickQueue(true)}
+          >
+            Круг с начала
+          </button>
+        </div>
       </Card>
 
       <Card
@@ -569,7 +609,7 @@ export function AdminCrmSettings() {
           </div>
           <div className="rounded-xl bg-surface-2 p-3">
             <dt className="font-semibold">Клиент → «Сделать лидом»</dt>
-            <dd className="mt-1 text-muted">В API часто остаётся is_study = 1. На сайте берём карточку с доски CRM (как Фролов в «Не разобрано»).</dd>
+            <dd className="mt-1 text-muted">Пишем is_study=0 и помечаем «на воронке». Список клиентов сразу убирает карточку, воронка — берёт. Если Alfa оставила is_study=1, сайт всё равно считает лидом.</dd>
           </div>
           <div className="rounded-xl bg-surface-2 p-3">
             <dt className="font-semibold">Архив</dt>

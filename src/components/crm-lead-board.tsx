@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CRM_BRANCH } from "@/data/ids";
-import { LEAD_STAGES, pinUnsorted, type LeadCard, type LeadStage } from "@/data/crm-leads";
+import { LEAD_STAGES, pinUnsorted, type LeadCard, type LeadStage } from "@/data/crm-leads-stages";
 import { RA_POP } from "@/data/admin-ui";
 import { cn } from "@/lib/utils";
 
