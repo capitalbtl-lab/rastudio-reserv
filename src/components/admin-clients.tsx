@@ -335,6 +335,7 @@ export function AdminClients({
   }, [active]);
 
   async function loadLiveTariffs(force = false) {
+    if (liveTariffBusy) return;
     if (!force && liveTariffAt.current && Date.now() - liveTariffAt.current < 120000 && liveTariffIds.size) return;
     setLiveTariffBusy(true);
     try {
@@ -343,10 +344,10 @@ export function AdminClients({
         1,
         240000,
       )) as { ok?: boolean; ids?: number[]; scanned?: number };
-      if (res.ok && Array.isArray(res.ids) && (res.ids.length || Number(res.scanned || 0) > 0)) {
+      if (res.ok && Array.isArray(res.ids)) {
         setLiveTariffIds(new Set(res.ids.map(Number).filter(Boolean)));
         liveTariffAt.current = Date.now();
-        setLiveReady(true);
+        if (res.ids.length || Number(res.scanned || 0) > 0) setLiveReady(true);
         await load(qRef.current, statusRef.current, branchRef.current, ageRef.current);
       }
     } finally {
@@ -354,9 +355,9 @@ export function AdminClients({
     }
   }
 
-  async function pickTariffHave(next: TariffHave) {
-    if (next !== "all") await loadLiveTariffs();
+  function pickTariffHave(next: TariffHave) {
     setTariffHave(next);
+    if (next !== "all") void loadLiveTariffs();
   }
 
   const overlayOnce = useRef(false);
@@ -757,22 +758,21 @@ export function AdminClients({
     };
   }, [rows]);
 
-  const shown = useMemo(() => {
+  const liveSet = useMemo(() => {
     const live = new Set(liveTariffIds);
     for (const r of rows) if (r.hasLiveTariff && Number(r.crmId)) live.add(Number(r.crmId));
-    const ready = liveReady || live.size > 0;
-    const list = ready ? keepByLiveTariff(rows, tariffHave, live, (r) => Number(r.crmId) || 0) : rows;
-    return list.slice(0, cap);
-  }, [rows, cap, tariffHave, liveTariffIds, liveReady]);
+    return live;
+  }, [liveTariffIds, rows]);
+  const shown = useMemo(() => {
+    return keepByLiveTariff(rows, tariffHave, liveSet, (r) => Number(r.crmId) || 0).slice(0, cap);
+  }, [rows, cap, tariffHave, liveSet]);
   const funnelOn = status === "лид" && view === "дети";
   const tariffCounts = useMemo(() => {
-    const live = new Set(liveTariffIds);
-    for (const r of rows) if (r.hasLiveTariff && Number(r.crmId)) live.add(Number(r.crmId));
     const pool = funnelOn ? funnelItems.map((it) => Number(it.customerId || it.id) || 0) : rows.map((r) => Number(r.crmId) || 0);
     let withN = 0;
-    for (const id of pool) if (id && live.has(id)) withN += 1;
-    return { all: pool.length, with: withN, without: Math.max(0, pool.length - withN), ready: liveReady || live.size > 0 };
-  }, [funnelOn, funnelItems, rows, liveTariffIds, liveReady]);
+    for (const id of pool) if (id && liveSet.has(id)) withN += 1;
+    return { all: pool.length, with: withN, without: Math.max(0, pool.length - withN), ready: true };
+  }, [funnelOn, funnelItems, rows, liveSet]);
   const chipCounts = useMemo(() => {
     const next = { ...branchCounts };
     if (!funnelOn || !funnelItems.length) return next;
@@ -810,11 +810,11 @@ export function AdminClients({
     () =>
       keepByLiveTariff(
         filterLeadCards(funnelItems, { branch, age, q, gone: funnelGone.current }),
-        liveReady ? tariffHave : "all",
-        liveTariffIds,
+        tariffHave,
+        liveSet,
         (it) => Number(it.customerId || it.id) || 0,
       ),
-    [funnelItems, q, branch, age, tariffHave, liveTariffIds, liveReady],
+    [funnelItems, q, branch, age, tariffHave, liveSet],
   );
   const activeIndex = shown.findIndex((r) => Number(r.crmId) === activeId);
   const joinedIds = new Set((card?.groups || []).filter((g) => g.active).map((g) => g.id));
@@ -1183,8 +1183,8 @@ export function AdminClients({
           <div className="flex h-10 max-w-full items-center rounded-full bg-surface-2 p-1" data-sort-group="tariff" role="tablist" aria-label="Абонемент">
             {([
               ["all", "Все", tariffCounts.all],
-              ["with", "С абонементом", !tariffCounts.ready || liveTariffBusy ? "…" : tariffCounts.with],
-              ["without", "Без абонемента", !tariffCounts.ready || liveTariffBusy ? "…" : tariffCounts.without],
+              ["with", "С абонементом", liveTariffBusy && !tariffCounts.with ? "…" : tariffCounts.with],
+              ["without", "Без абонемента", liveTariffBusy && !tariffCounts.with ? "…" : tariffCounts.without],
             ] as const).map(([id, label, n]) => {
               const on = tariffHave === id;
               return (
@@ -1195,8 +1195,7 @@ export function AdminClients({
                   aria-selected={on}
                   data-sort="tariff"
                   data-id={id}
-                  disabled={liveTariffBusy && id !== "all"}
-                  onClick={() => void pickTariffHave(id)}
+                  onClick={() => pickTariffHave(id)}
                   className={cn(
                     "h-8 rounded-full px-3 text-[0.8rem] font-semibold transition-colors duration-[var(--motion-quick)]",
                     on ? "bg-primary text-white shadow-sm" : "text-muted hover:text-fg",
@@ -1700,20 +1699,20 @@ export function AdminClients({
               ) : null}
               <CrmGroupMembers
                 title="Ученики"
-                items={keepByLiveTariff(groupMembers.filter((m) => m.status !== "лид"), liveReady ? tariffHave : "all", liveTariffIds, (m) => m.id)}
+                items={keepByLiveTariff(groupMembers.filter((m) => m.status !== "лид"), tariffHave, liveSet, (m) => m.id)}
                 onOpen={(m) => void openById(m.id, pickedGroup.branchId)}
                 loading={groupLoading}
               />
               <CrmGroupMembers
                 title="Лиды"
-                items={keepByLiveTariff(groupMembers.filter((m) => m.status === "лид"), liveReady ? tariffHave : "all", liveTariffIds, (m) => m.id)}
+                items={keepByLiveTariff(groupMembers.filter((m) => m.status === "лид"), tariffHave, liveSet, (m) => m.id)}
                 onOpen={(m) => void openById(m.id, pickedGroup.branchId)}
                 variant="lead"
                 loading={groupLoading}
               />
               <CrmGroupMembers
                 title="Архивные ученики"
-                items={keepByLiveTariff(groupArchive, liveReady ? tariffHave : "all", liveTariffIds, (m) => m.id)}
+                items={keepByLiveTariff(groupArchive, tariffHave, liveSet, (m) => m.id)}
                 onOpen={(m) => void openById(m.id, pickedGroup.branchId)}
                 variant="archive"
                 loading={groupLoading}
