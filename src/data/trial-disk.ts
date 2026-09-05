@@ -1,4 +1,5 @@
 /** Заявка с сайта/консультанта: диск сразу, Alfa — очередью. Только ID. */
+import { nextLocalId } from "./crm-local-id.ts";
 
 export type TrialLessonBody = {
   type: string;
@@ -31,7 +32,7 @@ export type TrialCreateBody = {
 };
 
 export function trialLocalId(now = Date.now()) {
-  return -Math.abs((now % 1_000_000_000) || 1);
+  return nextLocalId([], now);
 }
 
 export function trialPhoneDigits(phone: string) {

@@ -158,13 +158,13 @@ export function playbookPrompt(scripts: ScriptSection[], facts?: SessionFacts, n
   if (facts?.branchId) closed.push("филиал");
   if (facts?.school) closed.push("направление");
   const skip = new Set<ScriptStep>();
-  if (facts?.age) skip.add("age");
-  if (facts?.city) skip.add("city");
-  if (facts?.branchId) skip.add("branch");
+  if (facts?.age || facts?.mode === "client" || facts?.mode === "fork") skip.add("age");
+  if (facts?.city || facts?.mode === "client" || facts?.mode === "fork") skip.add("city");
+  if (facts?.branchId || facts?.mode === "client" || facts?.mode === "fork") skip.add("branch");
   const live = [
     "Один новый вопрос. Закрытые шаги не повторяй даже другими словами.",
     "Про программу — два предложения, потом вопрос «подробнее или пробное?». Не читай методичку вслух.",
-    facts ? `Сейчас: ${nextStepOf(facts)}` : "Спроси возраст коротко и жди ответ.",
+    facts ? `Сейчас: ${nextStepOf(facts)}` : "Спроси: уже занимаетесь или подбираете впервые.",
     closed.length ? `Уже есть, ЗАПРЕЩЕНО спрашивать: ${closed.join(", ")}.` : "",
     facts?.city ? `Город уже ${facts.city}. Фразы «Коломна или Луховицы», «какой город» — запрещены.` : "",
   ]

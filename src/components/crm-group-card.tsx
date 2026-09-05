@@ -190,12 +190,9 @@ export function CrmGroupCard({
   const branch = CRM_BRANCH[branchId]?.short || "";
   return (
     <div data-card-id={key} data-group-id={groupId || undefined} data-branch-id={branchId || undefined}>
-      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted">
-        Карточка группы · {key}
-      </p>
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted">Группа</p>
       <h4 className="font-display mt-1 text-[1.45rem] leading-tight">{name || "Группа"}</h4>
       <p className="mt-1.5 flex flex-wrap gap-1.5 text-sm text-muted">
-        {groupId ? <span className="rounded-full bg-white px-2 py-0.5 font-mono text-[0.72rem] ring-1 ring-black/8">gid {groupId}</span> : null}
         {branch ? <span>{branch}</span> : null}
         {age ? <span>{age}</span> : null}
         {subject ? <span>{subject}</span> : null}

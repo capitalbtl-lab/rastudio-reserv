@@ -138,7 +138,10 @@ export function exportPath(job: CrmExportJob) {
 }
 
 export function exportBody(job: CrmExportJob) {
-  if (job.op === "pay.create") return { ...job.body };
+  if (job.op === "pay.create") {
+    const { localId: _localId, kind: _kind, ...rest } = job.body;
+    return rest;
+  }
   if (job.op === "lesson.create") {
     const { localId: _localId, via: _via, ...rest } = job.body;
     return rest;
@@ -177,6 +180,50 @@ export function crmCreatedId(res: unknown) {
   return Number(r.model?.id || r.id || 0) || 0;
 }
 
+const REMAP_SCALARS = [
+  "localId",
+  "subject_id",
+  "lead_status_id",
+  "id",
+  "groupId",
+  "customer_id",
+  "related_id",
+  "lessonId",
+  "tariffId",
+  "statusId",
+] as const;
+
+const REMAP_ARRAYS = ["subject_ids", "group_ids", "branch_ids"] as const;
+
+/** Alfa вернула номер — перепись очереди. Свой id (from < 0 или local subject) → crmId. */
+export function remapExportJobs(jobs: CrmExportJob[], from: number, to: number, skipId?: string): CrmExportJob[] {
+  const a = Number(from) || 0;
+  const b = Number(to) || 0;
+  if (!a || !b || a === b) return jobs;
+  return jobs.map((j) => {
+    if (skipId && j.id === skipId) return j;
+    const entityId = j.entityId === a ? b : j.entityId;
+    const body = { ...j.body };
+    let changed = entityId !== j.entityId;
+    for (const k of REMAP_SCALARS) {
+      if (Number(body[k]) === a) {
+        body[k] = b;
+        changed = true;
+      }
+    }
+    for (const k of REMAP_ARRAYS) {
+      if (!Array.isArray(body[k])) continue;
+      const prev = body[k] as unknown[];
+      const next = prev.map((n) => (Number(n) === a ? b : n));
+      if (next.some((n, i) => n !== prev[i])) {
+        body[k] = next;
+        changed = true;
+      }
+    }
+    return changed ? { ...j, entityId, body } : j;
+  });
+}
+
 export function isSingleExportOp(op: CrmExportOp) {
   return (
     op === "cgi.apply" ||
@@ -186,6 +233,39 @@ export function isSingleExportOp(op: CrmExportOp) {
     op === "customer.create" ||
     op === "subject.create" ||
     op === "lead-status.create" ||
-    op === "lesson.create"
+    op === "lesson.create" ||
+    op === "pay.create"
   );
+}
+
+export function exportJobSnap(jobs: CrmExportJob[]) {
+  return jobs.map((j) => ({
+    id: j.id,
+    op: j.op,
+    entityId: j.entityId,
+    branchId: j.branchId,
+    actor: j.actor || ("human" as CrmActorId),
+    at: j.at,
+    tries: j.tries,
+  }));
+}
+
+export function exportOpLabel(op: CrmExportOp) {
+  if (op === "customer.update") return "карточка";
+  if (op === "customer.create") return "новый клиент";
+  if (op === "group.update") return "группа";
+  if (op === "group.create") return "новая группа";
+  if (op === "cgi.apply") return "состав";
+  if (op === "customer-tariff.create") return "абонемент";
+  if (op === "customer-tariff.clear") return "снять абонемент";
+  if (op === "lesson.create") return "занятие";
+  if (op === "lesson.update") return "урок";
+  if (op === "regular-lesson.update") return "расписание";
+  if (op === "regular-lesson.create") return "слот";
+  if (op === "pay.create") return "платёж";
+  if (op === "subject.create") return "предмет";
+  if (op === "lead-status.create") return "новый этап";
+  if (op === "lead-status.update") return "этап воронки";
+  if (op === "lead-status.delete") return "удалить этап";
+  return op;
 }

@@ -10,7 +10,7 @@ function fileOf() {
 }
 
 function empty(): CachePolicy {
-  return { at: "", overlayAt: "", overlayNext: 0, overlayTotal: 0, rules: { ...DEFAULT_CACHE_RULES } };
+  return { at: "", overlayAt: "", overlayNext: 0, overlayTotal: 0, journalAt: "", journalNext: 0, journalTotal: 0, rules: { ...DEFAULT_CACHE_RULES } };
 }
 
 export function loadCachePolicy(): CachePolicy {
@@ -32,6 +32,9 @@ export function loadCachePolicy(): CachePolicy {
       overlayAt: String(raw.overlayAt || ""),
       overlayNext: Math.max(0, Number(raw.overlayNext) || 0),
       overlayTotal: Math.max(0, Number(raw.overlayTotal) || 0),
+      journalAt: String(raw.journalAt || ""),
+      journalNext: Math.max(0, Number(raw.journalNext) || 0),
+      journalTotal: Math.max(0, Number(raw.journalTotal) || 0),
       rules,
     };
   } catch {
@@ -48,6 +51,9 @@ export function saveCachePolicy(next: CachePolicy) {
     overlayAt: String(next.overlayAt || cur.overlayAt || ""),
     overlayNext: Number.isFinite(Number(next.overlayNext)) ? Math.max(0, Number(next.overlayNext)) : cur.overlayNext,
     overlayTotal: Number.isFinite(Number(next.overlayTotal)) ? Math.max(0, Number(next.overlayTotal)) : cur.overlayTotal,
+    journalAt: String(next.journalAt ?? cur.journalAt ?? ""),
+    journalNext: Number.isFinite(Number(next.journalNext)) ? Math.max(0, Number(next.journalNext)) : cur.journalNext || 0,
+    journalTotal: Number.isFinite(Number(next.journalTotal)) ? Math.max(0, Number(next.journalTotal)) : cur.journalTotal || 0,
     rules: { ...cur.rules },
   };
   for (const k of Object.keys(DEFAULT_CACHE_RULES) as CacheKind[]) {
@@ -75,4 +81,21 @@ export function stampOverlay(next: number, total: number) {
   cur.overlayNext = next;
   cur.overlayTotal = total;
   return saveCachePolicy(cur);
+}
+
+export function stampJournalCursor(next: number, total: number) {
+  const cur = loadCachePolicy();
+  cur.journalAt = new Date().toISOString();
+  cur.journalNext = next;
+  cur.journalTotal = total;
+  return saveCachePolicy(cur);
+}
+
+export function journalStale(now = Date.now()) {
+  const pol = loadCachePolicy();
+  const ttl = Math.max(5, Number(pol.rules.lessons?.ttlMin) || 10);
+  const t = Date.parse(pol.journalAt || "");
+  if (!Number.isFinite(t) || t <= 0) return true;
+  if (!pol.journalTotal || (Number(pol.journalNext) || 0) < pol.journalTotal) return true;
+  return now - t >= ttl * 60_000;
 }

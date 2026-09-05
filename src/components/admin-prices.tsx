@@ -21,10 +21,10 @@ type Tab = "schedule" | "agent" | "calls" | "dossiers" | "apis";
 
 const TABS: { id: Tab; label: string; hint: string }[] = [
   { id: "schedule", label: "Расписание занятий", hint: "Группы, цены, абонементы" },
-  { id: "agent", label: "Ассистент ИИ", hint: "Окно, обучение, разделы сайта" },
+  { id: "agent", label: "Ассистент ИИ", hint: "Окно, каналы, обучение" },
   { id: "calls", label: "База звонков", hint: "Novofon → знания" },
   { id: "dossiers", label: "Личные дела", hint: "Клиенты AlfaCRM" },
-  { id: "apis", label: "API и интеграции", hint: "Yandex, CRM, телефония" },
+  { id: "apis", label: "API и интеграции", hint: "Yandex, ВК, MAX, CRM" },
 ];
 
 function token() {

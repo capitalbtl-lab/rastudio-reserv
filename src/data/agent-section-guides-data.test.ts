@@ -5,7 +5,10 @@ import { readFileSync } from "node:fs";
 describe("база знаний: предметы и роли", () => {
   it("заводской текст содержит курс сайта, счётчики, роли и статусы", () => {
     const src = readFileSync(new URL("./agent-section-guides-data.ts", import.meta.url), "utf8");
-    assert.match(src, /GUIDE_REV = "2026-09-05-leads-disk"/);
+    assert.match(src, /GUIDE_REV = "2026-09-05-client-desk"/);
+    assert.match(src, /id: "agent"/);
+    assert.match(src, /function agentBody/);
+    assert.match(src, /COURSE_ASK/);
     assert.match(src, /id: "subjects"/);
     assert.match(src, /id: "roles"/);
     assert.match(src, /function subjectsBody/);
@@ -17,6 +20,8 @@ describe("база знаний: предметы и роли", () => {
     assert.match(src, /не уходит/);
     assert.match(src, /гр \/ уч|групп \/ ученик/);
     assert.match(src, /consultantCanBook/);
+    assert.match(src, /consultantCanJournal/);
+    assert.match(src, /note_skip/);
     assert.match(src, /custom_prioritet/);
     assert.match(src, /status 4/);
     assert.match(src, /custom_hashtagkursa/);
@@ -37,7 +42,12 @@ describe("база знаний: предметы и роли", () => {
     assert.match(src, /applyPricesFromTariffs/);
     assert.match(src, /lesson.create/);
     assert.match(src, /group.create/);
-    assert.match(src, /customer.create/);
+    assert.match(src, /joinCourseSubject/);
+    assert.match(src, /id < 0/);
+    assert.match(src, /remapExportJobs/);
+    assert.match(src, /stampJournal/);
+    assert.match(src, /customerIds \+ status/);
+    assert.match(src, /Разъём, не склад/);
     assert.match(src, /lead-status.create/);
     assert.match(src, /teacherId филиала/);
     assert.match(src, /schoolId прайса/);
@@ -46,5 +56,16 @@ describe("база знаний: предметы и роли", () => {
     assert.match(src, /course_id=courseId дерева/);
     assert.match(src, /loadGuides\(\)/);
     assert.match(src, /\["roles", "site"\]/);
+    assert.match(src, /comms\[\]/);
+    assert.match(src, /pays\[\]/);
+    assert.match(src, /id: "add-pay"/);
+    assert.match(src, /id: "read-comms"/);
+    assert.match(src, /commsPrompt|лента канала/);
+    assert.match(src, /Не читать кассу Alfa на F5/);
+    assert.match(src, /Не выгружать чат/);
+    assert.match(src, /уже ходим или подбираем впервые/);
+    assert.match(src, /\/api\/agent\/vk\|max\|phone/);
+    assert.match(src, /AGENT_PANES/);
+    assert.match(src, /resolveAskToTree/);
   });
 });

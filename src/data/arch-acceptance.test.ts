@@ -11,6 +11,7 @@ import { tariffRowLive, liveTariffCustomerIds } from "./crm-tariff-row.ts";
 import { roomsOfBranchList } from "./crm-rooms.ts";
 import { slotFitsAgent } from "./agent-groups.ts";
 import { takenByGroupFromCgi, groupsOfCustomerFromCgi } from "./crm-membership.ts";
+import { joinCourseSubject } from "./course-subject-core.ts";
 
 const tree = {
   schools: [
@@ -66,6 +67,25 @@ describe("приёмка: витрина → заявка → лид", () => {
     assert.equal(hit.subjectId, 13);
     assert.equal(hit.source, "group");
     assert.equal(Number("/art-studio-5-6"), Number.NaN);
+  });
+
+  it("стык курс/предмет — карта ID, имя не ключ", () => {
+    const treeFull = { ...tree, assign: {} as Record<string, string> };
+    const byMap = joinCourseSubject(
+      { id: "580", groupId: 580, branchId: 1, courseId: "", subjectId: 13 },
+      treeFull,
+      [{ subjectId: 13, courseId: "/art-studio-5-6" }],
+    );
+    assert.equal(byMap.courseId, "/art-studio-5-6");
+    assert.equal(byMap.source, "map");
+    assert.equal(byMap.gap, "");
+    const noMap = joinCourseSubject(
+      { id: "580", groupId: 580, branchId: 1, courseId: "", subjectId: 13 },
+      treeFull,
+      [],
+    );
+    assert.equal(noMap.courseId, "");
+    assert.equal(noMap.gap, "no-course");
   });
 
   it("Фролов на доске CRM — лид, не клиент; «Сделать клиентом» снимает воронку", () => {

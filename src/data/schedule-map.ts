@@ -9,7 +9,7 @@ import { SEED_SUBJECTS, loadSubjects } from "@/data/crm-subjects";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { slotMismatch } from "@/data/slot-mismatch";
 import { loadSiteTree, saveSiteTree } from "./site-tree";
-import { SUBJECT_TO_COURSE, resolveGroupCourseId, groupAssignKey, canonCourseId, canonSchoolId } from "./ids";
+import { SUBJECT_TO_COURSE, resolveGroupCourseId, joinCourseSubject, courseSubjectGapText, groupAssignKey, canonCourseId, canonSchoolId } from "./ids";
 import { UNMAPPED_SCHOOL } from "./group-status";
 
 export type SchoolLink = { schedule: string; siteHref: string; schoolId?: string };
@@ -207,7 +207,9 @@ export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
     const course = cid ? tree.courses.find((c) => c.id === cid || c.href === cid) : undefined;
     const schoolNode = course ? tree.schools.find((x) => x.id === course.schoolId) : undefined;
     if (!course || !schoolNode) {
-      const mm = slotMismatch(s);
+      const join = joinCourseSubject(s, tree, map.courses);
+      const gap = courseSubjectGapText(join);
+      const mm = gap ? { level: "soft" as const, text: gap } : slotMismatch(s);
       return {
         ...s,
         courseId: "",

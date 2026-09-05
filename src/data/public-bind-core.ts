@@ -1,5 +1,6 @@
 /** Доска раздела «Сайт»: школы/курсы/группы только по ID. */
 import type { SiteTree } from "./site-tree.ts";
+import { resolveGroupCourseId } from "./course-subject-core.ts";
 
 export type IdMapCourse = { subjectId: number; courseId?: string; siteHref?: string };
 
@@ -37,26 +38,13 @@ function schoolInTree(tree: SiteTree, raw?: string) {
   return tree.schools.find((s) => s.id === id || s.href === id)?.id || "";
 }
 
-function assignKey(s: { id?: string; groupId?: number; branchId?: number }) {
-  if (Number(s.groupId) > 0) return `gid:${Number(s.branchId) || 0}:${s.groupId}`;
-  return String(s.id || "");
-}
-
 /** courseId группы: assign → slot.courseId → карта subjectId. Не по имени. */
 export function publicCourseIdOf(
   s: { id?: string; groupId?: number; branchId?: number; courseId?: string; subjectId?: number },
   tree: SiteTree,
   mapCourses?: IdMapCourse[],
 ) {
-  const assigned = courseInTree(tree, tree.assign?.[assignKey(s)] || "");
-  if (assigned) return assigned;
-  const own = courseInTree(tree, s.courseId);
-  if (own) return own;
-  if (s.subjectId && mapCourses?.length) {
-    const link = mapCourses.find((c) => c.subjectId === s.subjectId);
-    return courseInTree(tree, String(link?.courseId || link?.siteHref || ""));
-  }
-  return "";
+  return resolveGroupCourseId(s, tree, mapCourses);
 }
 
 export function publicGroupsOfCourse(

@@ -1,4 +1,9 @@
+export type VisitorMode = "fork" | "new" | "client";
+
 export type SessionFacts = {
+  mode?: VisitorMode;
+  identified?: boolean;
+  customerId?: number;
   age?: number;
   band?: string;
   city?: string;
@@ -110,6 +115,30 @@ function takePhone(text: string) {
   return m ? m[0].replace(/[^\d+]/g, "") : "";
 }
 
+const CLIENT_RE =
+  /уже ходим|уже занима|действующ\w* клиент|мы клиент|ходим к вам|занимаемся у вас|наш ребёнок ходит|продолжаем ходить|открыть карточку|телефон для входа/i;
+const NEW_RE =
+  /впервые|подбираем курс|новый клиент|ещё не ходим|не занимаемся|подобрать курс|хочу пробн|запишите на пробн|подбираем впервые/i;
+
+export function modeFromMessages(messages: { role: string; content: string }[]): VisitorMode {
+  const userMsgs = messages.filter((m) => m.role === "user").map((m) => m.content);
+  for (const u of [...userMsgs].reverse()) {
+    if (NEW_RE.test(u)) return "new";
+    if (CLIENT_RE.test(u)) return "client";
+  }
+  const user = userMsgs.join("\n");
+  if (takeAge(user)) return "new";
+  return "fork";
+}
+
+export function identifiedFromMessages(messages: { role: string; content: string }[]) {
+  const user = [...messages].reverse().find((m) => m.role === "user")?.content || "";
+  const asst = [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
+  if (/это ваш|нашли|ваш ребёнок/i.test(asst) && /^(да|ага|угу|верно|наш|так|это наш)\b/i.test(user.trim())) return true;
+  if (/откройте карточку|да, это /i.test(user)) return true;
+  return false;
+}
+
 function takeCourse(text: string) {
   const m = text.match(
     /(?:курс[аеу]?\s+|интересен?\s+|про\s+|запис\w+\s+на\s+|подробнее\s+про\s+)[«"]?([^«»"\n.]{8,72})/i,
@@ -126,8 +155,8 @@ export function factsFromMessages(messages: { role: string; content: string }[])
     .filter((m) => m.role === "assistant")
     .map((m) => m.content)
     .join("\n");
-  const facts: SessionFacts = {};
-  const age = takeAge(user) || takeAge(assistant);
+  const facts: SessionFacts = { mode: modeFromMessages(messages) };
+  const age = takeAge(user) || (facts.mode === "new" ? takeAge(assistant) : 0);
   if (age) {
     facts.age = age;
     facts.band = bandOf(age);
@@ -170,10 +199,19 @@ export function factsFromMessages(messages: { role: string; content: string }[])
   facts.briefed =
     /последовательн|ступен|проходят на занят|материал дет|от младшего/i.test(assistant) ||
     /понятно|к пробному|к записи|давайте к/i.test(user);
+  if (facts.mode === "client") facts.identified = identifiedFromMessages(messages);
   return facts;
 }
 
 export function nextStepOf(facts: SessionFacts) {
+  if (!facts.mode || facts.mode === "fork") {
+    return "спросить ТОЛЬКО: уже занимаетесь у нас или подбираете впервые. Возраст не спрашивать.";
+  }
+  if (facts.mode === "client") {
+    if (!facts.phone) return "попросить телефон записи. Не спрашивать возраст и город.";
+    if (!facts.identified) return "подтвердить имя ребёнка с диска. Не выдумывать карточку. Возраст не спрашивать.";
+    return "клиент узнан. Говорить про его группы, явку, отработку, паузу, абонемент. Не воронка нового. Жалобы и возврат денег — телефон.";
+  }
   if (!facts.age) return "спросить ТОЛЬКО возраст: «Сколько лет ребёнку?» Ждать ответ. Город не упоминать.";
   if (!facts.city) return "подтвердить возраст тремя словами и спросить ТОЛЬКО город: Коломна или Луховицы. Возраст больше не спрашивай.";
   if (facts.city === "Коломна" && !facts.branchId) {
@@ -190,6 +228,9 @@ export function nextStepOf(facts: SessionFacts) {
 
 export function factsPrompt(facts: SessionFacts) {
   const lines: string[] = [];
+  if (facts.mode) lines.push(`режим: ${facts.mode === "client" ? "действующий" : facts.mode === "new" ? "новый" : "развилка"}`);
+  if (facts.identified) lines.push("клиент узнан по телефону, карточка с диска");
+  if (facts.customerId) lines.push(`customerId ${facts.customerId}`);
   if (facts.age) lines.push(`возраст ребёнка: ${facts.age} лет${facts.band ? ` (группа ${facts.band})` : ""}`);
   if (facts.city) lines.push(`город: ${facts.city}`);
   if (facts.branch) lines.push(`филиал: ${facts.branch}${facts.branchId ? ` (id ${facts.branchId})` : ""}`);

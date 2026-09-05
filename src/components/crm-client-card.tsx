@@ -22,6 +22,8 @@ import { Button } from "@/components/ui/button";
 import { LessonStrip, toYmd } from "@/components/lesson-strip";
 import { RaSelect } from "@/components/ra-select";
 import { SCHOOLS } from "@/data/site";
+import type { GroupCalLesson } from "@/data/crm-slots-core";
+import { commChannelLabel } from "@/data/crm-comms-core";
 
 function money(n?: number) {
   return `${Number(n || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`;
@@ -51,10 +53,10 @@ function ruIso(iso: string) {
   return `${d}.${m}.${y}`;
 }
 
-const SCHOOL_LABELS = SCHOOLS.map((s) => s.label);
+const SCHOOL_LABELS: string[] = SCHOOLS.map((s) => s.label);
 
 function resolveSchool(g: { school?: string; schoolId?: string }) {
-  if (g.school && SCHOOL_LABELS.includes(g.school)) return g.school;
+  if (g.school && SCHOOLS.some((s) => s.label === g.school)) return g.school;
   if (g.schoolId) {
     const hit = SCHOOLS.find((s) => s.href === g.schoolId || s.href === `/${String(g.schoolId).replace(/^\//, "")}`);
     if (hit) return hit.label;
@@ -131,11 +133,19 @@ function Field({ label, required, top, children }: { label: string; required?: b
   );
 }
 
+function whenComm(raw: string) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const d = new Date(s.includes("T") || s.includes("-") ? s : s.replace(" ", "T"));
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
 function Comm({ c }: { c: CustomerComm }) {
   return (
     <div className={cn("rounded-xl px-3 py-2 text-sm ring-1 ring-black/6", c.incoming ? "bg-white" : "bg-primary/8")}>
       <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">
-        {[c.at, c.channel, c.who].filter(Boolean).join(" · ")}
+        {[whenComm(c.at), commChannelLabel(c.channel), c.who].filter(Boolean).join(" · ")}
         {c.incoming ? " · входящее" : ""}
       </p>
       <p className="mt-1 whitespace-pre-wrap leading-relaxed">{c.text}</p>
@@ -344,6 +354,12 @@ export function CrmClientCard({
     setLessonTime(card.regular?.[0]?.from || "");
   }, [card]);
 
+  useEffect(() => {
+    if (!msg || busy) return;
+    const t = window.setTimeout(() => setMsg(""), 2800);
+    return () => window.clearTimeout(t);
+  }, [msg, busy]);
+
   const channels = useMemo(() => {
     const set = new Set(card.comms.map((c) => c.channel || "сообщение"));
     return [...set];
@@ -510,7 +526,7 @@ export function CrmClientCard({
     setMsg("");
     try {
       await onAction(action, extra);
-      setMsg("Сохранено в AlfaCRM.");
+      setMsg("Сохранено.");
       setPayKind("");
       setPaySum("");
       setHeadMenu("");
@@ -585,6 +601,18 @@ export function CrmClientCard({
                         Провести
                       </Button>
                     </div>
+                  ) : null}
+                  {(card.pays || []).length ? (
+                    <ul className="mt-2 max-h-36 overflow-y-auto border-t border-black/8 pt-1.5">
+                      {[...(card.pays || [])].reverse().map((p) => (
+                        <li key={p.id} className="flex justify-between gap-2 px-1.5 py-0.5 text-[0.68rem]">
+                          <span className="min-w-0 truncate text-muted">{p.documentDate || p.note}</span>
+                          <span className="shrink-0 tabular-nums font-semibold">
+                            {p.income ? `+${money(p.income)}` : `−${money(p.expenditure)}`}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   ) : null}
                 </div>
               ) : null}
@@ -845,7 +873,7 @@ export function CrmClientCard({
                 })}
               </ul>
             ) : (
-              <p className="mt-2 text-sm text-muted">Группа не привязана.</p>
+              <p className="mt-2 text-sm text-muted">Ещё не в группе — можно записать ниже.</p>
             )}
           </div>
           <div className="min-w-0 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="active-tariff">
@@ -876,7 +904,7 @@ export function CrmClientCard({
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-sm text-muted">Абонемента ученика нет.</p>
+              <p className="mt-2 text-sm text-muted">Нет действующего абонемента.</p>
             )}
           </div>
         </div>
@@ -899,7 +927,7 @@ export function CrmClientCard({
 
         <div className="mt-5">
           <div className="flex flex-wrap items-center gap-1.5">
-            <p className="font-display text-lg">Коммуникации</p>
+            <p className="font-display text-lg">Переписка</p>
             <button type="button" onClick={() => setChannel("")} className={cn("rounded-full px-2 py-0.5 text-[0.7rem] font-semibold", !channel ? "bg-fg text-white" : "bg-white ring-1 ring-black/8")}>
               Все
             </button>
@@ -910,7 +938,7 @@ export function CrmClientCard({
                 onClick={() => setChannel(ch)}
                 className={cn("rounded-full px-2 py-0.5 text-[0.7rem] font-semibold", channel === ch ? "bg-fg text-white" : "bg-white ring-1 ring-black/8")}
               >
-                {ch}
+                {commChannelLabel(ch)}
               </button>
             ))}
           </div>
@@ -922,11 +950,11 @@ export function CrmClientCard({
               ))}
             </div>
           ) : loading ? null : (
-            <p className="mt-2 text-sm text-muted">Переписки в карточке пока нет.</p>
+            <p className="mt-2 text-sm text-muted">Пока нет переписки. Заявки с сайта, чат, ВК и MAX появятся здесь.</p>
           )}
         </div>
         {msg ? <p className="mt-3 text-sm font-medium text-primary">{msg}</p> : null}
-        {busy ? <p className="mt-1 text-sm text-muted">Пишу в AlfaCRM…</p> : null}
+        {busy ? <p className="mt-1 text-sm text-muted">Сохраняю…</p> : null}
       </div>
     </article>
   );

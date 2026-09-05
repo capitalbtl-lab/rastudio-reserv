@@ -154,9 +154,6 @@ async function runPull(kind: PullKind) {
 export async function handleAdminDisk(data: DiskReq) {
   if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
   const kind = data.kind || "subjects";
-  if (kind === "clients" || kind === "clientsLeads" || kind === "clientsArchive") {
-    void import("./dossiers").then((m) => m.startLeadTicker()).catch(() => {});
-  }
   if (data.action === "pullStatus") return { ok: true as const, ...job() };
   if (data.action === "pull") {
     const cur = job();
@@ -181,7 +178,7 @@ export async function handleAdminDisk(data: DiskReq) {
     if (kind === "subjects") {
       const { packSubjectRows } = await import("./subject-admin");
       const packed = packSubjectRows();
-      return { ok: true as const, ...packed, total: packed.subjects.length };
+      return { ...packed, ok: true as const, total: packed.subjects.length };
     }
     if (kind === "tariffs") {
       const raw = readJson("crm-tariffs.json") || {};
@@ -205,39 +202,14 @@ export async function handleAdminDisk(data: DiskReq) {
       };
     }
     if (kind === "clients") {
-      const { searchClientViews, applyCrmCustomer } = await import("./dossiers");
+      const { searchClientViews, toClientListRow } = await import("./dossiers");
       const q = String(data.q || "").trim();
       const status = String(data.status || "");
       const branchId = Number(data.branchId) || 0;
       const ageBand = String(data.ageBand || "");
-      let res = searchClientViews(q, 2500, status, branchId, ageBand);
-      if (q.length >= 3 && res.items.length < 3) {
-        try {
-          const { token, request } = await import("./alfacrm");
-          const t = await token();
-          const needle = q.toLowerCase();
-          for (const b of [1, 2, 3, 4]) {
-            const json = await request<{ items?: Record<string, unknown>[] }>(
-              `/v2api/${b}/customer/index`,
-              { page: 0, pageSize: 30, name: q },
-              t,
-            ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-            for (const c of json.items || []) {
-              const hay = `${c.name || ""} ${c.legal_name || ""}`.toLowerCase();
-              if (!hay.includes(needle) && !needle.split(/\s+/).every((w) => hay.includes(w))) continue;
-              applyCrmCustomer(c, b, false);
-              const { rememberCustomerAsLead, forgetLead } = await import("./crm-leads");
-              const st = Number(c.is_study);
-              if (st === 1 || st === 2) forgetLead(Number(c.id), b);
-              else rememberCustomerAsLead(c, b);
-            }
-          }
-          res = searchClientViews(q, 2500, status, branchId, ageBand);
-        } catch {
-          /* local list is enough */
-        }
-      }
-      return { ok: true as const, ...res };
+      const take = Math.min(2500, Math.max(80, Number(data.take) || (q ? 400 : 240)));
+      const res = searchClientViews(q, take, status, branchId, ageBand);
+      return { ok: true as const, ...res, items: res.items.map(toClientListRow) };
     }
     if (kind === "prices") {
       const raw = readJson("prices.json");

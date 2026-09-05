@@ -19,12 +19,12 @@ export const adminDebugMode = createServerFn({ method: "POST" })
       for (const f of WINDOW_FLAGS) {
         if (data.widget && f.id in data.widget) widget[f.id] = Boolean(data.widget[f.id]);
       }
-      saveDebug({ tools, widget });
+      saveDebug({ tools, widget, last: cur.last || [] });
       logAdmin("Режим отладки: набор инструментов обновлён");
-      return { ok: true as const, tools, widget };
+      return { ok: true as const, tools, widget, last: cur.last || [] };
     }
     const s = loadDebug();
-    return { ok: true as const, tools: s.tools, widget: s.widget };
+    return { ok: true as const, tools: s.tools, widget: s.widget, last: s.last || [] };
   });
 
 export const unlockDebug = createServerFn({ method: "POST" })

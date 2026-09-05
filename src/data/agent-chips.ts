@@ -1,6 +1,6 @@
 import { SITE } from "@/data/site";
 import { courseHint } from "@/data/agent-courses";
-import { factsFromMessages } from "@/data/agent-facts";
+import { factsFromMessages, modeFromMessages } from "@/data/agent-facts";
 import { nextSlot, slotsFromMessages } from "@/data/funnel-state";
 import { summerSeason } from "@/data/agent-playbook";
 
@@ -10,6 +10,22 @@ export type AgentChip = {
   href?: string;
   primary?: boolean;
 };
+
+const FORK: AgentChip[] = [
+  { label: "Уже ходим", send: "Мы уже ходим к вам" },
+  { label: "Подбираем впервые", send: "Подбираем курс впервые", primary: true },
+  { label: "Правила и цены", send: "Расскажите правила оказания услуг и цены" },
+];
+
+const CLIENT_TOPICS: AgentChip[] = [
+  { label: "Расписание", send: "Когда следующее занятие?", primary: true },
+  { label: "Отработка", send: "Нужна отработка пропуска" },
+  { label: "Не придём", send: "Не сможем прийти на ближайшее занятие" },
+  { label: "Пауза", send: "Поставим занятия на паузу" },
+  { label: "Абонемент", send: "Что с абонементом и остатком" },
+  { label: "Правила", send: "Расскажите правила оказания услуг" },
+  { label: "Второму ребёнку", send: "Хочу записать второго ребёнка на пробное" },
+];
 
 const AGES: AgentChip[] = [
   { label: "3–4 года", send: "Ребёнку 4 года" },
@@ -59,6 +75,23 @@ export function chipsForReply(
   const t = last.toLowerCase();
   if (!t.trim()) return { hint: "", chips: [] };
   if (/кодовое слово/.test(t)) return { hint: "Назовите кодовое слово", chips: [] };
+  const mode = modeFromMessages(messages);
+  const facts = factsFromMessages(messages);
+  if (mode === "fork") {
+    if (/правил|цен[аыу]|оферт/.test(t)) {
+      return { hint: "Дальше", chips: FORK };
+    }
+    return { hint: "С чего начнём", chips: FORK };
+  }
+  if (mode === "client") {
+    if (/это ваш|нашли|несколько детей/.test(t)) {
+      return { hint: "Это ваш ребёнок?", chips: groups.length ? groups : [] };
+    }
+    if (facts.identified || /карто<|абонемент|занят|отработк|не прид/.test(t)) {
+      return { hint: "Что нужно", chips: CLIENT_TOPICS };
+    }
+    return { hint: "Телефон записи", chips: [] };
+  }
   if (/заявк|записал|принял заявку|готово, заявк/.test(t)) {
     return {
       hint: "Полезно сразу",
@@ -70,7 +103,7 @@ export function chipsForReply(
     };
   }
   if (/здравствуйте|сколько лет ребёнк|подберу программу|проконсультирую/.test(t) && !slotsFromMessages(messages).age) {
-    return { hint: "Сколько лет ребёнку", chips: AGES };
+    return mode === "new" ? { hint: "Сколько лет ребёнку", chips: AGES } : { hint: "С чего начнём", chips: FORK };
   }
   if (/сколько.{0,28}лет|возраст|цифрой или кнопк|кнопки ниже/.test(t)) {
     return { hint: "Сколько лет ребёнку", chips: AGES };
@@ -106,7 +139,6 @@ export function chipsForReply(
       ],
     };
   }
-  const facts = factsFromMessages(messages);
   const slots = slotsFromMessages(messages);
   const allSchools = schoolsFor(slots.age);
   const named = allSchools.filter((c) => {

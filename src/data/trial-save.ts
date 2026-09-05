@@ -29,37 +29,6 @@ function dobFromAge(age?: number) {
   return `01.09.${new Date().getFullYear() - Math.round(n)}`;
 }
 
-async function saveLeadForm(data: {
-  parent: string;
-  child: string;
-  dobRu: string;
-  phone: string;
-  email: string;
-  branch: string;
-  course: string;
-}) {
-  const body = {
-    LeadForm: { id: 20, lead_source_id: 2 },
-    LeadFormForm: {
-      field1763751875: data.parent,
-      field1763751902: data.child,
-      field1763751955: data.dobRu,
-      field1763751913: data.phone,
-      field1763751923: data.email,
-      field1763755924: data.branch,
-      ...(data.course ? { field1763755942: data.course } : {}),
-    },
-  };
-  const res = await fetch("https://studiyarazvivaysya.s20.online/v2api/2/lead-form/save?id=20", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
-  });
-  const json = (await res.json()) as { success?: boolean; message?: string };
-  if (json.success) return { ok: true as const };
-  return { ok: false as const, error: json.message || "Не удалось отправить заявку. Позвоните нам." };
-}
-
 export async function applyCreatedCustomer(
   localId: number,
   crmId: number,
@@ -98,6 +67,12 @@ export async function applyCreatedCustomer(
     });
   } catch {
     /* досье */
+  }
+  try {
+    const { applyCreatedCommCustomer } = await import("./crm-comms");
+    applyCreatedCommCustomer(localId, crmId);
+  } catch {
+    /* лента */
   }
 }
 
@@ -189,6 +164,20 @@ export async function saveTrialLead(data: TrialPayload) {
           : {}),
       });
       cachePutLead(trialLeadCard({ localId: crmId, branchId, child, phone, email, note, statusId }));
+      try {
+        const { appendComm } = await import("./crm-comms");
+        appendComm({
+          customerId: crmId,
+          branchId,
+          channel: "site",
+          actor: "consultant",
+          who: parent || "сайт",
+          text: note,
+          incoming: true,
+        });
+      } catch {
+        /* лента */
+      }
       enqueueExport({
         op: "customer.update",
         branchId,
@@ -237,6 +226,20 @@ export async function saveTrialLead(data: TrialPayload) {
         : {}),
     });
     cachePutLead(trialLeadCard({ localId, branchId, child, phone, email, note, statusId }));
+    try {
+      const { appendComm } = await import("./crm-comms");
+      appendComm({
+        customerId: localId,
+        branchId,
+        channel: "site",
+        actor: "consultant",
+        who: parent || "сайт",
+        text: note,
+        incoming: true,
+      });
+    } catch {
+      /* лента */
+    }
     enqueueExport({
       op: "customer.create",
       branchId,
@@ -261,50 +264,6 @@ export async function saveTrialLead(data: TrialPayload) {
     return { ok: true as const, id: localId, duplicate: false, branch: branchId, queued: true, pending: true, lesson: { type: kindLabel, date: data.date, time: data.time } };
   } catch (err) {
     console.error("saveTrialLead queue", err);
-    try {
-      const { upsertAlfaLead } = await import("./alfacrm");
-      const saved = await upsertAlfaLead({
-        parent,
-        child,
-        phone,
-        email,
-        dobRu,
-        branchId: branch,
-        courseName: resolved.name || data.groupName || "",
-        courseId,
-        subjectId: subjectId || undefined,
-        gid: data.gid,
-        groupName: data.groupName,
-        kind,
-        date: data.date,
-        time: data.time,
-        duration: data.duration,
-      });
-      return {
-        ok: true as const,
-        id: saved.id,
-        duplicate: saved.duplicate,
-        branch: saved.branch,
-        url: saved.url,
-        lesson: saved.lesson,
-      };
-    } catch (err2) {
-      console.error("saveTrialLead", err2);
-      try {
-        const form = await saveLeadForm({
-          parent,
-          child,
-          dobRu: dobRu || dobFromAge(data.age) || "01.09.2017",
-          phone,
-          email: email || `lead+${phone.replace(/\D/g, "").slice(-10)}@rastudio.org`,
-          branch,
-          course: subjectId ? String(subjectId) : resolved.subjectId || resolved.courseId,
-        });
-        if (form.ok) return { ok: true as const, id: 0, duplicate: false, branch: branchId };
-        return form;
-      } catch {
-        return { ok: false as const, error: "Сеть недоступна. Позвоните 8 (800) 511-34-01." };
-      }
-    }
+    return { ok: false as const, error: "Заявку не записали на сайт. Позвоните 8 (800) 511-34-01." };
   }
 }

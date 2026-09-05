@@ -78,8 +78,8 @@ export function AdminDossiers() {
   async function load() {
     const res = await adminDossiers({ data: { token: token(), action: "list", q } });
     if (res.ok && "items" in res) {
-      setRows(res.items as Row[]);
-      setTotal(Number(res.total) || res.items.length);
+      setRows((res.items || []) as Row[]);
+      setTotal(Number(res.total) || (res.items || []).length);
       if ("lastCrmSync" in res) setLastSync(String(res.lastCrmSync || ""));
       if ("nextCrmSync" in res) setNextSync(String(res.nextCrmSync || ""));
       if ("facets" in res && res.facets) setFacets(res.facets as typeof EMPTY_FACETS);
@@ -203,7 +203,7 @@ export function AdminDossiers() {
     });
     setBusy(false);
     if (res.ok && "job" in res) {
-      setMsg(`${res.job.count} чел. · ${res.job.reason}`);
+      setMsg(`${res.job?.count ?? 0} чел. · ${res.job?.reason || ""}`);
       if ("jobs" in res) setJobs(res.jobs);
     } else setMsg(res.ok ? "" : res.error || "Ошибка");
   }

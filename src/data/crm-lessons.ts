@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { GroupCalLesson } from "./crm-slots-core";
+import { journalAttend, lessonStatusLabel } from "./crm-journal-core";
 
 export type LessonKnowledge = {
   lessonId?: number;
@@ -15,6 +16,9 @@ export type LessonKnowledge = {
   group?: string;
   topic?: string;
   homework?: string;
+  customerIds?: number[];
+  attend?: number;
+  total?: number;
 };
 
 function file() {
@@ -51,6 +55,9 @@ export function rememberLessons(lessons: GroupCalLesson[]) {
       group: l.group,
       topic: l.topic,
       homework: l.homework,
+      customerIds: l.customerIds,
+      attend: l.attend,
+      total: l.total,
     });
   }
   const items = [...map.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4000);
@@ -60,13 +67,16 @@ export function rememberLessons(lessons: GroupCalLesson[]) {
 
 export function lessonFactsForAgent(limit = 40) {
   return loadLessonKnowledge()
-    .filter((x) => x.topic || x.homework)
+    .filter((x) => x.topic || x.homework || (x.customerIds && x.customerIds.length) || x.status === 3)
     .slice(0, limit)
     .map((x) => {
+      const { attend, total } = journalAttend(x);
       const bits = [
         x.date,
         x.group || x.subject,
         x.type,
+        lessonStatusLabel(x.status),
+        total ? `явка ${attend} из ${total}` : "",
         x.topic ? `тема: ${x.topic}` : "",
         x.homework ? `домашнее: ${x.homework}` : "",
       ].filter(Boolean);

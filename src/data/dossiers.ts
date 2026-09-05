@@ -164,7 +164,6 @@ function uniq(list: string[]) {
 function emptyDossier(partial: Partial<Dossier> & { id: string }): Dossier {
   const now = new Date().toISOString();
   return {
-    id: partial.id,
     phones: [],
     phoneDigits: "",
     child: { fio: "" },
@@ -545,6 +544,12 @@ export function findDossier(opts: { crmId?: number; phone?: string; id?: string 
   );
 }
 
+export function dossiersByPhone(phone?: string) {
+  const digits = digitsPhone(phone);
+  if (!digits || digits.length < 10) return [] as Dossier[];
+  return loadStore().items.filter((d) => d.phoneDigits === digits || d.phones.some((p) => digitsPhone(p) === digits));
+}
+
 export function dossierPrompt(d: Dossier | null) {
   if (!d) return "";
   const lines = [
@@ -814,7 +819,7 @@ export async function overlayMembershipChunk(
       );
     };
     await pull();
-    if (n === 0 && g.taken > 0) {
+    if (n === 0 && Number(g.taken) > 0) {
       await wait(CRM_READ_GAP_MS);
       await pull();
     }
@@ -973,7 +978,7 @@ export async function overlayMembershipFromCrm() {
   enqueueCrmOverlay(true);
   const last = await tickCrmQueue(3);
   const ids = last.ids || [];
-  return { ok: true as const, people: 0, withGroups: 0, live: last.live || ids.length, scanned: last.scanned || 0, ids };
+  return { ok: true as const, people: 0, withGroups: 0, live: last.live || ids.length, scanned: Number((last as { scanned?: number }).scanned) || 0, ids };
 }
 
 export async function syncDossierFromCrm(crmId: number, branchId: number) {
@@ -1296,7 +1301,7 @@ export async function reclassifyRolesFromCrm() {
           `/v2api/${branch}/customer/index`,
           { page, pageSize: 50, is_study: study },
           t,
-        ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+        ).catch(() => ({ items: [] as Record<string, unknown>[], total: 0 }));
         const items = data.items || [];
         if (page === 0) {
           if (study === 1) totals.учится += Number(data.total) || items.length;
@@ -1415,13 +1420,44 @@ function viewOf(d: Dossier) {
     groupLinks: links,
     archived: status === "архив",
     leadStatusId: Number(ex.lead_status_id || 0),
-    note: String(d.note || ex.note || "").replace(/<[^>]+>/g, "").trim().slice(0, 280),
+    note: String(ex.note || "").replace(/<[^>]+>/g, "").trim().slice(0, 280),
     updatedAt: d.updatedAt,
     hasLiveTariff: ex.live_tariff === "1",
   };
 }
 
 export type ClientView = ReturnType<typeof viewOf>;
+
+export function toClientListRow(d: ClientView) {
+  return {
+    id: d.id,
+    crmId: d.crmId,
+    cardId: d.cardId,
+    branchId: d.branchId,
+    child: d.child,
+    parent: d.parent,
+    phone: d.phone,
+    age: d.age,
+    ageBand: d.ageBand,
+    gender: d.gender,
+    status: d.status,
+    courses: d.coursesNow.length ? d.coursesNow : d.courses,
+    schools: d.schools,
+    city: d.city,
+    branch: d.branch,
+    groupLinks: (d.groupLinks || []).map((g) => ({
+      id: g.id,
+      name: g.name,
+      branchId: g.branchId,
+      school: g.school,
+      active: g.active,
+    })),
+    archived: d.archived,
+    leadStatusId: d.leadStatusId,
+    note: d.note,
+    hasLiveTariff: d.hasLiveTariff,
+  };
+}
 
 export function groupRoster(branchId: number, groupId: number) {
   const store = loadStore();
@@ -1482,24 +1518,20 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
   const views = viewsMemo.views as ClientView[];
   const counts = { все: 0, учится: 0, лид: 0, архив: 0 };
   const branchCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
-  const hidden = (d: ClientView) => d.status === "удалён" || d.status === "снят";
+  const hidden = (d: ClientView) => d.status === "удалён";
+  const chipStatus = !want || want === "все" ? "" : want;
   for (const d of views) {
     if (hidden(d)) continue;
     counts.все += 1;
     if (d.status === "учится") counts.учится += 1;
     else if (d.status === "лид") counts.лид += 1;
     else if (d.status === "архив") counts.архив += 1;
-  }
-  const chipStatus = !want || want === "все" ? "" : want;
-  for (const d of views) {
-    if (hidden(d)) continue;
     if (chipStatus && d.status !== chipStatus) continue;
     const b = Number(d.branchId) || 0;
     if (branchCounts[b] != null) branchCounts[b] += 1;
   }
   const items = views.filter((d) => {
     if (hidden(d) && !needle) return false;
-    if (hidden(d) && needle && d.status === "снят") return false;
     if (d.status === "архив" && want !== "архив") return false;
     if (want === "лид" && d.status !== "лид") return false;
     if (want && want !== "все") {
@@ -1516,7 +1548,7 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
     if (hay.includes(needle)) return true;
     return words.length > 0 && words.every((w) => hay.includes(w));
   });
-  items.sort((a, b) => (a.displayName || a.child || "").localeCompare(b.displayName || b.child || "", "ru"));
+  if (items.length > 1) items.sort((a, b) => (a.displayName || a.child || "").localeCompare(b.displayName || b.child || "", "ru"));
   return {
     items: items.slice(0, limit),
     total: items.length,
@@ -1546,7 +1578,7 @@ export async function handleAdminDossiers(data: DossiersReq) {
     if (data.action === "syncAll") {
       try {
         const res = await syncAllFromCrm();
-        return { ok: true as const, ...res };
+        return { ...res, ok: true as const };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "CRM" };
       }
@@ -1560,7 +1592,7 @@ export async function handleAdminDossiers(data: DossiersReq) {
           page: Number(data.page) || 0,
           pages: Number(data.pages) || 3,
         });
-        return { ok: true as const, ...res };
+        return { ...res, ok: true as const };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "CRM не ответила на этот шаг." };
       }
@@ -1568,7 +1600,7 @@ export async function handleAdminDossiers(data: DossiersReq) {
     if (data.action === "syncMembers") {
       try {
         const res = await syncMembershipsSlice(Number(data.offset) || 0, 8);
-        return { ok: true as const, ...res };
+        return { ...res, ok: true as const };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось сверить состав групп." };
       }

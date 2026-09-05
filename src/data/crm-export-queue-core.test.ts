@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mergeExportJob, exportPath, exportBody, type CrmExportJob } from "./crm-export-queue-core.ts";
+import { mergeExportJob, exportPath, exportBody, exportJobSnap, exportOpLabel, remapExportJobs, type CrmExportJob } from "./crm-export-queue-core.ts";
+import { isLocalId, isCrmId, isLocalSubject, nextLocalId } from "./crm-local-id.ts";
 
 describe("очередь выгрузки в Alfa", () => {
   it("две правки одной группы сливаются, приоритет последней", () => {
@@ -25,6 +26,11 @@ describe("очередь выгрузки в Alfa", () => {
   it("без актора — сотрудник", () => {
     const jobs = mergeExportJob([], { op: "group.update", branchId: 1, entityId: 580, body: { custom_prioritet: 1 } });
     assert.equal(jobs[0].actor, "human");
+    const snap = exportJobSnap(jobs);
+    assert.equal(snap[0].actor, "human");
+    assert.equal(snap[0].entityId, 580);
+    assert.equal(exportOpLabel("cgi.apply"), "состав");
+    assert.equal(exportOpLabel("lead-status.update"), "этап воронки");
   });
 
   it("разные группы не склеиваются", () => {
@@ -245,5 +251,41 @@ describe("очередь выгрузки в Alfa", () => {
     });
     assert.equal(exportPath(realDel[0]), "/v2api/1/lead-status/delete");
     assert.deepEqual(exportBody(realDel[0]), { id: 7 });
+  });
+
+  it("этап 6: свой id отрицательный, перепись очереди одним правилом", () => {
+    assert.equal(isLocalId(-12), true);
+    assert.equal(isLocalId(7759), false);
+    assert.equal(isCrmId(7759), true);
+    assert.equal(isCrmId(-12), false);
+    assert.equal(isLocalSubject({ id: 13 }), false);
+    assert.equal(isLocalSubject({ id: 9001 }), true);
+    assert.equal(isLocalSubject({ id: -3, local: true }), true);
+    const a = nextLocalId();
+    const b = nextLocalId([a]);
+    assert.ok(a < 0);
+    assert.ok(b < 0);
+    assert.notEqual(a, b);
+    let jobs = mergeExportJob([], {
+      op: "lead-status.update",
+      branchId: 1,
+      entityId: -11,
+      body: { id: -11, name: "Ждём" },
+    });
+    jobs = mergeExportJob(jobs, {
+      op: "customer.update",
+      branchId: 1,
+      entityId: -40,
+      body: { lead_status_id: -11, subject_ids: [-5, 13] },
+    });
+    const remapped = remapExportJobs(jobs, -11, 88, jobs[0].id);
+    assert.equal(remapped[0].entityId, -11);
+    assert.equal(remapped[1].entityId, -40);
+    assert.equal(remapped[1].body.lead_status_id, 88);
+    const all = remapExportJobs(jobs, -11, 88);
+    assert.equal(all[0].entityId, 88);
+    assert.equal(all[0].body.id, 88);
+    assert.equal(all[1].body.lead_status_id, 88);
+    assert.deepEqual(all[1].body.subject_ids, [-5, 13]);
   });
 });

@@ -28,10 +28,13 @@ import {
   type SlotDraft,
 } from "./crm-slots";
 import { loadSubjects, saveSubjects, pullSubjectsFromCrm, pushSubjectsToCrm, createLocalSubject } from "./crm-subjects";
+import { isLocalSubject } from "./crm-local-id";
 import type { GroupCalLesson } from "./crm-slots-core";
 import { beatsOf } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { loadGroupCard, saveGroupCard, nextLocalLessonId, upsertGroupCalendar, mergeLocalCalendar } from "./group-cards";
+import { stampJournal, journalForCustomer, clientLessonFromJournal } from "./crm-journal-core";
+import { wantAlfaPull, loadAlfaLink, saveAlfaLink, alfaLinkOf } from "./crm-alfa-link";
 import { scheduleVoiceTurn } from "./schedule-voice";
 import { loadSiteTree, addTreeSchool, addTreeCourse, deleteTreeCourse, deleteTreeSchool, moveSlotsToCourse, saveSiteTree, slotTreeKey } from "./site-tree";
 import { listTeachers, teachersAtBranch, mergeTeacher, saveTeachers, loadTeachers } from "./crm-teachers";
@@ -132,8 +135,9 @@ export type CustomerCard = {
     roomId?: number;
   }[];
   calendar?: { id: number; date: string; from: string; to: string; type: string; typeId: number; group: string; teacher: string; status?: number; subject?: string; room?: string }[];
-  tariffs?: { id: number; name: string; rest: number; lessons: number; archived?: boolean }[];
+  tariffs?: { id: number; tariffId?: number; name: string; rest: number; lessons: number; archived?: boolean; bDate?: string; eDate?: string; price?: number }[];
   comms: CustomerComm[];
+  pays?: { id: number; kind: string; income: number; expenditure: number; note: string; documentDate: string }[];
   catalog?: { subjects: { id: number; name: string }[]; teachers: { id: number; name: string }[]; rooms: { id: number; name: string }[]; tariffs?: { id: number; name: string; price: number; lessons: number; subjectIds?: number[]; lessonTypeIds?: number[]; periodCount?: number; periodType?: number; periodLabel?: string; eDate?: string; calculationType?: number }[]; groups?: { id: number; name: string; branchId: number; subjectId?: number; teacher?: string; day?: string; from?: string; to?: string }[] };
 };
 
@@ -190,19 +194,6 @@ function packMember(c: Record<string, unknown>, archived: boolean): GroupMember 
   };
 }
 
-function packComm(it: Record<string, unknown>): CustomerComm {
-  const text = String(it.comment || it.text || it.message || it.body || "").trim();
-  const incoming = Number(it.is_incoming ?? it.incoming ?? 0) === 1 || /входящ|incoming/i.test(String(it.type_name || it.direction || ""));
-  return {
-    id: Number(it.id || 0),
-    at: String(it.date || it.created_at || it.datetime || it.added || ""),
-    who: String(it.user_name || it.employee_name || it.manager_name || it.user || "").trim(),
-    channel: String(it.type_name || it.channel || it.source || it.provider || "сообщение").trim(),
-    text,
-    incoming,
-  };
-}
-
 const PEOPLE_TTL_MS = 12 * 60 * 1000;
 
 function sleep(ms: number) {
@@ -231,7 +222,7 @@ async function pagedCrm(
   for (let page = 0; page < 40; page += 1) {
     if (page) await sleep(CRM_READ_GAP_MS);
     const res = await request<{ items?: Record<string, unknown>[]; total?: number }>(path, { page, pageSize: 200, ...body }, t).catch(
-      () => ({ items: [] as Record<string, unknown>[] }),
+      () => ({ items: [] as Record<string, unknown>[], total: 0 }),
     );
     const batch = res.items || [];
     items.push(...batch);
@@ -459,19 +450,25 @@ async function loadCustomerRaw(
   branch: number,
   customerId: number,
 ): Promise<{ c: Record<string, unknown>; branch: number } | null> {
-  const branches = [branch, 1, 2, 3, 4].filter((b, i, a) => b > 0 && a.indexOf(b) === i);
-  const bodies = [
-    { page: 0, pageSize: 10, id: customerId },
-    { page: 0, pageSize: 10, ids: [customerId] },
-  ];
-  for (const b of branches) {
-    for (const body of bodies) {
-      const data = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${b}/customer/index`, body, t).catch(
-        () => ({ items: [] as Record<string, unknown>[] }),
-      );
-      const hit = (data.items || []).find((x) => Number(x.id) === customerId);
-      if (hit) return { c: hit, branch: b };
-    }
+  const known = Number(branch) || 0;
+  const rest = [1, 2, 3, 4].filter((b) => b && b !== known);
+  const branches = known > 0 ? [known, ...rest] : rest;
+  async function hitOf(b: number, body: Record<string, unknown>) {
+    const data = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${b}/customer/index`, body, t).catch(
+      () => ({ items: [] as Record<string, unknown>[] }),
+    );
+    const hit = (data.items || []).find((x) => Number(x.id) === customerId);
+    return hit ? { c: hit, branch: b } : null;
+  }
+  const first = branches[0];
+  if (!first) return null;
+  const byId = await hitOf(first, { page: 0, pageSize: 10, id: customerId });
+  if (byId) return byId;
+  const byIds = await hitOf(first, { page: 0, pageSize: 10, ids: [customerId] });
+  if (byIds) return byIds;
+  for (const b of branches.slice(1)) {
+    const hit = await hitOf(b, { page: 0, pageSize: 10, id: customerId });
+    if (hit) return hit;
   }
   return null;
 }
@@ -595,41 +592,6 @@ function groupIdsFromCustomer(c: Record<string, unknown>) {
   return [...out];
 }
 
-async function cgiAndLessonGroups(
-  request: typeof import("./alfacrm").request,
-  t: string,
-  branch: number,
-  customerId: number,
-) {
-  const { cgiCustomerId } = await import("./pupil-tariffs");
-  const out: { id: number; name: string; branchId: number }[] = [];
-  const seen = new Set<number>();
-  const branches = [branch, 1, 2, 3, 4].filter((b, i, a) => b > 0 && a.indexOf(b) === i);
-  for (const b of branches) {
-    try {
-      const json = await request<{ items?: Record<string, unknown>[] }>(
-        `/v2api/${b}/cgi/index?customer_id=${customerId}`,
-        { page: 0, pageSize: 80, customer_id: customerId },
-        t,
-      );
-      for (const it of json.items || []) {
-        if (Number(it.removed || it.is_removed || 0) === 1) continue;
-        const cid = cgiCustomerId(it);
-        if (cid && cid !== customerId) continue;
-        const rec = it as { group?: { id?: number; name?: string } };
-        const gid = Number(it.group_id || it.groupId || rec.group?.id || 0);
-        if (!gid || seen.has(gid)) continue;
-        seen.add(gid);
-        out.push({ id: gid, name: String(it.group_name || rec.group?.name || ""), branchId: b });
-      }
-    } catch {
-      /* next branch */
-    }
-    if (out.length) break;
-  }
-  return out;
-}
-
 async function setGroupMembership(
   request: <T = { success?: boolean; errors?: unknown }>(path: string, body: unknown, t?: string) => Promise<T>,
   t: string,
@@ -744,22 +706,11 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
   const study = Number(c.is_study);
   const addr = asStrList(c.addr).join(", ") || String(c.custom_adresprozhivaniya || "").trim();
   const comms: CustomerComm[] = [];
-  const tries: [string, Record<string, unknown>][] = [
-    [`/v2api/${useBranch}/communication/index?class=Customer&related_id=${customerId}`, { page: 0, pageSize: 40 }],
-    [`/v2api/${useBranch}/communication/index`, { page: 0, pageSize: 40, class: "Customer", related_id: customerId }],
-    [`/v2api/${useBranch}/communication/index`, { page: 0, pageSize: 40, customer_id: customerId }],
-  ];
-  for (const [path, body] of tries) {
-    try {
-      const json = await request<{ items?: Record<string, unknown>[] }>(path, body, t);
-      const items = json.items || [];
-      if (items.length) {
-        comms.push(...items.map(packComm).filter((x) => x.text));
-        break;
-      }
-    } catch {
-      /* next shape */
-    }
+  try {
+    const { commsOf, asCustomerComm } = await import("./crm-comms");
+    comms.push(...commsOf(customerId).map(asCustomerComm));
+  } catch {
+    /* лента с диска необязательна на fresh */
   }
   const rawName = String(c.name || dossier?.child.fio || "").trim();
   const rawParent = String(c.legal_name || dossier?.parent.fio || "").trim();
@@ -768,12 +719,7 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
   const dob = String(c.dob || dossier?.child.dob || "");
   const fromDossier = dossier?.groupLinks || [];
   const { activeGroupsForCard } = await import("./crm-membership");
-  const { mergeCgiGroupLinks } = await import("./crm-group-disk");
-  const cgiGroups = await cgiAndLessonGroups(request, t, useBranch, customerId);
-  const linked = activeGroupsForCard({
-    cgi: cgiGroups.map((g) => ({ id: g.id, name: g.name, branchId: g.branchId })),
-    dossier: fromDossier,
-  });
+  const linked = activeGroupsForCard({ cgi: [], dossier: fromDossier });
   const packedGroups = linked.map((g) => {
     const packed = packGroupLink(g.id, g.branchId, g.name || "", g.active);
     return {
@@ -807,58 +753,23 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
     }
   }
   const calendar: NonNullable<CustomerCard["calendar"]> = [];
-  try {
-    const json = await request<{ items?: Record<string, unknown>[] }>(
-      `/v2api/${useBranch}/lesson/index`,
-      { page: 0, pageSize: 80, customer_id: customerId },
-      t,
-    );
-    for (const it of json.items || []) {
-      const date = isoish(String(it.date || it.lesson_date || ""));
-      if (!date || date.length < 10) continue;
-      calendar.push({
-        id: Number(it.id || 0),
-        date,
-        from: hm(String(it.time_from || "")),
-        to: hm(String(it.time_to || "")),
-        type: String(it.lesson_type_name || ""),
-        typeId: Number(it.lesson_type_id || 0),
-        group: String(it.group_name || (Array.isArray(it.group_ids) ? it.group_ids[0] : "") || ""),
-        teacher: "",
-        status: Number(it.status || 0),
-        subject: String(it.subject_name || ""),
-        room: String(it.room_name || it.room_id || ""),
-      });
+  for (const g of packedGroups) {
+    const gcard = loadGroupCard(g.branchId, g.id);
+    for (const les of journalForCustomer(gcard?.calendar || [], customerId)) {
+      calendar.push(clientLessonFromJournal(les, g.name || les.group));
     }
-  } catch {
-    /* calendar is optional */
   }
   const tariffs: NonNullable<CustomerCard["tariffs"]> = [];
-  try {
-    const { customerTariffLabel, customerTariffOnCard } = await import("./pupil-tariffs");
-    const catalogTariffs = loadTariffs().items.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price }));
-    const json = await request<{ items?: Record<string, unknown>[] }>(
-      `/v2api/${useBranch}/customer-tariff/index?customer_id=${customerId}`,
-      { page: 0, pageSize: 40, customer_id: customerId },
-      t,
-    );
-    for (const it of json.items || []) {
-      const nested = it.tariff && typeof it.tariff === "object" ? (it.tariff as Record<string, unknown>) : {};
-      const tariffId = Number(it.tariff_id || it.tariffId || nested.id || 0);
-      tariffs.push({
-        id: Number(it.id || 0),
-        tariffId,
-        name: customerTariffLabel({ ...it, tariff_id: tariffId, tariff_name: it.tariff_name || nested.name }, catalogTariffs),
-        rest: Number(it.balance ?? it.rest ?? it.paid ?? 0),
-        lessons: Number(it.lessons_count ?? it.paid_count ?? it.lesson_count ?? nested.lessons_count ?? 0),
-        archived: !customerTariffOnCard(it),
-        bDate: String(it.b_date || it.bDate || ""),
-        eDate: String(it.e_date || it.eDate || ""),
-        price: Number(nested.price ?? it.price ?? 0),
-      });
-    }
-  } catch {
-    /* tariffs optional */
+  const liveStamp = String(dossier?.extras?.live_tariff || "");
+  if (liveStamp === "1") {
+    const tariffId = Number(dossier?.extras?.tariff_id || 0);
+    tariffs.push({
+      id: tariffId || customerId,
+      tariffId: tariffId || undefined,
+      name: String(dossier?.tariff || "абонемент"),
+      rest: 0,
+      lessons: 0,
+    });
   }
   const studyStatusId = Number(c.study_status_id || 0);
   const statusName =
@@ -881,7 +792,7 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
                     : studyStatusId === 9
                       ? "Без статуса"
                       : "";
-  const rooms = await roomsOfBranch(request, t, useBranch);
+  const rooms: { id: number; name: string }[] = [];
   const subjectIds = packedGroups.map((g) => Number(g.subjectId) || 0).filter(Boolean);
   const offerTariffs = loadTariffs()
     .items.filter((t) => !t.archive && (!t.branchIds.length || t.branchIds.includes(useBranch)))
@@ -903,26 +814,6 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
       eDate: t.eDate,
       calculationType: t.calculationType,
     }));
-  if (cgiGroups.length) {
-    upsertDossier({
-      crmId: customerId,
-      branchId: useBranch,
-      groupLinks: mergeCgiGroupLinks(
-        fromDossier,
-        packedGroups.map((g) => ({
-          id: g.id,
-          name: g.name,
-          branchId: g.branchId,
-          school: g.school || "",
-          active: true,
-          subjectId: g.subjectId,
-          courseId: g.courseId,
-        })),
-      ),
-      source: "alfacrm",
-      crmWins: true,
-    });
-  }
   return {
     id: customerId,
     cardId: clientCardId(customerId),
@@ -1011,8 +902,9 @@ function packCrmLesson(
   const from = hm(item.time_from) || ctx.fallbackFrom;
   const to = hm(item.time_to) || ctx.fallbackTo;
   const teacher = (item.teacher_ids || []).map((id) => ctx.teachers.get(Number(id)) || "").filter(Boolean).join(", ") || ctx.fallbackTeacher;
-  const attend = (item.details || []).filter((d) => d.is_attend === 1).length;
-  const total = (item.details || []).length || (item.customer_ids || []).length;
+  const ids = (item.customer_ids || []).map(Number).filter((n) => n > 0);
+  const fromDetails = (item.details || []).filter((d) => d.is_attend === 1).length;
+  const total = (item.details || []).length || ids.length;
   return {
     date,
     from,
@@ -1028,14 +920,14 @@ function packCrmLesson(
     topic: String(item.topic || "").trim(),
     homework: String(item.homework || "").trim(),
     note: String(item.note || "").trim(),
-    attend,
+    attend: fromDetails || ids.length,
     total,
     lessonId: Number(item.id || 0) || undefined,
     roomId: Number(item.room_id || 0) || undefined,
     teacherIds: (item.teacher_ids || []).map(Number).filter((n) => n > 0),
     subjectId: Number(item.subject_id || 0) || undefined,
     groupIds: (item.group_ids || []).map(Number).filter((n) => n > 0),
-    customerIds: (item.customer_ids || []).map(Number).filter((n) => n > 0),
+    customerIds: ids,
   };
 }
 
@@ -1235,6 +1127,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "clientsLiveTariffs"
           | "cachePolicyGet"
           | "cachePolicySave"
+          | "alfaLinkSave"
           | "actorsGet"
           | "actorsSave"
           | "crmQueueTick"
@@ -1332,7 +1225,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         funnelAuto?: import("./funnel-auto").FunnelAuto;
         offset?: number;
         take?: number;
-        force?: boolean;
+        alfaLink?: string;
         cachePolicy?: import("./crm-cache-policy").CachePolicy;
         groupKeys?: { branchId: number; groupId: number }[];
         pupilItems?: import("./pupil-tariffs").PupilTariffItem[];
@@ -1355,6 +1248,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         groupIds?: number[];
         timeTo?: string;
         lessonId?: number;
+        diskOnly?: boolean;
       };
     },
   )
@@ -1536,7 +1430,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const slot = listAdminSlots().find((s) => s.groupId === gid && s.branchId === branch) || listAdminSlots().find((s) => s.groupId === gid);
       const taken = Number(slot?.taken) || 0;
       const { overlayCgiNeeded } = await import("./crm-group-disk");
-      if (!data.diskOnly && overlayCgiNeeded(disk.active.length, taken) && !data.fresh) {
+      if (!data.diskOnly && overlayCgiNeeded(disk.active.length, taken) && wantAlfaPull(data.fresh)) {
         void import("./crm-packet-queue").then((q) => {
           q.enqueueGroupPacket(branch, gid, slot?.groupName);
           void q.tickCrmQueue(1);
@@ -1555,16 +1449,35 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const customerId = Number(data.customerId) || 0;
       if (!customerId) return { ok: false as const, error: "Нет номера ученика." };
       const d = findDossier({ crmId: customerId });
-      if (d && !data.fresh) {
-        const { cardFromDossier } = await import("./customer-card-disk");
-        return { ok: true as const, fromCache: true, customer: cardFromDossier(d, branch) };
+      if (!wantAlfaPull(data.fresh)) {
+        if (d) {
+          const { cardFromDossier } = await import("./customer-card-disk");
+          return { ok: true as const, fromCache: true, customer: cardFromDossier(d, branch) };
+        }
+        return { ok: false as const, error: "Ученик не найден на сайте." };
       }
-      if (!data.fresh) return { ok: false as const, error: "Ученик не найден на сайте." };
+      if (d) {
+        const { pendingExportIds } = await import("./crm-export-queue");
+        if (pendingExportIds(["customer.update", "customer.create"]).has(customerId)) {
+          const { cardFromDossier } = await import("./customer-card-disk");
+          return { ok: true as const, fromCache: true, customer: cardFromDossier(d, branch) };
+        }
+      }
       if (customerId < 0) return { ok: false as const, error: "Ученик не найден на сайте." };
       const { token, request } = await import("./alfacrm");
       const t = await token();
       const customer = await loadCustomerCard(request, t, branch, customerId);
       if (!customer) return { ok: false as const, error: "Ученик не найден в AlfaCRM." };
+      const { inboundCustomerPays, customerBalance, cardPays } = await import("./crm-pay");
+      const { inboundCustomerComms, commsOf, asCustomerComm } = await import("./crm-comms");
+      await Promise.all([inboundCustomerPays(request, t, branch, customerId), inboundCustomerComms(request, t, branch, customerId)]);
+      customer.balance = customerBalance(customerId, customer.balance);
+      customer.comms = commsOf(customerId).map(asCustomerComm);
+      customer.pays = cardPays(customerId);
+      void import("./crm-packet-queue").then((q) => {
+        q.enqueueCustomerPacket(branch, [customerId]);
+        void q.tickCrmQueue(1);
+      });
       return { ok: true as const, customer };
     }
     if (data.action === "customerSave") {
@@ -1693,23 +1606,26 @@ export const adminSchedule = createServerFn({ method: "POST" })
         upsertGroupCalendar(
           useBranch,
           gid,
-          {
-            date: dateIso,
-            from: time,
-            to,
-            status: 1,
-            type: type.name,
-            typeId: type.id,
-            duration,
-            subjectId,
-            teacherIds: teacherId ? [teacherId] : [],
-            roomId: roomId || undefined,
-            groupIds: [gid],
-            customerIds: [customerId],
-            topic: String(data.topic || ""),
-            note: String(data.note || `${type.name} с сайта rastudio.org`),
-            lessonId: localId,
-          },
+          stampJournal(
+            {
+              date: dateIso,
+              from: time,
+              to,
+              status: 1,
+              type: type.name,
+              typeId: type.id,
+              duration,
+              subjectId,
+              teacherIds: teacherId ? [teacherId] : [],
+              roomId: roomId || undefined,
+              groupIds: [gid],
+              customerIds: [customerId],
+              topic: String(data.topic || ""),
+              note: String(data.note || `${type.name} с сайта rastudio.org`),
+              lessonId: localId,
+            },
+            [customerId],
+          ),
           { name: slot?.groupName, subjectId: slot?.subjectId, subject: slot?.subject },
         );
       }
@@ -1776,18 +1692,28 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const sum = Number(data.sum || 0);
       if (!customerId) return { ok: false as const, error: "Нет customerId." };
       if (!sum) return { ok: false as const, error: "Укажите сумму." };
-      const kind = String(data.payKind || "income");
+      const { payKindOf, payEffect, appendPay, ensureOpening, customerBalance } = await import("./crm-pay");
+      const { cardFromDossier } = await import("./customer-card-disk");
+      const kind = payKindOf(data.payKind);
       const now = new Date();
       const ru = `${String(now.getDate()).padStart(2, "0")}.${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
       const note = kind === "product" ? "продажа товара" : kind === "refund" ? "возврат средств" : kind === "correct" ? "корректировка" : "доход";
-      const income = kind === "refund" ? 0 : sum;
-      const expenditure = kind === "refund" ? sum : 0;
       const d = findDossier({ crmId: customerId });
-      const prev = Number(d?.extras?.balance || 0);
-      const nextBal = kind === "refund" ? prev - sum : kind === "correct" ? sum : prev + (kind === "product" ? 0 : sum);
+      ensureOpening(customerId, Number(d?.branchId || branch), d?.extras?.balance);
+      const prev = customerBalance(customerId, d?.extras?.balance);
+      const fx = payEffect(kind, sum, prev);
+      const pay = appendPay({
+        customerId,
+        branchId: Number(d?.branchId || branch),
+        kind,
+        income: fx.income,
+        expenditure: fx.expenditure,
+        note,
+        documentDate: ru,
+      });
       upsertDossier({
         crmId: customerId,
-        extras: { ...(d?.extras || {}), balance: String(nextBal) },
+        extras: { ...(d?.extras || {}), balance: String(fx.next) },
         source: "admin",
       } as never);
       const { enqueueExport } = await import("./crm-export-queue");
@@ -1795,7 +1721,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         op: "pay.create",
         branchId: branch,
         entityId: customerId,
-        body: { customer_id: customerId, document_date: ru, income, expenditure, note },
+        body: { customer_id: customerId, document_date: ru, income: fx.income, expenditure: fx.expenditure, note, localId: pay.id, kind },
       });
       logAdmin(`Клиент ${customerId}: ${note} ${sum} в очереди`);
       if (kind !== "refund") {
@@ -1803,39 +1729,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
           m.applyFunnelAuto("tariff", { customerId, branchId: branch, isStudy: Number(d?.extras?.is_study), statusId: Number(d?.extras?.lead_status_id || 0) }),
         );
       }
-      const study = Number(d?.extras?.is_study);
+      const fresh = findDossier({ crmId: customerId });
       return {
         ok: true as const,
         queued: true,
-        customer: {
-          id: customerId,
-          cardId: clientCardId(customerId),
-          branchId: Number(d?.branchId || branch),
-          name: d?.child.fio || "",
-          parent: d?.parent.fio || "",
-          dob: d?.child.dob || "",
-          age: ageLabel(d?.child.dob || ""),
-          gender: d?.child.gender || "",
-          phones: d?.phones || [],
-          emails: [] as string[],
-          address: d?.address || "",
-          status: d?.status || "",
-          isStudy: Number.isFinite(study) ? study : undefined,
-          note: "",
-          paidTill: "",
-          url: d?.url || "",
-          schools: d?.schools || [],
-          groups: (d?.groupLinks || []).map((g) => ({
-            id: g.id,
-            name: g.name,
-            branchId: g.branchId,
-            school: g.school,
-            active: g.active,
-            subjectId: g.subjectId,
-            courseId: g.courseId,
-          })),
-          comms: [] as CustomerComm[],
-        },
+        customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId, balance: fx.next },
       };
     }
     if (data.action === "customerTariff") {
@@ -2166,7 +2064,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         const sub = existing || createLocalSubject(name);
         const courseId = String((data as { courseId?: string }).courseId || "");
         if (sub.id && courseId) bindSubjectCourse(sub.id, courseId);
-        if (!existing || existing.local || existing.id >= 9000) {
+        if (!existing || isLocalSubject(existing)) {
           const { enqueueExport } = await import("./crm-export-queue");
           enqueueExport({
             op: "subject.create",
@@ -2175,8 +2073,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
             body: { name: sub.name, localId: sub.id },
           });
         }
-        logAdmin(`Предмет «${sub.name}» id ${sub.id} на сайте${existing && existing.id < 9000 ? "" : ", Alfa в очереди"}`);
-        return { ...decorateSubjects(loadSubjects()), created: sub, queued: !existing || existing.local || existing.id >= 9000 };
+        logAdmin(`Предмет «${sub.name}» id ${sub.id} на сайте${existing && !isLocalSubject(existing) ? "" : ", Alfa в очереди"}`);
+        return { ...decorateSubjects(loadSubjects()), created: sub, queued: !existing || isLocalSubject(existing) };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Не удалось создать предмет." };
       }
@@ -2227,7 +2125,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const status = String(data.status || "").trim();
       const branchId = Number(data.branchId) || 0;
       const ageBand = String(data.ageBand || "").trim();
-      const local = searchClientViews(q, 2500, status, branchId, ageBand);
+      const local = searchClientViews(q, q ? 60 : 240, status, branchId, ageBand);
       const items = local.items.map((d) => ({
         id: d.id,
         crmId: d.crmId,
@@ -2280,7 +2178,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
                 age: m.age ? Number(String(m.age).match(/\d+/)?.[0] || 0) || null : null,
                 ageBand: "",
                 gender: m.gender,
-                status: m.status,
+                status: m.status === "учится" || m.status === "лид" || m.status === "архив" || m.status === "удалён" ? m.status : "лид",
                 studyStatus: "",
                 courses: [],
                 schools: [],
@@ -2311,45 +2209,23 @@ export const adminSchedule = createServerFn({ method: "POST" })
       }
     }
     if (data.action === "leadMove") {
-      const { cacheMoveLead } = await import("./crm-leads");
-      const { leadMoveFields } = await import("./crm-leads-stages");
-      const { enqueueExport } = await import("./crm-export-queue");
+      const { moveLead } = await import("./crm-leads");
       const branch = Number(data.branchId) || 1;
       const leadId = Number(data.leadId) || 0;
       const statusId = Number(data.leadStatusId);
       if (!leadId) return { ok: false as const, error: "Нет номера лида." };
       if (!Number.isFinite(statusId)) return { ok: false as const, error: "Нет этапа воронки." };
       const sort = Number.isFinite(Number(data.sort)) ? Number(data.sort) : undefined;
-      cacheMoveLead(branch, leadId, statusId, sort);
-      const d = findDossier({ crmId: leadId });
-      upsertDossier({
-        crmId: leadId,
-        extras: { ...(d?.extras || {}), lead_status_id: String(statusId), is_study: "0" },
-      } as never);
-      enqueueExport({
-        op: "customer.update",
-        branchId: branch,
-        entityId: leadId,
-        body: { ...leadMoveFields(statusId, sort) },
-      });
+      await moveLead(branch, leadId, statusId, sort, "human");
       logAdmin(`Лид ${leadId}: этап ${statusId} на диске, очередь AlfaCRM`);
       return { ok: true as const, queued: true, leadStatusId: statusId };
     }
     if (data.action === "leadArchive") {
-      const { cacheArchiveLead } = await import("./crm-leads");
-      const { enqueueExport } = await import("./crm-export-queue");
+      const { archiveLead } = await import("./crm-leads");
       const branch = Number(data.branchId) || 1;
       const leadId = Number(data.leadId) || 0;
       if (!leadId) return { ok: false as const, error: "Нет номера лида." };
-      cacheArchiveLead(branch, leadId);
-      const d = findDossier({ crmId: leadId });
-      upsertDossier({ crmId: leadId, extras: { ...(d?.extras || {}), is_study: "0", removed: "1" } } as never);
-      enqueueExport({
-        op: "customer.update",
-        branchId: branch,
-        entityId: leadId,
-        body: { removed: 1, is_study: 2 },
-      });
+      await archiveLead(branch, leadId, "human");
       logAdmin(`Лид ${leadId}: в архив на диске, очередь AlfaCRM`);
       return { ok: true as const, queued: true };
     }
@@ -2369,9 +2245,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
           op: "lead-status.create",
           branchId: 1,
           entityId: id,
+          actor: "human",
           body: {
             name: hit?.name || name,
-            color: hit?.color || color,
             localId: id,
             pipeline_id: 1,
             is_enabled: 1,
@@ -2383,6 +2259,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           op: "lead-status.update",
           branchId: 1,
           entityId: id,
+          actor: "human",
           body: {
             ...(name ? { name } : {}),
             ...(color ? colorPatch(color) : {}),
@@ -2403,9 +2280,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
         op: "lead-status.create",
         branchId: 1,
         entityId: made.id,
+        actor: "human",
         body: {
           name: made.name,
-          color: made.color,
           localId: made.id,
           pipeline_id: 1,
           is_enabled: 1,
@@ -2427,6 +2304,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           op: "lead-status.delete",
           branchId: 1,
           entityId: id,
+          actor: "human",
           body: { id },
         });
         logAdmin(`Этап лида ${id}: удалён на диске${id > 0 ? ", очередь AlfaCRM" : ""}`);
@@ -2437,22 +2315,16 @@ export const adminSchedule = createServerFn({ method: "POST" })
       }
     }
     if (data.action === "leadStageSort") {
-      const { sortLeadStages, loadLeadsBoard } = await import("./crm-leads");
+      const { sortLeadStages, cachedLeadBoard } = await import("./crm-leads");
       const ids = Array.isArray(data.stageIds) ? data.stageIds.map(Number).filter((n) => Number.isFinite(n)) : [];
       if (!ids.length) return { ok: false as const, error: "Нет порядка этапов." };
       try {
-        await sortLeadStages(ids, Number(data.branchId) || 2);
-        logAdmin(`Этапы воронки: порядок ${ids.filter((id) => id).join(",")}`);
-        const board = await loadLeadsBoard(Number(data.branchId) || 0, true);
-        const { mergeStages, pinUnsorted } = await import("./crm-leads");
-        const order = pinUnsorted(ids);
-        const stages = mergeStages(
-          (board.stages || []).map((s) => ({ ...s, weight: Math.max(0, order.indexOf(s.id)) })),
-          (board.items || []).map((x) => x.statusId),
-        );
-        return { ok: true as const, stages, items: board.items };
+        await sortLeadStages(ids, Number(data.branchId) || 2, "human");
+        logAdmin(`Этапы воронки: порядок ${ids.filter((id) => id).join(",")} на диске, очередь AlfaCRM`);
+        const board = cachedLeadBoard(Number(data.branchId) || 0);
+        return { ok: true as const, stages: board.stages, items: board.items, queued: true };
       } catch (e) {
-        return { ok: false as const, error: e instanceof Error ? e.message : "AlfaCRM не сменила порядок этапов." };
+        return { ok: false as const, error: e instanceof Error ? e.message : "Не записали порядок этапов." };
       }
     }
     if (data.action === "funnelAutoGet") {
@@ -2762,17 +2634,34 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const q = await import("./crm-packet-queue");
       const exp = await import("./crm-export-queue");
       const snap = q.crmQueueSnapshot();
+      const out = exp.crmExportSnapshot();
       return {
         ok: true as const,
         policy: loadCachePolicy(),
         kinds: CACHE_KIND_META,
-        queue: { ...snap, exportPending: exp.crmExportSnapshot().pending },
+        alfaLink: loadAlfaLink(),
+        queue: {
+          ...snap,
+          exportPending: out.pending,
+          exportBusy: out.busy,
+          exportNote: out.lastNote,
+          jobs: out.jobs,
+        },
       };
     }
     if (data.action === "cachePolicySave") {
       const { saveCachePolicy, loadCachePolicy, CACHE_KIND_META } = await import("./crm-cache-policy");
       const raw = data.cachePolicy && typeof data.cachePolicy === "object" ? (data.cachePolicy as Parameters<typeof saveCachePolicy>[0]) : loadCachePolicy();
       return { ok: true as const, policy: saveCachePolicy(raw), kinds: CACHE_KIND_META };
+    }
+    if (data.action === "alfaLinkSave") {
+      const next = saveAlfaLink(alfaLinkOf(data.alfaLink));
+      logAdmin(`Связь AlfaCRM: ${next.mode === "offline" ? "без Alfa" : "с Alfa"}`);
+      if (next.mode === "linked") {
+        void import("./crm-packet-queue").then((q) => void q.tickCrmQueue(1));
+        void import("./crm-export-queue").then((e) => void e.tickExportQueue(3));
+      }
+      return { ok: true as const, alfaLink: next };
     }
     if (data.action === "actorsGet") {
       const { loadActors } = await import("./crm-actors-disk");
@@ -2790,11 +2679,18 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const q = await import("./crm-packet-queue");
       const exp = await import("./crm-export-queue");
       const res = await q.ensureAndTick({ force: Boolean(data.force), take: 3 });
+      const out = await exp.tickExportQueue(3);
       const snap = q.crmQueueSnapshot();
       return {
-        ok: true as const,
         ...res,
-        queue: { ...snap, exportPending: exp.crmExportSnapshot().pending },
+        ok: true as const,
+        queue: {
+          ...snap,
+          exportPending: out.pending,
+          exportBusy: out.busy,
+          exportNote: out.lastNote,
+          jobs: out.jobs,
+        },
       };
     }
     if (data.action === "voiceAsk") {
@@ -2813,7 +2709,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!gid) return { ok: false as const, error: "Нет номера группы." };
       const slot = listAdminSlots().find((s) => s.groupId === gid && s.branchId === branch) || listAdminSlots().find((s) => s.groupId === gid);
       const cached = loadGroupCard(branch, gid);
-      if (!data.fresh) {
+      if (!wantAlfaPull(data.fresh)) {
         if (!cached && !slot) return { ok: false as const, error: "Группа не на сайте." };
         const group = cached || {
           id: gid,
@@ -2838,8 +2734,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         return {
           ok: true as const,
           fromCache: true,
-          subjects: subjectsWithHref(),
-          levels: SEED_LEVELS,
+          ...(data.lite ? {} : { subjects: subjectsWithHref(), levels: SEED_LEVELS }),
           group,
           ...groupTariffPack(slot),
         };
@@ -2946,6 +2841,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const calendar = mergeLocalCalendar(
         [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)),
         cached?.calendar,
+        (await import("./crm-export-queue")).pendingExportIds(["lesson.update", "lesson.create"]),
       );
       rememberLessons(calendar);
       const levels = await fetchLevels(t, branch).catch(() => SEED_LEVELS);
@@ -3443,7 +3339,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         .map((s) => ({ id: s.groupId, name: s.groupName || `группа ${s.groupId}` }))
         .filter((g) => (seen.has(g.id) ? false : (seen.add(g.id), true)));
       const catalog = lessonCatalogOf(branch);
-      if (lessonId < 0 || (!data.fresh && (hit || slot))) {
+      if (lessonId < 0 || (!wantAlfaPull(data.fresh) && (hit || slot))) {
         const { dossiersInGroup } = await import("./dossiers");
         const people = gid ? dossiersInGroup(branch, gid) : [];
         const customerIds = (hit?.customerIds?.length ? hit.customerIds : people.map((d) => d.crmId)).map(Number).filter((n) => n > 0);
@@ -3577,23 +3473,26 @@ export const adminSchedule = createServerFn({ method: "POST" })
         upsertGroupCalendar(
           branch,
           gid,
-          {
-            date: dateIso,
-            from,
-            to,
-            duration,
-            status: prevHit?.status || 1,
-            type: prevHit?.type || "Групповое",
-            typeId: prevHit?.typeId || 2,
-            roomId: roomId || undefined,
-            teacherIds,
-            subjectId: subjectId || undefined,
-            groupIds,
+          stampJournal(
+            {
+              date: dateIso,
+              from,
+              to,
+              duration,
+              status: prevHit?.status || 1,
+              type: prevHit?.type || "Групповое",
+              typeId: prevHit?.typeId || 2,
+              roomId: roomId || undefined,
+              teacherIds,
+              subjectId: subjectId || undefined,
+              groupIds,
+              customerIds,
+              topic: String(data.topic || ""),
+              note: String(data.note || ""),
+              lessonId,
+            },
             customerIds,
-            topic: String(data.topic || ""),
-            note: String(data.note || ""),
-            lessonId,
-          },
+          ),
           { name: slot?.groupName, subjectId: slot?.subjectId, subject: slot?.subject },
         );
       }
@@ -3654,10 +3553,17 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (gid) {
         const card = loadGroupCard(branch, gid);
         if (card) {
-          saveGroupCard({
-            ...card,
-            calendar: (card.calendar || []).map((x) => (Number(x.lessonId) === lessonId ? { ...x, status } : x)),
+          const { dossiersInGroup } = await import("./dossiers");
+          const fallback = dossiersInGroup(branch, gid)
+            .map((d) => Number(d.crmId) || 0)
+            .filter((n) => n);
+          const calendar = (card.calendar || []).map((x) => {
+            if (Number(x.lessonId) !== lessonId) return x;
+            const ids = x.customerIds?.length ? x.customerIds : status === 3 ? fallback : x.customerIds;
+            return stampJournal({ ...x, status }, ids);
           });
+          saveGroupCard({ ...card, calendar });
+          rememberLessons(calendar.filter((x) => Number(x.lessonId) === lessonId));
         }
       }
       enqueueExport({

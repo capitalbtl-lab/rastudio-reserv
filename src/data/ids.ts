@@ -83,9 +83,21 @@
  * Файлы: site-tree.json, crm-schedule.json, crm-subjects.json, prices.json,
  *        crm-tariffs.json, schedule-map.json, tariff-map.json, dossiers.json
  */
-import type { CrmSlot } from "./crm-slots-core";
-import type { SiteTree } from "./site-tree";
 import { ROMASHKA_NAME, ROMASHKA_REV } from "./romashka";
+
+export {
+  groupAssignKey,
+  canonCourseId,
+  canonSchoolId,
+  courseIdOfGroup,
+  courseIdOfSubject,
+  resolveGroupCourseId,
+  joinCourseSubject,
+  courseSubjectGapText,
+  subjectIdsOfCourse,
+  subjectIdOfCourse,
+} from "./course-subject-core";
+export type { IdMapCourse, CourseSubjectJoin, CourseSubjectSource, CourseSubjectGap } from "./course-subject-core";
 
 /** Текущая точка восстановления архитектуры кабинета. */
 export const ARCH_REV = ROMASHKA_NAME;
@@ -139,87 +151,6 @@ export const SUBJECT_TO_COURSE: Record<number, string> = {
   113: "/japanese",
 };
 
-export type IdMapCourse = { subjectId: number; courseId?: string; siteHref?: string };
-
-/** Ключ группы в tree.assign. Локальная группа без gid — её slot.id. */
-export function groupAssignKey(s: { id?: string; groupId?: number; branchId?: number }) {
-  if (Number(s.groupId) > 0) return `gid:${Number(s.branchId) || 0}:${s.groupId}`;
-  return String(s.id || "");
-}
-
-function courseIdInTree(tree: SiteTree, id: string) {
-  if (!id) return "";
-  const hit = tree.courses.find((c) => c.id === id || c.href === id);
-  return hit?.id || "";
-}
-
-/** Канон courseId дерева. href сводим к id. Имя не смотрим. */
-export function canonCourseId(tree: SiteTree, raw: string) {
-  return courseIdInTree(tree, String(raw || "").trim());
-}
-
-/** Канон schoolId дерева. href сводим к id. */
-export function canonSchoolId(tree: SiteTree, raw: string) {
-  const id = String(raw || "").trim();
-  if (!id) return "";
-  const hit = tree.schools.find((s) => s.id === id || s.href === id);
-  return hit?.id || "";
-}
-
-/** courseId группы: сначала assign по gid, потом поле slot.courseId. Без угадывания по имени. */
-export function courseIdOfGroup(s: Pick<CrmSlot, "id" | "groupId" | "branchId" | "courseId">, tree: SiteTree) {
-  const key = groupAssignKey(s);
-  const id = (key && tree.assign?.[key]) || s.courseId || "";
-  return courseIdInTree(tree, id);
-}
-
-/** courseId по subjectId из карты админки. Без заводской таблицы. */
-export function courseIdOfSubject(subjectId: number, tree: SiteTree, mapCourses?: IdMapCourse[]) {
-  if (!subjectId || !mapCourses?.length) return "";
-  const link = mapCourses.find((c) => c.subjectId === subjectId);
-  const raw = String(link?.courseId || link?.siteHref || "").trim();
-  if (!raw) return "";
-  return courseIdInTree(tree, raw);
-}
-
-/**
- * courseId группы: явный перенос (assign / поле карточки), иначе карта subjectId → courseId.
- * Пустая строка в карте не стирает выбор в карточке.
- */
-export function resolveGroupCourseId(
-  s: Pick<CrmSlot, "id" | "groupId" | "branchId" | "courseId" | "subjectId">,
-  tree: SiteTree,
-  mapCourses?: IdMapCourse[],
-): string {
-  const assigned = courseIdOfGroup(s, tree);
-  if (assigned) return assigned;
-  if (s.courseId) {
-    const own = courseIdInTree(tree, s.courseId);
-    if (own) return own;
-  }
-  if (s.subjectId && mapCourses?.length) {
-    const fromMap = courseIdOfSubject(s.subjectId, tree, mapCourses);
-    if (fromMap) return fromMap;
-  }
-  return "";
-}
-
-/** Обратная связь: какие subjectId привязаны к этому courseId в карте админки. */
-export function subjectIdsOfCourse(courseId: string, mapCourses?: IdMapCourse[]): number[] {
-  if (!courseId || !mapCourses?.length) return [];
-  return mapCourses
-    .filter((c) => c.courseId === courseId)
-    .map((c) => c.subjectId)
-    .filter(Boolean);
-}
-
-/** subjectId курса из карты Соответствия в админке. Несколько предметов на курсе — не угадываем. */
-export function subjectIdOfCourse(courseId: string, mapCourses?: IdMapCourse[]): number {
-  if (!courseId) return 0;
-  const ids = [...new Set(subjectIdsOfCourse(courseId, mapCourses))];
-  return ids.length === 1 ? ids[0] : 0;
-}
-
 /** Ключ строки цены = courseId сайта. */
 export function priceRowKey(r: { courseId?: string; path?: string; id?: string }) {
   return String(r.courseId || r.path || r.id || "");
@@ -245,6 +176,11 @@ AlfaCRM не источник ответа. Она догоняет очеред
 Читать API CRM нельзя, если на диске уже есть customerId или groupId.
 Писать (админка): сначала диск, потом очередь. Не ждать ответ Alfa.
 Актор записи: human · assistant · consultant · sync. Настройка CRM → Люди и роли.
+Свой id < 0, пока Alfa не вернула номер. Перепись диска и очереди. 9000+ только у старых предметов.
+Журнал уроков: calendar[].lessonId. Явка = customerIds, не cgi и не last_attend. status 1 план · 2 отмена · 3 проведено.
+Деньги: pays[].id + customerId. Остаток = сумма строк диска. Alfa касса — pay.create и «Обновить», не F5. paid_till не касса.
+Каналы: comms[].id + customerId + channel. Чат, заявка, ВК, MAX и SMS — на диск сразу. Alfa communication — «Обновить».
+Связь Alfa: разъём, не склад. linked — очередь и «Обновить». offline — уход, кабинет тот же, очередь копит.
 
 филиал branchId: 1 Гражданская, 2 ЦМИТ, 3 Луховицы, 4 лето
 группа groupId = gid. Ключ: gid:{branchId}:{groupId}

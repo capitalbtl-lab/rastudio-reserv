@@ -7,6 +7,8 @@ import { DEFAULT_SCRIPTS, playbookPrompt, type ScriptSection } from "./agent-pla
 import type { SessionFacts } from "./agent-facts";
 import { docsPrompt } from "./agent-docs";
 import { consultantGuidePrompt } from "./agent-section-guides-data";
+import { loadChannels } from "./agent-channels";
+import { repairSiteFlags, SITE_WINDOW_IDS, FRAME_WINDOW_IDS, CHIP_IDS } from "./agent-window-core";
 
 export type AgentSettings = {
   updatedAt: string;
@@ -37,6 +39,10 @@ export type AgentSettings = {
   adminVoiceCanWrite: boolean;
   /** Голос кабинета отвечает родителям как Олег/Ольга. По умолчанию нет. */
   adminVoiceCanConsult: boolean;
+  /** Консультант отмечает пропуск и паузу на диске. */
+  consultantCanJournal: boolean;
+  /** Консультант вешает абонемент (tariffId). По умолчанию нет. */
+  consultantCanTariff: boolean;
 };
 
 export type AgentUiFlags = Pick<
@@ -69,6 +75,13 @@ export const WINDOW_FLAGS: { id: keyof AgentUiFlags; title: string; hint: string
   { id: "speakEveryReply", title: "Озвучивать каждый вопрос", hint: "Голосовой режим читает всю фразу.", tip: "На сайте выключено — молчит. В отладке можно слушать." },
 ];
 
+export const SITE_WINDOW_FLAGS = WINDOW_FLAGS.filter((f) => (SITE_WINDOW_IDS as readonly string[]).includes(f.id));
+export const FRAME_WINDOW_FLAGS = WINDOW_FLAGS.filter((f) => (FRAME_WINDOW_IDS as readonly string[]).includes(f.id));
+export const CHIP_FLAGS = WINDOW_FLAGS.filter((f) => (CHIP_IDS as readonly string[]).includes(f.id));
+export const BEHAVIOR_WINDOW_FLAGS = WINDOW_FLAGS.filter((f) =>
+  ["keepAssistantReplies", "speakEveryReply"].includes(f.id),
+);
+
 /** Граница консультант (сайт) ↔ админка. Меняется здесь, не в коде промпта. */
 export const ROLE_FLAGS: { id: keyof AgentSettings; title: string; hint: string; tip: string }[] = [
   {
@@ -100,6 +113,18 @@ export const ROLE_FLAGS: { id: keyof AgentSettings; title: string; hint: string;
     title: "Голос админки консультирует родителей",
     hint: "Подбор курса и запись из кабинета, как Олег/Ольга.",
     tip: "По умолчанию выкл: кабинет — сотруднику, сайт — родителю. Включать только если один агент на оба мира.",
+  },
+  {
+    id: "consultantCanJournal",
+    title: "Консультант отмечает пропуск и паузу",
+    hint: "«Не придём» и пауза пишутся в карточку и ленту. Явку группы не переписывает.",
+    tip: "Выключено — только рассказывает расписание, пропуск принимает администратор по телефону.",
+  },
+  {
+    id: "consultantCanTariff",
+    title: "Консультант назначает абонемент",
+    hint: "Вешает tariffId на узнанного клиента. Alfa — очередь.",
+    tip: "По умолчанию выкл: деньги лучше через кабинет. Включать, когда Олег/Ольга сами закрывают оплату.",
   },
 ];
 
@@ -144,7 +169,19 @@ const DEFAULT_SETTINGS: AgentSettings = {
   consultantCanManage: false,
   adminVoiceCanWrite: true,
   adminVoiceCanConsult: false,
+  consultantCanJournal: true,
+  consultantCanTariff: false,
 };
+
+/** Все флаги видимости false — битый сейв. Сайт остаётся без чата. */
+export function salvageSettings(s: AgentSettings): { settings: AgentSettings; repaired: boolean } {
+  if (!SITE_WINDOW_IDS.every((id) => s[id] === false)) return { settings: s, repaired: false };
+  const defaults = Object.fromEntries(SITE_WINDOW_IDS.map((id) => [id, DEFAULT_SETTINGS[id]])) as Record<
+    (typeof SITE_WINDOW_IDS)[number],
+    boolean
+  >;
+  return { settings: repairSiteFlags(s, defaults) as AgentSettings, repaired: true };
+}
 
 function fileOf() {
   return join(process.cwd(), "storage", "agent-brain.json");
@@ -173,8 +210,24 @@ export function loadBrain(): Brain {
       return fresh;
     }
     const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Partial<Brain>;
+    const merged = { ...DEFAULT_SETTINGS, ...(raw.settings || {}) };
+    const fix = salvageSettings(merged);
+    if (fix.repaired) {
+      const brain: Brain = {
+        settings: fix.settings,
+        examples: Array.isArray(raw.examples) ? raw.examples : [],
+        scripts: seedScripts(raw.scripts),
+        lastSystematized: raw.lastSystematized,
+      };
+      try {
+        saveBrain(brain);
+      } catch {
+        /* диск */
+      }
+      return brain;
+    }
     return {
-      settings: { ...DEFAULT_SETTINGS, ...(raw.settings || {}) },
+      settings: merged,
       examples: Array.isArray(raw.examples) ? raw.examples : [],
       scripts: seedScripts(raw.scripts),
       lastSystematized: raw.lastSystematized,
@@ -230,6 +283,15 @@ export function agentPromptAddons(facts?: SessionFacts, channel = "site") {
   const parts: string[] = ["", STYLE[s.style] || STYLE.warm];
   parts.push(rolesPrompt(channel === "admin" ? "admin" : "site"));
   if (channel !== "admin") {
+    try {
+      const list = loadChannels();
+      const common = list.find((c) => c.id === "common");
+      const mine = list.find((c) => c.id === channel);
+      if (common?.rules?.trim()) parts.push(`КАНАЛ общее:\n${common.rules.trim()}`);
+      if (mine?.rules?.trim() && mine.id !== "common") parts.push(`КАНАЛ ${mine.label} (id=${mine.id}):\n${mine.rules.trim()}`);
+    } catch {
+      /* диск */
+    }
     const guide = consultantGuidePrompt();
     if (guide.trim()) parts.push(guide);
   }
@@ -260,7 +322,7 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
     (data: unknown) =>
       data as {
         token?: string;
-        action: "get" | "saveSettings" | "add" | "update" | "remove" | "import" | "saveScript" | "resetScripts" | "systematize";
+        action: "get" | "getSettings" | "saveSettings" | "add" | "update" | "remove" | "import" | "saveScript" | "resetScripts" | "systematize";
         settings?: Partial<AgentSettings>;
         example?: Partial<TrainExample> & { id?: string };
         examples?: TrainExample[];
@@ -279,6 +341,7 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
       lastSystematized: brain.lastSystematized || "",
     });
     if (data.action === "get") return pack();
+    if (data.action === "getSettings") return { ok: true as const, settings: brain.settings };
     if (data.action === "saveSettings") {
       brain.settings = {
         ...brain.settings,
@@ -308,6 +371,8 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
         consultantCanManage: flag(data.settings?.consultantCanManage, brain.settings.consultantCanManage),
         adminVoiceCanWrite: flag(data.settings?.adminVoiceCanWrite, brain.settings.adminVoiceCanWrite),
         adminVoiceCanConsult: flag(data.settings?.adminVoiceCanConsult, brain.settings.adminVoiceCanConsult),
+        consultantCanJournal: flag(data.settings?.consultantCanJournal, brain.settings.consultantCanJournal),
+        consultantCanTariff: flag(data.settings?.consultantCanTariff, brain.settings.consultantCanTariff),
         updatedAt: new Date().toISOString(),
       };
       saveBrain(brain);

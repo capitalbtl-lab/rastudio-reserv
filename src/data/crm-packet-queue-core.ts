@@ -1,7 +1,14 @@
 export type CrmPacket =
   | { id: string; kind: "overlay"; offset: number }
+  | { id: string; kind: "journal"; offset: number }
   | { id: string; kind: "group"; branchId: number; groupId: number; name?: string }
   | { id: string; kind: "customers"; branchId: number; ids: number[] };
+
+export type CrmPacketDraft =
+  | { id?: string; kind: "overlay"; offset: number }
+  | { id?: string; kind: "journal"; offset: number }
+  | { id?: string; kind: "group"; branchId: number; groupId: number; name?: string }
+  | { id?: string; kind: "customers"; branchId: number; ids: number[] };
 
 export type CrmQueueState = {
   packets: CrmPacket[];
@@ -18,13 +25,19 @@ export function nidPacket() {
 }
 
 /** Один overlay в очереди, с меньшим offset. Группы без дублей. Ученики сливаются по филиалу. */
-export function mergeCrmPacket(packets: CrmPacket[], incoming: Omit<CrmPacket, "id"> & { id?: string }): CrmPacket[] {
+export function mergeCrmPacket(packets: CrmPacket[], incoming: CrmPacketDraft): CrmPacket[] {
   const id = incoming.id || nidPacket();
   if (incoming.kind === "overlay") {
     const rest = packets.filter((p) => p.kind !== "overlay");
     const old = packets.find((p) => p.kind === "overlay");
     const offset = Math.min(Number(incoming.offset) || 0, old && old.kind === "overlay" ? old.offset : Number(incoming.offset) || 0);
     return [{ id: old?.id || id, kind: "overlay", offset }, ...rest];
+  }
+  if (incoming.kind === "journal") {
+    const rest = packets.filter((p) => p.kind !== "journal");
+    const old = packets.find((p) => p.kind === "journal");
+    const offset = Math.min(Number(incoming.offset) || 0, old && old.kind === "journal" ? old.offset : Number(incoming.offset) || 0);
+    return [...rest, { id: old?.id || id, kind: "journal", offset }];
   }
   if (incoming.kind === "group") {
     if (packets.some((p) => p.kind === "group" && p.groupId === incoming.groupId && p.branchId === incoming.branchId)) return packets;
@@ -45,7 +58,14 @@ export function overlayStale(opts: { cache: boolean; ttlMin: number; overlayAt: 
 }
 
 export function pickNextPacket(packets: CrmPacket[]) {
-  return packets.find((p) => p.kind !== "overlay") || packets[0] || null;
+  return (
+    packets.find((p) => p.kind === "group") ||
+    packets.find((p) => p.kind === "customers") ||
+    packets.find((p) => p.kind === "journal") ||
+    packets.find((p) => p.kind === "overlay") ||
+    packets[0] ||
+    null
+  );
 }
 
 /** Не гонять cgi-круг заново, если он уже дошёл и TTL живой. */

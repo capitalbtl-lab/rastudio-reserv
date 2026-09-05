@@ -174,13 +174,23 @@ export const adminEdits = createServerFn({ method: "POST" })
   });
 
 export const adminClearEdit = createServerFn({ method: "POST" })
-  .validator((data: unknown) => data as { token?: string; path: string; field: string })
+  .validator((data: unknown) => data as { token?: string; path: string; field?: string; all?: boolean; value?: string })
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
-    const { clearPageField } = await import("./edits");
+    const { clearPageField, clearPage, setPageField, listPageEdits } = await import("./edits");
+    if (data.value != null && data.field) {
+      const saved = setPageField(data.path, data.field, data.value);
+      if (saved.ok) logAdmin(`Текст: ${saved.path} · ${saved.field}`);
+      return { ...saved, edits: listPageEdits() };
+    }
+    if (data.all) {
+      const saved = clearPage(data.path);
+      if (saved.ok) logAdmin(`Сброс страницы: ${saved.path}`);
+      return { ...saved, edits: listPageEdits() };
+    }
     const saved = clearPageField(data.path, data.field);
     if (saved.ok) logAdmin(`Сброс текста: ${saved.path} · ${saved.field}`);
-    return saved;
+    return { ...saved, edits: listPageEdits() };
   });
 
 export const adminVoice = createServerFn({ method: "POST" })

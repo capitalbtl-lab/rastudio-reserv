@@ -90,7 +90,7 @@ export async function applyFunnelAuto(
   if (statusId == null) return { ok: true as const, skipped: true as const };
   try {
     const { moveLead } = await import("./crm-leads");
-    await moveLead(branch, id, statusId);
+    await moveLead(branch, id, statusId, undefined, "sync");
     return { ok: true as const, statusId };
   } catch (e) {
     return { ok: false as const, error: e instanceof Error ? e.message : "не сдвинула этап" };

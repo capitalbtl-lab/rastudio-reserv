@@ -7,6 +7,9 @@ import { clientCardId, CRM_BRANCH } from "./ids";
 import { listTeachers, teachersAtBranch } from "./crm-teachers";
 import { loadSubjects } from "./crm-subjects";
 import { isAdminGroup } from "./group-status";
+import { clientLessonFromJournal, journalForCustomer } from "./crm-journal-core";
+import { customerBalance, cardPays } from "./crm-pay";
+import { asCustomerComm, commsOf } from "./crm-comms";
 
 function ageLabel(dob: string) {
   const m = String(dob || "").match(/^(\d{1,2})[.](\d{1,2})[.](\d{4})$/) || String(dob || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -24,6 +27,41 @@ function ageLabel(dob: string) {
   }
   if (years < 0) return "";
   return months ? `${years} лет +${months}мес` : `${years} лет`;
+}
+
+let catalogSlots: ReturnType<typeof listAdminSlots> | null = null;
+let catalogMemo: {
+  groups: NonNullable<NonNullable<CustomerCard["catalog"]>["groups"]>;
+  subjects: { id: number; name: string }[];
+} | null = null;
+
+function catalogBase() {
+  const slots = listAdminSlots();
+  if (catalogMemo && catalogSlots === slots) return catalogMemo;
+  const seen = new Set<string>();
+  const groups: NonNullable<NonNullable<CustomerCard["catalog"]>["groups"]> = [];
+  for (const s of slots) {
+    if (!s.groupId || !isAdminGroup(s.statusId)) continue;
+    const key = `${s.branchId}:${s.groupId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    groups.push({
+      id: s.groupId,
+      name: s.groupName,
+      branchId: s.branchId,
+      subjectId: s.subjectId || undefined,
+      teacher: s.teacher,
+      day: s.dayLabel,
+      from: s.timeFrom,
+      to: s.timeTo,
+    });
+  }
+  catalogSlots = slots;
+  catalogMemo = {
+    groups,
+    subjects: loadSubjects().map((s) => ({ id: s.id, name: s.name })),
+  };
+  return catalogMemo;
 }
 
 export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
@@ -68,43 +106,12 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
       }
     }
     const gcard = loadGroupCard(g.branchId, g.id);
-    for (const les of gcard?.calendar || []) {
-      const ids = les.customerIds || [];
-      if (ids.length && customerId && !ids.includes(customerId)) continue;
-      calendar.push({
-        id: Number(les.lessonId || 0),
-        date: les.date,
-        from: les.from,
-        to: les.to,
-        type: les.type || "",
-        typeId: Number(les.typeId || 0),
-        group: g.name || les.group || "",
-        teacher: les.teacher || "",
-        status: les.status,
-        subject: les.subject || "",
-        room: les.room || "",
-      });
+    for (const les of journalForCustomer(gcard?.calendar || [], customerId)) {
+      calendar.push(clientLessonFromJournal(les, g.name || les.group));
     }
   }
-  const seen = new Set<string>();
-  const catalogGroups: NonNullable<NonNullable<CustomerCard["catalog"]>["groups"]> = [];
-  for (const s of slots) {
-    if (!s.groupId || !isAdminGroup(s.statusId)) continue;
-    const key = `${s.branchId}:${s.groupId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    catalogGroups.push({
-      id: s.groupId,
-      name: s.groupName,
-      branchId: s.branchId,
-      subjectId: s.subjectId || undefined,
-      teacher: s.teacher,
-      day: s.dayLabel,
-      from: s.timeFrom,
-      to: s.timeTo,
-    });
-  }
-  catalogGroups.sort((a, b) => Number(b.branchId === useBranch) - Number(a.branchId === useBranch) || a.name.localeCompare(b.name, "ru"));
+  const cat = catalogBase();
+  const catalogGroups = cat.groups.slice().sort((a, b) => Number(b.branchId === useBranch) - Number(a.branchId === useBranch) || a.name.localeCompare(b.name, "ru"));
   return {
     id: customerId,
     cardId: clientCardId(customerId),
@@ -127,10 +134,23 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
     groups,
     regular,
     calendar,
-    tariffs: [],
-    comms: [],
+    tariffs:
+      String(d.extras?.live_tariff) === "1"
+        ? [
+            {
+              id: Number(d.extras?.tariff_id || 0) || Number(d.crmId) || 0,
+              tariffId: Number(d.extras?.tariff_id || 0) || undefined,
+              name: d.tariff || "абонемент",
+              rest: 0,
+              lessons: 0,
+            },
+          ]
+        : [],
+    comms: commsOf(customerId).map(asCustomerComm),
+    pays: cardPays(customerId),
+    balance: customerBalance(customerId, d.extras?.balance),
     catalog: {
-      subjects: loadSubjects().map((s) => ({ id: s.id, name: s.name })),
+      subjects: cat.subjects,
       teachers: teachersAtBranch(useBranch, listTeachers(slots)).map((x) => ({ id: x.id, name: x.name })),
       rooms: [],
       groups: catalogGroups,

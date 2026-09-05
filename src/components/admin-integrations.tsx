@@ -18,14 +18,16 @@ const KIND_RU: Record<ApiKind, string> = {
   llm: "Модель ИИ",
   telephony: "Телефония",
   crm: "CRM",
+  messenger: "Мессенджер",
   other: "Другой сервис",
 };
 
 const GROUPS: { kind: ApiKind; title: string; tip: string }[] = [
   { kind: "llm", title: "Модели ИИ", tip: "YandexGPT — если в диалоге персональные данные (ФИО, телефон, запись). DeepSeek — общие вопросы без ПДн. Если выбранная модель молчит, чат пробует вторую." },
-  { kind: "telephony", title: "Телефония", tip: "Novofon тянет записи разговоров в «Базу звонков». Сюда же можно добавить вторую АТС: имя, ключ, секрет." },
+  { kind: "telephony", title: "Телефония", tip: "Novofon тянет записи разговоров в «Базу звонков» и шлёт SMS-ответы консультанта. Webhook входящих: /api/agent/phone. Сюда же можно добавить вторую АТС: имя, ключ, секрет." },
   { kind: "crm", title: "CRM", tip: "AlfaCRM: хост s20.online, почта роли API, ключ v2api. Без этого нет живых групп, записи на пробное и личных дел." },
-  { kind: "other", title: "Другие сервисы", tip: "MAX, VK, Telegram, почта — любой ключ, который потом подхватит интеграция. Пока хранится и ждёт контур." },
+  { kind: "messenger", title: "Мессенджеры", tip: "ВК Callback API и бот MAX. Один мозг консультанта: развилка «уже ходим / впервые», карточка с диска. Ключи сюда, webhook и последние входящие — Ассистент ИИ → Каналы." },
+  { kind: "other", title: "Другие сервисы", tip: "Telegram, почта и любой ключ, который потом подхватит интеграция." },
 ];
 
 type Row = ApiConn & { hint?: string; note?: string; fields: (ApiConn["fields"][number] & { set?: boolean })[] };
@@ -158,7 +160,15 @@ export function AdminIntegrations() {
           <h3 className="font-display text-xl">{g.title}</h3>
           <InfoTip text={g.tip} />
         </div>
-        {list.length ? list.map((c) => <Card key={c.id} c={c} />) : <p className="rounded-3xl bg-surface px-5 py-8 text-sm text-muted shadow-[var(--shadow-border)]">Пока пусто</p>}
+        {list.length ? (
+          <div className={list.length > 1 ? "grid gap-4 md:grid-cols-2" : ""}>
+            {list.map((c) => (
+              <Card key={c.id} c={c} />
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-3xl bg-surface px-5 py-8 text-sm text-muted shadow-[var(--shadow-border)]">Пока пусто</p>
+        )}
       </div>
     );
   }
@@ -170,7 +180,7 @@ export function AdminIntegrations() {
         title="API и интеграции"
         tip="Ключи лежат на сервере в storage/api-keys.json, не в git. Поля с точками — секрет уже есть, впишите новый только если меняете. Пустое поле при сохранении старый ключ не стирает. Процессные переменные .env имеют приоритет, если заданы."
       >
-        <p className="mt-2 max-w-2xl text-sm text-muted">Yandex, DeepSeek, Novofon, AlfaCRM и любые другие ключи — здесь, без правки файлов сервера.</p>
+        <p className="mt-2 max-w-2xl text-sm text-muted">Yandex, DeepSeek, Novofon, ВК, MAX, AlfaCRM — ключи здесь. Webhook консультанта: Ассистент ИИ → Каналы.</p>
       </AdminSectionHead>
 
       <div className="space-y-3">
@@ -190,11 +200,13 @@ export function AdminIntegrations() {
         <KindCol kind="crm" />
       </div>
 
+      <KindCol kind="messenger" />
+
       {conns.some((c) => c.kind === "other") ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <h3 className="font-display text-xl">Другие сервисы</h3>
-            <InfoTip text={GROUPS[3].tip} />
+            <InfoTip text={GROUPS.find((g) => g.kind === "other")?.tip || ""} />
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             {conns.filter((c) => c.kind === "other").map((c) => (
@@ -207,7 +219,7 @@ export function AdminIntegrations() {
       <article className="flex flex-col rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
         <div className="flex items-center gap-2">
           <p className="font-display text-xl">Добавить API</p>
-          <InfoTip text="Свой сервис: MAX, VK, Telegram, почта, вторая АТС. Укажите имя, тип и ключ. Позже можно дописать поля, сохранив карточку. Тип «телефония» появится и в базе звонков, «CRM» — рядом с AlfaCRM." />
+          <InfoTip text="Свой сервис: Telegram, почта, вторая АТС. ВК и MAX уже в каталоге «Мессенджеры». Укажите имя, тип и ключ." />
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <label className="text-sm">

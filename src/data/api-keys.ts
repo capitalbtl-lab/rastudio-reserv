@@ -4,7 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { isAdminRequest } from "./admin-auth";
 import { logAdmin } from "./admin-settings";
 
-export type ApiKind = "llm" | "telephony" | "crm" | "other";
+export type ApiKind = "llm" | "telephony" | "crm" | "messenger" | "other";
 export type ApiField = { key: string; label: string; secret?: boolean; value: string };
 export type ApiConn = {
   id: string;
@@ -40,10 +40,35 @@ export const API_CATALOG: Catalog[] = [
     id: "novofon",
     kind: "telephony",
     name: "Novofon",
-    hint: "Запись звонков. Нужны оба поля: User key (appid_…) и Secret. После долгой выгрузки Novofon может резать IP сервера — тогда проверка пишет SSL timeout, это не ключ.",
+    hint: "Запись звонков и SMS-ответы консультанта. User key (appid_…) и Secret. Webhook входящих: https://www.rastudio.org/api/agent/phone (NOTIFY_START, SMS). После долгой выгрузки Novofon может резать IP сервера — тогда проверка пишет SSL timeout, это не ключ.",
     fields: [
       { key: "NOVOFON_USER_KEY", label: "User key" },
       { key: "NOVOFON_SECRET", label: "Secret", secret: true },
+      { key: "NOVOFON_NOTIFY_SECRET", label: "Секрет webhook (если отдельный)", secret: true },
+    ],
+  },
+  {
+    id: "vk",
+    kind: "messenger",
+    name: "ВКонтакте",
+    hint: "Callback API сообщества rastudio. Токен группы + строка подтверждения + секрет. Адрес: https://www.rastudio.org/api/agent/vk",
+    note: "В сообществе: Управление → Работа с API → Callback API. Событие «Входящее сообщение». Версия 5.199. Строка подтверждения — то же значение, что поле Confirmation. Секрет — поле Secret. Сообщения сообщества: messages.send.",
+    fields: [
+      { key: "VK_GROUP_TOKEN", label: "Токен сообщества", secret: true },
+      { key: "VK_SECRET", label: "Secret Callback API", secret: true },
+      { key: "VK_CONFIRMATION", label: "Строка подтверждения" },
+      { key: "VK_GROUP_ID", label: "ID сообщества" },
+    ],
+  },
+  {
+    id: "max",
+    kind: "messenger",
+    name: "MAX",
+    hint: "Чат-бот MAX. Токен из «MAX для бизнеса». Webhook: https://www.rastudio.org/api/agent/max — подписка кнопкой в Ассистент ИИ → Каналы.",
+    note: "События message_created, bot_started, message_callback. Секрет уходит в заголовке X-Max-Bot-Api-Secret. Ответ — POST platform-api2.max.ru/messages.",
+    fields: [
+      { key: "MAX_BOT_TOKEN", label: "Токен бота", secret: true },
+      { key: "MAX_SECRET", label: "Secret webhook", secret: true },
     ],
   },
   {
@@ -61,7 +86,7 @@ export const API_CATALOG: Catalog[] = [
   },
 ];
 
-const KINDS: ApiKind[] = ["llm", "telephony", "crm", "other"];
+const KINDS: ApiKind[] = ["llm", "telephony", "crm", "messenger", "other"];
 
 function fileOf() {
   return join(process.cwd(), "storage", "api-keys.json");

@@ -7,9 +7,12 @@ import {
   mergeExportJob,
   crmCreatedId,
   isSingleExportOp,
+  exportJobSnap,
+  remapExportJobs,
   type CrmExportJob,
   type CrmExportState,
 } from "./crm-export-queue-core";
+import { pendingEntityIds } from "./crm-inbound-core";
 import { logAdmin } from "./admin-settings";
 
 const MAX_TRIES = 5;
@@ -37,7 +40,18 @@ function saveExport(q: CrmExportState) {
 
 export function crmExportSnapshot() {
   const q = loadExport();
-  return { pending: q.jobs.length, lastAt: q.lastAt, lastNote: q.lastNote, busy: Boolean(g.__raCrmExportBusy), ops: q.jobs.map((j) => `${j.op}:${j.entityId}`) };
+  return {
+    pending: q.jobs.length,
+    lastAt: q.lastAt,
+    lastNote: q.lastNote,
+    busy: Boolean(g.__raCrmExportBusy),
+    jobs: exportJobSnap(q.jobs),
+    ops: q.jobs.map((j) => `${j.op}:${j.entityId}`),
+  };
+}
+
+export function pendingExportIds(ops?: string[]) {
+  return pendingEntityIds(loadExport().jobs, ops);
 }
 
 export function enqueueExport(incoming: Omit<CrmExportJob, "id" | "at" | "tries">) {
@@ -52,6 +66,16 @@ export function enqueueExport(incoming: Omit<CrmExportJob, "id" | "at" | "tries"
 
 export async function tickExportQueue(take = 2) {
   if (g.__raCrmExportBusy) return crmExportSnapshot();
+  const { alfaLinkedNow } = await import("./crm-alfa-link");
+  if (!alfaLinkedNow()) {
+    const q = loadExport();
+    const note = q.jobs.length ? `без Alfa · в очереди ${q.jobs.length}` : "без Alfa";
+    if (q.lastNote !== note) {
+      q.lastNote = note;
+      saveExport(q);
+    }
+    return crmExportSnapshot();
+  }
   g.__raCrmExportBusy = true;
   try {
     const { token, request } = await import("./alfacrm");
@@ -119,15 +143,7 @@ export async function tickExportQueue(take = 2) {
           await applyCreatedSubject(localId, sid, String(job.body.name || ""));
           await activateCrmSubject(sid).catch(() => undefined);
           q = loadExport();
-          q.jobs = q.jobs.map((j) => {
-            if (j.id === job.id) return j;
-            const body = { ...j.body };
-            if (Number(body.subject_id) === localId) body.subject_id = sid;
-            if (Array.isArray(body.subject_ids)) {
-              body.subject_ids = (body.subject_ids as unknown[]).map((n) => (Number(n) === localId ? sid : n));
-            }
-            return { ...j, body };
-          });
+          q.jobs = remapExportJobs(q.jobs, localId, sid, job.id);
           saveExport(q);
         } else if (job.op === "customer-tariff.clear") {
           const { customerTariffIndexPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs } = await import("./pupil-tariffs");
@@ -185,27 +201,26 @@ export async function tickExportQueue(take = 2) {
           if (job.op === "customer.create") {
             const cid = crmCreatedId(res);
             if (!cid) throw new Error("AlfaCRM не вернула номер клиента");
+            const localId = Number(job.body.localId) || job.entityId;
             const { applyCreatedCustomer } = await import("./trial-save");
-            await applyCreatedCustomer(Number(job.body.localId) || job.entityId, cid, job.branchId, {
+            await applyCreatedCustomer(localId, cid, job.branchId, {
               phone: Array.isArray(job.body.phone) ? String(job.body.phone[0] || "") : String(job.body.phone || ""),
               child: String(job.body.name || ""),
               parent: String(job.body.legal_name || ""),
               isStudy: Number(job.body.is_study) || 0,
             });
+            q = loadExport();
+            q.jobs = remapExportJobs(q.jobs, localId, cid, job.id);
+            saveExport(q);
             const lesson = job.body.lesson as { type?: string; subjectId?: number; gid?: string; date?: string; time?: string; duration?: number; note?: string } | null | undefined;
             if (lesson) {
-              const { createAlfaLesson } = await import("./alfacrm");
-              await createAlfaLesson({
-                branch: job.branchId,
-                customerId: cid,
-                type: lesson.type || "trial",
-                subjectId: Number(lesson.subjectId) || undefined,
-                gid: lesson.gid,
-                date: lesson.date,
-                time: lesson.time,
-                duration: lesson.duration,
-                note: lesson.note,
-              }).catch((e) => logAdmin(`Урок после заявки ${cid}: ${e instanceof Error ? e.message : e}`, "sync"));
+              enqueueExport({
+                op: "lesson.create",
+                branchId: job.branchId,
+                entityId: cid,
+                actor: job.actor || "sync",
+                body: { via: "createAlfaLesson", ...lesson },
+              });
             }
             const gid = Number((job.body.group_ids as number[] | undefined)?.[0] || 0);
             if (gid) {
@@ -230,16 +245,7 @@ export async function tickExportQueue(take = 2) {
             const { applyCreatedLeadStage } = await import("./crm-leads");
             applyCreatedLeadStage(localId, sid);
             q = loadExport();
-            q.jobs = q.jobs.map((j) => {
-              if (j.id === job.id) return j;
-              let entityId = j.entityId;
-              if ((j.op === "lead-status.update" || j.op === "lead-status.delete") && j.entityId === localId) entityId = sid;
-              const body = { ...j.body };
-              if (Number(body.lead_status_id) === localId) body.lead_status_id = sid;
-              if (Number(body.localId) === localId) body.localId = sid;
-              if (String(j.op).startsWith("lead-status") && Number(body.id) === localId) body.id = sid;
-              return { ...j, entityId, body };
-            });
+            q.jobs = remapExportJobs(q.jobs, localId, sid, job.id);
             saveExport(q);
           }
           if (job.op === "lesson.create") {
@@ -250,11 +256,18 @@ export async function tickExportQueue(take = 2) {
               const { applyCreatedCalendarLesson } = await import("./group-cards");
               applyCreatedCalendarLesson(localId, lid);
               q = loadExport();
-              q.jobs = q.jobs.map((j) => {
-                if (j.id === job.id) return j;
-                if (j.op === "lesson.update" && j.entityId === localId) return { ...j, entityId: lid };
-                return j;
-              });
+              q.jobs = remapExportJobs(q.jobs, localId, lid, job.id);
+              saveExport(q);
+            }
+          }
+          if (job.op === "pay.create") {
+            const pid = crmCreatedId(res);
+            const localId = Number(job.body.localId) || 0;
+            if (pid && localId < 0) {
+              const { applyCreatedPay } = await import("./crm-pay");
+              applyCreatedPay(localId, pid);
+              q = loadExport();
+              q.jobs = remapExportJobs(q.jobs, localId, pid, job.id);
               saveExport(q);
             }
           }

@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ScheduleRouteImport } from './routes/schedule'
+import { Route as ApiAgentChannelRouteImport } from './routes/api/agent.$channel'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,18 +35,25 @@ const ScheduleRoute = ScheduleRouteImport.update({
   path: '/schedule',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAgentChannelRoute = ApiAgentChannelRouteImport.update({
+  id: '/api/agent/$channel',
+  path: '/api/agent/$channel',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/admin': typeof AdminRoute
   '/schedule': typeof ScheduleRoute
+  '/api/agent/$channel': typeof ApiAgentChannelRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/admin': typeof AdminRoute
   '/schedule': typeof ScheduleRoute
+  '/api/agent/$channel': typeof ApiAgentChannelRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,14 @@ export interface FileRoutesById {
   '/$': typeof SplatRoute
   '/admin': typeof AdminRoute
   '/schedule': typeof ScheduleRoute
+  '/api/agent/$channel': typeof ApiAgentChannelRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$' | '/admin' | '/schedule'
+  fullPaths: '/' | '/$' | '/admin' | '/schedule' | '/api/agent/$channel'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$' | '/admin' | '/schedule'
-  id: '__root__' | '/' | '/$' | '/admin' | '/schedule'
+  to: '/' | '/$' | '/admin' | '/schedule' | '/api/agent/$channel'
+  id: '__root__' | '/' | '/$' | '/admin' | '/schedule' | '/api/agent/$channel'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +76,7 @@ export interface RootRouteChildren {
   SplatRoute: typeof SplatRoute
   AdminRoute: typeof AdminRoute
   ScheduleRoute: typeof ScheduleRoute
+  ApiAgentChannelRoute: typeof ApiAgentChannelRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +109,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ScheduleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/agent/$channel': {
+      id: '/api/agent/$channel'
+      path: '/api/agent/$channel'
+      fullPath: '/api/agent/$channel'
+      preLoaderRoute: typeof ApiAgentChannelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +124,7 @@ const rootRouteChildren: RootRouteChildren = {
   SplatRoute: SplatRoute,
   AdminRoute: AdminRoute,
   ScheduleRoute: ScheduleRoute,
+  ApiAgentChannelRoute: ApiAgentChannelRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

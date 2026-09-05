@@ -50,4 +50,17 @@ describe("очередь пакетов CRM", () => {
     assert.equal(restart.restart, true);
     assert.equal(restart.offset, 0);
   });
+
+  it("журнал схлопывается отдельно, впереди overlay", () => {
+    let q: CrmPacket[] = [];
+    q = mergeCrmPacket(q, { kind: "overlay", offset: 0 });
+    q = mergeCrmPacket(q, { kind: "journal", offset: 12 });
+    q = mergeCrmPacket(q, { kind: "journal", offset: 4 });
+    assert.equal(q.filter((p) => p.kind === "journal").length, 1);
+    const journal = q.find((p) => p.kind === "journal");
+    assert.equal(journal && journal.kind === "journal" ? journal.offset : -1, 4);
+    assert.equal(pickNextPacket(q)?.kind, "journal");
+    q = mergeCrmPacket(q, { kind: "group", branchId: 2, groupId: 1 });
+    assert.equal(pickNextPacket(q)?.kind, "group");
+  });
 });

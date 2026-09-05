@@ -12,6 +12,7 @@ export type DiskReq = {
   status?: string;
   branchId?: number;
   ageBand?: string;
+  take?: number;
 };
 
 /** Клиент импортирует только это. Реализация с fs — динамический import на сервере. */

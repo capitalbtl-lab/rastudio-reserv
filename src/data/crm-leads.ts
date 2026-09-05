@@ -8,7 +8,6 @@ import {
   colorPatch,
   mapCrmLeadStatuses,
   mergeStages,
-  leadStatusSortForm,
   leadStatusSortPayload,
   parseCrmStageOrder,
   applyStageOrder,
@@ -35,6 +34,8 @@ import {
   type LeadCard,
 } from "./crm-leads-stages";
 import { crmHost, crmWebLogin, csrfOf, mergeCookies, setCookieList } from "./crm-web";
+import type { CrmActorId } from "./crm-actors";
+import { nextLocalId } from "./crm-local-id";
 
 export type { LeadStage, LeadCard } from "./crm-leads-stages";
 export {
@@ -102,11 +103,9 @@ function bag() {
 }
 
 function localStageId() {
-  const used = new Set<number>();
-  for (const v of bag().values()) for (const s of v.stages) used.add(s.id);
-  let id = -Math.abs((Date.now() % 1_000_000_000) || 1);
-  while (used.has(id) || id === 0) id -= 1;
-  return id;
+  const used: number[] = [];
+  for (const v of bag().values()) for (const s of v.stages) used.push(s.id);
+  return nextLocalId(used);
 }
 
 export function cachedLeadBoard(branchId = 0) {
@@ -169,6 +168,17 @@ export function applyCreatedLeadStage(localId: number, crmId: number) {
     for (const s of stages) if (s.id === from) s.id = to;
     for (const it of items) if (it.statusId === from) it.statusId = to;
   });
+}
+
+/** Порядок колонок на диск сразу. Alfa — очередь lead-status.update. */
+export function diskSortLeadStages(ids: number[]) {
+  const order = pinUnsorted(ids);
+  if (!order.length) return order;
+  touchStages((stages) => {
+    const next = applyStageOrder(stages, order);
+    stages.splice(0, stages.length, ...next);
+  });
+  return order;
 }
 
 function asPhone(v: unknown) {
@@ -388,7 +398,7 @@ async function fetchBranchLeads(t: string, branch: number, stages: { id: number 
   return { items: out, fromBoard, boardError: board.length ? "" : login.error || "доска CRM не открылась" };
 }
 
-export async function syncLeadsDelta(branchId = 0) {
+export async function syncLeadsDelta(branchId = 0): Promise<Bag> {
   const key = String(branchId || 0);
   const hit = bag().get(key);
   if (!hit?.items.length) return loadLeadsBoard(branchId, true);
@@ -469,24 +479,21 @@ export async function boardFromDisk(branchId = 0): Promise<Bag> {
   }
 }
 
-export async function loadLeadsBoard(branchId = 0, force = false, delta = false) {
+export async function loadLeadsBoard(branchId = 0, force = false, delta = false): Promise<Bag> {
   const key = String(branchId || 0);
   const hit = bag().get(key);
-  if (!force && hit?.items.length) {
-    if (delta || Date.now() - hit.at >= 10 * 60 * 1000) void syncLeadsDelta(branchId);
-    return hit;
-  }
-  if ((!force || delta) && hit?.items.length) return syncLeadsDelta(branchId);
-  if (!force) {
+  const { wantAlfaPull } = await import("./crm-alfa-link");
+  if (!wantAlfaPull(force)) {
+    if (hit?.items.length) return hit;
     const disk = await boardFromDisk(branchId);
     if (disk.items.length) {
       bag().set(key, disk);
       persistLeads();
-      if (delta) void syncLeadsDelta(branchId);
     }
     return disk;
   }
-  const work = async () => {
+  if (delta && hit?.items.length) return syncLeadsDelta(branchId);
+  const work = async (): Promise<Bag> => {
     const t = await alfaToken();
     const rawStages = await fetchStages(t, branchId || 2);
     const branches = branchId ? [branchId] : [1, 2, 3, 4];
@@ -592,24 +599,6 @@ export function forgetLead(id: number, branchId: number) {
   }
 }
 
-async function patchLead(branch: number, id: number, fields: Record<string, unknown>, t: string) {
-  const paths = [`/v2api/${branch}/customer/update`, `/v2api/${branch}/lead/update`];
-  let last = "";
-  for (const path of paths) {
-    try {
-      const json = await request<{ success?: boolean; errors?: unknown }>(path, { id, ...fields }, t);
-      if (json && json.success === false) {
-        last = JSON.stringify(json.errors || json);
-        continue;
-      }
-      return json;
-    } catch (e) {
-      last = e instanceof Error ? e.message : String(e);
-    }
-  }
-  throw new Error(last || "AlfaCRM не приняла смену этапа воронки.");
-}
-
 export function cacheMoveLead(branchId: number, leadId: number, statusId: number, sort?: number) {
   const branch = branchId || 1;
   const id = Number(leadId) || 0;
@@ -662,163 +651,140 @@ export function cacheArchiveLead(branchId: number, leadId: number) {
   persistLeads();
 }
 
-export async function moveLead(branchId: number, leadId: number, statusId: number, sort?: number) {
-  const t = await alfaToken();
+export async function moveLead(branchId: number, leadId: number, statusId: number, sort?: number, actor: CrmActorId = "human") {
   const branch = branchId || 1;
   const id = Number(leadId) || 0;
   if (!id) throw new Error("Нет номера лида.");
   if (!Number.isFinite(Number(statusId))) throw new Error("Нет этапа воронки.");
-  const fields = leadMoveFields(statusId);
-  await patchLead(branch, id, fields, t);
-  if (Number.isFinite(Number(sort))) {
-    try {
-      await patchLead(branch, id, { sort: Number(sort) }, t);
-    } catch {
-      /* поле sort в филиале может отсутствовать */
-    }
-  }
   cacheMoveLead(branch, id, statusId, sort);
-  return { ok: true as const };
+  try {
+    const { upsertDossier, findDossier } = await import("./dossiers");
+    const d = findDossier({ crmId: id });
+    upsertDossier({
+      crmId: id,
+      extras: { ...(d?.extras || {}), lead_status_id: String(statusId), is_study: "0" },
+    } as never);
+  } catch {
+    /* досье */
+  }
+  const { enqueueExport } = await import("./crm-export-queue");
+  enqueueExport({
+    op: "customer.update",
+    branchId: branch,
+    entityId: id,
+    actor,
+    body: { ...leadMoveFields(statusId, sort) },
+  });
+  return { ok: true as const, queued: true as const };
 }
 
-export async function archiveLead(branchId: number, leadId: number) {
-  const t = await alfaToken();
+export async function archiveLead(branchId: number, leadId: number, actor: CrmActorId = "human") {
   const branch = branchId || 1;
   const id = Number(leadId) || 0;
   if (!id) throw new Error("Нет номера лида.");
-  try {
-    await patchLead(branch, id, { removed: 1 }, t);
-  } catch {
-    await patchLead(branch, id, { is_study: 2, removed: 1 }, t);
-  }
   cacheArchiveLead(branch, id);
-  return { ok: true as const };
-}
-
-export async function createLeadStage(name: string, color = "#1a7bb9") {
-  const t = await alfaToken();
-  const title = name.trim() || "Новый этап";
-  const json = await request<{ success?: boolean; model?: { id?: number }; id?: number; errors?: unknown }>(
-    `/v2api/1/lead-status/create`,
-    { name: title, pipeline_id: PIPELINE, is_enabled: 1, ...colorPatch(color) },
-    t,
-  );
-  if (json.success === false) throw new Error(JSON.stringify(json.errors || json));
-  bag().clear();
-  return { ok: true as const, id: Number(json.model?.id || json.id || 0), name: title, color };
-}
-
-export async function saveLeadStage(id: number, patch: { name?: string; color?: string }) {
-  const t = await alfaToken();
-  const body: Record<string, unknown> = { id, pipeline_id: PIPELINE };
-  if (patch.name) body.name = patch.name.trim();
-  if (patch.color) Object.assign(body, colorPatch(patch.color));
-  const json = await request<{ success?: boolean; errors?: unknown }>(`/v2api/1/lead-status/update`, body, t);
-  if (json.success === false) throw new Error(JSON.stringify(json.errors || json));
-  for (const v of bag().values()) {
-    const hit = v.stages.find((s) => s.id === id);
-    if (hit) {
-      if (patch.name) hit.name = patch.name.trim();
-      if (patch.color) hit.color = patch.color;
-    }
+  try {
+    const { upsertDossier, findDossier } = await import("./dossiers");
+    const d = findDossier({ crmId: id });
+    upsertDossier({ crmId: id, extras: { ...(d?.extras || {}), is_study: "0", removed: "1" } } as never);
+  } catch {
+    /* досье */
   }
-  return { ok: true as const };
+  const { enqueueExport } = await import("./crm-export-queue");
+  enqueueExport({
+    op: "customer.update",
+    branchId: branch,
+    entityId: id,
+    actor,
+    body: { removed: 1, is_study: 2 },
+  });
+  return { ok: true as const, queued: true as const };
 }
 
-export async function sortLeadStages(ids: number[], branchId = 2) {
-  const data = leadStatusSortPayload(ids);
-  if (!data.length) return { ok: true as const };
-  await postCrmLeadStatusSort(data, branchId);
-  const t = await alfaToken();
-  for (const row of data) {
-    await request(`/v2api/1/lead-status/update`, { id: row.id, weight: row.weight, sort: row.weight, pipeline_id: PIPELINE }, t).catch(
-      () => null,
-    );
-  }
-  const order = pinUnsorted(ids);
-  for (const v of bag().values()) {
-    const by = new Map(v.stages.map((s) => [s.id, s]));
-    const next: LeadStage[] = [];
-    const seen = new Set<number>();
-    for (const id of order) {
-      const s = by.get(id);
-      if (!s || seen.has(id)) continue;
-      seen.add(id);
-      next.push({ ...s, weight: id === 0 ? 0 : data.find((row) => row.id === id)?.weight });
-    }
-    for (const s of v.stages) if (!seen.has(s.id)) next.push(s);
-    v.stages = next;
-  }
-  return { ok: true as const };
+export async function createLeadStage(name: string, color = "#1a7bb9", actor: CrmActorId = "human") {
+  const made = diskCreateLeadStage(name, color);
+  const { enqueueExport } = await import("./crm-export-queue");
+  enqueueExport({
+    op: "lead-status.create",
+    branchId: 1,
+    entityId: made.id,
+    actor,
+    body: {
+      name: made.name,
+      localId: made.id,
+      pipeline_id: PIPELINE,
+      is_enabled: 1,
+      ...colorPatch(made.color),
+    },
+  });
+  return { ok: true as const, id: made.id, name: made.name, color: made.color, queued: true as const };
 }
 
-async function postCrmLeadStatusSort(data: { id: number; weight: number }[], branchId: number) {
-  const host = crmHost();
-  const login = await crmWebLogin();
-  if (!login.cookie) throw new Error(login.error || "Нет пароля кабинета CRM — порядок этапов в AlfaCRM не записан.");
-  let cookie = login.cookie;
-  const tries = [...new Set([Number(branchId) || 2, 2, 1].filter((n) => n > 0))];
-  let last = "";
-  for (const branch of tries) {
-    const pageUrl = `${host}/settings/${branch}/pipeline/index`;
-    const page = await fetch(pageUrl, {
-      headers: {
-        Cookie: cookie,
-        Accept: "text/html,application/json",
-        "X-Requested-With": "XMLHttpRequest",
-        Referer: `${host}/`,
+export async function saveLeadStage(id: number, patch: { name?: string; color?: string }, actor: CrmActorId = "human") {
+  if (!Number.isFinite(id)) throw new Error("Нет этапа воронки.");
+  diskSaveLeadStage(id, patch);
+  const { enqueueExport } = await import("./crm-export-queue");
+  if (id < 0) {
+    const hit = cachedLeadBoard(0).stages.find((s) => s.id === id);
+    enqueueExport({
+      op: "lead-status.create",
+      branchId: 1,
+      entityId: id,
+      actor,
+      body: {
+        name: hit?.name || patch.name || "",
+        localId: id,
+        pipeline_id: PIPELINE,
+        is_enabled: 1,
+        ...colorPatch(hit?.color || patch.color || "#2563eb"),
       },
-      redirect: "manual",
     });
-    cookie = mergeCookies(cookie, setCookieList(page));
-    const html = await page.text();
-    if (/LoginForm/i.test(html) && !/lead-status/i.test(html)) {
-      last = "Сессия CRM сбросилась. Войдите в AlfaCRM.";
-      continue;
-    }
-    const csrf = csrfOf(html);
-    const sortUrl = `${host}/settings/${branch}/lead-status/sort`;
-    const res = await fetch(sortUrl, {
-      method: "POST",
-      headers: {
-        Cookie: cookie,
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        Accept: "application/json, text/javascript, */*; q=0.01",
-        "X-Requested-With": "XMLHttpRequest",
-        ...(csrf ? { "X-CSRF-Token": csrf } : {}),
-        Origin: host,
-        Referer: pageUrl,
+  } else if (id > 0) {
+    enqueueExport({
+      op: "lead-status.update",
+      branchId: 1,
+      entityId: id,
+      actor,
+      body: {
+        ...(patch.name ? { name: patch.name.trim() } : {}),
+        ...(patch.color ? colorPatch(patch.color) : {}),
       },
-      body: leadStatusSortForm(data, csrf),
-      redirect: "manual",
     });
-    cookie = mergeCookies(cookie, setCookieList(res));
-    const text = await res.text();
-    const loc = res.headers.get("location") || "";
-    if (res.status === 302 && /login/i.test(loc)) {
-      last = "CRM сбросила сессию при сортировке этапов.";
-      continue;
-    }
-    if (res.status === 400 || /Не удалось проверить переданные данные/i.test(text)) {
-      last = "CRM отклонила запрос сортировки этапов.";
-      continue;
-    }
-    if (res.ok || res.status === 204 || res.status === 302) return;
-    last = `CRM не приняла порядок этапов (${res.status}).`;
   }
-  throw new Error(last || "AlfaCRM не записала порядок этапов.");
+  return { ok: true as const, queued: true as const };
 }
 
-export async function deleteLeadStage(id: number) {
+export async function sortLeadStages(ids: number[], _branchId = 2, actor: CrmActorId = "human") {
+  const order = diskSortLeadStages(ids);
+  if (!order.length) return { ok: true as const, queued: true as const };
+  const { enqueueExport } = await import("./crm-export-queue");
+  for (const row of leadStatusSortPayload(order)) {
+    if (!(row.id > 0)) continue;
+    enqueueExport({
+      op: "lead-status.update",
+      branchId: 1,
+      entityId: row.id,
+      actor,
+      body: { weight: row.weight, sort: row.weight, pipeline_id: PIPELINE },
+    });
+  }
+  return { ok: true as const, queued: true as const };
+}
+
+export async function deleteLeadStage(id: number, actor: CrmActorId = "human") {
   if (id === 0) throw new Error("Системный столбец «Не разобрано» нельзя удалить.");
-  const t = await alfaToken();
-  const json = await request<{ success?: boolean; errors?: unknown }>(`/v2api/1/lead-status/delete`, { id }, t);
-  if (json.success === false) throw new Error(JSON.stringify(json.errors || json));
-  for (const v of bag().values()) {
-    v.stages = v.stages.filter((s) => s.id !== id);
-    for (const it of v.items) if (it.statusId === id) it.statusId = 0;
+  diskDeleteLeadStage(id);
+  if (id > 0) {
+    const { enqueueExport } = await import("./crm-export-queue");
+    enqueueExport({
+      op: "lead-status.delete",
+      branchId: 1,
+      entityId: id,
+      actor,
+      body: { id },
+    });
   }
-  return { ok: true as const };
+  return { ok: true as const, queued: id > 0 };
 }
 
 export { CRM_BRANCH };

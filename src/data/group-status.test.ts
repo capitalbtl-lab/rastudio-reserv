@@ -13,7 +13,7 @@ import {
   sessionCourseId,
 } from "./group-status.ts";
 import { inheritSchoolBySubject } from "./schedule-map.ts";
-import { resolveGroupCourseId } from "./ids.ts";
+import { resolveGroupCourseId } from "./course-subject-core.ts";
 import { bulkPriorityFromPrompt } from "./schedule-bulk.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 

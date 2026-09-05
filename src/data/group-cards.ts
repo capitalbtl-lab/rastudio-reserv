@@ -1,7 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { GroupCalLesson } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
+import { nextLocalId } from "./crm-local-id";
+import { mergeJournalInbound } from "./crm-inbound-core";
 
 export type CachedGroupCard = {
   id: number;
@@ -27,6 +29,9 @@ export type CachedGroupCard = {
 
 type Store = { at: string; items: Record<string, CachedGroupCard> };
 
+let mem: Store | null = null;
+let memMtime = 0;
+
 function file() {
   return join(process.cwd(), "storage", "group-cards.json");
 }
@@ -37,17 +42,31 @@ function key(branchId: number, gid: number) {
 
 function load(): Store {
   try {
+    const mtime = existsSync(file()) ? statSync(file()).mtimeMs : 0;
+    if (mem && memMtime === mtime) return mem;
     const raw = JSON.parse(readFileSync(file(), "utf8")) as Store;
-    if (raw && raw.items && typeof raw.items === "object") return raw;
+    if (raw && raw.items && typeof raw.items === "object") {
+      mem = raw;
+      memMtime = mtime;
+      return mem;
+    }
   } catch {
     /* */
   }
-  return { at: "", items: {} };
+  mem = { at: "", items: {} };
+  memMtime = 0;
+  return mem;
 }
 
 function write(store: Store) {
+  mem = store;
   mkdirSync(dirname(file()), { recursive: true });
   writeFileSync(file(), JSON.stringify(store, null, 0), "utf8");
+  try {
+    memMtime = statSync(file()).mtimeMs;
+  } catch {
+    memMtime = Date.now();
+  }
 }
 
 export function loadGroupCard(branchId: number, gid: number): CachedGroupCard | null {
@@ -55,9 +74,15 @@ export function loadGroupCard(branchId: number, gid: number): CachedGroupCard | 
 }
 
 export function saveGroupCard(card: CachedGroupCard) {
+  saveGroupCards([card]);
+}
+
+export function saveGroupCards(cards: CachedGroupCard[]) {
+  if (!cards.length) return;
   const store = load();
-  store.items[key(card.branchId, card.id)] = { ...card, at: new Date().toISOString() };
-  store.at = new Date().toISOString();
+  const at = new Date().toISOString();
+  for (const card of cards) store.items[key(card.branchId, card.id)] = { ...card, at };
+  store.at = at;
   write(store);
 }
 
@@ -66,16 +91,11 @@ export function listGroupCards(): CachedGroupCard[] {
 }
 
 export function nextLocalLessonId() {
-  let min = 0;
+  const used: number[] = [];
   for (const card of listGroupCards()) {
-    for (const l of card.calendar || []) {
-      const id = Number(l.lessonId) || 0;
-      if (id < min) min = id;
-    }
+    for (const l of card.calendar || []) used.push(Number(l.lessonId) || 0);
   }
-  const fromTime = -Math.abs((Date.now() % 1_000_000_000) || 1);
-  const id = Math.min(fromTime, min - 1);
-  return id === 0 ? -1 : id;
+  return nextLocalId(used);
 }
 
 export function upsertGroupCalendar(
@@ -118,17 +138,13 @@ export function upsertGroupCalendar(
   return next;
 }
 
-export function mergeLocalCalendar(pulled: GroupCalLesson[], prev: GroupCalLesson[] | undefined): GroupCalLesson[] {
-  const local = (prev || []).filter((x) => Number(x.lessonId) < 0);
-  if (!local.length) return pulled;
-  const out = [...pulled];
-  for (const loc of local) {
-    const date = String(loc.date || "");
-    const from = String(loc.from || "");
-    if (out.some((c) => Number(c.lessonId) === Number(loc.lessonId) || (String(c.date) === date && String(c.from || "") === from))) continue;
-    out.push(loc);
-  }
-  return out.sort((a, b) => a.date.localeCompare(b.date) || String(a.from || "").localeCompare(String(b.from || "")));
+export function mergeLocalCalendar(
+  pulled: GroupCalLesson[],
+  prev: GroupCalLesson[] | undefined,
+  holdIds?: Iterable<number>,
+  mode: "replace" | "union" = "replace",
+): GroupCalLesson[] {
+  return mergeJournalInbound(pulled, prev, holdIds, mode);
 }
 
 export function applyCreatedCalendarLesson(localId: number, crmId: number) {

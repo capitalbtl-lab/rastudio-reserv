@@ -10,6 +10,9 @@ export type CachePolicy = {
   overlayAt: string;
   overlayNext: number;
   overlayTotal: number;
+  journalAt: string;
+  journalNext: number;
+  journalTotal: number;
   rules: Record<CacheKind, CacheRule>;
 };
 
@@ -42,7 +45,7 @@ export const CACHE_KIND_META: { id: CacheKind; title: string; hint: string; live
     id: "lessons",
     title: "Занятия",
     hint: "Календарь группы, провести / отменить урок.",
-    liveHint: "Оперативно, кэш короткий.",
+    liveHint: "Журнал с диска. Фон забирает явку из Alfa (очередь старше). «Обновить» у группы — сразу. Рассылки — после выгрузки.",
   },
   {
     id: "directory",
@@ -57,7 +60,7 @@ export const DEFAULT_CACHE_RULES: Record<CacheKind, CacheRule> = {
   customers: { cache: true, ttlMin: 10 },
   pupilTariffs: { cache: true, ttlMin: 30 },
   tariffCatalog: { cache: true, ttlMin: 60 },
-  lessons: { cache: false, ttlMin: 5 },
+  lessons: { cache: true, ttlMin: 10 },
   directory: { cache: true, ttlMin: 60 },
 };
 

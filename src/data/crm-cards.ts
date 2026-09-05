@@ -77,6 +77,15 @@ export type CustomerComm = {
   incoming: boolean;
 };
 
+export type CustomerPay = {
+  id: number;
+  kind: string;
+  income: number;
+  expenditure: number;
+  note: string;
+  documentDate: string;
+};
+
 export type CustomerCard = {
   id: number;
   cardId?: string;
@@ -106,6 +115,7 @@ export type CustomerCard = {
   calendar?: ClientLesson[];
   tariffs?: ClientTariff[];
   comms: CustomerComm[];
+  pays?: CustomerPay[];
   catalog?: LessonCatalog;
 };
 

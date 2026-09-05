@@ -100,7 +100,8 @@ describe("форма записи не тащит AlfaCRM в браузер", ()
       assert.equal(/await import\(/.test(src), false);
     }
     assert.match(trial, /createServerFn/);
-    assert.match(save, /await import\("\.\/alfacrm"\)/);
+    assert.equal(/await import\("\.\/alfacrm"\)/.test(save), false);
+    assert.equal(/upsertAlfaLead/.test(save), false);
     assert.match(save, /enqueueExport/);
   });
 
@@ -159,7 +160,8 @@ describe("кабинет: новый ученик диск сразу", () => {
     const sub = readFileSync(new URL("./crm-subjects.ts", import.meta.url), "utf8");
     assert.match(sub, /export function createLocalSubject/);
     assert.match(sub, /export function nextLocalSubjectId/);
-    assert.match(sub, /id >= 9000/);
+    assert.match(sub, /isLocalSubject/);
+    assert.match(sub, /nextLocalId/);
   });
 
   it("этап воронки на диске, Alfa — очередь lead-status.*", () => {
@@ -253,9 +255,12 @@ describe("кабинет: новый ученик диск сразу", () => {
     const get = src.slice(getAt, getNext > getAt ? getNext : getAt + 2500);
     assert.match(get, /cardFromDossier/);
     assert.match(get, /customer-card-disk/);
-    assert.equal(/enqueueCustomerPacket/.test(get), false);
+    const diskEnd = get.indexOf("if (customerId < 0)");
+    const disk = get.slice(0, diskEnd > 0 ? diskEnd : get.length);
+    assert.equal(/enqueueCustomerPacket/.test(disk), false);
+    assert.match(get, /enqueueCustomerPacket/);
     assert.match(get, /fromCache: true/);
-    assert.match(get, /if \(!data\.fresh\)/);
+    assert.match(get, /wantAlfaPull\(data\.fresh\)/);
     assert.match(get, /Ученик не найден на сайте/);
     const memAt = src.indexOf('data.action === "groupMembers"');
     const memNext = src.indexOf("if (data.action ===", memAt + 10);
@@ -266,20 +271,30 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.equal(/loadGroupMembers/.test(mem), false);
     assert.equal(/await loadGroupMembers/.test(mem), false);
     const loadAt = src.indexOf("async function loadCustomerCard");
-    const loadNext = src.indexOf("async function ", loadAt + 20);
-    const load = src.slice(loadAt, loadNext > loadAt ? loadNext : loadAt + 5000);
-    assert.match(load, /activeGroupsForCard/);
-    assert.match(load, /mergeCgiGroupLinks/);
+    const loadEnd = src.indexOf("\nfunction hm(", loadAt);
+    const load = src.slice(loadAt, loadEnd > loadAt ? loadEnd : loadAt + 5000);
+    assert.match(load, /journalForCustomer/);
+    assert.equal(/lesson\/index/.test(load), false);
+    assert.match(load, /mergeCgiGroupLinks|activeGroupsForCard/);
     assert.equal(/groupIdsFromCustomer/.test(load), false);
-    const cgiAt = src.indexOf("async function cgiAndLessonGroups");
-    const cgiNext = src.indexOf("async function ", cgiAt + 20);
-    const cgi = src.slice(cgiAt, cgiNext > cgiAt ? cgiNext : cgiAt + 2500);
-    assert.equal(/regular-lesson/.test(cgi), false);
+    assert.equal(/cgi\/index/.test(load), false);
     const gAt = src.indexOf('data.action === "groupGet"');
     const gNext = src.indexOf("if (data.action ===", gAt + 10);
     const g = src.slice(gAt, gNext > gAt ? gNext : gAt + 2500);
     assert.match(g, /Группа не на сайте/);
     assert.match(g, /fromCache: true/);
+  });
+
+  it("список клиентов с диска, поиск не ходит в Alfa", () => {
+    const src = readFileSync(new URL("./admin-disk-run.ts", import.meta.url), "utf8");
+    const at = src.indexOf('if (kind === "clients")');
+    const next = src.indexOf("if (kind === \"prices\")", at);
+    const chunk = src.slice(at, next > at ? next : at + 800);
+    assert.match(chunk, /searchClientViews/);
+    assert.match(chunk, /toClientListRow/);
+    assert.match(chunk, /data.take/);
+    assert.equal(/customer\/index/.test(chunk), false);
+    assert.equal(/startLeadTicker/.test(src), false);
   });
 
   it("воронка лидов с диска, Alfa только force", () => {
@@ -288,14 +303,216 @@ describe("кабинет: новый ученик диск сразу", () => {
     const next = src.indexOf("export function rememberCustomerAsLead");
     const chunk = src.slice(at, next > at ? next : at + 4000);
     assert.match(chunk, /boardFromDisk/);
-    assert.match(chunk, /if \(!force\)/);
+    assert.match(chunk, /wantAlfaPull\(force\)/);
     assert.match(src, /export async function boardFromDisk/);
     assert.match(src, /с диска сайта/);
+    const diskPart = chunk.slice(0, chunk.indexOf("if (delta"));
+    assert.equal(/alfaToken/.test(diskPart), false);
+    assert.equal(/syncLeadsDelta/.test(diskPart), false);
     const stages = readFileSync(new URL("./crm-leads-stages.ts", import.meta.url), "utf8");
     assert.match(stages, /export function leadCardFromView/);
     const save = readFileSync(new URL("./trial-save.ts", import.meta.url), "utf8");
     assert.match(save, /actor: "consultant"/);
     const exp = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
     assert.match(exp, /logAdmin\(`Выгрузка CRM: \$\{q\.lastNote\}`, "sync"\)/);
+  });
+
+  it("этап 5: очередь Alfa — нет прямого API на запись, актор на выгрузке", () => {
+    const leads = readFileSync(new URL("./crm-leads.ts", import.meta.url), "utf8");
+    const moveAt = leads.indexOf("export async function moveLead");
+    const move = leads.slice(moveAt, leads.indexOf("export async function archiveLead"));
+    assert.match(move, /enqueueExport/);
+    assert.match(move, /actor/);
+    assert.equal(/alfaToken/.test(move), false);
+    assert.equal(/patchLead/.test(move), false);
+    const sortAt = leads.indexOf("export async function sortLeadStages");
+    const sort = leads.slice(sortAt, leads.indexOf("export async function deleteLeadStage"));
+    assert.match(sort, /diskSortLeadStages/);
+    assert.match(sort, /lead-status.update/);
+    assert.equal(/postCrmLeadStatusSort/.test(sort), false);
+    assert.equal(/alfaToken/.test(sort), false);
+    assert.match(leads, /export function diskSortLeadStages/);
+    assert.equal(/async function patchLead/.test(leads), false);
+
+    const sched = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
+    const sortSchedAt = sched.indexOf('data.action === "leadStageSort"');
+    const sortSchedNext = sched.indexOf("if (data.action ===", sortSchedAt + 10);
+    const sortSched = sched.slice(sortSchedAt, sortSchedNext > sortSchedAt ? sortSchedNext : sortSchedAt + 2500);
+    assert.match(sortSched, /cachedLeadBoard/);
+    assert.equal(/loadLeadsBoard/.test(sortSched), false);
+    assert.match(sortSched, /"human"/);
+
+    const auto = readFileSync(new URL("./funnel-auto.ts", import.meta.url), "utf8");
+    assert.match(auto, /moveLead\(branch, id, statusId, undefined, "sync"\)/);
+
+    const save = readFileSync(new URL("./trial-save.ts", import.meta.url), "utf8");
+    assert.equal(/upsertAlfaLead/.test(save), false);
+    assert.equal(/s20\.online/.test(save), false);
+    assert.equal(/lead-form\/save/.test(save), false);
+
+    const exp = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
+    assert.match(exp, /exportJobSnap/);
+    const createdAt = exp.indexOf('if (job.op === "customer.create")');
+    const created = exp.slice(createdAt, createdAt + 1800);
+    assert.match(created, /op: "lesson.create"/);
+    assert.equal(/await createAlfaLesson/.test(created), false);
+  });
+
+  it("этап 3: стык курс/предмет — одно правило, имя не ключ", () => {
+    const core = readFileSync(new URL("./course-subject-core.ts", import.meta.url), "utf8");
+    assert.match(core, /export function joinCourseSubject/);
+    assert.match(core, /CourseSubjectGap/);
+    assert.equal(/schoolFromHay/.test(core), false);
+    assert.equal(/slotMismatch/.test(core), false);
+    assert.equal(/from\s+["'][^"']*romashka/.test(core), false);
+    assert.equal(/from\s+["']node:fs["']/.test(core), false);
+    const ids = readFileSync(new URL("./ids.ts", import.meta.url), "utf8");
+    assert.match(ids, /from "\.\/course-subject-core"/);
+    assert.match(ids, /joinCourseSubject/);
+    assert.equal(/export function joinCourseSubject/.test(ids), false);
+    assert.equal(/schoolFromHay/.test(ids), false);
+    assert.equal(/slotMismatch/.test(ids), false);
+    const pub = readFileSync(new URL("./public-bind-core.ts", import.meta.url), "utf8");
+    assert.match(pub, /from "\.\/course-subject-core\.ts"/);
+    assert.match(pub, /resolveGroupCourseId/);
+    assert.equal(/schoolFromHay/.test(pub), false);
+    assert.equal(/from\s+["'][^"']*ids/.test(pub), false);
+    const rules = readFileSync(new URL("./crm-disk-rules.ts", import.meta.url), "utf8");
+    assert.match(rules, /id: "course"/);
+    assert.match(rules, /schedule-map/);
+    const settings = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
+    assert.match(settings, /ALFA_LINK_MODES/);
+    assert.match(settings, /Связь с AlfaCRM/);
+    const map = readFileSync(new URL("./schedule-map.ts", import.meta.url), "utf8");
+    assert.match(map, /joinCourseSubject/);
+    assert.match(map, /courseSubjectGapText/);
+  });
+
+  it("этап 6: свой id отрицательный, очередь переписывает одним правилом", () => {
+    const local = readFileSync(new URL("./crm-local-id.ts", import.meta.url), "utf8");
+    assert.match(local, /export function isLocalId/);
+    assert.match(local, /export function nextLocalId/);
+    assert.match(local, /export function isLocalSubject/);
+    assert.equal(/from\s+["']node:fs["']/.test(local), false);
+    const core = readFileSync(new URL("./crm-export-queue-core.ts", import.meta.url), "utf8");
+    assert.match(core, /export function remapExportJobs/);
+    const queue = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
+    assert.match(queue, /remapExportJobs/);
+    assert.equal(/body\.subject_id\) === localId/.test(queue), false);
+    const sub = readFileSync(new URL("./crm-subjects.ts", import.meta.url), "utf8");
+    assert.match(sub, /nextLocalId/);
+    assert.match(sub, /isLocalSubject/);
+    const trial = readFileSync(new URL("./trial-disk.ts", import.meta.url), "utf8");
+    assert.match(trial, /nextLocalId/);
+    const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
+    assert.match(cards, /nextLocalId/);
+    const leads = readFileSync(new URL("./crm-leads.ts", import.meta.url), "utf8");
+    assert.match(leads, /nextLocalId/);
+    const rules = readFileSync(new URL("./crm-disk-rules.ts", import.meta.url), "utf8");
+    assert.match(rules, /id: "local"/);
+    assert.match(rules, /stage: 6/);
+    const settings = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
+    assert.match(settings, /ALFA_LINK_MODES/);
+    const sched = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
+    assert.match(sched, /isLocalSubject/);
+  });
+
+  it("этап 7: журнал уроков — customerIds на диске, не cgi", () => {
+    const core = readFileSync(new URL("./crm-journal-core.ts", import.meta.url), "utf8");
+    assert.match(core, /export function stampJournal/);
+    assert.match(core, /export function journalForCustomer/);
+    assert.equal(/from\s+["']node:fs["']/.test(core), false);
+    const save = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
+    const saveAt = save.indexOf('data.action === "lessonSave"');
+    const saveNext = save.indexOf("if (data.action ===", saveAt + 10);
+    const chunk = save.slice(saveAt, saveNext > saveAt ? saveNext : saveAt + 4000);
+    assert.match(chunk, /stampJournal/);
+    const stAt = save.indexOf('data.action === "lessonStatus"');
+    const stNext = save.indexOf("if (data.action ===", stAt + 10);
+    const st = save.slice(stAt, stNext > stAt ? stNext : stAt + 2500);
+    assert.match(st, /stampJournal/);
+    assert.match(st, /rememberLessons/);
+    const card = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
+    assert.match(card, /journalForCustomer/);
+    assert.match(card, /clientLessonFromJournal/);
+    const lessons = readFileSync(new URL("./crm-lessons.ts", import.meta.url), "utf8");
+    assert.match(lessons, /journalAttend/);
+    const rules = readFileSync(new URL("./crm-disk-rules.ts", import.meta.url), "utf8");
+    assert.match(rules, /id: "journal"/);
+    assert.match(rules, /stage: 7/);
+    const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
+    assert.match(inbound, /pendingExportIds/);
+    assert.match(inbound, /mergeLocalCalendar/);
+    assert.match(inbound, /"union"/);
+    assert.match(inbound, /date_from/);
+    const pack = readFileSync(new URL("./crm-packet-queue.ts", import.meta.url), "utf8");
+    assert.match(pack, /kind === "journal"/);
+    assert.match(pack, /inboundJournalChunk/);
+    assert.match(pack, /skipJournal/);
+  });
+
+  it("этап 8: деньги — журнал на диске, Alfa касса очередь", () => {
+    const core = readFileSync(new URL("./crm-pay-core.ts", import.meta.url), "utf8");
+    assert.match(core, /export function payEffect/);
+    assert.match(core, /export function balanceOf/);
+    assert.match(core, /export function mergePayInbound/);
+    assert.equal(/from\s+["']node:fs["']/.test(core), false);
+    const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
+    assert.match(pay, /appendPay/);
+    assert.match(pay, /applyCreatedPay/);
+    assert.match(pay, /inboundCustomerPays/);
+    assert.match(pay, /pendingExportIds/);
+    const save = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
+    const at = save.indexOf('data.action === "customerPay"');
+    const next = save.indexOf("if (data.action ===", at + 10);
+    const chunk = save.slice(at, next > at ? next : at + 3500);
+    assert.match(chunk, /appendPay/);
+    assert.match(chunk, /pay.create/);
+    assert.match(chunk, /localId/);
+    const card = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
+    assert.match(card, /customerBalance/);
+    const rules = readFileSync(new URL("./crm-disk-rules.ts", import.meta.url), "utf8");
+    assert.match(rules, /id: "money"/);
+    assert.match(rules, /stage: 8/);
+    const queue = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
+    assert.match(queue, /applyCreatedPay/);
+    assert.match(readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8"), /cardPays/);
+  });
+
+  it("этап 9: каналы консультанта — лента на диске, Alfa не F5", () => {
+    const core = readFileSync(new URL("./crm-comms-core.ts", import.meta.url), "utf8");
+    assert.match(core, /export function mergeCommsInbound/);
+    assert.match(core, /export function packAlfaComm/);
+    assert.equal(/from\s+["']node:fs["']/.test(core), false);
+    const comms = readFileSync(new URL("./crm-comms.ts", import.meta.url), "utf8");
+    assert.match(comms, /appendComm/);
+    assert.match(comms, /inboundCustomerComms/);
+    assert.match(comms, /rememberConsultantTurn/);
+    const card = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
+    assert.match(card, /commsOf/);
+    assert.match(card, /cardPays/);
+    const load = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
+    const loadAt = load.indexOf("async function loadCustomerCard");
+    const loadEnd = load.indexOf("\nfunction hm(", loadAt);
+    const chunk = load.slice(loadAt, loadEnd > loadAt ? loadEnd : loadAt + 5000);
+    assert.equal(/communication\/index/.test(chunk), false);
+    assert.equal(/customer-tariff\/index/.test(chunk), false);
+    const getAt = load.indexOf('data.action === "customerGet"');
+    const getNext = load.indexOf("if (data.action ===", getAt + 10);
+    const get = load.slice(getAt, getNext > getAt ? getNext : getAt + 3500);
+    assert.match(get, /inboundCustomerComms/);
+    const trial = readFileSync(new URL("./trial-save.ts", import.meta.url), "utf8");
+    assert.match(trial, /appendComm/);
+    assert.match(trial, /applyCreatedCommCustomer/);
+    const chat = readFileSync(new URL("./agent-chat.ts", import.meta.url), "utf8");
+    assert.match(chat, /rememberConsultantTurn/);
+    assert.match(chat, /commsPrompt/);
+    assert.match(chat, /phone\?: string/);
+    const inbox = readFileSync(new URL("./agent-inbox.ts", import.meta.url), "utf8");
+    assert.match(inbox, /rememberConsultantTurn/);
+    assert.match(inbox, /stampComms/);
+    const rules = readFileSync(new URL("./crm-disk-rules.ts", import.meta.url), "utf8");
+    assert.match(rules, /id: "comms"/);
+    assert.match(rules, /stage: 9/);
   });
 });

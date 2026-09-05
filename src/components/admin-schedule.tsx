@@ -1214,7 +1214,7 @@ export function AdminSchedule() {
     const res = await adminSchedule({
       data: { token: token(), action, customerId: pupil.id, branchId: pupil.branchId, ...extra } as never,
     });
-    if (!res.ok) throw new Error(("error" in res && res.error) || "AlfaCRM не приняла изменение.");
+    if (!res.ok) throw new Error(("error" in res && res.error) || "Не удалось сохранить.");
     if ("customer" in res && res.customer) setPupil(res.customer as CustomerCard);
   }
 
@@ -2275,7 +2275,7 @@ export function AdminSchedule() {
       const preview = await run("aiPreview", { prompt: q, ids: pickedRef.current });
       const n = preview && "changes" in preview && Array.isArray(preview.changes) ? preview.changes.length : 0;
       const comment = preview && "comment" in preview ? String(preview.comment || "") : "";
-      const rows = preview && "changes" in preview && Array.isArray(preview.changes) ? (preview.changes as Change[]) : [];
+      const rows = preview && "changes" in preview && Array.isArray(preview.changes) ? (preview.changes as unknown as Change[]) : [];
       if (rows.length && rows.every((c) => c.field === "priority")) {
         await applyPriorityNow(comment || `Приоритет у ${rows.length} групп.`, rows, true);
         return;
@@ -3039,7 +3039,10 @@ export function AdminSchedule() {
                     const label = age && !name.toLowerCase().includes(age.toLowerCase().slice(0, 5)) ? `${name} · ${age}` : name;
                     const res = await run("treeAddCourse", { schoolId: school.id, label, age });
                     if (!res.ok) return;
-                    const created = (res.tree || siteTree).courses.find((c) => c.schoolId === school.id && c.label === label);
+                    const created =
+                      res.ok && "tree" in res && res.tree
+                        ? res.tree.courses.find((c: { schoolId?: string; label?: string; id?: string }) => c.schoolId === school.id && c.label === label)
+                        : siteTree.courses.find((c) => c.schoolId === school.id && c.label === label);
                     setCreateCourse({ name: "", age: "" });
                     setDraft((d) => ({ ...d, school: school.label, schoolId: school.id, course: label, courseId: created?.id || "", age }));
                     setAddKind("group");

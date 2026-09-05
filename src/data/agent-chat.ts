@@ -14,6 +14,15 @@ function fallbackTalk(who: "oleg" | "olga", facts: SessionFacts) {
     const short = pitch ? pitch.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ") : "В этом направлении дети идут от простого к сложному.";
     return `${n}: ${short} Рассказать подробнее или сразу на пробное?`;
   }
+  if (!facts.mode || facts.mode === "fork") {
+    return `${n}: Вы уже занимаетесь у нас или подбираете впервые?`;
+  }
+  if (facts.mode === "client" && !facts.identified) {
+    return facts.phone
+      ? `${n}: Проверяю карточку по телефону на сайте.`
+      : `${n}: Напишите телефон, который указывали при записи.`;
+  }
+  if (facts.mode === "client") return `${n}: Чем помочь: расписание, отработка, пропуск или абонемент?`;
   if (!facts.age) return `${n}: Сколько лет ребёнку?`;
   if (!facts.city) return `${n}: ${facts.age} лет, хорошо. Вам удобнее Коломна или Луховицы?`;
   if (facts.city === "Коломна" && !facts.branchId) {
@@ -36,7 +45,7 @@ function clientSystem(who: "oleg" | "olga", facts?: SessionFacts, stepOverride?:
     who === "olga"
       ? "женский род: согласна, готова, поняла. Никогда «согласен»."
       : "мужской род: согласен, готов, понял. Никогда «согласна».";
-  const step = stepOverride || (facts ? nextStepOf(facts) : "спросить возраст одной короткой фразой и ждать.");
+  const step = stepOverride || (facts ? nextStepOf(facts) : "спросить: уже занимаетесь или подбираете впервые.");
   return `Вы — ${name}, администратор студии «Развивайся». Говорите по-русски с родителем, как умная колонка Алиса: живо, коротко, по очереди. Не называйте себя роботом или нейросетью. Не выдумывайте день и свободные места. Цены: «от … / 4 недели». Пробное без обязательства.
 
 КАК ГОВОРИТЬ (как Алиса):
@@ -80,6 +89,7 @@ id курсов для заявки: ${TRIAL_COURSES.map((c) => `${c.id} ${c.nam
 Не открывай страницу курса в браузере. Только кнопка open_course.
 Жалобы и деньги — телефон.
 Если просят править сайт, статусы групп или CRM — это кабинет сотрудника, не этот чат. Не предлагай «войти в административный режим», пока человек сам не сказал, что он сотрудник.
+Узнанный клиент: занятия, явка, пропуск, пауза, отработка, абонемент — только с диска (блок КАРТОЧКА). Не выдумывай дату. Пропуск — note_skip. Пауза — pause_classes. Отработка — book_lesson makeup на gid его группы. Абонемент — assign_tariff с tariffId, если галочка в настройках.
 `;
 }
 
@@ -90,13 +100,14 @@ const ADMIN_SYSTEM = `Вы — Ольга, консоль управления �
 Если просят подобрать курс — «это другой чат, нажмите выход администратора».
 
 Только правки сайта:
-— цены: set_price
-— тексты страницы: list_page_fields, set_site_text, clear_site_text
-— голоса Олега и Ольги: set_voice_settings (Олег: zahar, filipp, ermil; Ольга: alena, jane, marina)
+— цены: set_price (path = courseId, не название)
+— тексты: сначала list_page_fields, потом set_site_text / clear_site_text
+  поля: заголовок, описание, о курсе, почему сейчас, главный заголовок (только главная)
+— голоса: set_voice_settings
 — reload_page если просят обновить
-После команды сразу вызови инструмент и коротко подтверди, что сохранено.
+После команды сразу вызови инструмент и коротко подтверди страницу и поле по-русски.
 Не пиши «режим управления уже открыт», не проси кодовое слово — доступ уже есть.
-Не обсуждай курсы «для ребёнка». Голос меняй инструментом, не вопросами про обучение.
+Не обсуждай курсы «для ребёнка». Не угадывай поле по смыслу — list_page_fields.
 `;
 
 const ADMIN_TOOLS = [
@@ -167,7 +178,7 @@ const ADMIN_TOOLS = [
           path: { type: "string", description: "Путь, название курса, главная, или пусто = текущая страница" },
           field: {
             type: "string",
-            description: "h1 | description | about | why_heading | why | hero_title | hero_text",
+            description: "заголовок | описание | о курсе | почему сейчас | главный заголовок | текст под заголовком",
           },
           value: { type: "string", description: "Новый текст" },
         },
@@ -188,6 +199,18 @@ const ADMIN_TOOLS = [
           field: { type: "string" },
         },
         required: ["field"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "clear_site_page",
+      description: "Вернуть все тексты одной страницы к каталогу.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: { path: { type: "string", description: "Путь или пусто = текущая страница" } },
       },
     },
   },
@@ -349,9 +372,82 @@ const TOOLS = [
   },
 ];
 
-function siteTools(canBook: boolean) {
-  if (canBook) return TOOLS;
-  return TOOLS.filter((t) => t.function.name !== "submit_trial" && t.function.name !== "book_lesson");
+const CLIENT_TOOLS = [
+  {
+    type: "function" as const,
+    function: {
+      name: "client_card",
+      description: "Перечитать карточку узнанного клиента с диска: группы, ближайшее занятие, явка, абонемент, пауза, остаток. Не по ФИО.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: { customer_id: { type: "number", description: "customerId с диска" } },
+        required: ["customer_id"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "note_skip",
+      description: "Родитель не придёт. Пишет пропуск на диск и в ленту. Не меняет явку всей группы. Только customerId.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          customer_id: { type: "number" },
+          date: { type: "string", description: "Дата пропуска ДД.ММ.ГГГГ или ГГГГ-ММ-ДД" },
+          reason: { type: "string" },
+        },
+        required: ["customer_id"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "pause_classes",
+      description: "Пауза занятий ребёнка до даты (extras.pause_until) и запись в ленту. Пустая дата — снять паузу. Не статус группы.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          customer_id: { type: "number" },
+          until: { type: "string", description: "До какой даты пауза. Пусто — снять." },
+          reason: { type: "string" },
+        },
+        required: ["customer_id"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "assign_tariff",
+      description: "Повесить абонемент tariffId на узнанного клиента. Диск сразу, Alfa очередь. Не по имени шаблона.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          customer_id: { type: "number" },
+          tariff_id: { type: "number", description: "tariffId шаблона CRM" },
+          group_id: { type: "number" },
+          branch_id: { type: "number" },
+        },
+        required: ["customer_id", "tariff_id"],
+      },
+    },
+  },
+];
+
+function siteTools(canBook: boolean, identified = false, canJournal = true, canTariff = false) {
+  type Tool = (typeof TOOLS)[number] | (typeof CLIENT_TOOLS)[number];
+  let list: Tool[] = canBook ? [...TOOLS] : TOOLS.filter((t) => t.function.name !== "submit_trial" && t.function.name !== "book_lesson");
+  if (!identified) return list;
+  list = [...list, CLIENT_TOOLS[0]];
+  if (canJournal) list = [...list, CLIENT_TOOLS[1], CLIENT_TOOLS[2]];
+  if (canTariff) list = [...list, CLIENT_TOOLS[3]];
+  return list;
 }
 
 type ChatMsg = { role: "user" | "assistant" | "system" | "tool"; content: string; tool_call_id?: string; tool_calls?: unknown };
@@ -503,6 +599,7 @@ export const chatAgent = createServerFn({ method: "POST" })
         gateWord?: string;
         voice?: boolean;
         channel?: string;
+        phone?: string;
       },
   )
   .handler(async ({ data }) => {
@@ -525,7 +622,9 @@ export const chatAgent = createServerFn({ method: "POST" })
     const { findDossier, dossierPrompt, upsertDossier, dossierFromNote } = await import("./dossiers");
     const { agentPromptAddons, loadBrain } = await import("./agent-config");
     const { lockedFunnelReply } = await import("./agent-funnel");
-    let admin = tokenOk(data.token);
+    const channelId = String(data.channel || "site");
+    const fromMessenger = channelId === "vk" || channelId === "max" || channelId === "phone";
+    let admin = tokenOk(data.token) && !fromMessenger;
     let granted: string | undefined;
     let reload = false;
     let open = "";
@@ -540,7 +639,7 @@ export const chatAgent = createServerFn({ method: "POST" })
       /вход администратора|я администратор|хочу внести изменения|открой режим управления/i.test(
         trimmed.map((m) => m.content).join(" "),
       );
-    if (!admin && wantAdmin && lastUser && codewordInText(lastUser)) {
+    if (!admin && !fromMessenger && wantAdmin && lastUser && codewordInText(lastUser)) {
       admin = true;
       granted = makeAdminToken(30 * 60 * 1000);
       logAdmin("Вход по кодовому слову");
@@ -551,7 +650,7 @@ export const chatAgent = createServerFn({ method: "POST" })
         reload: false,
       };
     }
-    if (!admin && data.gate) {
+    if (!admin && data.gate && !fromMessenger) {
       return {
         ok: true as const,
         reply: "Ольга: Слово не подошло. Назовите кодовое слово ещё раз, одним словом.",
@@ -563,13 +662,36 @@ export const chatAgent = createServerFn({ method: "POST" })
       ? `\nСтраница сейчас: ${data.path || "/"}.`
       : "";
     const facts = factsFromMessages(all);
+    if (data.phone) facts.phone = facts.phone || String(data.phone);
     const note = buildSessionNote(all);
-    if (!admin) {
-      const locked = lockedFunnelReply(soloWho, all, Boolean(data.voice));
+    if (!admin && facts.mode === "client") {
+      const { dossiersByPhone } = await import("./dossiers");
+      const { asIdentifyHits, confirmedHit, identifyLocked } = await import("./agent-identify");
+      const lastAsst = [...trimmed].reverse().find((m) => m.role === "assistant")?.content || "";
+      const hits = facts.phone ? asIdentifyHits(dossiersByPhone(facts.phone)) : [];
+      const known = confirmedHit(hits, lastUser, lastAsst);
+      if (known) {
+        facts.identified = true;
+        facts.customerId = known.customerId;
+        facts.child = facts.child || known.child;
+      }
+      const lockedId = identifyLocked(soloWho, {
+        phone: facts.phone,
+        hits,
+        identified: facts.identified,
+        lastUser,
+        lastAssistant: lastAsst,
+      });
+      if (lockedId) {
+        return { ok: true as const, reply: lockedId.reply, token: granted, reload: false, groups: lockedId.chips };
+      }
+    }
+    if (!admin && facts.mode !== "client") {
+      const locked = lockedFunnelReply(soloWho, all, Boolean(data.voice) || channelId === "phone");
       if (locked?.reply) {
         return { ok: true as const, reply: locked.reply, token: granted, reload: false };
       }
-      if (facts.school && !facts.briefed) {
+      if (facts.mode === "new" && facts.school && !facts.briefed) {
         const pitch = programPitch(facts.school, loadBrain().scripts);
         const name = soloWho === "olga" ? "Ольга" : "Олег";
         return {
@@ -584,31 +706,65 @@ export const chatAgent = createServerFn({ method: "POST" })
         };
       }
     }
-    if (!admin && (facts.phone || facts.child || facts.parent)) {
+    if (!admin && facts.mode !== "client" && (facts.phone || facts.child || facts.parent)) {
       try {
         dossierFromNote(note, { phone: facts.phone, chatId: String(data.path || "") });
       } catch {
         /* */
       }
     }
-    const file = !admin ? findDossier({ phone: facts.phone }) : null;
+    const file =
+      !admin && facts.identified && facts.customerId
+        ? findDossier({ crmId: facts.customerId })
+        : !admin && facts.mode === "new"
+          ? findDossier({ phone: facts.phone })
+          : null;
+    let deskBlock = "";
+    if (!admin && facts.identified && facts.customerId) {
+      try {
+        const { clientDigest, digestPrompt } = await import("./agent-client-desk");
+        deskBlock = digestPrompt(clientDigest(facts.customerId));
+      } catch {
+        /* диск */
+      }
+    }
     const factsLessons = admin ? lessonFactsForAgent(12) : [];
     const lessonBlock = factsLessons.length
-      ? `\nТемы недавних занятий (из AlfaCRM, без ФИО учеников):\n${factsLessons.map((x) => `— ${x}`).join("\n")}\n`
+      ? `\nТемы недавних занятий (с диска, без ФИО учеников):\n${factsLessons.map((x) => `— ${x}`).join("\n")}\n`
       : "";
+    let commsBlock = "";
+    if (!admin && file?.crmId) {
+      try {
+        const { commsOf, commsPrompt } = await import("./crm-comms");
+        commsBlock = commsPrompt(commsOf(Number(file.crmId)));
+      } catch {
+        /* лента */
+      }
+    }
     const system = admin
       ? ADMIN_SYSTEM + adminHint
-      : clientSystem(soloWho, facts, note.next) +
-        agentPromptAddons(facts, data.channel || "site") +
+      : clientSystem(soloWho, facts, facts.mode === "new" ? note.next : nextStepOf(facts)) +
+        agentPromptAddons(facts, data.channel || channelId || "site") +
         knowledgeForAgent() +
         factsPrompt(facts) +
         notePrompt(note) +
         dossierPrompt(file) +
+        deskBlock +
+        commsBlock +
         lessonBlock;
     const messages: ChatMsg[] = [{ role: "system", content: system }, ...trimmed];
+    const t0 = Date.now();
     try {
       for (let step = 0; step < 4; step++) {
-        const tools = admin ? ADMIN_TOOLS : siteTools(loadBrain().settings.consultantCanBook !== false);
+        const settings = loadBrain().settings;
+        const tools = admin
+          ? ADMIN_TOOLS
+          : siteTools(
+              settings.consultantCanBook !== false,
+              Boolean(facts.identified && facts.customerId),
+              settings.consultantCanJournal !== false,
+              settings.consultantCanTariff === true,
+            );
         const json = await complete(messages, tools);
         if (!json) break;
         const msg = json.choices?.[0]?.message;
@@ -778,6 +934,53 @@ export const chatAgent = createServerFn({ method: "POST" })
                   content: "Курс не найден. Уточни название.",
                 });
               }
+            } else if (call.function.name === "client_card" || call.function.name === "note_skip" || call.function.name === "pause_classes" || call.function.name === "assign_tariff") {
+              const cid = Number(args.customer_id) || Number(facts.customerId) || 0;
+              if (!facts.identified || !cid || cid !== Number(facts.customerId)) {
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: "Сначала узнать клиента по телефону и имени. Чужую карточку не открывать.",
+                });
+              } else {
+                const desk = await import("./agent-client-desk");
+                if (call.function.name === "client_card") {
+                  const d = desk.clientDigest(cid);
+                  messages.push({
+                    role: "tool",
+                    tool_call_id: call.id,
+                    content: d ? desk.digestPrompt(d) : "Карточки на диске нет.",
+                  });
+                } else if (call.function.name === "note_skip") {
+                  if (loadBrain().settings.consultantCanJournal === false) {
+                    messages.push({ role: "tool", tool_call_id: call.id, content: "Пропуск консультантом выключен. Телефон 8 (800) 511-34-01." });
+                  } else {
+                    const res = desk.applySkip(cid, String(args.date || ""), String(args.reason || ""));
+                    messages.push({ role: "tool", tool_call_id: call.id, content: res.ok ? res.text : res.error });
+                  }
+                } else if (call.function.name === "pause_classes") {
+                  if (loadBrain().settings.consultantCanJournal === false) {
+                    messages.push({ role: "tool", tool_call_id: call.id, content: "Пауза консультантом выключена. Телефон 8 (800) 511-34-01." });
+                  } else {
+                    const res = desk.applyPause(cid, String(args.until || ""), String(args.reason || ""));
+                    messages.push({ role: "tool", tool_call_id: call.id, content: res.ok ? res.text : res.error });
+                  }
+                } else if (loadBrain().settings.consultantCanTariff !== true) {
+                  messages.push({ role: "tool", tool_call_id: call.id, content: "Назначение абонемента консультантом выключено. Это кабинет сотрудника." });
+                } else {
+                  const res = desk.applyClientTariff({
+                    customerId: cid,
+                    tariffId: Number(args.tariff_id) || 0,
+                    groupId: Number(args.group_id) || 0,
+                    branchId: Number(args.branch_id) || 0,
+                  });
+                  messages.push({
+                    role: "tool",
+                    tool_call_id: call.id,
+                    content: res.ok ? `Абонемент tariffId=${res.tariffId} на сайте, Alfa в очереди.` : res.error,
+                  });
+                }
+              }
             } else if (call.function.name === "verify_admin_code") {
               const { checkCodeword, logAdmin } = await import("./admin-settings");
               const ok = checkCodeword(String(args.word || ""));
@@ -850,10 +1053,11 @@ export const chatAgent = createServerFn({ method: "POST" })
                 tool_call_id: call.id,
                 content: JSON.stringify({
                   page: shown.path,
-                  fields: Object.fromEntries(
+                  title: shown.title,
+                  overrides: Object.fromEntries(
                     Object.entries(shown.fields).map(([k, v]) => [fieldLabel(k), v]),
                   ),
-                  edited_pages: all.map((x) => x.path),
+                  edited_pages: all.map((x) => ({ path: x.path, title: x.title })),
                 }),
               });
             } else if (admin && call.function.name === "set_site_text") {
@@ -867,13 +1071,14 @@ export const chatAgent = createServerFn({ method: "POST" })
                 messages.push({
                   role: "tool",
                   tool_call_id: call.id,
-                  content: `Сохранено: ${saved.path} — ${fieldLabel(saved.field)}. Страница обновится.`,
+                  content: `Сохранено: ${saved.title || saved.path} — ${fieldLabel(saved.field)}. Страница обновится.`,
                 });
               } else {
                 messages.push({ role: "tool", tool_call_id: call.id, content: saved.error });
               }
             } else if (admin && call.function.name === "clear_site_text") {
               const { clearPageField } = await import("./edits");
+              const { fieldLabel } = await import("./edits-core");
               const saved = clearPageField(String(args.path || ""), String(args.field || ""), String(data.path || ""));
               if (saved.ok) {
                 reload = true;
@@ -882,7 +1087,22 @@ export const chatAgent = createServerFn({ method: "POST" })
                 messages.push({
                   role: "tool",
                   tool_call_id: call.id,
-                  content: `Вернули исходный текст: ${saved.path} / ${saved.field}.`,
+                  content: `Вернули исходный текст: ${saved.title || saved.path} — ${fieldLabel(saved.field)}.`,
+                });
+              } else {
+                messages.push({ role: "tool", tool_call_id: call.id, content: saved.error });
+              }
+            } else if (admin && call.function.name === "clear_site_page") {
+              const { clearPage } = await import("./edits");
+              const saved = clearPage(String(args.path || ""), String(data.path || ""));
+              if (saved.ok) {
+                reload = true;
+                const { logAdmin } = await import("./admin-settings");
+                logAdmin(`Сброс страницы: ${saved.path}`);
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: `Вернули исходные тексты: ${saved.title || saved.path}. Страница обновится.`,
                 });
               } else {
                 messages.push({ role: "tool", tool_call_id: call.id, content: saved.error });
@@ -919,8 +1139,39 @@ export const chatAgent = createServerFn({ method: "POST" })
           continue;
         }
         const reply = guardReply((msg.content || "").trim(), facts);
-        if (reply) return { ok: true as const, reply, token: granted, reload, open: open || undefined, signup: signup || undefined, groups: groups.length ? groups : undefined };
+        if (reply) {
+          if (!admin) {
+            void import("./crm-comms").then((m) =>
+              m.rememberConsultantTurn({
+                customerId: Number(file?.crmId) || undefined,
+                branchId: Number(file?.branchId) || undefined,
+                channel: data.channel || "site",
+                phone: facts.phone,
+                parent: facts.parent,
+                incoming: lastUser,
+                reply,
+              }),
+            );
+          }
+          void import("./debug-mode").then((m) =>
+            m.stampDebugNet({
+              ok: true,
+              ms: Date.now() - t0,
+              channel: String(data.channel || "site"),
+              chars: reply.length,
+            }),
+          );
+          return { ok: true as const, reply, token: granted, reload, open: open || undefined, signup: signup || undefined, groups: groups.length ? groups : undefined };
+        }
       }
+      void import("./debug-mode").then((m) =>
+        m.stampDebugNet({
+          ok: true,
+          ms: Date.now() - t0,
+          channel: String(data.channel || "site"),
+          error: "fallback",
+        }),
+      );
       return {
         ok: true as const,
         reply: fallbackTalk(soloWho, facts),
@@ -931,6 +1182,14 @@ export const chatAgent = createServerFn({ method: "POST" })
         groups: groups.length ? groups : undefined,
       };
     } catch {
+      void import("./debug-mode").then((m) =>
+        m.stampDebugNet({
+          ok: false,
+          ms: 0,
+          channel: String(data.channel || "site"),
+          error: "llm",
+        }),
+      );
       return {
         ok: true as const,
         reply: fallbackTalk(soloWho, facts),

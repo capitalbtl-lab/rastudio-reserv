@@ -35,4 +35,28 @@ describe("open_course только по ID дерева", () => {
     assert.equal(pickCoursePage("блабла 2026", rows, tree), null);
     assert.equal(pickCoursePage("Робототехника 2024 группа 580", rows, tree)?.path, "/robototehnika-v-kolomne");
   });
+
+  it("речь «python» и «манга» → courseId, не школа по слову", () => {
+    const extra = [
+      ...rows,
+      { path: "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python", name: "Python" },
+      { path: "/manga-and-anime", name: "Манга" },
+    ];
+    const withProg = {
+      ...tree,
+      schools: [...tree.schools, { id: "/programming-school", href: "/programming-school", label: "Школа программирования" }],
+      courses: [
+        ...tree.courses,
+        {
+          id: "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python",
+          href: "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python",
+          schoolId: "/programming-school",
+          label: "Python",
+        },
+        { id: "/manga-and-anime", href: "/manga-and-anime", schoolId: "/art-studio", label: "Манга" },
+      ],
+    };
+    assert.equal(pickCoursePage("python", extra, withProg)?.path, "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python");
+    assert.equal(pickCoursePage("манга", extra, withProg)?.path, "/manga-and-anime");
+  });
 });

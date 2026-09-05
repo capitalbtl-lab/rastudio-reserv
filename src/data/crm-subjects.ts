@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { serverEnv } from "./server-env";
 import { subjectIdOfCourse } from "./ids";
+import { isLocalSubject, nextLocalId } from "./crm-local-id";
 
 export type CrmSubject = { id: number; name: string; local?: boolean };
 
@@ -71,11 +72,19 @@ export function foldSubject(s: string) {
     .trim();
 }
 
+let subjectsMem: { mtime: number; items: CrmSubject[] } | null = null;
+
 export function loadSubjects(): CrmSubject[] {
   try {
-    if (existsSync(filePath())) {
-      const raw = JSON.parse(readFileSync(filePath(), "utf8")) as { items?: CrmSubject[] };
-      if (Array.isArray(raw.items) && raw.items.length) return raw.items;
+    const p = filePath();
+    if (existsSync(p)) {
+      const mtime = statSync(p).mtimeMs;
+      if (subjectsMem && subjectsMem.mtime === mtime) return subjectsMem.items;
+      const raw = JSON.parse(readFileSync(p, "utf8")) as { items?: CrmSubject[] };
+      if (Array.isArray(raw.items) && raw.items.length) {
+        subjectsMem = { mtime, items: raw.items };
+        return raw.items;
+      }
     }
   } catch {
     /* */
@@ -86,13 +95,17 @@ export function loadSubjects(): CrmSubject[] {
 export function saveSubjects(items: CrmSubject[]) {
   mkdirSync(dirname(filePath()), { recursive: true });
   const uniq = new Map<number, CrmSubject>();
-  let nextLocal = 9000;
   for (const s of items) {
-    const id = Number(s.id) || nextLocal++;
-    uniq.set(id, { id, name: String(s.name || "").trim(), ...(id >= 9000 || s.local ? { local: true } : {}) });
+    const id = Number(s.id) || nextLocalId(uniq.keys());
+    uniq.set(id, { id, name: String(s.name || "").trim(), ...(isLocalSubject({ id, local: s.local }) ? { local: true } : {}) });
   }
   const list = [...uniq.values()].filter((s) => s.name).sort((a, b) => a.name.localeCompare(b.name, "ru"));
   writeFileSync(filePath(), JSON.stringify({ at: new Date().toISOString(), items: list }, null, 2));
+  try {
+    subjectsMem = { mtime: statSync(filePath()).mtimeMs, items: list };
+  } catch {
+    subjectsMem = { mtime: Date.now(), items: list };
+  }
   return list;
 }
 
@@ -304,12 +317,7 @@ function subjectTitle(name: string) {
 }
 
 export function nextLocalSubjectId(list = loadSubjects()) {
-  let n = 9000;
-  for (const s of list) {
-    const id = Number(s.id) || 0;
-    if (id >= n) n = id + 1;
-  }
-  return n;
+  return nextLocalId(list.map((s) => s.id));
 }
 
 /** Предмет на диск сразу. Alfa — очередь subject.create. Не ищем CRM по похожему имени. */
@@ -317,7 +325,7 @@ export function createLocalSubject(name: string) {
   const cleaned = subjectTitle(name);
   if (!cleaned) throw new Error("Нет названия предмета.");
   const list = loadSubjects();
-  const localHit = list.find((s) => (s.local || s.id >= 9000) && foldSubject(s.name) === foldSubject(cleaned));
+  const localHit = list.find((s) => isLocalSubject(s) && foldSubject(s.name) === foldSubject(cleaned));
   if (localHit) return localHit;
   const next = { id: nextLocalSubjectId(list), name: cleaned, local: true as const };
   saveSubjects([...list, next]);
@@ -667,13 +675,11 @@ export function applySubjectChanges(items: CrmSubject[], changes: SubjectChange[
     s.name = c.to;
     byId.set(c.id, s);
   }
-  let nextLocal = 9000;
-  while (byId.has(nextLocal)) nextLocal += 1;
   for (const a of adds) {
     const name = String(a.name || "").trim();
     if (!name) continue;
-    byId.set(nextLocal, { id: nextLocal, name, local: true });
-    nextLocal += 1;
+    const id = nextLocalId(byId.keys());
+    byId.set(id, { id, name, local: true });
   }
   return saveSubjects([...byId.values()]);
 }

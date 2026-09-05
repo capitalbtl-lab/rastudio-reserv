@@ -12,7 +12,7 @@ import { adminSchedule } from "@/data/admin-schedule";
 import { clientCardId, groupCardId, CABINET_ID, CRM_BRANCH } from "@/data/ids";
 import { displayPersonName, displayParent, initialsOf, statusLabel } from "@/data/client-display";
 import { cn } from "@/lib/utils";
-import { ADMIN_PANEL_BLUE, RA_POP } from "@/data/admin-ui";
+import { ADMIN_PANEL_BLUE, RA_POP, agoRu } from "@/data/admin-ui";
 import { LessonStrip, GroupLessonStrip } from "@/components/lesson-strip";
 import { CrmGroupMembers, GroupLoadScene } from "@/components/crm-group-card";
 import { CrmLeadBoard } from "@/components/crm-lead-board";
@@ -174,6 +174,7 @@ type ClientsSnap = {
   branchCounts: Record<number, number>;
   synced: string;
   all: number;
+  at?: number;
 };
 
 let clientsSnap: ClientsSnap | null = null;
@@ -356,6 +357,7 @@ export function AdminClients({
   const viewRef = useRef<"дети" | "группы">("дети");
   const liveTariffAt = useRef(0);
   const rowsRef = useRef<ClientRow[]>(rows);
+  const capRef = useRef(120);
   const wasActive = useRef(active);
   qRef.current = q;
   statusRef.current = status;
@@ -364,6 +366,7 @@ export function AdminClients({
   desktopRef.current = desktop;
   viewRef.current = view;
   rowsRef.current = rows;
+  capRef.current = cap;
 
   useEffect(() => {
     if (active && !wasActive.current && viewRef.current === "группы") {
@@ -431,7 +434,13 @@ export function AdminClients({
   async function load(nextQ = q, nextStatus = status, nextBranch = branch, nextAge = age) {
     if (!rowsRef.current.length) setBusy(true);
     try {
-      const res = (await retryFetch(() => loadFromDisk("clients", { q: nextQ, status: nextStatus, branchId: nextBranch, ageBand: nextAge }), 2, 20000)) as {
+      const res = (await retryFetch(() => loadFromDisk("clients", {
+        q: nextQ,
+        status: nextStatus,
+        branchId: nextBranch,
+        ageBand: nextAge,
+        take: Math.max(240, capRef.current + 120, String(nextQ || "").trim() ? 400 : 0),
+      }), 2, 20000)) as {
         ok?: boolean;
         items?: ClientRow[];
         total?: number;
@@ -459,6 +468,7 @@ export function AdminClients({
           branchCounts: res.branchCounts || { 1: 0, 2: 0, 3: 0, 4: 0 },
           synced: res.lastCrmSync || "",
           all: Number(res.all || 0),
+          at: Date.now(),
         };
         writeClientsSnap(clientsSnap);
         const all = Number(res.all || 0);
@@ -526,14 +536,15 @@ export function AdminClients({
     if (force || !have) setFunnelLoading(!have);
     const watching = () => bid === 0 || bid === branchRef.current;
     if (watching()) {
-      if (delta && have) setFunnelNote("Сверяю изменения в AlfaCRM…");
-      else if (force && have) setFunnelNote("Обновляю доску CRM…");
-      else if (!have) setFunnelNote("Загружаю лидов из AlfaCRM…");
+      if (force && have) setFunnelNote("Подтягиваю воронку из Alfa…");
+      else if (!have) setFunnelNote("Открываю воронку…");
     }
     const watchdog = window.setTimeout(() => {
       if (seq !== funnelSeq.current) return;
       setFunnelLoading(false);
-      if (watching() && !funnelAt.current[bid]) setFunnelNote("CRM отвечает долго. Доска откроется, как только дойдёт.");
+      if (watching() && !funnelAt.current[bid]) {
+        setFunnelNote(force ? "Alfa отвечает долго. Воронка откроется, как дойдёт." : "Воронка открывается дольше обычного.");
+      }
     }, 15000);
     try {
       const res = (await adminSchedule({
@@ -560,7 +571,7 @@ export function AdminClients({
         if (watching()) setFunnelNote(res.note || (packed.length ? `${packed.length} лидов` : "Пустая воронка."));
         return;
       }
-      if (watching()) setFunnelNote(res.error || "AlfaCRM не отдала воронку лидов.");
+      if (watching()) setFunnelNote(res.error || (force ? "Alfa не отдала воронку." : "Не удалось открыть воронку."));
     } catch (e) {
       if (watching()) setFunnelNote(e instanceof Error && e.message ? e.message : "Не удалось загрузить воронку лидов.");
     } finally {
@@ -680,7 +691,7 @@ export function AdminClients({
     const res = await adminSchedule({
       data: { token: token(), action, customerId: card.id, branchId: card.branchId, ...extra } as never,
     });
-    if (!res.ok) throw new Error(("error" in res && res.error) || "AlfaCRM не приняла изменение.");
+    if (!res.ok) throw new Error(("error" in res && res.error) || "Не удалось сохранить.");
     if ("customer" in res && res.customer) {
       const next = res.customer as CustomerCard;
       setCard(next);
@@ -696,6 +707,12 @@ export function AdminClients({
   }
 
   useEffect(() => {
+    const have = Boolean(clientsSnap?.items.length);
+    const fresh = have && Date.now() - Number(clientsSnap?.at || 0) < 90_000;
+    if (fresh) {
+      const t = window.setTimeout(() => void load(qRef.current, statusRef.current, branchRef.current, ageRef.current), 500);
+      return () => window.clearTimeout(t);
+    }
     void load(qRef.current, statusRef.current, branchRef.current, ageRef.current);
   }, []);
 
@@ -713,6 +730,7 @@ export function AdminClients({
 
   useEffect(() => {
     const t = window.setInterval(() => {
+      if (document.hidden) return;
       void load(qRef.current, statusRef.current, branchRef.current, ageRef.current);
     }, 5 * 60 * 1000);
     return () => window.clearInterval(t);
@@ -756,7 +774,10 @@ export function AdminClients({
 
   useEffect(() => {
     if (!(status === "лид" && view === "дети")) return;
-    const t = window.setInterval(() => void loadFunnel(branchRef.current, false, true), crmSyncMinutes() * 60 * 1000);
+    const t = window.setInterval(() => {
+      if (document.hidden) return;
+      void loadFunnel(branchRef.current, false, false);
+    }, crmSyncMinutes() * 60 * 1000);
     return () => window.clearInterval(t);
   }, [status, view]);
 
@@ -924,7 +945,7 @@ export function AdminClients({
 
   async function loadLeadKeys() {
     if (leadKeysRef.current) return leadKeysRef.current;
-    const res = (await retryFetch(() => loadFromDisk("clients", { q: "", status: "лид", branchId: 0, ageBand: "" }), 2, 20000)) as {
+    const res = (await retryFetch(() => loadFromDisk("clients", { q: "", status: "лид", branchId: 0, ageBand: "", take: 2500 }), 2, 20000)) as {
       items?: ClientRow[];
     };
     const keys = new Set<string>();
@@ -1129,7 +1150,7 @@ export function AdminClients({
                 window.clearTimeout(searchT.current);
                 searchT.current = window.setTimeout(() => {
                   if (viewRef.current === "дети") void load(v, status, branch, age);
-                }, 120);
+                }, 220);
               }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => e.preventDefault()}
@@ -1152,7 +1173,7 @@ export function AdminClients({
                   e.currentTarget.blur();
                 }
               }}
-              placeholder={view === "группы" ? "Группа, педагог, возраст" : status === "лид" ? "Лид, телефон, этап" : "Имя, телефон, customerId"}
+              placeholder={view === "группы" ? "Группа, педагог, возраст" : status === "лид" ? "Имя, телефон, этап" : "Имя или телефон"}
               className="h-10 w-full bg-transparent text-sm outline-none"
               aria-label={view === "группы" ? "Поиск групп" : "Поиск клиентов"}
             />
@@ -1273,6 +1294,7 @@ export function AdminClients({
             <button
               type="button"
               className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-[0.8rem] font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
+              title="Подтянуть свежие данные из Alfa"
               disabled={busy || pull.open}
               onClick={() => void pullKind("clients")}
             >
@@ -1282,10 +1304,11 @@ export function AdminClients({
             <button
               type="button"
               className="inline-flex h-10 items-center rounded-full px-3 text-[0.8rem] font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
+              title="Подтянуть воронку лидов из Alfa"
               disabled={busy || pull.open}
               onClick={() => void pullKind("clientsLeads")}
             >
-              Загрузить доску CRM
+              Воронка из Alfa
             </button>
             <button
               type="button"
@@ -1429,13 +1452,13 @@ export function AdminClients({
             ) : null}
           </div>
           </div>
-          {synced ? <span className="hidden text-[0.68rem] text-muted xl:inline">{new Date(synced).toLocaleString("ru-RU")}</span> : null}
+          {synced ? <span className="hidden text-[0.68rem] text-muted xl:inline">на сайте · {agoRu(synced)}</span> : null}
         </div>
         {status === "архив" && !counts.архив ? (
-          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Архив на сайте пуст. Нажмите «загрузить архив» — только is_study=2.</p>
+          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Архив на сайте пуст. Нажмите «Загрузить архив».</p>
         ) : null}
         {status === "лид" && !counts.лид ? (
-          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Лидов на сайте нет. Нажмите «Загрузить лиды» — только активные is_study=0. Архивные лиды с сайта удаляются.</p>
+          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Лидов на сайте нет. Нажмите «Воронка из Alfa».</p>
         ) : null}
       </div>
 
@@ -1534,7 +1557,7 @@ export function AdminClients({
               }}
               onReorderStages={(ids) => {
                 const prev = funnelStages;
-                setFunnelNote("Записываю порядок в AlfaCRM…");
+                setFunnelNote("Порядок сохранён. Alfa подхватит.");
                 setFunnelStages((xs) => {
                   const by = new Map(xs.map((s) => [s.id, s]));
                   const next = ids.map((id) => by.get(id)).filter((s): s is LeadStage => Boolean(s));
@@ -1547,11 +1570,11 @@ export function AdminClients({
                 }).then((res) => {
                   if (res && "ok" in res && res.ok && "stages" in res && Array.isArray(res.stages)) {
                     setFunnelStages(mergeStages(res.stages as LeadStage[]));
-                    setFunnelNote("Порядок записан в AlfaCRM. Обновите страницу этапов воронки в CRM.");
+                    setFunnelNote("Порядок сохранён.");
                     return;
                   }
                   setFunnelStages(prev);
-                  setFunnelNote((res && "error" in res && String(res.error || "")) || "AlfaCRM не приняла новый порядок этапов.");
+                  setFunnelNote((res && "error" in res && String(res.error || "")) || "Не записали порядок этапов.");
                 });
               }}
             />
@@ -1646,13 +1669,18 @@ export function AdminClients({
             </p>
           ) : null}
           {view === "дети" && total > shown.length ? (
-            <button type="button" className="w-full rounded-[1.2rem] bg-white py-3 text-sm font-semibold text-primary ring-1 ring-black/6" onClick={() => setCap((n) => n + 120)}>
+            <button type="button" className="w-full rounded-[1.2rem] bg-white py-3 text-sm font-semibold text-primary ring-1 ring-black/6" onClick={() => {
+              const next = cap + 120;
+              capRef.current = next;
+              setCap(next);
+              if (next > rows.length && rows.length < total) void load(q, status, branch, age);
+            }}>
               Ещё {Math.min(120, total - shown.length)} из {total - shown.length}
             </button>
           ) : null}
           {view === "дети" && !busy && !shown.length ? (
             <p className="rounded-[1.2rem] bg-white px-4 py-10 text-center text-sm text-muted ring-1 ring-black/6">
-              {status === "архив" ? "Архив пуст в этой выборке." : status === "лид" ? "Лидов нет в этой выборке." : "Текущих клиентов нет. Нажмите «Обновить»."}
+              {status === "архив" ? "В этой выборке архива нет." : status === "лид" ? "В этой выборке лидов нет." : "В этой выборке никого нет. Смените фильтр или нажмите «Обновить»."}
             </p>
           ) : null}
         </div>
@@ -1668,12 +1696,9 @@ export function AdminClients({
               data-branch-id={pickedGroup.branchId}
             >
               {groupLoading ? <GroupLoadScene hint={pickedGroup.groupName} /> : null}
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted">
-                Карточка группы · card:group:{pickedGroup.branchId}:{pickedGroup.groupId}
-              </p>
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted">Группа</p>
               <h4 className="font-display mt-1 text-[1.45rem] leading-tight">{pickedGroup.groupName}</h4>
               <p className="mt-1.5 flex flex-wrap gap-1.5 text-sm text-muted">
-                <span className="rounded-full bg-white px-2 py-0.5 font-mono text-[0.72rem] ring-1 ring-black/8">gid {pickedGroup.groupId}</span>
                 {CRM_BRANCH[pickedGroup.branchId]?.short ? <span>{CRM_BRANCH[pickedGroup.branchId]?.short}</span> : null}
                 {pickedGroup.age ? <span>{pickedGroup.age}</span> : null}
                 {pickedGroup.course ? <span>{pickedGroup.course}</span> : null}
@@ -1857,7 +1882,7 @@ export function AdminClients({
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 items-center justify-center rounded-[1.4rem] bg-white px-6 text-center text-sm text-muted shadow-[var(--shadow-border)]">
-              {view === "группы" ? "Выберите группу слева — карточка откроется здесь." : <>Выберите человека — карточка <span className="mx-1 font-mono">card:customer:{"{id}"}</span> откроется здесь.</>}
+              {view === "группы" ? "Выберите группу слева — карточка откроется здесь." : "Выберите человека слева — откроется карточка."}
             </div>
           )}
         </div>

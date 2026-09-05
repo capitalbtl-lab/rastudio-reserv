@@ -18,3 +18,21 @@ export function clampIsoDate(v: string) {
   const y = year.length === 4 ? String(Math.min(2099, Math.max(1900, Number(year) || 1900))) : year;
   return [y, month, day].filter((p) => p !== "").join("-");
 }
+
+/** «3 мин назад» — для шапки кабинета, не для логов. */
+export function agoRu(raw: string) {
+  const t = new Date(raw).getTime();
+  if (!Number.isFinite(t) || t <= 0) return "";
+  const sec = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (sec < 45) return "только что";
+  if (sec < 120) return "минуту назад";
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min} мин назад`;
+  const h = Math.round(min / 60);
+  if (h === 1) return "час назад";
+  if (h < 24) return `${h} ч назад`;
+  const d = Math.round(h / 24);
+  if (d === 1) return "вчера";
+  if (d < 7) return `${d} дн. назад`;
+  return new Date(t).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+}

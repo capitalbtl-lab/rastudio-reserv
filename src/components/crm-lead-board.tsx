@@ -49,7 +49,7 @@ function CardFace({
             type="button"
             data-lead-del="1"
             data-no-drag="1"
-            title="В архив AlfaCRM"
+            title="В архив"
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
@@ -75,7 +75,7 @@ function CardFace({
         {!hideBranch && CRM_BRANCH[it.branchId]?.short ? (
           <span className="rounded-full bg-surface-2 px-1.5 py-0.5">{CRM_BRANCH[it.branchId]?.short}</span>
         ) : null}
-        {it.assigned ? <span className="truncate">{it.assigned}</span> : <span>не закреплён</span>}
+        {it.assigned ? <span className="truncate">{it.assigned}</span> : null}
       </span>
     </>
   );

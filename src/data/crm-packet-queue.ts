@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { emptyCrmQueue, mergeCrmPacket, overlayStale, overlayEnqueueOffset, pickNextPacket, type CrmPacket, type CrmQueueState } from "./crm-packet-queue-core";
-import { loadCachePolicy, stampOverlay } from "./crm-cache-policy";
+import { emptyCrmQueue, mergeCrmPacket, overlayStale, overlayEnqueueOffset, pickNextPacket, type CrmPacket, type CrmPacketDraft, type CrmQueueState } from "./crm-packet-queue-core";
+import { loadCachePolicy, stampOverlay, stampJournalCursor, journalStale } from "./crm-cache-policy";
 import { logAdmin } from "./admin-settings";
+import { alfaLinkedNow } from "./crm-alfa-link";
 
 export type { CrmPacket, CrmQueueState };
 
@@ -10,7 +11,7 @@ function fileOf() {
   return join(process.cwd(), "storage", "crm-packet-queue.json");
 }
 
-const g = globalThis as { __raCrmQueueBusy?: boolean };
+const g = globalThis as { __raCrmQueueBusy?: boolean; __raCrmLastKind?: string };
 
 function loadQueue(): CrmQueueState {
   try {
@@ -43,7 +44,7 @@ export function crmQueueSnapshot() {
   };
 }
 
-export function enqueueCrmPacket(incoming: Omit<CrmPacket, "id">) {
+export function enqueueCrmPacket(incoming: CrmPacketDraft) {
   const q = loadQueue();
   q.packets = mergeCrmPacket(q.packets, incoming);
   q.lastAt = new Date().toISOString();
@@ -52,6 +53,7 @@ export function enqueueCrmPacket(incoming: Omit<CrmPacket, "id">) {
 }
 
 export function enqueueCrmOverlay(fromStart = false) {
+  if (!alfaLinkedNow()) return crmQueueSnapshot();
   const pol = loadCachePolicy();
   const rule = pol.rules.pupilTariffs;
   const stale = overlayStale({
@@ -70,6 +72,25 @@ export function enqueueCrmOverlay(fromStart = false) {
   if (plan.skip) return crmQueueSnapshot();
   if (plan.restart) stampOverlay(0, pol.overlayTotal || 0);
   return enqueueCrmPacket({ kind: "overlay", offset: plan.offset });
+}
+
+export function enqueueJournalOverlay(fromStart = false) {
+  if (!alfaLinkedNow()) return crmQueueSnapshot();
+  if (!fromStart) {
+    const q = loadQueue();
+    if (q.packets.some((p) => p.kind === "journal")) return crmQueueSnapshot();
+  }
+  const pol = loadCachePolicy();
+  const stale = fromStart || journalStale();
+  const plan = overlayEnqueueOffset({
+    fromStart,
+    overlayNext: pol.journalNext || 0,
+    overlayTotal: pol.journalTotal || 0,
+    stale,
+  });
+  if (plan.skip) return crmQueueSnapshot();
+  if (plan.restart) stampJournalCursor(0, pol.journalTotal || 0);
+  return enqueueCrmPacket({ kind: "journal", offset: plan.offset });
 }
 
 export function enqueueGroupPacket(branchId: number, groupId: number, name?: string) {
@@ -131,12 +152,31 @@ async function runCustomersPacket(branchId: number, ids: number[]) {
   return { ok: true as const, done: false, ids: all, live: all.length, extra: `проверка ${ids.length} учеников, живых в пакете ${liveN}`, next: 0, total: 0, scanned: ids.length };
 }
 
-export async function tickCrmQueue(take = 3) {
+export async function tickCrmQueue(take = 3, opts?: { skipJournal?: boolean }) {
+  if (!alfaLinkedNow()) {
+    const { liveTariffIdsFromStore } = await import("./dossiers");
+    const ids = liveTariffIdsFromStore();
+    const pol = loadCachePolicy();
+    return {
+      ok: true as const,
+      done: true,
+      ids,
+      live: ids.length,
+      next: pol.overlayNext,
+      total: pol.overlayTotal,
+      extra: "без Alfa",
+      fromCache: true,
+    };
+  }
   if (g.__raCrmQueueBusy) return { ok: true as const, busy: true, done: false, ids: [] as number[], next: 0, total: 0, extra: "пакет уже идёт" };
   g.__raCrmQueueBusy = true;
   try {
     const q = loadQueue();
-    const picked = pickNextPacket(q.packets);
+    const packets = opts?.skipJournal ? q.packets.filter((p) => p.kind !== "journal") : q.packets;
+    const picked =
+      g.__raCrmLastKind === "journal" && packets.some((p) => p.kind === "overlay")
+        ? packets.find((p) => p.kind === "overlay") || pickNextPacket(packets)
+        : pickNextPacket(packets);
     const { overlayMembershipChunk, overlayAdminGroups, liveTariffIdsFromStore } = await import("./dossiers");
     if (!picked) {
       const ids = liveTariffIdsFromStore();
@@ -148,6 +188,22 @@ export async function tickCrmQueue(take = 3) {
       res = await overlayMembershipChunk(0, 1, [{ groupId: picked.groupId, branchId: picked.branchId, name: picked.name || `группа ${picked.groupId}` }]);
     } else if (picked.kind === "customers") {
       res = await runCustomersPacket(picked.branchId, picked.ids);
+    } else if (picked.kind === "journal") {
+      const { inboundJournalChunk } = await import("./crm-journal-inbound");
+      const offset = Math.max(0, picked.offset || 0);
+      res = await inboundJournalChunk(offset, 2);
+      if (!res.done) {
+        const nq = loadQueue();
+        nq.packets = mergeCrmPacket(
+          nq.packets.filter((p) => p.id !== picked.id),
+          { kind: "journal", offset: Number(res.next) || offset + 2 },
+        );
+        nq.lastAt = new Date().toISOString();
+        nq.lastNote = res.extra || "";
+        saveQueue(nq);
+        g.__raCrmLastKind = picked.kind;
+        return { ...res, busy: false };
+      }
     } else {
       const total = overlayAdminGroups().length;
       const offset = Math.max(0, picked.offset || 0);
@@ -161,10 +217,12 @@ export async function tickCrmQueue(take = 3) {
         nq.lastAt = new Date().toISOString();
         nq.lastNote = res.extra || "";
         saveQueue(nq);
+        g.__raCrmLastKind = picked.kind;
         return { ...res, busy: false };
       }
     }
     dropPacket(picked.id);
+    g.__raCrmLastKind = picked.kind;
     const nq = loadQueue();
     nq.lastAt = new Date().toISOString();
     nq.lastNote = res.extra || picked.kind;
@@ -186,9 +244,22 @@ export async function tickCrmQueue(take = 3) {
 export async function ensureAndTick(opts?: { force?: boolean; offset?: number | null; take?: number }) {
   const { liveTariffIdsFromStore, overlayAdminGroups } = await import("./dossiers");
   const pol = loadCachePolicy();
-  const rule = pol.rules.pupilTariffs;
   const total = overlayAdminGroups().length;
   const ids = liveTariffIdsFromStore();
+  if (!alfaLinkedNow()) {
+    return {
+      ok: true as const,
+      ids,
+      total,
+      live: ids.length,
+      fromCache: true,
+      done: true,
+      next: pol.overlayNext,
+      scanned: ids.length,
+      extra: "без Alfa",
+    };
+  }
+  const rule = pol.rules.pupilTariffs;
   const stale = overlayStale({
     cache: rule.cache,
     ttlMin: rule.ttlMin,
@@ -210,33 +281,36 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
       extra: "из хранилища сайта",
     };
   }
-  if (opts?.force) enqueueCrmOverlay(true);
-  else if (stale || opts?.offset != null) {
+  if (opts?.force) {
+    enqueueCrmOverlay(true);
+    enqueueJournalOverlay(true);
+  } else if (stale || opts?.offset != null) {
     const q = loadQueue();
     if (!q.packets.some((p) => p.kind === "overlay")) {
       enqueueCrmPacket({ kind: "overlay", offset: opts?.offset ?? pol.overlayNext ?? 0 });
     }
   }
+  if (journalStale() && !opts?.force) enqueueJournalOverlay(false);
   const take = Number(opts?.take) || 3;
-  const res = await tickCrmQueue(take);
+  const res = await tickCrmQueue(take, { skipJournal: true });
+  kickBackground();
   return { ...res, fromCache: false, total: Number(res.total) || total };
 }
 
 function kickBackground() {
   const pol = loadCachePolicy();
   const rule = pol.rules.pupilTariffs;
-  if (
-    !overlayStale({
-      cache: rule.cache,
-      ttlMin: rule.ttlMin,
-      overlayAt: pol.overlayAt,
-      overlayNext: pol.overlayNext,
-      overlayTotal: pol.overlayTotal,
-    })
-  ) {
-    return;
-  }
-  enqueueCrmOverlay(false);
+  const cgiStale = overlayStale({
+    cache: rule.cache,
+    ttlMin: rule.ttlMin,
+    overlayAt: pol.overlayAt,
+    overlayNext: pol.overlayNext,
+    overlayTotal: pol.overlayTotal,
+  });
+  const needJournal = journalStale();
+  if (!cgiStale && !needJournal) return;
+  if (cgiStale) enqueueCrmOverlay(false);
+  if (needJournal) enqueueJournalOverlay(false);
   if (g.__raCrmQueueBusy) return;
   void tickCrmQueue(3);
 }

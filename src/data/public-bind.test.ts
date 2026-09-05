@@ -1,6 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { publicSiteBoard, publicGroupsOfCourse } from "./public-bind-core.ts";
+import { publicSiteBoard, publicGroupsOfCourse, publicCourseIdOf } from "./public-bind-core.ts";
+import { resolveGroupCourseId, joinCourseSubject, subjectIdOfCourse, courseSubjectGapText } from "./course-subject-core.ts";
+import { DISK_RULES } from "./crm-disk-rules.ts";
 import type { SiteTree } from "./site-tree.ts";
 
 const tree: SiteTree = {
@@ -38,5 +40,77 @@ describe("раздел Сайт по ID", () => {
   it("не клеит группу в курс по имени школы", () => {
     const slots = [{ id: "x", groupId: 1, branchId: 1, groupName: "Художественная 5-6", subjectId: 99 }];
     assert.equal(publicGroupsOfCourse(slots, "/art-studio-5-6", tree).length, 0);
+  });
+
+  it("сайт и админка стыкуют курс одной функцией", () => {
+    const assigned = { id: "a", groupId: 580, branchId: 1, courseId: "", subjectId: 14 };
+    const mapped = { id: "m", groupId: 777, branchId: 1, courseId: "", subjectId: 14 };
+    const map = [{ subjectId: 14, courseId: "/art-studio-5-6" }];
+    assert.equal(publicCourseIdOf(assigned, tree, map), resolveGroupCourseId(assigned, tree, map));
+    assert.equal(publicCourseIdOf(assigned, tree, map), "/art-studio-10-14");
+    assert.equal(publicCourseIdOf(mapped, tree, map), resolveGroupCourseId(mapped, tree, map));
+    assert.equal(publicCourseIdOf(mapped, tree, map), "/art-studio-5-6");
+    assert.equal(joinCourseSubject(mapped, tree, map).source, "map");
+    assert.equal(joinCourseSubject(assigned, tree, map).source, "assign");
+  });
+
+  it("имя «Роботы» не даёт курс, если subjectId другой", () => {
+    const join = joinCourseSubject(
+      { id: "x", groupId: 1, branchId: 1, courseId: "", subjectId: 99 },
+      tree,
+      [{ subjectId: 14, courseId: "/art-studio-5-6" }],
+    );
+    assert.equal(join.courseId, "");
+    assert.equal(join.source, "none");
+    assert.equal(join.gap, "no-course");
+    assert.match(courseSubjectGapText(join), /subjectId 99/);
+  });
+
+  it("assign бьёт slot и карту; несколько предметов на курсе не угадываем", () => {
+    const s = { id: "a", groupId: 580, branchId: 1, courseId: "/art-studio-5-6", subjectId: 14 };
+    const map = [{ subjectId: 14, courseId: "/robototehnika-7-9" }];
+    const join = joinCourseSubject(s, tree, map);
+    assert.equal(join.courseId, "/art-studio-10-14");
+    assert.equal(join.source, "assign");
+    const slotOnly = joinCourseSubject(
+      { id: "b", groupId: 590, branchId: 1, courseId: "/robototehnika-7-9", subjectId: 14 },
+      tree,
+      map,
+    );
+    assert.equal(slotOnly.source, "slot");
+    assert.equal(slotOnly.courseId, "/robototehnika-7-9");
+    assert.equal(subjectIdOfCourse("/art-studio-5-6", [{ subjectId: 13, courseId: "/art-studio-5-6" }]), 13);
+    assert.equal(
+      subjectIdOfCourse("/art-studio-5-6", [
+        { subjectId: 13, courseId: "/art-studio-5-6" },
+        { subjectId: 14, courseId: "/art-studio-5-6" },
+      ]),
+      0,
+    );
+  });
+
+  it("правила диска: cgi, живой абонемент, курс/предмет, разъём Alfa, свой id, журнал", () => {
+    assert.deepEqual(
+      DISK_RULES.map((r) => r.id),
+      ["cgi", "tariff", "course", "connector", "local", "journal", "money", "comms"],
+    );
+    assert.equal(DISK_RULES[2].stage, 3);
+    assert.equal(DISK_RULES[3].stage, 5);
+    assert.equal(DISK_RULES[4].stage, 6);
+    assert.equal(DISK_RULES[5].stage, 7);
+    assert.equal(DISK_RULES[6].stage, 8);
+    assert.equal(DISK_RULES[7].stage, 9);
+    assert.match(DISK_RULES[2].truth, /schedule-map/);
+    assert.match(DISK_RULES[2].not, /хэштег|похож/);
+    assert.match(DISK_RULES[3].truth, /очередь/);
+    assert.match(DISK_RULES[3].field, /linked/);
+    assert.match(DISK_RULES[4].truth, /отрицательн/);
+    assert.match(DISK_RULES[4].field, /id < 0/);
+    assert.match(DISK_RULES[5].field, /customerIds/);
+    assert.match(DISK_RULES[5].not, /cgi|last_attend/);
+    assert.match(DISK_RULES[6].field, /pays/);
+    assert.match(DISK_RULES[6].not, /paid_till|F5/);
+    assert.match(DISK_RULES[7].field, /comms/);
+    assert.match(DISK_RULES[7].not, /communication\/index/);
   });
 });

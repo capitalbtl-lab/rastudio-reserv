@@ -57,6 +57,18 @@ describe("ИИ подбирает группы по ID дерева", () => {
     assert.equal(slotFitsAgent(slot, { course: "блабла" }, tree), false);
   });
 
+  it("courseId в запросе сильнее речи, python не клеит художественную группу", () => {
+    const art = {
+      groupId: 580,
+      branchId: 1,
+      statusId: 2,
+      courseId: "/art-studio-10-14",
+      schoolId: "/art-studio",
+    };
+    assert.equal(slotFitsAgent(art, { course: "python", courseId: "/art-studio-10-14" }, tree), true);
+    assert.equal(slotFitsAgent(art, { course: "python" }, tree), false);
+  });
+
   it("строка для модели содержит courseId и состав, не предлагает угадать", () => {
     const line = agentGroupLine({
       gid: "580",

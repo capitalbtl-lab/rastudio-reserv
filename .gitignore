@@ -22,3 +22,5 @@ attachments/
 content/raw/
 
 storage/
+__pycache__/
+*.pyc

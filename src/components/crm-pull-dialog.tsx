@@ -18,11 +18,11 @@ export type CrmPullState = {
 };
 
 const TITLES: Record<CrmPullState["kind"], string> = {
-  subjects: "Загрузка предметов",
-  groups: "Загрузка групп",
-  tariffs: "Загрузка абонементов",
-  clients: "Загрузка клиентов",
-  prices: "Загрузка цен",
+  subjects: "Подтягиваю предметы из Alfa",
+  groups: "Подтягиваю группы из Alfa",
+  tariffs: "Подтягиваю абонементы из Alfa",
+  clients: "Подтягиваю клиентов из Alfa",
+  prices: "Подтягиваю цены из Alfa",
 };
 
 export function emptyPull(kind: CrmPullState["kind"]): CrmPullState {
@@ -31,7 +31,7 @@ export function emptyPull(kind: CrmPullState["kind"]): CrmPullState {
 
 export function CrmPullDialog({ pull, onClose }: { pull: CrmPullState; onClose: () => void }) {
   if (!pull.open || typeof document === "undefined") return null;
-  const title = pull.done ? (pull.error ? "Не загрузилось" : "Загрузка завершена") : TITLES[pull.kind];
+  const title = pull.done ? (pull.error ? "Не получилось" : "Готово") : TITLES[pull.kind];
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => pull.done && onClose()}>
       <div className={cn("w-full max-w-md p-6", RA_POP)} onClick={(e) => e.stopPropagation()}>
@@ -39,7 +39,7 @@ export function CrmPullDialog({ pull, onClose }: { pull: CrmPullState; onClose: 
         {!pull.done ? (
           <div className="mt-5 flex items-start gap-3">
             <span className="mt-0.5 h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
-            <p className="text-sm text-fg">{pull.step || "Подключаюсь к AlfaCRM…"}</p>
+            <p className="text-sm text-fg">{pull.step || "Соединяюсь с Alfa…"}</p>
           </div>
         ) : (
           <div className="mt-4 space-y-2 text-sm">

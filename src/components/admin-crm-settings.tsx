@@ -6,8 +6,10 @@ import { CRM_STAGE_COLORS, LEAD_STAGES, mergeStages, pinUnsorted, type LeadStage
 import { FUNNEL_AUTO_DEFAULT, type FunnelAuto } from "@/data/funnel-auto-core";
 import { CRM_BRANCH } from "@/data/ids";
 import { cn } from "@/lib/utils";
-import { CRM_ACTORS, type CrmActorsState } from "@/data/crm-actors";
+import { CRM_ACTORS, actorLabel, actorOf, type CrmActorsState } from "@/data/crm-actors";
 import { CACHE_KIND_META, type CacheKind, type CachePolicy } from "@/data/crm-cache-policy-core";
+import { exportOpLabel, type CrmExportOp } from "@/data/crm-export-queue-core";
+import { ALFA_LINK_MODES, type AlfaLinkMode } from "@/data/crm-alfa-link-core";
 
 export const CRM_SYNC_MIN_KEY = "ra_crm_sync_min";
 
@@ -46,7 +48,18 @@ export function AdminCrmSettings() {
   const [cache, setCache] = useState<CachePolicy | null>(null);
   const [actors, setActors] = useState<CrmActorsState | null>(null);
   const [humanName, setHumanName] = useState("Администратор");
-  const [queue, setQueue] = useState<{ pending?: number; lastNote?: string; overlayNext?: number; overlayTotal?: number; busy?: boolean; exportPending?: number } | null>(null);
+  const [alfaMode, setAlfaMode] = useState<AlfaLinkMode>("linked");
+  const [queue, setQueue] = useState<{
+    pending?: number;
+    lastNote?: string;
+    overlayNext?: number;
+    overlayTotal?: number;
+    busy?: boolean;
+    exportPending?: number;
+    exportBusy?: boolean;
+    exportNote?: string;
+    jobs?: { op: string; entityId: number; actor?: string; tries?: number }[];
+  } | null>(null);
   const dragId = useRef(0);
 
   useEffect(() => {
@@ -85,9 +98,10 @@ export function AdminCrmSettings() {
     try {
       const res = (await adminSchedule({
         data: { token: token(), action: "cachePolicyGet" } as never,
-      })) as { ok?: boolean; policy?: CachePolicy; queue?: typeof queue };
+      })) as { ok?: boolean; policy?: CachePolicy; queue?: typeof queue; alfaLink?: { mode?: AlfaLinkMode } };
       if (res.ok && res.policy) setCache(res.policy);
       if (res.ok && res.queue) setQueue(res.queue);
+      if (res.ok && res.alfaLink?.mode) setAlfaMode(res.alfaLink.mode === "offline" ? "offline" : "linked");
     } catch {
       /* defaults */
     }
@@ -135,6 +149,26 @@ export function AdminCrmSettings() {
     setMsg(res.error || "Не удалось сохранить роли.");
   }
 
+  async function saveAlfaMode(mode: AlfaLinkMode) {
+    setAlfaMode(mode);
+    setBusy(true);
+    try {
+      const res = (await adminSchedule({
+        data: { token: token(), action: "alfaLinkSave", alfaLink: mode } as never,
+      })) as { ok?: boolean; alfaLink?: { mode?: AlfaLinkMode }; error?: string };
+      if (!res.ok) {
+        setMsg(res.error || "Не удалось сменить связь с Alfa.");
+        return;
+      }
+      setAlfaMode(res.alfaLink?.mode === "offline" ? "offline" : "linked");
+      setMsg(mode === "offline" ? "Без AlfaCRM: очередь копит, в CRM не уходит." : "С AlfaCRM: очередь выгружает, рассылки работают.");
+      if (mode === "linked") await tickQueue(false);
+      else await loadCache();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function tickQueue(force: boolean) {
     setBusy(true);
     try {
@@ -175,17 +209,17 @@ export function AdminCrmSettings() {
       for (const s of xs) if (!next.some((x) => x.id === s.id)) next.push(s);
       return next;
     });
-    setMsg("Записываю порядок в AlfaCRM…");
+    setMsg("Порядок на диске, Alfa в очереди.");
     const res = (await adminSchedule({
       data: { token: token(), action: "leadStageSort", stageIds: pinned, branchId: 2 } as never,
     })) as { ok?: boolean; stages?: LeadStage[]; error?: string };
     if (res.ok && Array.isArray(res.stages)) {
       setStages(mergeStages(res.stages));
-      setMsg("Порядок записан в AlfaCRM.");
+      setMsg("Порядок записан. Alfa догонит очередью.");
       return;
     }
     setStages(prev);
-    setMsg(res.error || "AlfaCRM не приняла порядок.");
+    setMsg(res.error || "Не записали порядок этапов.");
   }
 
   function shift(id: number, dir: -1 | 1) {
@@ -309,6 +343,68 @@ export function AdminCrmSettings() {
           ))}
         </ul>
         <p className="mt-3 text-[0.75rem] text-muted">Пароль входа тот же. Несколько сотрудников — следующим шагом, не смешивать с ИИ.</p>
+      </Card>
+
+      <Card
+        title="Связь с AlfaCRM"
+        hint="Кабинет всегда показывает сайт. Alfa — рассылки и касса коллег."
+      >
+        <div className="grid gap-2 sm:grid-cols-2">
+          {ALFA_LINK_MODES.map((m) => {
+            const on = alfaMode === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                disabled={busy}
+                onClick={() => void saveAlfaMode(m.id)}
+                className={cn(
+                  "rounded-2xl px-4 py-3 text-left ring-1 transition",
+                  on ? "bg-black text-white ring-black" : "bg-surface-2 ring-black/8 hover:bg-white",
+                )}
+              >
+                <p className="text-sm font-semibold">{m.title}</p>
+                <p className={cn("mt-1 text-[0.75rem] leading-snug", on ? "text-white/80" : "text-muted")}>{m.hint}</p>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card
+        title="Очередь в Alfa"
+        hint={
+          alfaMode === "offline"
+            ? "Связь выключена — правки копятся на сайте и уйдут, когда включите Alfa."
+            : "Уже сохранено у нас. Сейчас уйдёт в Alfa — рассылки сработают."
+        }
+      >
+        {queue?.jobs?.length ? (
+          <ul className="space-y-1.5">
+            {queue.jobs.slice(0, 12).map((j, i) => (
+              <li key={`${j.op}-${j.entityId}-${i}`} className="flex flex-wrap items-center gap-2 rounded-xl bg-surface-2 px-3 py-2 text-sm">
+                <span className="rounded-full bg-white px-2 py-0.5 text-[0.68rem] font-semibold uppercase tracking-wider text-muted">
+                  {actorLabel(actorOf(j.actor), humanName)}
+                </span>
+                <span className="font-semibold">{exportOpLabel(j.op as CrmExportOp)}</span>
+                {j.tries ? <span className="text-[0.72rem] text-rose-700">повтор {j.tries + 1}</span> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted">Всё отправлено — Alfa ничего не ждёт.</p>
+        )}
+        <p className="mt-3 text-[0.75rem] text-muted">
+          {queue?.exportPending ? `Ждут отправки: ${queue.exportPending}.` : "Очередь пуста."}
+          {queue?.exportBusy ? " Отправляю…" : ""}
+          {queue?.exportNote ? ` · ${queue.exportNote}` : ""}
+          {queue?.pending ? ` · подтягиваю состав групп` : ""}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" className="h-9 rounded-full bg-black/8 px-4 text-sm" disabled={busy} onClick={() => void tickQueue(false)}>
+            {alfaMode === "offline" ? "Сейчас без связи" : "Отправить в Alfa"}
+          </button>
+        </div>
       </Card>
 
       <Card
@@ -618,8 +714,8 @@ export function AdminCrmSettings() {
       </Card>
 
       <Card
-        title="Синхронизация лидов"
-        hint="Правки в AlfaCRM подтягиваются не целиком, а только по изменённым карточкам. Полная доска — кнопкой на вкладке Клиенты."
+        title="Люди в Alfa"
+        hint="Сейчас работают и у нас, и в Alfa. Фон забирает чужие правки. Невыгруженная очередь старше входа — «Обновить» её не затирает. F5 Alfa не ждёт."
       >
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm font-semibold">
@@ -646,9 +742,10 @@ export function AdminCrmSettings() {
           </button>
         </div>
         <ul className="mt-3 space-y-1 text-[0.82rem] text-muted">
-          <li>Доска лидов с диска сайта. F5 не ходит в AlfaCRM.</li>
-          <li>Фон читает только записи с новым updated_at — остальные не трогает.</li>
-          <li>Полная сверка — кнопка «Обновить» на вкладке Клиенты.</li>
+          <li>Состав и абонементы — фоновые пакеты.</li>
+          <li>Лиды — только карточки с новым updated_at.</li>
+          <li>Журнал урока — фон по 2 группы, как состав. Очередь старше входа. «Обновить» у группы — сразу.</li>
+          <li>Касса пока в Alfa: платёж у нас сразу на диск и в очередь.</li>
         </ul>
       </Card>
 

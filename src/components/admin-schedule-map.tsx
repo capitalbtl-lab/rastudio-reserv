@@ -36,6 +36,7 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
   const [courseId, setCourseId] = useState("");
   const [q, setQ] = useState("");
   const [onlyLoose, setOnlyLoose] = useState(false);
+  const [layout, setLayout] = useState<"scheme" | "list">("scheme");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -235,12 +236,27 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
         <AdminSectionHead
           section="schedule"
           title="Соответствия"
-          tip="Предмет CRM и абонемент привязываются к курсу сайта. AlfaCRM эти соответствия не получает."
+          tip="Схема: школа → курс сайта → предмет или абонемент. Клик по чипу меняет courseId. Имя не ключ. AlfaCRM карту не получает."
         />
       )}
 
       <div className="overflow-hidden rounded-3xl bg-surface shadow-[var(--shadow-border)]">
         <div className="flex flex-wrap items-center gap-2 border-b border-black/6 px-4 py-3">
+          <div className="flex rounded-2xl bg-surface-2 p-0.5 ring-1 ring-black/8">
+            {([
+              ["scheme", "Схема"],
+              ["list", "Список"],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setLayout(id)}
+                className={cn("h-9 rounded-2xl px-3 text-sm font-semibold", layout === id ? "bg-primary text-white" : "text-muted hover:text-fg")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="flex rounded-2xl bg-surface-2 p-0.5 ring-1 ring-black/8">
             {([
               ["subjects", "Предметы CRM"],
@@ -288,6 +304,68 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
           </p>
         </div>
 
+        {layout === "scheme" ? (
+          <div className="flex gap-3 overflow-x-auto p-3 md:h-[min(68vh,40rem)]">
+            {board.map((sch) => {
+              const loose = sch.courses.find((c) => c.label === "Без курса")?.items.length || 0;
+              return (
+                <section key={sch.schoolId} className="w-[17.5rem] shrink-0 rounded-3xl bg-white p-3 ring-1 ring-black/6">
+                  <p className="flex items-center gap-2 font-display text-[1.05rem] leading-tight">
+                    <span className="min-w-0 truncate">{sch.label.replace(/^Школа\s+/i, "")}</span>
+                    {loose ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" /> : null}
+                  </p>
+                  <p className="mt-0.5 font-mono text-[0.62rem] text-muted">{sch.schoolId}</p>
+                  <div className="mt-3 space-y-2">
+                    {sch.courses.map((c) => (
+                      <article
+                        key={c.courseId}
+                        className={cn(
+                          "rounded-2xl p-2 ring-1",
+                          c.label === "Без курса" ? "bg-amber-50 ring-amber-200" : "bg-surface-2 ring-black/6",
+                        )}
+                      >
+                        <p className="truncate text-[0.72rem] font-semibold">{chipLabel(c)}</p>
+                        {c.label !== "Без курса" ? (
+                          <p className="truncate font-mono text-[0.58rem] text-muted">{c.courseId}</p>
+                        ) : null}
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {c.items.length ? (
+                            c.items.map((item) => (
+                              <label
+                                key={`${kind}-${item.id}-${item.courseId || "loose"}`}
+                                className="inline-flex max-w-full items-center gap-1 rounded-full bg-white px-2 py-0.5 ring-1 ring-black/8"
+                              >
+                                <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", item.courseId && !item.courseId.includes("#") ? "bg-emerald-500" : "bg-amber-400")} />
+                                <span className="max-w-[7.5rem] truncate text-[0.65rem] font-medium">{item.title}</span>
+                                <select
+                                  value={item.courseId && !item.courseId.includes("#") ? item.courseId : ""}
+                                  onChange={(e) => moveItem(item.id, e.target.value, item.courseId && !item.courseId.includes("#") ? item.courseId : "")}
+                                  className="max-w-[6.5rem] truncate bg-transparent text-[0.62rem] text-muted outline-none"
+                                  title="courseId"
+                                >
+                                  <option value="">без курса</option>
+                                  {tree.courses
+                                    .filter((x) => x.schoolId === sch.schoolId)
+                                    .map((x) => (
+                                      <option key={x.id} value={x.id}>
+                                        {x.label}
+                                      </option>
+                                    ))}
+                                </select>
+                              </label>
+                            ))
+                          ) : (
+                            <p className="text-[0.65rem] text-muted">пусто</p>
+                          )}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        ) : (
         <div className="grid md:grid-cols-[15.5rem_minmax(0,1fr)] md:h-[min(68vh,40rem)]">
           <nav className="flex gap-1.5 overflow-x-auto border-b border-black/6 p-2 md:flex-col md:overflow-y-auto md:border-b-0 md:border-r md:p-3">
             {board.map((sch) => {
@@ -411,6 +489,7 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
             </ul>
           </div>
         </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-black/6 px-4 py-3">
           <p className="mr-auto min-h-5 text-sm text-muted">
@@ -418,8 +497,8 @@ export function AdminScheduleMap({ embedded }: { embedded?: boolean }) {
               (dirty
                 ? "Есть несохранённые привязки. На сайт уйдут после сохранения. AlfaCRM не меняется."
                 : kind === "tariffs"
-                  ? "Абонемент привязывается к курсу сайта. Это соответствие только здесь."
-                  : "Выберите школу слева, курс сверху — предмет привязывается списком справа.")}
+                  ? "Схема: школа → курс сайта → абонемент. Чип меняет courseId. AlfaCRM не меняется."
+                  : "Схема: школа → курс сайта → предмет CRM. Чип меняет courseId. Имя не ключ.")}
           </p>
           {dirty ? (
             <Button type="button" variant="ghost" className="h-9 px-3 text-sm" disabled={busy} onClick={() => { kind === "tariffs" ? setTariffs(tariffSaved) : setCourses(saved); setMsg(""); }}>
