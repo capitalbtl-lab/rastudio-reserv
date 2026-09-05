@@ -2383,32 +2383,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
       return { ok: true as const, done: done.length, skipped, failed, total: rows.length, mode };
     }
     if (data.action === "clientsLiveTariffs") {
-      const { token, pagedIndex } = await import("./alfacrm");
-      const { customerTariffIndexBranchPath, customerTariffOnCard, tariffRowCustomerId, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
-      const t = await token();
-      const ids = new Set<number>();
-      let scanned = 0;
-      const branches = [1, 2, 3, 4];
-      for (let i = 0; i < branches.length; i += 2) {
-        if (i) await sleep(CRM_READ_GAP_MS);
-        await Promise.all(
-          branches.slice(i, i + 2).map(async (branch) => {
-            await pagedIndex(
-              customerTariffIndexBranchPath(branch),
-              {},
-              t,
-              (it: Record<string, unknown>) => {
-                scanned += 1;
-                const id = tariffRowCustomerId(it);
-                if (id && customerTariffOnCard(it)) ids.add(id);
-              },
-              { pageSize: 100, pages: 20 },
-            );
-          }),
-        );
-      }
-      logAdmin(`Живые абонементы на сегодня: ${ids.size} учеников, строк CRM ${scanned}`);
-      return { ok: true as const, ids: [...ids], total: ids.size, scanned };
+      const { overlayMembershipFromCrm } = await import("./dossiers");
+      const res = await overlayMembershipFromCrm();
+      logAdmin(`Живые абонементы на сегодня: ${res.live} учеников, cgi ${res.people}, строк ${res.scanned}`);
+      return { ok: true as const, ids: res.ids, total: res.live, scanned: res.scanned, withGroups: res.withGroups };
     }
     if (data.action === "voiceAsk") {
       const prompt = String(data.prompt || "").trim();

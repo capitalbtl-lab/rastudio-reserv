@@ -347,6 +347,7 @@ export function AdminClients({
         setLiveTariffIds(new Set(res.ids.map(Number).filter(Boolean)));
         liveTariffAt.current = Date.now();
         setLiveReady(true);
+        await load(qRef.current, statusRef.current, branchRef.current, ageRef.current);
       }
     } finally {
       setLiveTariffBusy(false);
@@ -748,15 +749,20 @@ export function AdminClients({
   }, [rows]);
 
   const shown = useMemo(() => {
-    const list = liveReady ? keepByLiveTariff(rows, tariffHave, liveTariffIds, (r) => Number(r.crmId) || 0) : rows;
+    const live = new Set(liveTariffIds);
+    for (const r of rows) if (r.hasLiveTariff && Number(r.crmId)) live.add(Number(r.crmId));
+    const ready = liveReady || live.size > 0;
+    const list = ready ? keepByLiveTariff(rows, tariffHave, live, (r) => Number(r.crmId) || 0) : rows;
     return list.slice(0, cap);
   }, [rows, cap, tariffHave, liveTariffIds, liveReady]);
   const funnelOn = status === "лид" && view === "дети";
   const tariffCounts = useMemo(() => {
+    const live = new Set(liveTariffIds);
+    for (const r of rows) if (r.hasLiveTariff && Number(r.crmId)) live.add(Number(r.crmId));
     const pool = funnelOn ? funnelItems.map((it) => Number(it.customerId || it.id) || 0) : rows.map((r) => Number(r.crmId) || 0);
     let withN = 0;
-    for (const id of pool) if (id && liveTariffIds.has(id)) withN += 1;
-    return { all: pool.length, with: withN, without: Math.max(0, pool.length - withN), ready: liveReady };
+    for (const id of pool) if (id && live.has(id)) withN += 1;
+    return { all: pool.length, with: withN, without: Math.max(0, pool.length - withN), ready: liveReady || live.size > 0 };
   }, [funnelOn, funnelItems, rows, liveTariffIds, liveReady]);
   const chipCounts = useMemo(() => {
     const next = { ...branchCounts };
@@ -1166,8 +1172,8 @@ export function AdminClients({
           <div className="flex h-10 max-w-full items-center rounded-full bg-surface-2 p-1" data-sort-group="tariff" role="tablist" aria-label="Абонемент">
             {([
               ["all", "Все", tariffCounts.all],
-              ["with", "С абонементом", !liveReady || liveTariffBusy ? "…" : tariffCounts.with],
-              ["without", "Без абонемента", !liveReady || liveTariffBusy ? "…" : tariffCounts.without],
+              ["with", "С абонементом", !tariffCounts.ready || liveTariffBusy ? "…" : tariffCounts.with],
+              ["without", "Без абонемента", !tariffCounts.ready || liveTariffBusy ? "…" : tariffCounts.without],
             ] as const).map(([id, label, n]) => {
               const on = tariffHave === id;
               return (

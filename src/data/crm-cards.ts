@@ -132,6 +132,7 @@ export type ClientRow = {
   leadStatusId?: number;
   note?: string;
   updatedAt?: string;
+  hasLiveTariff?: boolean;
 };
 
 export type LessonCatalogItem = { id: number; name: string };

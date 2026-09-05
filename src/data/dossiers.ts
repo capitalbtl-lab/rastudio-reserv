@@ -358,6 +358,21 @@ function groupsFromItem(item: Record<string, unknown>, branchId: number): GroupL
       subjectId,
     });
   }
+  const ids = Array.isArray(item.group_ids) ? item.group_ids : [];
+  for (const x of ids) {
+    const id = Number(x);
+    if (!id) continue;
+    const k = `${branchId}:${id}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({
+      id,
+      name: `группа ${id}`,
+      branchId,
+      school: "",
+      active: true,
+    });
+  }
   return out;
 }
 
@@ -613,6 +628,90 @@ export function applyCrmCustomer(item: Record<string, unknown>, branchId: number
   });
 }
 
+export async function overlayMembershipFromCrm() {
+  const t = await alfaToken();
+  const { pagedIndex } = await import("./alfacrm");
+  const { cgiCustomerId, customerTariffOnCard, tariffRowCustomerId } = await import("./pupil-tariffs");
+  const byCustomer = new Map<number, { groups: { id: number; branchId: number; name: string }[]; live: boolean }>();
+  function bag(id: number) {
+    let row = byCustomer.get(id);
+    if (!row) {
+      row = { groups: [], live: false };
+      byCustomer.set(id, row);
+    }
+    return row;
+  }
+  let scanned = 0;
+  for (const branch of [1, 2, 3, 4]) {
+    await pagedIndex(
+      `/v2api/${branch}/cgi/index`,
+      {},
+      t,
+      (it: Record<string, unknown>) => {
+        if (Number(it.removed || it.is_removed || 0) === 1) return;
+        const cid = cgiCustomerId(it);
+        const rec = it as { group?: { id?: number; name?: string } };
+        const gid = Number(it.group_id || it.groupId || rec.group?.id || 0);
+        if (!cid || !gid) return;
+        const row = bag(cid);
+        if (!row.groups.some((g) => g.id === gid && g.branchId === branch)) {
+          row.groups.push({ id: gid, branchId: branch, name: String(it.group_name || rec.group?.name || "") });
+        }
+      },
+      { pageSize: 200, pages: 40 },
+    );
+    await pagedIndex(
+      `/v2api/${branch}/customer-tariff/index`,
+      {},
+      t,
+      (it: Record<string, unknown>) => {
+        scanned += 1;
+        const cid = tariffRowCustomerId(it);
+        if (!cid) return;
+        if (customerTariffOnCard(it)) bag(cid).live = true;
+      },
+      { pageSize: 200, pages: 40 },
+    );
+  }
+  const store = loadStore();
+  let withGroups = 0;
+  let live = 0;
+  const ids: number[] = [];
+  for (const d of store.items) {
+    const id = Number(d.crmId || 0);
+    if (!id) continue;
+    const hit = byCustomer.get(id);
+    d.extras = d.extras || {};
+    if (hit?.groups.length) {
+      const list = [...(d.groupLinks || [])];
+      for (const g of hit.groups) {
+        const i = list.findIndex((x) => x.id === g.id && x.branchId === g.branchId);
+        const link: GroupLink = {
+          id: g.id,
+          name: g.name || list[i]?.name || `группа ${g.id}`,
+          branchId: g.branchId,
+          school: list[i]?.school || "",
+          active: true,
+          subjectId: list[i]?.subjectId,
+          courseId: list[i]?.courseId,
+        };
+        if (i >= 0) list[i] = { ...list[i], ...link };
+        else list.push(link);
+      }
+      d.groupLinks = list;
+      withGroups += 1;
+    }
+    d.extras.live_tariff = hit?.live ? "1" : "0";
+    if (hit?.live) {
+      live += 1;
+      ids.push(id);
+    }
+  }
+  saveStore(store);
+  logAdmin(`Состав CRM: cgi ${byCustomer.size}, с группами ${withGroups}, живых абонементов ${live}, строк тарифов ${scanned}`);
+  return { ok: true as const, people: byCustomer.size, withGroups, live, scanned, ids };
+}
+
 export async function syncDossierFromCrm(crmId: number, branchId: number) {
   const t = await alfaToken();
   const data = await request<{ items?: Record<string, unknown>[] }>(
@@ -722,7 +821,9 @@ export async function syncAllFromCrm(
   }
   store.lastCrmSync = new Date().toISOString();
   saveStore(store);
-  return { ok: true as const, count: n, purged, lastCrmSync: store.lastCrmSync, studies: want };
+  onProgress?.({ step: "Состав групп и абонементы…", n, total: n });
+  const overlay = await overlayMembershipFromCrm().catch(() => ({ live: 0, withGroups: 0, scanned: 0, ids: [] as number[] }));
+  return { ok: true as const, count: n, purged, lastCrmSync: store.lastCrmSync, studies: want, liveTariffs: overlay.live, withGroups: overlay.withGroups };
 }
 
 let leadTickBusy = false;
@@ -1062,6 +1163,7 @@ function viewOf(d: Dossier) {
     leadStatusId: Number(ex.lead_status_id || 0),
     note: String(d.note || ex.note || "").replace(/<[^>]+>/g, "").trim().slice(0, 280),
     updatedAt: d.updatedAt,
+    hasLiveTariff: ex.live_tariff === "1",
   };
 }
 

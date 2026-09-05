@@ -7,6 +7,7 @@ import {
   crmBranchIds,
   crmIndexAccumTotal,
   crmIndexShouldStop,
+  crmUnwrapIndex,
   crmLeadStatusId,
   isCrmLeadRecord,
   leadMoveFields,
@@ -156,6 +157,12 @@ describe("двусторонняя связь карточек лидов с Alf
 });
 
 describe("пагинация customer/index не режет лидов", () => {
+  it("index CRM: items из data.items и объекта", () => {
+    assert.equal(crmUnwrapIndex({ data: { items: [{ id: 1 }], total: 1 } }).items[0].id, 1);
+    assert.equal(crmUnwrapIndex({ items: { a: { id: 2 } } }).items[0].id, 2);
+    assert.equal(crmUnwrapIndex({ models: [{ id: 3 }] }).items[0].id, 3);
+  });
+
   it("если total первой страницы равен pageSize — читаем следующую (там Фролов)", () => {
     const pageSize = 50;
     let total = Number.POSITIVE_INFINITY;

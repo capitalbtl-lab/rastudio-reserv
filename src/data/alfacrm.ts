@@ -1,5 +1,5 @@
 import { serverEnv } from "./server-env";
-import { crmIndexAccumTotal, crmIndexShouldStop } from "./crm-leads-stages";
+import { crmIndexAccumTotal, crmIndexShouldStop, crmUnwrapIndex } from "./crm-leads-stages";
 
 const HOST = () => (serverEnv("ALFACRM_HOST") || "https://studiyarazvivaysya.s20.online").replace(/\/$/, "");
 const EMAIL = () => serverEnv("ALFACRM_EMAIL") || process.env.ALFACRM_EMAIL || "";
@@ -259,19 +259,16 @@ export async function pagedIndex<T extends Record<string, unknown>>(
   let loaded = 0;
   let prev = "";
   for (let page = 0; page < maxPages; page += 1) {
-    const res = await request<{ items?: T[]; total?: number; count?: number }>(
-      path,
-      { ...body, page, pageSize },
-      tok,
-    ).catch(() => ({ items: [] as T[] }));
-    const batch = res.items || [];
-    total = crmIndexAccumTotal(page, pageSize, batch.length, res.total, total);
+    const res = await request<unknown>(path, { ...body, page, pageSize }, tok).catch(() => ({ items: [] }));
+    const pack = crmUnwrapIndex(res);
+    const batch = pack.items as T[];
+    total = crmIndexAccumTotal(page, pageSize, batch.length, pack.total ?? (res as { total?: unknown }).total, total);
     const key = batch.map((x) => String(x.id ?? "")).join(",");
     if (key && key === prev) break;
     prev = key;
     for (const it of batch) onItem(it);
     loaded += batch.length;
-    if (crmIndexShouldStop(pageSize, batch.length, res.count, loaded, total)) break;
+    if (crmIndexShouldStop(pageSize, batch.length, pack.count, loaded, total)) break;
   }
   return { loaded, total: Number.isFinite(total) ? total : loaded };
 }

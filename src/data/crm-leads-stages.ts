@@ -335,6 +335,25 @@ export function crmUpdatedAtFrom(at: number, overlapMs = 5 * 60 * 1000) {
 }
 
 /** total первой страницы, равный pageSize, нельзя принимать за полное число записей. */
+export function crmUnwrapIndex(json: unknown): { items: Record<string, unknown>[]; total?: number; count?: number } {
+  if (!json || typeof json !== "object") return { items: [] };
+  const o = json as Record<string, unknown>;
+  const inner = o.data && typeof o.data === "object" && !Array.isArray(o.data) ? (o.data as Record<string, unknown>) : o;
+  let raw: unknown = inner.items ?? o.items ?? o.models;
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) raw = Object.values(raw as Record<string, unknown>);
+  if (!Array.isArray(raw) && Array.isArray(inner)) raw = inner;
+  const items = Array.isArray(raw)
+    ? raw.filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === "object")
+    : [];
+  const total = Number(inner.total ?? o.total);
+  const count = Number(inner.count ?? o.count);
+  return {
+    items,
+    total: Number.isFinite(total) ? total : undefined,
+    count: Number.isFinite(count) ? count : undefined,
+  };
+}
+
 export function crmIndexAccumTotal(page: number, pageSize: number, batchLen: number, rawTotal: unknown, prev: number) {
   const n = Number(rawTotal);
   if (Number.isFinite(n) && n >= 0 && !(page === 0 && n === batchLen && n === pageSize)) return n;
