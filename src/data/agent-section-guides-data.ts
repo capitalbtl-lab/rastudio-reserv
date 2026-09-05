@@ -20,7 +20,7 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-05-tariffs";
+export const GUIDE_REV = "2026-09-05-clients-tariff";
 
 const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Сайт", idField: "rastudio.org", link: "то, что видят родители. Админка = /admin + AlfaCRM" },
@@ -131,7 +131,7 @@ const SCHEDULE_OPS: GuideOp[] = [
   { id: "pupil-tariff-reload", title: "Перезагрузить список групп мастера", body: "Кнопка «Перезагрузить список» на шаге групп. pupilTariffGroups без кэша taken." },
   { id: "open-group", title: "Открыть группу", body: "Только groupId + branchId. Карточка groupCardId = card:group:{branchId}:{groupId}. Состав: три списка Ученики / Лиды / Архивные ученики, клик = customerId. Голос: kind=openGroup. Из клиента: onOpenGroup(groupId, branchId)." },
   { id: "open-client", title: "Открыть клиента", body: "Только customerId. clientCardId = card:customer:{customerId}. Событие ra-open-client { customerId, branchId }. Несколько ФИО в поиске — вкладка clients + query, карточку открывать когда остался один customerId. Desktop = panel, не popup." },
-  { id: "filter-clients", title: "Сортировка клиентов", body: "Две независимые оси. status: учится|лид (Текущие/Лиды), архив тихо. view: дети|группы. Событие ra-clients-filter { status, view, branchId, ageBand }. Матрица status×view обязательна. branchId 0 = все, 1–4 филиал. ageBand пусто = все." },
+  { id: "filter-clients", title: "Сортировка клиентов", body: "Три независимые оси. status: учится|лид (Текущие/Лиды). view: дети|группы. tariff: all|with|without — живой абонемент на сегодня (removed≠1, e_date пусто или ≥ сегодня МСК). Событие ra-clients-filter { status, view, branchId, ageBand, tariff }. data-sort=tariff. «С абонементом» / «Без абонемента» работают и для текущих, и для лидов. Загрузка ids: clientsLiveTariffs." },
   { id: "pull-clients", title: "Загрузка текущих", body: "Кнопка «Обновить» = is_study=1 AND removed=0. Не читает лиды и архив." },
   { id: "pull-leads", title: "Загрузка лидов", body: "Кнопка «Загрузить лиды» = полный снимок is_study=0 removed=0, затем с сайта удалить архивные лиды (is_study=2 и лиды, которых нет среди активных). Текущих (is_study=1) не трогать. Авто каждые 5 минут: syncNewLeadsFromCrm — только customerId, которых ещё нет в dossiers.json. Старых лидов не перечитывать." },
   { id: "pull-archive", title: "Загрузка архива", body: "Только тихая кнопка. is_study=2. Не главная сортировка." },

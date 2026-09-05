@@ -1212,6 +1212,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "pupilTariffActive"
           | "pupilTariffAssign"
           | "pupilTariffClear"
+          | "clientsLiveTariffs"
           | "voiceAsk"
           | "customersSearch"
           | "tariffsGet"
@@ -2312,6 +2313,33 @@ export const adminSchedule = createServerFn({ method: "POST" })
       }
       logAdmin(`Мастер учеников: ${mode === "delete" ? "удалено" : "закрыто"} ${done.length}, пропуск ${skipped.length}, ошибок ${failed.length}`);
       return { ok: true as const, done: done.length, skipped, failed, total: rows.length, mode };
+    }
+    if (data.action === "clientsLiveTariffs") {
+      const { token, pagedIndex } = await import("./alfacrm");
+      const { customerTariffIndexBranchPath, customerTariffLive, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
+      const t = await token();
+      const ids = new Set<number>();
+      const branches = [1, 2, 3, 4];
+      for (let i = 0; i < branches.length; i += 2) {
+        if (i) await sleep(CRM_READ_GAP_MS);
+        await Promise.all(
+          branches.slice(i, i + 2).map(async (branch) => {
+            await pagedIndex(
+              customerTariffIndexBranchPath(branch),
+              {},
+              t,
+              (it: Record<string, unknown>) => {
+                if (!customerTariffLive(it)) return;
+                const id = Number(it.customer_id ?? it.customerId ?? 0);
+                if (id) ids.add(id);
+              },
+              { pageSize: 100, pages: 20 },
+            );
+          }),
+        );
+      }
+      logAdmin(`Живые абонементы на сегодня: ${ids.size} учеников`);
+      return { ok: true as const, ids: [...ids], total: ids.size };
     }
     if (data.action === "voiceAsk") {
       const prompt = String(data.prompt || "").trim();

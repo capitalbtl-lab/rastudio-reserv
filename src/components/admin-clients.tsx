@@ -21,6 +21,7 @@ import { LEAD_STAGES, mergeStages, reorderLeads, filterLeadCards, mergeBranchLea
 import { crmSyncMinutes } from "@/components/admin-crm-settings";
 import type { CrmSlot, GroupCalLesson } from "@/data/crm-slots-core";
 import { GROUP_STATUSES, isAdminGroup } from "@/data/group-status";
+import { keepByLiveTariff, type TariffHave } from "@/data/pupil-tariffs";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -275,6 +276,9 @@ export function AdminClients({
   const [groupOpen, setGroupOpen] = useState(false);
   const [addingGroup, setAddingGroup] = useState("");
   const [view, setView] = useState<"дети" | "группы">("дети");
+  const [tariffHave, setTariffHave] = useState<TariffHave>("all");
+  const [liveTariffIds, setLiveTariffIds] = useState<Set<number>>(() => new Set());
+  const [liveTariffBusy, setLiveTariffBusy] = useState(false);
   const [pickedGroup, setPickedGroup] = useState<CrmSlot | null>(null);
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
   const [groupArchive, setGroupArchive] = useState<GroupMember[]>([]);
@@ -307,6 +311,7 @@ export function AdminClients({
   const activeIdRef = useRef(0);
   const desktopRef = useRef(desktop);
   const viewRef = useRef<"дети" | "группы">("дети");
+  const liveTariffAt = useRef(0);
   const rowsRef = useRef<ClientRow[]>(rows);
   const wasActive = useRef(active);
   qRef.current = q;
@@ -327,6 +332,29 @@ export function AdminClients({
     }
     wasActive.current = active;
   }, [active]);
+
+  async function loadLiveTariffs(force = false) {
+    if (!force && liveTariffAt.current && Date.now() - liveTariffAt.current < 120000 && liveTariffIds.size) return;
+    setLiveTariffBusy(true);
+    try {
+      const res = (await retryFetch(
+        () => adminSchedule({ data: { token: token(), action: "clientsLiveTariffs" } as never }),
+        1,
+        90000,
+      )) as { ok?: boolean; ids?: number[] };
+      if (res.ok && Array.isArray(res.ids)) {
+        setLiveTariffIds(new Set(res.ids.map(Number).filter(Boolean)));
+        liveTariffAt.current = Date.now();
+      }
+    } finally {
+      setLiveTariffBusy(false);
+    }
+  }
+
+  async function pickTariffHave(next: TariffHave) {
+    if (next !== "all") await loadLiveTariffs();
+    setTariffHave(next);
+  }
 
   async function load(nextQ = q, nextStatus = status, nextBranch = branch, nextAge = age) {
     if (!rowsRef.current.length) setBusy(true);
@@ -708,8 +736,17 @@ export function AdminClients({
     };
   }, [rows]);
 
-  const shown = useMemo(() => rows.slice(0, cap), [rows, cap]);
+  const shown = useMemo(() => {
+    const list = keepByLiveTariff(rows, tariffHave, liveTariffIds, (r) => Number(r.crmId) || 0);
+    return list.slice(0, cap);
+  }, [rows, cap, tariffHave, liveTariffIds]);
   const funnelOn = status === "лид" && view === "дети";
+  const tariffCounts = useMemo(() => {
+    const pool = funnelOn ? funnelItems.map((it) => Number(it.customerId || it.id) || 0) : rows.map((r) => Number(r.crmId) || 0);
+    let withN = 0;
+    for (const id of pool) if (id && liveTariffIds.has(id)) withN += 1;
+    return { all: pool.length, with: withN, without: pool.length - withN };
+  }, [funnelOn, funnelItems, rows, liveTariffIds]);
   const chipCounts = useMemo(() => {
     const next = { ...branchCounts };
     if (!funnelOn || !funnelItems.length) return next;
@@ -744,8 +781,14 @@ export function AdminClients({
     funnelWas.current = funnelOn;
   }, [funnelOn]);
   const funnelShown = useMemo(
-    () => filterLeadCards(funnelItems, { branch, age, q, gone: funnelGone.current }),
-    [funnelItems, q, branch, age],
+    () =>
+      keepByLiveTariff(
+        filterLeadCards(funnelItems, { branch, age, q, gone: funnelGone.current }),
+        tariffHave,
+        liveTariffIds,
+        (it) => Number(it.customerId || it.id) || 0,
+      ),
+    [funnelItems, q, branch, age, tariffHave, liveTariffIds],
   );
   const activeIndex = shown.findIndex((r) => Number(r.crmId) === activeId);
   const joinedIds = new Set((card?.groups || []).filter((g) => g.active).map((g) => g.id));
@@ -986,6 +1029,7 @@ export function AdminClients({
       data-filter-status={status}
       data-filter-branch={branch}
       data-filter-age={age}
+      data-filter-tariff={tariffHave}
     >
       <div className="shrink-0 rounded-[1.4rem] bg-white p-3 shadow-[var(--shadow-border)] md:px-4 md:py-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -1105,6 +1149,62 @@ export function AdminClients({
                 {label}
                 <span className="ml-1 tabular-nums opacity-80">{n}</span>
               </button>
+              );
+            })}
+          </div>
+          <div className="flex h-10 max-w-full items-center rounded-full bg-surface-2 p-1" data-sort-group="tariff" role="tablist" aria-label="Абонемент">
+            {([
+              ["all", "Все", tariffCounts.all],
+              ["with", "С абонементом", liveTariffBusy && tariffHave !== "all" ? "…" : tariffCounts.with],
+              ["without", "Без абонемента", liveTariffBusy && tariffHave !== "all" ? "…" : tariffCounts.without],
+            ] as const).map(([id, label, n]) => {
+              const on = tariffHave === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  data-sort="tariff"
+                  data-id={id}
+                  disabled={liveTariffBusy && id !== "all"}
+                  onClick={() => void pickTariffHave(id)}
+                  className={cn(
+                    "h-8 rounded-full px-3 text-[0.8rem] font-semibold transition-colors duration-[var(--motion-quick)]",
+                    on ? "bg-primary text-white shadow-sm" : "text-muted hover:text-fg",
+                  )}
+                >
+                  {label}
+                  <span className="ml-1 tabular-nums opacity-80">{n}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex h-10 max-w-full items-center rounded-full bg-surface-2 p-1" data-sort-group="tariff" role="tablist" aria-label="Абонемент">
+            {([
+              ["all", "Все", tariffCounts.all],
+              ["with", "С абонементом", liveTariffBusy && tariffHave !== "all" ? "…" : tariffCounts.with],
+              ["without", "Без абонемента", liveTariffBusy && tariffHave !== "all" ? "…" : tariffCounts.without],
+            ] as const).map(([id, label, n]) => {
+              const on = tariffHave === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  data-sort="tariff"
+                  data-id={id}
+                  disabled={liveTariffBusy && id !== "all"}
+                  onClick={() => void pickTariffHave(id)}
+                  className={cn(
+                    "h-8 rounded-full px-3 text-[0.8rem] font-semibold transition-colors duration-[var(--motion-quick)]",
+                    on ? "bg-primary text-white shadow-sm" : "text-muted hover:text-fg",
+                  )}
+                >
+                  {label}
+                  <span className="ml-1 tabular-nums opacity-80">{n}</span>
+                </button>
               );
             })}
           </div>
@@ -1594,20 +1694,20 @@ export function AdminClients({
               ) : null}
               <CrmGroupMembers
                 title="Ученики"
-                items={groupMembers.filter((m) => m.status !== "лид")}
+                items={keepByLiveTariff(groupMembers.filter((m) => m.status !== "лид"), tariffHave, liveTariffIds, (m) => m.id)}
                 onOpen={(m) => void openById(m.id, pickedGroup.branchId)}
                 loading={groupLoading}
               />
               <CrmGroupMembers
                 title="Лиды"
-                items={groupMembers.filter((m) => m.status === "лид")}
+                items={keepByLiveTariff(groupMembers.filter((m) => m.status === "лид"), tariffHave, liveTariffIds, (m) => m.id)}
                 onOpen={(m) => void openById(m.id, pickedGroup.branchId)}
                 variant="lead"
                 loading={groupLoading}
               />
               <CrmGroupMembers
                 title="Архивные ученики"
-                items={groupArchive}
+                items={keepByLiveTariff(groupArchive, tariffHave, liveTariffIds, (m) => m.id)}
                 onOpen={(m) => void openById(m.id, pickedGroup.branchId)}
                 variant="archive"
                 loading={groupLoading}

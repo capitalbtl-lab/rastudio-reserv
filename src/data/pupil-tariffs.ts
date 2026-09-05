@@ -459,6 +459,24 @@ export function personKey(branchId: number, customerId: number) {
   return `${branchId}:${customerId}`;
 }
 
+export type TariffHave = "all" | "with" | "without";
+
+/** Клиенты/лиды: живой абонемент на сегодня (removed≠1, не истёк). */
+export function keepByLiveTariff<T>(
+  items: T[],
+  have: TariffHave,
+  live: Set<number>,
+  idOf: (item: T) => number,
+) {
+  if (have === "all") return items;
+  return items.filter((item) => {
+    const id = Number(idOf(item)) || 0;
+    if (!id) return have === "without";
+    const on = live.has(id);
+    return have === "with" ? on : !on;
+  });
+}
+
 /** Кто выпал после круга школы: назначение без этого тарифа, удаление/закрытие — тариф ещё живой. */
 export function dropoutsAfterJob<
   T extends { customerId: number; branchId: number; tariffId?: number },
