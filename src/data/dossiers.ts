@@ -628,24 +628,15 @@ export function applyCrmCustomer(item: Record<string, unknown>, branchId: number
   });
 }
 
-export async function overlayMembershipFromCrm() {
-  const t = await alfaToken();
-  const { pagedIndex, request } = await import("./alfacrm");
-  const { cgiCustomerId, customerTariffOnCard, tariffRowCustomerId, customerTariffIndexBranchPath, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
-  const { crmUnwrapIndex } = await import("./crm-leads-stages");
-  const byCustomer = new Map<number, { groups: { id: number; branchId: number; name: string }[]; live: boolean }>();
-  function bag(id: number) {
-    let row = byCustomer.get(id);
-    if (!row) {
-      row = { groups: [], live: false };
-      byCustomer.set(id, row);
-    }
-    return row;
-  }
+export function liveTariffIdsFromStore() {
+  return loadStore()
+    .items.map((d) => (d.extras?.live_tariff === "1" ? Number(d.crmId) || 0 : 0))
+    .filter(Boolean);
+}
+
+export function overlayAdminGroups() {
   const slots = (loadVersions()[0]?.slots || []).filter((s) => Number(s.groupId) > 0);
-  const slotOf = (branchId: number, groupId: number) =>
-    slots.find((s) => s.groupId === groupId && s.branchId === branchId) || slots.find((s) => s.groupId === groupId);
-  const groups: { groupId: number; branchId: number; name: string }[] = [];
+  const groups: { groupId: number; branchId: number; name: string; taken: number }[] = [];
   const seenG = new Set<string>();
   for (const s of slots) {
     if (!isAdminGroup(s.statusId)) continue;
@@ -655,79 +646,103 @@ export async function overlayMembershipFromCrm() {
     const k = `${bid}:${gid}`;
     if (seenG.has(k)) continue;
     seenG.add(k);
-    groups.push({ groupId: gid, branchId: bid, name: String(s.groupName || "") });
+    groups.push({ groupId: gid, branchId: bid, name: String(s.groupName || ""), taken: Number(s.taken) || 0 });
+  }
+  return groups;
+}
+
+export async function overlayMembershipChunk(offset = 0, take = 3) {
+  const { pagedIndex, request } = await import("./alfacrm");
+  const { cgiCustomerId, customerTariffOnCard, tariffRowCustomerId, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
+  const { crmUnwrapIndex } = await import("./crm-leads-stages");
+  const { stampOverlay } = await import("./crm-cache-policy");
+  const t = await alfaToken();
+  const groups = overlayAdminGroups();
+  const total = groups.length;
+  const size = Math.max(1, Math.min(6, Number(take) || 3));
+  const from = Math.max(0, Number(offset) || 0);
+  const slice = groups.slice(from, from + size);
+  const slots = (loadVersions()[0]?.slots || []).filter((s) => Number(s.groupId) > 0);
+  const slotOf = (branchId: number, groupId: number) =>
+    slots.find((s) => s.groupId === groupId && s.branchId === branchId) || slots.find((s) => s.groupId === groupId);
+  const byCustomer = new Map<number, { groups: { id: number; branchId: number; name: string }[]; live: boolean; seenTariff: boolean }>();
+  function bag(id: number) {
+    let row = byCustomer.get(id);
+    if (!row) {
+      row = { groups: [], live: false, seenTariff: false };
+      byCustomer.set(id, row);
+    }
+    return row;
   }
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  for (let i = 0; i < groups.length; i += 2) {
+  const notes: string[] = [];
+  let scanned = 0;
+  let cgiN = 0;
+
+  async function cgiOf(g: (typeof slice)[0]) {
+    let n = 0;
+    const pull = async () => {
+      n = 0;
+      await pagedIndex(
+        `/v2api/${g.branchId}/cgi/index?group_id=${g.groupId}`,
+        { group_id: g.groupId },
+        t,
+        (it: Record<string, unknown>) => {
+          if (Number(it.removed || it.is_removed || 0) === 1) return;
+          const cid = cgiCustomerId(it);
+          if (!cid) return;
+          n += 1;
+          const row = bag(cid);
+          if (!row.groups.some((x) => x.id === g.groupId && x.branchId === g.branchId)) {
+            row.groups.push({ id: g.groupId, branchId: g.branchId, name: g.name });
+          }
+        },
+        { pageSize: 100, pages: 8 },
+      );
+    };
+    await pull();
+    if (n === 0 && g.taken > 0) {
+      await wait(CRM_READ_GAP_MS);
+      await pull();
+    }
+    cgiN += n;
+    notes.push(`${g.groupId}: cgi ${n}${g.taken ? ` / ${g.taken}` : ""}`);
+    return n;
+  }
+
+  for (let i = 0; i < slice.length; i += 1) {
+    if (i) await wait(CRM_READ_GAP_MS);
+    await cgiOf(slice[i]);
+  }
+
+  const cids = [...byCustomer.keys()];
+  for (let i = 0; i < cids.length; i += 2) {
     if (i) await wait(CRM_READ_GAP_MS);
     await Promise.all(
-      groups.slice(i, i + 2).map(async (g) => {
-        await pagedIndex(
-          `/v2api/${g.branchId}/cgi/index?group_id=${g.groupId}`,
-          { group_id: g.groupId },
-          t,
-          (it: Record<string, unknown>) => {
-            if (Number(it.removed || it.is_removed || 0) === 1) return;
-            const cid = cgiCustomerId(it);
-            if (!cid) return;
-            const row = bag(cid);
-            if (!row.groups.some((x) => x.id === g.groupId && x.branchId === g.branchId)) {
-              row.groups.push({ id: g.groupId, branchId: g.branchId, name: g.name });
-            }
-          },
-          { pageSize: 100, pages: 8 },
+      cids.slice(i, i + 2).map(async (cid) => {
+        const branch = byCustomer.get(cid)?.groups[0]?.branchId || 1;
+        const json = await request(`/v2api/${branch}/customer-tariff/index?customer_id=${cid}`, { page: 0, pageSize: 30, customer_id: cid }, t).catch(
+          () => ({}),
         );
+        const row = bag(cid);
+        row.seenTariff = true;
+        for (const it of crmUnwrapIndex(json).items) {
+          scanned += 1;
+          if (customerTariffOnCard(it) && tariffRowCustomerId(it) === cid) row.live = true;
+        }
       }),
     );
   }
-  let scanned = 0;
-  function onTariff(it: Record<string, unknown>) {
-    scanned += 1;
-    const cid = tariffRowCustomerId(it);
-    if (cid && customerTariffOnCard(it)) bag(cid).live = true;
-  }
-  for (const branch of [1, 2, 3, 4]) {
-    await pagedIndex(customerTariffIndexBranchPath(branch), {}, t, onTariff, { pageSize: 200, pages: 20 });
-  }
-  if (scanned === 0) {
-    for (let i = 0; i < groups.length; i += 2) {
-      if (i) await wait(CRM_READ_GAP_MS);
-      await Promise.all(
-        groups.slice(i, i + 2).map((g) =>
-          pagedIndex(customerTariffIndexBranchPath(g.branchId), { group_id: g.groupId }, t, onTariff, { pageSize: 80, pages: 6 }),
-        ),
-      );
-    }
-  }
-  if (scanned === 0) {
-    for (const d of loadStore().items) {
-      const id = Number(d.crmId || 0);
-      if (id && (d.status === "учится" || String(d.extras?.is_study) === "1" || d.status === "лид")) bag(id);
-    }
-    const cids = [...byCustomer.keys()];
-    for (let i = 0; i < cids.length; i += 2) {
-      if (i) await wait(CRM_READ_GAP_MS);
-      await Promise.all(
-        cids.slice(i, i + 2).map(async (cid) => {
-          const branch = byCustomer.get(cid)?.groups[0]?.branchId || 1;
-          const json = await request(`/v2api/${branch}/customer-tariff/index?customer_id=${cid}`, { page: 0, pageSize: 30, customer_id: cid }, t).catch(
-            () => ({}),
-          );
-          for (const it of crmUnwrapIndex(json).items) onTariff(it);
-        }),
-      );
-    }
-  }
+
   const store = loadStore();
   let withGroups = 0;
-  let live = 0;
-  const ids: number[] = [];
   for (const d of store.items) {
     const id = Number(d.crmId || 0);
     if (!id) continue;
     const hit = byCustomer.get(id);
+    if (!hit) continue;
     d.extras = d.extras || {};
-    if (hit?.groups.length) {
+    if (hit.groups.length) {
       const prev = new Map((d.groupLinks || []).map((g) => [`${g.branchId}:${g.id}`, g]));
       const list: GroupLink[] = hit.groups.map((g) => {
         const old = prev.get(`${g.branchId}:${g.id}`);
@@ -742,23 +757,50 @@ export async function overlayMembershipFromCrm() {
           courseId: old?.courseId || slot?.courseId,
         };
       });
-      for (const old of d.groupLinks || []) {
-        if (!list.some((g) => g.id === old.id && g.branchId === old.branchId)) list.push({ ...old, active: false });
-      }
-      d.groupLinks = list;
+      const keep = (d.groupLinks || []).filter((old) => !list.some((g) => g.id === old.id && g.branchId === old.branchId));
+      d.groupLinks = [...list, ...keep.map((g) => ({ ...g, active: false }))];
       withGroups += 1;
     }
-    if (scanned > 0) {
-      d.extras.live_tariff = hit?.live ? "1" : "0";
-      if (hit?.live) {
-        live += 1;
-        ids.push(id);
-      }
+    if (hit.seenTariff) d.extras.live_tariff = hit.live ? "1" : "0";
+  }
+  const next = from + slice.length;
+  const done = next >= total || slice.length === 0;
+  if (done) {
+    for (const d of store.items) {
+      d.extras = d.extras || {};
+      if (d.extras.live_tariff !== "1" && d.extras.live_tariff !== "0") d.extras.live_tariff = "0";
     }
   }
   saveStore(store);
-  logAdmin(`Состав CRM: cgi ${byCustomer.size}, групп ${groups.length}, с группами ${withGroups}, живых абонементов ${live}, строк тарифов ${scanned}`);
-  return { ok: true as const, people: byCustomer.size, withGroups, live, scanned, ids };
+  stampOverlay(next, total);
+  const ids = liveTariffIdsFromStore();
+  const extra = notes.join(" · ") || "пакет пуст";
+  logAdmin(`Пакет абонементов ${from + 1}–${Math.min(next, total)}/${total}: cgi ${cgiN}, живых ${ids.length}, строк ${scanned}. ${extra}`);
+  return {
+    ok: true as const,
+    done,
+    offset: from,
+    next,
+    total,
+    take: slice.length,
+    cgi: cgiN,
+    scanned,
+    withGroups,
+    live: ids.length,
+    ids,
+    extra,
+  };
+}
+
+export async function overlayMembershipFromCrm() {
+  let offset = 0;
+  let last = await overlayMembershipChunk(0, 3);
+  offset = last.next;
+  while (!last.done) {
+    last = await overlayMembershipChunk(offset, 3);
+    offset = last.next;
+  }
+  return { ok: true as const, people: last.cgi, withGroups: last.withGroups, live: last.live, scanned: last.scanned, ids: last.ids };
 }
 
 export async function syncDossierFromCrm(crmId: number, branchId: number) {

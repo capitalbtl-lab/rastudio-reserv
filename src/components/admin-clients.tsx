@@ -280,6 +280,7 @@ export function AdminClients({
   const [liveTariffIds, setLiveTariffIds] = useState<Set<number>>(() => new Set());
   const [liveTariffBusy, setLiveTariffBusy] = useState(false);
   const [liveReady, setLiveReady] = useState(false);
+  const [tariffProgress, setTariffProgress] = useState<{ done: number; total: number; extra: string } | null>(null);
   const [pickedGroup, setPickedGroup] = useState<CrmSlot | null>(null);
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
   const [groupArchive, setGroupArchive] = useState<GroupMember[]>([]);
@@ -338,18 +339,52 @@ export function AdminClients({
     if (liveTariffBusy) return;
     if (!force && liveTariffAt.current && Date.now() - liveTariffAt.current < 120000 && liveTariffIds.size) return;
     setLiveTariffBusy(true);
+    type Pack = {
+      ok?: boolean;
+      ids?: number[];
+      done?: boolean;
+      next?: number;
+      total?: number;
+      fromCache?: boolean;
+      extra?: string;
+      live?: number;
+    };
+    const live = new Set(liveTariffIds);
+    function merge(ids: number[] | undefined) {
+      for (const id of ids || []) if (Number(id)) live.add(Number(id));
+      setLiveTariffIds(new Set(live));
+      if (live.size) setLiveReady(true);
+    }
     try {
-      const res = (await retryFetch(
-        () => adminSchedule({ data: { token: token(), action: "clientsLiveTariffs" } as never }),
+      const first = (await retryFetch(
+        () => adminSchedule({ data: { token: token(), action: "clientsLiveTariffs", force } as never }),
         1,
-        240000,
-      )) as { ok?: boolean; ids?: number[]; scanned?: number };
-      if (res.ok && Array.isArray(res.ids)) {
-        setLiveTariffIds(new Set(res.ids.map(Number).filter(Boolean)));
+        45000,
+      )) as Pack;
+      merge(first.ids);
+      const total = Number(first.total) || 0;
+      setTariffProgress({ done: first.fromCache && first.done ? total : 0, total, extra: first.fromCache ? "из хранилища сайта" : "" });
+      if (first.done && !force) {
         liveTariffAt.current = Date.now();
-        if (res.ids.length || Number(res.scanned || 0) > 0) setLiveReady(true);
         await load(qRef.current, statusRef.current, branchRef.current, ageRef.current);
+        return;
       }
+      let offset = 0;
+      while (offset >= 0) {
+        const res = (await retryFetch(
+          () => adminSchedule({ data: { token: token(), action: "clientsLiveTariffs", offset, take: 3 } as never }),
+          1,
+          45000,
+        )) as Pack;
+        merge(res.ids);
+        const next = Number(res.next) || offset + 3;
+        const tot = Number(res.total) || total;
+        setTariffProgress({ done: Math.min(next, tot), total: tot, extra: res.extra || `${live.size} с абонементом` });
+        if (res.done || next >= tot) break;
+        offset = next;
+      }
+      liveTariffAt.current = Date.now();
+      await load(qRef.current, statusRef.current, branchRef.current, ageRef.current);
     } finally {
       setLiveTariffBusy(false);
     }
@@ -1207,6 +1242,23 @@ export function AdminClients({
               );
             })}
           </div>
+          {tariffProgress ? (
+            <div className="min-w-[14rem] flex-1 basis-[14rem] px-1 py-1">
+              <div className="flex items-center justify-between gap-2 text-[0.72rem] text-muted">
+                <span>{liveTariffBusy ? "Читаю абонементы пакетами" : "Абонементы"}</span>
+                <span className="tabular-nums">
+                  {tariffProgress.done} / {tariffProgress.total} групп
+                </span>
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white ring-1 ring-black/6">
+                <div
+                  className="h-full rounded-full bg-primary transition-[width] duration-300"
+                  style={{ width: `${tariffProgress.total ? Math.round((tariffProgress.done / tariffProgress.total) * 100) : 0}%` }}
+                />
+              </div>
+              {tariffProgress.extra ? <p className="mt-0.5 truncate text-[0.68rem] text-muted">{tariffProgress.extra}</p> : null}
+            </div>
+          ) : null}
 
           <div className="ml-auto flex flex-wrap items-center gap-1">
             <button

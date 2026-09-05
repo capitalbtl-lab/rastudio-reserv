@@ -1303,6 +1303,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "pupilTariffAssign"
           | "pupilTariffClear"
           | "clientsLiveTariffs"
+          | "cachePolicyGet"
+          | "cachePolicySave"
           | "voiceAsk"
           | "customersSearch"
           | "tariffsGet"
@@ -1395,6 +1397,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
         schoolId?: string;
         courseId?: string;
         funnelAuto?: import("./funnel-auto").FunnelAuto;
+        offset?: number;
+        take?: number;
+        force?: boolean;
+        cachePolicy?: import("./crm-cache-policy").CachePolicy;
         groupKeys?: { branchId: number; groupId: number }[];
         pupilItems?: import("./pupil-tariffs").PupilTariffItem[];
         includeLeads?: boolean;
@@ -2405,10 +2411,39 @@ export const adminSchedule = createServerFn({ method: "POST" })
       return { ok: true as const, done: done.length, skipped, failed, total: rows.length, mode };
     }
     if (data.action === "clientsLiveTariffs") {
-      const { overlayMembershipFromCrm } = await import("./dossiers");
-      const res = await overlayMembershipFromCrm();
-      logAdmin(`Живые абонементы на сегодня: ${res.live} учеников, cgi ${res.people}, строк ${res.scanned}`);
-      return { ok: true as const, ids: res.ids, total: res.live, scanned: res.scanned, withGroups: res.withGroups };
+      const { overlayMembershipChunk, liveTariffIdsFromStore, overlayAdminGroups } = await import("./dossiers");
+      const { loadCachePolicy, cacheFresh } = await import("./crm-cache-policy");
+      const offset = data.offset == null ? null : Number(data.offset);
+      const take = Number(data.take) || 3;
+      const force = Boolean(data.force);
+      if (offset == null) {
+        const ids = liveTariffIdsFromStore();
+        const pol = loadCachePolicy();
+        const total = overlayAdminGroups().length;
+        const fresh = cacheFresh("pupilTariffs", pol.overlayAt) && ids.length > 0;
+        logAdmin(`Абонементы из хранилища: ${ids.length}, кэш ${fresh ? "свежий" : "нет"}`);
+        return {
+          ok: true as const,
+          ids,
+          total,
+          live: ids.length,
+          fromCache: true,
+          done: fresh && !force,
+          next: 0,
+          scanned: ids.length,
+        };
+      }
+      const res = await overlayMembershipChunk(offset, take);
+      return res;
+    }
+    if (data.action === "cachePolicyGet") {
+      const { loadCachePolicy, CACHE_KIND_META } = await import("./crm-cache-policy");
+      return { ok: true as const, policy: loadCachePolicy(), kinds: CACHE_KIND_META };
+    }
+    if (data.action === "cachePolicySave") {
+      const { saveCachePolicy, loadCachePolicy, CACHE_KIND_META } = await import("./crm-cache-policy");
+      const raw = data.cachePolicy && typeof data.cachePolicy === "object" ? (data.cachePolicy as Parameters<typeof saveCachePolicy>[0]) : loadCachePolicy();
+      return { ok: true as const, policy: saveCachePolicy(raw), kinds: CACHE_KIND_META };
     }
     if (data.action === "voiceAsk") {
       const prompt = String(data.prompt || "").trim();

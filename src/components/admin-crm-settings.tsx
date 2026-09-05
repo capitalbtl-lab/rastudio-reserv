@@ -6,6 +6,7 @@ import { CRM_STAGE_COLORS, LEAD_STAGES, mergeStages, pinUnsorted, type LeadStage
 import { FUNNEL_AUTO_DEFAULT, type FunnelAuto } from "@/data/funnel-auto-core";
 import { CRM_BRANCH } from "@/data/ids";
 import { cn } from "@/lib/utils";
+import { CACHE_KIND_META, type CacheKind, type CachePolicy } from "@/data/crm-cache-policy-core";
 
 export const CRM_SYNC_MIN_KEY = "ra_crm_sync_min";
 
@@ -41,12 +42,14 @@ export function AdminCrmSettings() {
   const [addColor, setAddColor] = useState("#1a7bb9");
   const [syncMin, setSyncMin] = useState(10);
   const [auto, setAuto] = useState<FunnelAuto>(FUNNEL_AUTO_DEFAULT);
+  const [cache, setCache] = useState<CachePolicy | null>(null);
   const dragId = useRef(0);
 
   useEffect(() => {
     setSyncMin(crmSyncMinutes());
     void loadStages();
     void loadAuto();
+    void loadCache();
   }, []);
 
   async function loadAuto() {
@@ -71,6 +74,30 @@ export function AdminCrmSettings() {
       return;
     }
     setMsg(res.error || "Не удалось сохранить автоматизацию.");
+  }
+
+  async function loadCache() {
+    try {
+      const res = (await adminSchedule({
+        data: { token: token(), action: "cachePolicyGet" } as never,
+      })) as { ok?: boolean; policy?: CachePolicy };
+      if (res.ok && res.policy) setCache(res.policy);
+    } catch {
+      /* defaults */
+    }
+  }
+
+  async function saveCache(next: CachePolicy) {
+    setCache(next);
+    const res = (await adminSchedule({
+      data: { token: token(), action: "cachePolicySave", cachePolicy: next } as never,
+    })) as { ok?: boolean; policy?: CachePolicy; error?: string };
+    if (res.ok && res.policy) {
+      setCache(res.policy);
+      setMsg("Кэш сайта записан.");
+      return;
+    }
+    setMsg(res.error || "Не удалось сохранить кэш.");
   }
 
   async function loadStages() {
@@ -418,6 +445,71 @@ export function AdminCrmSettings() {
           />
           Не возвращать с «Оплатил», если снова добавили в группу
         </label>
+      </Card>
+
+      <Card
+        title="Кэш сайта"
+        hint="Что читать из хранилища админки, а что каждый раз из AlfaCRM. Оперативные данные — на лету. Абонементы учеников можно кэшировать: счётчик «с / без» сразу живой, сверка идёт пакетами по 3 группы."
+      >
+        <ul className="space-y-2">
+          {CACHE_KIND_META.map((k) => {
+            const rule = cache?.rules[k.id as CacheKind] || { cache: true, ttlMin: 10 };
+            return (
+              <li key={k.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-surface-2 px-3 py-2.5">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={rule.cache}
+                  title={rule.cache ? "Читать из кэша сайта" : "Всегда из CRM"}
+                  onClick={() =>
+                    cache &&
+                    void saveCache({
+                      ...cache,
+                      rules: { ...cache.rules, [k.id]: { ...rule, cache: !rule.cache } },
+                    })
+                  }
+                  className={cn("relative h-6 w-11 shrink-0 rounded-full transition", rule.cache ? "bg-primary" : "bg-black/15")}
+                >
+                  <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow", rule.cache ? "left-5" : "left-0.5")} />
+                </button>
+                <div className="min-w-[12rem] flex-1">
+                  <p className="text-sm font-semibold">{k.title}</p>
+                  <p className="text-[0.75rem] text-muted">{k.hint}</p>
+                  <p className="text-[0.72rem] text-muted">{rule.cache ? `кэш ${rule.ttlMin} мин · ${k.liveHint}` : `на лету · ${k.liveHint}`}</p>
+                </div>
+                <label className="text-[0.75rem] text-muted">
+                  TTL
+                  <select
+                    className="ml-2 h-9 rounded-full bg-white px-3 text-sm text-fg ring-1 ring-black/8"
+                    disabled={!rule.cache}
+                    value={rule.ttlMin}
+                    onChange={(e) =>
+                      cache &&
+                      void saveCache({
+                        ...cache,
+                        rules: { ...cache.rules, [k.id]: { ...rule, ttlMin: Number(e.target.value) } },
+                      })
+                    }
+                  >
+                    {[5, 10, 15, 30, 60, 120].map((n) => (
+                      <option key={n} value={n}>
+                        {n} мин
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+        {cache?.overlayAt ? (
+          <p className="mt-3 text-[0.75rem] text-muted">
+            Последняя сверка абонементов: {new Date(cache.overlayAt).toLocaleString("ru-RU")}
+            {cache.overlayTotal ? ` · ${cache.overlayNext}/${cache.overlayTotal} групп` : ""}
+          </p>
+        ) : (
+          <p className="mt-3 text-[0.75rem] text-muted">Сверки абонементов ещё не было — счётчик заполнится пакетами на вкладке Клиенты.</p>
+        )}
       </Card>
 
       <Card
