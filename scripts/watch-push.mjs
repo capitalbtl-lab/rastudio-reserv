@@ -1,34 +1,28 @@
 /**
- * После паузы в правках коммитит и пушит main.
- * Beget (rastudio-deploy) забирает коммит сам.
+ * Если дерево грязное и 20 с не менялось — коммит и push main.
+ * Без fs.watch: в песочнице кончаются inotify.
  */
-import { watch } from "node:fs";
-import { spawn } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 
+const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const IGNORE = /(^|\/)(\.git|node_modules|storage|\.output|\.nitro|\.tanstack|screenshots|artifacts|__pycache__|\.grok)(\/|$)/;
-const DEBOUNCE_MS = 20_000;
-let timer = null;
+const POLL_MS = 15_000;
+const STABLE = 2;
+let last = "";
+let hits = 0;
 let running = false;
-let again = false;
 
-function relevant(name) {
-  if (!name) return false;
-  return !IGNORE.test(String(name).replaceAll("\\", "/"));
-}
-
-function schedule() {
-  clearTimeout(timer);
-  timer = setTimeout(() => run(), DEBOUNCE_MS);
+async function dirty() {
+  const { stdout } = await exec("git", ["status", "--porcelain"], { cwd: root });
+  return String(stdout || "").trim();
 }
 
 function run() {
-  if (running) {
-    again = true;
-    return;
-  }
+  if (running) return;
   running = true;
   const child = spawn("bash", [path.join(root, "scripts/push-main.sh")], {
     cwd: root,
@@ -36,16 +30,32 @@ function run() {
   });
   child.on("close", (code) => {
     running = false;
-    if (again) {
-      again = false;
-      schedule();
-    }
+    last = "";
+    hits = 0;
     if (code) console.error("[push] код", code);
   });
 }
 
-watch(root, { recursive: true }, (_ev, fn) => {
-  if (relevant(fn)) schedule();
-});
+async function tick() {
+  try {
+    const now = await dirty();
+    if (!now) {
+      last = "";
+      hits = 0;
+      return;
+    }
+    if (now === last) {
+      hits += 1;
+      if (hits >= STABLE) run();
+    } else {
+      last = now;
+      hits = 1;
+    }
+  } catch (e) {
+    console.error("[push]", e instanceof Error ? e.message : e);
+  }
+}
 
-console.log("[push] 20 с без правок → main");
+console.log("[push] грязное дерево 20 с без изменений → main");
+void tick();
+setInterval(() => void tick(), POLL_MS);
