@@ -13,8 +13,12 @@ import {
   parseCrmLeadBoard,
   parseCrmStageOrder,
   pinUnsorted,
+  filterLeadCards,
+  leadAgeBand,
+  leadYears,
+  leadCardFromView,
+  type LeadCard,
 } from "./crm-leads-stages.ts";
-import { filterLeadCards, leadAgeBand, leadYears, type LeadCard } from "./crm-leads.ts";
 
 describe("воронка AlfaCRM: порядок этапов", () => {
   it("без ответа API колонки как в кабинете: Не разобрано → Разбирается → Ожидает старта → Отложен → Оплатил", () => {
@@ -212,6 +216,30 @@ describe("возраст на доске лидов", () => {
       [2, 3],
     );
     assert.equal(filterLeadCards(items, { age: "3-4" }).length, 1);
+  });
+});
+
+describe("лид с диска сайта", () => {
+  it("карточка из досье, без API, отрицательный id — заявка сайта", () => {
+    const card = leadCardFromView({
+      crmId: -21,
+      branchId: 2,
+      displayName: "Иванов",
+      child: "Иванов",
+      parent: "Иванова",
+      age: 8,
+      phone: "+7900",
+      note: "пробное",
+      leadStatusId: 1,
+      updatedAt: "2026-09-05",
+    });
+    assert.equal(card?.id, -21);
+    assert.equal(card?.branchId, 2);
+    assert.equal(card?.name, "Иванов");
+    assert.equal(card?.age, "8 лет");
+    assert.equal(card?.statusId, 1);
+    assert.equal(card?.phone, "+7900");
+    assert.equal(leadCardFromView({ crmId: 0 }), null);
   });
 });
 

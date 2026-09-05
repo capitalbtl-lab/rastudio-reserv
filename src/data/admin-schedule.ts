@@ -313,6 +313,7 @@ function packPupilGroups(groups: import("./pupil-tariffs").PupilGroup[]) {
 
 async function membersFromDisk(branch: number, gid: number): Promise<{ active: GroupMember[]; archive: GroupMember[] }> {
   const { dossiersInGroup } = await import("./dossiers");
+  const { personRole } = await import("./crm-person-role");
   const active: GroupMember[] = [];
   const archive: GroupMember[] = [];
   const seen = new Set<number>();
@@ -321,8 +322,14 @@ async function membersFromDisk(branch: number, gid: number): Promise<{ active: G
     if (!id || seen.has(id)) continue;
     seen.add(id);
     const hit = (d.groupLinks || []).find((g) => g.id === gid);
-    const study = Number(d.extras?.is_study);
-    const archived = hit?.active === false || study === 2 || d.status === "архив";
+    const role = personRole({
+      is_study: d.extras?.is_study,
+      removed: d.extras?.removed,
+      lead_status_id: d.extras?.lead_status_id,
+      crm_funnel: d.extras?.crm_funnel,
+      status: d.status,
+    });
+    const archived = hit?.active === false || role === "архив" || role === "удалён";
     const dob = String(d.child.dob || "");
     const phones = (d.phones || []).filter(Boolean);
     const row: GroupMember = {
@@ -338,7 +345,7 @@ async function membersFromDisk(branch: number, gid: number): Promise<{ active: G
       from: "",
       to: "",
       archived,
-      status: archived ? "архив" : study === 0 || d.status === "лид" ? "лид" : "учится",
+      status: archived ? "архив" : role === "лид" ? "лид" : "учится",
     };
     if (archived) archive.push(row);
     else active.push(row);
@@ -1228,6 +1235,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "clientsLiveTariffs"
           | "cachePolicyGet"
           | "cachePolicySave"
+          | "actorsGet"
+          | "actorsSave"
+          | "crmQueueTick"
           | "voiceAsk"
           | "customersSearch"
           | "tariffsGet"
@@ -1549,7 +1559,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
         const { cardFromDossier } = await import("./customer-card-disk");
         return { ok: true as const, fromCache: true, customer: cardFromDossier(d, branch) };
       }
-      if (!d && customerId < 0) return { ok: false as const, error: "Ученик не найден на сайте." };
+      if (!data.fresh) return { ok: false as const, error: "Ученик не найден на сайте." };
+      if (customerId < 0) return { ok: false as const, error: "Ученик не найден на сайте." };
       const { token, request } = await import("./alfacrm");
       const t = await token();
       const customer = await loadCustomerCard(request, t, branch, customerId);
@@ -1569,7 +1580,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (patch.note != null) body.note = patch.note;
       if (patch.dob) body.dob = patch.dob;
       if (patch.address) body.custom_adresprozhivaniya = patch.address;
-      if (data.isStudy === 0 || data.isStudy === 1 || data.isStudy === 2) body.is_study = data.isStudy;
+      if (data.isStudy === 0 || data.isStudy === 1 || data.isStudy === 2) {
+        const { personSaveFields } = await import("./crm-person-role");
+        Object.assign(body, personSaveFields(data.isStudy));
+      }
       if (Number(data.studyStatusId) > 0) body.study_status_id = Number(data.studyStatusId);
       const { upsertDossier, findDossier } = await import("./dossiers");
       const study = data.isStudy === 0 || data.isStudy === 1 || data.isStudy === 2 ? data.isStudy : undefined;
@@ -1583,7 +1597,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         address: patch.address ? String(patch.address) : undefined,
         status: study === 0 ? "лид" : study === 2 ? "архив" : study === 1 ? "учится" : undefined,
         extras: {
-          ...(study != null ? { is_study: String(study) } : {}),
+          ...(study != null ? { is_study: String(study), crm_funnel: study === 0 ? "1" : "0", lead_status_id: "0" } : {}),
           ...(Number(data.studyStatusId) > 0 ? { study_status_id: String(data.studyStatusId) } : {}),
         },
         source: "admin",
@@ -2745,12 +2759,43 @@ export const adminSchedule = createServerFn({ method: "POST" })
     }
     if (data.action === "cachePolicyGet") {
       const { loadCachePolicy, CACHE_KIND_META } = await import("./crm-cache-policy");
-      return { ok: true as const, policy: loadCachePolicy(), kinds: CACHE_KIND_META };
+      const q = await import("./crm-packet-queue");
+      const exp = await import("./crm-export-queue");
+      const snap = q.crmQueueSnapshot();
+      return {
+        ok: true as const,
+        policy: loadCachePolicy(),
+        kinds: CACHE_KIND_META,
+        queue: { ...snap, exportPending: exp.crmExportSnapshot().pending },
+      };
     }
     if (data.action === "cachePolicySave") {
       const { saveCachePolicy, loadCachePolicy, CACHE_KIND_META } = await import("./crm-cache-policy");
       const raw = data.cachePolicy && typeof data.cachePolicy === "object" ? (data.cachePolicy as Parameters<typeof saveCachePolicy>[0]) : loadCachePolicy();
       return { ok: true as const, policy: saveCachePolicy(raw), kinds: CACHE_KIND_META };
+    }
+    if (data.action === "actorsGet") {
+      const { loadActors } = await import("./crm-actors-disk");
+      return { ok: true as const, ...loadActors() };
+    }
+    if (data.action === "actorsSave") {
+      const { saveActors } = await import("./crm-actors-disk");
+      const { logAdmin } = await import("./admin-settings");
+      const humanName = String((data as { humanName?: string }).humanName || "");
+      const state = saveActors({ humanName });
+      logAdmin(`Роли: сотрудник «${state.humanName}»`, "human");
+      return { ok: true as const, ...state };
+    }
+    if (data.action === "crmQueueTick") {
+      const q = await import("./crm-packet-queue");
+      const exp = await import("./crm-export-queue");
+      const res = await q.ensureAndTick({ force: Boolean(data.force), take: 3 });
+      const snap = q.crmQueueSnapshot();
+      return {
+        ok: true as const,
+        ...res,
+        queue: { ...snap, exportPending: exp.crmExportSnapshot().pending },
+      };
     }
     if (data.action === "voiceAsk") {
       const prompt = String(data.prompt || "").trim();

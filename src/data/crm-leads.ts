@@ -30,6 +30,7 @@ import {
   reorderLeads,
   leadYears,
   leadAgeBand,
+  leadCardFromView,
   type LeadStage,
   type LeadCard,
 } from "./crm-leads-stages";
@@ -59,6 +60,7 @@ export {
   leadAgeBand,
   mergeBranchLeadCards,
   isCrmLeadRecord,
+  leadCardFromView,
 } from "./crm-leads-stages";
 
 type Bag = { at: number; stages: LeadStage[]; items: LeadCard[]; note?: string };
@@ -437,6 +439,36 @@ export async function syncLeadsDelta(branchId = 0) {
   return next;
 }
 
+export async function boardFromDisk(branchId = 0): Promise<Bag> {
+  const stages = mergeStages(
+    bag().get(String(branchId || 0))?.stages || bag().get("0")?.stages || LEAD_STAGES,
+  );
+  try {
+    const { searchClientViews } = await import("./dossiers");
+    const local = searchClientViews("", 5000, "лид", branchId || 0);
+    const items: LeadCard[] = [];
+    const seen = new Set<number>();
+    for (const row of local.items) {
+      const packed = leadCardFromView(row);
+      if (!packed || seen.has(packed.id)) continue;
+      seen.add(packed.id);
+      items.push(packed);
+    }
+    const nextStages = mergeStages(
+      stages,
+      items.map((x) => x.statusId),
+    );
+    return {
+      at: Date.now(),
+      stages: nextStages,
+      items,
+      note: items.length ? `${items.length} с диска сайта` : "Пустая воронка на сайте. Alfa — кнопка «Обновить».",
+    };
+  } catch {
+    return { at: Date.now(), stages, items: [], note: "Пустая воронка на сайте. Alfa — кнопка «Обновить»." };
+  }
+}
+
 export async function loadLeadsBoard(branchId = 0, force = false, delta = false) {
   const key = String(branchId || 0);
   const hit = bag().get(key);
@@ -445,6 +477,15 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
     return hit;
   }
   if ((!force || delta) && hit?.items.length) return syncLeadsDelta(branchId);
+  if (!force) {
+    const disk = await boardFromDisk(branchId);
+    if (disk.items.length) {
+      bag().set(key, disk);
+      persistLeads();
+      if (delta) void syncLeadsDelta(branchId);
+    }
+    return disk;
+  }
   const work = async () => {
     const t = await alfaToken();
     const rawStages = await fetchStages(t, branchId || 2);

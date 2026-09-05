@@ -1,5 +1,7 @@
 /** Выгрузка в Alfa: диск уже записан, CRM догоняет пакетом. */
 
+import type { CrmActorId } from "./crm-actors";
+
 export type CrmExportOp =
   | "group.update"
   | "group.create"
@@ -26,6 +28,7 @@ export type CrmExportJob = {
   body: Record<string, unknown>;
   at: string;
   tries: number;
+  actor?: CrmActorId;
 };
 
 export type CrmExportState = {
@@ -98,7 +101,7 @@ export function mergeExportJob(jobs: CrmExportJob[], incoming: Omit<CrmExportJob
   if (hit) {
     return jobs.map((j) =>
       j.id === hit.id
-        ? { ...j, body: { ...j.body, ...incoming.body }, at, tries: 0 }
+        ? { ...j, body: { ...j.body, ...incoming.body }, at, tries: 0, actor: incoming.actor || j.actor }
         : j,
     );
   }
@@ -112,6 +115,7 @@ export function mergeExportJob(jobs: CrmExportJob[], incoming: Omit<CrmExportJob
       body: { ...incoming.body },
       at,
       tries: incoming.tries || 0,
+      actor: incoming.actor || "human",
     },
   ].slice(-400);
 }

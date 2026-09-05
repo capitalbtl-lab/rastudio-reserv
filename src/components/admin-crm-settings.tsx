@@ -6,6 +6,7 @@ import { CRM_STAGE_COLORS, LEAD_STAGES, mergeStages, pinUnsorted, type LeadStage
 import { FUNNEL_AUTO_DEFAULT, type FunnelAuto } from "@/data/funnel-auto-core";
 import { CRM_BRANCH } from "@/data/ids";
 import { cn } from "@/lib/utils";
+import { CRM_ACTORS, type CrmActorsState } from "@/data/crm-actors";
 import { CACHE_KIND_META, type CacheKind, type CachePolicy } from "@/data/crm-cache-policy-core";
 
 export const CRM_SYNC_MIN_KEY = "ra_crm_sync_min";
@@ -43,6 +44,8 @@ export function AdminCrmSettings() {
   const [syncMin, setSyncMin] = useState(10);
   const [auto, setAuto] = useState<FunnelAuto>(FUNNEL_AUTO_DEFAULT);
   const [cache, setCache] = useState<CachePolicy | null>(null);
+  const [actors, setActors] = useState<CrmActorsState | null>(null);
+  const [humanName, setHumanName] = useState("Администратор");
   const [queue, setQueue] = useState<{ pending?: number; lastNote?: string; overlayNext?: number; overlayTotal?: number; busy?: boolean; exportPending?: number } | null>(null);
   const dragId = useRef(0);
 
@@ -51,6 +54,7 @@ export function AdminCrmSettings() {
     void loadStages();
     void loadAuto();
     void loadCache();
+    void loadActors();
   }, []);
 
   async function loadAuto() {
@@ -100,6 +104,35 @@ export function AdminCrmSettings() {
       return;
     }
     setMsg(res.error || "Не удалось сохранить кэш.");
+  }
+
+  async function loadActors() {
+    try {
+      const res = (await adminSchedule({
+        data: { token: token(), action: "actorsGet" } as never,
+      })) as { ok?: boolean; humanName?: string; actors?: CrmActorsState["actors"] };
+      if (res.ok) {
+        setActors({
+          humanName: res.humanName || "Администратор",
+          actors: res.actors?.length ? res.actors : CRM_ACTORS,
+        });
+        setHumanName(res.humanName || "Администратор");
+      }
+    } catch {
+      setActors({ humanName: "Администратор", actors: CRM_ACTORS });
+    }
+  }
+
+  async function saveActorsName() {
+    const res = (await adminSchedule({
+      data: { token: token(), action: "actorsSave", humanName } as never,
+    })) as { ok?: boolean; humanName?: string; actors?: CrmActorsState["actors"]; error?: string };
+    if (res.ok) {
+      setActors({ humanName: res.humanName || humanName, actors: res.actors?.length ? res.actors : CRM_ACTORS });
+      setMsg("Роли записаны.");
+      return;
+    }
+    setMsg(res.error || "Не удалось сохранить роли.");
   }
 
   async function tickQueue(force: boolean) {
@@ -245,6 +278,38 @@ export function AdminCrmSettings() {
           Этапы воронки, автоматизация и синхронизация с AlfaCRM. Порядок столбцов здесь — тот же, что в кабинете CRM и на доске лидов.
         </p>
       </div>
+
+      <Card
+        title="Люди и роли"
+        hint="Кто пишет на диск. Alfa догоняет очередью и не меняет автора. Пароль кабинета один — сотрудник. Два ИИ без пароля: ассистент в админке, консультант на сайте. Очередь — пакеты cgi и выгрузка."
+      >
+        <ul className="space-y-2">
+          {(actors?.actors || CRM_ACTORS).map((a) => (
+            <li key={a.id} className="flex flex-wrap items-start gap-3 rounded-xl bg-surface-2 px-3 py-2.5">
+              <span className="mt-1 rounded-full bg-white px-2 py-0.5 text-[0.68rem] font-semibold uppercase tracking-wider text-muted">
+                {a.kind === "human" ? "человек" : a.kind === "ai" ? "ИИ" : "система"}
+              </span>
+              <div className="min-w-[12rem] flex-1">
+                {a.id === "human" ? (
+                  <label className="block text-sm font-semibold">
+                    Сотрудник
+                    <input
+                      value={humanName}
+                      onChange={(e) => setHumanName(e.target.value)}
+                      onBlur={() => void saveActorsName()}
+                      className="mt-1 h-9 w-full rounded-full bg-white px-3 text-sm font-medium ring-1 ring-black/8"
+                    />
+                  </label>
+                ) : (
+                  <p className="text-sm font-semibold">{a.name}</p>
+                )}
+                <p className="mt-0.5 text-[0.75rem] text-muted">{a.hint}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-[0.75rem] text-muted">Пароль входа тот же. Несколько сотрудников — следующим шагом, не смешивать с ИИ.</p>
+      </Card>
 
       <Card
         title="Воронка продаж"
@@ -581,9 +646,9 @@ export function AdminCrmSettings() {
           </button>
         </div>
         <ul className="mt-3 space-y-1 text-[0.82rem] text-muted">
-          <li>Доска лидов кэшируется в браузере: F5 не сбрасывает карточки.</li>
+          <li>Доска лидов с диска сайта. F5 не ходит в AlfaCRM.</li>
           <li>Фон читает только записи с новым updated_at — остальные не трогает.</li>
-          <li>AlfaCRM не шлёт вебхук на правку лида, поэтому сверка по таймеру.</li>
+          <li>Полная сверка — кнопка «Обновить» на вкладке Клиенты.</li>
         </ul>
       </Card>
 

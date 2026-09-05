@@ -13,6 +13,20 @@ describe("очередь выгрузки в Alfa", () => {
     assert.equal(exportBody(jobs[0]).id, 580);
   });
 
+  it("актор пишется в очередь и не теряется при слиянии", () => {
+    let jobs: CrmExportJob[] = [];
+    jobs = mergeExportJob(jobs, { op: "customer.update", branchId: 1, entityId: 12, body: { is_study: 0 }, actor: "assistant" });
+    jobs = mergeExportJob(jobs, { op: "customer.update", branchId: 1, entityId: 12, body: { note: "с ИИ" }, actor: "assistant" });
+    assert.equal(jobs.length, 1);
+    assert.equal(jobs[0].actor, "assistant");
+    assert.equal(jobs[0].body.note, "с ИИ");
+  });
+
+  it("без актора — сотрудник", () => {
+    const jobs = mergeExportJob([], { op: "group.update", branchId: 1, entityId: 580, body: { custom_prioritet: 1 } });
+    assert.equal(jobs[0].actor, "human");
+  });
+
   it("разные группы не склеиваются", () => {
     let jobs: CrmExportJob[] = [];
     jobs = mergeExportJob(jobs, { op: "group.update", branchId: 1, entityId: 580, body: { custom_prioritet: 1 } });

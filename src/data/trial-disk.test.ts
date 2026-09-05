@@ -255,11 +255,14 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.match(get, /customer-card-disk/);
     assert.equal(/enqueueCustomerPacket/.test(get), false);
     assert.match(get, /fromCache: true/);
+    assert.match(get, /if \(!data\.fresh\)/);
+    assert.match(get, /Ученик не найден на сайте/);
     const memAt = src.indexOf('data.action === "groupMembers"');
     const memNext = src.indexOf("if (data.action ===", memAt + 10);
     const mem = src.slice(memAt, memNext > memAt ? memNext : memAt + 2000);
     assert.match(mem, /membersFromDisk/);
     assert.match(mem, /overlayCgiNeeded/);
+    assert.match(mem, /diskOnly/);
     assert.equal(/loadGroupMembers/.test(mem), false);
     assert.equal(/await loadGroupMembers/.test(mem), false);
     const loadAt = src.indexOf("async function loadCustomerCard");
@@ -277,5 +280,22 @@ describe("кабинет: новый ученик диск сразу", () => {
     const g = src.slice(gAt, gNext > gAt ? gNext : gAt + 2500);
     assert.match(g, /Группа не на сайте/);
     assert.match(g, /fromCache: true/);
+  });
+
+  it("воронка лидов с диска, Alfa только force", () => {
+    const src = readFileSync(new URL("./crm-leads.ts", import.meta.url), "utf8");
+    const at = src.indexOf("export async function loadLeadsBoard");
+    const next = src.indexOf("export function rememberCustomerAsLead");
+    const chunk = src.slice(at, next > at ? next : at + 4000);
+    assert.match(chunk, /boardFromDisk/);
+    assert.match(chunk, /if \(!force\)/);
+    assert.match(src, /export async function boardFromDisk/);
+    assert.match(src, /с диска сайта/);
+    const stages = readFileSync(new URL("./crm-leads-stages.ts", import.meta.url), "utf8");
+    assert.match(stages, /export function leadCardFromView/);
+    const save = readFileSync(new URL("./trial-save.ts", import.meta.url), "utf8");
+    assert.match(save, /actor: "consultant"/);
+    const exp = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
+    assert.match(exp, /logAdmin\(`Выгрузка CRM: \$\{q\.lastNote\}`, "sync"\)/);
   });
 });

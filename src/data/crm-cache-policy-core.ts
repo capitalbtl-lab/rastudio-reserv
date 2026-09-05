@@ -18,13 +18,13 @@ export const CACHE_KIND_META: { id: CacheKind; title: string; hint: string; live
     id: "groups",
     title: "Состав групп",
     hint: "Кто в какой группе (cgi). Оперативные данные.",
-    liveHint: "На лету при открытии группы. Кэш — список учеников с сайта.",
+    liveHint: "Состав с диска. Alfa только кнопка «Обновить» или пакет в Настройке CRM.",
   },
   {
     id: "customers",
     title: "Клиенты и лиды",
     hint: "Карточки людей, статусы, телефоны.",
-    liveHint: "Список из хранилища сайта, карточка — из CRM при открытии.",
+    liveHint: "Список и карточка с диска. Alfa — кнопка «Обновить».",
   },
   {
     id: "pupilTariffs",

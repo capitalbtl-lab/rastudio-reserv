@@ -193,6 +193,7 @@ export async function saveTrialLead(data: TrialPayload) {
         op: "customer.update",
         branchId,
         entityId: crmId,
+        actor: "consultant",
         body: {
           name: child,
           legal_name: parent,
@@ -206,6 +207,7 @@ export async function saveTrialLead(data: TrialPayload) {
         op: "lesson.create",
         branchId,
         entityId: crmId,
+        actor: "consultant",
         body: { via: "createAlfaLesson", ...lesson },
       });
       if (data.gid && /^\d+$/.test(data.gid)) {
@@ -213,6 +215,7 @@ export async function saveTrialLead(data: TrialPayload) {
           op: "cgi.apply",
           branchId,
           entityId: crmId,
+          actor: "consultant",
           body: { groupId: Number(data.gid), drop: false },
         });
       }
@@ -238,6 +241,7 @@ export async function saveTrialLead(data: TrialPayload) {
       op: "customer.create",
       branchId,
       entityId: localId,
+      actor: "consultant",
       body: trialCreateBody({
         localId,
         child,

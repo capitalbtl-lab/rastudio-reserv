@@ -466,18 +466,10 @@ export function AdminClients({
           autoPull.current = true;
           void pullKind("clients");
         }
-        const keep = activeIdRef.current;
-        const still = keep && res.items.some((r) => Number(r.crmId) === keep);
         if (!res.items.length) {
           setCard(null);
           setActiveId(0);
           activeIdRef.current = 0;
-        } else if (!still && desktopRef.current && viewRef.current === "дети" && nextStatus !== "лид") {
-          const first = res.items[0];
-          window.requestAnimationFrame(() => {
-            if (activeIdRef.current) return;
-            void openRow(first);
-          });
         }
       }
     } catch {
@@ -1007,7 +999,7 @@ export function AdminClients({
     try {
       const [people, res] = await Promise.all([
         adminSchedule({
-          data: { token: token(), action: "groupMembers", groupId: s.groupId, branchId: s.branchId } as never,
+          data: { token: token(), action: "groupMembers", groupId: s.groupId, branchId: s.branchId, diskOnly: true } as never,
         }),
         adminSchedule({
           data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId, lite: true } as never,

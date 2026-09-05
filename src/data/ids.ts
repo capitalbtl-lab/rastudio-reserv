@@ -244,6 +244,7 @@ export const IDS_FOR_AGENT = `КАРТА ID (обязательно). Не ищ�
 AlfaCRM не источник ответа. Она догоняет очередью: customer.update · group.update · regular-lesson.update · cgi.apply · customer-tariff.create.
 Читать API CRM нельзя, если на диске уже есть customerId или groupId.
 Писать (админка): сначала диск, потом очередь. Не ждать ответ Alfa.
+Актор записи: human · assistant · consultant · sync. Настройка CRM → Люди и роли.
 
 филиал branchId: 1 Гражданская, 2 ЦМИТ, 3 Луховицы, 4 лето
 группа groupId = gid. Ключ: gid:{branchId}:{groupId}

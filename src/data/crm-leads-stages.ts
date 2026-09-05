@@ -345,6 +345,40 @@ export type LeadCard = {
   chats: number;
 };
 
+/** Карточка лида с диска сайта. Без API. crmId < 0 — заявка ещё не в Alfa. */
+export function leadCardFromView(v: {
+  crmId?: number | null;
+  branchId?: number | null;
+  displayName?: string;
+  child?: string;
+  parent?: string;
+  age?: number | string | null;
+  phone?: string;
+  note?: string;
+  leadStatusId?: number;
+  updatedAt?: string;
+}): LeadCard | null {
+  const id = Number(v.crmId || 0);
+  if (!id) return null;
+  const branchId = Number(v.branchId) || 1;
+  const age = v.age == null || v.age === "" ? "" : typeof v.age === "number" ? `${v.age} лет` : String(v.age);
+  return {
+    id,
+    customerId: id,
+    branchId,
+    branches: [branchId],
+    name: String(v.displayName || v.child || v.parent || "").trim() || `лид ${id}`,
+    age,
+    phone: String(v.phone || ""),
+    email: "",
+    note: String(v.note || ""),
+    assigned: "",
+    statusId: Number(v.leadStatusId) || 0,
+    at: String(v.updatedAt || ""),
+    chats: 0,
+  };
+}
+
 export function leadYears(age: string, extra = "") {
   const fromAge = parseInt(String(age || ""), 10);
   if (Number.isFinite(fromAge) && fromAge > 0 && fromAge < 90) return fromAge;

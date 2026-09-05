@@ -22,11 +22,11 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-05-card-disk";
+export const GUIDE_REV = "2026-09-05-leads-disk";
 
 const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Сайт", idField: "rastudio.org", link: "родители. Админка = /admin. AlfaCRM догоняет очередью, не источник ответа" },
-  { entity: "Очередь Alfa", idField: "enqueueExport", link: "customer.create/update · group.update · group.create · regular-lesson.update/create · cgi.apply · customer-tariff.create/clear · lesson.create/update · pay.create · subject.create · lead-status.create/update/delete. Диск сразу" },
+  { entity: "Очередь Alfa", idField: "enqueueExport", link: "customer.create/update · group.update · group.create · regular-lesson.update/create · cgi.apply · customer-tariff.create/clear · lesson.create/update · pay.create · subject.create · lead-status.create/update/delete. Диск сразу. actor: human|assistant|consultant|sync" },
   { entity: "Лиды доска", idField: "crm-leads-board.json", link: "после reload с диска, сверка CRM фоном. Не полный API при каждом открытии" },
   { entity: "Цена", idField: "price.courseId + schoolId", link: "строка прайса = courseId. Группа школы = schoolId, не название. «Все» — сайт и консультант" },
   { entity: "Абонемент ученика", idField: "extras.live_tariff", link: "1 живой на диске. CRM только если пометки нет. e_date ≥ сегодня МСК" },
@@ -163,8 +163,9 @@ const SCHEDULE_NEVER = [
   "Не подставлять абонемент в цену курса по названию. Только subjectId / courseId.",
   "Не подставлять педагога по ФИО. Только teacherId филиала.",
   "Не ждать API Alfa, если карточка, занятие, доска лидов или состав уже на диске.",
-  "Не открывать карточку клиента через loadCustomerCard, если досье есть. customerGet — диск, очередь пакета. group_ids не состав.",
+  "Не открывать карточку клиента через loadCustomerCard, если досье есть. customerGet — диск, Alfa только fresh. group_ids не состав.",
   "Не ждать cgi при открытии группы: groupMembers всегда с диска. Alfa — пакет, только если taken > 0 и на диске никого.",
+  "Не читать воронку лидов из API при открытии. loadLeadsBoard — диск, Alfa только force / кнопка «Обновить».",
   "Не ждать Alfa при создании, переименовании или удалении этапа воронки лидов. Диск сразу, очередь lead-status.create/update/delete.",
   "Не ждать Alfa при назначении занятия. customerLesson и lessonSave пишут календарь группы сразу, очередь lesson.create. Локальный lessonId < 0.",
   "Не ждать ответ Alfa после submit_trial / book_lesson. Заявка на сайте сразу, CRM — очередь customer.create.",
@@ -286,7 +287,7 @@ DOM: [data-card-id="card:customer:{id}"] [data-customer-id="{id}"]
 деньги: customerPay payKind.
 
 СЕРВЕР adminSchedule POST (token обязателен). Чтение с диска. Запись: диск сразу, Alfa очередью.
-customerGet    { customerId, branchId } — диск, Alfa если нет TTL
+customerGet    { customerId, branchId } — диск, Alfa только fresh
 customerSave   { customerId, branchId, patch } — диск + customer.update
 customerTariff { customerId, tariffId, date } — диск + customer-tariff.create
 customerGroup  { customerId, groupId, branchId } — диск + cgi.apply

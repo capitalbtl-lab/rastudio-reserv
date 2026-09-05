@@ -175,7 +175,7 @@ export async function tickCrmQueue(take = 3) {
     nq.lastAt = new Date().toISOString();
     nq.lastNote = e instanceof Error ? e.message : "пакет не прошёл";
     saveQueue(nq);
-    logAdmin(`Очередь CRM: ${nq.lastNote}`);
+    logAdmin(`Очередь CRM: ${nq.lastNote}`, "sync");
     return { ok: false as const, error: nq.lastNote, done: false, ids: [] as number[], next: 0, total: 0, extra: nq.lastNote };
   } finally {
     g.__raCrmQueueBusy = false;

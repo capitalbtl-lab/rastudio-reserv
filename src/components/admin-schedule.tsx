@@ -1064,7 +1064,7 @@ export function AdminSchedule() {
       }
       const [res, people] = await Promise.all([
         adminSchedule({ data: { token: token(), action: "groupGet", groupId: s.groupId, branchId: s.branchId } as never }),
-        adminSchedule({ data: { token: token(), action: "groupMembers", groupId: s.groupId, branchId: s.branchId } as never }),
+        adminSchedule({ data: { token: token(), action: "groupMembers", groupId: s.groupId, branchId: s.branchId, diskOnly: true } as never }),
       ]);
       if (!still()) return;
       if (!res.ok) {
@@ -1274,7 +1274,7 @@ export function AdminSchedule() {
   async function reloadMembers() {
     if (!detail?.groupId) return;
     const slotId = detail.id;
-    const res = await adminSchedule({ data: { token: token(), action: "groupMembers", groupId: detail.groupId, branchId: detail.branchId } as never });
+    const res = await adminSchedule({ data: { token: token(), action: "groupMembers", groupId: detail.groupId, branchId: detail.branchId, diskOnly: true } as never });
     if (res.ok && "active" in res) {
       applyMembers(slotId, (res.active || []) as GroupMember[], (res.archive || []) as GroupMember[]);
     }

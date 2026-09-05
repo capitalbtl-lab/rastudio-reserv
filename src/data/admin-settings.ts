@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 type Settings = { salt: string; phraseHash: string; passwordHash: string; updatedAt: string };
-type LogItem = { at: string; text: string };
+type LogItem = { at: string; text: string; actor?: string };
 
 const DEFAULT_WORD = "ромашка";
 const DEFAULT_PASS = "RastudioCeny2026";
@@ -117,7 +117,7 @@ export function checkPassword(pass: string) {
   return timingSafeEqual(got, exp);
 }
 
-export function logAdmin(text: string) {
+export function logAdmin(text: string, actor = "human") {
   let prev: LogItem[] = [];
   try {
     if (existsSync(fileOf("admin-log.json"))) {
@@ -126,7 +126,7 @@ export function logAdmin(text: string) {
   } catch {
     prev = [];
   }
-  prev.unshift({ at: new Date().toISOString(), text });
+  prev.unshift({ at: new Date().toISOString(), text, actor });
   writeJson("admin-log.json", prev.slice(0, 40));
 }
 

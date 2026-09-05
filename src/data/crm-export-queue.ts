@@ -205,7 +205,7 @@ export async function tickExportQueue(take = 2) {
                 time: lesson.time,
                 duration: lesson.duration,
                 note: lesson.note,
-              }).catch((e) => logAdmin(`Урок после заявки ${cid}: ${e instanceof Error ? e.message : e}`));
+              }).catch((e) => logAdmin(`Урок после заявки ${cid}: ${e instanceof Error ? e.message : e}`, "sync"));
             }
             const gid = Number((job.body.group_ids as number[] | undefined)?.[0] || 0);
             if (gid) {
@@ -213,6 +213,7 @@ export async function tickExportQueue(take = 2) {
                 op: "cgi.apply",
                 branchId: job.branchId,
                 entityId: cid,
+                actor: job.actor || "sync",
                 body: {
                   groupId: gid,
                   drop: false,
@@ -270,7 +271,7 @@ export async function tickExportQueue(take = 2) {
         q.lastAt = new Date().toISOString();
         q.lastNote = `${job.op} ${job.entityId}: ${msg}`;
         saveExport(q);
-        logAdmin(`Выгрузка CRM: ${q.lastNote}`);
+        logAdmin(`Выгрузка CRM: ${q.lastNote}`, "sync");
       }
     }
     return crmExportSnapshot();
