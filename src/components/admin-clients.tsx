@@ -163,7 +163,7 @@ type GroupInfo = {
   signup: string;
   subjectId: number;
   calendar: GroupCalLesson[];
-  tariffs: { id: number; name: string; price: number }[];
+  tariffs: { id: number; name: string; price: number; fit?: boolean }[];
 };
 
 type ClientsSnap = {
@@ -342,8 +342,8 @@ export function AdminClients({
         () => adminSchedule({ data: { token: token(), action: "clientsLiveTariffs" } as never }),
         1,
         120000,
-      )) as { ok?: boolean; ids?: number[] };
-      if (res.ok && Array.isArray(res.ids)) {
+      )) as { ok?: boolean; ids?: number[]; scanned?: number };
+      if (res.ok && Array.isArray(res.ids) && (res.ids.length || Number(res.scanned || 0) > 0)) {
         setLiveTariffIds(new Set(res.ids.map(Number).filter(Boolean)));
         liveTariffAt.current = Date.now();
         setLiveReady(true);
@@ -978,7 +978,9 @@ export function AdminClients({
         signup: g?.signup || s.signup || "",
         subjectId: g?.subjectId || s.subjectId || 0,
         calendar: g?.calendar?.length ? g.calendar : cached?.info.calendar?.length ? cached.info.calendar : slotCalendar(s),
-        tariffs: res.ok && "tariffs" in res && Array.isArray(res.tariffs) ? (res.tariffs as GroupInfo["tariffs"]) : cached?.info.tariffs || [],
+        tariffs: res.ok && "tariffs" in res && Array.isArray(res.tariffs)
+          ? (res.tariffs as GroupInfo["tariffs"]).filter((t) => t.fit)
+          : cached?.info.tariffs || [],
       };
       setGroupMembers(members);
       setGroupArchive(archive);
@@ -1029,7 +1031,7 @@ export function AdminClients({
           signup: g?.signup || s.signup || "",
           subjectId: g?.subjectId || s.subjectId || 0,
           calendar: g?.calendar || [],
-          tariffs: res.ok && "tariffs" in res && Array.isArray(res.tariffs) ? (res.tariffs as GroupInfo["tariffs"]) : [],
+          tariffs: res.ok && "tariffs" in res && Array.isArray(res.tariffs) ? (res.tariffs as GroupInfo["tariffs"]).filter((t) => t.fit) : [],
         },
       });
     } catch {

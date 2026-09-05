@@ -161,6 +161,7 @@ describe("пагинация customer/index не режет лидов", () => {
     assert.equal(crmUnwrapIndex({ data: { items: [{ id: 1 }], total: 1 } }).items[0].id, 1);
     assert.equal(crmUnwrapIndex({ items: { a: { id: 2 } } }).items[0].id, 2);
     assert.equal(crmUnwrapIndex({ models: [{ id: 3 }] }).items[0].id, 3);
+    assert.equal(crmUnwrapIndex({ data: [{ id: 4 }] }).items[0].id, 4);
   });
 
   it("если total первой страницы равен pageSize — читаем следующую (там Фролов)", () => {

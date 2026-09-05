@@ -340,6 +340,7 @@ export function crmUnwrapIndex(json: unknown): { items: Record<string, unknown>[
   const o = json as Record<string, unknown>;
   const inner = o.data && typeof o.data === "object" && !Array.isArray(o.data) ? (o.data as Record<string, unknown>) : o;
   let raw: unknown = inner.items ?? o.items ?? o.models;
+  if (Array.isArray(o.data)) raw = Array.isArray(raw) && raw.length ? raw : o.data;
   if (raw && typeof raw === "object" && !Array.isArray(raw)) raw = Object.values(raw as Record<string, unknown>);
   if (!Array.isArray(raw) && Array.isArray(inner)) raw = inner;
   const items = Array.isArray(raw)

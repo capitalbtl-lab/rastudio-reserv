@@ -711,10 +711,12 @@ export async function overlayMembershipFromCrm() {
       d.groupLinks = list;
       withGroups += 1;
     }
-    d.extras.live_tariff = hit?.live ? "1" : "0";
-    if (hit?.live) {
-      live += 1;
-      ids.push(id);
+    if (scanned > 0) {
+      d.extras.live_tariff = hit?.live ? "1" : "0";
+      if (hit?.live) {
+        live += 1;
+        ids.push(id);
+      }
     }
   }
   saveStore(store);
