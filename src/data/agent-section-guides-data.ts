@@ -20,7 +20,7 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-04-map";
+export const GUIDE_REV = "2026-09-05-tariffs";
 
 const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Сайт", idField: "rastudio.org", link: "то, что видят родители. Админка = /admin + AlfaCRM" },
@@ -36,6 +36,10 @@ const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Школа", idField: "schoolId", link: "course.schoolId" },
   { entity: "Группы предмета", idField: "groupTotal / studentTotal", link: "живые группы и taken по branchId, вкладка Предметы" },
   { entity: "Абонемент", idField: "tariffId", link: "tariff-map → courseId/schoolId (сайт); fallback subjectIds + branchIds + минуты ±5" },
+  { entity: "Абонемент ученика", idField: "customer_tariff.id", link: "карточка CRM. Живой = removed≠1 и e_date пусто или ≥ сегодня МСК. Старт завтра — живой" },
+  { entity: "Мастер учеников", idField: "path add|change|remove", link: "Админка → Абонементы → Мастер абонементов учеников. Прогоны изолированы" },
+  { entity: "Темп мастера", idField: "pace select|fast|slow", link: "выборочно / все быстро / все медленно (пачки по 3 groupId, сверка 3×)" },
+  { entity: "Счёт абонемента", idField: "calcType / is_separate_balance", link: "0 базовый общий счёт · 1 раздельный (по умолчанию в мастере)" },
   { entity: "Клиент", idField: "customerId", link: "dossier.crmId; groupLinks[].id = groupId" },
   { entity: "Карточка клиента", idField: "clientCardId", link: "card:customer:{customerId}" },
   { entity: "Кабинет", idField: "cabinetId", link: "cabinet:admin" },
@@ -89,7 +93,12 @@ const SCHEDULE_TABS: GuideTab[] = [
   {
     id: "tariffs",
     title: "Абонементы",
-    body: "Карточка абонемента CRM (tariffId) живёт во вкладке Абонементы. Привязка к школе и курсу сайта — отдельная карта storage/tariff-map.json: tariffId → schoolId + courseId. Это соответствие только на сайте, в AlfaCRM не выгружается. Колонка «Курс сайта» в таблице абонементов и вкладка Соответствия → Абонементы правят одну карту. Первая привязка угадывается по subjectIds через карту предметов, дальше только вручную по ID курса. Группа подходит к абонементу если: филиал ∈ tariff.branchIds, минуты ±5, тип урока 2 (групповое), и (courseId группы = courseId карты ИЛИ subjectId группы ∈ tariff.subjectIds). Имя абонемента не участвует. Архив не загружать. slot.tariffId — явный выбор на карточке группы, важнее автоподбора.",
+    body: "Карточка шаблона CRM (tariffId) — вкладка Абонементы. Соответствие школе и курсу сайта — storage/tariff-map.json: tariffId → schoolId + courseIds[] (несколько курсов сайта на один шаблон). Только сайт, в AlfaCRM не уходит. Колонка «Курс сайта» и Соответствия → Абонементы правят одну карту. Первая привязка — по subjectIds через карту предметов, дальше только вручную по courseId. Группа подходит, если: филиал ∈ tariff.branchIds, минуты ±5, тип урока 2, и (courseId группы ∈ карты ИЛИ subjectId ∈ tariff.subjectIds). Имя шаблона не ключ. Архив шаблона не значит, что с карточки ученика сняли. slot.tariffId на группе важнее автоподбора. Цены шаблонов — колонка «Все» прайса по courseId, не выдумывать. Мастер абонементов студии создаёт шаблоны CRM. Мастер абонементов учеников вешает шаблон на customerId.",
+  },
+  {
+    id: "pupil-wizard",
+    title: "Мастер абонементов учеников",
+    body: "Админка → Абонементы → «Мастер абонементов учеников». Три изолированных режима path: add назначение, change изменение срока (e_date), remove удаление с карточки. Переключение режима сбрасывает список учеников и кэш прогона, группы можно оставить отмеченными. Кнопка «Перезагрузить список» заново читает слоты. Состав и абонементы — живой CRM, без кэша. Темп: select выборочно (галочки); fast все, школа сайта за школой; slow все, внутри школы группы по номеру пачками по 3 (580, 590, 592…): опрос → выгрузка → сверка 3 раза, паузы ×2, лог время+ФИО. Назначение пишет абонемент один раз; сверка не дублирует. Удаление по одному customerId, сбой пачки не рвёт весь прогон. Добавление: все привязанные (учится+лиды, если галка). Изменение/удаление: только у кого в CRM живой абонемент, в том числе лид с выписанным; лид без абонемента (Майоров) не входит. Живой = removed≠1, есть tariff_id, e_date пусто или ≥ сегодня Europe/Moscow; дата старта сегодня/завтра — живой. is_archived шаблона не снятие. calcType по умолчанию 1 раздельный (is_separate_balance=1, calculation_type=2). Базовый — только если сотрудник нажал. skipExisting: не вешать тот же tariffId повторно. Ребёнок в двух группах: add — две строки (два тарифа по курсам); change/remove — один человек. API: pupilTariffGroups, pupilTariffPlan, pupilTariffActive, pupilTariffAssign, pupilTariffClear. Писать только если adminVoiceCanWrite. Родителю мастер не открывать.",
   },
   {
     id: "site",
@@ -112,7 +121,14 @@ const SCHEDULE_OPS: GuideOp[] = [
   { id: "push-subjects", title: "Выгрузить предметы в AlfaCRM", body: "Кнопка «Выгрузить в AlfaCRM». Уходит только subjectId + имя. Курс сайта, школа, счётчики групп — только сайт. Отмеченные галкой, иначе все." },
   { id: "save-subjects", title: "Сохранить предметы на сайте", body: "subjectsSave { subjects }. Имена и id. Курс сайта сохраняется отдельно subjectsBind." },
   { id: "ask-subject-usage", title: "Сколько групп / учеников по предмету", body: "kind=question. Ответ из живой карты: subjectId, курс сайта, по филиалам группы и taken. Не путать с числом абонементов (tariffTotal — только вкладка «С абонементами»)." },
-  { id: "bind-tariff", title: "Привязать абонемент к курсу сайта", body: "Карта tariffId → schoolId + courseId. Соответствия → Абонементы или колонка «Курс сайта» во вкладке Абонементы. saveTariffs. Файл tariff-map.json. В AlfaCRM не уходит. Не привязывать по имени." },
+  { id: "bind-tariff", title: "Привязать абонемент к курсу сайта", body: "Карта tariffId → schoolId + courseIds[]. Соответствия → Абонементы или колонка «Курс сайта». saveTariffs. tariff-map.json. В AlfaCRM не уходит. Несколько курсов сайта на один tariffId. Не привязывать по имени." },
+  { id: "open-tariffs", title: "Открыть абонементы", body: "kind=openTab pane=tariffs. Голос: «открой абонементы», «мастер абонементов»." },
+  { id: "pupil-wizard-open", title: "Открыть мастер абонементов учеников", body: "Админка → Абонементы → Мастер абонементов учеников. Не мастер абонементов студии (тот создаёт шаблоны). Только сотрудник, adminVoiceCanWrite для записи в CRM." },
+  { id: "pupil-tariff-add", title: "Назначить абонементы ученикам", body: "path=add. Отметить группы (или темп fast/slow). Далее — состав из CRM cgi+customer по groupId. Шаг абонемент: tariffId группы из slot.tariffId или карты, период, calcType=1 раздельный по умолчанию. Выгрузка pupilTariffAssign. skipExisting не вешает тот же tariffId. Две группы = две строки. Писать по одному/пачками, не дублировать после сверки." },
+  { id: "pupil-tariff-change", title: "Изменить срок абонементов", body: "path=change. Только живые абонементы CRM, в том числе у лида. closeDate / e_date. pupilTariffClear mode=close. Не подставлять тариф группы, если на карточке его нет." },
+  { id: "pupil-tariff-delete", title: "Снять абонементы с карточек", body: "path=remove. Только живые на карточке (customer_tariff.removed≠1). Не путать с архивом шаблона в справочнике. По одному customerId, не обрывать прогон. pupilTariffClear mode=delete. Три одинаковых 5450 — снять все живые id." },
+  { id: "pupil-tariff-pace", title: "Темп мастера", body: "select — галочки. fast — все, школа сайта за школой. slow — все, groupId по возрастанию пачками по 3, сверка 3 раза, паузы ×2, лог ФИО. Назначение в slow всё равно один раз на человека." },
+  { id: "pupil-tariff-reload", title: "Перезагрузить список групп мастера", body: "Кнопка «Перезагрузить список» на шаге групп. pupilTariffGroups без кэша taken." },
   { id: "open-group", title: "Открыть группу", body: "Только groupId + branchId. Карточка groupCardId = card:group:{branchId}:{groupId}. Состав: три списка Ученики / Лиды / Архивные ученики, клик = customerId. Голос: kind=openGroup. Из клиента: onOpenGroup(groupId, branchId)." },
   { id: "open-client", title: "Открыть клиента", body: "Только customerId. clientCardId = card:customer:{customerId}. Событие ra-open-client { customerId, branchId }. Несколько ФИО в поиске — вкладка clients + query, карточку открывать когда остался один customerId. Desktop = panel, не popup." },
   { id: "filter-clients", title: "Сортировка клиентов", body: "Две независимые оси. status: учится|лид (Текущие/Лиды), архив тихо. view: дети|группы. Событие ra-clients-filter { status, view, branchId, ageBand }. Матрица status×view обязательна. branchId 0 = все, 1–4 филиал. ageBand пусто = все." },
@@ -123,7 +139,7 @@ const SCHEDULE_OPS: GuideOp[] = [
   { id: "set-client-status", title: "Клиент ↔ Лид", body: "customerSave { isStudy: 1 } клиент. { isStudy: 0 } лид. Не путать с studyStatusId. Архив isStudy=2 только явно." },
   { id: "set-study-status", title: "Состояние обучения", body: "customerSave { studyStatusId }. 1 Обучается, 4 Ожидает старта, 8 Ждём, 7/10/11 пропуски, 5 должник, 2 завершил, 9 без статуса. RaSelect data-op=study-status." },
   { id: "assign-lesson", title: "Назначить занятие", body: "popup data-op=lesson-dialog. Поля: lessonType, date, time, duration, roomId, groupId, subjectId*, teacherId, topic, note. customerLesson. Нет subjectId — ошибка." },
-  { id: "add-tariff", title: "Добавить абонемент ученика", body: "popup data-op=tariff-dialog. Поля: groupId ученика* (может быть в нескольких группах), tariffId*, b_date, periodCount+periodType (1 день / 2 неделя / 3 месяц, e_date = start+N единиц −1 день), calcType 0|1 (is_separate_balance), subjectIds[], lessonTypeIds[], note. customerTariff. Не угадывать tariffId по имени." },
+  { id: "add-tariff", title: "Добавить абонемент ученика", body: "Один человек: popup data-op=tariff-dialog. Поля: groupId ученика*, tariffId*, b_date, periodCount+periodType (1 день / 2 неделя / 3 месяц / 4 год, e_date = start+N −1 день), calcType 0 базовый / 1 раздельный по умолчанию, subjectIds[], lessonTypeIds[] (групповое=2), note. customerTariff. Массово — мастер учеников, не этот попап. Не угадывать tariffId по имени." },
   { id: "add-group", title: "Добавить в группу", body: "popup data-op=group-dialog. Поля: branchId*, фильтр школы, groupId* как {branchId}:{groupId}, bDate, eDate. customerGroup. Список групп = филиал+возраст слева. Не писать по названию группы." },
   { id: "list-live-groups", title: "Живые группы для записи", body: "list_groups { age, branch?, course? }. Все неархивные (status ≠ 3, не смены 7–9), включая 4 и priority 0. Сортировка 1→2→3→0. Назови ВСЕ. Первой — priority 1. priority 0 — «набор с сайта закрыт», не open_group. Состав taken = учится+лиды. gid вслух не читай. Если consultantCanSeeAllGroups=выкл — только priority≥1." },
   { id: "set-group-flags", title: "Статус и приоритет в таблице", body: "Только голос админки, если adminVoiceCanWrite. Колонки Статус и Приоритет. action=groupFlags { groupId, branchId, statusId?, priority? }. Массово: «во всех группах на Гражданской приоритет 1» — branchId=1, все gid включая «2026 …». Сразу AlfaCRM. Не консультант сайта." },
@@ -160,6 +176,14 @@ const SCHEDULE_NEVER = [
   "Не открывать справочник предметов по имени. pane=subjects, правка — subjectId.",
   "Не путать tariffTotal (абонементы с этим предметом) и groupTotal (живые группы).",
   "Не искать абонемент для группы по названию. Сначала slot.tariffId, затем tariff-map.courseId, затем subjectId+филиал+минуты.",
+  "Не путать мастер абонементов студии (шаблоны tariffId) и мастер абонементов учеников (вешает шаблон на customerId).",
+  "Не назначать абонемент повторно тем, кого в этом прогоне уже записали. Сверка не повод писать второй раз.",
+  "Не считать архив шаблона CRM снятием с карточки. Живой = removed≠1 и не истёк e_date.",
+  "Не отсекать лида из изменения/удаления, если на карточке живой абонемент. Лида без абонемента не трогать.",
+  "Не ставить базовый счёт, если сотрудник не выбрал. По умолчанию раздельный calcType=1.",
+  "Не обрывать выгрузку мастера из‑за двух ошибок. Идти к следующей пачке.",
+  "Не открывать мастера учеников родителю и консультанту сайта. Только админка, adminVoiceCanWrite.",
+  "Не кэшировать состав группы и индекс абонементов в мастере. Каждый прогон — живой CRM.",
   "Не открывать родителю форму AlfaCRM (/lead/create, iframe id=20). Записывать самому: submit_trial или book_lesson.",
   "Не выдумывать gid, дату и время. Дата пробного = ближайшее занятие выбранной группы, время = timeFrom слота.",
   "Не путать филиалы Коломны: 1 Гражданская, 2 ЦМИТ Октябрьской. Филиал заявки = branchId группы.",
@@ -183,7 +207,7 @@ function scheduleBody() {
   const tabs = SCHEDULE_TABS.map((t) => `### ${t.title} [${t.id}]\n${t.body}`).join("\n\n");
   const ops = SCHEDULE_OPS.map((o) => `- ${o.id} · ${o.title}: ${o.body}`).join("\n");
   const never = SCHEDULE_NEVER.map((n) => `- ${n}`).join("\n");
-  return `ИНСТРУКЦИЯ РАЗДЕЛА «Расписание занятий» для ИИ. Метод: Карта ID. REV ${GUIDE_REV}. Точка восстановления: ромашка 3.
+  return `ИНСТРУКЦИЯ РАЗДЕЛА «Расписание занятий» для ИИ. Метод: Карта ID. REV ${GUIDE_REV}. Точка восстановления: ромашка 6.
 Где лежит: Ассистент ИИ → База знаний ИИ. Источник правил раздела. Агент читает этот текст при каждом запросе.
 
 Правило: сущность ищется, открывается, пишется и связывается ТОЛЬКО по ID. Имя — подпись на экране, не ключ.
@@ -266,7 +290,16 @@ income Доход · product Продажа товара · refund Возвра�
 is_study: 0 лид · 1 клиент (учится) · 2 архив
 studyStatusId: 1 Обучается · 4 Ожидает старта · 8 Ждём на занятиях · 7 Пропустил 1 · 10 Пропустил 2 · 11 Пропустил 3 · 5 Должник · 2 Завершил · 9 Без статуса
 periodType: 1 день · 2 неделя · 3 месяц · 4 год. e_date inclusive = start + N − 1 день.
-calcType: 0 базовый (общий счёт) · 1 раздельный (is_separate_balance=1)
+calcType: 0 базовый (общий счёт) · 1 раздельный (is_separate_balance=1, calculation_type=2). В мастере учеников по умолчанию 1.
+
+ПРОТОКОЛ АБОНЕМЕНТОВ
+Два мастера. Студии = шаблоны tariffId. Учеников = повесить шаблон на customerId.
+Карта сайта tariff-map.json: tariffId → schoolId + courseIds[]. saveTariffs. В CRM не уходит.
+Подбор группе: 1) slot.tariffId 2) courseId ∈ карты 3) subjectId ∈ tariff.subjectIds + филиал + минуты ±5 + тип 2. Имя не ключ.
+Живой на карточке: removed≠1, tariff_id>0, e_date пусто или ≥ сегодня МСК. Старт сегодня/завтра — живой. Архив шаблона игнорировать.
+Мастер учеников path add|change|remove изолированы. pace select|fast|slow. slow = пачки по 3 groupId, сверка 3×, назначение один раз.
+API: pupilTariffGroups / Plan / Active / Assign / Clear. Один человек — customerTariff.
+Писать только adminVoiceCanWrite. Родителю для пробного абонемент не нужен.
 
 СОБЫТИЯ ОКНА
 ra-open-client { customerId, branchId, q? }
@@ -395,10 +428,28 @@ export const FACTORY_GUIDES: SectionGuide[] = [
     summary: "groupId+branchId, карточка группы, три списка состава, без склейки по названию.",
     graph: SCHEDULE_GRAPH.filter((r) => /Группа|Филиал|Предмет|Курс|Школа|Клиент|Абонемент/.test(r.entity)),
     cascade: SCHEDULE_CASCADE,
-    tabs: SCHEDULE_TABS.filter((t) => t.id === "groups" || t.id === "map" || t.id === "tariffs"),
-    ops: SCHEDULE_OPS.filter((o) => /group|subject|tariff|pull-push/.test(o.id)),
+    tabs: SCHEDULE_TABS.filter((t) => t.id === "groups" || t.id === "map" || t.id === "tariffs" || t.id === "pupil-wizard"),
+    ops: SCHEDULE_OPS.filter((o) => /group|subject|tariff|pupil-|pull-push/.test(o.id)),
     never: SCHEDULE_NEVER.filter((n) => /групп|groupId|курс|названи/i.test(n)),
     body: groupsBody(),
+  },
+  {
+    id: "tariffs",
+    section: "tariffs",
+    title: "Абонементы",
+    on: true,
+    updatedAt: "",
+    summary: "Шаблоны CRM, карта курса сайта, мастер учеников: назначение / срок / удаление, темп, раздельный счёт.",
+    graph: SCHEDULE_GRAPH.filter((r) => /Абонемент|Мастер|Темп|Счёт|Цена|Курс|Школа|Группа|Клиент/.test(r.entity)),
+    cascade: [
+      "slot.tariffId на группе",
+      "tariff-map.courseIds включает courseId группы",
+      "subjectId группы ∈ tariff.subjectIds и филиал и минуты ±5",
+    ],
+    tabs: SCHEDULE_TABS.filter((t) => t.id === "tariffs" || t.id === "pupil-wizard" || t.id === "prices" || t.id === "map"),
+    ops: SCHEDULE_OPS.filter((o) => /tariff|pupil-|edit-price/.test(o.id)),
+    never: SCHEDULE_NEVER.filter((n) => /абонемент|тариф|мастер|счёт|шаблон|дубл/i.test(n)),
+    body: tariffsBody(),
   },
 ];
 
@@ -673,7 +724,7 @@ adminVoiceCanConsult — голос кабинета подбирает курс
 Открыть группу groupId+branchId, клиента customerId.
 Сменить статус/приоритет в таблице (groupFlags), если adminVoiceCanWrite.
 Загрузить/выгрузить расписание, предметы, абонементы.
-Мастер абонементов: все привязанные, status 4 и 594 входят.
+Мастер абонементов учеников: режимы add/change/remove, темп select/fast/slow, calcType=1 раздельный по умолчанию, без кэша, без дублей.
 «Сколько в группе» — roster CRM, не явка.
 
 ЧТО ГОЛОС АДМИНКИ НЕ ДЕЛАЕТ (adminVoiceCanConsult выкл)
@@ -683,6 +734,82 @@ adminVoiceCanConsult — голос кабинета подбирает курс
 
 СВЯЗАННЫЕ РАЗДЕЛЫ
 Группы — статусы и приоритет. Сайт · запись — матрица витрины. Предметы / Соответствия — courseId только сайт. Клиенты — customerId.
+`;
+}
+
+function tariffsBody() {
+  const tab = SCHEDULE_TABS.find((t) => t.id === "tariffs")?.body || "";
+  const wizard = SCHEDULE_TABS.find((t) => t.id === "pupil-wizard")?.body || "";
+  const ops = SCHEDULE_OPS.filter((o) => /tariff|pupil-|edit-price/.test(o.id))
+    .map((o) => `- ${o.id} · ${o.title}: ${o.body}`)
+    .join("\n");
+  const never = SCHEDULE_NEVER.filter((n) => /абонемент|тариф|мастер|счёт|шаблон|дубл/i.test(n))
+    .map((n) => `- ${n}`)
+    .join("\n");
+  return `ИНСТРУКЦИЯ РАЗДЕЛА «Абонементы» для ИИ. Карта ID. REV ${GUIDE_REV}.
+Где лежит: Ассистент ИИ → База знаний ИИ → Абонементы.
+Точка восстановления: ромашка 6.
+
+ИИ сам вешает, меняет срок и снимает абонементы учеников по ID, без угадывания по имени. Писать в CRM только если adminVoiceCanWrite. Родителю (Олег/Ольга) мастер не открывать: абонемент — оплата, запись на пробное его не требует.
+
+ТЕРМИНЫ
+Сайт — rastudio.org.
+Админка — /admin + AlfaCRM.
+Шаблон абонемента — tariffId в справочнике CRM. Вкладка Абонементы, мастер абонементов студии.
+Абонемент ученика — запись customer_tariff на карточке: id + customerId + tariffId + b_date + e_date + removed.
+Карта сайта — storage/tariff-map.json: tariffId → schoolId + courseIds[]. Несколько курсов сайта на один шаблон. В CRM не уходит.
+Живой на карточке — removed≠1, tariff_id>0, e_date пусто или ≥ сегодня Europe/Moscow. Дата старта сегодня или завтра — живой (только что назначили). Архив шаблона (is_archived) не снятие с человека.
+Раздельный счёт — calcType=1, is_separate_balance=1, calculation_type=2. По умолчанию в мастере учеников. Базовый (0, общий счёт карточки) — только если сотрудник выбрал.
+
+${tab}
+
+${wizard}
+
+КАСКАД ШАБЛОНА ДЛЯ ГРУППЫ
+1. slot.tariffId на карточке группы.
+2. tariff-map: courseId группы входит в courseIds[] этого tariffId.
+3. subjectId группы ∈ tariff.subjectIds и branchId ∈ tariff.branchIds и минуты урока ±5 и тип урока 2.
+Не склеивать «Абонемент 3850» с группой по цифрам в названии.
+
+РЕЖИМЫ МАСТЕРА УЧЕНИКОВ
+add — назначить. Состав группы = cgi + customer index по groupId (учится и лиды, если галка). На каждого выбранного pupilTariffAssign. skipExisting не вешает тот же tariffId ещё раз. Две группы = две строки.
+change — изменить e_date живых. Список только с живым CRM. Лиды с абонементом входят, без — нет.
+remove — снять живые с карточки (delete customer_tariff.id). Не архивировать шаблон справочника. По одному человеку. Три копии 5450 — три id.
+Переключение add/change/remove сбрасывает список учеников. Группы можно не снимать. «Перезагрузить список» = pupilTariffGroups заново.
+
+ТЕМП
+select — отмеченные галочкой.
+fast — все группы, школа сайта за школой (дерево schoolId).
+slow — все, внутри школы groupId по возрастанию пачками по 3: прочитать → выгрузить → сверка 3 раза. Паузы вдвое. Лог: время, ФИО, группа, шаблон. Назначение в этом прогоне повторно не писать, даже если CRM ещё не догнала.
+
+СЕРВЕР adminSchedule (token)
+pupilTariffGroups — слоты, без кэша taken.
+pupilTariffPlan { groupKeys[], includeLeads } — состав, без тарифов шаблона как «живых».
+pupilTariffActive { pupilItems[], fresh:true } — живые с карточек.
+pupilTariffAssign { pupilItems[], date, skipExisting, calcType } — создать.
+pupilTariffClear { pupilItems[], mode: close|delete, date } — срок или снять.
+customerTariff — один человек из карточки клиента.
+
+ГОЛОС АДМИНКИ
+«открой абонементы» = openTab pane=tariffs.
+«назначь абонемент группе 593» — нужен tariffId и path=add, не имя «модельная 5450». Нет ID — спросить.
+«сними абонементы у группы 593» — path=remove, только живые.
+«поставь раздельный» — calcType=1.
+Не консультировать родителей из этого раздела.
+
+КОНСУЛЬТАНТ САЙТА
+Абонемент для пробного и записи в группу не нужен. Цену курса назвать из колонки «Все» по courseId. Какой шаблон к курсу — tariff-map, не выдумывать номер.
+
+ФАЙЛЫ
+storage/crm-tariffs.json — шаблоны.
+storage/tariff-map.json — tariffId → школа/курсы сайта.
+storage/prices.json — колонка «Все».
+
+ОПЕРАЦИИ
+${ops}
+
+ЗАПРЕТЫ
+${never}
 `;
 }
 
