@@ -2316,9 +2316,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
     }
     if (data.action === "clientsLiveTariffs") {
       const { token, pagedIndex } = await import("./alfacrm");
-      const { customerTariffIndexBranchPath, customerTariffLive, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
+      const { customerTariffIndexBranchPath, customerTariffOnCard, tariffRowCustomerId, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
       const t = await token();
       const ids = new Set<number>();
+      let scanned = 0;
       const branches = [1, 2, 3, 4];
       for (let i = 0; i < branches.length; i += 2) {
         if (i) await sleep(CRM_READ_GAP_MS);
@@ -2326,20 +2327,20 @@ export const adminSchedule = createServerFn({ method: "POST" })
           branches.slice(i, i + 2).map(async (branch) => {
             await pagedIndex(
               customerTariffIndexBranchPath(branch),
-              {},
+              { removed: 0 },
               t,
               (it: Record<string, unknown>) => {
-                if (!customerTariffLive(it)) return;
-                const id = Number(it.customer_id ?? it.customerId ?? 0);
-                if (id) ids.add(id);
+                scanned += 1;
+                const id = tariffRowCustomerId(it);
+                if (id && customerTariffOnCard(it)) ids.add(id);
               },
               { pageSize: 100, pages: 20 },
             );
           }),
         );
       }
-      logAdmin(`Живые абонементы на сегодня: ${ids.size} учеников`);
-      return { ok: true as const, ids: [...ids], total: ids.size };
+      logAdmin(`Живые абонементы на сегодня: ${ids.size} учеников, строк CRM ${scanned}`);
+      return { ok: true as const, ids: [...ids], total: ids.size, scanned };
     }
     if (data.action === "voiceAsk") {
       const prompt = String(data.prompt || "").trim();

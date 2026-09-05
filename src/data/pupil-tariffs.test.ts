@@ -166,6 +166,16 @@ describe("мастер абонементов учеников", () => {
     assert.deepEqual(keepByLiveTariff(rows, "without", live, (x) => x.id).map((x) => x.id), [2, 0]);
   });
 
+  it("customer id абонемента из вложенного customer и без tariff_id всё равно на карточке", async () => {
+    const { tariffRowCustomerId, customerTariffOnCard } = await import("./pupil-tariffs.ts");
+    assert.equal(tariffRowCustomerId({ customer: { id: 8554 }, id: 9 }), 8554);
+    assert.equal(tariffRowCustomerId({ customer_ids: [12], id: 1 }), 12);
+    assert.equal(
+      customerTariffOnCard({ id: 88, removed: 0, e_date: "04.07.2027" }, "2026-09-05"),
+      true,
+    );
+  });
+
   it("все медленно — пачки по 3 группы по номеру", () => {
     const pack = batchesOfThree([
       { groupId: 594 },

@@ -331,6 +331,24 @@ export function customerTariffLive(it: Record<string, unknown>, _catalog?: Catal
   return true;
 }
 
+export function tariffRowCustomerId(it: Record<string, unknown>) {
+  const nested =
+    it.customer && typeof it.customer === "object"
+      ? Number((it.customer as { id?: unknown }).id || 0)
+      : 0;
+  const listed = Array.isArray(it.customer_ids) ? Number(it.customer_ids[0] || 0) : 0;
+  return Number(it.customer_id ?? it.customerId ?? nested ?? listed ?? 0) || 0;
+}
+
+/** На карточке действует: не снят и не истёк. Пустой tariff_id (подпись «абонемент») всё равно живой. */
+export function customerTariffOnCard(it: Record<string, unknown>, today = todayIso()) {
+  if (Number(it.removed || it.is_removed || 0) === 1) return false;
+  if (!(Number(it.id) > 0)) return false;
+  const to = tariffDateToIso(String(it.e_date || it.eDate || ""));
+  if (to && to < today) return false;
+  return true;
+}
+
 export function preferCurrentTariffs(
   list: { id: number; tariffId: number; name: string }[],
   catalog?: CatalogTariff[],
@@ -403,7 +421,7 @@ export function splitCustomerTariffs(
   for (const it of items || []) {
     if (Number(it.removed || 0) === 1) continue;
     const id = Number(it.id) || 0;
-    const customerId = Number(it.customer_id ?? it.customerId ?? 0);
+    const customerId = tariffRowCustomerId(it);
     const tariffId = Number(it.tariff_id || it.tariffId || 0);
     if (!id || !customerId || !tariffId) continue;
     const row = { id, tariffId, name: customerTariffLabel(it, catalog) };
