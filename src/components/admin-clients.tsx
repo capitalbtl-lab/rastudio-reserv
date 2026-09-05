@@ -341,7 +341,7 @@ export function AdminClients({
       const res = (await retryFetch(
         () => adminSchedule({ data: { token: token(), action: "clientsLiveTariffs" } as never }),
         1,
-        120000,
+        240000,
       )) as { ok?: boolean; ids?: number[]; scanned?: number };
       if (res.ok && Array.isArray(res.ids) && (res.ids.length || Number(res.scanned || 0) > 0)) {
         setLiveTariffIds(new Set(res.ids.map(Number).filter(Boolean)));
