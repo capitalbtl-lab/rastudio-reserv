@@ -547,6 +547,15 @@ export function AdminClients({
         schools: next.schools?.length ? next.schools : prev?.schools || r.schools || [],
       }));
       applyLiveStatus(crmId, bid, next);
+      if ((next.tariffs || []).some((t) => !t.archived)) {
+        setLiveTariffIds((s) => {
+          if (s.has(crmId)) return s;
+          const n = new Set(s);
+          n.add(crmId);
+          return n;
+        });
+        setLiveReady(true);
+      }
     }
   }
 

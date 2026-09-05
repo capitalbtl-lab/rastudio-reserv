@@ -868,8 +868,9 @@ export function CrmClientCard({
                   <li key={t.id} className="rounded-xl bg-white px-3 py-2 ring-1 ring-black/6">
                     <p className="font-semibold text-sm">{t.name}</p>
                     <p className="text-[0.75rem] text-muted">
-                      {money(t.rest)}
-                      {t.lessons ? ` · ${t.lessons} ур.` : ""}
+                      {[t.bDate && t.eDate ? `${t.bDate} — ${t.eDate}` : "", t.lessons ? `${t.lessons} ур.` : "", t.price ? money(t.price) : t.rest ? money(t.rest) : ""]
+                        .filter(Boolean)
+                        .join(" · ") || money(t.rest)}
                     </p>
                   </li>
                 ))}

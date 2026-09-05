@@ -633,6 +633,61 @@ function groupIdsFromCustomer(c: Record<string, unknown>) {
   return [...out];
 }
 
+async function cgiAndLessonGroups(
+  request: typeof import("./alfacrm").request,
+  t: string,
+  branch: number,
+  customerId: number,
+) {
+  const { cgiCustomerId } = await import("./pupil-tariffs");
+  const out: { id: number; name: string; branchId: number }[] = [];
+  const seen = new Set<number>();
+  const branches = [branch, 1, 2, 3, 4].filter((b, i, a) => b > 0 && a.indexOf(b) === i);
+  for (const b of branches) {
+    try {
+      const json = await request<{ items?: Record<string, unknown>[] }>(
+        `/v2api/${b}/cgi/index?customer_id=${customerId}`,
+        { page: 0, pageSize: 80, customer_id: customerId },
+        t,
+      );
+      for (const it of json.items || []) {
+        if (Number(it.removed || it.is_removed || 0) === 1) continue;
+        const cid = cgiCustomerId(it);
+        if (cid && cid !== customerId) continue;
+        const rec = it as { group?: { id?: number; name?: string } };
+        const gid = Number(it.group_id || it.groupId || rec.group?.id || 0);
+        if (!gid || seen.has(gid)) continue;
+        seen.add(gid);
+        out.push({ id: gid, name: String(it.group_name || rec.group?.name || ""), branchId: b });
+      }
+    } catch {
+      /* next branch */
+    }
+    if (out.length) break;
+  }
+  if (!out.length) {
+    try {
+      const json = await request<{ items?: Record<string, unknown>[] }>(
+        `/v2api/${branch}/regular-lesson/index`,
+        { page: 0, pageSize: 50, customer_id: customerId },
+        t,
+      );
+      for (const it of json.items || []) {
+        const gids = Array.isArray(it.group_ids) ? it.group_ids : [];
+        for (const raw of gids) {
+          const gid = Number(raw) || 0;
+          if (!gid || seen.has(gid)) continue;
+          seen.add(gid);
+          out.push({ id: gid, name: String(it.group_name || ""), branchId: branch });
+        }
+      }
+    } catch {
+      /* optional */
+    }
+  }
+  return out;
+}
+
 async function setGroupMembership(
   request: <T = { success?: boolean; errors?: unknown }>(path: string, body: unknown, t?: string) => Promise<T>,
   t: string,
@@ -779,6 +834,11 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
     }
   }
   const crmIds = new Set(groupIdsFromCustomer(c));
+  const cgiGroups = await cgiAndLessonGroups(request, t, useBranch, customerId);
+  for (const g of cgiGroups) {
+    crmIds.add(g.id);
+    if (g.name) crmNames.set(g.id, { name: g.name, branchId: g.branchId || useBranch });
+  }
   const byId = new Map<number, CustomerCard["groups"][number]>();
   if (crmIds.size) {
     for (const id of crmIds) {
@@ -851,18 +911,26 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
   }
   const tariffs: NonNullable<CustomerCard["tariffs"]> = [];
   try {
+    const { customerTariffLabel, customerTariffOnCard } = await import("./pupil-tariffs");
+    const catalogTariffs = loadTariffs().items.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price }));
     const json = await request<{ items?: Record<string, unknown>[] }>(
       `/v2api/${useBranch}/customer-tariff/index?customer_id=${customerId}`,
-      { page: 0, pageSize: 20, customer_id: customerId },
+      { page: 0, pageSize: 40, customer_id: customerId },
       t,
     );
     for (const it of json.items || []) {
+      const nested = it.tariff && typeof it.tariff === "object" ? (it.tariff as Record<string, unknown>) : {};
+      const tariffId = Number(it.tariff_id || it.tariffId || nested.id || 0);
       tariffs.push({
         id: Number(it.id || 0),
-        name: String(it.tariff_name || it.name || "абонемент"),
+        tariffId,
+        name: customerTariffLabel({ ...it, tariff_id: tariffId, tariff_name: it.tariff_name || nested.name }, catalogTariffs),
         rest: Number(it.balance ?? it.rest ?? it.paid ?? 0),
-        lessons: Number(it.lessons_count ?? it.paid_count ?? it.lesson_count ?? 0),
-        archived: Number(it.removed || it.is_archived || 0) === 1,
+        lessons: Number(it.lessons_count ?? it.paid_count ?? it.lesson_count ?? nested.lessons_count ?? 0),
+        archived: !customerTariffOnCard(it),
+        bDate: String(it.b_date || it.bDate || ""),
+        eDate: String(it.e_date || it.eDate || ""),
+        price: Number(nested.price ?? it.price ?? 0),
       });
     }
   } catch {
@@ -2327,7 +2395,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           branches.slice(i, i + 2).map(async (branch) => {
             await pagedIndex(
               customerTariffIndexBranchPath(branch),
-              { removed: 0 },
+              {},
               t,
               (it: Record<string, unknown>) => {
                 scanned += 1;

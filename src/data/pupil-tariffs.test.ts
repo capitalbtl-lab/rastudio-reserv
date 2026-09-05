@@ -167,9 +167,10 @@ describe("мастер абонементов учеников", () => {
   });
 
   it("customer id абонемента из вложенного customer и без tariff_id всё равно на карточке", async () => {
-    const { tariffRowCustomerId, customerTariffOnCard } = await import("./pupil-tariffs.ts");
+    const { tariffRowCustomerId, customerTariffOnCard, cgiCustomerId } = await import("./pupil-tariffs.ts");
     assert.equal(tariffRowCustomerId({ customer: { id: 8554 }, id: 9 }), 8554);
     assert.equal(tariffRowCustomerId({ customer_ids: [12], id: 1 }), 12);
+    assert.equal(cgiCustomerId({ customer: { id: 8823 }, group_id: 1 }), 8823);
     assert.equal(
       customerTariffOnCard({ id: 88, removed: 0, e_date: "04.07.2027" }, "2026-09-05"),
       true,

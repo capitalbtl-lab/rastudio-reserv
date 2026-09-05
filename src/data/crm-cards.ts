@@ -42,10 +42,14 @@ export type ClientLesson = {
 
 export type ClientTariff = {
   id: number;
+  tariffId?: number;
   name: string;
   rest: number;
   lessons: number;
   archived?: boolean;
+  bDate?: string;
+  eDate?: string;
+  price?: number;
 };
 
 export type GroupMember = {

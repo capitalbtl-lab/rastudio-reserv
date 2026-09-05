@@ -113,7 +113,9 @@ export function countCgiParticipants(items: Record<string, unknown>[]) {
 }
 
 export function cgiCustomerId(it: Record<string, unknown>) {
-  return Number(it.customer_id || it.customerId || 0);
+  const nested =
+    it.customer && typeof it.customer === "object" ? Number((it.customer as { id?: unknown }).id || 0) : 0;
+  return Number(it.customer_id || it.customerId || nested || 0) || 0;
 }
 
 export function mergeGroupTaken(...n: number[]) {
