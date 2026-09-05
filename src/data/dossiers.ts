@@ -641,6 +641,9 @@ export async function overlayMembershipFromCrm() {
     }
     return row;
   }
+  const slots = (loadVersions()[0]?.slots || []).filter((s) => Number(s.groupId) > 0);
+  const slotOf = (branchId: number, groupId: number) =>
+    slots.find((s) => s.groupId === groupId && s.branchId === branchId) || slots.find((s) => s.groupId === groupId);
   let scanned = 0;
   for (const branch of [1, 2, 3, 4]) {
     await pagedIndex(
@@ -655,7 +658,12 @@ export async function overlayMembershipFromCrm() {
         if (!cid || !gid) return;
         const row = bag(cid);
         if (!row.groups.some((g) => g.id === gid && g.branchId === branch)) {
-          row.groups.push({ id: gid, branchId: branch, name: String(it.group_name || rec.group?.name || "") });
+          const slot = slotOf(branch, gid);
+          row.groups.push({
+            id: gid,
+            branchId: branch,
+            name: String(it.group_name || rec.group?.name || slot?.groupName || ""),
+          });
         }
       },
       { pageSize: 200, pages: 40 },
@@ -683,20 +691,22 @@ export async function overlayMembershipFromCrm() {
     const hit = byCustomer.get(id);
     d.extras = d.extras || {};
     if (hit?.groups.length) {
-      const list = [...(d.groupLinks || [])];
-      for (const g of hit.groups) {
-        const i = list.findIndex((x) => x.id === g.id && x.branchId === g.branchId);
-        const link: GroupLink = {
+      const prev = new Map((d.groupLinks || []).map((g) => [`${g.branchId}:${g.id}`, g]));
+      const list: GroupLink[] = hit.groups.map((g) => {
+        const old = prev.get(`${g.branchId}:${g.id}`);
+        const slot = slotOf(g.branchId, g.id);
+        return {
           id: g.id,
-          name: g.name || list[i]?.name || `группа ${g.id}`,
+          name: g.name || old?.name || slot?.groupName || `группа ${g.id}`,
           branchId: g.branchId,
-          school: list[i]?.school || "",
+          school: old?.school || slot?.school || "",
           active: true,
-          subjectId: list[i]?.subjectId,
-          courseId: list[i]?.courseId,
+          subjectId: old?.subjectId || slot?.subjectId || undefined,
+          courseId: old?.courseId || slot?.courseId,
         };
-        if (i >= 0) list[i] = { ...list[i], ...link };
-        else list.push(link);
+      });
+      for (const old of d.groupLinks || []) {
+        if (!list.some((g) => g.id === old.id && g.branchId === old.branchId)) list.push({ ...old, active: false });
       }
       d.groupLinks = list;
       withGroups += 1;

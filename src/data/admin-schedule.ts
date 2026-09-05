@@ -839,6 +839,11 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
     crmIds.add(g.id);
     if (g.name) crmNames.set(g.id, { name: g.name, branchId: g.branchId || useBranch });
   }
+  for (const g of fromDossier) {
+    if (g.active === false) continue;
+    crmIds.add(g.id);
+    if (g.name) crmNames.set(g.id, { name: g.name, branchId: g.branchId || useBranch });
+  }
   const byId = new Map<number, CustomerCard["groups"][number]>();
   if (crmIds.size) {
     for (const id of crmIds) {
@@ -979,6 +984,23 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
       eDate: t.eDate,
       calculationType: t.calculationType,
     }));
+  if (packedGroups.length) {
+    upsertDossier({
+      crmId: customerId,
+      branchId: useBranch,
+      groupLinks: packedGroups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        branchId: g.branchId,
+        school: g.school || "",
+        active: Boolean(g.active),
+        subjectId: g.subjectId,
+        courseId: g.courseId,
+      })),
+      source: "alfacrm",
+      crmWins: true,
+    });
+  }
   return {
     id: customerId,
     cardId: clientCardId(customerId),

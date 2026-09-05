@@ -341,7 +341,7 @@ export function AdminClients({
       const res = (await retryFetch(
         () => adminSchedule({ data: { token: token(), action: "clientsLiveTariffs" } as never }),
         1,
-        90000,
+        120000,
       )) as { ok?: boolean; ids?: number[] };
       if (res.ok && Array.isArray(res.ids)) {
         setLiveTariffIds(new Set(res.ids.map(Number).filter(Boolean)));
@@ -358,6 +358,15 @@ export function AdminClients({
     if (next !== "all") await loadLiveTariffs();
     setTariffHave(next);
   }
+
+  const overlayOnce = useRef(false);
+  useEffect(() => {
+    if (overlayOnce.current || liveTariffBusy || !rows.length) return;
+    const missing = rows.filter((r) => !(r.groupLinks || []).some((g) => g.active !== false && g.id)).length;
+    if (missing < Math.max(8, rows.length * 0.2)) return;
+    overlayOnce.current = true;
+    void loadLiveTariffs(true);
+  }, [rows.length, liveTariffBusy]);
 
   async function load(nextQ = q, nextStatus = status, nextBranch = branch, nextAge = age) {
     if (!rowsRef.current.length) setBusy(true);
@@ -1555,7 +1564,13 @@ export function AdminClients({
                     </span>
                   </span>
                   <span className="mt-0.5 block truncate text-[0.72rem] text-muted">
-                    {[r.age ? `${r.age} лет` : "", parent, r.phone, CRM_BRANCH[Number(r.branchId) || 0]?.short, crmId ? `id ${crmId}` : ""]
+                    {[
+                      r.age ? `${r.age} лет` : "",
+                      (r.groupLinks || []).filter((g) => g.active !== false).map((g) => g.name).find(Boolean) || "",
+                      parent,
+                      r.phone,
+                      CRM_BRANCH[Number(r.branchId) || 0]?.short,
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
