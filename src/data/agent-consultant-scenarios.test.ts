@@ -51,10 +51,10 @@ describe("сценарии консультанта", () => {
     assert.equal(facts.identified, true);
     assert.equal(facts.intent, "отработка");
     assert.doesNotMatch(nextStepOf(facts), /подтвердить имя/);
-    assert.match(nextStepOf(facts), /день отработки|Не предлагать пробное/);
+    assert.match(nextStepOf(facts), /недел[юи] отработки|Не предлагать пробное/);
     const chipsSrc = readFileSync(new URL("./agent-chips.ts", import.meta.url), "utf8");
-    assert.match(chipsSrc, /facts\.intent === "отработка" && !facts\.day/);
-    assert.match(chipsSrc, /WEEKDAY_CHIPS/);
+    assert.match(chipsSrc, /facts\.intent === "отработка" && !facts\.makeupWeek/);
+    assert.match(chipsSrc, /MAKEUP_WEEK_CHIPS/);
   });
 
   it("суббота — отработка, не пробное", () => {
@@ -62,18 +62,21 @@ describe("сценарии консультанта", () => {
       { role: "user", content: "Да, это Александра" },
       { role: "assistant", content: "Ольга: Александра в карточке. Чем помочь?" },
       { role: "user", content: "Нужна отработка пропуска" },
+      { role: "user", content: "на этой неделе" },
       { role: "user", content: "в субботу" },
     );
     const facts = factsFromMessages(msgs);
     assert.equal(facts.identified, true);
     assert.equal(facts.intent, "отработка");
+    assert.equal(facts.makeupWeek, "this");
     assert.equal(facts.day, "суббота");
-    assert.equal(takeWeekday("в субботу"), "суббота");
-    assert.match(nextStepOf(facts), /суббота/);
+    assert.match(nextStepOf(facts), /this|этой|три ближайших/);
     assert.doesNotMatch(nextStepOf(facts), /подтвердить имя|пробное занятие/i);
     assert.match(talkFallback("olga", facts), /Пробное не предлагаю/);
     const desk = readFileSync(new URL("./agent-client-desk.ts", import.meta.url), "utf8");
     assert.match(desk, /Пробное вместо отработки не ставлю/);
+    assert.match(desk, /MAKEUP_WEEK_CHIPS/);
+    assert.match(desk, /pageMakeup/);
   });
 
   it("пропуск и пауза — разные намерения", () => {
