@@ -1449,6 +1449,192 @@ export function CrmClientCard({
   ) : null;
   const dropNode = dropDialog && typeof document !== "undefined" ? createPortal(dropDialog, document.body) : dropDialog;
 
+  const payDialog = headMenu === "pay" ? (
+    <div
+      className="fixed inset-0 z-[260] flex items-center justify-center bg-black/50 p-3 backdrop-blur-[3px]"
+      onClick={() => setHeadMenu("")}
+      data-op="pay-menu"
+    >
+      <div
+        className={cn("flex max-h-[min(92vh,40rem)] w-full max-w-[28rem] flex-col overflow-hidden", RA_POP)}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex shrink-0 items-start justify-between gap-3 px-5 pb-2 pt-4">
+          <div className="min-w-0">
+            <h3 className="font-display text-[1.25rem] leading-tight">Добавить доход</h3>
+            <p className="mt-0.5 text-[0.78rem] text-muted">Остаток {money(card.balance)}</p>
+          </div>
+          <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full text-lg leading-none text-muted hover:bg-surface-2" onClick={() => setHeadMenu("")} aria-label="Закрыть">
+            ×
+          </button>
+        </header>
+        <div className="shrink-0 flex flex-wrap gap-0.5 px-5 pb-2">
+          {CARD_PAY_KINDS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              data-pay-kind={p.id}
+              className={cn("rounded-lg px-2 py-1 text-[0.72rem] font-medium", payKind === p.id ? "bg-primary/10 text-primary" : "hover:bg-surface-2")}
+              onClick={() => setPayKind(p.id)}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+        <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-4">
+          {payKind ? (
+            <div className="grid grid-cols-1 items-center gap-x-3 gap-y-2 text-[0.78rem] sm:grid-cols-[7.5rem_minmax(0,1fr)]">
+              <span className="text-muted">Тип и дата</span>
+              <div className="flex min-w-0 gap-1">
+                <span className="flex h-9 min-w-0 flex-1 items-center truncate rounded-lg bg-surface-2 px-2 text-muted">Доход</span>
+                <input
+                  type="date"
+                  value={payDate}
+                  min={ISO_DATE_MIN}
+                  max={ISO_DATE_MAX}
+                  onChange={(e) => setPayDate(clampIsoDate(e.target.value))}
+                  className="h-9 w-[10.5rem] shrink-0 rounded-lg bg-surface-2 px-1.5 ring-1 ring-black/8"
+                />
+              </div>
+              <span className="text-muted">Счёт</span>
+              <div className="min-w-0">
+                <RaSelect
+                  value={payAccountId}
+                  onChange={setPayAccountId}
+                  options={ALFA_PAY_ACCOUNTS.map((x) => ({ value: String(x.id), label: x.name }))}
+                />
+              </div>
+              <span className="text-muted">Статья</span>
+              <div className="min-w-0">
+                <RaSelect value={payItemId} onChange={setPayItemId} groups={payItemGroups(card.branchId)} placeholder="Статья дохода" />
+              </div>
+              <span className="text-muted">Локация</span>
+              <div className="min-w-0">
+                <RaSelect
+                  value={payLocationId}
+                  onChange={setPayLocationId}
+                  options={[
+                    { value: "", label: "(не задано)" },
+                    ...locationsOfBranch(card.branchId)
+                      .filter((x) => x.id > 0)
+                      .map((x) => ({ value: String(x.id), label: x.name })),
+                  ]}
+                  placeholder={locationsOfBranch(card.branchId)[0]?.name || "(не задано)"}
+                />
+              </div>
+              <span className="text-muted">Менеджер</span>
+              <div className="min-w-0">
+                <RaSelect
+                  value={payManagerId}
+                  onChange={setPayManagerId}
+                  options={[{ value: "", label: "(не задано)" }, ...ALFA_PAY_MANAGERS.map((x) => ({ value: String(x.id), label: x.name }))]}
+                />
+              </div>
+              <span className="text-muted">Клиентский счёт</span>
+              <div className="min-w-0">
+                <RaSelect
+                  value={payCttId}
+                  onChange={setPayCttId}
+                  options={[
+                    { value: "", label: "(не задано)" },
+                    ...(card.tariffs || []).map((t) => ({ value: String(t.id), label: t.name })),
+                  ]}
+                />
+              </div>
+              <span className="text-muted">Сумма</span>
+              <input
+                value={paySum}
+                onChange={(e) => setPaySum(e.target.value)}
+                placeholder="Например, 5000"
+                className="h-9 min-w-0 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8"
+              />
+              <span className="text-muted">Плательщик</span>
+              <input
+                value={payPayer}
+                onChange={(e) => setPayPayer(e.target.value)}
+                placeholder="ФИО родителя"
+                className="h-9 min-w-0 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8"
+              />
+              <span className="text-muted">Группа</span>
+              <div className="min-w-0">
+                <RaSelect
+                  value={payGroupId}
+                  onChange={setPayGroupId}
+                  options={[
+                    { value: "", label: "Выберите" },
+                    ...(card.groups || []).map((g) => ({ value: String(g.id), label: g.name })),
+                  ]}
+                />
+              </div>
+              <span className="text-muted">Комментарий</span>
+              <input
+                value={payNote}
+                onChange={(e) => setPayNote(e.target.value)}
+                placeholder="Оплата за обучение"
+                className="h-9 min-w-0 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8"
+              />
+              <span className="text-muted">Способ внесения</span>
+              <div className="min-w-0">
+                <RaSelect
+                  value={payMethod}
+                  onChange={setPayMethod}
+                  options={ALFA_PAY_METHODS.map((x) => ({ value: x.id, label: x.name }))}
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="text-[0.78rem] text-muted">Выберите тип операции</p>
+          )}
+          {(card.pays || []).length ? (
+            <ul className="mt-3 max-h-28 overflow-y-auto border-t border-black/8 pt-2">
+              {[...(card.pays || [])].reverse().map((p) => (
+                <li key={p.id} className="flex justify-between gap-2 px-0.5 py-0.5 text-[0.72rem]">
+                  <span className="min-w-0 truncate text-muted">{p.documentDate || p.note}</span>
+                  <span className="shrink-0 tabular-nums font-semibold">
+                    {p.income ? `+${money(p.income)}` : `−${money(p.expenditure)}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        {payKind ? (
+          <footer className="flex shrink-0 justify-end gap-2 border-t border-black/8 px-5 py-3">
+            <Button type="button" size="sm" className="h-9 px-4" variant="ghost" onClick={() => setHeadMenu("")}>
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-9 px-4"
+              data-op="customerPay"
+              disabled={Boolean(busy)}
+              onClick={() =>
+                void run("customerPay", {
+                  payKind,
+                  sum: Number(String(paySum).replace(",", ".")),
+                  payAccountId: Number(payAccountId) || 1,
+                  payItemId: Number(payItemId) || 0,
+                  locationId: Number(payLocationId) || 0,
+                  managerId: Number(payManagerId) || 0,
+                  cttId: Number(payCttId) || 0,
+                  payerName: payPayer,
+                  groupId: Number(payGroupId) || 0,
+                  note: payNote,
+                  payMethod,
+                  documentDate: payDate,
+                })
+              }
+            >
+              {busy === "customerPay" ? "Сохраняю…" : "Сохранить"}
+            </Button>
+          </footer>
+        ) : null}
+      </div>
+    </div>
+  ) : null;
+  const payNode = payDialog && typeof document !== "undefined" ? createPortal(payDialog, document.body) : payDialog;
+
   if (variant === "panel") {
     return (
       <>
@@ -1457,6 +1643,7 @@ export function CrmClientCard({
         {tariffNode}
         {groupNode}
         {dropNode}
+        {payNode}
       </>
     );
   }
@@ -1473,6 +1660,7 @@ export function CrmClientCard({
         {tariffDialog}
         {groupDialog}
         {dropDialog}
+        {payDialog}
       </>
     );
   }
@@ -1483,6 +1671,7 @@ export function CrmClientCard({
       {tariffNode}
       {groupNode}
       {dropNode}
+      {payNode}
     </>
   );
 }
