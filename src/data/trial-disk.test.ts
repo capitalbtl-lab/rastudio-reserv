@@ -324,6 +324,7 @@ describe("кабинет: новый ученик диск сразу", () => {
     const ui = readFileSync(new URL("../components/admin-clients.tsx", import.meta.url), "utf8");
     assert.match(ui, /loadFunnel\(branch, false, true\)/);
     assert.match(ui, /loadFunnel\(branchRef\.current, false, true\)/);
+    assert.doesNotMatch(ui, /autoPull/);
     const link = readFileSync(new URL("./crm-alfa-link.ts", import.meta.url), "utf8");
     assert.match(link, /wantAlfaDelta/);
   });

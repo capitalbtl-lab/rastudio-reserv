@@ -346,7 +346,6 @@ export function AdminClients({
   const [desktop, setDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches);
   const searchT = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
-  const autoPull = useRef(false);
   const groupGen = useRef(0);
   const groupPack = useRef(new Map<string, { members: GroupMember[]; archive: GroupMember[]; info: GroupInfo }>());
   const qRef = useRef("");
@@ -472,11 +471,6 @@ export function AdminClients({
           at: Date.now(),
         };
         writeClientsSnap(clientsSnap);
-        const all = Number(res.all || 0);
-        if (!autoPull.current && !nextQ && nextStatus === "учится" && all === 0 && !res.items.length) {
-          autoPull.current = true;
-          void pullKind("clients");
-        }
         if (!res.items.length) {
           setCard(null);
           setActiveId(0);
