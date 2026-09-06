@@ -895,17 +895,48 @@ ${never}
 `;
 }
 
+export function consultantIdGraphPrompt() {
+  return `КАРТА ID (не связывать по имени):
+школа schoolId → курс courseId → предмет subjectId.
+филиал branchId + группа groupId. Клиент customerId в группе. Урок lessonId на группе. Абонемент tariffId → курс.
+Живой абонемент extras.live_tariff. Состав groupLinks id+branchId. Имя — подпись, не ключ.`;
+}
+
+export const CORE_ID_NODES = [
+  { id: "schoolId", label: "Школа", col: 0, row: 0 },
+  { id: "courseId", label: "Курс", col: 1, row: 0 },
+  { id: "subjectId", label: "Предмет", col: 2, row: 0 },
+  { id: "branchId", label: "Филиал", col: 0, row: 1 },
+  { id: "groupId", label: "Группа", col: 1, row: 1 },
+  { id: "tariffId", label: "Абонемент", col: 2, row: 1 },
+  { id: "customerId", label: "Клиент", col: 1, row: 2 },
+  { id: "lessonId", label: "Урок", col: 2, row: 2 },
+] as const;
+
+export const CORE_ID_EDGES: Array<[string, string]> = [
+  ["schoolId", "courseId"],
+  ["courseId", "subjectId"],
+  ["branchId", "groupId"],
+  ["courseId", "groupId"],
+  ["subjectId", "groupId"],
+  ["groupId", "tariffId"],
+  ["tariffId", "courseId"],
+  ["customerId", "groupId"],
+  ["groupId", "lessonId"],
+  ["customerId", "lessonId"],
+];
+
 export function consultantGuidePrompt() {
   try {
     const all = loadGuides();
     const parts = ["roles", "site"]
       .map((id) => all.find((g) => g.id === id && g.on)?.body?.trim())
       .filter(Boolean) as string[];
-    if (parts.length) return parts.join("\n\n----\n\n");
+    if (parts.length) return `${parts.join("\n\n----\n\n")}\n\n----\n\n${consultantIdGraphPrompt()}`;
   } catch {
     /* завод */
   }
-  return [rolesBody(), siteBookBody()].join("\n\n----\n\n");
+  return [rolesBody(), siteBookBody(), consultantIdGraphPrompt()].join("\n\n----\n\n");
 }
 
 export function guidesOverlayFile() {

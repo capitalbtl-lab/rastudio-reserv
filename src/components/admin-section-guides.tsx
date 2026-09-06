@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { adminSectionGuides, FACTORY_GUIDES, GUIDE_REV, type SectionGuide } from "@/data/agent-section-guides";
+import { adminSectionGuides, FACTORY_GUIDES, GUIDE_REV, CORE_ID_NODES, CORE_ID_EDGES, type SectionGuide } from "@/data/agent-section-guides";
 import { Button } from "@/components/ui/button";
 import { AdminSaveBar } from "@/components/admin-save-bar";
 import { InfoTip, TipWrap } from "@/components/info-tip";
@@ -19,6 +19,59 @@ function when(iso: string) {
   return d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
+const COL_W = 148;
+const ROW_H = 68;
+const BOX_W = 124;
+const BOX_H = 36;
+
+function IdGraph({
+  selected,
+  onPick,
+}: {
+  selected: string | null;
+  onPick: (id: string) => void;
+}) {
+  const pos = new Map(CORE_ID_NODES.map((n) => [n.id, { x: 24 + n.col * COL_W, y: 20 + n.row * ROW_H }]));
+  const w = 24 + 3 * COL_W;
+  const h = 20 + 3 * ROW_H;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-[40rem]" role="img" aria-label="Карта связей ID">
+      {CORE_ID_EDGES.map(([a, b]) => {
+        const pa = pos.get(a);
+        const pb = pos.get(b);
+        if (!pa || !pb) return null;
+        return (
+          <line
+            key={`${a}-${b}`}
+            x1={pa.x + BOX_W / 2}
+            y1={pa.y + BOX_H / 2}
+            x2={pb.x + BOX_W / 2}
+            y2={pb.y + BOX_H / 2}
+            stroke={selected === a || selected === b ? "#205edc" : "#111827"}
+            strokeWidth={selected === a || selected === b ? 2 : 1.2}
+            opacity={selected && selected !== a && selected !== b ? 0.15 : 0.35}
+          />
+        );
+      })}
+      {CORE_ID_NODES.map((n) => {
+        const p = pos.get(n.id)!;
+        const on = selected === n.id;
+        return (
+          <g key={n.id} transform={`translate(${p.x} ${p.y})`} className="cursor-pointer" onClick={() => onPick(n.id)}>
+            <rect width={BOX_W} height={BOX_H} rx="18" fill={on ? "#205edc" : "#111827"} />
+            <text x={BOX_W / 2} y="16" textAnchor="middle" fill="#fff" fontSize="11" fontWeight="700">
+              {n.label}
+            </text>
+            <text x={BOX_W / 2} y="28" textAnchor="middle" fill="#fff" fontSize="8" opacity="0.75">
+              {n.id}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 export function AdminSectionGuides() {
   const [guides, setGuides] = useState<SectionGuide[]>(FACTORY_GUIDES);
   const [active, setActive] = useState("schedule");
@@ -26,6 +79,7 @@ export function AdminSectionGuides() {
   const [on, setOn] = useState(true);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
 
   const guide = guides.find((g) => g.id === active) || guides[0];
 
@@ -148,7 +202,10 @@ export function AdminSectionGuides() {
           <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
             <div className="flex items-center gap-2">
               <p className="font-display text-lg">Карта ID</p>
-              <InfoTip text="Жёсткий граф. Агент не имеет права связывать сущности по названию. Ключ — только поле ID." />
+              <InfoTip text="Жёсткий граф. Агент не имеет права связывать сущности по названию. Ключ — только поле ID. Эта схема уходит в промпт Олега и Ольги." />
+            </div>
+            <div className="mt-3 overflow-hidden rounded-2xl bg-surface-2 p-3">
+              <IdGraph selected={picked} onPick={setPicked} />
             </div>
             <div className="mt-3 overflow-x-auto rounded-2xl ring-1 ring-black/10">
               <table className="w-full text-left text-sm">
@@ -161,7 +218,14 @@ export function AdminSectionGuides() {
                 </thead>
                 <tbody>
                   {guide.graph.map((row) => (
-                    <tr key={row.idField} className="border-t border-black/5">
+                    <tr
+                      key={row.idField}
+                      className={cn("border-t border-black/5", picked && row.idField.includes(picked) && "bg-primary/10")}
+                      onClick={() => {
+                        const hit = CORE_ID_NODES.find((n) => row.idField.includes(n.id));
+                        setPicked(hit?.id || null);
+                      }}
+                    >
                       <td className="px-3 py-2 font-semibold">{row.entity}</td>
                       <td className="px-3 py-2 font-mono text-[0.78rem]">{row.idField}</td>
                       <td className="px-3 py-2 text-muted">{row.link}</td>
