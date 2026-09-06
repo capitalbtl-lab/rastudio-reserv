@@ -60,7 +60,7 @@ export async function makeupList(customerId: number, weekday: string) {
   return { digest: d, list, courseLabel };
 }
 
-export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts, rights: DeskRights = OPEN_RIGHTS) {
+export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts, rights: DeskRights = OPEN_RIGHTS, lastUser = "") {
   if (facts.wantsBook || facts.wantsSkip) return null;
   if (facts.mode !== "client" || !facts.identified || !facts.customerId) return null;
   const n = who === "olga" ? "Ольга" : "Олег";
@@ -149,10 +149,11 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
     if (rights.consultantCanSkip === false) {
       return { reply: `${n}: Пропуск отмечает администратор. ${phoneHint()}`, chips: [] };
     }
-    const last = String(facts.day ? "" : "");
-    void last;
-    if (!facts.wantsSkip && (facts.day || false) && !/ближайш/i.test("")) {
-      /* день выбран — подтверждение ниже, если не nearest */
+    if (/другую дату|другая дата/i.test(lastUser) && !facts.day) {
+      return {
+        reply: `${n}: На какой день отметить пропуск ${child}?`,
+        chips: WEEKDAY_CHIPS,
+      };
     }
     if (facts.day) {
       return {
