@@ -12,7 +12,6 @@ import {
   scheduleFor,
   allSchedule,
 } from "./catalog.server";
-import { sessionsFromCrm, filterCrmSessions } from "./alfacrm-schedule";
 import { ensureLivePrices } from "./prices";
 import { ensureLiveEdits, snapshotEdits } from "./edits";
 import { loadSiteSignup } from "./site-signup";
@@ -54,8 +53,11 @@ export const loadSitePage = createServerFn({ method: "POST" })
 
 async function scheduleWithCrm(splat?: string) {
   try {
-    const crm = await sessionsFromCrm();
-    const filtered = filterCrmSessions(crm, splat ? (splat.startsWith("/") ? splat : `/${splat}`) : splat);
+    const { sessionsFromDisk, filterCrmSessions } = await import("./alfacrm-schedule");
+    const filtered = filterCrmSessions(
+      sessionsFromDisk(),
+      splat ? (splat.startsWith("/") ? splat : `/${splat}`) : splat,
+    );
     if (filtered.length) return filtered;
   } catch {
     /* CMS fallback */
@@ -66,7 +68,8 @@ async function scheduleWithCrm(splat?: string) {
 export const loadFullSchedule = createServerFn({ method: "GET" }).handler(async () => {
   ensureLivePrices();
   try {
-    const crm = await sessionsFromCrm();
+    const { sessionsFromDisk } = await import("./alfacrm-schedule");
+    const crm = sessionsFromDisk();
     if (crm.length) return { sessions: crm };
   } catch {
     /* CMS fallback */

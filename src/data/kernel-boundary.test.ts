@@ -33,6 +33,9 @@ describe("ядро: границы вкладок", () => {
     }
     const index = src("src/routes/index.tsx");
     assert.doesNotMatch(index, /from ["']@\/components\/home-editor["']/);
+    const pages = src("src/data/load-site-page.ts");
+    assert.doesNotMatch(pages, /from ["']\.\/alfacrm-schedule["']/);
+    assert.match(pages, /sessionsFromDisk/);
     const admin = src("src/routes/admin.tsx");
     assert.match(admin, /StaffShell/);
     assert.doesNotMatch(admin, /SiteShell/);

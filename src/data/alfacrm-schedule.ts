@@ -263,6 +263,11 @@ export function mergeCrmIntoSite(incoming: CrmSlot[], existing: CrmSlot[]) {
   return { slots: applyScheduleMap(stampSubjects(stampTimes(out))), added, updated };
 }
 
+export function sessionsFromDisk(): CmsSession[] {
+  const local = listAdminSlots();
+  return local.length ? sessionsFromSlots(local) : [];
+}
+
 export async function sessionsFromCrm(): Promise<CmsSession[]> {
   const local = listAdminSlots();
   if (local.length) return sessionsFromSlots(local);
