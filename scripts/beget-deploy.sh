@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Выкладка rastudio.org на Beget.
-# Сборка падает → старый процесс не трогаем.
+# Сначала останавливаем процесс, потом чистим .output — иначе кабинет
+# ищет старые hashed-чанки (site-tree-XXXX.mjs) и сыпется.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -33,8 +34,7 @@ if [ ! -d node_modules ] || ! git diff --quiet "$BEFORE" HEAD -- package-lock.js
   npm ci
 fi
 
-# Старые hashed-чанки SSR ломают кабинет (site-tree-XXXX.mjs), если процесс
-# ещё держит прошлый admin-disk-run. Чистим выход и поднимаем процесс заново.
+pm2 stop rastudio >/dev/null 2>&1 || true
 rm -rf .output
 npm run build:beget
 pm2 delete rastudio >/dev/null 2>&1 || true

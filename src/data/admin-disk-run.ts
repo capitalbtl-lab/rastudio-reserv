@@ -6,6 +6,8 @@ import type { DiskReq, PullKind, PullLine } from "./admin-disk";
 import { loadSiteTree } from "./site-tree";
 import { guessTariffLinks, readTariffMap, saveTariffMap } from "./tariff-map";
 import { subjectsWithHref, courseSubjectIndex } from "./crm-tariffs";
+import { packSubjectRows } from "./subject-admin";
+import { searchClientViews, toClientListRow } from "./dossiers";
 
 /** Каталог абонементов читаем вместе с деревом сайта, без отдельного SSR-чанка. */
 
@@ -114,7 +116,6 @@ async function runPull(kind: PullKind) {
       setJob({ step: "Читаю предметы в AlfaCRM…" });
       const { pullSubjectsFromCrm } = await import("./crm-subjects");
       const list = await pullSubjectsFromCrm();
-      const { packSubjectRows } = await import("./subject-admin");
       const packed = packSubjectRows(list);
       const withCourse = packed.subjects.filter((s) => s.courseId).length;
       const groups = packed.subjects.reduce((n, s) => n + Number(s.groupTotal || 0), 0);
@@ -218,7 +219,6 @@ export async function handleAdminDisk(data: DiskReq) {
   }
   try {
     if (kind === "subjects") {
-      const { packSubjectRows } = await import("./subject-admin");
       const packed = packSubjectRows();
       return { ...packed, ok: true as const, total: packed.subjects.length };
     }
@@ -251,7 +251,6 @@ export async function handleAdminDisk(data: DiskReq) {
       };
     }
     if (kind === "clients") {
-      const { searchClientViews, toClientListRow } = await import("./dossiers");
       const q = String(data.q || "").trim();
       const status = String(data.status || "");
       const branchId = Number(data.branchId) || 0;
