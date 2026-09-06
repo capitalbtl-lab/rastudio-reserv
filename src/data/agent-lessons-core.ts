@@ -105,7 +105,8 @@ export function parseLessonSpeech(text: string): Omit<AgentLesson, "id" | "at" |
     raw.match(/(?:надо(?: было)?|правильно|говори|запомни[:\s]+|вместо этого)\s*[:—-]?\s*(.+)$/i) ||
     raw.match(/как правильно[:\s]+(.+)$/i);
   const wrongHit = raw.match(/неправильн\w*[^.!?]{0,40}[«"]?([^».!?]{8,120})/);
-  const right = String(rightHit?.[1] || raw).replace(/^что /, "").trim().slice(0, 800);
+  const right = String(rightHit?.[1] || "").replace(/^что /, "").trim().slice(0, 800);
+  if (!right || right.length < 16 || /^(как правильно|что было|ошибк|урок)\b/i.test(right)) return null;
   const wrong = String(wrongHit?.[1] || "").trim().slice(0, 400);
   const blob = `${raw} ${right}`;
   return {
