@@ -76,32 +76,6 @@ function Related({ page, courses }: { page: SitePage; courses: CourseCard[] }) {
   );
 }
 
-function Breadcrumb({ page, onDark = false }: { page: SitePage; onDark?: boolean }) {
-  const tone = onDark ? "text-bg/80" : "text-primary";
-  const sep = onDark ? "text-bg/45" : "text-muted";
-  return (
-    <p className={`text-sm font-medium ${tone}`}>
-      <PageLink to="/" className="hover:underline">
-        Главная
-      </PageLink>
-      <span className={`mx-2 ${sep}`}>/</span>
-      {page.kind === "teacher" ? (
-        <PageLink to="/team" className="hover:underline">
-          Педагоги
-        </PageLink>
-      ) : page.kind === "master" ? (
-        <PageLink to="/master-class" className="hover:underline">
-          Мастер-классы
-        </PageLink>
-      ) : (
-        <PageLink to="/allcourses" className="hover:underline">
-          Курсы
-        </PageLink>
-      )}
-    </p>
-  );
-}
-
 export function PageArticle({
   page,
   teachers = [],
@@ -463,7 +437,10 @@ function CatalogPage({ page, courses }: { page: SitePage; courses: CourseCard[] 
         kicker="Семь школ · Коломна · Луховицы"
         title={page.h1}
         description={page.description || page.paragraphs[0]}
-        images={courses.slice(0, 8).map((c) => ({ src: c.image, alt: c.alt, filename: c.filename, href: c.href }))}
+        images={courses
+          .filter((c) => c.image)
+          .slice(0, 8)
+          .map((c) => ({ src: c.image, alt: c.alt, filename: c.filename, href: c.href }))}
         secondary={{ href: "/schedule", label: "Расписание" }}
         stats={STATS.map((s) => ({ value: s.value, label: s.label }))}
       />
