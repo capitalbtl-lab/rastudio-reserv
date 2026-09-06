@@ -1,6 +1,6 @@
-import { nextSlot, PROMPT, slotsFromMessages, type Slots } from "./funnel-state";
-import { modeFromMessages, factsFromMessages } from "./agent-facts";
-import { STUDIO_ADDR_SHORT, STUDIO_HOURS_SHORT, STUDIO_RULES_SHORT } from "./agent-client-desk-core";
+import { nextSlot, PROMPT, slotsFromMessages, type Slots } from "./funnel-state.ts";
+import { modeFromMessages, factsFromMessages } from "./agent-facts.ts";
+import { STUDIO_ADDR_SHORT, STUDIO_HOURS_SHORT, STUDIO_RULES_SHORT } from "./agent-client-desk-core.ts";
 
 export type FunnelHit = { reply: string };
 

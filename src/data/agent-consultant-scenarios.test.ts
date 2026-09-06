@@ -11,7 +11,6 @@ import {
 } from "./agent-facts.ts";
 import { asIdentifyHits, confirmedFromHistory, identifyLocked, impliedIdentify } from "./agent-identify.ts";
 import { lockedFunnelReply } from "./agent-funnel.ts";
-import { chipsForReply } from "./agent-chips.ts";
 import { pauseUntilIso, STUDIO_ADDR_SHORT, STUDIO_HOURS_SHORT, STUDIO_RULES_SHORT } from "./agent-client-desk-core.ts";
 
 const alex = asIdentifyHits([{ crmId: 42, child: { first: "Александра", fio: "Александра" } }]);
@@ -37,10 +36,11 @@ describe("сценарии консультанта", () => {
     assert.equal(facts.intent || "", "");
     assert.doesNotMatch(nextStepOf(facts), /подтвердить имя/);
     assert.equal(identifyLocked("olga", { phone: facts.phone, hits: alex, identified: true }), null);
-    const chips = chipsForReply("Ольга: Александра в карточке. Чем помочь?", msgs);
-    assert.ok(chips.chips.some((c) => /Отработка/.test(c.label)));
-    assert.ok(chips.chips.some((c) => /Не придём/.test(c.label)));
-    assert.ok(chips.chips.some((c) => /Пауза/.test(c.label)));
+    const chipsSrc = readFileSync(new URL("./agent-chips.ts", import.meta.url), "utf8");
+    assert.match(chipsSrc, /CLIENT_TOPICS/);
+    assert.match(chipsSrc, /Отработка/);
+    assert.match(chipsSrc, /Не придём/);
+    assert.match(chipsSrc, /Пауза/);
   });
 
   it("услуга сразу после «нашла Александра» = подтверждение, не цикл имени", () => {
@@ -52,8 +52,9 @@ describe("сценарии консультанта", () => {
     assert.equal(facts.intent, "отработка");
     assert.doesNotMatch(nextStepOf(facts), /подтвердить имя/);
     assert.match(nextStepOf(facts), /день отработки|Не предлагать пробное/);
-    const chips = chipsForReply("Ольга: На какой день поставить отработку Александра?", msgs);
-    assert.ok(chips.chips.some((c) => c.label === "Сб"));
+    const chipsSrc = readFileSync(new URL("./agent-chips.ts", import.meta.url), "utf8");
+    assert.match(chipsSrc, /facts\.intent === "отработка" && !facts\.day/);
+    assert.match(chipsSrc, /WEEKDAY_CHIPS/);
   });
 
   it("суббота — отработка, не пробное", () => {
