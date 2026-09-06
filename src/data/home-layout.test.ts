@@ -86,6 +86,7 @@ describe("макет главной", () => {
     assert.match(studio, /DeepSeek: править текст/);
     assert.match(studio, /Сохранить агента страницы/);
     assert.match(studio, /"set"/);
+    assert.match(studio, /И этот/);
     assert.doesNotMatch(studio, /<video src=\{item\.src\}/);
   });
 });

@@ -91,16 +91,20 @@ export function MediaGrid({
   return (
     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
       {media.slice(0, 48).map((item) => (
-        <button
+        <div
           key={item.src}
-          type="button"
+          role="button"
+          tabIndex={0}
           draggable
-          disabled={Boolean(busy)}
           className={cn(
             "cursor-grab overflow-hidden rounded-xl bg-surface-2 text-left ring-2 ring-transparent active:cursor-grabbing",
             active === item.src && "ring-primary",
+            busy && "pointer-events-none opacity-50",
           )}
           onClick={() => onPick?.(item.src)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") onPick?.(item.src);
+          }}
           onDragStart={(e) => startMediaDrag(e, item.src, item.kind)}
           onDragEnd={() => endMediaDrag()}
           title={item.caption || item.place || item.name}
@@ -112,7 +116,7 @@ export function MediaGrid({
           ) : (
             <img src={item.src} alt={item.caption || item.place || item.name} loading="lazy" decoding="async" className="aspect-square w-full object-cover" />
           )}
-        </button>
+        </div>
       ))}
     </div>
   );

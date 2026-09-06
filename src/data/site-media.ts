@@ -30,7 +30,12 @@ function treePack() {
   }
 }
 
-function walk(dir: string, acc: SiteMediaItem[], depth = 0) {
+function walk(
+  dir: string,
+  acc: SiteMediaItem[],
+  pack: { schools: { id: string }[]; courses: { id: string; schoolId: string }[] },
+  depth = 0,
+) {
   if (depth > 6 || acc.length >= 400) return;
   let names: string[] = [];
   try {
@@ -38,7 +43,6 @@ function walk(dir: string, acc: SiteMediaItem[], depth = 0) {
   } catch {
     return;
   }
-  const pack = treePack();
   for (const name of names) {
     if (name.startsWith(".")) continue;
     const full = join(dir, name);
@@ -49,7 +53,7 @@ function walk(dir: string, acc: SiteMediaItem[], depth = 0) {
       continue;
     }
     if (st.isDirectory()) {
-      walk(full, acc, depth + 1);
+      walk(full, acc, pack, depth + 1);
       continue;
     }
     const ext = extname(name).toLowerCase();
@@ -76,7 +80,7 @@ export function invalidateSiteMedia() {
 export function listSiteMedia(): SiteMediaItem[] {
   if (cache && Date.now() - cache.at < 30_000) return cache.items;
   const acc: SiteMediaItem[] = [];
-  walk(join(ROOT(), "media"), acc);
+  walk(join(ROOT(), "media"), acc, treePack());
   acc.sort((a, b) => b.at - a.at);
   cache = { at: Date.now(), items: acc };
   return acc;
