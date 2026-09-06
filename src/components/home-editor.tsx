@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Eye, EyeOff, Monitor, Redo2, Smartphone, Tablet, Undo2 } from "lucide-react";
 import { debugSession } from "@/data/debug-fn";
 import { debugEmit } from "@/data/debug-client";
@@ -20,7 +20,10 @@ import {
   type HomeLayoutDoc,
 } from "@/data/home-layout-core";
 import { StudioPanel } from "@/components/home-studio";
+import { HomeEditorCtx, useHomeEditor, type HomeEditorCtxValue } from "@/components/home-read";
 import { cn } from "@/lib/utils";
+
+export { EditText, useHomeEditor } from "@/components/home-read";
 
 const KEY = "ra_debug";
 
@@ -30,29 +33,6 @@ function debugToken() {
   } catch {
     return "";
   }
-}
-
-type Ctx = {
-  editing: boolean;
-  selected: string | null;
-  select: (id: string | null) => void;
-  doc: HomeLayoutDoc;
-  device: HomeDevice;
-  setDevice: (d: HomeDevice) => void;
-  setDoc: (next: HomeLayoutDoc, persist?: boolean) => void;
-  text: (id: string, fallback: string) => string;
-  setText: (id: string, value: string) => void;
-  undo: () => void;
-  redo: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
-  dirty: string;
-};
-
-const HomeEditorCtx = createContext<Ctx | null>(null);
-
-export function useHomeEditor() {
-  return useContext(HomeEditorCtx);
 }
 
 export function HomeEditorProvider({
@@ -179,7 +159,7 @@ export function HomeEditorProvider({
     return () => window.removeEventListener("keydown", onKey);
   }, [editing, selected, doc, setDoc, undo, redo]);
 
-  const value: Ctx = {
+  const value: HomeEditorCtxValue = {
     editing,
     selected,
     select: setSelected,
@@ -197,37 +177,6 @@ export function HomeEditorProvider({
   };
 
   return <HomeEditorCtx.Provider value={value}>{children}</HomeEditorCtx.Provider>;
-}
-
-export function EditText({
-  id,
-  as: Tag = "span",
-  className,
-  children,
-}: {
-  id: string;
-  as?: "span" | "p" | "h1" | "h2" | "h3" | "div";
-  className?: string;
-  children: string;
-}) {
-  const ctx = useHomeEditor();
-  const fallback = String(children).replace(/\s+/g, " ").trim();
-  const value = ctx?.text(id, fallback) || fallback;
-  const editing = Boolean(ctx?.editing);
-  return (
-    <Tag
-      className={cn(className, editing && "ve-text")}
-      contentEditable={editing}
-      suppressContentEditableWarning
-      onMouseDown={(e) => editing && e.stopPropagation()}
-      onBlur={(e) => {
-        const next = (e.currentTarget.textContent || "").trim();
-        if (next && next !== value) ctx?.setText(id, next);
-      }}
-    >
-      {value}
-    </Tag>
-  );
 }
 
 export function HomeEditorChrome() {

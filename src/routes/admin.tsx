@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { SiteShell } from "@/components/site-shell";
+import { StaffShell } from "@/components/staff-shell";
 import { AdminPrices } from "@/components/admin-prices";
 import { pageHead, SEO_ORIGIN } from "@/data/seo";
 import { AppErrorComponent } from "@/lib/error-component";
@@ -21,8 +21,8 @@ export const Route = createFileRoute("/admin")({
 
 function AdminPage() {
   return (
-    <SiteShell>
+    <StaffShell>
       <AdminPrices />
-    </SiteShell>
+    </StaffShell>
   );
 }

@@ -13,7 +13,7 @@ import { AgeChips } from "@/components/age-chips";
 import { Reviews } from "@/components/reviews";
 import { RobotEnglishVideos } from "@/components/robot-videos";
 import { HomeCanvas, HomeSlot, BlockMedia } from "@/components/home-blocks";
-import { EditText } from "@/components/home-editor";
+import { EditText } from "@/components/home-read";
 import { loadPublicEdits } from "@/data/load-site-page";
 import { hydrateEdits, pageEdit, type EditsStore } from "@/data/edits-core";
 import type { HomeLayoutDoc } from "@/data/home-layout-core";
