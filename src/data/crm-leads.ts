@@ -36,6 +36,7 @@ import {
 import { crmHost, crmWebLogin, csrfOf, mergeCookies, setCookieList } from "./crm-web";
 import type { CrmActorId } from "./crm-actors";
 import { nextLocalId } from "./crm-local-id";
+import { personRole } from "./crm-person-role";
 
 export type { LeadStage, LeadCard } from "./crm-leads-stages";
 export {
@@ -64,7 +65,26 @@ export {
   leadCardFromView,
 } from "./crm-leads-stages";
 
-type Bag = { at: number; stages: LeadStage[]; items: LeadCard[]; note?: string };
+function studyingOnDisk(id: number) {
+  try {
+    const { findDossier } = require("./dossiers") as typeof import("./dossiers");
+    const d = findDossier({ crmId: id });
+    if (!d) return false;
+    return personRole({
+      is_study: d.extras?.is_study,
+      removed: d.extras?.removed,
+      crm_funnel: d.extras?.crm_funnel,
+      lead_status_id: d.extras?.lead_status_id,
+      status: d.status,
+    }) === "учится";
+  } catch {
+    return false;
+  }
+}
+
+function withoutStudents(items: LeadCard[]) {
+  return items.filter((x) => !studyingOnDisk(x.id));
+}
 const g = globalThis as { __raLeads?: Map<string, Bag> };
 
 function fileOf() {
