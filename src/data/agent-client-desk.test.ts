@@ -43,7 +43,9 @@ describe("действующий клиент: стол консультанта
     assert.match(desk, /consultantCanSkip === false/);
     assert.match(desk, /consultantCanPause === false/);
     assert.match(desk, /allowedLessonType\(rights, "makeup"\)/);
-    assert.match(desk, /teacher_id=/);
+    assert.match(desk, /tariffsForClient/);
+    assert.match(desk, /tariff_id=/);
+    assert.match(desk, /applyClientTariff/);
     const map = readFileSync(new URL("../components/admin-schedule-map.tsx", import.meta.url), "utf8");
     assert.match(map, /Схема/);
     assert.match(map, /layout === "scheme"/);

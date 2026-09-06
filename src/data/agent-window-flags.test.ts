@@ -68,7 +68,9 @@ describe("окно агента: права и типы занятий", () => {
     assert.match(chat, /speakEveryReply/);
     assert.match(chat, /keepAssistantReplies/);
     assert.match(chat, /войти в административный режим/);
-    assert.match(chat, /Включить голосовой режим/);
+    assert.match(chat, /Повторить ответ/);
+    assert.match(chat, /replayLast/);
+    assert.match(chat, /Repeat2/);
     assert.match(chat, /echoCancellation: true/);
     assert.match(chat, /agent-voice-loop/);
     assert.match(chat, /vadTick/);

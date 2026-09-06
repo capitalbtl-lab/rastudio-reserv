@@ -413,7 +413,7 @@ export async function completeClientAction(
     });
     return {
       reply: res.ok
-        ? `${n}: Повесила абонемент tariffId=${res.tariffId} на ${child}. Alfa догонит очередью.`
+        ? `${n}: Абонемент tariffId=${res.tariffId} на карточке ${child}. Alfa догонит очередью.`
         : `${n}: ${res.error}`,
       chips: [],
       done: true,

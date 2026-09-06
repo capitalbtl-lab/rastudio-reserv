@@ -208,4 +208,18 @@ describe("сценарии консультанта", () => {
     assert.match(chat, /completeClientAction/);
     assert.doesNotMatch(chat, /Повторите, пожалуйста — я на связи/);
   });
+
+  it("абонемент — шаблоны tariffId, не имя; переигровка голоса", () => {
+    const desk = readFileSync(new URL("./agent-client-desk.ts", import.meta.url), "utf8");
+    assert.match(desk, /intent === "абонемент"/);
+    assert.match(desk, /tariffsForClient/);
+    assert.match(desk, /Повесьте абонемент tariff_id=/);
+    assert.match(desk, /consultantCanTariff === false/);
+    assert.match(desk, /applyClientTariff/);
+    assert.doesNotMatch(desk, /похожее название абонемента/);
+    const ui = readFileSync(new URL("../components/agent-chat.tsx", import.meta.url), "utf8");
+    assert.match(ui, /Повторить ответ/);
+    assert.match(ui, /async function replayLast/);
+    assert.match(ui, /await speak\(last\)/);
+  });
 });
