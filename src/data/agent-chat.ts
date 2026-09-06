@@ -6,6 +6,8 @@ import { LESSON_TYPES } from "@/data/alfacrm";
 import { serverEnv } from "./server-env";
 import { type SessionFacts, nextStepOf } from "./agent-facts";
 import { programPitch } from "./agent-playbook";
+import { allowedLessonType, BOOK_TYPE_FLAGS } from "./agent-book-kinds";
+import type { AgentSettings } from "./agent-config";
 
 function fallbackTalk(who: "oleg" | "olga", facts: SessionFacts) {
   const n = who === "olga" ? "Ольга" : "Олег";
@@ -475,14 +477,23 @@ const CLIENT_TOOLS = [
   },
 ];
 
-function siteTools(canBook: boolean, identified = false, canJournal = true, canTariff = false, steer = false) {
+function siteTools(s: AgentSettings, identified = false, steer = false) {
   type Tool = (typeof TOOLS)[number] | (typeof CLIENT_TOOLS)[number];
-  let list: Tool[] = canBook ? [...TOOLS] : TOOLS.filter((t) => t.function.name !== "submit_trial" && t.function.name !== "book_lesson");
-  if (!steer) list = list.filter((t) => t.function.name !== "open_page");
+  const canBook = s.consultantCanBook !== false;
+  const canTrial = canBook && s.consultantCanBookTrial !== false;
+  const anyLesson = canBook && BOOK_TYPE_FLAGS.some((f) => s[f.id] !== false);
+  let list: Tool[] = TOOLS.filter((t) => {
+    const n = t.function.name;
+    if (n === "submit_trial") return canTrial;
+    if (n === "book_lesson") return anyLesson;
+    if (n === "open_page") return steer;
+    return true;
+  });
   if (!identified) return list;
   list = [...list, CLIENT_TOOLS[0]];
-  if (canJournal) list = [...list, CLIENT_TOOLS[1], CLIENT_TOOLS[2]];
-  if (canTariff) list = [...list, CLIENT_TOOLS[3]];
+  if (s.consultantCanSkip !== false) list = [...list, CLIENT_TOOLS[1]];
+  if (s.consultantCanPause !== false) list = [...list, CLIENT_TOOLS[2]];
+  if (s.consultantCanTariff === true) list = [...list, CLIENT_TOOLS[3]];
   return list;
 }
 
@@ -783,6 +794,9 @@ export const chatAgent = createServerFn({ method: "POST" })
     const lessonBlock = factsLessons.length
       ? `\nТемы недавних занятий (с диска, без ФИО учеников):\n${factsLessons.map((x) => `— ${x}`).join("\n")}\n`
       : "";
+    const lessonBlock = factsLessons.length
+      ? `\nТемы недавних занятий (с диска, без ФИО учеников):\n${factsLessons.map((x) => `— ${x}`).join("\n")}\n`
+      : "";
     let commsBlock = "";
     if (!admin && file?.crmId) {
       try {
@@ -818,8 +832,14 @@ export const chatAgent = createServerFn({ method: "POST" })
         /* */
       }
     }
+    const brainSettings = loadBrain().settings;
     const system = admin
-      ? ADMIN_SYSTEM + adminHint
+      ? ADMIN_SYSTEM +
+        (brainSettings.adminVoiceCanConsult
+          ? "\nМожно коротко консультировать родителей, как Ольга: возраст, курс, запись через инструменты. Правки сайта — если их просили.\n"
+          : "") +
+        adminHint +
+        agentPromptAddons(facts, "admin")
       : clientSystem(soloWho, facts, facts.mode === "new" ? note.next : nextStepOf(facts)) +
         agentPromptAddons(facts, data.channel || channelId || "site") +
         knowledgeForAgent() +
@@ -836,15 +856,12 @@ export const chatAgent = createServerFn({ method: "POST" })
     try {
       for (let step = 0; step < 4; step++) {
         const settings = loadBrain().settings;
+        const identified = Boolean(facts.identified && facts.customerId);
         const tools = admin
-          ? ADMIN_TOOLS
-          : siteTools(
-              settings.consultantCanBook !== false,
-              Boolean(facts.identified && facts.customerId),
-              settings.consultantCanJournal !== false,
-              settings.consultantCanTariff === true,
-              pageSteer,
-            );
+          ? settings.adminVoiceCanConsult
+            ? [...ADMIN_TOOLS, ...siteTools(settings, identified, pageSteer)]
+            : ADMIN_TOOLS
+          : siteTools(settings, identified, pageSteer);
         const json = await complete(messages, tools);
         if (!json) break;
         const msg = json.choices?.[0]?.message;

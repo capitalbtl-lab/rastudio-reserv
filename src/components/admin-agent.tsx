@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { adminAgentBrain, type AgentSettings, FRAME_WINDOW_FLAGS, BEHAVIOR_WINDOW_FLAGS, CHIP_FLAGS, ROLE_FLAGS } from "@/data/agent-config";
+import { adminAgentBrain, type AgentSettings, FRAME_WINDOW_FLAGS, BEHAVIOR_WINDOW_FLAGS, CHIP_FLAGS, ROLE_FLAGS, BOOK_TYPE_FLAGS } from "@/data/agent-config";
 import { Button } from "@/components/ui/button";
 import { AdminChats } from "@/components/admin-chats";
 import { AdminVoices } from "@/components/admin-voices";
@@ -182,6 +182,24 @@ export function AdminAgent() {
                 <Toggle
                   key={f.id}
                   on={Boolean(settings[f.id])}
+                  set={(v) => setSettings({ ...settings, [f.id]: v })}
+                  title={f.title}
+                  hint={f.hint}
+                  tip={f.tip}
+                />
+              ))}
+            </div>
+          </div>
+          <div>
+            <h3 className="font-display text-xl">Какие занятия консультант ставит</h3>
+            <p className="mt-1 max-w-2xl text-sm text-muted">
+              Групповые, пробные, сверхурочные, дополнительные, индивидуальные и прочие у педагогов. Работает, если «Консультант записывает сам» включён.
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {BOOK_TYPE_FLAGS.map((f) => (
+                <Toggle
+                  key={f.id}
+                  on={settings[f.id] !== false}
                   set={(v) => setSettings({ ...settings, [f.id]: v })}
                   title={f.title}
                   hint={f.hint}
