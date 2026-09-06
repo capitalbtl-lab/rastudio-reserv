@@ -1,6 +1,6 @@
 import { SITE } from "@/data/site";
 import { courseHint } from "@/data/agent-courses";
-import { factsFromMessages, modeFromMessages } from "@/data/agent-facts";
+import { factsFromMessages, modeFromMessages, WEEKDAY_CHIPS } from "@/data/agent-facts";
 import { nextSlot, slotsFromMessages } from "@/data/funnel-state";
 import { summerSeason } from "@/data/agent-playbook";
 
@@ -85,9 +85,23 @@ export function chipsForReply(
   }
   if (mode === "client") {
     if (facts.identified) {
+      if (facts.intent === "отработка" && !facts.day) {
+        return { hint: "День отработки", chips: WEEKDAY_CHIPS };
+      }
+      if (facts.intent === "пауза") {
+        return {
+          hint: "Срок паузы",
+          chips: [
+            { label: "Неделя", send: "Пауза на неделю" },
+            { label: "Две недели", send: "Пауза на две недели", primary: true },
+            { label: "Месяц", send: "Пауза на месяц" },
+          ],
+        };
+      }
+      if (groups.length) return { hint: "Слоты", chips: groups };
       return { hint: "Что нужно", chips: CLIENT_TOPICS };
     }
-    if (/это ваш|нашли|несколько детей/.test(t)) {
+    if (/это ваш|нашл|несколько детей/.test(t)) {
       return { hint: "Это ваш ребёнок?", chips: groups.length ? groups : [] };
     }
     if (/карточк|абонемент|занят|отработк|не прид/.test(t)) {

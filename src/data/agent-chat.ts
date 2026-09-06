@@ -9,6 +9,21 @@ import { programPitch } from "./agent-playbook";
 
 function fallbackTalk(who: "oleg" | "olga", facts: SessionFacts) {
   const n = who === "olga" ? "Ольга" : "Олег";
+  if (facts.mode === "client" && facts.identified) {
+    const child = facts.child || "ребёнок";
+    if (facts.intent === "отработка") {
+      return facts.day
+        ? `${n}: Ищу отработку на ${facts.day} в группах того же курса, не только в своей. Пробное не предлагаю.`
+        : `${n}: На какой день поставить отработку ${child}?`;
+    }
+    if (facts.intent === "расписание") return `${n}: ${child} — ближайшее занятие в карточке. Чем ещё помочь?`;
+    if (facts.intent === "абонемент") return `${n}: Сейчас скажу абонемент и остаток по карточке ${child}.`;
+    if (facts.intent === "пауза") return `${n}: На какой срок поставить паузу ${child}?`;
+    if (facts.intent === "правила") {
+      return `${n}: Пропуск лучше предупредить заранее. Отработка — в другой группе того же курса при наличии мест. Пауза — по заявлению до даты. Что именно нужно?`;
+    }
+    return `${n}: ${child} уже в карточке. Расписание, отработка, пропуск или абонемент?`;
+  }
   if (facts.school) {
     const pitch = programPitch(facts.school);
     const short = pitch ? pitch.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ") : "В этом направлении дети идут от простого к сложному.";
@@ -323,20 +338,20 @@ const TOOLS = [
     function: {
       name: "list_groups",
       description:
-        "Живые группы по ID: courseId/schoolId дерева, branchId, возраст. Не ищи по имени группы. Вернёт gid, courseId, schoolId, subjectId, состав с диска, приоритет.",
+        "Живые группы по ID: courseId/schoolId дерева, branchId, возраст, день недели. Age не обязателен, если есть course_id. Для отработки передай weekday и course_id из карточки. Не ищи по имени группы.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
-          age: { type: "number", description: "Возраст ребёнка" },
+          age: { type: "number", description: "Возраст ребёнка. Для отработки узнанного клиента можно не передавать." },
           branch: { type: "string", description: "1 Гражданская, 2 ЦМИТ, 3 Луховицы, или Коломна" },
           branch_id: { type: "number", description: "branchId 1|2|3|4" },
           course: { type: "string", description: "Речь родителя или courseId/schoolId дерева, не имя группы CRM" },
           course_id: { type: "string", description: "courseId дерева, например /art-studio-10-14" },
           school_id: { type: "string", description: "schoolId дерева, например /art-studio" },
           subject_id: { type: "number", description: "subjectId AlfaCRM" },
+          weekday: { type: "string", description: "День недели: суббота, пн, вторник" },
         },
-        required: ["age"],
       },
     },
   },
@@ -709,6 +724,17 @@ export const chatAgent = createServerFn({ method: "POST" })
       });
       if (lockedId) {
         return { ok: true as const, reply: lockedId.reply, token: granted, reload: false, groups: lockedId.chips };
+      }
+      if (facts.identified && facts.customerId) {
+        try {
+          const { lockedClientTurn } = await import("./agent-client-desk");
+          const deskLock = await lockedClientTurn(soloWho, facts);
+          if (deskLock) {
+            return { ok: true as const, reply: deskLock.reply, token: granted, reload: false, groups: deskLock.chips };
+          }
+        } catch {
+          /* диск */
+        }
       }
     }
     if (!admin && facts.mode !== "client") {

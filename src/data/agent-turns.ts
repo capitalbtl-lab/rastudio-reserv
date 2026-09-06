@@ -22,6 +22,9 @@ export function parseTurns(raw: string, fallback: Who = "olga"): { who: Who; tex
   const flush = () => {
     let text = genderFix(who, buf.join(" ").trim());
     text = text.replace(/^(Олег|Ольга)\s*[:—-]\s*/i, "").trim();
+    while (/^(Олег|Ольга)\s*[:—-]\s*/i.test(text)) {
+      text = text.replace(/^(Олег|Ольга)\s*[:—-]\s*/i, "").trim();
+    }
     if (text) out.push({ who, text });
     buf = [];
   };

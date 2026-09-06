@@ -47,7 +47,7 @@ export function confirmedHit(
   if (!text || rejectIdentify(text)) return null;
   const byName = hits.find((h) => text.toLowerCase().includes(h.first.toLowerCase()));
   if (byName) return byName;
-  if (hits.length === 1 && /это ваш|нашли|ваш ребёнок|несколько детей/i.test(assistant) && YES.test(text)) return hits[0];
+  if (hits.length === 1 && /это ваш|нашл|ваш ребёнок|несколько детей/i.test(assistant) && YES.test(text)) return hits[0];
   return null;
 }
 
