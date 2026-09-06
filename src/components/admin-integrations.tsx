@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/info-tip";
 import { AdminSaveBar } from "@/components/admin-save-bar";
 import { AdminSectionHead } from "@/components/admin-self-test";
+import { useAdminReload } from "@/components/admin-reload-btn";
 import { cn } from "@/lib/utils";
 
 function token() {
@@ -53,6 +54,10 @@ export function AdminIntegrations() {
   useEffect(() => {
     void load();
   }, []);
+
+  useAdminReload(() => {
+    void load();
+  });
 
   function take(res: { ok: boolean; conns?: unknown; error?: string }) {
     if (!res.ok) {

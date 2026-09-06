@@ -2473,16 +2473,19 @@ export function AdminSchedule() {
         check={false}
         tip="Группы по школам и курсам (courseId). Связи только по ID: группа→курс, предмет, абонемент, клиент."
         extra={
-          <button
-            type="button"
-            data-op="groups-wide"
-            className={adminGhostBtn}
-            onClick={() => {
-              setGroupsWide((v) => !v);
-            }}
-          >
-            {groupsWide ? "Свернуть экран" : "На весь экран"}
-          </button>
+          <div className="flex items-center gap-2">
+            <AdminReloadBtn />
+            <button
+              type="button"
+              data-op="groups-wide"
+              className={adminGhostBtn}
+              onClick={() => {
+                setGroupsWide((v) => !v);
+              }}
+            >
+              {groupsWide ? "Свернуть экран" : "На весь экран"}
+            </button>
+          </div>
         }
       >
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">

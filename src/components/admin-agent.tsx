@@ -11,6 +11,7 @@ import { AdminAccess } from "@/components/admin-access";
 import { AdminDebug } from "@/components/admin-debug";
 import { AdminSectionGuides } from "@/components/admin-section-guides";
 import { AdminSectionHead } from "@/components/admin-self-test";
+import { useAdminReload } from "@/components/admin-reload-btn";
 import { AdminSaveBar } from "@/components/admin-save-bar";
 import { InfoTip } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
@@ -77,6 +78,10 @@ export function AdminAgent() {
   useEffect(() => {
     void load();
   }, []);
+
+  useAdminReload(() => {
+    void load();
+  });
 
   async function save() {
     if (!settings) return;

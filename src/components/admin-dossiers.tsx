@@ -7,6 +7,7 @@ import { adminDossierJobs, JOB_ACTIONS, type DossierJob } from "@/data/dossier-j
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/info-tip";
 import { AdminSectionHead } from "@/components/admin-self-test";
+import { useAdminReload } from "@/components/admin-reload-btn";
 import { AdminSaveBar } from "@/components/admin-save-bar";
 import { cn } from "@/lib/utils";
 
@@ -107,6 +108,11 @@ export function AdminDossiers() {
     void load();
     void loadJobs();
   }, []);
+
+  useAdminReload(() => {
+    void load();
+    void loadJobs();
+  });
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {

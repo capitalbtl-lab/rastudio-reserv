@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { adminCalls } from "@/data/admin";
 import { Button } from "@/components/ui/button";
 import { AdminSectionHead } from "@/components/admin-self-test";
+import { useAdminReload } from "@/components/admin-reload-btn";
 import { AdminSaveBar } from "@/components/admin-save-bar";
 import { cn } from "@/lib/utils";
 
@@ -146,6 +147,10 @@ export function AdminCalls() {
     const id = window.setInterval(() => void refresh(), 8000);
     return () => window.clearInterval(id);
   }, []);
+
+  useAdminReload(() => {
+    void refresh();
+  });
 
   const shown = rows.filter((r) => {
     if (filter === "study") return Boolean(r.crm?.isStudy) || /обуча/i.test(r.crm?.studyStatus || "");
