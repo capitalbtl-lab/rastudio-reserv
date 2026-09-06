@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { X, Send, Mic, Volume2, RotateCcw, Repeat2 } from "lucide-react";
+import { X, Send, Mic, Volume2, RotateCcw, Repeat2, AudioLines } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
 import { publicAgentUi } from "@/data/agent-config-fn";
 import type { AgentUiFlags } from "@/data/agent-config";
@@ -9,7 +9,7 @@ import { debugSession } from "@/data/debug-fn";
 import { speakAgent } from "@/data/agent-voice";
 import { saveChatLog } from "@/data/chat-logs-fn";
 import { factsFromMessages, talkFallback } from "@/data/agent-facts";
-import { nextChips } from "@/data/agent-chips";
+import { nextChips, needTypedText, typedPrompt } from "@/data/agent-chips";
 import { debugEmit } from "@/data/debug-client";
 import { readBehavior, tickBehavior } from "@/data/page-behavior";
 import { parseTurns, faceOf, type Who } from "@/data/agent-turns";
@@ -229,6 +229,7 @@ export function AgentChat() {
   const [adminMs, setAdminMs] = useState(0);
   const [awaitingCode, setAwaitingCode] = useState(false);
   const [groupChips, setGroupChips] = useState<{ label: string; href?: string; send?: string; primary?: boolean; note?: string }[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [box, setBox] = useState({ w: 520, h: 740 });
   const [ui, setUi] = useState<AgentUiFlags>({
     showChat: true,
@@ -295,6 +296,9 @@ export function AgentChat() {
           ],
         }
       : nextChips(messages, groupChips);
+  const lastAsk = [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
+  const needText = needTypedText(lastAsk, offer.chips);
+  const typeHint = needText ? typedPrompt(lastAsk) : "Напишите или нажмите кнопку";
   voiceOnRef.current = voiceOn;
   bargeRef.current = bargeOn;
   partnerRef.current = partner;
@@ -490,6 +494,12 @@ export function AgentChat() {
       document.body.classList.remove("agent-open");
     };
   }, []);
+
+  useEffect(() => {
+    if (!open || !needText || busy) return;
+    const id = window.setTimeout(() => inputRef.current?.focus(), 80);
+    return () => window.clearTimeout(id);
+  }, [open, needText, busy, lastAsk]);
 
   function cancelSpeech() {
     genRef.current += 1;
@@ -1167,6 +1177,34 @@ export function AgentChat() {
           </button>
           <div className={cn("relative shrink-0 px-3 pb-2.5 pt-2.5 text-primary-foreground sm:px-4 sm:pb-3.5 sm:pt-3.5", inAdminUi ? "bg-ink" : "bg-primary")}>
             <div className="absolute right-2 top-2 flex items-center gap-1 sm:right-3 sm:top-3 sm:gap-1.5">
+              {voiceOn && uiOn("allowBarge") ? (
+                <button
+                  type="button"
+                  className={cn(
+                    "grid h-8 shrink-0 place-items-center rounded-full px-2 sm:h-9 sm:px-2.5",
+                    bargeOn ? "bg-white text-primary" : "bg-black/15 text-white hover:bg-black/25",
+                  )}
+                  title={bargeOn ? "Перебивать можно — говорите поверх" : "Включить перебивание"}
+                  aria-label={bargeOn ? "Перебивание включено" : "Включить перебивание"}
+                  aria-pressed={bargeOn}
+                  onClick={() => {
+                    const next = !bargeOn;
+                    setBargeOn(next);
+                    bargeRef.current = next;
+                    try {
+                      localStorage.setItem("ra_barge", next ? "1" : "0");
+                    } catch {
+                      /* */
+                    }
+                    if (voiceOnRef.current && !busyRef.current) {
+                      stopListen(true);
+                      startListen();
+                    }
+                  }}
+                >
+                  <AudioLines className="size-4" />
+                </button>
+              ) : null}
               {uiOn("allowReset") ? (
               <button
                 type="button"

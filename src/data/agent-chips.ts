@@ -146,6 +146,9 @@ export function chipsForReply(
       if (slots) return slots;
       return { hint: "Что нужно", chips: CLIENT_TOPICS };
     }
+    if (/телефон|по нему открою/.test(t)) {
+      return { hint: "Телефон записи", chips: [] };
+    }
     if (/это ваш|нашл|несколько детей/.test(t)) {
       return { hint: "Это ваш ребёнок?", chips: groups.length ? groups : [] };
     }
@@ -225,5 +228,24 @@ export function nextChips(messages: { role: string; content: string }[], groups:
   if (fromText.chips.length) return fromText;
   const open = nextSlot(slotsFromMessages(messages));
   if (open === "age" && /лет|возраст/.test(last)) return { hint: "Скажите или нажмите", chips: AGES };
-  return { hint: "", chips: [] };
+  return { hint: fromText.hint || "", chips: [] as AgentChip[] };
+}
+
+/** Поле ввода нужно, когда ответ нельзя выбрать кнопкой: телефон, имя, код. */
+export function needTypedText(last: string, chips: { label?: string }[] = []) {
+  const t = String(last || "").toLowerCase();
+  if (/кодовое слово/.test(t)) return true;
+  if (/напишите телефон|телефон, который указывали|по нему открою/.test(t)) return true;
+  if (/имя второго|как зовут|напишите имя|назовите имя/.test(t)) return true;
+  if (chips.length) return false;
+  if (/напишите|назовите|введите/.test(t) && !/нажмите кнопку|или нажмите/.test(t)) return true;
+  return false;
+}
+
+export function typedPrompt(last: string) {
+  const t = String(last || "").toLowerCase();
+  if (/телефон/.test(t)) return "Напишите телефон";
+  if (/кодовое/.test(t)) return "Кодовое слово";
+  if (/имя/.test(t)) return "Напишите имя";
+  return "Напишите здесь";
 }
