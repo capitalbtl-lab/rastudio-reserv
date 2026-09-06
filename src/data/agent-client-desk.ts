@@ -40,6 +40,12 @@ function phoneHint() {
   return "Позвоните 8 (800) 511-34-01 — администратор отметит.";
 }
 
+const TOPIC_CHIPS = CLIENT_TOPICS.map((c) => ({
+  label: c.label,
+  send: c.send || c.label,
+  primary: c.primary,
+}));
+
 export async function makeupList(customerId: number, weekday: string) {
   const d = clientDigest(customerId);
   const empty = { digest: d, list: [] as { gid: string; when: string; chip: string; branchId: number; nextDate: string; timeFrom: string; courseId: string; subjectId?: number; teacherId?: number; teacher?: string; priority: number; seats: string }[], courseLabel: "" };
@@ -73,13 +79,13 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
     if (/жалоб|возврат|претенз|деньги верн/i.test(lastUser)) {
       return {
         reply: `${n}: Жалобы и возврат денег — 8 (800) 511-34-01. Карточку ${child} не закрываю.`,
-        chips: CLIENT_TOPICS,
+        chips: TOPIC_CHIPS,
       };
     }
     if (intent === "готово") {
       return {
         reply: `${n}: Хорошо. Если понадобится отработка, пропуск или пауза — напишите.`,
-        chips: CLIENT_TOPICS,
+        chips: TOPIC_CHIPS,
       };
     }
     const words = lastUser.trim().split(/\s+/).filter(Boolean).length;

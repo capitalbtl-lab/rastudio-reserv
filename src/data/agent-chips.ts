@@ -115,7 +115,7 @@ export function chipsForReply(
         if (!facts.age) {
           return {
             hint: "Возраст второго",
-            chips: AGES.map((c) => ({ ...c, send: c.send.replace("Ребёнку", "Второму ребёнку") })),
+            chips: AGES.map((c) => ({ ...c, send: String(c.send || "").replace("Ребёнку", "Второму ребёнку") })),
           };
         }
         if (!facts.secondChild) {
