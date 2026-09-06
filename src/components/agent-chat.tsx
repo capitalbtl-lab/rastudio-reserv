@@ -73,7 +73,7 @@ function goSitePath(path: string) {
 }
 const DUAL_HELLO = /Олег: Здравствуйте[\s\S]*Ольга:/;
 const ADMIN_ASK = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
-const ADMIN_HELLO = "Ольга: Доступ открыт на 30 минут. Цены, тексты страниц или голоса — что меняем?";
+const ADMIN_HELLO = "Ольга: Доступ открыт на 30 минут. Цены, тексты, голоса — или скажите, что консультант ответил неправильно, и как надо.";
 
 function moodOf(messages: Msg[], busy: boolean): Mood {
   if (busy) return "think";
@@ -293,6 +293,7 @@ export function AgentChat() {
             { label: "Цены", send: "Покажи текущие цены" },
             { label: "Тексты страницы", send: "Покажи тексты этой страницы" },
             { label: "Голоса", send: "Какие сейчас настройки голосов" },
+            { label: "Обучение", send: "Запомни как правильно: " },
           ],
         }
       : nextChips(messages, groupChips);
