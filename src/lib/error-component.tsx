@@ -1,3 +1,5 @@
+"use client";
+
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { TriangleAlert } from "lucide-react";
 
@@ -15,12 +17,13 @@ export function AppErrorComponent({ error }: ErrorComponentProps) {
           ? "Сервер обрабатывал тяжёлый запрос (импорт из Alfa). Обновите страницу — вход и режим отладки снова откроются."
           : "Попробуйте обновить страницу. Если снова ошибка — подождите полминуты и повторите."}
       </p>
-      <a
-        href={typeof location !== "undefined" ? location.pathname || "/" : "/"}
+      <button
+        type="button"
         className="mt-2 inline-flex h-11 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-fg"
+        onClick={() => window.location.reload()}
       >
         Обновить
-      </a>
+      </button>
     </main>
   );
 }

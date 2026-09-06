@@ -1108,6 +1108,7 @@ export async function syncAllFromCrm(
     store.lastLeadSync = new Date().toISOString();
   }
   store.lastCrmSync = new Date().toISOString();
+  store.items.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
   saveStore(store);
   if (leadsOnly) {
     onProgress?.({ step: "Лиды на сайте", n, total: n });
