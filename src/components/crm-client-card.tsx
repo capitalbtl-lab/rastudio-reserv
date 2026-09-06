@@ -1111,30 +1111,30 @@ export function CrmClientCard({
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-muted">с</span>
               <RaSelect
-                value={splitHm(lessonTime).h >= 0 ? String(splitHm(lessonTime).h) : ""}
-                onChange={(v) => setLessonTime(joinHm(Number(v), splitHm(lessonTime).min >= 0 ? splitHm(lessonTime).min : 0))}
+                value={lessonHm.h >= 0 ? String(lessonHm.h) : ""}
+                onChange={(v) => setLessonTime(joinHm(Number(v), lessonHm.min >= 0 ? lessonHm.min : 0))}
                 placeholder="час"
                 options={
-                  splitHm(lessonTime).h >= 0 && !HOUR_OPTS.some((o) => o.value === String(splitHm(lessonTime).h))
-                    ? [{ value: String(splitHm(lessonTime).h), label: pad2(splitHm(lessonTime).h) }, ...HOUR_OPTS]
+                  lessonHm.h >= 0 && !HOUR_OPTS.some((o) => o.value === String(lessonHm.h))
+                    ? [{ value: String(lessonHm.h), label: pad2(lessonHm.h) }, ...HOUR_OPTS]
                     : HOUR_OPTS
                 }
                 className="h-9 w-[4.6rem] rounded-md bg-white px-2 ring-1 ring-black/10"
               />
               <span className="text-muted">:</span>
               <RaSelect
-                value={splitHm(lessonTime).min >= 0 ? String(splitHm(lessonTime).min) : ""}
-                onChange={(v) => setLessonTime(joinHm(splitHm(lessonTime).h >= 0 ? splitHm(lessonTime).h : 16, Number(v)))}
+                value={lessonHm.min >= 0 ? String(lessonHm.min) : ""}
+                onChange={(v) => setLessonTime(joinHm(lessonHm.h >= 0 ? lessonHm.h : 16, Number(v)))}
                 placeholder="мин"
                 options={
-                  splitHm(lessonTime).min >= 0 && !MIN_OPTS.some((o) => o.value === String(splitHm(lessonTime).min))
-                    ? [{ value: String(splitHm(lessonTime).min), label: pad2(splitHm(lessonTime).min) }, ...MIN_OPTS]
+                  lessonHm.min >= 0 && !MIN_OPTS.some((o) => o.value === String(lessonHm.min))
+                    ? [{ value: String(lessonHm.min), label: pad2(lessonHm.min) }, ...MIN_OPTS]
                     : MIN_OPTS
                 }
                 className="h-9 w-[4.6rem] rounded-md bg-white px-2 ring-1 ring-black/10"
               />
               <span className="text-muted">до</span>
-              <span className="min-w-[3.2rem] tabular-nums text-fg">{addMinsHm(lessonTime, lessonMins) || "—"}</span>
+              <span className="min-w-[3.2rem] tabular-nums text-fg">{lessonUntil || "—"}</span>
             </div>
           </Field>
           <Field label="Длительность">
