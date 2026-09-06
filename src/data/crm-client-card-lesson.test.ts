@@ -26,6 +26,13 @@ describe("форма занятия карточки", () => {
     assert.match(src, /lessonGroupOffers/);
     assert.match(src, /g\?\.teacherId/);
   });
+
+  it("расписание импортирует reload — иначе вкладка не открывается", () => {
+    const sched = readFileSync(new URL("../components/admin-schedule.tsx", import.meta.url), "utf8");
+    assert.match(sched, /import \{ AdminReloadBtn, useAdminReload \} from "@\/components\/admin-reload-btn"/);
+    assert.match(sched, /useAdminReload\(/);
+    assert.match(sched, /from "@\/data\/crm-teachers-core"/);
+  });
 });
 
 describe("список и вкладка не падают", () => {

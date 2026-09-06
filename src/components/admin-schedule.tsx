@@ -21,6 +21,7 @@ import { pullFromCrm } from "@/lib/crm-pull";
 import { CrmPullDialog, emptyPull, type CrmPullState } from "@/components/crm-pull-dialog";
 import type { CrmSubject } from "@/data/crm-subjects";
 import { ADMIN_PANEL_BLUE, RA_POP } from "@/data/admin-ui";
+import { AdminReloadBtn, useAdminReload } from "@/components/admin-reload-btn";
 import { TabError } from "@/lib/error-component";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
 import type { CrmTeacher } from "@/data/crm-teachers-core";
