@@ -447,66 +447,10 @@ export async function syncLeadsDelta(branchId = 0): Promise<Bag> {
         ).catch(() => undefined),
       ),
     );
-    for (const b of branches) {
-      const ids = [...new Set(hit.items.filter((x) => !branchId || x.branchId === b).map((x) => x.id))].filter(Boolean);
-      for (let i = 0; i < ids.length; i += 30) {
-        const chunk = ids.slice(i, i + 30);
-        await request<{ items?: Record<string, unknown>[] }>(
-          `/v2api/${b}/customer/index`,
-          { page: 0, pageSize: 50, ids: chunk },
-          t,
-        )
-          .then((data) => {
-            for (const it of data.items || []) {
-              if (!chunk.includes(Number(it.id || 0))) continue;
-              take(it, b);
-            }
-          })
-          .catch(() => undefined);
-      }
-    }
-    let merged = applyLeadDelta(hit.items, [...incomingBy.values()], dropped);
-    const login = await crmWebLogin().catch(() => ({ cookie: "", error: "" }));
-    let boardMoved = 0;
-    if (login.cookie) {
-      const statusIds = (hit.stages || []).map((s) => s.id);
-      for (const b of branches) {
-        const board = await fetchCrmLeadColumns(b, statusIds, login.cookie, t, 8).catch(() => []);
-        if (!board.length) continue;
-        const by = new Map(merged.items.map((x) => [x.id, x]));
-        for (const row of board) {
-          const card = by.get(row.id);
-          if (card) {
-            if (card.statusId !== row.statusId) {
-              card.statusId = row.statusId;
-              boardMoved += 1;
-            }
-            continue;
-          }
-          if (dossierIsStudying(row.id)) continue;
-          merged.items.push({
-            id: row.id,
-            customerId: row.id,
-            branchId: b,
-            branches: [b],
-            name: row.name || `лид ${row.id}`,
-            age: "",
-            phone: "",
-            email: "",
-            note: "",
-            assigned: "",
-            statusId: row.statusId,
-            sort: 0,
-            at: "",
-            chats: 0,
-          });
-          boardMoved += 1;
-        }
-      }
-    }
+    const merged = applyLeadDelta(hit.items, [...incomingBy.values()], dropped);
     const note =
-      merged.added || merged.updated || merged.removed || boardMoved
-        ? `с CRM: ${merged.updated} изменённых, ${merged.added} новых, ${merged.removed} снятых${boardMoved ? `, этапов с доски ${boardMoved}` : ""}`
+      merged.added || merged.updated || merged.removed
+        ? `с CRM: ${merged.updated} изменённых, ${merged.added} новых, ${merged.removed} снятых`
         : "изменений в CRM нет";
     const items = withoutStudents(merged.items);
     const next = { at: Date.now(), stages: hit.stages, items, note, delta: true as const };
@@ -522,6 +466,63 @@ export async function syncLeadsDelta(branchId = 0): Promise<Bag> {
     return next;
   } finally {
     leadDeltaBusy = false;
+  }
+}
+
+let leadBoardLightBusy = false;
+
+/** Только колонки воронки (HTML). Карточки клиентов/касса не трогает. */
+export async function syncLeadsBoardLight(branchId = 0): Promise<Bag> {
+  const key = String(branchId || 0);
+  let hit = bag().get(key);
+  if (!hit?.items.length) {
+    const disk = await boardFromDisk(branchId);
+    if (!disk.items.length) return disk;
+    bag().set(key, disk);
+    persistLeads();
+    hit = disk;
+  }
+  if (leadBoardLightBusy) return hit;
+  leadBoardLightBusy = true;
+  try {
+    const t = await alfaToken().catch(() => "");
+    const login = await crmWebLogin().catch(() => ({ cookie: "", error: "" }));
+    if (!login.cookie) return { ...hit, note: hit.note || "доска CRM не открылась" };
+    const branches = branchId ? [branchId] : [1, 2, 3, 4];
+    const statusIds = (hit.stages || []).map((s) => s.id);
+    const items = hit.items.map((x) => ({ ...x }));
+    const by = new Map(items.map((x) => [x.id, x]));
+    let moved = 0;
+    for (const b of branches) {
+      const board = await fetchCrmLeadColumns(b, statusIds, login.cookie, t, 2).catch(() => []);
+      for (const row of board) {
+        const card = by.get(row.id);
+        if (!card) continue;
+        if (card.statusId === row.statusId) continue;
+        card.statusId = row.statusId;
+        moved += 1;
+      }
+    }
+    const nextItems = withoutStudents(items);
+    const next = {
+      ...hit,
+      items: nextItems,
+      note: moved ? `этапов с доски Alfa: ${moved}` : "изменений в CRM нет",
+      delta: true as const,
+    };
+    bag().set(key, next);
+    persistLeads();
+    if (moved) {
+      try {
+        const { stampLeadStages } = await import("./dossiers");
+        stampLeadStages(nextItems.map((x) => ({ id: x.id, statusId: x.statusId })));
+      } catch {
+        /* диск */
+      }
+    }
+    return next;
+  } finally {
+    leadBoardLightBusy = false;
   }
 }
 
@@ -555,7 +556,7 @@ export async function boardFromDisk(branchId = 0): Promise<Bag> {
   }
 }
 
-export async function loadLeadsBoard(branchId = 0, force = false, delta = false): Promise<Bag> {
+export async function loadLeadsBoard(branchId = 0, force = false, delta = false, light = false): Promise<Bag> {
   const key = String(branchId || 0);
   const hit = bag().get(key);
   const { wantAlfaPull, wantAlfaDelta } = await import("./crm-alfa-link");
@@ -582,6 +583,9 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
     if (disk.items.length && (!hit?.items.length || disk.items.length !== hit.items.length)) {
       bag().set(key, disk);
       persistLeads();
+    }
+    if (light && disk.items.length) {
+      return syncLeadsBoardLight(branchId).catch(() => disk);
     }
     if (wantAlfaDelta(delta) && disk.items.length) {
       const age = Date.now() - (hit?.at || 0);

@@ -530,7 +530,7 @@ export function AdminClients({
     }
   }
 
-  async function loadFunnel(bid: number, force = false, delta = false) {
+  async function loadFunnel(bid: number, force = false, delta = false, light = false) {
     const seq = ++funnelSeq.current;
     const have = funnelItemsRef.current.length > 0 || funnelAt.current[bid] > 0;
     if (force || !have) setFunnelLoading(!have);
@@ -548,7 +548,7 @@ export function AdminClients({
     }, 15000);
     try {
       const res = (await adminSchedule({
-        data: { token: token(), action: "leadsBoard", branchId: bid, force, delta } as never,
+        data: { token: token(), action: "leadsBoard", branchId: bid, force, delta, light } as never,
       })) as { ok?: boolean; error?: string; stages?: LeadStage[]; items?: LeadCard[]; total?: number; note?: string; delta?: boolean };
       if (res.ok && Array.isArray(res.items)) {
         const nextStages = mergeStages(res.stages || [], res.items.map((x) => x.statusId));
@@ -764,7 +764,7 @@ export function AdminClients({
         if (snap.stages?.length) setFunnelStages(mergeStages(snap.stages));
       }
     }
-    void loadFunnel(branch, false, true);
+    void loadFunnel(branch, false, false, true);
   }, [status, view, branch]);
 
   useEffect(() => {
@@ -778,17 +778,22 @@ export function AdminClients({
     if (!(status === "лид" && view === "дети")) return;
     const tick = () => {
       if (document.hidden) return;
-      void loadFunnel(branchRef.current, false, true);
+      void loadFunnel(branchRef.current, false, false, true);
     };
     const t = window.setInterval(tick, 25_000);
+    const slow = window.setInterval(() => {
+      if (document.hidden) return;
+      void loadFunnel(branchRef.current, false, true, false);
+    }, 5 * 60 * 1000);
     const onShow = () => {
       if (document.hidden) return;
-      void loadFunnel(branchRef.current, false, true);
+      void loadFunnel(branchRef.current, false, false, true);
     };
     document.addEventListener("visibilitychange", onShow);
     window.addEventListener("focus", onShow);
     return () => {
       window.clearInterval(t);
+      window.clearInterval(slow);
       document.removeEventListener("visibilitychange", onShow);
       window.removeEventListener("focus", onShow);
     };
