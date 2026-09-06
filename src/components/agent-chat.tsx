@@ -678,7 +678,7 @@ export function AgentChat() {
       analyser.fftSize = 1024;
       src.connect(analyser);
       const data = new Uint8Array(analyser.fftSize);
-      let over = 0;
+      vadStateRef.current = emptyVad();
       const stop = () => {
         vadStopRef.current = null;
         if (vadRafRef.current) {
@@ -705,16 +705,18 @@ export function AgentChat() {
           sum += n * n;
         }
         const rms = Math.sqrt(sum / data.length);
-        if (Date.now() > ignoreUntilRef.current && rms > 0.11) {
-          over += 1;
-          if (over >= 7) {
-            stop();
-            cancelSpeech();
-            startListen();
-            return;
-          }
-        } else {
-          over = 0;
+        if (Date.now() < ignoreUntilRef.current) {
+          vadStateRef.current = emptyVad();
+          vadRafRef.current = requestAnimationFrame(tick);
+          return;
+        }
+        const next = vadTick(vadStateRef.current, rms, true);
+        vadStateRef.current = next.state;
+        if (next.fire) {
+          stop();
+          cancelSpeech();
+          startListen();
+          return;
         }
         vadRafRef.current = requestAnimationFrame(tick);
       };
@@ -731,13 +733,12 @@ export function AgentChat() {
     spokenRef.current = parseTurns(phrase)
       .map((t) => t.text)
       .join(" ");
+    spokenAtRef.current = Date.now();
     setSpeaking(true);
-    ignoreUntilRef.current = Date.now() + (bargeRef.current ? 280 : 480);
-    if (voiceOnRef.current && bargeRef.current) {
+    ignoreUntilRef.current = Date.now() + ignoreWhileSpeakStartMs(bargeRef.current);
+    if (voiceOnRef.current) {
       startListen();
-      startVad();
-    } else {
-      stopListen(true);
+      if (bargeRef.current) startVad();
     }
     try {
       const mode = adminLeft() > 0 ? "olga" : partnerRef.current;
@@ -752,6 +753,7 @@ export function AgentChat() {
         if (i > 0) await new Promise((r) => window.setTimeout(r, Math.round((clip?.gap || 0.18) * 1000)));
         if (gen !== genRef.current) return;
         spokenRef.current = turn.text;
+        spokenAtRef.current = Date.now();
         try {
           if (clip) await playClip(clip.audio, clip.volume);
           else await speakBrowser(turn.text, turn.who);
@@ -769,11 +771,12 @@ export function AgentChat() {
       if (gen === genRef.current) {
         speakingRef.current = false;
         setSpeaking(false);
-        ignoreUntilRef.current = Date.now() + (bargeRef.current ? 80 : 60);
+        spokenAtRef.current = Date.now();
+        ignoreUntilRef.current = Date.now() + ignoreAfterSpeakMs(bargeRef.current);
         if (voiceOnRef.current && !busyRef.current) {
           window.setTimeout(() => {
             if (gen === genRef.current && voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
-          }, bargeRef.current ? 30 : 60);
+          }, listenGapAfterSpeakMs(bargeRef.current));
         }
       }
     }
@@ -786,17 +789,10 @@ export function AgentChat() {
   }
 
   function isEcho(said: string, loose = false) {
-    const a = said
-      .toLowerCase()
-      .replace(/[^\p{L}\d\s]/gu, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    const words = a.split(" ").filter((w) => w.length > 2);
-    if (!a || !spokenRef.current) return false;
-    const b = spokenRef.current.toLowerCase();
-    if (words.length < 2) return b.includes(a) && a.length > 10;
-    const hits = words.filter((w) => b.includes(w)).length;
-    return hits / words.length >= (loose ? 0.45 : 0.7);
+    return isVoiceEcho(said, spokenRef.current, {
+      loose,
+      spokenAgoMs: Date.now() - spokenAtRef.current,
+    });
   }
 
   function stopListen(keepMic = true) {
@@ -848,12 +844,11 @@ export function AgentChat() {
       const said = last?.[0]?.transcript?.trim();
       if (!said) return;
       if (Date.now() < ignoreUntilRef.current) return;
-      if (isEcho(said, false)) return;
+      if (isEcho(said, speakingRef.current)) return;
       const isFinal = !("isFinal" in last) || last.isFinal !== false;
       if (speakingRef.current) {
         if (!bargeRef.current) return;
-        const words = said.split(/\s+/).filter((w) => w.length > 1);
-        if (!isFinal && words.length < 1) return;
+        if (!bargeInterimReady(said, isFinal)) return;
         cancelSpeech();
         if (!isFinal) return;
       }
@@ -872,12 +867,20 @@ export function AgentChat() {
     };
     rec.onerror = (ev?: { error?: string }) => {
       const err = String(ev?.error || "");
-      if (err === "not-allowed" || err === "service-not-allowed") {
+      if (srFatal(err)) {
         listenWantedRef.current = false;
         debugEmit("voice", { error: "микрофон запрещён" });
+        recRef.current = null;
+        setListening(false);
+        return;
       }
       recRef.current = null;
       setListening(false);
+      if (srShouldRestart(err) && listenWantedRef.current && voiceOnRef.current && !busyRef.current) {
+        window.setTimeout(() => {
+          if (listenWantedRef.current && voiceOnRef.current && !busyRef.current) startListen();
+        }, err === "no-speech" ? 40 : 160);
+      }
     };
     recRef.current = rec;
     setListening(true);
