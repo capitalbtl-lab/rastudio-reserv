@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync, unlinkSync } from "node:fs";
 import { extname, join, relative } from "node:path";
 import { logAdmin } from "./admin-settings";
+import { mediaFolder } from "./media-context";
 
 export type SiteMediaItem = {
   src: string;
@@ -8,6 +9,7 @@ export type SiteMediaItem = {
   kind: "image" | "video";
   bytes: number;
   at: number;
+  folder: string;
 };
 
 const ROOT = () => join(process.cwd(), "public");
@@ -41,12 +43,14 @@ function walk(dir: string, acc: SiteMediaItem[], depth = 0) {
     const kind = IMAGE.has(ext) ? "image" : VIDEO.has(ext) ? "video" : null;
     if (!kind) continue;
     const rel = relative(ROOT(), full).replace(/\\/g, "/");
+    const src = `/${rel}`;
     acc.push({
-      src: `/${rel}`,
+      src,
       name,
       kind,
       bytes: st.size,
       at: st.mtimeMs,
+      folder: mediaFolder(src),
     });
   }
 }
@@ -71,7 +75,18 @@ export function saveSiteMedia(name: string, buf: Buffer) {
   const full = join(UPLOADS(), file);
   writeFileSync(full, buf);
   logAdmin(`Медиа: загружен ${file}`);
-  return { ok: true as const, item: { src: `/media/uploads/${file}`, name: file, kind: (IMAGE.has(ext) ? "image" : "video") as "image" | "video", bytes: buf.length, at: Date.now() } };
+  const src = `/media/uploads/${file}`;
+  return {
+    ok: true as const,
+    item: {
+      src,
+      name: file,
+      kind: (IMAGE.has(ext) ? "image" : "video") as "image" | "video",
+      bytes: buf.length,
+      at: Date.now(),
+      folder: "uploads",
+    },
+  };
 }
 
 export function deleteSiteUpload(src: string) {
