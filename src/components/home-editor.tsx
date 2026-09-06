@@ -221,6 +221,7 @@ export function EditText({
 
 export function HomeEditorChrome() {
   const ctx = useHomeEditor();
+  const [studioOpen, setStudioOpen] = useState(false);
   if (!ctx?.editing) return null;
   const { doc, selected, select, setDoc, device, setDevice, undo, redo, canUndo, canRedo, dirty } = ctx;
   const style = selected ? doc.styles[selected] || {} : {};
@@ -256,6 +257,13 @@ export function HomeEditorChrome() {
             <Redo2 className="size-3.5" />
           </button>
           <span className="ml-auto text-[0.72rem] text-header-fg/55">{dirty}</span>
+          <button
+            type="button"
+            className="rounded-full bg-white/10 px-3 py-1.5 text-[0.72rem] font-semibold hover:bg-white/15 lg:hidden"
+            onClick={() => setStudioOpen((v) => !v)}
+          >
+            Студия
+          </button>
           <button
             type="button"
             className="rounded-full bg-white/10 px-3 py-1.5 text-[0.72rem] font-semibold hover:bg-white/15"
