@@ -717,10 +717,10 @@ export const chatAgent = createServerFn({ method: "POST" })
     const note = buildSessionNote(all);
     if (!admin && facts.mode === "client") {
       const { dossiersByPhone } = await import("./dossiers");
-      const { asIdentifyHits, confirmedFromHistory, identifyLocked } = await import("./agent-identify");
+      const { asIdentifyHits, confirmedFromHistory, identifyLocked, impliedIdentify } = await import("./agent-identify");
       const lastAsst = [...trimmed].reverse().find((m) => m.role === "assistant")?.content || "";
       const hits = facts.phone ? asIdentifyHits(dossiersByPhone(facts.phone)) : [];
-      const known = confirmedFromHistory(hits, all);
+      const known = confirmedFromHistory(hits, all) || impliedIdentify(hits, lastUser, facts.identified);
       if (known) {
         facts.identified = true;
         facts.customerId = known.customerId;
@@ -743,7 +743,7 @@ export const chatAgent = createServerFn({ method: "POST" })
         try {
           const desk = await import("./agent-client-desk");
           const s = loadBrain().settings;
-          const deskLock = await desk.lockedClientTurn(soloWho, facts, {
+          const rights = {
             consultantCanBook: s.consultantCanBook !== false,
             consultantCanBookTrial: s.consultantCanBookTrial !== false,
             consultantCanBookGroup: s.consultantCanBookGroup !== false,
@@ -755,7 +755,8 @@ export const chatAgent = createServerFn({ method: "POST" })
             consultantCanSkip: s.consultantCanSkip !== false,
             consultantCanPause: s.consultantCanPause !== false,
             consultantCanTariff: s.consultantCanTariff === true,
-          });
+          };
+          const deskLock = await desk.completeClientAction(soloWho, facts, rights, lastUser);
           if (deskLock) {
             return { ok: true as const, reply: deskLock.reply, token: granted, reload: false, groups: deskLock.chips };
           }

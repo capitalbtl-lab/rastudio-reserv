@@ -202,6 +202,107 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
   return null;
 }
 
+function parseChipIds(text: string) {
+  const g = String(text || "");
+  const num = (re: RegExp) => {
+    const m = g.match(re);
+    return m ? Number(m[1]) : 0;
+  };
+  const str = (re: RegExp) => g.match(re)?.[1] || "";
+  return {
+    gid: str(/gid=(\d+)/i),
+    branchId: num(/филиал=(\d+)/i),
+    date: str(/дата=([^\s]+)/i),
+    time: str(/время=([^\s]+)/i),
+    courseId: str(/курс=([^\s]+)/i),
+    subjectId: num(/subject_id=(\d+)/i),
+    teacherId: num(/teacher_id=(\d+)/i),
+    kind: /makeup|отработк/i.test(g) ? "makeup" : /individual|индивидуальн/i.test(g) ? "individual" : /overtime|сверхурочн/i.test(g) ? "overtime" : /extra|дополнительн/i.test(g) ? "extra" : /trial|пробн/i.test(g) ? "trial" : "group",
+  };
+}
+
+export async function completeClientAction(
+  who: "oleg" | "olga",
+  facts: SessionFacts,
+  rights: DeskRights,
+  lastUser: string,
+): Promise<{ reply: string; chips: { label: string; send: string; primary?: boolean }[]; done: boolean } | null> {
+  if (facts.mode !== "client" || !facts.identified || !facts.customerId) return null;
+  const n = who === "olga" ? "Ольга" : "Олег";
+  const did = who === "olga" ? "Отметила" : "Отметил";
+  const put = who === "olga" ? "Поставила" : "Поставил";
+  const d = clientDigest(facts.customerId);
+  const child = facts.child || d?.child.split(/\s+/)[0] || "ребёнок";
+
+  if (facts.wantsSkip) {
+    if (rights.consultantCanSkip === false) {
+      return { reply: `${n}: Пропуск отмечает администратор. ${phoneHint()}`, chips: [], done: true };
+    }
+    const res = applySkip(facts.customerId, facts.day || "", lastUser);
+    return {
+      reply: res.ok
+        ? `${n}: ${did} пропуск ${child}${d?.nextLesson ? ` (${d.nextLesson})` : ""}. Нужна отработка в другой группе того же курса?`
+        : `${n}: ${res.error}`,
+      chips: res.ok
+        ? [
+            { label: "Отработка", send: "Нужна отработка пропуска", primary: true },
+            { label: "Этого достаточно", send: "Спасибо, этого достаточно" },
+          ]
+        : [],
+      done: true,
+    };
+  }
+
+  if (facts.intent === "пауза" && facts.pauseUntil) {
+    if (rights.consultantCanPause === false) {
+      return { reply: `${n}: Паузу ставит администратор. ${phoneHint()}`, chips: [], done: true };
+    }
+    const until = pauseUntilIso(facts.pauseUntil);
+    const res = applyPause(facts.customerId, until, lastUser);
+    return {
+      reply: res.ok ? `${n}: ${put} паузу ${child} до ${until}. Когда вернуться — напишите, сниму.` : `${n}: ${res.error}`,
+      chips: [],
+      done: true,
+    };
+  }
+
+  if (facts.wantsBook && /gid=\d/i.test(lastUser)) {
+    const ids = parseChipIds(lastUser);
+    if (!allowedLessonType(rights, ids.kind)) {
+      return { reply: `${n}: Такой тип занятия ставит администратор. ${phoneHint()}`, chips: [], done: true };
+    }
+    const card = findDossier({ crmId: facts.customerId });
+    const { saveTrialLead } = await import("./trial-save.ts");
+    const saved = await saveTrialLead({
+      parent: d?.parent || card?.parent?.fio || "Родитель",
+      child: d?.child || card?.child?.fio || child,
+      dob: String(card?.child?.dob || ""),
+      phone: card?.phones?.[0] || card?.phoneDigits || "",
+      email: "",
+      course: ids.courseId,
+      branch: String(ids.branchId || d?.branchId || card?.branchId || ""),
+      gid: ids.gid,
+      date: ids.date,
+      time: ids.time,
+      subjectId: ids.subjectId || undefined,
+      teacherId: ids.teacherId || undefined,
+      kind: ids.kind,
+    });
+    const label = ids.kind === "makeup" ? "отработку" : ids.kind === "trial" ? "пробное" : "занятие";
+    return {
+      reply: saved.ok
+        ? `${n}: ${put} ${label}${ids.date ? ` на ${ids.date}` : ""}${ids.time ? ` в ${ids.time}` : ""}. Alfa догонит очередью.`
+        : `${n}: ${saved.error || "Не получилось поставить."}`,
+      chips: [],
+      done: true,
+    };
+  }
+
+  const lock = await lockedClientTurn(who, facts, rights, lastUser);
+  if (lock) return { reply: lock.reply, chips: lock.chips, done: true };
+  return null;
+}
+
 function todayIso() {
   const n = new Date();
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
