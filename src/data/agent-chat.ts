@@ -80,6 +80,11 @@ const ADMIN_SYSTEM = `Вы — Ольга, консоль управления �
 После команды сразу вызови инструмент и коротко подтверди страницу и поле по-русски.
 Не пиши «режим управления уже открыт», не проси кодовое слово — доступ уже есть.
 Не угадывай поле по смыслу — list_page_fields.
+
+Обучение консультанта Олега/Ольги на сайте (не правки страницы):
+Если сотрудник говорит «неправильно», «запомни», «надо было сказать», «вместо этого», «как правильно» — вызови remember_lesson.
+Типы kind: reply (как говорить), crm (что делать в карточке: отработка, пропуск, пауза, абонемент, запись), flow (порядок вопросов), id (только ID, не имя).
+После записи коротко подтверди тип и тему. Консультант на сайте читает карту сразу.
 `;
 
 const ADMIN_NO_CONSULT = `Это не консультация. Запрещено: возраст ребёнка, подбор курса, пробное, филиалы «куда удобнее», лиды в CRM, «чем могу помочь» в смысле кружков.
@@ -208,6 +213,27 @@ const ADMIN_TOOLS = [
           mood: { type: "string", description: "good радостный | friendly | calm спокойный | quiet тихий" },
           role: { type: "string" },
         },
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "remember_lesson",
+      description:
+        "Запомнить урок консультанту: что было неправильно и как правильно. Пишет на карту обучения. kind: reply | crm | flow | id.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: { type: "string", description: "reply текст | crm действие в карточке | flow порядок вопросов | id только ключ" },
+          intent: { type: "string", description: "отработка | пропуск | пауза | абонемент | набор | расписание | пробное | вход" },
+          wrong: { type: "string", description: "Как агент ответил не так" },
+          right: { type: "string", description: "Как надо. Обязательно." },
+          action: { type: "string", description: "book_lesson | note_skip | pause_classes | assign_tariff | submit_trial | list_groups" },
+          entity: { type: "string", description: "courseId | groupId | teacherId | customerId | tariffId" },
+        },
+        required: ["right"],
       },
     },
   },
@@ -666,6 +692,16 @@ export const chatAgent = createServerFn({ method: "POST" })
     const adminHint = admin
       ? `\nСтраница сейчас: ${data.path || "/"}.`
       : "";
+    if (admin && !fromMessenger && lastUser) {
+      const { isLessonSpeech, parseLessonSpeech, addLesson, confirmLessonReply } = await import("./agent-lessons");
+      if (isLessonSpeech(lastUser)) {
+        const parsed = parseLessonSpeech(lastUser);
+        if (parsed?.right) {
+          const saved = addLesson({ ...parsed, source: "voice-admin" });
+          return { ok: true as const, reply: confirmLessonReply(saved), token: granted, reload: false };
+        }
+      }
+    }
     const facts = factsFromMessages(all);
     if (data.phone) facts.phone = facts.phone || String(data.phone);
     const note = buildSessionNote(all);
@@ -1278,6 +1314,28 @@ export const chatAgent = createServerFn({ method: "POST" })
                 });
               } else {
                 messages.push({ role: "tool", tool_call_id: call.id, content: saved.error });
+              }
+            } else if (admin && call.function.name === "remember_lesson") {
+              const { addLesson, confirmLessonReply, guessKind, guessIntent, guessAction, guessEntity } = await import("./agent-lessons");
+              const right = String(args.right || "").trim();
+              if (!right) {
+                messages.push({ role: "tool", tool_call_id: call.id, content: "Нужно, как правильно." });
+              } else {
+                const blob = `${args.wrong || ""} ${right} ${args.intent || ""}`;
+                const saved = addLesson({
+                  kind: args.kind === "crm" || args.kind === "flow" || args.kind === "id" || args.kind === "reply" ? args.kind : guessKind(blob),
+                  intent: String(args.intent || guessIntent(blob)),
+                  wrong: String(args.wrong || ""),
+                  right,
+                  action: String(args.action || guessAction(blob)),
+                  entity: String(args.entity || guessEntity(blob)),
+                  source: "voice-admin",
+                });
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: confirmLessonReply(saved),
+                });
               }
             } else if (admin && call.function.name === "set_voice_settings") {
               const { parseVoiceCommand, saveVoiceSettings, loadVoiceSettings } = await import("./voice-settings");

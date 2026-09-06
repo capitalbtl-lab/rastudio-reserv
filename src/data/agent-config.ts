@@ -8,6 +8,7 @@ import type { SessionFacts } from "./agent-facts";
 import { docsPrompt } from "./agent-docs";
 import { consultantGuidePrompt } from "./agent-section-guides-data";
 import { loadChannels } from "./agent-channels";
+import { lessonsPrompt } from "./agent-lessons";
 import { repairSiteFlags, SITE_WINDOW_IDS, FRAME_WINDOW_IDS, CHIP_IDS } from "./agent-window-core";
 import { BOOK_TYPE_FLAGS, bookTypesPrompt, type BookTypeFlag } from "./agent-book-kinds";
 export { BOOK_TYPE_FLAGS, allowedLessonType, bookTypesPrompt, lessonTypeGroup } from "./agent-book-kinds";
@@ -356,8 +357,15 @@ export function agentPromptAddons(facts?: SessionFacts, channel = "site") {
     parts.push("ОБУЧЕНИЕ (эти примеры и правила важнее общих фраз, но не ломают воронку):");
     for (const ex of take) {
       if (ex.kind === "rule") parts.push(`Правило: ${ex.output || ex.input}`);
+      else if (ex.kind === "correction") parts.push(`Исправление. Было: ${ex.input.slice(0, 400)}\nНадо: ${ex.output.slice(0, 600)}`);
       else parts.push(`Пример.\nРодитель: ${ex.input.slice(0, 400)}\nОтвет: ${ex.output.slice(0, 600)}`);
     }
+  }
+  try {
+    const map = lessonsPrompt();
+    if (map.trim()) parts.push(map);
+  } catch {
+    /* диск */
   }
   const docs = docsPrompt(channel, [facts?.school, facts?.course, facts?.intent].filter(Boolean).join(" "));
   if (docs.trim()) parts.push(docs);
