@@ -94,8 +94,9 @@ export async function maybeBookChudnovaTrial() {
     const who = (await findChudnova(request, t)) || { id: 670, branchId: 1, name: PAY_TEST_NAME };
     const existing = loadCustomerCalendar(who.id).find((l) => Number(l.typeId) === 3 || /пробн/i.test(String(l.type || "")));
     if (existing && Number(existing.lessonId) > 0) {
-      saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note: `${who.name} #${who.id} пробное Alfa #${existing.lessonId}` });
-      return { skipped: "exists" as const, customerId: who.id };
+      const note = `${who.name} #${who.id} пробное Alfa #${existing.lessonId}`;
+      saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note });
+      return { skipped: "exists" as const, customerId: who.id, note };
     }
     const d = findDossier({ crmId: who.id });
     const link = (d?.groupLinks || []).find((x) => x.active !== false) || (d?.groupLinks || [])[0];
@@ -130,38 +131,23 @@ export async function maybeBookChudnovaTrial() {
     const date = formatRuDob(plan.date) || plan.date;
     const dateIso = isoFromRu(date);
     const to = addMins(plan.time, plan.duration);
-    const booked = await createAlfaLesson({
-      branch: plan.branchId,
-      customerId: plan.customerId,
-      type: "trial",
-      subjectId: plan.subjectId,
-      gid: plan.gid ? String(plan.gid) : undefined,
-      date,
-      time: plan.time,
-      duration: plan.duration,
-      note: plan.note,
-      teacherId: plan.teacherId || undefined,
-      roomId: plan.roomId || undefined,
-    });
-    if (!booked.ok) throw new Error(booked.error || "Alfa не создала пробное");
-    const lessonId = Number(booked.id) || 0;
-    if (existing && Number(existing.lessonId) < 0 && lessonId) applyCreatedCalendarLesson(Number(existing.lessonId), lessonId);
+    const localId = Number(existing?.lessonId) < 0 ? Number(existing.lessonId) : nextLocalLessonId();
     const lessonRow = stampJournal(
       {
         date: dateIso,
-        from: booked.time || plan.time,
+        from: plan.time,
         to,
         status: 1,
-        type: booked.type || type.name,
-        typeId: booked.typeId || type.id,
-        duration: booked.duration || plan.duration,
+        type: type.name,
+        typeId: type.id,
+        duration: plan.duration,
         subjectId: plan.subjectId,
         teacherIds: plan.teacherId ? [plan.teacherId] : [],
         roomId: plan.roomId || undefined,
         groupIds: plan.gid ? [plan.gid] : [],
         customerIds: [plan.customerId],
         note: plan.note,
-        lessonId,
+        lessonId: localId,
         group: slot?.groupName || type.name,
         subject: slot?.subject || "Художественная школа (10-14 лет)",
         teacher: slot?.teacher || "",
@@ -176,13 +162,45 @@ export async function maybeBookChudnovaTrial() {
         subject: slot?.subject,
       });
     }
-    saveMark({
-      done: TRIAL_TEST_ID,
-      at: new Date().toISOString(),
-      note: `${who.name} #${who.id} Alfa #${lessonId} филиал ${who.branchId} · ${date} ${plan.time} ауд. ${plan.roomId || "—"}`,
-    });
-    logAdmin(`Пробное Чудновой: Alfa #${lessonId} ${date} ${plan.time} филиал ${who.branchId} ауд. ${plan.roomId || "—"}`, "sync");
-    return { ok: true as const, customerId: who.id, branchId: who.branchId, date, time: plan.time, lessonId };
+    const attempts: { gid?: string; teacherId?: number; roomId?: number }[] = [
+      { roomId: plan.roomId || 28, gid: undefined, teacherId: undefined },
+      { roomId: plan.roomId || 28, gid: plan.gid ? String(plan.gid) : undefined, teacherId: plan.teacherId || undefined },
+    ];
+    let lastErr = "";
+    for (const a of attempts) {
+      try {
+        const booked = await createAlfaLesson({
+          branch: plan.branchId,
+          customerId: plan.customerId,
+          type: "trial",
+          subjectId: plan.subjectId,
+          date,
+          time: plan.time,
+          duration: plan.duration,
+          note: plan.note,
+          roomId: a.roomId,
+          gid: a.gid,
+          teacherId: a.teacherId,
+        });
+        if (!booked.ok) {
+          lastErr = booked.error || "Alfa не создала пробное";
+          continue;
+        }
+        const lessonId = Number(booked.id) || 0;
+        if (localId < 0 && lessonId) applyCreatedCalendarLesson(localId, lessonId);
+        const note = `${who.name} #${who.id} Alfa #${lessonId} филиал ${who.branchId} · ${date} ${plan.time} ауд. ${a.roomId || "—"}`;
+        saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note });
+        logAdmin(`Пробное Чудновой: ${note}`, "sync");
+        return { ok: true as const, customerId: who.id, branchId: who.branchId, date, time: plan.time, lessonId, note };
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : String(e);
+      }
+    }
+    const note = `диск есть, Alfa: ${lastErr.slice(0, 280)}`;
+    saveMark({ done: "", at: new Date().toISOString(), note });
+    logAdmin(`Пробное Чудновой: ${note}`, "sync");
+    g.__raTrialTest = false;
+    return { ok: false as const, error: note, customerId: who.id, date, time: plan.time, lessonId: localId };
   } catch (e) {
     g.__raTrialTest = false;
     const msg = e instanceof Error ? e.message : "пробное";

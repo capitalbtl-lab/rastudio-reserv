@@ -42,7 +42,8 @@ describe("пробное Чудновой Александре", () => {
     assert.match(q, /maybeBookChudnovaTrial/);
     const book = readFileSync(new URL("./crm-trial-test.ts", import.meta.url), "utf8");
     assert.match(book, /createAlfaLesson/);
-    assert.match(book, /Number\(existing.lessonId\) > 0/);
+    assert.match(book, /id: 670/);
+    assert.match(book, /upsertCustomerCalendar/);
     assert.match(book, /DEFAULT_ROOM/);
     assert.match(q, /job.op === "lesson.create"/);
     assert.match(q, /createAlfaLesson/);

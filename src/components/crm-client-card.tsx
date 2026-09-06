@@ -1018,6 +1018,12 @@ export function CrmClientCard({
           </div>
         </div>
 
+        {card.crmPush ? (
+          <p className="mt-3 rounded-xl bg-white/90 px-3 py-2 text-[0.8rem] text-fg ring-1 ring-black/8" data-op="crm-push">
+            {card.crmPush}
+          </p>
+        ) : null}
+
         <div className="mt-4 rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-black/6">
           <LessonStrip
             lessons={tiles}

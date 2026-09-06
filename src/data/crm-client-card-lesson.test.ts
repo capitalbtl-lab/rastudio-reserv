@@ -26,7 +26,8 @@ describe("форма занятия карточки", () => {
     assert.match(src, /lessonGroupOffers/);
     assert.match(src, /g\?\.teacherId/);
     assert.match(src, /const lessonRoomCount = lessonRooms.filter/);
-    assert.match(src, /\$\{lessonRoomCount\} доступно/);
+    assert.match(src, /card.crmPush/);
+    assert.match(src, /data-op="crm-push"/);
   });
 
   it("расписание импортирует reload — иначе вкладка не открывается", () => {

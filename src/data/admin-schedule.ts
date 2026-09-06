@@ -140,6 +140,7 @@ export type CustomerCard = {
   tariffs?: { id: number; tariffId?: number; name: string; rest: number; lessons: number; archived?: boolean; bDate?: string; eDate?: string; price?: number }[];
   comms: CustomerComm[];
   pays?: { id: number; kind: string; income: number; expenditure: number; note: string; documentDate: string }[];
+  crmPush?: string;
   catalog?: { subjects: { id: number; name: string }[]; teachers: { id: number; name: string }[]; rooms: { id: number; name: string }[]; tariffs?: { id: number; name: string; price: number; lessons: number; subjectIds?: number[]; lessonTypeIds?: number[]; periodCount?: number; periodType?: number; periodLabel?: string; eDate?: string; calculationType?: number }[]; groups?: { id: number; name: string; branchId: number; subjectId?: number; teacher?: string; day?: string; from?: string; to?: string }[] };
 };
 
@@ -1481,12 +1482,17 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const customerId = Number(data.customerId) || 0;
       if (!customerId) return { ok: false as const, error: "Нет номера ученика." };
       const d = findDossier({ crmId: customerId });
-      if (d?.child?.fio) {
+      let crmPush = "";
+      if (d?.child?.fio || customerId === 670) {
         const { isChudnovaAlexandra } = await import("./crm-pay-test-core");
-        if (isChudnovaAlexandra(d.child.fio)) {
-          await import("./crm-trial-test").then((m) => m.maybeBookChudnovaTrial()).catch(() => null);
+        if (customerId === 670 || (d?.child?.fio && isChudnovaAlexandra(d.child.fio))) {
+          const booked = await import("./crm-trial-test")
+            .then((m) => m.maybeBookChudnovaTrial())
+            .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+          crmPush = String((booked as { note?: string; error?: string }).note || (booked as { error?: string }).error || "");
         }
       }
+      const withPush = <T extends { crmPush?: string }>(card: T): T => (crmPush ? { ...card, crmPush } : card);
       if (!wantAlfaPull(data.fresh)) {
         if (d) {
           const { cardFromDossier } = await import("./customer-card-disk");
@@ -1502,7 +1508,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
             const fresh = findDossier({ crmId: customerId });
             if (fresh) card = cardFromDossier(fresh, branch);
           }
-          return { ok: true as const, fromCache: true, customer: card };
+          return { ok: true as const, fromCache: true, customer: withPush(card) };
         }
         return { ok: false as const, error: "Ученик не найден на сайте." };
       }
@@ -1510,7 +1516,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         const { pendingExportIds } = await import("./crm-export-queue");
         if (pendingExportIds(["customer.update", "customer.create"]).has(customerId)) {
           const { cardFromDossier } = await import("./customer-card-disk");
-          return { ok: true as const, fromCache: true, customer: cardFromDossier(d, branch) };
+          return { ok: true as const, fromCache: true, customer: withPush(cardFromDossier(d, branch)) };
         }
       }
       if (customerId < 0) return { ok: false as const, error: "Ученик не найден на сайте." };
@@ -1524,6 +1530,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       customer.balance = customerBalance(customerId, customer.balance);
       customer.comms = commsOf(customerId).map(asCustomerComm);
       customer.pays = cardPays(customerId);
+      if (crmPush) customer.crmPush = crmPush;
       void import("./crm-packet-queue").then((q) => {
         q.enqueueCustomerPacket(branch, [customerId]);
         void q.tickCrmQueue(1);
