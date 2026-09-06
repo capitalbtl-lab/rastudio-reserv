@@ -482,8 +482,8 @@ export async function boardFromDisk(branchId = 0): Promise<Bag> {
 export async function loadLeadsBoard(branchId = 0, force = false, delta = false): Promise<Bag> {
   const key = String(branchId || 0);
   const hit = bag().get(key);
-  const { wantAlfaPull } = await import("./crm-alfa-link");
-  if (!wantAlfaPull(force)) {
+  const { wantAlfaPull, wantAlfaDelta } = await import("./crm-alfa-link");
+  if (!wantAlfaPull(force) && !wantAlfaDelta(delta)) {
     if (hit?.items.length) return hit;
     const disk = await boardFromDisk(branchId);
     if (disk.items.length) {
@@ -492,7 +492,8 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
     }
     return disk;
   }
-  if (delta && hit?.items.length) return syncLeadsDelta(branchId);
+  if (delta && !force && hit?.items.length) return syncLeadsDelta(branchId);
+  if (wantAlfaDelta(delta) && !force) return syncLeadsDelta(branchId);
   const work = async (): Promise<Bag> => {
     const t = await alfaToken();
     const rawStages = await fetchStages(t, branchId || 2);

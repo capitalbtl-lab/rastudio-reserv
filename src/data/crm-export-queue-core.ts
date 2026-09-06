@@ -1,6 +1,7 @@
 /** Выгрузка в Alfa: диск уже записан, CRM догоняет пакетом. */
 
 import type { CrmActorId } from "./crm-actors";
+import { isLocalId } from "./crm-local-id";
 
 export type CrmExportOp =
   | "group.update"
@@ -97,6 +98,8 @@ export function mergeExportJob(jobs: CrmExportJob[], incoming: Omit<CrmExportJob
       (j) => !(j.op === "lead-status.create" && (j.entityId === incoming.entityId || Number(j.body.localId) === incoming.entityId)),
     );
   }
+  const folded = foldLocalIntoCreate(jobs, incoming, at);
+  if (folded) return folded;
   const hit = jobs.find((j) => sameExportJob(j, incoming));
   if (hit) {
     return jobs.map((j) =>

@@ -36,3 +36,8 @@ export function alfaLinkedNow() {
 export function wantAlfaPull(fresh?: unknown) {
   return Boolean(fresh) && alfaLinkedNow();
 }
+
+/** Дельта лидов и карточек — пока связь включена, без полной выгрузки. */
+export function wantAlfaDelta(delta?: unknown) {
+  return Boolean(delta) && alfaLinkedNow();
+}
