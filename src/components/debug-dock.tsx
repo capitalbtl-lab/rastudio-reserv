@@ -19,8 +19,8 @@ function token() {
   }
 }
 
-export function DebugDock() {
-  const [ask, setAsk] = useState(false);
+export function DebugDock({ startAsk = false }: { startAsk?: boolean } = {}) {
+  const [ask, setAsk] = useState(startAsk);
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
   const [on, setOn] = useState(false);

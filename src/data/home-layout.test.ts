@@ -66,18 +66,26 @@ describe("макет главной", () => {
     }
     assert.match(src, /HomeCanvas/);
     assert.match(src, /EditText id="hero.title"/);
+    assert.match(src, /from "@\/components\/home-read"/);
+    assert.doesNotMatch(src, /from "@\/components\/home-editor"/);
     const editor = readFileSync(new URL("../components/home-editor.tsx", import.meta.url), "utf8");
     assert.match(editor, /Инспектор/);
-    assert.match(editor, /contentEditable/);
     assert.match(editor, /StudioPanel/);
     assert.match(editor, /home-editing/);
     assert.match(editor, /\["layers", "Слои"\]/);
     assert.match(editor, /Панель/);
     assert.doesNotMatch(editor, /max-w-\[390px\]/);
+    const read = readFileSync(new URL("../components/home-read.tsx", import.meta.url), "utf8");
+    assert.match(read, /contentEditable/);
     const blocks = readFileSync(new URL("../components/home-blocks.tsx", import.meta.url), "utf8");
+    assert.match(blocks, /HomeEditorGate/);
     assert.match(blocks, /home-device-phone/);
     assert.match(blocks, /md:pl-\[15\.25rem\]/);
+    assert.doesNotMatch(blocks, /from "@\/components\/home-editor"/);
     assert.doesNotMatch(blocks, /max-w-\[390px\].*lg:pr/);
+    const admin = readFileSync(new URL("../routes/admin.tsx", import.meta.url), "utf8");
+    assert.match(admin, /StaffShell/);
+    assert.doesNotMatch(admin, /SiteShell/);
     const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
     assert.match(css, /html\.home-editing \.mobile-dock/);
     assert.match(css, /html\.home-editing \.agent-shell/);
