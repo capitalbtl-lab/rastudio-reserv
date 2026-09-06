@@ -8,6 +8,7 @@ import {
 } from "@/data/admin";
 import { Button } from "@/components/ui/button";
 import { adminGhostBtn, AdminSelfTest } from "@/components/admin-self-test";
+import { AdminReloadBtn } from "@/components/admin-reload-btn";
 import { cn } from "@/lib/utils";
 import { tidyHttpError } from "@/data/http-error";
 import { lazyWithRetry, TabError } from "@/lib/error-component";
@@ -259,16 +260,19 @@ export function AdminPrices() {
           </>
         }
         extra={
-          <button
-            type="button"
-            className={adminGhostBtn}
-            onClick={() => {
-              logout();
-              setIn(false);
-            }}
-          >
-            Выйти
-          </button>
+          <div className="flex items-center gap-2">
+            <AdminReloadBtn />
+            <button
+              type="button"
+              className={adminGhostBtn}
+              onClick={() => {
+                logout();
+                setIn(false);
+              }}
+            >
+              Выйти
+            </button>
+          </div>
         }
       />
 

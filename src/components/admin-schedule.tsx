@@ -21,6 +21,7 @@ import { pullFromCrm } from "@/lib/crm-pull";
 import { CrmPullDialog, emptyPull, type CrmPullState } from "@/components/crm-pull-dialog";
 import type { CrmSubject } from "@/data/crm-subjects";
 import { ADMIN_PANEL_BLUE, RA_POP } from "@/data/admin-ui";
+import { AdminReloadBtn, useAdminReload } from "@/components/admin-reload-btn";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
 import type { CrmTeacher } from "@/data/crm-teachers";
 import { AdminClients } from "@/components/admin-clients";
@@ -2554,9 +2555,12 @@ export function AdminSchedule() {
           </button>
         ))}
         {groupsWide ? (
-          <button type="button" data-op="groups-wide-off" className={cn(adminGhostBtn, "ml-auto mb-1")} onClick={() => setGroupsWide(false)}>
-            Свернуть экран
-          </button>
+          <div className="ml-auto mb-1 flex items-center gap-2">
+            <AdminReloadBtn />
+            <button type="button" data-op="groups-wide-off" className={adminGhostBtn} onClick={() => setGroupsWide(false)}>
+              Свернуть экран
+            </button>
+          </div>
         ) : null}
       </div>
 
