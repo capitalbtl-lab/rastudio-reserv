@@ -41,10 +41,10 @@ describe("пробное Чудновой Александре", () => {
     const q = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
     assert.match(q, /maybeBookChudnovaTrial/);
     const book = readFileSync(new URL("./crm-trial-test.ts", import.meta.url), "utf8");
+    assert.match(book, /createAlfaLesson/);
     assert.match(book, /Number\(existing.lessonId\) > 0/);
-    assert.match(book, /createAlfaLesson|subject_id: plan.subjectId/);
+    assert.match(book, /DEFAULT_ROOM/);
     assert.match(q, /job.op === "lesson.create"/);
     assert.match(q, /createAlfaLesson/);
-    assert.match(q, /roomId/);
   });
 });

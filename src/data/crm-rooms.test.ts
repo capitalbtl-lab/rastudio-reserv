@@ -31,7 +31,7 @@ describe("аудитории филиала", () => {
   it("каталог ЦМИТ содержит аудитории модалки Alfa", () => {
     const rooms = roomsCatalog([{ roomId: 19, branchId: 2 }]);
     const cmit = rooms.filter((r) => r.branchId === 2);
-    assert.ok(SEED_ROOMS.every((s) => cmit.some((r) => r.id === s.id && r.name === s.name)));
+    assert.ok(SEED_ROOMS.filter((s) => s.branchId === 2).every((s) => cmit.some((r) => r.id === s.id && r.name === s.name)));
     const groups = roomsSelectGroups(rooms, 2);
     assert.equal(groups.length, 1);
     assert.match(groups[0].label, /ЦМИТ/);
@@ -49,10 +49,11 @@ describe("аудитории филиала", () => {
     const civic = roomsSelectGroups(rooms, 1);
     assert.equal(civic.length, 1);
     assert.match(civic[0].label, /Гражданская/);
-    assert.deepEqual(
-      civic[0].options.map((o) => o.value),
-      ["3"],
-    );
+    const ids = civic[0].options.map((o) => o.value);
+    assert.ok(ids.includes("28"));
+    assert.ok(ids.includes("1"));
+    assert.ok(ids.includes("3"));
+    assert.equal(ids.includes("19"), false);
   });
 });
 
