@@ -41,13 +41,15 @@ export function roomBelongsToBranch(x: Record<string, unknown>, branch: number) 
   return ids.includes(Number(branch));
 }
 
-export function roomsOfBranchList(raw: Record<string, unknown>[], branch: number) {
+export function roomsOfBranchList(raw: Record<string, unknown>[], branch: number, assume = false) {
   const seen = new Set<number>();
   const out: { id: number; name: string }[] = [];
+  const b = Number(branch) || 0;
   for (const x of raw) {
     const id = Number(x.id || 0);
     if (!id || seen.has(id) || roomArchived(x)) continue;
-    if (!roomBelongsToBranch(x, branch)) continue;
+    const ids = roomBranchIds(x);
+    if (ids.length ? !ids.includes(b) : !assume) continue;
     seen.add(id);
     const name = String(x.name || "").trim() || `аудитория ${id}`;
     out.push({ id, name });
@@ -101,12 +103,28 @@ export function roomsOfBranchCatalog(rooms: CrmRoom[], branchId: number) {
 }
 
 export function roomsSelectGroups(rooms: CrmRoom[], branchId: number) {
-  const list = roomsOfBranchCatalog(rooms, branchId);
-  const label = LOCATION_LABEL[branchId] || "Аудитории";
-  return [
-    {
-      label,
-      options: list.map((r) => ({ value: String(r.id), label: r.name })),
-    },
-  ].filter((g) => g.options.length);
+  const b = Number(branchId) || 0;
+  const ofBranch = b ? roomsOfBranchCatalog(rooms, b) : [];
+  const list = ofBranch.length ? ofBranch : rooms;
+  if (!list.length) return [];
+  if (ofBranch.length) {
+    return [
+      {
+        label: LOCATION_LABEL[b] || "Аудитории",
+        options: ofBranch.map((r) => ({ value: String(r.id), label: r.name })),
+      },
+    ];
+  }
+  const map = new Map<number, CrmRoom[]>();
+  for (const r of list) {
+    const arr = map.get(r.branchId) || [];
+    arr.push(r);
+    map.set(r.branchId, arr);
+  }
+  return [...map.entries()]
+    .sort((a, c) => a[0] - c[0])
+    .map(([id, rs]) => ({
+      label: LOCATION_LABEL[id] || `филиал ${id}`,
+      options: rs.map((r) => ({ value: String(r.id), label: r.name })),
+    }));
 }

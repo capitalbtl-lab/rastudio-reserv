@@ -48,6 +48,7 @@ import { loadScheduleMap } from "./schedule-map";
 import { packSubjectRows, bindSubjectCourse } from "./subject-admin";
 import { isAdminGroup, readPriority, crmPriorityOf } from "./group-status";
 import { roomsCatalog } from "./crm-rooms";
+import { loadRooms } from "./crm-rooms-disk";
 
 function isoish(raw: string) {
   const s = String(raw || "").trim();
@@ -532,8 +533,14 @@ async function roomsOfBranch(request: typeof import("./alfacrm").request, t: str
   try {
     const { roomsOfBranchList } = await import("./crm-rooms");
     const rm = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/room/index`, { page: 0, pageSize: 100 }, t);
-    const items = roomsOfBranchList(rm.items || [], branch);
+    const items = roomsOfBranchList(rm.items || [], branch, true);
     roomCache.set(branch, { at: Date.now(), items });
+    try {
+      const { rememberRooms } = await import("./crm-rooms-disk");
+      rememberRooms(items.map((x) => ({ id: x.id, name: x.name, branchId: branch })));
+    } catch {
+      /* диск */
+    }
     return items;
   } catch {
     return hit?.items || [];
@@ -697,7 +704,7 @@ function catalogGroups(branch: number) {
 }
 
 function catalogRooms() {
-  const extra: { id: number; name: string; branchId: number }[] = [];
+  const extra: { id: number; name: string; branchId: number }[] = [...loadRooms()];
   for (const [b, pack] of roomCache) {
     for (const x of pack.items) extra.push({ id: x.id, name: x.name, branchId: b });
   }

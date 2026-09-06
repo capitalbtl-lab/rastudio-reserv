@@ -13,6 +13,7 @@ import { asCustomerComm, commsOf } from "./crm-comms";
 import { loadTariffs } from "./crm-tariffs";
 import { isPaidCountLabel, parseDossierCtt } from "./pupil-tariffs";
 import { roomsCatalog } from "./crm-rooms";
+import { loadRooms } from "./crm-rooms-disk";
 
 function ageLabel(dob: string) {
   const m = String(dob || "").match(/^(\d{1,2})[.](\d{1,2})[.](\d{4})$/) || String(dob || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -71,7 +72,7 @@ function catalogBase() {
   catalogMemo = {
     groups,
     subjects: loadSubjects().map((s) => ({ id: s.id, name: s.name })),
-    rooms: roomsCatalog(slots),
+    rooms: roomsCatalog(slots, loadRooms()),
   };
   return catalogMemo;
 }
