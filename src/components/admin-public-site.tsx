@@ -77,6 +77,14 @@ export function AdminPublicSite() {
         <p className="mt-1 max-w-2xl text-sm text-muted">
           Сайт — то, что видят родители. Школа = schoolId, курс = courseId, группа = groupId+branchId, филиал = branchId. Имена — подписи.
         </p>
+        <p className="mt-3">
+          <a
+            href="/?edit=1"
+            className="inline-flex h-11 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground"
+          >
+            Редактор главной
+          </a>
+        </p>
       </div>
       <section className="rounded-2xl bg-white p-4 ring-1 ring-black/8">
         <h3 className="font-semibold">Кнопки записи на сайте</h3>

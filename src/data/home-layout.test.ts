@@ -82,6 +82,12 @@ describe("макет главной", () => {
     assert.match(blocks, /home-device-phone/);
     assert.match(blocks, /md:pl-\[15\.25rem\]/);
     assert.doesNotMatch(blocks, /from "@\/components\/home-editor"/);
+    const gate = readFileSync(new URL("../components/home-editor-gate.tsx", import.meta.url), "utf8");
+    assert.match(gate, /edit=1/);
+    assert.match(gate, /ra_admin/);
+    const pub = readFileSync(new URL("../components/admin-public-site.tsx", import.meta.url), "utf8");
+    assert.match(pub, /\/\?edit=1/);
+    assert.match(pub, /Редактор главной/);
     assert.doesNotMatch(blocks, /max-w-\[390px\].*lg:pr/);
     const admin = readFileSync(new URL("../routes/admin.tsx", import.meta.url), "utf8");
     assert.match(admin, /StaffShell/);

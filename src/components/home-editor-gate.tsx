@@ -5,6 +5,32 @@ import { HomeReadProvider } from "@/components/home-read";
 
 type Prov = ComponentType<{ initial?: unknown; children: ReactNode }>;
 
+function adminCookie() {
+  try {
+    const m = document.cookie.match(/(?:^|;\s*)ra_admin=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : "";
+  } catch {
+    return "";
+  }
+}
+
+function wantsEdit() {
+  try {
+    if (sessionStorage.getItem("ra_debug")) return true;
+  } catch {
+    /* */
+  }
+  try {
+    if (!/(?:\?|&)edit=1(?:&|$)/.test(location.search)) return false;
+    const t = adminCookie();
+    if (!t) return false;
+    sessionStorage.setItem("ra_debug", t);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function HomeEditorGate({
   initial,
   children,
@@ -15,13 +41,13 @@ export function HomeEditorGate({
   const [Prov, setProv] = useState<Prov | null>(null);
   useEffect(() => {
     const boot = () => {
+      if (!wantsEdit()) {
+        setProv(null);
+        return;
+      }
       void import("@/components/home-editor").then((m) => setProv(() => m.HomeEditorProvider));
     };
-    try {
-      if (sessionStorage.getItem("ra_debug")) boot();
-    } catch {
-      /* */
-    }
+    boot();
     window.addEventListener("ra-debug-session", boot);
     return () => window.removeEventListener("ra-debug-session", boot);
   }, []);
