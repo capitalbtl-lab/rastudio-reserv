@@ -895,11 +895,12 @@ export function CrmClientCard({
                       title="Удалить абонемент"
                       disabled={!onAction || Boolean(busy)}
                       onClick={() => setDropTariff({ id: t.id, name: t.name })}
-                      className="grid h-auto w-8 shrink-0 place-items-center rounded-xl text-muted ring-1 ring-black/6 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"
+                      className="grid h-auto min-w-8 shrink-0 place-items-center rounded-xl px-1.5 text-[0.62rem] font-semibold uppercase tracking-wide text-muted ring-1 ring-black/6 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"
                     >
-                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                      <svg viewBox="0 0 24 24" className="mb-0.5 h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                         <path d="M4 7h16M9 7V5h6v2m-8 0 1 12h8l1-12" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
+                      Удалить
                     </button>
                   </li>
                 ))}
