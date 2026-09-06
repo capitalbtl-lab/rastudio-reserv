@@ -141,7 +141,7 @@ export function AdminAgent() {
             </p>
           ) : (
             <p className="rounded-2xl bg-surface px-4 py-3 text-sm text-muted shadow-[var(--shadow-border)]">
-              На сайте: окно {settings.showChat !== false ? "видно" : "скрыто"} · голос {settings.allowVoice !== false ? "вкл" : "выкл"} · Ольга {settings.allowOlga !== false ? "да" : "нет"} · Олег {settings.allowOleg !== false ? "да" : "нет"} · сброс {settings.allowReset !== false ? "да" : "нет"} · перебивание {settings.allowBarge !== false ? "да" : "нет"} · админ-режим {settings.allowAdminMode !== false ? "да" : "нет"}.
+              На сайте: окно видно · голос {settings.allowVoice !== false ? "вкл" : "выкл"} · Ольга {settings.allowOlga !== false ? "да" : "нет"} · Олег {settings.allowOleg !== false ? "да" : "нет"} · сброс {settings.allowReset !== false ? "да" : "нет"} · перебивание {settings.allowBarge !== false ? "да" : "нет"} · админ-режим {settings.allowAdminMode !== false ? "да" : "нет"}.
               Ответы {settings.keepAssistantReplies !== false ? "не стираются" : "могут затираться"} · озвучка {settings.speakEveryReply !== false ? "каждого вопроса" : "выкл"}.
             </p>
           )}
