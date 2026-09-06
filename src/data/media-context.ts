@@ -18,10 +18,20 @@ const HOME: Record<string, string> = {
   "robot-en-4.mp4": "робототехника на английском, ролик 4",
 };
 
+export function schoolSlug(id: string) {
+  return String(id || "")
+    .replace(/^\//, "")
+    .split("/")[0]
+    .replace(/[^a-zA-Z0-9._-а-яА-ЯёЁ-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 export function mediaFolder(src: string) {
   const clean = String(src || "").split("?")[0].replace(/^\/+/, "");
   const parts = clean.split("/").filter(Boolean);
   if (parts[0] !== "media") return "";
+  if (parts[1] === "schools" && parts[2]) return parts[2];
   if (parts[1] === "courses" && parts[2]) return parts[2];
   if (parts[1] === "home") return "home";
   if (parts[1] === "uploads") return "uploads";
@@ -44,6 +54,33 @@ export function matchMediaLabel(folder: string, labels: MediaLabel[]) {
     labels.find((l) => slug.includes(l.id.replace(/^\//, "").toLowerCase()) && l.id.replace(/^\//, "").length > 4) ||
     null
   );
+}
+
+export function mediaSchoolId(
+  src: string,
+  schools: { id: string }[] = [],
+  courses: { id: string; schoolId: string }[] = [],
+) {
+  const clean = String(src || "").split("?")[0].replace(/^\/+/, "");
+  const parts = clean.split("/").filter(Boolean);
+  if (parts[1] === "schools" && parts[2]) return `/${parts[2]}`;
+  const folder = mediaFolder(src);
+  const school = schools.find((s) => schoolSlug(s.id) === folder);
+  if (school) return school.id;
+  const course = courses.find((c) => schoolSlug(c.id) === folder);
+  if (course?.schoolId) return course.schoolId;
+  return "";
+}
+
+/** Куда писать загрузку: папка школы на диске, иначе uploads. */
+export function mediaUploadRel(folder: string) {
+  const slug = schoolSlug(folder);
+  if (!slug || slug === "all") return "media/uploads";
+  if (slug === "home") return "media/home";
+  if (slug === "uploads") return "media/uploads";
+  if (slug === "imported") return "media/imported";
+  if (slug === "heroes") return "media/heroes";
+  return `media/schools/${slug}`;
 }
 
 export function mediaContext(src: string, labels: MediaLabel[] = []) {
