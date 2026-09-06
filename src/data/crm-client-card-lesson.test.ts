@@ -19,5 +19,22 @@ describe("форма занятия карточки", () => {
     assert.match(src, /placeholder="мин"/);
     assert.match(src, /HOUR_OPTS/);
     assert.match(src, /timeTo: addMinsHm/);
+    assert.match(src, /from "@\/data\/crm-lesson-time"/);
+    assert.match(src, /e.target === e.currentTarget/);
+    assert.match(src, /setLessonOpen\(false\)/);
+    assert.match(src, /applyLessonBranch/);
+  });
+});
+
+describe("список и вкладка не падают", () => {
+  it("клик по пункту не пробивает оверлей, чанк после деплоя перезагружает", () => {
+    const sel = readFileSync(new URL("../components/ra-select.tsx", import.meta.url), "utf8");
+    assert.match(sel, /onMouseDown=\{\(e\) => e.preventDefault\(\)\}/);
+    assert.match(sel, /g.options \|\| \[\]/);
+    const err = readFileSync(new URL("../lib/error-component.tsx", import.meta.url), "utf8");
+    assert.match(err, /lazyWithRetry/);
+    assert.match(err, /isChunkLoadError/);
+    assert.match(err, /Кабинет обновляется/);
+    assert.match(err, /window.location.reload/);
   });
 });
