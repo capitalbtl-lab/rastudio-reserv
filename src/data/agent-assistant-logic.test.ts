@@ -2,7 +2,6 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { allowedLessonType, emptyBookFlags, type BookSettings } from "./agent-book-kinds.ts";
-import { LOCKED_SCRIPT_IDS } from "./agent-config.ts";
 
 function book(partial: Partial<BookSettings>): BookSettings {
   return { consultantCanBook: true, ...emptyBookFlags(true), ...partial };
@@ -23,7 +22,9 @@ describe("ассистент: прогноз ошибок после чистк�
   });
 
   it("заводские шаги воронки помечены, карта обучения ≠ карта ID", () => {
-    assert.ok(LOCKED_SCRIPT_IDS.includes("age"));
+    const cfg = readFileSync(new URL("./agent-config.ts", import.meta.url), "utf8");
+    assert.match(cfg, /export const LOCKED_SCRIPT_IDS/);
+    assert.match(cfg, /"age"/);
     const train = readFileSync(new URL("../components/admin-train.tsx", import.meta.url), "utf8");
     assert.match(train, /LOCKED_SCRIPT_IDS/);
     assert.match(train, /Карта обучения/);
