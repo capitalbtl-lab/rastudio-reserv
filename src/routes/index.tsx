@@ -8,9 +8,11 @@ import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 import { TrialForm } from "@/components/trial-form";
 import { Button } from "@/components/ui/button";
-import { HeroCollage } from "@/components/hero-collage";
 import { AgeChips } from "@/components/age-chips";
 import { Reviews } from "@/components/reviews";
+import { SiteVideo } from "@/components/site-video";
+import { RobotEnglishVideos } from "@/components/robot-videos";
+import { teaser } from "@/data/page-media";
 import { loadPublicEdits } from "@/data/load-site-page";
 import { hydrateEdits, pageEdit } from "@/data/edits-core";
 import { priceShort } from "@/data/prices-core";
@@ -102,8 +104,7 @@ function Home() {
               {hero.hero_title || "Ребёнок не просто учится — он создаёт, думает и развивается"}
             </h1>
             <p className="hero-in hero-in-3 mt-5 max-w-md text-[1.02rem] leading-relaxed text-header-fg/70">
-              {hero.hero_text ||
-                "Семь школ искусств, инженерии и IT в одной сети. Пробное занятие — чтобы выбрать направление вместе."}
+              {hero.hero_text || home.description || SITE.homeDescription}
             </p>
             <div className="hero-in hero-in-3 mt-8 flex flex-wrap gap-3">
               <Button asChild size="lg">
@@ -123,7 +124,15 @@ function Home() {
             </div>
           </div>
 
-          <HeroCollage />
+          <div className="relative overflow-hidden rounded-[2rem] bg-black shadow-[0_24px_50px_-28px_rgba(0,0,0,0.7)]">
+            <SiteVideo
+              src="/media/home/hero.mp4"
+              title="Студия «Развивайся» в Коломне"
+              mode="ambient"
+              className="aspect-[4/5] w-full lg:aspect-[3/4]"
+              poster="/media/home/shot-robot.jpg"
+            />
+          </div>
         </div>
       </section>
 

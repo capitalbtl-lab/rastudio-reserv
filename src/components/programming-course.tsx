@@ -21,6 +21,7 @@ import { whyForPath } from "@/data/course-why";
 import { PageReviews } from "@/components/reviews";
 import { ConvertBand } from "@/components/convert";
 import { PhotoSlider } from "@/components/photo-slider";
+import { PageVideoGrid } from "@/components/robot-videos";
 import { galleryPhotos } from "@/lib/gallery";
 import { CourseSellAfterWhy, CourseSellAfterProgram } from "@/components/course-sell";
 import { courseOfferFacts } from "@/data/ages";
@@ -65,13 +66,22 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
         }
         age={course.age}
         title={course.name}
-        description={course.program}
+        description={page.description || course.program}
         images={galleryPhotos(images, course.pathDecoded || course.path || page.path, "hero")}
         video={page.video}
         facts={courseOfferFacts(course.pathDecoded || course.path || page.path, course.age)}
         path={course.pathDecoded || course.path || page.path}
       />
       <ConvertBand path={course.pathDecoded || course.path || page.path} sessions={schedule} />
+      {page.videos?.length ? (
+        <section className="page-wrap pt-10">
+          <p className="kicker">Видео курса</p>
+          <h2 className="display mt-2 text-2xl md:text-3xl">Как проходят занятия</h2>
+          <div className="mt-6">
+            <PageVideoGrid clips={page.videos} />
+          </div>
+        </section>
+      ) : null}
 
       {course.aboutLead ? (
         <section className="border-b border-border bg-surface">
