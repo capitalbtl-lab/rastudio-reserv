@@ -170,19 +170,34 @@ export function AdminCrmSettings() {
     setBusy(true);
     try {
       const res = (await adminSchedule({
-        data: { token: token(), action: "alfaLinkSave", alfaLink: mode } as never,
-      })) as { ok?: boolean; alfaLink?: { mode?: AlfaLinkMode }; error?: string };
+        data: { token: token(), action: "alfaLinkSave", alfaLink: { mode, pull, push, minutes: syncMin } } as never,
+      })) as { ok?: boolean; alfaLink?: { mode?: AlfaLinkMode; pull?: typeof pull; push?: typeof push; minutes?: number }; error?: string };
       if (!res.ok) {
         setMsg(res.error || "Не удалось сменить связь с Alfa.");
         return;
       }
-      setAlfaMode(res.alfaLink?.mode === "offline" ? "offline" : "linked");
-      setMsg(mode === "offline" ? "Без AlfaCRM: очередь копит, в CRM не уходит." : "С AlfaCRM: очередь выгружает, рассылки работают.");
+      if (res.alfaLink) applyLink(res.alfaLink);
+      setMsg(mode === "offline" ? "Без AlfaCRM: очередь копит, в CRM не уходит. Ольга пишет на диск." : "Фон с AlfaCRM: очередь выгружает по включённым каналам.");
       if (mode === "linked") await tickQueue(false);
       else await loadCache();
     } finally {
       setBusy(false);
     }
+  }
+
+  async function saveSync(next: { pull?: typeof pull; push?: typeof push; minutes?: number }) {
+    if (next.pull) setPull(next.pull);
+    if (next.push) setPush(next.push);
+    if (next.minutes) setSyncMin(next.minutes);
+    const res = (await adminSchedule({
+      data: { token: token(), action: "alfaLinkSave", alfaLink: { mode: alfaMode, pull: next.pull || pull, push: next.push || push, minutes: next.minutes || syncMin } } as never,
+    })) as { ok?: boolean; alfaLink?: { mode?: AlfaLinkMode; pull?: typeof pull; push?: typeof push; minutes?: number }; error?: string };
+    if (!res.ok) {
+      setMsg(res.error || "Не удалось сохранить каналы Alfa.");
+      return;
+    }
+    if (res.alfaLink) applyLink(res.alfaLink);
+    setMsg("Каналы фона с Alfa записаны. Ольга по-прежнему пишет на диск.");
   }
 
   async function tickQueue(force: boolean) {
@@ -315,6 +330,7 @@ export function AdminCrmSettings() {
     } catch {
       /* */
     }
+    void saveSync({ minutes: v });
   }
 
   const named = stages.filter((s) => s.id !== 0);
