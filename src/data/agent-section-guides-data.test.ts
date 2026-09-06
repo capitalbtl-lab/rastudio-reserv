@@ -42,6 +42,11 @@ describe("база знаний: предметы и роли", () => {
     assert.match(src, /CORE_ID_NODES/);
     assert.match(src, /CORE_ID_HINT/);
     assert.match(src, /consultantIdGraphPrompt/);
+    for (const id of ["schoolId", "courseId", "subjectId", "branchId", "groupId", "tariffId", "customerId", "lessonId"]) {
+      assert.match(src, new RegExp(id));
+    }
+    const ui = readFileSync(new URL("../components/admin-section-guides.tsx", import.meta.url), "utf8");
+    assert.equal([...ui.matchAll(/<IdGraph /g)].length, 1);
     assert.match(src, /schoolId → курс courseId/);
     assert.match(src, /ОЛЕГ И ОЛЬГА/);
     assert.match(src, /applyPricesFromTariffs/);

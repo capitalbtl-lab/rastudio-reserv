@@ -220,11 +220,8 @@ export function AdminSectionGuides() {
 
           <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
             <div className="flex items-center gap-2">
-              <p className="font-display text-lg">Карта ID</p>
-              <InfoTip text="Жёсткий граф. Агент не имеет права связывать сущности по названию. Ключ — только поле ID. Эта схема уходит в промпт Олега и Ольги." />
-            </div>
-            <div className="mt-3 overflow-hidden rounded-2xl bg-surface-2 p-3">
-              <IdGraph selected={picked} onPick={setPicked} />
+              <p className="font-display text-lg">Строки раздела</p>
+              <InfoTip text="Таблица текущего раздела. Клик по строке подсвечивает узел на карте сверху. Ключ — только поле ID." />
             </div>
             <div className="mt-3 overflow-x-auto rounded-2xl ring-1 ring-black/10">
               <table className="w-full text-left text-sm">
