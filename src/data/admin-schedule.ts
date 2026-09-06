@@ -1642,37 +1642,41 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const localId = nextLocalLessonId();
       const dateIso = isoish(date);
       const useBranch = Number(slot?.branchId || lessonBranch);
+      const lessonRow = stampJournal(
+        {
+          date: dateIso,
+          from: time,
+          to,
+          status: 1,
+          type: type.name,
+          typeId: type.id,
+          duration,
+          subjectId,
+          teacherIds: teacherId ? [teacherId] : [],
+          roomId,
+          groupIds: gid ? [gid] : [],
+          customerIds: [customerId],
+          topic: String(data.topic || ""),
+          note: String(data.note || `${type.name} с сайта rastudio.org`),
+          lessonId: localId,
+          group: slot?.groupName || type.name,
+          subject: slot?.subject || "",
+          teacher: slot?.teacher || "",
+        },
+        [customerId],
+      );
+      upsertCustomerCalendar(customerId, lessonRow);
       if (gid) {
-        upsertGroupCalendar(
-          useBranch,
-          gid,
-          stampJournal(
-            {
-              date: dateIso,
-              from: time,
-              to,
-              status: 1,
-              type: type.name,
-              typeId: type.id,
-              duration,
-              subjectId,
-              teacherIds: teacherId ? [teacherId] : [],
-              roomId: roomId || undefined,
-              groupIds: [gid],
-              customerIds: [customerId],
-              topic: String(data.topic || ""),
-              note: String(data.note || `${type.name} с сайта rastudio.org`),
-              lessonId: localId,
-            },
-            [customerId],
-          ),
-          { name: slot?.groupName, subjectId: slot?.subjectId, subject: slot?.subject },
-        );
+        upsertGroupCalendar(useBranch, gid, lessonRow, {
+          name: slot?.groupName,
+          subjectId: slot?.subjectId,
+          subject: slot?.subject,
+        });
       }
       enqueueExport({
         op: "lesson.create",
         branchId: useBranch,
-        entityId: localId,
+        entityId: customerId,
         body: {
           localId,
           lesson_type_id: type.id,
@@ -1690,15 +1694,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
         },
       });
       logAdmin(`Клиент ${customerId}: занятие ${type.name} id ${localId} на диске, очередь AlfaCRM`);
-      const study = Number(d?.extras?.is_study);
+      const packed = d ? (await import("./customer-card-disk")).cardFromDossier(d, useBranch) : null;
       return {
         ok: true as const,
         queued: true,
         lesson: { ok: true as const, id: localId, date: dateIso, time, duration, type: type.name, typeId: type.id },
-        customer: {
+        customer: packed || {
           id: customerId,
           cardId: clientCardId(customerId),
-          branchId: Number(d?.branchId || branch),
+          branchId: Number(d?.branchId || useBranch),
           name: d?.child.fio || "",
           parent: d?.parent.fio || "",
           dob: d?.child.dob || "",
@@ -1708,7 +1712,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           emails: [] as string[],
           address: d?.address || "",
           status: d?.status || "",
-          isStudy: Number.isFinite(study) ? study : undefined,
+          isStudy: Number.isFinite(Number(d?.extras?.is_study)) ? Number(d?.extras?.is_study) : undefined,
           note: "",
           paidTill: "",
           url: d?.url || "",
@@ -1722,6 +1726,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
             subjectId: g.subjectId,
             courseId: g.courseId,
           })),
+          calendar: [clientLessonFromJournal(lessonRow, lessonRow.group)],
           comms: [] as CustomerComm[],
         },
       };

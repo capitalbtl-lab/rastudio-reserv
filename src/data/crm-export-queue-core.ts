@@ -90,7 +90,7 @@ export function sameExportJob(
   return a.entityId === b.entityId;
 }
 
-const CREATE_OPS: CrmExportOp[] = ["customer.create", "group.create", "lead-status.create", "subject.create"];
+const CREATE_OPS: CrmExportOp[] = ["customer.create", "group.create", "lead-status.create", "subject.create", "lesson.create", "pay.create"];
 
 export function canRunExportJob(job: { op: CrmExportOp; entityId: number }) {
   if (!isLocalId(job.entityId)) return true;
