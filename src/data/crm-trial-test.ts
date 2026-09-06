@@ -193,8 +193,7 @@ export async function maybeBookChudnovaTrial() {
       });
     }
     const attempts: { gid?: string; teacherId?: number; roomId?: number }[] = [
-      { roomId: plan.roomId || 28, gid: undefined, teacherId: undefined },
-      { roomId: plan.roomId || 28, gid: plan.gid ? String(plan.gid) : undefined, teacherId: plan.teacherId || undefined },
+      { roomId: 0, gid: undefined, teacherId: plan.teacherId || 2 },
     ];
     let lastErr = "";
     for (const a of attempts) {

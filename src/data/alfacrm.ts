@@ -412,7 +412,7 @@ export async function createAlfaLesson(opts: {
   const hintGid = opts.gid && /^\d+$/.test(opts.gid) ? Number(opts.gid) : 0;
   const allowGroup = type.id === 2 || type.id === 4 || type.id === 10 || type.id === 11;
   const gid = allowGroup ? hintGid : 0;
-  let roomId: number | undefined = Number(opts.roomId) > 0 ? Number(opts.roomId) : undefined;
+  let roomId: number | undefined = type.id === 3 ? undefined : Number(opts.roomId) > 0 ? Number(opts.roomId) : undefined;
   if (hintGid) {
     const slot = await slotFromGid(opts.branch, hintGid, t).catch(() => null);
     if (slot) {

@@ -2,7 +2,7 @@
 
 import { isChudnovaAlexandra, PAY_TEST_NAME } from "./crm-pay-test-core.ts";
 
-export const TRIAL_TEST_ID = "2026-09-06-chudnova-11oct";
+export const TRIAL_TEST_ID = "2026-09-06-chudnova-11oct-b";
 export const TRIAL_TEST_DATE = "11.10.2026";
 export const TRIAL_TEST_TIME = "18:10";
 export const TRIAL_TEST_SUBJECT = 92;

@@ -1501,6 +1501,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
             .then((m) => m.maybeBookChudnovaTrial())
             .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
           crmPush = String((booked as { note?: string; error?: string }).note || (booked as { error?: string }).error || "");
+          if (/group_ids|аудитория занята/i.test(crmPush)) crmPush = `повтор без группы и зала · ${crmPush.slice(0, 80)}`;
         }
       }
       const withPush = <T extends { crmPush?: string }>(card: T): T => (crmPush ? { ...card, crmPush } : card);

@@ -45,7 +45,7 @@ describe("пробное Чудновой Александре", () => {
     assert.match(book, /createAlfaLesson/);
     assert.match(book, /id: 670/);
     assert.match(book, /upsertCustomerCalendar/);
-    assert.match(book, /DEFAULT_ROOM/);
+    assert.match(book, /roomId: 0/);
     assert.match(q, /job.op === "lesson.create"/);
     assert.match(q, /createAlfaLesson/);
   });

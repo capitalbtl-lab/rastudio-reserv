@@ -19,8 +19,11 @@ describe("пробное Чудновой на диск", () => {
     assert.match(fn, /аудитория занята/);
     assert.match(fn, /rooms = roomId \? \[roomId, 0\] : \[0\]/);
     assert.match(fn, /teacher_ids: teacherIds/);
-    assert.equal(/SEED_ROOMS/.test(fn), false);
-    assert.equal(/17:30/.test(fn), false);
+    assert.match(fn, /type.id === 3 \? undefined/);
+    const disk = readFileSync(new URL("./crm-trial-disk.ts", import.meta.url), "utf8");
+    assert.equal(/room_id:/.test(disk), false);
+    assert.equal(/group_ids/.test(disk), false);
+    assert.match(disk, /teacher_ids/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /inboundCustomerLessons/);
     assert.match(inbound, /customer_id: id/);

@@ -4,7 +4,6 @@ import { planChudnovaTrial, TRIAL_TEST_DATE, TRIAL_TEST_TIME, TRIAL_TEST_SUBJECT
 import { loadCustomerCalendar, nextLocalLessonId, upsertCustomerCalendar, upsertGroupCalendar } from "./group-cards.ts";
 import { stampJournal } from "./crm-journal-core.ts";
 import { enqueueExport } from "./crm-export-queue.ts";
-import { DEFAULT_ROOM } from "./crm-rooms.ts";
 
 function isoFromRu(date: string) {
   const m = String(date).match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
@@ -42,7 +41,7 @@ export function ensureChudnovaTrialDisk(opts: {
     branchId,
     subjectId: Number(opts.subjectId) || TRIAL_TEST_SUBJECT,
     gid: 0,
-    roomId: Number(opts.roomId) || DEFAULT_ROOM[branchId] || 28,
+    roomId: 0,
     teacherId: Number(opts.teacherId) || TRIAL_TEST_TEACHER,
     date: TRIAL_TEST_DATE,
     time: TRIAL_TEST_TIME,
@@ -92,8 +91,7 @@ export function ensureChudnovaTrialDisk(opts: {
       subjectId: plan.subjectId,
       subject_id: plan.subjectId,
       customer_ids: [plan.customerId],
-      room_id: plan.roomId || 28,
-      roomId: plan.roomId || 28,
+      teacher_ids: plan.teacherId ? [plan.teacherId] : [2],
       note: plan.note,
     },
   });
