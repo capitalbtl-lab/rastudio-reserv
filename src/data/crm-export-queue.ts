@@ -77,23 +77,6 @@ function followExport() {
 }
 
 export async function tickExportQueue(take = 2) {
-  if (!g.__raRoomsKick) {
-    g.__raRoomsKick = true;
-    void (async () => {
-      try {
-        const { token, request } = await import("./alfacrm");
-        const { roomsOfBranchList } = await import("./crm-rooms");
-        const { rememberRooms } = await import("./crm-rooms-disk");
-        const t = await token();
-        for (const b of [1, 2, 3, 4]) {
-          const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${b}/room/index`, { page: 0, pageSize: 100 }, t);
-          rememberRooms(roomsOfBranchList(json.items || [], b, true).map((x) => ({ id: x.id, name: x.name, branchId: b })));
-        }
-      } catch {
-        /* аудитории подтянутся с карточки */
-      }
-    })();
-  }
   if (!g.__raPayTestKick) {
     g.__raPayTestKick = true;
     const { maybeRunChudnovaPayTest } = await import("./crm-pay-test");
@@ -123,6 +106,19 @@ export async function tickExportQueue(take = 2) {
   try {
     const { token, request } = await import("./alfacrm");
     const t = await token();
+    if (!g.__raRoomsKick) {
+      g.__raRoomsKick = true;
+      try {
+        const { roomsOfBranchList } = await import("./crm-rooms");
+        const { rememberRooms } = await import("./crm-rooms-disk");
+        for (const b of [1, 2, 3, 4]) {
+          const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${b}/room/index`, { page: 0, pageSize: 100 }, t);
+          rememberRooms(roomsOfBranchList(json.items || [], b, true).map((x) => ({ id: x.id, name: x.name, branchId: b })));
+        }
+      } catch {
+        /* аудитории с карточки */
+      }
+    }
     let q = loadExport();
     const first = q.jobs.find((j) => canRunExportJob(j) && wantAlfaPush(j.op, j.body)) || q.jobs.find(canRunExportJob);
     const n = isSingleExportOp(first?.op || "group.update") ? 1 : Math.max(1, take);
