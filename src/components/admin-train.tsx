@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { InfoTip, TipWrap } from "@/components/info-tip";
 import { AdminSaveBar } from "@/components/admin-save-bar";
 import { AdminTrainDocs } from "@/components/admin-train-docs";
+import { AdminLessonMap } from "@/components/admin-lesson-map";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -86,7 +87,7 @@ function ScriptCard({
 }
 
 export function AdminTrain() {
-  const [pane, setPane] = useState<"scripts" | "docs" | "examples">("scripts");
+  const [pane, setPane] = useState<"scripts" | "docs" | "examples" | "map">("scripts");
   const [rows, setRows] = useState<TrainExample[]>([]);
   const [scripts, setScripts] = useState<ScriptSection[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -250,7 +251,7 @@ export function AdminTrain() {
           <InfoTip text="Три вкладки. Скрипты — порядок разговора (возраст → город → филиал → школа). Документы — Word/PDF: инструкция, правила, оферта, разложенные по каналам. Примеры — эталонные реплики. Ассистент читает всё включённое, но на сайте только канал «Агент на сайте» плюс «Общее»." />
         </div>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Только воронка, документы и примеры. Карта ID — «База знаний». Роли — «Окно». Стиль фразы — «Как говорит». Курс и группу не подбирать по названию.
+          Только воронка, документы, примеры и карта обучения. Карта ID разделов — «База знаний». Роли — «Окно». Стиль фразы — «Как говорит». Курс и группу не подбирать по названию.
         </p>
       </div>
 
@@ -279,9 +280,18 @@ export function AdminTrain() {
           Примеры
         </button>
         <InfoTip text="Живые пары «родитель сказал — ассистент ответил» и короткие правила. Экспорт JSONL — для другого агента. Не кладите сюда многостраничные договоры." />
+        <button
+          type="button"
+          onClick={() => setPane("map")}
+          className={cn("inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold", pane === "map" ? "bg-primary text-primary-foreground" : "bg-surface")}
+        >
+          Карта обучения
+        </button>
+        <InfoTip text="Живые уроки с голоса админ-режима: текст ответа, действие CRM, ход разговора, ключ ID. Не путать с картой ID в «Базе знаний»." />
       </div>
 
       {pane === "docs" ? <AdminTrainDocs /> : null}
+      {pane === "map" ? <AdminLessonMap /> : null}
 
       {pane === "scripts" ? (
         <div className="space-y-4">
