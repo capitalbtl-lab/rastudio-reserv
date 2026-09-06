@@ -107,11 +107,6 @@ export function chipsForReply(
           after: "Сначала неделя — потом три варианта времени.",
         };
       }
-      if (facts.intent === "отработка" && facts.makeupWeek && !facts.day) {
-        const slots = scheduleOffer(groups);
-        if (slots) return slots;
-        return { hint: "День отработки", chips: WEEKDAY_CHIPS };
-      }
       if (facts.intent === "пауза" && !facts.pauseUntil) {
         return {
           hint: "Срок паузы",

@@ -59,8 +59,24 @@ const TOPIC_CHIPS = CLIENT_TOPICS.map((c) => ({
 type DeskChip = { label: string; send: string; primary?: boolean; note?: string };
 
 export async function makeupList(customerId: number, weekday: string) {
-  const pack = await makeupWeekSlots(customerId, "this", weekday);
-  return { digest: pack.digest, list: pack.list, courseLabel: pack.courseLabel };
+  const d = clientDigest(customerId);
+  const empty = { digest: d, list: [] as { gid: string; when: string; chip: string; branchId: number; nextDate: string; timeFrom: string; courseId: string; subjectId?: number; teacherId?: number; teacher?: string; priority: number; seats: string; name?: string; short?: string }[], courseLabel: "" };
+  if (!d) return empty;
+  const { groupsForQuery } = await import("./alfacrm-schedule.ts");
+  const ids = [...new Set(d.groups.map((g) => g.courseId).filter(Boolean))];
+  const seen = new Set<string>();
+  const list = empty.list;
+  for (const courseId of ids.slice(0, 4)) {
+    const part = await groupsForQuery({ courseId, weekday });
+    for (const g of part) {
+      const key = `${g.gid}-${g.when}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push(g);
+    }
+  }
+  const courseLabel = d.groups.map((g) => g.name).filter(Boolean)[0] || ids[0] || "";
+  return { digest: d, list, courseLabel };
 }
 
 export async function makeupWeekSlots(customerId: number, week: MakeupWeek, weekday?: string) {
@@ -292,23 +308,47 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
     if (!allowedLessonType(rights, "makeup")) {
       return { reply: `${n}: Отработку ставит администратор. ${phoneHint()}`, chips: [] };
     }
-    if (!facts.day) {
+    if (!facts.makeupWeek) {
       return {
-        reply: `${n}: На какой день поставить отработку ${child}? Если в своей группе нет этого дня — посмотрю другие группы того же курса.`,
-        chips: WEEKDAY_CHIPS,
+        reply: `${n}: На какой неделе удобно отработать занятие ${child} — на этой, на следующей или позже?`,
+        chips: MAKEUP_WEEK_CHIPS,
       };
     }
-    const pack = await makeupList(facts.customerId, facts.day);
-    const open = pack.list.filter((g) => g.priority !== 0 && g.seats !== "мест нет");
-    if (!open.length) {
+    const pack = await makeupWeekSlots(facts.customerId, facts.makeupWeek, facts.day);
+    const ranked = rankMakeupSlots(pack.list, Boolean(facts.makeupOtherTeacher));
+    const usingOther = Boolean(facts.makeupOtherTeacher) || !ranked.own.length;
+    const page = pageMakeup(ranked.pool, facts.makeupSkip || 0, 3);
+    if (!page.slice.length) {
+      if (!usingOther && ranked.other.length) {
+        return {
+          reply: `${n}: У вашего педагога ${weekLabel(facts.makeupWeek)} нет свободных слотов отработки. Могу предложить другого педагога того же курса.`,
+          chips: [{ label: "Другой педагог", send: "Предложите другого педагога", primary: true }, ...MAKEUP_WEEK_CHIPS],
+        };
+      }
       return {
-        reply: `${n}: На ${facts.day} в курсе «${pack.courseLabel || "этого направления"}» сейчас нет живых групп с местами. Выберите другой день или позвоните 8 (800) 511-34-01. Пробное вместо отработки не ставлю.`,
-        chips: WEEKDAY_CHIPS,
+        reply: `${n}: ${weekLabel(facts.makeupWeek).replace(/^на /, "На ")} в курсе «${pack.courseLabel || "этого направления"}» нет живых групп с местами. Выберите другую неделю или позвоните 8 (800) 511-34-01. Пробное вместо отработки не ставлю.`,
+        chips: MAKEUP_WEEK_CHIPS,
       };
     }
+    const teacherBit = usingOther ? "другого педагога" : "вашего педагога";
+    const extra: DeskChip[] = [];
+    if (page.more) extra.push({ label: "Ещё три варианта", send: "Покажите ещё три варианта отработки" });
+    if (!usingOther && ranked.other.length) extra.push({ label: "Другой педагог", send: "Предложите другого педагога" });
+    const tidy = (name: string) => String(name || "").replace(/^\d{4}\s+/, "").replace(/\s+/g, " ").trim();
     return {
-      reply: `${n}: На ${facts.day} ${found} ${open.length} групп того же курса. Нажмите слот — поставлю отработку.`,
-      chips: slotChips(open, "makeup"),
+      reply: `${n}: ${weekLabel(facts.makeupWeek).replace(/^на /, "На ")} у ${teacherBit} три ближайших слота отработки по курсу «${tidy(pack.courseLabel) || "этого направления"}». Нажмите вариант — поставлю. Если не подходит, покажу ещё три. Пробное вместо отработки не ставлю.`,
+      chips: [
+        ...page.slice.map((g, i) => {
+          const when = `${makeupDateLabel(new Date(g.at))} ${g.timeFrom || ""}`.trim();
+          return {
+            label: `${when} · ${g.short || g.branch}`,
+            note: [g.teacher, g.seats, tidy(g.name)].filter(Boolean).join(" · "),
+            send: `Поставьте отработку gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""} teacher_id=${g.teacherId || ""}`,
+            primary: i === 0,
+          };
+        }),
+        ...extra,
+      ],
     };
   }
   return null;
