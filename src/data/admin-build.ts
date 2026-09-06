@@ -50,7 +50,7 @@ export function writeBuildStamp(stamp: BuildStamp) {
 export function kickDeploy() {
   const sh = path.join(process.cwd(), "scripts/beget-deploy.sh");
   if (!existsSync(sh)) return false;
-  writeBuildStamp({ ...readBuildStamp(), deploying: true });
+  writeBuildStamp({ ...readBuildStamp(), deploying: true, at: new Date().toISOString() });
   spawn("bash", [sh, "--force"], {
     cwd: process.cwd(),
     detached: true,
