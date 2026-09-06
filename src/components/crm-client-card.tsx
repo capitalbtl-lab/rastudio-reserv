@@ -34,6 +34,7 @@ import {
   locationsOfBranch,
   payItemGroups,
 } from "@/data/crm-pay-alfa";
+import { mergeRooms, roomsSelectGroups, SEED_ROOMS } from "@/data/crm-rooms";
 
 function money(n?: number) {
   return `${Number(n || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`;
@@ -339,6 +340,7 @@ export function CrmClientCard({
   const [lessonTime, setLessonTime] = useState(card.regular?.[0]?.from || "16:00");
   const [lessonMins, setLessonMins] = useState(90);
   const [lessonGroup, setLessonGroup] = useState(0);
+  const [lessonBranch, setLessonBranch] = useState(0);
   const [lessonSubject, setLessonSubject] = useState(0);
   const [lessonTeacher, setLessonTeacher] = useState(0);
   const [lessonRoom, setLessonRoom] = useState(0);
@@ -405,9 +407,11 @@ export function CrmClientCard({
         name: String(g?.name || prev?.name || `группа ${id}`),
         subjectId: Number(g?.subjectId || prev?.subjectId) || undefined,
         teacher: g?.teacher || prev?.teacher,
+        teacherId: Number(g?.teacherId || prev?.teacherId) || undefined,
         day: g?.day || prev?.day,
         from: g?.from || prev?.from,
         to: g?.to || prev?.to,
+        roomId: Number(g?.roomId || prev?.roomId) || undefined,
         course: g?.course || prev?.course,
         school: g?.school || prev?.school,
         schoolId: g?.schoolId || prev?.schoolId,
@@ -426,7 +430,7 @@ export function CrmClientCard({
   const lessonGroupSelect = useMemo(() => {
     const map = new Map<string, { value: string; label: string; hint?: string }[]>();
     for (const g of lessonGroupOffers) {
-      if (card.branchId && g.branchId && g.branchId !== card.branchId) continue;
+      if (!lessonBranch || g.branchId !== lessonBranch) continue;
       const school = resolveSchool(g) || g.school || g.course || "Другие";
       const hint = [g.teacher, g.day && g.from ? `${g.day} ${g.from}` : ""].filter(Boolean).join(" · ");
       const arr = map.get(school) || [];
@@ -436,7 +440,19 @@ export function CrmClientCard({
     return [...map.entries()]
       .sort((a, b) => a[0].localeCompare(b[0], "ru"))
       .map(([label, options]) => ({ label, options }));
-  }, [lessonGroupOffers, card.branchId]);
+  }, [lessonGroupOffers, lessonBranch]);
+  const lessonRooms = useMemo(
+    () =>
+      mergeRooms(
+        SEED_ROOMS,
+        (catalog.rooms || [])
+          .map((r) => ({ id: r.id, name: r.name, branchId: Number(r.branchId) || 0 }))
+          .filter((r) => r.id && r.branchId),
+      ),
+    [catalog.rooms],
+  );
+  const lessonRoomSelect = useMemo(() => roomsSelectGroups(lessonRooms, lessonBranch), [lessonRooms, lessonBranch]);
+  const lessonRoomCount = lessonRoomSelect.reduce((n, g) => n + g.options.length, 0);
   const pupilGroups = useMemo(() => {
     const list = [...(card.groups || [])];
     list.sort((a, b) => Number(Boolean(b.active)) - Number(Boolean(a.active)) || String(a.name).localeCompare(String(b.name), "ru"));
