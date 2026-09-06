@@ -113,10 +113,10 @@ export async function saveTrialLead(data: TrialPayload) {
     /* карта или слоты недоступны */
   }
   const kind = String(data.kind || "trial");
-  const { resolveLessonType } = await import("./alfacrm");
   const { lessonCreatePolicy } = await import("./lesson-type-rules");
-  const type = resolveLessonType(kind) || resolveLessonType("trial")!;
-  const policy = lessonCreatePolicy(type.id);
+  const { CARD_LESSON_TYPES } = await import("./crm-cards");
+  const policy = lessonCreatePolicy(kind);
+  const type = CARD_LESSON_TYPES.find((t) => t.key === policy.key || t.id === policy.typeId) || CARD_LESSON_TYPES.find((t) => t.key === "trial")!;
   const kindLabel = type.name.toLowerCase();
   const gidNum = data.gid && /^\d+$/.test(data.gid) ? Number(data.gid) : 0;
   const useGid = policy.allowGroup && gidNum ? gidNum : 0;
