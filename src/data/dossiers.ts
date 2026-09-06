@@ -622,6 +622,7 @@ export function applyCrmCustomer(
   const paid = item.paid_till ? `оплачено до ${item.paid_till}` : "";
   const extraTariff = Number(item.paid_count) ? `занятий по абонементу: ${item.paid_count}` : "";
   const extras = extrasFromCrm(item);
+  extras.paid_count = String(item.paid_count ?? extras.paid_count ?? "");
   const fromGroup = namesFromGroup(extras.groups);
   const study = Number(item.is_study);
   extras.removed = study === 0 || study === 1 || study === 2 ? "0" : String(extras.removed || "0");
@@ -651,7 +652,7 @@ export function applyCrmCustomer(
     teacher: teachers[0] || "",
     teachers,
     school,
-    tariff: [paid, extraTariff].filter(Boolean).join(" · "),
+    tariff: paid || undefined,
     status: statusFromCrm(item, reallyArchived),
     extras,
     source: "alfacrm",
@@ -682,6 +683,39 @@ export function stampDossierLiveTariff(ids: number[], live: boolean) {
   }
   if (n) saveStore(store);
   return liveTariffIdsFromStore();
+}
+
+export function stampDossierCtt(
+  customerId: number,
+  rows: {
+    id: number;
+    tariffId?: number;
+    name: string;
+    rest?: number;
+    lessons?: number;
+    archived?: boolean;
+    bDate?: string;
+    eDate?: string;
+    price?: number;
+  }[],
+  branchId?: number,
+) {
+  const live = rows.filter((t) => t.id && !t.archived);
+  const first = live[0];
+  upsertDossier({
+    crmId: customerId,
+    branchId,
+    tariff: first?.name || "",
+    extras: {
+      live_tariff: live.length ? "1" : "0",
+      tariff_id: first?.tariffId ? String(first.tariffId) : "",
+      ctt: JSON.stringify(rows.slice(0, 24)),
+    },
+    source: "alfacrm",
+    crmWins: true,
+    quiet: true,
+  });
+  return live.length;
 }
 
 /** Кто на доске CRM — лид на сайте, даже если Alfa оставила is_study=1. */

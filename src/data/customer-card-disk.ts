@@ -10,6 +10,8 @@ import { isAdminGroup } from "./group-status";
 import { clientLessonFromJournal, journalForCustomer } from "./crm-journal-core";
 import { customerBalance, cardPays } from "./crm-pay";
 import { asCustomerComm, commsOf } from "./crm-comms";
+import { loadTariffs } from "./crm-tariffs";
+import { isPaidCountLabel, parseDossierCtt } from "./pupil-tariffs";
 
 function ageLabel(dob: string) {
   const m = String(dob || "").match(/^(\d{1,2})[.](\d{1,2})[.](\d{4})$/) || String(dob || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -112,6 +114,25 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   }
   const cat = catalogBase();
   const catalogGroups = cat.groups.slice().sort((a, b) => Number(b.branchId === useBranch) - Number(a.branchId === useBranch) || a.name.localeCompare(b.name, "ru"));
+  const catalogTariffs = loadTariffs().items;
+  let tariffs = parseDossierCtt(d.extras);
+  if (!tariffs.length && String(d.extras?.live_tariff) === "1") {
+    const tariffId = Number(d.extras?.tariff_id || 0);
+    const fromCat = catalogTariffs.find((t) => t.id === tariffId);
+    const raw = String(d.tariff || "").trim();
+    const name = fromCat?.name || (!isPaidCountLabel(raw) && raw ? raw : tariffId ? `абонемент #${tariffId}` : "");
+    if (name) {
+      tariffs = [
+        {
+          id: tariffId || Number(d.crmId) || 0,
+          tariffId: tariffId || undefined,
+          name,
+          rest: 0,
+          lessons: 0,
+        },
+      ];
+    }
+  }
   return {
     id: customerId,
     cardId: clientCardId(customerId),
@@ -134,18 +155,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
     groups,
     regular,
     calendar,
-    tariffs:
-      String(d.extras?.live_tariff) === "1"
-        ? [
-            {
-              id: Number(d.extras?.tariff_id || 0) || Number(d.crmId) || 0,
-              tariffId: Number(d.extras?.tariff_id || 0) || undefined,
-              name: d.tariff || "абонемент",
-              rest: 0,
-              lessons: 0,
-            },
-          ]
-        : [],
+    tariffs,
     comms: commsOf(customerId).map(asCustomerComm),
     pays: cardPays(customerId),
     balance: customerBalance(customerId, d.extras?.balance),

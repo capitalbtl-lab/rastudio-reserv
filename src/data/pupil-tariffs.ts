@@ -1,592 +1,64 @@
-import type { CrmSlot } from "./crm-slots-core";
-import type { CrmTariff } from "./crm-tariffs";
-import { matchTariffs, tariffFitsSlot } from "./crm-tariffs";
-import { guessTariffLinks } from "./tariff-map";
-import { UNMAPPED_SCHOOL } from "./group-status";
-import { tariffRowLive, tariffRowCustomerId, tariffTodayIso } from "./crm-tariff-row";
-
-export { cgiCustomerId, cgiRecordLive } from "./crm-membership";
-export { tariffDateToIso, tariffRowLive, tariffRowHasTemplate, tariffRowCustomerId } from "./crm-tariff-row";
-
-export type PupilGroup = {
-  key: string;
-  groupId: number;
-  branchId: number;
-  name: string;
-  school: string;
-  schoolId: string;
-  course: string;
-  age: string;
-  teacher: string;
-  taken: number;
-  limit: number;
-  subjectId: number;
-};
-
-export type PupilTariffItem = {
-  customerId: number;
-  name: string;
-  status: string;
-  groupId: number;
-  branchId: number;
-  groupName: string;
-  school: string;
-  schoolId?: string;
-  tariffId: number;
-  tariffName: string;
-  price: number;
-  periodCount: number;
-  periodType: number;
-  calcType: number;
-  subjectIds: number[];
-  lessonTypeIds: number[];
-  lessonsCount: number;
-  eDate?: string;
-  skip?: "no-tariff" | "already" | "lead";
-  activeTariffs?: { id: number; tariffId: number; name: string }[];
-};
-
-export const ASSIGN_CHUNK = 5;
-export const ASSIGN_GAP_MS = 900;
-export const ASSIGN_BATCH_PAUSE_MS = 2500;
-export const ASSIGN_REST_EVERY = 40;
-export const ASSIGN_REST_MS = 8000;
-/** Сколько групп мастер читает за один запрос к CRM — иначе прокси обрывает длинное чтение. */
-export const PLAN_GROUP_CHUNK = 1;
-/** Абонементы школы читаем пачками, иначе 166 чел. вешают nginx. */
-export const TARIFF_READ_CHUNK = 8;
-/** Пауза между пачками чтения AlfaCRM, чтобы не упереться в лимит API. */
-export const CRM_READ_GAP_MS = 200;
-export const SLOW_GROUP_BATCH = 3;
-export const SLOW_VERIFY = 3;
-export const SLOW_SPEED = 2;
-
-/** Группы по номеру, пачки по 3 — режим «Все медленно». */
-export function batchesOfThree<T extends { groupId: number }>(list: T[], size = SLOW_GROUP_BATCH) {
-  const sorted = [...list].sort((a, b) => a.groupId - b.groupId);
-  const out: T[][] = [];
-  for (let i = 0; i < sorted.length; i += size) out.push(sorted.slice(i, i + size));
-  return out;
-}
-
-export function assignEtaMin(n: number) {
-  const count = Math.max(0, Number(n) || 0);
-  const batches = Math.ceil(count / ASSIGN_CHUNK) || 0;
-  const rests = Math.floor(count / ASSIGN_REST_EVERY);
-  const ms = count * (ASSIGN_GAP_MS + 450) + batches * ASSIGN_BATCH_PAUSE_MS + rests * ASSIGN_REST_MS;
-  return Math.max(1, Math.ceil(ms / 60000));
-}
-
-/** Состав группы в CRM: quantity / limit на карточке, не customer.group_ids. */
-export function crmGroupQuantity(g: Record<string, unknown> | { quantity?: unknown; cnt?: unknown; customers_count?: unknown } | null | undefined) {
-  if (!g || typeof g !== "object") return 0;
-  const rec = g as Record<string, unknown>;
-  return Number(rec.quantity ?? rec.cnt ?? rec.customers_count ?? 0) || 0;
-}
-
-/** Участие клиент↔группа (cgi): сколько живых в каждой gid. */
-export function countCgiByGroup(items: Record<string, unknown>[], today = todayIso()) {
-  const map = new Map<number, number>();
-  for (const it of items) {
-    if (!cgiRecordLive(it, today)) continue;
-    const gid = Number(it.group_id || it.groupId || 0);
-    if (!gid) continue;
-    map.set(gid, (map.get(gid) || 0) + 1);
-  }
-  return map;
-}
-
-export function countCgiParticipants(items: Record<string, unknown>[]) {
-  const ids = new Set<number>();
-  let rows = 0;
-  for (const it of items) {
-    if (Number(it.removed || it.is_removed || 0)) continue;
-    rows += 1;
-    const id = Number(it.customer_id || it.customerId || 0);
-    if (id) ids.add(id);
-  }
-  return ids.size || rows;
-}
-
-export function mergeGroupTaken(...n: number[]) {
-  return n.reduce((max, x) => Math.max(max, Number(x) || 0), 0);
-}
-
-export function crmIndexTotal(res: { total?: unknown; count?: unknown; items?: unknown[] } | null | undefined) {
-  const items = Array.isArray(res?.items) ? res!.items!.length : 0;
-  const total = Number(res?.total);
-  const count = Number(res?.count);
-  return Math.max(Number.isFinite(total) ? total : 0, Number.isFinite(count) ? count : 0, items);
-}
-
-export function uniqueLiveGroups(slots: CrmSlot[]): PupilGroup[] {
-  const seen = new Set<string>();
-  const out: PupilGroup[] = [];
-  for (const s of slots) {
-    if (!s.groupId) continue;
-    const key = `${s.branchId}:${s.groupId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({
-      key,
-      groupId: s.groupId,
-      branchId: s.branchId,
-      name: s.groupName || `группа ${s.groupId}`,
-      school: s.school || UNMAPPED_SCHOOL,
-      schoolId: String(s.schoolId || ""),
-      course: s.course || s.subject || "",
-      age: s.age || "",
-      teacher: s.teacher || "",
-      taken: Number(s.taken || 0) || Number(s.takenStudy || 0) + Number(s.takenLead || 0),
-      limit: Number(s.limit || 0),
-      subjectId: Number(s.subjectId || 0),
-    });
-  }
-  out.sort(
-    (a, b) =>
-      (a.schoolId || a.school).localeCompare(b.schoolId || b.school, "ru") ||
-      a.school.localeCompare(b.school, "ru") ||
-      a.course.localeCompare(b.course, "ru") ||
-      a.name.localeCompare(b.name, "ru"),
-  );
-  return out;
-}
-
-/** Школа за школой по ID сайта, без школы — в конце. */
-export function bySchoolId<T extends { schoolId?: string; school?: string }>(list: T[]) {
-  const map = new Map<string, T[]>();
-  for (const g of list) {
-    const id = String(g.schoolId || "").trim() || `name:${g.school || "_"}`;
-    const cur = map.get(id) || [];
-    cur.push(g);
-    map.set(id, cur);
-  }
-  return [...map.entries()].sort(([a], [b]) => {
-    const aMiss = a.startsWith("name:");
-    const bMiss = b.startsWith("name:");
-    if (aMiss !== bMiss) return aMiss ? 1 : -1;
-    return a.localeCompare(b, "ru");
-  });
-}
-
-export function groupsBySchoolId(list: PupilGroup[]) {
-  return bySchoolId(list);
-}
-
-/** Группа в мастере, если есть хоть кто-то: ученик, лид или архив. */
-export function groupHasBoundPupils(taken: number, active: number, archive: number) {
-  return Number(taken) > 0 || Number(active) > 0 || Number(archive) > 0;
-}
-
-/** UI 0 общий счёт → Alfa calculation_type 1; UI 1 раздельный → Alfa 2. */
-export function alfaCalculationType(uiCalcType: number) {
-  return Number(uiCalcType) ? 2 : 1;
-}
-
-/**
- * 1) slot.tariffId, если живой и проходит филиал/минуты/тип.
- * 2) карта tariff-map: courseId группы.
- * 3) subjectId + филиал + минуты, только абонементы не привязанные к чужому курсу.
- * Имя не участвует. Не берём «похожий» предмет другого курса сайта.
- */
-export function pickBestTariff(slot: Pick<CrmSlot, "subjectId" | "branchId" | "timeFrom" | "timeTo" | "tariffId" | "courseId" | "schoolId">, list: CrmTariff[]) {
-  const live = list.filter((t) => !t.archive);
-  const saved = Number(slot.tariffId) || 0;
-  if (saved) {
-    const hit = live.find((t) => t.id === saved);
-    if (hit && tariffFitsSlot(hit, slot as CrmSlot)) return hit;
-  }
-  const matched = matchTariffs(slot as CrmSlot, live);
-  const courseId = String(slot.courseId || "");
-  if (courseId) {
-    const mapped = matched.filter((t) => guessTariffLinks([t]).some((l) => l.courseId === courseId));
-    if (mapped.length) return mapped[0];
-  }
-  return matched[0] || null;
-}
-
-export function pupilRowFromMember(
-  m: { id: number; name: string; status: string; archived?: boolean },
-  group: PupilGroup,
-  tariff: CrmTariff | null,
-  includeLeads: boolean,
-): PupilTariffItem | null {
-  if (!m.id) return null;
-  if (m.archived || m.status === "архив") return null;
-  if (m.status === "лид" && !includeLeads) return null;
-  const skip = !tariff ? ("no-tariff" as const) : m.status === "лид" ? ("lead" as const) : undefined;
-  const subjects = [...new Set([...(tariff?.subjectIds || []), group.subjectId].filter(Boolean))];
-  const lessons = tariff?.lessonTypeIds?.length ? [...tariff.lessonTypeIds] : [2];
+export function packCardTariff(it: Record<string, unknown>, catalog?: CatalogTariff[]) {
+  const live = tariffRowLive(it);
   return {
-    customerId: m.id,
-    name: m.name || `ученик ${m.id}`,
-    status: m.status,
-    groupId: group.groupId,
-    branchId: group.branchId,
-    groupName: group.name,
-    school: group.school,
-    schoolId: group.schoolId,
-    tariffId: tariff?.id || 0,
-    tariffName: tariff?.name || "",
-    price: tariff?.price || 0,
-    periodCount: tariff?.periodCount || 0,
-    periodType: tariff?.periodType || 1,
-    calcType: tariff && Number(tariff.calculationType) === 2 ? 1 : 0,
-    subjectIds: subjects,
-    lessonTypeIds: lessons,
-    lessonsCount: tariff?.lessonsCount || 0,
-    skip,
-  };
-}
-
-/** В изменении/удалении на строке только живой абонемент CRM, не тариф группы. */
-export function stampLiveTariff(row: PupilTariffItem): PupilTariffItem {
-  const live = row.activeTariffs || [];
-  if (!live.length) return { ...row, tariffId: 0, tariffName: "", price: 0 };
-  return { ...row, tariffId: live[0].tariffId, tariffName: formatTariffNames(live) || "" };
-}
-
-/** Изменение/удаление: все с живым абонементом CRM, в том числе лид, если абонемент уже выписан. */
-export function changeListRows(rows: PupilTariffItem[]) {
-  return collapsePupilsByCustomer(
-    rows.map(stampLiveTariff).filter((r) => (r.activeTariffs || []).length),
-  );
-}
-
-export function addPeriod(iso: string, count: number, type: number) {
-  if (!iso || !count) return "";
-  const d = new Date(`${iso}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return "";
-  if (type === 1) d.setDate(d.getDate() + count);
-  else if (type === 2) d.setDate(d.getDate() + count * 7);
-  else if (type === 3) d.setMonth(d.getMonth() + count);
-  else if (type === 4) d.setFullYear(d.getFullYear() + count);
-  else return "";
-  d.setDate(d.getDate() - 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-export function assignable(items: PupilTariffItem[]) {
-  return items.filter((x) => x.tariffId && x.customerId && x.skip !== "no-tariff" && x.skip !== "already");
-}
-
-/** Тело customer-tariff/create. customer_id и lesson_type_ids всегда в корне.
- *  В AlfaCRM customer_id ещё и в query: /create?customer_id= */
-export function customerTariffCreatePath(branch: number, customerId: number) {
-  return `/v2api/${Number(branch) || 1}/customer-tariff/create?customer_id=${Number(customerId) || 0}`;
-}
-
-export function customerTariffIndexPath(branch: number, customerId: number) {
-  return `/v2api/${Number(branch) || 1}/customer-tariff/index?customer_id=${Number(customerId) || 0}`;
-}
-
-export function customerTariffIndexBranchPath(branch: number) {
-  return `/v2api/${Number(branch) || 1}/customer-tariff/index`;
-}
-
-export function customerTariffUpdatePath(branch: number, tariffRowId: number, customerId: number) {
-  return `/v2api/${Number(branch) || 1}/customer-tariff/update?id=${Number(tariffRowId) || 0}&customer_id=${Number(customerId) || 0}`;
-}
-
-export function customerTariffDeletePath(branch: number, tariffRowId: number, customerId: number) {
-  return `/v2api/${Number(branch) || 1}/customer-tariff/delete?id=${Number(tariffRowId) || 0}&customer_id=${Number(customerId) || 0}`;
-}
-
-export type CatalogTariff = { id: number; name: string; archive?: boolean; price?: number };
-
-/** Живая строка — tariffRowLive. Каталог не участвует. */
-export function customerTariffLive(it: Record<string, unknown>, _catalog?: CatalogTariff[], today = tariffTodayIso()) {
-  return tariffRowLive(it, today);
-}
-
-/** На карточке и в счётчике то же правило, что в мастере. */
-export function customerTariffOnCard(it: Record<string, unknown>, today = tariffTodayIso()) {
-  return tariffRowLive(it, today);
-}
-
-export function preferCurrentTariffs(
-  list: { id: number; tariffId: number; name: string }[],
-  catalog?: CatalogTariff[],
-) {
-  if (!list.length || !catalog?.length) return list;
-  const liveIds = new Set(catalog.filter((c) => !c.archive).map((c) => c.id));
-  if (!liveIds.size) return list;
-  const preferred = list.filter((t) => liveIds.has(t.tariffId));
-  return preferred.length ? preferred : list;
-}
-
-export function customerTariffLabel(it: Record<string, unknown>, catalog?: CatalogTariff[]) {
-  const tariffId = Number(it.tariff_id || it.tariffId || 0);
-  const raw = String(it.tariff_name || it.tariffName || "").trim();
-  if (raw && !/^абонемент(#\s*\d+)?$/i.test(raw)) return raw;
-  const live = catalog?.find((t) => t.id === tariffId && !t.archive);
-  if (live?.name) return live.name;
-  const any = catalog?.find((t) => t.id === tariffId);
-  if (any?.name) return any.name;
-  return tariffId ? `абонемент #${tariffId}` : "абонемент";
-}
-
-export function withCatalogNames(
-  list: { id: number; tariffId: number; name: string }[],
-  catalog?: CatalogTariff[],
-) {
-  if (!catalog?.length) return list;
-  return list.map((t) => {
-    const live = catalog.find((c) => c.id === t.tariffId && !c.archive);
-    if (live?.name) return { ...t, name: live.name };
-    const any = catalog.find((c) => c.id === t.tariffId);
-    if (any?.name) return { ...t, name: any.name };
-    if (t.name && !/^абонемент(#\s*\d+)?$/i.test(t.name)) return t;
-    return { ...t, name: t.tariffId ? `абонемент #${t.tariffId}` : "абонемент" };
-  });
-}
-
-export function formatTariffNames(list: { name: string }[] | undefined) {
-  const order: string[] = [];
-  const count = new Map<string, number>();
-  for (const t of list || []) {
-    const name = String(t.name || "").trim() || "абонемент";
-    if (!count.has(name)) order.push(name);
-    count.set(name, (count.get(name) || 0) + 1);
-  }
-  return order.map((n) => {
-    const c = count.get(n) || 1;
-    return c > 1 ? `${n} ×${c}` : n;
-  }).join(", ");
-}
-
-export function activeCustomerTariffs(
-  items: Record<string, unknown>[] | undefined,
-  catalog?: CatalogTariff[],
-) {
-  return (items || []).filter((it) => customerTariffLive(it, catalog)).map((it) => ({
-    id: Number(it.id),
-    tariffId: Number(it.tariff_id || it.tariffId || 0),
+    id: Number(it.id) || 0,
+    tariffId: Number(it.tariff_id || it.tariffId || 0) || undefined,
     name: customerTariffLabel(it, catalog),
-  }));
-}
-
-/** Индекс живых абонементов филиала: customer_id → список. Один index вместо запроса на каждого ученика. */
-export function splitCustomerTariffs(
-  items: Record<string, unknown>[] | undefined,
-  catalog?: CatalogTariff[],
-) {
-  const live = new Map<number, { id: number; tariffId: number; name: string }[]>();
-  const archived = new Map<number, { id: number; tariffId: number; name: string }[]>();
-  for (const it of items || []) {
-    const id = Number(it.id) || 0;
-    const customerId = tariffRowCustomerId(it);
-    if (!id || !customerId) continue;
-    const tariffId = Number(it.tariff_id || it.tariffId || 0);
-    const row = { id, tariffId, name: customerTariffLabel(it, catalog) };
-    const bucket = tariffRowLive(it) ? live : Number(it.removed || it.is_removed || 0) === 1 ? null : archived;
-    if (!bucket) continue;
-    const list = bucket.get(customerId) || [];
-    list.push(row);
-    bucket.set(customerId, list);
-  }
-  if (catalog?.length) {
-    for (const [cid, list] of live) live.set(cid, preferCurrentTariffs(list, catalog));
-  }
-  return { live, archived };
-}
-
-export function indexActiveTariffsByCustomer(
-  items: Record<string, unknown>[] | undefined,
-  catalog?: CatalogTariff[],
-) {
-  return splitCustomerTariffs(items, catalog).live;
-}
-
-export function countArchivedOnlyPupils<T extends { customerId: number; branchId: number }>(
-  pupils: T[],
-  live: Map<string, unknown[]>,
-  archived: Map<string, unknown[]>,
-) {
-  const seen = new Set<string>();
-  let n = 0;
-  for (const row of pupils) {
-    const key = `${row.branchId}:${row.customerId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if ((live.get(key) || []).length) continue;
-    if ((archived.get(key) || []).length) n += 1;
-  }
-  return n;
-}
-
-export function keepPupilsWithActiveTariffs<T extends { customerId: number; branchId: number }>(
-  items: T[],
-  byCustomer: Map<string, { id: number; tariffId: number; name: string }[]>,
-) {
-  const out: (T & { activeTariffs: { id: number; tariffId: number; name: string }[] })[] = [];
-  for (const row of items) {
-    const list = byCustomer.get(`${row.branchId}:${row.customerId}`) || [];
-    if (!list.length) continue;
-    out.push({ ...row, activeTariffs: list });
-  }
-  return out;
-}
-
-export function personKey(branchId: number, customerId: number) {
-  return `${branchId}:${customerId}`;
-}
-
-export type TariffHave = "all" | "with" | "without";
-
-/** Клиенты/лиды: живая строка на сегодня (tariffRowLive), не касса. */
-export function keepByLiveTariff<T>(
-  items: T[],
-  have: TariffHave,
-  live: Set<number>,
-  idOf: (item: T) => number,
-) {
-  if (have === "all") return items;
-  return items.filter((item) => {
-    const id = Number(idOf(item)) || 0;
-    if (!id) return have === "without";
-    const on = live.has(id);
-    return have === "with" ? on : !on;
-  });
-}
-
-/** Кто выпал после круга школы: назначение без этого тарифа, удаление/закрытие — тариф ещё живой. */
-export function dropoutsAfterJob<
-  T extends { customerId: number; branchId: number; tariffId?: number },
->(
-  mode: "assign" | "close" | "delete",
-  sent: T[],
-  live: { customerId: number; branchId: number; activeTariffs?: { tariffId: number }[] }[],
-  closeDate = "",
-) {
-  const by = new Map(live.map((r) => [personKey(r.branchId, r.customerId), r.activeTariffs || []]));
-  const today = todayIso();
-  return sent.filter((p) => {
-    const list = by.get(personKey(p.branchId, p.customerId)) || [];
-    if (mode === "assign") return !list.some((t) => t.tariffId === p.tariffId);
-    if (mode === "close" && (!closeDate || closeDate >= today)) return false;
-    return list.length > 0;
-  });
-}
-
-export function collapsePupilsByCustomer(items: PupilTariffItem[]) {
-  const map = new Map<string, PupilTariffItem>();
-  for (const it of items) {
-    const key = `${it.branchId}:${it.customerId}`;
-    const prev = map.get(key);
-    if (!prev) {
-      map.set(key, { ...it });
-      continue;
-    }
-    const groups = [...new Set([prev.groupName, it.groupName].filter(Boolean))];
-    const tariffs = [...(prev.activeTariffs || []), ...(it.activeTariffs || [])].filter(
-      (t, i, a) => a.findIndex((x) => x.id === t.id) === i,
-    );
-    map.set(key, {
-      ...prev,
-      groupName: groups.join(" · "),
-      activeTariffs: tariffs.length ? tariffs : prev.activeTariffs,
-    });
-  }
-  return [...map.values()];
-}
-
-export function pupilListStats(items: PupilTariffItem[]) {
-  const people = new Set(items.map((it) => `${it.branchId}:${it.customerId}`));
-  const leads = new Set(items.filter((it) => it.status === "лид").map((it) => `${it.branchId}:${it.customerId}`));
-  return {
-    rows: items.length,
-    unique: people.size,
-    dual: Math.max(0, items.length - people.size),
-    leads: leads.size,
+    rest: Number(it.balance ?? it.rest ?? 0) || 0,
+    lessons: Number(it.lesson_count ?? it.lessons_count ?? it.paid_count ?? 0) || 0,
+    archived: !live,
+    bDate: String(it.b_date || it.bDate || ""),
+    eDate: String(it.e_date || it.eDate || ""),
+    price: Number(it.price || 0) || 0,
   };
 }
-export function customerTariffPayload(opts: {
-  customerId: number;
-  tariffId: number;
-  bDate: string;
-  eDate?: string;
-  groupId?: number;
-  calcType?: number;
-  subjectIds?: number[];
-  lessonTypeIds?: number[];
-  periodCount?: number;
-  periodType?: number;
-  note?: string;
-  lessonsCount?: number;
-}) {
-  const customerId = Number(opts.customerId) || 0;
-  const tariffId = Number(opts.tariffId) || 0;
-  const lessonTypeIds = (opts.lessonTypeIds || []).map(Number).filter((n) => n > 0);
-  const subjectIds = (opts.subjectIds || []).map(Number).filter((n) => n > 0);
-  const body: Record<string, unknown> = {
-    customer_id: customerId,
-    tariff_id: tariffId,
-    b_date: String(opts.bDate || "").trim(),
-    lesson_type_ids: lessonTypeIds.length ? lessonTypeIds : [2],
-  };
-  if (opts.eDate) body.e_date = String(opts.eDate);
-  const groupId = Number(opts.groupId) || 0;
-  if (groupId) body.group_id = groupId;
-  if (subjectIds.length) body.subject_ids = subjectIds;
-  if (Number(opts.lessonsCount) > 0) body.lesson_count = Number(opts.lessonsCount);
-  if (opts.note) body.note = String(opts.note);
-  const calcType = Number(opts.calcType) ? 1 : 0;
-  body.is_separate_balance = calcType;
-  body.calculation_type = alfaCalculationType(calcType);
-  const periodType = Number(opts.periodType) || 0;
-  const periodCount = Number(opts.periodCount) || 0;
-  if (periodCount) {
-    body.period = periodCount;
-    body.period_type = periodType || 1;
-    body.unit = periodType === 2 ? "weeks" : periodType === 3 ? "months" : periodType === 4 ? "years" : "days";
+
+export function parseDossierCtt(extras?: Record<string, string> | null) {
+  try {
+    const raw = JSON.parse(String(extras?.ctt || "[]")) as unknown;
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((row) => {
+        const it = row as Record<string, unknown>;
+        const id = Number(it.id || 0);
+        if (!id) return null;
+        return {
+          id,
+          tariffId: Number(it.tariffId || it.tariff_id || 0) || undefined,
+          name: String(it.name || "абонемент"),
+          rest: Number(it.rest || 0) || 0,
+          lessons: Number(it.lessons || 0) || 0,
+          archived: Boolean(it.archived),
+          bDate: String(it.bDate || it.b_date || ""),
+          eDate: String(it.eDate || it.e_date || ""),
+          price: Number(it.price || 0) || 0,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => Boolean(x));
+  } catch {
+    return [];
   }
-  return body;
 }
 
-export async function postCustomerTariff(
-  request: <T = { success?: boolean; errors?: unknown }>(path: string, body?: unknown, t?: string) => Promise<T>,
-  t: string,
-  opts: Parameters<typeof customerTariffPayload>[0] & { branch: number },
-) {
-  const customerId = Number(opts.customerId) || 0;
-  const tariffId = Number(opts.tariffId) || 0;
-  const branch = Number(opts.branch) || 1;
-  if (!customerId) return { ok: false as const, error: "Нет customer_id ученика." };
-  if (!tariffId) return { ok: false as const, error: "Выберите абонемент." };
-  if (!String(opts.bDate || "").trim()) return { ok: false as const, error: "Нет даты начала абонемента." };
-  const full = customerTariffPayload(opts);
-  const tries: Record<string, unknown>[] = [
-    full,
-    { ...full, is_separate_balance: 1, calculation_type: 2 },
-    { ...full, is_separate_balance: 0, calculation_type: 1 },
-  ];
-  let last = "";
-  for (const body of tries) {
-    if (body.customer_id == null || body.customer_id === "" || Number(body.customer_id) === 0) continue;
-    try {
-      const res = await request<{ success?: boolean; errors?: unknown }>(customerTariffCreatePath(branch, customerId), body, t);
-      if (res.success === false) {
-        last = JSON.stringify(res.errors || res);
-        continue;
-      }
-      return { ok: true as const };
-    } catch (e) {
-      last = e instanceof Error ? e.message : String(e);
-    }
-  }
-  return { ok: false as const, error: last || "AlfaCRM не приняла абонемент." };
+export function isPaidCountLabel(raw?: string) {
+  return /занятий по абонементу|оплачено до/i.test(String(raw || ""));
 }
 
-/** Абонемент подходит к предмету группы, если предмет не задан или входит в карту абонемента. */
-export function tariffMatchesSubject(tariff: { subjectIds?: number[] } | null | undefined, subjectId: number) {
-  const id = Number(subjectId) || 0;
-  if (!id) return true;
-  const ids = tariff?.subjectIds || [];
-  if (!ids.length) return false;
-  return ids.includes(id);
-}
-
-export function todayIso() {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Moscow" });
+/** Один ученик: строки customer-tariff на диск. */
+export async function pullCustomerTariffs(branchId: number, customerId: number) {
+  const cid = Number(customerId) || 0;
+  const branch = Number(branchId) || 1;
+  if (!cid) return [];
+  const { request, token } = await import("./alfacrm");
+  const { crmUnwrapIndex } = await import("./crm-leads-stages");
+  const { loadTariffs } = await import("./crm-tariffs");
+  const t = await token();
+  const json = await request(customerTariffIndexPath(branch, cid), { page: 0, pageSize: 50, customer_id: cid }, t).catch(
+    () => ({}),
+  );
+  const catalog = loadTariffs().items.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price }));
+  const rows = crmUnwrapIndex(json).items.filter((it) => Number(it.id) && (!tariffRowCustomerId(it) || tariffRowCustomerId(it) === cid)).map((it) => packCardTariff(it, catalog));
+  const { stampDossierCtt } = await import("./dossiers");
+  stampDossierCtt(cid, rows, branch);
+  return rows;
 }
