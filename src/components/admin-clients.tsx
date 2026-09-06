@@ -1355,7 +1355,6 @@ export function AdminClients({
             >
               Загрузить «Архив»{counts.архив ? ` ${counts.архив}` : ""}
             </button>
-          </div>
         </div>
         {hint ? <p className="mt-2 rounded-xl bg-primary/10 px-3 py-1.5 text-sm font-medium text-fg">{hint}</p> : null}
 
