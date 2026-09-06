@@ -33,6 +33,10 @@ describe("голосовой контур: эхо и перебивание", ()
       false,
     );
     assert.equal(isVoiceEcho("уже ходим", HELLO, { speaking: true }), false);
+    const fork = "Нажмите кнопку или скажите уже ходим подбираем впервые или вас интересуют правила и цены";
+    assert.equal(isVoiceEcho("уже ходим", fork, { speaking: true }), true);
+    assert.equal(isVoiceEcho("уже ходим", fork, { speaking: false, spokenAgoMs: 400 }), false);
+    assert.equal(isVoiceEcho("мы уже ходим к вам", fork, { speaking: true }), false);
     assert.equal(isSocialHello("Привет"), true);
     assert.equal(isSocialHello("добрый день"), true);
     assert.equal(isSocialHello("уже ходим"), false);
@@ -70,14 +74,15 @@ describe("голосовой контур: эхо и перебивание", ()
     assert.ok(ignoreAfterSpeakMs(true) < 1500);
   });
 
-  it("перебивание глушит TTS по голосу, повтор не ждёт запрос", () => {
+  it("VAD тише колонки, перебивание — распознавание; повтор не ждёт запрос", () => {
     const chat = readFileSync(new URL("../components/agent-chat.tsx", import.meta.url), "utf8");
     assert.match(chat, /from "@\/data\/agent-voice-loop"/);
     assert.match(chat, /vadTick/);
     assert.match(chat, /srShouldRestart/);
     assert.match(chat, /bargeInterimReady/);
     assert.match(chat, /isSocialHello/);
-    assert.match(chat, /next\.fire && speakingRef/);
+    assert.match(chat, /el\.volume = Math.min\(el\.volume, 0\.18\)/);
+    assert.doesNotMatch(chat, /next\.fire && speakingRef\.current\) \{\s*vadStateRef\.current = emptyVad\(\);\s*cancelSpeech/);
     assert.match(chat, /replayLast/);
     assert.match(chat, /startListen\(\);\s*\n\s*if \(bargeRef/);
     assert.match(chat, /if \(!bargeInterimReady\(said, isFinal\)\) return;/);

@@ -42,7 +42,10 @@ export function isVoiceEcho(
     if ((opts?.spokenAgoMs || 0) <= echoTailMs()) return true;
     return false;
   }
-  if (isDirectChoice(a)) return false;
+  if (isDirectChoice(a)) {
+    if (opts?.speaking && b.includes(a)) return true;
+    return false;
+  }
   if (!opts?.speaking && (opts?.spokenAgoMs || 0) > echoTailMs()) return false;
   const words = a.split(" ").filter((w) => w.length > 1);
   if (words.length < 2) {

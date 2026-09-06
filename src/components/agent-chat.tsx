@@ -726,9 +726,8 @@ export function AgentChat() {
         vadStateRef.current = next.state;
         if (next.fire && speakingRef.current) {
           vadStateRef.current = emptyVad();
-          cancelSpeech();
-          ignoreUntilRef.current = Date.now() + 240;
-          if (voiceOnRef.current && !busyRef.current) startListen();
+          const el = audioElRef.current;
+          if (el && !el.paused) el.volume = Math.min(el.volume, 0.18);
         }
         vadRafRef.current = requestAnimationFrame(tick);
       };
