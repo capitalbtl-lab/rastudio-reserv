@@ -280,7 +280,8 @@ ${JSON.stringify(slim).slice(0, 9000)}`,
     llm?.kind === "question" || llm?.kind === "refuse" || llm?.kind === "edit" || llm?.kind === "openClient" || llm?.kind === "openGroup" || llm?.kind === "openTab"
       ? llm.kind
       : "refuse";
-  let action = llm?.action === "pull" || llm?.action === "push" || llm?.action === "preview" ? llm.action : kind === "edit" ? "preview" : "none";
+  let action: "preview" | "pull" | "push" | "none" =
+    llm?.action === "pull" || llm?.action === "push" || llm?.action === "preview" ? llm.action : kind === "edit" ? "preview" : "none";
   if (!canWrite && (kind === "edit" || action === "push" || action === "preview" || action === "pull")) {
     return {
       kind: "refuse",
