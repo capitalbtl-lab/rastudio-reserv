@@ -1273,7 +1273,7 @@ export async function syncMembershipsSlice(offset = 0, take = 8) {
         const crmId = Number(c.id || 0);
         if (!crmId) continue;
         if (Number(c.removed) === 1 || Number(c.is_study) !== 1) continue;
-        applyCrmCustomer(c, g.branchId, false, {});
+        applyCrmCustomer(c, g.branchId, false, {}, BULK);
         upsertDossier({
           crmId,
           branchId: g.branchId,
@@ -1291,6 +1291,8 @@ export async function syncMembershipsSlice(offset = 0, take = 8) {
           },
           source: "alfacrm",
           crmWins: true,
+          persist: false,
+          quiet: true,
         });
         n += 1;
       }
@@ -1298,6 +1300,7 @@ export async function syncMembershipsSlice(offset = 0, take = 8) {
     }
   }
   const done = offset + take >= groups.length;
+  saveStore(loadStore());
   const views = searchClientViews("", 1, "учится");
   return {
     ok: true as const,

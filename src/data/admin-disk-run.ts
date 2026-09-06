@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { isAdminRequest } from "./admin-auth";
 import { logAdmin } from "./admin-settings";
 import type { DiskReq, PullKind, PullLine } from "./admin-disk";
@@ -30,12 +30,49 @@ function emptyJob(): Job {
   return { running: false, kind: "", step: "", done: false, error: "", lines: [], added: 0, updated: 0, total: 0, at: 0 };
 }
 
+function jobFile() {
+  return join(process.cwd(), "storage", "crm-pull-job.json");
+}
+
+function persistJobFile(j: Job) {
+  try {
+    mkdirSync(dirname(jobFile()), { recursive: true });
+    writeFileSync(jobFile(), JSON.stringify(j), "utf8");
+  } catch {
+    /* диск */
+  }
+}
+
+function readJobFile(): Job | null {
+  try {
+    if (!existsSync(jobFile())) return null;
+    return JSON.parse(readFileSync(jobFile(), "utf8")) as Job;
+  } catch {
+    return null;
+  }
+}
+
 function job(): Job {
-  return { ...(g.__raDiskPull || emptyJob()) };
+  if (g.__raDiskPull) return { ...(g.__raDiskPull) };
+  const disk = readJobFile();
+  if (!disk) return emptyJob();
+  if (disk.running && Date.now() - Number(disk.at || 0) > 180000) {
+    disk.running = false;
+    disk.done = true;
+    disk.error =
+      disk.error ||
+      "Импорт прервался — сервер перезапустился. Данные до последней порции на сайте. Нажмите ещё раз.";
+    g.__raDiskPull = disk;
+    persistJobFile(disk);
+  } else {
+    g.__raDiskPull = disk;
+  }
+  return { ...(g.__raDiskPull) };
 }
 
 function setJob(patch: Partial<Job>) {
   g.__raDiskPull = { ...job(), ...patch, at: Date.now() };
+  persistJobFile(g.__raDiskPull);
   return g.__raDiskPull;
 }
 
