@@ -1,6 +1,6 @@
 import { nextSlot, PROMPT, slotsFromMessages, type Slots } from "./funnel-state";
 import { modeFromMessages, factsFromMessages } from "./agent-facts";
-import { STUDIO_RULES_SHORT } from "./agent-client-desk-core";
+import { STUDIO_ADDR_SHORT, STUDIO_HOURS_SHORT, STUDIO_RULES_SHORT } from "./agent-client-desk-core";
 
 export type FunnelHit = { reply: string };
 
@@ -20,10 +20,15 @@ export function lockedFunnelReply(
   if (mode === "fork") {
     const last = lastAssistant(messages);
     const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
-    if (/правил|оферт|цен[аыу]/i.test(lastUser)) {
+    if (/правил|оферт|цен[аыу]|сколько стоит|стоимост/i.test(lastUser)) {
       return { reply: `${n}: ${STUDIO_RULES_SHORT} Уже ходите к нам или подбираете впервые?` };
     }
-    if (/филиал|адрес|как пройти/i.test(lastUser)) return null;
+    if (/час[ыа] работ|когда открыт|график работ|во сколько работаете/i.test(lastUser)) {
+      return { reply: `${n}: ${STUDIO_HOURS_SHORT} Уже ходите к нам или подбираете впервые?` };
+    }
+    if (/где наход|как пройти|как проехать|адрес|филиал/i.test(lastUser)) {
+      return { reply: `${n}: ${STUDIO_ADDR_SHORT} Уже ходите к нам или подбираете впервые?` };
+    }
     if (/уже занимаетесь|подбираете впервые/i.test(last)) {
       return { reply: `${n}: Нажмите кнопку или скажите: уже ходим или подбираем впервые.` };
     }

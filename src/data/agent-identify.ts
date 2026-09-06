@@ -110,6 +110,15 @@ export function identifyLocked(
   if (hit) return null;
   if (opts.hits.length === 1) {
     const h = opts.hits[0];
+    if (rejectIdentify(opts.lastUser || "")) {
+      return {
+        reply: `${n}: Тогда подберём как в первый раз или назовите другой телефон.`,
+        chips: [
+          { label: "Другой телефон", send: "Сейчас назову другой телефон" },
+          { label: "Подбираем впервые", send: "Подбираем курс впервые", primary: true },
+        ],
+      };
+    }
     return {
       reply: `${n}: ${who === "olga" ? "Нашла" : "Нашёл"} на сайте: ${h.first}. Это ваш ребёнок?`,
       chips: [

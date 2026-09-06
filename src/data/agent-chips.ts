@@ -17,7 +17,7 @@ const FORK: AgentChip[] = [
   { label: "Правила и цены", send: "Расскажите правила оказания услуг и цены" },
 ];
 
-const CLIENT_TOPICS: AgentChip[] = [
+export const CLIENT_TOPICS: AgentChip[] = [
   { label: "Расписание", send: "Когда следующее занятие?", primary: true },
   { label: "Отработка", send: "Нужна отработка пропуска" },
   { label: "Не придём", send: "Не сможем прийти на ближайшее занятие" },
@@ -112,10 +112,19 @@ export function chipsForReply(
         };
       }
       if (facts.intent === "второй") {
-        return {
-          hint: "Возраст второго",
-          chips: AGES.map((c) => ({ ...c, send: c.send.replace("Ребёнку", "Второму ребёнку") })),
-        };
+        if (!facts.age) {
+          return {
+            hint: "Возраст второго",
+            chips: AGES.map((c) => ({ ...c, send: c.send.replace("Ребёнку", "Второму ребёнку") })),
+          };
+        }
+        if (!facts.secondChild) {
+          return { hint: "Имя второго", chips: [] };
+        }
+        return { hint: "Направление второго", chips: schoolsFor(facts.age) };
+      }
+      if (facts.intent === "готово") {
+        return { hint: "Если понадобится", chips: CLIENT_TOPICS };
       }
       if ((facts.intent === "индивидуальное" || facts.intent === "сверхурочное" || facts.intent === "дополнительное") && !facts.day) {
         return { hint: "День занятия", chips: WEEKDAY_CHIPS };

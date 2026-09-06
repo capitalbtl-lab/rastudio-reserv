@@ -11,6 +11,7 @@ import { enqueueExport } from "./crm-export-queue.ts";
 import { digestPrompt, pauseUntilIso, STUDIO_RULES_SHORT, type ClientDigest } from "./agent-client-desk-core.ts";
 import { WEEKDAY_CHIPS, type SessionFacts } from "./agent-facts.ts";
 import { allowedLessonType, type BookSettings } from "./agent-book-kinds.ts";
+import { CLIENT_TOPICS } from "./agent-chips.ts";
 
 export type { ClientDigest };
 export { digestPrompt };
@@ -41,7 +42,7 @@ function phoneHint() {
 
 export async function makeupList(customerId: number, weekday: string) {
   const d = clientDigest(customerId);
-  const empty = { digest: d, list: [] as { gid: string; when: string; chip: string; branchId: number; nextDate: string; timeFrom: string; courseId: string; subjectId?: number; teacherId?: number; priority: number; seats: string }[], courseLabel: "" };
+  const empty = { digest: d, list: [] as { gid: string; when: string; chip: string; branchId: number; nextDate: string; timeFrom: string; courseId: string; subjectId?: number; teacherId?: number; teacher?: string; priority: number; seats: string }[], courseLabel: "" };
   if (!d) return empty;
   const { groupsForQuery } = await import("./alfacrm-schedule.ts");
   const ids = [...new Set(d.groups.map((g) => g.courseId).filter(Boolean))];
@@ -66,8 +67,28 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
   const n = who === "olga" ? "Ольга" : "Олег";
   const found = who === "olga" ? "нашла" : "нашёл";
   const d = clientDigest(facts.customerId);
-  const child = facts.child || d?.child.split(/\s+/)[0] || "ребёнок";
+  const child = facts.child?.split(/\s+/)[0] || d?.child.split(/\s+/)[0] || "ребёнок";
   const intent = facts.intent || "";
+  if (!intent || intent === "готово") {
+    if (/жалоб|возврат|претенз|деньги верн/i.test(lastUser)) {
+      return {
+        reply: `${n}: Жалобы и возврат денег — 8 (800) 511-34-01. Карточку ${child} не закрываю.`,
+        chips: CLIENT_TOPICS,
+      };
+    }
+    if (intent === "готово") {
+      return {
+        reply: `${n}: Хорошо. Если понадобится отработка, пропуск или пауза — напишите.`,
+        chips: CLIENT_TOPICS,
+      };
+    }
+    const words = lastUser.trim().split(/\s+/).filter(Boolean).length;
+    if (words >= 5 && !/gid=|это ${child}|да, это/i.test(lastUser)) return null;
+    return {
+      reply: `${n}: ${child} в карточке${d?.nextLesson ? `, ближайшее: ${d.nextLesson}` : ""}. Чем помочь?`,
+      chips: CLIENT_TOPICS,
+    };
+  }
   if (intent === "расписание") {
     return {
       reply: `${n}: ${child} — ближайшее занятие: ${d?.nextLesson || "в слотах на сайте нет даты"}. Нужна отработка, пропуск или абонемент?`,
