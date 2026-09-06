@@ -13,6 +13,25 @@ export type ClientDigest = {
   pauseUntil: string;
 };
 
+export const STUDIO_RULES_SHORT =
+  "Пропуск лучше предупредить заранее. Отработка — в другой группе того же курса, если есть места. Пауза — по заявлению, до конкретной даты. Цены — на странице курса, колонка «Все» за 4 недели. Жалобы и возврат денег — 8 (800) 511-34-01.";
+
+export function pauseUntilIso(raw: string, now = new Date()) {
+  const t = String(raw || "").trim();
+  if (!t) return "";
+  const d = new Date(now.getTime());
+  if (/две недели/i.test(t)) d.setDate(d.getDate() + 14);
+  else if (/неделю|неделя/i.test(t)) d.setDate(d.getDate() + 7);
+  else if (/месяц/i.test(t)) d.setMonth(d.getMonth() + 1);
+  else {
+    const m = t.match(/(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/);
+    if (!m) return t;
+    const year = m[3] ? (String(m[3]).length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : d.getFullYear();
+    return `${year}-${String(Number(m[2])).padStart(2, "0")}-${String(Number(m[1])).padStart(2, "0")}`;
+  }
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function digestPrompt(d: ClientDigest | null) {
   if (!d) return "";
   const groups = d.groups.length
@@ -28,6 +47,6 @@ ${groups}
 явка: ${d.lastLessons.join("; ") || "журнала нет"}
 абонемент: ${d.tariff || "нет пометки"} · остаток ${d.balance}
 пауза до: ${d.pauseUntil || "нет"}
-Пропуск — note_skip. Пауза — pause_classes. Отработка — list_groups по courseId, не только свой gid; book_lesson makeup. Имя ребёнка повторно не спрашивать.
+Пропуск — note_skip. Пауза — pause_classes. Отработка — list_groups по courseId, не только свой gid; book_lesson makeup. Имя ребёнка повторно не спрашивать. Второго ребёнка не путать с этим customerId.
 `;
 }

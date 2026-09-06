@@ -30,8 +30,12 @@ export function asIdentifyHits(
   return out;
 }
 
-const YES = /^(да|ага|угу|верно|наш|так|это наш|это он|это она|да,\s*это)\b/i;
+const YES = /^(да|ага|угу|верно|наш|так|это наш|это он|это она|да,\s*это|конечно|именно|она|он)\b/i;
 const DENY = /другой ребёнок|это не (наш|он|она)|не наш ребёнок|подбираем впервые|подбираем курс впервые/i;
+
+/** Запрос услуги после показа имени = подтверждение единственного ребёнка. Не переспрашивать. */
+export const CLIENT_SERVICE_ASK =
+  /отработк|пропуск|не прид|не сможем прийти|пауз|приостанов|абонемент|остат|когда следующее|расписан|правил|оферт|второго ребёнк|ещё одн(ого|у) ребёнк|индивидуальн|сверхурочн|дополнительн занят|во сколько|какой день ходим/i;
 
 export function rejectIdentify(text: string) {
   return DENY.test(String(text || "").trim());
@@ -48,6 +52,16 @@ export function confirmedHit(
   const byName = hits.find((h) => text.toLowerCase().includes(h.first.toLowerCase()));
   if (byName) return byName;
   if (hits.length === 1 && /это ваш|нашл|ваш ребёнок|несколько детей/i.test(assistant) && YES.test(text)) return hits[0];
+  if (hits.length === 1 && CLIENT_SERVICE_ASK.test(text) && !rejectIdentify(text)) return hits[0];
+  return null;
+}
+
+export function impliedIdentify(hits: IdentifyHit[], lastUser: string, already?: boolean): IdentifyHit | null {
+  if (!hits.length) return null;
+  if (already && hits.length === 1) return hits[0];
+  const u = String(lastUser || "").trim();
+  if (!u || rejectIdentify(u)) return null;
+  if (hits.length === 1 && CLIENT_SERVICE_ASK.test(u)) return hits[0];
   return null;
 }
 
