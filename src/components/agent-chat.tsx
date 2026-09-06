@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { X, Send, Mic, Volume2, RotateCcw } from "lucide-react";
+import { X, Send, Mic, Volume2, RotateCcw, Repeat2 } from "lucide-react";
 import { chatAgent } from "@/data/agent-chat";
 import { publicAgentUi } from "@/data/agent-config-fn";
 import type { AgentUiFlags } from "@/data/agent-config";
@@ -1082,7 +1082,22 @@ export function AgentChat() {
     }
     const spoken = [...(inAdminUi ? adminMsgsRef.current : clientMsgsRef.current)].reverse().find((m) => m.role === "assistant")?.content;
     if (spoken) await maybeSpeak(spoken);
-    if (voiceOnRef.current) startListen();
+    if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
+  }
+
+  async function replayLast(phrase?: string) {
+    if (busyRef.current) return;
+    if (!uiOn("allowVoice")) return;
+    const live = inAdminUi ? adminMsgsRef.current : clientMsgsRef.current;
+    const last = phrase?.trim() || [...live].reverse().find((m) => m.role === "assistant")?.content || "";
+    if (!last.trim()) return;
+    if (!voiceOnRef.current) {
+      voiceOnRef.current = true;
+      setVoiceOn(true);
+      await unlockAudio();
+      await ensureMic();
+    }
+    await speak(last);
   }
 
   function pickPartner(next: "oleg" | "olga") {
