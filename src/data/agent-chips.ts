@@ -53,6 +53,18 @@ const TRIAL: AgentChip[] = [
   { label: "Сразу в группу", send: "Хочу сразу в действующую группу" },
 ];
 
+function scheduleOffer(groups: AgentChip[]): { hint: string; chips: AgentChip[]; after?: string } | null {
+  if (!groups.length) return null;
+  const slots = groups.filter((c) => /gid=/i.test(c.send || ""));
+  if (!slots.length) return { hint: "Группы", chips: groups };
+  const makeup = slots.some((c) => /отработк/i.test(c.send || ""));
+  return {
+    hint: makeup ? "Слоты отработки" : "Расписание",
+    chips: groups,
+    after: makeup ? "Выберите слот — поставлю отработку." : "Выберите удобное время, и я запишу вас в группу.",
+  };
+}
+
 function schoolsFor(age?: number): AgentChip[] {
   const y = age || 8;
   const out: AgentChip[] = [];

@@ -47,7 +47,7 @@ ${who === "oleg" ? "Вы хорошо рассказываете про техн
 ЭТА РЕПЛИКА — только текущий шаг: ${step}
 Если в фактах уже есть город — ни слова «какой город», «Коломна или Луховицы».
 Не возвращайся к закрытым шагам.
-list_groups когда направление уже ясно и родитель хочет слот. Передай course_id или school_id, если знаешь. Назови ВСЕ подходящие, первой — приоритет 1. gid вслух не читай. Группу по имени CRM не ищи.
+list_groups когда направление уже ясно и родитель хочет слот. Передай course_id или school_id, если знаешь. Слоты уйдут кнопками — в речи одна фраза «есть несколько групп:», без нумерации дней и педагогов. gid вслух не читай. Группу по имени CRM не ищи.
 Пробное в свободный день: заявка без слота, в комментарии «дату согласуем по телефону». Не выдумывай время.
 История сессии полная до сброса диалога. Прежде чем спросить — посмотри факты.
 На запись нужны: ФИО ребёнка, ФИО родителя, телефон, филиал. Дата рождения целиком 01.01.2021; если нет — возраст.
@@ -961,7 +961,7 @@ export const chatAgent = createServerFn({ method: "POST" })
               });
             } else if (call.function.name === "list_groups") {
               try {
-                const { groupsForQuery, formatGroups } = await import("./alfacrm-schedule");
+                const { groupsForQuery, formatGroups, slotChips } = await import("./alfacrm-schedule");
                 const age = Number(args.age);
                 const makeup = facts.mode === "client" && facts.intent === "отработка";
                 let courseId = String(args.course_id || "");
@@ -1000,14 +1000,7 @@ export const chatAgent = createServerFn({ method: "POST" })
                         const pub = loadSiteSignup().statusPublish;
                         shown = shownRaw.filter((g) => slotOnPublicSchedule(g, pub));
                       }
-                      groups = shown
-                        .filter((g) => g.priority !== 0)
-                        .slice(0, 8)
-                        .map((g, i) => ({
-                          label: `Отработка · ${g.chip}`,
-                          send: `Поставьте отработку gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""} teacher_id=${g.teacherId || ""}`,
-                          primary: i === 0,
-                        }));
+                      groups = slotChips(shown, "makeup");
                       messages.push({
                         role: "tool",
                         tool_call_id: call.id,
@@ -1039,23 +1032,9 @@ export const chatAgent = createServerFn({ method: "POST" })
                   shown = shownRaw.filter((g) => slotOnPublicSchedule(g, pub));
                 }
                 if (makeup) {
-                  groups = shown
-                    .filter((g) => g.priority !== 0)
-                    .slice(0, 8)
-                    .map((g, i) => ({
-                      label: `Отработка · ${g.chip}`,
-                      send: `Поставьте отработку gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""} teacher_id=${g.teacherId || ""}`,
-                      primary: i === 0,
-                    }));
+                  groups = slotChips(shown, "makeup");
                 } else {
-                  groups = [
-                    { label: "Пробное занятие", send: "Хочу записаться на пробное занятие", primary: true },
-                    { label: "Сразу в группу", send: "Запишите сразу в группу" },
-                    ...shown.slice(0, 6).map((g) => ({
-                      label: `Пробное · ${g.chip}`,
-                      send: `Запишите на пробное gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""} teacher_id=${g.teacherId || ""}`,
-                    })),
-                  ];
+                  groups = slotChips(shown, "group");
                 }
                 messages.push({
                   role: "tool",

@@ -638,6 +638,41 @@ function chipLabel(session: CmsSession, branchId: number, seats: string) {
   return seatBit ? `${when} · ${short} · ${seatBit}` : `${when} · ${short}`;
 }
 
+export function scheduleChipOf(g: {
+  name?: string;
+  chip?: string;
+  when?: string;
+  teacher?: string;
+  seats?: string;
+  nextDate?: string;
+  priority?: number;
+}) {
+  const when = String(g.chip || "").split(" · ")[0].trim() || String(g.when || "").trim();
+  const name = String(g.name || "группа").replace(/\s+/g, " ").trim();
+  const teacher = String(g.teacher || "").replace(/\s+/g, " ").trim();
+  const seats = String(g.seats || "").trim();
+  const next = g.nextDate ? `ближайшее ${g.nextDate}` : "";
+  const closed = Number(g.priority) === 0 ? "набор с сайта закрыт" : "";
+  return {
+    label: when ? `${when} · ${name}` : name,
+    note: [teacher, seats, next, closed].filter(Boolean).join(" · "),
+  };
+}
+
+export function slotChips(list: LiveGroup[], kind: "group" | "makeup" | "trial" = "group") {
+  const rows = kind === "makeup" ? list.filter((g) => g.priority !== 0 && g.seats !== "мест нет") : list;
+  const verb = kind === "makeup" ? "Поставьте отработку" : kind === "trial" ? "Запишите на пробное" : "Запишите в группу";
+  return rows.slice(0, 8).map((g, i) => {
+    const { label, note } = scheduleChipOf(g);
+    return {
+      label,
+      note,
+      send: `${verb} gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""} teacher_id=${g.teacherId || ""}`,
+      primary: i === 0,
+    };
+  });
+}
+
 export async function groupsForQuery(q: {
   age?: number;
   branch?: string;
@@ -743,17 +778,17 @@ export function formatGroups(list: LiveGroup[], age?: number, kind?: string) {
   const lines = list.map((g, i) => `${i + 1}. ${agentGroupLine(g)}`);
   if (kind === "makeup") {
     return [
-      `Группы того же курса для отработки (${list.length}). Своя группа не обязательна — любой gid этого courseId с местами.`,
-      "Запись: book_lesson lesson_type=makeup. Пробное не предлагать. gid вслух не читай.",
+      `Слоты отработки (${list.length}) — только для кнопок. В речи родителю список НЕ читай и не нумеруй.`,
+      "Одна фраза: на какой день смотрим и что слоты кнопками ниже. gid вслух не читай. book_lesson lesson_type=makeup после нажатия. Пробное не предлагать.",
       ...lines,
     ].join("\n");
   }
   return [
-    `Все подходящие группы (${list.length}), сначала приоритет 1. Назови родителю ВСЕ, не только первые. Ключ — gid+филиал и courseId, не имя. gid вслух не читай.`,
-    first.length
-      ? `В первую очередь предлагай запись в группы с приоритетом 1 (${first.map((g) => g.courseId || g.name).join("; ")}). Остальные тоже перечисли.`
-      : "Среди найденных нет приоритета 1 — назови все и уточни, куда удобнее.",
-    "Пробное = submit_trial, в группу = book_lesson lesson_type=group. Форму AlfaCRM не открывай. Приоритет 0 — с сайта не записывать, скажи что набор через администратора или предложи группу с приоритетом 1. Состав = groupLinks/taken слота, не явка.",
+    `Слоты для кнопок (${list.length}). В речи родителю НЕ читай этот список, не нумеруй дни и педагогов.`,
+    `Одна короткая фраза, без перечня: «В {направление} для ${age || "этого возраста"} лет в {филиал} есть несколько групп:»`,
+    first.length ? `Первой кнопкой — приоритет 1 (${first.map((g) => g.courseId || g.name).join("; ")}).` : "Приоритета 1 нет — все кнопки равны.",
+    "После кнопок интерфейс сам напишет: «Выберите удобное время, и я запишу вас в группу.» Эту фразу в пузыре не дублируй.",
+    "gid вслух не читай. После нажатия кнопки: book_lesson lesson_type=group. Приоритет 0 с сайта не записывать.",
     ...lines,
   ].join("\n");
 }
