@@ -17,6 +17,7 @@ import { ensureLivePrices } from "./prices";
 import { ensureLiveEdits, snapshotEdits } from "./edits";
 import { loadSiteSignup } from "./site-signup";
 import { loadHomeLayout } from "./home-layout";
+import { loadMediaAlts } from "./media-alts";
 
 export const loadSitePage = createServerFn({ method: "GET" })
   .validator((splat: unknown) => (typeof splat === "string" ? splat : undefined))
@@ -75,5 +76,6 @@ export const loadFullSchedule = createServerFn({ method: "GET" }).handler(async 
 
 export const loadPublicEdits = createServerFn({ method: "GET" }).handler(async () => {
   ensureLiveEdits();
+  loadMediaAlts();
   return { edits: snapshotEdits(), layout: loadHomeLayout() };
 });

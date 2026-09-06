@@ -6,6 +6,7 @@ import { EditText, HomeEditorChrome, HomeEditorProvider, useHomeEditor } from "@
 import { homeBlockLabel, placeHomeBlock, visibleHomeOrder, type HomeBlockId, type HomeCustomBlock, type HomeLayoutDoc } from "@/data/home-layout-core";
 import { SiteVideo } from "@/components/site-video";
 import { SeoImage } from "@/components/seo-image";
+import { mediaAlt } from "@/data/media-alts-core";
 import { PageLink } from "@/components/page-link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -45,9 +46,9 @@ export function BlockMedia({
   const src = ctx?.doc.media[id] || fallback;
   if (!src) return null;
   if (/\.mp4($|\?)/i.test(src)) {
-    return <SiteVideo src={src} title={title} mode="ambient" className={className || "aspect-[4/3] w-full"} />;
+    return <SiteVideo src={src} title={mediaAlt(src, title || "") || title} mode="ambient" className={className || "aspect-[4/3] w-full"} />;
   }
-  return <SeoImage src={src} alt={title || ""} filename={src} className={className || "aspect-[4/3] rounded-3xl"} />;
+  return <SeoImage src={src} alt={mediaAlt(src, title || "")} filename={src} className={className || "aspect-[4/3] rounded-3xl"} />;
 }
 
 function CustomHomeBlock({ block }: { block: HomeCustomBlock }) {

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { tokenOk } from "./admin-auth";
 import { listSiteMedia, saveSiteMedia, deleteSiteUpload } from "./site-media";
-import { describeMediaForPulse, proposeMediaCaption, acceptMediaCaption, loadSitePulse, refreshSitePulse, noteCustomBlock } from "./site-pulse";
+import { proposeMediaCaption, acceptMediaCaption, loadSitePulse, refreshSitePulse, noteCustomBlock } from "./site-pulse";
 import { loadMediaAlts } from "./media-alts";
 import { schoolSlug } from "./media-context";
 import { loadHomeLayout, saveHomeLayout } from "./home-layout";
@@ -38,12 +38,6 @@ function mediaWithCaptions() {
   const captions = new Map(pulse.notes.filter((n) => n.src).map((n) => [n.src as string, n.text]));
   const alts = loadMediaAlts();
   const labels = treeLabels();
-  let tree: { schools: { id: string; label: string }[]; courses: { id: string; schoolId: string }[] } = { schools: [], courses: [] };
-  try {
-    tree = loadSiteTree();
-  } catch {
-    /* */
-  }
   return listSiteMedia().map((item) => {
     const ctx = mediaContext(item.src, labels);
     return {
@@ -111,15 +105,26 @@ export const siteStudio = createServerFn({ method: "POST" })
     if (data.action === "upload") {
       const raw = String(data.base64 || "").replace(/^data:[^;]+;base64,/, "");
       if (!raw) return { ok: false as const, error: "Файл пустой." };
-      const saved = saveSiteMedia(String(data.name || "file"), Buffer.from(raw, "base64"));
+      const folder = String(data.folder || "");
+      if (!folder || folder === "all") return { ok: false as const, error: "Сначала откройте папку школы — файл попадёт туда." };
+      const saved = saveSiteMedia(String(data.name || "file"), Buffer.from(raw, "base64"), folder);
       if (!saved.ok) return saved;
       let caption = "";
       try {
-        caption = await describeMediaForPulse(saved.item.src, saved.item.name, saved.item.kind);
+        caption = await proposeMediaCaption(saved.item.src, saved.item.name, saved.item.kind);
       } catch (e) {
         caption = e instanceof Error ? e.message : "DeepSeek не описал файл.";
       }
-      return { ok: true as const, item: saved.item, caption, media: mediaWithCaptions(), pulse: loadSitePulse() };
+      return { ok: true as const, item: saved.item, caption, askCaption: true, media: mediaWithCaptions(), pulse: loadSitePulse() };
+    }
+    if (data.action === "caption") {
+      const src = String(data.src || "");
+      if (!src) return { ok: false as const, error: "Нет файла." };
+      if (data.accept) {
+        acceptMediaCaption(src, String(data.caption || ""));
+        return { ok: true as const, media: mediaWithCaptions(), pulse: loadSitePulse() };
+      }
+      return { ok: true as const, media: mediaWithCaptions(), pulse: loadSitePulse() };
     }
     if (data.action === "delete") {
       const res = deleteSiteUpload(String(data.src || ""));
@@ -135,8 +140,8 @@ export const siteStudio = createServerFn({ method: "POST" })
         if (data.slot) {
           layout = saveHomeLayout(setHomeMedia(layout, data.slot, src));
         }
-        const caption = await describeMediaForPulse(src, name, kind);
-        return { ok: true as const, caption, pulse: loadSitePulse(), layout };
+        const caption = await proposeMediaCaption(src, name, kind);
+        return { ok: true as const, caption, askCaption: true, pulse: loadSitePulse(), layout };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "DeepSeek не ответил." };
       }
