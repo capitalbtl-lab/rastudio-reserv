@@ -32,7 +32,7 @@ describe("ошибки шлюза в кабинете", () => {
     const ui = readFileSync(new URL("../lib/error-component.tsx", import.meta.url), "utf8");
     assert.match(ui, /lazyWithRetry/);
     assert.match(ui, /TabError/);
-    assert.match(ui, /Кабинет обновился/);
+    assert.match(ui, /Система обновляется/);
     const prices = readFileSync(new URL("../components/admin-prices.tsx", import.meta.url), "utf8");
     assert.match(prices, /lazyWithRetry/);
     assert.match(prices, /TabPane/);
