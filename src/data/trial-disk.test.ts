@@ -308,10 +308,12 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.match(chunk, /syncLeadsDelta/);
     assert.match(chunk, /90_000/);
     const syncAt = src.indexOf("export async function syncLeadsDelta");
-    const syncChunk = src.slice(syncAt, src.indexOf("export async function boardFromDisk"));
+    const syncChunk = src.slice(syncAt, at);
+    assert.ok(syncAt >= 0 && at > syncAt);
     assert.equal(/loadLeadsBoard/.test(syncChunk), false);
     assert.match(syncChunk, /boardFromDisk/);
-    const diskPart = chunk.slice(0, chunk.indexOf("if (delta"));
+    const diskPart = chunk.slice(0, chunk.indexOf("const work = async"));
+    assert.ok(diskPart.length > 80);
     assert.equal(/alfaToken/.test(diskPart), false);
     const stages = readFileSync(new URL("./crm-leads-stages.ts", import.meta.url), "utf8");
     assert.match(stages, /export function leadCardFromView/);
