@@ -330,7 +330,8 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
         chips: MAKEUP_WEEK_CHIPS,
       };
     }
-    const teacherBit = usingOther ? "другого педагога" : "вашего педагога";
+    const teacherBit =
+      !ranked.own.length && !facts.makeupOtherTeacher ? "педагогов этого курса" : usingOther ? "другого педагога" : "вашего педагога";
     const extra: DeskChip[] = [];
     if (page.more) extra.push({ label: "Ещё три варианта", send: "Покажите ещё три варианта отработки" });
     if (!usingOther && ranked.other.length) extra.push({ label: "Другой педагог", send: "Предложите другого педагога" });

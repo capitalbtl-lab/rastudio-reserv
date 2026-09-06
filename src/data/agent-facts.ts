@@ -314,15 +314,19 @@ export function factsFromMessages(messages: { role: string; content: string }[])
       .find(Boolean);
     if (day) facts.day = day;
     if (facts.intent === "отработка") {
+      const users = messages.map((m, i) => ({ i, ...m }));
       const week = [...messages]
         .filter((m) => m.role === "user")
         .map((m) => takeMakeupWeek(m.content))
         .reverse()
         .find(Boolean);
       if (week) facts.makeupWeek = week;
-      const moreHits = messages.filter((m) => m.role === "user" && isMakeupMore(m.content)).length;
+      const lastWeekAt = users.reduce((acc, m) => (m.role === "user" && takeMakeupWeek(m.content) ? m.i : acc), -1);
+      const lastOtherAt = users.reduce((acc, m) => (m.role === "user" && isMakeupOtherTeacher(m.content) ? m.i : acc), -1);
+      const from = Math.max(lastWeekAt, lastOtherAt);
+      const moreHits = users.filter((m) => m.i > from && m.role === "user" && isMakeupMore(m.content)).length;
       if (moreHits) facts.makeupSkip = moreHits * 3;
-      if (messages.some((m) => m.role === "user" && isMakeupOtherTeacher(m.content))) facts.makeupOtherTeacher = true;
+      if (lastOtherAt >= 0) facts.makeupOtherTeacher = true;
     }
     const pause = [...messages]
       .filter((m) => m.role === "user")
