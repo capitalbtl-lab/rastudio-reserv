@@ -217,7 +217,9 @@ function Home() {
           ))}
         </div>
       </section>
+      </HomeSlot>
 
+      <HomeSlot id="catalog">
       <section className="page-wrap pb-12 md:pb-16">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -255,7 +257,9 @@ function Home() {
           ))}
         </div>
       </section>
+      </HomeSlot>
 
+      <HomeSlot id="about">
       <section className="page-wrap pb-12 md:pb-16">
         <div className="grid items-center gap-8 overflow-hidden rounded-[2rem] bg-surface p-6 shadow-[var(--shadow-border)] md:grid-cols-2 md:gap-12 md:p-10">
           <div>
@@ -273,7 +277,9 @@ function Home() {
           </div>
         </div>
       </section>
+      </HomeSlot>
 
+      <HomeSlot id="teachers">
       <section className="page-wrap pb-12 md:pb-16">
         <p className="kicker text-primary">Педагоги</p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
@@ -307,9 +313,13 @@ function Home() {
           ))}
         </div>
       </section>
+      </HomeSlot>
 
+      <HomeSlot id="reviews">
       <Reviews />
+      </HomeSlot>
 
+      <HomeSlot id="stories">
       <section className="page-wrap pb-12 md:pb-16">
         <p className="kicker text-primary">Жизнь студии</p>
         <h2 className="section-title mt-3">Проекты и события</h2>
@@ -338,7 +348,9 @@ function Home() {
           ))}
         </div>
       </section>
+      </HomeSlot>
 
+      <HomeSlot id="branches">
       <section className="ink overflow-x-hidden py-12 pb-16 text-header-fg md:py-16 md:pb-24">
         <div className="page-wrap">
           <p className="kicker text-header-fg/45">Три студии</p>
@@ -374,10 +386,14 @@ function Home() {
           </div>
         </div>
       </section>
+      </HomeSlot>
 
-      <section className="page-wrap py-12 md:py-16">
+      <HomeSlot id="trial">
+      <section id="trial" className="page-wrap py-12 md:py-16">
         <TrialForm />
       </section>
+      </HomeSlot>
+      </HomeCanvas>
     </SiteShell>
   );
 }
