@@ -130,6 +130,15 @@ describe("сценарии консультанта", () => {
     assert.match(nextStepOf(named), /Пробное на телефон/);
   });
 
+  it("привет на развилке — озвучить кнопки, не молчать", () => {
+    const fork = [{ role: "assistant", content: "Ольга: Здравствуйте. Я Ольга, студия «Развивайся». Вы уже занимаетесь у нас или подбираете впервые?" }];
+    const hit = lockedFunnelReply("olga", [...fork, { role: "user", content: "Привет" }], true);
+    assert.match(hit?.reply || "", /уже ходим/i);
+    assert.match(hit?.reply || "", /правил/i);
+    assert.equal(modeFromMessages([...fork, { role: "user", content: "Привет" }]), "fork");
+    assert.match(talkFallback("olga", factsFromMessages([...fork, { role: "user", content: "Привет" }])), /уже ходим/i);
+  });
+
   it("развилка: правила, часы, адрес — без возраста", () => {
     const fork = [{ role: "assistant", content: "Ольга: Вы уже занимаетесь у нас или подбираете впервые?" }];
     const rules = lockedFunnelReply("olga", [...fork, { role: "user", content: "Расскажите правила оказания услуг и цены" }]);

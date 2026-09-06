@@ -15,6 +15,14 @@ export function isSocialHello(s: string) {
   return HELLO_RE.test(normalizeSaid(s));
 }
 
+/** Короткий ответ на развилку — не эхо своей фразы «скажите: уже ходим». */
+export function isDirectChoice(s: string) {
+  const a = normalizeSaid(s);
+  if (!a) return false;
+  if (isSocialHello(a)) return true;
+  return /^(мы )?уже ходим( к вам)?$/.test(a) || /^(подбираем( курс)? впервые|впервые)$/.test(a) || /^(правила|цены|правила и цены)$/.test(a);
+}
+
 export function echoTailMs() {
   return 1800;
 }
@@ -27,8 +35,8 @@ export function isVoiceEcho(
   const a = normalizeSaid(said);
   const b = normalizeSaid(spoken);
   if (!a || !b) return false;
+  if (isDirectChoice(a)) return false;
   if (!opts?.speaking && (opts?.spokenAgoMs || 0) > echoTailMs()) return false;
-  if (isSocialHello(a) && !b.split(" ").includes(a) && a !== "здравствуйте" && a !== "здравствуй") return false;
   const words = a.split(" ").filter((w) => w.length > 1);
   if (words.length < 2) {
     const w = words[0] || a;

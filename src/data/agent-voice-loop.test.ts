@@ -32,6 +32,7 @@ describe("голосовой контур: эхо и перебивание", ()
       isVoiceEcho("назовите дату и время", "Назовите дату и время, удобные для вас", { spokenAgoMs: 2500 }),
       false,
     );
+    assert.equal(isVoiceEcho("уже ходим", HELLO, { speaking: true }), false);
     assert.equal(isSocialHello("Привет"), true);
     assert.equal(isSocialHello("добрый день"), true);
     assert.equal(isSocialHello("уже ходим"), false);
