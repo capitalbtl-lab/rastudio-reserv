@@ -1483,9 +1483,19 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!customerId) return { ok: false as const, error: "Нет номера ученика." };
       const d = findDossier({ crmId: customerId });
       let crmPush = "";
+      const { alfaLinkedNow } = await import("./crm-alfa-link");
+      if (alfaLinkedNow() && customerId > 0) {
+        await import("./crm-journal-inbound")
+          .then((m) => m.inboundCustomerLessons(branch, customerId))
+          .catch(() => null);
+      }
       if (d?.child?.fio || customerId === 670) {
         const { isChudnovaAlexandra } = await import("./crm-pay-test-core");
-        if (customerId === 670 || (d?.child?.fio && isChudnovaAlexandra(d.child.fio))) {
+        const cal = (await import("./group-cards")).loadCustomerCalendar(customerId);
+        const trial = cal.find((l) => Number(l.typeId) === 3 || /пробн/i.test(String(l.type || "")));
+        if (Number(trial?.lessonId) > 0) {
+          crmPush = `Alfa #${trial?.lessonId} · ${trial?.date || ""} ${trial?.from || ""}`.trim();
+        } else if (customerId === 670 || (d?.child?.fio && isChudnovaAlexandra(d.child.fio))) {
           const booked = await import("./crm-trial-test")
             .then((m) => m.maybeBookChudnovaTrial())
             .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));

@@ -17,6 +17,15 @@ function ruShift(days: number) {
   return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
 }
 
+function ymd(raw?: string) {
+  const s = String(raw || "").trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
+  return s.slice(0, 10);
+}
+
 function packLight(
   item: {
     id?: number;
@@ -140,15 +149,6 @@ export async function inboundJournalGroup(
     rememberLessons(calendar);
   }
   return { ok: true as const, extra: `журнал ${gid}: ${calendar.length}`, count: calendar.length, calendar, card };
-}
-
-function ymd(raw?: string) {
-  const s = String(raw || "").trim();
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-  if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
-  return s.slice(0, 10);
 }
 
 function isOneOffLesson(item: { lesson_type_id?: number; group_ids?: number[] }) {
