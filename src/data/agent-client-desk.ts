@@ -12,6 +12,16 @@ import { digestPrompt, pauseUntilIso, STUDIO_RULES_SHORT, type ClientDigest } fr
 import { WEEKDAY_CHIPS, type SessionFacts } from "./agent-facts.ts";
 import { allowedLessonType, type BookSettings } from "./agent-book-kinds.ts";
 import { CLIENT_TOPICS } from "./agent-chips.ts";
+import { lessonDatesInRange } from "@/lib/trial-slot";
+import {
+  MAKEUP_WEEK_CHIPS,
+  makeupDateLabel,
+  pageMakeup,
+  rankMakeupSlots,
+  weekLabel,
+  weekWindow,
+  type MakeupWeek,
+} from "./agent-makeup.ts";
 
 export type { ClientDigest };
 export { digestPrompt };
@@ -46,21 +56,56 @@ const TOPIC_CHIPS = CLIENT_TOPICS.map((c) => ({
   primary: c.primary,
 }));
 
+type DeskChip = { label: string; send: string; primary?: boolean; note?: string };
+
 export async function makeupList(customerId: number, weekday: string) {
+  const pack = await makeupWeekSlots(customerId, "this", weekday);
+  return { digest: pack.digest, list: pack.list, courseLabel: pack.courseLabel };
+}
+
+export async function makeupWeekSlots(customerId: number, week: MakeupWeek, weekday?: string) {
   const d = clientDigest(customerId);
-  const empty = { digest: d, list: [] as { gid: string; when: string; chip: string; branchId: number; nextDate: string; timeFrom: string; courseId: string; subjectId?: number; teacherId?: number; teacher?: string; priority: number; seats: string }[], courseLabel: "" };
+  const empty = {
+    digest: d,
+    list: [] as (Awaited<ReturnType<typeof import("./alfacrm-schedule.ts").groupsForQuery>>[number] & {
+      at: number;
+      ownGid: boolean;
+      ownTeacher: boolean;
+    })[],
+    courseLabel: "",
+  };
   if (!d) return empty;
   const { groupsForQuery } = await import("./alfacrm-schedule.ts");
   const ids = [...new Set(d.groups.map((g) => g.courseId).filter(Boolean))];
+  const slots = listAdminSlots();
+  const ownGids = new Set(d.groups.map((g) => g.groupId));
+  const ownTeacherIds = new Set<number>();
+  const ownTeacherNames = new Set<string>();
+  for (const g of d.groups) {
+    const slot = slots.find((s) => s.groupId === g.groupId && s.branchId === g.branchId) || slots.find((s) => s.groupId === g.groupId);
+    if (slot?.teacherId) ownTeacherIds.add(Number(slot.teacherId));
+    const name = String(slot?.teacher || "").trim().toLowerCase();
+    if (name) ownTeacherNames.add(name);
+  }
+  const win = weekWindow(week);
   const seen = new Set<string>();
   const list = empty.list;
   for (const courseId of ids.slice(0, 4)) {
-    const part = await groupsForQuery({ courseId, weekday });
+    const part = await groupsForQuery({ courseId, weekday: weekday || undefined });
     for (const g of part) {
-      const key = `${g.gid}-${g.when}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      list.push(g);
+      const dates = lessonDatesInRange({ day: g.day || 0, timeFrom: g.timeFrom }, win.from, win.to);
+      const ownGid = ownGids.has(Number(g.gid));
+      const ownTeacher = Boolean(
+        (g.teacherId && ownTeacherIds.has(Number(g.teacherId))) ||
+          (g.teacher && ownTeacherNames.has(g.teacher.trim().toLowerCase())),
+      );
+      for (const at of dates) {
+        const nextDate = `${String(at.getDate()).padStart(2, "0")}.${String(at.getMonth() + 1).padStart(2, "0")}.${at.getFullYear()}`;
+        const key = `${g.gid}-${nextDate}-${g.timeFrom}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        list.push({ ...g, nextDate, at: at.getTime(), ownGid, ownTeacher });
+      }
     }
   }
   const courseLabel = d.groups.map((g) => g.name).filter(Boolean)[0] || ids[0] || "";
