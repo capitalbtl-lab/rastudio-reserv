@@ -12,6 +12,7 @@ import { HeroCollage } from "@/components/hero-collage";
 import { AgeChips } from "@/components/age-chips";
 import { Reviews } from "@/components/reviews";
 import { RobotEnglishVideos } from "@/components/robot-videos";
+import { SiteVideo } from "@/components/site-video";
 import { loadPublicEdits } from "@/data/load-site-page";
 import { hydrateEdits, pageEdit } from "@/data/edits-core";
 import { priceShort } from "@/data/prices-core";
@@ -249,12 +250,14 @@ function Home() {
             <h2 className="section-title mt-3">Это студия «Развивайся»</h2>
             <p className="mt-5 text-[0.98rem] leading-relaxed text-muted">{home.paragraphs[0]}</p>
           </div>
-          <SeoImage
-            src="/courses/intro-computers.jpg"
-            alt="Знакомство с компьютером и информационными технологиями в Коломне"
-            filename="Развивайся - Знакомство с компьютером и информационными технологиями в Коломне.png"
-            className="aspect-4/3 rounded-3xl bg-surface-2"
-          />
+          <div className="overflow-hidden rounded-3xl bg-header">
+            <SiteVideo
+              src="/media/home/hero.mp4"
+              title="Администратор на ресепшн Студии Развивайся"
+              mode="ambient"
+              className="aspect-[4/3] w-full"
+            />
+          </div>
         </div>
       </section>
 
