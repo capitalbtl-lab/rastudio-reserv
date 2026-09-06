@@ -373,6 +373,23 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "open_page",
+      description:
+        "Открыть родителю страницу сайта: курс, расписание, каталог или пробное. Только если агент внедрён на страницу и можно управлять поведением. Не admin, не api.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          path: { type: "string", description: "Путь /robototehnika-v-kolomne, /schedule, /allcourses или #trial" },
+          reason: { type: "string", description: "Зачем открываем, одно предложение" },
+        },
+        required: ["path"],
+      },
+    },
+  },
 ];
 
 const CLIENT_TOOLS = [
@@ -443,9 +460,10 @@ const CLIENT_TOOLS = [
   },
 ];
 
-function siteTools(canBook: boolean, identified = false, canJournal = true, canTariff = false) {
+function siteTools(canBook: boolean, identified = false, canJournal = true, canTariff = false, steer = false) {
   type Tool = (typeof TOOLS)[number] | (typeof CLIENT_TOOLS)[number];
   let list: Tool[] = canBook ? [...TOOLS] : TOOLS.filter((t) => t.function.name !== "submit_trial" && t.function.name !== "book_lesson");
+  if (!steer) list = list.filter((t) => t.function.name !== "open_page");
   if (!identified) return list;
   list = [...list, CLIENT_TOOLS[0]];
   if (canJournal) list = [...list, CLIENT_TOOLS[1], CLIENT_TOOLS[2]];
@@ -762,12 +780,25 @@ export const chatAgent = createServerFn({ method: "POST" })
         /* */
       }
     }
+    let pageHint = "";
+    let pageSteer = false;
+    if (!admin) {
+      try {
+        const { agentFor, pageAgentPrompt } = await import("./page-agents");
+        const pageAgent = agentFor(data.path || data.behavior?.path || "/");
+        pageHint = pageAgentPrompt(pageAgent, data.path || "/");
+        pageSteer = Boolean(pageAgent?.on && pageAgent.steer);
+      } catch {
+        /* */
+      }
+    }
     const system = admin
       ? ADMIN_SYSTEM + adminHint
       : clientSystem(soloWho, facts, facts.mode === "new" ? note.next : nextStepOf(facts)) +
         agentPromptAddons(facts, data.channel || channelId || "site") +
         knowledgeForAgent() +
         behave +
+        pageHint +
         factsPrompt(facts) +
         notePrompt(note) +
         dossierPrompt(file) +
@@ -786,6 +817,7 @@ export const chatAgent = createServerFn({ method: "POST" })
               Boolean(facts.identified && facts.customerId),
               settings.consultantCanJournal !== false,
               settings.consultantCanTariff === true,
+              pageSteer,
             );
         const json = await complete(messages, tools);
         if (!json) break;
@@ -954,6 +986,36 @@ export const chatAgent = createServerFn({ method: "POST" })
                   role: "tool",
                   tool_call_id: call.id,
                   content: "Курс не найден. Уточни название.",
+                });
+              }
+            } else if (call.function.name === "open_page") {
+              const { safeSitePath } = await import("./page-agents-core");
+              const { findCoursePage } = await import("./agent-courses");
+              const { loadSiteTree } = await import("./site-tree");
+              const want = String(args.path || "");
+              const path = want === "#trial" ? "#trial" : safeSitePath(want);
+              if (!path) {
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: "Путь нельзя открыть. Только страницы сайта, не кабинет.",
+                });
+              } else if (fromMessenger) {
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: "В мессенджере страницу не открыть. Дай ссылку rastudio.org" + path + " текстом.",
+                });
+              } else {
+                const hit = path.startsWith("#") ? null : findCoursePage(path, loadSiteTree());
+                const href = path === "#trial" ? "/#trial" : path;
+                const label = path === "#trial" ? "Пробное занятие" : hit?.name ? `Открыть: ${hit.name}` : path === "/schedule" ? "Расписание" : path === "/allcourses" ? "Все курсы" : `Открыть ${path}`;
+                open = href;
+                groups = [...groups.filter((g) => g.href !== href), { label, href, primary: true }];
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: `Страница ${href} сейчас откроется. В речи одно короткое предложение, зачем. Не говори URL.`,
                 });
               }
             } else if (call.function.name === "client_card" || call.function.name === "note_skip" || call.function.name === "pause_classes" || call.function.name === "assign_tariff") {
