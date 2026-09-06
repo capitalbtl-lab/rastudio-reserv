@@ -1036,6 +1036,10 @@ html.home-editing .mobile-dock {
   display: none !important;
 }
 
+html.home-editing main {
+  padding-bottom: 0;
+}
+
 html.home-editing .agent-shell {
   display: none !important;
 }
