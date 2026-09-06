@@ -208,6 +208,9 @@ export function guardReply(text: string, facts: SessionFacts) {
   if (facts.age) {
     drop(/[^.!?\n]*(сколько лет( ребёнк\w*)?|какой возраст|скажите[^.!?\n]{0,24}лет)[^.!?\n]*[.!?…]?/gi);
   }
+  if (facts.identified) {
+    drop(/[^.!?\n]*(это ваш ребёнок|нашл\w* на сайте)[^.!?\n]*[.!?…]?/gi);
+  }
   if (body.length < 8) {
     if (facts.city === "Коломна" && !facts.branchId) {
       body = "В Коломне два адреса: ЦМИТ на Октябрьской революции, 340 и Гражданская, 2. Какой ближе?";

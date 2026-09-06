@@ -88,7 +88,7 @@ export function chipsForReply(
       if (facts.intent === "отработка" && !facts.day) {
         return { hint: "День отработки", chips: WEEKDAY_CHIPS };
       }
-      if (facts.intent === "пауза") {
+      if (facts.intent === "пауза" && !facts.pauseUntil) {
         return {
           hint: "Срок паузы",
           chips: [

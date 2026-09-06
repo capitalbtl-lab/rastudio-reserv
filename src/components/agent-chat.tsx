@@ -8,7 +8,7 @@ import type { AgentUiFlags } from "@/data/agent-config";
 import { debugSession } from "@/data/debug-fn";
 import { speakAgent } from "@/data/agent-voice";
 import { saveChatLog } from "@/data/chat-logs-fn";
-import { nextChips } from "@/data/agent-chips";
+import { factsFromMessages } from "@/data/agent-facts";
 import { debugEmit } from "@/data/debug-client";
 import { readBehavior, tickBehavior } from "@/data/page-behavior";
 import { parseTurns, faceOf, type Who } from "@/data/agent-turns";
@@ -838,11 +838,24 @@ export function AgentChat() {
           const nextPath = String(res.open);
           window.setTimeout(() => goSitePath(nextPath), voiceOnRef.current ? 1400 : 700);
         }
-      } else reply = res.error || "Повторите, пожалуйста — я на связи.";
+      } else {
+        const facts = factsFromMessages(history);
+        const n = partnerRef.current === "oleg" ? "Олег" : "Ольга";
+        reply =
+          facts.mode === "client" && facts.identified
+            ? `${n}: ${facts.child || "Ребёнок"} уже в карточке. Напишите, что нужно — расписание, отработка, пропуск или абонемент.`
+            : res.error || "Повторите, пожалуйста — я на связи.";
+      }
     } catch (e) {
       debugEmit("net", { ok: false, ms: Date.now() - t0, error: e instanceof Error ? e.message : "сеть" });
       if (gen !== chatGenRef.current) return;
-      reply = "Повторите, пожалуйста — я на связи.";
+      const history = adminThread ? adminMsgsRef.current : clientMsgsRef.current;
+      const facts = factsFromMessages(history);
+      const n = partnerRef.current === "oleg" ? "Олег" : "Ольга";
+      reply =
+        facts.mode === "client" && facts.identified
+          ? `${n}: ${facts.child || "Ребёнок"} уже в карточке. Напишите, что нужно — расписание, отработка, пропуск или абонемент.`
+          : "Повторите, пожалуйста — я на связи.";
     }
     if (gen !== chatGenRef.current) return;
     if (reply.trim() && !(gate && reply === ADMIN_HELLO && adminMsgsRef.current.some((m) => m.content === ADMIN_HELLO))) {
