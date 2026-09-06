@@ -70,20 +70,18 @@ describe("голосовой контур: эхо и перебивание", ()
     assert.ok(ignoreAfterSpeakMs(true) < 1500);
   });
 
-  it("окно не глушит TTS по VAD колонок, держит распознавание", () => {
+  it("перебивание глушит TTS по голосу, повтор не ждёт запрос", () => {
     const chat = readFileSync(new URL("../components/agent-chat.tsx", import.meta.url), "utf8");
     assert.match(chat, /from "@\/data\/agent-voice-loop"/);
     assert.match(chat, /vadTick/);
     assert.match(chat, /srShouldRestart/);
     assert.match(chat, /bargeInterimReady/);
     assert.match(chat, /isSocialHello/);
-    assert.match(chat, /cancelSpeech\(\)/);
     assert.match(chat, /next\.fire && speakingRef/);
-    assert.match(chat, /busyRef\.current = false/);
     assert.match(chat, /replayLast/);
     assert.match(chat, /startListen\(\);\s*\n\s*if \(bargeRef/);
     assert.match(chat, /if \(!bargeInterimReady\(said, isFinal\)\) return;/);
     assert.match(chat, /cancelSpeech\(\);\s*\n\s*void send\(said\);/);
-    assert.match(chat, /el\.volume = Math.min\(el\.volume, 0\.28\)/);
+    assert.match(chat, /busyRef\.current = false;/);
   });
 });
