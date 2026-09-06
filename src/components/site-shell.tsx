@@ -8,8 +8,16 @@ import { Button } from "@/components/ui/button";
 import { bindIntersection } from "@/lib/intersection";
 import { organizationJsonLd } from "@/data/seo";
 import { JsonLd } from "@/components/json-ld";
-import { AgentChat } from "@/components/agent-chat";
 import { tickBehavior } from "@/data/page-behavior";
+
+function AgentChatLazy() {
+  const [Chat, setChat] = useState<ComponentType | null>(null);
+  useEffect(() => {
+    void import("@/components/agent-chat").then((m) => setChat(() => m.AgentChat));
+  }, []);
+  if (!Chat) return null;
+  return <Chat />;
+}
 
 function DebugDockLazy() {
   const [Dock, setDock] = useState<ComponentType<{ startAsk?: boolean }> | null>(null);
@@ -75,7 +83,7 @@ export function SiteShell({ children, bare }: { children: ReactNode; bare?: bool
         </div>
       </div>
       )}
-      <AgentChat />
+      <AgentChatLazy />
       <DebugDockLazy />
     </div>
   );

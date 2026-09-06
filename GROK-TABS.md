@@ -10,7 +10,9 @@
 4. Не плодить второй мозг, вторую карту ID, вторую воронку.
 5. Чужие файлы из таблицы вкладки не трогать. Нужно общее — написать человеку.
 
-Ядро (только вкладка A): `src/data/ids.ts`, `crm-disk-rules.ts`, `crm-local-id.ts`, `crm-export-queue*.ts`, `crm-packet-queue*.ts`, `crm-inbound*.ts`, `crm-alfa-link*.ts`, `dossiers*.ts`, `customer-card-disk.ts`, `schedule-map.ts`, `tariff-map.ts`, `public-bind*.ts`, схема `Brain` в `agent-config.ts`.
+Ядро (только вкладка A): см. `src/data/kernel.ts` (`KERNEL_FILES`).
+Не расширять список и не переименовывать ключи без этой вкладки.
+`src/data/ids.ts`, `crm-disk-rules.ts`, `crm-local-id.ts`, очередь Alfa, `dossiers*.ts`, карты course/tariff, схема `Brain` в `agent-config.ts`.
 
 ---
 
