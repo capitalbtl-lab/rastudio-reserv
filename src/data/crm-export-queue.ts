@@ -18,7 +18,7 @@ import { logAdmin } from "./admin-settings";
 
 const MAX_TRIES = 5;
 const BUSY_MS = 45000;
-const g = globalThis as { __raCrmExportBusy?: boolean; __raCrmExportBusyAt?: number; __raCrmExportFollow?: ReturnType<typeof setTimeout> };
+const g = globalThis as { __raCrmExportBusy?: boolean; __raCrmExportBusyAt?: number; __raCrmExportFollow?: ReturnType<typeof setTimeout>; __raPayTestKick?: boolean };
 
 function fileOf() {
   return join(process.cwd(), "storage", "crm-export-queue.json");
@@ -77,6 +77,11 @@ function followExport() {
 }
 
 export async function tickExportQueue(take = 2) {
+  if (!g.__raPayTestKick) {
+    g.__raPayTestKick = true;
+    const { maybeRunChudnovaPayTest } = await import("./crm-pay-test");
+    await maybeRunChudnovaPayTest().catch(() => null);
+  }
   if (g.__raCrmExportBusy) {
     if (g.__raCrmExportBusyAt && Date.now() - g.__raCrmExportBusyAt > BUSY_MS) g.__raCrmExportBusy = false;
     else return crmExportSnapshot();
