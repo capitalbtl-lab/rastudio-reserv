@@ -1013,7 +1013,7 @@ export function AgentChat() {
     setText("");
     if (wasIn && voiceOnRef.current) {
       const back = "Ольга: Вернулись к консультации для родителей.";
-      void speak(back).then(() => {
+      void maybeSpeak(back).then(() => {
         if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
       });
     } else if (voiceOnRef.current) {
@@ -1036,7 +1036,7 @@ export function AgentChat() {
     setGroupChips([]);
     setText("");
     if (voiceOnRef.current) {
-      void speak(ADMIN_ASK).then(() => {
+      void maybeSpeak(ADMIN_ASK).then(() => {
         if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
       });
     }
@@ -1060,7 +1060,7 @@ export function AgentChat() {
       /* */
     }
     const spoken = [...(inAdminUi ? adminMsgsRef.current : clientMsgsRef.current)].reverse().find((m) => m.role === "assistant")?.content;
-    if (spoken) await speak(spoken);
+    if (spoken) await maybeSpeak(spoken);
     if (voiceOnRef.current) startListen();
   }
 
@@ -1150,13 +1150,21 @@ export function AgentChat() {
                   chatSid(true);
                   awaitingCodeRef.current = false;
                   setAwaitingCode(false);
-                  if (adminLeft() > 0) setAdminMsgs([{ role: "assistant", content: ADMIN_HELLO }]);
-                  else {
+                  if (adminLeft() > 0) {
+                    adminMsgsRef.current = [{ role: "assistant", content: ADMIN_HELLO }];
+                    setAdminMsgs(adminMsgsRef.current);
+                  } else {
                     clientMsgsRef.current = [{ role: "assistant", content: greeting(partner, pageAgent) }];
                     setClientMsgs(clientMsgsRef.current);
                   }
                   setGroupChips([]);
                   setText("");
+                  if (voiceOnRef.current) {
+                    const hello = adminLeft() > 0 ? ADMIN_HELLO : greeting(partner, pageAgent);
+                    void maybeSpeak(hello).then(() => {
+                      if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
+                    });
+                  }
                 }}
               >
                 <RotateCcw className="size-4" />
