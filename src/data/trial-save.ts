@@ -113,7 +113,14 @@ export async function saveTrialLead(data: TrialPayload) {
     /* карта или слоты недоступны */
   }
   const kind = String(data.kind || "trial");
-  const kindLabel = kind === "group" ? "групповое" : kind === "trial" ? "пробное" : kind;
+  const { resolveLessonType } = await import("./alfacrm");
+  const { lessonCreatePolicy } = await import("./lesson-type-rules");
+  const type = resolveLessonType(kind) || resolveLessonType("trial")!;
+  const policy = lessonCreatePolicy(type.id);
+  const kindLabel = type.name.toLowerCase();
+  const gidNum = data.gid && /^\d+$/.test(data.gid) ? Number(data.gid) : 0;
+  const useGid = policy.allowGroup && gidNum ? gidNum : 0;
+  const attach = policy.attachCgi && gidNum ? gidNum : 0;
   const branchId = Number(branch) || 2;
   const note = trialNoteLine({
     parent,
@@ -134,15 +141,65 @@ export async function saveTrialLead(data: TrialPayload) {
     /* заводской Разбирается */
   }
   const lesson = {
-    type: kind,
+    type: type.key,
+    lesson_type_id: type.id,
     subjectId: subjectId || undefined,
-    gid: data.gid,
+    subject_id: subjectId || undefined,
+    gid: useGid ? String(useGid) : "",
     date: data.date,
+    lesson_date: data.date,
     time: data.time,
+    time_from: data.time,
     duration: data.duration,
     note,
     teacherId: Number(data.teacherId) || undefined,
+    teacher_ids: Number(data.teacherId) ? [Number(data.teacherId)] : undefined,
   };
+  async function stampCalendar(customerId: number) {
+    if (!data.date || !data.time || !subjectId || !customerId) return;
+    try {
+      const { nextLocalLessonId, upsertCustomerCalendar } = await import("./group-cards");
+      const { stampJournal } = await import("./crm-journal-core");
+      const { isoFromRu } = await import("./crm-dates").catch(async () => {
+        const iso = String(data.date || "");
+        const m = iso.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+        return { isoFromRu: (d: string) => {
+          const x = String(d).match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+          return x ? `${x[3]}-${x[2].padStart(2, "0")}-${x[1].padStart(2, "0")}` : d;
+        } };
+      });
+      const from = String(data.time).replace(".", ":").slice(0, 5);
+      const mins = Number(data.duration) || 90;
+      const [h, m] = from.split(":").map(Number);
+      const tot = ((h || 0) * 60 + (m || 0) + mins) % (24 * 60);
+      const to = `${String(Math.floor(tot / 60)).padStart(2, "0")}:${String(tot % 60).padStart(2, "0")}`;
+      const dateIso = typeof isoFromRu === "function" ? isoFromRu(String(data.date)) : String(data.date);
+      upsertCustomerCalendar(
+        customerId,
+        stampJournal(
+          {
+            date: dateIso,
+            from,
+            to,
+            status: 1,
+            type: type.name,
+            typeId: type.id,
+            duration: mins,
+            subjectId,
+            teacherIds: Number(data.teacherId) ? [Number(data.teacherId)] : [],
+            groupIds: useGid ? [useGid] : [],
+            customerIds: [customerId],
+            note,
+            lessonId: nextLocalLessonId(),
+            group: data.groupName || type.name,
+          },
+          [customerId],
+        ),
+      );
+    } catch {
+      /* календарь */
+    }
+  }
   try {
     const { findDossier, upsertDossier } = await import("./dossiers");
     const { cachePutLead, forgetLead } = await import("./crm-leads");

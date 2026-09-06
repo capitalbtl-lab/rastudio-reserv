@@ -1645,6 +1645,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
     }
     if (data.action === "customerLesson") {
       const { resolveLessonType, formatRuDob } = await import("./alfacrm");
+      const { lessonAllowsGroup, lessonOmitsRoom } = await import("./lesson-type-rules");
       const { enqueueExport } = await import("./crm-export-queue");
       const customerId = Number(data.customerId) || 0;
       if (!customerId) return { ok: false as const, error: "Нет customerId." };
@@ -1685,7 +1686,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           subjectId,
           teacherIds: teacherId ? [teacherId] : [],
           roomId,
-          groupIds: gid ? [gid] : [],
+          groupIds: gid && lessonAllowsGroup(type.id) ? [gid] : [],
           customerIds: [customerId],
           topic: String(data.topic || ""),
           note: String(data.note || `${type.name} с сайта rastudio.org`),
@@ -1718,9 +1719,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
           duration,
           subject_id: subjectId,
           customer_ids: [customerId],
-          ...(roomId ? { room_id: roomId } : {}),
-          ...(gid && type.id !== 3 && type.id !== 1 && type.id !== 5 ? { group_ids: [gid] } : {}),
-          ...(teacherId && type.id !== 3 ? { teacher_ids: [teacherId] } : {}),
+          ...(roomId && !lessonOmitsRoom(type.id) ? { room_id: roomId } : {}),
+          ...(gid && lessonAllowsGroup(type.id) ? { group_ids: [gid] } : {}),
+          ...(teacherId ? { teacher_ids: [teacherId] } : {}),
           ...(data.topic ? { topic: String(data.topic) } : {}),
           note: data.note || `${type.name} с сайта rastudio.org`,
         },

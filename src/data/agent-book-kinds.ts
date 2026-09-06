@@ -115,5 +115,9 @@ export function bookTypesPrompt(s: BookSettings) {
   for (const f of BOOK_TYPE_FLAGS) {
     (flagOf(s, f.id) ? on : off).push(f.title);
   }
-  return `Каждый тип — то же правило, что пробное: book_lesson с lesson_type. Можно ставить: ${on.join(", ") || "ничего"}.${off.length ? ` Нельзя: ${off.join(", ")}.` : ""} Индивидуальное и сверхурочное — teacher_id + дата и время.`;
+  return [
+    `Каждый тип — book_lesson с lesson_type. Можно: ${on.join(", ") || "ничего"}.${off.length ? ` Нельзя: ${off.join(", ")}.` : ""}`,
+    "Alfa: пробное/вводное/индивидуальное/разовые — БЕЗ group_ids, зал не слать если занят. Групповое и отработка — group_ids, отработка в cgi не пишется.",
+    "Групповое: gid обязателен. Отработка: неделя → три слота того же курса у того же педагога. Индивидуальное и сверхурочное: teacher_id + дата и время.",
+  ].join(" ");
 }

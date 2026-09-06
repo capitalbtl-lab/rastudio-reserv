@@ -1,6 +1,7 @@
 import { serverEnv } from "./server-env";
 import { formatRuPhone } from "./ru-phone";
 import { crmIndexAccumTotal, crmIndexShouldStop, crmUnwrapIndex } from "./crm-leads-stages";
+import { lessonAllowsGroup, lessonOmitsRoom } from "./lesson-type-rules";
 
 const HOST = () => (serverEnv("ALFACRM_HOST") || "https://studiyarazvivaysya.s20.online").replace(/\/$/, "");
 const EMAIL = () => serverEnv("ALFACRM_EMAIL") || process.env.ALFACRM_EMAIL || "";
@@ -410,9 +411,9 @@ export async function createAlfaLesson(opts: {
   let duration = Number(opts.duration) || 90;
   let teacherIds: number[] = Number(opts.teacherId) > 0 ? [Number(opts.teacherId)] : [];
   const hintGid = opts.gid && /^\d+$/.test(opts.gid) ? Number(opts.gid) : 0;
-  const allowGroup = type.id === 2 || type.id === 4 || type.id === 10 || type.id === 11;
+  const allowGroup = lessonAllowsGroup(type.id);
   const gid = allowGroup ? hintGid : 0;
-  let roomId: number | undefined = type.id === 3 ? undefined : Number(opts.roomId) > 0 ? Number(opts.roomId) : undefined;
+  let roomId: number | undefined = lessonOmitsRoom(type.id) ? undefined : Number(opts.roomId) > 0 ? Number(opts.roomId) : undefined;
   if (hintGid) {
     const slot = await slotFromGid(opts.branch, hintGid, t).catch(() => null);
     if (slot) {
@@ -421,7 +422,7 @@ export async function createAlfaLesson(opts: {
       if (!opts.duration) duration = durationOf(slot.time_from_v, slot.time_to_v, duration);
       if (!date && slot.day) date = nextDateForCrmDay(Number(slot.day));
       if (!teacherIds.length) teacherIds = slot.teacher_ids || [];
-      if (!roomId && slot.room_id && type.id !== 3) roomId = slot.room_id;
+      if (!roomId && slot.room_id && !lessonOmitsRoom(type.id)) roomId = slot.room_id;
     }
   }
   if (!date) date = nextDateForCrmDay(moscowParts().day === 7 ? 1 : moscowParts().day + 1);
