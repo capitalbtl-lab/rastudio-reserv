@@ -888,6 +888,7 @@ export function AdminTariffs({ embedId, onEmbedClose }: { embedId?: number; onEm
                           subQ={subQ}
                           setSubQ={setSubQ}
                           groups={branch ? opened.groups.filter((g) => g.branchId === branch) : opened.groups}
+                          hideDelete={Boolean(embedId)}
                           onPatch={(next) => patch(opened.id, next)}
                           onSave={async () => {
                             const current = items.find((x) => x.id === opened.id) || opened;
@@ -1517,6 +1518,7 @@ function Editor({
   onSave,
   onPush,
   onDelete,
+  hideDelete,
 }: {
   t: Row;
   busy: boolean;
@@ -1535,6 +1537,7 @@ function Editor({
   onSave: () => Promise<{ ok?: boolean; error?: string } | void>;
   onPush: () => Promise<{ ok?: boolean; error?: string } | void>;
   onDelete: () => Promise<{ ok?: boolean; error?: string } | void>;
+  hideDelete?: boolean;
 }) {
   const [note, setNote] = useState("");
   const [moreTypes, setMoreTypes] = useState(false);
@@ -1789,7 +1792,9 @@ function Editor({
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           {note ? <p className={cn("max-w-xs text-right text-[0.75rem]", /не |ошиб|сбой|сесс/i.test(note) ? "text-rose-700" : "text-primary")}>{note}</p> : null}
           <div className="flex flex-wrap justify-end gap-1.5">
+            {hideDelete ? null : (
             <Button type="button" variant="ghost" className="h-8 px-3 text-[0.78rem] text-rose-700 hover:bg-rose-50" disabled={busy} onClick={() => void onDelete()}>Удалить</Button>
+            )}
             <Button type="button" variant="secondary" className="h-8 px-3 text-[0.78rem]" disabled={busy} onClick={async () => {
               setNote("Сохраняю на сайте…");
               const res = await onSave();
