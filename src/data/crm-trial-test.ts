@@ -85,6 +85,8 @@ export async function maybeBookChudnovaTrial() {
   if (mark.done === TRIAL_TEST_ID) return { skipped: "done" as const, note: String(mark.note || "уже отправлено") };
   g.__raTrialTest = true;
   try {
+    const { ensureChudnovaTrialDisk } = await import("./crm-trial-disk");
+    ensureChudnovaTrialDisk({ customerId: 670, branchId: 1, name: PAY_TEST_NAME, teacherId: 2, subjectId: TRIAL_TEST_SUBJECT });
     const { token, request, resolveLessonType, formatRuDob, createAlfaLesson } = await import("./alfacrm");
     const { findDossier } = await import("./dossiers");
     const { listAdminSlots } = await import("./alfacrm-schedule");

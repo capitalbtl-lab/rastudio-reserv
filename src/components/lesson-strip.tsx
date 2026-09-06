@@ -24,6 +24,8 @@ function isOneOffLesson(l: GroupCalLesson) {
   const t = Number(l.typeId || 0);
   return t === 3 || t === 1 || t === 4 || t === 5 || t === 10 || t === 11 || /пробн|отработ|вводн|индивид/i.test(String(l.type || ""));
 }
+
+export function todayYmd() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -589,7 +591,7 @@ export function LessonStrip({
       const days = Number(range);
       const from = shiftYmd(today, -days);
       const to = shiftYmd(today, days);
-      pool = all.filter((l) => l.date >= from && l.date <= to);
+      pool = all.filter((l) => (l.date >= from && l.date <= to) || isOneOffLesson(l));
     }
     const pastAll = pool.filter((l) => l.date < today);
     const futureAll = pool.filter((l) => l.date > today);

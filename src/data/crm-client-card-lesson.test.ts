@@ -28,6 +28,10 @@ describe("форма занятия карточки", () => {
     assert.match(src, /const lessonRoomCount = lessonRooms.filter/);
     assert.match(src, /card.crmPush/);
     assert.match(src, /data-op="crm-push"/);
+    const strip = readFileSync(new URL("../components/lesson-strip.tsx", import.meta.url), "utf8");
+    assert.match(strip, /isOneOffLesson/);
+    assert.match(strip, /bg-amber-100/);
+    assert.match(strip, /all.filter\(isOneOffLesson\)/);
   });
 
   it("расписание импортирует reload — иначе вкладка не открывается", () => {
