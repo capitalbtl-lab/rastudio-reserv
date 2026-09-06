@@ -18,11 +18,12 @@ describe("касса Alfa по филиалам", () => {
     assert.equal(defaultPayItemId(1), 2);
   });
 
-  it("ЦМИТ, Луховицы, Лето: не подставлять локацию Гражданской", () => {
-    assert.equal(locationIdForBranch(2), 0);
-    assert.equal(locationIdForBranch(3), 0);
-    assert.equal(locationIdForBranch(4), 0);
+  it("ЦМИТ, Луховицы, Лето: свой location_id = филиал", () => {
+    assert.equal(locationIdForBranch(2), 2);
+    assert.equal(locationIdForBranch(3), 3);
+    assert.equal(locationIdForBranch(4), 4);
     assert.equal(locationBelongsToBranch(1, 2), false);
+    assert.equal(locationBelongsToBranch(2, 2), true);
     assert.equal(locationBelongsToBranch(1, 3), false);
     assert.match(locationsOfBranch(2)[0].name, /ЦМИТ/);
     assert.match(locationsOfBranch(3)[0].name, /Луховицы/);
@@ -59,7 +60,7 @@ describe("касса Alfa по филиалам", () => {
     assert.equal(body.pay_account_id, 1);
   });
 
-  it("pay.create ЦМИТ не уносит location_id=1", () => {
+  it("pay.create ЦМИТ — location_id 2, не Гражданская", () => {
     const body = packAlfaPayCreate({
       customerId: 100,
       branchId: 2,
@@ -73,7 +74,18 @@ describe("касса Alfa по филиалам", () => {
       payItemId: 2,
     });
     assert.equal(body.location_id, undefined);
-    assert.equal(body.pay_item_id, 2);
+    const cmit = packAlfaPayCreate({
+      customerId: 100,
+      branchId: 2,
+      documentDate: "06.09.2026",
+      income: 3000,
+      expenditure: 0,
+      note: "",
+      localId: -3,
+      kind: "income",
+      payItemId: 2,
+    });
+    assert.equal(cmit.location_id, 2);
     const lukh = packAlfaPayCreate({
       customerId: 101,
       branchId: 3,
@@ -84,7 +96,7 @@ describe("касса Alfa по филиалам", () => {
       localId: -4,
       kind: "income",
     });
-    assert.equal(lukh.location_id, undefined);
+    assert.equal(lukh.location_id, 3);
     const summer = packAlfaPayCreate({
       customerId: 102,
       branchId: 4,
@@ -96,7 +108,7 @@ describe("касса Alfa по филиалам", () => {
       kind: "income",
       payItemId: 11,
     });
-    assert.equal(summer.location_id, undefined);
+    assert.equal(summer.location_id, 4);
     assert.equal(summer.pay_item_id, 11);
   });
 });
