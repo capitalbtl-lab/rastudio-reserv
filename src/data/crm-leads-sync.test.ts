@@ -508,7 +508,9 @@ describe("воронка: F5 не тянет полную Alfa", () => {
     assert.match(src, /boardFromDisk/);
     assert.match(src, /await syncLeadsDelta/);
     const ui = readFileSync(new URL("../components/admin-clients.tsx", import.meta.url), "utf8");
-    assert.match(ui, /loadFunnel\(branch, false, true\)/);
+    assert.match(ui, /loadFunnel\(branch, false, false, true\)/);
+    assert.match(ui, /25_000/);
+    assert.match(src, /syncLeadsBoardLight/);
     assert.match(ui, /Загрузить «Лидов»/);
   });
 });

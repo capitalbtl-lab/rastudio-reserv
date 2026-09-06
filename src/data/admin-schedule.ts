@@ -1170,6 +1170,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         stageIds?: number[];
         force?: boolean;
         delta?: boolean;
+        light?: boolean;
         color?: string;
         branchId?: number;
         isStudy?: number;

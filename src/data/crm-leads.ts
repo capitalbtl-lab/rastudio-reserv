@@ -560,7 +560,7 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false,
   const key = String(branchId || 0);
   const hit = bag().get(key);
   const { wantAlfaPull, wantAlfaDelta } = await import("./crm-alfa-link");
-  if (!wantAlfaPull(force) && !wantAlfaDelta(delta)) {
+  if (!wantAlfaPull(force) && !wantAlfaDelta(delta || light)) {
     if (hit?.items.length) {
       const items = withoutStudents(hit.items);
       if (items.length !== hit.items.length) {
