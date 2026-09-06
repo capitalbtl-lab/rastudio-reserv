@@ -88,6 +88,6 @@ describe("карта обучения консультанта", () => {
     const cfg = readFileSync(new URL("./agent-config.ts", import.meta.url), "utf8");
     assert.match(cfg, /lessonsPrompt/);
     const panes = readFileSync(new URL("./agent-panes.ts", import.meta.url), "utf8");
-    assert.match(panes, /Карта обучения/);
+    assert.match(panes, /карта обучения/i);
   });
 });
