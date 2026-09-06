@@ -22,6 +22,12 @@ describe("ядро: границы вкладок", () => {
     assert.match(rules, /customerId/);
     assert.ok(KERNEL_KEYS.includes("groupId"));
     assert.ok(KERNEL_KEYS.includes("customerId"));
+    const nodes = src("src/data/agent-section-guides-data.ts");
+    for (const k of KERNEL_KEYS) {
+      assert.match(nodes, new RegExp(`id: "${k}"`));
+      assert.match(src("src/data/agent-section-guides-data.ts"), new RegExp(k));
+    }
+    assert.match(src("src/components/admin-section-guides.tsx"), /Карта связей/);
   });
 
   it("публичный сайт не ходит в Alfa и не тащит кабинет", () => {
