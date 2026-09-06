@@ -331,6 +331,7 @@ export function AdminClients({
   const [funnelItems, setFunnelItems] = useState<LeadCard[]>(() => funnelSnapGet(0)?.items || funnelSnapGet(clientsSnap?.branch || 0)?.items || []);
   const [funnelStages, setFunnelStages] = useState<LeadStage[]>(() => funnelSnapGet(clientsSnap?.branch || 0)?.stages || LEAD_STAGES);
   const [funnelLoading, setFunnelLoading] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const [funnelW, setFunnelW] = useState(400);
   const [funnelNote, setFunnelNote] = useState("");
   const funnelWRef = useRef(400);
@@ -699,6 +700,29 @@ export function AdminClients({
       const next = res.customer as CustomerCard;
       setCard(next);
       applyLiveStatus(card.id, card.branchId, next);
+    }
+  }
+
+  async function reloadScreen() {
+    if (reloading || pull.open) return;
+    setReloading(true);
+    try {
+      if (statusRef.current === "лид" && viewRef.current === "дети") {
+        await loadFunnel(branchRef.current, false, false, true);
+      }
+      await load(qRef.current, statusRef.current, branchRef.current, ageRef.current);
+      const id = activeIdRef.current;
+      if (id && viewRef.current === "дети") {
+        const row = rowsRef.current.find((r) => Number(r.crmId) === id);
+        await openRow(row || emptyRow(id, branchRef.current || 1));
+      }
+      if (viewRef.current === "группы" && pickedGroup) {
+        groupPack.current.delete(`${pickedGroup.branchId}:${pickedGroup.groupId}`);
+        await openGroupSlot(pickedGroup);
+      }
+      void loadLiveTariffs(true);
+    } finally {
+      setReloading(false);
     }
   }
 
@@ -1310,13 +1334,14 @@ export function AdminClients({
 
           <button
             type="button"
-            className="ml-auto grid size-10 shrink-0 place-items-center rounded-full text-fg hover:bg-surface-2"
-            title="Перезагрузить кабинет, как F5"
-            aria-label="Перезагрузить кабинет"
+            className="ml-auto grid size-10 shrink-0 place-items-center rounded-full text-fg hover:bg-surface-2 disabled:opacity-50"
+            title="Обновить список и карточку без перезагрузки страницы"
+            aria-label="Обновить кабинет"
             data-op="reload-admin"
-            onClick={() => window.location.reload()}
+            disabled={reloading || pull.open}
+            onClick={() => void reloadScreen()}
           >
-            <RefreshCw className="h-4 w-4" aria-hidden />
+            <RefreshCw className={cn("h-4 w-4", reloading && "animate-spin")} aria-hidden />
           </button>
         </div>
         <div className="mt-1 flex flex-wrap items-center justify-end gap-1">
