@@ -1,41 +1,44 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { allowedLessonType, BOOK_TYPE_FLAGS, bookTypesPrompt, type BookSettings } from "./agent-book-kinds.ts";
+import { allowedLessonType, BOOK_TYPE_FLAGS, bookTypesPrompt, emptyBookFlags, type BookSettings } from "./agent-book-kinds.ts";
 
 function book(partial: Partial<BookSettings>): BookSettings {
   return {
     consultantCanBook: true,
-    consultantCanBookTrial: true,
-    consultantCanBookGroup: true,
-    consultantCanBookMakeup: true,
-    consultantCanBookOvertime: true,
-    consultantCanBookExtra: true,
-    consultantCanBookIndividual: true,
-    consultantCanBookOther: true,
+    ...emptyBookFlags(true),
     ...partial,
   };
 }
 
 describe("окно агента: права и типы занятий", () => {
-  it("allowedLessonType смотрит галочку типа, не название", () => {
+  it("каждый тип Alfa — своя галочка, одно правило book_lesson", () => {
     const s = book({
       consultantCanBookTrial: true,
       consultantCanBookGroup: false,
       consultantCanBookOvertime: true,
       consultantCanBookIndividual: false,
-      consultantCanBookOther: true,
+      consultantCanBookMaster: true,
+      consultantCanBookIntro: false,
     });
     assert.equal(allowedLessonType(s, "trial"), true);
-    assert.equal(allowedLessonType(s, "intro"), true);
+    assert.equal(allowedLessonType(s, "intro"), false);
     assert.equal(allowedLessonType(s, "group"), false);
     assert.equal(allowedLessonType(s, "overtime"), true);
     assert.equal(allowedLessonType(s, "individual"), false);
     assert.equal(allowedLessonType(s, "master"), true);
+    assert.equal(allowedLessonType(s, "мастер-класс"), true);
     assert.equal(allowedLessonType(book({ consultantCanBook: false, consultantCanBookTrial: true }), "trial"), false);
-    assert.match(bookTypesPrompt(s), /Пробное/);
-    assert.match(bookTypesPrompt(s), /Запись в группу/);
-    assert.equal(BOOK_TYPE_FLAGS.length, 7);
+    assert.equal(BOOK_TYPE_FLAGS.length, 15);
+    assert.match(bookTypesPrompt(s), /то же правило, что пробное/);
+    assert.match(bookTypesPrompt(s), /Мастер-класс/);
+  });
+
+  it("старый сейв «прочие» раскладывается на отдельные типы", () => {
+    const off = book({ consultantCanBookOther: false });
+    delete (off as { consultantCanBookMaster?: boolean }).consultantCanBookMaster;
+    assert.equal(allowedLessonType(off, "master"), false);
+    assert.equal(allowedLessonType(off, "trial"), true);
   });
 
   it("старый journal раскладывается, skip и pause в окне раздельно", () => {
@@ -46,8 +49,9 @@ describe("окно агента: права и типы занятий", () => {
     assert.match(cfg, /id: "consultantCanSkip"/);
     assert.match(cfg, /id: "consultantCanPause"/);
     assert.doesNotMatch(cfg, /id: "consultantCanJournal"/);
-    assert.match(cfg, /consultantCanBookTrial: flag/);
+    assert.match(cfg, /consultantCanBookTrial/);
     assert.match(cfg, /consultantCanBookOther: flag/);
+    assert.match(cfg, /BOOK_TYPE_FLAGS\.map/);
     const win = readFileSync(new URL("../components/admin-agent.tsx", import.meta.url), "utf8");
     assert.match(win, /BOOK_TYPE_FLAGS\.map/);
     assert.match(win, /ROLE_FLAGS\.map/);

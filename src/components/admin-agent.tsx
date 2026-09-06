@@ -198,7 +198,7 @@ export function AdminAgent() {
           <div>
             <h3 className="font-display text-xl">Какие занятия консультант ставит</h3>
             <p className="mt-1 max-w-2xl text-sm text-muted">
-              Групповые, пробные, сверхурочные, дополнительные, индивидуальные и прочие у педагогов. Работает, если «Консультант записывает сам» включён.
+              Каждый тип — то же правило: book_lesson в Alfa со своим lesson_type. Выключен — Ольга не ставит, даёт телефон.
             </p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {BOOK_TYPE_FLAGS.map((f) => (

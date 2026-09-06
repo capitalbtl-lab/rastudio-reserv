@@ -735,13 +735,7 @@ export const chatAgent = createServerFn({ method: "POST" })
           const s = loadBrain().settings;
           const rights = {
             consultantCanBook: s.consultantCanBook !== false,
-            consultantCanBookTrial: s.consultantCanBookTrial !== false,
-            consultantCanBookGroup: s.consultantCanBookGroup !== false,
-            consultantCanBookMakeup: s.consultantCanBookMakeup !== false,
-            consultantCanBookOvertime: s.consultantCanBookOvertime !== false,
-            consultantCanBookExtra: s.consultantCanBookExtra !== false,
-            consultantCanBookIndividual: s.consultantCanBookIndividual !== false,
-            consultantCanBookOther: s.consultantCanBookOther !== false,
+            ...Object.fromEntries(BOOK_TYPE_FLAGS.map((f) => [f.id, s[f.id] !== false])),
             consultantCanSkip: s.consultantCanSkip !== false,
             consultantCanPause: s.consultantCanPause !== false,
             consultantCanTariff: s.consultantCanTariff === true,

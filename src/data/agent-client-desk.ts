@@ -10,7 +10,7 @@ import { loadTariffs, matchTariffs } from "./crm-tariffs.ts";
 import { enqueueExport } from "./crm-export-queue.ts";
 import { digestPrompt, pauseUntilIso, STUDIO_RULES_SHORT, type ClientDigest } from "./agent-client-desk-core.ts";
 import { WEEKDAY_CHIPS, type SessionFacts } from "./agent-facts.ts";
-import { allowedLessonType, type BookSettings } from "./agent-book-kinds.ts";
+import { allowedLessonType, emptyBookFlags, type BookSettings } from "./agent-book-kinds.ts";
 import { CLIENT_TOPICS } from "./agent-chips.ts";
 import { lessonDatesInRange } from "@/lib/trial-slot";
 import {
@@ -34,13 +34,7 @@ export type DeskRights = BookSettings & {
 
 const OPEN_RIGHTS: DeskRights = {
   consultantCanBook: true,
-  consultantCanBookTrial: true,
-  consultantCanBookGroup: true,
-  consultantCanBookMakeup: true,
-  consultantCanBookOvertime: true,
-  consultantCanBookExtra: true,
-  consultantCanBookIndividual: true,
-  consultantCanBookOther: true,
+  ...emptyBookFlags(true),
   consultantCanSkip: true,
   consultantCanPause: true,
   consultantCanTariff: false,
