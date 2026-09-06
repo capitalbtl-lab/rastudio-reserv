@@ -241,7 +241,7 @@ function scheduleBody() {
   const tabs = SCHEDULE_TABS.map((t) => `### ${t.title} [${t.id}]\n${t.body}`).join("\n\n");
   const ops = SCHEDULE_OPS.map((o) => `- ${o.id} · ${o.title}: ${o.body}`).join("\n");
   const never = SCHEDULE_NEVER.map((n) => `- ${n}`).join("\n");
-  return `ИНСТРУКЦИЯ РАЗДЕЛА «Расписание занятий» для ИИ. Метод: Карта ID. REV ${GUIDE_REV}. Точка восстановления: ромашка 8.
+  return `ИНСТРУКЦИЯ РАЗДЕЛА «Расписание занятий» для ИИ. Метод: Карта ID. REV ${GUIDE_REV}. Точка восстановления: ромашка 9.
 Где лежит: Ассистент ИИ → База знаний ИИ. Источник правил раздела. Агент читает этот текст при каждом запросе.
 
 Правило: сущность ТОЛЬКО по ID. Правда на диске сайта. AlfaCRM догоняет очередью: customer.create/update, group.update, regular-lesson.update, cgi.apply, customer-tariff.create/clear, lesson.create/update, pay.create. Не опрашивать API, если есть customerId/groupId.
@@ -833,7 +833,7 @@ function tariffsBody() {
     .join("\n");
   return `ИНСТРУКЦИЯ РАЗДЕЛА «Абонементы» для ИИ. Карта ID. REV ${GUIDE_REV}.
 Где лежит: Ассистент ИИ → База знаний ИИ → Абонементы.
-Точка восстановления: ромашка 8.
+Точка восстановления: ромашка 9.
 
 ИИ сам вешает, меняет срок и снимает абонементы учеников по ID, без угадывания по имени. Писать в CRM только если adminVoiceCanWrite. Родителю (Олег/Ольга) мастер не открывать: абонемент — оплата, запись на пробное его не требует.
 
