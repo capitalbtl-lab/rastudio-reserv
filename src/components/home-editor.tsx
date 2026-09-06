@@ -406,6 +406,23 @@ export function HomeEditorChrome() {
           Изменения сразу на сайте, как публикация в Тильде. Ctrl+Z — шаг назад.
         </p>
       </aside>
+      {studioOpen ? (
+        <div className="ve-ui fixed inset-x-3 bottom-3 top-[7.1rem] z-50 overflow-auto rounded-2xl bg-header p-4 text-header-fg shadow-[0_16px_40px_-18px_rgba(0,0,0,.55)] lg:hidden">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold">Студия</p>
+            <button type="button" className="text-[0.78rem] underline" onClick={() => setStudioOpen(false)}>
+              закрыть
+            </button>
+          </div>
+          <StudioPanel
+            slot={selected}
+            onLayout={(layout) => setDoc(layout)}
+            onPickMedia={(src) => {
+              if (selected) setDoc(setHomeMedia(doc, selected, src));
+            }}
+          />
+        </div>
+      ) : null}
     </>
   );
 }

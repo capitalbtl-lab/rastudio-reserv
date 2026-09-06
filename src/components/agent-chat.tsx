@@ -10,11 +10,14 @@ import { speakAgent } from "@/data/agent-voice";
 import { saveChatLog } from "@/data/chat-logs-fn";
 import { nextChips } from "@/data/agent-chips";
 import { debugEmit } from "@/data/debug-client";
-import { readBehavior } from "@/data/page-behavior";
+import { readBehavior, tickBehavior } from "@/data/page-behavior";
 import { parseTurns, faceOf, type Who } from "@/data/agent-turns";
 import { PageLink } from "@/components/page-link";
 import { SITE } from "@/data/site";
 import { cn } from "@/lib/utils";
+import { publicPageAgent } from "@/data/page-agents-fn";
+import type { PageAgent } from "@/data/page-agents-core";
+import { useRouterState } from "@tanstack/react-router";
 
 type Rec = {
   lang: string;
@@ -36,9 +39,23 @@ type Msg = { role: "user" | "assistant"; content: string };
 type Mood = "hello" | "think" | "happy" | "sorry";
 const SILENCE = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
-function greeting(who: "oleg" | "olga", _voice = false) {
+function greeting(who: "oleg" | "olga", page?: PageAgent | null) {
   const name = who === "olga" ? "Ольга" : "Олег";
+  const custom = String(page?.greeting || "").replace(/^(Олег|Ольга):\s*/i, "").trim();
+  if (page?.on && custom) return `${name}: ${custom}`;
   return `${name}: Здравствуйте. Я ${name}, студия «Развивайся». Вы уже занимаетесь у нас или подбираете впервые?`;
+}
+
+function goSitePath(path: string) {
+  if (!path) return;
+  if (path === "#trial" || path.endsWith("#trial")) {
+    const el = document.getElementById("trial") || document.querySelector("#trial");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    else window.location.assign("/#trial");
+    return;
+  }
+  if (path === window.location.pathname) return;
+  window.location.assign(path);
 }
 const DUAL_HELLO = /Олег: Здравствуйте[\s\S]*Ольга:/;
 const ADMIN_ASK = "Ольга: Режим управления сайтом. Назовите кодовое слово.";
@@ -183,6 +200,8 @@ function noisyAdmin(text: string) {
 }
 
 export function AgentChat() {
+  const path = useRouterState({ select: (s) => s.location.pathname || "/" });
+  const [pageAgent, setPageAgent] = useState<PageAgent | null>(null);
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -275,6 +294,45 @@ export function AgentChat() {
     const id = window.setInterval(() => setAdminMs(adminLeft()), 10000);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    tickBehavior();
+    void publicPageAgent({ data: { path } }).then((res) => {
+      if (res.ok) setPageAgent(res.agent || null);
+    });
+  }, [path]);
+
+  useEffect(() => {
+    if (!pageAgent?.on) return;
+    setClientMsgs((prev) => {
+      if (prev.some((m) => m.role === "user")) return prev;
+      const who = partnerRef.current;
+      return [{ role: "assistant", content: greeting(who, pageAgent) }];
+    });
+    if (pageAgent.who === "oleg" || pageAgent.who === "olga") {
+      setPartner(pageAgent.who);
+      writePartner(pageAgent.who);
+    }
+  }, [pageAgent]);
+
+  useEffect(() => {
+    if (!pageAgent?.on || !pageAgent.autoOpenSec || open) return;
+    const key = `ra_agent_auto:${pageAgent.path}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+    } catch {
+      /* */
+    }
+    const t = window.setTimeout(() => {
+      try {
+        sessionStorage.setItem(key, "1");
+      } catch {
+        /* */
+      }
+      setOpen(true);
+    }, pageAgent.autoOpenSec * 1000);
+    return () => window.clearTimeout(t);
+  }, [pageAgent, open]);
 
   useEffect(() => {
     void publicAgentUi().then((res) => {
@@ -775,6 +833,10 @@ export function AgentChat() {
         }
         if ("signup" in res && res.signup) {
           window.open(String(res.signup), "_blank", "noopener,noreferrer");
+        }
+        if ("open" in res && res.open) {
+          const nextPath = String(res.open);
+          window.setTimeout(() => goSitePath(nextPath), voiceOnRef.current ? 1400 : 700);
         }
       } else reply = res.error || "Повторите, пожалуйста — я на связи.";
     } catch (e) {
