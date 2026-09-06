@@ -168,7 +168,9 @@ export async function tickExportQueue(take = 2) {
           const ids = Array.isArray(job.body.customer_ids) ? job.body.customer_ids.map(Number) : [];
           const customerId = ids.find((n) => n > 0) || Number(job.entityId) || 0;
           if (customerId <= 0) throw new Error("занятие ждёт номер клиента в Alfa");
-          const gid = job.body.gid != null ? String(job.body.gid) : Array.isArray(job.body.group_ids) ? String(job.body.group_ids[0] || "") : "";
+          const kind = String(job.body.type || job.body.lesson_type_id || "trial");
+          const gidRaw = job.body.gid != null ? String(job.body.gid) : Array.isArray(job.body.group_ids) ? String(job.body.group_ids[0] || "") : "";
+          const gid = kind === "trial" || kind === "3" || kind === "Пробное" ? "" : gidRaw;
           const booked = await createAlfaLesson({
             branch: job.branchId,
             customerId,

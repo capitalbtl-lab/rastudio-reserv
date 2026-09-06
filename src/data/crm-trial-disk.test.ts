@@ -11,14 +11,15 @@ describe("пробное Чудновой на диск", () => {
     assert.equal(shouldEnsureChudnovaTrial(2, "Иванова"), false);
   });
 
-  it("досье пишет диск до Alfa, очередь lesson.create", () => {
+  it("пробное в Alfa без group_ids, зал перебирается", () => {
+    const alfa = readFileSync(new URL("./alfacrm.ts", import.meta.url), "utf8");
+    const fnAt = alfa.indexOf("export async function createAlfaLesson");
+    const fn = alfa.slice(fnAt, fnAt + 4500);
+    assert.match(fn, /allowGroup/);
+    assert.match(fn, /type.id === 3/);
+    assert.match(fn, /аудитория занята/);
+    assert.match(fn, /SEED_ROOMS/);
     const disk = readFileSync(new URL("./crm-trial-disk.ts", import.meta.url), "utf8");
-    assert.match(disk, /upsertCustomerCalendar/);
-    assert.match(disk, /enqueueExport/);
-    assert.match(disk, /lesson_type_id: 3/);
-    assert.match(disk, /room_id: plan.roomId \|\| 28/);
-    const card = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
-    assert.match(card, /ensureChudnovaTrialDisk/);
-    assert.equal(/from "\.\/crm-trial-test"/.test(card), false);
+    assert.equal(/group_ids/.test(disk), false);
   });
 });

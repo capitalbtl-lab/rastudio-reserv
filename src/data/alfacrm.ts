@@ -440,33 +440,36 @@ export async function createAlfaLesson(opts: {
     const tot = (Number(hh) || 0) * 60 + (Number(mm) || 0) + duration;
     const timeTo = `${String(Math.floor((tot % (24 * 60)) / 60)).padStart(2, "0")}:${String((tot % (24 * 60)) % 60).padStart(2, "0")}`;
     for (const rid of rooms) {
-      const created = await request<{ success?: boolean; errors?: unknown; model?: { id?: number }; id?: number; data?: { id?: number } }>(
-        `/v2api/${opts.branch}/lesson/create`,
-        {
-          lesson_type_id: type.id,
-          lesson_date: date,
-          time_from: tm,
-          time_to: timeTo,
-          duration,
-          subject_id: subjectId,
-          customer_ids: [opts.customerId],
-          ...(gid ? { group_ids: [gid] } : {}),
-          ...(teacherIds.length && type.id !== 3 ? { teacher_ids: teacherIds } : {}),
-          ...(rid ? { room_id: rid } : {}),
-          ...(opts.topic ? { topic: opts.topic } : {}),
-          note: opts.note || `${type.name} с сайта rastudio.org`,
-        },
-        t,
-      );
-      const id = Number(created.model?.id || created.id || created.data?.id) || 0;
-      if (created.success !== false && id) {
-        return { ok: true as const, id, date, time: tm, duration, type: type.name, typeId: type.id, roomId: rid || undefined };
+      try {
+        const created = await request<{ success?: boolean; errors?: unknown; model?: { id?: number }; id?: number; data?: { id?: number } }>(
+          `/v2api/${opts.branch}/lesson/create`,
+          {
+            lesson_type_id: type.id,
+            lesson_date: date,
+            time_from: tm,
+            time_to: timeTo,
+            duration,
+            subject_id: subjectId,
+            customer_ids: [opts.customerId],
+            ...(gid ? { group_ids: [gid] } : {}),
+            ...(teacherIds.length && type.id !== 3 ? { teacher_ids: teacherIds } : {}),
+            ...(rid ? { room_id: rid } : {}),
+            ...(opts.topic ? { topic: opts.topic } : {}),
+            note: opts.note || `${type.name} с сайта rastudio.org`,
+          },
+          t,
+        );
+        const id = Number(created.model?.id || created.id || created.data?.id) || 0;
+        if (created.success !== false && id) {
+          return { ok: true as const, id, date, time: tm, duration, type: type.name, typeId: type.id, roomId: rid || undefined };
+        }
+        lastErr = JSON.stringify(created.errors || created);
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : String(e);
       }
-      const err = JSON.stringify(created.errors || created);
-      lastErr = err;
-      if (/аудитория занята/i.test(err)) continue;
-      if (/нельзя добавить группу/i.test(err) && gid) break;
-      throw new Error(`alfacrm-lesson ${err}`);
+      if (/аудитория занята/i.test(lastErr)) continue;
+      if (/нельзя добавить группу/i.test(lastErr)) continue;
+      throw new Error(`alfacrm-lesson ${lastErr}`);
     }
     if (!/аудитория занята/i.test(lastErr)) break;
   }

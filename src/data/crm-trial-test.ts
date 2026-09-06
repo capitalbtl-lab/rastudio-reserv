@@ -100,16 +100,30 @@ export async function maybeBookChudnovaTrial() {
         saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note });
         return { skipped: "exists" as const, customerId: who.id, note };
       }
-      const { tickExportQueue } = await import("./crm-export-queue");
-      await tickExportQueue(2);
-      const after = loadCustomerCalendar(who.id).find((l) => Number(l.lessonId) > 0 && (Number(l.typeId) === 3 || /пробн/i.test(String(l.type || ""))));
-      const alfaId = Number(after?.lessonId) || 0;
-      const note = alfaId > 0 ? `${who.name} #${who.id} Alfa #${alfaId}` : `${who.name} #${who.id} пробное на диске ${existing.date} ${existing.from || ""}, очередь Alfa`;
-      if (alfaId > 0) saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note });
-      else saveMark({ done: "", at: new Date().toISOString(), note });
-      return alfaId > 0
-        ? { ok: true as const, customerId: who.id, lessonId: alfaId, note }
-        : { ok: false as const, error: note, customerId: who.id, lessonId: lid };
+      try {
+        const booked = await createAlfaLesson({
+          branch: who.branchId,
+          customerId: who.id,
+          type: "trial",
+          subjectId: Number((existing as { subjectId?: number }).subjectId) || TRIAL_TEST_SUBJECT,
+          date: ruFromIso(existing.date) || TRIAL_TEST_DATE,
+          time: String(existing.from || TRIAL_TEST_TIME),
+          duration: 90,
+          note: `пробное rastudio.org · ${PAY_TEST_NAME}`,
+          roomId: Number((existing as { roomId?: number }).roomId) || 0,
+        });
+        if (booked.ok && booked.id) {
+          applyCreatedCalendarLesson(lid, Number(booked.id));
+          const note = `${who.name} #${who.id} Alfa #${booked.id} · ${booked.date} ${booked.time}`;
+          saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note });
+          logAdmin(`Пробное Чудновой: ${note}`, "sync");
+          return { ok: true as const, customerId: who.id, lessonId: Number(booked.id), note };
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        saveMark({ done: "", at: new Date().toISOString(), note: msg.slice(0, 400) });
+        return { ok: false as const, error: msg, customerId: who.id, lessonId: lid };
+      }
     }
     const d = findDossier({ crmId: who.id });
     const link = (d?.groupLinks || []).find((x) => x.active !== false) || (d?.groupLinks || [])[0];
