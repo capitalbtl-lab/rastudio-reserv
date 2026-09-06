@@ -409,48 +409,68 @@ export async function createAlfaLesson(opts: {
   let time = String(opts.time || "").replace(".", ":").slice(0, 5);
   let duration = Number(opts.duration) || 90;
   let teacherIds: number[] = Number(opts.teacherId) > 0 ? [Number(opts.teacherId)] : [];
+  const hintGid = opts.gid && /^\d+$/.test(opts.gid) ? Number(opts.gid) : 0;
+  const allowGroup = type.id === 2 || type.id === 4 || type.id === 10 || type.id === 11;
+  const gid = allowGroup ? hintGid : 0;
   let roomId: number | undefined = Number(opts.roomId) > 0 ? Number(opts.roomId) : undefined;
-  const gid = opts.gid && /^\d+$/.test(opts.gid) ? Number(opts.gid) : 0;
-  if (gid) {
-    const slot = await slotFromGid(opts.branch, gid, t).catch(() => null);
+  if (hintGid) {
+    const slot = await slotFromGid(opts.branch, hintGid, t).catch(() => null);
     if (slot) {
       if (!subjectId) subjectId = Number(slot.subject_id) || 0;
       if (!time) time = String(slot.time_from_v || "").slice(0, 5);
       if (!opts.duration) duration = durationOf(slot.time_from_v, slot.time_to_v, duration);
       if (!date && slot.day) date = nextDateForCrmDay(Number(slot.day));
       if (!teacherIds.length) teacherIds = slot.teacher_ids || [];
-      if (!roomId && slot.room_id) roomId = slot.room_id;
+      if (!roomId && slot.room_id && type.id !== 3) roomId = slot.room_id;
     }
   }
   if (!date) date = nextDateForCrmDay(moscowParts().day === 7 ? 1 : moscowParts().day + 1);
   if (!time) time = "16:00";
   if (!subjectId) return { ok: false as const, error: "no-subject" as const };
-  const [hh, mm] = time.split(":").map(Number);
-  const tot = (Number(hh) || 0) * 60 + (Number(mm) || 0) + duration;
-  const timeTo = `${String(Math.floor((tot % (24 * 60)) / 60)).padStart(2, "0")}:${String((tot % (24 * 60)) % 60).padStart(2, "0")}`;
-  const created = await request<{ success?: boolean; errors?: unknown; model?: { id?: number }; id?: number; data?: { id?: number } }>(
-    `/v2api/${opts.branch}/lesson/create`,
-    {
-      lesson_type_id: type.id,
-      lesson_date: date,
-      time_from: time,
-      time_to: timeTo,
-      duration,
-      subject_id: subjectId,
-      customer_ids: [opts.customerId],
-      ...(gid ? { group_ids: [gid] } : {}),
-      ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
-      ...(roomId ? { room_id: roomId } : {}),
-      ...(opts.topic ? { topic: opts.topic } : {}),
-      note: opts.note || `${type.name} с сайта rastudio.org`,
-    },
-    t,
-  );
-  const id = Number(created.model?.id || created.id || created.data?.id) || 0;
-  if (created.success === false || !id) {
-    throw new Error(`alfacrm-lesson ${JSON.stringify(created.errors || created)}`);
+  const { SEED_ROOMS } = await import("./crm-rooms");
+  const rooms = [
+    roomId || 0,
+    ...SEED_ROOMS.filter((r) => r.branchId === opts.branch && r.id !== roomId).map((r) => r.id),
+    0,
+  ].filter((id, i, a) => a.indexOf(id) === i);
+  const times = [time, "17:30", "15:00", "10:00"].filter((x, i, a) => a.indexOf(x) === i);
+  let lastErr = "";
+  for (const tm of times) {
+    const [hh, mm] = tm.split(":").map(Number);
+    const tot = (Number(hh) || 0) * 60 + (Number(mm) || 0) + duration;
+    const timeTo = `${String(Math.floor((tot % (24 * 60)) / 60)).padStart(2, "0")}:${String((tot % (24 * 60)) % 60).padStart(2, "0")}`;
+    for (const rid of rooms) {
+      const created = await request<{ success?: boolean; errors?: unknown; model?: { id?: number }; id?: number; data?: { id?: number } }>(
+        `/v2api/${opts.branch}/lesson/create`,
+        {
+          lesson_type_id: type.id,
+          lesson_date: date,
+          time_from: tm,
+          time_to: timeTo,
+          duration,
+          subject_id: subjectId,
+          customer_ids: [opts.customerId],
+          ...(gid ? { group_ids: [gid] } : {}),
+          ...(teacherIds.length && type.id !== 3 ? { teacher_ids: teacherIds } : {}),
+          ...(rid ? { room_id: rid } : {}),
+          ...(opts.topic ? { topic: opts.topic } : {}),
+          note: opts.note || `${type.name} с сайта rastudio.org`,
+        },
+        t,
+      );
+      const id = Number(created.model?.id || created.id || created.data?.id) || 0;
+      if (created.success !== false && id) {
+        return { ok: true as const, id, date, time: tm, duration, type: type.name, typeId: type.id, roomId: rid || undefined };
+      }
+      const err = JSON.stringify(created.errors || created);
+      lastErr = err;
+      if (/аудитория занята/i.test(err)) continue;
+      if (/нельзя добавить группу/i.test(err) && gid) break;
+      throw new Error(`alfacrm-lesson ${err}`);
+    }
+    if (!/аудитория занята/i.test(lastErr)) break;
   }
-  return { ok: true as const, id, date, time, duration, type: type.name, typeId: type.id };
+  throw new Error(`alfacrm-lesson ${lastErr || "не создался"}`);
 }
 
 export type AlfaLead = {
