@@ -13,6 +13,7 @@ import { clientCardId, groupCardId, CABINET_ID, CRM_BRANCH } from "@/data/ids";
 import { displayPersonName, displayParent, initialsOf, statusLabel } from "@/data/client-display";
 import { cn } from "@/lib/utils";
 import { ADMIN_PANEL_BLUE, RA_POP, agoRu } from "@/data/admin-ui";
+import { useAdminReload } from "@/components/admin-reload-btn";
 import { LessonStrip, GroupLessonStrip } from "@/components/lesson-strip";
 import { CrmGroupMembers, GroupLoadScene } from "@/components/crm-group-card";
 import { CrmLeadBoard } from "@/components/crm-lead-board";
@@ -726,6 +727,10 @@ export function AdminClients({
     }
   }
 
+  useAdminReload(() => {
+    void reloadScreen();
+  });
+
   async function openById(customerId: number, branchId: number) {
     const crmId = Number(customerId) || 0;
     if (!crmId) return;
@@ -1331,18 +1336,6 @@ export function AdminClients({
           {liveTariffBusy && tariffProgress && !tariffProgress.extra.includes("хранилищ") ? (
             <p className="px-1 py-1 text-[0.72rem] text-muted">{tariffProgress.extra || "Обновляю абонементы…"}</p>
           ) : null}
-
-          <button
-            type="button"
-            className="ml-auto grid size-10 shrink-0 place-items-center rounded-full text-fg hover:bg-surface-2 disabled:opacity-50"
-            title="Обновить список и карточку без перезагрузки страницы"
-            aria-label="Обновить кабинет"
-            data-op="reload-admin"
-            disabled={reloading || pull.open}
-            onClick={() => void reloadScreen()}
-          >
-            <RefreshCw className={cn("h-4 w-4", reloading && "animate-spin")} aria-hidden />
-          </button>
         </div>
         <div className="mt-1 flex flex-wrap items-center justify-end gap-1">
             <button
