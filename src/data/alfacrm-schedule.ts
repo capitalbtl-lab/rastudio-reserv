@@ -581,6 +581,7 @@ export type LiveGroup = {
   seats: string;
   wait: number;
   teacher: string;
+  teacherId?: number;
   timeFrom: string;
   timeTo: string;
   nextDate: string;
@@ -710,6 +711,7 @@ export async function groupsForQuery(q: {
       seats,
       wait: waitDays(crmDayOf(session.when)),
       teacher: slot.teacher || "",
+      teacherId: slot.teacherId || 0,
       timeFrom: slot.timeFrom || "",
       timeTo: slot.timeTo || "",
       nextDate,

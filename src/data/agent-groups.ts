@@ -148,6 +148,7 @@ export function agentGroupLine(g: {
   short?: string;
   when?: string;
   teacher?: string;
+  teacherId?: number;
   taken?: number;
   limit?: number;
   seats?: string;
@@ -166,6 +167,7 @@ export function agentGroupLine(g: {
     g.short || "",
     g.when || "",
     g.teacher || "",
+    g.teacherId ? `teacherId=${g.teacherId}` : "",
     `состав ${g.taken ?? 0}/${g.limit || "—"}`,
     g.seats || "",
     g.nextDate ? `ближайшее ${g.nextDate} ${g.timeFrom || ""}` : "",

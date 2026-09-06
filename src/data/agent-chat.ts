@@ -110,6 +110,7 @@ id курсов для заявки: ${TRIAL_COURSES.map((c) => `${c.id} ${c.nam
 Пропуск — note_skip. Пауза — pause_classes.
 Отработка — list_groups по courseId из карточки на день, который назвал родитель. Не только gid своей группы: если в ней нет этого дня или мест, предложи другую группу того же курса. Затем book_lesson makeup. Не предлагай пробное вместо отработки.
 Абонемент — остаток и пометку с диска. assign_tariff только если галочка в настройках.
+Индивидуальное и сверхурочное: обязательны педагог teacher_id, дата и время. teacher_id бери из list_groups (teacherId=). Дополнительное — дата, время, subject_id. Прочие (мастер-класс, открытый, экскурсия, лагерь, событие, собеседование, продлёнка, лето) — book_lesson с lesson_type из списка, не выдумывай тип.
 `;
 }
 
@@ -318,6 +319,7 @@ const TOOLS = [
             description:
               "trial | group | makeup отработка | intro вводное | extra дополнительное | overtime сверхурочное | individual индивидуальное | master | open | excursion | camp | event | interview | aftercare продленка | summer",
           },
+          teacher_id: { type: "number", description: "teacherId педагога из list_groups. Обязателен для individual и overtime." },
         },
         required: ["parent", "child", "phone", "branch_id", "lesson_type"],
       },
@@ -739,8 +741,21 @@ export const chatAgent = createServerFn({ method: "POST" })
       }
       if (facts.identified && facts.customerId) {
         try {
-          const { lockedClientTurn } = await import("./agent-client-desk");
-          const deskLock = await lockedClientTurn(soloWho, facts);
+          const desk = await import("./agent-client-desk");
+          const s = loadBrain().settings;
+          const deskLock = await desk.lockedClientTurn(soloWho, facts, {
+            consultantCanBook: s.consultantCanBook !== false,
+            consultantCanBookTrial: s.consultantCanBookTrial !== false,
+            consultantCanBookGroup: s.consultantCanBookGroup !== false,
+            consultantCanBookMakeup: s.consultantCanBookMakeup !== false,
+            consultantCanBookOvertime: s.consultantCanBookOvertime !== false,
+            consultantCanBookExtra: s.consultantCanBookExtra !== false,
+            consultantCanBookIndividual: s.consultantCanBookIndividual !== false,
+            consultantCanBookOther: s.consultantCanBookOther !== false,
+            consultantCanSkip: s.consultantCanSkip !== false,
+            consultantCanPause: s.consultantCanPause !== false,
+            consultantCanTariff: s.consultantCanTariff === true,
+          });
           if (deskLock) {
             return { ok: true as const, reply: deskLock.reply, token: granted, reload: false, groups: deskLock.chips };
           }

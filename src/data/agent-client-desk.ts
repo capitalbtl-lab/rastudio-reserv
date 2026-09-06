@@ -41,7 +41,7 @@ function phoneHint() {
 
 export async function makeupList(customerId: number, weekday: string) {
   const d = clientDigest(customerId);
-  const empty = { digest: d, list: [] as { gid: string; when: string; chip: string; branchId: number; nextDate: string; timeFrom: string; courseId: string; subjectId?: number; priority: number; seats: string }[], courseLabel: "" };
+  const empty = { digest: d, list: [] as { gid: string; when: string; chip: string; branchId: number; nextDate: string; timeFrom: string; courseId: string; subjectId?: number; teacherId?: number; priority: number; seats: string }[], courseLabel: "" };
   if (!d) return empty;
   const { groupsForQuery } = await import("./alfacrm-schedule.ts");
   const ids = [...new Set(d.groups.map((g) => g.courseId).filter(Boolean))];
@@ -60,7 +60,7 @@ export async function makeupList(customerId: number, weekday: string) {
   return { digest: d, list, courseLabel };
 }
 
-export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts) {
+export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts, rights: DeskRights = OPEN_RIGHTS) {
   if (facts.wantsBook || facts.wantsSkip) return null;
   if (facts.mode !== "client" || !facts.identified || !facts.customerId) return null;
   const n = who === "olga" ? "Ольга" : "Олег";
@@ -76,7 +76,9 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
   }
   if (intent === "абонемент") {
     return {
-      reply: `${n}: ${child}: абонемент ${d?.tariff || "нет пометки"}, остаток ${d ? d.balance : "—"}.`,
+      reply: rights.consultantCanTariff
+        ? `${n}: ${child}: абонемент ${d?.tariff || "нет пометки"}, остаток ${d ? d.balance : "—"}. Назвать tariffId, чтобы повесить, или хватит остатка?`
+        : `${n}: ${child}: абонемент ${d?.tariff || "нет пометки"}, остаток ${d ? d.balance : "—"}. Назначить абонемент может администратор по телефону 8 (800) 511-34-01.`,
       chips: [],
     };
   }
@@ -87,6 +89,9 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
     };
   }
   if (intent === "пауза") {
+    if (rights.consultantCanPause === false) {
+      return { reply: `${n}: Паузу ставит администратор. ${phoneHint()}`, chips: [] };
+    }
     if (facts.pauseUntil) return null;
     return {
       reply: `${n}: На какой срок поставить паузу ${child}? Напишите дату «до …» или выберите срок.`,
@@ -98,6 +103,9 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
     };
   }
   if (intent === "пропуск") {
+    if (rights.consultantCanSkip === false) {
+      return { reply: `${n}: Пропуск отмечает администратор. ${phoneHint()}`, chips: [] };
+    }
     return {
       reply: `${n}: Отметить, что ${child} не придёт на ближайшее${d?.nextLesson ? ` (${d.nextLesson})` : ""}?`,
       chips: [
@@ -107,6 +115,9 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
     };
   }
   if (intent === "отработка") {
+    if (!allowedLessonType(rights, "makeup")) {
+      return { reply: `${n}: Отработку ставит администратор. ${phoneHint()}`, chips: [] };
+    }
     if (!facts.day) {
       return {
         reply: `${n}: На какой день поставить отработку ${child}? Если в своей группе нет этого дня — посмотрю другие группы того же курса.`,
@@ -125,7 +136,7 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
       reply: `${n}: На ${facts.day} ${found} ${open.length} групп того же курса. Нажмите слот — поставлю отработку.`,
       chips: open.slice(0, 8).map((g, i) => ({
         label: `Отработка · ${g.chip}`,
-        send: `Поставьте отработку gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""}`,
+        send: `Поставьте отработку gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""} teacher_id=${g.teacherId || ""}`,
         primary: i === 0,
       })),
     };
