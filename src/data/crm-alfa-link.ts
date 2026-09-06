@@ -5,7 +5,6 @@ import {
   alfaLinked,
   alfaSyncOf,
   deltaAllowed,
-  exportOpPushChannel,
   pullAllowed,
   pullFreshAllowed,
   pushAllowed,

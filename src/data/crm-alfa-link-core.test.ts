@@ -6,13 +6,21 @@ import {
   alfaLinkOf,
   alfaSyncOf,
   exportOpPushChannel,
+  pushAllowed,
+  pullAllowed,
+  deltaAllowed,
+  pullFreshAllowed,
   ALFA_LINK_MODES,
   ALFA_PULL_CH,
   ALFA_PUSH_CH,
+  ALFA_SYNC_DEFAULT,
 } from "./crm-alfa-link-core.ts";
 
-describe("связь с AlfaCRM", () => {
-  it("по умолчанию linked, offline только явно", () => {
+const linked = { mode: "linked" as const, ...ALFA_SYNC_DEFAULT };
+const offline = { mode: "offline" as const, ...ALFA_SYNC_DEFAULT };
+
+describe("режим фона с AlfaCRM", () => {
+  it("по умолчанию linked, все каналы включены", () => {
     assert.equal(alfaLinked(), true);
     assert.equal(alfaLinked("linked"), true);
     assert.equal(alfaLinked("offline"), false);
@@ -22,28 +30,76 @@ describe("связь с AlfaCRM", () => {
       ALFA_LINK_MODES.map((m) => m.id),
       ["linked", "offline"],
     );
-    assert.equal(alfaSyncOf(null).pull.leads, true);
-    assert.equal(alfaSyncOf({ pull: { leads: false } }).pull.leads, false);
-    assert.equal(alfaSyncOf({ pull: { leads: false } }).push.trials, true);
-    assert.equal(exportOpPushChannel("customer.create", { is_study: 0 }), "trials");
-    assert.equal(exportOpPushChannel("customer.create", { lesson: { type: "trial" } }), "trials");
-    assert.equal(exportOpPushChannel("lesson.create", {}), "lessons");
-    assert.equal(exportOpPushChannel("lead-status.update", {}), "leads");
     assert.equal(ALFA_PULL_CH.length, 3);
     assert.equal(ALFA_PUSH_CH.length, 7);
+    assert.equal(ALFA_SYNC_DEFAULT.pull.leads, true);
+    assert.equal(ALFA_SYNC_DEFAULT.push.trials, true);
   });
 
-  it("очередь и fresh не стучатся в Alfa в режиме offline", () => {
+  it("alfaSyncOf мержит только указанные флаги, минуты 2…60", () => {
+    const offLeads = alfaSyncOf({ pull: { leads: false } });
+    assert.equal(offLeads.pull.leads, false);
+    assert.equal(offLeads.pull.clients, true);
+    assert.equal(offLeads.push.trials, true);
+    const fromCur = alfaSyncOf({ push: { trials: false } }, offLeads);
+    assert.equal(fromCur.pull.leads, false);
+    assert.equal(fromCur.push.trials, false);
+    assert.equal(fromCur.push.lessons, true);
+    assert.equal(alfaSyncOf({ minutes: 1 }).minutes, 2);
+    assert.equal(alfaSyncOf({ minutes: 99 }).minutes, 60);
+    assert.equal(alfaSyncOf({ minutes: 15 }).minutes, 15);
+  });
+
+  it("пробное Ольги — канал trials, занятие trial тоже", () => {
+    assert.equal(exportOpPushChannel("customer.create", { is_study: 0 }), "trials");
+    assert.equal(exportOpPushChannel("customer.create", { lesson: { type: "trial" } }), "trials");
+    assert.equal(exportOpPushChannel("lesson.create", { type: "trial", via: "createAlfaLesson" }), "trials");
+    assert.equal(exportOpPushChannel("lesson.create", { type: "regular" }), "lessons");
+    assert.equal(exportOpPushChannel("lesson.create", {}), "lessons");
+    assert.equal(exportOpPushChannel("cgi.apply", {}), "groups");
+    assert.equal(exportOpPushChannel("customer-tariff.create", {}), "tariffs");
+    assert.equal(exportOpPushChannel("pay.create", {}), "pay");
+    assert.equal(exportOpPushChannel("lead-status.update", {}), "leads");
+    assert.equal(exportOpPushChannel("customer.update", {}), "clients");
+    assert.equal(exportOpPushChannel("customer.create", { is_study: 1 }), "leads");
+  });
+
+  it("offline: ни дельта, ни fresh, ни выгрузка", () => {
+    assert.equal(deltaAllowed(offline, true), false);
+    assert.equal(pullFreshAllowed(offline, true), false);
+    assert.equal(pullAllowed(offline, "leads"), false);
+    assert.equal(pushAllowed(offline, "customer.create", { is_study: 0 }), false);
+    assert.equal(pushAllowed(offline, "lesson.create", { type: "trial" }), false);
+  });
+
+  it("linked + выключенные каналы: диск можно, Alfa нет", () => {
+    const noTrials = { ...linked, push: { ...linked.push, trials: false } };
+    const noLeadsPull = { ...linked, pull: { ...linked.pull, leads: false } };
+    assert.equal(pushAllowed(linked, "customer.create", { is_study: 0 }), true);
+    assert.equal(pushAllowed(noTrials, "customer.create", { is_study: 0 }), false);
+    assert.equal(pushAllowed(noTrials, "lesson.create", { type: "trial" }), false);
+    assert.equal(pushAllowed(noTrials, "lesson.create", { type: "regular" }), true);
+    assert.equal(pushAllowed(noTrials, "cgi.apply", {}), true);
+    assert.equal(deltaAllowed(linked, true), true);
+    assert.equal(deltaAllowed(linked, false), false);
+    assert.equal(deltaAllowed(noLeadsPull, true), false);
+    assert.equal(pullFreshAllowed(noLeadsPull, true), true);
+    assert.equal(pullAllowed({ ...linked, pull: { ...linked.pull, clients: false } }, "clients"), false);
+    assert.equal(pullAllowed({ ...linked, pull: { ...linked.pull, clients: false } }, "leads"), true);
+  });
+
+  it("очередь и кабинет режут Alfa до импорта alfacrm", () => {
     const exp = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
     const tickAt = exp.indexOf("export async function tickExportQueue");
-    const chunk = exp.slice(tickAt, tickAt + 1400);
+    const chunk = exp.slice(tickAt, tickAt + 1600);
     assert.match(chunk, /alfaLinkedNow/);
     assert.match(chunk, /wantAlfaPush/);
     assert.match(chunk, /без Alfa/);
-    assert.equal(chunk.indexOf("await import(\"./alfacrm\")") > chunk.indexOf("if (!alfaLinkedNow())"), true);
+    assert.ok(chunk.indexOf("await import(\"./alfacrm\")") > chunk.indexOf("if (!alfaLinkedNow())"));
     const pack = readFileSync(new URL("./crm-packet-queue.ts", import.meta.url), "utf8");
     assert.match(pack, /if \(!alfaLinkedNow\(\)\)/);
     assert.match(pack, /wantAlfaPullChannel\("clients"\)/);
+    assert.match(pack, /wantAlfaPullChannel\("lessons"\)/);
     assert.match(pack, /extra: "без Alfa"/);
     const sched = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(sched, /wantAlfaPull\(data.fresh\)/);
@@ -52,9 +108,16 @@ describe("связь с AlfaCRM", () => {
     assert.match(ui, /Фон с AlfaCRM/);
     assert.match(ui, /ALFA_PUSH_CH/);
     assert.match(ui, /ALFA_PULL_CH/);
+    assert.match(ui, /saveSync/);
     const link = readFileSync(new URL("./crm-alfa-link.ts", import.meta.url), "utf8");
     assert.match(link, /wantAlfaDelta/);
     assert.match(link, /wantAlfaPush/);
-    assert.match(link, /pull.leads/);
+    assert.match(link, /deltaAllowed/);
+    assert.match(link, /pushAllowed/);
+    const save = readFileSync(new URL("./trial-save.ts", import.meta.url), "utf8");
+    assert.match(save, /enqueueExport/);
+    assert.match(save, /actor: "consultant"/);
+    assert.match(save, /customer.create/);
+    assert.match(save, /lesson.create/);
   });
 });
