@@ -5,7 +5,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { loadScheduleMap } from "./schedule-map.ts";
+import { loadScheduleMap } from "./schedule-map";
 import { loadSiteTree } from "./site-tree";
 import { canonCourseId, canonSchoolId } from "./ids";
 
