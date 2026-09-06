@@ -366,8 +366,8 @@
   "/englishlanguagegg": [
     {
       "src": "/media/courses/englishlanguagegg/01.jpg",
-      "filename": "01.jpg",
-      "alt": "Занятия в студии «Развивайся» в Коломне"
+      "filename": "Английский язык Go Getter с носителем языка.jpg",
+      "alt": "Английский язык Go Getter с носителем языка в Коломне"
     },
     {
       "src": "/media/courses/englishlanguagegg/02.jpg",
@@ -393,8 +393,8 @@
   "/englishlanguagesm": [
     {
       "src": "/media/courses/englishlanguagesm/01.jpg",
-      "filename": "01.jpg",
-      "alt": "Занятия в студии «Развивайся» в Коломне"
+      "filename": "Английский язык Super Minds с носителем языка.jpg",
+      "alt": "Английский язык Super Minds с носителем языка в Коломне"
     }
   ],
   "/gamedesign": [
@@ -726,8 +726,8 @@
   "/japanese": [
     {
       "src": "/media/courses/japanese/01.jpg",
-      "filename": "01.jpg",
-      "alt": "Занятия в студии «Развивайся» в Коломне"
+      "filename": "Курс японского языка Kodomo no Nihongo.jpg",
+      "alt": "Курс японского языка Kodomo no Nihongo в Коломне"
     }
   ],
   "/kinder-master": [
@@ -1481,8 +1481,8 @@
   "/vitaminkorean": [
     {
       "src": "/media/courses/vitaminkorean/01.jpg",
-      "filename": "01.jpg",
-      "alt": "Занятия в студии «Развивайся» в Коломне"
+      "filename": "Курс корейского языка Vitamin Korean.jpg",
+      "alt": "Курс корейского языка Vitamin Korean в Коломне"
     }
   ],
   "/model-school-podium": [

@@ -12,6 +12,17 @@ type Props = {
   loading?: "lazy" | "eager";
 };
 
+const HASH_FILE = /^[0-9a-f]{5,8}_[0-9a-f]{8,}/i;
+
+export function imageTitle(filename?: string, alt?: string) {
+  const file = String(filename || "").trim();
+  const label = String(alt || "").trim();
+  if (!file || HASH_FILE.test(file) || /empty-state|placeholder|image-empty/i.test(file)) {
+    return label;
+  }
+  return file.replace(/\.(png|jpe?g|webp|gif)$/i, "");
+}
+
 export function SeoImage({
   src,
   alt,
@@ -22,14 +33,13 @@ export function SeoImage({
   height,
   loading = "lazy",
 }: Props) {
-  const title =
-    filename && !/empty-state|placeholder|image-empty/i.test(filename) ? filename : alt;
+  const title = imageTitle(filename, alt);
   return (
     <figure className={cn("overflow-hidden", className)}>
       <img
         src={localSrc(src)}
         alt={alt}
-        title={title}
+        title={title || undefined}
         width={width}
         height={height}
         loading={loading}

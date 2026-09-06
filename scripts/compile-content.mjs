@@ -19,6 +19,21 @@ function filenameFromSrc(src, alt = "") {
   }
 }
 
+const HASH_FILE = /^[0-9a-f]{5,8}_[0-9a-f]{8,}/i;
+
+function humanAlt(alt, filename, title) {
+  const strip = (s) =>
+    cleanText(s)
+      .replace(/\.(png|jpe?g|gif|webp)$/i, "")
+      .trim();
+  const fromAlt = strip(alt);
+  if (fromAlt && !HASH_FILE.test(fromAlt) && fromAlt.length > 6) return fromAlt;
+  const fromFile = strip(filename);
+  if (fromFile && !HASH_FILE.test(fromFile) && fromFile.length > 6) return fromFile;
+  const fromTitle = cleanText(title).split("|")[0].trim();
+  return fromTitle || fromAlt || fromFile;
+}
+
 function upsize(src, w = 1200) {
   if (!src || !src.includes("wixstatic.com")) return src;
   return src.replace(/\/v1\/(fill|fit)\/w_\d+,h_\d+[^/]*/i, (_m, kind) => {
@@ -192,7 +207,7 @@ for (const raw of pages) {
     seenImg.add(key);
     images.push({
       src,
-      alt: alt || filename,
+      alt: humanAlt(alt, filename, title),
       filename,
     });
   }

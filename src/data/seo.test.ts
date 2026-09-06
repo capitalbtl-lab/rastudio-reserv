@@ -8,6 +8,8 @@ import {
   shouldNoindex,
   stripBrand,
 } from "./seo-core.ts";
+import { SEO_COPY } from "./seo-copy.ts";
+import { SITE, SCHOOLS } from "./site.ts";
 
 describe("seo", () => {
   it("не отдаёт главную description пустым страницам и убирает RASTUDIO.ORG", () => {
@@ -24,6 +26,15 @@ describe("seo", () => {
     assert.match(teacher, /Аверина/);
     assert.doesNotMatch(teacher, /Художественная школа в Коломне для детей и взрослых/);
     assert.ok(teacher.length <= 180);
+  });
+
+  it("главная и языковая школа берут description с Wix", () => {
+    assert.equal(SEO_COPY["/"], undefined);
+    assert.match(SITE.homeDescription, /Художественная школа в Коломне/);
+    assert.match(SEO_COPY["/languageschool"].description, /английскому, корейскому, китайскому, японскому/);
+    const school = SCHOOLS.find((s) => s.href === "/languageschool");
+    assert.equal(school?.filename.includes("11062b"), false);
+    assert.match(school?.blurb || "", /английскому, корейскому/);
   });
 
   it("Course schema только у курсов, кабинет закрыт", () => {

@@ -198,5 +198,30 @@
     "src": "/courses/model-growth.jpg",
     "filename": "Развивайся - Курс личностного роста в Коломне.jpg",
     "alt": "Курс личностного роста для девочек в Коломне"
+  },
+  "/languageschool": {
+    "src": "/media/courses/englishlanguagegg/01.jpg",
+    "filename": "Школа иностранных языков в Студии Развивайся | Коломна.jpg",
+    "alt": "Школа иностранных языков в Студии Развивайся | Коломна"
+  },
+  "/englishlanguagegg": {
+    "src": "/media/courses/englishlanguagegg/01.jpg",
+    "filename": "Английский язык Go Getter с носителем языка.jpg",
+    "alt": "Английский язык Go Getter с носителем языка в Коломне"
+  },
+  "/englishlanguagesm": {
+    "src": "/media/courses/englishlanguagesm/01.jpg",
+    "filename": "Английский язык Super Minds с носителем языка.jpg",
+    "alt": "Английский язык Super Minds с носителем языка в Коломне"
+  },
+  "/japanese": {
+    "src": "/media/courses/japanese/01.jpg",
+    "filename": "Курс японского языка Kodomo no Nihongo.jpg",
+    "alt": "Курс японского языка Kodomo no Nihongo в Коломне"
+  },
+  "/vitaminkorean": {
+    "src": "/media/courses/vitaminkorean/01.jpg",
+    "filename": "Курс корейского языка Vitamin Korean.jpg",
+    "alt": "Курс корейского языка Vitamin Korean в Коломне"
   }
 }
