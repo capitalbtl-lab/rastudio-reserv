@@ -410,15 +410,7 @@ function applyLocalHeroes(page) {
 
 for (const page of compiled) applyLocalHeroes(page);
 
-const PAGE_OVERRIDES = {
-  "/model-school": {
-    title: "Модельная школа в Коломне | Студия «Развивайся»",
-    description:
-      "Модельная школа в Коломне: курс «Подиум» 9–14 лет, макияж и личностный рост для девочек 13–17. Студия «Развивайся», пробное занятие.",
-    ogTitle: "Модельная школа в Коломне | Студия «Развивайся»",
-    h1: "Модельная школа в Коломне",
-  },
-};
+const PAGE_OVERRIDES = {};
 for (const page of compiled) {
   const o = PAGE_OVERRIDES[page.path];
   if (o) Object.assign(page, o);

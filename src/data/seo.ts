@@ -67,11 +67,11 @@ export function enrichPage(page: HeadPage): HeadPage {
   const path = page.path || "";
   const decoded = decodePath(path);
   const extra = SEO_COPY[path] || SEO_COPY[decoded];
-  const title = brandTitle(extra?.title || page.title || SITE.homeTitle);
+  const wixTitle = stripBrand(page.title || "").trim();
+  const wixDescription = (page.description || "").replace(/\s+/g, " ").trim();
+  const title = brandTitle(wixTitle || extra?.title || SITE.homeTitle);
   const description =
-    extra?.description ||
-    (page.description || "").trim() ||
-    fallbackDescription({ ...page, title });
+    wixDescription || extra?.description || fallbackDescription({ ...page, title });
   return {
     ...page,
     title,
