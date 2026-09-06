@@ -24,6 +24,14 @@ import { RaSelect } from "@/components/ra-select";
 import { SCHOOLS } from "@/data/site";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
 import { commChannelLabel } from "@/data/crm-comms-core";
+import {
+  ALFA_PAY_ACCOUNTS,
+  ALFA_PAY_LOCATIONS,
+  ALFA_PAY_MANAGERS,
+  ALFA_PAY_METHODS,
+  locationIdForBranch,
+  payItemGroups,
+} from "@/data/crm-pay-alfa";
 
 function money(n?: number) {
   return `${Number(n || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`;
@@ -301,6 +309,16 @@ export function CrmClientCard({
   const [channel, setChannel] = useState("");
   const [payKind, setPayKind] = useState("");
   const [paySum, setPaySum] = useState("");
+  const [payDate, setPayDate] = useState(todayIso());
+  const [payAccountId, setPayAccountId] = useState("1");
+  const [payItemId, setPayItemId] = useState("2");
+  const [payLocationId, setPayLocationId] = useState("");
+  const [payManagerId, setPayManagerId] = useState("");
+  const [payCttId, setPayCttId] = useState("");
+  const [payPayer, setPayPayer] = useState("");
+  const [payGroupId, setPayGroupId] = useState("");
+  const [payNote, setPayNote] = useState("");
+  const [payMethod, setPayMethod] = useState("");
   const [headMenu, setHeadMenu] = useState<"" | "pay" | "lesson">("");
   const headLeave = useRef(0);
 
