@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 describe("база знаний: предметы и роли", () => {
   it("заводской текст содержит курс сайта, счётчики, роли и статусы", () => {
     const src = readFileSync(new URL("./agent-section-guides-data.ts", import.meta.url), "utf8");
-    assert.match(src, /GUIDE_REV = "2026-09-05-client-desk"/);
+    assert.match(src, /GUIDE_REV = "2026-09-06-agent-window"/);
     assert.match(src, /id: "agent"/);
     assert.match(src, /function agentBody/);
     assert.match(src, /COURSE_ASK/);
@@ -20,7 +20,8 @@ describe("база знаний: предметы и роли", () => {
     assert.match(src, /не уходит/);
     assert.match(src, /гр \/ уч|групп \/ ученик/);
     assert.match(src, /consultantCanBook/);
-    assert.match(src, /consultantCanJournal/);
+    assert.match(src, /consultantCanSkip/);
+    assert.match(src, /consultantCanPause/);
     assert.match(src, /note_skip/);
     assert.match(src, /custom_prioritet/);
     assert.match(src, /status 4/);

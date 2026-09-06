@@ -23,7 +23,7 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-05-client-desk";
+export const GUIDE_REV = "2026-09-06-agent-window";
 
 const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Сайт", idField: "rastudio.org", link: "родители. Админка = /admin. AlfaCRM догоняет очередью, не источник ответа" },
@@ -162,7 +162,7 @@ const SCHEDULE_OPS: GuideOp[] = [
   { id: "book-trial", title: "Записать на пробное", body: "Только консультант, если consultantCanBook. submit_trial. parent, child, phone, branch_id группы. gid, date=ближайшее, time=timeFrom, course_id=courseId дерева, subject_id слота. kind=trial. Диск сразу (досье + доска), очередь customer.create. Не ждать Alfa в реплике." },
   { id: "book-group", title: "Записать в группу", body: "Только консультант сайта, если consultantCanBook. book_lesson lesson_type=group. Те же поля, gid обязателен. Не open_group и не URL AlfaCRM. Если просят абонемент / «сразу ходить» — group, не trial. Приоритет 0 — не записывать с сайта, предложи priority 1 или «через администратора». Диск сразу, очередь." },
   { id: "site-signup-settings", title: "Настройки записи на сайте", body: "Админка → Сайт. trialOn / groupOn. trialByBranch[1..4]. Матрица statusPublish: по каждому statusId галочки расписание / пробное / в группу. Приоритет 0 всегда прячет витрину. Сайт рисует своё окно, не iframe. Меняет сотрудник, не консультант." },
-  { id: "ai-roles", title: "Роли ИИ", body: "Ассистент ИИ → Окно: ROLE_FLAGS. Консультант (сайт, ВК, MAX, Novofon) ≠ голос админки. consultantCanBook, consultantCanSeeAllGroups, consultantCanManage, adminVoiceCanWrite, adminVoiceCanConsult. Не смешивать миры без галочки. Webhook /api/agent/$channel." },
+  { id: "ai-roles", title: "Роли ИИ", body: "Ассистент ИИ → Окно: ROLE_FLAGS и BOOK_TYPE_FLAGS. Консультант (сайт, ВК, MAX, Novofon) ≠ голос админки. consultantCanBook, consultantCanSeeAllGroups, consultantCanManage, consultantCanSkip, consultantCanPause, consultantCanTariff, adminVoiceCanWrite, adminVoiceCanConsult. Типы занятий: trial/group/makeup/overtime/extra/individual/other. Не смешивать миры без галочки. Webhook /api/agent/$channel." },
   { id: "edit-price", title: "Править цену курса", body: "Вкладка Цены курсов, колонка «Все» по courseId. Сохранить. Формула формирования цены — продвинутый режим КБМ/ТМХ. Не угадывать сумму по названию курса." },
   { id: "pull-push", title: "AlfaCRM расписание", body: "Загрузить — снимок групп на сайт. Выгрузить — только отмеченные чекбоксом. Сначала группа, потом регулярный урок с subjectId." },
 ];
@@ -791,13 +791,15 @@ priority 0 с сайта не записывать. Если consultantCanSeeAll
 Жалобы, смена цены, статусы групп — не этот чат.
 Не открывать вкладки админки, не groupFlags, не мастер абонементов.
 
-Узнанный клиент (телефон + имя): карточка с диска. Пропуск note_skip, пауза pause_classes, отработка book_lesson makeup на gid его группы. Абонемент assign_tariff только если consultantCanTariff. Не по ФИО и не по названию группы.
+Узнанный клиент (телефон + имя): карточка с диска. Пропуск note_skip если consultantCanSkip. Пауза pause_classes если consultantCanPause. Отработка book_lesson makeup. Абонемент assign_tariff только если consultantCanTariff. Не по ФИО и не по названию группы.
 
 НАСТРОЙКИ (источник истины)
 consultantCanBook — консультант сам submit_trial / book_lesson. Выкл: слоты + телефон.
+consultantCanBookTrial / Group / Makeup / Overtime / Extra / Individual / Other — какие типы занятий можно ставить.
 consultantCanSeeAllGroups — называть группы с priority 0 и status 4. Выкл: только витрина.
 consultantCanManage — позвать в административный режим, если человек сказал, что сотрудник.
-consultantCanJournal — пропуск и пауза на диск. Выкл: только телефон.
+consultantCanSkip — пропуск одного занятия на диск (note_skip). Отдельно от паузы.
+consultantCanPause — пауза занятий до даты (pause_classes). Отдельно от пропуска.
 consultantCanTariff — повесить tariffId. По умолчанию выкл.
 adminVoiceCanWrite — голос кабинета пишет на диск и в очередь.
 adminVoiceCanConsult — голос кабинета подбирает курс родителю. По умолчанию выкл.

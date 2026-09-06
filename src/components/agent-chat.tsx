@@ -355,6 +355,10 @@ export function AgentChat() {
         setVoiceOn(false);
         voiceOnRef.current = false;
       }
+      if (!next.allowBarge) {
+        setBargeOn(false);
+        bargeRef.current = false;
+      }
     });
   }, []);
 

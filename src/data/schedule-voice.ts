@@ -247,8 +247,26 @@ ${JSON.stringify(slim).slice(0, 9000)}`,
     800,
   );
   if (!llm) {
-    if (localLimitTurn(prompt)) return { kind: "edit", reason: "", answer: "", action: "preview" };
+    if (localLimitTurn(prompt)) {
+      if (!canWrite) {
+        return {
+          kind: "refuse",
+          reason: "adminVoiceCanWrite выкл",
+          answer: "Запись в CRM голосом выключена. Включите «Голос админки пишет в CRM» в окне ассистента.",
+          action: "none",
+        };
+      }
+      return { kind: "edit", reason: "", answer: "", action: "preview" };
+    }
     if (/добав|создай|постав|измени|поменя|лимит|мест|расписан|групп|цифр/i.test(prompt)) {
+      if (!canWrite) {
+        return {
+          kind: "refuse",
+          reason: "adminVoiceCanWrite выкл",
+          answer: "Запись в CRM голосом выключена.",
+          action: "none",
+        };
+      }
       return { kind: "edit", reason: "", answer: "", action: "preview" };
     }
     return {

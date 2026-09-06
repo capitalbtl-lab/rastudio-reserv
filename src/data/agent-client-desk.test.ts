@@ -32,9 +32,11 @@ describe("действующий клиент: стол консультанта
     assert.match(chat, /name: "note_skip"/);
     assert.match(chat, /name: "pause_classes"/);
     assert.match(chat, /name: "assign_tariff"/);
-    assert.match(chat, /consultantCanJournal/);
+    assert.match(chat, /consultantCanSkip/);
+    assert.match(chat, /consultantCanPause/);
     const cfg = readFileSync(new URL("./agent-config.ts", import.meta.url), "utf8");
-    assert.match(cfg, /consultantCanJournal/);
+    assert.match(cfg, /consultantCanSkip/);
+    assert.match(cfg, /consultantCanPause/);
     assert.match(cfg, /consultantCanTariff/);
     const map = readFileSync(new URL("../components/admin-schedule-map.tsx", import.meta.url), "utf8");
     assert.match(map, /Схема/);
