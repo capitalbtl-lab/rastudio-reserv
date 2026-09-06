@@ -24,8 +24,8 @@ describe("форма занятия карточки", () => {
     assert.match(src, /setLessonOpen\(false\)/);
     assert.match(src, /applyLessonBranch/);
     assert.match(src, /lessonGroupOffers/);
-    assert.match(src, /g\?\.teacherId/);
-  });
+    assert.match(src, /const lessonRoomCount = lessonRooms.filter/);
+    assert.match(src, /\$\{lessonRoomCount\} доступно/);
 
   it("расписание импортирует reload — иначе вкладка не открывается", () => {
     const sched = readFileSync(new URL("../components/admin-schedule.tsx", import.meta.url), "utf8");

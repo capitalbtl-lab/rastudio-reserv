@@ -453,6 +453,7 @@ export function CrmClientCard({
     [catalog.rooms],
   );
   const lessonRoomSelect = useMemo(() => roomsSelectGroups(lessonRooms, lessonBranch), [lessonRooms, lessonBranch]);
+  const lessonRoomCount = lessonRooms.filter((r) => r.branchId === lessonBranch).length;
   const lessonHm = splitHm(lessonTime);
   const lessonUntil = addMinsHm(lessonTime, lessonMins);
   const pupilGroups = useMemo(() => {
