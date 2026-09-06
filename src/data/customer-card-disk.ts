@@ -12,6 +12,7 @@ import { customerBalance, cardPays } from "./crm-pay";
 import { asCustomerComm, commsOf } from "./crm-comms";
 import { loadTariffs } from "./crm-tariffs";
 import { isPaidCountLabel, parseDossierCtt } from "./pupil-tariffs";
+import { roomsCatalog } from "./crm-rooms";
 
 function ageLabel(dob: string) {
   const m = String(dob || "").match(/^(\d{1,2})[.](\d{1,2})[.](\d{4})$/) || String(dob || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -35,6 +36,7 @@ let catalogSlots: ReturnType<typeof listAdminSlots> | null = null;
 let catalogMemo: {
   groups: NonNullable<NonNullable<CustomerCard["catalog"]>["groups"]>;
   subjects: { id: number; name: string }[];
+  rooms: { id: number; name: string; branchId: number }[];
 } | null = null;
 
 function catalogBase() {
@@ -53,9 +55,11 @@ function catalogBase() {
       branchId: s.branchId,
       subjectId: s.subjectId || undefined,
       teacher: s.teacher,
+      teacherId: s.teacherId || undefined,
       day: s.dayLabel,
       from: s.timeFrom,
       to: s.timeTo,
+      roomId: s.roomId || undefined,
       course: s.course || undefined,
       school: s.school || undefined,
       schoolId: s.schoolId,
@@ -67,6 +71,7 @@ function catalogBase() {
   catalogMemo = {
     groups,
     subjects: loadSubjects().map((s) => ({ id: s.id, name: s.name })),
+    rooms: roomsCatalog(slots),
   };
   return catalogMemo;
 }
@@ -171,7 +176,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
     catalog: {
       subjects: cat.subjects,
       teachers: teachersAtBranch(useBranch, listTeachers(slots)).map((x) => ({ id: x.id, name: x.name })),
-      rooms: [],
+      rooms: cat.rooms,
       groups: catalogGroups,
     },
   };

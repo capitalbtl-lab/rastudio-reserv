@@ -1617,31 +1617,34 @@ export const adminSchedule = createServerFn({ method: "POST" })
     if (data.action === "customerLesson") {
       const { resolveLessonType, formatRuDob } = await import("./alfacrm");
       const { enqueueExport } = await import("./crm-export-queue");
-      const branch = Number(data.branchId) || 1;
       const customerId = Number(data.customerId) || 0;
       if (!customerId) return { ok: false as const, error: "Нет customerId." };
+      const lessonBranch = Number(data.branchId) || 0;
+      if (!lessonBranch) return { ok: false as const, error: "Нет branchId — выберите филиал." };
+      const roomId = Number(data.roomId) || 0;
+      if (!roomId) return { ok: false as const, error: "Нет roomId — выберите аудиторию." };
       const d = findDossier({ crmId: customerId });
       const wantedGid = Number(data.groupId) || 0;
       const link = (d?.groupLinks || []).find((x) => x.id === wantedGid) || (d?.groupLinks || []).find((x) => x.active !== false);
-      const gid = wantedGid || Number(link?.id) || 0;
+      const gid = wantedGid || 0;
       const slot = gid
-        ? listAdminSlots().find((s) => s.groupId === gid && s.branchId === branch) || listAdminSlots().find((s) => s.groupId === gid)
+        ? listAdminSlots().find((s) => s.groupId === gid && s.branchId === lessonBranch) || listAdminSlots().find((s) => s.groupId === gid)
         : undefined;
       const type = resolveLessonType(String(data.lessonType || "trial")) || resolveLessonType("trial")!;
       const subjectId = Number(data.subjectId) || Number(slot?.subjectId) || Number(link?.subjectId) || 0;
-      if (!subjectId) return { ok: false as const, error: "Нет subjectId у группы клиента — выберите группу." };
+      if (!subjectId) return { ok: false as const, error: "Нет subjectId — выберите предмет." };
       const date = formatRuDob(data.date) || (() => {
         const now = new Date();
         return `${String(now.getDate()).padStart(2, "0")}.${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
       })();
       const time = String(data.time || slot?.timeFrom || "16:00").replace(".", ":").slice(0, 5);
+      if (!/^\d{1,2}:\d{2}$/.test(time)) return { ok: false as const, error: "Нет времени занятия." };
       const duration = Number(data.duration) || 90;
       const to = String(data.timeTo || "").slice(0, 5) || addMins(time, duration);
       const teacherId = Number(data.teacherId) || Number(slot?.teacherId) || 0;
-      const roomId = Number(data.roomId) || 0;
       const localId = nextLocalLessonId();
       const dateIso = isoish(date);
-      const useBranch = Number(slot?.branchId || branch);
+      const useBranch = Number(slot?.branchId || lessonBranch);
       if (gid) {
         upsertGroupCalendar(
           useBranch,
@@ -1682,9 +1685,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
           duration,
           subject_id: subjectId,
           customer_ids: [customerId],
+          room_id: roomId,
           ...(gid ? { group_ids: [gid] } : {}),
           ...(teacherId ? { teacher_ids: [teacherId] } : {}),
-          ...(roomId ? { room_id: roomId } : {}),
           ...(data.topic ? { topic: String(data.topic) } : {}),
           note: data.note || `${type.name} с сайта rastudio.org`,
         },
