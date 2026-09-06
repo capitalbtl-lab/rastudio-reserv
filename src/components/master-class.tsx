@@ -6,7 +6,7 @@ import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 import { TrialForm } from "@/components/trial-form";
 import { Button } from "@/components/ui/button";
-import { CmsImg, Kicker, ProseBlocks } from "@/components/cms-blocks";
+import { CmsImg, Kicker, ProseBlocks, CoursePageHero } from "@/components/cms-blocks";
 import { cn } from "@/lib/utils";
 
 export function MasterClassPage({ page, master }: { page: SitePage; master: CmsMaster }) {
@@ -19,55 +19,32 @@ export function MasterClassPage({ page, master }: { page: SitePage; master: CmsM
     { title: "Кому подойдёт", text: master.who },
     { title: "Результат", text: master.result },
   ].filter((s) => s.text);
+  const shots = [
+    hero ? { src: "src" in hero ? hero.src : master.image!.src, alt: master.name, filename: "filename" in hero ? hero.filename : master.image?.filename } : null,
+    ...page.images,
+  ].filter(Boolean) as { src: string; alt: string; filename?: string }[];
 
   return (
     <article>
-      <section className="ink relative isolate min-h-[64dvh] overflow-hidden text-header-fg">
-        {hero ? (
-          <SeoImage
-            src={"src" in hero ? hero.src : master.image!.src}
-            alt={master.name}
-            filename={"filename" in hero ? hero.filename : master.image!.filename}
-            className="absolute inset-0 h-full w-full"
-            imgClassName="h-full w-full object-cover opacity-50"
-            loading="eager"
-          />
-        ) : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/20" />
-        <div className="relative mx-auto flex min-h-[64dvh] max-w-[1180px] flex-col justify-end px-4 pb-28 pt-24 md:px-5">
-          <p className="text-sm font-medium text-header-fg/80">
+      <CoursePageHero
+        kicker={
+          <>
             <PageLink to="/" className="hover:underline">
               Главная
             </PageLink>
-            <span className="mx-2 text-header-fg/45">/</span>
+            <span className="mx-2 text-header-fg/35">/</span>
             <PageLink to="/master-class" className="hover:underline">
               Мастер-классы
             </PageLink>
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {master.directions.map((d) => (
-              <span
-                key={d}
-                className="bg-bg/15 px-2 py-1 text-xs font-medium uppercase tracking-wider"
-              >
-                {d}
-              </span>
-            ))}
-          </div>
-          <h1 className="hero-title mt-4 max-w-4xl">{master.name}</h1>
-          {master.short ? (
-            <p className="mt-5 max-w-2xl text-base text-header-fg/80 md:text-lg">{master.short}</p>
-          ) : null}
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Button asChild size="lg">
-              <a href="#trial">Записаться</a>
-            </Button>
-            <Button asChild size="lg">
-              <a href={SITE.phoneHref}>{SITE.phone}</a>
-            </Button>
-          </div>
-        </div>
-      </section>
+          </>
+        }
+        age={master.ages.join(", ")}
+        title={master.name}
+        description={master.short || page.description}
+        images={shots}
+        facts={master.directions.slice(0, 4)}
+        secondary={{ href: "/master-class", label: "Все мастер-классы" }}
+      />
 
       <div className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

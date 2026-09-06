@@ -639,6 +639,7 @@ function MasterListPage({ page, masters }: { page: SitePage; masters: MasterCard
       <div className="mt-16">
         <TrialForm compact />
       </div>
+      </div>
     </article>
   );
 }
