@@ -172,11 +172,31 @@ export function priceShort(path: string) {
 
 export type GroupDuration = { path: string; course: string; mins: number; perWeek: number; groups: number };
 
-/** Длительность к цене: только courseId / path. Имя курса не склеивает. */
+/** Длительность к цене: courseId / path / id. Имя курса не склеивает. */
 export function matchDuration(row: PriceRow, items: GroupDuration[]) {
-  const rp = normPath(row.courseId || row.path);
-  if (!rp) return null;
-  return items.find((it) => normPath(it.path) === rp) || null;
+  const keys = new Set(
+    [row.courseId, row.path, row.id]
+      .map((x) => normPath(String(x || "")))
+      .filter((x) => x && x !== "/"),
+  );
+  if (!keys.size) return null;
+  return items.find((it) => keys.has(normPath(it.path))) || null;
+}
+
+/** Пустые минуты и «в неделю» заполняются из групп. Уже заданные цифры не трогаем, если onlyEmpty. */
+export function applyDurations(rows: PriceRow[], items: GroupDuration[], onlyEmpty = true) {
+  let filled = 0;
+  const next = rows.map((r) => {
+    const hit = matchDuration(r, items);
+    if (!hit) return r;
+    const mins = onlyEmpty && r.mins ? r.mins : hit.mins || r.mins || 0;
+    const perWeek = onlyEmpty && r.perWeek ? r.perWeek : hit.perWeek || r.perWeek || 0;
+    if (mins === (r.mins || 0) && perWeek === (r.perWeek || 0)) return r;
+    if (!mins && !perWeek) return r;
+    filled += 1;
+    return { ...r, mins, perWeek };
+  });
+  return { rows: next, filled };
 }
 
 export const PRICE_DIRECTIONS = [

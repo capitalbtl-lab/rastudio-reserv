@@ -6,8 +6,14 @@ import {
   savePriceRows,
   updateGroupPrice,
   updateOnePrice,
+  addPriceSchool,
+  addPriceCourse,
+  deletePriceCourse,
+  deletePriceSchool,
   type PriceRow,
 } from "./prices";
+import { loadSiteTree, syncTreeFromPriceRows, applySchoolLabels } from "./site-tree";
+import { fillPriceDurations } from "./price-from-groups";
 import {
   checkPassword,
   listAdminLog,
@@ -32,19 +38,47 @@ export const adminPrices = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string })
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
-    ensureLivePrices();
-    const { loadSiteTree } = await import("./site-tree");
-    return { ok: true as const, rows: listPriceRows(), schools: loadSiteTree().schools };
+    try {
+      ensureLivePrices();
+      let filled = 0;
+      let rows = listPriceRows();
+      try {
+        const pack = fillPriceDurations(false);
+        rows = pack.rows;
+        filled = pack.filled;
+      } catch {
+        /* группы могут быть ещё не на диске */
+      }
+      let schools: { id: string; label: string }[] = [];
+      try {
+        schools = loadSiteTree().schools;
+      } catch {
+        schools = [...new Map(rows.map((r) => [r.schoolId || r.direction, { id: r.schoolId || r.direction, label: r.direction }])).values()].filter(
+          (s) => s.id,
+        );
+      }
+      return { ok: true as const, rows, schools, filled };
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : "Не удалось загрузить цены.";
+      const error = /Cannot find module|site-tree/i.test(raw)
+        ? "Кабинет обновляется. Обновите страницу через несколько секунд."
+        : raw;
+      return { ok: false as const, error };
+    }
   });
 
 export const adminGroupDurations = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string })
   .handler(async ({ data }) => {
     if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
-    const { groupDurations } = await import("./price-from-groups");
-    const pack = groupDurations();
-    logAdmin(`Цены: подгрузка минут/недели из групп · ${pack.items.length} курсов, ${pack.groups} групп`);
-    return { ok: true as const, ...pack };
+    try {
+      const pack = fillPriceDurations(true);
+      logAdmin(`Цены: минуты и «в неделю» из групп · ${pack.filled} курсов, ${pack.groups} групп`);
+      return { ok: true as const, ...pack };
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : "Не удалось прочитать группы.";
+      return { ok: false as const, error: /Cannot find module/i.test(raw) ? "Кабинет обновляется. Обновите страницу." : raw };
+    }
   });
 
 export const adminSavePrice = createServerFn({ method: "POST" })

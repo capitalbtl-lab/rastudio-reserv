@@ -3,9 +3,9 @@
  * Группа → строка цены только по courseId / subjectId / path. Имя не склеивает.
  */
 import { listAdminSlots } from "./alfacrm-schedule";
-import { ensureLivePrices, listPriceRows } from "./prices";
+import { ensureLivePrices, listPriceRows, savePriceRows } from "./prices";
 import { loadScheduleMap } from "./schedule-map";
-import { normPath, tidyCourseName, type GroupDuration, type PriceRow } from "./prices-core";
+import { applyDurations, normPath, tidyCourseName, type GroupDuration, type PriceRow } from "./prices-core";
 import { priceRowKey } from "./ids";
 import type { CrmSlot } from "./crm-slots-core";
 
@@ -93,4 +93,13 @@ export function groupDurations() {
     groups: hits.length,
   }));
   return { items, groups: slots.length, used, courses: items.length };
+}
+
+/** Записать минуты и «в неделю» в прайс. force — перезаписать даже заполненные. */
+export function fillPriceDurations(force = false) {
+  const pack = groupDurations();
+  ensureLivePrices();
+  const applied = applyDurations(listPriceRows(), pack.items, !force);
+  if (applied.filled) savePriceRows(applied.rows);
+  return { ...pack, filled: applied.filled, rows: applied.filled ? applied.rows : listPriceRows() };
 }
