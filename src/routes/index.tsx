@@ -104,14 +104,16 @@ function Home() {
       <section className="ink relative isolate overflow-hidden text-header-fg">
         <div className="page-wrap grid items-center gap-10 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[88dvh] lg:gap-8 lg:py-8">
           <div className="relative z-10 max-w-xl">
-            <p className="hero-in kicker text-header-fg/55">Сеть школ · Коломна · Луховицы</p>
-            <h1 className="hero-in hero-in-2 mt-5 text-[clamp(2.1rem,1.2rem+3vw,3.8rem)] leading-[1.05]">
+            <EditText id="hero.kicker" as="p" className="hero-in kicker text-header-fg/55">
+              Сеть школ · Коломна · Луховицы
+            </EditText>
+            <EditText id="hero.title" as="h1" className="hero-in hero-in-2 mt-5 text-[clamp(2.1rem,1.2rem+3vw,3.8rem)] leading-[1.05]">
               {hero.hero_title || "Ребёнок не просто учится — он мыслит, растёт и создаёт будущее"}
-            </h1>
-            <p className="hero-in hero-in-3 mt-5 max-w-md text-[1.02rem] leading-relaxed text-header-fg/70">
+            </EditText>
+            <EditText id="hero.text" as="p" className="hero-in hero-in-3 mt-5 max-w-md text-[1.02rem] leading-relaxed text-header-fg/70">
               {hero.hero_text ||
                 "Семь школ: искусство, инженерия и IT в одной сети. Пробное занятие — чтобы выбрать направление вместе."}
-            </p>
+            </EditText>
             <div className="hero-in hero-in-3 mt-8 flex flex-wrap gap-3">
               <Button asChild size="lg">
                 <a href="#trial">Пробное занятие</a>
@@ -156,11 +158,15 @@ function Home() {
 
       <HomeSlot id="ages">
       <section className="page-wrap pt-8 pb-2 md:pt-10">
-        <p className="kicker text-primary">Подбор за 10 секунд</p>
-        <h2 className="section-title mt-3">Сколько лет ребёнку?</h2>
-        <p className="mt-3 max-w-xl text-muted">
+        <EditText id="ages.kicker" as="p" className="kicker text-primary">
+          Подбор за 10 секунд
+        </EditText>
+        <EditText id="ages.title" as="h2" className="section-title mt-3">
+          Сколько лет ребёнку?
+        </EditText>
+        <EditText id="ages.text" as="p" className="mt-3 max-w-xl text-muted">
           Нажмите возраст — откроются курсы с ценой, филиалом и записью на пробное.
-        </p>
+        </EditText>
         <AgeChips className="mt-5" />
         <div className="mt-6">
           <Button asChild size="lg">
@@ -174,8 +180,12 @@ function Home() {
       <section className="page-wrap pt-8 pb-12 md:pt-10 md:pb-16">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="kicker text-primary">Семь школ одной сети</p>
-            <h2 className="section-title mt-3">Выберите направление</h2>
+            <EditText id="schools.kicker" as="p" className="kicker text-primary">
+              Семь школ одной сети
+            </EditText>
+            <EditText id="schools.title" as="h2" className="section-title mt-3">
+              Выберите направление
+            </EditText>
           </div>
           <Button asChild size="lg">
             <PageLink to="/allcourses">Все курсы</PageLink>
@@ -223,8 +233,12 @@ function Home() {
       <section className="page-wrap pb-12 md:pb-16">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="kicker text-primary">Каталог</p>
-            <h2 className="section-title mt-3">Курсы сети «Развивайся»</h2>
+            <EditText id="catalog.kicker" as="p" className="kicker text-primary">
+              Каталог
+            </EditText>
+            <EditText id="catalog.title" as="h2" className="section-title mt-3">
+              Курсы сети «Развивайся»
+            </EditText>
           </div>
           <Button asChild size="lg">
             <PageLink to="/allcourses">Открыть каталог</PageLink>
@@ -263,9 +277,15 @@ function Home() {
       <section className="page-wrap pb-12 md:pb-16">
         <div className="grid items-center gap-8 overflow-hidden rounded-[2rem] bg-surface p-6 shadow-[var(--shadow-border)] md:grid-cols-2 md:gap-12 md:p-10">
           <div>
-            <p className="kicker text-primary">О студии</p>
-            <h2 className="section-title mt-3">Это студия «Развивайся»</h2>
-            <p className="mt-5 text-[0.98rem] leading-relaxed text-muted">{home.paragraphs[0]}</p>
+            <EditText id="about.kicker" as="p" className="kicker text-primary">
+              О студии
+            </EditText>
+            <EditText id="about.title" as="h2" className="section-title mt-3">
+              Это студия «Развивайся»
+            </EditText>
+            <EditText id="about.text" as="p" className="mt-5 text-[0.98rem] leading-relaxed text-muted">
+              {home.paragraphs[0]}
+            </EditText>
           </div>
           <div className="overflow-hidden rounded-3xl bg-header">
             <SiteVideo
@@ -281,14 +301,20 @@ function Home() {
 
       <HomeSlot id="teachers">
       <section className="page-wrap pb-12 md:pb-16">
-        <p className="kicker text-primary">Педагоги</p>
+        <EditText id="teachers.kicker" as="p" className="kicker text-primary">
+          Педагоги
+        </EditText>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-          <h2 className="section-title max-w-2xl">Команда сильной сети школ</h2>
+          <EditText id="teachers.title" as="h2" className="section-title max-w-2xl">
+            Команда сильной сети школ
+          </EditText>
           <Button asChild size="lg">
             <PageLink to="/team">Все педагоги</PageLink>
           </Button>
         </div>
-        <p className="mt-4 max-w-2xl text-[0.98rem] leading-relaxed text-muted">{home.paragraphs[2]}</p>
+        <EditText id="teachers.text" as="p" className="mt-4 max-w-2xl text-[0.98rem] leading-relaxed text-muted">
+          {home.paragraphs[2]}
+        </EditText>
         <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 md:gap-4">
           {teachers.map((t) => (
             <PageLink
@@ -321,8 +347,12 @@ function Home() {
 
       <HomeSlot id="stories">
       <section className="page-wrap pb-12 md:pb-16">
-        <p className="kicker text-primary">Жизнь студии</p>
-        <h2 className="section-title mt-3">Проекты и события</h2>
+        <EditText id="stories.kicker" as="p" className="kicker text-primary">
+          Жизнь студии
+        </EditText>
+        <EditText id="stories.title" as="h2" className="section-title mt-3">
+          Проекты и события
+        </EditText>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {STRIPS.map((story) => (
             <PageLink
@@ -353,8 +383,12 @@ function Home() {
       <HomeSlot id="branches">
       <section className="ink overflow-x-hidden py-12 pb-16 text-header-fg md:py-16 md:pb-24">
         <div className="page-wrap">
-          <p className="kicker text-header-fg/45">Три студии</p>
-          <h2 className="section-title mt-3">Сеть в Коломне и Луховицах</h2>
+          <EditText id="branches.kicker" as="p" className="kicker text-header-fg/45">
+            Три студии
+          </EditText>
+          <EditText id="branches.title" as="h2" className="section-title mt-3">
+            Сеть в Коломне и Луховицах
+          </EditText>
           <div className="mt-10 grid gap-4 md:grid-cols-3">
             {BRANCHES.map((b) => (
               <div key={b.address} className="rounded-3xl bg-white/5 p-6 ring-1 ring-white/10 md:p-7">
