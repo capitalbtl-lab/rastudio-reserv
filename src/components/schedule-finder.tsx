@@ -13,6 +13,7 @@ import {
   courseKey,
   courseTitle,
   expandSlots,
+  listBranches,
   matchesAgeBand,
 } from "@/lib/schedule";
 
@@ -41,13 +42,19 @@ function Chip({
 
 export function ScheduleFinder({ sessions }: { sessions: CmsSession[] }) {
   const [city, setCity] = useState("");
+  const [branch, setBranch] = useState("");
   const [age, setAge] = useState<AgeBandId | "">("");
   const [day, setDay] = useState("");
   const [course, setCourse] = useState("");
 
   const cities = useMemo(
-    () => [...new Set(sessions.map((s) => branchMeta(s).city))].sort((a, b) => a.localeCompare(b, "ru")),
+    () => [...new Set(sessions.map((s) => branchMeta(s).city).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru")),
     [sessions],
+  );
+  const branches = useMemo(() => listBranches(sessions), [sessions]);
+  const branchChips = useMemo(
+    () => (city ? branches.filter((b) => b.city === city) : branches),
+    [branches, city],
   );
 
   const courses = useMemo(() => {
@@ -61,6 +68,7 @@ export function ScheduleFinder({ sessions }: { sessions: CmsSession[] }) {
     for (const session of sessions) {
       const meta = branchMeta(session);
       if (city && meta.city !== city) continue;
+      if (branch && meta.id !== branch) continue;
       if (age && !matchesAgeBand(session.age, age)) continue;
       if (course && courseKey(session) !== course) continue;
       for (const slot of expandSlots(session)) {
@@ -71,7 +79,7 @@ export function ScheduleFinder({ sessions }: { sessions: CmsSession[] }) {
     return out.sort(
       (a, b) => a.sort - b.sort || courseTitle(a.session).localeCompare(courseTitle(b.session), "ru"),
     );
-  }, [sessions, city, age, day, course]);
+  }, [sessions, city, branch, age, day, course]);
 
   const groups = useMemo(() => {
     const list: { day: string; label: string; items: typeof slots }[] = [];
@@ -83,7 +91,7 @@ export function ScheduleFinder({ sessions }: { sessions: CmsSession[] }) {
     return list;
   }, [slots]);
 
-  const active = Boolean(city || age || day || course);
+  const active = Boolean(city || branch || age || day || course);
 
   return (
     <section className="mt-8">
@@ -95,12 +103,45 @@ export function ScheduleFinder({ sessions }: { sessions: CmsSession[] }) {
               Все
             </Chip>
             {cities.map((item) => (
-              <Chip key={item} on={city === item} onClick={() => setCity(item)}>
+              <Chip
+                key={item}
+                on={city === item}
+                onClick={() => {
+                  setCity(item);
+                  const hit = branches.find((b) => b.id === branch);
+                  if (hit && hit.city !== item) setBranch("");
+                }}
+              >
                 {item}
               </Chip>
             ))}
           </div>
         </div>
+        {branchChips.length > 1 || branch ? (
+        <div className="mt-4">
+          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Филиал</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Chip
+              on={!branch}
+              onClick={() => setBranch("")}
+            >
+              Все
+            </Chip>
+            {branchChips.map((item) => (
+              <Chip
+                key={item.id}
+                on={branch === item.id}
+                onClick={() => {
+                  setBranch(item.id);
+                  setCity(item.city);
+                }}
+              >
+                {item.short}
+              </Chip>
+            ))}
+          </div>
+        </div>
+        ) : null}
         <div className="mt-4">
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Возраст</p>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -152,6 +193,7 @@ export function ScheduleFinder({ sessions }: { sessions: CmsSession[] }) {
               className="text-sm font-semibold text-primary"
               onClick={() => {
                 setCity("");
+                setBranch("");
                 setAge("");
                 setDay("");
                 setCourse("");

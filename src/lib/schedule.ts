@@ -33,8 +33,8 @@ export function branchMeta(session: Pick<CmsSession, "city" | "branch">): Branch
   };
 }
 
-export function branchRank(session: Pick<CmsSession, "city" | "branch"> | BranchInfo) {
-  const id = "id" in session && session.id ? session.id : branchMeta(session as Pick<CmsSession, "city" | "branch">).id;
+export function branchRank(session: Pick<CmsSession, "city" | "branch">) {
+  const id = branchMeta(session).id;
   if (id === "okt") return 0;
   if (id === "grazh") return 1;
   if (id === "luh") return 2;
@@ -47,7 +47,9 @@ export function listBranches(sessions: Pick<CmsSession, "city" | "branch">[]) {
     const meta = branchMeta(s);
     if (meta.short) map.set(meta.id, meta);
   }
-  return [...map.values()].sort((a, b) => branchRank(a) - branchRank(b) || a.short.localeCompare(b.short, "ru"));
+  return [...map.values()].sort(
+    (a, b) => branchRank({ city: a.city, branch: a.short }) - branchRank({ city: b.city, branch: b.short }) || a.short.localeCompare(b.short, "ru"),
+  );
 }
 
 export function courseKey(session: CmsSession) {
