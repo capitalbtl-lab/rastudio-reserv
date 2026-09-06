@@ -123,7 +123,7 @@ export function DebugDock() {
       ) : null}
 
       {on ? (
-        <div className="fixed bottom-24 left-3 z-[70] w-[min(22rem,calc(100vw-1.5rem))] md:bottom-4">
+        <div className="debug-dock fixed bottom-24 left-3 z-[70] w-[min(22rem,calc(100vw-1.5rem))] md:bottom-4">
           <div className="rounded-2xl bg-header/95 p-3 text-[0.75rem] text-header-fg shadow-[0_16px_40px_-16px_rgba(0,0,0,.5)] backdrop-blur">
             <div className="flex items-center justify-between gap-2">
               <p className="font-semibold">Отладка</p>

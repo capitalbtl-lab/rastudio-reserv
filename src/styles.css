@@ -1001,3 +1001,47 @@
   outline: 2px solid var(--color-primary);
   background: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
+
+.home-device-phone,
+.home-device-tablet {
+  background: var(--color-bg);
+  border-radius: 1.75rem;
+  box-shadow: 0 24px 60px -28px rgb(0 0 0 / 0.45);
+  outline: 1px solid rgb(0 0 0 / 0.08);
+}
+
+.home-device-phone {
+  width: min(390px, 100%);
+}
+
+.home-device-tablet {
+  width: min(768px, 100%);
+}
+
+.home-device-phone .page-wrap,
+.home-device-tablet .page-wrap {
+  width: calc(100% - 1.5rem);
+}
+
+.home-device-phone [class*="lg:grid-cols"],
+.home-device-phone [class*="md:grid-cols"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.home-device-phone [class*="lg:min-h"] {
+  min-height: 0 !important;
+}
+
+html.home-editing .mobile-dock {
+  display: none !important;
+}
+
+html.home-editing .agent-shell {
+  display: none !important;
+}
+
+html.home-editing .debug-dock {
+  bottom: 0.75rem;
+  z-index: 30;
+}
+

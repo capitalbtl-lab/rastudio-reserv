@@ -117,24 +117,33 @@ function HomeCanvasInner({ children }: { children: ReactNode }) {
     if (custom) return { id, node: <CustomHomeBlock block={custom} /> };
     return null;
   }).filter(Boolean) as { id: string; node: ReactNode }[];
-  const deviceW = ctx.editing ? (ctx.device === "phone" ? "max-w-[390px]" : ctx.device === "tablet" ? "max-w-[768px]" : "max-w-none") : "";
+  const phone = ctx.editing && ctx.device === "phone";
+  const tablet = ctx.editing && ctx.device === "tablet";
 
   return (
     <div className={cn(ctx.editing && "home-layout-on")}>
       <HomeEditorChrome />
-      <div className={cn(ctx.editing && "md:px-60 lg:pl-64 lg:pr-[24rem]", ctx.editing && deviceW && "mx-auto", deviceW)}>
-        {slots.map((slot) => (
-          <HomeSlotFrame
-            key={slot.id}
-            id={slot.id}
-            drag={drag}
-            over={over}
-            onDragId={setDrag}
-            onOver={setOver}
-          >
-            {slot.node}
-          </HomeSlotFrame>
-        ))}
+      <div className={cn(ctx.editing && "md:pl-[15.25rem] lg:pr-[23.25rem] md:py-6")}>
+        <div
+          className={cn(
+            "min-w-0",
+            phone && "home-device-phone mx-auto overflow-x-clip",
+            tablet && "home-device-tablet mx-auto overflow-x-clip",
+          )}
+        >
+          {slots.map((slot) => (
+            <HomeSlotFrame
+              key={slot.id}
+              id={slot.id}
+              drag={drag}
+              over={over}
+              onDragId={setDrag}
+              onOver={setOver}
+            >
+              {slot.node}
+            </HomeSlotFrame>
+          ))}
+        </div>
       </div>
     </div>
   );

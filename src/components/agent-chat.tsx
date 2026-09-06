@@ -985,7 +985,7 @@ export function AgentChat() {
   if (!uiOn("showChat")) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] md:inset-auto md:bottom-6 md:right-6">
+    <div className="agent-shell pointer-events-none fixed inset-x-0 bottom-0 z-[60] md:inset-auto md:bottom-6 md:right-6">
       {open ? (
         <div
           className="agent-panel pointer-events-auto relative flex w-auto flex-col overflow-hidden rounded-[1.6rem] bg-white ring-[3px] ring-white shadow-[0_28px_70px_-18px_rgba(9,12,18,0.55)] md:h-[var(--agent-h)] md:w-[var(--agent-w)]"

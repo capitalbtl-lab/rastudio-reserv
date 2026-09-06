@@ -1,3 +1,235 @@
+"use client";
+
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { Eye, EyeOff, Monitor, Redo2, Smartphone, Tablet, Undo2 } from "lucide-react";
+import { debugSession } from "@/data/debug-fn";
+import { debugEmit } from "@/data/debug-client";
+import { saveHomeLayoutFn } from "@/data/home-layout-fn";
+import {
+  emptyHomeLayout,
+  homeBlockLabel,
+  moveHomeBlock,
+  normalizeHomeLayout,
+  patchHomeStyle,
+  placeHomeBlock,
+  setHomeText,
+  setHomeMedia,
+  type HomeBg,
+  type HomeBlockId,
+  type HomeDevice,
+  type HomeLayoutDoc,
+} from "@/data/home-layout-core";
+import { StudioPanel } from "@/components/home-studio";
+import { cn } from "@/lib/utils";
+
+const KEY = "ra_debug";
+
+function debugToken() {
+  try {
+    return sessionStorage.getItem(KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+type Ctx = {
+  editing: boolean;
+  selected: string | null;
+  select: (id: string | null) => void;
+  doc: HomeLayoutDoc;
+  device: HomeDevice;
+  setDevice: (d: HomeDevice) => void;
+  setDoc: (next: HomeLayoutDoc, persist?: boolean) => void;
+  text: (id: string, fallback: string) => string;
+  setText: (id: string, value: string) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  dirty: string;
+};
+
+const HomeEditorCtx = createContext<Ctx | null>(null);
+
+export function useHomeEditor() {
+  return useContext(HomeEditorCtx);
+}
+
+export function HomeEditorProvider({
+  initial,
+  children,
+}: {
+  initial?: unknown;
+  children: ReactNode;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [doc, setDocState] = useState(() => normalizeHomeLayout(initial));
+  const [device, setDevice] = useState<HomeDevice>("desktop");
+  const [dirty, setDirty] = useState("готово");
+  const hist = useRef<HomeLayoutDoc[]>([normalizeHomeLayout(initial)]);
+  const histAt = useRef(0);
+  const timer = useRef<number>(0);
+
+  useEffect(() => {
+    setDocState(normalizeHomeLayout(initial));
+    hist.current = [normalizeHomeLayout(initial)];
+    histAt.current = 0;
+  }, [initial]);
+
+  useEffect(() => {
+    const check = () => {
+      const t = debugToken();
+      if (!t) {
+        setEditing(false);
+        return;
+      }
+      void debugSession({ data: { token: t } }).then((res) => {
+        setEditing(Boolean(res.ok && "tools" in res && res.tools.layout !== false));
+      });
+    };
+    check();
+    window.addEventListener("ra-debug-session", check);
+    return () => window.removeEventListener("ra-debug-session", check);
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("home-editing", editing);
+    if (editing) root.dataset.homeDevice = device;
+    else delete root.dataset.homeDevice;
+    return () => {
+      root.classList.remove("home-editing");
+      delete root.dataset.homeDevice;
+    };
+  }, [editing, device]);
+
+  const persist = useCallback((next: HomeLayoutDoc) => {
+    const token = debugToken();
+    if (!token) return;
+    window.clearTimeout(timer.current);
+    setDirty("сохраняем…");
+    timer.current = window.setTimeout(() => {
+      void saveHomeLayoutFn({ data: { token, layout: next } }).then((res) => {
+        setDirty(res.ok ? "сохранено" : res.error || "ошибка");
+        debugEmit("layout", { ok: res.ok, error: res.ok ? "" : res.error });
+      });
+    }, 280);
+  }, []);
+
+  const setDoc = useCallback(
+    (next: HomeLayoutDoc, write = true) => {
+      const norm = normalizeHomeLayout(next);
+      setDocState(norm);
+      if (write) {
+        const cut = hist.current.slice(0, histAt.current + 1);
+        cut.push(norm);
+        hist.current = cut.slice(-40);
+        histAt.current = hist.current.length - 1;
+        persist(norm);
+      }
+    },
+    [persist],
+  );
+
+  const undo = useCallback(() => {
+    if (histAt.current <= 0) return;
+    histAt.current -= 1;
+    const next = hist.current[histAt.current];
+    setDocState(next);
+    persist(next);
+  }, [persist]);
+
+  const redo = useCallback(() => {
+    if (histAt.current >= hist.current.length - 1) return;
+    histAt.current += 1;
+    const next = hist.current[histAt.current];
+    setDocState(next);
+    persist(next);
+  }, [persist]);
+
+  useEffect(() => {
+    if (!editing) return;
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement | null)?.isContentEditable;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (e.key === "Escape") setSelected(null);
+      if (typing) return;
+      if (!selected) return;
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setDoc({ ...doc, order: moveHomeBlock(doc.order, selected, -1) });
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setDoc({ ...doc, order: moveHomeBlock(doc.order, selected, 1) });
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        setDoc(patchHomeStyle(doc, selected, { hidden: !doc.styles[selected]?.hidden }));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editing, selected, doc, setDoc, undo, redo]);
+
+  const value: Ctx = {
+    editing,
+    selected,
+    select: setSelected,
+    doc,
+    device,
+    setDevice,
+    setDoc,
+    text: (id, fallback) => doc.texts[id] || fallback,
+    setText: (id, v) => setDoc(setHomeText(doc, id, v)),
+    undo,
+    redo,
+    canUndo: histAt.current > 0,
+    canRedo: histAt.current < hist.current.length - 1,
+    dirty,
+  };
+
+  return <HomeEditorCtx.Provider value={value}>{children}</HomeEditorCtx.Provider>;
+}
+
+export function EditText({
+  id,
+  as: Tag = "span",
+  className,
+  children,
+}: {
+  id: string;
+  as?: "span" | "p" | "h1" | "h2" | "h3" | "div";
+  className?: string;
+  children: string;
+}) {
+  const ctx = useHomeEditor();
+  const fallback = String(children).replace(/\s+/g, " ").trim();
+  const value = ctx?.text(id, fallback) || fallback;
+  const editing = Boolean(ctx?.editing);
+  return (
+    <Tag
+      className={cn(className, editing && "ve-text")}
+      contentEditable={editing}
+      suppressContentEditableWarning
+      onMouseDown={(e) => editing && e.stopPropagation()}
+      onBlur={(e) => {
+        const next = (e.currentTarget.textContent || "").trim();
+        if (next && next !== value) ctx?.setText(id, next);
+      }}
+    >
+      {value}
+    </Tag>
+  );
+}
+
 export function HomeEditorChrome() {
   const ctx = useHomeEditor();
   const [sheetOpen, setSheetOpen] = useState(false);
