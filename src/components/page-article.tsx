@@ -27,6 +27,7 @@ import { AgeChips } from "@/components/age-chips";
 import { CoursePrice } from "@/components/course-price";
 import { trialCourseForPath } from "@/data/trial-public";
 import { hydrateEdits, pageEdit, type EditsStore } from "@/data/edits-core";
+import { wixStory } from "@/data/page-media";
 import { cn } from "@/lib/utils";
 
 type MasterCard = { path: string; h1: string };
@@ -223,7 +224,7 @@ function CinematicPage({
   const current = courses.find((c) => c.href === path);
   const age = heading.age || current?.age || null;
   const edit = pageEdit(path);
-  const body = edit.about ? [edit.about] : COURSE_STORY[path] ?? page.paragraphs;
+  const body = wixStory(path, page, COURSE_STORY[path], edit.about);
   const trialSession = schedule.find((s) => s.id === trialId);
   function openSign(id: string, mode: "trial" | "group") {
     setSignMode(mode);

@@ -8,6 +8,9 @@ const ROBOT_EN = [
 export type VideoPack = { hero?: string; clips?: string[] };
 
 const ART_INTRO = "/media/courses/art-studio-9-13/intro.mp4";
+const ROBOT_CLIP = "/media/courses/robototehnika-v-kolomne/intro.mp4";
+const PYTHON_CLIP = "/media/courses/programming-school/intro.mp4";
+const PYTHON_PATH = "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python";
 
 export const PAGE_VIDEOS: Record<string, VideoPack> = {
   "/": { hero: "/media/home/hero.mp4", clips: [...ROBOT_EN] },
@@ -33,7 +36,20 @@ export const PAGE_VIDEOS: Record<string, VideoPack> = {
   "/roboticsinenglish2": { hero: "/media/home/robot-en-2.mp4" },
   "/roboticsinenglish3": { hero: "/media/home/robot-en-3.mp4" },
   "/roboticsinenglish4": { hero: "/media/home/robot-en-4.mp4" },
-  "/robototehnika-v-kolomne": { hero: "/media/home/robot-english.mp4" },
+  "/robototehnika-v-kolomne": {
+    hero: "/media/home/robot-english.mp4",
+    clips: [ROBOT_CLIP],
+  },
+  "/robototehnika-5-7": { clips: ["/media/courses/robototehnika-5-7/intro.mp4"] },
+  "/robototehnika-7-9": { clips: ["/media/courses/robototehnika-7-9/intro.mp4"] },
+  "/robototehnika-10-14": { clips: ["/media/courses/robototehnika-10-14/intro.mp4"] },
+  "/languageschool": { clips: ["/media/courses/languageschool/intro.mp4"] },
+  "/englishlanguagegg": { clips: ["/media/courses/englishlanguagegg/intro.mp4"] },
+  "/englishlanguagesm": { clips: ["/media/courses/englishlanguagesm/intro.mp4"] },
+  "/japanese": { clips: ["/media/courses/japanese/intro.mp4"] },
+  "/vitaminkorean": { clips: ["/media/courses/vitaminkorean/intro.mp4"] },
+  "/programming-school": { clips: [PYTHON_CLIP] },
+  [PYTHON_PATH]: { clips: [PYTHON_CLIP] },
 };
 
 function decode(path = "") {
@@ -47,6 +63,21 @@ function decode(path = "") {
 export function videoPack(path = ""): VideoPack {
   const decoded = decode(path);
   return PAGE_VIDEOS[path] || PAGE_VIDEOS[decoded] || PAGE_VIDEOS[`/${decoded.replace(/^\//, "")}`] || {};
+}
+
+export function wixStory(
+  path: string,
+  page: { description?: string; paragraphs?: string[] },
+  story?: string[],
+  about?: string,
+) {
+  if (about) return [about];
+  const paras = (page.paragraphs || []).map((t) => String(t || "").trim()).filter(Boolean);
+  if (path === "/robototehnika-5-7" && story?.length) return story;
+  if (paras.length) return paras;
+  if (story?.length) return story;
+  const desc = String(page.description || "").trim();
+  return desc ? [desc] : [];
 }
 
 export function teaser(text: string, max = 280) {
