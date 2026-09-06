@@ -9,6 +9,7 @@ export {
   consultantIdGraphPrompt,
   CORE_ID_NODES,
   CORE_ID_EDGES,
+  CORE_ID_HINT,
   type GuideOp,
   type GuideRow,
   type GuideTab,

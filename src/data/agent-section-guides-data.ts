@@ -913,6 +913,17 @@ export const CORE_ID_NODES = [
   { id: "lessonId", label: "Урок", col: 2, row: 2 },
 ] as const;
 
+export const CORE_ID_HINT: Record<string, string> = {
+  schoolId: "Школа сайта. course.schoolId. Имя — подпись.",
+  courseId: "Курс витрины и колонки «Все». Не subjectId и не название группы.",
+  subjectId: "Предмет CRM. Стык: schedule-map[subjectId] → courseId.",
+  branchId: "1 Гражданская · 2 ЦМИТ · 3 Луховицы · 4 лето.",
+  groupId: "Только пара branchId+groupId. Ключ gid:{branchId}:{groupId}.",
+  tariffId: "Шаблон абонемента. Живой у ученика — extras.live_tariff.",
+  customerId: "Клиент. dossier.crmId. Не путать с groupId, даже если числа совпали.",
+  lessonId: "Урок журнала. Новое — id < 0, очередь lesson.create.",
+};
+
 export const CORE_ID_EDGES: Array<[string, string]> = [
   ["schoolId", "courseId"],
   ["courseId", "subjectId"],

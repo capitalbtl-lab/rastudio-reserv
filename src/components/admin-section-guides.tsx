@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { adminSectionGuides, FACTORY_GUIDES, GUIDE_REV, CORE_ID_NODES, CORE_ID_EDGES, type SectionGuide } from "@/data/agent-section-guides";
+import { adminSectionGuides, FACTORY_GUIDES, GUIDE_REV, CORE_ID_NODES, CORE_ID_EDGES, CORE_ID_HINT, type SectionGuide } from "@/data/agent-section-guides";
 import { Button } from "@/components/ui/button";
 import { AdminSaveBar } from "@/components/admin-save-bar";
 import { InfoTip, TipWrap } from "@/components/info-tip";
@@ -73,10 +73,11 @@ function IdGraph({
 }
 
 export function AdminSectionGuides() {
+  const start = FACTORY_GUIDES.find((g) => g.id === "schedule") || FACTORY_GUIDES[0];
   const [guides, setGuides] = useState<SectionGuide[]>(FACTORY_GUIDES);
-  const [active, setActive] = useState("schedule");
-  const [body, setBody] = useState(FACTORY_GUIDES[0]?.body || "");
-  const [on, setOn] = useState(true);
+  const [active, setActive] = useState(start.id);
+  const [body, setBody] = useState(start.body);
+  const [on, setOn] = useState(start.on);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
@@ -160,11 +161,29 @@ export function AdminSectionGuides() {
           <InfoTip text="Правила по ID. Олег и Ольга на сайте читают разделы «Роли ИИ» и «Сайт · запись». Голос админки читает все включённые разделы, когда работает с кабинетом." />
         </div>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Карта ID разделов. Олег и Ольга читают «Роли ИИ» и «Сайт · запись». Вкладки самого ассистента — «Ассистент ИИ»: не пересекаются с обучением и стилем речи. Сопоставление только по ID, не по названию.
+          Карта связей — восемь ключей. Олег и Ольга читают её в каждом ответе. Разделы ниже — подробный текст. Сопоставление только по ID, не по названию.
         </p>
       </div>
 
-      <div className="flex items-end gap-1 border-b border-black/10">
+      <article className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+        <div className="flex items-center gap-2">
+          <p className="font-display text-lg">Карта связей</p>
+          <InfoTip text="Клик по узлу подсвечивает строки. Эта схема в промпте консультанта: имя не ключ." />
+        </div>
+        <div className="mt-3 overflow-hidden rounded-2xl bg-surface-2 p-3">
+          <IdGraph selected={picked} onPick={setPicked} />
+        </div>
+        {picked ? (
+          <p className="mt-3 text-sm">
+            <span className="font-mono text-[0.78rem] font-semibold">{picked}</span>
+            <span className="text-muted"> — {CORE_ID_HINT[picked]}</span>
+          </p>
+        ) : (
+          <p className="mt-3 text-sm text-muted">Нажмите узел: школа, курс, предмет, филиал, группа, абонемент, клиент, урок.</p>
+        )}
+      </article>
+
+      <div className="flex flex-wrap items-end gap-1 border-b border-black/10">
         {guides.map((g) => (
           <button
             key={g.id}

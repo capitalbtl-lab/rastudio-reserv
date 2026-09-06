@@ -39,8 +39,9 @@ describe("база знаний: предметы и роли", () => {
     assert.match(src, /enqueueExport/);
     assert.match(src, /groupLinks/);
     assert.match(src, /consultantGuidePrompt/);
-    assert.match(src, /consultantIdGraphPrompt/);
     assert.match(src, /CORE_ID_NODES/);
+    assert.match(src, /CORE_ID_HINT/);
+    assert.match(src, /consultantIdGraphPrompt/);
     assert.match(src, /schoolId → курс courseId/);
     assert.match(src, /ОЛЕГ И ОЛЬГА/);
     assert.match(src, /applyPricesFromTariffs/);
