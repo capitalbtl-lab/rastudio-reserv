@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { adminAgentBrain, type TrainExample, type ScriptSection } from "@/data/agent-config";
+import { adminAgentBrain, type TrainExample, type ScriptSection, LOCKED_SCRIPT_IDS } from "@/data/agent-config";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { InfoTip, TipWrap } from "@/components/info-tip";
@@ -63,6 +63,7 @@ function ScriptCard({
         <p className="mt-0.5 text-[0.68rem] text-muted">
           {s.step}
           {s.auto ? " · из диалогов" : ""}
+          {(LOCKED_SCRIPT_IDS as readonly string[]).includes(s.id) ? " · заводской шаг, эталон при загрузке" : ""}
           {s.updatedAt ? ` · ${when(s.updatedAt)}` : ""}
         </p>
       </div>

@@ -58,6 +58,11 @@ describe("окно агента: права и типы занятий", () => {
     assert.match(win, /ROLE_FLAGS\.map/);
     assert.match(win, /Какие занятия консультант ставит/);
     assert.match(win, /Alfa/);
+    assert.match(win, /consultantCanBook === false/);
+    assert.match(win, /offByDefault/);
+    const chat = readFileSync(new URL("./agent-chat.ts", import.meta.url), "utf8");
+    assert.doesNotMatch(chat, /name: "open_group"/);
+    assert.match(chat, /submit_trial то же/);
   });
 
   it("окно чата: сброс, Олег/Ольга, перебивание, ответы не стираются, озвучка", () => {

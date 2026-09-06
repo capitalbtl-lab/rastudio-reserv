@@ -241,9 +241,11 @@ function fileOf() {
   return join(process.cwd(), "storage", "agent-brain.json");
 }
 
+export const LOCKED_SCRIPT_IDS = ["funnel", "age", "city", "branch", "school"] as const;
+
 function seedScripts(list?: ScriptSection[]) {
   const have = Array.isArray(list) ? list : [];
-  const locked = new Set(["funnel", "age", "city", "branch", "school"]);
+  const locked = new Set<string>(LOCKED_SCRIPT_IDS);
   if (!have.length) return DEFAULT_SCRIPTS.map((s) => ({ ...s, updatedAt: s.updatedAt || new Date().toISOString() }));
   const byId = new Map(have.map((s) => [s.id, s]));
   for (const def of DEFAULT_SCRIPTS) {
