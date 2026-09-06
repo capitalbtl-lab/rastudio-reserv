@@ -25,6 +25,7 @@ const CLIENT_TOPICS: AgentChip[] = [
   { label: "Абонемент", send: "Что с абонементом и остатком" },
   { label: "Правила", send: "Расскажите правила оказания услуг" },
   { label: "Второму ребёнку", send: "Хочу записать второго ребёнка на пробное" },
+  { label: "Другое занятие", send: "Нужно индивидуальное или дополнительное занятие у педагога" },
 ];
 
 const AGES: AgentChip[] = [
@@ -97,6 +98,27 @@ export function chipsForReply(
             { label: "Месяц", send: "Пауза на месяц" },
           ],
         };
+      }
+      if (facts.intent === "пропуск" && !facts.wantsSkip) {
+        if (/другую дату|другая дата/i.test(t) || (!facts.day && /другую дату/i.test(messages.filter((m) => m.role === "user").slice(-1)[0]?.content || ""))) {
+          return { hint: "День пропуска", chips: WEEKDAY_CHIPS };
+        }
+        return {
+          hint: "Отметить пропуск",
+          chips: [
+            { label: "Да, отметить", send: "Да, отметьте пропуск ближайшего занятия", primary: true },
+            { label: "Другая дата", send: "Пропуск в другую дату" },
+          ],
+        };
+      }
+      if (facts.intent === "второй") {
+        return {
+          hint: "Возраст второго",
+          chips: AGES.map((c) => ({ ...c, send: c.send.replace("Ребёнку", "Второму ребёнку") })),
+        };
+      }
+      if ((facts.intent === "индивидуальное" || facts.intent === "сверхурочное" || facts.intent === "дополнительное") && !facts.day) {
+        return { hint: "День занятия", chips: WEEKDAY_CHIPS };
       }
       if (groups.length) return { hint: "Слоты", chips: groups };
       return { hint: "Что нужно", chips: CLIENT_TOPICS };
