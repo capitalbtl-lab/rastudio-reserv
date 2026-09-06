@@ -70,6 +70,17 @@ describe("макет главной", () => {
     assert.match(editor, /Инспектор/);
     assert.match(editor, /contentEditable/);
     assert.match(editor, /StudioPanel/);
+    assert.match(editor, /home-editing/);
+    assert.match(editor, /\["layers", "Слои"\]/);
+    assert.match(editor, /Панель/);
+    assert.doesNotMatch(editor, /max-w-\[390px\]/);
+    const blocks = readFileSync(new URL("../components/home-blocks.tsx", import.meta.url), "utf8");
+    assert.match(blocks, /home-device-phone/);
+    assert.match(blocks, /md:pl-\[15\.25rem\]/);
+    assert.doesNotMatch(blocks, /max-w-\[390px\].*lg:pr/);
+    const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+    assert.match(css, /html\.home-editing \.mobile-dock/);
+    assert.match(css, /html\.home-editing \.agent-shell/);
     const studio = readFileSync(new URL("../components/home-studio.tsx", import.meta.url), "utf8");
     assert.match(studio, /Придумать новый блок/);
     assert.match(studio, /DeepSeek: править текст/);
