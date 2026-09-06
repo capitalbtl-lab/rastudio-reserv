@@ -1468,6 +1468,32 @@ export function CrmClientCard({
     </div>
   ) : null;
   const dropNode = dropDialog && typeof document !== "undefined" ? createPortal(dropDialog, document.body) : dropDialog;
+  const dropTariffDialog = dropTariff ? (
+    <div className="fixed inset-0 z-[240] grid place-items-center bg-black/35 p-4" onClick={() => setDropTariff(null)}>
+      <div className={cn("w-full max-w-[22rem] p-5", RA_POP)} onClick={(e) => e.stopPropagation()}>
+        <p className="font-display text-[1.05rem] leading-snug">Удалить абонемент?</p>
+        <p className="mt-2 text-sm text-muted">
+          «{dropTariff.name}» снимется с «{title}». Это запишется в AlfaCRM.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" className="h-9 rounded-full px-4 text-sm font-semibold text-muted hover:bg-surface-2" onClick={() => setDropTariff(null)}>
+            Отмена
+          </button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 bg-rose-600 text-white hover:bg-rose-700"
+            data-op="remove-tariff-confirm"
+            disabled={Boolean(busy)}
+            onClick={() => void run("customerTariff", { remove: true, tariffRowId: dropTariff.id, tariffId: dropTariff.id })}
+          >
+            {busy === "customerTariff" ? "Снимаю…" : "Удалить"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+  const dropTariffNode = dropTariffDialog && typeof document !== "undefined" ? createPortal(dropTariffDialog, document.body) : dropTariffDialog;
 
   const payDialog = headMenu === "pay" ? (
     <div
@@ -1663,6 +1689,7 @@ export function CrmClientCard({
         {tariffNode}
         {groupNode}
         {dropNode}
+        {dropTariffNode}
         {payNode}
       </>
     );
@@ -1680,6 +1707,7 @@ export function CrmClientCard({
         {tariffDialog}
         {groupDialog}
         {dropDialog}
+        {dropTariffDialog}
         {payDialog}
       </>
     );
@@ -1691,6 +1719,7 @@ export function CrmClientCard({
       {tariffNode}
       {groupNode}
       {dropNode}
+      {dropTariffNode}
       {payNode}
     </>
   );
