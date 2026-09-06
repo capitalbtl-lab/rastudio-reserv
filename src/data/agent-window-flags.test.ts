@@ -30,8 +30,9 @@ describe("окно агента: права и типы занятий", () => {
     assert.equal(allowedLessonType(s, "мастер-класс"), true);
     assert.equal(allowedLessonType(book({ consultantCanBook: false, consultantCanBookTrial: true }), "trial"), false);
     assert.equal(BOOK_TYPE_FLAGS.length, 15);
-    assert.match(bookTypesPrompt(s), /то же правило, что пробное/);
+    assert.match(bookTypesPrompt(s), /book_lesson с lesson_type/);
     assert.match(bookTypesPrompt(s), /Мастер-класс/);
+    assert.match(bookTypesPrompt(s), /БЕЗ group_ids/);
   });
 
   it("старый сейв «прочие» раскладывается на отдельные типы", () => {
@@ -56,6 +57,8 @@ describe("окно агента: права и типы занятий", () => {
     assert.match(win, /BOOK_TYPE_FLAGS\.map/);
     assert.match(win, /ROLE_FLAGS\.map/);
     assert.match(win, /Какие занятия консультант ставит/);
+    assert.match(win, /LESSON_POLICY_GROUPS/);
+    assert.match(win, /Alfa/);
   });
 
   it("окно чата: сброс, Олег/Ольга, перебивание, ответы не стираются, озвучка", () => {

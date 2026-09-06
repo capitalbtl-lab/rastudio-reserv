@@ -15,11 +15,8 @@ describe("пробное Чудновой на диск", () => {
     const alfa = readFileSync(new URL("./alfacrm.ts", import.meta.url), "utf8");
     const fnAt = alfa.indexOf("export async function createAlfaLesson");
     const fn = alfa.slice(fnAt, fnAt + 4500);
-    assert.match(fn, /allowGroup/);
-    assert.match(fn, /аудитория занята/);
-    assert.match(fn, /rooms = roomId \? \[roomId, 0\] : \[0\]/);
-    assert.match(fn, /teacher_ids: teacherIds/);
-    assert.match(fn, /type.id === 3 \? undefined/);
+    assert.match(fn, /lessonAllowsGroup/);
+    assert.match(fn, /lessonOmitsRoom/);
     const disk = readFileSync(new URL("./crm-trial-disk.ts", import.meta.url), "utf8");
     assert.equal(/room_id:/.test(disk), false);
     assert.equal(/group_ids/.test(disk), false);
