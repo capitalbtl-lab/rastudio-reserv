@@ -48,4 +48,17 @@ describe("импорт лидов не валит кабинет", () => {
     assert.match(pull, /isTransientHttp/);
     assert.match(pull, /Кабинет отвечает медленно/);
   });
+
+  it("перевод лида в клиента подгружает is_study=1 даже без группы", () => {
+    const src = readFileSync(join(dir, "dossiers.ts"), "utf8");
+    assert.match(src, /export async function syncCustomersDelta/);
+    assert.match(src, /wantAlfaPullChannel\("customers"\)/);
+    assert.match(src, /customerPullCandidate/);
+    assert.match(src, /forgetLead/);
+    const pack = readFileSync(join(dir, "crm-packet-queue.ts"), "utf8");
+    assert.match(pack, /syncCustomersDelta/);
+    const core = readFileSync(join(dir, "crm-alfa-link-core.ts"), "utf8");
+    assert.match(core, /id: "customers"/);
+    assert.match(core, /Клиенты/);
+  });
 });

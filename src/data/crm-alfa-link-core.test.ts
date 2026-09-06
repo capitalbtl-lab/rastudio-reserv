@@ -30,9 +30,10 @@ describe("режим фона с AlfaCRM", () => {
       ALFA_LINK_MODES.map((m) => m.id),
       ["linked", "offline"],
     );
-    assert.equal(ALFA_PULL_CH.length, 3);
+    assert.equal(ALFA_PULL_CH.length, 4);
     assert.equal(ALFA_PUSH_CH.length, 7);
     assert.equal(ALFA_SYNC_DEFAULT.pull.leads, true);
+    assert.equal(ALFA_SYNC_DEFAULT.pull.customers, true);
     assert.equal(ALFA_SYNC_DEFAULT.push.trials, true);
   });
 
@@ -99,6 +100,7 @@ describe("режим фона с AlfaCRM", () => {
     const pack = readFileSync(new URL("./crm-packet-queue.ts", import.meta.url), "utf8");
     assert.match(pack, /if \(!alfaLinkedNow\(\)\)/);
     assert.match(pack, /wantAlfaPullChannel\("clients"\)/);
+    assert.match(pack, /wantAlfaPullChannel\("customers"\)/);
     assert.match(pack, /wantAlfaPullChannel\("lessons"\)/);
     assert.match(pack, /extra: "без Alfa"/);
     const sched = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");

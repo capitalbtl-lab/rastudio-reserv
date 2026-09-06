@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { personIsStudy, personRole, personSaveFields } from "./crm-person-role.ts";
+import { customerPullCandidate, personIsStudy, personRole, personSaveFields } from "./crm-person-role.ts";
 
 describe("роль человека: один экран", () => {
   it("is_study режет три корзины", () => {
@@ -12,9 +12,16 @@ describe("роль человека: один экран", () => {
 
   it("Фролов: клиент на доске CRM — лид, не клиент", () => {
     assert.equal(personRole({ is_study: 1, crm_funnel: "1" }), "лид");
-    assert.equal(personRole({ is_study: 1, lead_status_id: 1 }), "лид");
+    assert.equal(personRole({ is_study: 1, lead_status_id: 1 }), "учится");
     assert.equal(personRole({ is_study: 1, lead_status_id: 0 }), "учится");
     assert.equal(personRole({ is_study: 1, lead_status_id: null }), "учится");
+  });
+
+  it("лид без is_study=1 — кандидат на подгрузку клиентов", () => {
+    assert.equal(customerPullCandidate({ crmId: 10, status: "лид", extras: { is_study: "0" } }), true);
+    assert.equal(customerPullCandidate({ crmId: 10, status: "лид", extras: { is_study: "1" } }), false);
+    assert.equal(customerPullCandidate({ crmId: 10, status: "учится", extras: { is_study: "1" } }), false);
+    assert.equal(customerPullCandidate({ crmId: 0, status: "лид", extras: { is_study: "0" } }), false);
   });
 
   it("архив сильнее воронки", () => {
