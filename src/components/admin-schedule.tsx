@@ -1591,7 +1591,7 @@ export function AdminSchedule() {
       const list = siteTree.courses
         .filter((c) => c.schoolId === school.id)
         .slice()
-        .sort((a, b) => ageLo(a.age || a.label) - ageLo(b.age || b.label) || a.label.localeCompare(b.label, "ru"));
+        .sort((a, b) => ageLo(a.age || a.label) - ageLo(b.age || b.label) || String(a.label || "").localeCompare(String(b.label || ""), "ru"));
       const courses = list.map((c) => ({ course: c.label, courseId: c.id, href: c.href, items: [] as CrmSlot[] }));
       for (const s of filtered) {
         if (used.has(s.id)) continue;

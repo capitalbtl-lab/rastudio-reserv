@@ -33,18 +33,22 @@ export function RaSelect({
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 240, maxH: 280, up: false });
 
-  const all = useMemo(() => (groups ? groups.flatMap((g) => g.options) : options) || [], [groups, options]);
+  const all = useMemo(() => (groups ? groups.flatMap((g) => g.options || []) : options) || [], [groups, options]);
   const current = all.find((o) => o.value === value);
   const qq = q.trim().toLowerCase();
-  const match = (o: RaOption) => !qq || o.label.toLowerCase().includes(qq) || (o.hint || "").toLowerCase().includes(qq);
+  const match = (o: RaOption) => {
+    const label = String(o?.label || "");
+    const hint = String(o?.hint || "");
+    return !qq || label.toLowerCase().includes(qq) || hint.toLowerCase().includes(qq);
+  };
   const shownGroups = useMemo(() => {
     if (!groups) return [];
     return groups
-      .map((g) => ({ ...g, options: g.options.filter(match) }))
+      .map((g) => ({ ...g, options: (g.options || []).filter(match) }))
       .filter((g) => g.options.length);
   }, [groups, qq]);
   const shownOpts = useMemo(() => (options || []).filter(match), [options, qq]);
-  const total = groups ? groups.reduce((n, g) => n + g.options.length, 0) : (options || []).length;
+  const total = groups ? groups.reduce((n, g) => n + (g.options?.length || 0), 0) : (options || []).length;
   const searchable = total > 8;
 
   function place() {
@@ -125,7 +129,7 @@ export function RaSelect({
       ) : null}
       <ul className="pretty-scroll overflow-y-auto py-1" style={{ maxHeight: searchable ? pos.maxH - 48 : pos.maxH }}>
         <li className={groups?.length ? "border-b border-black/8 mb-1 pb-1" : undefined}>
-          <button type="button" className={itemCls(!value)} onClick={() => pick("")}>
+          <button type="button" className={itemCls(!value)} onMouseDown={(e) => e.preventDefault()} onClick={() => pick("")}>
             <span className={value ? "text-muted" : "font-semibold"}>{placeholder}</span>
           </button>
         </li>
@@ -134,7 +138,7 @@ export function RaSelect({
               <li key={g.label}>
                 <p className="px-3 pb-0.5 pt-2 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-muted">{g.label}</p>
                 {g.options.map((o) => (
-                  <button key={o.value} type="button" className={itemCls(o.value === value)} onClick={() => pick(o.value)}>
+                  <button key={o.value} type="button" className={itemCls(o.value === value)} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(o.value)}>
                     <span>{o.label}</span>
                     {o.hint ? <span className="text-[0.72rem] font-normal text-muted">{o.hint}</span> : null}
                   </button>
@@ -143,7 +147,7 @@ export function RaSelect({
             ))
           : shownOpts.map((o) => (
               <li key={o.value}>
-                <button type="button" className={itemCls(o.value === value)} onClick={() => pick(o.value)}>
+                <button type="button" className={itemCls(o.value === value)} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(o.value)}>
                   <span>{o.label}</span>
                   {o.hint ? <span className="text-[0.72rem] font-normal text-muted">{o.hint}</span> : null}
                 </button>

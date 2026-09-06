@@ -400,7 +400,7 @@ export function CrmClientCard({
     setPhone(card.phones[0] || "");
     setEmail(card.emails[0] || "");
     setNote(card.note);
-    setLessonTime(card.regular?.[0]?.from || "");
+    setLessonTime(card.regular?.[0]?.from || "16:00");
   }, [card]);
 
   useEffect(() => {
@@ -410,10 +410,10 @@ export function CrmClientCard({
   }, [msg, busy]);
 
   const channels = useMemo(() => {
-    const set = new Set(card.comms.map((c) => c.channel || "сообщение"));
+    const set = new Set((card.comms || []).map((c) => c.channel || "сообщение"));
     return [...set];
   }, [card.comms]);
-  const comms = channel ? card.comms.filter((c) => (c.channel || "сообщение") === channel) : card.comms;
+  const comms = channel ? (card.comms || []).filter((c) => (c.channel || "сообщение") === channel) : card.comms || [];
   const tiles = useMemo(() => lessonsForCard(card.calendar, card.regular), [card.calendar, card.regular]);
   const catalog: LessonCatalog = card.catalog || { subjects: [], teachers: [], rooms: [], tariffs: [], groups: [] };
   const tariffOffers: TariffOffer[] = catalog.tariffs || [];
@@ -1076,7 +1076,13 @@ export function CrmClientCard({
   );
 
   const dialog = lessonOpen ? (
-    <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/45 p-4" onClick={() => setLessonOpen(false)} data-op="lesson-dialog">
+    <div
+      className="fixed inset-0 z-[250] flex items-center justify-center bg-black/45 p-4"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) setLessonOpen(false);
+      }}
+      data-op="lesson-dialog"
+    >
       <div className={cn("w-full max-w-[34rem]", RA_POP)} onClick={(e) => e.stopPropagation()}>
         <header className="flex items-center justify-between border-b border-black/8 px-5 py-3">
           <h3 className="font-display text-lg">{typeName} — запланировать</h3>

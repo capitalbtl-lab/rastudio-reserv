@@ -27,21 +27,46 @@ export function AppErrorComponent({ error }: ErrorComponentProps) {
 }
 
 export function lazyWithRetry(load: () => Promise<{ default: ComponentType<any> }>) {
-  return lazy(() => load());
+  return lazy(() =>
+    load().catch((err) => {
+      if (typeof window !== "undefined" && isChunkLoadError(err)) {
+        const key = "ra_chunk_reload";
+        const last = Number(sessionStorage.getItem(key) || 0);
+        if (Date.now() - last > 12_000) {
+          sessionStorage.setItem(key, String(Date.now()));
+          window.location.reload();
+        }
+      }
+      throw err;
+    }),
+  );
 }
 
-export class TabError extends Component<{ children: ReactNode; quiet?: boolean }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
+export class TabError extends Component<{ children: ReactNode; quiet?: boolean }, { failed: boolean; chunk: boolean; message: string }> {
+  state = { failed: false, chunk: false, message: "" };
+  static getDerivedStateFromError(error: Error) {
+    const message = String(error?.message || error || "");
+    return { failed: true, chunk: isChunkLoadError(message), message };
+  }
+  componentDidCatch(error: Error) {
+    if (isChunkLoadError(error) && typeof window !== "undefined") {
+      const key = "ra_chunk_reload";
+      const last = Number(sessionStorage.getItem(key) || 0);
+      if (Date.now() - last > 12_000) {
+        sessionStorage.setItem(key, String(Date.now()));
+        window.setTimeout(() => window.location.reload(), 250);
+      }
+    }
   }
   render() {
     if (!this.state.failed) return this.props.children;
     if (this.props.quiet) return null;
     return (
       <div className="mt-8 rounded-3xl bg-surface px-5 py-6 shadow-[var(--shadow-border)]">
-        <p className="font-display text-xl">Раздел не открылся</p>
-        <p className="mt-2 max-w-lg text-sm text-muted">Обновите страницу.</p>
+        <p className="font-display text-xl">{this.state.chunk ? "Кабинет обновляется" : "Раздел не открылся"}</p>
+        <p className="mt-2 max-w-lg text-sm text-muted">
+          {this.state.chunk ? "Секунда — загружается текущая версия." : "Обновите страницу. Если снова ошибка — подождите полминуты."}
+        </p>
         <button type="button" className="mt-3 text-sm font-semibold text-primary" onClick={() => window.location.reload()}>
           Обновить
         </button>
