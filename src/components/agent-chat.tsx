@@ -926,6 +926,7 @@ export function AgentChat() {
     setBusy(true);
     let reply = "";
     let shouldReload = false;
+    let speakTail = "";
     const t0 = Date.now();
     try {
       const history = adminThread ? adminMsgsRef.current : clientMsgsRef.current;
@@ -961,15 +962,13 @@ export function AgentChat() {
         }
         shouldReload = Boolean(res.reload);
         if ("groups" in res && Array.isArray(res.groups) && res.groups.length) {
-          setGroupChips((prev) => {
-            const nextChipsList = [...prev];
-            for (const chip of res.groups as typeof prev) {
-              const i = nextChipsList.findIndex((c) => c.label === chip.label || (chip.href && c.href === chip.href));
-              if (i >= 0) nextChipsList[i] = chip;
-              else nextChipsList.push(chip);
-            }
-            return nextChipsList;
-          });
+          const incoming = res.groups as typeof groupChips;
+          setGroupChips(incoming);
+          if (incoming.some((c) => /gid=/i.test(c.send || ""))) {
+            speakTail = incoming.some((c) => /отработк/i.test(c.send || ""))
+              ? " Выберите слот — поставлю отработку."
+              : " Выберите удобное время, и я запишу вас в группу.";
+          }
         }
         if ("signup" in res && res.signup) {
           window.open(String(res.signup), "_blank", "noopener,noreferrer");
@@ -1009,7 +1008,7 @@ export function AgentChat() {
     busyRef.current = false;
     setBusy(false);
     if (voiceOnRef.current && reply.trim()) {
-      await maybeSpeak(reply);
+      await maybeSpeak(`${reply}${speakTail}`);
       if (gen !== chatGenRef.current) return;
     }
     if (voiceOnRef.current && !speakingRef.current) startListen();
