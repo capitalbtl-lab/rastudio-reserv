@@ -6,6 +6,7 @@ import { deepseekText } from "./deepseek-text";
 import { homeBlockLabel, type HomeCustomBlock } from "./home-layout-core";
 import { mediaContext } from "./media-context";
 import { loadSiteTree } from "./site-tree";
+import { saveMediaAlt } from "./media-alts";
 
 export type PulseNote = { at: string; kind: "media" | "block" | "site"; title: string; text: string; src?: string };
 
@@ -63,20 +64,33 @@ export function pushPulse(note: PulseNote) {
 }
 
 export async function describeMediaForPulse(src: string, name: string, kind: "image" | "video") {
+  const caption = await proposeMediaCaption(src, name, kind);
+  acceptMediaCaption(src, caption);
+  return caption;
+}
+
+export async function proposeMediaCaption(src: string, name: string, kind: "image" | "video") {
   const layout = loadHomeLayout();
   const used = Object.entries(layout.media || {})
     .filter(([, v]) => v === src)
     .map(([id]) => homeBlockLabel(id, layout.customs));
   const ctx = mediaContext(src, treeLabels());
-  const caption = await deepseekText(
-    `Опиши файл сайта для консультанта Ольги. DeepSeek видит метаданные и место, не пиксели — не выдумывай лица.
+  return deepseekText(
+    `Напиши ALT-подпись файла сайта студии «Развивайся». DeepSeek видит метаданные и место, не пиксели — не выдумывай лица.
 Тип: ${kind === "video" ? "видео" : "фото"}. Имя: ${name}. Путь: ${src}.
 Папка/курс: ${ctx.place}. Где на главной: ${used.join(", ") || "ещё не в блоке"}.
-Два коротких предложения: что это за кадр (по месту и имени) и как назвать родителю. Без выдуманных людей и цен.`,
-    280,
+Одно-два коротких предложения для атрибута alt: что на кадре по месту и имени. Без цен и выдуманных людей.`,
+    220,
   );
-  pushPulse({ at: new Date().toISOString(), kind: "media", title: `${ctx.place}: ${name}`, text: caption, src });
-  return caption;
+}
+
+export function acceptMediaCaption(src: string, text: string) {
+  const caption = String(text || "").trim();
+  if (!caption) return loadSitePulse();
+  const ctx = mediaContext(src, treeLabels());
+  const name = src.split("/").pop() || src;
+  saveMediaAlt(src, caption);
+  return pushPulse({ at: new Date().toISOString(), kind: "media", title: `${ctx.place}: ${name}`, text: caption, src });
 }
 
 export function noteCustomBlock(block: Pick<HomeCustomBlock, "title" | "text" | "why" | "kicker">) {

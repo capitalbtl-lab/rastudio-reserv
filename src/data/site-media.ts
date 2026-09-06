@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync, unlinkSync } from "node:fs";
 import { extname, join, relative } from "node:path";
 import { logAdmin } from "./admin-settings";
-import { mediaFolder } from "./media-context";
+import { mediaFolder, mediaSchoolId, mediaUploadRel, schoolSlug } from "./media-context";
+import { loadSiteTree } from "./site-tree";
 
 export type SiteMediaItem = {
   src: string;
@@ -10,15 +11,24 @@ export type SiteMediaItem = {
   bytes: number;
   at: number;
   folder: string;
+  schoolId?: string;
 };
 
 const ROOT = () => join(process.cwd(), "public");
-const UPLOADS = () => join(ROOT(), "media", "uploads");
 
 const IMAGE = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"]);
 const VIDEO = new Set([".mp4", ".webm"]);
 
 let cache: { at: number; items: SiteMediaItem[] } | null = null;
+
+function treePack() {
+  try {
+    const tree = loadSiteTree();
+    return { schools: tree.schools, courses: tree.courses };
+  } catch {
+    return { schools: [] as { id: string }[], courses: [] as { id: string; schoolId: string }[] };
+  }
+}
 
 function walk(dir: string, acc: SiteMediaItem[], depth = 0) {
   if (depth > 6 || acc.length >= 400) return;
@@ -28,6 +38,7 @@ function walk(dir: string, acc: SiteMediaItem[], depth = 0) {
   } catch {
     return;
   }
+  const pack = treePack();
   for (const name of names) {
     if (name.startsWith(".")) continue;
     const full = join(dir, name);
@@ -53,6 +64,7 @@ function walk(dir: string, acc: SiteMediaItem[], depth = 0) {
       bytes: st.size,
       at: st.mtimeMs,
       folder: mediaFolder(src),
+      schoolId: mediaSchoolId(src, pack.schools, pack.courses),
     });
   }
 }
@@ -70,21 +82,24 @@ export function listSiteMedia(): SiteMediaItem[] {
   return acc;
 }
 
-export function saveSiteMedia(name: string, buf: Buffer) {
+export function saveSiteMedia(name: string, buf: Buffer, folder = "") {
   const ext = extname(name).toLowerCase();
   if (!IMAGE.has(ext) && !VIDEO.has(ext)) return { ok: false as const, error: "Нужно фото (jpg, png, webp) или видео mp4." };
   if (buf.length > 12 * 1024 * 1024) return { ok: false as const, error: "Файл больше 12 МБ." };
-  mkdirSync(UPLOADS(), { recursive: true });
-  const safe = name
-    .replace(/[^a-zA-Z0-9._-а-яА-ЯёЁ]+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 80) || "file";
+  const relDir = mediaUploadRel(folder);
+  const dir = join(ROOT(), relDir);
+  mkdirSync(dir, { recursive: true });
+  const safe =
+    name
+      .replace(/[^a-zA-Z0-9._-а-яА-ЯёЁ]+/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 80) || "file";
   const file = `${Date.now().toString(36)}-${safe.toLowerCase()}`;
-  const full = join(UPLOADS(), file);
-  writeFileSync(full, buf);
+  writeFileSync(join(dir, file), buf);
   invalidateSiteMedia();
-  logAdmin(`Медиа: загружен ${file}`);
-  const src = `/media/uploads/${file}`;
+  logAdmin(`Медиа: загружен ${relDir}/${file}`);
+  const src = `/${relDir}/${file}`;
+  const pack = treePack();
   return {
     ok: true as const,
     item: {
@@ -93,14 +108,16 @@ export function saveSiteMedia(name: string, buf: Buffer) {
       kind: (IMAGE.has(ext) ? "image" : "video") as "image" | "video",
       bytes: buf.length,
       at: Date.now(),
-      folder: "uploads",
+      folder: mediaFolder(src),
+      schoolId: mediaSchoolId(src, pack.schools, pack.courses) || (schoolSlug(folder) ? `/${schoolSlug(folder)}` : ""),
     },
   };
 }
 
 export function deleteSiteUpload(src: string) {
   const rel = String(src || "").replace(/^\/+/, "");
-  if (!rel.startsWith("media/uploads/")) return { ok: false as const, error: "Удалять можно только загрузки в медиатеке." };
+  const okDir = rel.startsWith("media/uploads/") || rel.startsWith("media/schools/");
+  if (!okDir) return { ok: false as const, error: "Удалять можно загрузки в медиатеке и папках школ." };
   const full = join(ROOT(), rel);
   if (!existsSync(full)) return { ok: false as const, error: "Файла нет." };
   unlinkSync(full);

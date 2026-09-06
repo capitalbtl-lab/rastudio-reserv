@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { tokenOk } from "./admin-auth";
 import { listSiteMedia, saveSiteMedia, deleteSiteUpload } from "./site-media";
-import { describeMediaForPulse, loadSitePulse, refreshSitePulse, noteCustomBlock } from "./site-pulse";
+import { describeMediaForPulse, proposeMediaCaption, acceptMediaCaption, loadSitePulse, refreshSitePulse, noteCustomBlock } from "./site-pulse";
+import { loadMediaAlts } from "./media-alts";
+import { schoolSlug } from "./media-context";
 import { loadHomeLayout, saveHomeLayout } from "./home-layout";
 import {
   addCustomBlock,
@@ -34,11 +36,31 @@ function treeLabels() {
 function mediaWithCaptions() {
   const pulse = loadSitePulse();
   const captions = new Map(pulse.notes.filter((n) => n.src).map((n) => [n.src as string, n.text]));
+  const alts = loadMediaAlts();
   const labels = treeLabels();
+  let tree: { schools: { id: string; label: string }[]; courses: { id: string; schoolId: string }[] } = { schools: [], courses: [] };
+  try {
+    tree = loadSiteTree();
+  } catch {
+    /* */
+  }
   return listSiteMedia().map((item) => {
     const ctx = mediaContext(item.src, labels);
-    return { ...item, caption: captions.get(item.src) || "", place: ctx.place };
+    return {
+      ...item,
+      caption: alts[item.src] || captions.get(item.src) || "",
+      place: ctx.place,
+      schoolId: item.schoolId || "",
+    };
   });
+}
+
+function studioSchools() {
+  try {
+    return loadSiteTree().schools.map((s) => ({ id: s.id, label: s.label, folder: schoolSlug(s.id) }));
+  } catch {
+    return [];
+  }
 }
 
 export const siteStudio = createServerFn({ method: "POST" })
@@ -58,7 +80,8 @@ export const siteStudio = createServerFn({ method: "POST" })
           | "rewrite"
           | "agents"
           | "embed"
-          | "set";
+          | "set"
+          | "caption";
         name?: string;
         mime?: string;
         base64?: string;
@@ -68,12 +91,15 @@ export const siteStudio = createServerFn({ method: "POST" })
         slot?: string;
         path?: string;
         agent?: unknown;
+        folder?: string;
+        caption?: string;
+        accept?: boolean;
       },
   )
   .handler(async ({ data }) => {
     if (!guard(data.token)) return { ok: false as const, error: "Нужен вход администратора или режим отладки." };
     if (data.action === "list") {
-      return { ok: true as const, media: mediaWithCaptions(), pulse: loadSitePulse(), pages: loadPageAgents().pages };
+      return { ok: true as const, media: mediaWithCaptions(), pulse: loadSitePulse(), pages: loadPageAgents().pages, schools: studioSchools() };
     }
     if (data.action === "set") {
       const src = String(data.src || "");
