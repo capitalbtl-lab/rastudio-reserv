@@ -60,7 +60,7 @@ export function useAdminLiveReload() {
         }
         if (deploying && idle) {
           if (!started) started = Date.now();
-          if (Date.now() - started > 5 * 60 * 1000) {
+          if (Date.now() - started > 70 * 1000) {
             idle = false;
             setPhase("");
             return;
@@ -83,7 +83,10 @@ export function useAdminLiveReload() {
           setPhase((p) => (p === "reload" ? p : ""));
         }
       } catch {
-        /* сервер в момент перезапуска — окно не вешаем */
+        if (started && Date.now() - started > 70 * 1000) {
+          idle = false;
+          setPhase("");
+        }
       } finally {
         busy = false;
       }

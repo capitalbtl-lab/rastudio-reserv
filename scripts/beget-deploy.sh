@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Выкладка rastudio.org на Beget.
-# Сначала останавливаем процесс, потом чистим .output — иначе кабинет
-# ищет старые hashed-чанки (site-tree-XXXX.mjs) и сыпется.
+# Сборка в .output-next, пока старый процесс ещё отдаёт сайт.
+# Стоп — только на секунды, чтобы поменять папки.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -34,12 +34,29 @@ if [ ! -d node_modules ] || ! git diff --quiet "$BEFORE" HEAD -- package-lock.js
   npm ci
 fi
 
+rm -rf .output-next
+NITRO_PRESET=node-server NITRO_OUTPUT=.output-next npm run build:beget
+if [ ! -f .output-next/server/index.mjs ]; then
+  echo "[deploy] сборка не дала .output-next — сайт не трогаем"
+  stamp
+  exit 1
+fi
+
 pm2 stop rastudio >/dev/null 2>&1 || true
-rm -rf .output
-npm run build:beget
+rm -rf .output-prev
+if [ -d .output ]; then mv .output .output-prev; fi
+mv .output-next .output
 pm2 delete rastudio >/dev/null 2>&1 || true
-pm2 start ecosystem.config.cjs --only rastudio --update-env
+if ! pm2 start ecosystem.config.cjs --only rastudio --update-env; then
+  echo "[deploy] старт не удался, возвращаю прошлую сборку"
+  rm -rf .output
+  if [ -d .output-prev ]; then mv .output-prev .output; fi
+  pm2 start ecosystem.config.cjs --only rastudio --update-env || true
+  stamp
+  exit 1
+fi
 pm2 save
+rm -rf .output-prev
 
 if ! pm2 describe rastudio-deploy >/dev/null 2>&1; then
   pm2 start ecosystem.config.cjs --only rastudio-deploy
