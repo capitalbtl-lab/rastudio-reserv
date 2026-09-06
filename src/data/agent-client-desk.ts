@@ -9,9 +9,103 @@ import { listAdminSlots } from "./alfacrm-schedule.ts";
 import { loadTariffs } from "./crm-tariffs.ts";
 import { enqueueExport } from "./crm-export-queue.ts";
 import { digestPrompt, type ClientDigest } from "./agent-client-desk-core.ts";
+import { WEEKDAY_CHIPS, type SessionFacts } from "./agent-facts.ts";
 
 export type { ClientDigest };
 export { digestPrompt };
+
+export async function makeupList(customerId: number, weekday: string) {
+  const d = clientDigest(customerId);
+  if (!d) return { digest: null as ClientDigest | null, list: [] as Awaited<ReturnType<typeof import("./alfacrm-schedule").groupsForQuery>>, courseLabel: "" };
+  const { groupsForQuery } = await import("./alfacrm-schedule.ts");
+  const ids = [...new Set(d.groups.map((g) => g.courseId).filter(Boolean))];
+  const seen = new Set<string>();
+  const list: Awaited<ReturnType<typeof groupsForQuery>> = [];
+  const queries = ids.length ? ids.slice(0, 4).map((courseId) => ({ courseId, weekday })) : [];
+  for (const q of queries) {
+    const part = await groupsForQuery(q);
+    for (const g of part) {
+      const key = `${g.gid}-${g.when}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push(g);
+    }
+  }
+  const courseLabel = d.groups.map((g) => g.name).filter(Boolean)[0] || ids[0] || "";
+  return { digest: d, list, courseLabel };
+}
+
+export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts) {
+  if (facts.mode !== "client" || !facts.identified || !facts.customerId) return null;
+  const n = who === "olga" ? "Ольга" : "Олег";
+  const found = who === "olga" ? "нашла" : "нашёл";
+  const d = clientDigest(facts.customerId);
+  const child = facts.child || d?.child.split(/\s+/)[0] || "ребёнок";
+  const intent = facts.intent || "";
+  if (intent === "расписание") {
+    return {
+      reply: `${n}: ${child} — ближайшее занятие: ${d?.nextLesson || "в слотах на сайте нет даты"}. Нужна отработка, пропуск или абонемент?`,
+      chips: [] as { label: string; send: string; primary?: boolean }[],
+    };
+  }
+  if (intent === "абонемент") {
+    return {
+      reply: `${n}: ${child}: абонемент ${d?.tariff || "нет пометки"}, остаток ${d ? d.balance : "—"}.`,
+      chips: [],
+    };
+  }
+  if (intent === "правила") {
+    return {
+      reply: `${n}: Пропуск лучше предупредить заранее. Отработка — в другой группе того же курса, если есть места. Пауза — по заявлению, до конкретной даты. Что из этого нужно?`,
+      chips: [],
+    };
+  }
+  if (intent === "пауза") {
+    if (/на неделю|на две|на месяц|до\s+\d/i.test(String(facts.day || ""))) return null;
+    return {
+      reply: `${n}: На какой срок поставить паузу ${child}? Напишите дату «до …» или выберите срок.`,
+      chips: [
+        { label: "Неделя", send: "Пауза на неделю" },
+        { label: "Две недели", send: "Пауза на две недели", primary: true },
+        { label: "Месяц", send: "Пауза на месяц" },
+      ],
+    };
+  }
+  if (intent === "пропуск") {
+    return {
+      reply: `${n}: Отметить, что ${child} не придёт на ближайшее${d?.nextLesson ? ` (${d.nextLesson})` : ""}?`,
+      chips: [
+        { label: "Да, отметить", send: "Да, отметьте пропуск ближайшего занятия", primary: true },
+        { label: "Другая дата", send: "Пропуск в другую дату" },
+      ],
+    };
+  }
+  if (intent === "отработка") {
+    if (!facts.day) {
+      return {
+        reply: `${n}: На какой день поставить отработку ${child}? Если в своей группе нет этого дня — посмотрю другие группы того же курса.`,
+        chips: WEEKDAY_CHIPS,
+      };
+    }
+    const pack = await makeupList(facts.customerId, facts.day);
+    const open = pack.list.filter((g) => g.priority !== 0 && g.seats !== "мест нет");
+    if (!open.length) {
+      return {
+        reply: `${n}: На ${facts.day} в курсе «${pack.courseLabel || "этого направления"}» сейчас нет живых групп с местами. Выберите другой день или позвоните 8 (800) 511-34-01. Пробное вместо отработки не ставлю.`,
+        chips: WEEKDAY_CHIPS,
+      };
+    }
+    return {
+      reply: `${n}: На ${facts.day} ${found} ${open.length} групп того же курса. Нажмите слот — поставлю отработку.`,
+      chips: open.slice(0, 8).map((g, i) => ({
+        label: `Отработка · ${g.chip}`,
+        send: `Поставьте отработку gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""}`,
+        primary: i === 0,
+      })),
+    };
+  }
+  return null;
+}
 
 function todayIso() {
   const n = new Date();

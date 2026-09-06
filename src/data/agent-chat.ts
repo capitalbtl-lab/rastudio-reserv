@@ -948,14 +948,71 @@ export const chatAgent = createServerFn({ method: "POST" })
               try {
                 const { groupsForQuery, formatGroups } = await import("./alfacrm-schedule");
                 const age = Number(args.age);
+                const makeup = facts.mode === "client" && facts.intent === "отработка";
+                let courseId = String(args.course_id || "");
+                let schoolId = String(args.school_id || "");
+                const weekday = String(args.weekday || facts.day || "");
+                if (makeup && facts.customerId && !courseId && !schoolId) {
+                  try {
+                    const { clientDigest } = await import("./agent-client-desk");
+                    const d = clientDigest(facts.customerId);
+                    const ids = [...new Set((d?.groups || []).map((g) => g.courseId).filter(Boolean))];
+                    if (ids.length === 1) courseId = ids[0];
+                    else if (ids.length > 1) {
+                      const merged = [];
+                      const seen = new Set<string>();
+                      for (const id of ids.slice(0, 4)) {
+                        const part = await groupsForQuery({
+                          age: Number.isFinite(age) ? age : undefined,
+                          branch: String(args.branch || ""),
+                          branchId: Number(args.branch_id) || undefined,
+                          courseId: id,
+                          weekday,
+                        });
+                        for (const g of part) {
+                          const key = `${g.gid}-${g.when}`;
+                          if (seen.has(key)) continue;
+                          seen.add(key);
+                          merged.push(g);
+                        }
+                      }
+                      const shownRaw = merged;
+                      const seeAll = loadBrain().settings.consultantCanSeeAllGroups !== false;
+                      let shown = shownRaw;
+                      if (!seeAll) {
+                        const { slotOnPublicSchedule } = await import("./group-status");
+                        const { loadSiteSignup } = await import("./site-signup");
+                        const pub = loadSiteSignup().statusPublish;
+                        shown = shownRaw.filter((g) => slotOnPublicSchedule(g, pub));
+                      }
+                      groups = shown
+                        .filter((g) => g.priority !== 0)
+                        .slice(0, 8)
+                        .map((g, i) => ({
+                          label: `Отработка · ${g.chip}`,
+                          send: `Поставьте отработку gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""}`,
+                          primary: i === 0,
+                        }));
+                      messages.push({
+                        role: "tool",
+                        tool_call_id: call.id,
+                        content: formatGroups(shown, age, "makeup"),
+                      });
+                      continue;
+                    }
+                  } catch {
+                    /* карточка */
+                  }
+                }
                 const list = await groupsForQuery({
                   age: Number.isFinite(age) ? age : undefined,
                   branch: String(args.branch || ""),
                   branchId: Number(args.branch_id) || undefined,
                   course: String(args.course || ""),
-                  courseId: String(args.course_id || ""),
-                  schoolId: String(args.school_id || ""),
+                  courseId,
+                  schoolId,
                   subjectId: Number(args.subject_id) || undefined,
+                  weekday,
                 });
                 const shownRaw = list;
                 const seeAll = loadBrain().settings.consultantCanSeeAllGroups !== false;
@@ -966,18 +1023,29 @@ export const chatAgent = createServerFn({ method: "POST" })
                   const pub = loadSiteSignup().statusPublish;
                   shown = shownRaw.filter((g) => slotOnPublicSchedule(g, pub));
                 }
-                groups = [
-                  { label: "Пробное занятие", send: "Хочу записаться на пробное занятие", primary: true },
-                  { label: "Сразу в группу", send: "Запишите сразу в группу" },
-                  ...shown.slice(0, 6).map((g) => ({
-                    label: `Пробное · ${g.chip}`,
-                    send: `Запишите на пробное gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""}`,
-                  })),
-                ];
+                if (makeup) {
+                  groups = shown
+                    .filter((g) => g.priority !== 0)
+                    .slice(0, 8)
+                    .map((g, i) => ({
+                      label: `Отработка · ${g.chip}`,
+                      send: `Поставьте отработку gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""}`,
+                      primary: i === 0,
+                    }));
+                } else {
+                  groups = [
+                    { label: "Пробное занятие", send: "Хочу записаться на пробное занятие", primary: true },
+                    { label: "Сразу в группу", send: "Запишите сразу в группу" },
+                    ...shown.slice(0, 6).map((g) => ({
+                      label: `Пробное · ${g.chip}`,
+                      send: `Запишите на пробное gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""}`,
+                    })),
+                  ];
+                }
                 messages.push({
                   role: "tool",
                   tool_call_id: call.id,
-                  content: formatGroups(shown, age),
+                  content: formatGroups(shown, age, makeup ? "makeup" : ""),
                 });
               } catch {
                 messages.push({
