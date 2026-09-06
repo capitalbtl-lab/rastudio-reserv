@@ -65,7 +65,8 @@ export function HomeEditorProvider({
         return;
       }
       void debugSession({ data: { token: t } }).then((res) => {
-        setEditing(Boolean(res.ok && "tools" in res && res.tools.layout !== false));
+        const door = /(?:\?|&)edit=1(?:&|$)/.test(location.search);
+        setEditing(Boolean(res.ok && "tools" in res && (door || res.tools.layout !== false)));
       });
     };
     check();

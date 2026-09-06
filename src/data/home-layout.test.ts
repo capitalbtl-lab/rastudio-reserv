@@ -72,6 +72,7 @@ describe("макет главной", () => {
     assert.match(editor, /Инспектор/);
     assert.match(editor, /StudioPanel/);
     assert.match(editor, /home-editing/);
+    assert.match(editor, /edit=1/);
     assert.match(editor, /\["layers", "Слои"\]/);
     assert.match(editor, /Панель/);
     assert.doesNotMatch(editor, /max-w-\[390px\]/);
