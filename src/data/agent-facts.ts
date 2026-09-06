@@ -155,7 +155,7 @@ export function modeFromMessages(messages: { role: string; content: string }[]):
 }
 
 export function identifiedFromMessages(messages: { role: string; content: string }[]) {
-  const yes = /^(да|ага|угу|верно|наш|так|это наш|это он|это она|да,\s*это|конечно|именно|она|он)\b/i;
+  const yes = /^(да|ага|угу|верно|наш|так|это наш|это он|это она|да,\s*это|конечно|именно|она|он)(?=$|[\s,.!?…])/i;
   const deny = /другой ребёнок|это не (наш|он|она)|не наш ребёнок|подбираем впервые|подбираем курс впервые/i;
   let ok = false;
   for (let i = 0; i < messages.length; i++) {
@@ -292,7 +292,7 @@ export function factsFromMessages(messages: { role: string; content: string }[])
   if (facts.mode !== "client") {
     if (/правил|оферт|цен[аыу]|сколько стоит|стоимост/i.test(lastUser)) facts.intent = "правила";
     else if (/час[ыа] работ|когда открыт|график работ|во сколько работаете|когда вы работа|когда работаете|во сколько открыт/i.test(lastUser)) facts.intent = "часы";
-    else if (/где наход|как пройти|как проехать|адрес/i.test(lastUser)) facts.intent = "адрес";
+    else if (/где .{0,16}наход|как пройти|как проехать|адрес/i.test(lastUser)) facts.intent = "адрес";
   }
   if (facts.mode === "client") {
     facts.identified = identifiedFromMessages(messages);
