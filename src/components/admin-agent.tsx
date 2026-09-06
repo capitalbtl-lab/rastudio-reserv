@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { adminAgentBrain, type AgentSettings, FRAME_WINDOW_FLAGS, BEHAVIOR_WINDOW_FLAGS, CHIP_FLAGS, ROLE_FLAGS, BOOK_TYPE_FLAGS } from "@/data/agent-config";
+import { LESSON_POLICY_GROUPS, lessonCreatePolicy } from "@/data/lesson-type-rules";
 import { Button } from "@/components/ui/button";
 import { AdminChats } from "@/components/admin-chats";
 import { AdminVoices } from "@/components/admin-voices";
@@ -203,20 +204,30 @@ export function AdminAgent() {
           <div>
             <h3 className="font-display text-xl">Какие занятия консультант ставит</h3>
             <p className="mt-1 max-w-2xl text-sm text-muted">
-              Каждый тип — то же правило: book_lesson в Alfa со своим lesson_type. Выключен — Ольга не ставит, даёт телефон.
+              Ольга вызывает book_lesson с lesson_type. Правило Alfa одно на тип: группа только где можно, пробное — без group_ids. Выключен — телефон 8 (800) 511-34-01.
             </p>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              {BOOK_TYPE_FLAGS.map((f) => (
-                <Toggle
-                  key={f.id}
-                  on={settings[f.id] !== false}
-                  set={(v) => setSettings({ ...settings, [f.id]: v })}
-                  title={f.title}
-                  hint={f.hint}
-                  tip={f.tip}
-                />
-              ))}
-            </div>
+            {LESSON_POLICY_GROUPS.map((g) => (
+              <div key={g.title} className="mt-4">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">{g.title}</p>
+                <div className="mt-2 grid gap-3 md:grid-cols-2">
+                  {g.keys.map((key) => {
+                    const f = BOOK_TYPE_FLAGS.find((x) => x.key === key);
+                    if (!f) return null;
+                    const rule = lessonCreatePolicy(key);
+                    return (
+                      <Toggle
+                        key={f.id}
+                        on={settings[f.id] !== false}
+                        set={(v) => setSettings({ ...settings, [f.id]: v })}
+                        title={`${f.title} · Alfa ${rule.typeId}`}
+                        hint={rule.hint}
+                        tip={f.tip}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
           <AdminSaveBar>
             {msg ? <p className="text-sm text-primary">{msg}</p> : null}

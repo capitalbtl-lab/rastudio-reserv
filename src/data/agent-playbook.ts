@@ -146,6 +146,29 @@ export const DEFAULT_SCRIPTS: ScriptSection[] = [
 Не вызывай open_group и не давай ссылку /lead/create. Записываешь сам. Мест нет — другой слот, не записывать молча.`,
     updatedAt: "",
   },
+  {
+    id: "makeup",
+    step: "group",
+    title: "Отработка пропуска",
+    body: `Только узнанный клиент. Спроси неделю: эта, следующая или позже. list_groups по courseId карточки. Три ближайших слота того же курса у того же педагога (не свой gid). Если не удобно — ещё три. Нет уроков у педагога — другого педагога. После кнопки: book_lesson lesson_type=makeup, gid слота, date, time, subject_id, teacher_id, branch_id. В Alfa это тип 4, group_ids можно, в состав группы не пиши. Не предлагай пробное вместо отработки.`,
+    updatedAt: "",
+  },
+  {
+    id: "individual",
+    step: "group",
+    title: "Индивидуальное, сверхурочное, дополнительное",
+    body: `Индивидуальное (1) и сверхурочное (11): обязательны teacher_id из list_groups, дата и время. book_lesson lesson_type=individual|overtime. Без группы.
+Дополнительное (10): дата, время, subject_id, слот если есть. Не путать с отработкой.
+Вводное (5): как пробное, свой тип, без group_ids.`,
+    updatedAt: "",
+  },
+  {
+    id: "oneoff",
+    step: "group",
+    title: "Разовые: мастер-класс, открытый, экскурсия, лагерь, событие, собеседование, продлёнка, лето",
+    body: `book_lesson с точным lesson_type: master, open, excursion, camp, event, interview, aftercare, summer. Филиал, дата, время, subject_id если есть, педагог если назвали. Без group_ids, зал не ставить если занят. Не выдумывай тип. Лето и лагерь — только апрель–август, пока родитель сам не спросил.`,
+    updatedAt: "",
+  },
 ];
 
 export function playbookPrompt(scripts: ScriptSection[], facts?: SessionFacts, now = new Date()) {

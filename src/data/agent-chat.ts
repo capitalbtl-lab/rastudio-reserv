@@ -895,6 +895,8 @@ export const chatAgent = createServerFn({ method: "POST" })
                 });
                 continue;
               }
+              const { lessonCreatePolicy } = await import("./lesson-type-rules");
+              const policy = lessonCreatePolicy(kind);
               const fromChip = String(lastUser || "");
               if (!args.gid) {
                 const g = fromChip.match(/gid=(\d+)/i);
@@ -909,7 +911,7 @@ export const chatAgent = createServerFn({ method: "POST" })
                 if (s) args.subject_id = Number(s[1]);
               }
               const gid = String(args.gid || "").replace(/\D/g, "");
-              if ((kind === "individual" || kind === "overtime") && !Number(args.teacher_id) && !gid) {
+              if (policy.needTeacher && !Number(args.teacher_id) && !gid) {
                 messages.push({
                   role: "tool",
                   tool_call_id: call.id,
@@ -917,7 +919,15 @@ export const chatAgent = createServerFn({ method: "POST" })
                 });
                 continue;
               }
-              if (gid && (kind === "group" || kind === "trial")) {
+              if (policy.needGid && !gid) {
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: `Для «${kind}» нужен gid слота из list_groups. Покажи кнопки, не записывай без слота.`,
+                });
+                continue;
+              }
+              if (gid && kind === "group") {
                 try {
                   const { listAdminSlots } = await import("./alfacrm-schedule");
                   const { readPriority } = await import("./group-status");
