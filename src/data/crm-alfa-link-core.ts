@@ -106,7 +106,7 @@ export function exportOpPushChannel(op: string, body?: Record<string, unknown>):
   if (op.startsWith("lesson") || op.startsWith("regular-lesson")) {
     const lesson = body?.lesson && typeof body.lesson === "object" ? (body.lesson as { type?: string }) : null;
     const kind = String(body?.type || lesson?.type || body?.kind || "");
-    if (kind === "trial") return "trials";
+    if (kind === "trial" || Number(body?.lesson_type_id) === 3) return "trials";
     return "lessons";
   }
   if (op === "customer.create") {

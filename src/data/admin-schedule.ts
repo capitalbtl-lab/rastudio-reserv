@@ -1618,8 +1618,6 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!customerId) return { ok: false as const, error: "Нет customerId." };
       const lessonBranch = Number(data.branchId) || 0;
       if (!lessonBranch) return { ok: false as const, error: "Нет branchId — выберите филиал." };
-      const roomId = Number(data.roomId) || 0;
-      if (!roomId) return { ok: false as const, error: "Нет roomId — выберите аудиторию." };
       const d = findDossier({ crmId: customerId });
       const wantedGid = Number(data.groupId) || 0;
       const link = (d?.groupLinks || []).find((x) => x.id === wantedGid) || (d?.groupLinks || []).find((x) => x.active !== false);
@@ -1627,6 +1625,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const slot = gid
         ? listAdminSlots().find((s) => s.groupId === gid && s.branchId === lessonBranch) || listAdminSlots().find((s) => s.groupId === gid)
         : undefined;
+      const roomId = Number(data.roomId) || Number(slot?.roomId) || 0;
+      if (!roomId) return { ok: false as const, error: "Нет roomId — выберите аудиторию." };
       const type = resolveLessonType(String(data.lessonType || "trial")) || resolveLessonType("trial")!;
       const subjectId = Number(data.subjectId) || Number(slot?.subjectId) || Number(link?.subjectId) || 0;
       if (!subjectId) return { ok: false as const, error: "Нет subjectId — выберите предмет." };
@@ -1679,6 +1679,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         entityId: customerId,
         body: {
           localId,
+          type: type.key,
           lesson_type_id: type.id,
           lesson_date: date,
           time_from: time,
@@ -1686,7 +1687,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           duration,
           subject_id: subjectId,
           customer_ids: [customerId],
-          room_id: roomId,
+          ...(roomId ? { room_id: roomId } : {}),
           ...(gid ? { group_ids: [gid] } : {}),
           ...(teacherId ? { teacher_ids: [teacherId] } : {}),
           ...(data.topic ? { topic: String(data.topic) } : {}),
