@@ -382,33 +382,47 @@ function PlainPage({
 }
 
 function TeamPage({ page, teachers }: { page: SitePage; teachers: TeacherCard[] }) {
+  const photos = teachers.slice(0, 6).map((t) => ({
+    src: t.photo,
+    alt: t.alt || t.name,
+    filename: t.filename,
+    href: t.href,
+  }));
   return (
-    <article className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
-      <h1 className="display section-title">{page.h1}</h1>
-      <p className="mt-5 max-w-2xl text-lg text-muted">{page.paragraphs[0] || page.description}</p>
-      <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {teachers.map((t) => (
-          <PageLink
-            key={t.href + t.name}
-            to={t.href}
-            className="group overflow-hidden rounded-lg bg-surface shadow-[var(--shadow-border)] transition-shadow duration-[var(--motion-fast)] hover:shadow-[var(--shadow-border-hover)]"
-          >
-            <SeoImage
-              src={t.photo}
-              alt={t.alt}
-              filename={t.filename}
-              className="aspect-4/5 bg-surface-2"
-              imgClassName="transition-transform duration-[var(--motion-fast)] ease-[var(--ease-out)] group-hover:scale-105"
-            />
-            <div className="p-4">
-              <p className="font-medium">{t.name}</p>
-              <p className="mt-1 text-sm text-muted">{t.role}</p>
-            </div>
-          </PageLink>
-        ))}
-      </div>
-      <div className="mt-16">
-        <TrialForm compact />
+    <article>
+      <CoursePageHero
+        kicker="Педагоги · Коломна · Луховицы"
+        title={page.h1}
+        description={page.paragraphs[0] || page.description}
+        images={photos.length ? photos : galleryPhotos(page.images, "/team", "hero")}
+        secondary={{ href: "/allcourses", label: "Смотреть курсы" }}
+        stats={STATS.map((s) => ({ value: s.value, label: s.label }))}
+      />
+      <div className="page-wrap py-12 md:py-16">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {teachers.map((t) => (
+            <PageLink
+              key={t.href + t.name}
+              to={t.href}
+              className="group overflow-hidden rounded-lg bg-surface shadow-[var(--shadow-border)] transition-shadow duration-[var(--motion-fast)] hover:shadow-[var(--shadow-border-hover)]"
+            >
+              <SeoImage
+                src={t.photo}
+                alt={t.alt}
+                filename={t.filename}
+                className="aspect-4/5 bg-surface-2"
+                imgClassName="transition-transform duration-[var(--motion-fast)] ease-[var(--ease-out)] group-hover:scale-105"
+              />
+              <div className="p-4">
+                <p className="font-medium">{t.name}</p>
+                <p className="mt-1 text-sm text-muted">{t.role}</p>
+              </div>
+            </PageLink>
+          ))}
+        </div>
+        <div className="mt-16">
+          <TrialForm compact />
+        </div>
       </div>
     </article>
   );
@@ -444,10 +458,17 @@ function CatalogPage({ page, courses }: { page: SitePage; courses: CourseCard[] 
   }, [q, courses, group, age, city]);
 
   return (
-    <article className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
-      <h1 className="display section-title">{page.h1}</h1>
-      <p className="mt-5 max-w-2xl text-lg text-muted">{page.description || page.paragraphs[0]}</p>
-      <p className="mt-8 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted">Возраст</p>
+    <article>
+      <CoursePageHero
+        kicker="Семь школ · Коломна · Луховицы"
+        title={page.h1}
+        description={page.description || page.paragraphs[0]}
+        images={courses.slice(0, 8).map((c) => ({ src: c.image, alt: c.alt, filename: c.filename, href: c.href }))}
+        secondary={{ href: "/schedule", label: "Расписание" }}
+        stats={STATS.map((s) => ({ value: s.value, label: s.label }))}
+      />
+      <div className="page-wrap py-12 md:py-16">
+      <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted">Возраст</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -539,26 +560,29 @@ function CatalogPage({ page, courses }: { page: SitePage; courses: CourseCard[] 
       <div className="mt-16">
         <TrialForm compact />
       </div>
+      </div>
     </article>
   );
 }
 
 function ContactsPage({ page }: { page: SitePage }) {
   return (
-    <article className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
-      <h1 className="display section-title">{page.h1}</h1>
-      <p className="mt-5 max-w-3xl text-lg text-muted">
-        Три студии в Коломне и Луховицах. Запись:{" "}
-        <a href={SITE.phoneHref} className="whitespace-nowrap text-fg">
-          {SITE.phone}
-        </a>
-        ,{" "}
-        <a href={`mailto:${SITE.email}`} className="whitespace-nowrap">
-          {SITE.email}
-        </a>
-        .
-      </p>
-      <div className="mt-10 grid gap-4 md:grid-cols-3">
+    <article>
+      <CoursePageHero
+        kicker="Три студии · Коломна · Луховицы"
+        title={page.h1}
+        description={`Запись: ${SITE.phone}. Администратор поможет выбрать филиал и направление.`}
+        images={galleryPhotos(page.images, "/contacts", "hero")}
+        secondary={{ href: "/schedule", label: "Расписание" }}
+        stats={[
+          { value: "3", label: "филиала" },
+          { value: "2", label: "города" },
+          { value: "7", label: "школ" },
+          { value: SITE.phone, label: "телефон" },
+        ]}
+      />
+      <div className="page-wrap py-12 md:py-16">
+      <div className="grid gap-4 md:grid-cols-3">
         {BRANCHES.map((b) => (
           <div key={b.address} className="overflow-hidden rounded-lg bg-surface shadow-[var(--shadow-border)]">
             <iframe
@@ -584,16 +608,23 @@ function ContactsPage({ page }: { page: SitePage }) {
       <div className="mt-16">
         <TrialForm />
       </div>
+      </div>
     </article>
   );
 }
 
 function MasterListPage({ page, masters }: { page: SitePage; masters: MasterCard[] }) {
   return (
-    <article className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
-      <h1 className="display section-title">{page.h1}</h1>
-      <p className="mt-5 max-w-2xl text-lg text-muted">{page.paragraphs[0] || page.description}</p>
-      <div className="mt-8 grid gap-3 sm:grid-cols-2">
+    <article>
+      <CoursePageHero
+        kicker="Разовые занятия · Коломна"
+        title={page.h1}
+        description={page.paragraphs[0] || page.description}
+        images={galleryPhotos(page.images, "/master-class", "hero")}
+        secondary={{ href: "/allcourses", label: "Все курсы" }}
+      />
+      <div className="page-wrap py-12 md:py-16">
+      <div className="grid gap-3 sm:grid-cols-2">
         {masters.map((item) => (
           <PageLink
             key={item.path}
