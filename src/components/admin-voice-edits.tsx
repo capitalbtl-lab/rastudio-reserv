@@ -78,7 +78,7 @@ export function AdminVoiceEdits() {
       <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
         <p className="text-sm font-semibold">Медиатека и генератор блоков</p>
         <p className="mt-2 text-sm text-muted">
-          Загрузка фото/видео, подпись DeepSeek для консультантов, кнопка «Придумать блок» по трендам 2026. Поставить блок — он сразу на главной.
+          Загрузка фото/видео, подпись DeepSeek для консультантов, кнопка «Придумать новый блок» по трендам 2026. Поставить блок — он сразу на главной. Вкладка «Агент» — внедрение Ольги или Олега на текущую страницу.
         </p>
         <div className="mt-4">
           <StudioPanel admin />

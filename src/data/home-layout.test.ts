@@ -70,5 +70,9 @@ describe("макет главной", () => {
     assert.match(editor, /Инспектор/);
     assert.match(editor, /contentEditable/);
     assert.match(editor, /StudioPanel/);
+    const studio = readFileSync(new URL("../components/home-studio.tsx", import.meta.url), "utf8");
+    assert.match(studio, /Придумать новый блок/);
+    assert.match(studio, /DeepSeek: править текст/);
+    assert.match(studio, /Сохранить агента страницы/);
   });
 });
