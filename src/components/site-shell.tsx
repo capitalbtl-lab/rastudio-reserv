@@ -86,10 +86,10 @@ export function SiteShell({ children, bare }: { children: ReactNode; bare?: bool
           </div>
         </div>
       )}
-      <TabError>
+      <TabError quiet>
         <AgentChatLazy />
       </TabError>
-      <TabError>
+      <TabError quiet>
         <DebugDockLazy />
       </TabError>
     </div>

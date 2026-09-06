@@ -57,7 +57,7 @@ export function lazyWithRetry(load: () => Promise<{ default: ComponentType<any> 
   );
 }
 
-export class TabError extends Component<{ children: ReactNode }, { failed: boolean }> {
+export class TabError extends Component<{ children: ReactNode; quiet?: boolean }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
@@ -67,6 +67,7 @@ export class TabError extends Component<{ children: ReactNode }, { failed: boole
   }
   render() {
     if (!this.state.failed) return this.props.children;
+    if (this.props.quiet) return null;
     return (
       <div className="mt-8 rounded-3xl bg-surface px-5 py-6 shadow-[var(--shadow-border)]">
         <p className="font-display text-xl">Раздел не открылся</p>
