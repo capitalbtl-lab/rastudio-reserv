@@ -391,6 +391,52 @@ export function CrmClientCard({
   const catalog: LessonCatalog = card.catalog || { subjects: [], teachers: [], rooms: [], tariffs: [], groups: [] };
   const tariffOffers: TariffOffer[] = catalog.tariffs || [];
   const groupOffers: GroupOffer[] = groupChoices?.length ? groupChoices : catalog.groups || [];
+  const lessonGroupOffers = useMemo(() => {
+    const map = new Map<string, GroupOffer>();
+    const put = (g?: Partial<GroupOffer> | null) => {
+      const id = Number(g?.id) || 0;
+      const branchId = Number(g?.branchId || card.branchId) || 0;
+      if (!id) return;
+      const k = `${branchId}:${id}`;
+      const prev = map.get(k);
+      map.set(k, {
+        id,
+        branchId,
+        name: String(g?.name || prev?.name || `группа ${id}`),
+        subjectId: Number(g?.subjectId || prev?.subjectId) || undefined,
+        teacher: g?.teacher || prev?.teacher,
+        day: g?.day || prev?.day,
+        from: g?.from || prev?.from,
+        to: g?.to || prev?.to,
+        course: g?.course || prev?.course,
+        school: g?.school || prev?.school,
+        schoolId: g?.schoolId || prev?.schoolId,
+        courseId: g?.courseId || prev?.courseId,
+        statusId: Number(g?.statusId || prev?.statusId) || undefined,
+      });
+    };
+    for (const g of catalog.groups || []) put(g);
+    for (const g of groupOffers) put(g);
+    for (const g of card.groups || []) put({ id: g.id, name: g.name, branchId: g.branchId, subjectId: g.subjectId, school: g.school, courseId: g.courseId });
+    const branch = card.branchId;
+    return [...map.values()].sort(
+      (a, b) => Number(b.branchId === branch) - Number(a.branchId === branch) || String(a.school || "").localeCompare(String(b.school || ""), "ru") || a.name.localeCompare(b.name, "ru"),
+    );
+  }, [catalog.groups, groupOffers, card.groups, card.branchId]);
+  const lessonGroupSelect = useMemo(() => {
+    const map = new Map<string, { value: string; label: string; hint?: string }[]>();
+    for (const g of lessonGroupOffers) {
+      if (card.branchId && g.branchId && g.branchId !== card.branchId) continue;
+      const school = resolveSchool(g) || g.school || g.course || "Другие";
+      const hint = [g.teacher, g.day && g.from ? `${g.day} ${g.from}` : ""].filter(Boolean).join(" · ");
+      const arr = map.get(school) || [];
+      arr.push({ value: String(g.id), label: g.name, hint });
+      map.set(school, arr);
+    }
+    return [...map.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], "ru"))
+      .map(([label, options]) => ({ label, options }));
+  }, [lessonGroupOffers, card.branchId]);
   const pupilGroups = useMemo(() => {
     const list = [...(card.groups || [])];
     list.sort((a, b) => Number(Boolean(b.active)) - Number(Boolean(a.active)) || String(a.name).localeCompare(String(b.name), "ru"));
@@ -469,12 +515,17 @@ export function CrmClientCard({
 
   function applyGroup(id: number) {
     setLessonGroup(id);
-    const g = (card.groups || []).find((x) => x.id === id);
+    const g =
+      lessonGroupOffers.find((x) => x.id === id && x.branchId === card.branchId) ||
+      lessonGroupOffers.find((x) => x.id === id);
+    const member = (card.groups || []).find((x) => x.id === id);
     const reg = (card.regular || []).find((r) => r.groupId === id);
     if (g?.subjectId) setLessonSubject(g.subjectId);
+    else if (member?.subjectId) setLessonSubject(member.subjectId);
     else if (reg?.subjectId) setLessonSubject(reg.subjectId);
-    if (reg?.from) setLessonTime(reg.from);
-    const mins = durationMins(reg?.from, reg?.to);
+    if (g?.from) setLessonTime(g.from);
+    else if (reg?.from) setLessonTime(reg.from);
+    const mins = durationMins(g?.from, g?.to) || durationMins(reg?.from, reg?.to);
     if (mins) setLessonMins(mins);
     if (reg?.teacherId) setLessonTeacher(reg.teacherId);
     if (reg?.roomId) setLessonRoom(reg.roomId);
@@ -483,14 +534,15 @@ export function CrmClientCard({
   function openLesson(key: string) {
     const g = (card.groups || []).find((x) => x.active !== false) || (card.groups || [])[0];
     const reg = (card.regular || []).find((r) => r.groupId === g?.id) || (card.regular || [])[0];
+    const own = key === "group" || key === "makeup" || key === "extra" || key === "overtime" || key === "individual";
     setLessonKey(key);
     setLessonDate(todayIso());
-    setLessonTime(reg?.from || "16:00");
-    setLessonMins(durationMins(reg?.from, reg?.to) || 90);
-    setLessonGroup(g?.id || 0);
-    setLessonSubject(g?.subjectId || reg?.subjectId || 0);
-    setLessonTeacher(reg?.teacherId || 0);
-    setLessonRoom(reg?.roomId || 0);
+    setLessonTime(own ? reg?.from || "16:00" : "16:00");
+    setLessonMins(own ? durationMins(reg?.from, reg?.to) || 90 : 90);
+    setLessonGroup(own ? g?.id || 0 : 0);
+    setLessonSubject(own ? g?.subjectId || reg?.subjectId || 0 : 0);
+    setLessonTeacher(own ? reg?.teacherId || 0 : 0);
+    setLessonRoom(own ? reg?.roomId || 0 : 0);
     setLessonTopic("");
     setLessonNote("");
     setLessonOpen(true);
@@ -1017,12 +1069,18 @@ export function CrmClientCard({
             </div>
           </Field>
           <Field label="Группа">
-            <RaSelect
-              value={lessonGroup ? String(lessonGroup) : ""}
-              onChange={(v) => applyGroup(Number(v) || 0)}
-              placeholder="не выбрана"
-              options={(card.groups || []).map((g) => ({ value: String(g.id), label: g.name || `группа ${g.id}` }))}
-            />
+            <div className="flex items-center gap-2">
+              <RaSelect
+                value={lessonGroup ? String(lessonGroup) : ""}
+                onChange={(v) => applyGroup(Number(v) || 0)}
+                placeholder={lessonKey === "trial" || lessonKey === "intro" ? "любое направление" : "не выбрана"}
+                groups={lessonGroupSelect}
+                menuMinWidth={360}
+              />
+              <span className="shrink-0 text-[0.75rem] text-muted">
+                {lessonGroupSelect.reduce((n, g) => n + g.options.length, 0)} групп
+              </span>
+            </div>
           </Field>
           <Field label="Предмет" required>
             <RaSelect

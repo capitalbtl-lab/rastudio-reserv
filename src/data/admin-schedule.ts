@@ -683,6 +683,11 @@ function catalogGroups(branch: number) {
       day: s.dayLabel,
       from: s.timeFrom,
       to: s.timeTo,
+      course: s.course || undefined,
+      school: s.school || undefined,
+      schoolId: s.schoolId,
+      courseId: s.courseId,
+      statusId: s.statusId || undefined,
     });
   }
   return out.sort((a, b) => Number(b.branchId === branch) - Number(a.branchId === branch) || a.name.localeCompare(b.name, "ru"));

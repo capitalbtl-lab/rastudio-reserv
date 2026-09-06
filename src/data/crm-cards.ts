@@ -172,6 +172,7 @@ export type GroupOffer = {
   school?: string;
   schoolId?: string;
   courseId?: string;
+  statusId?: number;
 };
 export type LessonCatalog = {
   subjects: LessonCatalogItem[];

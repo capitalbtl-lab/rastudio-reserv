@@ -56,6 +56,11 @@ function catalogBase() {
       day: s.dayLabel,
       from: s.timeFrom,
       to: s.timeTo,
+      course: s.course || undefined,
+      school: s.school || undefined,
+      schoolId: s.schoolId,
+      courseId: s.courseId,
+      statusId: s.statusId || undefined,
     });
   }
   catalogSlots = slots;
