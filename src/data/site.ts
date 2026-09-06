@@ -292,7 +292,7 @@ export const MOMENTS = [
     title: 'ПРОЕКТ "РАЗВИВАЙСЯ | ВАЖНЫЕ ДЕЛА"',
     blurb: "Бесплатные мастер-классы и благотворительные проекты студии.",
     image:
-      "https://static.wixstatic.com/media/4e33b6_d7e3decbbaef4a1e937baa2b83583b7e~mv2.jpg/v1/fill/w_800,h_800,al_c,q_80,enc_avif,quality_auto/4e33b6_d7e3decbbaef4a1e937baa2b83583b7e~mv2.jpg",
+      "/media/imported/4e33b6_d7e3decbbaef4a1e937baa2b83583b7e_mv2.jpg",
     alt: "Благотворительные проекты Студии Развивайся в Коломне",
     filename: "4e33b6_d7e3decbbaef4a1e937baa2b83583b7e~mv2.jpg",
   },
@@ -301,7 +301,7 @@ export const MOMENTS = [
     title: "ЛЕТНИЙ ГОРОДСКОЙ ЛАГЕРЬ 2026",
     blurb: "Науки и профориентация, питание по СанПиН, два филиала в Коломне.",
     image:
-      "https://static.wixstatic.com/media/4e33b6_6c4462b65d0c4593b30ff3c96f099397~mv2.jpg/v1/fill/w_800,h_800,al_c,q_80,enc_avif,quality_auto/4e33b6_6c4462b65d0c4593b30ff3c96f099397~mv2.jpg",
+      "/media/imported/4e33b6_6c4462b65d0c4593b30ff3c96f099397_mv2.jpg",
     alt: "Летний лагерь в Студии Развивайся в Коломне",
     filename: "4e33b6_6c4462b65d0c4593b30ff3c96f099397~mv2.jpg",
   },
@@ -311,7 +311,7 @@ export const MOMENTS = [
       "ВНУТРЕННЕЕ СОРЕВНОВАНИЕ СТУДИИ «РАЗВИВАЙСЯ» ПО 3D-МОДЕЛИРОВАНИЮ В TINKERCAD: «РОБОТЫ БУДУЩЕГО»",
     blurb: "Внутренний конкурс по 3D-моделированию в Tinkercad.",
     image:
-      "https://static.wixstatic.com/media/4e33b6_a77d452c2a234db78242e46c3593cf1c~mv2.jpg/v1/fill/w_800,h_800,al_c,q_80,enc_avif,quality_auto/4e33b6_a77d452c2a234db78242e46c3593cf1c~mv2.jpg",
+      "/media/imported/4e33b6_a77d452c2a234db78242e46c3593cf1c_mv2.jpg",
     alt: "Конкурс робототехники от Студии Развивайся в Коломне",
     filename: "4e33b6_a77d452c2a234db78242e46c3593cf1c~mv2.jpg",
   },
@@ -319,32 +319,32 @@ export const MOMENTS = [
 
 export const PARTNER_LOGOS = [
   {
-    src: "https://static.wixstatic.com/media/4e33b6_5f0212bb908f42c2b022b4aa05ce2980~mv2.png/v1/fill/w_400,h_400,al_c,q_85,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(4).png",
+    src: "/media/imported/4e33b6_5f0212bb908f42c2b022b4aa05ce2980_mv2.png",
     alt: "Логотипы на главную Студия Развивайся (4).png",
     filename: "Логотипы на главную Студия Развивайся (4).png",
   },
   {
-    src: "https://static.wixstatic.com/media/4e33b6_284d58a7c14b4d50bc03394b5b87ad45~mv2.png/v1/fill/w_400,h_400,al_c,q_85,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(3).png",
+    src: "/media/imported/4e33b6_284d58a7c14b4d50bc03394b5b87ad45_mv2.png",
     alt: "Логотипы на главную Студия Развивайся (3).png",
     filename: "Логотипы на главную Студия Развивайся (3).png",
   },
   {
-    src: "https://static.wixstatic.com/media/4e33b6_920386da915e419e8380eef5d8b302af~mv2.jpg/v1/fill/w_400,h_400,al_c,q_80,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(2).jpg",
+    src: "/media/imported/4e33b6_920386da915e419e8380eef5d8b302af_mv2.jpg",
     alt: "Логотипы на главную Студия Развивайся (2).jpg",
     filename: "Логотипы на главную Студия Развивайся (2).jpg",
   },
   {
-    src: "https://static.wixstatic.com/media/4e33b6_d9ab0d6feca64ece8d498d9b0275b293~mv2.jpg/v1/fill/w_400,h_400,al_c,q_80,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(1).jpg",
+    src: "/media/imported/4e33b6_d9ab0d6feca64ece8d498d9b0275b293_mv2.jpg",
     alt: "Логотипы на главную Студия Развивайся (1).jpg",
     filename: "Логотипы на главную Студия Развивайся (1).jpg",
   },
   {
-    src: "https://static.wixstatic.com/media/4e33b6_5b4eed978be64bd494a3b78b27ccfd70~mv2.jpg/v1/fill/w_400,h_400,al_c,q_80,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(3).jpg",
+    src: "/media/imported/4e33b6_5b4eed978be64bd494a3b78b27ccfd70_mv2.jpg",
     alt: "Логотипы на главную Студия Развивайся (3).jpg",
     filename: "Логотипы на главную Студия Развивайся (3).jpg",
   },
   {
-    src: "https://static.wixstatic.com/media/4e33b6_a30da1df107748559ac545bcd3f89c00~mv2.png/v1/fill/w_400,h_400,al_c,q_85,enc_avif,quality_auto/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF%D1%8B%20%D0%BD%D0%B0%20%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D1%83%D1%8E%20%D0%A1%D1%82%D1%83%D0%B4%D0%B8%D1%8F%20%D0%A0%D0%B0%D0%B7%D0%B2%D0%B8%D0%B2%D0%B0%D0%B9%D1%81%D1%8F%20(6).png",
+    src: "/media/imported/4e33b6_a30da1df107748559ac545bcd3f89c00_mv2.png",
     alt: "Логотипы на главную Студия Развивайся (6).png",
     filename: "Логотипы на главную Студия Развивайся (6).png",
   },
