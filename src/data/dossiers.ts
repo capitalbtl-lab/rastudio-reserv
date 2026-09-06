@@ -1172,6 +1172,78 @@ export async function syncNewLeadsFromCrm() {
   }
 }
 
+let customerTickBusy = false;
+
+/** Лид, которого в Alfa перевели в клиента (is_study 0→1), появляется в кабинете без группы. */
+export async function syncCustomersDelta() {
+  const { wantAlfaPullChannel } = await import("./crm-alfa-link");
+  if (!wantAlfaPullChannel("customers")) return { ok: true as const, added: 0, skipped: "канал" as const };
+  if (customerTickBusy) return { ok: true as const, added: 0, skipped: true as const };
+  customerTickBusy = true;
+  try {
+    const store = loadStore();
+    const suspects = store.items.filter((d) => customerPullCandidate(d));
+    const byBranch = new Map<number, number[]>();
+    for (const d of suspects) {
+      const id = Number(d.crmId);
+      const b = Number(d.branchId) || 1;
+      const list = byBranch.get(b) || [];
+      list.push(id);
+      byBranch.set(b, list);
+    }
+    const t = await alfaToken();
+    let added = 0;
+    for (const [branch, ids] of byBranch) {
+      for (let i = 0; i < ids.length && i < 120; i += 30) {
+        const chunk = ids.slice(i, i + 30);
+        const data = await request<{ items?: Record<string, unknown>[] }>(
+          `/v2api/${branch}/customer/index`,
+          { page: 0, pageSize: 50, ids: chunk },
+          t,
+        ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+        for (const item of data.items || []) {
+          const id = Number(item.id || 0);
+          if (!id || !chunk.includes(id)) continue;
+          if (Number(item.removed) === 1 || Number(item.is_study) !== 1) continue;
+          applyCrmCustomer({ ...item, crm_funnel: "0" }, branch, false, {}, BULK);
+          added += 1;
+          try {
+            const { forgetLead } = await import("./crm-leads");
+            forgetLead(id, branch);
+          } catch {
+            /* диск */
+          }
+        }
+      }
+    }
+    for (const branch of [1, 2, 3, 4]) {
+      const known = new Set(loadStore().items.map((d) => Number(d.crmId || 0)).filter(Boolean));
+      const data = await request<{ items?: Record<string, unknown>[] }>(
+        `/v2api/${branch}/customer/index`,
+        { page: 0, pageSize: 50, is_study: 1, removed: 0 },
+        t,
+      ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+      for (const item of data.items || []) {
+        const id = Number(item.id || 0);
+        if (!id || Number(item.is_study) !== 1 || Number(item.removed) === 1) continue;
+        if (known.has(id)) continue;
+        applyCrmCustomer({ ...item, crm_funnel: "0" }, branch, false, {}, BULK);
+        added += 1;
+        known.add(id);
+      }
+    }
+    const next = loadStore();
+    if (added) {
+      next.lastCrmSync = new Date().toISOString();
+      saveStore(next);
+      logAdmin(`Клиенты из AlfaCRM: ${added} карточек is_study=1`, "sync");
+    }
+    return { ok: true as const, added, count: added };
+  } finally {
+    customerTickBusy = false;
+  }
+}
+
 export function startLeadTicker() {
   const g = globalThis as { __raLeadTimer?: ReturnType<typeof setInterval> };
   if (g.__raLeadTimer) return;
