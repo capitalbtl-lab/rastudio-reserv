@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pulsePrompt } from "./site-pulse";
+import { serverEnv } from "./server-env";
 import type { NovofonCall } from "./novofon";
 
 export type CallCrm = {

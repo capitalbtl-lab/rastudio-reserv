@@ -51,7 +51,8 @@ export function BlockMedia({
 }
 
 function CustomHomeBlock({ block }: { block: HomeCustomBlock }) {
-  const src = block.image;
+  const ctx = useHomeEditor();
+  const src = ctx?.doc.media[block.id] || block.image;
   return (
     <section className="page-wrap py-12 md:py-16">
       <div className="grid items-center gap-8 overflow-hidden rounded-[2rem] bg-surface p-6 shadow-[var(--shadow-border)] md:grid-cols-2 md:gap-12 md:p-10">
@@ -87,8 +88,8 @@ function CustomHomeBlock({ block }: { block: HomeCustomBlock }) {
 
 function HomeCanvasInner({ children }: { children: ReactNode }) {
   const ctx = useHomeEditor();
-  const [drag, setDrag] = useState<HomeBlockId | null>(null);
-  const [over, setOver] = useState<HomeBlockId | null>(null);
+  const [drag, setDrag] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
   if (!ctx) return children;
 
   const map = new Map<string, ReactElement<{ id: HomeBlockId }>>();
@@ -136,11 +137,11 @@ function HomeSlotFrame({
   onOver,
   children,
 }: {
-  id: HomeBlockId;
-  drag: HomeBlockId | null;
-  over: HomeBlockId | null;
-  onDragId: (id: HomeBlockId | null) => void;
-  onOver: (id: HomeBlockId | null) => void;
+  id: string;
+  drag: string | null;
+  over: string | null;
+  onDragId: (id: string | null) => void;
+  onOver: (id: string | null) => void;
   children: ReactNode;
 }) {
   const ctx = useHomeEditor();

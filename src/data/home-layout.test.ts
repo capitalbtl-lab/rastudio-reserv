@@ -47,9 +47,21 @@ describe("макет главной", () => {
     assert.equal(doc.texts["hero.title"], undefined);
   });
 
+  it("свой блок и медиа попадают в макет", () => {
+    const doc = normalizeHomeLayout({
+      order: ["hero", "c_abc1"],
+      customs: [{ id: "c_abc1", kicker: "Сезон", title: "Летний интенсив", text: "Короткая смена." }],
+      media: { about: "/media/home/hero.mp4" },
+    });
+    assert.ok(doc.order.includes("c_abc1"));
+    assert.equal(doc.customs[0].title, "Летний интенсив");
+    assert.equal(doc.media.about, "/media/home/hero.mp4");
+  });
+
   it("главная оборачивает каждый блок и правит текст", () => {
     const src = readFileSync(new URL("../routes/index.tsx", import.meta.url), "utf8");
     for (const id of defaultHomeOrder()) {
+      if (id.startsWith("c_")) continue;
       assert.match(src, new RegExp(`HomeSlot id="${id}"`));
     }
     assert.match(src, /HomeCanvas/);
@@ -57,5 +69,6 @@ describe("макет главной", () => {
     const editor = readFileSync(new URL("../components/home-editor.tsx", import.meta.url), "utf8");
     assert.match(editor, /Инспектор/);
     assert.match(editor, /contentEditable/);
+    assert.match(editor, /StudioPanel/);
   });
 });
