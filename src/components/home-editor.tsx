@@ -34,8 +34,8 @@ function debugToken() {
 
 type Ctx = {
   editing: boolean;
-  selected: HomeBlockId | null;
-  select: (id: HomeBlockId | null) => void;
+  selected: string | null;
+  select: (id: string | null) => void;
   doc: HomeLayoutDoc;
   device: HomeDevice;
   setDevice: (d: HomeDevice) => void;
@@ -63,7 +63,7 @@ export function HomeEditorProvider({
   children: ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
-  const [selected, setSelected] = useState<HomeBlockId | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [doc, setDocState] = useState(() => normalizeHomeLayout(initial));
   const [device, setDevice] = useState<HomeDevice>("desktop");
   const [dirty, setDirty] = useState("готово");

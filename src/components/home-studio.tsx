@@ -40,7 +40,10 @@ export function useSiteStudio(useAdmin = false) {
   const [prompt, setPrompt] = useState("");
   const tok = () => (useAdmin ? adminToken() : token() || adminToken());
 
-  async function run(action: Parameters<typeof siteStudio>[0]["data"]["action"], extra: Record<string, unknown> = {}) {
+  async function run(
+    action: "list" | "upload" | "delete" | "describe" | "pulse" | "invent" | "generate" | "place" | "rewrite" | "agents" | "embed",
+    extra: Record<string, unknown> = {},
+  ) {
     setBusy(action);
     setMsg("");
     const res = await siteStudio({ data: { token: tok(), action, ...extra } });

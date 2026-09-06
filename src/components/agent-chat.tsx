@@ -942,7 +942,7 @@ export function AgentChat() {
     setPartner(next);
     setClientMsgs((prev) => {
       const onlyHello = prev.length <= 1 && !prev.some((m) => m.role === "user");
-      if (onlyHello) return [{ role: "assistant", content: greeting(next, voiceOnRef.current) }];
+      if (onlyHello) return [{ role: "assistant", content: greeting(next, pageAgent) }];
       return prev;
     });
   }
@@ -1023,7 +1023,7 @@ export function AgentChat() {
                   setAwaitingCode(false);
                   if (adminLeft() > 0) setAdminMsgs([{ role: "assistant", content: ADMIN_HELLO }]);
                   else {
-                    clientMsgsRef.current = [{ role: "assistant", content: greeting(partner, voiceOnRef.current) }];
+                    clientMsgsRef.current = [{ role: "assistant", content: greeting(partner, pageAgent) }];
                     setClientMsgs(clientMsgsRef.current);
                   }
                   setGroupChips([]);
