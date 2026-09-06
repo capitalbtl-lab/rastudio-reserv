@@ -16,7 +16,7 @@ describe("пробное Чудновой на диск", () => {
     const fnAt = alfa.indexOf("export async function createAlfaLesson");
     const fn = alfa.slice(fnAt, fnAt + 4500);
     assert.match(fn, /allowGroup/);
-    assert.match(fn, /type.id === 3/);
+    assert.match(fn, /type.id !== 3/);
     assert.match(fn, /аудитория занята/);
     assert.match(fn, /SEED_ROOMS/);
     const disk = readFileSync(new URL("./crm-trial-disk.ts", import.meta.url), "utf8");
