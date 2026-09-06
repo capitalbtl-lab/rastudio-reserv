@@ -80,10 +80,15 @@ export function AdminPublicSite() {
         <p className="mt-3">
           <a
             href="/?edit=1"
+            target="_blank"
+            rel="noopener"
             className="inline-flex h-11 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground"
           >
             Редактор главной
           </a>
+        </p>
+        <p className="mt-2 max-w-xl text-sm text-muted">
+          Откроется rastudio.org со студией: слои, текст, медиа. Родители по этой ссылке редактор не видят.
         </p>
       </div>
       <section className="rounded-2xl bg-white p-4 ring-1 ring-black/8">

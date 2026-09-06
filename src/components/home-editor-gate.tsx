@@ -5,10 +5,15 @@ import { HomeReadProvider } from "@/components/home-read";
 
 type Prov = ComponentType<{ initial?: unknown; children: ReactNode }>;
 
-function adminCookie() {
+function staffToken() {
   try {
     const m = document.cookie.match(/(?:^|;\s*)ra_admin=([^;]+)/);
-    return m ? decodeURIComponent(m[1]) : "";
+    if (m) return decodeURIComponent(m[1]);
+  } catch {
+    /* */
+  }
+  try {
+    return localStorage.getItem("ra_admin") || "";
   } catch {
     return "";
   }
@@ -22,7 +27,7 @@ function wantsEdit() {
   }
   try {
     if (!/(?:\?|&)edit=1(?:&|$)/.test(location.search)) return false;
-    const t = adminCookie();
+    const t = staffToken();
     if (!t) return false;
     sessionStorage.setItem("ra_debug", t);
     return true;
