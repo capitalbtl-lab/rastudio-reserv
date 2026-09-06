@@ -1,13 +1,13 @@
 import type { Dossier } from "./dossiers";
 import type { CustomerCard } from "./crm-cards";
 import { listAdminSlots } from "./alfacrm-schedule";
-import { loadGroupCard } from "./group-cards";
+import { collectCustomerJournal } from "./group-cards";
 import { beatsOf } from "./crm-slots-core";
 import { clientCardId, CRM_BRANCH } from "./ids";
 import { listTeachers, teachersAtBranch } from "./crm-teachers";
 import { loadSubjects } from "./crm-subjects";
 import { isAdminGroup } from "./group-status";
-import { clientLessonFromJournal, journalForCustomer } from "./crm-journal-core";
+import { clientLessonFromJournal } from "./crm-journal-core";
 import { customerBalance, cardPays } from "./crm-pay";
 import { asCustomerComm, commsOf } from "./crm-comms";
 import { loadTariffs } from "./crm-tariffs";
@@ -97,7 +97,8 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   const days = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
   const regular: NonNullable<CustomerCard["regular"]> = [];
   const calendar: NonNullable<CustomerCard["calendar"]> = [];
-  for (const g of groups.filter((x) => x.active)) {
+  const activeGroups = groups.filter((x) => x.active);
+  for (const g of activeGroups) {
     const slot = slots.find((s) => s.groupId === g.id && s.branchId === g.branchId) || slots.find((s) => s.groupId === g.id);
     if (slot) {
       for (const b of beatsOf(slot)) {
@@ -117,10 +118,9 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
         });
       }
     }
-    const gcard = loadGroupCard(g.branchId, g.id);
-    for (const les of journalForCustomer(gcard?.calendar || [], customerId)) {
-      calendar.push(clientLessonFromJournal(les, g.name || les.group));
-    }
+  }
+  for (const les of collectCustomerJournal(customerId, activeGroups)) {
+    calendar.push(clientLessonFromJournal(les, les.group));
   }
   const cat = catalogBase();
   const catalogGroups = cat.groups.slice().sort((a, b) => Number(b.branchId === useBranch) - Number(a.branchId === useBranch) || a.name.localeCompare(b.name, "ru"));

@@ -4,6 +4,7 @@ import type { GroupCalLesson } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { nextLocalId } from "./crm-local-id";
 import { mergeJournalInbound } from "./crm-inbound-core";
+import { journalForCustomer } from "./crm-journal-core";
 
 export type CachedGroupCard = {
   id: number;
@@ -95,7 +96,100 @@ export function nextLocalLessonId() {
   for (const card of listGroupCards()) {
     for (const l of card.calendar || []) used.push(Number(l.lessonId) || 0);
   }
+  for (const list of Object.values(loadCustomerCals().items)) {
+    for (const l of list) used.push(Number(l.lessonId) || 0);
+  }
   return nextLocalId(used);
+}
+
+function mergeLessonInto(cal: GroupCalLesson[], lesson: GroupCalLesson) {
+  const next = [...cal];
+  const lid = Number(lesson.lessonId) || 0;
+  const date = String(lesson.date || "");
+  const from = String(lesson.from || "");
+  let i = lid ? next.findIndex((x) => Number(x.lessonId) === lid) : -1;
+  if (i < 0 && date) i = next.findIndex((x) => String(x.date) === date && String(x.from || "") === from);
+  if (i >= 0) next[i] = { ...next[i], ...lesson, lessonId: lid || next[i].lessonId };
+  else next.push(lesson);
+  return { list: next, item: i >= 0 ? next[i] : lesson };
+}
+
+function customerCalFile() {
+  return join(process.cwd(), "storage", "customer-calendars.json");
+}
+
+type CustCals = { at: string; items: Record<string, GroupCalLesson[]> };
+
+let custMem: CustCals | null = null;
+let custMtime = 0;
+
+function loadCustomerCals(): CustCals {
+  try {
+    const mtime = existsSync(customerCalFile()) ? statSync(customerCalFile()).mtimeMs : 0;
+    if (custMem && custMtime === mtime) return custMem;
+    const raw = JSON.parse(readFileSync(customerCalFile(), "utf8")) as CustCals;
+    if (raw && raw.items && typeof raw.items === "object") {
+      custMem = { at: String(raw.at || ""), items: raw.items };
+      custMtime = mtime;
+      return custMem;
+    }
+  } catch {
+    /* */
+  }
+  custMem = { at: "", items: {} };
+  custMtime = 0;
+  return custMem;
+}
+
+function writeCustomerCals(store: CustCals) {
+  custMem = store;
+  mkdirSync(dirname(customerCalFile()), { recursive: true });
+  writeFileSync(customerCalFile(), JSON.stringify(store, null, 0), "utf8");
+  try {
+    custMtime = statSync(customerCalFile()).mtimeMs;
+  } catch {
+    custMtime = Date.now();
+  }
+}
+
+export function loadCustomerCalendar(customerId: number): GroupCalLesson[] {
+  const id = Number(customerId) || 0;
+  if (!id) return [];
+  return loadCustomerCals().items[String(id)] || [];
+}
+
+export function upsertCustomerCalendar(customerId: number, lesson: GroupCalLesson) {
+  const id = Number(customerId) || 0;
+  if (!id) return [];
+  const store = loadCustomerCals();
+  const key = String(id);
+  const { list, item } = mergeLessonInto(store.items[key] || [], lesson);
+  store.items[key] = list;
+  store.at = new Date().toISOString();
+  writeCustomerCals(store);
+  rememberLessons([item]);
+  return list;
+}
+
+export function collectCustomerJournal(
+  customerId: number,
+  groups: { id: number; branchId: number; name?: string }[],
+): GroupCalLesson[] {
+  const out: GroupCalLesson[] = [];
+  const seen = new Set<string>();
+  const push = (les: GroupCalLesson, groupName?: string) => {
+    const row = { ...les, group: les.group || groupName || "" };
+    const key = String(row.lessonId || `${row.date}|${row.from}|${row.type}|${row.group}`);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(row);
+  };
+  for (const g of groups) {
+    const gcard = loadGroupCard(g.branchId, g.id);
+    for (const les of journalForCustomer(gcard?.calendar || [], customerId)) push(les, g.name);
+  }
+  for (const les of loadCustomerCalendar(customerId)) push(les);
+  return out.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")));
 }
 
 export function upsertGroupCalendar(
@@ -124,17 +218,10 @@ export function upsertGroupCalendar(
     calendar: [],
     at: "",
   };
-  const cal = [...(card.calendar || [])];
-  const lid = Number(lesson.lessonId) || 0;
-  const date = String(lesson.date || "");
-  const from = String(lesson.from || "");
-  let i = lid ? cal.findIndex((x) => Number(x.lessonId) === lid) : -1;
-  if (i < 0 && date) i = cal.findIndex((x) => String(x.date) === date && String(x.from || "") === from);
-  if (i >= 0) cal[i] = { ...cal[i], ...lesson, lessonId: lid || cal[i].lessonId };
-  else cal.push(lesson);
+  const { list: cal, item } = mergeLessonInto(card.calendar || [], lesson);
   const next = { ...card, calendar: cal };
   saveGroupCard(next);
-  rememberLessons([i >= 0 ? cal[i] : lesson]);
+  rememberLessons([item]);
   return next;
 }
 
@@ -163,6 +250,24 @@ export function applyCreatedCalendarLesson(localId: number, crmId: number) {
     });
     if (changed) saveGroupCard({ ...card, calendar });
   }
+  const store = loadCustomerCals();
+  let custChanged = false;
+  const items = { ...store.items };
+  for (const [cid, list] of Object.entries(items)) {
+    let hit = false;
+    const calendar = list.map((x) => {
+      if (Number(x.lessonId) !== from) return x;
+      hit = true;
+      const next = { ...x, lessonId: to };
+      remapped.push(next);
+      return next;
+    });
+    if (hit) {
+      items[cid] = calendar;
+      custChanged = true;
+    }
+  }
+  if (custChanged) writeCustomerCals({ ...store, items, at: new Date().toISOString() });
   if (remapped.length) rememberLessons(remapped);
 }
 

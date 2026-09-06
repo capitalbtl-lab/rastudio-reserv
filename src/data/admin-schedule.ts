@@ -32,7 +32,7 @@ import { isLocalSubject } from "./crm-local-id";
 import type { GroupCalLesson } from "./crm-slots-core";
 import { beatsOf } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
-import { loadGroupCard, saveGroupCard, nextLocalLessonId, upsertGroupCalendar, mergeLocalCalendar } from "./group-cards";
+import { loadGroupCard, saveGroupCard, nextLocalLessonId, upsertGroupCalendar, mergeLocalCalendar, upsertCustomerCalendar, collectCustomerJournal } from "./group-cards";
 import { stampJournal, journalForCustomer, clientLessonFromJournal } from "./crm-journal-core";
 import { wantAlfaPull, loadAlfaLink, saveAlfaLink, alfaLinkOf } from "./crm-alfa-link";
 import { scheduleVoiceTurn } from "./schedule-voice";
@@ -769,11 +769,8 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
     }
   }
   const calendar: NonNullable<CustomerCard["calendar"]> = [];
-  for (const g of packedGroups) {
-    const gcard = loadGroupCard(g.branchId, g.id);
-    for (const les of journalForCustomer(gcard?.calendar || [], customerId)) {
-      calendar.push(clientLessonFromJournal(les, g.name || les.group));
-    }
+  for (const les of collectCustomerJournal(customerId, packedGroups)) {
+    calendar.push(clientLessonFromJournal(les, les.group));
   }
   const tariffs: NonNullable<CustomerCard["tariffs"]> = [];
   try {
