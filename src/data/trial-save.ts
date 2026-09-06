@@ -297,7 +297,6 @@ export async function saveTrialLead(data: TrialPayload) {
       /* лента */
     }
     await stampCalendar(localId);
-    }
     enqueueExport({
       op: "customer.create",
       branchId,
