@@ -151,11 +151,24 @@ const CLIENT_RE =
   /уже ходим|уже занима|действующ\w* клиент|мы клиент|ходим к вам|занимаемся у вас|наш ребёнок ходит|продолжаем ходить|открыть карточку|телефон для входа/i;
 const NEW_RE =
   /впервые|подбираем курс|новый клиент|ещё не ходим|не занимаемся|подобрать курс|хочу пробн|запишите на пробн|подбираем впервые|хочу записаться|запишите нас\b/i;
+const ENROLL_RE =
+  /хочу записать|записать реб[её]нк|запишите реб[её]нк|хотим записать|записать сына|записать доч|какие курс|какой курс|подберите курс|подберите направлен|запишите на курс/i;
+
+export function wantsEnroll(text: string) {
+  const t = String(text || "");
+  if (/отработк/.test(t)) return false;
+  return ENROLL_RE.test(t) || /хочу пробн|запишите на пробн|хочу записаться|подбираем курс/i.test(t);
+}
 
 export function modeFromMessages(messages: { role: string; content: string }[]): VisitorMode {
   const userMsgs = messages.filter((m) => m.role === "user").map((m) => m.content);
+  if (identifiedFromMessages(messages)) {
+    const last = [...userMsgs].reverse()[0] || "";
+    if (NEW_RE.test(last) && !ENROLL_RE.test(last)) return "new";
+    return "client";
+  }
   for (const u of [...userMsgs].reverse()) {
-    if (NEW_RE.test(u)) return "new";
+    if (NEW_RE.test(u) || ENROLL_RE.test(u)) return "new";
     if (CLIENT_RE.test(u)) return "client";
   }
   const user = userMsgs.join("\n");
@@ -224,7 +237,7 @@ function takeClientIntent(messages: { role: string; content: string }[]) {
   const users = messages.filter((m) => m.role === "user").map((m) => m.content);
   for (const u of [...users].reverse()) {
     if (/этого достаточно|всё,? спасибо|^спасибо[.!?]*$|пока,? спасибо|больше ничего не нужно/i.test(u)) return "готово";
-    if (/второго ребёнк|ещё одн(ого|у) ребёнк|второй ребёнок/i.test(u)) return "второй";
+    if (/второго ребёнк|ещё одн(ого|у) ребёнк|второй ребёнок|записать реб[её]нк|хочу записать(?!ся на отработ)/i.test(u)) return "второй";
     if (/отработк|пропустил занят|как записаться на отработ|взамен пропущен/i.test(u)) return "отработка";
     if (/пауз|приостанов|замороз|каникул|уед(ем|у)/i.test(u)) return "пауза";
     if (/не прид|не сможем прийти|боле(ем|ет)|пропуск(?!а)|не будет сегодня|отмените (сегодня|ближайш)/i.test(u)) return "пропуск";

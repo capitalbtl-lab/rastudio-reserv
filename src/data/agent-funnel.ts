@@ -1,5 +1,5 @@
 import { nextSlot, PROMPT, slotsFromMessages, type Slots } from "./funnel-state.ts";
-import { modeFromMessages, factsFromMessages } from "./agent-facts.ts";
+import { modeFromMessages, factsFromMessages, wantsEnroll } from "./agent-facts.ts";
 import { STUDIO_ADDR_SHORT, STUDIO_HOURS_SHORT, STUDIO_RULES_SHORT } from "./agent-client-desk-core.ts";
 import { isSocialHello } from "./agent-voice-loop.ts";
 
@@ -50,6 +50,10 @@ export function lockedFunnelReply(
   const asked = (re: RegExp) => re.test(last);
 
   if (open === "age") {
+    const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
+    if (wantsEnroll(lastUser) && !asked(/лет ребёнк|подберу курс/i)) {
+      return { reply: `${n}: Запишем. Сколько лет ребёнку — подберу курс. Можно сказать, написать или нажать направление.` };
+    }
     if (asked(/скажите или напишите возраст|цифрой или кнопк|кнопку ниже|нажмите кнопку/i)) {
       return { reply: `${n}: Чтобы не предложить слишком сложное, скажите или напишите возраст или нажмите кнопку.` };
     }

@@ -172,11 +172,13 @@ export function chipsForReply(
       ],
     };
   }
-  if (/здравствуйте|сколько лет ребёнк|подберу программу|проконсультирую/.test(t) && !slotsFromMessages(messages).age) {
-    return mode === "new" ? { hint: "Скажите или нажмите", chips: AGES } : { hint: "С чего начнём", chips: FORK };
+  if (/здравствуйте|сколько лет ребёнк|подберу программу|проконсультирую|подберу курс/.test(t) && !slotsFromMessages(messages).age) {
+    return mode === "new" ? { hint: "Возраст или направление", chips: [...AGES, ...schoolsFor()] } : { hint: "С чего начнём", chips: FORK };
   }
-  if (/сколько.{0,28}лет|возраст|цифрой или кнопк|кнопки ниже|скажите или напишите/.test(t)) {
-    return { hint: "Скажите или нажмите", chips: AGES };
+  if (/сколько.{0,28}лет|возраст|цифрой или кнопк|кнопки ниже|скажите или напишите|подберу то, что зайдёт/.test(t)) {
+    return mode === "new"
+      ? { hint: "Возраст или направление", chips: [...AGES, ...schoolsFor()] }
+      : { hint: "Скажите или нажмите", chips: AGES };
   }
   if (/коломна или луховиц|удобнее коломн/.test(t)) {
     return { hint: "Город", chips: CITIES };

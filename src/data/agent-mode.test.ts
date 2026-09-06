@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { factsFromMessages, modeFromMessages, nextStepOf, takeWeekday } from "./agent-facts.ts";
 import { asIdentifyHits, confirmedHit, confirmedFromHistory, identifyLocked } from "./agent-identify.ts";
+import { lockedFunnelReply } from "./agent-funnel.ts";
 
 describe("развилка новый / уже ходим", () => {
   it("приветствие не спрашивает возраст", () => {
@@ -54,6 +55,20 @@ describe("развилка новый / уже ходим", () => {
       { role: "user", content: "Подбираем курс впервые" },
     ];
     assert.equal(modeFromMessages(msgs), "new");
+  });
+
+  it("«хочу записать ребёнка» после «уже ходим» — курс, не телефон", () => {
+    const msgs = [
+      { role: "assistant", content: "Ольга: Вы уже занимаетесь у нас или подбираете впервые?" },
+      { role: "user", content: "уже ходим" },
+      { role: "assistant", content: "Ольга: Напишите телефон, который указывали при записи. По нему открою карточку на сайте." },
+      { role: "user", content: "Так я хочу записать ребёнка" },
+    ];
+    assert.equal(modeFromMessages(msgs), "new");
+    assert.match(nextStepOf(factsFromMessages(msgs)), /возраст|лет|курс|направлен/);
+    const hit = lockedFunnelReply("olga", msgs);
+    assert.match(hit?.reply || "", /лет|курс|направлен/i);
+    assert.doesNotMatch(hit?.reply || "", /телефон/i);
   });
 
   it("карточка только после подтверждения имени", () => {
@@ -125,14 +140,14 @@ describe("вход по телефону с диска", () => {
     assert.equal(facts.identified, true);
     assert.equal(facts.intent, "отработка");
     assert.equal(facts.day || "", "");
-    assert.match(nextStepOf(facts), /день/);
+    assert.match(nextStepOf(facts), /недел/);
     const chipsSrc = readFileSync(new URL("./agent-chips.ts", import.meta.url), "utf8");
-    assert.match(chipsSrc, /WEEKDAY_CHIPS/);
+    assert.match(chipsSrc, /MAKEUP_WEEK_CHIPS/);
     const sat = factsFromMessages([...msgs, { role: "user", content: "суббота" }]);
     assert.equal(takeWeekday("суббота"), "суббота");
     assert.equal(takeWeekday("в субботу"), "суббота");
     assert.equal(sat.day, "суббота");
-    assert.match(nextStepOf(sat), /суббота/);
+    assert.match(nextStepOf(sat), /недел/);
     assert.doesNotMatch(nextStepOf(sat), /подтвердить имя/);
   });
 
