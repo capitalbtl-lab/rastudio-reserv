@@ -482,6 +482,7 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.match(chunk, /appendPay/);
     assert.match(chunk, /pay.create/);
     assert.match(chunk, /localId/);
+    assert.match(chunk, /packAlfaPayCreate/);
     const card = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
     assert.match(card, /customerBalance/);
     const rules = readFileSync(new URL("./crm-disk-rules.ts", import.meta.url), "utf8");

@@ -566,13 +566,27 @@ export function CrmClientCard({
 
   const headBtns = (
     <div className={cn("flex shrink-0 items-center gap-1", compact && "flex-wrap justify-end")}>
-            <div className="relative" onMouseEnter={cancelHeadLeave} onMouseLeave={armHeadLeave}>
+            <div className="relative" onMouseEnter={cancelHeadLeave} onMouseLeave={headMenu === "pay" ? undefined : armHeadLeave}>
               <button
                 type="button"
                 data-op="add-pay"
                 onClick={() => {
                   cancelHeadLeave();
-                  setHeadMenu((v) => (v === "pay" ? "" : "pay"));
+                  if (headMenu === "pay") {
+                    setHeadMenu("");
+                    return;
+                  }
+                  const loc = locationIdForBranch(card.branchId);
+                  setPayLocationId(loc ? String(loc) : "");
+                  setPayPayer(card.parent || "");
+                  const live = (card.tariffs || []).filter((t) => !t.archived);
+                  setPayCttId(live.length === 1 ? String(live[0].id) : live[0] ? String(live[0].id) : "");
+                  const gs = card.groups || [];
+                  setPayGroupId(gs.length === 1 ? String(gs[0].id) : "");
+                  setPayDate(todayIso());
+                  setPayAccountId("1");
+                  if (!payItemId) setPayItemId("2");
+                  setHeadMenu("pay");
                 }}
                 className={cn(
                   "h-7 rounded-full font-semibold",
@@ -583,17 +597,17 @@ export function CrmClientCard({
                 Оплата ▾
               </button>
               {headMenu === "pay" ? (
-                <div className={cn("absolute right-0 top-8 z-[80] w-64 p-2", RA_POP)} data-op="pay-menu">
-                  <p className="px-1.5 pb-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-muted">
-                    Остаток {money(card.balance)} · {card.lessonsLeft || 0} ур.
+                <div className={cn("absolute right-0 top-8 z-[80] w-[22rem] p-3", RA_POP)} data-op="pay-menu">
+                  <p className="px-0.5 pb-2 text-[0.65rem] font-semibold uppercase tracking-wider text-muted">
+                    Добавить доход · остаток {money(card.balance)}
                   </p>
-                  <div className="flex flex-col gap-0.5">
+                  <div className="mb-2 flex flex-wrap gap-0.5">
                     {CARD_PAY_KINDS.map((p) => (
                       <button
                         key={p.id}
                         type="button"
                         data-pay-kind={p.id}
-                        className={cn("rounded-lg px-2 py-1.5 text-left text-[0.78rem] font-medium", payKind === p.id ? "bg-primary/10 text-primary" : "hover:bg-surface-2")}
+                        className={cn("rounded-lg px-2 py-1 text-[0.72rem] font-medium", payKind === p.id ? "bg-primary/10 text-primary" : "hover:bg-surface-2")}
                         onClick={() => setPayKind(p.id)}
                       >
                         {p.name}
@@ -601,29 +615,118 @@ export function CrmClientCard({
                     ))}
                   </div>
                   {payKind ? (
-                    <div className="mt-2 flex gap-1.5">
+                    <div className="grid grid-cols-[7.2rem_1fr] items-center gap-x-2 gap-y-1.5 text-[0.72rem]">
+                      <span className="text-muted">Тип и дата</span>
+                      <div className="flex gap-1">
+                        <span className="flex h-8 flex-1 items-center rounded-lg bg-surface-2 px-2 text-muted">Доход</span>
+                        <input
+                          type="date"
+                          value={payDate}
+                          min={ISO_DATE_MIN}
+                          max={ISO_DATE_MAX}
+                          onChange={(e) => setPayDate(clampIsoDate(e.target.value))}
+                          className="h-8 w-[9.2rem] rounded-lg bg-surface-2 px-1.5 ring-1 ring-black/8"
+                        />
+                      </div>
+                      <span className="text-muted">Счёт</span>
+                      <RaSelect
+                        value={payAccountId}
+                        onChange={setPayAccountId}
+                        options={ALFA_PAY_ACCOUNTS.map((x) => ({ value: String(x.id), label: x.name }))}
+                      />
+                      <span className="text-muted">Статья</span>
+                      <RaSelect value={payItemId} onChange={setPayItemId} groups={payItemGroups()} placeholder="Статья дохода" />
+                      <span className="text-muted">Локация</span>
+                      <RaSelect
+                        value={payLocationId}
+                        onChange={setPayLocationId}
+                        options={[{ value: "", label: "(не задано)" }, ...ALFA_PAY_LOCATIONS.map((x) => ({ value: String(x.id), label: x.name }))]}
+                      />
+                      <span className="text-muted">Менеджер</span>
+                      <RaSelect
+                        value={payManagerId}
+                        onChange={setPayManagerId}
+                        options={[{ value: "", label: "(не задано)" }, ...ALFA_PAY_MANAGERS.map((x) => ({ value: String(x.id), label: x.name }))]}
+                      />
+                      <span className="text-muted">Клиентский счёт</span>
+                      <RaSelect
+                        value={payCttId}
+                        onChange={setPayCttId}
+                        options={[
+                          { value: "", label: "(не задано)" },
+                          ...(card.tariffs || []).map((t) => ({ value: String(t.id), label: t.name })),
+                        ]}
+                      />
+                      <span className="text-muted">Сумма</span>
                       <input
                         value={paySum}
                         onChange={(e) => setPaySum(e.target.value)}
-                        placeholder="сумма"
-                        className="h-8 min-w-0 flex-1 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/8"
+                        placeholder="Например, 5000"
+                        className="h-8 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8"
                       />
+                      <span className="text-muted">Плательщик</span>
+                      <input
+                        value={payPayer}
+                        onChange={(e) => setPayPayer(e.target.value)}
+                        placeholder="ФИО родителя"
+                        className="h-8 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8"
+                      />
+                      <span className="text-muted">Группа</span>
+                      <RaSelect
+                        value={payGroupId}
+                        onChange={setPayGroupId}
+                        options={[
+                          { value: "", label: "Выберите" },
+                          ...(card.groups || []).map((g) => ({ value: String(g.id), label: g.name })),
+                        ]}
+                      />
+                      <span className="text-muted">Комментарий</span>
+                      <input
+                        value={payNote}
+                        onChange={(e) => setPayNote(e.target.value)}
+                        placeholder="Оплата за обучение"
+                        className="h-8 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8"
+                      />
+                      <span className="text-muted">Способ внесения</span>
+                      <RaSelect
+                        value={payMethod}
+                        onChange={setPayMethod}
+                        options={ALFA_PAY_METHODS.map((x) => ({ value: x.id, label: x.name }))}
+                      />
+                      <span />
                       <Button
                         type="button"
                         size="sm"
-                        className="h-8 px-2.5 text-[0.72rem]"
+                        className="h-8 justify-self-end px-3 text-[0.72rem]"
                         data-op="customerPay"
                         disabled={Boolean(busy)}
-                        onClick={() => void run("customerPay", { payKind, sum: Number(String(paySum).replace(",", ".")) })}
+                        onClick={() =>
+                          void run("customerPay", {
+                            payKind,
+                            sum: Number(String(paySum).replace(",", ".")),
+                            payAccountId: Number(payAccountId) || 1,
+                            payItemId: Number(payItemId) || 0,
+                            locationId: Number(payLocationId) || 0,
+                            managerId: Number(payManagerId) || 0,
+                            cttId: Number(payCttId) || 0,
+                            payerName: payPayer,
+                            groupId: Number(payGroupId) || 0,
+                            note: payNote,
+                            payMethod,
+                            documentDate: payDate,
+                          })
+                        }
                       >
-                        Провести
+                        Сохранить
                       </Button>
                     </div>
-                  ) : null}
+                  ) : (
+                    <p className="text-[0.72rem] text-muted">Выберите тип операции</p>
+                  )}
                   {(card.pays || []).length ? (
-                    <ul className="mt-2 max-h-36 overflow-y-auto border-t border-black/8 pt-1.5">
+                    <ul className="mt-2 max-h-28 overflow-y-auto border-t border-black/8 pt-1.5">
                       {[...(card.pays || [])].reverse().map((p) => (
-                        <li key={p.id} className="flex justify-between gap-2 px-1.5 py-0.5 text-[0.68rem]">
+                        <li key={p.id} className="flex justify-between gap-2 px-1 py-0.5 text-[0.68rem]">
                           <span className="min-w-0 truncate text-muted">{p.documentDate || p.note}</span>
                           <span className="shrink-0 tabular-nums font-semibold">
                             {p.income ? `+${money(p.income)}` : `−${money(p.expenditure)}`}
