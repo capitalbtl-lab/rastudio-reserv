@@ -21,13 +21,15 @@ function filenameFromSrc(src, alt = "") {
 
 const HASH_FILE = /^[0-9a-f]{5,8}_[0-9a-f]{8,}/i;
 
-function humanAlt(alt, filename, title) {
+function humanAlt(alt, filename, title, src = "") {
   const strip = (s) =>
     cleanText(s)
       .replace(/\.(png|jpe?g|gif|webp)$/i, "")
       .trim();
   const fromAlt = strip(alt);
   if (fromAlt && !HASH_FILE.test(fromAlt) && fromAlt.length > 6) return fromAlt;
+  const fromMedia = strip(WIX_MEDIA_NAMES[mediaIdFromSrc(src)] || "");
+  if (fromMedia && !HASH_FILE.test(fromMedia) && fromMedia.length > 6) return fromMedia;
   const fromFile = strip(filename);
   if (fromFile && !HASH_FILE.test(fromFile) && fromFile.length > 6) return fromFile;
   const fromTitle = cleanText(title).split("|")[0].trim();
@@ -204,7 +206,8 @@ function heroFor(pathValue, decoded) {
 for (const raw of pages) {
   const p = raw.path || "/";
   const title = cleanText(raw.title) || "";
-  const description = cleanText(raw.description) || "";
+  const wix = wixSeoFor(title);
+  const description = cleanText(wix?.description || raw.description) || "";
   const h1s = unique(
     (raw.h1 || [])
       .map(cleanText)
@@ -246,7 +249,7 @@ for (const raw of pages) {
     seenImg.add(key);
     images.push({
       src,
-      alt: humanAlt(alt, filename, title),
+      alt: humanAlt(alt, filename, title, src),
       filename,
     });
   }
