@@ -1461,9 +1461,19 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const d = findDossier({ crmId: customerId });
       if (!wantAlfaPull(data.fresh)) {
         if (d) {
-          const { cardFromDossier } = await import("./customer-card-disk");
-          return { ok: true as const, fromCache: true, customer: cardFromDossier(d, branch) };
+        const { cardFromDossier } = await import("./customer-card-disk");
+        const { parseDossierCtt } = await import("./pupil-tariffs");
+        let card = cardFromDossier(d, branch);
+        const live = (card.tariffs || []).filter((t) => !t.archived);
+        if (!live.length && (await import("./crm-alfa-link")).wantAlfaPullChannel("tariffs")) {
+          await import("./pupil-tariffs").then((m) => m.pullCustomerTariffs(branch, customerId)).catch(() => []);
+          const fresh = findDossier({ crmId: customerId });
+          if (fresh) card = cardFromDossier(fresh, branch);
+        } else if (!parseDossierCtt(d.extras).length && live.length) {
+          void import("./pupil-tariffs").then((m) => m.pullCustomerTariffs(branch, customerId)).catch(() => []);
         }
+        return { ok: true as const, fromCache: true, customer: card };
+      }
         return { ok: false as const, error: "Ученик не найден на сайте." };
       }
       if (d) {
