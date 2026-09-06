@@ -50,7 +50,9 @@ describe("Чуднова Александра: занятия до Alfa", () => 
     assert.equal(isChudnovaAlexandra("Чуднова Александра Алексеевна"), true);
     assert.equal(isChudnovaAlexandra("Чуднова Ольга Сергеевна"), false);
     assert.ok(LOCAL < 0);
-    assert.match(TRIAL_TEST_ID, /chudnova-trial-e/);
+    assert.match(TRIAL_TEST_ID, /chudnova-11oct/);
+    assert.equal(TRIAL_TEST_DATE, "11.10.2026");
+    assert.equal(TRIAL_TEST_TIME, "18:10");
   });
 
   it("клиент на диске и в очереди create, в Alfa тело без localId/lesson", () => {

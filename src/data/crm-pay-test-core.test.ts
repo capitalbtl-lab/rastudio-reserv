@@ -29,8 +29,9 @@ describe("пробное Чудновой Александре", () => {
   it("план: отдельная дата, тип trial, не Ольга", () => {
     const row = planChudnovaTrial({ customerId: 670, branchId: 1, gid: 76, subjectId: 92, roomId: 3 });
     assert.equal(row?.type, "trial");
-    assert.equal(row?.date, TRIAL_TEST_DATE);
-    assert.equal(row?.time, TRIAL_TEST_TIME);
+    assert.equal(row?.date, "11.10.2026");
+    assert.equal(row?.time, "18:10");
+    assert.equal(row?.teacherId, 2);
     assert.equal(row?.customerId, 670);
     assert.equal(row?.subjectId, 92);
     assert.match(row?.note || "", /Чуднова Александра/);

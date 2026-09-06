@@ -1,6 +1,6 @@
 /** Пробное Чудновой на диск сразу. Alfa догоняет очередью. Без token. */
 
-import { planChudnovaTrial, TRIAL_TEST_DATE, TRIAL_TEST_TIME, TRIAL_TEST_SUBJECT, shouldEnsureChudnovaTrial } from "./crm-trial-test-core.ts";
+import { planChudnovaTrial, TRIAL_TEST_DATE, TRIAL_TEST_TIME, TRIAL_TEST_SUBJECT, TRIAL_TEST_TEACHER, shouldEnsureChudnovaTrial } from "./crm-trial-test-core.ts";
 import { loadCustomerCalendar, nextLocalLessonId, upsertCustomerCalendar, upsertGroupCalendar } from "./group-cards.ts";
 import { stampJournal } from "./crm-journal-core.ts";
 import { enqueueExport } from "./crm-export-queue.ts";
@@ -34,15 +34,16 @@ export function ensureChudnovaTrialDisk(opts: {
   const branchId = Number(opts.branchId) || 1;
   if (!shouldEnsureChudnovaTrial(customerId, opts.name)) return null;
   const cal = loadCustomerCalendar(customerId);
-  const hit = cal.find((l) => Number(l.typeId) === 3 || /пробн/i.test(String(l.type || "")) || String(l.date || "").startsWith("2026-09-08"));
+  const want = isoFromRu(TRIAL_TEST_DATE);
+  const hit = cal.find((l) => String(l.date || "").startsWith(want));
   if (hit) return { existed: true as const, lessonId: Number(hit.lessonId) || 0, date: String(hit.date || "") };
   const plan = planChudnovaTrial({
     customerId,
     branchId,
     subjectId: Number(opts.subjectId) || TRIAL_TEST_SUBJECT,
-    gid: Number(opts.gid) || 0,
+    gid: 0,
     roomId: Number(opts.roomId) || DEFAULT_ROOM[branchId] || 28,
-    teacherId: Number(opts.teacherId) || 0,
+    teacherId: Number(opts.teacherId) || TRIAL_TEST_TEACHER,
     date: TRIAL_TEST_DATE,
     time: TRIAL_TEST_TIME,
   });

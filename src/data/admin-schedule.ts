@@ -1492,7 +1492,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (d?.child?.fio || customerId === 670) {
         const { isChudnovaAlexandra } = await import("./crm-pay-test-core");
         const cal = (await import("./group-cards")).loadCustomerCalendar(customerId);
-        const trial = cal.find((l) => Number(l.typeId) === 3 || /пробн/i.test(String(l.type || "")));
+        const want = "2026-10-11";
+        const trial = cal.find((l) => String(l.date || "").startsWith(want));
         if (Number(trial?.lessonId) > 0) {
           crmPush = `Alfa #${trial?.lessonId} · ${trial?.date || ""} ${trial?.from || ""}`.trim();
         } else if (customerId === 670 || (d?.child?.fio && isChudnovaAlexandra(d.child.fio))) {

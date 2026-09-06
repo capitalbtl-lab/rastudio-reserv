@@ -2,11 +2,12 @@
 
 import { isChudnovaAlexandra, PAY_TEST_NAME } from "./crm-pay-test-core.ts";
 
-export const TRIAL_TEST_ID = "2026-09-06-chudnova-trial-e";
-export const TRIAL_TEST_DATE = "08.09.2026";
-export const TRIAL_TEST_TIME = "16:00";
+export const TRIAL_TEST_ID = "2026-09-06-chudnova-11oct";
+export const TRIAL_TEST_DATE = "11.10.2026";
+export const TRIAL_TEST_TIME = "18:10";
 export const TRIAL_TEST_SUBJECT = 92;
 export const TRIAL_TEST_DURATION = 90;
+export const TRIAL_TEST_TEACHER = 2;
 
 export function shouldEnsureChudnovaTrial(customerId: number, name?: string) {
   if (Number(customerId) === 670) return true;
@@ -32,7 +33,7 @@ export function planChudnovaTrial(opts: {
     subjectId: Number(opts.subjectId) || TRIAL_TEST_SUBJECT,
     gid: Number(opts.gid) || 0,
     roomId: Number(opts.roomId) || 0,
-    teacherId: Number(opts.teacherId) || 0,
+    teacherId: Number(opts.teacherId) || TRIAL_TEST_TEACHER,
     date: String(opts.date || TRIAL_TEST_DATE),
     time: String(opts.time || TRIAL_TEST_TIME),
     duration: TRIAL_TEST_DURATION,

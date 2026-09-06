@@ -92,14 +92,14 @@ export async function maybeBookChudnovaTrial() {
     const { stampJournal } = await import("./crm-journal-core");
     const t = await token();
     const who = (await findChudnova(request, t)) || { id: 670, branchId: 1, name: PAY_TEST_NAME };
-    const existing = loadCustomerCalendar(who.id).find((l) => Number(l.typeId) === 3 || /пробн/i.test(String(l.type || "")) || String(l.date || "").startsWith("2026-09-08"));
-    if (existing) {
-      const lid = Number(existing.lessonId) || 0;
-      if (lid > 0) {
-        const note = `${who.name} #${who.id} пробное Alfa #${lid}`;
-        saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note });
-        return { skipped: "exists" as const, customerId: who.id, note };
-      }
+    const want = isoFromRu(TRIAL_TEST_DATE);
+    const existing = loadCustomerCalendar(who.id).find((l) => String(l.date || "").startsWith(want));
+    if (existing && Number(existing.lessonId) > 0) {
+      const note = `${who.name} #${who.id} пробное ${want} Alfa #${existing.lessonId}`;
+      saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note });
+      return { skipped: "exists" as const, customerId: who.id, note };
+    }
+    if (existing && Number(existing.lessonId) < 0) {
       try {
         const booked = await createAlfaLesson({
           branch: who.branchId,
@@ -109,11 +109,12 @@ export async function maybeBookChudnovaTrial() {
           date: ruFromIso(existing.date) || TRIAL_TEST_DATE,
           time: String(existing.from || TRIAL_TEST_TIME),
           duration: 90,
-          note: `пробное rastudio.org · ${PAY_TEST_NAME}`,
+          note: `пробное rastudio.org · ${PAY_TEST_NAME} · ${TRIAL_TEST_DATE}`,
           roomId: Number((existing as { roomId?: number }).roomId) || 0,
+          teacherId: Number((existing as { teacherIds?: number[] }).teacherIds?.[0]) || 2,
         });
         if (booked.ok && booked.id) {
-          applyCreatedCalendarLesson(lid, Number(booked.id));
+          applyCreatedCalendarLesson(Number(existing.lessonId), Number(booked.id));
           const note = `${who.name} #${who.id} Alfa #${booked.id} · ${booked.date} ${booked.time}`;
           saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note });
           logAdmin(`Пробное Чудновой: ${note}`, "sync");
@@ -122,7 +123,7 @@ export async function maybeBookChudnovaTrial() {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         saveMark({ done: "", at: new Date().toISOString(), note: msg.slice(0, 400) });
-        return { ok: false as const, error: msg, customerId: who.id, lessonId: lid };
+        return { ok: false as const, error: msg, customerId: who.id, lessonId: Number(existing.lessonId) };
       }
     }
     const d = findDossier({ crmId: who.id });
@@ -144,11 +145,11 @@ export async function maybeBookChudnovaTrial() {
       customerId: who.id,
       branchId: who.branchId,
       subjectId: fromExisting?.subjectId || Number(slot?.subjectId) || Number(link?.subjectId) || TRIAL_TEST_SUBJECT,
-      gid,
+      gid: 0,
       roomId: await firstRoom(request, t, who.branchId, fromExisting?.roomId || slot?.roomId),
-      teacherId: fromExisting?.teacherId || Number(slot?.teacherId) || 0,
-      date: fromExisting?.date || TRIAL_TEST_DATE,
-      time: fromExisting?.time || TRIAL_TEST_TIME,
+      teacherId: fromExisting?.teacherId || Number(slot?.teacherId) || 2,
+      date: TRIAL_TEST_DATE,
+      time: TRIAL_TEST_TIME,
     });
     if (!plan) {
       g.__raTrialTest = false;
