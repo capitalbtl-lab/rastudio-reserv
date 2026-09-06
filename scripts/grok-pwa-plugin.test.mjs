@@ -115,6 +115,18 @@ test("platform chrome overwrites share-card metas and always sets og:title", () 
   assert.doesNotMatch(out, /property="og:image"/);
 });
 
+test("keeps page og:description from the document", () => {
+  const html =
+    '<html><head><title>Языки</title><meta name="description" content="Обучение английскому, корейскому, китайскому, японскому языкам для детей в Коломне."><meta property="og:description" content="Обучение английскому, корейскому, китайскому, японскому языкам для детей в Коломне."></head></html>';
+  const out = injectGrokPwaHead(html, {
+    appName: "Demo",
+    site: { title: "Студия Развивайся", description: "fallback" },
+  });
+  assert.match(out, /property="og:description" content="Обучение английскому, корейскому, китайскому, японскому языкам для детей в Коломне."/);
+  assert.doesNotMatch(out, /content="fallback"/);
+  assert.equal(out.split('property="og:description"').length - 1, 1);
+});
+
 test("does not duplicate twitter:card or og:title", () => {
   const once = injectGrokPwaHead("<html><head><title>Hello World</title></head></html>");
   const twice = injectGrokPwaHead(once);

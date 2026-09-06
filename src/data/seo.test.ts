@@ -10,6 +10,7 @@ import {
 } from "./seo-core.ts";
 import { SEO_COPY } from "./seo-copy.ts";
 import { SITE, SCHOOLS } from "./site.ts";
+import { imageTitle } from "../components/seo-image.tsx";
 
 describe("seo", () => {
   it("не отдаёт главную description пустым страницам и убирает RASTUDIO.ORG", () => {
@@ -35,6 +36,11 @@ describe("seo", () => {
     const school = SCHOOLS.find((s) => s.href === "/languageschool");
     assert.equal(school?.filename.includes("11062b"), false);
     assert.match(school?.blurb || "", /английскому, корейскому/);
+    assert.equal(imageTitle("11062b_e2ae833a8eaa43e38e4aa6d32eb3b8f7f000.jpg", "Школа иностранных языков"), "Школа иностранных языков");
+    assert.equal(
+      imageTitle("Школа иностранных языков в Студии Развивайся | Коломна.jpg", "x"),
+      "Школа иностранных языков в Студии Развивайся | Коломна",
+    );
   });
 
   it("Course schema только у курсов, кабинет закрыт", () => {
