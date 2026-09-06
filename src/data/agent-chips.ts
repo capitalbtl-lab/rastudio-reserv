@@ -151,10 +151,10 @@ export function chipsForReply(
     };
   }
   if (/здравствуйте|сколько лет ребёнк|подберу программу|проконсультирую/.test(t) && !slotsFromMessages(messages).age) {
-    return mode === "new" ? { hint: "Сколько лет ребёнку", chips: AGES } : { hint: "С чего начнём", chips: FORK };
+    return mode === "new" ? { hint: "Скажите или нажмите", chips: AGES } : { hint: "С чего начнём", chips: FORK };
   }
-  if (/сколько.{0,28}лет|возраст|цифрой или кнопк|кнопки ниже/.test(t)) {
-    return { hint: "Сколько лет ребёнку", chips: AGES };
+  if (/сколько.{0,28}лет|возраст|цифрой или кнопк|кнопки ниже|скажите или напишите/.test(t)) {
+    return { hint: "Скажите или нажмите", chips: AGES };
   }
   if (/коломна или луховиц|удобнее коломн/.test(t)) {
     return { hint: "Город", chips: CITIES };
@@ -208,6 +208,6 @@ export function nextChips(messages: { role: string; content: string }[], groups:
   const fromText = chipsForReply(last, messages, groups);
   if (fromText.chips.length) return fromText;
   const open = nextSlot(slotsFromMessages(messages));
-  if (open === "age" && /лет|возраст/.test(last)) return { hint: "Сколько лет ребёнку", chips: AGES };
+  if (open === "age" && /лет|возраст/.test(last)) return { hint: "Скажите или нажмите", chips: AGES };
   return { hint: "", chips: [] };
 }

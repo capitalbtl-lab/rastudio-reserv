@@ -164,6 +164,14 @@ describe("сценарии консультанта", () => {
     const age = factsFromMessages([...msgs, { role: "user", content: "Ребёнку 8 лет" }]);
     assert.equal(age.age, 8);
     assert.match(nextStepOf(age), /Коломна или Луховицы/);
+    const asked = [
+      ...msgs,
+      { role: "assistant", content: "Ольга: Скажите, сколько лет ребёнку — сразу подберу то, что зайдёт именно ему." },
+      { role: "user", content: "ещё не знаю" },
+    ];
+    const again = lockedFunnelReply("olga", asked, true);
+    assert.match(again?.reply || "", /скажите или напишите возраст или нажмите кнопку/i);
+    assert.doesNotMatch(again?.reply || "", /цифрой/);
   });
 
   it("телефон 10 цифр и «конечно» подтверждают карточку", () => {
