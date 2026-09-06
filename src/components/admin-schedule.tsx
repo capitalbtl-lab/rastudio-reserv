@@ -2226,7 +2226,7 @@ export function AdminSchedule() {
       if (kind === "openTab" || kind === "openClient" || kind === "openGroup") {
         if (paneTo === "clients" || kind === "openClient") showPane("clients");
         else if (paneTo === "groups" || kind === "openGroup") showPane("groups");
-        else if (paneTo === "subjects" || paneTo === "tariffs" || paneTo === "map" || paneTo === "prices" || paneTo === "public" || paneTo === "crm") {
+        else if (paneTo === "subjects" || paneTo === "teachers" || paneTo === "tariffs" || paneTo === "map" || paneTo === "prices" || paneTo === "public" || paneTo === "crm") {
           showPane(paneTo);
         }
         if (kind === "openClient" && customerId) {
