@@ -21,6 +21,7 @@ export const ALFA_LINK_MODES: {
 
 export const ALFA_PULL_CH = [
   { id: "leads", title: "Лиды", hint: "Дельта воронки: новые и изменённые карточки." },
+  { id: "customers", title: "Клиенты", hint: "Карточки is_study=1. Лид, которого в Alfa перевели в клиента, появится в кабинете даже без группы." },
   { id: "clients", title: "Ученики", hint: "Состав групп и живые абонементы пакетами." },
   { id: "lessons", title: "Журнал", hint: "Явка по группам, как состав." },
 ] as const;
@@ -45,7 +46,7 @@ export type AlfaSyncFlags = {
 };
 
 export const ALFA_SYNC_DEFAULT: AlfaSyncFlags = {
-  pull: { leads: true, clients: true, lessons: true },
+  pull: { leads: true, customers: true, clients: true, lessons: true },
   push: { leads: true, trials: true, clients: true, lessons: true, groups: true, tariffs: true, pay: true },
   minutes: 10,
 };

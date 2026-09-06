@@ -11,16 +11,9 @@ export type PersonRoleInput = {
   status?: unknown;
 };
 
-function leadStageId(it: PersonRoleInput) {
-  const raw = it.lead_status_id ?? it.status_id;
-  if (raw == null || raw === "" || raw === false) return 0;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
 /**
  * Экран «Клиенты» — только учится. Экран «Лиды» — воронка.
- * Фролов: is_study может остаться 1, но он на доске CRM (crm_funnel или этап воронки).
+ * Фролов: is_study=1 и всё ещё на доске CRM (crm_funnel). Остаток lead_status_id после перевода в клиента — не лид.
  */
 export function personRole(it: PersonRoleInput): PersonRole {
   if (Number(it.removed) === 1) return "удалён";
@@ -29,11 +22,17 @@ export function personRole(it: PersonRoleInput): PersonRole {
   if (study === 2) return "архив";
   if (study === 0) return "лид";
   if (String(it.crm_funnel || "") === "1") return "лид";
-  if (study === 1 && leadStageId(it) > 0) return "лид";
   if (study === 1) return "учится";
   const st = String(it.status || "");
   if (st === "лид" || st === "учится" || st === "архив" || st === "удалён") return st;
   return "удалён";
+}
+
+/** Лид на диске, которого надо перепроверить в Alfa: не клиент is_study=1. */
+export function customerPullCandidate(d: { crmId?: number; status?: string; extras?: { is_study?: string } }) {
+  if (!Number(d.crmId)) return false;
+  if (String(d.extras?.is_study || "") === "1") return false;
+  return String(d.extras?.is_study || "") === "0" || d.status === "лид";
 }
 
 export function personIsStudy(role: PersonRole): 0 | 1 | 2 {
