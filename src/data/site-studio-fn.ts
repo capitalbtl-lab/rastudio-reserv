@@ -6,7 +6,6 @@ import { loadHomeLayout, saveHomeLayout } from "./home-layout";
 import {
   addCustomBlock,
   homeBlockLabel,
-  isCustomBlockId,
   placeHomeBlock,
   setHomeMedia,
   setHomeText,
@@ -204,9 +203,6 @@ custom заполняй только если это свой блок (id на�
       const saved = upsertPageAgent(draft);
       if (!saved.ok) return saved;
       return { ok: true as const, agent: saved.agent, pages: saved.pages };
-    }
-    if (data.action === "place" && isCustomBlockId(String(data.slot || ""))) {
-      return { ok: false as const, error: "Неизвестное действие." };
     }
     return { ok: false as const, error: "Неизвестное действие." };
   });
