@@ -130,6 +130,31 @@ function durationMins(from?: string, to?: string) {
   return n > 0 && n <= 480 ? n : 0;
 }
 
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function splitHm(raw: string) {
+  const m = String(raw || "").match(/^(\d{1,2}):(\d{2})/);
+  return { h: m ? Number(m[1]) : -1, min: m ? Number(m[2]) : -1 };
+}
+
+function joinHm(h: number, min: number) {
+  if (h < 0 || min < 0) return "";
+  return `${pad2(h)}:${pad2(min)}`;
+}
+
+function addMinsHm(hhmm: string, mins: number) {
+  const { h, min } = splitHm(hhmm);
+  if (h < 0) return "";
+  const t = (((h * 60 + min + Number(mins || 0)) % (24 * 60)) + 24 * 60) % (24 * 60);
+  return `${pad2(Math.floor(t / 60))}:${pad2(t % 60)}`;
+}
+
+const HOUR_OPTS = Array.from({ length: 16 }, (_, i) => i + 7).map((h) => ({ value: String(h), label: pad2(h) }));
+const MIN_OPTS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) => ({ value: String(m), label: pad2(m) }));
+const DUR_OPTS = [45, 60, 90, 120, 150, 180].map((n) => ({ value: String(n), label: `${n} мин` }));
+
 const fieldCtl = "h-9 w-full rounded-md bg-white px-2 text-sm ring-1 ring-black/10";
 
 function Field({ label, required, top, children }: { label: string; required?: boolean; top?: boolean; children: ReactNode }) {
@@ -452,7 +477,8 @@ export function CrmClientCard({
     [catalog.rooms],
   );
   const lessonRoomSelect = useMemo(() => roomsSelectGroups(lessonRooms, lessonBranch), [lessonRooms, lessonBranch]);
-  const lessonRoomCount = lessonRoomSelect.reduce((n, g) => n + g.options.length, 0);
+  const lessonHm = splitHm(lessonTime);
+  const lessonUntil = addMinsHm(lessonTime, lessonMins);
   const pupilGroups = useMemo(() => {
     const list = [...(card.groups || [])];
     list.sort((a, b) => Number(Boolean(b.active)) - Number(Boolean(a.active)) || String(a.name).localeCompare(String(b.name), "ru"));
@@ -565,7 +591,7 @@ export function CrmClientCard({
   function openLesson(key: string) {
     setLessonKey(key);
     setLessonDate(todayIso());
-    setLessonTime("");
+    setLessonTime("16:00");
     setLessonMins(90);
     setLessonBranch(0);
     setLessonGroup(0);
@@ -1082,19 +1108,46 @@ export function CrmClientCard({
             <input type="date" min={ISO_DATE_MIN} max={ISO_DATE_MAX} value={lessonDate} onChange={(e) => setLessonDate(clampIsoDate(e.target.value))} className={fieldCtl} />
           </Field>
           <Field label="Время" required>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-muted">с</span>
-              <input value={lessonTime} onChange={(e) => setLessonTime(e.target.value)} placeholder="__:__" className={cn(fieldCtl, "max-w-[7rem]")} />
-              <span className="text-muted">мин</span>
-              <input
-                type="number"
-                min={15}
-                max={480}
-                value={lessonMins}
-                onChange={(e) => setLessonMins(Number(e.target.value) || 0)}
-                className={cn(fieldCtl, "max-w-[5.5rem]")}
+              <RaSelect
+                value={splitHm(lessonTime).h >= 0 ? String(splitHm(lessonTime).h) : ""}
+                onChange={(v) => setLessonTime(joinHm(Number(v), splitHm(lessonTime).min >= 0 ? splitHm(lessonTime).min : 0))}
+                placeholder="час"
+                options={
+                  splitHm(lessonTime).h >= 0 && !HOUR_OPTS.some((o) => o.value === String(splitHm(lessonTime).h))
+                    ? [{ value: String(splitHm(lessonTime).h), label: pad2(splitHm(lessonTime).h) }, ...HOUR_OPTS]
+                    : HOUR_OPTS
+                }
+                className="h-9 w-[4.6rem] rounded-md bg-white px-2 ring-1 ring-black/10"
               />
+              <span className="text-muted">:</span>
+              <RaSelect
+                value={splitHm(lessonTime).min >= 0 ? String(splitHm(lessonTime).min) : ""}
+                onChange={(v) => setLessonTime(joinHm(splitHm(lessonTime).h >= 0 ? splitHm(lessonTime).h : 16, Number(v)))}
+                placeholder="мин"
+                options={
+                  splitHm(lessonTime).min >= 0 && !MIN_OPTS.some((o) => o.value === String(splitHm(lessonTime).min))
+                    ? [{ value: String(splitHm(lessonTime).min), label: pad2(splitHm(lessonTime).min) }, ...MIN_OPTS]
+                    : MIN_OPTS
+                }
+                className="h-9 w-[4.6rem] rounded-md bg-white px-2 ring-1 ring-black/10"
+              />
+              <span className="text-muted">до</span>
+              <span className="min-w-[3.2rem] tabular-nums text-fg">{addMinsHm(lessonTime, lessonMins) || "—"}</span>
             </div>
+          </Field>
+          <Field label="Длительность">
+            <RaSelect
+              value={lessonMins ? String(lessonMins) : ""}
+              onChange={(v) => setLessonMins(Number(v) || 90)}
+              placeholder="минуты"
+              options={
+                lessonMins && !DUR_OPTS.some((o) => o.value === String(lessonMins))
+                  ? [{ value: String(lessonMins), label: `${lessonMins} мин` }, ...DUR_OPTS]
+                  : DUR_OPTS
+              }
+            />
           </Field>
           <Field label="Аудитория" required>
             <div className="flex items-center gap-2">
@@ -1173,6 +1226,7 @@ export function CrmClientCard({
                 lessonType: lessonKey,
                 date: lessonDate,
                 time: lessonTime,
+                timeTo: addMinsHm(lessonTime, lessonMins) || undefined,
                 duration: lessonMins,
                 branchId: lessonBranch,
                 groupId: lessonGroup || undefined,
