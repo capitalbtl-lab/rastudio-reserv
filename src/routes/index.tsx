@@ -149,6 +149,22 @@ function Home() {
         </div>
       </div>
 
+      <section className="page-wrap pt-12 pb-4 md:pt-16">
+        <div className="grid items-start gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-12">
+          <div>
+            <p className="kicker text-primary">Билингвальный курс</p>
+            <h2 className="section-title mt-3">Робототехника на английском языке</h2>
+            <p className="mt-5 text-[0.98rem] leading-relaxed text-muted">{teaser(home.paragraphs[1], 360)}</p>
+            <div className="mt-6">
+              <Button asChild size="lg">
+                <PageLink to="/roboticsinenglish">Смотреть курс и видео</PageLink>
+              </Button>
+            </div>
+          </div>
+          <RobotEnglishVideos />
+        </div>
+      </section>
+
       <section className="page-wrap pt-8 pb-2 md:pt-10">
         <p className="kicker text-primary">Подбор за 10 секунд</p>
         <h2 className="section-title mt-3">Сколько лет ребёнку?</h2>
