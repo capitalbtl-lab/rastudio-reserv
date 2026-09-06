@@ -145,7 +145,7 @@ export type ClientRow = {
   hasLiveTariff?: boolean;
 };
 
-export type LessonCatalogItem = { id: number; name: string };
+export type LessonCatalogItem = { id: number; name: string; branchId?: number };
 export type TariffOffer = {
   id: number;
   name: string;
@@ -165,9 +165,11 @@ export type GroupOffer = {
   branchId: number;
   subjectId?: number;
   teacher?: string;
+  teacherId?: number;
   day?: string;
   from?: string;
   to?: string;
+  roomId?: number;
   course?: string;
   school?: string;
   schoolId?: string;

@@ -1,5 +1,19 @@
 /** Аудитория карточки занятия — только филиал группы, без архива и без «всех подряд». */
 
+import { ALFA_PAY_LOCATIONS } from "./crm-pay-alfa";
+import { CRM_BRANCH } from "./ids";
+
+export type CrmRoom = { id: number; name: string; branchId: number };
+
+/** Имена из модалки Alfa calendar/create (company/2). Остальные филиалы — с слотов, подпись «аудитория N». */
+export const SEED_ROOMS: CrmRoom[] = [
+  { id: 19, name: "Ауд.1", branchId: 2 },
+  { id: 20, name: "Ауд.1.1", branchId: 2 },
+  { id: 21, name: "Ауд.2", branchId: 2 },
+  { id: 22, name: "Ауд.3", branchId: 2 },
+  { id: 27, name: "Ауд.3.1", branchId: 2 },
+];
+
 export function roomArchived(x: Record<string, unknown>) {
   if ([x.removed, x.is_removed, x.archived, x.is_archived, x.is_delete].some((v) => Number(v) === 1 || v === true)) return true;
   if (x.is_active === 0 || x.enabled === 0 || x.is_enabled === 0 || x.state === 0) return true;
@@ -36,4 +50,60 @@ export function roomsOfBranchList(raw: Record<string, unknown>[], branch: number
   }
   out.sort((a, b) => a.name.localeCompare(b.name, "ru"));
   return out;
+}
+
+function prettyName(name: string, id: number) {
+  const s = String(name || "").trim();
+  if (!s || /^аудитория\s+\d+$/i.test(s)) return "";
+  return s;
+}
+
+export function mergeRooms(...lists: CrmRoom[][]) {
+  const map = new Map<string, CrmRoom>();
+  for (const list of lists) {
+    for (const r of list) {
+      const id = Number(r.id) || 0;
+      const branchId = Number(r.branchId) || 0;
+      if (!id || !branchId) continue;
+      const k = `${branchId}:${id}`;
+      const prev = map.get(k);
+      const name = prettyName(r.name, id) || prev?.name || `аудитория ${id}`;
+      map.set(k, { id, name, branchId });
+    }
+  }
+  return [...map.values()].sort(
+    (a, b) => a.branchId - b.branchId || a.name.localeCompare(b.name, "ru") || a.id - b.id,
+  );
+}
+
+export function roomsFromSlots(slots: { roomId?: number; branchId?: number }[]): CrmRoom[] {
+  const out: CrmRoom[] = [];
+  for (const s of slots) {
+    const id = Number(s.roomId) || 0;
+    const branchId = Number(s.branchId) || 0;
+    if (!id || !branchId) continue;
+    out.push({ id, name: `аудитория ${id}`, branchId });
+  }
+  return out;
+}
+
+export function roomsCatalog(slots: { roomId?: number; branchId?: number }[] = [], extra: CrmRoom[] = []) {
+  return mergeRooms(SEED_ROOMS, roomsFromSlots(slots), extra);
+}
+
+export function roomsOfBranchCatalog(rooms: CrmRoom[], branchId: number) {
+  const b = Number(branchId) || 0;
+  return rooms.filter((r) => r.branchId === b);
+}
+
+export function roomsSelectGroups(rooms: CrmRoom[], branchId: number) {
+  const list = roomsOfBranchCatalog(rooms, branchId);
+  const loc = ALFA_PAY_LOCATIONS.find((x) => x.branchId === branchId);
+  const label = loc?.name || CRM_BRANCH[branchId]?.name || "Аудитории";
+  return [
+    {
+      label,
+      options: list.map((r) => ({ value: String(r.id), label: r.name })),
+    },
+  ].filter((g) => g.options.length);
 }

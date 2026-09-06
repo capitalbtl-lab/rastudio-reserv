@@ -47,6 +47,7 @@ import { loadTariffs, pullTariffsFromCrm, matchTariffs, groupTariffPack, subject
 import { loadScheduleMap } from "./schedule-map";
 import { packSubjectRows, bindSubjectCourse } from "./subject-admin";
 import { isAdminGroup, readPriority, crmPriorityOf } from "./group-status";
+import { roomsCatalog } from "./crm-rooms";
 
 function isoish(raw: string) {
   const s = String(raw || "").trim();
@@ -680,9 +681,11 @@ function catalogGroups(branch: number) {
       branchId: s.branchId,
       subjectId: s.subjectId || undefined,
       teacher: s.teacher,
+      teacherId: s.teacherId || undefined,
       day: s.dayLabel,
       from: s.timeFrom,
       to: s.timeTo,
+      roomId: s.roomId || undefined,
       course: s.course || undefined,
       school: s.school || undefined,
       schoolId: s.schoolId,
@@ -691,6 +694,14 @@ function catalogGroups(branch: number) {
     });
   }
   return out.sort((a, b) => Number(b.branchId === branch) - Number(a.branchId === branch) || a.name.localeCompare(b.name, "ru"));
+}
+
+function catalogRooms() {
+  const extra: { id: number; name: string; branchId: number }[] = [];
+  for (const [b, pack] of roomCache) {
+    for (const x of pack.items) extra.push({ id: x.id, name: x.name, branchId: b });
+  }
+  return roomsCatalog(listAdminSlots(), extra);
 }
 
 async function loadCustomerCard(request: typeof import("./alfacrm").request, t: string, branch: number, customerId: number): Promise<CustomerCard | null> {
@@ -796,7 +807,7 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
                     : studyStatusId === 9
                       ? "Без статуса"
                       : "";
-  const rooms: { id: number; name: string }[] = [];
+  const rooms: { id: number; name: string; branchId?: number }[] = catalogRooms();
   const subjectIds = packedGroups.map((g) => Number(g.subjectId) || 0).filter(Boolean);
   const offerTariffs = loadTariffs()
     .items.filter((t) => !t.archive && (!t.branchIds.length || t.branchIds.includes(useBranch)))
