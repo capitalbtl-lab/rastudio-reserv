@@ -490,6 +490,8 @@ describe("кабинет: новый ученик диск сразу", () => {
     const queue = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
     assert.match(queue, /applyCreatedPay/);
     assert.match(readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8"), /cardPays/);
+    assert.match(save, /customerPayLink/);
+    assert.match(readFileSync(new URL("./pay-online.ts", import.meta.url), "utf8"), /enqueueExport/);
   });
 
   it("этап 9: каналы консультанта — лента на диске, Alfa не F5", () => {

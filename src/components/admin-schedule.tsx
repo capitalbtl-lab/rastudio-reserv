@@ -1209,13 +1209,14 @@ export function AdminSchedule() {
     await openPupil({ id: crmId, name: "", parent: "", dob: "", age: "", gender: "", phones: [], status: "" }, branchId);
   }
 
-  async function mutatePupil(action: "customerSave" | "customerLesson" | "customerPay" | "customerTariff" | "customerGroup", extra: Record<string, unknown> = {}) {
+  async function mutatePupil(action: "customerSave" | "customerLesson" | "customerPay" | "customerPayLink" | "customerTariff" | "customerGroup", extra: Record<string, unknown> = {}) {
     if (!pupil) return;
     const res = await adminSchedule({
       data: { token: token(), action, customerId: pupil.id, branchId: pupil.branchId, ...extra } as never,
     });
     if (!res.ok) throw new Error(("error" in res && res.error) || "Не удалось сохранить.");
     if ("customer" in res && res.customer) setPupil(res.customer as CustomerCard);
+    if ("url" in res && res.url) return { url: String(res.url) };
   }
 
   function resetAddPupil() {

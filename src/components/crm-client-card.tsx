@@ -624,6 +624,7 @@ export function CrmClientCard({
                         Ссылка ЮKassa
                       </Button>
                     </div>
+                    </div>
                   ) : null}
                   {(card.pays || []).length ? (
                     <ul className="mt-2 max-h-36 overflow-y-auto border-t border-black/8 pt-1.5">
