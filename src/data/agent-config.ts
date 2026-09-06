@@ -10,7 +10,7 @@ import { consultantGuidePrompt } from "./agent-section-guides-data";
 import { loadChannels } from "./agent-channels";
 import { lessonsPrompt } from "./agent-lessons";
 import { repairSiteFlags, SITE_WINDOW_IDS, FRAME_WINDOW_IDS, CHIP_IDS } from "./agent-window-core";
-import { BOOK_TYPE_FLAGS, bookTypesPrompt, type BookTypeFlag } from "./agent-book-kinds";
+import { BOOK_TYPE_FLAGS, bookTypesPrompt, LEGACY_OTHER_FLAGS, emptyBookFlags, type BookTypeFlag } from "./agent-book-kinds";
 export { BOOK_TYPE_FLAGS, allowedLessonType, bookTypesPrompt, lessonTypeGroup } from "./agent-book-kinds";
 
 export type AgentSettings = {
@@ -56,6 +56,16 @@ export type AgentSettings = {
   consultantCanBookOvertime: boolean;
   consultantCanBookExtra: boolean;
   consultantCanBookIndividual: boolean;
+  consultantCanBookIntro: boolean;
+  consultantCanBookMaster: boolean;
+  consultantCanBookOpen: boolean;
+  consultantCanBookExcursion: boolean;
+  consultantCanBookCamp: boolean;
+  consultantCanBookEvent: boolean;
+  consultantCanBookInterview: boolean;
+  consultantCanBookAftercare: boolean;
+  consultantCanBookSummer: boolean;
+  /** Старый сейв. Новые типы читают свои галочки. */
   consultantCanBookOther: boolean;
 };
 
@@ -193,12 +203,7 @@ const DEFAULT_SETTINGS: AgentSettings = {
   consultantCanPause: true,
   consultantCanJournal: true,
   consultantCanTariff: false,
-  consultantCanBookTrial: true,
-  consultantCanBookGroup: true,
-  consultantCanBookMakeup: true,
-  consultantCanBookOvertime: true,
-  consultantCanBookExtra: true,
-  consultantCanBookIndividual: true,
+  ...emptyBookFlags(true),
   consultantCanBookOther: true,
 };
 
@@ -212,9 +217,12 @@ export function mergeAgentSettings(raw?: Partial<AgentSettings> | null): AgentSe
   if (incoming.consultantCanPause == null) s.consultantCanPause = incoming.consultantCanJournal !== false;
   s.consultantCanJournal = s.consultantCanSkip !== false || s.consultantCanPause !== false;
   const bookDefault = s.consultantCanBook !== false;
+  const otherLegacy = incoming.consultantCanBookOther;
   for (const f of BOOK_TYPE_FLAGS) {
     const id: BookTypeFlag = f.id;
-    if (incoming[id] == null) s[id] = bookDefault;
+    if (incoming[id] != null) continue;
+    if (LEGACY_OTHER_FLAGS.includes(id) && otherLegacy != null) s[id] = otherLegacy !== false;
+    else s[id] = bookDefault;
   }
   return s;
 }
@@ -429,12 +437,9 @@ export const adminAgentBrain = createServerFn({ method: "POST" })
         consultantCanSkip: flag(next.consultantCanSkip, brain.settings.consultantCanSkip),
         consultantCanPause: flag(next.consultantCanPause, brain.settings.consultantCanPause),
         consultantCanTariff: flag(next.consultantCanTariff, brain.settings.consultantCanTariff),
-        consultantCanBookTrial: flag(next.consultantCanBookTrial, brain.settings.consultantCanBookTrial),
-        consultantCanBookGroup: flag(next.consultantCanBookGroup, brain.settings.consultantCanBookGroup),
-        consultantCanBookMakeup: flag(next.consultantCanBookMakeup, brain.settings.consultantCanBookMakeup),
-        consultantCanBookOvertime: flag(next.consultantCanBookOvertime, brain.settings.consultantCanBookOvertime),
-        consultantCanBookExtra: flag(next.consultantCanBookExtra, brain.settings.consultantCanBookExtra),
-        consultantCanBookIndividual: flag(next.consultantCanBookIndividual, brain.settings.consultantCanBookIndividual),
+        ...Object.fromEntries(
+          BOOK_TYPE_FLAGS.map((f) => [f.id, flag(next[f.id], brain.settings[f.id])]),
+        ),
         consultantCanBookOther: flag(next.consultantCanBookOther, brain.settings.consultantCanBookOther),
         updatedAt: new Date().toISOString(),
       });

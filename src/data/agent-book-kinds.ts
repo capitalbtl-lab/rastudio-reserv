@@ -1,14 +1,4 @@
-/** Какие занятия консультант может ставить. Источник — галочки Окна, не догадка по названию. */
-
-export const LESSON_TYPE_GROUPS = {
-  trial: ["trial", "intro"],
-  group: ["group"],
-  makeup: ["makeup"],
-  overtime: ["overtime"],
-  extra: ["extra"],
-  individual: ["individual"],
-  other: ["master", "open", "excursion", "camp", "event", "interview", "aftercare", "summer"],
-} as const;
+/** Какие занятия консультант ставит. Один тип Alfa — одна галочка. Тот же book_lesson, что пробное и отработка. */
 
 export type BookTypeFlag =
   | "consultantCanBookTrial"
@@ -17,86 +7,105 @@ export type BookTypeFlag =
   | "consultantCanBookOvertime"
   | "consultantCanBookExtra"
   | "consultantCanBookIndividual"
-  | "consultantCanBookOther";
+  | "consultantCanBookIntro"
+  | "consultantCanBookMaster"
+  | "consultantCanBookOpen"
+  | "consultantCanBookExcursion"
+  | "consultantCanBookCamp"
+  | "consultantCanBookEvent"
+  | "consultantCanBookInterview"
+  | "consultantCanBookAftercare"
+  | "consultantCanBookSummer";
 
-export const BOOK_TYPE_FLAGS: { id: BookTypeFlag; title: string; hint: string; tip: string }[] = [
-  {
-    id: "consultantCanBookTrial",
-    title: "Пробное занятие",
-    hint: "submit_trial и book_lesson lesson_type=trial / intro.",
-    tip: "Выключено — пробное только по телефону 8 (800) 511-34-01.",
-  },
-  {
-    id: "consultantCanBookGroup",
-    title: "Запись в группу",
-    hint: "Постоянные занятия, lesson_type=group.",
-    tip: "Приоритет 0 с сайта всё равно не записывает — только называет, если разрешено.",
-  },
-  {
-    id: "consultantCanBookMakeup",
-    title: "Отработка пропуска",
-    hint: "book_lesson lesson_type=makeup в группе того же курса.",
-    tip: "Нужен узнанный клиент и свободные места. Явку всей группы не переписывает.",
-  },
-  {
-    id: "consultantCanBookOvertime",
-    title: "Сверхурочное занятие",
-    hint: "lesson_type=overtime у педагога сверх сетки.",
-    tip: "Отдельная заявка. Не путать с отработкой в соседней группе.",
-  },
-  {
-    id: "consultantCanBookExtra",
-    title: "Дополнительное занятие",
-    hint: "lesson_type=extra сверх абонемента.",
-    tip: "Доп. урок, не замена пропуска.",
-  },
-  {
-    id: "consultantCanBookIndividual",
-    title: "Индивидуальное занятие",
-    hint: "lesson_type=individual с педагогом.",
-    tip: "Не группа. Нужны педагог, дата и время.",
-  },
-  {
-    id: "consultantCanBookOther",
-    title: "Прочие занятия у педагогов",
-    hint: "Мастер-класс, вводное, открытый урок, экскурсия, лагерь, событие, собеседование, продлёнка, лето.",
-    tip: "Всё, что не группа/пробное/отработка/доп/индивидуальное.",
-  },
+type FlagRow = { id: BookTypeFlag; key: string; title: string; hint: string; tip: string };
+
+export const BOOK_TYPE_FLAGS: FlagRow[] = [
+  { id: "consultantCanBookTrial", key: "trial", title: "Пробное занятие", hint: "book_lesson lesson_type=trial. Тот же путь, что остальные типы.", tip: "Выключено — только телефон 8 (800) 511-34-01." },
+  { id: "consultantCanBookGroup", key: "group", title: "Групповое занятие", hint: "book_lesson lesson_type=group. Запись в постоянную группу.", tip: "Приоритет 0 с сайта не записывает." },
+  { id: "consultantCanBookMakeup", key: "makeup", title: "Отработка пропуска", hint: "book_lesson lesson_type=makeup в группе того же курса.", tip: "Нужен узнанный клиент и свободные места." },
+  { id: "consultantCanBookOvertime", key: "overtime", title: "Сверхурочное занятие", hint: "book_lesson lesson_type=overtime. Педагог, дата, время.", tip: "Не путать с отработкой в соседней группе." },
+  { id: "consultantCanBookExtra", key: "extra", title: "Дополнительное занятие", hint: "book_lesson lesson_type=extra сверх абонемента.", tip: "Доп. урок, не замена пропуска." },
+  { id: "consultantCanBookIndividual", key: "individual", title: "Индивидуальное занятие", hint: "book_lesson lesson_type=individual. Педагог, дата, время.", tip: "Не группа." },
+  { id: "consultantCanBookIntro", key: "intro", title: "Вводное занятие", hint: "book_lesson lesson_type=intro. Как пробное, свой тип в Alfa.", tip: "Не подменять пробным." },
+  { id: "consultantCanBookMaster", key: "master", title: "Мастер-класс", hint: "book_lesson lesson_type=master.", tip: "Разовое, не слот расписания." },
+  { id: "consultantCanBookOpen", key: "open", title: "Открытый урок", hint: "book_lesson lesson_type=open.", tip: "Разовое." },
+  { id: "consultantCanBookExcursion", key: "excursion", title: "Экскурсия", hint: "book_lesson lesson_type=excursion.", tip: "Разовое." },
+  { id: "consultantCanBookCamp", key: "camp", title: "Летний лагерь", hint: "book_lesson lesson_type=camp.", tip: "Разовое." },
+  { id: "consultantCanBookEvent", key: "event", title: "Мероприятие", hint: "book_lesson lesson_type=event.", tip: "Разовое." },
+  { id: "consultantCanBookInterview", key: "interview", title: "Собеседование", hint: "book_lesson lesson_type=interview.", tip: "Разовое." },
+  { id: "consultantCanBookAftercare", key: "aftercare", title: "Продлёнка", hint: "book_lesson lesson_type=aftercare.", tip: "Разовое." },
+  { id: "consultantCanBookSummer", key: "summer", title: "Летняя программа", hint: "book_lesson lesson_type=summer.", tip: "Разовое." },
+];
+
+/** Старые сейвы: одна галочка «прочие» закрывала типы ниже. */
+export const LEGACY_OTHER_FLAGS: BookTypeFlag[] = [
+  "consultantCanBookIntro",
+  "consultantCanBookMaster",
+  "consultantCanBookOpen",
+  "consultantCanBookExcursion",
+  "consultantCanBookCamp",
+  "consultantCanBookEvent",
+  "consultantCanBookInterview",
+  "consultantCanBookAftercare",
+  "consultantCanBookSummer",
 ];
 
 export type BookSettings = {
   consultantCanBook: boolean;
-  consultantCanBookTrial: boolean;
-  consultantCanBookGroup: boolean;
-  consultantCanBookMakeup: boolean;
-  consultantCanBookOvertime: boolean;
-  consultantCanBookExtra: boolean;
-  consultantCanBookIndividual: boolean;
-  consultantCanBookOther: boolean;
-};
+  consultantCanBookOther?: boolean;
+} & Record<BookTypeFlag, boolean>;
 
-function flagOf(s: BookSettings, id: BookTypeFlag) {
-  return s[id] !== false;
+export function emptyBookFlags(on = true): Record<BookTypeFlag, boolean> {
+  return Object.fromEntries(BOOK_TYPE_FLAGS.map((f) => [f.id, on])) as Record<BookTypeFlag, boolean>;
 }
 
-export function lessonTypeGroup(kind: string): keyof typeof LESSON_TYPE_GROUPS | "" {
-  const k = String(kind || "trial").toLowerCase().trim();
-  for (const [group, list] of Object.entries(LESSON_TYPE_GROUPS) as [keyof typeof LESSON_TYPE_GROUPS, readonly string[]][]) {
-    if (list.includes(k)) return group;
-  }
-  return "other";
+const ALIASES: Record<string, string> = {
+  пробное: "trial",
+  проба: "trial",
+  групповое: "group",
+  группа: "group",
+  отработка: "makeup",
+  индивидуальное: "individual",
+  индивидуал: "individual",
+  сверхурочное: "overtime",
+  дополнительное: "extra",
+  вводное: "intro",
+  "мастер-класс": "master",
+  мастеркласс: "master",
+  "открытый урок": "open",
+  экскурсия: "excursion",
+  лагерь: "camp",
+  "летний лагерь": "camp",
+  мероприятие: "event",
+  собеседование: "interview",
+  продленка: "aftercare",
+  продлёнка: "aftercare",
+  "летняя программа": "summer",
+};
+
+function kindKey(kind: string) {
+  const raw = String(kind || "trial").toLowerCase().trim();
+  if (ALIASES[raw]) return ALIASES[raw];
+  const hit = BOOK_TYPE_FLAGS.find((f) => f.key === raw || f.id === raw);
+  return hit?.key || raw;
+}
+
+export function lessonTypeGroup(kind: string) {
+  return kindKey(kind);
+}
+
+function flagOf(s: BookSettings, id: BookTypeFlag) {
+  if (s[id] != null) return s[id] !== false;
+  if (LEGACY_OTHER_FLAGS.includes(id)) return s.consultantCanBookOther !== false;
+  return true;
 }
 
 export function allowedLessonType(s: BookSettings, kind: string) {
   if (s.consultantCanBook === false) return false;
-  const g = lessonTypeGroup(kind);
-  if (g === "trial") return flagOf(s, "consultantCanBookTrial");
-  if (g === "group") return flagOf(s, "consultantCanBookGroup");
-  if (g === "makeup") return flagOf(s, "consultantCanBookMakeup");
-  if (g === "overtime") return flagOf(s, "consultantCanBookOvertime");
-  if (g === "extra") return flagOf(s, "consultantCanBookExtra");
-  if (g === "individual") return flagOf(s, "consultantCanBookIndividual");
-  return flagOf(s, "consultantCanBookOther");
+  const key = kindKey(kind);
+  const row = BOOK_TYPE_FLAGS.find((f) => f.key === key);
+  if (!row) return s.consultantCanBookOther !== false;
+  return flagOf(s, row.id);
 }
 
 export function bookTypesPrompt(s: BookSettings) {
@@ -106,5 +115,5 @@ export function bookTypesPrompt(s: BookSettings) {
   for (const f of BOOK_TYPE_FLAGS) {
     (flagOf(s, f.id) ? on : off).push(f.title);
   }
-  return `Можно ставить: ${on.join(", ") || "ничего"}.${off.length ? ` Нельзя: ${off.join(", ")}.` : ""} Индивидуальное и сверхурочное — teacher_id + дата и время.`;
+  return `Каждый тип — то же правило, что пробное: book_lesson с lesson_type. Можно ставить: ${on.join(", ") || "ничего"}.${off.length ? ` Нельзя: ${off.join(", ")}.` : ""} Индивидуальное и сверхурочное — teacher_id + дата и время.`;
 }
