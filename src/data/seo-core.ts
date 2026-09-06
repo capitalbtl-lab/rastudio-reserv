@@ -87,6 +87,15 @@ export type SeoSeed = {
   paragraphs?: string[];
 };
 
+export function bodyDescription(page: SeoSeed) {
+  const skip = /^(согласие|top of page|bottom of page|курсы программирования, робототехники|3 современные студии)/i;
+  for (const raw of page.paragraphs || []) {
+    const t = String(raw || "").replace(/\s+/g, " ").trim();
+    if (t.length > 50 && !skip.test(t) && !GENERIC_HEADING.test(t)) return clipMeta(t);
+  }
+  return "";
+}
+
 export function fallbackDescription(page: SeoSeed) {
   const heading = GENERIC_HEADING.test((page.h1 || "").trim()) ? page.title : page.h1 || page.title;
   const name = stripBrand(heading || "").replace(/[«»"]/g, "").trim();
@@ -95,6 +104,8 @@ export function fallbackDescription(page: SeoSeed) {
     const role = (page.paragraphs?.[0] || "педагог студии «Развивайся»").replace(/\s+/g, " ").trim();
     return clipMeta(`${name} — ${role} Коломна и Луховицы, пробное занятие.`);
   }
+  const fromBody = bodyDescription(page);
+  if (fromBody) return fromBody;
   if (kind === "master") {
     return clipMeta(
       `${name} в студии «Развивайся», Коломна. Разовое занятие для детей и взрослых, запись 8 (800) 511-34-01.`,

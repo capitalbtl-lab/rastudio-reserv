@@ -1,4 +1,5 @@
 import type { SiteImage } from "@/data/catalog";
+import { cleanWixAlt } from "@/data/wix-seo-core";
 
 const SKIP =
   /фон\s*кнон|робошкола|мс\.png|кнопк|логотип|обои|нейросеть/i;
@@ -120,7 +121,11 @@ export function galleryPhotos(images: Shot[], path?: string, mode: "hero" | "gal
     if (img.src.startsWith("/courses/")) return;
     if (/11062b_/i.test(img.src)) return;
     seen.add(key);
-    out.push({ src: img.src, filename: img.filename, alt: img.alt || "Занятия в Студии Развивайся" });
+    out.push({
+      src: img.src,
+      filename: img.filename,
+      alt: cleanWixAlt(img.alt, img.filename, "Занятия в Студии Развивайся"),
+    });
   }
 
   const heroes = mediaImages(path);

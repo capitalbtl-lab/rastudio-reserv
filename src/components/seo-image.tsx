@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { localSrc } from "@/lib/local-media";
+import { cleanWixAlt } from "@/data/wix-seo-core";
 
 type Props = {
   src: string;
@@ -18,7 +19,7 @@ export function imageTitle(filename?: string, alt?: string) {
   const file = String(filename || "").trim();
   const label = String(alt || "").trim();
   if (!file || HASH_FILE.test(file) || /empty-state|placeholder|image-empty/i.test(file)) {
-    return label;
+    return cleanWixAlt(label, file);
   }
   return file.replace(/\.(png|jpe?g|webp|gif)$/i, "");
 }
@@ -33,12 +34,13 @@ export function SeoImage({
   height,
   loading = "lazy",
 }: Props) {
-  const title = imageTitle(filename, alt);
+  const label = cleanWixAlt(alt, filename);
+  const title = imageTitle(filename, label);
   return (
     <figure className={cn("overflow-hidden", className)}>
       <img
         src={localSrc(src)}
-        alt={alt}
+        alt={label}
         title={title || undefined}
         width={width}
         height={height}

@@ -68,10 +68,10 @@ export function enrichPage(page: HeadPage): HeadPage {
   const decoded = decodePath(path);
   const extra = SEO_COPY[path] || SEO_COPY[decoded];
   const wixTitle = stripBrand(page.title || "").trim();
-  const wixDescription = (page.description || "").replace(/\s+/g, " ").trim();
+  const rawDescription = (page.description || "").replace(/\s+/g, " ").trim();
   const title = brandTitle(wixTitle || extra?.title || SITE.homeTitle);
   const description =
-    wixDescription || extra?.description || fallbackDescription({ ...page, title });
+    rawDescription || extra?.description || fallbackDescription({ ...page, title });
   return {
     ...page,
     title,

@@ -214,8 +214,18 @@ function heroFor(pathValue, decoded) {
 for (const raw of pages) {
   const p = raw.path || "/";
   const title = cleanText(raw.title) || "";
+  const scraped = cleanText(raw.description);
   const wix = wixSeoFor(title);
-  const description = cleanText(wix?.description || raw.description) || "";
+  const paragraphs = unique(
+    (raw.paragraphs || [])
+      .map(cleanText)
+      .filter((t) => t && t.length > 24 && !CHROME_PARA.test(t.toLowerCase())),
+  ).slice(0, 22);
+  const fromBody =
+    p === "/allcourses" || p === "/contacts" || p === "/event-list"
+      ? ""
+      : paragraphs.find((t) => t.length > 50) || "";
+  const description = scraped || cleanText(wix?.description) || fromBody;
   const h1s = unique(
     (raw.h1 || [])
       .map(cleanText)
@@ -236,12 +246,6 @@ for (const raw of pages) {
           h.text.length < 220,
       ),
   ).slice(0, 16);
-
-  const paragraphs = unique(
-    (raw.paragraphs || [])
-      .map(cleanText)
-      .filter((t) => t && t.length > 24 && !CHROME_PARA.test(t.toLowerCase())),
-  ).slice(0, 22);
 
   const images = [];
   const seenImg = new Set();
@@ -658,6 +662,14 @@ const catalog = {
 const outDir = path.join(ROOT, "src/data");
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, "catalog.json"), JSON.stringify(catalog));
+fs.writeFileSync(
+  path.join(outDir, "lite.json"),
+  JSON.stringify({
+    home: catalog.pages.find((p) => p.path === "/") || catalog.pages[0],
+    teachers: catalog.teachers,
+    courses: catalog.courses,
+  }),
+);
 console.log(
   "pages",
   catalog.pages.length,
@@ -667,34 +679,5 @@ console.log(
   catalog.courses.length,
   "bytes",
   fs.statSync(path.join(outDir, "catalog.json")).size,
-);
-
-const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${compiled
-  .map((p) => {
-    const loc = `https://www.rastudio.org${p.path === "/" ? "" : p.path}`;
-    return `  <url><loc>${loc.replace(/&/g, "&")}</loc><changefreq>weekly</changefreq></url>`;
-  })
-  .join("\n")}
-</urlset>
-`;
-fs.mkdirSync(path.join(ROOT, "public"), { recursive: true });
-fs.writeFileSync(path.join(ROOT, "public/sitemap.xml"), sitemap);
-fs.writeFileSync(
-  path.join(ROOT, "public/robots.txt"),
-  `User-agent: *
-Allow: /
-
-Sitemap: https://www.rastudio.org/sitemap.xml
-`,
-);
-fs.writeFileSync(
-  path.join(outDir, "lite.json"),
-  JSON.stringify({
-    home: catalog.pages.find((p) => p.path === "/") || catalog.pages[0],
-    teachers: catalog.teachers,
-    courses: catalog.courses,
-  }),
 );
 console.log("lite", fs.statSync(path.join(outDir, "lite.json")).size);
