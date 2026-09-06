@@ -1,8 +1,9 @@
 "use client";
 
-import { Children, isValidElement, useEffect, useState, type ReactElement, type ReactNode } from "react";
+import { Children, isValidElement, useEffect, useState, type ComponentType, type ReactElement, type ReactNode } from "react";
 import { GripVertical } from "lucide-react";
-import { EditText, HomeEditorChrome, HomeEditorProvider, useHomeEditor } from "@/components/home-editor";
+import { EditText, useHomeEditor } from "@/components/home-read";
+import { HomeEditorGate } from "@/components/home-editor-gate";
 import { homeBlockLabel, placeHomeBlock, setHomeMedia, visibleHomeOrder, type HomeBlockId, type HomeCustomBlock, type HomeLayoutDoc } from "@/data/home-layout-core";
 import { SiteVideo } from "@/components/site-video";
 import { SeoImage } from "@/components/seo-image";
@@ -22,9 +23,9 @@ export function HomeCanvas({
   children: ReactNode;
 }) {
   return (
-    <HomeEditorProvider initial={layout || initialOrder}>
+    <HomeEditorGate initial={layout || initialOrder}>
       <HomeCanvasInner>{children}</HomeCanvasInner>
-    </HomeEditorProvider>
+    </HomeEditorGate>
   );
 }
 
@@ -103,7 +104,13 @@ function HomeCanvasInner({ children }: { children: ReactNode }) {
   const ctx = useHomeEditor();
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
+  const [Chrome, setChrome] = useState<ComponentType | null>(null);
   useEffect(() => {
+    if (!ctx?.editing) return;
+    void import("@/components/home-editor").then((m) => setChrome(() => m.HomeEditorChrome));
+  }, [ctx?.editing]);
+  useEffect(() => {
+    if (!ctx?.editing) return;
     const move = (e: DragEvent) => moveMediaDrag(e.clientX, e.clientY);
     const end = () => endMediaDrag();
     window.addEventListener("dragover", move);
@@ -115,7 +122,7 @@ function HomeCanvasInner({ children }: { children: ReactNode }) {
       window.removeEventListener("drop", end);
       endMediaDrag();
     };
-  }, []);
+  }, [ctx?.editing]);
   if (!ctx) return children;
 
   const map = new Map<string, ReactElement<{ id: HomeBlockId }>>();
@@ -137,7 +144,7 @@ function HomeCanvasInner({ children }: { children: ReactNode }) {
 
   return (
     <div className={cn(ctx.editing && "home-layout-on")}>
-      <HomeEditorChrome />
+      {Chrome ? <Chrome /> : null}
       <div className={cn(ctx.editing && "md:pl-[15.25rem] lg:pr-[23.25rem] md:py-6")}>
         <div
           className={cn(
