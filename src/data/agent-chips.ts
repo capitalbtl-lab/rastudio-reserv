@@ -9,6 +9,7 @@ export type AgentChip = {
   send?: string;
   href?: string;
   primary?: boolean;
+  note?: string;
 };
 
 const FORK: AgentChip[] = [
@@ -72,7 +73,7 @@ export function chipsForReply(
   last: string,
   messages: { role: string; content: string }[],
   groups: AgentChip[] = [],
-): { hint: string; chips: AgentChip[] } {
+): { hint: string; chips: AgentChip[]; after?: string } {
   const t = last.toLowerCase();
   if (!t.trim()) return { hint: "", chips: [] };
   if (/кодовое слово/.test(t)) return { hint: "Назовите кодовое слово", chips: [] };
@@ -129,7 +130,8 @@ export function chipsForReply(
       if ((facts.intent === "индивидуальное" || facts.intent === "сверхурочное" || facts.intent === "дополнительное") && !facts.day) {
         return { hint: "День занятия", chips: WEEKDAY_CHIPS };
       }
-      if (groups.length) return { hint: "Слоты", chips: groups };
+      const slots = scheduleOffer(groups);
+      if (slots) return slots;
       return { hint: "Что нужно", chips: CLIENT_TOPICS };
     }
     if (/это ваш|нашл|несколько детей/.test(t)) {
@@ -159,12 +161,14 @@ export function chipsForReply(
   if (/коломна или луховиц|удобнее коломн/.test(t)) {
     return { hint: "Город", chips: CITIES };
   }
-  if (/цмит|октябрьской революции|гражданская, 2|какой ближе/.test(t)) {
+  const listed = scheduleOffer(groups);
+  if (listed && /групп|расписан|слот|ближайш|запишу вас в группу|есть несколько|пробн|запис/.test(t)) {
+    return listed;
+  }
+  if (/какой ближе|цмит или гражданск|два адреса|филиал ближе|удобен филиал/.test(t)) {
     return { hint: "Филиал", chips: KOLOMNA };
   }
-  if (groups.length && /групп|пробн|слот|свободн.{0,12}мест|ближайш/.test(t)) {
-    return { hint: "Группы", chips: groups };
-  }
+  if (listed) return listed;
   if (/пробн|сразу в групп|запис/.test(t)) {
     const page = courseHint(messages.map((m) => m.content).slice(-6).join(" "));
     return { hint: "Запись", chips: [...TRIAL, ...(page ? [{ label: "Подробнее о курсе", href: page.path }] : [])] };
