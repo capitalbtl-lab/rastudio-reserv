@@ -1,4 +1,4 @@
-/** Связь с AlfaCRM. Кабинет всегда читает диск. Режим решает, стучимся ли в Alfa. */
+/** Связь с AlfaCRM. Кабинет всегда читает диск. Режим и каналы решают, стучимся ли в Alfa. */
 
 export type AlfaLinkMode = "linked" | "offline";
 
@@ -9,15 +9,46 @@ export const ALFA_LINK_MODES: {
 }[] = [
   {
     id: "linked",
-    title: "С AlfaCRM",
-    hint: "Правки сразу на сайте. Alfa получает их в фоне — рассылки и касса работают. Новые лиды из Alfa подтягиваются сами. Полная воронка — кнопка «Воронка из Alfa».",
+    title: "Фон с AlfaCRM",
+    hint: "Сайт пишет сразу на диск. Включённые каналы уходят в Alfa сами (рассылки, касса коллег). Полная воронка — кнопка «Обновить».",
   },
   {
     id: "offline",
     title: "Без AlfaCRM",
-    hint: "Работаем только на сайте. Правки копятся и уйдут в Alfa, когда включите связь снова.",
+    hint: "Только сайт. Очередь копится и уйдёт, когда включите фон. Ольга всё равно пишет на диск.",
   },
 ];
+
+export const ALFA_PULL_CH = [
+  { id: "leads", title: "Лиды", hint: "Дельта воронки: новые и изменённые карточки." },
+  { id: "clients", title: "Ученики", hint: "Состав групп и живые абонементы пакетами." },
+  { id: "lessons", title: "Журнал", hint: "Явка по группам, как состав." },
+] as const;
+
+export const ALFA_PUSH_CH = [
+  { id: "leads", title: "Лиды", hint: "Этап воронки и новая карточка, в том числе от Ольги." },
+  { id: "trials", title: "Пробные", hint: "Запись с сайта и консультанта — customer.create + занятие." },
+  { id: "clients", title: "Ученики", hint: "Имя, телефон, пауза." },
+  { id: "lessons", title: "Занятия", hint: "Пробное, отработка, журнал." },
+  { id: "groups", title: "Группы", hint: "Состав cgi и слот." },
+  { id: "tariffs", title: "Абонементы", hint: "Назначение и снятие." },
+  { id: "pay", title: "Касса", hint: "Платежи с сайта в очередь кассы Alfa." },
+] as const;
+
+export type AlfaPullCh = (typeof ALFA_PULL_CH)[number]["id"];
+export type AlfaPushCh = (typeof ALFA_PUSH_CH)[number]["id"];
+
+export type AlfaSyncFlags = {
+  pull: Record<AlfaPullCh, boolean>;
+  push: Record<AlfaPushCh, boolean>;
+  minutes: number;
+};
+
+export const ALFA_SYNC_DEFAULT: AlfaSyncFlags = {
+  pull: { leads: true, clients: true, lessons: true },
+  push: { leads: true, trials: true, clients: true, lessons: true, groups: true, tariffs: true, pay: true },
+  minutes: 10,
+};
 
 export function alfaLinked(mode?: string | null) {
   return mode !== "offline";
@@ -25,4 +56,40 @@ export function alfaLinked(mode?: string | null) {
 
 export function alfaLinkOf(raw?: string | null): AlfaLinkMode {
   return raw === "offline" ? "offline" : "linked";
+}
+
+function flagMap<T extends string>(src: unknown, keys: readonly T[], fallback: Record<T, boolean>): Record<T, boolean> {
+  const raw = src && typeof src === "object" ? (src as Record<string, unknown>) : {};
+  const out = { ...fallback };
+  for (const k of keys) {
+    if (k in raw) out[k] = raw[k] !== false;
+  }
+  return out;
+}
+
+export function alfaSyncOf(raw?: Partial<AlfaSyncFlags> | null): AlfaSyncFlags {
+  const minutes = Number(raw?.minutes);
+  return {
+    pull: flagMap(raw?.pull, ALFA_PULL_CH.map((c) => c.id), ALFA_SYNC_DEFAULT.pull),
+    push: flagMap(raw?.push, ALFA_PUSH_CH.map((c) => c.id), ALFA_SYNC_DEFAULT.push),
+    minutes: Number.isFinite(minutes) ? Math.max(2, Math.min(60, minutes)) : ALFA_SYNC_DEFAULT.minutes,
+  };
+}
+
+/** Канал выгрузки по операции очереди. Пробное — customer.create с is_study 0 или lesson.type trial. */
+export function exportOpPushChannel(op: string, body?: Record<string, unknown>): AlfaPushCh {
+  if (op.startsWith("lead-status")) return "leads";
+  if (op === "pay.create") return "pay";
+  if (op.startsWith("customer-tariff")) return "tariffs";
+  if (op === "cgi.apply" || op.startsWith("group") || op === "subject.create") return "groups";
+  if (op.startsWith("lesson") || op.startsWith("regular-lesson")) return "lessons";
+  if (op === "customer.create") {
+    const study = Number(body?.is_study);
+    const lesson = body?.lesson && typeof body.lesson === "object" ? (body.lesson as { type?: string }) : null;
+    const kind = String(lesson?.type || body?.kind || "");
+    if (study === 0 || kind === "trial") return "trials";
+    return "leads";
+  }
+  if (op === "customer.update") return "clients";
+  return "clients";
 }
