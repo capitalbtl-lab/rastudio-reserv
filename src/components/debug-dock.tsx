@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { debugSession, unlockDebug } from "@/data/debug-fn";
 import { debugSessionChanged, type DebugToolId } from "@/data/debug-client";
+import { saveHomeLayoutFn } from "@/data/home-layout-fn";
 import { slotsFromMessages } from "@/data/funnel-state";
 import { factsFromMessages } from "@/data/agent-facts";
 import { Button } from "@/components/ui/button";
@@ -166,6 +167,24 @@ export function DebugDock() {
                       </li>
                     ))}
                   </ol>
+                ) : null}
+                {show("layout") ? (
+                  <div className="border-t border-white/15 pt-2">
+                    <p>Макет главной: на этой странице перетащите блоки за «⋮⋮» или стрелками. Порядок сразу на сайте.</p>
+                    <button
+                      type="button"
+                      className="mt-1 underline"
+                      onClick={() => {
+                        const t = token();
+                        if (!t) return;
+                        void saveHomeLayoutFn({ data: { token: t, reset: true } }).then(() => {
+                          window.location.reload();
+                        });
+                      }}
+                    >
+                      Сбросить порядок
+                    </button>
+                  </div>
                 ) : null}
               </div>
             ) : null}
