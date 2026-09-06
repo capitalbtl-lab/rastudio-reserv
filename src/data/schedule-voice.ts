@@ -5,6 +5,7 @@ import { searchClientViews } from "./dossiers";
 import { BRANCHES } from "@/data/site";
 import { IDS_FOR_AGENT } from "@/data/ids";
 import { scheduleGuidePrompt } from "@/data/agent-section-guides-run";
+import { loadBrain } from "./agent-config";
 
 export type ScheduleVoiceResult = {
   kind: "edit" | "question" | "refuse" | "openClient" | "openGroup" | "openTab";
@@ -160,11 +161,22 @@ function localPeopleTurn(prompt: string): ScheduleVoiceResult | null {
   };
 }
 
-/** Только кабинет. Не Олег/Ольга, не запись родителей. */
+/** Только кабинет. Не Олег/Ольга, не запись родителей — пока adminVoiceCanConsult выкл. */
 export async function scheduleVoiceTurn(prompt: string, selectedIds: string[]): Promise<ScheduleVoiceResult> {
+  const settings = loadBrain().settings;
+  const canWrite = settings.adminVoiceCanWrite !== false;
+  const canConsult = settings.adminVoiceCanConsult === true;
   const people = localPeopleTurn(prompt);
   if (people) return people;
   const local = localLimitTurn(prompt);
+  if (local && !canWrite) {
+    return {
+      kind: "refuse",
+      reason: "adminVoiceCanWrite выкл",
+      answer: "Запись в CRM голосом выключена. Откройте карточку вручную или включите «Голос админки пишет в CRM» в окне ассистента.",
+      action: "none",
+    };
+  }
   if (local) return local;
   const slots = listAdminSlots();
   const slim = slots.slice(0, 90).map((s) => ({
@@ -204,9 +216,10 @@ export async function scheduleVoiceTurn(prompt: string, selectedIds: string[]): 
     ageBand?: string;
   }>(
     `Ты голосовой агент кабинета студии «Развивайся»: расписание, группы, клиенты, предметы, абонементы.
-Ты НЕ Олег и НЕ Ольга. Ты НЕ консультируешь родителей. Ты НЕ записываешь детей.
-Умеешь: менять расписание и лимит мест, добавлять группы, открывать карточку группы, искать карточку клиента, открывать вкладки «группы», «клиенты», «предметы», «абонементы», «соответствия», фильтровать текущих/лидов/архив.
-Правда на диске. Alfa догоняет очередью. Не опрашивай CRM, если есть groupId/customerId на сайте. Соответствия только по ID.
+${canConsult ? "Можно коротко консультировать родителей, как Ольга." : "Ты НЕ Олег и НЕ Ольга. Ты НЕ консультируешь родителей. Ты НЕ записываешь детей."}
+Умеешь: ${canWrite ? "менять расписание и лимит мест, добавлять группы, " : "только смотреть: "}открывать карточку группы, искать карточку клиента, открывать вкладки «группы», «клиенты», «предметы», «абонементы», «соответствия», фильтровать текущих/лидов/архив.
+${canWrite ? "Правда на диске. Alfa догоняет очередью. Можно писать статус, приоритет, лимит, абонемент ученика — только по ID." : "Запись в CRM выключена (adminVoiceCanWrite). kind=edit запрещён. Только question / openTab / openClient / openGroup / refuse."}
+Не опрашивай CRM, если есть groupId/customerId на сайте. Соответствия только по ID.
 Карточка клиента на десктопе — правая панель, не popup. Overlay только на телефоне.
 ${scheduleGuidePrompt() || IDS_FOR_AGENT}
 Открывать группу только по groupId+branchId (groupCardId = card:group:{branchId}:{groupId}). Клиента — только по customerId (clientCardId = card:customer:{customerId}). Курс — courseId, предмет — subjectId. Курс сайта в CRM не уходит.
@@ -249,7 +262,15 @@ ${JSON.stringify(slim).slice(0, 9000)}`,
     llm?.kind === "question" || llm?.kind === "refuse" || llm?.kind === "edit" || llm?.kind === "openClient" || llm?.kind === "openGroup" || llm?.kind === "openTab"
       ? llm.kind
       : "refuse";
-  const action = llm?.action === "pull" || llm?.action === "push" || llm?.action === "preview" ? llm.action : kind === "edit" ? "preview" : "none";
+  let action = llm?.action === "pull" || llm?.action === "push" || llm?.action === "preview" ? llm.action : kind === "edit" ? "preview" : "none";
+  if (!canWrite && (kind === "edit" || action === "push" || action === "preview" || action === "pull")) {
+    return {
+      kind: "refuse",
+      reason: "adminVoiceCanWrite выкл",
+      answer: "Запись в CRM голосом выключена. Откройте карточку вручную или включите «Голос админки пишет в CRM».",
+      action: "none",
+    };
+  }
   return {
     kind,
     reason: String(llm?.reason || (kind === "refuse" ? "не разобрала запрос по расписанию, группам или клиентам." : "")).trim(),
