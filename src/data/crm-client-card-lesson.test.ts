@@ -15,9 +15,8 @@ describe("форма занятия карточки", () => {
     assert.match(src, /!lessonBranch \|\| !lessonRoom/);
     assert.match(src, /setLessonBranch\(0\)/);
     assert.match(src, /setLessonRoom\(0\)/);
-    assert.match(src, /placeholder="час"/);
-    assert.match(src, /placeholder="мин"/);
-    assert.match(src, /HOUR_OPTS/);
+    assert.match(src, /type="time"/);
+    assert.match(src, /step=\{60\}/);
     assert.match(src, /timeTo: addMinsHm/);
     assert.match(src, /from "@\/data\/crm-lesson-time"/);
     assert.match(src, /e.target === e.currentTarget/);

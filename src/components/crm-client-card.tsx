@@ -35,7 +35,7 @@ import {
   payItemGroups,
 } from "@/data/crm-pay-alfa";
 import { mergeRooms, roomsSelectGroups, SEED_ROOMS } from "@/data/crm-rooms";
-import { addMinsHm, DUR_OPTS, HOUR_OPTS, joinHm, MIN_OPTS, pad2, splitHm } from "@/data/crm-lesson-time";
+import { addMinsHm, DUR_OPTS } from "@/data/crm-lesson-time";
 
 function money(n?: number) {
   return `${Number(n || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`;
@@ -454,7 +454,6 @@ export function CrmClientCard({
   );
   const lessonRoomSelect = useMemo(() => roomsSelectGroups(lessonRooms, lessonBranch), [lessonRooms, lessonBranch]);
   const lessonRoomCount = lessonRooms.filter((r) => r.branchId === lessonBranch).length;
-  const lessonHm = splitHm(lessonTime);
   const lessonUntil = addMinsHm(lessonTime, lessonMins);
   const pupilGroups = useMemo(() => {
     const list = [...(card.groups || [])];
@@ -1115,28 +1114,12 @@ export function CrmClientCard({
           <Field label="Время" required>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-muted">с</span>
-              <RaSelect
-                value={lessonHm.h >= 0 ? String(lessonHm.h) : ""}
-                onChange={(v) => setLessonTime(joinHm(Number(v), lessonHm.min >= 0 ? lessonHm.min : 0))}
-                placeholder="час"
-                options={
-                  lessonHm.h >= 0 && !HOUR_OPTS.some((o) => o.value === String(lessonHm.h))
-                    ? [{ value: String(lessonHm.h), label: pad2(lessonHm.h) }, ...HOUR_OPTS]
-                    : HOUR_OPTS
-                }
-                className="h-9 w-[4.6rem] rounded-md bg-white px-2 ring-1 ring-black/10"
-              />
-              <span className="text-muted">:</span>
-              <RaSelect
-                value={lessonHm.min >= 0 ? String(lessonHm.min) : ""}
-                onChange={(v) => setLessonTime(joinHm(lessonHm.h >= 0 ? lessonHm.h : 16, Number(v)))}
-                placeholder="мин"
-                options={
-                  lessonHm.min >= 0 && !MIN_OPTS.some((o) => o.value === String(lessonHm.min))
-                    ? [{ value: String(lessonHm.min), label: pad2(lessonHm.min) }, ...MIN_OPTS]
-                    : MIN_OPTS
-                }
-                className="h-9 w-[4.6rem] rounded-md bg-white px-2 ring-1 ring-black/10"
+              <input
+                type="time"
+                step={60}
+                value={/^\d{2}:\d{2}$/.test(lessonTime) ? lessonTime : ""}
+                onChange={(e) => setLessonTime(e.target.value)}
+                className={`${fieldCtl} w-[8.5rem]`}
               />
               <span className="text-muted">до</span>
               <span className="min-w-[3.2rem] tabular-nums text-fg">{lessonUntil || "—"}</span>
