@@ -63,8 +63,10 @@ export type Dossier = {
 };
 
 type Store = { items: Dossier[]; lastCrmSync?: string; nextCrmSync?: string; lastLeadSync?: string };
+type CrmWriteOpts = { persist?: boolean; quiet?: boolean };
 
 const MAX = 8000;
+const BULK: CrmWriteOpts = { persist: false, quiet: true };
 let cachedStore: { mtime: number; store: Store } | null = null;
 let viewsMemo: { items: Dossier[]; views: unknown[] } | null = null;
 
@@ -117,6 +119,10 @@ function saveStore(store: Store) {
     cachedStore = { mtime: Date.now(), store: packed };
   }
   viewsMemo = null;
+}
+
+function yieldLoop() {
+  return new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
 export function digitsPhone(raw?: string) {
@@ -407,6 +413,8 @@ export function upsertDossier(patch: {
   source: string;
   note?: string;
   crmWins?: boolean;
+  persist?: boolean;
+  quiet?: boolean;
 }) {
   const crm = patch.source === "alfacrm" || Boolean(patch.crmWins);
   const digits = digitsPhone(patch.phone);
@@ -477,7 +485,7 @@ export function upsertDossier(patch: {
     dob: next.child.dob,
     city: next.city,
   });
-  if (before !== after || patch.note) {
+  if (!patch.quiet && (before !== after || patch.note)) {
     next.log = [
       {
         at: next.updatedAt,
@@ -493,6 +501,7 @@ export function upsertDossier(patch: {
   } else {
     store.items = [next, ...rest];
   }
+  if (patch.persist === false) return next;
   store.items.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
   saveStore(store);
   return next;
