@@ -6,7 +6,6 @@ import { debugSession } from "@/data/debug-fn";
 import { debugEmit } from "@/data/debug-client";
 import { saveHomeLayoutFn } from "@/data/home-layout-fn";
 import {
-  HOME_BLOCKS,
   emptyHomeLayout,
   homeBlockLabel,
   moveHomeBlock,
@@ -199,7 +198,8 @@ export function EditText({
   children: string;
 }) {
   const ctx = useHomeEditor();
-  const value = ctx?.text(id, children) || children;
+  const fallback = String(children).replace(/\s+/g, " ").trim();
+  const value = ctx?.text(id, fallback) || fallback;
   const editing = Boolean(ctx?.editing);
   return (
     <Tag
@@ -387,4 +387,3 @@ export function HomeEditorChrome() {
   );
 }
 
-export { HOME_BLOCKS };

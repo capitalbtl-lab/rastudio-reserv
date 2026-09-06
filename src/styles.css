@@ -980,7 +980,7 @@
 }
 
 .home-layout-on a,
-.home-layout-on button:not(.ve-ui button):not(.ve-ui) {
+.home-layout-on button {
   pointer-events: none;
 }
 
