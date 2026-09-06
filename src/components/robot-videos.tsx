@@ -116,12 +116,12 @@ export function RobotEnglishVideos() {
             </div>
           </div>
 
-          <div className="relative bg-header">
-            <div className="relative">
+          <div className="relative flex min-h-[16rem] flex-col bg-header lg:min-h-full">
+            <div className="relative aspect-video min-h-[14rem] flex-1 lg:aspect-auto">
               <video
                 key={`${src}-${watching ? "on" : "off"}`}
                 src={src}
-                className="aspect-video w-full object-cover lg:aspect-[16/11]"
+                className="absolute inset-0 h-full w-full object-cover"
                 autoPlay
                 muted={!watching}
                 loop={!watching}
@@ -145,7 +145,7 @@ export function RobotEnglishVideos() {
               ) : null}
             </div>
             {clips.length > 1 ? (
-              <div className="grid grid-cols-2 gap-px bg-white/10 sm:grid-cols-4">
+              <div className="grid shrink-0 grid-cols-2 gap-px bg-white/10 sm:grid-cols-4">
                 {clips.map((clip, i) => (
                   <button
                     key={clip}
