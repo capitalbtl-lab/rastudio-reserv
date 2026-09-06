@@ -502,3 +502,15 @@ describe("инкремент CRM: только изменённые карточ
     assert.equal(leadDeltaDrops({ id: 2, is_study: 0, lead_status_id: 1 }), false);
   });
 });
+
+describe("воронка: F5 не тянет полную Alfa", () => {
+  it("дельта без карточек не вызывает полную выгрузку", () => {
+    const src = readFileSync(new URL("./crm-leads.ts", import.meta.url), "utf8");
+    assert.doesNotMatch(src, /if \(!hit\?\.items\.length\) return loadLeadsBoard\(branchId, true\)/);
+    assert.match(src, /boardFromDisk/);
+    assert.match(src, /void syncLeadsDelta/);
+    const ui = readFileSync(new URL("../components/admin-clients.tsx", import.meta.url), "utf8");
+    assert.match(ui, /loadFunnel\(branch, false, true\)/);
+    assert.match(ui, /Воронка из Alfa/);
+  });
+});

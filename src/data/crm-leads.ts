@@ -400,8 +400,14 @@ async function fetchBranchLeads(t: string, branch: number, stages: { id: number 
 
 export async function syncLeadsDelta(branchId = 0): Promise<Bag> {
   const key = String(branchId || 0);
-  const hit = bag().get(key);
-  if (!hit?.items.length) return loadLeadsBoard(branchId, true);
+  let hit = bag().get(key);
+  if (!hit?.items.length) {
+    const disk = await boardFromDisk(branchId);
+    if (!disk.items.length) return disk;
+    bag().set(key, disk);
+    persistLeads();
+    hit = disk;
+  }
   const t = await alfaToken();
   const since = crmUpdatedAtFrom(hit.at);
   const branches = branchId ? [branchId] : [1, 2, 3, 4];
@@ -492,8 +498,17 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
     }
     return disk;
   }
-  if (delta && !force && hit?.items.length) return syncLeadsDelta(branchId);
-  if (wantAlfaDelta(delta) && !force) return syncLeadsDelta(branchId);
+  if (!force) {
+    const disk = hit?.items.length ? hit : await boardFromDisk(branchId);
+    if (disk.items.length && !hit?.items.length) {
+      bag().set(key, disk);
+      persistLeads();
+    }
+    if (wantAlfaDelta(delta) && disk.items.length) {
+      void syncLeadsDelta(branchId).catch(() => undefined);
+    }
+    return disk;
+  }
   const work = async (): Promise<Bag> => {
     const t = await alfaToken();
     const rawStages = await fetchStages(t, branchId || 2);
