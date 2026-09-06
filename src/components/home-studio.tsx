@@ -31,7 +31,7 @@ function currentPath() {
   return window.location.pathname || "/";
 }
 
-export function useSiteStudio(useAdmin = false) {
+export export export export function useSiteStudio(useAdmin = false) {
   const [media, setMedia] = useState<MediaRow[]>([]);
   const [ideas, setIdeas] = useState<Omit<HomeCustomBlock, "id">[]>([]);
   const [pages, setPages] = useState<PageAgent[]>([]);
