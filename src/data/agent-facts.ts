@@ -15,6 +15,7 @@ export type SessionFacts = {
   parent?: string;
   phone?: string;
   intent?: string;
+  day?: string;
   briefed?: boolean;
 };
 
@@ -145,9 +146,47 @@ export function identifiedFromMessages(messages: { role: string; content: string
     }
     const prev = [...messages.slice(0, i)].reverse().find((x) => x.role === "assistant")?.content || "";
     if (/откройте карточку|да, это /i.test(u)) ok = true;
-    else if (/это ваш|нашли|ваш ребёнок|несколько детей/i.test(prev) && yes.test(u)) ok = true;
+    else if (/это ваш|нашл|ваш ребёнок|несколько детей/i.test(prev) && yes.test(u)) ok = true;
   }
   return ok;
+}
+
+export const WEEKDAY_CHIPS: { label: string; send: string; primary?: boolean }[] = [
+  { label: "Пн", send: "в понедельник" },
+  { label: "Вт", send: "во вторник" },
+  { label: "Ср", send: "в среду" },
+  { label: "Чт", send: "в четверг" },
+  { label: "Пт", send: "в пятницу" },
+  { label: "Сб", send: "в субботу", primary: true },
+  { label: "Вс", send: "в воскресенье" },
+];
+
+const WEEKDAY_NAME: { re: RegExp; day: string }[] = [
+  { re: /понедельник/i, day: "понедельник" },
+  { re: /вторник/i, day: "вторник" },
+  { re: /сред[ауые]/i, day: "среда" },
+  { re: /четверг/i, day: "четверг" },
+  { re: /пятниц/i, day: "пятница" },
+  { re: /суббот/i, day: "суббота" },
+  { re: /воскресен/i, day: "воскресенье" },
+];
+
+const WEEKDAY_SHORT: Record<string, string> = {
+  пн: "понедельник",
+  вт: "вторник",
+  ср: "среда",
+  чт: "четверг",
+  пт: "пятница",
+  сб: "суббота",
+  вс: "воскресенье",
+};
+
+export function takeWeekday(text: string) {
+  const t = String(text || "").trim().toLowerCase();
+  if (!t) return "";
+  if (WEEKDAY_SHORT[t]) return WEEKDAY_SHORT[t];
+  for (const w of WEEKDAY_NAME) if (w.re.test(t)) return w.day;
+  return "";
 }
 
 function takeClientIntent(messages: { role: string; content: string }[]) {
@@ -227,6 +266,12 @@ export function factsFromMessages(messages: { role: string; content: string }[])
     facts.identified = identifiedFromMessages(messages);
     const want = takeClientIntent(messages);
     if (want) facts.intent = want;
+    const day = [...messages]
+      .filter((m) => m.role === "user")
+      .map((m) => takeWeekday(m.content))
+      .reverse()
+      .find(Boolean);
+    if (day) facts.day = day;
     if (facts.identified && !facts.child) {
       const named = messages
         .filter((m) => m.role === "user")
@@ -246,7 +291,10 @@ export function nextStepOf(facts: SessionFacts) {
     if (!facts.phone) return "попросить телефон записи. Не спрашивать возраст и город.";
     if (!facts.identified) return "подтвердить имя ребёнка с диска. Не выдумывать карточку. Возраст не спрашивать.";
     if (facts.intent === "отработка") {
-      return "ребёнок уже подтверждён — имя больше не спрашивать. Отработка: list_groups по courseId из карточки на день, который назвал родитель. Если в своей группе нет этого дня — другие группы того же курса. Затем book_lesson makeup. Не предлагать пробное.";
+      if (!facts.day) {
+        return "ребёнок уже подтверждён — имя больше не спрашивать. Спросить ТОЛЬКО день отработки. Не предлагать пробное.";
+      }
+      return `ребёнок уже подтверждён — имя больше не спрашивать. День: ${facts.day}. list_groups по courseId из карточки, weekday=${facts.day}. Если в своей группе нет этого дня — другие группы того же курса. Затем book_lesson makeup. Не предлагать пробное.`;
     }
     if (facts.intent === "пауза") {
       return "ребёнок уже подтверждён. Если срока паузы нет — спросить до какой даты. Если дата есть — pause_classes. Не переспрашивать имя.";
