@@ -143,30 +143,6 @@ export function AdminUpdateOverlay({ phase }: { phase: AdminLivePhase }) {
   if (typeof document === "undefined") return node;
   return createPortal(node, document.body);
 }
-    <div className="fixed inset-0 z-[420] flex items-center justify-center bg-[#0b1c2c]/55 p-4 backdrop-blur-[6px]" data-op="admin-updating" role="status" aria-live="polite">
-      <div className={cn(RA_POP, "relative w-full max-w-[22rem] overflow-hidden px-8 py-9 text-center")}>
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 overflow-hidden bg-sky-100">
-          <span className="absolute inset-y-0 w-1/3 animate-[ra-bar_1.2s_ease-in-out_infinite] rounded-full bg-sky-500" />
-        </div>
-        <div className="mx-auto grid size-[4.6rem] place-items-center">
-          <span className="relative block size-[4.6rem]">
-            <span className="absolute inset-0 rounded-full bg-sky-50 ring-1 ring-sky-100" />
-            <span className="absolute inset-0 animate-spin rounded-full border-[3px] border-sky-100 border-t-sky-600" />
-            <span className="absolute inset-[9px] rounded-full border-[3px] border-transparent border-b-sky-400" style={{ animation: "spin 1.35s linear infinite reverse" }} />
-            <span className="absolute inset-[18px] animate-pulse rounded-full bg-gradient-to-br from-sky-500 to-sky-700" />
-          </span>
-        </div>
-        <h2 className="mt-5 font-display text-[1.35rem] leading-tight text-fg">Система обновляется</h2>
-        <p className="mt-2 text-[0.9rem] leading-snug text-muted">
-          {phase === "reload" ? "Подключаю новую версию кабинета…" : "Новая версия выкладывается. Кабинет откроется сам."}
-        </p>
-      </div>
-      <style>{`@keyframes ra-bar{0%{left:-40%}100%{left:110%}}`}</style>
-    </div>
-  );
-  if (typeof document === "undefined") return node;
-  return createPortal(node, document.body);
-}
 
 export function AdminReloadBtn({ className }: { className?: string }) {
   const [busy, setBusy] = useState(false);
