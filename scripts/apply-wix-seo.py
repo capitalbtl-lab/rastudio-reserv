@@ -3,6 +3,7 @@
 import json
 import re
 from pathlib import Path
+from urllib.parse import unquote
 
 ROOT = Path("/workspace")
 WIX = json.loads((ROOT / "content/wix-seo.json").read_text())
@@ -14,7 +15,7 @@ MAP_PATH = ROOT / "src/data/wix-seo-map.json"
 
 HASH = re.compile(r"^[0-9a-f]{5,8}_[0-9a-f]{8,}", re.I)
 EXT = re.compile(r"\.(png|jpe?g|gif|webp)$", re.I)
-GENERIC_ALT = re.compile(r"empty-state|placeholder|image-empty|логотип(ы)? на главную", re.I)
+GENERIC_ALT = re.compile(r"empty-state|placeholder|image-empty|^логотипы на главную", re.I)
 INVENTED = re.compile(
     r"пробное занятие|лего, логика, конструирование|цвет, тон, техника|дефиле, позирование|личностный рост для девочек|макияж для девочек",
     re.I,
@@ -39,16 +40,14 @@ def strip_file(s):
 
 
 def media_id(src):
-    m = re.search(r"/media/([^/?#]+)", str(src or ""), re.I)
+    value = str(src or "")
+    m = re.search(r"/media/([^/?#]+)", value, re.I)
     if m:
-        try:
-            return re.sub(r"_mv2\.", "~mv2.", bytes(m.group(1), "utf-8").decode("unicode_escape") if False else __import__("urllib.parse").unquote(m.group(1)))
-        except Exception:
-            return m.group(1)
-    m = re.search(r"/imported/([^/?#]+)", str(src or ""), re.I)
+        return unquote(m.group(1)).replace("_mv2.", "~mv2.")
+    m = re.search(r"/imported/([^/?#]+)", value, re.I)
     if not m:
         return ""
-    return m.group(1).replace("_mv2.", "~mv2.")
+    return unquote(m.group(1)).replace("_mv2.", "~mv2.")
 
 
 def clip(text, max_len=168):
@@ -103,7 +102,6 @@ for row in WIX:
 
 MAP_PATH.write_text(json.dumps(wix_by_path, ensure_ascii=False, indent=2) + "\n")
 
-# Best Wix alt per media id (prefer real sentences over filenames)
 alt_by_id = {}
 for page in PAGES:
     for img in page.get("images") or []:
@@ -126,7 +124,7 @@ def pick_alt(img, page_title):
     wix_alt = alt_by_id.get(mid, "")
     media_name = MEDIA_NAMES.get(mid, "")
     filename = img.get("filename") or ""
-    for raw in (wix_alt, img.get("alt"), media_name, filename, page_title.split("|")[0]):
+    for raw in (wix_alt, img.get("alt"), media_name, filename, (page_title or "").split("|")[0]):
         t = strip_file(raw or "")
         if t and not HASH.match(t) and len(t) > 3 and not GENERIC_ALT.search(t):
             return t
@@ -143,7 +141,11 @@ for page in catalog["pages"]:
         if current != dump["description"]:
             page["description"] = dump["description"]
             changed_desc += 1
-        if dump.get("title") and (not page.get("title") or "RASTUDIO.ORG" in (page.get("title") or "") or INVENTED.search(page.get("title") or "")):
+        if dump.get("title") and (
+            not page.get("title")
+            or "RASTUDIO.ORG" in (page.get("title") or "")
+            or INVENTED.search(page.get("title") or "")
+        ):
             page["title"] = dump["title"]
     elif not current or INVENTED.search(current):
         from_body = body_desc(page.get("paragraphs"))
@@ -158,7 +160,10 @@ for page in catalog["pages"]:
             changed_alt += 1
 
 for course in catalog.get("courses") or []:
-    page = next((p for p in catalog["pages"] if p["path"] == course["href"] or p.get("pathDecoded") == course["href"]), None)
+    page = next(
+        (p for p in catalog["pages"] if p["path"] == course["href"] or p.get("pathDecoded") == course["href"]),
+        None,
+    )
     if page and page.get("description"):
         course["description"] = page["description"]
     if page and page.get("images"):
