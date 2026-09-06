@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { HeroCollage } from "@/components/hero-collage";
 import { AgeChips } from "@/components/age-chips";
 import { Reviews } from "@/components/reviews";
+import { RobotEnglishVideos } from "@/components/robot-videos";
 import { loadPublicEdits } from "@/data/load-site-page";
 import { hydrateEdits, pageEdit } from "@/data/edits-core";
 import { priceShort } from "@/data/prices-core";
@@ -139,6 +140,8 @@ function Home() {
           </div>
         </div>
       </div>
+
+      <RobotEnglishVideos />
 
       <section className="page-wrap pt-8 pb-2 md:pt-10">
         <p className="kicker text-primary">Подбор за 10 секунд</p>
