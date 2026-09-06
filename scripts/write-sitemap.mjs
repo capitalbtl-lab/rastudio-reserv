@@ -20,7 +20,14 @@ const skip = new Set([
   "/roboticsinenglish3",
   "/roboticsinenglish4",
 ]);
-const skipPrefix = ["/hs-2-", "/master-klassy/"];
+const skipPrefix = ["/hs-2-"];
+const LOW = new Set([
+  "/charity",
+  "/legal-information",
+  "/event-list",
+  "/opendoors",
+  "/tinkercad2025itogi",
+]);
 
 function loc(p) {
   if (!p || p === "/") return ORIGIN;
@@ -34,14 +41,17 @@ function loc(p) {
 function priority(kind, p) {
   if (p === "/") return "1.0";
   if (kind === "school" || p === "/allcourses" || p === "/schedule") return "0.9";
-  if (kind === "course" || p === "/contacts") return "0.8";
-  if (kind === "master-list" || kind === "team") return "0.6";
+  if (kind === "course" || p === "/contacts") return LOW.has(p) ? "0.4" : "0.8";
+  if (kind === "master-list" || kind === "team" || kind === "about") return "0.6";
+  if (kind === "master") return "0.5";
+  if (kind === "teacher") return "0.4";
   return "0.5";
 }
 
 function freq(kind, p) {
   if (p === "/" || p === "/schedule") return "daily";
   if (kind === "course" || kind === "school") return "weekly";
+  if (kind === "master") return "monthly";
   return "monthly";
 }
 

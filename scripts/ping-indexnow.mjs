@@ -5,7 +5,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const HOST = "www.rastudio.org";
 const KEY = "rastudio-indexnow-8f3a2c";
 const xml = fs.readFileSync(path.join(ROOT, "public/sitemap.xml"), "utf8");
-const urlList = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]).slice(0, 80);
+const urlList = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]).slice(0, 200);
 
 const body = JSON.stringify({
   host: HOST,
@@ -14,9 +14,16 @@ const body = JSON.stringify({
   urlList,
 });
 
-const res = await fetch("https://yandex.com/indexnow", {
-  method: "POST",
-  headers: { "content-type": "application/json; charset=utf-8" },
-  body,
-});
-console.log("IndexNow", res.status, await res.text(), "urls", urlList.length);
+const endpoints = ["https://yandex.com/indexnow", "https://api.indexnow.org/indexnow"];
+for (const url of endpoints) {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json; charset=utf-8" },
+      body,
+    });
+    console.log("IndexNow", url, res.status, (await res.text()).slice(0, 200), "urls", urlList.length);
+  } catch (err) {
+    console.log("IndexNow", url, "fail", err instanceof Error ? err.message : err);
+  }
+}
