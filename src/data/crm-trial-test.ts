@@ -80,9 +80,9 @@ async function firstRoom(
 }
 
 export async function maybeBookChudnovaTrial() {
-  if (g.__raTrialTest) return { skipped: "busy" as const };
+  if (g.__raTrialTest) return { skipped: "busy" as const, note: "уже создаю пробное" };
   const mark = loadMark();
-  if (mark.done === TRIAL_TEST_ID) return { skipped: "done" as const };
+  if (mark.done === TRIAL_TEST_ID) return { skipped: "done" as const, note: String(mark.note || "уже отправлено") };
   g.__raTrialTest = true;
   try {
     const { token, request, resolveLessonType, formatRuDob, createAlfaLesson } = await import("./alfacrm");
@@ -208,6 +208,8 @@ export async function maybeBookChudnovaTrial() {
     saveMark({ done: "", at: new Date().toISOString(), note: msg.slice(0, 400) });
     logAdmin(`Пробное Чудновой: ${msg}`, "sync");
     return { ok: false as const, error: msg };
+  } finally {
+    g.__raTrialTest = false;
   }
 }
 

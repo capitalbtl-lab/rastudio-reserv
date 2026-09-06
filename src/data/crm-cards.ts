@@ -116,6 +116,7 @@ export type CustomerCard = {
   tariffs?: ClientTariff[];
   comms: CustomerComm[];
   pays?: CustomerPay[];
+  crmPush?: string;
   catalog?: LessonCatalog;
 };
 

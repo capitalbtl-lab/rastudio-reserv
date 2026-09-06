@@ -14,6 +14,7 @@ import { loadTariffs } from "./crm-tariffs";
 import { isPaidCountLabel, parseDossierCtt } from "./pupil-tariffs";
 import { roomsCatalog } from "./crm-rooms";
 import { loadRooms } from "./crm-rooms-disk";
+import { ensureChudnovaTrialDisk } from "./crm-trial-disk";
 
 function ageLabel(dob: string) {
   const m = String(dob || "").match(/^(\d{1,2})[.](\d{1,2})[.](\d{4})$/) || String(dob || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -99,6 +100,22 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   const regular: NonNullable<CustomerCard["regular"]> = [];
   const calendar: NonNullable<CustomerCard["calendar"]> = [];
   const activeGroups = groups.filter((x) => x.active);
+  const art = activeGroups.find((g) => /художествен/i.test(g.name || g.school || "")) || activeGroups[0];
+  const artSlot = art
+    ? slots.find((s) => s.groupId === art.id && s.branchId === art.branchId) || slots.find((s) => s.groupId === art.id)
+    : undefined;
+  ensureChudnovaTrialDisk({
+    customerId,
+    branchId: useBranch,
+    name: d.child.fio,
+    gid: art?.id,
+    subjectId: Number(art?.subjectId || artSlot?.subjectId) || undefined,
+    roomId: Number(artSlot?.roomId) || undefined,
+    teacherId: Number(artSlot?.teacherId) || undefined,
+    groupName: art?.name,
+    subject: artSlot?.subject,
+    teacher: artSlot?.teacher,
+  });
   for (const g of activeGroups) {
     const slot = slots.find((s) => s.groupId === g.id && s.branchId === g.branchId) || slots.find((s) => s.groupId === g.id);
     if (slot) {

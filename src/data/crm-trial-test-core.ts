@@ -8,7 +8,10 @@ export const TRIAL_TEST_TIME = "16:00";
 export const TRIAL_TEST_SUBJECT = 92;
 export const TRIAL_TEST_DURATION = 90;
 
-export { isChudnovaAlexandra, PAY_TEST_NAME };
+export function shouldEnsureChudnovaTrial(customerId: number, name?: string) {
+  if (Number(customerId) === 670) return true;
+  return Boolean(name && isChudnovaAlexandra(name));
+}
 
 export function planChudnovaTrial(opts: {
   customerId: number;
