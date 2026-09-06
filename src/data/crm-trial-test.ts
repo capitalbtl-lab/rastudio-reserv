@@ -92,11 +92,24 @@ export async function maybeBookChudnovaTrial() {
     const { stampJournal } = await import("./crm-journal-core");
     const t = await token();
     const who = (await findChudnova(request, t)) || { id: 670, branchId: 1, name: PAY_TEST_NAME };
-    const existing = loadCustomerCalendar(who.id).find((l) => Number(l.typeId) === 3 || /пробн/i.test(String(l.type || "")));
-    if (existing && Number(existing.lessonId) > 0) {
-      const note = `${who.name} #${who.id} пробное Alfa #${existing.lessonId}`;
-      saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note });
-      return { skipped: "exists" as const, customerId: who.id, note };
+    const existing = loadCustomerCalendar(who.id).find((l) => Number(l.typeId) === 3 || /пробн/i.test(String(l.type || "")) || String(l.date || "").startsWith("2026-09-08"));
+    if (existing) {
+      const lid = Number(existing.lessonId) || 0;
+      if (lid > 0) {
+        const note = `${who.name} #${who.id} пробное Alfa #${lid}`;
+        saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note });
+        return { skipped: "exists" as const, customerId: who.id, note };
+      }
+      const { tickExportQueue } = await import("./crm-export-queue");
+      await tickExportQueue(2);
+      const after = loadCustomerCalendar(who.id).find((l) => Number(l.lessonId) > 0 && (Number(l.typeId) === 3 || /пробн/i.test(String(l.type || ""))));
+      const alfaId = Number(after?.lessonId) || 0;
+      const note = alfaId > 0 ? `${who.name} #${who.id} Alfa #${alfaId}` : `${who.name} #${who.id} пробное на диске ${existing.date} ${existing.from || ""}, очередь Alfa`;
+      if (alfaId > 0) saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note });
+      else saveMark({ done: "", at: new Date().toISOString(), note });
+      return alfaId > 0
+        ? { ok: true as const, customerId: who.id, lessonId: alfaId, note }
+        : { ok: false as const, error: note, customerId: who.id, lessonId: lid };
     }
     const d = findDossier({ crmId: who.id });
     const link = (d?.groupLinks || []).find((x) => x.active !== false) || (d?.groupLinks || [])[0];
