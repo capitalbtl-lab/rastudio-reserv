@@ -358,6 +358,7 @@ export function CrmClientCard({
   const [periodOpen, setPeriodOpen] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const [dropGroup, setDropGroup] = useState<{ id: number; branchId: number; name: string } | null>(null);
+  const [dropTariff, setDropTariff] = useState<{ id: number; name: string } | null>(null);
   const [groupId, setGroupId] = useState(0);
   const [groupBranch, setGroupBranch] = useState(0);
   const [groupDir, setGroupDir] = useState("");
@@ -554,6 +555,7 @@ export function CrmClientCard({
       setTariffOpen(false);
       setGroupOpen(false);
       setDropGroup(null);
+      setDropTariff(null);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Не удалось сохранить.");
     } finally {
@@ -874,13 +876,31 @@ export function CrmClientCard({
             {activeTariffs.length ? (
               <ul className="mt-2 space-y-1.5">
                 {activeTariffs.map((t) => (
-                  <li key={t.id} className="rounded-xl bg-white px-3 py-2 ring-1 ring-black/6">
-                    <p className="font-semibold text-sm">{t.name}</p>
-                    <p className="text-[0.75rem] text-muted">
-                      {[t.bDate && t.eDate ? `${t.bDate} — ${t.eDate}` : "", t.lessons ? `${t.lessons} ур.` : "", t.price ? money(t.price) : t.rest ? money(t.rest) : ""]
-                        .filter(Boolean)
-                        .join(" · ") || money(t.rest)}
-                    </p>
+                  <li key={t.id} className="flex items-stretch gap-1.5">
+                    <div className="min-w-0 flex-1 rounded-xl bg-white px-3 py-2 ring-1 ring-black/6">
+                      <p className="font-semibold text-sm">{t.name}</p>
+                      <p className="text-[0.75rem] text-muted">
+                        {[
+                          t.bDate && t.eDate ? `${t.bDate} — ${t.eDate}` : "",
+                          t.lessons ? `${t.lessons} ур.` : "",
+                          t.price ? money(t.price) : t.rest ? money(t.rest) : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || (t.rest ? money(t.rest) : "")}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      data-op="remove-tariff"
+                      title="Удалить абонемент"
+                      disabled={!onAction || Boolean(busy)}
+                      onClick={() => setDropTariff({ id: t.id, name: t.name })}
+                      className="grid h-auto w-8 shrink-0 place-items-center rounded-xl text-muted ring-1 ring-black/6 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"
+                    >
+                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                        <path d="M4 7h16M9 7V5h6v2m-8 0 1 12h8l1-12" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
                   </li>
                 ))}
               </ul>

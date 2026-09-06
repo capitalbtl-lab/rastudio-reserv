@@ -620,7 +620,6 @@ export function applyCrmCustomer(
   const childName = isPhoneLike(rawName) ? "" : rawName;
   const gender = genderFromCrm(item.gender, childName);
   const paid = item.paid_till ? `оплачено до ${item.paid_till}` : "";
-  const extraTariff = Number(item.paid_count) ? `занятий по абонементу: ${item.paid_count}` : "";
   const extras = extrasFromCrm(item);
   extras.paid_count = String(item.paid_count ?? extras.paid_count ?? "");
   const fromGroup = namesFromGroup(extras.groups);

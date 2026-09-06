@@ -125,9 +125,23 @@ async function runCustomersPacket(branchId: number, ids: number[]) {
     const json = await request(`/v2api/${branchId}/customer-tariff/index?customer_id=${cid}`, { page: 0, pageSize: 30, customer_id: cid }, t).catch(
       () => ({}),
     );
-    const live = crmUnwrapIndex(json).items.some((it) => tariffRowLive(it) && tariffRowCustomerId(it) === cid);
+    const items = crmUnwrapIndex(json).items;
+    const live = items.some((it) => tariffRowLive(it) && tariffRowCustomerId(it) === cid);
     if (live) liveN += 1;
     stampDossierLiveTariff([cid], live);
+    try {
+      const { packCardTariff } = await import("./pupil-tariffs");
+      const { loadTariffs } = await import("./crm-tariffs");
+      const { stampDossierCtt } = await import("./dossiers");
+      const catalog = loadTariffs().items.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price }));
+      stampDossierCtt(
+        cid,
+        items.filter((it) => Number(it.id)).map((it) => packCardTariff(it, catalog)),
+        branchId,
+      );
+    } catch {
+      /* подпись абонемента необязательна */
+    }
     if (groups.length) {
       const d = findDossier({ crmId: cid });
       upsertDossier({

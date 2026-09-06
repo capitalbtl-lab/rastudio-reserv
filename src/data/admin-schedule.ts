@@ -1783,6 +1783,25 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const customerId = Number(data.customerId) || 0;
       const tariffId = Number(data.tariffId) || 0;
       if (!customerId) return { ok: false as const, error: "Нет customerId." };
+      const { parseDossierCtt } = await import("./pupil-tariffs");
+      const { stampDossierCtt, findDossier } = await import("./dossiers");
+      if (data.remove) {
+        const rowId = Number(data.tariffRowId || data.id || 0);
+        const d0 = findDossier({ crmId: customerId });
+        const next = parseDossierCtt(d0?.extras).map((t) => (t.id === rowId || (!rowId && !t.archived) ? { ...t, archived: true } : t));
+        stampDossierCtt(customerId, next, branch);
+        const { enqueueExport } = await import("./crm-export-queue");
+        enqueueExport({
+          op: "customer-tariff.clear",
+          branchId: branch,
+          entityId: customerId,
+          body: { mode: "delete", rowId },
+        });
+        logAdmin(`Клиент ${customerId}: абонемент ${rowId || "живой"} снят, очередь AlfaCRM`);
+        const { cardFromDossier } = await import("./customer-card-disk");
+        const d = findDossier({ crmId: customerId });
+        return { ok: true as const, queued: true, customer: d ? cardFromDossier(d, branch) : { id: customerId, tariffs: next } };
+      }
       if (!tariffId) return { ok: false as const, error: "Выберите абонемент." };
       const offer = loadTariffs().items.find((x) => x.id === tariffId);
       const bDate = formatRuDob(data.date) || (() => {
@@ -1790,15 +1809,25 @@ export const adminSchedule = createServerFn({ method: "POST" })
         return `${String(now.getDate()).padStart(2, "0")}.${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
       })();
       const eDate = formatRuDob(data.eDate) || "";
-      const { upsertDossier, findDossier, stampDossierLiveTariff } = await import("./dossiers");
-      upsertDossier({
-        crmId: customerId,
-        branchId: branch,
-        tariff: offer?.name || `абонемент ${tariffId}`,
-        extras: { live_tariff: "1", tariff_id: String(tariffId) },
-        source: "admin",
-      });
-      stampDossierLiveTariff([customerId], true);
+      const prev = parseDossierCtt(findDossier({ crmId: customerId })?.extras);
+      stampDossierCtt(
+        customerId,
+        [
+          ...prev.filter((t) => t.tariffId !== tariffId),
+          {
+            id: Date.now() % 1_000_000_000,
+            tariffId,
+            name: offer?.name || `абонемент ${tariffId}`,
+            rest: 0,
+            lessons: offer?.lessonsCount || 0,
+            archived: false,
+            bDate,
+            eDate,
+            price: offer?.price || 0,
+          },
+        ],
+        branch,
+      );
       const { enqueueExport } = await import("./crm-export-queue");
       enqueueExport({
         op: "customer-tariff.create",

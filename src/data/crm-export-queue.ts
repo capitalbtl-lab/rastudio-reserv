@@ -186,7 +186,9 @@ export async function tickExportQueue(take = 2) {
           const list = activeCustomerTariffs(json.items);
           const mode = String(job.body.mode || "close");
           const eDate = String(job.body.eDate || "");
-          for (const tar of list) {
+          const only = Number(job.body.rowId || 0);
+          const targets = only ? list.filter((tar) => tar.id === only) : list;
+          for (const tar of targets) {
             if (mode === "delete") {
               await request(customerTariffDeletePath(job.branchId, tar.id, job.entityId), { id: tar.id, customer_id: job.entityId }, t);
             } else {
