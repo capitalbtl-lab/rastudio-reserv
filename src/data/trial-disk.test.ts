@@ -327,7 +327,7 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.doesNotMatch(ui, /autoPull/);
     const link = readFileSync(new URL("./crm-alfa-link.ts", import.meta.url), "utf8");
     assert.match(link, /wantAlfaDelta/);
-    assert.match(link, /pull.leads/);
+    assert.match(link, /deltaAllowed/);
   });
 
   it("этап 5: очередь Alfa — нет прямого API на запись, актор на выгрузке", () => {
