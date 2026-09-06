@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useMemo, useState } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { SITE, BRANCHES, COURSE_GROUPS, courseInGroup, STATS } from "@/data/site";

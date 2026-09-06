@@ -19,7 +19,7 @@ import { loadSiteSignup } from "./site-signup";
 import { loadHomeLayout } from "./home-layout";
 import { loadMediaAlts } from "./media-alts";
 
-export const loadSitePage = createServerFn({ method: "GET" })
+export const loadSitePage = createServerFn({ method: "POST" })
   .validator((splat: unknown) => (typeof splat === "string" ? splat : undefined))
   .handler(async ({ data }) => {
     ensureLivePrices();

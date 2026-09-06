@@ -3,7 +3,7 @@ import { loadSitePage } from "@/data/load-site-page";
 import { pageHead } from "@/data/seo";
 import { SiteShell } from "@/components/site-shell";
 import { PageArticle } from "@/components/page-article";
-import { CoursePageHero } from "@/components/cms-blocks";
+import { NotFoundPage } from "@/components/not-found";
 
 export const Route = createFileRoute("/$")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -11,7 +11,8 @@ export const Route = createFileRoute("/$")({
     city: typeof search.city === "string" ? search.city : undefined,
   }),
   loader: async ({ params }) => {
-    const data = await loadSitePage({ data: params._splat });
+    const splat = [params._splat].flat().filter(Boolean).join("/");
+    const data = await loadSitePage({ data: splat });
     if (!data) throw notFound();
     return data;
   },
@@ -52,21 +53,6 @@ function CatchAll() {
         schedule={data.schedule}
         edits={data.edits}
         signup={data.signup}
-      />
-    </SiteShell>
-  );
-}
-
-function NotFoundPage() {
-  return (
-    <SiteShell>
-      <CoursePageHero
-        kicker="404"
-        title="Страница не найдена"
-        description="Этот адрес не входит в карту сайта rastudio.org. Откройте каталог курсов или вернитесь на главную."
-        images={[]}
-        secondary={{ href: "/", label: "На главную" }}
-        path="/"
       />
     </SiteShell>
   );

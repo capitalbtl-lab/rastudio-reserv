@@ -167,13 +167,22 @@ export function allCourses() {
 
 export function getCmsCourse(splat?: string | null) {
   if (!splat) return undefined;
-  const course = courseByPath.get(norm(splat));
-  return course ? applyCmsEdits(course) : undefined;
+  const alias = ALIAS[norm(splat)];
+  if (alias) return getCmsCourse(alias);
+  for (const key of pageLookupKeys(splat)) {
+    const course = courseByPath.get(key);
+    if (course) return applyCmsEdits(course);
+  }
+  return undefined;
 }
 
 export function getCmsMaster(splat?: string | null) {
   if (!splat) return undefined;
-  return masterByPath.get(norm(splat));
+  for (const key of pageLookupKeys(splat)) {
+    const master = masterByPath.get(key);
+    if (master) return master;
+  }
+  return undefined;
 }
 
 export function allCmsCourses() {
