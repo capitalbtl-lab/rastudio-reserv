@@ -338,8 +338,8 @@ async function fetchCrmLeadColumns(branch: number, statusIds: number[], cookie: 
 async function fetchBranchLeads(t: string, branch: number, stages: { id: number }[] = []) {
   const out: LeadCard[] = [];
   const seen = new Set<number>();
-  const take = (it: Record<string, unknown>, forceLead = false) => {
-    const packed = packLead(forceLead ? { ...it, is_study: 0 } : it, branch);
+  const take = (it: Record<string, unknown>) => {
+    const packed = packLead(it, branch);
     if (!packed || seen.has(packed.id)) return;
     seen.add(packed.id);
     out.push(packed);
@@ -388,7 +388,7 @@ async function fetchBranchLeads(t: string, branch: number, stages: { id: number 
       stages
         .filter((s) => s.id)
         .map((s) =>
-          pagedIndex(`/v2api/${branch}/customer/index`, { lead_status_id: s.id }, t, (it) => take(it, true), {
+          pagedIndex(`/v2api/${branch}/customer/index`, { lead_status_id: s.id, is_study: 0 }, t, (it) => take(it), {
             pageSize: 100,
             pages: 6,
           }).catch(() => undefined),
@@ -429,9 +429,7 @@ export async function syncLeadsDelta(branchId = 0): Promise<Bag> {
             dropped.push(id);
             return;
           }
-          const force = Number(it.is_study) === 0 || crmLeadStatusId(it) > 0 || onBoard.has(id);
-          if (!force) return;
-          const packed = packLead({ ...it, is_study: 0 }, b);
+          const packed = packLead(it, b);
           if (packed) incoming.push(packed);
         },
         { pageSize: 100, pages: 4 },

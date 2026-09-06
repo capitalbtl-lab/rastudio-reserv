@@ -13,16 +13,17 @@ export type PersonRoleInput = {
 
 /**
  * Экран «Клиенты» — только учится. Экран «Лиды» — воронка.
- * Фролов: is_study=1 и всё ещё на доске CRM (crm_funnel). Остаток lead_status_id после перевода в клиента — не лид.
+ * is_study=1 всегда ученик: хвост lead_status_id / карточка на доске Alfa не делает лидом.
+ * Иначе Чуднова (худ. школа) сидит в «Ожидает старта».
  */
 export function personRole(it: PersonRoleInput): PersonRole {
   if (Number(it.removed) === 1) return "удалён";
   const studyRaw = it.is_study;
   const study = studyRaw === "" || studyRaw == null ? NaN : Number(studyRaw);
   if (study === 2) return "архив";
+  if (study === 1) return "учится";
   if (study === 0) return "лид";
   if (String(it.crm_funnel || "") === "1") return "лид";
-  if (study === 1) return "учится";
   const st = String(it.status || "");
   if (st === "лид" || st === "учится" || st === "архив" || st === "удалён") return st;
   return "удалён";

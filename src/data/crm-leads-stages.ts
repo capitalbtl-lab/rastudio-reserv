@@ -284,14 +284,14 @@ export function isCrmLeadRecord(it: Record<string, unknown>) {
   if (!Number(it.id || 0)) return false;
   if (Number(it.removed) === 1) return false;
   const study = Number(it.is_study);
-  if (study === 2) return false;
-  if (study === 1) return crmLeadStatusId(it) > 0;
+  if (study === 1 || study === 2) return false;
   return true;
 }
 
-/** Карточка уходит с воронки только в архив или отказ. Клиент «Сделать лидом» остаётся. */
+/** С воронки снимаем архив, отказ и тех, кого Alfa уже считает учеником. */
 export function leadDeltaDrops(it: Record<string, unknown>) {
-  return Number(it.removed) === 1 || Number(it.is_study) === 2;
+  const study = Number(it.is_study);
+  return Number(it.removed) === 1 || study === 2 || study === 1;
 }
 
 export function applyLeadDelta<T extends { id: number }>(
