@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { agentFor } from "./page-agents";
 
-export const publicPageAgent = createServerFn({ method: "GET" })
+export const publicPageAgent = createServerFn({ method: "POST" })
   .validator((data: unknown) => ({ path: String((data as { path?: string } | undefined)?.path || "/") }))
   .handler(async ({ data }) => {
     const agent = agentFor(data.path);
