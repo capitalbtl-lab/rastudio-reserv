@@ -3,6 +3,14 @@ import path from "node:path";
 
 const ROOT = "/workspace";
 const pages = JSON.parse(fs.readFileSync(path.join(ROOT, "content/pages.json"), "utf8"));
+const WIX_SEO = JSON.parse(fs.readFileSync(path.join(ROOT, "content/wix-seo.json"), "utf8"));
+const WIX_MEDIA_NAMES = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(ROOT, "content/wix-media-names.json"), "utf8"));
+  } catch {
+    return {};
+  }
+})();
 
 const CHROME_ALT =
   /логотип|телеграм|оферт|сервис|мы в телеграм|договор оферты|skip to|wix/i;
