@@ -1090,6 +1090,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "customerSave"
           | "customerLesson"
           | "customerPay"
+          | "customerPayLink"
           | "customerTariff"
           | "customerGroup"
           | "customerCreate"
@@ -1735,6 +1736,28 @@ export const adminSchedule = createServerFn({ method: "POST" })
         queued: true,
         customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId, balance: fx.next },
       };
+    }
+    if (data.action === "customerPayLink") {
+      const branch = Number(data.branchId) || 1;
+      const customerId = Number(data.customerId) || 0;
+      const sum = Number(data.sum || 0);
+      if (!customerId) return { ok: false as const, error: "Нет customerId." };
+      if (!sum) return { ok: false as const, error: "Укажите сумму." };
+      const { createOnlinePay } = await import("./pay-online");
+      const { findDossier } = await import("./dossiers");
+      const d = findDossier({ crmId: customerId });
+      const kind = String(data.payKind || "income");
+      const created = await createOnlinePay({
+        customerId,
+        branchId: Number(d?.branchId || branch),
+        amount: sum,
+        kind,
+        child: String(d?.child || d?.name || ""),
+        note: kind === "product" ? "продажа товара" : "оплата ЮKassa",
+      });
+      if (!created.ok) return created;
+      logAdmin(`Клиент ${customerId}: ссылка ЮKassa ${sum} ₽`);
+      return { ok: true as const, url: created.url, invoiceId: created.invoiceId };
     }
     if (data.action === "customerTariff") {
       const { formatRuDob } = await import("./alfacrm");

@@ -19,6 +19,7 @@ const KIND_RU: Record<ApiKind, string> = {
   telephony: "Телефония",
   crm: "CRM",
   messenger: "Мессенджер",
+  pay: "Оплата",
   other: "Другой сервис",
 };
 
@@ -27,6 +28,7 @@ const GROUPS: { kind: ApiKind; title: string; tip: string }[] = [
   { kind: "telephony", title: "Телефония", tip: "Novofon тянет записи разговоров в «Базу звонков» и шлёт SMS-ответы консультанта. Webhook входящих: /api/agent/phone. Сюда же можно добавить вторую АТС: имя, ключ, секрет." },
   { kind: "crm", title: "CRM", tip: "AlfaCRM: хост s20.online, почта роли API, ключ v2api. Без этого нет живых групп, записи на пробное и личных дел." },
   { kind: "messenger", title: "Мессенджеры", tip: "ВК Callback API и бот MAX. Один мозг консультанта: развилка «уже ходим / впервые», карточка с диска. Ключи сюда, webhook и последние входящие — Ассистент ИИ → Каналы." },
+  { kind: "pay", title: "Оплата", tip: "ЮKassa: ссылка из карточки клиента. Успех — журнал на диске и очередь в кассу Alfa. Канал «Касса» в «Фон с AlfaCRM»." },
   { kind: "other", title: "Другие сервисы", tip: "Telegram, почта и любой ключ, который потом подхватит интеграция." },
 ];
 
@@ -180,7 +182,7 @@ export function AdminIntegrations() {
         title="API и интеграции"
         tip="Ключи лежат на сервере в storage/api-keys.json, не в git. Поля с точками — секрет уже есть, впишите новый только если меняете. Пустое поле при сохранении старый ключ не стирает. Процессные переменные .env имеют приоритет, если заданы."
       >
-        <p className="mt-2 max-w-2xl text-sm text-muted">Yandex, DeepSeek, Novofon, ВК, MAX, AlfaCRM — ключи здесь. Webhook консультанта: Ассистент ИИ → Каналы.</p>
+        <p className="mt-2 max-w-2xl text-sm text-muted">Yandex, DeepSeek, Novofon, ВК, MAX, AlfaCRM, ЮKassa — ключи здесь. Webhook консультанта: Ассистент ИИ → Каналы. Оплата: webhook https://www.rastudio.org/api/pay/yookassa</p>
       </AdminSectionHead>
 
       <div className="space-y-3">
@@ -201,6 +203,7 @@ export function AdminIntegrations() {
       </div>
 
       <KindCol kind="messenger" />
+      <KindCol kind="pay" />
 
       {conns.some((c) => c.kind === "other") ? (
         <div className="space-y-3">

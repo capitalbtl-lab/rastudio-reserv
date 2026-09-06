@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as PayRouteImport } from './routes/pay'
 import { Route as ScheduleRouteImport } from './routes/schedule'
 import { Route as ApiAgentChannelRouteImport } from './routes/api/agent.$channel'
+import { Route as ApiPayYookassaRouteImport } from './routes/api/pay.yookassa'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -30,6 +32,11 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PayRoute = PayRouteImport.update({
+  id: '/pay',
+  path: '/pay',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ScheduleRoute = ScheduleRouteImport.update({
   id: '/schedule',
   path: '/schedule',
@@ -40,43 +47,78 @@ const ApiAgentChannelRoute = ApiAgentChannelRouteImport.update({
   path: '/api/agent/$channel',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPayYookassaRoute = ApiPayYookassaRouteImport.update({
+  id: '/api/pay/yookassa',
+  path: '/api/pay/yookassa',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/admin': typeof AdminRoute
+  '/pay': typeof PayRoute
   '/schedule': typeof ScheduleRoute
   '/api/agent/$channel': typeof ApiAgentChannelRoute
+  '/api/pay/yookassa': typeof ApiPayYookassaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/admin': typeof AdminRoute
+  '/pay': typeof PayRoute
   '/schedule': typeof ScheduleRoute
   '/api/agent/$channel': typeof ApiAgentChannelRoute
+  '/api/pay/yookassa': typeof ApiPayYookassaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/admin': typeof AdminRoute
+  '/pay': typeof PayRoute
   '/schedule': typeof ScheduleRoute
   '/api/agent/$channel': typeof ApiAgentChannelRoute
+  '/api/pay/yookassa': typeof ApiPayYookassaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$' | '/admin' | '/schedule' | '/api/agent/$channel'
+  fullPaths:
+    | '/'
+    | '/$'
+    | '/admin'
+    | '/pay'
+    | '/schedule'
+    | '/api/agent/$channel'
+    | '/api/pay/yookassa'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$' | '/admin' | '/schedule' | '/api/agent/$channel'
-  id: '__root__' | '/' | '/$' | '/admin' | '/schedule' | '/api/agent/$channel'
+  to:
+    | '/'
+    | '/$'
+    | '/admin'
+    | '/pay'
+    | '/schedule'
+    | '/api/agent/$channel'
+    | '/api/pay/yookassa'
+  id:
+    | '__root__'
+    | '/'
+    | '/$'
+    | '/admin'
+    | '/pay'
+    | '/schedule'
+    | '/api/agent/$channel'
+    | '/api/pay/yookassa'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
   AdminRoute: typeof AdminRoute
+  PayRoute: typeof PayRoute
   ScheduleRoute: typeof ScheduleRoute
   ApiAgentChannelRoute: typeof ApiAgentChannelRoute
+  ApiPayYookassaRoute: typeof ApiPayYookassaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -102,6 +144,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pay': {
+      id: '/pay'
+      path: '/pay'
+      fullPath: '/pay'
+      preLoaderRoute: typeof PayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/schedule': {
       id: '/schedule'
       path: '/schedule'
@@ -116,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAgentChannelRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/pay/yookassa': {
+      id: '/api/pay/yookassa'
+      path: '/api/pay/yookassa'
+      fullPath: '/api/pay/yookassa'
+      preLoaderRoute: typeof ApiPayYookassaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -123,8 +179,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
   AdminRoute: AdminRoute,
+  PayRoute: PayRoute,
   ScheduleRoute: ScheduleRoute,
   ApiAgentChannelRoute: ApiAgentChannelRoute,
+  ApiPayYookassaRoute: ApiPayYookassaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -687,7 +687,7 @@ export function AdminClients({
     }
   }
 
-  async function mutateCard(action: "customerSave" | "customerLesson" | "customerPay" | "customerTariff" | "customerGroup", extra: Record<string, unknown> = {}) {
+  async function mutateCard(action: "customerSave" | "customerLesson" | "customerPay" | "customerPayLink" | "customerTariff" | "customerGroup", extra: Record<string, unknown> = {}) {
     if (!card) return;
     const res = await adminSchedule({
       data: { token: token(), action, customerId: card.id, branchId: card.branchId, ...extra } as never,
@@ -698,6 +698,7 @@ export function AdminClients({
       setCard(next);
       applyLiveStatus(card.id, card.branchId, next);
     }
+    if ("url" in res && res.url) return { url: String(res.url) };
   }
 
   async function openById(customerId: number, branchId: number) {

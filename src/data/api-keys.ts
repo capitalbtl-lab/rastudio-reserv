@@ -4,7 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { isAdminRequest } from "./admin-auth";
 import { logAdmin } from "./admin-settings";
 
-export type ApiKind = "llm" | "telephony" | "crm" | "messenger" | "other";
+export type ApiKind = "llm" | "telephony" | "crm" | "messenger" | "pay" | "other";
 export type ApiField = { key: string; label: string; secret?: boolean; value: string };
 export type ApiConn = {
   id: string;
@@ -84,9 +84,20 @@ export const API_CATALOG: Catalog[] = [
       { key: "ALFACRM_WEB_PASSWORD", label: "Пароль входа в CRM", secret: true },
     ],
   },
+  {
+    id: "yookassa",
+    kind: "pay",
+    name: "ЮKassa",
+    hint: "Приём оплаты с сайта. Shop ID и секретный ключ из личного кабинета ЮKassa. HTTP-уведомления: https://www.rastudio.org/api/pay/yookassa события payment.succeeded и payment.canceled.",
+    note: "Родитель платит по ссылке. Успех пишется в журнал на диске и в очередь Alfa pay.create (если канал «Касса» включён). Тестовый магазин — ключ test_. Боевой — live_. Return URL уже https://www.rastudio.org/pay",
+    fields: [
+      { key: "YOOKASSA_SHOP_ID", label: "shopId" },
+      { key: "YOOKASSA_SECRET_KEY", label: "Секретный ключ", secret: true },
+    ],
+  },
 ];
 
-const KINDS: ApiKind[] = ["llm", "telephony", "crm", "messenger", "other"];
+const KINDS: ApiKind[] = ["llm", "telephony", "crm", "messenger", "pay", "other"];
 
 function fileOf() {
   return join(process.cwd(), "storage", "api-keys.json");
