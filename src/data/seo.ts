@@ -1,8 +1,26 @@
-import { SITE, SCHOOLS, BRANCHES } from "./site.ts";
-import { schoolIdOfPath } from "./site-bind-core.ts";
-import { SEO_COPY } from "./seo-copy.ts";
-import { YANDEX_RATING, YANDEX_REVIEWS } from "./reviews.ts";
-import { courseLength, coursePlace, coursePrice } from "./ages.ts";
+import { SITE, SCHOOLS, BRANCHES } from "@/data/site";
+import { schoolIdOfPath } from "@/data/site-bind-core";
+import { SEO_COPY } from "@/data/seo-copy";
+import { YANDEX_RATING, YANDEX_REVIEWS } from "@/data/reviews";
+import { courseLength, coursePlace, coursePrice } from "@/data/ages";
+import {
+  brandTitle,
+  decodePath,
+  fallbackDescription,
+  isCourseSchemaPath,
+  shouldNoindex,
+  stripBrand,
+  GENERIC_HEADING,
+} from "@/data/seo-core";
+
+export {
+  brandTitle,
+  decodePath,
+  fallbackDescription,
+  isCourseSchemaPath,
+  shouldNoindex,
+  stripBrand,
+} from "@/data/seo-core";
 
 export const SEO_ORIGIN = "https://www.rastudio.org";
 export const DEFAULT_OG = `${SEO_ORIGIN}/og.jpg`;
@@ -27,31 +45,22 @@ function absUrl(href: string) {
   return `${SEO_ORIGIN}${href.startsWith("/") ? href : `/${href}`}`;
 }
 
-const NOINDEX_PREFIXES = ["/hs-2-", "/eventschedule", "/roboticsinenglish1", "/roboticsinenglish2", "/roboticsinenglish3", "/roboticsinenglish4"];
-const NOINDEX_PATHS = new Set([
-  "/parenttesting",
-  "/kbmprof",
-  "/tmxprof",
-  "/sborbojcamsvo",
-  "/sbordetyampalestiny",
-  "/admin",
-]);
-const NOT_COURSE_PATHS = new Set([
-  "/charity",
-  "/event-list",
-  "/legal-information",
-  "/parenttesting",
-  "/opendoors",
-  "/tinkercad2025itogi",
-  "/kbmprof",
-  "/tmxprof",
-  "/sborbojcamsvo",
-  "/sbordetyampalestiny",
-  "/eventschedule-c",
-  "/eventschedule-s",
-]);
-const GENERIC_HEADING = /^(о курсе|о курсе и его ценности|филиалы|события|добро пожаловать)/i;
-const CANONICAL_MAP: Record<string, string> = {
+export function shouldNoindex(path = "") {
+  const decoded = decodePath(path);
+  if (NOINDEX_PATHS.has(decoded) || NOINDEX_PATHS.has(path)) return true;
+  return NOINDEX_PREFIXES.some((p) => decoded.startsWith(p) || path.startsWith(p));
+}
+
+export function isCourseSchemaPath(path = "", kind = "") {
+  const decoded = decodePath(path);
+  if (kind && kind !== "course" && kind !== "school") return false;
+  if (NOT_COURSE_PATHS.has(decoded) || NOT_COURSE_PATHS.has(path)) return false;
+  if (decoded.startsWith("/hs-2-") || path.startsWith("/hs-2-")) return false;
+  if (shouldNoindex(path)) return false;
+  return kind === "course" || kind === "school";
+}
+
+function canonicalOf(page: HeadPage) {
   "/roboticsinenglish1": "/roboticsinenglish",
   "/roboticsinenglish2": "/roboticsinenglish",
   "/roboticsinenglish3": "/roboticsinenglish",
