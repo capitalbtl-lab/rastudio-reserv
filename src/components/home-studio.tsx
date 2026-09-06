@@ -296,3 +296,152 @@ export function StudioPanel({
           <MediaGrid media={shown} busy={s.busy} active={picked} onPick={(src) => void pick(src)} />
         </>
       ) : null}
+
+      {tab === "ai" ? (
+        <>
+          <textarea
+            value={s.prompt}
+            onChange={(e) => s.setPrompt(e.target.value)}
+            rows={2}
+            placeholder="Например: летний интенсив по роботам или набор в digital art"
+            className="w-full rounded-xl bg-surface-2 px-3 py-2 text-sm ring-1 ring-black/10"
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" disabled={Boolean(s.busy)} onClick={() => void s.run("invent", { prompt: s.prompt })}>
+              Придумать новый блок
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={Boolean(s.busy) || !s.prompt.trim()}
+              onClick={async () => {
+                const res = await s.run("generate", { prompt: s.prompt, slot });
+                if (res.ok && "layout" in res && res.layout) onLayout?.(res.layout);
+              }}
+            >
+              Сгенерировать по запросу
+            </Button>
+          </div>
+          {s.ideas.length ? (
+            <ul className="space-y-2">
+              {s.ideas.map((idea, i) => (
+                <li key={i} className="rounded-2xl bg-surface-2 p-3">
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-primary">{idea.kicker || "Блок"}</p>
+                  <p className="mt-1 font-semibold">{idea.title}</p>
+                  <p className="mt-1 text-muted">{idea.text}</p>
+                  {idea.why ? <p className="mt-1 text-[0.72rem] text-muted">Тренд: {idea.why}</p> : null}
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="mt-2"
+                    onClick={async () => {
+                      const res = await s.run("place", { block: idea, slot, src: picked });
+                      if (res.ok && "layout" in res && res.layout) onLayout?.(res.layout);
+                    }}
+                  >
+                    Поставить на главную
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[0.78rem] leading-relaxed text-muted">
+              Кнопка предлагает три блока по трендам 2026. «Сгенерировать» сразу ставит один на главную.
+            </p>
+          )}
+          <div className="rounded-2xl bg-surface-2 p-3">
+            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Переписать тексты блока</p>
+            <textarea
+              value={rewrite}
+              onChange={(e) => setRewrite(e.target.value)}
+              rows={2}
+              placeholder={slot ? "Короче, теплее, без канцелярита" : "Сначала выберите блок"}
+              className="mt-2 w-full rounded-xl bg-surface px-3 py-2 text-sm"
+            />
+            <Button
+              type="button"
+              size="sm"
+              className="mt-2"
+              disabled={Boolean(s.busy) || !slot}
+              onClick={async () => {
+                const res = await s.run("rewrite", { slot, prompt: rewrite });
+                if (res.ok && "layout" in res && res.layout) onLayout?.(res.layout);
+              }}
+            >
+              DeepSeek: править текст
+            </Button>
+          </div>
+        </>
+      ) : null}
+
+      {tab === "agent" ? (
+        <div className="space-y-3">
+          <p className="text-[0.78rem] leading-relaxed text-muted">
+            Агент уже на всём сайте. Здесь — как он ведёт себя на этой странице: приветствие, автооткрытие и может ли открывать курсы.
+          </p>
+          <label className="flex items-center justify-between gap-3 text-sm">
+            <span>Внедрить на {agent.path}</span>
+            <input type="checkbox" checked={agent.on} onChange={(e) => setAgent({ ...agent, on: e.target.checked })} />
+          </label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {(["olga", "oleg"] as const).map((who) => (
+              <button
+                key={who}
+                type="button"
+                className={cn("rounded-xl py-2 text-[0.78rem] font-semibold", agent.who === who ? "bg-primary text-primary-foreground" : "bg-surface-2")}
+                onClick={() => setAgent({ ...agent, who })}
+              >
+                {who === "olga" ? "Ольга" : "Олег"}
+              </button>
+            ))}
+          </div>
+          <label className="block text-[0.72rem] text-muted">
+            Фокус страницы
+            <textarea
+              value={agent.focus}
+              onChange={(e) => setAgent({ ...agent, focus: e.target.value })}
+              rows={2}
+              placeholder="Робототехника 7–9, пробное без давления"
+              className="mt-1 w-full rounded-xl bg-surface-2 px-3 py-2 text-sm text-fg"
+            />
+          </label>
+          <label className="block text-[0.72rem] text-muted">
+            Приветствие
+            <textarea
+              value={agent.greeting}
+              onChange={(e) => setAgent({ ...agent, greeting: e.target.value })}
+              rows={2}
+              placeholder="Вижу, смотрите робототехнику. Рассказать про возраст или сразу на пробное?"
+              className="mt-1 w-full rounded-xl bg-surface-2 px-3 py-2 text-sm text-fg"
+            />
+          </label>
+          <label className="block text-[0.72rem] text-muted">
+            Открыть чат через {agent.autoOpenSec || 0} сек
+            <input
+              type="range"
+              min={0}
+              max={60}
+              value={agent.autoOpenSec}
+              className="mt-1 w-full"
+              onChange={(e) => setAgent({ ...agent, autoOpenSec: Number(e.target.value) })}
+            />
+          </label>
+          <label className="flex items-center justify-between gap-3 text-sm">
+            <span>Открывать страницы по поведению</span>
+            <input type="checkbox" checked={agent.steer} onChange={(e) => setAgent({ ...agent, steer: e.target.checked })} />
+          </label>
+          <Button
+            type="button"
+            disabled={Boolean(s.busy)}
+            onClick={() => void s.run("embed", { agent, path: agent.path })}
+          >
+            Сохранить агента страницы
+          </Button>
+        </div>
+      ) : null}
+
+      {s.msg ? <p className="text-primary">{s.msg}</p> : null}
+      {s.busy ? <p className="text-muted">{s.busy === "invent" || s.busy === "generate" || s.busy === "rewrite" || s.busy === "upload" ? "DeepSeek думает…" : "Работаю…"}</p> : null}
+    </div>
+  );
+}
