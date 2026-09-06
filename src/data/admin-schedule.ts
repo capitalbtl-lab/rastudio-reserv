@@ -1633,7 +1633,6 @@ export const adminSchedule = createServerFn({ method: "POST" })
         ? listAdminSlots().find((s) => s.groupId === gid && s.branchId === lessonBranch) || listAdminSlots().find((s) => s.groupId === gid)
         : undefined;
       const roomId = Number(data.roomId) || Number(slot?.roomId) || 0;
-      if (!roomId) return { ok: false as const, error: "Нет roomId — выберите аудиторию." };
       const type = resolveLessonType(String(data.lessonType || "trial")) || resolveLessonType("trial")!;
       const subjectId = Number(data.subjectId) || Number(slot?.subjectId) || Number(link?.subjectId) || 0;
       if (!subjectId) return { ok: false as const, error: "Нет subjectId — выберите предмет." };

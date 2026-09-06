@@ -69,13 +69,18 @@ async function firstRoom(
   slotRoom?: number,
 ) {
   if (Number(slotRoom)) return Number(slotRoom);
-  const json = await request<{ items?: { id?: number; branch_id?: number }[] }>(
-    `/v2api/${branch}/room/index`,
-    { page: 0, pageSize: 50 },
-    t,
-  ).catch(() => ({ items: [] as { id?: number }[] }));
-  const hit = (json.items || []).find((x) => Number(x.id) && (Number(x.branch_id) === branch || !x.branch_id));
-  return Number(hit?.id) || 0;
+  const { roomsOfBranchList } = await import("./crm-rooms");
+  const { rememberRooms } = await import("./crm-rooms-disk");
+  let picked = 0;
+  for (const b of [branch, 1, 2, 3, 4]) {
+    const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${b}/room/index`, { page: 0, pageSize: 100 }, t).catch(
+      () => ({ items: [] as Record<string, unknown>[] }),
+    );
+    const items = roomsOfBranchList(json.items || [], b, true);
+    rememberRooms(items.map((x) => ({ id: x.id, name: x.name, branchId: b })));
+    if (!picked && b === branch) picked = Number(items[0]?.id) || 0;
+  }
+  return picked;
 }
 
 export async function maybeBookChudnovaTrial() {

@@ -208,7 +208,6 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.match(cl, /entityId: customerId/);
     assert.match(cl, /localId/);
     assert.match(cl, /Нет branchId/);
-    assert.match(cl, /Нет roomId/);
     assert.match(cl, /type: type.key/);
     assert.match(cl, /room_id: roomId/);
     assert.match(cl, /cardFromDossier/);

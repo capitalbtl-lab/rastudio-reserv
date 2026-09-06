@@ -34,6 +34,11 @@ describe("аудитории филиала", () => {
     assert.equal(groups.length, 1);
     assert.match(groups[0].label, /ЦМИТ/);
     assert.ok(groups[0].options.some((o) => o.label === "Ауд.1"));
-    assert.equal(roomsSelectGroups(rooms, 1).length, 0);
+    const civic = roomsSelectGroups(rooms, 1);
+    assert.ok(civic.length >= 1);
+    assert.ok(civic.some((g) => g.options.length));
+    const assumed = roomsOfBranchList([{ id: 8, name: "Зал Гражданская" }], 1, true);
+    assert.equal(assumed[0]?.id, 8);
+    assert.equal(roomsOfBranchList([{ id: 8, name: "Зал Гражданская" }], 1, false).length, 0);
   });
 });

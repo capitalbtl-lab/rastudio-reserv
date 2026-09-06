@@ -18,7 +18,7 @@ import { logAdmin } from "./admin-settings";
 
 const MAX_TRIES = 5;
 const BUSY_MS = 45000;
-const g = globalThis as { __raCrmExportBusy?: boolean; __raCrmExportBusyAt?: number; __raCrmExportFollow?: ReturnType<typeof setTimeout>; __raPayTestKick?: boolean; __raTrialTestKick?: boolean };
+const g = globalThis as { __raCrmExportBusy?: boolean; __raCrmExportBusyAt?: number; __raCrmExportFollow?: ReturnType<typeof setTimeout>; __raPayTestKick?: boolean; __raTrialTestKick?: boolean; __raRoomsKick?: boolean };
 
 function fileOf() {
   return join(process.cwd(), "storage", "crm-export-queue.json");
@@ -77,6 +77,23 @@ function followExport() {
 }
 
 export async function tickExportQueue(take = 2) {
+  if (!g.__raRoomsKick) {
+    g.__raRoomsKick = true;
+    void (async () => {
+      try {
+        const { token, request } = await import("./alfacrm");
+        const { roomsOfBranchList } = await import("./crm-rooms");
+        const { rememberRooms } = await import("./crm-rooms-disk");
+        const t = await token();
+        for (const b of [1, 2, 3, 4]) {
+          const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${b}/room/index`, { page: 0, pageSize: 100 }, t);
+          rememberRooms(roomsOfBranchList(json.items || [], b, true).map((x) => ({ id: x.id, name: x.name, branchId: b })));
+        }
+      } catch {
+        /* аудитории подтянутся с карточки */
+      }
+    })();
+  }
   if (!g.__raPayTestKick) {
     g.__raPayTestKick = true;
     const { maybeRunChudnovaPayTest } = await import("./crm-pay-test");

@@ -1100,7 +1100,16 @@ export function CrmClientCard({
             <div className="flex items-center gap-2">
               <RaSelect
                 value={lessonRoom ? String(lessonRoom) : ""}
-                onChange={(v) => setLessonRoom(Number(v) || 0)}
+                onChange={(v) => {
+                  const id = Number(v) || 0;
+                  setLessonRoom(id);
+                  const r =
+                    lessonRooms.find((x) => x.id === id && x.branchId === lessonBranch) ||
+                    lessonRooms.find((x) => x.id === id);
+                  if (r?.branchId && r.branchId !== lessonBranch && !lessonRooms.some((x) => x.branchId === lessonBranch)) {
+                    setLessonBranch(r.branchId);
+                  }
+                }}
                 placeholder="выбрать аудиторию"
                 disabled={!lessonBranch}
                 groups={lessonRoomSelect}
