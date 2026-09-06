@@ -760,16 +760,15 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
     }
   }
   const tariffs: NonNullable<CustomerCard["tariffs"]> = [];
-  const liveStamp = String(dossier?.extras?.live_tariff || "");
-  if (liveStamp === "1") {
-    const tariffId = Number(dossier?.extras?.tariff_id || 0);
-    tariffs.push({
-      id: tariffId || customerId,
-      tariffId: tariffId || undefined,
-      name: String(dossier?.tariff || "абонемент"),
-      rest: 0,
-      lessons: 0,
-    });
+  try {
+    const { parseDossierCtt, pullCustomerTariffs } = await import("./pupil-tariffs");
+    let rows = parseDossierCtt(dossier?.extras);
+    if (!rows.length) {
+      rows = await pullCustomerTariffs(useBranch, customerId).catch(() => []);
+    }
+    tariffs.push(...rows);
+  } catch {
+    /* диск */
   }
   const studyStatusId = Number(c.study_status_id || 0);
   const statusName =
@@ -1461,19 +1460,16 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const d = findDossier({ crmId: customerId });
       if (!wantAlfaPull(data.fresh)) {
         if (d) {
-        const { cardFromDossier } = await import("./customer-card-disk");
-        const { parseDossierCtt } = await import("./pupil-tariffs");
-        let card = cardFromDossier(d, branch);
-        const live = (card.tariffs || []).filter((t) => !t.archived);
-        if (!live.length && (await import("./crm-alfa-link")).wantAlfaPullChannel("tariffs")) {
-          await import("./pupil-tariffs").then((m) => m.pullCustomerTariffs(branch, customerId)).catch(() => []);
-          const fresh = findDossier({ crmId: customerId });
-          if (fresh) card = cardFromDossier(fresh, branch);
-        } else if (!parseDossierCtt(d.extras).length && live.length) {
-          void import("./pupil-tariffs").then((m) => m.pullCustomerTariffs(branch, customerId)).catch(() => []);
+          const { cardFromDossier } = await import("./customer-card-disk");
+          const { parseDossierCtt, pullCustomerTariffs } = await import("./pupil-tariffs");
+          let card = cardFromDossier(d, branch);
+          if (!parseDossierCtt(d.extras).length && (await import("./crm-alfa-link")).wantAlfaPullChannel("tariffs")) {
+            await pullCustomerTariffs(branch, customerId).catch(() => []);
+            const fresh = findDossier({ crmId: customerId });
+            if (fresh) card = cardFromDossier(fresh, branch);
+          }
+          return { ok: true as const, fromCache: true, customer: card };
         }
-        return { ok: true as const, fromCache: true, customer: card };
-      }
         return { ok: false as const, error: "Ученик не найден на сайте." };
       }
       if (d) {
