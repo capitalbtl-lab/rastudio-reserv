@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { localSrc } from "@/lib/local-media";
-import { cleanWixAlt } from "@/data/wix-seo-core";
+import { cleanWixAlt } from "../data/wix-seo-core";
 
 type Props = {
   src: string;
