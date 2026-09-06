@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   teacherIdsOfSlot,
   teacherAllowed,
@@ -55,5 +56,22 @@ describe("педагоги только по teacherId", () => {
     const civic = teachersAtBranchFromSlots(1, slots, [{ id: 10, name: "Самсонова", branchIds: [2] }]);
     assert.ok(civic.some((t) => t.id === 10));
     assert.equal(civic.some((t) => t.id === 11), false);
+  });
+});
+
+describe("связи в экранах", () => {
+  it("расписание и вкладка педагогов без fs, урок не затирает группу", () => {
+    const sched = readFileSync(new URL("../components/admin-schedule.tsx", import.meta.url), "utf8");
+    assert.match(sched, /from "@\/data\/crm-teachers-core"/);
+    assert.match(sched, /teachersAtBranchFromSlots/);
+    assert.match(sched, /\["teachers", "Педагоги"\]/);
+    const pane = readFileSync(new URL("../components/admin-teachers.tsx", import.meta.url), "utf8");
+    assert.match(pane, /from "@\/data\/crm-teachers-core"/);
+    assert.match(pane, /subjectsOfTeacher/);
+    assert.doesNotMatch(pane, /from "@\/data\/crm-teachers"/);
+    const alfa = readFileSync(new URL("./alfacrm-schedule.ts", import.meta.url), "utf8");
+    assert.match(alfa, /pickTeacherIds\(first\?\.teacher_ids, g.teacher_ids\)/);
+    const card = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
+    assert.match(card, /teachersAtBranch\(useBranch, listTeachers\(slots\), slots\)/);
   });
 });
