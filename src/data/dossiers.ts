@@ -593,7 +593,13 @@ ${lines.map((l) => `— ${l}`).join("\n")}
 `;
 }
 
-export function applyCrmCustomer(item: Record<string, unknown>, branchId: number, _archived = false, teacherMap: Record<string, string> = {}) {
+export function applyCrmCustomer(
+  item: Record<string, unknown>,
+  branchId: number,
+  _archived = false,
+  teacherMap: Record<string, string> = {},
+  opts: CrmWriteOpts = {},
+) {
   const id = Number(item.id);
   if (!id) return null;
   const phones = asList(item.phone);
@@ -638,7 +644,9 @@ export function applyCrmCustomer(item: Record<string, unknown>, branchId: number
     extras,
     source: "alfacrm",
     crmWins: true,
-    note: `CRM ${id}: ${childName || rawName || ""}`,
+    note: opts.quiet ? undefined : `CRM ${id}: ${childName || rawName || ""}`,
+    persist: opts.persist,
+    quiet: opts.quiet,
   });
 }
 
@@ -1042,7 +1050,7 @@ export async function syncAllFromCrm(
           if (Number(item.removed) === 1 || String(item.removed) === "1") continue;
           if (Number(item.is_study) !== study) continue;
           if (study !== 2 && Number(item.is_study) === 2) continue;
-          applyCrmCustomer(item, branch, study === 2, teacherMap);
+          applyCrmCustomer(item, branch, study === 2, teacherMap, BULK);
           const id = Number(item.id || 0);
           if (id && study === 1) {
             if (!currentMap.has(id)) currentMap.set(id, new Set());
@@ -1051,6 +1059,8 @@ export async function syncAllFromCrm(
           if (id && study === 0) leadIds.add(id);
           n += 1;
         }
+        if (n && n % 50 === 0) saveStore(loadStore());
+        await yieldLoop();
         if (!items.length || items.length < 50) break;
       }
     }
@@ -1099,6 +1109,10 @@ export async function syncAllFromCrm(
   }
   store.lastCrmSync = new Date().toISOString();
   saveStore(store);
+  if (leadsOnly) {
+    onProgress?.({ step: "Лиды на сайте", n, total: n });
+    return { ok: true as const, count: n, purged, lastCrmSync: store.lastCrmSync, studies: want, liveTariffs: 0, withGroups: 0 };
+  }
   onProgress?.({ step: "Состав групп и абонементы…", n, total: n });
   const overlay = await overlayMembershipFromCrm().catch(() => ({ live: 0, withGroups: 0, scanned: 0, ids: [] as number[] }));
   return { ok: true as const, count: n, purged, lastCrmSync: store.lastCrmSync, studies: want, liveTariffs: overlay.live, withGroups: overlay.withGroups };
@@ -1133,7 +1147,7 @@ export async function syncNewLeadsFromCrm() {
           if (!id || Number(item.removed) === 1 || Number(item.is_study) !== 0) continue;
           const prev = knownStudy.get(id);
           if (prev === "0") continue;
-          applyCrmCustomer(item, branch, false);
+          applyCrmCustomer(item, branch, false, {}, BULK);
           knownStudy.set(id, "0");
           added += 1;
           newOnPage += 1;
@@ -1202,8 +1216,8 @@ export async function syncSliceFromCrm(opts: { branchId: number; isStudy?: numbe
     for (const item of items) {
       if (!opts.removed && (Number(item.removed) === 1 || (opts.isStudy != null && Number(item.is_study) !== Number(opts.isStudy)))) continue;
       if (!opts.removed && opts.isStudy !== 2 && Number(item.is_study) === 2) continue;
-      if (opts.removed) applyCrmCustomer(item, branch, Number(item.is_study) !== 1, map);
-      else applyCrmCustomer(item, branch, opts.isStudy === 2, map);
+      if (opts.removed) applyCrmCustomer(item, branch, Number(item.is_study) !== 1, map, BULK);
+      else applyCrmCustomer(item, branch, opts.isStudy === 2, map, BULK);
       n += 1;
     }
     page += 1;
