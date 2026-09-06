@@ -93,6 +93,17 @@ export function HomeEditorProvider({
     return () => window.removeEventListener("ra-debug-session", check);
   }, []);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("home-editing", editing);
+    if (editing) root.dataset.homeDevice = device;
+    else delete root.dataset.homeDevice;
+    return () => {
+      root.classList.remove("home-editing");
+      delete root.dataset.homeDevice;
+    };
+  }, [editing, device]);
+
   const persist = useCallback((next: HomeLayoutDoc) => {
     const token = debugToken();
     if (!token) return;
