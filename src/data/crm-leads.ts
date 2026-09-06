@@ -505,7 +505,8 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
       persistLeads();
     }
     if (wantAlfaDelta(delta) && disk.items.length) {
-      void syncLeadsDelta(branchId).catch(() => undefined);
+      const age = Date.now() - (hit?.at || 0);
+      if (!hit?.items.length || age > 90_000) void syncLeadsDelta(branchId).catch(() => undefined);
     }
     return disk;
   }
