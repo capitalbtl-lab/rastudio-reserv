@@ -33,7 +33,7 @@ import type { GroupCalLesson } from "./crm-slots-core";
 import { beatsOf } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { loadGroupCard, saveGroupCard, nextLocalLessonId, upsertGroupCalendar, mergeLocalCalendar, upsertCustomerCalendar, collectCustomerJournal } from "./group-cards";
-import { stampJournal, journalForCustomer, clientLessonFromJournal } from "./crm-journal-core";
+import { stampJournal, clientLessonFromJournal } from "./crm-journal-core";
 import { wantAlfaPull, loadAlfaLink, saveAlfaLink, alfaLinkOf } from "./crm-alfa-link";
 import { scheduleVoiceTurn } from "./schedule-voice";
 import { loadSiteTree, addTreeSchool, addTreeCourse, deleteTreeCourse, deleteTreeSchool, moveSlotsToCourse, saveSiteTree, slotTreeKey } from "./site-tree";

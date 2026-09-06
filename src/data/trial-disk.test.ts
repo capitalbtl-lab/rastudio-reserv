@@ -281,7 +281,7 @@ describe("кабинет: новый ученик диск сразу", () => {
     const loadAt = src.indexOf("async function loadCustomerCard");
     const loadEnd = src.indexOf("\nfunction hm(", loadAt);
     const load = src.slice(loadAt, loadEnd > loadAt ? loadEnd : loadAt + 5000);
-    assert.match(load, /journalForCustomer/);
+    assert.match(load, /collectCustomerJournal/);
     assert.equal(/lesson\/index/.test(load), false);
     assert.match(load, /mergeCgiGroupLinks|activeGroupsForCard/);
     assert.equal(/groupIdsFromCustomer/.test(load), false);
@@ -454,7 +454,7 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.match(st, /stampJournal/);
     assert.match(st, /rememberLessons/);
     const card = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
-    assert.match(card, /journalForCustomer/);
+    assert.match(card, /collectCustomerJournal/);
     assert.match(card, /clientLessonFromJournal/);
     const lessons = readFileSync(new URL("./crm-lessons.ts", import.meta.url), "utf8");
     assert.match(lessons, /journalAttend/);
