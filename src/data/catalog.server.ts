@@ -16,6 +16,7 @@ import {
 import { applyPageEdits, applyCmsEdits } from "./edits";
 import { publicCoursesMeta } from "./public-bind";
 import { localizeTree } from "@/lib/local-media";
+import { lastPathSlug, pageLookupKeys } from "./catalog-path";
 
 const extras = extrasRaw as Record<string, SitePage["images"]>;
 const galleries = galleriesRaw as Record<string, string[]>;
@@ -77,10 +78,24 @@ const catalog: Catalog = {
 const cms = localizeTree(cmsRaw as CmsPayload);
 
 const pageIndex = new Map<string, SitePage>();
-for (const page of catalog.pages) {
-  pageIndex.set(norm(page.path), page);
-  pageIndex.set(norm(page.pathDecoded), page);
+const pageBySlug = new Map<string, SitePage>();
+function indexPage(key: string, page: SitePage) {
+  const n = norm(key);
+  if (n && n !== "/" && !pageIndex.has(n)) pageIndex.set(n, page);
 }
+for (const page of catalog.pages) {
+  indexPage(page.path, page);
+  indexPage(page.pathDecoded, page);
+  const slug = lastPathSlug(page.pathDecoded || page.path);
+  if (slug && !pageBySlug.has(slug)) pageBySlug.set(slug, page);
+}
+
+const ALIAS: Record<string, string> = {
+  "/gamedev": "/kursy-shkoly-programmirovaniya/it-школа-разработка-игр-на-unity",
+  "/unity": "/kursy-shkoly-programmirovaniya/it-школа-разработка-игр-на-unity",
+  "/python": "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-python",
+  "/cpp": "/kursy-shkoly-programmirovaniya/it-школа-программирование-на-си",
+};
 
 const courseByPath = new Map<string, CmsCourse>();
 const courseById = new Map<string, CmsCourse>();
@@ -103,8 +118,19 @@ function norm(input: string) {
 }
 
 export function getPage(splat?: string | null): SitePage | undefined {
-  const page = splat ? pageIndex.get(norm(splat)) : pageIndex.get("/");
-  if (!page) return undefined;
+  if (!splat) return pageIndex.get("/") || catalog.pages.find((p) => p.pathDecoded === "/");
+  const alias = ALIAS[norm(splat)];
+  if (alias) return getPage(alias);
+  for (const key of pageLookupKeys(splat)) {
+    const hit = pageIndex.get(key) || pageBySlug.get(lastPathSlug(key));
+    if (hit) return finishPage(hit);
+  }
+  const slug = lastPathSlug(splat);
+  const bySlug = slug ? pageBySlug.get(slug) : undefined;
+  return bySlug ? finishPage(bySlug) : undefined;
+}
+
+function finishPage(page: SitePage) {
   const edited = applyPageEdits(page);
   if (norm(edited.pathDecoded || edited.path) === "/art-studio-9-13") {
     return {
