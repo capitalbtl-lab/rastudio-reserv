@@ -1,123 +1,30 @@
 "use client";
 
-import {
-  Children,
-  isValidElement,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactElement,
-  type ReactNode,
-} from "react";
-import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
-import { debugSession } from "@/data/debug-fn";
-import { debugEmit } from "@/data/debug-client";
-import { saveHomeLayoutFn } from "@/data/home-layout-fn";
+import { Children, isValidElement, useState, type ReactElement, type ReactNode } from "react";
+import { GripVertical } from "lucide-react";
+import { HomeEditorChrome, HomeEditorProvider, useHomeEditor } from "@/components/home-editor";
 import {
   homeBlockLabel,
-  moveHomeBlock,
-  normalizeHomeOrder,
   placeHomeBlock,
+  visibleHomeOrder,
   type HomeBlockId,
+  type HomeLayoutDoc,
 } from "@/data/home-layout-core";
 import { cn } from "@/lib/utils";
 
-const KEY = "ra_debug";
-
-function debugToken() {
-  try {
-    return sessionStorage.getItem(KEY) || "";
-  } catch {
-    return "";
-  }
-}
-
 export function HomeCanvas({
   initialOrder,
+  layout,
   children,
 }: {
-  initialOrder?: string[];
+  initialOrder?: unknown;
+  layout?: unknown;
   children: ReactNode;
 }) {
-  const [order, setOrder] = useState(() => normalizeHomeOrder(initialOrder));
-  const [editing, setEditing] = useState(false);
-  const [drag, setDrag] = useState<HomeBlockId | null>(null);
-  const [over, setOver] = useState<HomeBlockId | null>(null);
-  const [msg, setMsg] = useState("");
-
-  useEffect(() => {
-    setOrder(normalizeHomeOrder(initialOrder));
-  }, [initialOrder]);
-
-  useEffect(() => {
-    const check = () => {
-      const t = debugToken();
-      if (!t) {
-        setEditing(false);
-        return;
-      }
-      void debugSession({ data: { token: t } }).then((res) => {
-        setEditing(Boolean(res.ok && "tools" in res && res.tools.layout !== false));
-      });
-    };
-    check();
-    window.addEventListener("ra-debug-session", check);
-    return () => window.removeEventListener("ra-debug-session", check);
-  }, []);
-
-  const persist = useCallback((next: HomeBlockId[]) => {
-    setOrder(next);
-    const token = debugToken();
-    if (!token) return;
-    void saveHomeLayoutFn({ data: { token, order: next } }).then((res) => {
-      if (res.ok) {
-        setMsg("Порядок сохранён");
-        debugEmit("layout", { order: res.order, ok: true });
-      } else {
-        setMsg(res.error || "Не удалось сохранить");
-        debugEmit("layout", { ok: false, error: res.error });
-      }
-      window.setTimeout(() => setMsg(""), 1800);
-    });
-  }, []);
-
-  const slots = useMemo(() => {
-    const map = new Map<string, ReactElement<{ id: HomeBlockId }>>();
-    Children.forEach(children, (child) => {
-      if (!isValidElement(child)) return;
-      const id = (child.props as { id?: HomeBlockId }).id;
-      if (id) map.set(id, child as ReactElement<{ id: HomeBlockId }>);
-    });
-    return order.map((id) => map.get(id)).filter(Boolean) as ReactElement<{ id: HomeBlockId }>[];
-  }, [children, order]);
-
   return (
-    <div className={cn(editing && "home-layout-on")}>
-      {editing ? (
-        <div className="sticky top-[3.75rem] z-30 sm:top-[4.75rem] md:top-[5.25rem]">
-          <div className="mx-auto flex w-[min(1180px,calc(100%-1.5rem))] items-center justify-between gap-3 rounded-b-2xl bg-header px-4 py-2 text-[0.78rem] text-header-fg shadow-[0_12px_32px_-18px_rgba(0,0,0,.45)]">
-            <p>Редактор главной: перетащите блок или стрелки вверх / вниз. Порядок виден всем на сайте.</p>
-            <span className="shrink-0 text-header-fg/70">{msg || "отладка"}</span>
-          </div>
-        </div>
-      ) : null}
-      {slots.map((slot) => (
-        <HomeSlotFrame
-          key={slot.props.id}
-          id={slot.props.id}
-          editing={editing}
-          dragging={drag === slot.props.id}
-          over={over === slot.props.id && drag !== slot.props.id}
-          onDragId={setDrag}
-          onOver={setOver}
-          onMove={(dir) => persist(moveHomeBlock(order, slot.props.id, dir))}
-          onPlace={(id, before) => persist(placeHomeBlock(order, id, before))}
-        >
-          {slot}
-        </HomeSlotFrame>
-      ))}
-    </div>
+    <HomeEditorProvider initial={layout || initialOrder}>
+      <HomeCanvasInner>{children}</HomeCanvasInner>
+    </HomeEditorProvider>
   );
 }
 
@@ -125,35 +32,93 @@ export function HomeSlot({ id, children }: { id: HomeBlockId; children: ReactNod
   return <>{children}</>;
 }
 
+function HomeCanvasInner({ children }: { children: ReactNode }) {
+  const ctx = useHomeEditor();
+  const [drag, setDrag] = useState<HomeBlockId | null>(null);
+  const [over, setOver] = useState<HomeBlockId | null>(null);
+  if (!ctx) return children;
+
+  const map = new Map<string, ReactElement<{ id: HomeBlockId }>>();
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return;
+    const id = (child.props as { id?: HomeBlockId }).id;
+    if (id) map.set(id, child as ReactElement<{ id: HomeBlockId }>);
+  });
+  const ids = visibleHomeOrder(ctx.doc, ctx.editing);
+  const slots = ids.map((id) => map.get(id)).filter(Boolean) as ReactElement<{ id: HomeBlockId }>[];
+  const deviceW = ctx.editing ? (ctx.device === "phone" ? "max-w-[390px]" : ctx.device === "tablet" ? "max-w-[768px]" : "max-w-none") : "";
+
+  return (
+    <div className={cn(ctx.editing && "home-layout-on")}>
+      <HomeEditorChrome />
+      <div className={cn(ctx.editing && "md:px-60", ctx.editing && deviceW && "mx-auto", deviceW)}>
+        {slots.map((slot) => (
+          <HomeSlotFrame
+            key={slot.props.id}
+            id={slot.props.id}
+            drag={drag}
+            over={over}
+            onDragId={setDrag}
+            onOver={setOver}
+          >
+            {slot}
+          </HomeSlotFrame>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function HomeSlotFrame({
   id,
-  editing,
-  dragging,
+  drag,
   over,
   onDragId,
   onOver,
-  onMove,
-  onPlace,
   children,
 }: {
   id: HomeBlockId;
-  editing: boolean;
-  dragging: boolean;
-  over: boolean;
+  drag: HomeBlockId | null;
+  over: HomeBlockId | null;
   onDragId: (id: HomeBlockId | null) => void;
   onOver: (id: HomeBlockId | null) => void;
-  onMove: (dir: -1 | 1) => void;
-  onPlace: (id: HomeBlockId, before: HomeBlockId) => void;
   children: ReactNode;
 }) {
-  if (!editing) return <>{children}</>;
+  const ctx = useHomeEditor();
+  const editing = Boolean(ctx?.editing);
+  const selected = ctx?.selected === id;
+  const style = ctx?.doc.styles[id];
+  const bg =
+    style?.bg === "ink"
+      ? "bg-header text-header-fg"
+      : style?.bg === "paper"
+        ? "bg-white text-fg"
+        : style?.bg === "surface"
+          ? "bg-surface text-fg"
+          : "";
+
+  if (!editing) {
+    return (
+      <div className={bg} style={{ paddingTop: style?.padTop || undefined, paddingBottom: style?.padBottom || undefined }}>
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
-        "relative outline outline-2 -outline-offset-2 transition-[outline-color,opacity]",
-        over ? "outline-primary" : "outline-primary/35",
-        dragging && "opacity-40",
+        "relative transition-[outline-color,opacity,box-shadow]",
+        bg,
+        selected ? "outline outline-2 outline-primary" : over ? "outline outline-2 outline-primary/50" : "outline outline-1 outline-primary/20",
+        drag === id && "opacity-40",
+        style?.hidden && "opacity-50",
       )}
+      style={{ paddingTop: style?.padTop || undefined, paddingBottom: style?.padBottom || undefined }}
+      onClick={(e) => {
+        e.stopPropagation();
+        ctx?.select(id);
+      }}
       onDragOver={(e) => {
         e.preventDefault();
         onOver(id);
@@ -164,16 +129,22 @@ function HomeSlotFrame({
         const from = e.dataTransfer.getData("text/home-block") as HomeBlockId;
         onOver(null);
         onDragId(null);
-        if (from && from !== id) onPlace(from, id);
+        if (from && from !== id && ctx) ctx.setDoc({ ...ctx.doc, order: placeHomeBlock(ctx.doc.order, from, id) });
       }}
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center pt-2">
-        <div className="pointer-events-auto flex items-center gap-1 rounded-full bg-header px-1.5 py-1 text-[0.7rem] font-semibold text-header-fg shadow-[0_10px_24px_-12px_rgba(0,0,0,.55)]">
+      <div className="ve-ui pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center pt-2">
+        <div
+          className={cn(
+            "pointer-events-auto flex items-center gap-1 rounded-full px-1.5 py-1 text-[0.7rem] font-semibold shadow-[0_10px_24px_-12px_rgba(0,0,0,.55)]",
+            selected ? "bg-primary text-primary-foreground" : "bg-header text-header-fg",
+          )}
+        >
           <button
             type="button"
             draggable
             aria-label={`Переместить «${homeBlockLabel(id)}»`}
             className="grid size-7 cursor-grab place-items-center rounded-full hover:bg-white/15 active:cursor-grabbing"
+            onClick={(e) => e.stopPropagation()}
             onDragStart={(e) => {
               e.dataTransfer.setData("text/home-block", id);
               e.dataTransfer.effectAllowed = "move";
@@ -187,25 +158,12 @@ function HomeSlotFrame({
             <GripVertical className="size-3.5" />
           </button>
           <span className="px-1">{homeBlockLabel(id)}</span>
-          <button
-            type="button"
-            aria-label="Выше"
-            className="grid size-7 place-items-center rounded-full hover:bg-white/15"
-            onClick={() => onMove(-1)}
-          >
-            <ChevronUp className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            aria-label="Ниже"
-            className="grid size-7 place-items-center rounded-full hover:bg-white/15"
-            onClick={() => onMove(1)}
-          >
-            <ChevronDown className="size-3.5" />
-          </button>
+          {style?.hidden ? <span className="pr-2 opacity-80">скрыт</span> : null}
         </div>
       </div>
       {children}
     </div>
   );
 }
+
+export type { HomeLayoutDoc };

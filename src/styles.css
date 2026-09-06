@@ -978,3 +978,26 @@
   box-shadow: 0 0 0 2px rgb(255 255 255 / 0.55), 0 8px 18px rgb(37 99 235 / 0.38);
   color: #fff;
 }
+
+.home-layout-on a,
+.home-layout-on button:not(.ve-ui button):not(.ve-ui) {
+  pointer-events: none;
+}
+
+.home-layout-on .ve-ui,
+.home-layout-on .ve-ui * {
+  pointer-events: auto;
+}
+
+.home-layout-on .ve-text {
+  pointer-events: auto;
+  cursor: text;
+  outline: 1px dashed color-mix(in srgb, var(--color-primary) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: 0.2rem;
+}
+
+.home-layout-on .ve-text:focus {
+  outline: 2px solid var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}

@@ -14,8 +14,10 @@ import { Reviews } from "@/components/reviews";
 import { RobotEnglishVideos } from "@/components/robot-videos";
 import { SiteVideo } from "@/components/site-video";
 import { HomeCanvas, HomeSlot } from "@/components/home-blocks";
+import { EditText } from "@/components/home-editor";
 import { loadPublicEdits } from "@/data/load-site-page";
 import { hydrateEdits, pageEdit, type EditsStore } from "@/data/edits-core";
+import type { HomeLayoutDoc } from "@/data/home-layout-core";
 import { priceShort } from "@/data/prices-core";
 import { ageBadge, courseNameOnly } from "@/data/ages";
 import { cn } from "@/lib/utils";
@@ -86,7 +88,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const data = Route.useLoaderData() as { edits?: EditsStore; layout?: string[] };
+  const data = Route.useLoaderData() as { edits?: EditsStore; layout?: HomeLayoutDoc };
   if (data?.edits) hydrateEdits(data.edits);
   const hero = pageEdit("/");
   return (
@@ -97,7 +99,7 @@ function Home() {
           SCHOOLS.map((s) => ({ name: s.label, url: s.href })),
         )}
       />
-      <HomeCanvas initialOrder={data?.layout}>
+      <HomeCanvas layout={data?.layout}>
       <HomeSlot id="hero">
       <section className="ink relative isolate overflow-hidden text-header-fg">
         <div className="page-wrap grid items-center gap-10 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[88dvh] lg:gap-8 lg:py-8">
