@@ -109,6 +109,14 @@ describe("вход по телефону с диска", () => {
     assert.equal(locked, null);
   });
 
+  it("двойное имя в реплике не рисует два пузыря", async () => {
+    const { parseTurns } = await import("./agent-turns.ts");
+    const turns = parseTurns("Ольга: Ольга: Нашла на сайте: Александра. Это ваш ребёнок?");
+    assert.equal(turns.length, 1);
+    assert.equal(turns[0].who, "olga");
+    assert.match(turns[0].text, /^Нашла/);
+  });
+
   it("пусто — не выдумывать карточку", () => {
     const locked = identifyLocked("oleg", { phone: "79160000000", hits: [] });
     assert.match(locked?.reply || "", /никого нет/);
