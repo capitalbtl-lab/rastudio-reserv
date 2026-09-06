@@ -15,7 +15,7 @@ import { RobotEnglishVideos } from "@/components/robot-videos";
 import { SiteVideo } from "@/components/site-video";
 import { HomeCanvas, HomeSlot } from "@/components/home-blocks";
 import { loadPublicEdits } from "@/data/load-site-page";
-import { hydrateEdits, pageEdit } from "@/data/edits-core";
+import { hydrateEdits, pageEdit, type EditsStore } from "@/data/edits-core";
 import { priceShort } from "@/data/prices-core";
 import { ageBadge, courseNameOnly } from "@/data/ages";
 import { cn } from "@/lib/utils";
@@ -86,10 +86,8 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const data = Route.useLoaderData() as { edits?: Parameters<typeof hydrateEdits>[0]; layout?: string[] } | Parameters<typeof hydrateEdits>[0] | null;
-  const edits = data && typeof data === "object" && "edits" in data ? data.edits : data;
-  const layout = data && typeof data === "object" && "layout" in data ? data.layout : undefined;
-  if (edits) hydrateEdits(edits);
+  const data = Route.useLoaderData() as { edits?: EditsStore; layout?: string[] };
+  if (data?.edits) hydrateEdits(data.edits);
   const hero = pageEdit("/");
   return (
     <SiteShell>
@@ -99,7 +97,7 @@ function Home() {
           SCHOOLS.map((s) => ({ name: s.label, url: s.href })),
         )}
       />
-      <HomeCanvas initialOrder={layout}>
+      <HomeCanvas initialOrder={data?.layout}>
       <HomeSlot id="hero">
       <section className="ink relative isolate overflow-hidden text-header-fg">
         <div className="page-wrap grid items-center gap-10 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[88dvh] lg:gap-8 lg:py-8">

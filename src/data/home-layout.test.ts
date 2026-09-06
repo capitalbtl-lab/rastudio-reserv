@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { defaultHomeOrder, moveHomeBlock, normalizeHomeOrder, placeHomeBlock } from "./home-layout-core.ts";
 
 describe("макет главной", () => {
@@ -20,5 +21,13 @@ describe("макет главной", () => {
     const placed = placeHomeBlock(base, "trial", "hero");
     assert.equal(placed[0], "trial");
     assert.equal(placed[1], "hero");
+  });
+
+  it("главная оборачивает каждый блок", () => {
+    const src = readFileSync(new URL("../routes/index.tsx", import.meta.url), "utf8");
+    for (const id of defaultHomeOrder()) {
+      assert.match(src, new RegExp(`HomeSlot id="${id}"`));
+    }
+    assert.match(src, /HomeCanvas/);
   });
 });
