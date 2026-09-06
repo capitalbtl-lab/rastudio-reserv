@@ -68,9 +68,9 @@ async function firstRoom(
   branch: number,
   slotRoom?: number,
 ) {
-  const { roomsOfBranchList, DEFAULT_ROOM } = await import("./crm-rooms");
+  const { roomsOfBranchList, DEFAULT_ROOM, SEED_ROOMS } = await import("./crm-rooms");
   const { rememberRooms } = await import("./crm-rooms-disk");
-  if (Number(slotRoom)) return Number(slotRoom);
+  if (Number(slotRoom) && SEED_ROOMS.some((r) => r.id === Number(slotRoom) && r.branchId === branch)) return Number(slotRoom);
   const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/room/index`, { page: 0, pageSize: 100 }, t).catch(
     () => ({ items: [] as Record<string, unknown>[] }),
   );
@@ -128,7 +128,10 @@ export async function maybeBookChudnovaTrial() {
       date: fromExisting?.date || TRIAL_TEST_DATE,
       time: fromExisting?.time || TRIAL_TEST_TIME,
     });
-    if (!plan) return { ok: false as const, error: "нет плана" };
+    if (!plan) {
+      g.__raTrialTest = false;
+      return { ok: false as const, error: "нет плана" };
+    }
     const type = resolveLessonType(plan.type)!;
     const date = formatRuDob(plan.date) || plan.date;
     const dateIso = isoFromRu(date);

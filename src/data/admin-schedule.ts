@@ -1481,6 +1481,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const customerId = Number(data.customerId) || 0;
       if (!customerId) return { ok: false as const, error: "Нет номера ученика." };
       const d = findDossier({ crmId: customerId });
+      if (d?.child?.fio) {
+        const { isChudnovaAlexandra } = await import("./crm-pay-test-core");
+        if (isChudnovaAlexandra(d.child.fio)) {
+          await import("./crm-trial-test").then((m) => m.maybeBookChudnovaTrial()).catch(() => null);
+        }
+      }
       if (!wantAlfaPull(data.fresh)) {
         if (d) {
           const { cardFromDossier } = await import("./customer-card-disk");
