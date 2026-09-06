@@ -1,6 +1,7 @@
 /** Разовое пробное: только Чуднова Александра, отдельная дата в расписании. */
 
 import { isChudnovaAlexandra, PAY_TEST_NAME } from "./crm-pay-test-core.ts";
+export { isChudnovaAlexandra, PAY_TEST_NAME };
 
 export const TRIAL_TEST_ID = "2026-09-06-chudnova-11oct-b";
 export const TRIAL_TEST_DATE = "11.10.2026";
