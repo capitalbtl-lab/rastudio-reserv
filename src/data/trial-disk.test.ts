@@ -202,13 +202,16 @@ describe("кабинет: новый ученик диск сразу", () => {
     const clAt = src.indexOf('data.action === "customerLesson"');
     const clNext = src.indexOf("if (data.action ===", clAt + 10);
     const cl = src.slice(clAt, clNext > clAt ? clNext : clAt + 4000);
-    assert.match(cl, /nextLocalLessonId/);
+    assert.match(cl, /upsertCustomerCalendar/);
     assert.match(cl, /upsertGroupCalendar/);
     assert.match(cl, /op: "lesson.create"/);
+    assert.match(cl, /entityId: customerId/);
     assert.match(cl, /localId/);
     assert.match(cl, /Нет branchId/);
     assert.match(cl, /Нет roomId/);
     assert.match(cl, /room_id: roomId/);
+    assert.match(cl, /cardFromDossier/);
+    assert.equal(/entityId: localId/.test(cl), false);
     assert.equal(/id: 0/.test(cl), false);
     const saveAt = src.indexOf('data.action === "lessonSave"');
     const saveNext = src.indexOf("if (data.action ===", saveAt + 10);
@@ -221,6 +224,8 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.match(cards, /export function nextLocalLessonId/);
     assert.match(cards, /export function applyCreatedCalendarLesson/);
     assert.match(cards, /export function mergeLocalCalendar/);
+    assert.match(cards, /export function upsertCustomerCalendar/);
+    assert.match(cards, /export function collectCustomerJournal/);
     const queue = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
     assert.match(queue, /applyCreatedCalendarLesson/);
     const core = readFileSync(new URL("./crm-export-queue-core.ts", import.meta.url), "utf8");
