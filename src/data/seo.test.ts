@@ -37,10 +37,9 @@ describe("seo", () => {
     assert.equal(school?.filename.includes("11062b"), false);
     assert.match(school?.blurb || "", /английскому, корейскому/);
     const lang = pickDescription({
-      path: "/languageschool",
       title: 'Школа иностранных языков в Студии "Развивайся" | Коломна',
       description: "Обучение английскому, корейскому, китайскому, японскому языкам для детей в Коломне.",
-    } as never);
+    });
     assert.match(lang, /английскому, корейскому, китайскому, японскому/);
     assert.equal(imageTitle("11062b_e2ae833a8eaa43e38e4aa6d32eb3b8f7f000.jpg", "Школа иностранных языков"), "Школа иностранных языков");
     assert.equal(
