@@ -479,10 +479,9 @@ export function AgentChat() {
   function cancelSpeech() {
     genRef.current += 1;
     audioRef.current?.stop();
-    if (vadRafRef.current) {
-      cancelAnimationFrame(vadRafRef.current);
-      vadRafRef.current = 0;
-    }
+    const stopVad = vadStopRef.current;
+    vadStopRef.current = null;
+    stopVad?.();
     if (audioElRef.current) {
       audioElRef.current.pause();
       audioElRef.current.removeAttribute("src");
@@ -666,6 +665,7 @@ export function AgentChat() {
       const data = new Uint8Array(analyser.fftSize);
       let over = 0;
       const stop = () => {
+        vadStopRef.current = null;
         if (vadRafRef.current) {
           cancelAnimationFrame(vadRafRef.current);
           vadRafRef.current = 0;
