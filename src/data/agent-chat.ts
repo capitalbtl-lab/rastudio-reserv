@@ -603,6 +603,7 @@ export const chatAgent = createServerFn({ method: "POST" })
         voice?: boolean;
         channel?: string;
         phone?: string;
+        behavior?: { path?: string; dwell?: number; trail?: string[]; courses?: string[] };
       },
   )
   .handler(async ({ data }) => {
@@ -747,11 +748,26 @@ export const chatAgent = createServerFn({ method: "POST" })
         /* лента */
       }
     }
+    let behave = "";
+    if (!admin && data.behavior) {
+      try {
+        const { behaviorPrompt } = await import("./page-behavior");
+        behave = behaviorPrompt({
+          path: String(data.behavior.path || data.path || "/"),
+          dwell: Number(data.behavior.dwell) || 0,
+          trail: Array.isArray(data.behavior.trail) ? data.behavior.trail.map(String) : [],
+          courses: Array.isArray(data.behavior.courses) ? data.behavior.courses.map(String) : [],
+        });
+      } catch {
+        /* */
+      }
+    }
     const system = admin
       ? ADMIN_SYSTEM + adminHint
       : clientSystem(soloWho, facts, facts.mode === "new" ? note.next : nextStepOf(facts)) +
         agentPromptAddons(facts, data.channel || channelId || "site") +
         knowledgeForAgent() +
+        behave +
         factsPrompt(facts) +
         notePrompt(note) +
         dossierPrompt(file) +

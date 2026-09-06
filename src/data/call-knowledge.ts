@@ -339,7 +339,7 @@ export function knowledgeForAgent() {
   const kb = loadCallStore().knowledge;
   const set = loadCallSettings();
   const pulse = pulsePrompt();
-  if (!kb) return "";
+  if (!kb) return pulse;
   const inj = set.inject;
   const faq = inj.faq
     ? kb.faq.filter(onItem).slice(0, 12).map((x) => `В: ${x.q}\nО: ${x.a}`).join("\n")
@@ -354,7 +354,7 @@ export function knowledgeForAgent() {
   const instructions = inj.instructions ? asLines(kb.instructions).filter(onItem).map((x) => x.text) : [];
   const phrases = inj.phrases ? asLines(kb.phrases).filter(onItem).map((x) => x.text) : [];
   const site = inj.siteRecommendations ? asLines(kb.siteRecommendations).filter(onItem).map((x) => x.text) : [];
-  if (!faq && !obj && !scripts && !rules.length && !instructions.length) return "";
+  if (!faq && !obj && !scripts && !rules.length && !instructions.length) return pulse;
   return `
 
 База знаний с реальных звонков (Клиент / Администратор — говори как администратор студии, не цитируй «из базы»):
@@ -367,5 +367,5 @@ ${kb.summary}
 ${faq}
 Возражения:
 ${obj}
-${site.length ? `Замечания к сайту (не обещай несуществующее): ${site.slice(0, 5).join("; ")}` : ""}`;
+${site.length ? `Замечания к сайту (не обещай несуществующее): ${site.slice(0, 5).join("; ")}` : ""}${pulse}`;
 }
