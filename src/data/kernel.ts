@@ -1,22 +1,12 @@
 /** Ядро. Вкладки B–E читают, не правят. Новый ключ — сначала сюда. */
 
-export { DISK_RULES, diskRuleOf, type DiskRule } from "./crm-disk-rules";
+export { DISK_RULES, diskRuleOf, type DiskRule } from "./crm-disk-rules.ts";
 export {
   isLocalId,
   isCrmId,
   isLocalSubject,
   nextLocalId,
-} from "./crm-local-id";
-export {
-  ARCH_REV,
-  ARCH_REV_N,
-  CRM_BRANCH,
-  groupAssignKey,
-  canonCourseId,
-  canonSchoolId,
-  resolveGroupCourseId,
-  joinCourseSubject,
-} from "./ids";
+} from "./crm-local-id.ts";
 
 export const KERNEL_KEYS = [
   "branchId",
