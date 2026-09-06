@@ -10,6 +10,7 @@ import {
 } from "./seo-core.ts";
 import { SEO_COPY } from "./seo-copy.ts";
 import { SITE, SCHOOLS } from "./site.ts";
+import { enrichPage } from "./seo.ts";
 import { imageTitle } from "../components/seo-image.tsx";
 
 describe("seo", () => {
@@ -41,6 +42,28 @@ describe("seo", () => {
       imageTitle("Школа иностранных языков в Студии Развивайся | Коломна.jpg", "x"),
       "Школа иностранных языков в Студии Развивайся | Коломна",
     );
+  });
+
+  it("не переписывает description, уже прописанный в Wix", () => {
+    const about = enrichPage({
+      path: "/o-nas",
+      title: 'Студия "РАЗВИВАЙСЯ" в Коломне | О нас',
+      description:
+        'Студия искусств и интеллектуального развития "Развивайся" - это дополнительное образование для детей и творческие курсы для взрослых в Коломне в качественно новом формате.',
+      canonical: "https://www.rastudio.org/o-nas",
+    });
+    assert.match(about.description, /качественно новом формате/);
+    assert.doesNotMatch(about.description, /с 2016 года: художественная школа/);
+    const team = enrichPage({
+      path: "/team",
+      title: 'Педагоги Студии и ЦМИТ "Развивайся" (Коломна)',
+      description: 'Знакомьтесь с педагогами Студии "Развивайся". Выбирайте профессионалов!',
+      canonical: "https://www.rastudio.org/team",
+    });
+    assert.match(team.description, /Выбирайте профессионалов/);
+    assert.equal(SEO_COPY["/o-nas"], undefined);
+    assert.equal(SEO_COPY["/team"], undefined);
+    assert.equal(SEO_COPY["/master-class"], undefined);
   });
 
   it("Course schema только у курсов, кабинет закрыт", () => {

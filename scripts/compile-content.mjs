@@ -54,6 +54,37 @@ function cleanText(s) {
     .trim();
 }
 
+function normTitle(s) {
+  return cleanText(s)
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[«»"]/g, "")
+    .replace(/\s*\|\s*rastudio\.org\s*$/i, "")
+    .replace(/[\u200b\u200c\u200d]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const wixByTitle = new Map();
+for (const row of WIX_SEO) {
+  const key = normTitle(row.title);
+  if (key && (row.description || "").trim()) wixByTitle.set(key, row);
+}
+
+function wixSeoFor(title) {
+  return wixByTitle.get(normTitle(title)) || null;
+}
+
+function mediaIdFromSrc(src) {
+  const m = String(src).match(/\/media\/([^/?]+)/i);
+  if (!m) return "";
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return m[1];
+  }
+}
+
 function unique(arr) {
   const seen = new Set();
   const out = [];
@@ -114,6 +145,14 @@ const COURSE_VIDEOS = JSON.parse(
 const FILE_EXTRAS = JSON.parse(
   fs.readFileSync(path.join(ROOT, "content/course-extras.json"), "utf8"),
 );
+const WIX_SEO = JSON.parse(fs.readFileSync(path.join(ROOT, "content/wix-seo.json"), "utf8"));
+const WIX_MEDIA_NAMES = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(ROOT, "content/wix-media-names.json"), "utf8"));
+  } catch {
+    return {};
+  }
+})();
 const MANUAL_EXTRAS = {
   "/digitalartschool": [
     {
