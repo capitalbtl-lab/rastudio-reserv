@@ -258,6 +258,7 @@ export function AgentChat() {
   const debugOnRef = useRef(debugOn);
   const debugWidgetRef = useRef(debugWidget);
   const vadRafRef = useRef(0);
+  const vadStopRef = useRef<(() => void) | null>(null);
   clientMsgsRef.current = clientMsgs;
   adminMsgsRef.current = adminMsgs;
   uiRef.current = ui;
@@ -645,6 +646,8 @@ export function AgentChat() {
   }
 
   function startVad() {
+    vadStopRef.current?.();
+    vadStopRef.current = null;
     if (vadRafRef.current) {
       cancelAnimationFrame(vadRafRef.current);
       vadRafRef.current = 0;
@@ -662,15 +665,22 @@ export function AgentChat() {
       src.connect(analyser);
       const data = new Uint8Array(analyser.fftSize);
       let over = 0;
+      const stop = () => {
+        if (vadRafRef.current) {
+          cancelAnimationFrame(vadRafRef.current);
+          vadRafRef.current = 0;
+        }
+        try {
+          src.disconnect();
+          void ctx.close();
+        } catch {
+          /* */
+        }
+      };
+      vadStopRef.current = stop;
       const tick = () => {
         if (!speakingRef.current || !bargeRef.current) {
-          try {
-            src.disconnect();
-            void ctx.close();
-          } catch {
-            /* */
-          }
-          vadRafRef.current = 0;
+          stop();
           return;
         }
         analyser.getByteTimeDomainData(data);
@@ -683,14 +693,9 @@ export function AgentChat() {
         if (Date.now() > ignoreUntilRef.current && rms > 0.11) {
           over += 1;
           if (over >= 7) {
+            stop();
             cancelSpeech();
             startListen();
-            try {
-              src.disconnect();
-              void ctx.close();
-            } catch {
-              /* */
-            }
             return;
           }
         } else {
@@ -744,10 +749,8 @@ export function AgentChat() {
         }
       }
     } finally {
-      if (vadRafRef.current) {
-        cancelAnimationFrame(vadRafRef.current);
-        vadRafRef.current = 0;
-      }
+      vadStopRef.current?.();
+      vadStopRef.current = null;
       if (gen === genRef.current) {
         speakingRef.current = false;
         setSpeaking(false);
