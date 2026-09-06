@@ -21,7 +21,7 @@ import { pullFromCrm } from "@/lib/crm-pull";
 import { CrmPullDialog, emptyPull, type CrmPullState } from "@/components/crm-pull-dialog";
 import type { CrmSubject } from "@/data/crm-subjects";
 import { ADMIN_PANEL_BLUE, RA_POP } from "@/data/admin-ui";
-import { AdminReloadBtn, useAdminReload } from "@/components/admin-reload-btn";
+import { lazyWithRetry, TabError } from "@/lib/error-component";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
 import type { CrmTeacher } from "@/data/crm-teachers";
 import { AdminClients } from "@/components/admin-clients";
@@ -1531,11 +1531,22 @@ export function AdminSchedule() {
   }
 
   function shownBeat(s: CrmSlot) {
-    const raw = beatsOf(s);
-    const beats = raw.filter((b) => b.lessonId || /^\d{1,2}:\d{2}$/.test(b.timeFrom || ""));
-    const list = beats.length ? beats : raw;
-    const i = view[s.id] || 0;
-    return list[((i % list.length) + list.length) % list.length] || list[0];
+    const fallback = {
+      day: Number(s.day) || 1,
+      timeFrom: String(s.timeFrom || ""),
+      timeTo: String(s.timeTo || ""),
+      lessonId: Number(s.lessonId) || 0,
+    };
+    try {
+      const raw = beatsOf(s);
+      const beats = raw.filter((b) => b && (b.lessonId || /^\d{1,2}:\d{2}$/.test(String(b.timeFrom || ""))));
+      const list = (beats.length ? beats : raw).filter(Boolean);
+      if (!list.length) return fallback;
+      const i = view[s.id] || 0;
+      return list[((i % list.length) + list.length) % list.length] || list[0] || fallback;
+    } catch {
+      return fallback;
+    }
   }
 
   function patchBeat(s: CrmSlot, field: "day" | "timeFrom" | "timeTo", value: string | number) {
@@ -1755,8 +1766,8 @@ export function AdminSchedule() {
   };
 
   function teachersForBranch(branchId: number) {
-    const fromCrm = crmTeachers.filter((t) => t.branchIds.includes(branchId));
-    if (fromCrm.length) return fromCrm.slice().sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    const fromCrm = crmTeachers.filter((t) => (t.branchIds || []).includes(branchId));
+    if (fromCrm.length) return fromCrm.slice().sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ru"));
     const seen = new Map<number, CrmTeacher>();
     for (const s of slots) {
       if (s.branchId !== branchId) continue;
@@ -1764,7 +1775,7 @@ export function AdminSchedule() {
       if (!id || !s.teacher) continue;
       if (!seen.has(id)) seen.set(id, { id, name: s.teacher, branchIds: [branchId] });
     }
-    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    return [...seen.values()].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ru"));
   }
 
   function parseVoice(text: string) {
@@ -3220,6 +3231,7 @@ export function AdminSchedule() {
             ))}
           </div>
         </div>
+        <TabError>
         {tree.map((sch) => {
           return (
           <article key={sch.schoolId || sch.school} className="rounded-3xl bg-surface shadow-[var(--shadow-border)]">

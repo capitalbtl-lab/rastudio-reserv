@@ -67,6 +67,9 @@ export class TabError extends Component<{ children: ReactNode; quiet?: boolean }
         <p className="mt-2 max-w-lg text-sm text-muted">
           {this.state.chunk ? "Секунда — загружается текущая версия." : "Обновите страницу. Если снова ошибка — подождите полминуты."}
         </p>
+        {this.state.message && !this.state.chunk ? (
+          <p className="mt-2 max-w-2xl break-words font-mono text-[0.72rem] text-muted/80">{this.state.message.slice(0, 280)}</p>
+        ) : null}
         <button type="button" className="mt-3 text-sm font-semibold text-primary" onClick={() => window.location.reload()}>
           Обновить
         </button>
