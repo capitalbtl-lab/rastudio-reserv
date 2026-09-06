@@ -80,7 +80,8 @@ describe("окно агента: права и типы занятий", () => {
     assert.match(server, /consultantCanPause === false/);
     assert.match(server, /adminVoiceCanConsult/);
     assert.match(server, /teacher_id/);
-    assert.match(server, /lockedClientTurn\(soloWho, facts,/);
+    assert.match(server, /completeClientAction/);
+    assert.match(server, /impliedIdentify/);
     const voice = readFileSync(new URL("./schedule-voice.ts", import.meta.url), "utf8");
     assert.match(voice, /adminVoiceCanWrite/);
     assert.match(voice, /adminVoiceCanConsult/);

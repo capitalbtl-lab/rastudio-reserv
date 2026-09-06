@@ -269,6 +269,8 @@ export function factsFromMessages(messages: { role: string; content: string }[])
   facts.briefed =
     /последовательн|ступен|проходят на занят|материал дет|от младшего/i.test(assistant) ||
     /понятно|к пробному|к записи|давайте к/i.test(user);
+  const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
+  if (facts.mode !== "client" && /правил|оферт|цен[аыу]/i.test(lastUser)) facts.intent = "правила";
   if (facts.mode === "client") {
     facts.identified = identifiedFromMessages(messages);
     const want = takeClientIntent(messages);

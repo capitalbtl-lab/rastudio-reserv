@@ -38,9 +38,6 @@ function fallbackTalk(who: "oleg" | "olga", facts: SessionFacts) {
     const short = pitch ? pitch.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ") : "В этом направлении дети идут от простого к сложному.";
     return `${n}: ${short} Рассказать подробнее или сразу на пробное?`;
   }
-  if (!facts.mode || facts.mode === "fork") {
-    return `${n}: Вы уже занимаетесь у нас или подбираете впервые?`;
-  }
   if (facts.mode === "client" && !facts.identified) {
     return facts.phone
       ? `${n}: Проверяю карточку по телефону на сайте.`

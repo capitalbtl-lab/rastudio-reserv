@@ -59,7 +59,7 @@ describe("развилка новый / уже ходим", () => {
   it("карточка только после подтверждения имени", () => {
     const chat = readFileSync(new URL("./agent-chat.ts", import.meta.url), "utf8");
     assert.match(chat, /identifyLocked/);
-    assert.match(chat, /lockedClientTurn/);
+    assert.match(chat, /completeClientAction/);
     assert.match(chat, /facts.identified && facts.customerId/);
     assert.match(chat, /dossiersByPhone/);
     assert.match(chat, /fromMessenger/);
