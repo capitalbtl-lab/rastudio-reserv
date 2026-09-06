@@ -532,10 +532,11 @@ export function CrmClientCard({
   function applyGroup(id: number) {
     setLessonGroup(id);
     const g =
-      lessonGroupOffers.find((x) => x.id === id && x.branchId === card.branchId) ||
+      lessonGroupOffers.find((x) => x.id === id && (!lessonBranch || x.branchId === lessonBranch)) ||
       lessonGroupOffers.find((x) => x.id === id);
     const member = (card.groups || []).find((x) => x.id === id);
     const reg = (card.regular || []).find((r) => r.groupId === id);
+    if (g?.branchId) setLessonBranch(g.branchId);
     if (g?.subjectId) setLessonSubject(g.subjectId);
     else if (member?.subjectId) setLessonSubject(member.subjectId);
     else if (reg?.subjectId) setLessonSubject(reg.subjectId);
@@ -543,22 +544,34 @@ export function CrmClientCard({
     else if (reg?.from) setLessonTime(reg.from);
     const mins = durationMins(g?.from, g?.to) || durationMins(reg?.from, reg?.to);
     if (mins) setLessonMins(mins);
-    if (reg?.teacherId) setLessonTeacher(reg.teacherId);
-    if (reg?.roomId) setLessonRoom(reg.roomId);
+    if (g?.teacherId) setLessonTeacher(g.teacherId);
+    else if (reg?.teacherId) setLessonTeacher(reg.teacherId);
+    if (g?.roomId) setLessonRoom(g.roomId);
+    else if (reg?.roomId) setLessonRoom(reg.roomId);
+  }
+
+  function applyLessonBranch(id: number) {
+    setLessonBranch(id);
+    if (lessonGroup) {
+      const g = lessonGroupOffers.find((x) => x.id === lessonGroup);
+      if (g && g.branchId !== id) setLessonGroup(0);
+    }
+    if (lessonRoom) {
+      const ok = lessonRooms.some((r) => r.id === lessonRoom && r.branchId === id);
+      if (!ok) setLessonRoom(0);
+    }
   }
 
   function openLesson(key: string) {
-    const g = (card.groups || []).find((x) => x.active !== false) || (card.groups || [])[0];
-    const reg = (card.regular || []).find((r) => r.groupId === g?.id) || (card.regular || [])[0];
-    const own = key === "group" || key === "makeup" || key === "extra" || key === "overtime" || key === "individual";
     setLessonKey(key);
     setLessonDate(todayIso());
-    setLessonTime(own ? reg?.from || "16:00" : "16:00");
-    setLessonMins(own ? durationMins(reg?.from, reg?.to) || 90 : 90);
-    setLessonGroup(own ? g?.id || 0 : 0);
-    setLessonSubject(own ? g?.subjectId || reg?.subjectId || 0 : 0);
-    setLessonTeacher(own ? reg?.teacherId || 0 : 0);
-    setLessonRoom(own ? reg?.roomId || 0 : 0);
+    setLessonTime("");
+    setLessonMins(90);
+    setLessonBranch(0);
+    setLessonGroup(0);
+    setLessonSubject(0);
+    setLessonTeacher(0);
+    setLessonRoom(0);
     setLessonTopic("");
     setLessonNote("");
     setLessonOpen(true);
@@ -1053,13 +1066,25 @@ export function CrmClientCard({
               options={CARD_LESSON_TYPES.map((t) => ({ value: t.key, label: t.name }))}
             />
           </Field>
+          <Field label="Филиал" required>
+            <RaSelect
+              value={lessonBranch ? String(lessonBranch) : ""}
+              onChange={(v) => applyLessonBranch(Number(v) || 0)}
+              placeholder="выбрать филиал"
+              options={[1, 2, 3, 4].map((id) => ({
+                value: String(id),
+                label: CRM_BRANCH[id]?.short || `филиал ${id}`,
+                hint: CRM_BRANCH[id]?.name,
+              }))}
+            />
+          </Field>
           <Field label="Дата" required>
             <input type="date" min={ISO_DATE_MIN} max={ISO_DATE_MAX} value={lessonDate} onChange={(e) => setLessonDate(clampIsoDate(e.target.value))} className={fieldCtl} />
           </Field>
           <Field label="Время" required>
             <div className="flex items-center gap-2">
               <span className="text-muted">с</span>
-              <input value={lessonTime} onChange={(e) => setLessonTime(e.target.value)} placeholder="16:00" className={cn(fieldCtl, "max-w-[7rem]")} />
+              <input value={lessonTime} onChange={(e) => setLessonTime(e.target.value)} placeholder="__:__" className={cn(fieldCtl, "max-w-[7rem]")} />
               <span className="text-muted">мин</span>
               <input
                 type="number"
@@ -1071,17 +1096,19 @@ export function CrmClientCard({
               />
             </div>
           </Field>
-          <Field label="Аудитория">
+          <Field label="Аудитория" required>
             <div className="flex items-center gap-2">
               <RaSelect
                 value={lessonRoom ? String(lessonRoom) : ""}
                 onChange={(v) => setLessonRoom(Number(v) || 0)}
-                placeholder="(не задан)"
-                options={(catalog.rooms || []).map((r) => ({ value: String(r.id), label: r.name }))}
+                placeholder="выбрать аудиторию"
+                disabled={!lessonBranch}
+                groups={lessonRoomSelect}
+                menuMinWidth={360}
               />
-              {(catalog.rooms || []).length ? (
-                <span className="shrink-0 text-[0.75rem] text-muted">{catalog.rooms.length} доступно</span>
-              ) : null}
+              <span className="shrink-0 text-[0.75rem] text-muted">
+                {lessonBranch ? `${lessonRoomCount} доступно` : "сначала филиал"}
+              </span>
             </div>
           </Field>
           <Field label="Группа">
@@ -1089,7 +1116,8 @@ export function CrmClientCard({
               <RaSelect
                 value={lessonGroup ? String(lessonGroup) : ""}
                 onChange={(v) => applyGroup(Number(v) || 0)}
-                placeholder={lessonKey === "trial" || lessonKey === "intro" ? "любое направление" : "не выбрана"}
+                placeholder={lessonBranch ? "группы филиала" : "сначала филиал"}
+                disabled={!lessonBranch}
                 groups={lessonGroupSelect}
                 menuMinWidth={360}
               />
@@ -1130,16 +1158,17 @@ export function CrmClientCard({
             size="sm"
             className="h-9"
             data-op="customerLesson"
-            disabled={!onAction || Boolean(busy) || !lessonSubject}
+            disabled={!onAction || Boolean(busy) || !lessonSubject || !lessonBranch || !lessonRoom || !lessonDate || !lessonTime}
             onClick={() =>
               void run("customerLesson", {
                 lessonType: lessonKey,
                 date: lessonDate,
                 time: lessonTime,
                 duration: lessonMins,
+                branchId: lessonBranch,
                 groupId: lessonGroup || undefined,
                 subjectId: lessonSubject || undefined,
-                roomId: lessonRoom || undefined,
+                roomId: lessonRoom,
                 teacherId: lessonTeacher || undefined,
                 topic: lessonTopic || undefined,
                 note: lessonNote || undefined,
