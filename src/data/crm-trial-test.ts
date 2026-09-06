@@ -90,7 +90,11 @@ export async function maybeBookChudnovaTrial() {
   g.__raTrialTest = true;
   try {
     const { token, request, resolveLessonType, formatRuDob } = await import("./alfacrm");
-    const t = await token();
+    const { findDossier } = await import("./dossiers");
+    const { listAdminSlots } = await import("./alfacrm-schedule");
+    const { nextLocalLessonId, upsertCustomerCalendar, upsertGroupCalendar, loadCustomerCalendar } = await import("./group-cards");
+    const { stampJournal } = await import("./crm-journal-core");
+    const { enqueueExport, tickExportQueue } = await import("./crm-export-queue");
     const who = await findChudnova(request, t);
     if (!who) {
       saveMark({ done: "", at: new Date().toISOString(), note: "не нашла Чуднову Александру" });
@@ -98,17 +102,11 @@ export async function maybeBookChudnovaTrial() {
       g.__raTrialTest = false;
       return { ok: false as const, error: "нет клиента" };
     }
-    const { findDossier } = await import("./dossiers");
-    const { listAdminSlots } = await import("./alfacrm-schedule");
-    const { nextLocalLessonId, upsertCustomerCalendar, upsertGroupCalendar, loadCustomerCalendar } = await import("./group-cards");
-    const { stampJournal } = await import("./crm-journal-core");
-    const { enqueueExport, tickExportQueue } = await import("./crm-export-queue");
-    const already = loadCustomerCalendar(who.id).some((l) => Number(l.typeId) === 3 || /пробн/i.test(String(l.type || "")));
-    if (already) {
-      saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note: `${who.name} #${who.id} уже есть пробное на диске` });
+    const existing = loadCustomerCalendar(who.id).find((l) => Number(l.typeId) === 3 || /пробн/i.test(String(l.type || "")));
+    if (existing && Number(existing.lessonId) > 0) {
+      saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note: `${who.name} #${who.id} пробное Alfa #${existing.lessonId}` });
       return { skipped: "exists" as const, customerId: who.id };
     }
-    const d = findDossier({ crmId: who.id });
     const link = (d?.groupLinks || []).find((x) => x.active !== false) || (d?.groupLinks || [])[0];
     const gid = Number(link?.id) || 0;
     const slot = gid

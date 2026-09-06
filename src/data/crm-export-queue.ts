@@ -163,21 +163,36 @@ export async function tickExportQueue(take = 2) {
             lessonsCount: Number(job.body.lessonsCount) || undefined,
           });
           if (!res.ok) throw new Error(res.error || "абонемент не принят");
-        } else if (job.op === "lesson.create" && job.body.via === "createAlfaLesson") {
+        } else if (job.op === "lesson.create") {
           const { createAlfaLesson } = await import("./alfacrm");
+          const ids = Array.isArray(job.body.customer_ids) ? job.body.customer_ids.map(Number) : [];
+          const customerId = ids.find((n) => n > 0) || Number(job.entityId) || 0;
+          if (customerId <= 0) throw new Error("занятие ждёт номер клиента в Alfa");
+          const gid = job.body.gid != null ? String(job.body.gid) : Array.isArray(job.body.group_ids) ? String(job.body.group_ids[0] || "") : "";
           const booked = await createAlfaLesson({
             branch: job.branchId,
-            customerId: job.entityId,
-            type: String(job.body.type || "trial"),
-            subjectId: Number(job.body.subjectId) || undefined,
-            gid: job.body.gid ? String(job.body.gid) : undefined,
-            date: job.body.date ? String(job.body.date) : undefined,
-            time: job.body.time ? String(job.body.time) : undefined,
+            customerId,
+            type: String(job.body.type || job.body.lesson_type_id || "trial"),
+            subjectId: Number(job.body.subjectId || job.body.subject_id) || undefined,
+            gid: gid || undefined,
+            date: String(job.body.date || job.body.lesson_date || ""),
+            time: String(job.body.time || job.body.time_from || ""),
             duration: Number(job.body.duration) || undefined,
             note: job.body.note ? String(job.body.note) : undefined,
-            teacherId: Number(job.body.teacherId) || undefined,
+            topic: job.body.topic ? String(job.body.topic) : undefined,
+            teacherId: Number(job.body.teacherId || (Array.isArray(job.body.teacher_ids) ? job.body.teacher_ids[0] : 0)) || undefined,
+            roomId: Number(job.body.roomId || job.body.room_id) || undefined,
           });
           if (!booked.ok) throw new Error(booked.error || "урок не создался");
+          const localId = Number(job.body.localId || (job.entityId < 0 ? job.entityId : 0)) || 0;
+          const lid = Number(booked.id) || 0;
+          if (localId < 0 && lid) {
+            const { applyCreatedCalendarLesson } = await import("./group-cards");
+            applyCreatedCalendarLesson(localId, lid);
+            q = loadExport();
+            q.jobs = remapExportJobs(q.jobs, localId, lid, job.id);
+            saveExport(q);
+          }
         } else if (job.op === "subject.create") {
           const res = await request<{ success?: boolean; errors?: unknown; model?: { id?: number }; id?: number }>(
             exportPath(job),
@@ -298,18 +313,6 @@ export async function tickExportQueue(take = 2) {
             q = loadExport();
             q.jobs = remapExportJobs(q.jobs, localId, sid, job.id);
             saveExport(q);
-          }
-          if (job.op === "lesson.create") {
-            const lid = crmCreatedId(res);
-            if (!lid) throw new Error("AlfaCRM не вернула номер занятия");
-            const localId = Number(job.body.localId || job.entityId) || 0;
-            if (localId < 0) {
-              const { applyCreatedCalendarLesson } = await import("./group-cards");
-              applyCreatedCalendarLesson(localId, lid);
-              q = loadExport();
-              q.jobs = remapExportJobs(q.jobs, localId, lid, job.id);
-              saveExport(q);
-            }
           }
           if (job.op === "pay.create") {
             const pid = crmCreatedId(res);
