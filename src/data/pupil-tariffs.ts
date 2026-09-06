@@ -4,6 +4,7 @@ import { matchTariffs, tariffFitsSlot } from "./crm-tariffs";
 import { guessTariffLinks } from "./tariff-map";
 import { UNMAPPED_SCHOOL } from "./group-status";
 import { tariffRowLive, tariffRowCustomerId, tariffTodayIso } from "./crm-tariff-row";
+import { cgiRecordLive } from "./crm-membership";
 
 export { cgiCustomerId, cgiRecordLive } from "./crm-membership";
 export { tariffDateToIso, tariffRowLive, tariffRowHasTemplate, tariffRowCustomerId } from "./crm-tariff-row";

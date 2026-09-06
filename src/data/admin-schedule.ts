@@ -1190,6 +1190,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
         payMethod?: string;
         documentDate?: string;
         tariffId?: number;
+        tariffRowId?: number;
+        id?: number;
+        remove?: boolean;
         roomId?: number;
         teacherId?: number;
         topic?: string;

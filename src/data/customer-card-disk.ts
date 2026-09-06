@@ -129,6 +129,10 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
           name,
           rest: 0,
           lessons: 0,
+          archived: false,
+          bDate: "",
+          eDate: "",
+          price: 0,
         },
       ];
     }
