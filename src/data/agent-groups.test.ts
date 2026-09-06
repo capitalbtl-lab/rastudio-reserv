@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { resolveAskToTree, slotFitsAgent, agentGroupLine } from "./agent-groups.ts";
+import { resolveAskToTree, slotFitsAgent, agentGroupLine, clipScheduleSpeech, scheduleChipOf } from "./agent-groups.ts";
 
 const tree = {
   schools: [
@@ -82,5 +82,26 @@ describe("ИИ подбирает группы по ID дерева", () => {
     assert.match(line, /courseId=\/art-studio-10-14/);
     assert.match(line, /состав 8\/12/);
     assert.match(line, /gid=580/);
+  });
+
+  it("простыня слотов срезается, кнопка несёт день и комментарий", () => {
+    const dumped =
+      "В художественной школе для 12 лет в ЦМИТ на Октябрьской революции, 340 есть несколько групп: 1. Художественная школа (10–14 лет), Четверг с 15:00 до 18:00, педагог Нина Константиновна, набор до 20 мест, ближайшее занятие 10.09.2026. 2. Скульптурная студия (8+). Выберите удобное время, и я запишу вас в группу.";
+    const clipped = clipScheduleSpeech(dumped);
+    assert.match(clipped, /есть несколько групп:$/);
+    assert.doesNotMatch(clipped, /1\.\s/);
+    assert.doesNotMatch(clipped, /Четверг/);
+    const chip = scheduleChipOf({
+      name: "Художественная школа (10–14 лет)",
+      chip: "Чт 15:00–18:00 · ЦМИТ · набор",
+      teacher: "Мормуль Нина Константиновна",
+      seats: "набор до 20 мест",
+      nextDate: "10.09.2026",
+      priority: 1,
+    });
+    assert.match(chip.label, /Чт 15:00–18:00/);
+    assert.match(chip.label, /Художественная школа/);
+    assert.match(chip.note, /Нина Константиновна/);
+    assert.match(chip.note, /ближайшее 10\.09\.2026/);
   });
 });

@@ -176,3 +176,42 @@ export function agentGroupLine(g: {
     .filter(Boolean)
     .join(" · ");
 }
+
+/** Длинный нумерованный список слотов — в кнопки. В речи только вводная фраза. */
+export function clipScheduleSpeech(body: string) {
+  const raw = String(body || "").trim();
+  if (!raw) return raw;
+  const numbered = /\b1\.\s/.test(raw);
+  const dump =
+    (numbered && /(четверг|пятниц|суббот|понедельник|вторник|сред[ауы]|ближайшее занятие|педагог )/i.test(raw)) ||
+    ((raw.match(/ближайшее занятие/gi) || []).length >= 2);
+  if (!dump) return raw;
+  const fromIntro = raw.match(/([\s\S]{12,240}?есть несколько групп:?)/i)?.[1];
+  const head = (fromIntro || raw.split(/\s*1\.\s/)[0] || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[:.]\s*$/, "");
+  if (head.length < 12) return raw;
+  return `${head}:`;
+}
+
+export function scheduleChipOf(g: {
+  name?: string;
+  chip?: string;
+  when?: string;
+  teacher?: string;
+  seats?: string;
+  nextDate?: string;
+  priority?: number;
+}) {
+  const when = String(g.chip || "").split(" · ")[0].trim() || String(g.when || "").trim();
+  const name = String(g.name || "группа").replace(/\s+/g, " ").trim();
+  const teacher = String(g.teacher || "").replace(/\s+/g, " ").trim();
+  const seats = String(g.seats || "").trim();
+  const next = g.nextDate ? `ближайшее ${g.nextDate}` : "";
+  const closed = Number(g.priority) === 0 ? "набор с сайта закрыт" : "";
+  return {
+    label: when ? `${when} · ${name}` : name,
+    note: [teacher, seats, next, closed].filter(Boolean).join(" · "),
+  };
+}

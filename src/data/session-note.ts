@@ -1,4 +1,5 @@
 import { factsFromMessages, type SessionFacts } from "./agent-facts.ts";
+import { clipScheduleSpeech } from "./agent-groups.ts";
 
 export type NoteField = "age" | "city" | "branch" | "school" | "course" | "service";
 
@@ -193,24 +194,6 @@ ${missing.length ? `Спрашивал, но не зафиксировал:\n${m
 Правило: поле, которое уже спрашивал, повторно не спрашивай — даже другими словами. Не пиши «ещё раз», «уточните возраст», «какой город», «Коломна или Луховицы».
 Суть разговора: ${note.essence}
 `;
-}
-
-/** Длинный нумерованный список слотов — в кнопки. В речи только вводная фраза. */
-export function clipScheduleSpeech(body: string) {
-  const raw = String(body || "").trim();
-  if (!raw) return raw;
-  const numbered = /\b1\.\s/.test(raw);
-  const dump =
-    (numbered && /(четверг|пятниц|суббот|понедельник|вторник|сред[ауы]|ближайшее занятие|педагог )/i.test(raw)) ||
-    ((raw.match(/ближайшее занятие/gi) || []).length >= 2);
-  if (!dump) return raw;
-  const fromIntro = raw.match(/([\s\S]{12,240}?есть несколько групп:?)/i)?.[1];
-  const head = (fromIntro || raw.split(/\s*1\.\s/)[0] || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/[:.]\s*$/, "");
-  if (head.length < 12) return raw;
-  return `${head}:`;
 }
 
 export function guardReply(text: string, facts: SessionFacts) {

@@ -15,7 +15,7 @@ import { loadSiteSignup } from "./site-signup";
 import { loadSiteTree, saveSiteTree } from "./site-tree";
 import { mergeTeacher, saveTeachers, type CrmTeacher } from "./crm-teachers";
 import { listCgiBranch, takenByGroupFromCgi } from "./crm-membership";
-import { slotFitsAgent, agentGroupLine } from "./agent-groups";
+import { slotFitsAgent, agentGroupLine, scheduleChipOf } from "./agent-groups";
 import { takenOfGroup } from "./crm-group-disk";
 
 const DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
@@ -638,26 +638,7 @@ function chipLabel(session: CmsSession, branchId: number, seats: string) {
   return seatBit ? `${when} · ${short} · ${seatBit}` : `${when} · ${short}`;
 }
 
-export function scheduleChipOf(g: {
-  name?: string;
-  chip?: string;
-  when?: string;
-  teacher?: string;
-  seats?: string;
-  nextDate?: string;
-  priority?: number;
-}) {
-  const when = String(g.chip || "").split(" · ")[0].trim() || String(g.when || "").trim();
-  const name = String(g.name || "группа").replace(/\s+/g, " ").trim();
-  const teacher = String(g.teacher || "").replace(/\s+/g, " ").trim();
-  const seats = String(g.seats || "").trim();
-  const next = g.nextDate ? `ближайшее ${g.nextDate}` : "";
-  const closed = Number(g.priority) === 0 ? "набор с сайта закрыт" : "";
-  return {
-    label: when ? `${when} · ${name}` : name,
-    note: [teacher, seats, next, closed].filter(Boolean).join(" · "),
-  };
-}
+export { scheduleChipOf } from "./agent-groups";
 
 export function slotChips(list: LiveGroup[], kind: "group" | "makeup" | "trial" = "group") {
   const rows = kind === "makeup" ? list.filter((g) => g.priority !== 0 && g.seats !== "мест нет") : list;
