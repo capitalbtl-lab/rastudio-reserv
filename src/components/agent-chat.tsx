@@ -254,8 +254,15 @@ export function AgentChat() {
   const adminMsgsRef = useRef(adminMsgs);
   const micStreamRef = useRef<MediaStream | null>(null);
   const chatGenRef = useRef(0);
+  const uiRef = useRef(ui);
+  const debugOnRef = useRef(debugOn);
+  const debugWidgetRef = useRef(debugWidget);
+  const vadRafRef = useRef(0);
   clientMsgsRef.current = clientMsgs;
   adminMsgsRef.current = adminMsgs;
+  uiRef.current = ui;
+  debugOnRef.current = debugOn;
+  debugWidgetRef.current = debugWidget;
   const inAdminUi = awaitingCode || adminMs > 0;
   const messages = inAdminUi ? (adminMsgs.length ? adminMsgs : [{ role: "assistant" as const, content: awaitingCode ? ADMIN_ASK : ADMIN_HELLO }]) : clientMsgs;
   const mood = moodOf(messages, busy);
@@ -281,9 +288,10 @@ export function AgentChat() {
     setPartner(who);
     setClientMsgs(readChat(who));
     try {
-      setBargeOn(localStorage.getItem("ra_barge") === "1");
+      const saved = localStorage.getItem("ra_barge");
+      setBargeOn(saved == null ? true : saved === "1");
     } catch {
-      /* */
+      setBargeOn(true);
     }
     const savedAdmin = readAdminChat();
     const left = adminLeft();
@@ -380,8 +388,9 @@ export function AgentChat() {
 
   function uiOn(key: keyof AgentUiFlags) {
     if (key === "defaultPartner") return true;
-    if (ui[key]) return true;
-    return debugOn && debugWidget[key] === true;
+    const cur = uiRef.current;
+    if (cur[key]) return true;
+    return debugOnRef.current && debugWidgetRef.current[key] === true;
   }
 
   useEffect(() => {
@@ -465,6 +474,10 @@ export function AgentChat() {
   function cancelSpeech() {
     genRef.current += 1;
     audioRef.current?.stop();
+    if (vadRafRef.current) {
+      cancelAnimationFrame(vadRafRef.current);
+      vadRafRef.current = 0;
+    }
     if (audioElRef.current) {
       audioElRef.current.pause();
       audioElRef.current.removeAttribute("src");
@@ -595,7 +608,9 @@ export function AgentChat() {
     if (micStreamRef.current?.active) return true;
     if (!navigator.mediaDevices?.getUserMedia) return true;
     try {
-      micStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
       return true;
     } catch (e) {
       debugEmit("voice", { voiceOn: true, error: e instanceof Error ? e.message : "микрофон" });
