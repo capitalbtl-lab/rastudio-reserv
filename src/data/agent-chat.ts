@@ -4,60 +4,10 @@ import { saveTrialLead } from "@/data/trial-save";
 import { TRIAL_BRANCHES, TRIAL_COURSES } from "@/data/trial-public";
 import { LESSON_TYPES } from "@/data/alfacrm";
 import { serverEnv } from "./server-env";
-import { type SessionFacts, nextStepOf } from "./agent-facts";
+import { type SessionFacts, nextStepOf, talkFallback } from "./agent-facts";
 import { programPitch } from "./agent-playbook";
 import { allowedLessonType, BOOK_TYPE_FLAGS } from "./agent-book-kinds";
 import type { AgentSettings } from "./agent-config";
-
-function fallbackTalk(who: "oleg" | "olga", facts: SessionFacts) {
-  const n = who === "olga" ? "Ольга" : "Олег";
-  if (facts.mode === "client" && facts.identified) {
-    const child = facts.child || "ребёнок";
-    if (facts.intent === "отработка") {
-      return facts.day
-        ? `${n}: Ищу отработку на ${facts.day} в группах того же курса, не только в своей. Пробное не предлагаю.`
-        : `${n}: На какой день поставить отработку ${child}?`;
-    }
-    if (facts.intent === "расписание") return `${n}: ${child} — ближайшее занятие в карточке. Чем ещё помочь?`;
-    if (facts.intent === "абонемент") return `${n}: Сейчас скажу абонемент и остаток по карточке ${child}.`;
-    if (facts.intent === "пауза") return `${n}: На какой срок поставить паузу ${child}?`;
-    if (facts.intent === "правила") {
-      return `${n}: Пропуск лучше предупредить заранее. Отработка — в другой группе того же курса при наличии мест. Пауза — по заявлению до даты. Что именно нужно?`;
-    }
-    if (facts.intent === "второй") return `${n}: Второго ребёнка запишу на ваш телефон. Сколько лет и как зовут?`;
-    return `${n}: ${child} уже в карточке. Расписание, отработка, пропуск или абонемент?`;
-  }
-  if (!facts.mode || facts.mode === "fork") {
-    if (facts.intent === "правила") {
-      return `${n}: Пропуск лучше предупредить заранее. Отработка в другой группе того же курса, если есть места. Пауза по заявлению. Уже ходите или подбираете впервые?`;
-    }
-    return `${n}: Вы уже занимаетесь у нас или подбираете впервые?`;
-  }
-  if (facts.school) {
-    const pitch = programPitch(facts.school);
-    const short = pitch ? pitch.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ") : "В этом направлении дети идут от простого к сложному.";
-    return `${n}: ${short} Рассказать подробнее или сразу на пробное?`;
-  }
-  if (facts.mode === "client" && !facts.identified) {
-    return facts.phone
-      ? `${n}: Проверяю карточку по телефону на сайте.`
-      : `${n}: Напишите телефон, который указывали при записи.`;
-  }
-  if (facts.mode === "client") return `${n}: Чем помочь: расписание, отработка, пропуск или абонемент?`;
-  if (!facts.age) return `${n}: Сколько лет ребёнку?`;
-  if (!facts.city) return `${n}: ${facts.age} лет, хорошо. Вам удобнее Коломна или Луховицы?`;
-  if (facts.city === "Коломна" && !facts.branchId) {
-    return `${n}: В Коломне два адреса — ЦМИТ на Октябрьской или Гражданская. Какой ближе?`;
-  }
-  if (!facts.school) {
-    const y = facts.age || 8;
-    if (y <= 4) return `${n}: В этом возрасте ближе раннее развитие или рисовать?`;
-    if (y <= 6) return `${n}: Что ближе — творчество, роботы или подготовка к школе?`;
-    if (y <= 9) return `${n}: Рисовать, собирать роботов или программировать?`;
-    return `${n}: Художка, робототехника, программирование или инженерия?`;
-  }
-  return `${n}: Пробное занятие или сразу в группу?`;
-}
 
 function clientSystem(who: "oleg" | "olga", facts?: SessionFacts, stepOverride?: string) {
   const name = who === "olga" ? "Ольга" : "Олег";
@@ -728,7 +678,7 @@ export const chatAgent = createServerFn({ method: "POST" })
       if (known) {
         facts.identified = true;
         facts.customerId = known.customerId;
-        facts.child = facts.child || known.child;
+        facts.child = facts.child || known.first;
       } else if (facts.identified && hits.length === 1) {
         facts.customerId = hits[0].customerId;
         facts.child = facts.child || hits[0].child;
@@ -1417,7 +1367,7 @@ export const chatAgent = createServerFn({ method: "POST" })
       );
       return {
         ok: true as const,
-        reply: fallbackTalk(soloWho, facts),
+        reply: talkFallback(soloWho, facts),
         token: granted,
         reload,
         open: open || undefined,
@@ -1435,7 +1385,7 @@ export const chatAgent = createServerFn({ method: "POST" })
       );
       return {
         ok: true as const,
-        reply: fallbackTalk(soloWho, facts),
+        reply: talkFallback(soloWho, facts),
         token: granted,
         reload,
       };
