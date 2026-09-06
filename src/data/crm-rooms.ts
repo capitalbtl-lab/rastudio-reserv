@@ -3,13 +3,18 @@
 export type CrmRoom = { id: number; name: string; branchId: number };
 
 /** Имена из модалки Alfa calendar/create (company/2). Остальные филиалы — с слотов, подпись «аудитория N». */
+/** Активные аудитории из настроек Alfa. Гражданская: 28 и 1; ЦМИТ — модалка календаря. */
 export const SEED_ROOMS: CrmRoom[] = [
+  { id: 28, name: "Ауд.1", branchId: 1 },
+  { id: 1, name: "Ауд.1.1", branchId: 1 },
   { id: 19, name: "Ауд.1", branchId: 2 },
   { id: 20, name: "Ауд.1.1", branchId: 2 },
   { id: 21, name: "Ауд.2", branchId: 2 },
   { id: 22, name: "Ауд.3", branchId: 2 },
   { id: 27, name: "Ауд.3.1", branchId: 2 },
 ];
+
+export const DEFAULT_ROOM: Record<number, number> = { 1: 28, 2: 19, 3: 0, 4: 0 };
 
 const LOCATION_LABEL: Record<number, string> = {
   1: 'Студия "Развивайся" (г.Коломна, ул.Гражданская, д.2)',

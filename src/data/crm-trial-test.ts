@@ -68,19 +68,15 @@ async function firstRoom(
   branch: number,
   slotRoom?: number,
 ) {
-  if (Number(slotRoom)) return Number(slotRoom);
-  const { roomsOfBranchList } = await import("./crm-rooms");
+  const { roomsOfBranchList, DEFAULT_ROOM } = await import("./crm-rooms");
   const { rememberRooms } = await import("./crm-rooms-disk");
-  let picked = 0;
-  for (const b of [branch, 1, 2, 3, 4]) {
-    const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${b}/room/index`, { page: 0, pageSize: 100 }, t).catch(
-      () => ({ items: [] as Record<string, unknown>[] }),
-    );
-    const items = roomsOfBranchList(json.items || [], b, true);
-    rememberRooms(items.map((x) => ({ id: x.id, name: x.name, branchId: b })));
-    if (!picked && b === branch) picked = Number(items[0]?.id) || 0;
-  }
-  return picked;
+  if (Number(slotRoom)) return Number(slotRoom);
+  const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/room/index`, { page: 0, pageSize: 100 }, t).catch(
+    () => ({ items: [] as Record<string, unknown>[] }),
+  );
+  const items = roomsOfBranchList(json.items || [], branch, false);
+  rememberRooms(items.map((x) => ({ id: x.id, name: x.name, branchId: branch })));
+  return Number(items[0]?.id) || DEFAULT_ROOM[branch] || 0;
 }
 
 export async function maybeBookChudnovaTrial() {
@@ -89,12 +85,11 @@ export async function maybeBookChudnovaTrial() {
   if (mark.done === TRIAL_TEST_ID) return { skipped: "done" as const };
   g.__raTrialTest = true;
   try {
-    const { token, request, resolveLessonType, formatRuDob } = await import("./alfacrm");
+    const { token, request, resolveLessonType, formatRuDob, createAlfaLesson } = await import("./alfacrm");
     const { findDossier } = await import("./dossiers");
     const { listAdminSlots } = await import("./alfacrm-schedule");
-    const { nextLocalLessonId, upsertCustomerCalendar, upsertGroupCalendar, loadCustomerCalendar } = await import("./group-cards");
+    const { upsertCustomerCalendar, upsertGroupCalendar, loadCustomerCalendar, applyCreatedCalendarLesson } = await import("./group-cards");
     const { stampJournal } = await import("./crm-journal-core");
-    const { enqueueExport, tickExportQueue } = await import("./crm-export-queue");
     const t = await token();
     const who = await findChudnova(request, t);
     if (!who) {
