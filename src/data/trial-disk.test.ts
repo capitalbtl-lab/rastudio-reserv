@@ -297,24 +297,28 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.equal(/startLeadTicker/.test(src), false);
   });
 
-  it("воронка лидов с диска, Alfa только force", () => {
+  it("воронка лидов с диска, дельта при связи, полная — force", () => {
     const src = readFileSync(new URL("./crm-leads.ts", import.meta.url), "utf8");
     const at = src.indexOf("export async function loadLeadsBoard");
     const next = src.indexOf("export function rememberCustomerAsLead");
     const chunk = src.slice(at, next > at ? next : at + 4000);
     assert.match(chunk, /boardFromDisk/);
     assert.match(chunk, /wantAlfaPull\(force\)/);
-    assert.match(src, /export async function boardFromDisk/);
-    assert.match(src, /с диска сайта/);
+    assert.match(chunk, /wantAlfaDelta\(delta\)/);
+    assert.match(chunk, /syncLeadsDelta/);
     const diskPart = chunk.slice(0, chunk.indexOf("if (delta"));
     assert.equal(/alfaToken/.test(diskPart), false);
-    assert.equal(/syncLeadsDelta/.test(diskPart), false);
     const stages = readFileSync(new URL("./crm-leads-stages.ts", import.meta.url), "utf8");
     assert.match(stages, /export function leadCardFromView/);
     const save = readFileSync(new URL("./trial-save.ts", import.meta.url), "utf8");
     assert.match(save, /actor: "consultant"/);
     const exp = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
     assert.match(exp, /logAdmin\(`Выгрузка CRM: \$\{q\.lastNote\}`, "sync"\)/);
+    const ui = readFileSync(new URL("../components/admin-clients.tsx", import.meta.url), "utf8");
+    assert.match(ui, /loadFunnel\(branch, false, true\)/);
+    assert.match(ui, /loadFunnel\(branchRef\.current, false, true\)/);
+    const link = readFileSync(new URL("./crm-alfa-link.ts", import.meta.url), "utf8");
+    assert.match(link, /wantAlfaDelta/);
   });
 
   it("этап 5: очередь Alfa — нет прямого API на запись, актор на выгрузке", () => {

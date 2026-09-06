@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mergeExportJob, exportPath, exportBody, exportJobSnap, exportOpLabel, remapExportJobs, type CrmExportJob } from "./crm-export-queue-core.ts";
+import { mergeExportJob, exportPath, exportBody, exportJobSnap, exportOpLabel, remapExportJobs, canRunExportJob, type CrmExportJob } from "./crm-export-queue-core.ts";
 import { isLocalId, isCrmId, isLocalSubject, nextLocalId } from "./crm-local-id.ts";
 
 describe("очередь выгрузки в Alfa", () => {
@@ -287,5 +287,26 @@ describe("очередь выгрузки в Alfa", () => {
     assert.equal(all[0].body.id, 88);
     assert.equal(all[1].body.lead_status_id, 88);
     assert.deepEqual(all[1].body.subject_ids, [-5, 13]);
+  });
+
+  it("смена этапа локального лида складывается в customer.create, не уходит с id < 0", () => {
+    let jobs = mergeExportJob([], {
+      op: "customer.create",
+      branchId: 2,
+      entityId: -40,
+      body: { name: "Саша", localId: -40, is_study: 0, lead_status_id: 1 },
+    });
+    jobs = mergeExportJob(jobs, {
+      op: "customer.update",
+      branchId: 2,
+      entityId: -40,
+      body: { lead_status_id: 2, is_study: 0 },
+    });
+    assert.equal(jobs.length, 1);
+    assert.equal(jobs[0].op, "customer.create");
+    assert.equal(jobs[0].body.lead_status_id, 2);
+    assert.equal(canRunExportJob(jobs[0]), true);
+    assert.equal(canRunExportJob({ op: "customer.update", entityId: -40 }), false);
+    assert.equal(canRunExportJob({ op: "customer.update", entityId: 7759 }), true);
   });
 });

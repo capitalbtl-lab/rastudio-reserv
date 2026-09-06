@@ -32,5 +32,8 @@ describe("связь с AlfaCRM", () => {
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /Связь с AlfaCRM/);
     assert.match(ui, /ALFA_LINK_MODES/);
+    const link = readFileSync(new URL("./crm-alfa-link.ts", import.meta.url), "utf8");
+    assert.match(link, /wantAlfaDelta/);
+    assert.match(link, /Boolean\(delta\) && alfaLinkedNow/);
   });
 });
