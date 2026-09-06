@@ -617,13 +617,29 @@ export function CrmClientCard({
     return list;
   }, [catalog.subjects, lessonSubject, card.groups, card.regular]);
   const teacherOpts = useMemo(() => {
-    const list = [...(catalog.teachers || [])];
-    if (lessonTeacher && !list.some((s) => s.id === lessonTeacher)) {
-      const r = (card.regular || []).find((x) => x.teacherId === lessonTeacher);
-      list.unshift({ id: lessonTeacher, name: r?.teacher || `педагог ${lessonTeacher}` });
+    const map = new Map<number, { id: number; name: string }>();
+    const put = (id?: number, name?: string) => {
+      const n = Number(id) || 0;
+      if (!n) return;
+      const prev = map.get(n);
+      map.set(n, { id: n, name: String(name || prev?.name || `педагог ${n}`) });
+    };
+    const g =
+      lessonGroupOffers.find((x) => x.id === lessonGroup && (!lessonBranch || x.branchId === lessonBranch)) ||
+      lessonGroupOffers.find((x) => x.id === lessonGroup);
+    if (g?.teacherId) put(g.teacherId, g.teacher);
+    for (const x of lessonGroupOffers) {
+      if (lessonBranch && x.branchId !== lessonBranch) continue;
+      put(x.teacherId, x.teacher);
     }
+    for (const t of catalog.teachers || []) put(t.id, t.name);
+    const r = (card.regular || []).find((x) => x.teacherId === lessonTeacher);
+    if (lessonTeacher) put(lessonTeacher, r?.teacher);
+    const list = [...map.values()];
+    if (g?.teacherId) list.sort((a, b) => Number(b.id === g.teacherId) - Number(a.id === g.teacherId) || a.name.localeCompare(b.name, "ru"));
+    else list.sort((a, b) => a.name.localeCompare(b.name, "ru"));
     return list;
-  }, [catalog.teachers, lessonTeacher, card.regular]);
+  }, [catalog.teachers, lessonTeacher, lessonGroup, lessonBranch, lessonGroupOffers, card.regular]);
 
   async function run(action: CardAction, extra?: Record<string, unknown>) {
     if (!onAction) return;

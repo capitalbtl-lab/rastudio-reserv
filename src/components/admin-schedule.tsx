@@ -27,6 +27,7 @@ import type { CrmTeacher } from "@/data/crm-teachers";
 import { AdminClients } from "@/components/admin-clients";
 import { AdminCrmSettings } from "@/components/admin-crm-settings";
 import { AdminPublicSite } from "@/components/admin-public-site";
+import { AdminTeachers } from "@/components/admin-teachers";
 import { CrmClientCard } from "@/components/crm-client-card";
 import { CrmGroupMembers } from "@/components/crm-group-card";
 import { RaSelect } from "@/components/ra-select";
@@ -765,8 +766,8 @@ export function AdminSchedule() {
   const [view, setView] = useState<Record<string, number>>({});
   const [fileOpen, setFileOpen] = useState(false);
   const [pull, setPull] = useState<CrmPullState>(emptyPull("groups"));
-  const [pane, setPane] = useState<"groups" | "clients" | "subjects" | "prices" | "tariffs" | "map" | "crm" | "public">("groups");
-  const [seen, setSeen] = useState({ groups: true, clients: false, subjects: false, prices: false, tariffs: false, map: false, crm: false, public: false });
+  const [pane, setPane] = useState<"groups" | "clients" | "subjects" | "teachers" | "prices" | "tariffs" | "map" | "crm" | "public">("groups");
+  const [seen, setSeen] = useState({ groups: true, clients: false, subjects: false, teachers: false, prices: false, tariffs: false, map: false, crm: false, public: false });
   function showPane(id: typeof pane) {
     setPane(id);
     setSeen((s) => (s[id] ? s : { ...s, [id]: true }));
@@ -2554,6 +2555,7 @@ export function AdminSchedule() {
           ["groups", "Группы"],
           ["clients", "Клиенты"],
           ["subjects", "Предметы"],
+          ["teachers", "Педагоги"],
           ["prices", "Цены курсов"],
           ["tariffs", "Абонементы"],
           ["map", "Соответствия"],
@@ -2586,6 +2588,11 @@ export function AdminSchedule() {
       {seen.subjects ? (
         <div className={cn(groupsWide && pane === "subjects" && "min-h-0 flex-1 overflow-y-auto")} style={pane === "subjects" ? undefined : { display: "none" }} hidden={pane !== "subjects"}>
           <AdminSubjects />
+        </div>
+      ) : null}
+      {seen.teachers ? (
+        <div className={cn(groupsWide && pane === "teachers" && "min-h-0 flex-1 overflow-y-auto")} style={pane === "teachers" ? undefined : { display: "none" }} hidden={pane !== "teachers"}>
+          <AdminTeachers slots={slots} teachers={crmTeachers} />
         </div>
       ) : null}
       {seen.prices ? (

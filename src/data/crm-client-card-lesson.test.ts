@@ -23,6 +23,8 @@ describe("форма занятия карточки", () => {
     assert.match(src, /e.target === e.currentTarget/);
     assert.match(src, /setLessonOpen\(false\)/);
     assert.match(src, /applyLessonBranch/);
+    assert.match(src, /lessonGroupOffers/);
+    assert.match(src, /g\?\.teacherId/);
   });
 });
 
