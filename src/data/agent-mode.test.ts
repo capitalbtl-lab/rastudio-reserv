@@ -115,6 +115,8 @@ describe("вход по телефону с диска", () => {
     assert.equal(takeWeekday("в субботу"), "суббота");
     const msgs = [
       { role: "user", content: "Мы уже ходим к вам" },
+      { role: "assistant", content: "Ольга: Напишите телефон, который указывали при записи." },
+      { role: "user", content: "89163389392" },
       { role: "assistant", content: "Ольга: Нашла на сайте: Александра. Это ваш ребёнок?" },
       { role: "user", content: "Да, это Александра" },
       { role: "user", content: "Нужна отработка пропуска" },
