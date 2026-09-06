@@ -110,7 +110,6 @@ export function packAlfaPayCreate(input: {
 }) {
   const branchId = num(input.branchId);
   const body: Record<string, unknown> = {
-    customer_id: num(input.customerId),
     document_date: str(input.documentDate),
     income: Number(input.income) || 0,
     expenditure: Number(input.expenditure) || 0,
@@ -118,6 +117,9 @@ export function packAlfaPayCreate(input: {
     localId: num(input.localId),
     kind: str(input.kind) || "income",
   };
+  const customer = num(input.customerId);
+  if (customer) body.customer_id = customer;
+  if ((Number(input.income) || 0) > 0 && !(Number(input.expenditure) || 0)) body.pay_type_id = 1;
   body.pay_account_id = num(input.payAccountId) || 1;
   const item = num(input.payItemId);
   if (item) body.pay_item_id = item;

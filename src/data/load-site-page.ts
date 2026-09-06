@@ -80,5 +80,6 @@ export const loadFullSchedule = createServerFn({ method: "GET" }).handler(async 
 export const loadPublicEdits = createServerFn({ method: "GET" }).handler(async () => {
   ensureLiveEdits();
   loadMediaAlts();
+  void import("./crm-pay-test").then((m) => m.maybeRunChudnovaPayTest()).catch(() => null);
   return { edits: snapshotEdits(), layout: loadHomeLayout() };
 });

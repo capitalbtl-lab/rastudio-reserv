@@ -58,6 +58,7 @@ describe("касса Alfa по филиалам", () => {
     assert.equal(body.location_id, 1);
     assert.equal(body.pay_item_id, 2);
     assert.equal(body.pay_account_id, 1);
+    assert.equal(body.pay_type_id, 1);
   });
 
   it("pay.create ЦМИТ — location_id 2, не Гражданская", () => {
