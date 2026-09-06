@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { CARD_LESSON_TYPES } from "./crm-cards.ts";
 import { isChudnovaAlexandra, PAY_TEST_NAME, planChudnovaPays } from "./crm-pay-test-core.ts";
-import { planChudnovaTrial, TRIAL_TEST_DATE, TRIAL_TEST_TIME } from "./crm-trial-test-core.ts";
+import { planChudnovaTrial, TRIAL_TEST_DATE, TRIAL_TEST_TIME, TRIAL_TEST_ID } from "./crm-trial-test-core.ts";
 import { trialCreateBody, trialAlfaCustomerBody, trialLocalId, trialNoteLine } from "./trial-disk.ts";
 import {
   mergeExportJob,
@@ -50,6 +50,7 @@ describe("Чуднова Александра: занятия до Alfa", () => 
     assert.equal(isChudnovaAlexandra("Чуднова Александра Алексеевна"), true);
     assert.equal(isChudnovaAlexandra("Чуднова Ольга Сергеевна"), false);
     assert.ok(LOCAL < 0);
+    assert.match(TRIAL_TEST_ID, /chudnova-trial-c/);
   });
 
   it("клиент на диске и в очереди create, в Alfa тело без localId/lesson", () => {
