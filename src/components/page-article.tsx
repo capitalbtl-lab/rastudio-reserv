@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearch } from "@tanstack/react-router";
-import { SITE, BRANCHES, COURSE_GROUPS, courseInGroup } from "@/data/site";
+import { SITE, BRANCHES, COURSE_GROUPS, courseInGroup, STATS } from "@/data/site";
 import type { CourseCard, SitePage, TeacherCard } from "@/data/catalog";
 import type { CmsCourse, CmsMaster, CmsSession, CmsTrajectoryStep } from "@/data/cms";
 import { PageLink } from "@/components/page-link";
@@ -340,43 +340,42 @@ function PlainPage({
   schedule: CmsSession[];
   courses?: CourseCard[];
 }) {
-  const hero = page.images[0];
   const body = page.paragraphs;
+  const path = page.pathDecoded || page.path;
 
   return (
-    <article className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
-      <Breadcrumb page={page} />
-      <div className="mt-6 grid items-end gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-        <div>
-          <h1 className="display text-4xl md:text-5xl">{page.h1}</h1>
-          {page.description ? (
-            <p className="mt-5 max-w-2xl text-lg text-muted">{page.description}</p>
-          ) : null}
+    <article>
+      <CoursePageHero
+        kicker={
+          <>
+            <PageLink to="/" className="hover:underline">
+              Главная
+            </PageLink>
+            <span className="mx-2 text-header-fg/35">/</span>
+            {page.h1}
+          </>
+        }
+        title={page.h1}
+        description={page.description || page.paragraphs[0]}
+        images={galleryPhotos(page.images, path, "hero")}
+        secondary={{ href: "/allcourses", label: "Смотреть курсы" }}
+      />
+      <div className="page-wrap py-12 md:py-16">
+        <div className="max-w-3xl space-y-5 text-lg leading-relaxed text-fg/90">
+          {body.map((p) => (
+            <p key={p.slice(0, 48)}>{p}</p>
+          ))}
         </div>
-        {hero ? (
-          <SeoImage
-            src={hero.src}
-            alt={hero.alt}
-            filename={hero.filename}
-            className="aspect-4/3 rounded-lg bg-surface-2"
-            loading="eager"
-          />
+        <Gallery page={page} />
+        {schedule.length ? (
+          <div className="mt-12">
+            <ScheduleBlock sessions={schedule} scope={page.kind === "school" ? "school" : "course"} />
+          </div>
         ) : null}
-      </div>
-      <div className="mt-12 max-w-3xl space-y-5 text-lg leading-relaxed text-fg/90">
-        {body.map((p) => (
-          <p key={p.slice(0, 48)}>{p}</p>
-        ))}
-      </div>
-      <Gallery page={page} />
-      {schedule.length ? (
-        <div className="mt-12">
-          <ScheduleBlock sessions={schedule} scope={page.kind === "school" ? "school" : "course"} />
+        <Related page={page} courses={courses} />
+        <div className="mt-16">
+          <TrialForm compact />
         </div>
-      ) : null}
-      <Related page={page} courses={courses} />
-      <div className="mt-16">
-        <TrialForm compact />
       </div>
     </article>
   );

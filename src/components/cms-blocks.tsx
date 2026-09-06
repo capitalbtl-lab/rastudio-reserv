@@ -152,7 +152,7 @@ export function ProseBlocks({ text, className }: { text: string; className?: str
   );
 }
 
-type HeroShot = { src: string; filename?: string; alt?: string };
+type HeroShot = { src: string; filename?: string; alt?: string; href?: string };
 
 export function CoursePageHero({
   kicker,
@@ -163,6 +163,8 @@ export function CoursePageHero({
   video,
   facts,
   path,
+  secondary,
+  stats,
 }: {
   kicker: ReactNode;
   age?: string | null;
@@ -172,6 +174,8 @@ export function CoursePageHero({
   video?: string | null;
   facts?: string[];
   path?: string;
+  secondary?: { href: string; label: string };
+  stats?: { value: string; label: string }[];
 }) {
   const srcs = images.filter((img) => {
     if (!img?.src) return false;
@@ -180,46 +184,27 @@ export function CoursePageHero({
     if (/empty-state|обои|wallpaper/i.test(blob)) return false;
     return true;
   });
-  const shots: HeroShot[] = [];
-  const seen = new Set<string>();
-  for (const img of srcs) {
-    const key = img.src.split("?")[0].toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    shots.push(img);
-  }
-  const stills = shots.filter((s) => !s.src.startsWith("/courses/"));
-  const stack = (stills.length ? stills : shots).slice(0, 3);
-
-  function ShotMedia({ shot, className, imgClassName }: { shot: HeroShot; className?: string; imgClassName?: string }) {
-    return (
-      <SeoImage
-        src={shot.src}
-        alt={shot.alt || title}
-        filename={shot.filename}
-        className={className}
-        imgClassName={imgClassName}
-        loading="eager"
-      />
-    );
-  }
+  const shots: CollageShot[] = collageShotsFor(
+    path || "",
+    srcs.map((img) => ({
+      src: img.src,
+      alt: img.alt || title,
+      filename: img.filename,
+      href: img.href,
+    })),
+  );
 
   return (
     <section className="ink relative isolate overflow-hidden text-header-fg">
-      <div className="page-wrap grid items-center gap-8 py-10 md:py-12 lg:grid-cols-[1.1fr_0.9fr] lg:gap-10 lg:py-10">
+      <div className="page-wrap grid items-center gap-10 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[88dvh] lg:gap-8 lg:py-8">
         <div className="relative z-10 max-w-xl">
           <div className="hero-in kicker text-header-fg/55">{kicker}</div>
           {age ? <p className="hero-in mt-3 text-sm font-medium text-header-fg/70">{age}</p> : null}
-          <h1 className="hero-in hero-in-2 mt-4 text-[clamp(2rem,1.15rem+2.6vw,3.4rem)] leading-[1.05]">
-            {title}
-          </h1>
+          <h1 className="hero-in hero-in-2 mt-5 text-[clamp(2.1rem,1.2rem+3vw,3.8rem)] leading-[1.05]">{title}</h1>
           {facts?.length ? (
             <p className="hero-in mt-4 flex flex-wrap gap-2">
               {facts.map((item) => (
-                <span
-                  key={item}
-                  className="rounded-full bg-white/10 px-3 py-1 text-[0.78rem] font-semibold text-header-fg"
-                >
+                <span key={item} className="rounded-full bg-white/10 px-3 py-1 text-[0.78rem] font-semibold text-header-fg">
                   {item}
                 </span>
               ))}
@@ -227,57 +212,34 @@ export function CoursePageHero({
           ) : null}
           {path ? <CoursePrice path={path} tone="hero" /> : null}
           {description ? (
-            <p className="hero-in hero-in-3 mt-4 max-w-md text-[1.02rem] leading-relaxed text-header-fg/70">
-              {description}
-            </p>
+            <p className="hero-in hero-in-3 mt-5 max-w-md text-[1.02rem] leading-relaxed text-header-fg/70">{description}</p>
           ) : null}
-          <div className="hero-in hero-in-3 mt-6 flex flex-wrap gap-3">
+          <div className="hero-in hero-in-3 mt-8 flex flex-wrap gap-3">
             <Button asChild size="lg">
               <a href="#trial">Пробное занятие</a>
             </Button>
             <Button asChild size="lg" variant="outline">
-              <a href={SITE.phoneHref}>{SITE.phone}</a>
+              {secondary?.href?.startsWith("/") ? (
+                <PageLink to={secondary.href}>{secondary.label}</PageLink>
+              ) : (
+                <a href={secondary?.href || SITE.phoneHref}>{secondary?.label || SITE.phone}</a>
+              )}
             </Button>
           </div>
-          <p className="hero-in mt-4 max-w-md text-sm text-header-fg/65">{TRIAL_PROMISE}</p>
+          {stats?.length ? (
+            <div className="mt-10 grid grid-cols-4 gap-3 border-t border-white/10 pt-6">
+              {stats.map((s) => (
+                <div key={s.label}>
+                  <p className="display text-xl tabular-nums md:text-2xl">{s.value}</p>
+                  <p className="mt-1 text-[0.7rem] leading-snug text-header-fg/50 md:text-xs">{s.label}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="hero-in mt-4 max-w-md text-sm text-header-fg/65">{TRIAL_PROMISE}</p>
+          )}
         </div>
-
-        {shots.length || video ? (
-          <div className="relative">
-            {video ? (
-              <div className="grid gap-3">
-                <div className="overflow-hidden rounded-3xl bg-header">
-                  <SiteVideo src={video} title={title} mode="ambient" className="aspect-[4/5] lg:aspect-[3/4]" />
-                </div>
-                {stack.slice(0, 2).length ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    {stack.slice(0, 2).map((shot) => (
-                      <ShotMedia
-                        key={shot.src}
-                        shot={shot}
-                        className="aspect-[4/3] rounded-2xl bg-header"
-                        imgClassName="h-full w-full object-cover"
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <>
-                <div className="photo-stack hidden lg:block">
-                  {stack.map((shot) => (
-                    <div key={shot.src} className="shot bg-header">
-                      <ShotMedia shot={shot} className="h-full w-full" imgClassName="h-full w-full object-cover" />
-                    </div>
-                  ))}
-                </div>
-                <div className="overflow-hidden rounded-3xl lg:hidden">
-                  {shots[0] ? <ShotMedia shot={shots[0]} className="aspect-[4/5]" /> : null}
-                </div>
-              </>
-            )}
-          </div>
-        ) : null}
+        <HeroCollage shots={shots} />
       </div>
     </section>
   );
