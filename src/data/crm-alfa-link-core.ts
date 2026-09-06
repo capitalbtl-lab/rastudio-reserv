@@ -67,13 +67,33 @@ function flagMap<T extends string>(src: unknown, keys: readonly T[], fallback: R
   return out;
 }
 
-export function alfaSyncOf(raw?: Partial<AlfaSyncFlags> | null): AlfaSyncFlags {
-  const minutes = Number(raw?.minutes);
+export function alfaSyncOf(raw?: Partial<AlfaSyncFlags> | null, base: AlfaSyncFlags = ALFA_SYNC_DEFAULT): AlfaSyncFlags {
+  const minutes = Number(raw?.minutes ?? base.minutes);
   return {
-    pull: flagMap(raw?.pull, ALFA_PULL_CH.map((c) => c.id), ALFA_SYNC_DEFAULT.pull),
-    push: flagMap(raw?.push, ALFA_PUSH_CH.map((c) => c.id), ALFA_SYNC_DEFAULT.push),
-    minutes: Number.isFinite(minutes) ? Math.max(2, Math.min(60, minutes)) : ALFA_SYNC_DEFAULT.minutes,
+    pull: flagMap(raw?.pull, ALFA_PULL_CH.map((c) => c.id) as AlfaPullCh[], base.pull),
+    push: flagMap(raw?.push, ALFA_PUSH_CH.map((c) => c.id) as AlfaPushCh[], base.push),
+    minutes: Number.isFinite(minutes) ? Math.max(2, Math.min(60, minutes)) : base.minutes,
   };
+}
+
+export type AlfaGate = { mode?: string | null } & Partial<AlfaSyncFlags>;
+
+export function pullAllowed(state: AlfaGate, ch: AlfaPullCh) {
+  if (!alfaLinked(state.mode)) return false;
+  return alfaSyncOf(state).pull[ch] !== false;
+}
+
+export function deltaAllowed(state: AlfaGate, delta?: unknown) {
+  return Boolean(delta) && pullAllowed(state, "leads");
+}
+
+export function pullFreshAllowed(state: AlfaGate, fresh?: unknown) {
+  return Boolean(fresh) && alfaLinked(state.mode);
+}
+
+export function pushAllowed(state: AlfaGate, op: string, body?: Record<string, unknown>) {
+  if (!alfaLinked(state.mode)) return false;
+  return alfaSyncOf(state).push[exportOpPushChannel(op, body)] !== false;
 }
 
 /** Канал выгрузки по операции очереди. Пробное — customer.create с is_study 0 или lesson.type trial. */
@@ -82,7 +102,12 @@ export function exportOpPushChannel(op: string, body?: Record<string, unknown>):
   if (op === "pay.create") return "pay";
   if (op.startsWith("customer-tariff")) return "tariffs";
   if (op === "cgi.apply" || op.startsWith("group") || op === "subject.create") return "groups";
-  if (op.startsWith("lesson") || op.startsWith("regular-lesson")) return "lessons";
+  if (op.startsWith("lesson") || op.startsWith("regular-lesson")) {
+    const lesson = body?.lesson && typeof body.lesson === "object" ? (body.lesson as { type?: string }) : null;
+    const kind = String(body?.type || lesson?.type || body?.kind || "");
+    if (kind === "trial") return "trials";
+    return "lessons";
+  }
   if (op === "customer.create") {
     const study = Number(body?.is_study);
     const lesson = body?.lesson && typeof body.lesson === "object" ? (body.lesson as { type?: string }) : null;

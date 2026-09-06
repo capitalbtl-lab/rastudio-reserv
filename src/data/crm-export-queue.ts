@@ -102,8 +102,9 @@ export async function tickExportQueue(take = 2) {
     const batch = q.jobs.filter((j) => canRunExportJob(j) && wantAlfaPush(j.op, j.body)).slice(0, n);
     if (!batch.length) {
       const held = q.jobs.filter(canRunExportJob).length;
-      if (held && q.lastNote !== "канал выгрузки выключен") {
-        q.lastNote = held ? `канал выгрузки выключен · в очереди ${q.jobs.length}` : q.lastNote;
+      const note = held ? `канал выгрузки выключен · в очереди ${q.jobs.length}` : q.lastNote;
+      if (held && q.lastNote !== note) {
+        q.lastNote = note;
         saveExport(q);
       }
       return crmExportSnapshot();

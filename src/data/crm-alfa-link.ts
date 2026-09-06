@@ -4,7 +4,11 @@ import {
   alfaLinkOf,
   alfaLinked,
   alfaSyncOf,
+  deltaAllowed,
   exportOpPushChannel,
+  pullAllowed,
+  pullFreshAllowed,
+  pushAllowed,
   type AlfaLinkMode,
   type AlfaPullCh,
   type AlfaPushCh,
@@ -21,6 +25,9 @@ export {
   alfaLinkOf,
   alfaSyncOf,
   exportOpPushChannel,
+  deltaAllowed,
+  pullAllowed,
+  pushAllowed,
 } from "./crm-alfa-link-core";
 
 export type AlfaLinkState = { mode: AlfaLinkMode; at: string } & AlfaSyncFlags;
@@ -46,9 +53,10 @@ export function loadAlfaLink(): AlfaLinkState {
 export function saveAlfaLink(raw: AlfaLinkMode | Partial<AlfaLinkState> | string | null | undefined): AlfaLinkState {
   const cur = loadAlfaLink();
   const patch = typeof raw === "object" && raw ? raw : { mode: alfaLinkOf(raw) };
+  const flags = alfaSyncOf(patch, cur);
   const next: AlfaLinkState = {
     ...cur,
-    ...alfaSyncOf({ ...cur, ...patch }),
+    ...flags,
     mode: patch.mode ? alfaLinkOf(patch.mode) : cur.mode,
     at: new Date().toISOString(),
   };
@@ -63,22 +71,17 @@ export function alfaLinkedNow() {
 
 /** «Обновить» и fresh — режим «Фон с AlfaCRM». */
 export function wantAlfaPull(fresh?: unknown) {
-  return Boolean(fresh) && alfaLinkedNow();
+  return pullFreshAllowed(loadAlfaLink(), fresh);
 }
 
-/** Дельта лидов — фон, если канал «Лиды» включён. */
 export function wantAlfaDelta(delta?: unknown) {
-  if (!Boolean(delta) || !alfaLinkedNow()) return false;
-  return loadAlfaLink().pull.leads !== false;
+  return deltaAllowed(loadAlfaLink(), delta);
 }
 
 export function wantAlfaPullChannel(ch: AlfaPullCh) {
-  if (!alfaLinkedNow()) return false;
-  return loadAlfaLink().pull[ch] !== false;
+  return pullAllowed(loadAlfaLink(), ch);
 }
 
 export function wantAlfaPush(op: string, body?: Record<string, unknown>) {
-  if (!alfaLinkedNow()) return false;
-  const ch = exportOpPushChannel(op, body);
-  return loadAlfaLink().push[ch] !== false;
+  return pushAllowed(loadAlfaLink(), op, body);
 }
