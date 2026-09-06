@@ -7,18 +7,35 @@ export function tidyGroupName(name: string) {
     .trim();
 }
 
-export function nextLessonDate(session: Pick<CmsSession, "day" | "timeFrom">) {
+export function nextLessonDate(session: Pick<CmsSession, "day" | "timeFrom">, from = new Date()) {
   const crmDay = Number(session.day) || 0;
   if (!crmDay) return null;
   const js = crmDay === 7 ? 0 : crmDay;
   const [hh, mm] = String(session.timeFrom || "10:00").split(":").map((n) => Number(n) || 0);
-  const now = new Date();
+  const now = from;
   const d = new Date(now);
   d.setHours(hh, mm, 0, 0);
   let add = (js - d.getDay() + 7) % 7;
   if (add === 0 && d.getTime() <= now.getTime()) add = 7;
   d.setDate(d.getDate() + add);
   return d;
+}
+
+export function lessonDatesInRange(
+  session: Pick<CmsSession, "day" | "timeFrom">,
+  from: Date,
+  to: Date,
+  cap = 6,
+) {
+  const out: Date[] = [];
+  let cursor = new Date(from);
+  while (out.length < cap) {
+    const d = nextLessonDate(session, cursor);
+    if (!d || d.getTime() > to.getTime()) break;
+    out.push(d);
+    cursor = new Date(d.getTime() + 60 * 1000);
+  }
+  return out;
 }
 
 export function formatTrialDate(d: Date) {

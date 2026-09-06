@@ -1,6 +1,7 @@
 import { SITE } from "@/data/site";
 import { courseHint } from "@/data/agent-courses";
 import { factsFromMessages, modeFromMessages, WEEKDAY_CHIPS } from "./agent-facts";
+import { MAKEUP_WEEK_CHIPS } from "./agent-makeup";
 import { nextSlot, slotsFromMessages } from "@/data/funnel-state";
 import { summerSeason } from "@/data/agent-playbook";
 
@@ -99,7 +100,16 @@ export function chipsForReply(
   }
   if (mode === "client") {
     if (facts.identified) {
-      if (facts.intent === "отработка" && !facts.day) {
+      if (facts.intent === "отработка" && !facts.makeupWeek) {
+        return {
+          hint: "Неделя отработки",
+          chips: MAKEUP_WEEK_CHIPS,
+          after: "Сначала неделя — потом три варианта времени.",
+        };
+      }
+      if (facts.intent === "отработка" && facts.makeupWeek && !facts.day) {
+        const slots = scheduleOffer(groups);
+        if (slots) return slots;
         return { hint: "День отработки", chips: WEEKDAY_CHIPS };
       }
       if (facts.intent === "пауза" && !facts.pauseUntil) {

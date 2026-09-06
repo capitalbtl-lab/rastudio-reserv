@@ -1,4 +1,10 @@
 import { CLIENT_SERVICE_ASK } from "./agent-identify.ts";
+import {
+  isMakeupMore,
+  isMakeupOtherTeacher,
+  takeMakeupWeek,
+  type MakeupWeek,
+} from "./agent-makeup.ts";
 
 export type VisitorMode = "fork" | "new" | "client";
 
@@ -19,6 +25,9 @@ export type SessionFacts = {
   phone?: string;
   intent?: string;
   day?: string;
+  makeupWeek?: MakeupWeek;
+  makeupSkip?: number;
+  makeupOtherTeacher?: boolean;
   pauseUntil?: string;
   wantsBook?: boolean;
   wantsSkip?: boolean;
@@ -304,6 +313,17 @@ export function factsFromMessages(messages: { role: string; content: string }[])
       .reverse()
       .find(Boolean);
     if (day) facts.day = day;
+    if (facts.intent === "отработка") {
+      const week = [...messages]
+        .filter((m) => m.role === "user")
+        .map((m) => takeMakeupWeek(m.content))
+        .reverse()
+        .find(Boolean);
+      if (week) facts.makeupWeek = week;
+      const moreHits = messages.filter((m) => m.role === "user" && isMakeupMore(m.content)).length;
+      if (moreHits) facts.makeupSkip = moreHits * 3;
+      if (messages.some((m) => m.role === "user" && isMakeupOtherTeacher(m.content))) facts.makeupOtherTeacher = true;
+    }
     const pause = [...messages]
       .filter((m) => m.role === "user")
       .map((m) => m.content)
@@ -350,10 +370,10 @@ export function nextStepOf(facts: SessionFacts) {
     if (!facts.phone) return "попросить телефон записи. Не спрашивать возраст и город.";
     if (!facts.identified) return "подтвердить имя ребёнка с диска. Не выдумывать карточку. Возраст не спрашивать.";
     if (facts.intent === "отработка") {
-      if (!facts.day) {
-        return "ребёнок уже подтверждён — имя больше не спрашивать. Спросить ТОЛЬКО день отработки. Не предлагать пробное.";
+      if (!facts.makeupWeek) {
+        return "ребёнок уже подтверждён — имя больше не спрашивать. Спросить ТОЛЬКО неделю отработки: эта, следующая или позже. Не предлагать пробное.";
       }
-      return `ребёнок уже подтверждён — имя больше не спрашивать. День: ${facts.day}. list_groups по courseId из карточки, weekday=${facts.day}. Если в своей группе нет этого дня — другие группы того же курса. Затем book_lesson makeup. Не предлагать пробное.`;
+      return `ребёнок уже подтверждён — имя больше не спрашивать. Неделя: ${facts.makeupWeek}${facts.day ? `, день ${facts.day}` : ""}. Три ближайших слота того же курса и того же педагога (не свой gid). Если не удобно — ещё три. Если у педагога нет уроков — другого педагога. book_lesson makeup. Не предлагать пробное.`;
     }
     if (facts.intent === "пауза") {
       return "ребёнок уже подтверждён. Если срока паузы нет — спросить до какой даты. Если дата есть — pause_classes. Не переспрашивать имя.";
@@ -441,9 +461,9 @@ export function talkFallback(who: "oleg" | "olga", facts: SessionFacts) {
   if (facts.mode === "client" && facts.identified) {
     const child = facts.child || "ребёнок";
     if (facts.intent === "отработка") {
-      return facts.day
-        ? `${n}: Ищу отработку на ${facts.day} в группах того же курса, не только в своей. Пробное не предлагаю.`
-        : `${n}: На какой день поставить отработку ${child}?`;
+      return facts.makeupWeek
+        ? `${n}: Ищу отработку ${facts.makeupWeek === "this" ? "на этой неделе" : facts.makeupWeek === "next" ? "на следующей неделе" : "позже"} у вашего педагога, три ближайших слота того же курса. Пробное не предлагаю.`
+        : `${n}: На какой неделе удобно отработать занятие ${child} — на этой, на следующей или позже?`;
     }
     if (facts.intent === "расписание") return `${n}: ${child} — ближайшее занятие в карточке. Чем ещё помочь?`;
     if (facts.intent === "абонемент") return `${n}: Сейчас скажу абонемент и остаток по карточке ${child}.`;

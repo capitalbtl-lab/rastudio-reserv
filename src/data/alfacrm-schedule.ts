@@ -590,6 +590,7 @@ export type LiveGroup = {
   subjectId?: number;
   priority: number;
   statusId: number;
+  day?: number;
 };
 
 function whenMatchesWeekday(when: string, weekday: string) {
@@ -736,6 +737,7 @@ export async function groupsForQuery(q: {
       subjectId: slot.subjectId || 0,
       priority,
       statusId: slot.statusId || 0,
+      day: Number(session.day) || crmDayOf(session.when),
     });
   }
   out.sort((a, b) => {
