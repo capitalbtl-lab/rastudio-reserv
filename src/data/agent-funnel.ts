@@ -35,7 +35,7 @@ export function lockedFunnelReply(
     if (isSocialHello(lastUser) || /уже занимаетесь|подбираете впервые|с чего начнём|нажмите кнопку/i.test(last)) {
       return { reply: `${n}: ${FORK_ASK}` };
     }
-    return { reply: `${n}: Вы уже занимаетесь у нас или подбираете впервые?` };
+    return { reply: `${n}: ${FORK_ASK}` };
   }
   if (mode === "client") {
     const facts = factsFromMessages(messages);

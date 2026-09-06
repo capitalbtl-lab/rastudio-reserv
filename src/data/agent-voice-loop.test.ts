@@ -36,7 +36,10 @@ describe("голосовой контур: эхо и перебивание", ()
     const fork = "Нажмите кнопку или скажите уже ходим подбираем впервые или вас интересуют правила и цены";
     assert.equal(isVoiceEcho("уже ходим", fork, { speaking: true }), true);
     assert.equal(isVoiceEcho("уже ходим", fork, { speaking: false, spokenAgoMs: 400 }), false);
-    assert.equal(isVoiceEcho("мы уже ходим к вам", fork, { speaking: true }), false);
+    assert.equal(isVoiceEcho("подбираем впервые", fork, { speaking: true }), true);
+    assert.equal(isVoiceEcho("подбираем впервые", fork, { speaking: false, spokenAgoMs: 500 }), false);
+    assert.equal(isVoiceEcho("правила и цены", fork, { speaking: true }), true);
+    assert.equal(isVoiceEcho("правила и цены", fork, { speaking: false, spokenAgoMs: 500 }), false);
     assert.equal(isSocialHello("Привет"), true);
     assert.equal(isSocialHello("добрый день"), true);
     assert.equal(isSocialHello("уже ходим"), false);
