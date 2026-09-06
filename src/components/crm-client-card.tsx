@@ -35,6 +35,7 @@ import {
   payItemGroups,
 } from "@/data/crm-pay-alfa";
 import { mergeRooms, roomsSelectGroups, SEED_ROOMS } from "@/data/crm-rooms";
+import { addMinsHm, DUR_OPTS, HOUR_OPTS, joinHm, MIN_OPTS, pad2, splitHm } from "@/data/crm-lesson-time";
 
 function money(n?: number) {
   return `${Number(n || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`;
@@ -129,31 +130,6 @@ function durationMins(from?: string, to?: string) {
   const n = b[0] * 60 + b[1] - (a[0] * 60 + a[1]);
   return n > 0 && n <= 480 ? n : 0;
 }
-
-function pad2(n: number) {
-  return String(n).padStart(2, "0");
-}
-
-function splitHm(raw: string) {
-  const m = String(raw || "").match(/^(\d{1,2}):(\d{2})/);
-  return { h: m ? Number(m[1]) : -1, min: m ? Number(m[2]) : -1 };
-}
-
-function joinHm(h: number, min: number) {
-  if (h < 0 || min < 0) return "";
-  return `${pad2(h)}:${pad2(min)}`;
-}
-
-function addMinsHm(hhmm: string, mins: number) {
-  const { h, min } = splitHm(hhmm);
-  if (h < 0) return "";
-  const t = (((h * 60 + min + Number(mins || 0)) % (24 * 60)) + 24 * 60) % (24 * 60);
-  return `${pad2(Math.floor(t / 60))}:${pad2(t % 60)}`;
-}
-
-const HOUR_OPTS = Array.from({ length: 16 }, (_, i) => i + 7).map((h) => ({ value: String(h), label: pad2(h) }));
-const MIN_OPTS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) => ({ value: String(m), label: pad2(m) }));
-const DUR_OPTS = [45, 60, 90, 120, 150, 180].map((n) => ({ value: String(n), label: `${n} мин` }));
 
 const fieldCtl = "h-9 w-full rounded-md bg-white px-2 text-sm ring-1 ring-black/10";
 
