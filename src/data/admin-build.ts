@@ -25,7 +25,12 @@ export function deployHookOk(got?: string | null) {
 export function readBuildStamp(): BuildStamp {
   try {
     const raw = JSON.parse(readFileSync(FILE, "utf8")) as BuildStamp;
-    if (raw && typeof raw.sha === "string" && raw.sha) return { sha: raw.sha, at: String(raw.at || ""), deploying: Boolean(raw.deploying) };
+    if (raw && typeof raw.sha === "string" && raw.sha) {
+      const at = String(raw.at || "");
+      const age = at ? Date.now() - new Date(at).getTime() : 0;
+      const deploying = Boolean(raw.deploying) && age > 0 && age < 8 * 60 * 1000;
+      return { sha: raw.sha, at, deploying };
+    }
   } catch {
     /* fall through */
   }
