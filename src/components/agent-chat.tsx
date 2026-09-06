@@ -971,7 +971,12 @@ export function AgentChat() {
     if (gen !== chatGenRef.current) return;
     if (reply.trim() && !(gate && reply === ADMIN_HELLO && adminMsgsRef.current.some((m) => m.content === ADMIN_HELLO))) {
       const live = adminThread ? adminMsgsRef.current : clientMsgsRef.current;
-      const nextMsgs = [...live, { role: "assistant" as const, content: reply }];
+      const keep = uiOn("keepAssistantReplies");
+      const assistantMsg: Msg = { role: "assistant", content: reply };
+      const nextMsgs =
+        !keep && live.length && live[live.length - 1].role === "assistant"
+          ? [...live.slice(0, -1), assistantMsg]
+          : [...live, assistantMsg];
       if (adminThread) {
         adminMsgsRef.current = nextMsgs;
         setAdminMsgs(nextMsgs);
@@ -983,7 +988,7 @@ export function AgentChat() {
     busyRef.current = false;
     setBusy(false);
     if (voiceOnRef.current && reply.trim()) {
-      await speak(reply);
+      await maybeSpeak(reply);
       if (gen !== chatGenRef.current) return;
     }
     if (voiceOnRef.current && !speakingRef.current) startListen();
