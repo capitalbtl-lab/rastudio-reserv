@@ -8,8 +8,11 @@ import type { PageAgent } from "@/data/page-agents-core";
 import { emptyPageAgent } from "@/data/page-agents-core";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { endMediaDrag, startMediaDrag } from "@/lib/media-drag";
+import { hydrateMediaAlts } from "@/data/media-alts-core";
 
-type MediaRow = SiteMediaItem & { caption?: string; place?: string };
+type MediaRow = SiteMediaItem & { caption?: string; place?: string; schoolId?: string };
+type SchoolRow = { id: string; label: string; folder: string };
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -35,16 +38,17 @@ function useSiteStudio(useAdmin = false) {
   const [media, setMedia] = useState<MediaRow[]>([]);
   const [ideas, setIdeas] = useState<Omit<HomeCustomBlock, "id">[]>([]);
   const [pages, setPages] = useState<PageAgent[]>([]);
+  const [schools, setSchools] = useState<SchoolRow[]>([]);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState("");
   const [prompt, setPrompt] = useState("");
   const tok = () => (useAdmin ? adminToken() : token() || adminToken());
 
   async function run(
-    action: "list" | "upload" | "delete" | "describe" | "pulse" | "invent" | "generate" | "place" | "rewrite" | "agents" | "embed" | "set",
+    action: "list" | "upload" | "delete" | "describe" | "pulse" | "invent" | "generate" | "place" | "rewrite" | "agents" | "embed" | "set" | "caption",
     extra: Record<string, unknown> = {},
   ) {
-    setBusy(action === "describe" ? "" : action);
+    setBusy(action === "describe" || action === "caption" ? "" : action);
     setMsg("");
     const res = await siteStudio({ data: { token: tok(), action, ...extra } });
     if (action !== "describe") setBusy("");
@@ -55,12 +59,13 @@ function useSiteStudio(useAdmin = false) {
     if ("media" in res && res.media) setMedia(res.media as MediaRow[]);
     if ("ideas" in res && res.ideas) setIdeas(res.ideas as Omit<HomeCustomBlock, "id">[]);
     if ("pages" in res && res.pages) setPages(res.pages as PageAgent[]);
+    if ("schools" in res && Array.isArray(res.schools)) setSchools(res.schools as SchoolRow[]);
     if (action === "pulse") setMsg("Консультанты получили сводку сайта.");
-    if (action === "describe" && "caption" in res) setMsg(String(res.caption));
-    if (action === "upload" && "caption" in res) setMsg(`Загружено. DeepSeek: ${res.caption}`);
     if (action === "rewrite") setMsg("Тексты блока обновлены.");
     if (action === "set" && "layout" in res) setMsg("Файл в блоке.");
     if (action === "embed") setMsg("Агент на странице сохранён.");
+    if (action === "caption" && extra.accept) setMsg("Подпись добавлена.");
+    if (action === "caption" && extra.accept === false) setMsg("Подпись не добавлена.");
     return res;
   }
 
@@ -68,7 +73,7 @@ function useSiteStudio(useAdmin = false) {
     void run("list");
   }, []);
 
-  return { media, ideas, pages, msg, busy, prompt, setPrompt, run, setIdeas };
+  return { media, ideas, pages, schools, msg, busy, prompt, setPrompt, run, setIdeas };
 }
 
 export function MediaGrid({
@@ -89,12 +94,15 @@ export function MediaGrid({
         <button
           key={item.src}
           type="button"
+          draggable
           disabled={Boolean(busy)}
           className={cn(
-            "overflow-hidden rounded-xl bg-surface-2 text-left ring-2 ring-transparent",
+            "cursor-grab overflow-hidden rounded-xl bg-surface-2 text-left ring-2 ring-transparent active:cursor-grabbing",
             active === item.src && "ring-primary",
           )}
           onClick={() => onPick?.(item.src)}
+          onDragStart={(e) => startMediaDrag(e, item.src, item.kind)}
+          onDragEnd={() => endMediaDrag()}
           title={item.caption || item.place || item.name}
         >
           {item.kind === "video" ? (
@@ -102,7 +110,7 @@ export function MediaGrid({
               видео · {item.name.replace(/\.[^.]+$/, "").slice(0, 22)}
             </span>
           ) : (
-            <img src={item.src} alt={item.place || item.name} loading="lazy" decoding="async" className="aspect-square w-full object-cover" />
+            <img src={item.src} alt={item.caption || item.place || item.name} loading="lazy" decoding="async" className="aspect-square w-full object-cover" />
           )}
         </button>
       ))}
@@ -110,12 +118,11 @@ export function MediaGrid({
   );
 }
 
-const FOLDER_LABEL: Record<string, string> = {
-  home: "Главная",
-  uploads: "Загрузки",
-  imported: "Архив",
-  heroes: "Обложки",
-};
+const EXTRA_FOLDERS: { id: string; label: string }[] = [
+  { id: "home", label: "Главная" },
+  { id: "uploads", label: "Загрузки" },
+  { id: "imported", label: "Архив" },
+];
 
 export function StudioPanel({
   admin,
@@ -131,9 +138,10 @@ export function StudioPanel({
   const s = useSiteStudio(admin);
   const [tab, setTab] = useState<"media" | "ai" | "agent">("media");
   const [q, setQ] = useState("");
-  const [folder, setFolder] = useState("home");
+  const [folder, setFolder] = useState("");
   const [picked, setPicked] = useState("");
   const [rewrite, setRewrite] = useState("");
+  const [pending, setPending] = useState<{ src: string; caption: string } | null>(null);
   const [agent, setAgent] = useState<PageAgent>(() => emptyPageAgent(currentPath()));
 
   useEffect(() => {
@@ -143,16 +151,23 @@ export function StudioPanel({
   }, [s.pages]);
 
   const folders = useMemo(() => {
-    const set = new Set(s.media.map((m) => m.folder).filter(Boolean));
-    return ["", ...[...set].sort()];
-  }, [s.media]);
+    const schools = s.schools.map((sch) => ({ id: sch.id, label: sch.label }));
+    return [{ id: "", label: "Все" }, ...schools, ...EXTRA_FOLDERS];
+  }, [s.schools]);
+
+  const openFolder = folders.find((f) => f.id === folder);
+  const canUpload = Boolean(folder);
 
   const shown = useMemo(() => {
     const query = q.trim().toLowerCase();
     return s.media.filter((item) => {
-      if (folder && item.folder !== folder) return false;
+      if (folder) {
+        const schoolHit = item.schoolId === folder || item.folder === folder.replace(/^\//, "");
+        const extraHit = item.folder === folder;
+        if (!schoolHit && !extraHit) return false;
+      }
       if (!query) return true;
-      return `${item.name} ${item.place || ""} ${item.caption || ""} ${item.folder}`.toLowerCase().includes(query);
+      return `${item.name} ${item.place || ""} ${item.caption || ""} ${item.folder} ${item.schoolId || ""}`.toLowerCase().includes(query);
     });
   }, [s.media, q, folder]);
 
@@ -163,7 +178,18 @@ export function StudioPanel({
       const res = await s.run("set", { src, slot });
       if (res.ok && "layout" in res && res.layout) onLayout?.(res.layout);
     }
-    void s.run("describe", { src });
+  }
+
+  async function uploadFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const res = await s.run("upload", { name: file.name, mime: file.type, base64: String(reader.result || ""), folder });
+      if (res.ok && "item" in res && res.item) setPicked(res.item.src);
+      if (res.ok && "askCaption" in res && res.askCaption && "caption" in res && "item" in res && res.item) {
+        setPending({ src: res.item.src, caption: String(res.caption || "") });
+      }
+    };
+    reader.readAsDataURL(file);
   }
 
   return (
@@ -190,19 +216,22 @@ export function StudioPanel({
       {tab === "media" ? (
         <>
           <div className="flex flex-wrap gap-2">
-            <label className="inline-flex h-9 cursor-pointer items-center rounded-full bg-primary px-3 text-[0.78rem] font-semibold text-primary-foreground">
-              Загрузить файл
+            <label
+              className={cn(
+                "inline-flex h-9 items-center rounded-full px-3 text-[0.78rem] font-semibold",
+                canUpload ? "cursor-pointer bg-primary text-primary-foreground" : "cursor-not-allowed bg-surface-2 text-muted",
+              )}
+            >
+              {canUpload ? `Загрузить в «${openFolder?.label}»` : "Загрузить файл"}
               <input
                 type="file"
                 accept="image/*,video/mp4"
                 className="hidden"
+                disabled={!canUpload}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   e.target.value = "";
-                  if (!f) return;
-                  const reader = new FileReader();
-                  reader.onload = () => void s.run("upload", { name: f.name, mime: f.type, base64: String(reader.result || "") });
-                  reader.readAsDataURL(f);
+                  if (f) void uploadFile(f);
                 }}
               />
             </label>
@@ -210,6 +239,11 @@ export function StudioPanel({
               DeepSeek: знания
             </Button>
           </div>
+          <p className="text-[0.72rem] leading-relaxed text-muted">
+            {canUpload
+              ? "Файл попадёт в папку этой школы на сервере. Перетащите фото на блок слева."
+              : "Откройте папку школы — загрузка идёт туда. Либо смотрите все изображения."}
+          </p>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -217,172 +251,48 @@ export function StudioPanel({
             className="h-9 w-full rounded-xl bg-surface-2 px-3 text-sm ring-1 ring-black/10"
           />
           <div className="flex flex-wrap gap-1">
-            {folders.slice(0, 12).map((id) => (
+            {folders.map((item) => (
               <button
-                key={id || "all"}
+                key={item.id || "all"}
                 type="button"
                 className={cn(
                   "rounded-full px-2.5 py-1 text-[0.68rem] font-semibold",
-                  folder === id ? "bg-primary text-primary-foreground" : "bg-surface-2",
+                  folder === item.id ? "bg-primary text-primary-foreground" : "bg-surface-2",
                 )}
-                onClick={() => setFolder(id)}
+                onClick={() => setFolder(item.id)}
               >
-                {id ? FOLDER_LABEL[id] || id.replace(/-/g, " ").slice(0, 18) : "Все"}
+                {item.label}
               </button>
             ))}
           </div>
+          {pending ? (
+            <div className="rounded-2xl bg-surface-2 p-3">
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">DeepSeek предлагает подпись</p>
+              <p className="mt-2 leading-relaxed">{pending.caption || "Пусто."}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={async () => {
+                    await s.run("caption", { src: pending.src, caption: pending.caption, accept: true });
+                    hydrateMediaAlts({ ...Object.fromEntries(s.media.map((m) => [m.src, m.caption || ""])), [pending.src]: pending.caption });
+                    setPending(null);
+                  }}
+                >
+                  И этот
+                </Button>
+                <Button type="button" size="sm" variant="secondary" onClick={async () => {
+                  await s.run("caption", { src: pending.src, accept: false });
+                  setPending(null);
+                }}>
+                  Не добавлять
+                </Button>
+              </div>
+            </div>
+          ) : null}
           <p className="text-[0.72rem] text-muted">
-            {slot ? `Клик — поставить в «${slot}». DeepSeek подпишет кадр для Ольги.` : "Выберите блок слева, затем кликните файл."}
+            {slot ? `Перетащите файл на блок «${slot}» или кликните, чтобы поставить.` : "Выберите блок на странице, затем перетащите файл."}
           </p>
           <MediaGrid media={shown} busy={s.busy} active={picked} onPick={(src) => void pick(src)} />
         </>
       ) : null}
-
-      {tab === "ai" ? (
-        <>
-          <textarea
-            value={s.prompt}
-            onChange={(e) => s.setPrompt(e.target.value)}
-            rows={2}
-            placeholder="Например: летний интенсив по роботам или набор в digital art"
-            className="w-full rounded-xl bg-surface-2 px-3 py-2 text-sm ring-1 ring-black/10"
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" disabled={Boolean(s.busy)} onClick={() => void s.run("invent", { prompt: s.prompt })}>
-              Придумать новый блок
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={Boolean(s.busy) || !s.prompt.trim()}
-              onClick={async () => {
-                const res = await s.run("generate", { prompt: s.prompt, slot });
-                if (res.ok && "layout" in res && res.layout) onLayout?.(res.layout);
-              }}
-            >
-              Сгенерировать по запросу
-            </Button>
-          </div>
-          {s.ideas.length ? (
-            <ul className="space-y-2">
-              {s.ideas.map((idea, i) => (
-                <li key={i} className="rounded-2xl bg-surface-2 p-3">
-                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-primary">{idea.kicker || "Блок"}</p>
-                  <p className="mt-1 font-semibold">{idea.title}</p>
-                  <p className="mt-1 text-muted">{idea.text}</p>
-                  {idea.why ? <p className="mt-1 text-[0.72rem] text-muted">Тренд: {idea.why}</p> : null}
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="mt-2"
-                    onClick={async () => {
-                      const res = await s.run("place", { block: idea, slot, src: picked });
-                      if (res.ok && "layout" in res && res.layout) onLayout?.(res.layout);
-                    }}
-                  >
-                    Поставить на главную
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-[0.78rem] leading-relaxed text-muted">
-              Кнопка предлагает три блока по трендам 2026. «Сгенерировать» сразу ставит один на главную.
-            </p>
-          )}
-          <div className="rounded-2xl bg-surface-2 p-3">
-            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">Переписать тексты блока</p>
-            <textarea
-              value={rewrite}
-              onChange={(e) => setRewrite(e.target.value)}
-              rows={2}
-              placeholder={slot ? "Короче, теплее, без канцелярита" : "Сначала выберите блок"}
-              className="mt-2 w-full rounded-xl bg-surface px-3 py-2 text-sm"
-            />
-            <Button
-              type="button"
-              size="sm"
-              className="mt-2"
-              disabled={Boolean(s.busy) || !slot}
-              onClick={async () => {
-                const res = await s.run("rewrite", { slot, prompt: rewrite });
-                if (res.ok && "layout" in res && res.layout) onLayout?.(res.layout);
-              }}
-            >
-              DeepSeek: править текст
-            </Button>
-          </div>
-        </>
-      ) : null}
-
-      {tab === "agent" ? (
-        <div className="space-y-3">
-          <p className="text-[0.78rem] leading-relaxed text-muted">
-            Агент уже на всём сайте. Здесь — как он ведёт себя на этой странице: приветствие, автооткрытие и может ли открывать курсы.
-          </p>
-          <label className="flex items-center justify-between gap-3 text-sm">
-            <span>Внедрить на {agent.path}</span>
-            <input type="checkbox" checked={agent.on} onChange={(e) => setAgent({ ...agent, on: e.target.checked })} />
-          </label>
-          <div className="grid grid-cols-2 gap-1.5">
-            {(["olga", "oleg"] as const).map((who) => (
-              <button
-                key={who}
-                type="button"
-                className={cn("rounded-xl py-2 text-[0.78rem] font-semibold", agent.who === who ? "bg-primary text-primary-foreground" : "bg-surface-2")}
-                onClick={() => setAgent({ ...agent, who })}
-              >
-                {who === "olga" ? "Ольга" : "Олег"}
-              </button>
-            ))}
-          </div>
-          <label className="block text-[0.72rem] text-muted">
-            Фокус страницы
-            <textarea
-              value={agent.focus}
-              onChange={(e) => setAgent({ ...agent, focus: e.target.value })}
-              rows={2}
-              placeholder="Робототехника 7–9, пробное без давления"
-              className="mt-1 w-full rounded-xl bg-surface-2 px-3 py-2 text-sm text-fg"
-            />
-          </label>
-          <label className="block text-[0.72rem] text-muted">
-            Приветствие
-            <textarea
-              value={agent.greeting}
-              onChange={(e) => setAgent({ ...agent, greeting: e.target.value })}
-              rows={2}
-              placeholder="Вижу, смотрите робототехнику. Рассказать про возраст или сразу на пробное?"
-              className="mt-1 w-full rounded-xl bg-surface-2 px-3 py-2 text-sm text-fg"
-            />
-          </label>
-          <label className="block text-[0.72rem] text-muted">
-            Открыть чат через {agent.autoOpenSec || 0} сек
-            <input
-              type="range"
-              min={0}
-              max={60}
-              value={agent.autoOpenSec}
-              className="mt-1 w-full"
-              onChange={(e) => setAgent({ ...agent, autoOpenSec: Number(e.target.value) })}
-            />
-          </label>
-          <label className="flex items-center justify-between gap-3 text-sm">
-            <span>Открывать страницы по поведению</span>
-            <input type="checkbox" checked={agent.steer} onChange={(e) => setAgent({ ...agent, steer: e.target.checked })} />
-          </label>
-          <Button
-            type="button"
-            disabled={Boolean(s.busy)}
-            onClick={() => void s.run("embed", { agent, path: agent.path })}
-          >
-            Сохранить агента страницы
-          </Button>
-        </div>
-      ) : null}
-
-      {s.msg ? <p className="text-primary">{s.msg}</p> : null}
-      {s.busy ? <p className="text-muted">{s.busy === "invent" || s.busy === "generate" || s.busy === "rewrite" ? "DeepSeek думает…" : "Работаю…"}</p> : null}
-    </div>
-  );
-}
