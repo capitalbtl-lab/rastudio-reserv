@@ -297,20 +297,6 @@ export function titleFromDocument(html) {
   return match ? unescapeHtml(match[1]).trim() : "";
 }
 
-function metaContent(html, key) {
-  const src = String(html ?? "");
-  const named = new RegExp(
-    `<meta\\b[^>]*?(?:property|name)\\s*=\\s*["']${key}["'][^>]*?content\\s*=\\s*["']([^"']*)["'][^>]*?>`,
-    "i",
-  );
-  const contentFirst = new RegExp(
-    `<meta\\b[^>]*?content\\s*=\\s*["']([^"']*)["'][^>]*?(?:property|name)\\s*=\\s*["']${key}["'][^>]*?>`,
-    "i",
-  );
-  const hit = src.match(named) || src.match(contentFirst);
-  return hit ? unescapeHtml(hit[1] || "").trim() : "";
-}
-
 export function resolveOgTitle(
   site = {},
   appName = DEFAULT_APP_NAME,
@@ -440,8 +426,6 @@ export function injectGrokPwaHead(html, ctx = {}) {
   if (typeof html !== "string") return html;
   const { site, projectId, creator, creatorId, host, cwd } = normalizeHeadContext(ctx);
   const documentTitle = titleFromDocument(html);
-  const documentDescription =
-    metaContent(html, "og:description") || metaContent(html, "description");
   const appName = resolveOgTitle(
     site,
     ctx.appName ?? DEFAULT_APP_NAME,
@@ -460,13 +444,7 @@ export function injectGrokPwaHead(html, ctx = {}) {
 
   next = insertAfterHeadOpen(
     next,
-    grokOgHeadTags({
-      host,
-      appName,
-      site: documentDescription ? { ...site, description: documentDescription } : site,
-      documentTitle,
-      cwd,
-    }).join(""),
+    grokOgHeadTags({ host, appName, site, documentTitle, cwd }).join(""),
   );
 
   if (!next.includes("/grok-app-builder/extensions.js")) {
