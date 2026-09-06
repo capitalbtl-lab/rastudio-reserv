@@ -92,7 +92,7 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
     if (words >= 5 && !/gid=|это ${child}|да, это/i.test(lastUser)) return null;
     return {
       reply: `${n}: ${child} в карточке${d?.nextLesson ? `, ближайшее: ${d.nextLesson}` : ""}. Чем помочь?`,
-      chips: CLIENT_TOPICS,
+      chips: TOPIC_CHIPS,
     };
   }
   if (intent === "расписание") {
