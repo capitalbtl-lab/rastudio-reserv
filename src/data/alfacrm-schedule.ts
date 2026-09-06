@@ -13,7 +13,7 @@ import { nextLessonDate } from "@/lib/trial-slot";
 import { isAdminGroup, isArchivedGroup, isCampStatus, readPriority, crmPriorityOf, slotOnPublicSchedule, sessionMatchesPage } from "./group-status";
 import { loadSiteSignup } from "./site-signup";
 import { loadSiteTree, saveSiteTree } from "./site-tree";
-import { mergeTeacher, saveTeachers, type CrmTeacher } from "./crm-teachers";
+import { mergeTeacher, saveTeachers, pickTeacherIds, type CrmTeacher } from "./crm-teachers";
 import { listCgiBranch, takenByGroupFromCgi } from "./crm-membership";
 import { slotFitsAgent, agentGroupLine, scheduleChipOf } from "./agent-groups";
 import { takenOfGroup } from "./crm-group-disk";
@@ -496,7 +496,7 @@ async function loadCrm(force = false): Promise<CacheBag> {
     const groupSid = Number(g.subject_id) || 0;
     const sid = groupSid || lessonSid || 0;
     const subjectName = (sid && subjects.get(sid)) || g.name;
-    const teach = teacherOf(first?.teacher_ids || g.teacher_ids, teachers);
+    const teach = teacherOf(pickTeacherIds(first?.teacher_ids, g.teacher_ids), teachers);
     const seat = seats.get(seatKey(branchId, g.id)) || seats.get(seatKey(fromBranch, g.id));
     const beats = groupLessons
       .map((lesson) => ({

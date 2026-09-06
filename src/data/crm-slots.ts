@@ -864,7 +864,7 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
     }
     s.subjectId = subjectId;
     if (sub?.name) s.subject = sub.name;
-    const roster = teachersAtBranch(branch, listTeachers(next));
+    const roster = teachersAtBranch(branch, listTeachers(next), next);
     const teachers = teacherIdsOfSlot(s, branch, roster);
     if (s.teacher && !teachers.length) {
       s.teacherId = 0;

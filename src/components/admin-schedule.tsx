@@ -23,7 +23,8 @@ import type { CrmSubject } from "@/data/crm-subjects";
 import { ADMIN_PANEL_BLUE, RA_POP } from "@/data/admin-ui";
 import { TabError } from "@/lib/error-component";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
-import type { CrmTeacher } from "@/data/crm-teachers";
+import type { CrmTeacher } from "@/data/crm-teachers-core";
+import { teachersAtBranchFromSlots } from "@/data/crm-teachers-core";
 import { AdminClients } from "@/components/admin-clients";
 import { AdminCrmSettings } from "@/components/admin-crm-settings";
 import { AdminPublicSite } from "@/components/admin-public-site";
@@ -1767,16 +1768,7 @@ export function AdminSchedule() {
   };
 
   function teachersForBranch(branchId: number) {
-    const fromCrm = crmTeachers.filter((t) => (t.branchIds || []).includes(branchId));
-    if (fromCrm.length) return fromCrm.slice().sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ru"));
-    const seen = new Map<number, CrmTeacher>();
-    for (const s of slots) {
-      if (s.branchId !== branchId) continue;
-      const id = s.teacherId || s.teacherIds?.[0];
-      if (!id || !s.teacher) continue;
-      if (!seen.has(id)) seen.set(id, { id, name: s.teacher, branchIds: [branchId] });
-    }
-    return [...seen.values()].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ru"));
+    return teachersAtBranchFromSlots(branchId, slots, crmTeachers);
   }
 
   function parseVoice(text: string) {

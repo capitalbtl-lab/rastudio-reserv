@@ -176,7 +176,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
     balance: customerBalance(customerId, d.extras?.balance),
     catalog: {
       subjects: cat.subjects,
-      teachers: teachersAtBranch(useBranch, listTeachers(slots)).map((x) => ({ id: x.id, name: x.name })),
+      teachers: teachersAtBranch(useBranch, listTeachers(slots), slots).map((x) => ({ id: x.id, name: x.name })),
       rooms: cat.rooms,
       groups: catalogGroups,
     },
