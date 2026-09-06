@@ -1,6 +1,6 @@
 import { SITE } from "@/data/site";
 import { courseHint } from "@/data/agent-courses";
-import { factsFromMessages, modeFromMessages, WEEKDAY_CHIPS } from "@/data/agent-facts";
+import { factsFromMessages, modeFromMessages, WEEKDAY_CHIPS } from "./agent-facts";
 import { nextSlot, slotsFromMessages } from "@/data/funnel-state";
 import { summerSeason } from "@/data/agent-playbook";
 

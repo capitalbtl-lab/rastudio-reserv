@@ -22,6 +22,7 @@ describe("действующий клиент: стол консультанта
     assert.match(text, /gid=580/);
     assert.match(text, /courseId=\/art-studio-10-14/);
     assert.match(text, /note_skip/);
+    assert.match(text, /list_groups/);
     assert.doesNotMatch(text, /похож/);
   });
 

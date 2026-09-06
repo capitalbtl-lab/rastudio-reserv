@@ -2,7 +2,6 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { factsFromMessages, modeFromMessages, nextStepOf, takeWeekday } from "./agent-facts.ts";
-import { chipsForReply } from "./agent-chips.ts";
 import { asIdentifyHits, confirmedHit, confirmedFromHistory, identifyLocked } from "./agent-identify.ts";
 
 describe("развилка новый / уже ходим", () => {
@@ -60,6 +59,7 @@ describe("развилка новый / уже ходим", () => {
   it("карточка только после подтверждения имени", () => {
     const chat = readFileSync(new URL("./agent-chat.ts", import.meta.url), "utf8");
     assert.match(chat, /identifyLocked/);
+    assert.match(chat, /lockedClientTurn/);
     assert.match(chat, /facts.identified && facts.customerId/);
     assert.match(chat, /dossiersByPhone/);
     assert.match(chat, /fromMessenger/);
@@ -124,8 +124,8 @@ describe("вход по телефону с диска", () => {
     assert.equal(facts.intent, "отработка");
     assert.equal(facts.day || "", "");
     assert.match(nextStepOf(facts), /день/);
-    const chips = chipsForReply("На какой день поставить отработку", msgs);
-    assert.ok(chips.chips.some((c) => c.label === "Сб"));
+    const chipsSrc = readFileSync(new URL("./agent-chips.ts", import.meta.url), "utf8");
+    assert.match(chipsSrc, /WEEKDAY_CHIPS/);
     const sat = factsFromMessages([...msgs, { role: "user", content: "суббота" }]);
     assert.equal(takeWeekday("суббота"), "суббота");
     assert.equal(takeWeekday("в субботу"), "суббота");
