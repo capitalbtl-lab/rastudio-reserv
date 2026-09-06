@@ -1,12 +1,13 @@
 "use client";
 
-import { Children, isValidElement, useState, type ReactElement, type ReactNode } from "react";
+import { Children, isValidElement, useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { GripVertical } from "lucide-react";
 import { EditText, HomeEditorChrome, HomeEditorProvider, useHomeEditor } from "@/components/home-editor";
-import { homeBlockLabel, placeHomeBlock, visibleHomeOrder, type HomeBlockId, type HomeCustomBlock, type HomeLayoutDoc } from "@/data/home-layout-core";
+import { homeBlockLabel, placeHomeBlock, setHomeMedia, visibleHomeOrder, type HomeBlockId, type HomeCustomBlock, type HomeLayoutDoc } from "@/data/home-layout-core";
 import { SiteVideo } from "@/components/site-video";
 import { SeoImage } from "@/components/seo-image";
 import { mediaAlt } from "@/data/media-alts-core";
+import { endMediaDrag, mediaFromDrop, moveMediaDrag } from "@/lib/media-drag";
 import { PageLink } from "@/components/page-link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -102,6 +103,19 @@ function HomeCanvasInner({ children }: { children: ReactNode }) {
   const ctx = useHomeEditor();
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
+  useEffect(() => {
+    const move = (e: DragEvent) => moveMediaDrag(e.clientX, e.clientY);
+    const end = () => endMediaDrag();
+    window.addEventListener("dragover", move);
+    window.addEventListener("dragend", end);
+    window.addEventListener("drop", end);
+    return () => {
+      window.removeEventListener("dragover", move);
+      window.removeEventListener("dragend", end);
+      window.removeEventListener("drop", end);
+      endMediaDrag();
+    };
+  }, []);
   if (!ctx) return children;
 
   const map = new Map<string, ReactElement<{ id: HomeBlockId }>>();
@@ -191,7 +205,7 @@ function HomeSlotFrame({
       className={cn(
         "relative transition-[outline-color,opacity,box-shadow]",
         bg,
-        selected ? "outline outline-2 outline-primary" : over ? "outline outline-2 outline-primary/50" : "outline outline-1 outline-primary/20",
+        selected ? "outline outline-2 outline-primary" : over ? "outline outline-2 outline-primary/50 ve-media-over" : "outline outline-1 outline-primary/20",
         drag === id && "opacity-40",
         style?.hidden && "opacity-50",
       )}
@@ -207,9 +221,16 @@ function HomeSlotFrame({
       onDragLeave={() => onOver(null)}
       onDrop={(e) => {
         e.preventDefault();
+        const media = mediaFromDrop(e);
         const from = e.dataTransfer.getData("text/home-block") as HomeBlockId;
         onOver(null);
         onDragId(null);
+        endMediaDrag();
+        if (media && ctx) {
+          ctx.select(id);
+          ctx.setDoc(setHomeMedia(ctx.doc, id, media));
+          return;
+        }
         if (from && from !== id && ctx) ctx.setDoc({ ...ctx.doc, order: placeHomeBlock(ctx.doc.order, from, id) });
       }}
     >

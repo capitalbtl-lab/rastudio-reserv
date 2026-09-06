@@ -1049,3 +1049,50 @@ html.home-editing .debug-dock {
   z-index: 30;
 }
 
+.ve-media-ghost {
+  position: fixed;
+  z-index: 90;
+  width: 7.6rem;
+  height: 7.6rem;
+  pointer-events: none;
+  overflow: hidden;
+  background: #111;
+  outline: 3px solid #fff;
+  outline-offset: -1px;
+  border: 2px dashed #205edc;
+  box-shadow: 11px 16px 0 rgb(0 0 0 / 0.22), 0 22px 38px rgb(0 0 0 / 0.38);
+  transform: rotate(var(--ve-rot, -9deg)) skewX(var(--ve-skew, -6deg)) translate(var(--ve-shift, 4px), 3px);
+}
+
+.ve-media-ghost img {
+  width: 124%;
+  height: 124%;
+  object-fit: cover;
+  margin: -12% 0 0 -14%;
+  filter: contrast(1.05) saturate(1.08);
+}
+
+.ve-media-ghost span {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ve-media-over {
+  outline: 3px dashed var(--color-primary) !important;
+  outline-offset: -3px;
+  background-image: repeating-linear-gradient(
+    -12deg,
+    color-mix(in srgb, var(--color-primary) 14%, transparent),
+    color-mix(in srgb, var(--color-primary) 14%, transparent) 8px,
+    transparent 8px,
+    transparent 16px
+  );
+}
+
+
