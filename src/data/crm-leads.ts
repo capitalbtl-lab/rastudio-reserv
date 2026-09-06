@@ -585,7 +585,7 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
     }
     if (wantAlfaDelta(delta) && disk.items.length) {
       const age = Date.now() - (hit?.at || 0);
-      if (!hit?.items.length || age > 90_000) {
+      if (!hit?.items.length || age > 20_000) {
         const next = await syncLeadsDelta(branchId).catch(() => disk);
         return next;
       }

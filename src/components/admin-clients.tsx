@@ -18,7 +18,6 @@ import { CrmGroupMembers, GroupLoadScene } from "@/components/crm-group-card";
 import { CrmLeadBoard } from "@/components/crm-lead-board";
 import type { ClientRow, CustomerCard, GroupMember } from "@/data/crm-cards";
 import { LEAD_STAGES, mergeStages, reorderLeads, filterLeadCards, mergeBranchLeadCards, type LeadCard, type LeadStage } from "@/data/crm-leads-stages";
-import { crmSyncMinutes } from "@/components/admin-crm-settings";
 import type { CrmSlot, GroupCalLesson } from "@/data/crm-slots-core";
 import { GROUP_STATUSES, isAdminGroup } from "@/data/group-status";
 import { keepByLiveTariff, type TariffHave } from "@/data/pupil-tariffs";
@@ -569,7 +568,10 @@ export function AdminClients({
         funnelSnapPut(bid, nextStages, packed);
         setFunnelStages(nextStages);
         setFunnelItems(nextItems);
-        if (watching()) setFunnelNote(res.note || (packed.length ? `${packed.length} лидов` : "Пустая воронка."));
+        if (watching()) {
+          const note = res.note || (packed.length ? `${packed.length} лидов` : "Пустая воронка.");
+          if (force || !have || !/изменений в CRM нет/i.test(note)) setFunnelNote(note);
+        }
         return;
       }
       if (watching()) setFunnelNote(res.error || (force ? "Alfa не отдала воронку." : "Не удалось открыть воронку."));
@@ -774,11 +776,22 @@ export function AdminClients({
 
   useEffect(() => {
     if (!(status === "лид" && view === "дети")) return;
-    const t = window.setInterval(() => {
+    const tick = () => {
       if (document.hidden) return;
       void loadFunnel(branchRef.current, false, true);
-    }, crmSyncMinutes() * 60 * 1000);
-    return () => window.clearInterval(t);
+    };
+    const t = window.setInterval(tick, 25_000);
+    const onShow = () => {
+      if (document.hidden) return;
+      void loadFunnel(branchRef.current, false, true);
+    };
+    document.addEventListener("visibilitychange", onShow);
+    window.addEventListener("focus", onShow);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onShow);
+      window.removeEventListener("focus", onShow);
+    };
   }, [status, view]);
 
   useEffect(() => {
