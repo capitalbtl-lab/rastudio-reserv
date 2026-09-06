@@ -15,8 +15,8 @@ export const SITE = {
   camp: "http://www.racamp.ru",
   vk: "https://vk.ru/rastudio",
   logo: {
-    src: "https://static.wixstatic.com/media/4e33b6_562c01970b714565ac3c564af8248290~mv2.jpg/v1/fill/w_400,h_400,al_c,q_80,enc_avif,quality_auto/4e33b6_562c01970b714565ac3c564af8248290~mv2.jpg",
-    filename: "4e33b6_562c01970b714565ac3c564af8248290~mv2.jpg",
+    src: "/brand/logo-white.png",
+    filename: "logo-white.png",
     alt: "Логотип студии Развивайся",
   },
   homeTitle:
@@ -125,8 +125,7 @@ export const SCHOOLS = [
     label: "Школа иностранных языков",
     kicker: "9-14 лет",
     blurb: "Английский, корейский и японский с носителями.",
-    image:
-      "https://static.wixstatic.com/media/11062b_e2ae833a8eaa43e38e4aa6d32eb3b8f7f000.jpg/v1/fill/w_900,h_620,al_c,q_85,enc_avif,quality_auto/11062b_e2ae833a8eaa43e38e4aa6d32eb3b8f7f000.jpg",
+    image: "/media/courses/englishlanguagegg/01.jpg",
     alt: "Школа иностранных языков в Студии Развивайся | Коломна",
     filename: "11062b_e2ae833a8eaa43e38e4aa6d32eb3b8f7f000.jpg",
   },

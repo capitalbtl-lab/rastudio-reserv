@@ -35,9 +35,9 @@ const STRIPS = [
     title: "Важные дела",
     text: home.paragraphs[8],
     image: {
-      src: "https://static.wixstatic.com/media/4e33b6_e73db66828c94e8f87ddd27602c4138b~mv2.png/v1/fill/w_900,h_620,al_c,q_85,enc_avif,quality_auto/BlagoVsem.png",
+      src: "/media/imported/4e33b6_e73db66828c94e8f87ddd27602c4138b_mv2.png",
       alt: "Благотворительные проекты Студии Развивайся",
-      filename: "BlagoVsem (16).png",
+      filename: "BlagoVsem.png",
     },
     cta: "Подробнее",
   },

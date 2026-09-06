@@ -1,5 +1,6 @@
 import raw from "./catalog.json";
 import cmsRaw from "./cms.json";
+import extrasRaw from "../../content/course-extras.json";
 import { isPublishedTeacher, type Catalog, type SitePage } from "./catalog";
 import {
   courseKey,
@@ -12,9 +13,26 @@ import {
 } from "./cms";
 import { applyPageEdits, applyCmsEdits } from "./edits";
 import { publicCoursesMeta } from "./public-bind";
+import { localizeTree } from "@/lib/local-media";
 
-const catalog = raw as Catalog;
-const cms = cmsRaw as CmsPayload;
+const extras = extrasRaw as Record<string, SitePage["images"]>;
+const source = raw as Catalog;
+
+function withLocalGallery(page: SitePage): SitePage {
+  const next = localizeTree(page);
+  const extra = extras[page.path] || extras[page.pathDecoded];
+  if (!extra?.length) return next;
+  return { ...next, images: extra, ogImage: extra[0].src };
+}
+
+const catalog: Catalog = {
+  ...source,
+  pages: source.pages.map(withLocalGallery),
+  teachers: localizeTree(source.teachers),
+  courses: localizeTree(source.courses),
+  homeHero: source.homeHero ? localizeTree(source.homeHero) : null,
+};
+const cms = localizeTree(cmsRaw as CmsPayload);
 
 const pageIndex = new Map<string, SitePage>();
 for (const page of catalog.pages) {

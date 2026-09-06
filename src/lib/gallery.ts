@@ -118,7 +118,7 @@ export function galleryPhotos(images: Shot[], path?: string, mode: "hero" | "gal
     const blob = `${img.filename || ""} ${img.alt || ""} ${img.src}`;
     if (SKIP.test(blob) || SKIP_IDS.test(blob)) return;
     if (img.src.startsWith("/courses/")) return;
-    if (/wixstatic|11062b_/i.test(img.src)) return;
+    if (/11062b_/i.test(img.src)) return;
     seen.add(key);
     out.push({ src: img.src, filename: img.filename, alt: img.alt || "Занятия в Студии Развивайся" });
   }

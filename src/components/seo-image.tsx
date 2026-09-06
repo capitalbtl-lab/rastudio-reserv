@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { localSrc } from "@/lib/local-media";
 
 type Props = {
   src: string;
@@ -26,7 +27,7 @@ export function SeoImage({
   return (
     <figure className={cn("overflow-hidden", className)}>
       <img
-        src={src}
+        src={localSrc(src)}
         alt={alt}
         title={title}
         width={width}

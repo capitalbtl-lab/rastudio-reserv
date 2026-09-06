@@ -1,3 +1,4 @@
+import { localizeTree } from "@/lib/local-media";
 import raw from "./lite.json";
 
 type Lite = {
@@ -31,7 +32,7 @@ type Lite = {
   }>;
 };
 
-const lite = raw as Lite;
+const lite = localizeTree(raw as Lite);
 
 export const homePage = lite.home;
 export const liteTeachers = lite.teachers;
