@@ -360,7 +360,7 @@ export function CrmClientCard({
   const [groupOpen, setGroupOpen] = useState(false);
   const [dropGroup, setDropGroup] = useState<{ id: number; branchId: number; name: string } | null>(null);
   const [dropTariff, setDropTariff] = useState<{ id: number; name: string } | null>(null);
-  const [peekTariffId, setPeekTariffId] = useState(0);
+  const [peekTariff, setPeekTariff] = useState<{ id: number; name: string } | null>(null);
   const [groupId, setGroupId] = useState(0);
   const [groupBranch, setGroupBranch] = useState(0);
   const [groupDir, setGroupDir] = useState("");
@@ -884,7 +884,7 @@ export function CrmClientCard({
                       data-op="open-tariff"
                       title="Открыть карточку абонемента"
                       className="min-w-0 flex-1 rounded-xl bg-white px-3 py-2 text-left ring-1 ring-primary/20 hover:bg-primary/5"
-                      onClick={() => setPeekTariffId(Number(t.tariffId || t.id) || 0)}
+                      onClick={() => setPeekTariff({ id: Number(t.tariffId || t.id) || 0, name: t.name })}
                     >
                       <p className="font-semibold text-sm">{t.name}</p>
                       <p className="text-[0.75rem] text-muted">
@@ -1502,16 +1502,16 @@ export function CrmClientCard({
     </div>
   ) : null;
   const dropTariffNode = dropTariffDialog && typeof document !== "undefined" ? createPortal(dropTariffDialog, document.body) : dropTariffDialog;
-  const peekDialog = peekTariffId ? (
-    <div className="fixed inset-0 z-[280] flex items-start justify-center overflow-y-auto bg-black/45 p-3 md:p-6" onClick={() => setPeekTariffId(0)}>
+  const peekDialog = peekTariff ? (
+    <div className="fixed inset-0 z-[280] flex items-start justify-center overflow-y-auto bg-black/45 p-3 md:p-6" onClick={() => setPeekTariff(null)}>
       <div className={cn("my-4 w-full max-w-5xl p-4", RA_POP)} onClick={(e) => e.stopPropagation()} data-op="tariff-peek">
         <header className="mb-3 flex items-center justify-between gap-3">
           <h3 className="font-display text-lg">Карточка абонемента</h3>
-          <button type="button" className="h-9 rounded-full px-3 text-sm font-semibold text-muted hover:bg-surface-2" onClick={() => setPeekTariffId(0)}>
+          <button type="button" className="h-9 rounded-full px-3 text-sm font-semibold text-muted hover:bg-surface-2" onClick={() => setPeekTariff(null)}>
             Закрыть
           </button>
         </header>
-        <AdminTariffs embedId={peekTariffId} onEmbedClose={() => setPeekTariffId(0)} />
+        <AdminTariffs embedId={peekTariff.id} embedName={peekTariff.name} onEmbedClose={() => setPeekTariff(null)} />
       </div>
     </div>
   ) : null;

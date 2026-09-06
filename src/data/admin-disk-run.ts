@@ -3,6 +3,9 @@ import { dirname, join } from "node:path";
 import { isAdminRequest } from "./admin-auth";
 import { logAdmin } from "./admin-settings";
 import type { DiskReq, PullKind, PullLine } from "./admin-disk";
+import { loadSiteTree } from "./site-tree";
+import { guessTariffLinks, readTariffMap, saveTariffMap } from "./tariff-map";
+import { subjectsWithHref, courseSubjectIndex } from "./crm-tariffs";
 
 type Job = {
   running: boolean;
@@ -220,11 +223,18 @@ export async function handleAdminDisk(data: DiskReq) {
     if (kind === "tariffs") {
       const raw = readJson("crm-tariffs.json") || {};
       const items = Array.isArray(raw.items) ? raw.items : [];
-      const { loadSiteTree } = await import("./site-tree");
-      const { guessTariffLinks, readTariffMap, saveTariffMap } = await import("./tariff-map");
-      const { subjectsWithHref, courseSubjectIndex } = await import("./crm-tariffs");
       let tariffMap = guessTariffLinks(items as { id: number; subjectIds: number[]; archive?: boolean }[]);
-      if (!readTariffMap().length && tariffMap.some((x) => x.courseId)) tariffMap = saveTariffMap(tariffMap);
+      try {
+        if (!readTariffMap().length && tariffMap.some((x) => x.courseId)) tariffMap = saveTariffMap(tariffMap);
+      } catch {
+        /* карта ещё пустая */
+      }
+      let tree;
+      try {
+        tree = loadSiteTree();
+      } catch {
+        tree = { schools: [], courses: [], assign: {} };
+      }
       return {
         ok: true as const,
         at: String(raw.at || ""),
@@ -234,7 +244,7 @@ export async function handleAdminDisk(data: DiskReq) {
         subjects: subjectsWithHref(),
         courseSubjects: courseSubjectIndex(),
         total: items.length,
-        tree: loadSiteTree(),
+        tree,
         tariffMap,
       };
     }

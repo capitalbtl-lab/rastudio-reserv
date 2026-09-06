@@ -486,7 +486,7 @@ function blank(branchId: number): Row {
   };
 }
 
-export function AdminTariffs({ embedId, onEmbedClose }: { embedId?: number; onEmbedClose?: () => void } = {}) {
+export function AdminTariffs({ embedId, embedName, onEmbedClose }: { embedId?: number; embedName?: string; onEmbedClose?: () => void } = {}) {
   const [items, setItems] = useState<Row[]>([]);
   const [types, setTypes] = useState<CrmLessonType[]>([]);
   const [subjects, setSubjects] = useState<SubjectRow[]>([]);
@@ -526,7 +526,8 @@ export function AdminTariffs({ embedId, onEmbedClose }: { embedId?: number; onEm
     try {
       const res = await retryFetch(() => loadFromDisk("tariffs"));
       if (!res.ok) {
-        setMsg(res.error || "Не удалось прочитать абонементы с сайта.");
+        const raw = res.error || "Не удалось прочитать абонементы с сайта.";
+        setMsg(/cannot find module|ENOENT|_ssr/i.test(raw) ? "Каталог абонементов сейчас пересобирается. Обновите кабинет через минуту." : raw);
         return res;
       }
       if ("tariffs" in res && Array.isArray(res.tariffs)) setItems(res.tariffs as Row[]);
@@ -871,7 +872,16 @@ export function AdminTariffs({ embedId, onEmbedClose }: { embedId?: number; onEm
     setListen(true);
   }
 
-  const opened = items.find((t) => t.id === (embedId || open)) || null;
+  const opened =
+    embedId || embedName
+      ? items.find((t) => t.id === embedId) ||
+        items.find((t) => embedName && t.name.trim().toLowerCase() === embedName.trim().toLowerCase()) ||
+        items.find((t) => {
+          const code = String(embedName || "").match(/(\d{3,5}\/\d{1,2}\/\d{2,3})/);
+          return Boolean(code && t.name.includes(code[1]));
+        }) ||
+        null
+      : items.find((t) => t.id === open) || null;
   const pickedList = items.filter((t) => picked.has(t.id));
   const editor = opened ? (
                         <Editor
@@ -944,7 +954,13 @@ export function AdminTariffs({ embedId, onEmbedClose }: { embedId?: number; onEm
       <div data-op="tariff-embed">
         {busy && !opened ? <p className="text-sm text-muted">Загружаю карточку абонемента…</p> : null}
         {!busy && !opened ? (
-          <p className="text-sm text-muted">Абонемент №{embedId} не найден в каталоге на сайте. Загрузите абонементы из Alfa на вкладке «Абонементы».</p>
+          <p className="text-sm text-muted">
+            {msg && /пересобирается|не удалось/i.test(msg)
+              ? msg
+              : items.length
+                ? `Абонемент «${embedName || embedId}» в каталоге есть под другим номером. Откройте вкладку «Абонементы» и найдите по названию.`
+                : "На сайте пока нет каталога абонементов. Откройте вкладку «Абонементы» и нажмите «Загрузить из AlfaCRM»."}
+          </p>
         ) : null}
         {editor}
       </div>
