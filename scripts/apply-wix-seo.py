@@ -3,7 +3,7 @@
 import json
 import re
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 
 ROOT = Path("/workspace")
 WIX = json.loads((ROOT / "content/wix-seo.json").read_text())
@@ -50,6 +50,17 @@ def media_id(src):
     return unquote(m.group(1)).replace("_mv2.", "~mv2.")
 
 
+def page_path(raw):
+    url = raw.get("path") or raw.get("url") or ""
+    if url.startswith("/"):
+        return url
+    try:
+        path = urlparse(url).path or "/"
+    except Exception:
+        path = "/"
+    return path or "/"
+
+
 def clip(text, max_len=168):
     t = clean(text)
     if len(t) <= max_len:
@@ -67,24 +78,29 @@ def body_desc(paragraphs):
     return ""
 
 
+# Wix live scrape by path (the actual meta on that Wix page)
+scrape_by_path = {}
+for raw in PAGES:
+    path = page_path(raw)
+    desc = clean(raw.get("description") or "")
+    title = clean(raw.get("title") or "")
+    scrape_by_path[path] = {"title": title, "description": desc}
+
 EXPLICIT = {
     "sssaw": ["/model-school", "/model-school-podium"],
-    "m01ap": ["/master-class"],
     "e5jr8": ["/robototehnika-5-7"],
+    "e5n9o": ["/robototehnika-10-14"],
+    "hku95": ["/robototehnika-7-9"],
     "sk40z": ["/hs-2-zhivopis", "/hs-2-zhp"],
-    "a8kt5": ["/"],
     "vnmcv": ["/master-class"],
 }
 
 catalog = json.loads(CAT_PATH.read_text())
-by_title = {}
+by_full_title = {}
 for page in catalog["pages"]:
     key = norm_title(page.get("title") or "")
     if key:
-        by_title.setdefault(key, []).append(page["path"])
-    key2 = norm_title((page.get("title") or "").split("|")[0])
-    if key2:
-        by_title.setdefault(key2, []).append(page["path"])
+        by_full_title.setdefault(key, []).append(page["path"])
 
 wix_by_path = {}
 for row in WIX:
@@ -95,10 +111,23 @@ for row in WIX:
     paths = list(EXPLICIT.get(row["id"], []))
     key = norm_title(title)
     if key:
-        paths.extend(by_title.get(key, []))
-        paths.extend(by_title.get(norm_title(title.split("|")[0]), []))
+        hits = by_full_title.get(key) or []
+        if len(hits) == 1:
+            paths.append(hits[0])
+        elif len(hits) > 1:
+            paths.extend(hits)
     for path in dict.fromkeys(paths):
         wix_by_path[path] = {"title": title, "description": desc, "id": row["id"]}
+
+# Live Wix meta on the page wins over dump-by-title
+for path, row in scrape_by_path.items():
+    if row["description"]:
+        prev = wix_by_path.get(path)
+        wix_by_path[path] = {
+            "title": row["title"] or (prev or {}).get("title") or "",
+            "description": row["description"],
+            "id": (prev or {}).get("id") or "pages.json",
+        }
 
 MAP_PATH.write_text(json.dumps(wix_by_path, ensure_ascii=False, indent=2) + "\n")
 
@@ -112,8 +141,8 @@ for page in PAGES:
         if not alt:
             continue
         prev = alt_by_id.get(mid, "")
-        score = (0 if EXT.search(alt) or HASH.match(alt) else 2) + min(len(alt), 80) / 80
-        prev_score = (0 if EXT.search(prev) or HASH.match(prev) else 2) + min(len(prev), 80) / 80
+        score = (0 if EXT.search(alt) or HASH.match(alt) else 2) + min(len(alt), 120) / 120
+        prev_score = (0 if EXT.search(prev) or HASH.match(prev) else 2) + min(len(prev), 120) / 120
         if score >= prev_score:
             alt_by_id[mid] = alt
 
@@ -135,18 +164,13 @@ changed_desc = 0
 changed_alt = 0
 for page in catalog["pages"]:
     path = page["path"]
-    dump = wix_by_path.get(path) or wix_by_path.get(page.get("pathDecoded") or "")
+    decoded = page.get("pathDecoded") or path
+    dump = wix_by_path.get(path) or wix_by_path.get(decoded)
     current = clean(page.get("description") or "")
-    if dump:
+    if dump and dump["description"]:
         if current != dump["description"]:
             page["description"] = dump["description"]
             changed_desc += 1
-        if dump.get("title") and (
-            not page.get("title")
-            or "RASTUDIO.ORG" in (page.get("title") or "")
-            or INVENTED.search(page.get("title") or "")
-        ):
-            page["title"] = dump["title"]
     elif not current or INVENTED.search(current):
         from_body = body_desc(page.get("paragraphs"))
         if from_body and from_body != current:
@@ -184,9 +208,22 @@ lite["courses"] = catalog["courses"]
 lite["teachers"] = catalog.get("teachers") or lite.get("teachers")
 LITE_PATH.write_text(json.dumps(lite, ensure_ascii=False, separators=(",", ":")))
 
-print("wix paths", len(wix_by_path))
+print("wix paths", len(wix_by_path), "with desc", sum(1 for r in wix_by_path.values() if r.get("description")))
 print("desc updated", changed_desc)
 print("alts updated", changed_alt)
-print("mapped:")
-for p, row in sorted(wix_by_path.items()):
-    print(f"  {p} <- {row['id']}")
+print("key pages:")
+for p in [
+    "/robototehnika-5-7",
+    "/robototehnika-7-9",
+    "/robototehnika-10-14",
+    "/model-school",
+    "/model-school-podium",
+    "/hs-2-zhp",
+    "/legal-information",
+    "/o-nas",
+    "/kbmprof",
+    "/tmxprof",
+    "/art-studio-9-13",
+]:
+    row = wix_by_path.get(p)
+    print(f"  {p}: {(row or {}).get('id')} {(row or {}).get('description','')[:90]}")
