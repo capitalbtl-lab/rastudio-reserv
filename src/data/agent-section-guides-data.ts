@@ -33,7 +33,7 @@ const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Абонемент ученика", idField: "extras.live_tariff", link: "1 живой на диске. CRM только если пометки нет. e_date ≥ сегодня МСК" },
   { entity: "Занятие", idField: "lessonId", link: "журнал группы: calendar[].lessonId + customerIds + status. Новое — lessonId < 0, очередь lesson.create/update. Alfa только fresh. Явка ≠ cgi" },
   { entity: "Журнал уроков", idField: "customerIds + status", link: "stampJournal. attend/total с customerIds. ИИ читает явку с диска" },
-  { entity: "Деньги", idField: "pays[].id + customerId", link: "Остаток = сумма строк диска. ЮKassa webhook /api/pay/yookassa → appendPay + pay.create. Меню «Оплата»: Провести или ссылка. F5 не касса Alfa." },
+  { entity: "Деньги", idField: "pays[].id + customerId", link: "Остаток = сумма строк диска. Нет строк — extras.balance. customerPay → pay.create. Меню «Оплата» = pays[]. F5 не касса Alfa. Товар остаток не двигает" },
   { entity: "Каналы консультанта", idField: "comms[].id + customerId + channel", link: "Лента диска. Заявка, чат, ВК, MAX, SMS — actor=consultant сразу. commsPrompt в ответе. Alfa communication только «Обновить», не затирает свои id. В Alfa чат сайта, ВК, MAX и SMS не выгружаем" },
   { entity: "Webhook", idField: "/api/agent/vk|max|phone", link: "Один мозг chatAgent + телефон треда. ВК Callback confirmation+message_new. MAX subscriptions message_created/bot_started. Novofon NOTIFY_START + SMS, ответ SMS. Ключи API и интеграции. Треды storage/agent-inbox.json. Лента comms[]" },
   { entity: "Связь Alfa", idField: "linked | offline", link: "Разъём, не склад. Уход = offline. Настройка CRM → Фон с AlfaCRM. Каналы pull/push." },

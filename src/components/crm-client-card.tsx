@@ -230,7 +230,7 @@ function lessonsForCard(calendar: ClientLesson[] | undefined, regular: ClientReg
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-type CardAction = "customerSave" | "customerLesson" | "customerPay" | "customerPayLink" | "customerTariff" | "customerGroup";
+type CardAction = "customerSave" | "customerLesson" | "customerPay" | "customerTariff" | "customerGroup";
 
 function LeadField({ label, area, span, children }: { label: string; area?: string; span?: boolean; children: ReactNode }) {
   return (
@@ -260,7 +260,7 @@ export function CrmClientCard({
   loading?: boolean;
   onClose: () => void;
   onOpenGroup?: (groupId: number, branchId: number) => void;
-  onAction?: (action: CardAction, extra?: Record<string, unknown>) => Promise<{ url?: string } | void>;
+  onAction?: (action: CardAction, extra?: Record<string, unknown>) => Promise<void>;
   backLabel?: string;
   variant?: "overlay" | "panel";
   groupChoices?: GroupOffer[];
@@ -525,18 +525,7 @@ export function CrmClientCard({
     setBusy(action);
     setMsg("");
     try {
-      const res = await onAction(action, extra);
-      if (res && "url" in res && res.url) {
-        setMsg("Ссылка ЮKassa готова.");
-        try {
-          await navigator.clipboard.writeText(res.url);
-          setMsg("Ссылка скопирована. Откройте её родителю.");
-        } catch {
-          /* */
-        }
-        window.open(res.url, "_blank", "noopener");
-        return;
-      }
+      await onAction(action, extra);
       setMsg("Сохранено.");
       setPayKind("");
       setPaySum("");
@@ -594,14 +583,13 @@ export function CrmClientCard({
                     ))}
                   </div>
                   {payKind ? (
-                    <div className="mt-2 space-y-1.5">
+                    <div className="mt-2 flex gap-1.5">
                       <input
                         value={paySum}
                         onChange={(e) => setPaySum(e.target.value)}
                         placeholder="сумма"
-                        className="h-8 w-full rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/8"
+                        className="h-8 min-w-0 flex-1 rounded-lg bg-surface-2 px-2 text-sm ring-1 ring-black/8"
                       />
-                      <div className="flex gap-1.5">
                       <Button
                         type="button"
                         size="sm"
@@ -612,18 +600,6 @@ export function CrmClientCard({
                       >
                         Провести
                       </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="h-8 px-2.5 text-[0.72rem]"
-                        data-op="customerPayLink"
-                        disabled={Boolean(busy) || payKind === "refund" || payKind === "correct"}
-                        onClick={() => void run("customerPayLink", { payKind, sum: Number(String(paySum).replace(",", ".")) })}
-                      >
-                        Ссылка ЮKassa
-                      </Button>
-                    </div>
                     </div>
                   ) : null}
                   {(card.pays || []).length ? (
