@@ -1,8 +1,5 @@
 /** Аудитория карточки занятия — только филиал группы, без архива и без «всех подряд». */
 
-import { ALFA_PAY_LOCATIONS } from "./crm-pay-alfa";
-import { CRM_BRANCH } from "./ids";
-
 export type CrmRoom = { id: number; name: string; branchId: number };
 
 /** Имена из модалки Alfa calendar/create (company/2). Остальные филиалы — с слотов, подпись «аудитория N». */
@@ -13,6 +10,13 @@ export const SEED_ROOMS: CrmRoom[] = [
   { id: 22, name: "Ауд.3", branchId: 2 },
   { id: 27, name: "Ауд.3.1", branchId: 2 },
 ];
+
+const LOCATION_LABEL: Record<number, string> = {
+  1: 'Студия "Развивайся" (г.Коломна, ул.Гражданская, д.2)',
+  2: 'ЦМИТ "Развивайся" (г.Коломна, ул.Октябрьской революции, д. 340, 2 этаж)',
+  3: 'Студия "Развивайся" (г.Луховицы, ул.Пушкина, д.202А)',
+  4: 'Летние программы от Студии "Развивайся"',
+};
 
 export function roomArchived(x: Record<string, unknown>) {
   if ([x.removed, x.is_removed, x.archived, x.is_archived, x.is_delete].some((v) => Number(v) === 1 || v === true)) return true;
@@ -52,7 +56,7 @@ export function roomsOfBranchList(raw: Record<string, unknown>[], branch: number
   return out;
 }
 
-function prettyName(name: string, id: number) {
+function prettyName(name: string) {
   const s = String(name || "").trim();
   if (!s || /^аудитория\s+\d+$/i.test(s)) return "";
   return s;
@@ -67,7 +71,7 @@ export function mergeRooms(...lists: CrmRoom[][]) {
       if (!id || !branchId) continue;
       const k = `${branchId}:${id}`;
       const prev = map.get(k);
-      const name = prettyName(r.name, id) || prev?.name || `аудитория ${id}`;
+      const name = prettyName(r.name) || prev?.name || `аудитория ${id}`;
       map.set(k, { id, name, branchId });
     }
   }
@@ -98,8 +102,7 @@ export function roomsOfBranchCatalog(rooms: CrmRoom[], branchId: number) {
 
 export function roomsSelectGroups(rooms: CrmRoom[], branchId: number) {
   const list = roomsOfBranchCatalog(rooms, branchId);
-  const loc = ALFA_PAY_LOCATIONS.find((x) => x.branchId === branchId);
-  const label = loc?.name || CRM_BRANCH[branchId]?.name || "Аудитории";
+  const label = LOCATION_LABEL[branchId] || "Аудитории";
   return [
     {
       label,
