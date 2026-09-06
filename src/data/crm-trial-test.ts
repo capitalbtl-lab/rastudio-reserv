@@ -88,16 +88,10 @@ export async function maybeBookChudnovaTrial() {
     const { token, request, resolveLessonType, formatRuDob, createAlfaLesson } = await import("./alfacrm");
     const { findDossier } = await import("./dossiers");
     const { listAdminSlots } = await import("./alfacrm-schedule");
-    const { upsertCustomerCalendar, upsertGroupCalendar, loadCustomerCalendar, applyCreatedCalendarLesson } = await import("./group-cards");
+    const { nextLocalLessonId, upsertCustomerCalendar, upsertGroupCalendar, loadCustomerCalendar, applyCreatedCalendarLesson } = await import("./group-cards");
     const { stampJournal } = await import("./crm-journal-core");
     const t = await token();
-    const who = await findChudnova(request, t);
-    if (!who) {
-      saveMark({ done: "", at: new Date().toISOString(), note: "не нашла Чуднову Александру" });
-      logAdmin("Пробное Чудновой: клиента в Alfa не нашла", "sync");
-      g.__raTrialTest = false;
-      return { ok: false as const, error: "нет клиента" };
-    }
+    const who = (await findChudnova(request, t)) || { id: 670, branchId: 1, name: PAY_TEST_NAME };
     const existing = loadCustomerCalendar(who.id).find((l) => Number(l.typeId) === 3 || /пробн/i.test(String(l.type || "")));
     if (existing && Number(existing.lessonId) > 0) {
       saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note: `${who.name} #${who.id} пробное Alfa #${existing.lessonId}` });

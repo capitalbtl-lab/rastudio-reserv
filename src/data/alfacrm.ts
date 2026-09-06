@@ -425,12 +425,16 @@ export async function createAlfaLesson(opts: {
   if (!date) date = nextDateForCrmDay(moscowParts().day === 7 ? 1 : moscowParts().day + 1);
   if (!time) time = "16:00";
   if (!subjectId) return { ok: false as const, error: "no-subject" as const };
-  const created = await request<{ success?: boolean; errors?: unknown; model?: { id?: number } }>(
+  const [hh, mm] = time.split(":").map(Number);
+  const tot = (Number(hh) || 0) * 60 + (Number(mm) || 0) + duration;
+  const timeTo = `${String(Math.floor((tot % (24 * 60)) / 60)).padStart(2, "0")}:${String((tot % (24 * 60)) % 60).padStart(2, "0")}`;
+  const created = await request<{ success?: boolean; errors?: unknown; model?: { id?: number }; id?: number; data?: { id?: number } }>(
     `/v2api/${opts.branch}/lesson/create`,
     {
       lesson_type_id: type.id,
       lesson_date: date,
       time_from: time,
+      time_to: timeTo,
       duration,
       subject_id: subjectId,
       customer_ids: [opts.customerId],
@@ -442,7 +446,7 @@ export async function createAlfaLesson(opts: {
     },
     t,
   );
-  const id = created.model?.id;
+  const id = Number(created.model?.id || created.id || created.data?.id) || 0;
   if (created.success === false || !id) {
     throw new Error(`alfacrm-lesson ${JSON.stringify(created.errors || created)}`);
   }
