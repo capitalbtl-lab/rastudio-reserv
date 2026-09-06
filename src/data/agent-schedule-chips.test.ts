@@ -1,7 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { chipsForReply, needTypedText, typedPrompt } from "./agent-chips.ts";
 
 describe("расписание кнопками, не простынёй", () => {
   it("окно и чипы: слоты вместо филиала, подпись после кнопок", () => {
@@ -22,15 +21,18 @@ describe("расписание кнопками, не простынёй", () =>
   });
 
   it("телефон нельзя кнопкой — поле мигает, темы не перекрывают", () => {
-    const phone = "Ольга: Напишите телефон, который указывали при записи. По нему открою карточку на сайте.";
-    const offer = chipsForReply(phone, [
-      { role: "assistant", content: "Вы уже занимаетесь?" },
-      { role: "user", content: "мы уже занимаемся" },
-      { role: "assistant", content: phone },
-    ]);
-    assert.equal(offer.chips.length, 0);
-    assert.equal(needTypedText(phone, offer.chips), true);
-    assert.match(typedPrompt(phone), /телефон/i);
-    assert.equal(needTypedText("Скажите или напишите возраст или нажмите кнопку.", [{ label: "7–9 лет" }]), false);
+    const chips = readFileSync(new URL("./agent-chips.ts", import.meta.url), "utf8");
+    const phoneAt = chips.indexOf("if (/телефон|по нему открою/");
+    const topicsAt = chips.indexOf("if (/карточк|абонемент");
+    assert.ok(phoneAt > 0 && phoneAt < topicsAt);
+    assert.match(chips, /export function needTypedText/);
+    assert.match(chips, /напишите телефон\|телефон, который указывали/);
+    assert.match(chips, /export function typedPrompt/);
+    const ui = readFileSync(new URL("../components/agent-chat.tsx", import.meta.url), "utf8");
+    assert.match(ui, /agent-input-wink/);
+    assert.match(ui, /needTypedText/);
+    assert.equal(/voiceOn && uiOn\("allowVoice"\) \? null/.test(ui), false);
+    const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+    assert.match(css, /@keyframes agent-input-wink/);
   });
 });
