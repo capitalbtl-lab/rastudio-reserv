@@ -1739,6 +1739,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         entityId: customerId,
         body: packAlfaPayCreate({
           customerId,
+          branchId: Number(d?.branchId || branch),
           documentDate: ru,
           income: fx.income,
           expenditure: fx.expenditure,

@@ -26,10 +26,11 @@ import type { GroupCalLesson } from "@/data/crm-slots-core";
 import { commChannelLabel } from "@/data/crm-comms-core";
 import {
   ALFA_PAY_ACCOUNTS,
-  ALFA_PAY_LOCATIONS,
   ALFA_PAY_MANAGERS,
   ALFA_PAY_METHODS,
+  defaultPayItemId,
   locationIdForBranch,
+  locationsOfBranch,
   payItemGroups,
 } from "@/data/crm-pay-alfa";
 
@@ -585,7 +586,7 @@ export function CrmClientCard({
                   setPayGroupId(gs.length === 1 ? String(gs[0].id) : "");
                   setPayDate(todayIso());
                   setPayAccountId("1");
-                  if (!payItemId) setPayItemId("2");
+                  setPayItemId(String(defaultPayItemId(card.branchId)));
                   setHeadMenu("pay");
                 }}
                 className={cn(
@@ -635,12 +636,18 @@ export function CrmClientCard({
                         options={ALFA_PAY_ACCOUNTS.map((x) => ({ value: String(x.id), label: x.name }))}
                       />
                       <span className="text-muted">Статья</span>
-                      <RaSelect value={payItemId} onChange={setPayItemId} groups={payItemGroups()} placeholder="Статья дохода" />
+                      <RaSelect value={payItemId} onChange={setPayItemId} groups={payItemGroups(card.branchId)} placeholder="Статья дохода" />
                       <span className="text-muted">Локация</span>
                       <RaSelect
                         value={payLocationId}
                         onChange={setPayLocationId}
-                        options={[{ value: "", label: "(не задано)" }, ...ALFA_PAY_LOCATIONS.map((x) => ({ value: String(x.id), label: x.name }))]}
+                        options={[
+                          { value: "", label: "(не задано)" },
+                          ...locationsOfBranch(card.branchId)
+                            .filter((x) => x.id > 0)
+                            .map((x) => ({ value: String(x.id), label: x.name })),
+                        ]}
+                        placeholder={locationsOfBranch(card.branchId)[0]?.name || "(не задано)"}
                       />
                       <span className="text-muted">Менеджер</span>
                       <RaSelect
