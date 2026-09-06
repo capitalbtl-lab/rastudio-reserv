@@ -90,6 +90,44 @@ export function sameExportJob(
   return a.entityId === b.entityId;
 }
 
+const CREATE_OPS: CrmExportOp[] = [
+  "customer.create",
+  "group.create",
+  "lead-status.create",
+  "subject.create",
+  "lesson.create",
+  "pay.create",
+  "regular-lesson.create",
+];
+
+export function canRunExportJob(job: { op: CrmExportOp; entityId: number }) {
+  if (!isLocalId(job.entityId)) return true;
+  return CREATE_OPS.includes(job.op);
+}
+
+function foldLocalIntoCreate(
+  jobs: CrmExportJob[],
+  incoming: Omit<CrmExportJob, "id" | "at" | "tries"> & { id?: string; at?: string; tries?: number },
+  at: string,
+): CrmExportJob[] | null {
+  if (!isLocalId(incoming.entityId)) return null;
+  if (incoming.op !== "customer.update" && incoming.op !== "cgi.apply" && incoming.op !== "lesson.create") return null;
+  const create = jobs.find(
+    (j) => j.op === "customer.create" && (j.entityId === incoming.entityId || Number(j.body.localId) === incoming.entityId),
+  );
+  if (!create) return null;
+  const body = { ...create.body };
+  if (incoming.op === "customer.update") Object.assign(body, incoming.body);
+  if (incoming.op === "cgi.apply") {
+    const gid = Number(incoming.body.groupId) || 0;
+    if (gid) body.group_ids = incoming.body.drop ? [] : [gid];
+  }
+  if (incoming.op === "lesson.create") body.lesson = { ...(typeof body.lesson === "object" && body.lesson ? body.lesson : {}), ...incoming.body };
+  return jobs.map((j) =>
+    j.id === create.id ? { ...j, body, at, tries: 0, actor: incoming.actor || j.actor } : j,
+  );
+}
+
 /** Одна правка одной сущности: поля сливаются, последняя запись побеждает. */
 export function mergeExportJob(jobs: CrmExportJob[], incoming: Omit<CrmExportJob, "id" | "at" | "tries"> & { id?: string; at?: string; tries?: number }): CrmExportJob[] {
   const at = incoming.at || new Date().toISOString();

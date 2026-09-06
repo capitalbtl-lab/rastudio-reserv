@@ -9,6 +9,7 @@ import {
   isSingleExportOp,
   exportJobSnap,
   remapExportJobs,
+  canRunExportJob,
   type CrmExportJob,
   type CrmExportState,
 } from "./crm-export-queue-core";
@@ -16,7 +17,8 @@ import { pendingEntityIds } from "./crm-inbound-core";
 import { logAdmin } from "./admin-settings";
 
 const MAX_TRIES = 5;
-const g = globalThis as { __raCrmExportBusy?: boolean };
+const BUSY_MS = 45000;
+const g = globalThis as { __raCrmExportBusy?: boolean; __raCrmExportBusyAt?: number; __raCrmExportFollow?: ReturnType<typeof setTimeout> };
 
 function fileOf() {
   return join(process.cwd(), "storage", "crm-export-queue.json");
@@ -60,12 +62,25 @@ export function enqueueExport(incoming: Omit<CrmExportJob, "id" | "at" | "tries"
   q.lastAt = new Date().toISOString();
   q.lastNote = `${incoming.op} ${incoming.entityId}`;
   saveExport(q);
-  if (!g.__raCrmExportBusy) void tickExportQueue(2);
+  void tickExportQueue(3);
   return crmExportSnapshot();
 }
 
+function followExport() {
+  if (g.__raCrmExportFollow) return;
+  g.__raCrmExportFollow = setTimeout(() => {
+    g.__raCrmExportFollow = undefined;
+    const q = loadExport();
+    if (!q.jobs.some(canRunExportJob)) return;
+    void tickExportQueue(3);
+  }, 600);
+}
+
 export async function tickExportQueue(take = 2) {
-  if (g.__raCrmExportBusy) return crmExportSnapshot();
+  if (g.__raCrmExportBusy) {
+    if (g.__raCrmExportBusyAt && Date.now() - g.__raCrmExportBusyAt > BUSY_MS) g.__raCrmExportBusy = false;
+    else return crmExportSnapshot();
+  }
   const { alfaLinkedNow } = await import("./crm-alfa-link");
   if (!alfaLinkedNow()) {
     const q = loadExport();
@@ -77,13 +92,15 @@ export async function tickExportQueue(take = 2) {
     return crmExportSnapshot();
   }
   g.__raCrmExportBusy = true;
+  g.__raCrmExportBusyAt = Date.now();
   try {
     const { token, request } = await import("./alfacrm");
     const t = await token();
     let q = loadExport();
-    const first = q.jobs[0];
+    const first = q.jobs.find(canRunExportJob) || q.jobs[0];
     const n = isSingleExportOp(first?.op || "group.update") ? 1 : Math.max(1, take);
-    const batch = q.jobs.slice(0, n);
+    const batch = q.jobs.filter(canRunExportJob).slice(0, n);
+    if (!batch.length) return crmExportSnapshot();
     for (const job of batch) {
       try {
         if (job.op === "cgi.apply") {
@@ -291,5 +308,7 @@ export async function tickExportQueue(take = 2) {
     return crmExportSnapshot();
   } finally {
     g.__raCrmExportBusy = false;
+    g.__raCrmExportBusyAt = 0;
+    followExport();
   }
 }

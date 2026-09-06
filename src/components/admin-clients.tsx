@@ -767,9 +767,8 @@ export function AdminClients({
         setFunnelItems(snap.items);
         if (snap.stages?.length) setFunnelStages(mergeStages(snap.stages));
       }
-      return;
     }
-    void loadFunnel(branch, false, false);
+    void loadFunnel(branch, false, true);
   }, [status, view, branch]);
 
   useEffect(() => {
@@ -783,7 +782,7 @@ export function AdminClients({
     if (!(status === "лид" && view === "дети")) return;
     const t = window.setInterval(() => {
       if (document.hidden) return;
-      void loadFunnel(branchRef.current, false, false);
+      void loadFunnel(branchRef.current, false, true);
     }, crmSyncMinutes() * 60 * 1000);
     return () => window.clearInterval(t);
   }, [status, view]);

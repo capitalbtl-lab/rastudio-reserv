@@ -298,6 +298,7 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
 }
 
 function kickBackground() {
+  void import("./crm-export-queue").then((m) => m.tickExportQueue(3)).catch(() => null);
   const pol = loadCachePolicy();
   const rule = pol.rules.pupilTariffs;
   const cgiStale = overlayStale({
