@@ -640,6 +640,66 @@ export function AgentChat() {
     return null;
   }
 
+  function startVad() {
+    if (vadRafRef.current) {
+      cancelAnimationFrame(vadRafRef.current);
+      vadRafRef.current = 0;
+    }
+    const stream = micStreamRef.current;
+    if (!stream || !bargeRef.current) return;
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
+    try {
+      const ctx = new AC();
+      if (ctx.state === "suspended") void ctx.resume();
+      const src = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      src.connect(analyser);
+      const data = new Uint8Array(analyser.fftSize);
+      let over = 0;
+      const tick = () => {
+        if (!speakingRef.current || !bargeRef.current) {
+          try {
+            src.disconnect();
+            void ctx.close();
+          } catch {
+            /* */
+          }
+          vadRafRef.current = 0;
+          return;
+        }
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 1) {
+          const n = (data[i] - 128) / 128;
+          sum += n * n;
+        }
+        const rms = Math.sqrt(sum / data.length);
+        if (Date.now() > ignoreUntilRef.current && rms > 0.11) {
+          over += 1;
+          if (over >= 7) {
+            cancelSpeech();
+            startListen();
+            try {
+              src.disconnect();
+              void ctx.close();
+            } catch {
+              /* */
+            }
+            return;
+          }
+        } else {
+          over = 0;
+        }
+        vadRafRef.current = requestAnimationFrame(tick);
+      };
+      vadRafRef.current = requestAnimationFrame(tick);
+    } catch {
+      /* AudioContext */
+    }
+  }
+
   async function speak(phrase: string) {
     cancelSpeech();
     const gen = genRef.current;
@@ -648,8 +708,13 @@ export function AgentChat() {
       .map((t) => t.text)
       .join(" ");
     setSpeaking(true);
-    ignoreUntilRef.current = Date.now() + (bargeRef.current ? 220 : 500);
-    if (voiceOnRef.current) startListen();
+    ignoreUntilRef.current = Date.now() + (bargeRef.current ? 280 : 480);
+    if (voiceOnRef.current && bargeRef.current) {
+      startListen();
+      startVad();
+    } else {
+      stopListen(true);
+    }
     try {
       const mode = adminLeft() > 0 ? "olga" : partnerRef.current;
       const turns = parseTurns(phrase, mode);
@@ -675,12 +740,27 @@ export function AgentChat() {
         }
       }
     } finally {
+      if (vadRafRef.current) {
+        cancelAnimationFrame(vadRafRef.current);
+        vadRafRef.current = 0;
+      }
       if (gen === genRef.current) {
         speakingRef.current = false;
         setSpeaking(false);
-        ignoreUntilRef.current = Date.now() + (bargeRef.current ? 80 : 140);
+        ignoreUntilRef.current = Date.now() + (bargeRef.current ? 80 : 60);
+        if (voiceOnRef.current && !busyRef.current) {
+          window.setTimeout(() => {
+            if (gen === genRef.current && voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
+          }, bargeRef.current ? 30 : 60);
+        }
       }
     }
+  }
+
+  async function maybeSpeak(phrase: string) {
+    if (!voiceOnRef.current || !phrase.trim()) return;
+    if (!uiOn("speakEveryReply")) return;
+    await speak(phrase);
   }
 
   function isEcho(said: string, loose = false) {
@@ -718,29 +798,44 @@ export function AgentChat() {
     if (!SR) return;
     listenWantedRef.current = true;
     if (recRef.current) {
-      try {
-        recRef.current.start();
-        setListening(true);
-      } catch {
-        /* already started */
+      if (recRef.current.interimResults !== !!bargeRef.current) {
+        try {
+          recRef.current.stop();
+        } catch {
+          /* */
+        }
+        recRef.current = null;
+      } else {
+        try {
+          recRef.current.start();
+          setListening(true);
+        } catch {
+          /* already started */
+        }
+        return;
       }
-      return;
     }
     const rec = new SR();
     rec.lang = "ru-RU";
     rec.continuous = true;
-    rec.interimResults = false;
+    rec.interimResults = !!bargeRef.current;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
       if (busyRef.current) return;
       const last = e.results[e.results.length - 1];
-      if (last && "isFinal" in last && last.isFinal === false) return;
       const said = last?.[0]?.transcript?.trim();
       if (!said) return;
       if (Date.now() < ignoreUntilRef.current) return;
-      if (isEcho(said, speakingRef.current)) return;
-      if (speakingRef.current && !bargeRef.current) return;
-      if (speakingRef.current) cancelSpeech();
+      if (isEcho(said, false)) return;
+      const isFinal = !("isFinal" in last) || last.isFinal !== false;
+      if (speakingRef.current) {
+        if (!bargeRef.current) return;
+        const words = said.split(/\s+/).filter((w) => w.length > 1);
+        if (!isFinal && words.length < 1) return;
+        cancelSpeech();
+        if (!isFinal) return;
+      }
+      if (!isFinal) return;
       void send(said);
     };
     rec.onend = () => {
