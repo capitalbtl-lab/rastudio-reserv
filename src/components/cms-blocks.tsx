@@ -16,6 +16,7 @@ import { CoursePrice } from "@/components/course-price";
 import { ageBadge, courseNameOnly } from "@/data/ages";
 import { cn } from "@/lib/utils";
 import { collageShotsFor, HeroCollage, type CollageShot } from "@/components/hero-collage";
+import { SiteVideo } from "@/components/site-video";
 export { ScheduleBlock } from "@/components/schedule-block";
 
 export function Kicker({ children, className }: { children: string; className?: string }) {
@@ -161,6 +162,7 @@ export function CoursePageHero({
   title,
   description,
   images,
+  video,
   facts,
   path,
   secondary,
@@ -195,6 +197,7 @@ export function CoursePageHero({
   );
 
   return (
+    <>
     <section className="ink relative isolate overflow-hidden text-header-fg">
       <div className="page-wrap grid items-center gap-10 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[88dvh] lg:gap-8 lg:py-8">
         <div className="relative z-10 max-w-xl">
@@ -242,6 +245,12 @@ export function CoursePageHero({
         <HeroCollage shots={shots} />
       </div>
     </section>
+    {video ? (
+      <div className="page-wrap py-8">
+        <SiteVideo src={video} title={title} className="aspect-video w-full overflow-hidden rounded-3xl" />
+      </div>
+    ) : null}
+    </>
   );
 }
 
