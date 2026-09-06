@@ -169,8 +169,9 @@ export async function tickExportQueue(take = 2) {
           const customerId = ids.find((n) => n > 0) || Number(job.entityId) || 0;
           if (customerId <= 0) throw new Error("занятие ждёт номер клиента в Alfa");
           const kind = String(job.body.type || job.body.lesson_type_id || "trial");
+          const trial = kind === "trial" || kind === "3" || kind === "Пробное" || Number(job.body.lesson_type_id) === 3;
           const gidRaw = job.body.gid != null ? String(job.body.gid) : Array.isArray(job.body.group_ids) ? String(job.body.group_ids[0] || "") : "";
-          const gid = kind === "trial" || kind === "3" || kind === "Пробное" ? "" : gidRaw;
+          const gid = trial ? "" : gidRaw;
           const booked = await createAlfaLesson({
             branch: job.branchId,
             customerId,
@@ -183,7 +184,7 @@ export async function tickExportQueue(take = 2) {
             note: job.body.note ? String(job.body.note) : undefined,
             topic: job.body.topic ? String(job.body.topic) : undefined,
             teacherId: Number(job.body.teacherId || (Array.isArray(job.body.teacher_ids) ? job.body.teacher_ids[0] : 0)) || undefined,
-            roomId: Number(job.body.roomId || job.body.room_id) || undefined,
+            roomId: trial ? 0 : Number(job.body.roomId || job.body.room_id) || undefined,
           });
           if (!booked.ok) throw new Error(booked.error || "урок не создался");
           const localId = Number(job.body.localId || (job.entityId < 0 ? job.entityId : 0)) || 0;

@@ -7,8 +7,15 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 LOCK=/tmp/rastudio-deploy.lock
+if [ -f "$LOCK" ]; then
+  age=$(( $(date +%s) - $(stat -c %Y "$LOCK" 2>/dev/null || echo 0) ))
+  if [ "$age" -gt 720 ]; then
+    echo "[deploy] снимаю зависший lock (${age}s)"
+    rm -f "$LOCK"
+  fi
+fi
 exec 9>"$LOCK"
-if ! flock -n 9; then
+if ! flock -w 15 9; then
   echo "[deploy] уже идёт"
   exit 0
 fi
