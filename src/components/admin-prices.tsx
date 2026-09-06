@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import {
   adminLogin,
   adminCalls,
@@ -10,12 +10,13 @@ import { Button } from "@/components/ui/button";
 import { adminGhostBtn, AdminSelfTest } from "@/components/admin-self-test";
 import { cn } from "@/lib/utils";
 import { tidyHttpError } from "@/data/http-error";
+import { lazyWithRetry, TabError } from "@/lib/error-component";
 
-const AdminCalls = lazy(() => import("@/components/admin-calls").then((m) => ({ default: m.AdminCalls })));
-const AdminAgent = lazy(() => import("@/components/admin-agent").then((m) => ({ default: m.AdminAgent })));
-const AdminDossiers = lazy(() => import("@/components/admin-dossiers").then((m) => ({ default: m.AdminDossiers })));
-const AdminSchedule = lazy(() => import("@/components/admin-schedule").then((m) => ({ default: m.AdminSchedule })));
-const AdminIntegrations = lazy(() => import("@/components/admin-integrations").then((m) => ({ default: m.AdminIntegrations })));
+const AdminCalls = lazyWithRetry(() => import("@/components/admin-calls").then((m) => ({ default: m.AdminCalls })));
+const AdminAgent = lazyWithRetry(() => import("@/components/admin-agent").then((m) => ({ default: m.AdminAgent })));
+const AdminDossiers = lazyWithRetry(() => import("@/components/admin-dossiers").then((m) => ({ default: m.AdminDossiers })));
+const AdminSchedule = lazyWithRetry(() => import("@/components/admin-schedule").then((m) => ({ default: m.AdminSchedule })));
+const AdminIntegrations = lazyWithRetry(() => import("@/components/admin-integrations").then((m) => ({ default: m.AdminIntegrations })));
 
 const KEY = "ra_admin";
 type Tab = "schedule" | "agent" | "calls" | "dossiers" | "apis";
@@ -291,30 +292,38 @@ export function AdminPrices() {
       {err ? <p className="mt-4 text-sm text-primary">{err}</p> : null}
 
       {tab === "schedule" ? (
-        <Suspense fallback={<p className="mt-8 text-sm text-muted">Открываю кабинет…</p>}>
+        <TabPane>
           <AdminSchedule />
-        </Suspense>
+        </TabPane>
       ) : null}
       {tab === "calls" ? (
-        <Suspense fallback={<p className="mt-8 text-sm text-muted">Открываю кабинет…</p>}>
+        <TabPane>
           <AdminCalls />
-        </Suspense>
+        </TabPane>
       ) : null}
       {tab === "dossiers" ? (
-        <Suspense fallback={<p className="mt-8 text-sm text-muted">Открываю кабинет…</p>}>
+        <TabPane>
           <AdminDossiers />
-        </Suspense>
+        </TabPane>
       ) : null}
       {tab === "agent" ? (
-        <Suspense fallback={<p className="mt-8 text-sm text-muted">Открываю кабинет…</p>}>
+        <TabPane>
           <AdminAgent />
-        </Suspense>
+        </TabPane>
       ) : null}
       {tab === "apis" ? (
-        <Suspense fallback={<p className="mt-8 text-sm text-muted">Открываю кабинет…</p>}>
+        <TabPane>
           <AdminIntegrations />
-        </Suspense>
+        </TabPane>
       ) : null}
     </article>
+  );
+}
+
+function TabPane({ children }: { children: ReactNode }) {
+  return (
+    <TabError>
+      <Suspense fallback={<p className="mt-8 text-sm text-muted">Открываю кабинет…</p>}>{children}</Suspense>
+    </TabError>
   );
 }

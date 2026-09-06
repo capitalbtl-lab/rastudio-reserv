@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isTransientHttp, tidyHttpError } from "./http-error.ts";
+import { readFileSync } from "node:fs";
+import { isChunkLoadError, isTransientHttp, tidyHttpError } from "./http-error.ts";
 
 describe("ошибки шлюза в кабинете", () => {
   it("502 nginx не показывает HTML", () => {
@@ -23,5 +24,17 @@ describe("ошибки шлюза в кабинете", () => {
   it("502 считается временной", () => {
     assert.equal(isTransientHttp("502 Bad Gateway"), true);
     assert.equal(isTransientHttp("Нужен вход администратора."), false);
+  });
+
+  it("пропавший чанк после деплоя — не белый экран", () => {
+    assert.equal(isChunkLoadError("Failed to fetch dynamically imported module: https://www.rastudio.org/assets/admin-schedule-CninKylb.js"), true);
+    assert.equal(isChunkLoadError("Нужен вход администратора."), false);
+    const ui = readFileSync(new URL("../lib/error-component.tsx", import.meta.url), "utf8");
+    assert.match(ui, /lazyWithRetry/);
+    assert.match(ui, /TabError/);
+    assert.match(ui, /Кабинет обновился/);
+    const prices = readFileSync(new URL("../components/admin-prices.tsx", import.meta.url), "utf8");
+    assert.match(prices, /lazyWithRetry/);
+    assert.match(prices, /TabPane/);
   });
 });

@@ -20,3 +20,8 @@ export function isTransientHttp(raw: unknown): boolean {
   const s = String(raw instanceof Error ? raw.message : raw || "");
   return /502|504|Bad Gateway|Gateway Time|unhandled|status.:.?500|перезапуск|не ответил/i.test(s);
 }
+
+export function isChunkLoadError(raw: unknown): boolean {
+  const s = String(raw instanceof Error ? raw.message : raw || "");
+  return /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError|dynamically imported module/i.test(s);
+}
