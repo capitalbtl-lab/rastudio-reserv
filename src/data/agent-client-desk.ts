@@ -6,7 +6,7 @@ import { journalForCustomer, lessonStatusLabel } from "./crm-journal-core.ts";
 import { customerBalance } from "./crm-pay.ts";
 import { appendComm } from "./crm-comms.ts";
 import { listAdminSlots } from "./alfacrm-schedule.ts";
-import { loadTariffs } from "./crm-tariffs.ts";
+import { loadTariffs, matchTariffs } from "./crm-tariffs.ts";
 import { enqueueExport } from "./crm-export-queue.ts";
 import { digestPrompt, pauseUntilIso, STUDIO_RULES_SHORT, type ClientDigest } from "./agent-client-desk-core.ts";
 import { WEEKDAY_CHIPS, type SessionFacts } from "./agent-facts.ts";
@@ -102,11 +102,26 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
     };
   }
   if (intent === "абонемент") {
+    if (!rights.consultantCanTariff) {
+      return {
+        reply: `${n}: ${child}: абонемент ${d?.tariff || "нет пометки"}, остаток ${d ? d.balance : "—"}. Назначить абонемент может администратор по телефону 8 (800) 511-34-01.`,
+        chips: [],
+      };
+    }
+    const offers = tariffsForClient(facts.customerId);
+    if (!offers.length) {
+      return {
+        reply: `${n}: ${child}: абонемент ${d?.tariff || "нет пометки"}, остаток ${d ? d.balance : "—"}. Шаблонов для групп на диске не вижу. Назовите tariffId или кабинет.`,
+        chips: [],
+      };
+    }
     return {
-      reply: rights.consultantCanTariff
-        ? `${n}: ${child}: абонемент ${d?.tariff || "нет пометки"}, остаток ${d ? d.balance : "—"}. Назвать tariffId, чтобы повесить, или хватит остатка?`
-        : `${n}: ${child}: абонемент ${d?.tariff || "нет пометки"}, остаток ${d ? d.balance : "—"}. Назначить абонемент может администратор по телефону 8 (800) 511-34-01.`,
-      chips: [],
+      reply: `${n}: ${child}: абонемент ${d?.tariff || "нет пометки"}, остаток ${d ? d.balance : "—"}. Нажмите шаблон — повешу на карточку. Можно сказать номер.`,
+      chips: offers.map((t, i) => ({
+        label: t.price ? `${t.name} · ${t.price} ₽` : t.name,
+        send: `Повесьте абонемент tariff_id=${t.id}`,
+        primary: i === 0,
+      })),
     };
   }
   if (intent === "правила") {
@@ -254,6 +269,35 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
   return null;
 }
 
+export function tariffsForClient(customerId: number) {
+  const id = Number(customerId) || 0;
+  if (!id) return [] as { id: number; name: string; price: number }[];
+  const d = findDossier({ crmId: id });
+  if (!d) return [];
+  const slots = listAdminSlots();
+  const seen = new Set<number>();
+  const out: { id: number; name: string; price: number }[] = [];
+  const push = (t: { id: number; name: string; price: number; archive?: boolean }) => {
+    if (!t.id || t.archive || seen.has(t.id)) return;
+    seen.add(t.id);
+    out.push({ id: t.id, name: t.name || `абонемент ${t.id}`, price: Number(t.price) || 0 });
+  };
+  for (const g of d.groupLinks || []) {
+    if (g.active === false || !g.id) continue;
+    const slot = slots.find((s) => s.groupId === g.id && s.branchId === (g.branchId || d.branchId)) || slots.find((s) => s.groupId === g.id);
+    if (!slot) continue;
+    for (const t of matchTariffs(slot)) push(t);
+  }
+  if (!out.length) {
+    const branch = Number(d.branchId) || 1;
+    for (const t of loadTariffs().items) {
+      if (t.branchIds?.length && !t.branchIds.includes(branch)) continue;
+      push(t);
+    }
+  }
+  return out.slice(0, 8);
+}
+
 function parseChipIds(text: string) {
   const g = String(text || "");
   const num = (re: RegExp) => {
@@ -345,6 +389,32 @@ export async function completeClientAction(
       reply: saved.ok
         ? `${n}: ${put} ${label}${ids.date ? ` на ${ids.date}` : ""}${ids.time ? ` в ${ids.time}` : ""}. Alfa догонит очередью.`
         : `${n}: ${saved.error || "Не получилось поставить."}`,
+      chips: [],
+      done: true,
+    };
+  }
+
+  const tariffHit = lastUser.match(/tariff_id=(\d+)/i);
+  if (tariffHit || (facts.intent === "абонемент" && /повесь|назначь|повесьте абонемент/i.test(lastUser))) {
+    if (rights.consultantCanTariff === false) {
+      return { reply: `${n}: Абонемент вешает администратор. ${phoneHint()}`, chips: [], done: true };
+    }
+    const tariffId = Number(tariffHit?.[1] || lastUser.match(/\b(\d{3,7})\b/)?.[1] || 0);
+    if (!tariffId) {
+      const lock = await lockedClientTurn(who, facts, rights, lastUser);
+      if (lock) return { reply: lock.reply, chips: lock.chips, done: true };
+      return { reply: `${n}: Назовите tariffId шаблона.`, chips: [], done: true };
+    }
+    const res = applyClientTariff({
+      customerId: facts.customerId,
+      tariffId,
+      groupId: Number(d?.groups[0]?.groupId) || 0,
+      branchId: Number(d?.branchId) || 0,
+    });
+    return {
+      reply: res.ok
+        ? `${n}: Повесила абонемент tariffId=${res.tariffId} на ${child}. Alfa догонит очередью.`
+        : `${n}: ${res.error}`,
       chips: [],
       done: true,
     };

@@ -1355,6 +1355,17 @@ export function AgentChat() {
                           {turn.text}
                         </div>
                       </div>
+                      {uiOn("allowVoice") && i === lastAs && t === view.length - 1 && !busy ? (
+                        <button
+                          type="button"
+                          className="mb-1 grid size-8 shrink-0 place-items-center rounded-full bg-white text-muted shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground"
+                          title="Повторить ответ"
+                          aria-label="Повторить ответ"
+                          onClick={() => void replayLast(`${turn.who === "olga" ? "Ольга" : "Олег"}: ${turn.text}`)}
+                        >
+                          <Repeat2 className="size-3.5" />
+                        </button>
+                      ) : null}
                     </div>
                   ))}
                   {chipBar}
@@ -1407,6 +1418,17 @@ export function AgentChat() {
                 )}
               >
                 {bargeOn ? "Перебивать можно — говорите поверх" : "Включить перебивание"}
+              </button>
+            ) : null}
+            {voiceOn ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void replayLast()}
+                className="flex h-8 w-full items-center justify-center gap-1.5 rounded-full bg-[#eef1f7] text-[0.72rem] font-semibold text-fg disabled:opacity-40"
+              >
+                <Repeat2 className="size-3.5" />
+                Повторить ответ
               </button>
             ) : null}
             </div>
