@@ -506,7 +506,7 @@ describe("воронка: F5 не тянет полную Alfa", () => {
     const src = readFileSync(new URL("./crm-leads.ts", import.meta.url), "utf8");
     assert.doesNotMatch(src, /if \(!hit\?\.items\.length\) return loadLeadsBoard\(branchId, true\)/);
     assert.match(src, /boardFromDisk/);
-    assert.match(src, /void syncLeadsDelta/);
+    assert.match(src, /await syncLeadsDelta/);
     const ui = readFileSync(new URL("../components/admin-clients.tsx", import.meta.url), "utf8");
     assert.match(ui, /loadFunnel\(branch, false, true\)/);
     assert.match(ui, /Загрузить «Лидов»/);

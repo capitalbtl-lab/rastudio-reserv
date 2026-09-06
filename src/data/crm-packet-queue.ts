@@ -319,6 +319,9 @@ function kickBackground() {
   if (wantAlfaPullChannel("customers")) {
     void import("./dossiers").then((m) => m.syncCustomersDelta()).catch(() => null);
   }
+  if (wantAlfaPullChannel("leads")) {
+    void import("./crm-leads").then((m) => m.syncLeadsDelta(0)).catch(() => null);
+  }
   const pol = loadCachePolicy();
   const rule = pol.rules.pupilTariffs;
   const cgiStale = overlayStale({

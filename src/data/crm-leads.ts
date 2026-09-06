@@ -405,6 +405,8 @@ async function fetchBranchLeads(t: string, branch: number, stages: { id: number 
   return { items: out, fromBoard, boardError: board.length ? "" : login.error || "доска CRM не открылась" };
 }
 
+let leadDeltaBusy = false;
+
 export async function syncLeadsDelta(branchId = 0): Promise<Bag> {
   const key = String(branchId || 0);
   let hit = bag().get(key);
@@ -415,48 +417,112 @@ export async function syncLeadsDelta(branchId = 0): Promise<Bag> {
     persistLeads();
     hit = disk;
   }
-  const t = await alfaToken();
-  const since = crmUpdatedAtFrom(hit.at);
-  const branches = branchId ? [branchId] : [1, 2, 3, 4];
-  const incoming: LeadCard[] = [];
-  const dropped: number[] = [];
-  const seen = new Set<number>();
-  await Promise.all(
-    branches.map((b) =>
-      pagedIndex(
-        `/v2api/${b}/customer/index`,
-        { updated_at_from: since },
-        t,
-        (it) => {
-          const id = Number(it.id || 0);
-          if (!id || seen.has(id)) return;
-          seen.add(id);
-          if (leadDeltaDrops(it)) {
-            dropped.push(id);
-            return;
-          }
-          const packed = packLead(it, b);
-          if (packed) incoming.push(packed);
-        },
-        { pageSize: 100, pages: 4 },
-      ).catch(() => undefined),
-    ),
-  );
-  const merged = applyLeadDelta(hit.items, incoming, dropped);
-  const note =
-    merged.added || merged.updated || merged.removed
-      ? `с CRM: ${merged.updated} изменённых, ${merged.added} новых, ${merged.removed} снятых`
-      : "изменений в CRM нет";
-  const next = { at: Date.now(), stages: hit.stages, items: withoutStudents(merged.items), note, delta: true as const };
-  bag().set(key, next);
-  persistLeads();
+  if (leadDeltaBusy) return hit;
+  leadDeltaBusy = true;
   try {
-    const { stampFunnelOnDossiers } = await import("./dossiers");
-    stampFunnelOnDossiers(next.items.map((x) => x.id));
-  } catch {
-    /* диск */
+    const t = await alfaToken();
+    const since = crmUpdatedAtFrom(hit.at);
+    const branches = branchId ? [branchId] : [1, 2, 3, 4];
+    const incomingBy = new Map<number, LeadCard>();
+    const dropped: number[] = [];
+    const take = (it: Record<string, unknown>, b: number) => {
+      const id = Number(it.id || 0);
+      if (!id) return;
+      if (leadDeltaDrops(it)) {
+        dropped.push(id);
+        incomingBy.delete(id);
+        return;
+      }
+      const packed = packLead(it, b);
+      if (packed) incomingBy.set(id, packed);
+    };
+    await Promise.all(
+      branches.map((b) =>
+        pagedIndex(
+          `/v2api/${b}/customer/index`,
+          { updated_at_from: since },
+          t,
+          (it) => take(it, b),
+          { pageSize: 100, pages: 4 },
+        ).catch(() => undefined),
+      ),
+    );
+    for (const b of branches) {
+      const ids = [...new Set(hit.items.filter((x) => !branchId || x.branchId === b).map((x) => x.id))].filter(Boolean);
+      for (let i = 0; i < ids.length; i += 30) {
+        const chunk = ids.slice(i, i + 30);
+        await request<{ items?: Record<string, unknown>[] }>(
+          `/v2api/${b}/customer/index`,
+          { page: 0, pageSize: 50, ids: chunk },
+          t,
+        )
+          .then((data) => {
+            for (const it of data.items || []) {
+              if (!chunk.includes(Number(it.id || 0))) continue;
+              take(it, b);
+            }
+          })
+          .catch(() => undefined);
+      }
+    }
+    let merged = applyLeadDelta(hit.items, [...incomingBy.values()], dropped);
+    const login = await crmWebLogin().catch(() => ({ cookie: "", error: "" }));
+    let boardMoved = 0;
+    if (login.cookie) {
+      const statusIds = (hit.stages || []).map((s) => s.id);
+      for (const b of branches) {
+        const board = await fetchCrmLeadColumns(b, statusIds, login.cookie, t, 8).catch(() => []);
+        if (!board.length) continue;
+        const by = new Map(merged.items.map((x) => [x.id, x]));
+        for (const row of board) {
+          const card = by.get(row.id);
+          if (card) {
+            if (card.statusId !== row.statusId) {
+              card.statusId = row.statusId;
+              boardMoved += 1;
+            }
+            continue;
+          }
+          if (dossierIsStudying(row.id)) continue;
+          merged.items.push({
+            id: row.id,
+            customerId: row.id,
+            branchId: b,
+            branches: [b],
+            name: row.name || `лид ${row.id}`,
+            age: "",
+            phone: "",
+            email: "",
+            note: "",
+            assigned: "",
+            statusId: row.statusId,
+            sort: 0,
+            at: "",
+            chats: 0,
+          });
+          boardMoved += 1;
+        }
+      }
+    }
+    const note =
+      merged.added || merged.updated || merged.removed || boardMoved
+        ? `с CRM: ${merged.updated} изменённых, ${merged.added} новых, ${merged.removed} снятых${boardMoved ? `, этапов с доски ${boardMoved}` : ""}`
+        : "изменений в CRM нет";
+    const items = withoutStudents(merged.items);
+    const next = { at: Date.now(), stages: hit.stages, items, note, delta: true as const };
+    bag().set(key, next);
+    persistLeads();
+    try {
+      const { stampFunnelOnDossiers, stampLeadStages } = await import("./dossiers");
+      stampFunnelOnDossiers(items.map((x) => x.id));
+      stampLeadStages(items.map((x) => ({ id: x.id, statusId: x.statusId })));
+    } catch {
+      /* диск */
+    }
+    return next;
+  } finally {
+    leadDeltaBusy = false;
   }
-  return next;
 }
 
 export async function boardFromDisk(branchId = 0): Promise<Bag> {
@@ -519,7 +585,10 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
     }
     if (wantAlfaDelta(delta) && disk.items.length) {
       const age = Date.now() - (hit?.at || 0);
-      if (!hit?.items.length || age > 90_000) void syncLeadsDelta(branchId).catch(() => undefined);
+      if (!hit?.items.length || age > 90_000) {
+        const next = await syncLeadsDelta(branchId).catch(() => disk);
+        return next;
+      }
     }
     return disk;
   }
