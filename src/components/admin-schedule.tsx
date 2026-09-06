@@ -21,7 +21,7 @@ import { pullFromCrm } from "@/lib/crm-pull";
 import { CrmPullDialog, emptyPull, type CrmPullState } from "@/components/crm-pull-dialog";
 import type { CrmSubject } from "@/data/crm-subjects";
 import { ADMIN_PANEL_BLUE, RA_POP } from "@/data/admin-ui";
-import { lazyWithRetry, TabError } from "@/lib/error-component";
+import { TabError } from "@/lib/error-component";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
 import type { CrmTeacher } from "@/data/crm-teachers";
 import { AdminClients } from "@/components/admin-clients";
@@ -3388,14 +3388,14 @@ export function AdminSchedule() {
                                   <div className={cn("flex items-center gap-1.5", groupsWide ? "min-w-0" : "min-w-0")}>
                                     {s.groupId ? <span className="w-8 shrink-0 text-right font-semibold tabular-nums text-[0.8rem] text-muted">{s.groupId}</span> : <span className="w-8 shrink-0" />}
                                     {mm.level ? <MismatchDot text={mismatchHint(s)} /> : null}
-                                    <GroupNameField large value={s.groupName} subject={s.subject} onChange={(v) => patch(s.id, "groupName", v)} />
+                                    <GroupNameField large value={s.groupName || ""} subject={s.subject} onChange={(v) => patch(s.id, "groupName", v)} />
                                   </div>
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
-                                  <input value={s.age} onChange={(e) => patch(s.id, "age", e.target.value)} className={box} />
+                                  <input value={s.age || ""} onChange={(e) => patch(s.id, "age", e.target.value)} className={box} />
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
-                                  <select value={shownBeat(s).day} onChange={(e) => patchBeat(s, "day", Number(e.target.value))} className={cn(box, "px-0")}>
+                                  <select value={shownBeat(s).day || 1} onChange={(e) => patchBeat(s, "day", Number(e.target.value))} className={cn(box, "px-0")}>
                                     {[1, 2, 3, 4, 5, 6, 7].map((d) => (
                                       <option key={d} value={d}>
                                         {["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"][d]}
@@ -3405,8 +3405,8 @@ export function AdminSchedule() {
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
                                   <div className="flex items-center justify-center gap-1">
-                                    <input value={shownBeat(s).timeFrom} onChange={(e) => patchBeat(s, "timeFrom", e.target.value)} className={box} />
-                                    <input value={shownBeat(s).timeTo} onChange={(e) => patchBeat(s, "timeTo", e.target.value)} className={box} />
+                                    <input value={shownBeat(s).timeFrom || ""} onChange={(e) => patchBeat(s, "timeFrom", e.target.value)} className={box} />
+                                    <input value={shownBeat(s).timeTo || ""} onChange={(e) => patchBeat(s, "timeTo", e.target.value)} className={box} />
                                   </div>
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
@@ -3528,6 +3528,7 @@ export function AdminSchedule() {
           </article>
           );
         })}
+        </TabError>
         {slots.length ? null : <p className="text-sm text-muted">Пока пусто — нажмите «Загрузить из AlfaCRM».</p>}
       </div>
       </div>
@@ -4141,6 +4142,7 @@ export function AdminSchedule() {
         : null}
       {pupil && typeof document !== "undefined"
         ? createPortal(
+            <TabError>
             <CrmClientCard
               card={pupil}
               loading={pupilLoading}
@@ -4151,7 +4153,8 @@ export function AdminSchedule() {
                 setPupil(null);
                 openGroupFromLink(gid, bid);
               }}
-            />,
+            />
+            </TabError>,
             document.body,
           )
         : null}

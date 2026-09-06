@@ -35,6 +35,6 @@ describe("список и вкладка не падают", () => {
     assert.match(err, /lazyWithRetry/);
     assert.match(err, /isChunkLoadError/);
     assert.match(err, /Кабинет обновляется/);
-    assert.match(err, /window.location.reload/);
+    assert.match(err, /this.state.message/);
   });
 });
