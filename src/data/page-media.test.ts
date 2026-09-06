@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { teaser, videoPack, wixStory } from "./page-media.ts";
 
 describe("page-media", () => {
@@ -36,5 +37,20 @@ describe("page-media", () => {
     const short = teaser(long, 40);
     assert.ok(short.endsWith("…") || short.length <= 42);
     assert.match(short, /Первое/);
+  });
+
+  it("видео на сайте не автозапускаются, старт с начала без звука", () => {
+    const player = readFileSync(new URL("../components/site-video.tsx", import.meta.url), "utf8");
+    assert.doesNotMatch(player, /autoPlay/);
+    assert.match(player, /el\.currentTime = 0/);
+    assert.match(player, /el\.muted = true/);
+    assert.match(player, /Смотреть/);
+    const robot = readFileSync(new URL("../components/robot-videos.tsx", import.meta.url), "utf8");
+    assert.doesNotMatch(robot, /autoPlay/);
+    assert.match(robot, /SiteVideo/);
+    const home = readFileSync(new URL("../components/home-blocks.tsx", import.meta.url), "utf8");
+    assert.match(home, /SiteVideo/);
+    const cms = readFileSync(new URL("../components/cms-blocks.tsx", import.meta.url), "utf8");
+    assert.match(cms, /SiteVideo/);
   });
 });

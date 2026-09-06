@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Play } from "lucide-react";
+import { useEffect, useState } from "react";
 import { videoPack } from "@/data/page-media";
 import { PageLink } from "@/components/page-link";
 import { Button } from "@/components/ui/button";
+import { SiteVideo } from "@/components/site-video";
 import { cn } from "@/lib/utils";
 
 const DEFAULT = videoPack("/roboticsinenglish").clips || [];
@@ -18,44 +18,18 @@ export function PageVideoGrid({
   clips: string[];
   titles?: string[];
 }) {
-  const refs = useRef<Array<HTMLVideoElement | null>>([]);
   if (!clips.length) return null;
   const unique = [...new Set(clips)];
   const featured = unique[0];
   const rest = unique.slice(1);
 
-  function onPlay(index: number) {
-    refs.current.forEach((el, i) => {
-      if (el && i !== index) el.pause();
-    });
-  }
-
-  function Clip({ src, index, className, title }: { src: string; index: number; className?: string; title?: string }) {
-    return (
-      <div className={cn("overflow-hidden rounded-3xl bg-ink", className)}>
-        <video
-          ref={(el) => {
-            refs.current[index] = el;
-          }}
-          src={src}
-          className="aspect-video w-full object-cover"
-          controls
-          playsInline
-          preload="metadata"
-          onPlay={() => onPlay(index)}
-          aria-label={title || `Видео ${index + 1}`}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="grid gap-3">
-      <Clip src={featured} index={0} title={titles?.[0]} />
+      <SiteVideo src={featured} title={titles?.[0] || "Видео 1"} className="aspect-video w-full rounded-3xl" />
       {rest.length ? (
         <div className={cn("grid gap-3", rest.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
           {rest.map((src, i) => (
-            <Clip key={src} src={src} index={i + 1} title={titles?.[i + 1]} />
+            <SiteVideo key={src} src={src} title={titles?.[i + 1] || `Видео ${i + 2}`} className="aspect-video w-full rounded-3xl" />
           ))}
         </div>
       ) : null}
@@ -82,7 +56,6 @@ function LangPulse() {
 export function RobotEnglishVideos() {
   const clips = [...new Set(DEFAULT)];
   const [active, setActive] = useState(0);
-  const [watching, setWatching] = useState(false);
   const src = clips[active] || clips[0];
   if (!src) return null;
 
@@ -117,43 +90,19 @@ export function RobotEnglishVideos() {
           </div>
 
           <div className="relative flex min-h-[16rem] flex-col bg-header lg:min-h-full">
-            <div className="relative aspect-video min-h-[14rem] flex-1 lg:aspect-auto">
-              <video
-                key={`${src}-${watching ? "on" : "off"}`}
-                src={src}
-                className="absolute inset-0 h-full w-full object-cover"
-                autoPlay
-                muted={!watching}
-                loop={!watching}
-                controls={watching}
-                playsInline
-                preload="metadata"
-                aria-label={LABELS[active]}
-                onPlay={() => setWatching(true)}
-              />
-              {!watching ? (
-                <button
-                  type="button"
-                  className="absolute inset-0 grid place-items-center bg-header/25"
-                  onClick={() => setWatching(true)}
-                  aria-label={`Смотреть: ${LABELS[active]}`}
-                >
-                  <span className="grid size-16 place-items-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-border-hover)] transition-transform duration-[var(--motion-fast)] hover:scale-105">
-                    <Play className="ml-0.5 size-7" fill="currentColor" />
-                  </span>
-                </button>
-              ) : null}
-            </div>
+            <SiteVideo
+              key={src}
+              src={src}
+              title={LABELS[active]}
+              className="relative aspect-video min-h-[14rem] flex-1 lg:aspect-auto"
+            />
             {clips.length > 1 ? (
               <div className="grid shrink-0 grid-cols-2 gap-px bg-white/10 sm:grid-cols-4">
                 {clips.map((clip, i) => (
                   <button
                     key={clip}
                     type="button"
-                    onClick={() => {
-                      setActive(i);
-                      setWatching(true);
-                    }}
+                    onClick={() => setActive(i)}
                     className={cn(
                       "px-3 py-3 text-left transition-colors duration-[var(--motion-fast)]",
                       i === active ? "bg-white/12 text-header-fg" : "bg-header text-header-fg/55 hover:bg-white/8 hover:text-header-fg",
