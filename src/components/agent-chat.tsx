@@ -1453,7 +1453,10 @@ export function AgentChat() {
         <div className="agent-fab-wrap pointer-events-auto absolute bottom-[4.85rem] right-3 md:static">
           <button
             type="button"
-            onClick={() => setOpen(true)}
+            onClick={() => {
+              setOpen(true);
+              void unlockAudio();
+            }}
             className="agent-fab relative inline-flex h-[3.15rem] max-w-[calc(100vw-1.25rem)] items-center gap-1.5 overflow-visible rounded-full bg-white py-1 pl-1 pr-3 text-fg ring-[3px] ring-white shadow-[0_16px_40px_-12px_rgba(32,94,220,0.55)] md:h-[4.1rem] md:pr-5"
             aria-label="Написать администраторам студии"
           >

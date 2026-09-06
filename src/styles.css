@@ -209,7 +209,7 @@
 
 @media (max-width: 767px) {
   .agent-panel {
-    width: auto !important;
+    width: 100% !important;
     margin-inline: 0.4rem;
     margin-bottom: calc(4.35rem + env(safe-area-inset-bottom, 0px));
     height: calc(var(--agent-vvh, 100svh) - 4.55rem - env(safe-area-inset-bottom, 0px));

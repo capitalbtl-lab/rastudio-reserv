@@ -10,9 +10,34 @@ import { loadTariffs } from "./crm-tariffs.ts";
 import { enqueueExport } from "./crm-export-queue.ts";
 import { digestPrompt, type ClientDigest } from "./agent-client-desk-core.ts";
 import { WEEKDAY_CHIPS, type SessionFacts } from "./agent-facts.ts";
+import { allowedLessonType, type BookSettings } from "./agent-book-kinds.ts";
 
 export type { ClientDigest };
 export { digestPrompt };
+
+export type DeskRights = BookSettings & {
+  consultantCanSkip: boolean;
+  consultantCanPause: boolean;
+  consultantCanTariff: boolean;
+};
+
+const OPEN_RIGHTS: DeskRights = {
+  consultantCanBook: true,
+  consultantCanBookTrial: true,
+  consultantCanBookGroup: true,
+  consultantCanBookMakeup: true,
+  consultantCanBookOvertime: true,
+  consultantCanBookExtra: true,
+  consultantCanBookIndividual: true,
+  consultantCanBookOther: true,
+  consultantCanSkip: true,
+  consultantCanPause: true,
+  consultantCanTariff: false,
+};
+
+function phoneHint() {
+  return "Позвоните 8 (800) 511-34-01 — администратор отметит.";
+}
 
 export async function makeupList(customerId: number, weekday: string) {
   const d = clientDigest(customerId);
