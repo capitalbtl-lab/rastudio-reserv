@@ -167,7 +167,7 @@ for page in catalog["pages"]:
     decoded = page.get("pathDecoded") or path
     dump = wix_by_path.get(path) or wix_by_path.get(decoded)
     current = clean(page.get("description") or "")
-    if dump and dump["description"]:
+    if dump and dump["description"] and path not in ("/allcourses", "/contacts", "/event-list"):
         if current != dump["description"]:
             page["description"] = dump["description"]
             changed_desc += 1

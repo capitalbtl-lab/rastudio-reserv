@@ -1,6 +1,6 @@
 const HASH_FILE = /^[0-9a-f]{5,8}_[0-9a-f]{8,}/i;
 const FILE_EXT = /\.(png|jpe?g|gif|webp)$/i;
-const GENERIC_ALT = /empty-state|placeholder|image-empty|логотип(ы)? на главную/i;
+const GENERIC_ALT = /empty-state|placeholder|image-empty/i;
 
 export function normSeoTitle(value: string) {
   return String(value || "")
@@ -45,6 +45,15 @@ export function cleanWixAlt(alt?: string, filename?: string, fallback = "") {
   }
   const last = stripWixFile(fallback || alt || filename || "");
   return last && !HASH_FILE.test(last) ? last : "Занятия в Студии Развивайся";
+}
+
+export function imageTitle(filename?: string, alt?: string) {
+  const file = String(filename || "").trim();
+  const label = String(alt || "").trim();
+  if (!file || HASH_FILE.test(file) || /empty-state|placeholder|image-empty/i.test(file)) {
+    return cleanWixAlt(label, file);
+  }
+  return file.replace(FILE_EXT, "");
 }
 
 export function mediaIdFromSrc(src?: string) {

@@ -11,7 +11,7 @@ import {
 import { SEO_COPY } from "./seo-copy.ts";
 import { SITE, SCHOOLS } from "./site.ts";
 import { enrichPage } from "./seo.ts";
-import { imageTitle } from "../components/seo-image.tsx";
+import { cleanWixAlt, imageTitle } from "./wix-seo-core.ts";
 
 describe("seo", () => {
   it("не отдаёт главную description пустым страницам и убирает RASTUDIO.ORG", () => {
@@ -33,10 +33,16 @@ describe("seo", () => {
   it("главная и языковая школа берут description с Wix", () => {
     assert.equal(SEO_COPY["/"], undefined);
     assert.match(SITE.homeDescription, /Художественная школа в Коломне/);
-    assert.match(SEO_COPY["/languageschool"].description, /английскому, корейскому, китайскому, японскому/);
     const school = SCHOOLS.find((s) => s.href === "/languageschool");
     assert.equal(school?.filename.includes("11062b"), false);
     assert.match(school?.blurb || "", /английскому, корейскому/);
+    const lang = enrichPage({
+      path: "/languageschool",
+      title: 'Школа иностранных языков в Студии "Развивайся" | Коломна',
+      description: "Обучение английскому, корейскому, китайскому, японскому языкам для детей в Коломне.",
+      canonical: "https://www.rastudio.org/languageschool",
+    });
+    assert.match(lang.description, /английскому, корейскому, китайскому, японскому/);
     assert.equal(imageTitle("11062b_e2ae833a8eaa43e38e4aa6d32eb3b8f7f000.jpg", "Школа иностранных языков"), "Школа иностранных языков");
     assert.equal(
       imageTitle("Школа иностранных языков в Студии Развивайся | Коломна.jpg", "x"),
@@ -64,6 +70,48 @@ describe("seo", () => {
     assert.equal(SEO_COPY["/o-nas"], undefined);
     assert.equal(SEO_COPY["/team"], undefined);
     assert.equal(SEO_COPY["/master-class"], undefined);
+    const robot = enrichPage({
+      path: "/robototehnika-5-7",
+      title: "Школа робототехники в Коломне | Для детей 5-7 лет",
+      description:
+        "Целью обучения детей робототехнике в возрасте 5-7 лет является формирование интереса к дальнейшему развитию в направлении инженерии, информационных технологий и научно-технического творчества, а также формирование естественно-научной картины мира.",
+      canonical: "https://www.rastudio.org/robototehnika-5-7",
+    });
+    assert.match(robot.description, /5-7 лет является формирование интереса/);
+    assert.doesNotMatch(robot.description, /7-9 лет/);
+    const podium = enrichPage({
+      path: "/model-school",
+      title: 'Модельная школа "Подиум" в Коломне | Студия "Развивайся"',
+      description:
+        "Юные леди познакомятся с азами модельного дела. Вас ждут личностные тренинги, знакомство с правилами красоты и ухода за собой, фотосесии и уроки дефиле, изучение правил этикета и развитие уверенности в каждом новом шаге.",
+      canonical: "https://www.rastudio.org/model-school",
+    });
+    assert.match(podium.description, /азами модельного дела/);
+  });
+
+  it("берёт alt с Wix и убирает расширение файла", () => {
+    assert.equal(
+      cleanWixAlt("Школа робототехники в Коломне", "x.png"),
+      "Школа робототехники в Коломне",
+    );
+    assert.equal(
+      cleanWixAlt("Курс Киндер-мастер для детей 10-16 лет в Студии Развивайся (1).png"),
+      "Курс Киндер-мастер для детей 10-16 лет в Студии Развивайся",
+    );
+    assert.equal(
+      cleanWixAlt("4e33b6_4653b41b8e994af68c1a2ba5397ba322f000.jpg", "", "Студия «Развивайся»"),
+      "Студия «Развивайся»",
+    );
+    const master = fallbackDescription({
+      title: 'Мастер-класс "Алые маки"',
+      kind: "master",
+      h1: 'Мастер-класс "Алые маки"',
+      paragraphs: [
+        "Мягкий свет студии, спокойная атмосфера творчества и чистый лист акварельной бумаги постепенно превращаются в живую работу.",
+      ],
+    });
+    assert.match(master, /Мягкий свет студии/);
+    assert.doesNotMatch(master, /пробное занятие без абонемента/);
   });
 
   it("Course schema только у курсов, кабинет закрыт", () => {

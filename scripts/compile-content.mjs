@@ -155,14 +155,6 @@ const COURSE_VIDEOS = JSON.parse(
 const FILE_EXTRAS = JSON.parse(
   fs.readFileSync(path.join(ROOT, "content/course-extras.json"), "utf8"),
 );
-const WIX_SEO = JSON.parse(fs.readFileSync(path.join(ROOT, "content/wix-seo.json"), "utf8"));
-const WIX_MEDIA_NAMES = (() => {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(ROOT, "content/wix-media-names.json"), "utf8"));
-  } catch {
-    return {};
-  }
-})();
 const MANUAL_EXTRAS = {
   "/digitalartschool": [
     {
