@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { debugSession, unlockDebug } from "@/data/debug-fn";
 import { debugSessionChanged, type DebugToolId } from "@/data/debug-client";
 import { slotsFromMessages } from "@/data/funnel-state";
+import { factsFromMessages } from "@/data/agent-facts";
 import { Button } from "@/components/ui/button";
 
 const KEY = "ra_debug";
@@ -85,6 +86,7 @@ export function DebugDock() {
   }
 
   const slots = slotsFromMessages(chat);
+  const facts = factsFromMessages(chat);
   const show = (id: DebugToolId) => tools[id] !== false;
 
   return (
@@ -137,7 +139,12 @@ export function DebugDock() {
               <div className="mt-2 max-h-[50vh] space-y-2 overflow-auto">
                 {show("funnel") ? (
                   <p>
-                    Возраст: {slots.age || "—"} · Город: {slots.city || "—"} · Филиал: {slots.branch || "—"}
+                    Режим: {facts.mode || "—"}
+                    {facts.identified ? " · узнан" : facts.mode === "client" ? " · ждём имя" : ""}
+                    {facts.child ? ` · ${facts.child}` : ""}
+                    {facts.intent ? ` · ${facts.intent}` : ""}
+                    <br />
+                    Возраст: {slots.age || facts.age || "—"} · Город: {slots.city || facts.city || "—"} · Филиал: {slots.branch || facts.branch || "—"}
                   </p>
                 ) : null}
                 {show("voice") ? (

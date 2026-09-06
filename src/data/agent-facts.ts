@@ -227,6 +227,13 @@ export function factsFromMessages(messages: { role: string; content: string }[])
     facts.identified = identifiedFromMessages(messages);
     const want = takeClientIntent(messages);
     if (want) facts.intent = want;
+    if (facts.identified && !facts.child) {
+      const named = messages
+        .filter((m) => m.role === "user")
+        .map((m) => m.content.match(/да,\s*это\s+([А-ЯЁа-яё]+)/i))
+        .find(Boolean);
+      if (named?.[1]) facts.child = named[1];
+    }
   }
   return facts;
 }

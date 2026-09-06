@@ -28,6 +28,6 @@ ${groups}
 явка: ${d.lastLessons.join("; ") || "журнала нет"}
 абонемент: ${d.tariff || "нет пометки"} · остаток ${d.balance}
 пауза до: ${d.pauseUntil || "нет"}
-Пропуск — note_skip. Пауза — pause_classes. Отработка — book_lesson makeup на gid группы. Не по названию.
+Пропуск — note_skip. Пауза — pause_classes. Отработка — list_groups по courseId, не только свой gid; book_lesson makeup. Имя ребёнка повторно не спрашивать.
 `;
 }

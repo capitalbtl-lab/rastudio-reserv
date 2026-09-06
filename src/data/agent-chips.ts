@@ -84,10 +84,13 @@ export function chipsForReply(
     return { hint: "С чего начнём", chips: FORK };
   }
   if (mode === "client") {
+    if (facts.identified) {
+      return { hint: "Что нужно", chips: CLIENT_TOPICS };
+    }
     if (/это ваш|нашли|несколько детей/.test(t)) {
       return { hint: "Это ваш ребёнок?", chips: groups.length ? groups : [] };
     }
-    if (facts.identified || /карто<|абонемент|занят|отработк|не прид/.test(t)) {
+    if (/карточк|абонемент|занят|отработк|не прид/.test(t)) {
       return { hint: "Что нужно", chips: CLIENT_TOPICS };
     }
     return { hint: "Телефон записи", chips: [] };

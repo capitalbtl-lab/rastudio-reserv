@@ -20,16 +20,18 @@ export function parseTurns(raw: string, fallback: Who = "olga"): { who: Who; tex
   let who: Who = fallback;
   let buf: string[] = [];
   const flush = () => {
-    const text = genderFix(who, buf.join(" ").trim());
+    let text = genderFix(who, buf.join(" ").trim());
+    text = text.replace(/^(Олег|Ольга)\s*[:—-]\s*/i, "").trim();
     if (text) out.push({ who, text });
     buf = [];
   };
   for (const line of raw.replace(/\r/g, "").split("\n")) {
+    const named = line.match(/^\s*(Олег|Ольга)\s*$/);
     const m = line.match(/^\s*(Олег|Ольга)\s*[:—-]\s*(.*)$/);
-    if (m) {
+    if (named || m) {
       flush();
-      who = m[1] === "Ольга" ? "olga" : "oleg";
-      buf = [m[2]];
+      who = (named ? named[1] : m?.[1]) === "Ольга" ? "olga" : "oleg";
+      buf = m?.[2] ? [m[2]] : [];
     } else if (line.trim()) {
       buf.push(line.trim());
     }

@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { factsFromMessages, modeFromMessages, nextStepOf } from "./agent-facts.ts";
-import { asIdentifyHits, confirmedHit, identifyLocked } from "./agent-identify.ts";
+import { asIdentifyHits, confirmedHit, confirmedFromHistory, identifyLocked } from "./agent-identify.ts";
 
 describe("развилка новый / уже ходим", () => {
   it("приветствие не спрашивает возраст", () => {
@@ -78,6 +78,35 @@ describe("вход по телефону с диска", () => {
     const hits = asIdentifyHits([{ crmId: 11, child: { first: "Петя", fio: "Иванов Петя" } }]);
     const hit = confirmedHit(hits, "Да, это Петя", "Нашла на сайте: Петя. Это ваш ребёнок?");
     assert.equal(hit?.customerId, 11);
+  });
+
+  it("после «да, это» не переспрашивать имя", () => {
+    const msgs = [
+      { role: "assistant", content: "Ольга: Вы уже занимаетесь у нас или подбираете впервые?" },
+      { role: "user", content: "Мы уже ходим к вам" },
+      { role: "assistant", content: "Ольга: Напишите телефон, который указывали при записи." },
+      { role: "user", content: "89163389392" },
+      { role: "assistant", content: "Ольга: Нашла на сайте: Александра. Это ваш ребёнок?" },
+      { role: "user", content: "Да, это Александра" },
+      { role: "assistant", content: "Ольга: Александра занимается в художественной школе. Чем помочь?" },
+      { role: "user", content: "Нужна отработка пропуска" },
+    ];
+    const facts = factsFromMessages(msgs);
+    assert.equal(facts.mode, "client");
+    assert.equal(facts.identified, true);
+    assert.equal(facts.intent, "отработка");
+    assert.match(nextStepOf(facts), /не спрашивать|подтверждён|list_groups/i);
+    assert.doesNotMatch(nextStepOf(facts), /подтвердить имя/);
+    const hits = asIdentifyHits([{ crmId: 42, child: { first: "Александра", fio: "Александра" } }]);
+    assert.equal(confirmedFromHistory(hits, msgs)?.customerId, 42);
+    const locked = identifyLocked("olga", {
+      phone: "89163389392",
+      hits,
+      identified: facts.identified,
+      lastUser: "Нужна отработка пропуска",
+      lastAssistant: "Ольга: Александра занимается в художественной школе. Чем помочь?",
+    });
+    assert.equal(locked, null);
   });
 
   it("пусто — не выдумывать карточку", () => {

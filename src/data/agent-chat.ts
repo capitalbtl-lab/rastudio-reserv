@@ -89,7 +89,10 @@ id курсов для заявки: ${TRIAL_COURSES.map((c) => `${c.id} ${c.nam
 Не открывай страницу курса в браузере. Только кнопка open_course.
 Жалобы и деньги — телефон.
 Если просят править сайт, статусы групп или CRM — это кабинет сотрудника, не этот чат. Не предлагай «войти в административный режим», пока человек сам не сказал, что он сотрудник.
-Узнанный клиент: занятия, явка, пропуск, пауза, отработка, абонемент — только с диска (блок КАРТОЧКА). Не выдумывай дату. Пропуск — note_skip. Пауза — pause_classes. Отработка — book_lesson makeup на gid его группы. Абонемент — assign_tariff с tariffId, если галочка в настройках.
+Узнанный клиент: занятия, явка, пропуск, пауза, отработка, абонемент — только с диска (блок КАРТОЧКА). Не выдумывай дату. Имя ребёнка, если уже подтвердили, больше не спрашивай.
+Пропуск — note_skip. Пауза — pause_classes.
+Отработка — list_groups по courseId из карточки на день, который назвал родитель. Не только gid своей группы: если в ней нет этого дня или мест, предложи другую группу того же курса. Затем book_lesson makeup. Не предлагай пробное вместо отработки.
+Абонемент — остаток и пометку с диска. assign_tariff только если галочка в настройках.
 `;
 }
 
@@ -666,14 +669,17 @@ export const chatAgent = createServerFn({ method: "POST" })
     const note = buildSessionNote(all);
     if (!admin && facts.mode === "client") {
       const { dossiersByPhone } = await import("./dossiers");
-      const { asIdentifyHits, confirmedHit, identifyLocked } = await import("./agent-identify");
+      const { asIdentifyHits, confirmedFromHistory, identifyLocked } = await import("./agent-identify");
       const lastAsst = [...trimmed].reverse().find((m) => m.role === "assistant")?.content || "";
       const hits = facts.phone ? asIdentifyHits(dossiersByPhone(facts.phone)) : [];
-      const known = confirmedHit(hits, lastUser, lastAsst);
+      const known = confirmedFromHistory(hits, all);
       if (known) {
         facts.identified = true;
         facts.customerId = known.customerId;
         facts.child = facts.child || known.child;
+      } else if (facts.identified && hits.length === 1) {
+        facts.customerId = hits[0].customerId;
+        facts.child = facts.child || hits[0].child;
       }
       const lockedId = identifyLocked(soloWho, {
         phone: facts.phone,
