@@ -26,7 +26,7 @@ export function HomeCanvas({
   );
 }
 
-export function HomeSlot({ id, children }: { id: HomeBlockId; children: ReactNode }) {
+export function HomeSlot({ id, children }: { id: string; children: ReactNode }) {
   return <>{children}</>;
 }
 
@@ -202,7 +202,7 @@ function HomeSlotFrame({
           <button
             type="button"
             draggable
-            aria-label={`Переместить «${homeBlockLabel(id)}»`}
+            aria-label={`Переместить «${homeBlockLabel(id, ctx?.doc.customs)}»`}
             className="grid size-7 cursor-grab place-items-center rounded-full hover:bg-white/15 active:cursor-grabbing"
             onClick={(e) => e.stopPropagation()}
             onDragStart={(e) => {
@@ -217,7 +217,7 @@ function HomeSlotFrame({
           >
             <GripVertical className="size-3.5" />
           </button>
-          <span className="px-1">{homeBlockLabel(id)}</span>
+          <span className="px-1">{homeBlockLabel(id, ctx?.doc.customs)}</span>
           {style?.hidden ? <span className="pr-2 opacity-80">скрыт</span> : null}
         </div>
       </div>

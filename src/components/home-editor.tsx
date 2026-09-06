@@ -308,13 +308,13 @@ export function HomeEditorChrome() {
         </ul>
       </aside>
 
-      <aside className="ve-ui fixed top-[7.1rem] bottom-4 right-3 z-40 hidden w-64 overflow-auto rounded-2xl bg-header p-4 text-header-fg shadow-[0_16px_40px_-18px_rgba(0,0,0,.55)] md:top-[8.1rem] lg:block lg:top-[8.6rem]">
+      <aside className="ve-ui fixed top-[7.1rem] bottom-4 right-3 z-40 hidden w-[22rem] overflow-auto rounded-2xl bg-header p-4 text-header-fg shadow-[0_16px_40px_-18px_rgba(0,0,0,.55)] md:top-[8.1rem] lg:block lg:top-[8.6rem]">
         {selected ? (
           <>
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-header-fg/45">Инспектор</p>
             <p className="mt-2 font-display text-xl leading-tight">{homeBlockLabel(selected, doc.customs)}</p>
             <p className="mt-2 text-[0.78rem] leading-relaxed text-header-fg/60">
-              Кликните заголовок или абзац на блоке — правьте прямо на странице. Стрелки ↑↓ двигают слой.
+              Текст на холсте. Фото — вкладка «Медиа». DeepSeek правит тексты и придумывает блоки во вкладке «Блоки ИИ».
             </p>
             <label className="mt-5 flex items-center justify-between gap-3 text-sm">
               <span>Виден на сайте</span>
@@ -387,6 +387,7 @@ export function HomeEditorChrome() {
             Клик по файлу ставит его в выбранный блок. DeepSeek подписывает фото для Ольги.
           </p>
           <StudioPanel
+            slot={selected}
             onLayout={(layout) => setDoc(layout)}
             onPickMedia={(src) => {
               if (selected) setDoc(setHomeMedia(doc, selected, src));
