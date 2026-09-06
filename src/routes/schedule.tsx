@@ -5,6 +5,7 @@ import { ScheduleFinder } from "@/components/schedule-finder";
 import { pageHead, SEO_ORIGIN, breadcrumbJsonLd } from "@/data/seo";
 import { SEO_COPY } from "@/data/seo-copy";
 import { JsonLd } from "@/components/json-ld";
+import { CoursePageHero } from "@/components/cms-blocks";
 
 const copy = SEO_COPY["/schedule"];
 
@@ -25,12 +26,15 @@ function SchedulePage() {
   return (
     <SiteShell>
       <JsonLd data={breadcrumbJsonLd("/schedule", "Расписание")} />
+      <CoursePageHero
+        kicker="Коломна · Луховицы"
+        title="Расписание"
+        description="Филиал, возраст, день — группы как в кабинете. Время обновляется с расписания студии."
+        images={[]}
+        secondary={{ href: "/allcourses", label: "Все курсы" }}
+        path="/schedule"
+      />
       <article className="page-wrap py-12 md:py-16">
-        <p className="kicker">Коломна · Луховицы</p>
-        <h1 className="display mt-3 text-4xl md:text-5xl">Расписание</h1>
-        <p className="mt-4 max-w-2xl text-muted">
-          Филиал, возраст, день — группы как в AlfaCRM. Время обновляется с расписания студии.
-        </p>
         <ScheduleFinder sessions={sessions} />
       </article>
     </SiteShell>

@@ -1,11 +1,8 @@
 import { useMemo, useState } from "react";
 import type { SitePage } from "@/data/catalog";
 import type { CmsMaster } from "@/data/cms";
-import { SITE } from "@/data/site";
-import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
 import { TrialForm } from "@/components/trial-form";
-import { Button } from "@/components/ui/button";
 import { CmsImg, Kicker, ProseBlocks, CoursePageHero } from "@/components/cms-blocks";
 import { cn } from "@/lib/utils";
 
@@ -111,14 +108,23 @@ export function MasterListPageCms({ page, masters }: { page: SitePage; masters: 
   }, [masters, dir, q]);
 
   return (
-    <article className="mx-auto max-w-[1180px] px-4 py-12 md:px-5 md:py-16">
-      <Kicker>Студия</Kicker>
-      <h1 className="display section-title mt-2">{page.h1 || "Мастер-классы"}</h1>
-      <p className="mt-5 max-w-2xl text-lg text-muted">
-        {page.description ||
+    <article>
+      <CoursePageHero
+        kicker="Разовые занятия · Коломна · Луховицы"
+        title={page.h1 || "Мастер-классы"}
+        description={
+          page.description ||
           page.paragraphs[0] ||
-          "Разовые творческие занятия в Коломне: живопись, декор, керамика и арт-вечера."}
-      </p>
+          "Разовые творческие занятия в Коломне: живопись, декор, керамика и арт-вечера."
+        }
+        images={masters
+          .map((m) => m.image)
+          .filter(Boolean)
+          .slice(0, 6)
+          .map((img) => ({ src: img!.src, alt: img!.alt || "Мастер-класс", filename: img!.filename }))}
+        secondary={{ href: "/allcourses", label: "Все курсы" }}
+      />
+      <div className="page-wrap py-12 md:py-16">
       <div className="mt-8 flex flex-wrap gap-2">
         {directions.map((item) => (
           <button
@@ -178,6 +184,7 @@ export function MasterListPageCms({ page, masters }: { page: SitePage; masters: 
       ) : null}
       <div className="mt-16">
         <TrialForm compact />
+      </div>
       </div>
     </article>
   );

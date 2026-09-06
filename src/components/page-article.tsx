@@ -256,7 +256,7 @@ function CinematicPage({
             ? courseOfferFacts(page.pathDecoded || page.path, age)
             : undefined
         }
-        path={page.kind === "course" || page.kind === "school" ? page.pathDecoded || page.path : undefined}
+        path={page.pathDecoded || page.path}
       />
       {page.kind === "course" || page.kind === "school" ? (
         <ConvertBand path={page.pathDecoded || page.path} sessions={schedule} onTrial={(id) => openSign(id, "trial")} signup={signup} />

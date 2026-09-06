@@ -7,7 +7,6 @@ import { courseKey } from "@/data/cms";
 import { SITE, coursesForSchool } from "@/data/site";
 import type { ProgramStep } from "@/data/school-programs";
 import { SeoImage } from "@/components/seo-image";
-import { SiteVideo } from "@/components/site-video";
 import { PageLink } from "@/components/page-link";
 import { TRIAL_PROMISE } from "@/data/course-offer";
 import { Button } from "@/components/ui/button";
@@ -160,7 +159,6 @@ export function CoursePageHero({
   title,
   description,
   images,
-  video,
   facts,
   path,
   secondary,
