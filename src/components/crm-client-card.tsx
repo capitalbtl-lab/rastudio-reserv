@@ -1502,6 +1502,20 @@ export function CrmClientCard({
     </div>
   ) : null;
   const dropTariffNode = dropTariffDialog && typeof document !== "undefined" ? createPortal(dropTariffDialog, document.body) : dropTariffDialog;
+  const peekDialog = peekTariffId ? (
+    <div className="fixed inset-0 z-[280] flex items-start justify-center overflow-y-auto bg-black/45 p-3 md:p-6" onClick={() => setPeekTariffId(0)}>
+      <div className={cn("my-4 w-full max-w-5xl p-4", RA_POP)} onClick={(e) => e.stopPropagation()} data-op="tariff-peek">
+        <header className="mb-3 flex items-center justify-between gap-3">
+          <h3 className="font-display text-lg">Карточка абонемента</h3>
+          <button type="button" className="h-9 rounded-full px-3 text-sm font-semibold text-muted hover:bg-surface-2" onClick={() => setPeekTariffId(0)}>
+            Закрыть
+          </button>
+        </header>
+        <AdminTariffs embedId={peekTariffId} onEmbedClose={() => setPeekTariffId(0)} />
+      </div>
+    </div>
+  ) : null;
+  const peekNode = peekDialog && typeof document !== "undefined" ? createPortal(peekDialog, document.body) : peekDialog;
 
   const payDialog = headMenu === "pay" ? (
     <div
@@ -1698,6 +1712,7 @@ export function CrmClientCard({
         {groupNode}
         {dropNode}
         {dropTariffNode}
+        {peekNode}
         {payNode}
       </>
     );
@@ -1716,6 +1731,7 @@ export function CrmClientCard({
         {groupDialog}
         {dropDialog}
         {dropTariffDialog}
+        {peekDialog}
         {payDialog}
       </>
     );
@@ -1728,6 +1744,7 @@ export function CrmClientCard({
       {groupNode}
       {dropNode}
       {dropTariffNode}
+      {peekNode}
       {payNode}
     </>
   );
