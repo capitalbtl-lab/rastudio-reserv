@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { LESSON_TYPES } from "./alfacrm.ts";
+import { CARD_LESSON_TYPES } from "./crm-cards.ts";
 import { isChudnovaAlexandra, PAY_TEST_NAME, planChudnovaPays } from "./crm-pay-test-core.ts";
 import { planChudnovaTrial, TRIAL_TEST_DATE, TRIAL_TEST_TIME } from "./crm-trial-test-core.ts";
 import { trialCreateBody, trialAlfaCustomerBody, trialLocalId, trialNoteLine } from "./trial-disk.ts";
@@ -21,7 +21,7 @@ const SUBJECT = 92;
 const ROOM = 3;
 const TEACHER = 10;
 
-function lessonJob(type: (typeof LESSON_TYPES)[number], i: number): Omit<CrmExportJob, "id" | "at" | "tries"> {
+function lessonJob(type: (typeof CARD_LESSON_TYPES)[number], i: number): Omit<CrmExportJob, "id" | "at" | "tries"> {
   const localLesson = -(200 + i);
   return {
     op: "lesson.create",
@@ -85,11 +85,11 @@ describe("Чуднова Александра: занятия до Alfa", () => 
     assert.equal(canRunExportJob(jobs[0]), true);
     assert.equal(exportPath(jobs[0]), `/v2api/${BRANCH}/customer/create`);
 
-    for (const [i, type] of LESSON_TYPES.entries()) {
+    for (const [i, type] of CARD_LESSON_TYPES.entries()) {
       jobs = mergeExportJob(jobs, lessonJob(type, i));
     }
     const lessons = jobs.filter((j) => j.op === "lesson.create");
-    assert.equal(lessons.length, LESSON_TYPES.length);
+    assert.equal(lessons.length, CARD_LESSON_TYPES.length);
     assert.ok(lessons.every((j) => canRunExportJob(j) === false));
     assert.ok(lessons.every((j) => (j.body.customer_ids as number[])[0] === LOCAL));
     assert.ok(lessons.every((j) => String(j.body.note).includes(PAY_TEST_NAME)));
@@ -103,11 +103,11 @@ describe("Чуднова Александра: занятия до Alfa", () => 
       entityId: LOCAL,
       body: { name: PAY_TEST_NAME, localId: LOCAL },
     });
-    for (const [i, type] of LESSON_TYPES.entries()) jobs = mergeExportJob(jobs, lessonJob(type, i));
+    for (const [i, type] of CARD_LESSON_TYPES.entries()) jobs = mergeExportJob(jobs, lessonJob(type, i));
     const createId = jobs[0].id;
     jobs = remapExportJobs(jobs, LOCAL, 670, createId);
     const lessons = jobs.filter((j) => j.op === "lesson.create");
-    assert.equal(lessons.length, LESSON_TYPES.length);
+    assert.equal(lessons.length, CARD_LESSON_TYPES.length);
     for (const j of lessons) {
       assert.equal(j.entityId, 670);
       assert.deepEqual(j.body.customer_ids, [670]);
@@ -119,8 +119,8 @@ describe("Чуднова Александра: занятия до Alfa", () => 
       assert.deepEqual(sent.customer_ids, [670]);
     }
     const keys = new Set(lessons.map((j) => j.body.type));
-    assert.equal(keys.size, LESSON_TYPES.length);
-    assert.ok(LESSON_TYPES.every((t) => keys.has(t.key)));
+    assert.equal(keys.size, CARD_LESSON_TYPES.length);
+    assert.ok(CARD_LESSON_TYPES.every((t) => keys.has(t.key)));
   });
 
   it("пробное и касса Чудновой: план есть, платёж без crmId не уходит", () => {
@@ -151,7 +151,7 @@ describe("Чуднова Александра: занятия до Alfa", () => 
     assert.match(card, /CARD_LESSON_TYPES/);
     assert.match(card, /customerLesson/);
     const types = readFileSync(new URL("./crm-cards.ts", import.meta.url), "utf8");
-    for (const t of LESSON_TYPES) assert.match(types, new RegExp(`key: "${t.key}"`));
+    for (const t of CARD_LESSON_TYPES) assert.match(types, new RegExp(`key: "${t.key}"`));
     const sched = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(sched, /action === "customerLesson"/);
     assert.match(sched, /op: "lesson.create"/);
