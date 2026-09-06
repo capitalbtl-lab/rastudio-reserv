@@ -269,7 +269,7 @@ async function fetchStageOrderFromSettings(branchId: number): Promise<number[]> 
   return [];
 }
 
-async function fetchCrmLeadColumns(branch: number, statusIds: number[], cookie: string, token = "") {
+async function fetchCrmLeadColumns(branch: number, statusIds: number[], cookie: string, token = "", maxPages = 40) {
   const host = crmHost();
   const found: { id: number; name: string; statusId: number }[] = [];
   const seen = new Set<number>();
@@ -312,7 +312,7 @@ async function fetchCrmLeadColumns(branch: number, statusIds: number[], cookie: 
       }));
   async function follow(start: string, statusId: number) {
     let path = start;
-    for (let page = 0; page < 40; page++) {
+    for (let page = 0; page < maxPages; page++) {
       let raw = "";
       try {
         raw = await get(path);

@@ -702,6 +702,23 @@ export function stampFunnelOnDossiers(ids: number[]) {
   return n;
 }
 
+export function stampLeadStages(rows: { id: number; statusId: number }[]) {
+  const by = new Map(rows.map((x) => [Number(x.id), Number(x.statusId)]));
+  const store = loadStore();
+  let n = 0;
+  for (const d of store.items) {
+    const id = Number(d.crmId || 0);
+    if (!id || !by.has(id)) continue;
+    d.extras = d.extras || {};
+    const next = String(by.get(id) ?? 0);
+    if (d.extras.lead_status_id === next) continue;
+    d.extras.lead_status_id = next;
+    n += 1;
+  }
+  if (n) saveStore(store);
+  return n;
+}
+
 /** Состав группы с диска сайта: кто уже лежит в groupLinks. CGI не трогает. */
 export { groupLinkHits } from "./crm-group-disk";
 
