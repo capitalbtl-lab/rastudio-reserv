@@ -1,7 +1,9 @@
 import raw from "./catalog.json";
 import cmsRaw from "./cms.json";
 import extrasRaw from "../../content/course-extras.json";
-import { isPublishedTeacher, type Catalog, type SitePage } from "./catalog";
+import galleriesRaw from "./course-galleries.json";
+import { isPublishedTeacher, type Catalog, type SiteImage, type SitePage } from "./catalog";
+import { videoPack } from "./page-media";
 import {
   courseKey,
   normPath,
@@ -16,13 +18,53 @@ import { publicCoursesMeta } from "./public-bind";
 import { localizeTree } from "@/lib/local-media";
 
 const extras = extrasRaw as Record<string, SitePage["images"]>;
+const galleries = galleriesRaw as Record<string, string[]>;
 const source = raw as Catalog;
+
+function folderOf(path: string) {
+  const decoded = normPath(path);
+  const slug = decoded.split("/").filter(Boolean).pop() || "";
+  if (galleries[slug]) return slug;
+  if (decoded === "/art-studio") return "art-studio";
+  if (decoded === "/programming-school") return "programming-school";
+  if (decoded === "/promising-professions") return "promising-professions";
+  if (decoded === "/model-school" || decoded.startsWith("/model-school-")) return "model-school";
+  if (decoded === "/master-class") return "master-class";
+  if (decoded === "/team") return "team";
+  return slug;
+}
+
+function folderShots(path: string, alt: string): SiteImage[] {
+  const folder = folderOf(path);
+  const files = galleries[folder];
+  if (!files?.length) return [];
+  return files.map((name) => ({
+    src: `/media/courses/${folder}/${name}`,
+    filename: name,
+    alt,
+  }));
+}
 
 function withLocalGallery(page: SitePage): SitePage {
   const next = localizeTree(page);
   const extra = extras[page.path] || extras[page.pathDecoded];
-  if (!extra?.length) return next;
-  return { ...next, images: extra, ogImage: extra[0].src };
+  const alt = next.h1 || next.title || "Занятия в Студии Развивайся";
+  const pack = videoPack(page.pathDecoded || page.path);
+  const incoming = [...(extra || []), ...folderShots(page.pathDecoded || page.path, alt)];
+  const images = [...(next.images || [])];
+  const have = new Set(images.map((img) => img.src.split("?")[0]));
+  for (const img of incoming) {
+    const key = img.src.split("?")[0];
+    if (have.has(key)) continue;
+    have.add(key);
+    images.push(img);
+  }
+  return {
+    ...next,
+    images,
+    video: pack.hero || next.video || null,
+    videos: pack.clips?.length ? [...pack.clips] : next.videos,
+  };
 }
 
 const catalog: Catalog = {

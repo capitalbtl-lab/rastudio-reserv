@@ -7,6 +7,7 @@ import { courseKey } from "@/data/cms";
 import { SITE, coursesForSchool } from "@/data/site";
 import type { ProgramStep } from "@/data/school-programs";
 import { SeoImage } from "@/components/seo-image";
+import { SiteVideo } from "@/components/site-video";
 import { PageLink } from "@/components/page-link";
 import { TRIAL_PROMISE } from "@/data/course-offer";
 import { Button } from "@/components/ui/button";
@@ -242,43 +243,38 @@ export function CoursePageHero({
 
         {shots.length || video ? (
           <div className="relative">
-            <div className="photo-stack hidden lg:block">
-              {stack.map((shot) => (
-                <div key={shot.src} className="shot bg-header">
-                  <ShotMedia shot={shot} className="h-full w-full" imgClassName="h-full w-full object-cover" />
+            {video ? (
+              <div className="grid gap-3">
+                <div className="overflow-hidden rounded-3xl bg-header">
+                  <SiteVideo src={video} title={title} mode="ambient" className="aspect-[4/5] lg:aspect-[3/4]" />
                 </div>
-              ))}
-              {video && stack.length < 2 ? (
-                <div className="shot bg-header">
-                  <video
-                    src={video}
-                    className="h-full w-full object-cover"
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    preload="metadata"
-                    aria-label={title}
-                  />
+                {stack.slice(0, 2).length ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {stack.slice(0, 2).map((shot) => (
+                      <ShotMedia
+                        key={shot.src}
+                        shot={shot}
+                        className="aspect-[4/3] rounded-2xl bg-header"
+                        imgClassName="h-full w-full object-cover"
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <div className="photo-stack hidden lg:block">
+                  {stack.map((shot) => (
+                    <div key={shot.src} className="shot bg-header">
+                      <ShotMedia shot={shot} className="h-full w-full" imgClassName="h-full w-full object-cover" />
+                    </div>
+                  ))}
                 </div>
-              ) : null}
-            </div>
-            <div className="overflow-hidden rounded-3xl lg:hidden">
-              {video ? (
-                <video
-                  src={video}
-                  className="aspect-[4/5] w-full object-cover"
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  preload="metadata"
-                  aria-label={title}
-                />
-              ) : shots[0] ? (
-                <ShotMedia shot={shots[0]} className="aspect-[4/5]" />
-              ) : null}
-            </div>
+                <div className="overflow-hidden rounded-3xl lg:hidden">
+                  {shots[0] ? <ShotMedia shot={shots[0]} className="aspect-[4/5]" /> : null}
+                </div>
+              </>
+            )}
           </div>
         ) : null}
       </div>

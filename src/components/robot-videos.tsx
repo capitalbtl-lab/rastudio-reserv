@@ -1,16 +1,19 @@
 "use client";
 
 import { useRef } from "react";
+import { videoPack } from "@/data/page-media";
 
-const VIDEOS = [
-  { src: "/media/home/robot-en-1.mp4", title: "Педагог курса" },
-  { src: "/media/home/robot-en-2.mp4", title: "Занятие" },
-  { src: "/media/home/robot-en-3.mp4", title: "Практика" },
-  { src: "/media/home/robot-en-4.mp4", title: "Лаборатория" },
-] as const;
+const DEFAULT = videoPack("/roboticsinenglish").clips || [];
 
-export function RobotEnglishVideos() {
+export function PageVideoGrid({
+  clips,
+  titles,
+}: {
+  clips: string[];
+  titles?: string[];
+}) {
   const refs = useRef<Array<HTMLVideoElement | null>>([]);
+  if (!clips.length) return null;
 
   function onPlay(index: number) {
     refs.current.forEach((el, i) => {
@@ -19,23 +22,32 @@ export function RobotEnglishVideos() {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3">
-      {VIDEOS.map((clip, i) => (
-        <div key={clip.src} className="overflow-hidden rounded-2xl bg-black">
+    <div className={`grid gap-3 ${clips.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+      {clips.map((src, i) => (
+        <div key={src} className="overflow-hidden rounded-2xl bg-black">
           <video
             ref={(el) => {
               refs.current[i] = el;
             }}
-            src={clip.src}
+            src={src}
             className="aspect-video w-full object-cover"
             controls
             playsInline
             preload="metadata"
             onPlay={() => onPlay(i)}
-            aria-label={clip.title}
+            aria-label={titles?.[i] || `Видео ${i + 1}`}
           />
         </div>
       ))}
     </div>
+  );
+}
+
+export function RobotEnglishVideos() {
+  return (
+    <PageVideoGrid
+      clips={[...DEFAULT]}
+      titles={["Педагог курса", "Занятие", "Практика", "Лаборатория"]}
+    />
   );
 }
