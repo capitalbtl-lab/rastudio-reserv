@@ -36,7 +36,7 @@ const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Деньги", idField: "pays[].id + customerId", link: "Остаток = сумма строк диска. Нет строк — extras.balance. customerPay → pay.create. Меню «Оплата» = pays[]. F5 не касса Alfa. Товар остаток не двигает" },
   { entity: "Каналы консультанта", idField: "comms[].id + customerId + channel", link: "Лента диска. Заявка, чат, ВК, MAX, SMS — actor=consultant сразу. commsPrompt в ответе. Alfa communication только «Обновить», не затирает свои id. В Alfa чат сайта, ВК, MAX и SMS не выгружаем" },
   { entity: "Webhook", idField: "/api/agent/vk|max|phone", link: "Один мозг chatAgent + телефон треда. ВК Callback confirmation+message_new. MAX subscriptions message_created/bot_started. Novofon NOTIFY_START + SMS, ответ SMS. Ключи API и интеграции. Треды storage/agent-inbox.json. Лента comms[]" },
-  { entity: "Связь Alfa", idField: "linked | offline", link: "Разъём, не склад. Уход = offline, кабинет не переписываем. Настройка CRM → Связь с AlfaCRM" },
+  { entity: "Связь Alfa", idField: "linked | offline", link: "Разъём, не склад. Уход = offline. Настройка CRM → Фон с AlfaCRM. Каналы pull/push." },
   { entity: "Филиал", idField: "branchId 1–4", link: "1 Гражданская · 2 ЦМИТ · 3 Луховицы · 4 лето" },
   { entity: "Кнопка пробного", idField: "trialOn", link: "Админка → Сайт. Форма rastudio.org, филиал = branchId группы" },
   { entity: "Кнопка в группу", idField: "groupOn", link: "Админка → Сайт. Тот же gid, kind=group" },

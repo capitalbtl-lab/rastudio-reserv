@@ -260,6 +260,7 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
     };
   }
   if (!wantAlfaPullChannel("clients") && !opts?.force) {
+    void import("./crm-export-queue").then((m) => m.tickExportQueue(3)).catch(() => null);
     return {
       ok: true as const,
       ids,
@@ -296,14 +297,14 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
   }
   if (opts?.force) {
     enqueueCrmOverlay(true);
-    enqueueJournalOverlay(true);
+    if (wantAlfaPullChannel("lessons")) enqueueJournalOverlay(true);
   } else if (stale || opts?.offset != null) {
     const q = loadQueue();
     if (!q.packets.some((p) => p.kind === "overlay")) {
       enqueueCrmPacket({ kind: "overlay", offset: opts?.offset ?? pol.overlayNext ?? 0 });
     }
   }
-  if (journalStale() && !opts?.force) enqueueJournalOverlay(false);
+  if (wantAlfaPullChannel("lessons") && journalStale() && !opts?.force) enqueueJournalOverlay(false);
   const take = Number(opts?.take) || 3;
   const res = await tickCrmQueue(take, { skipJournal: true });
   kickBackground();
@@ -321,7 +322,7 @@ function kickBackground() {
     overlayNext: pol.overlayNext,
     overlayTotal: pol.overlayTotal,
   });
-  const needJournal = journalStale();
+  const needJournal = wantAlfaPullChannel("lessons") && journalStale();
   if (!cgiStale && !needJournal) return;
   if (cgiStale) enqueueCrmOverlay(false);
   if (needJournal) enqueueJournalOverlay(false);

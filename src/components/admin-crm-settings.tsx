@@ -811,7 +811,7 @@ export function AdminCrmSettings() {
 
       <Card
         title="Люди в Alfa"
-        hint="Сейчас работают и у нас, и в Alfa. Фон забирает чужие правки. Невыгруженная очередь старше входа — «Обновить» её не затирает. F5 Alfa не ждёт."
+        hint="Сейчас работают и у нас, и в Alfa. Интервал и каналы — блок «Фон с AlfaCRM». F5 Alfa не ждёт."
       >
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm font-semibold">

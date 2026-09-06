@@ -327,6 +327,7 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.doesNotMatch(ui, /autoPull/);
     const link = readFileSync(new URL("./crm-alfa-link.ts", import.meta.url), "utf8");
     assert.match(link, /wantAlfaDelta/);
+    assert.match(link, /pull.leads/);
   });
 
   it("этап 5: очередь Alfa — нет прямого API на запись, актор на выгрузке", () => {
@@ -394,7 +395,7 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.match(rules, /schedule-map/);
     const settings = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(settings, /ALFA_LINK_MODES/);
-    assert.match(settings, /Связь с AlfaCRM/);
+    assert.match(settings, /Фон с AlfaCRM/);
     const map = readFileSync(new URL("./schedule-map.ts", import.meta.url), "utf8");
     assert.match(map, /joinCourseSubject/);
     assert.match(map, /courseSubjectGapText/);
