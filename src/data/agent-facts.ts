@@ -132,11 +132,35 @@ export function modeFromMessages(messages: { role: string; content: string }[]):
 }
 
 export function identifiedFromMessages(messages: { role: string; content: string }[]) {
-  const user = [...messages].reverse().find((m) => m.role === "user")?.content || "";
-  const asst = [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
-  if (/это ваш|нашли|ваш ребёнок/i.test(asst) && /^(да|ага|угу|верно|наш|так|это наш)\b/i.test(user.trim())) return true;
-  if (/откройте карточку|да, это /i.test(user)) return true;
-  return false;
+  const yes = /^(да|ага|угу|верно|наш|так|это наш|это он|это она|да,\s*это)\b/i;
+  const deny = /другой ребёнок|это не (наш|он|она)|не наш ребёнок|подбираем впервые|подбираем курс впервые/i;
+  let ok = false;
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
+    if (m.role !== "user") continue;
+    const u = m.content.trim();
+    if (deny.test(u)) {
+      ok = false;
+      continue;
+    }
+    const prev = [...messages.slice(0, i)].reverse().find((x) => x.role === "assistant")?.content || "";
+    if (/откройте карточку|да, это /i.test(u)) ok = true;
+    else if (/это ваш|нашли|ваш ребёнок|несколько детей/i.test(prev) && yes.test(u)) ok = true;
+  }
+  return ok;
+}
+
+function takeClientIntent(messages: { role: string; content: string }[]) {
+  const users = messages.filter((m) => m.role === "user").map((m) => m.content);
+  for (const u of [...users].reverse()) {
+    if (/отработк|пропустил занят|как записаться на отработ/i.test(u)) return "отработка";
+    if (/пауз|приостанов/i.test(u)) return "пауза";
+    if (/не прид|не сможем прийти/i.test(u)) return "пропуск";
+    if (/абонемент|остат/i.test(u)) return "абонемент";
+    if (/правил|оферт/i.test(u)) return "правила";
+    if (/когда следующее|расписан/i.test(u)) return "расписание";
+  }
+  return "";
 }
 
 function takeCourse(text: string) {
@@ -187,7 +211,7 @@ export function factsFromMessages(messages: { role: string; content: string }[])
   if (parent) facts.parent = parent[1];
   if (/свободн\w+ день|согласуем|пустую дату/i.test(user)) facts.intent = "пробное-свободный-день";
   else if (/пробн/i.test(user)) facts.intent = "пробное";
-  else if (/в группу|абонемент|сразу в/i.test(user)) facts.intent = "группа";
+  else if (/в группу|сразу в/i.test(user)) facts.intent = "группа";
   const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
   if (!facts.age) {
     const loose = takeAge(lastUser);
@@ -199,7 +223,11 @@ export function factsFromMessages(messages: { role: string; content: string }[])
   facts.briefed =
     /последовательн|ступен|проходят на занят|материал дет|от младшего/i.test(assistant) ||
     /понятно|к пробному|к записи|давайте к/i.test(user);
-  if (facts.mode === "client") facts.identified = identifiedFromMessages(messages);
+  if (facts.mode === "client") {
+    facts.identified = identifiedFromMessages(messages);
+    const want = takeClientIntent(messages);
+    if (want) facts.intent = want;
+  }
   return facts;
 }
 
@@ -210,7 +238,25 @@ export function nextStepOf(facts: SessionFacts) {
   if (facts.mode === "client") {
     if (!facts.phone) return "попросить телефон записи. Не спрашивать возраст и город.";
     if (!facts.identified) return "подтвердить имя ребёнка с диска. Не выдумывать карточку. Возраст не спрашивать.";
-    return "клиент узнан. Говорить про его группы, явку, отработку, паузу, абонемент. Не воронка нового. Жалобы и возврат денег — телефон.";
+    if (facts.intent === "отработка") {
+      return "ребёнок уже подтверждён — имя больше не спрашивать. Отработка: list_groups по courseId из карточки на день, который назвал родитель. Если в своей группе нет этого дня — другие группы того же курса. Затем book_lesson makeup. Не предлагать пробное.";
+    }
+    if (facts.intent === "пауза") {
+      return "ребёнок уже подтверждён. Если срока паузы нет — спросить до какой даты. Если дата есть — pause_classes. Не переспрашивать имя.";
+    }
+    if (facts.intent === "пропуск") {
+      return "ребёнок уже подтверждён. note_skip на ближайшее занятие, если дату не назвали. Не переспрашивать имя.";
+    }
+    if (facts.intent === "абонемент") {
+      return "ребёнок уже подтверждён. Сказать абонемент и остаток с диска. Не переспрашивать имя. Не воронка нового.";
+    }
+    if (facts.intent === "правила") {
+      return "ребёнок уже подтверждён. Коротко правила: пропуск заранее, отработка в другой группе того же курса при наличии мест, пауза по заявлению. Один вопрос: что именно из правил нужно.";
+    }
+    if (facts.intent === "расписание") {
+      return "ребёнок уже подтверждён. Ближайшее занятие с диска. Не переспрашивать имя.";
+    }
+    return "клиент узнан. Не спрашивать снова «это ваш ребёнок». Говорить про его группы, явку, отработку, паузу, абонемент. Не воронка нового. Жалобы и возврат денег — телефон.";
   }
   if (!facts.age) return "спросить ТОЛЬКО возраст: «Сколько лет ребёнку?» Ждать ответ. Город не упоминать.";
   if (!facts.city) return "подтвердить возраст тремя словами и спросить ТОЛЬКО город: Коломна или Луховицы. Возраст больше не спрашивай.";

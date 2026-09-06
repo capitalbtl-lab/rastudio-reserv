@@ -30,7 +30,12 @@ export function asIdentifyHits(
   return out;
 }
 
-const YES = /^(да|ага|угу|верно|наш|так|это наш|это он|это она)\b/i;
+const YES = /^(да|ага|угу|верно|наш|так|это наш|это он|это она|да,\s*это)\b/i;
+const DENY = /другой ребёнок|это не (наш|он|она)|не наш ребёнок|подбираем впервые|подбираем курс впервые/i;
+
+export function rejectIdentify(text: string) {
+  return DENY.test(String(text || "").trim());
+}
 
 export function confirmedHit(
   hits: IdentifyHit[],
@@ -39,11 +44,31 @@ export function confirmedHit(
 ): IdentifyHit | null {
   if (!hits.length) return null;
   const text = String(user || "").trim();
-  if (!text) return null;
+  if (!text || rejectIdentify(text)) return null;
   const byName = hits.find((h) => text.toLowerCase().includes(h.first.toLowerCase()));
   if (byName) return byName;
-  if (hits.length === 1 && /это ваш|нашли|ваш ребёнок/i.test(assistant) && YES.test(text)) return hits[0];
+  if (hits.length === 1 && /это ваш|нашли|ваш ребёнок|несколько детей/i.test(assistant) && YES.test(text)) return hits[0];
   return null;
+}
+
+export function confirmedFromHistory(
+  hits: IdentifyHit[],
+  messages: { role: string; content: string }[],
+): IdentifyHit | null {
+  if (!hits.length) return null;
+  let last: IdentifyHit | null = null;
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
+    if (m.role !== "user") continue;
+    if (rejectIdentify(m.content)) {
+      last = null;
+      continue;
+    }
+    const prev = [...messages.slice(0, i)].reverse().find((x) => x.role === "assistant")?.content || "";
+    const hit = confirmedHit(hits, m.content, prev);
+    if (hit) last = hit;
+  }
+  return last;
 }
 
 export function identifyLocked(
