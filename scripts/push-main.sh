@@ -28,5 +28,3 @@ count="$(git diff --cached --name-only | wc -l | tr -d ' ')"
 git commit -m "Автовыкладка: ${count} файл."
 git push origin main
 echo "[push] $(git rev-parse --short HEAD) → origin/main"
-HOOK="$(node --input-type=module -e "import { createHmac } from 'node:crypto'; process.stdout.write(createHmac('sha256','rastudio-admin-token').update('deploy-hook').digest('hex').slice(0,32))")"
-curl -fsS -m 12 -X POST "https://www.rastudio.org/api/build" -H "x-ra-deploy: ${HOOK}" >/dev/null && echo "[push] выкладка запущена" || echo "[push] мгновенная выкладка ещё не на сервере — подхватит сторож"

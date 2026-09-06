@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const INTERVAL_MS = 8_000;
+const INTERVAL_MS = 60_000;
 let busy = false;
 
 async function git(args) {
@@ -40,6 +40,6 @@ async function tick() {
   }
 }
 
-console.log("[deploy] слежу за origin/main каждые 8 с");
+console.log("[deploy] слежу за origin/main каждые 60 с");
 void tick();
 setInterval(() => void tick(), INTERVAL_MS);
