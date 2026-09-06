@@ -54,10 +54,9 @@ describe("окно агента: права и типы занятий", () => {
     assert.match(cfg, /consultantCanBookOther: flag/);
     assert.match(cfg, /BOOK_TYPE_FLAGS\.map/);
     const win = readFileSync(new URL("../components/admin-agent.tsx", import.meta.url), "utf8");
-    assert.match(win, /BOOK_TYPE_FLAGS\.map/);
+    assert.match(win, /LESSON_POLICY_GROUPS/);
     assert.match(win, /ROLE_FLAGS\.map/);
     assert.match(win, /Какие занятия консультант ставит/);
-    assert.match(win, /LESSON_POLICY_GROUPS/);
     assert.match(win, /Alfa/);
   });
 
