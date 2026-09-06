@@ -378,8 +378,8 @@ export function AdminCrmSettings() {
       </Card>
 
       <Card
-        title="Связь с AlfaCRM"
-        hint="Кабинет всегда показывает сайт. Alfa — рассылки и касса коллег."
+        title="Фон с AlfaCRM"
+        hint="Диск сайта — правда. Ольга и формы пишут сюда сразу. Alfa — опциональный фон: лиды, пробные, занятия. Полная выгрузка — кнопка «Обновить» в клиентах."
       >
         <div className="grid gap-2 sm:grid-cols-2">
           {ALFA_LINK_MODES.map((m) => {
@@ -401,6 +401,70 @@ export function AdminCrmSettings() {
             );
           })}
         </div>
+        <div className={cn("mt-4 grid gap-4 md:grid-cols-2", alfaMode === "offline" && "opacity-50")}>
+          <div>
+            <p className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-muted">Подгружать из Alfa</p>
+            <ul className="mt-2 space-y-1.5">
+              {ALFA_PULL_CH.map((c) => (
+                <li key={c.id}>
+                  <label className="flex cursor-pointer items-start gap-2 rounded-xl bg-surface-2 px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      disabled={busy || alfaMode === "offline"}
+                      checked={pull[c.id as AlfaPullCh]}
+                      onChange={(e) => void saveSync({ pull: { ...pull, [c.id]: e.target.checked } })}
+                    />
+                    <span>
+                      <span className="font-semibold">{c.title}</span>
+                      <span className="mt-0.5 block text-[0.72rem] text-muted">{c.hint}</span>
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-muted">Выгружать в Alfa</p>
+            <ul className="mt-2 space-y-1.5">
+              {ALFA_PUSH_CH.map((c) => (
+                <li key={c.id}>
+                  <label className="flex cursor-pointer items-start gap-2 rounded-xl bg-surface-2 px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      disabled={busy || alfaMode === "offline"}
+                      checked={push[c.id as AlfaPushCh]}
+                      onChange={(e) => void saveSync({ push: { ...push, [c.id]: e.target.checked } })}
+                    />
+                    <span>
+                      <span className="font-semibold">{c.title}</span>
+                      <span className="mt-0.5 block text-[0.72rem] text-muted">{c.hint}</span>
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <label className="mt-4 flex flex-wrap items-center gap-2 text-sm font-semibold">
+          Сверять каждые
+          <select
+            className="h-9 rounded-full bg-surface-2 px-3 text-sm font-medium ring-1 ring-black/8"
+            value={syncMin}
+            disabled={busy || alfaMode === "offline"}
+            onChange={(e) => setMinutes(Number(e.target.value))}
+          >
+            {[2, 5, 10, 15, 30].map((n) => (
+              <option key={n} value={n}>
+                {n} мин
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="mt-2 text-[0.75rem] text-muted">
+          Выключенный канал: на сайте запись есть, в Alfa не уходит, пока не включите. Очередь хранит задание.
+        </p>
       </Card>
 
       <Card
