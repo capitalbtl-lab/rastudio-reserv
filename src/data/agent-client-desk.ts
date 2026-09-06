@@ -5,7 +5,7 @@ import { loadGroupCard } from "./group-cards.ts";
 import { journalForCustomer, lessonStatusLabel } from "./crm-journal-core.ts";
 import { customerBalance } from "./crm-pay.ts";
 import { appendComm } from "./crm-comms.ts";
-import { listAdminSlots } from "./alfacrm-schedule.ts";
+import { listAdminSlots, scheduleChipOf, slotChips } from "./alfacrm-schedule.ts";
 import { loadTariffs, matchTariffs } from "./crm-tariffs.ts";
 import { enqueueExport } from "./crm-export-queue.ts";
 import { digestPrompt, pauseUntilIso, STUDIO_RULES_SHORT, type ClientDigest } from "./agent-client-desk-core.ts";
@@ -191,11 +191,15 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
     }
     return {
       reply: `${n}: На ${facts.day} ${found} слоты. Нажмите — поставлю ${intent}.`,
-      chips: open.slice(0, 8).map((g, i) => ({
-        label: `${intent} · ${g.chip}${g.teacher ? ` · ${g.teacher}` : ""}`,
-        send: `Поставьте ${kind} gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""} teacher_id=${g.teacherId || ""}`,
-        primary: i === 0,
-      })),
+      chips: open.slice(0, 8).map((g, i) => {
+        const { label, note } = scheduleChipOf(g);
+        return {
+          label,
+          note: [intent, note].filter(Boolean).join(" · "),
+          send: `Поставьте ${kind} gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""} teacher_id=${g.teacherId || ""}`,
+          primary: i === 0,
+        };
+      }),
     };
   }
   if (intent === "пауза") {
@@ -259,11 +263,7 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
     }
     return {
       reply: `${n}: На ${facts.day} ${found} ${open.length} групп того же курса. Нажмите слот — поставлю отработку.`,
-      chips: open.slice(0, 8).map((g, i) => ({
-        label: `Отработка · ${g.chip}`,
-        send: `Поставьте отработку gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""} teacher_id=${g.teacherId || ""}`,
-        primary: i === 0,
-      })),
+      chips: slotChips(open, "makeup"),
     };
   }
   return null;
