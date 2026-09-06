@@ -228,7 +228,7 @@ export function AgentChat() {
   const [adminMsgs, setAdminMsgs] = useState<Msg[]>([]);
   const [adminMs, setAdminMs] = useState(0);
   const [awaitingCode, setAwaitingCode] = useState(false);
-  const [groupChips, setGroupChips] = useState<{ label: string; href?: string; send?: string; primary?: boolean }[]>([]);
+  const [groupChips, setGroupChips] = useState<{ label: string; href?: string; send?: string; primary?: boolean; note?: string }[]>([]);
   const [box, setBox] = useState({ w: 520, h: 740 });
   const [ui, setUi] = useState<AgentUiFlags>({
     showChat: true,
@@ -1294,47 +1294,43 @@ export function AgentChat() {
                     {offer.hint ? (
                       <p className="mb-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted">{offer.hint}</p>
                     ) : null}
-                    <div className="flex flex-wrap gap-1.5">
-                      {offer.chips.map((chip) =>
-                        chip.href ? (
-                          chip.href.startsWith("/") ? (
-                            <PageLink
-                              key={chip.label}
-                              to={chip.href}
-                              className={cn(
-                                "rounded-full px-3 py-1.5 text-[0.78rem] font-semibold",
-                                chip.primary ? "bg-primary text-primary-foreground" : "bg-white text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground",
-                              )}
-                            >
-                              {chip.label}
+                    <div className={cn("flex flex-wrap gap-1.5", offer.chips.some((c) => c.note) ? "flex-col" : "")}>
+                      {offer.chips.map((chip) => {
+                        const body = chip.note ? (
+                          <>
+                            <span className="block text-[0.82rem] font-semibold leading-snug">{chip.label}</span>
+                            <span className="mt-0.5 block text-[0.72rem] font-medium leading-snug opacity-80">{chip.note}</span>
+                          </>
+                        ) : (
+                          chip.label
+                        );
+                        const cls = cn(
+                          chip.note
+                            ? "w-full max-w-[22rem] rounded-2xl px-3 py-2 text-left"
+                            : "rounded-full px-3 py-1.5 text-[0.78rem] font-semibold",
+                          chip.primary ? "bg-primary text-primary-foreground" : "bg-white text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground",
+                        );
+                        if (chip.href) {
+                          return chip.href.startsWith("/") ? (
+                            <PageLink key={chip.label} to={chip.href} className={cls}>
+                              {body}
                             </PageLink>
                           ) : (
-                            <a
-                              key={chip.label}
-                              href={chip.href}
-                              className={cn(
-                                "rounded-full px-3 py-1.5 text-[0.78rem] font-semibold",
-                                chip.primary ? "bg-primary text-primary-foreground" : "bg-white text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground",
-                              )}
-                            >
-                              {chip.label}
+                            <a key={chip.label} href={chip.href} className={cls}>
+                              {body}
                             </a>
-                          )
-                        ) : (
-                          <button
-                            key={chip.label}
-                            type="button"
-                            onClick={() => void send(chip.send || chip.label)}
-                            className={cn(
-                              "rounded-full px-3 py-1.5 text-[0.78rem] font-semibold",
-                              chip.primary ? "bg-primary text-primary-foreground" : "bg-white text-fg shadow-[var(--shadow-border)] hover:bg-primary hover:text-primary-foreground",
-                            )}
-                          >
-                            {chip.label}
+                          );
+                        }
+                        return (
+                          <button key={chip.label} type="button" onClick={() => void send(chip.send || chip.label)} className={cls}>
+                            {body}
                           </button>
-                        ),
-                      )}
+                        );
+                      })}
                     </div>
+                    {offer.after ? (
+                      <p className="mt-2 text-[0.86rem] leading-relaxed text-fg">{offer.after}</p>
+                    ) : null}
                   </div>
                 ) : null;
               return m.role === "user" ? (
