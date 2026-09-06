@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { CoursePrice } from "@/components/course-price";
 import { ageBadge, courseNameOnly } from "@/data/ages";
 import { cn } from "@/lib/utils";
+import { collageShotsFor, HeroCollage, type CollageShot } from "@/components/hero-collage";
 export { ScheduleBlock } from "@/components/schedule-block";
 
 export function Kicker({ children, className }: { children: string; className?: string }) {
