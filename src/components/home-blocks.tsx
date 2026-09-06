@@ -3,13 +3,11 @@
 import { Children, isValidElement, useState, type ReactElement, type ReactNode } from "react";
 import { GripVertical } from "lucide-react";
 import { HomeEditorChrome, HomeEditorProvider, useHomeEditor } from "@/components/home-editor";
-import {
-  homeBlockLabel,
-  placeHomeBlock,
-  visibleHomeOrder,
-  type HomeBlockId,
-  type HomeLayoutDoc,
-} from "@/data/home-layout-core";
+import { homeBlockLabel, isCustomBlockId, placeHomeBlock, visibleHomeOrder, type HomeBlockId, type HomeCustomBlock, type HomeLayoutDoc } from "@/data/home-layout-core";
+import { SiteVideo } from "@/components/site-video";
+import { SeoImage } from "@/components/seo-image";
+import { PageLink } from "@/components/page-link";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function HomeCanvas({
@@ -28,8 +26,59 @@ export function HomeCanvas({
   );
 }
 
-export function HomeSlot({ id, children }: { id: HomeBlockId; children: ReactNode }) {
-  return <>{children}</>;
+export function BlockMedia({
+  id,
+  fallback,
+  className,
+  title,
+}: {
+  id: string;
+  fallback?: string;
+  className?: string;
+  title?: string;
+}) {
+  const ctx = useHomeEditor();
+  const src = ctx?.doc.media[id] || fallback;
+  if (!src) return null;
+  if (/\.mp4($|\?)/i.test(src)) {
+    return <SiteVideo src={src} title={title} mode="ambient" className={className || "aspect-[4/3] w-full"} />;
+  }
+  return <SeoImage src={src} alt={title || ""} filename={src} className={className || "aspect-[4/3] rounded-3xl"} />;
+}
+
+function CustomHomeBlock({ block }: { block: HomeCustomBlock }) {
+  const src = block.image;
+  return (
+    <section className="page-wrap py-12 md:py-16">
+      <div className="grid items-center gap-8 overflow-hidden rounded-[2rem] bg-surface p-6 shadow-[var(--shadow-border)] md:grid-cols-2 md:gap-12 md:p-10">
+        <div>
+          {block.kicker ? <p className="kicker text-primary">{block.kicker}</p> : null}
+          <h2 className="section-title mt-3">{block.title}</h2>
+          <p className="mt-5 text-[0.98rem] leading-relaxed text-muted">{block.text}</p>
+          {block.ctaLabel ? (
+            <div className="mt-6">
+              <Button asChild size="lg">
+                {block.ctaHref?.startsWith("/") ? (
+                  <PageLink to={block.ctaHref}>{block.ctaLabel}</PageLink>
+                ) : (
+                  <a href={block.ctaHref || "#trial"}>{block.ctaLabel}</a>
+                )}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+        {src ? (
+          /\.mp4($|\?)/i.test(src) ? (
+            <div className="overflow-hidden rounded-3xl bg-header">
+              <SiteVideo src={src} title={block.title} mode="ambient" className="aspect-[4/3] w-full" />
+            </div>
+          ) : (
+            <SeoImage src={src} alt={block.title} filename={block.title} className="aspect-[4/3] rounded-3xl" />
+          )
+        ) : null}
+      </div>
+    </section>
+  );
 }
 
 function HomeCanvasInner({ children }: { children: ReactNode }) {
@@ -45,7 +94,13 @@ function HomeCanvasInner({ children }: { children: ReactNode }) {
     if (id) map.set(id, child as ReactElement<{ id: HomeBlockId }>);
   });
   const ids = visibleHomeOrder(ctx.doc, ctx.editing);
-  const slots = ids.map((id) => map.get(id)).filter(Boolean) as ReactElement<{ id: HomeBlockId }>[];
+  const slots = ids.map((id) => {
+    const built = map.get(id);
+    if (built) return { id, node: built as ReactNode };
+    const custom = ctx.doc.customs.find((c) => c.id === id);
+    if (custom) return { id, node: <CustomHomeBlock block={custom} /> };
+    return null;
+  }).filter(Boolean) as { id: string; node: ReactNode }[];
   const deviceW = ctx.editing ? (ctx.device === "phone" ? "max-w-[390px]" : ctx.device === "tablet" ? "max-w-[768px]" : "max-w-none") : "";
 
   return (
