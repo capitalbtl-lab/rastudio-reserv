@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { serverEnv } from "./server-env";
+import { pulsePrompt } from "./site-pulse";
 import type { NovofonCall } from "./novofon";
 
 export type CallCrm = {
@@ -338,6 +338,7 @@ function onItem(x: { on?: boolean } | string) {
 export function knowledgeForAgent() {
   const kb = loadCallStore().knowledge;
   const set = loadCallSettings();
+  const pulse = pulsePrompt();
   if (!kb) return "";
   const inj = set.inject;
   const faq = inj.faq
