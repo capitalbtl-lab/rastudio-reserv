@@ -1,5 +1,6 @@
 import { nextSlot, PROMPT, slotsFromMessages, type Slots } from "./funnel-state";
 import { modeFromMessages, factsFromMessages } from "./agent-facts";
+import { STUDIO_RULES_SHORT } from "./agent-client-desk-core";
 
 export type FunnelHit = { reply: string };
 
@@ -19,7 +20,10 @@ export function lockedFunnelReply(
   if (mode === "fork") {
     const last = lastAssistant(messages);
     const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
-    if (/правил|оферт|цен[аыу]|филиал/i.test(lastUser)) return null;
+    if (/правил|оферт|цен[аыу]/i.test(lastUser)) {
+      return { reply: `${n}: ${STUDIO_RULES_SHORT} Уже ходите к нам или подбираете впервые?` };
+    }
+    if (/филиал|адрес|как пройти/i.test(lastUser)) return null;
     if (/уже занимаетесь|подбираете впервые/i.test(last)) {
       return { reply: `${n}: Нажмите кнопку или скажите: уже ходим или подбираем впервые.` };
     }

@@ -8,7 +8,7 @@ import { appendComm } from "./crm-comms.ts";
 import { listAdminSlots } from "./alfacrm-schedule.ts";
 import { loadTariffs } from "./crm-tariffs.ts";
 import { enqueueExport } from "./crm-export-queue.ts";
-import { digestPrompt, type ClientDigest } from "./agent-client-desk-core.ts";
+import { digestPrompt, pauseUntilIso, STUDIO_RULES_SHORT, type ClientDigest } from "./agent-client-desk-core.ts";
 import { WEEKDAY_CHIPS, type SessionFacts } from "./agent-facts.ts";
 import { allowedLessonType, type BookSettings } from "./agent-book-kinds.ts";
 
@@ -84,8 +84,51 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
   }
   if (intent === "правила") {
     return {
-      reply: `${n}: Пропуск лучше предупредить заранее. Отработка — в другой группе того же курса, если есть места. Пауза — по заявлению, до конкретной даты. Что из этого нужно?`,
-      chips: [],
+      reply: `${n}: ${STUDIO_RULES_SHORT} Что из этого нужно для ${child}?`,
+      chips: [
+        { label: "Отработка", send: "Нужна отработка пропуска" },
+        { label: "Пропуск", send: "Не сможем прийти на ближайшее занятие" },
+        { label: "Пауза", send: "Поставим занятия на паузу" },
+      ],
+    };
+  }
+  if (intent === "второй") {
+    return {
+      reply: `${n}: ${child} уже в карточке. Второго запишу как нового на ваш телефон. Сколько лет второму и как зовут?`,
+      chips: [
+        { label: "3–4 года", send: "Второму ребёнку 4 года" },
+        { label: "5–6 лет", send: "Второму ребёнку 6 лет" },
+        { label: "7–9 лет", send: "Второму ребёнку 8 лет", primary: true },
+        { label: "10–14 лет", send: "Второму ребёнку 12 лет" },
+      ],
+    };
+  }
+  if (intent === "индивидуальное" || intent === "сверхурочное" || intent === "дополнительное") {
+    const kind = intent === "индивидуальное" ? "individual" : intent === "сверхурочное" ? "overtime" : "extra";
+    if (!allowedLessonType(rights, kind)) {
+      return { reply: `${n}: ${intent} ставит администратор. ${phoneHint()}`, chips: [] };
+    }
+    if (!facts.day) {
+      return {
+        reply: `${n}: На какой день поставить ${intent} для ${child}? Нужны педагог, дата и время.`,
+        chips: WEEKDAY_CHIPS,
+      };
+    }
+    const pack = await makeupList(facts.customerId, facts.day);
+    const open = pack.list.filter((g) => g.priority !== 0);
+    if (!open.length) {
+      return {
+        reply: `${n}: На ${facts.day} слотов у педагогов этого курса не вижу. Другой день или 8 (800) 511-34-01.`,
+        chips: WEEKDAY_CHIPS,
+      };
+    }
+    return {
+      reply: `${n}: На ${facts.day} ${found} слоты. Нажмите — поставлю ${intent}.`,
+      chips: open.slice(0, 8).map((g, i) => ({
+        label: `${intent} · ${g.chip}${g.teacher ? ` · ${g.teacher}` : ""}`,
+        send: `Поставьте ${kind} gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""} teacher_id=${g.teacherId || ""}`,
+        primary: i === 0,
+      })),
     };
   }
   if (intent === "пауза") {
@@ -105,6 +148,20 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
   if (intent === "пропуск") {
     if (rights.consultantCanSkip === false) {
       return { reply: `${n}: Пропуск отмечает администратор. ${phoneHint()}`, chips: [] };
+    }
+    const last = String(facts.day ? "" : "");
+    void last;
+    if (!facts.wantsSkip && (facts.day || false) && !/ближайш/i.test("")) {
+      /* день выбран — подтверждение ниже, если не nearest */
+    }
+    if (facts.day) {
+      return {
+        reply: `${n}: Отметить пропуск ${child} в ${facts.day}?`,
+        chips: [
+          { label: "Да, отметить", send: `Да, отметьте пропуск ${facts.day}`, primary: true },
+          { label: "Другой день", send: "Пропуск в другую дату" },
+        ],
+      };
     }
     return {
       reply: `${n}: Отметить, что ${child} не придёт на ближайшее${d?.nextLesson ? ` (${d.nextLesson})` : ""}?`,
