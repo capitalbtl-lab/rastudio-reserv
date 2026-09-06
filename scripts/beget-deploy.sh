@@ -37,3 +37,4 @@ if ! pm2 describe rastudio-deploy >/dev/null 2>&1; then
 fi
 
 echo "[deploy] live $(git rev-parse --short HEAD)"
+node scripts/ping-indexnow.mjs || echo "[deploy] IndexNow skip"

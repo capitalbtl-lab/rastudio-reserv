@@ -19,7 +19,7 @@ import { courseOfferFacts } from "@/data/ages";
 import { galleryPhotos } from "@/lib/gallery";
 import { SCHOOL_PROGRAMS, SCHOOL_WHY, COURSE_STORY } from "@/data/school-programs";
 import { whyForPath } from "@/data/course-why";
-import { breadcrumbJsonLd, courseJsonLd } from "@/data/seo";
+import { breadcrumbJsonLd, courseJsonLd, courseListJsonLd, teacherJsonLd } from "@/data/seo";
 import { JsonLd } from "@/components/json-ld";
 import { AGE_BANDS, agesOverlap, coursePlace, ageBadge, courseNameOnly } from "@/data/ages";
 import { AgeChips } from "@/components/age-chips";
@@ -120,6 +120,8 @@ export function PageArticle({
     <>
       <JsonLd data={breadcrumbJsonLd(path, page.h1 || page.title)} />
       <JsonLd data={courseJsonLd({ ...page, path, h1: page.h1 })} />
+      <JsonLd data={teacherJsonLd({ ...page, path, h1: page.h1, paragraphs: page.paragraphs })} />
+      {page.kind === "catalog" ? <JsonLd data={courseListJsonLd(courses)} /> : null}
     </>
   );
   if (cmsCourse) {

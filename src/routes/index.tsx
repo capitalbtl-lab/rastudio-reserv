@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SITE, SCHOOLS, PARTNER_LOGOS, BRANCHES, STATS, SHOWCASE, TICKER } from "@/data/site";
 import { homePage, liteTeachers } from "@/data/lite";
-import { pageHead } from "@/data/seo";
+import { pageHead, itemListJsonLd } from "@/data/seo";
+import { JsonLd } from "@/components/json-ld";
 import { SiteShell } from "@/components/site-shell";
 import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
@@ -87,6 +88,12 @@ function Home() {
   const hero = pageEdit("/");
   return (
     <SiteShell>
+      <JsonLd
+        data={itemListJsonLd(
+          "Школы студии «Развивайся»",
+          SCHOOLS.map((s) => ({ name: s.label, url: s.href })),
+        )}
+      />
       <section className="ink relative isolate overflow-hidden text-header-fg">
         <div className="page-wrap grid items-center gap-10 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[88dvh] lg:gap-8 lg:py-8">
           <div className="relative z-10 max-w-xl">

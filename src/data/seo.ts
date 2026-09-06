@@ -1,8 +1,8 @@
-import { SITE, SCHOOLS, BRANCHES } from "./site";
-import { schoolIdOfPath } from "./site-bind-core";
-import { SEO_COPY } from "./seo-copy";
-import { YANDEX_RATING, YANDEX_REVIEWS } from "./reviews";
-import { courseLength, coursePlace, coursePrice } from "./ages";
+import { SITE, SCHOOLS, BRANCHES } from "./site.ts";
+import { schoolIdOfPath } from "./site-bind-core.ts";
+import { SEO_COPY } from "./seo-copy.ts";
+import { YANDEX_RATING, YANDEX_REVIEWS } from "./reviews.ts";
+import { courseLength, coursePlace, coursePrice } from "./ages.ts";
 
 export const SEO_ORIGIN = "https://www.rastudio.org";
 export const DEFAULT_OG = `${SEO_ORIGIN}/og.jpg`;
@@ -217,7 +217,6 @@ function postalOf(branch: (typeof BRANCHES)[number]) {
     addressLocality: branch.city,
     streetAddress: branch.address,
     addressRegion: "Московская область",
-    postalCode: branch.city === "Луховицы" ? "140501" : "140400",
     addressCountry: "RU",
   };
 }
@@ -329,12 +328,11 @@ function workloadIso(path: string) {
 
 function courseLocations(path: string) {
   const both = /Луховиц/i.test(coursePlace(path));
-  const branches = both ? BRANCHES : BRANCHES.filter((b) => b.city === "Коломна");
-  return branches.map((b, i) => ({
+  return BRANCHES.filter((b) => both || b.city === "Коломна").map((b, i) => ({
     "@type": "Place",
     name: b.name,
     address: postalOf(b),
-    geo: BRANCH_GEO[BRANCHES.indexOf(b)] || BRANCH_GEO[i],
+    geo: BRANCH_GEO[i] || BRANCH_GEO[0],
   }));
 }
 
