@@ -12,8 +12,7 @@ import { HeroCollage } from "@/components/hero-collage";
 import { AgeChips } from "@/components/age-chips";
 import { Reviews } from "@/components/reviews";
 import { RobotEnglishVideos } from "@/components/robot-videos";
-import { SiteVideo } from "@/components/site-video";
-import { HomeCanvas, HomeSlot } from "@/components/home-blocks";
+import { HomeCanvas, HomeSlot, BlockMedia } from "@/components/home-blocks";
 import { EditText } from "@/components/home-editor";
 import { loadPublicEdits } from "@/data/load-site-page";
 import { hydrateEdits, pageEdit, type EditsStore } from "@/data/edits-core";
@@ -288,11 +287,10 @@ function Home() {
             </EditText>
           </div>
           <div className="overflow-hidden rounded-3xl bg-header">
-            <SiteVideo
-              src="/media/home/hero.mp4"
+            <BlockMedia
+              id="about"
+              fallback="/media/home/hero.mp4"
               title="Администратор на ресепшн Студии Развивайся"
-              mode="ambient"
-              className="aspect-[4/3] w-full"
             />
           </div>
         </div>

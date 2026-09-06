@@ -26,6 +26,10 @@ export function HomeCanvas({
   );
 }
 
+export function HomeSlot({ id, children }: { id: HomeBlockId; children: ReactNode }) {
+  return <>{children}</>;
+}
+
 export function BlockMedia({
   id,
   fallback,
@@ -109,14 +113,14 @@ function HomeCanvasInner({ children }: { children: ReactNode }) {
       <div className={cn(ctx.editing && "md:px-60", ctx.editing && deviceW && "mx-auto", deviceW)}>
         {slots.map((slot) => (
           <HomeSlotFrame
-            key={slot.props.id}
-            id={slot.props.id}
+            key={slot.id}
+            id={slot.id}
             drag={drag}
             over={over}
             onDragId={setDrag}
             onOver={setOver}
           >
-            {slot}
+            {slot.node}
           </HomeSlotFrame>
         ))}
       </div>

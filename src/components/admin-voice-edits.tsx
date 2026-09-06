@@ -5,6 +5,7 @@ import { adminClearEdit, adminEdits } from "@/data/admin";
 import { fieldLabel } from "@/data/edits-core";
 import { Button } from "@/components/ui/button";
 import { AdminSaveBar } from "@/components/admin-save-bar";
+import { StudioPanel } from "@/components/home-studio";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -71,8 +72,18 @@ export function AdminVoiceEdits() {
   return (
     <div className="space-y-6">
       <p className="max-w-2xl text-sm text-muted">
-        Тексты rastudio.org после кодового слова или правкой здесь. Цены — «Группы, цены». CRM — карточка клиента. Кодовое слово — «Голосовой доступ».
+        Тексты rastudio.org после кодового слова или правкой здесь. Медиатека и генератор блоков — ниже. Цены — «Группы, цены».
       </p>
+
+      <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
+        <p className="text-sm font-semibold">Медиатека и генератор блоков</p>
+        <p className="mt-2 text-sm text-muted">
+          Загрузка фото/видео, подпись DeepSeek для консультантов, кнопка «Придумать блок» по трендам 2026. Поставить блок — он сразу на главной.
+        </p>
+        <div className="mt-4">
+          <StudioPanel admin />
+        </div>
+      </div>
 
       <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)] md:p-6">
         <p className="text-sm font-semibold">Как говорить в чате</p>

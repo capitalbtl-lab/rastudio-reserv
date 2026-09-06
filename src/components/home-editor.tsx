@@ -13,11 +13,13 @@ import {
   patchHomeStyle,
   placeHomeBlock,
   setHomeText,
+  setHomeMedia,
   type HomeBg,
   type HomeBlockId,
   type HomeDevice,
   type HomeLayoutDoc,
 } from "@/data/home-layout-core";
+import { StudioPanel } from "@/components/home-studio";
 import { cn } from "@/lib/utils";
 
 const KEY = "ra_debug";
@@ -289,7 +291,7 @@ export function HomeEditorChrome() {
                   }}
                 >
                   <button type="button" className="min-w-0 flex-1 truncate text-left font-medium" onClick={() => select(id)}>
-                    {homeBlockLabel(id)}
+                    {homeBlockLabel(id, doc.customs)}
                   </button>
                   <button
                     type="button"
@@ -310,7 +312,7 @@ export function HomeEditorChrome() {
         {selected ? (
           <>
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-header-fg/45">Инспектор</p>
-            <p className="mt-2 font-display text-xl leading-tight">{homeBlockLabel(selected)}</p>
+            <p className="mt-2 font-display text-xl leading-tight">{homeBlockLabel(selected, doc.customs)}</p>
             <p className="mt-2 text-[0.78rem] leading-relaxed text-header-fg/60">
               Кликните заголовок или абзац на блоке — правьте прямо на странице. Стрелки ↑↓ двигают слой.
             </p>
@@ -379,6 +381,18 @@ export function HomeEditorChrome() {
             Нажмите блок на странице или слой слева. Дальше: текст на холсте, отступы и фон справа, порядок перетаскиванием.
           </p>
         )}
+        <div className="mt-6 rounded-2xl bg-surface p-3 text-fg">
+          <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted">Медиа и ИИ</p>
+          <p className="mb-3 text-[0.75rem] leading-relaxed text-muted">
+            Клик по файлу ставит его в выбранный блок. DeepSeek подписывает фото для Ольги.
+          </p>
+          <StudioPanel
+            onLayout={(layout) => setDoc(layout)}
+            onPickMedia={(src) => {
+              if (selected) setDoc(setHomeMedia(doc, selected, src));
+            }}
+          />
+        </div>
         <p className="mt-6 text-[0.72rem] leading-relaxed text-header-fg/40">
           Изменения сразу на сайте, как публикация в Тильде. Ctrl+Z — шаг назад.
         </p>
