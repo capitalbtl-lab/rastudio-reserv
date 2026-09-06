@@ -133,76 +133,64 @@ export async function maybeBookChudnovaTrial() {
     const date = formatRuDob(plan.date) || plan.date;
     const dateIso = isoFromRu(date);
     const to = addMins(plan.time, plan.duration);
-    const localId = Number(existing?.lessonId) < 0 ? Number(existing?.lessonId) : nextLocalLessonId();
-    if (!(existing && Number(existing.lessonId) < 0)) {
-      const lessonRow = stampJournal(
-        {
-          date: dateIso,
-          from: plan.time,
-          to,
-          status: 1,
-          type: type.name,
-          typeId: type.id,
-          duration: plan.duration,
-          subjectId: plan.subjectId,
-          teacherIds: plan.teacherId ? [plan.teacherId] : [],
-          roomId: plan.roomId || undefined,
-          groupIds: plan.gid ? [plan.gid] : [],
-          customerIds: [plan.customerId],
-          note: plan.note,
-          lessonId: localId,
-          group: slot?.groupName || type.name,
-          subject: slot?.subject || "Художественная школа (10-14 лет)",
-          teacher: slot?.teacher || "",
-        },
-        [plan.customerId],
-      );
-      upsertCustomerCalendar(plan.customerId, lessonRow);
-      if (plan.gid) {
-        upsertGroupCalendar(plan.branchId, plan.gid, lessonRow, {
-          name: slot?.groupName,
-          subjectId: slot?.subjectId,
-          subject: slot?.subject,
-        });
-      }
-    }
-    enqueueExport({
-      op: "lesson.create",
-      branchId: plan.branchId,
-      entityId: plan.customerId,
-      body: {
-        localId,
-        type: plan.type,
-        subjectId: plan.subjectId,
-        subject_id: plan.subjectId,
-        gid: plan.gid || undefined,
-        group_ids: plan.gid ? [plan.gid] : undefined,
-        date,
-        lesson_date: date,
-        time: plan.time,
-        time_from: plan.time,
-        duration: plan.duration,
-        customer_ids: [plan.customerId],
-        ...(plan.roomId ? { room_id: plan.roomId, roomId: plan.roomId } : {}),
-        ...(plan.teacherId ? { teacher_ids: [plan.teacherId], teacherId: plan.teacherId } : {}),
-        note: plan.note,
-      },
+    const booked = await createAlfaLesson({
+      branch: plan.branchId,
+      customerId: plan.customerId,
+      type: "trial",
+      subjectId: plan.subjectId,
+      gid: plan.gid ? String(plan.gid) : undefined,
+      date,
+      time: plan.time,
+      duration: plan.duration,
+      note: plan.note,
+      teacherId: plan.teacherId || undefined,
+      roomId: plan.roomId || undefined,
     });
-    logAdmin(`Пробное Чудновой: #${who.id} ${date} ${plan.time} на диске, очередь AlfaCRM`, "sync");
-    await tickExportQueue(2);
-    const after = loadCustomerCalendar(who.id).find((l) => Number(l.lessonId) === localId || Number(l.lessonId) > 0 && (Number(l.typeId) === 3 || /пробн/i.test(String(l.type || ""))));
-    const alfaId = Number(after?.lessonId) || 0;
-    if (alfaId > 0) {
-      saveMark({ done: TRIAL_TEST_ID, at: new Date().toISOString(), note: `${who.name} #${who.id} Alfa #${alfaId} · ${date} ${plan.time}` });
-    } else {
-      saveMark({ done: "", at: new Date().toISOString(), note: `${who.name} #${who.id} очередь, Alfa ещё не приняла` });
-      g.__raTrialTest = false;
+    if (!booked.ok) throw new Error(booked.error || "Alfa не создала пробное");
+    const lessonId = Number(booked.id) || 0;
+    if (existing && Number(existing.lessonId) < 0 && lessonId) applyCreatedCalendarLesson(Number(existing.lessonId), lessonId);
+    const lessonRow = stampJournal(
+      {
+        date: dateIso,
+        from: booked.time || plan.time,
+        to,
+        status: 1,
+        type: booked.type || type.name,
+        typeId: booked.typeId || type.id,
+        duration: booked.duration || plan.duration,
+        subjectId: plan.subjectId,
+        teacherIds: plan.teacherId ? [plan.teacherId] : [],
+        roomId: plan.roomId || undefined,
+        groupIds: plan.gid ? [plan.gid] : [],
+        customerIds: [plan.customerId],
+        note: plan.note,
+        lessonId,
+        group: slot?.groupName || type.name,
+        subject: slot?.subject || "Художественная школа (10-14 лет)",
+        teacher: slot?.teacher || "",
+      },
+      [plan.customerId],
+    );
+    upsertCustomerCalendar(plan.customerId, lessonRow);
+    if (plan.gid) {
+      upsertGroupCalendar(plan.branchId, plan.gid, lessonRow, {
+        name: slot?.groupName,
+        subjectId: slot?.subjectId,
+        subject: slot?.subject,
+      });
     }
-    return { ok: true as const, customerId: who.id, branchId: who.branchId, date, time: plan.time, lessonId: alfaId || localId };
+    saveMark({
+      done: TRIAL_TEST_ID,
+      at: new Date().toISOString(),
+      note: `${who.name} #${who.id} Alfa #${lessonId} филиал ${who.branchId} · ${date} ${plan.time} ауд. ${plan.roomId || "—"}`,
+    });
+    logAdmin(`Пробное Чудновой: Alfa #${lessonId} ${date} ${plan.time} филиал ${who.branchId} ауд. ${plan.roomId || "—"}`, "sync");
+    return { ok: true as const, customerId: who.id, branchId: who.branchId, date, time: plan.time, lessonId };
   } catch (e) {
     g.__raTrialTest = false;
     const msg = e instanceof Error ? e.message : "пробное";
     if (/no-alfacrm/.test(msg)) return { skipped: "no-alfacrm" as const };
+    saveMark({ done: "", at: new Date().toISOString(), note: msg.slice(0, 400) });
     logAdmin(`Пробное Чудновой: ${msg}`, "sync");
     return { ok: false as const, error: msg };
   }
