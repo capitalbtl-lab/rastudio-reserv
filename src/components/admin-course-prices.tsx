@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { adminGroupDurations, adminPrices, adminSaveAll, adminSaveGroup, adminAddPriceCourse, adminDeletePrice } from "@/data/admin";
-import { PRICE_DIRECTIONS, hydratePrices, listPriceRows, matchDuration, type PriceRow } from "@/data/prices-core";
+import { PRICE_DIRECTIONS, hydratePrices, listPriceRows, type PriceRow } from "@/data/prices-core";
 import { Button } from "@/components/ui/button";
 import { AdminSectionHead } from "@/components/admin-self-test";
 import { adminPriceFormulas, type CorpFormulas } from "@/data/price-formulas";
@@ -88,7 +88,14 @@ export function AdminCoursePrices() {
             .filter((s) => s.id && !seen.has(s.id) && (seen.add(s.id), true)),
         );
       }
-      setErr(next.length ? "" : "Файл цен пуст — показаны курсы с сайта.");
+      const filled = "filled" in res ? Number(res.filled || 0) : 0;
+      setErr(
+        filled
+          ? `Минуты и «в неделю» взяты из групп: ${filled} курсов. Абонементы считают уроки от этих цифр.`
+          : next.length
+            ? ""
+            : "Файл цен пуст — показаны курсы с сайта.",
+      );
       const form = await adminPriceFormulas({ data: { token: token(), action: "get" } });
       if (form.ok && "formulas" in form && form.formulas) {
         setFormulas({ kbm: form.formulas.kbm, tmx: form.formulas.tmx, extra: form.formulas.extra || [] });
@@ -328,23 +335,19 @@ export function AdminCoursePrices() {
     setBusy(true);
     try {
       const res = await adminGroupDurations({ data: { token: token() } });
-      if (!res.ok || !("items" in res)) {
-        setErr(res.ok ? "Группы пустые." : res.error || "Не удалось прочитать группы.");
+      if (!res.ok) {
+        setErr(res.error || "Не удалось прочитать группы.");
         return;
       }
-      const items = res.items || [];
-      let filled = 0;
-      const next = rows.map((r) => {
-        const hit = matchDuration(r, items);
-        if (!hit) return r;
-        filled += 1;
-        return { ...r, mins: hit.mins || 0, perWeek: hit.perWeek || 0 };
-      });
-      setRows(next);
+      if ("rows" in res && Array.isArray(res.rows) && res.rows.length) {
+        setRows(res.rows);
+        hydratePrices(res.rows);
+      }
+      const filled = "filled" in res ? Number(res.filled || 0) : 0;
       setErr(
         filled
-          ? `Из групп: ${filled} курсов, учтено ${res.used ?? "—"} из ${res.groups} групп. Проверьте минуты и «в неделю», затем «Сохранить».`
-          : "В группах нет курсов, которые можно сопоставить с таблицей цен.",
+          ? `Записано на диск: ${filled} курсов, ${res.used ?? "—"} из ${res.groups} групп. Абонементы возьмут эти минуты и «в неделю».`
+          : "В группах нет курсов, которые можно сопоставить с таблицей цен. Проверьте вкладку «Соответствия».",
       );
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Не удалось подгрузить из групп.");
