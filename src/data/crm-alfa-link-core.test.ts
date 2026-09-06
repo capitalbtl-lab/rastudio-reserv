@@ -55,6 +55,7 @@ describe("режим фона с AlfaCRM", () => {
     assert.equal(exportOpPushChannel("customer.create", { is_study: 0 }), "trials");
     assert.equal(exportOpPushChannel("customer.create", { lesson: { type: "trial" } }), "trials");
     assert.equal(exportOpPushChannel("lesson.create", { type: "trial", via: "createAlfaLesson" }), "trials");
+    assert.equal(exportOpPushChannel("lesson.create", { lesson_type_id: 3 }), "trials");
     assert.equal(exportOpPushChannel("lesson.create", { type: "regular" }), "lessons");
     assert.equal(exportOpPushChannel("lesson.create", {}), "lessons");
     assert.equal(exportOpPushChannel("cgi.apply", {}), "groups");
