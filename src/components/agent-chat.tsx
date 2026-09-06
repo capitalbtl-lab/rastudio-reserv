@@ -10,6 +10,7 @@ import { speakAgent } from "@/data/agent-voice";
 import { saveChatLog } from "@/data/chat-logs-fn";
 import { nextChips } from "@/data/agent-chips";
 import { debugEmit } from "@/data/debug-client";
+import { readBehavior } from "@/data/page-behavior";
 import { parseTurns, faceOf, type Who } from "@/data/agent-turns";
 import { PageLink } from "@/components/page-link";
 import { SITE } from "@/data/site";
@@ -739,6 +740,7 @@ export function AgentChat() {
         gateWord: gate ? next : undefined,
         voice: voiceOnRef.current,
         channel: "site",
+        behavior: readBehavior(),
       };
       let res = await chatAgent({ data: payload });
       if (!res.ok) {

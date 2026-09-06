@@ -8,6 +8,7 @@ import { organizationJsonLd } from "@/data/seo";
 import { JsonLd } from "@/components/json-ld";
 import { AgentChat } from "@/components/agent-chat";
 import { DebugDock } from "@/components/debug-dock";
+import { tickBehavior } from "@/data/page-behavior";
 
 export function SiteShell({ children, bare }: { children: ReactNode; bare?: boolean }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -15,6 +16,12 @@ export function SiteShell({ children, bare }: { children: ReactNode; bare?: bool
   useEffect(() => {
     if (!rootRef.current) return;
     return bindIntersection(rootRef.current);
+  }, []);
+
+  useEffect(() => {
+    tickBehavior();
+    const id = window.setInterval(() => tickBehavior(), 5000);
+    return () => window.clearInterval(id);
   }, []);
 
   return (
