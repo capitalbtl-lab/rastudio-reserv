@@ -26,7 +26,7 @@ function emptyWidget() {
 }
 
 const DEFAULT: DebugSettings = {
-  tools: { chat: true, funnel: true, voice: true, net: true },
+  tools: { chat: true, funnel: true, voice: true, net: true, layout: true },
   widget: emptyWidget(),
   last: [],
 };

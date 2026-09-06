@@ -13,6 +13,7 @@ import { AgeChips } from "@/components/age-chips";
 import { Reviews } from "@/components/reviews";
 import { RobotEnglishVideos } from "@/components/robot-videos";
 import { SiteVideo } from "@/components/site-video";
+import { HomeCanvas, HomeSlot } from "@/components/home-blocks";
 import { loadPublicEdits } from "@/data/load-site-page";
 import { hydrateEdits, pageEdit } from "@/data/edits-core";
 import { priceShort } from "@/data/prices-core";
@@ -85,7 +86,9 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const edits = Route.useLoaderData();
+  const data = Route.useLoaderData() as { edits?: Parameters<typeof hydrateEdits>[0]; layout?: string[] } | Parameters<typeof hydrateEdits>[0] | null;
+  const edits = data && typeof data === "object" && "edits" in data ? data.edits : data;
+  const layout = data && typeof data === "object" && "layout" in data ? data.layout : undefined;
   if (edits) hydrateEdits(edits);
   const hero = pageEdit("/");
   return (
@@ -96,6 +99,8 @@ function Home() {
           SCHOOLS.map((s) => ({ name: s.label, url: s.href })),
         )}
       />
+      <HomeCanvas initialOrder={layout}>
+      <HomeSlot id="hero">
       <section className="ink relative isolate overflow-hidden text-header-fg">
         <div className="page-wrap grid items-center gap-10 py-16 md:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:min-h-[88dvh] lg:gap-8 lg:py-8">
           <div className="relative z-10 max-w-xl">
@@ -128,7 +133,9 @@ function Home() {
           <HeroCollage />
         </div>
       </section>
+      </HomeSlot>
 
+      <HomeSlot id="ticker">
       <div className="ink overflow-hidden border-y border-white/10 py-3 text-header-fg">
         <div className="marquee">
           <div className="marquee-track ticker-track items-center">
@@ -141,9 +148,13 @@ function Home() {
           </div>
         </div>
       </div>
+      </HomeSlot>
 
+      <HomeSlot id="robot">
       <RobotEnglishVideos />
+      </HomeSlot>
 
+      <HomeSlot id="ages">
       <section className="page-wrap pt-8 pb-2 md:pt-10">
         <p className="kicker text-primary">Подбор за 10 секунд</p>
         <h2 className="section-title mt-3">Сколько лет ребёнку?</h2>
@@ -157,7 +168,9 @@ function Home() {
           </Button>
         </div>
       </section>
+      </HomeSlot>
 
+      <HomeSlot id="schools">
       <section className="page-wrap pt-8 pb-12 md:pt-10 md:pb-16">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>

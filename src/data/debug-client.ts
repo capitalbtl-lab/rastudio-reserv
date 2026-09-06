@@ -3,6 +3,7 @@ export const DEBUG_TOOLS = [
   { id: "funnel", label: "Воронка", hint: "Возраст, город, филиал — что агент уже запомнил." },
   { id: "voice", label: "Голос и микрофон", hint: "TTS, SpeechRecognition, не просит ли телефон микрофон снова." },
   { id: "net", label: "Ответ агента", hint: "Последний chatAgent: длина, ошибка, канал." },
+  { id: "layout", label: "Макет главной", hint: "На rastudio.org в отладке блоки главной можно переставлять. Порядок виден всем." },
 ] as const;
 
 export type DebugToolId = (typeof DEBUG_TOOLS)[number]["id"];
