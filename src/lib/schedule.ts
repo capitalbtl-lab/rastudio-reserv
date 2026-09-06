@@ -12,24 +12,42 @@ export const WEEKDAYS: { re: RegExp; id: string; label: string }[] = [
   { re: /воскресень/i, id: "Вс", label: "Воскресенье" },
 ];
 
-export function branchMeta(session: CmsSession) {
+export type BranchInfo = {
+  id: string;
+  city: string;
+  address: string;
+  short: string;
+};
+
+export function branchMeta(session: Pick<CmsSession, "city" | "branch">): BranchInfo {
   const blob = `${session.city} ${session.branch}`;
-  if (/октябрьск/i.test(blob)) return { city: "Коломна", address: "ул. Октябрьской революции, 340", short: "Октябрьской, 340" };
-  if (/гражданск/i.test(blob)) return { city: "Коломна", address: "ул. Гражданская, 2", short: "Гражданская, 2" };
-  if (/пушкин|луховиц/i.test(blob)) return { city: "Луховицы", address: "ул. Пушкина, 202А", short: "Пушкина, 202А" };
+  if (/октябрьск/i.test(blob)) return { id: "okt", city: "Коломна", address: "ул. Октябрьской революции, 340", short: "Октябрьской, 340" };
+  if (/гражданск/i.test(blob)) return { id: "grazh", city: "Коломна", address: "ул. Гражданская, 2", short: "Гражданская, 2" };
+  if (/пушкин|луховиц/i.test(blob)) return { id: "luh", city: "Луховицы", address: "ул. Пушкина, 202А", short: "Пушкина, 202А" };
+  const short = session.branch || session.city || "";
   return {
+    id: short || "other",
     city: session.city || "Филиал",
     address: session.branch || "",
-    short: session.branch || session.city || "",
+    short,
   };
 }
 
-export function branchRank(session: CmsSession) {
-  const blob = `${session.city} ${session.branch}`;
-  if (/октябрьск/i.test(blob)) return 0;
-  if (/гражданск/i.test(blob)) return 1;
-  if (/луховиц|пушкин/i.test(blob)) return 2;
+export function branchRank(session: Pick<CmsSession, "city" | "branch"> | BranchInfo) {
+  const id = "id" in session && session.id ? session.id : branchMeta(session as Pick<CmsSession, "city" | "branch">).id;
+  if (id === "okt") return 0;
+  if (id === "grazh") return 1;
+  if (id === "luh") return 2;
   return 9;
+}
+
+export function listBranches(sessions: Pick<CmsSession, "city" | "branch">[]) {
+  const map = new Map<string, BranchInfo>();
+  for (const s of sessions) {
+    const meta = branchMeta(s);
+    if (meta.short) map.set(meta.id, meta);
+  }
+  return [...map.values()].sort((a, b) => branchRank(a) - branchRank(b) || a.short.localeCompare(b.short, "ru"));
 }
 
 export function courseKey(session: CmsSession) {
