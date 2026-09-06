@@ -17,6 +17,8 @@ export type SessionFacts = {
   intent?: string;
   day?: string;
   pauseUntil?: string;
+  wantsBook?: boolean;
+  wantsSkip?: boolean;
   briefed?: boolean;
 };
 
@@ -286,6 +288,9 @@ export function factsFromMessages(messages: { role: string; content: string }[])
       })
       .find(Boolean);
     if (pause) facts.pauseUntil = pause;
+    const last = [...messages].reverse().find((m) => m.role === "user")?.content || "";
+    if (/gid=\d/i.test(last) || /поставьте отработку/i.test(last)) facts.wantsBook = true;
+    if (/отметьте пропуск|да, отметить/i.test(last)) facts.wantsSkip = true;
     if (facts.identified && !facts.child) {
       const named = messages
         .filter((m) => m.role === "user")

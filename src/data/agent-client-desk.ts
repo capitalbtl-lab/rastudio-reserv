@@ -36,6 +36,7 @@ export async function makeupList(customerId: number, weekday: string) {
 }
 
 export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts) {
+  if (facts.wantsBook || facts.wantsSkip) return null;
   if (facts.mode !== "client" || !facts.identified || !facts.customerId) return null;
   const n = who === "olga" ? "Ольга" : "Олег";
   const found = who === "olga" ? "нашла" : "нашёл";
