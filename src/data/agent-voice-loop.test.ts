@@ -77,7 +77,10 @@ describe("голосовой контур: эхо и перебивание", ()
     assert.match(chat, /srShouldRestart/);
     assert.match(chat, /bargeInterimReady/);
     assert.match(chat, /isSocialHello/);
-    assert.doesNotMatch(chat, /if \(next\.fire\) \{\s*stop\(\);\s*cancelSpeech/);
+    assert.match(chat, /cancelSpeech\(\)/);
+    assert.match(chat, /next\.fire && speakingRef/);
+    assert.match(chat, /busyRef\.current = false/);
+    assert.match(chat, /replayLast/);
     assert.match(chat, /startListen\(\);\s*\n\s*if \(bargeRef/);
     assert.match(chat, /if \(!bargeInterimReady\(said, isFinal\)\) return;/);
     assert.match(chat, /cancelSpeech\(\);\s*\n\s*void send\(said\);/);

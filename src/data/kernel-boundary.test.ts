@@ -60,4 +60,12 @@ describe("ядро: границы вкладок", () => {
     assert.match(tabs, /crm-disk-rules/);
     assert.match(tabs, /kernel/);
   });
+
+  it("каналы зовут тот же chatAgent, не второй мозг", () => {
+    const inbox = src("src/data/agent-inbox.ts");
+    assert.match(inbox, /import\("\.\/agent-chat"\)/);
+    assert.match(inbox, /channel: ev\.channel/);
+    const api = src("src/routes/api/agent.$channel.ts");
+    assert.match(api, /handleWebhook/);
+  });
 });

@@ -726,8 +726,9 @@ export function AgentChat() {
         vadStateRef.current = next.state;
         if (next.fire && speakingRef.current) {
           vadStateRef.current = emptyVad();
-          const el = audioElRef.current;
-          if (el && !el.paused) el.volume = Math.min(el.volume, 0.28);
+          cancelSpeech();
+          ignoreUntilRef.current = Date.now() + 240;
+          if (voiceOnRef.current && !busyRef.current) startListen();
         }
         vadRafRef.current = requestAnimationFrame(tick);
       };
@@ -1099,11 +1100,12 @@ export function AgentChat() {
   }
 
   async function replayLast(phrase?: string) {
-    if (busyRef.current) return;
     if (!uiOn("allowVoice")) return;
     const live = inAdminUi ? adminMsgsRef.current : clientMsgsRef.current;
     const last = phrase?.trim() || [...live].reverse().find((m) => m.role === "assistant")?.content || "";
     if (!last.trim()) return;
+    busyRef.current = false;
+    setBusy(false);
     if (!voiceOnRef.current) {
       voiceOnRef.current = true;
       setVoiceOn(true);
@@ -1111,6 +1113,7 @@ export function AgentChat() {
       await ensureMic();
     }
     await speak(last);
+    if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
   }
 
   function pickPartner(next: "oleg" | "olga") {

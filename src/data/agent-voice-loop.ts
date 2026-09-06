@@ -97,9 +97,9 @@ export function ignoreWhileSpeakStartMs(barge: boolean) {
 }
 
 export function ignoreAfterSpeakMs(barge: boolean) {
-  return barge ? 700 : 1000;
+  return barge ? 420 : 900;
 }
 
 export function listenGapAfterSpeakMs(barge: boolean) {
-  return barge ? 80 : 120;
+  return barge ? 40 : 100;
 }
