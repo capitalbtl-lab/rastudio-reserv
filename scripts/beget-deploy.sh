@@ -22,6 +22,8 @@ if [ "${1:-}" != "--force" ] && [ "$BEFORE" = "$AFTER" ]; then
 fi
 
 echo "[deploy] ${BEFORE:0:7} → ${AFTER:0:7}"
+mkdir -p data
+printf '{"sha":"%s","at":"%s","deploying":true}\n' "${BEFORE:0:7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > data/build.json
 git reset --hard origin/main
 
 if [ ! -d node_modules ] || ! git diff --quiet "$BEFORE" HEAD -- package-lock.json 2>/dev/null; then
@@ -37,4 +39,5 @@ if ! pm2 describe rastudio-deploy >/dev/null 2>&1; then
 fi
 
 echo "[deploy] live $(git rev-parse --short HEAD)"
+printf '{"sha":"%s","at":"%s"}\n' "$(git rev-parse --short HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > data/build.json
 node scripts/ping-indexnow.mjs || echo "[deploy] IndexNow skip"

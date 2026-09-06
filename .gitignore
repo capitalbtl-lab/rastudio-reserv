@@ -22,5 +22,6 @@ attachments/
 content/raw/
 
 storage/
+data/build.json
 __pycache__/
 *.pyc
