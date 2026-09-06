@@ -9,6 +9,8 @@ import { docsPrompt } from "./agent-docs";
 import { consultantGuidePrompt } from "./agent-section-guides-data";
 import { loadChannels } from "./agent-channels";
 import { repairSiteFlags, SITE_WINDOW_IDS, FRAME_WINDOW_IDS, CHIP_IDS } from "./agent-window-core";
+import { BOOK_TYPE_FLAGS, bookTypesPrompt, type BookTypeFlag } from "./agent-book-kinds";
+export { BOOK_TYPE_FLAGS, allowedLessonType, bookTypesPrompt, lessonTypeGroup } from "./agent-book-kinds";
 
 export type AgentSettings = {
   updatedAt: string;
@@ -39,10 +41,21 @@ export type AgentSettings = {
   adminVoiceCanWrite: boolean;
   /** Голос кабинета отвечает родителям как Олег/Ольга. По умолчанию нет. */
   adminVoiceCanConsult: boolean;
-  /** Консультант отмечает пропуск и паузу на диске. */
+  /** Консультант отмечает пропуск. */
+  consultantCanSkip: boolean;
+  /** Консультант ставит паузу занятий. */
+  consultantCanPause: boolean;
+  /** Устарело: skip или pause. Держим для старых сейвов. */
   consultantCanJournal: boolean;
   /** Консультант вешает абонемент (tariffId). По умолчанию нет. */
   consultantCanTariff: boolean;
+  consultantCanBookTrial: boolean;
+  consultantCanBookGroup: boolean;
+  consultantCanBookMakeup: boolean;
+  consultantCanBookOvertime: boolean;
+  consultantCanBookExtra: boolean;
+  consultantCanBookIndividual: boolean;
+  consultantCanBookOther: boolean;
 };
 
 export type AgentUiFlags = Pick<
