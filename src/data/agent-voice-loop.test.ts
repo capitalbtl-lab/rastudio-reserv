@@ -59,6 +59,7 @@ describe("голосовой контур: эхо и перебивание", ()
   it("перебивание по interim — от двух слов, финал — от одного; привет — только финал", () => {
     assert.equal(bargeInterimReady("да", false), false);
     assert.equal(bargeInterimReady("перенесите занятие", false), true);
+    assert.equal(bargeInterimReady("суббота", false), true);
     assert.equal(bargeInterimReady("суббота", true), true);
     assert.equal(bargeInterimReady("привет", false), false);
     assert.equal(bargeInterimReady("привет", true), true);
@@ -78,5 +79,8 @@ describe("голосовой контур: эхо и перебивание", ()
     assert.match(chat, /isSocialHello/);
     assert.doesNotMatch(chat, /if \(next\.fire\) \{\s*stop\(\);\s*cancelSpeech/);
     assert.match(chat, /startListen\(\);\s*\n\s*if \(bargeRef/);
+    assert.match(chat, /if \(!bargeInterimReady\(said, isFinal\)\) return;/);
+    assert.match(chat, /cancelSpeech\(\);\s*\n\s*void send\(said\);/);
+    assert.match(chat, /el\.volume = Math.min\(el\.volume, 0\.28\)/);
   });
 });
