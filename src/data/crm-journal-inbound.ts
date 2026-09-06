@@ -38,7 +38,7 @@ function packLight(
   },
   ctx: { groupName: string; from: string; to: string; teacher: string; subject: string },
 ): GroupCalLesson | null {
-  const date = String(item.date || item.time_from || "").slice(0, 10);
+  const date = ymd(item.date || item.time_from || "");
   if (!date) return null;
   const from = hm(item.time_from) || ctx.from;
   const to = hm(item.time_to) || ctx.to;
@@ -140,6 +140,59 @@ export async function inboundJournalGroup(
     rememberLessons(calendar);
   }
   return { ok: true as const, extra: `журнал ${gid}: ${calendar.length}`, count: calendar.length, calendar, card };
+}
+
+function ymd(raw?: string) {
+  const s = String(raw || "").trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
+  return s.slice(0, 10);
+}
+
+function isOneOffLesson(item: { lesson_type_id?: number; group_ids?: number[] }) {
+  const typeId = Number(item.lesson_type_id || 0);
+  const groups = (item.group_ids || []).map(Number).filter((n) => n > 0);
+  if (typeId === 3 || typeId === 1 || typeId === 4 || typeId === 5 || typeId === 10 || typeId === 11) return true;
+  return groups.length === 0 && typeId !== 2;
+}
+
+export async function inboundCustomerLessons(branch: number, customerId: number) {
+  const id = Number(customerId) || 0;
+  if (!alfaLinkedNow() || id <= 0) return { ok: true as const, count: 0 };
+  const { token, request } = await import("./alfacrm");
+  const { upsertCustomerCalendar } = await import("./group-cards");
+  const t = await token();
+  const dateFrom = ruShift(-45);
+  const dateTo = ruShift(60);
+  const packs = await Promise.all(
+    [1, 2, 3].map((status) =>
+      request<{ items?: Parameters<typeof packLight>[0][] }>(
+        `/v2api/${branch}/lesson/index`,
+        { page: 0, pageSize: 50, status, customer_id: id, date_from: dateFrom, date_to: dateTo },
+        t,
+      ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] })),
+    ),
+  );
+  let count = 0;
+  for (const les of packs) {
+    for (const item of les.items || []) {
+      const ids = (item.customer_ids || []).map(Number);
+      if (ids.length && !ids.includes(id)) continue;
+      if (!isOneOffLesson(item)) continue;
+      const packed = packLight(
+        { ...item, date: ymd(item.date) },
+        { groupName: String(item.lesson_type_name || "Пробное"), from: "", to: "", teacher: "", subject: "" },
+      );
+      if (!packed) continue;
+      packed.date = ymd(packed.date);
+      packed.customerIds = packed.customerIds?.length ? packed.customerIds : [id];
+      upsertCustomerCalendar(id, packed);
+      count += 1;
+    }
+  }
+  return { ok: true as const, count };
 }
 
 export async function inboundJournalChunk(offset = 0, take = 2) {

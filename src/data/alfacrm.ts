@@ -427,51 +427,41 @@ export async function createAlfaLesson(opts: {
   if (!date) date = nextDateForCrmDay(moscowParts().day === 7 ? 1 : moscowParts().day + 1);
   if (!time) time = "16:00";
   if (!subjectId) return { ok: false as const, error: "no-subject" as const };
-  const { SEED_ROOMS } = await import("./crm-rooms");
-  const rooms = [
-    roomId || 0,
-    ...SEED_ROOMS.filter((r) => r.branchId === opts.branch && r.id !== roomId).map((r) => r.id),
-    0,
-  ].filter((id, i, a) => a.indexOf(id) === i);
-  const times = [time, "17:30", "15:00", "10:00"].filter((x, i, a) => a.indexOf(x) === i);
+  const [hh, mm] = time.split(":").map(Number);
+  const tot = (Number(hh) || 0) * 60 + (Number(mm) || 0) + duration;
+  const timeTo = `${String(Math.floor((tot % (24 * 60)) / 60)).padStart(2, "0")}:${String((tot % (24 * 60)) % 60).padStart(2, "0")}`;
+  const rooms = roomId ? [roomId, 0] : [0];
   let lastErr = "";
-  for (const tm of times) {
-    const [hh, mm] = tm.split(":").map(Number);
-    const tot = (Number(hh) || 0) * 60 + (Number(mm) || 0) + duration;
-    const timeTo = `${String(Math.floor((tot % (24 * 60)) / 60)).padStart(2, "0")}:${String((tot % (24 * 60)) % 60).padStart(2, "0")}`;
-    for (const rid of rooms) {
-      try {
-        const created = await request<{ success?: boolean; errors?: unknown; model?: { id?: number }; id?: number; data?: { id?: number } }>(
-          `/v2api/${opts.branch}/lesson/create`,
-          {
-            lesson_type_id: type.id,
-            lesson_date: date,
-            time_from: tm,
-            time_to: timeTo,
-            duration,
-            subject_id: subjectId,
-            customer_ids: [opts.customerId],
-            ...(gid ? { group_ids: [gid] } : {}),
-            ...(teacherIds.length && type.id !== 3 ? { teacher_ids: teacherIds } : {}),
-            ...(rid ? { room_id: rid } : {}),
-            ...(opts.topic ? { topic: opts.topic } : {}),
-            note: opts.note || `${type.name} с сайта rastudio.org`,
-          },
-          t,
-        );
-        const id = Number(created.model?.id || created.id || created.data?.id) || 0;
-        if (created.success !== false && id) {
-          return { ok: true as const, id, date, time: tm, duration, type: type.name, typeId: type.id, roomId: rid || undefined };
-        }
-        lastErr = JSON.stringify(created.errors || created);
-      } catch (e) {
-        lastErr = e instanceof Error ? e.message : String(e);
+  for (const rid of rooms) {
+    try {
+      const created = await request<{ success?: boolean; errors?: unknown; model?: { id?: number }; id?: number; data?: { id?: number } }>(
+        `/v2api/${opts.branch}/lesson/create`,
+        {
+          lesson_type_id: type.id,
+          lesson_date: date,
+          time_from: time,
+          time_to: timeTo,
+          duration,
+          subject_id: subjectId,
+          customer_ids: [opts.customerId],
+          ...(gid ? { group_ids: [gid] } : {}),
+          ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+          ...(rid ? { room_id: rid } : {}),
+          ...(opts.topic ? { topic: opts.topic } : {}),
+          note: opts.note || `${type.name} с сайта rastudio.org`,
+        },
+        t,
+      );
+      const id = Number(created.model?.id || created.id || created.data?.id) || 0;
+      if (created.success !== false && id) {
+        return { ok: true as const, id, date, time, duration, type: type.name, typeId: type.id, roomId: rid || undefined };
       }
-      if (/аудитория занята/i.test(lastErr)) continue;
-      if (/нельзя добавить группу/i.test(lastErr)) continue;
-      throw new Error(`alfacrm-lesson ${lastErr}`);
+      lastErr = JSON.stringify(created.errors || created);
+    } catch (e) {
+      lastErr = e instanceof Error ? e.message : String(e);
     }
-    if (!/аудитория занята/i.test(lastErr)) break;
+    if (/аудитория занята/i.test(lastErr) || /нельзя добавить группу/i.test(lastErr)) continue;
+    throw new Error(`alfacrm-lesson ${lastErr}`);
   }
   throw new Error(`alfacrm-lesson ${lastErr || "не создался"}`);
 }
