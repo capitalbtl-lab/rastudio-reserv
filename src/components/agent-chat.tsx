@@ -19,6 +19,18 @@ import { cn } from "@/lib/utils";
 import { publicPageAgent } from "@/data/page-agents-fn";
 import type { PageAgent } from "@/data/page-agents-core";
 import { useRouterState } from "@tanstack/react-router";
+import {
+  bargeInterimReady,
+  emptyVad,
+  ignoreAfterSpeakMs,
+  ignoreWhileSpeakStartMs,
+  isVoiceEcho,
+  listenGapAfterSpeakMs,
+  srFatal,
+  srShouldRestart,
+  vadTick,
+  type VadState,
+} from "@/data/agent-voice-loop";
 
 type Rec = {
   lang: string;
@@ -259,6 +271,8 @@ export function AgentChat() {
   const debugWidgetRef = useRef(debugWidget);
   const vadRafRef = useRef(0);
   const vadStopRef = useRef<(() => void) | null>(null);
+  const vadStateRef = useRef<VadState>(emptyVad());
+  const spokenAtRef = useRef(0);
   clientMsgsRef.current = clientMsgs;
   adminMsgsRef.current = adminMsgs;
   uiRef.current = ui;
@@ -493,6 +507,7 @@ export function AgentChat() {
     }
     speakingRef.current = false;
     setSpeaking(false);
+    spokenAtRef.current = Date.now();
   }
 
   function pickVoice(who: Who, voices: SpeechSynthesisVoice[]) {
