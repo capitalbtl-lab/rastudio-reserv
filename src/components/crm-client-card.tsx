@@ -878,7 +878,7 @@ export function CrmClientCard({
             {activeTariffs.length ? (
               <ul className="mt-2 space-y-1.5">
                 {activeTariffs.map((t) => (
-                  <li key={t.id} className="flex items-stretch gap-1.5">
+                  <li key={t.id} className="flex items-stretch gap-1">
                     <button
                       type="button"
                       data-op="open-tariff"
