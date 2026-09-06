@@ -160,20 +160,13 @@ export async function saveTrialLead(data: TrialPayload) {
     try {
       const { nextLocalLessonId, upsertCustomerCalendar } = await import("./group-cards");
       const { stampJournal } = await import("./crm-journal-core");
-      const { isoFromRu } = await import("./crm-dates").catch(async () => {
-        const iso = String(data.date || "");
-        const m = iso.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-        return { isoFromRu: (d: string) => {
-          const x = String(d).match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-          return x ? `${x[3]}-${x[2].padStart(2, "0")}-${x[1].padStart(2, "0")}` : d;
-        } };
-      });
+      const ru = String(data.date).match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+      const dateIso = ru ? `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}` : String(data.date).slice(0, 10);
       const from = String(data.time).replace(".", ":").slice(0, 5);
       const mins = Number(data.duration) || 90;
       const [h, m] = from.split(":").map(Number);
       const tot = ((h || 0) * 60 + (m || 0) + mins) % (24 * 60);
       const to = `${String(Math.floor(tot / 60)).padStart(2, "0")}:${String(tot % 60).padStart(2, "0")}`;
-      const dateIso = typeof isoFromRu === "function" ? isoFromRu(String(data.date)) : String(data.date);
       upsertCustomerCalendar(
         customerId,
         stampJournal(
@@ -220,8 +213,8 @@ export async function saveTrialLead(data: TrialPayload) {
           : { is_study: "0", lead_status_id: String(statusId) },
         source: "site",
         note,
-        ...(data.gid && /^\d+$/.test(data.gid)
-          ? { groupLink: { id: Number(data.gid), name: data.groupName || "", branchId, school: "", active: true, subjectId, courseId } }
+        ...(attach
+          ? { groupLink: { id: attach, name: data.groupName || "", branchId, school: "", active: true, subjectId, courseId } }
           : {}),
       });
       if (alreadyClient) forgetLead(crmId, branchId);
@@ -240,6 +233,7 @@ export async function saveTrialLead(data: TrialPayload) {
       } catch {
         /* лента */
       }
+      await stampCalendar(crmId);
       enqueueExport({
         op: "customer.update",
         branchId,
@@ -251,7 +245,7 @@ export async function saveTrialLead(data: TrialPayload) {
           ...(email ? { email: [email] } : {}),
           ...(dobRu ? { dob: dobRu } : {}),
           note,
-          ...(data.gid && /^\d+$/.test(data.gid) ? { group_ids: [Number(data.gid)] } : {}),
+          ...(attach ? { group_ids: [attach] } : {}),
         },
       });
       enqueueExport({
@@ -261,13 +255,13 @@ export async function saveTrialLead(data: TrialPayload) {
         actor: "consultant",
         body: { via: "createAlfaLesson", ...lesson },
       });
-      if (data.gid && /^\d+$/.test(data.gid)) {
+      if (attach) {
         enqueueExport({
           op: "cgi.apply",
           branchId,
           entityId: crmId,
           actor: "consultant",
-          body: { groupId: Number(data.gid), drop: false },
+          body: { groupId: attach, drop: false },
         });
       }
       return { ok: true as const, id: crmId, duplicate: true, branch: branchId, queued: true, pending: false, lesson: { type: kindLabel, date: data.date, time: data.time } };
@@ -283,8 +277,8 @@ export async function saveTrialLead(data: TrialPayload) {
       extras: { is_study: "0", lead_status_id: String(statusId), local_id: String(localId) },
       source: "site",
       note,
-      ...(data.gid && /^\d+$/.test(data.gid)
-        ? { groupLink: { id: Number(data.gid), name: data.groupName || "", branchId, school: "", active: true, subjectId, courseId } }
+      ...(attach
+        ? { groupLink: { id: attach, name: data.groupName || "", branchId, school: "", active: true, subjectId, courseId } }
         : {}),
     });
     cachePutLead(trialLeadCard({ localId, branchId, child, phone, email, note, statusId }));
@@ -302,6 +296,8 @@ export async function saveTrialLead(data: TrialPayload) {
     } catch {
       /* лента */
     }
+    await stampCalendar(localId);
+    }
     enqueueExport({
       op: "customer.create",
       branchId,
@@ -318,7 +314,7 @@ export async function saveTrialLead(data: TrialPayload) {
         statusId,
         courseId,
         subjectId,
-        gid: data.gid,
+        gid: attach ? String(attach) : "",
         note,
         lesson,
       }),
