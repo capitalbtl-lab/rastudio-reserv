@@ -1,6 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { roomBelongsToBranch, roomArchived, roomsOfBranchList } from "./crm-rooms.ts";
+import {
+  roomBelongsToBranch,
+  roomArchived,
+  roomsOfBranchList,
+  roomsCatalog,
+  roomsSelectGroups,
+  SEED_ROOMS,
+} from "./crm-rooms.ts";
 
 describe("аудитории филиала", () => {
   it("только ID филиала, без подстановки всех комнат", () => {
@@ -17,5 +24,16 @@ describe("аудитории филиала", () => {
     );
     assert.equal(roomBelongsToBranch({ branch_ids: [1] }, 2), false);
     assert.equal(roomArchived({ is_archived: 1 }), true);
+  });
+
+  it("каталог ЦМИТ содержит аудитории модалки Alfa", () => {
+    const rooms = roomsCatalog([{ roomId: 19, branchId: 2 }]);
+    const cmit = rooms.filter((r) => r.branchId === 2);
+    assert.ok(SEED_ROOMS.every((s) => cmit.some((r) => r.id === s.id && r.name === s.name)));
+    const groups = roomsSelectGroups(rooms, 2);
+    assert.equal(groups.length, 1);
+    assert.match(groups[0].label, /ЦМИТ/);
+    assert.ok(groups[0].options.some((o) => o.label === "Ауд.1"));
+    assert.equal(roomsSelectGroups(rooms, 1).length, 0);
   });
 });

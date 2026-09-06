@@ -206,6 +206,9 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.match(cl, /upsertGroupCalendar/);
     assert.match(cl, /op: "lesson.create"/);
     assert.match(cl, /localId/);
+    assert.match(cl, /Нет branchId/);
+    assert.match(cl, /Нет roomId/);
+    assert.match(cl, /room_id: roomId/);
     assert.equal(/id: 0/.test(cl), false);
     const saveAt = src.indexOf('data.action === "lessonSave"');
     const saveNext = src.indexOf("if (data.action ===", saveAt + 10);
