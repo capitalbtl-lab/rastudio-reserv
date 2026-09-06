@@ -20,7 +20,10 @@ const RANGE_OPTS = [
   { id: "360", label: "±360 дней" },
 ] as const;
 
-export function todayYmd() {
+function isOneOffLesson(l: GroupCalLesson) {
+  const t = Number(l.typeId || 0);
+  return t === 3 || t === 1 || t === 4 || t === 5 || t === 10 || t === 11 || /пробн|отработ|вводн|индивид/i.test(String(l.type || ""));
+}
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -77,6 +80,7 @@ function LessonTile({
   onLeave: () => void;
   onClick?: (el: HTMLElement, lesson: GroupCalLesson) => void;
 }) {
+  const trial = Number(l.typeId) === 3 || /пробн/i.test(String(l.type || ""));
   const d = parseYmd(l.date);
   const isToday = l.date === today;
   const cancelled = l.status === 2;
@@ -91,11 +95,14 @@ function LessonTile({
       data-lesson-date={l.date}
       data-lesson-id={l.lessonId || undefined}
       data-lesson-status={l.status}
+      data-lesson-type={l.typeId || undefined}
+      title={l.type ? `${l.type} ${l.from || ""}`.trim() : undefined}
       className={cn(
         "flex h-[3.35rem] w-[2.76rem] min-w-[2.76rem] cursor-pointer flex-col items-center justify-center rounded-lg px-0.5 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
         isToday && !cancelled && "ra-today-tile text-white",
         !isToday && done && "bg-emerald-100 text-fg ring-1 ring-emerald-400/80",
-        !isToday && planned && "bg-white text-fg ring-1 ring-neutral-500/55",
+        !isToday && planned && !trial && "bg-white text-fg ring-1 ring-neutral-500/55",
+        !isToday && planned && trial && "bg-amber-100 text-fg ring-1 ring-amber-500/80",
         cancelled && "bg-neutral-200 text-neutral-400 ring-1 ring-neutral-300 line-through",
       )}
     >
@@ -586,8 +593,22 @@ export function LessonStrip({
     }
     const pastAll = pool.filter((l) => l.date < today);
     const futureAll = pool.filter((l) => l.date > today);
-    const todayHit = pool.find((l) => l.date === today) || null;
-    if (range === "10") return { past: pastAll.slice(-10), future: futureAll.slice(0, 10), todayHit };
+    let todayHit = pool.find((l) => l.date === today) || null;
+    if (range === "10") {
+      const past = pastAll.slice(-10);
+      const future = futureAll.slice(0, 10);
+      const pin = (into: GroupCalLesson[], l: GroupCalLesson) => {
+        if (!into.some((x) => (x.lessonId && x.lessonId === l.lessonId) || `${x.date}|${x.from}` === `${l.date}|${l.from}`)) into.push(l);
+      };
+      for (const l of all.filter(isOneOffLesson)) {
+        if (l.date === today) todayHit = todayHit || l;
+        else if (l.date < today) pin(past, l);
+        else pin(future, l);
+      }
+      past.sort((a, b) => a.date.localeCompare(b.date) || String(a.from || "").localeCompare(String(b.from || "")));
+      future.sort((a, b) => a.date.localeCompare(b.date) || String(a.from || "").localeCompare(String(b.from || "")));
+      return { past, future, todayHit };
+    }
     return { past: pastAll, future: futureAll, todayHit };
   }, [all, range, today]);
   const shown = past.length + future.length + (todayHit ? 1 : 0);
