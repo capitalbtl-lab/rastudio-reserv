@@ -88,8 +88,8 @@ describe("приёмка: витрина → заявка → лид", () => {
     assert.equal(noMap.gap, "no-course");
   });
 
-  it("Фролов на доске CRM — лид, не клиент; «Сделать клиентом» снимает воронку", () => {
-    assert.equal(personRole({ is_study: 1, lead_status_id: 1, crm_funnel: "1" }), "лид");
+  it("хвост воронки у ученика не делает лидом; «Сделать клиентом» снимает воронку", () => {
+    assert.equal(personRole({ is_study: 1, lead_status_id: 1, crm_funnel: "1" }), "учится");
     assert.deepEqual(personSaveFields(1), { is_study: 1, lead_status_id: 0, crm_funnel: "0" });
     assert.equal(personRole(personSaveFields(1)), "учится");
   });

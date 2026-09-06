@@ -111,11 +111,9 @@ describe("двусторонняя связь карточек лидов с Alf
     assert.equal(isCrmLeadRecord({ ...FROLOV, removed: 1 }), false);
   });
 
-  it("клиент, которого вернули в воронку (is_study 1 + этап 1) — это лид", () => {
-    assert.equal(isCrmLeadRecord({ ...FROLOV, is_study: 1, lead_status_id: 1 }), true);
-    const card = pack({ ...FROLOV, is_study: 1, lead_status_id: 1 }, 2);
-    assert.ok(card);
-    assert.equal(card!.statusId, 1);
+  it("ученик с остатком этапа воронки — не лид", () => {
+    assert.equal(isCrmLeadRecord({ ...FROLOV, is_study: 1, lead_status_id: 1 }), false);
+    assert.equal(pack({ ...FROLOV, is_study: 1, lead_status_id: 1 }, 2), null);
   });
 
   it("сайт → CRM: смена этапа шлёт is_study 0 и lead_status_id", () => {
@@ -498,7 +496,7 @@ describe("инкремент CRM: только изменённые карточ
   it("архив is_study=2 и removed снимают с воронки, «сделать лидом» — нет", () => {
     assert.equal(leadDeltaDrops({ id: 1, is_study: 2 }), true);
     assert.equal(leadDeltaDrops({ id: 1, removed: 1, is_study: 0 }), true);
-    assert.equal(leadDeltaDrops({ id: 7759, is_study: 1, lead_status_id: null }), false);
+    assert.equal(leadDeltaDrops({ id: 7759, is_study: 1, lead_status_id: null }), true);
     assert.equal(leadDeltaDrops({ id: 2, is_study: 0, lead_status_id: 1 }), false);
   });
 });

@@ -10,8 +10,8 @@ describe("роль человека: один экран", () => {
     assert.equal(personRole({ is_study: 1, removed: 1 }), "удалён");
   });
 
-  it("Фролов: клиент на доске CRM — лид, не клиент", () => {
-    assert.equal(personRole({ is_study: 1, crm_funnel: "1" }), "лид");
+  it("ученик с хвостом воронки Alfa — всё равно учится, не лид", () => {
+    assert.equal(personRole({ is_study: 1, crm_funnel: "1" }), "учится");
     assert.equal(personRole({ is_study: 1, lead_status_id: 1 }), "учится");
     assert.equal(personRole({ is_study: 1, lead_status_id: 0 }), "учится");
     assert.equal(personRole({ is_study: 1, lead_status_id: null }), "учится");

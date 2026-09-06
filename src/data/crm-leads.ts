@@ -36,7 +36,7 @@ import {
 import { crmHost, crmWebLogin, csrfOf, mergeCookies, setCookieList } from "./crm-web";
 import type { CrmActorId } from "./crm-actors";
 import { nextLocalId } from "./crm-local-id";
-import { personRole } from "./crm-person-role";
+import { dossierIsStudying } from "./dossiers";
 
 export type { LeadStage, LeadCard } from "./crm-leads-stages";
 export {
@@ -65,26 +65,12 @@ export {
   leadCardFromView,
 } from "./crm-leads-stages";
 
-function studyingOnDisk(id: number) {
-  try {
-    const { findDossier } = require("./dossiers") as typeof import("./dossiers");
-    const d = findDossier({ crmId: id });
-    if (!d) return false;
-    return personRole({
-      is_study: d.extras?.is_study,
-      removed: d.extras?.removed,
-      crm_funnel: d.extras?.crm_funnel,
-      lead_status_id: d.extras?.lead_status_id,
-      status: d.status,
-    }) === "учится";
-  } catch {
-    return false;
-  }
-}
+type Bag = { at: number; stages: LeadStage[]; items: LeadCard[]; note?: string };
 
 function withoutStudents(items: LeadCard[]) {
-  return items.filter((x) => !studyingOnDisk(x.id));
+  return items.filter((x) => !dossierIsStudying(x.id));
 }
+
 const g = globalThis as { __raLeads?: Map<string, Bag> };
 
 function fileOf() {
@@ -400,6 +386,7 @@ async function fetchBranchLeads(t: string, branch: number, stages: { id: number 
     out.length = 0;
     seen.clear();
     for (const card of merged) {
+      if (!byApi.has(card.id) && dossierIsStudying(card.id)) continue;
       seen.add(card.id);
       out.push(card);
     }
@@ -434,7 +421,6 @@ export async function syncLeadsDelta(branchId = 0): Promise<Bag> {
   const incoming: LeadCard[] = [];
   const dropped: number[] = [];
   const seen = new Set<number>();
-  const onBoard = new Set(hit.items.map((x) => x.id));
   await Promise.all(
     branches.map((b) =>
       pagedIndex(
@@ -461,7 +447,7 @@ export async function syncLeadsDelta(branchId = 0): Promise<Bag> {
     merged.added || merged.updated || merged.removed
       ? `с CRM: ${merged.updated} изменённых, ${merged.added} новых, ${merged.removed} снятых`
       : "изменений в CRM нет";
-  const next = { at: Date.now(), stages: hit.stages, items: merged.items, note, delta: true as const };
+  const next = { at: Date.now(), stages: hit.stages, items: withoutStudents(merged.items), note, delta: true as const };
   bag().set(key, next);
   persistLeads();
   try {
@@ -508,7 +494,16 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
   const hit = bag().get(key);
   const { wantAlfaPull, wantAlfaDelta } = await import("./crm-alfa-link");
   if (!wantAlfaPull(force) && !wantAlfaDelta(delta)) {
-    if (hit?.items.length) return hit;
+    if (hit?.items.length) {
+      const items = withoutStudents(hit.items);
+      if (items.length !== hit.items.length) {
+        const cleaned = { ...hit, items };
+        bag().set(key, cleaned);
+        persistLeads();
+        return cleaned;
+      }
+      return hit;
+    }
     const disk = await boardFromDisk(branchId);
     if (disk.items.length) {
       bag().set(key, disk);
@@ -517,8 +512,8 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
     return disk;
   }
   if (!force) {
-    const disk = hit?.items.length ? hit : await boardFromDisk(branchId);
-    if (disk.items.length && !hit?.items.length) {
+    const disk = hit?.items.length ? { ...hit, items: withoutStudents(hit.items) } : await boardFromDisk(branchId);
+    if (disk.items.length && (!hit?.items.length || disk.items.length !== hit.items.length)) {
       bag().set(key, disk);
       persistLeads();
     }

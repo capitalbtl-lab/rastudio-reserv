@@ -553,6 +553,18 @@ export function findDossier(opts: { crmId?: number; phone?: string; id?: string 
   );
 }
 
+export function dossierIsStudying(id: number) {
+  const d = findDossier({ crmId: id });
+  if (!d) return false;
+  return personRole({
+    is_study: d.extras?.is_study,
+    removed: d.extras?.removed,
+    crm_funnel: d.extras?.crm_funnel,
+    lead_status_id: d.extras?.lead_status_id,
+    status: d.status,
+  }) === "учится";
+}
+
 export function dossiersByPhone(phone?: string) {
   const digits = digitsPhone(phone);
   if (!digits || digits.length < 10) return [] as Dossier[];

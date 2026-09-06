@@ -145,11 +145,12 @@ export async function saveTrialLead(data: TrialPayload) {
   };
   try {
     const { findDossier, upsertDossier } = await import("./dossiers");
-    const { cachePutLead } = await import("./crm-leads");
+    const { cachePutLead, forgetLead } = await import("./crm-leads");
     const { enqueueExport } = await import("./crm-export-queue");
     const existing = findDossier({ phone });
     const crmId = Number(existing?.crmId) || 0;
     if (crmId) {
+      const alreadyClient = Number(existing?.extras?.is_study) === 1 || existing?.status === "учится";
       upsertDossier({
         crmId,
         branchId,
@@ -157,14 +158,17 @@ export async function saveTrialLead(data: TrialPayload) {
         child,
         parent,
         dob: dobRu,
-        extras: { is_study: "0", lead_status_id: String(statusId) },
+        extras: alreadyClient
+          ? { is_study: "1", crm_funnel: "0" }
+          : { is_study: "0", lead_status_id: String(statusId) },
         source: "site",
         note,
         ...(data.gid && /^\d+$/.test(data.gid)
           ? { groupLink: { id: Number(data.gid), name: data.groupName || "", branchId, school: "", active: true, subjectId, courseId } }
           : {}),
       });
-      cachePutLead(trialLeadCard({ localId: crmId, branchId, child, phone, email, note, statusId }));
+      if (alreadyClient) forgetLead(crmId, branchId);
+      else cachePutLead(trialLeadCard({ localId: crmId, branchId, child, phone, email, note, statusId }));
       try {
         const { appendComm } = await import("./crm-comms");
         appendComm({
