@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { factsFromMessages, modeFromMessages, nextStepOf } from "./agent-facts.ts";
+import { factsFromMessages, modeFromMessages, nextStepOf, takeWeekday } from "./agent-facts.ts";
+import { chipsForReply } from "./agent-chips.ts";
 import { asIdentifyHits, confirmedHit, confirmedFromHistory, identifyLocked } from "./agent-identify.ts";
 
 describe("развилка новый / уже ходим", () => {
@@ -107,6 +108,26 @@ describe("вход по телефону с диска", () => {
       lastAssistant: "Ольга: Александра занимается в художественной школе. Чем помочь?",
     });
     assert.equal(locked, null);
+  });
+
+  it("суббота — день отработки, имя больше не спрашивать", () => {
+    assert.equal(takeWeekday("суббота"), "суббота");
+    assert.equal(takeWeekday("в субботу"), "суббота");
+    const msgs = [
+      { role: "assistant", content: "Ольга: Нашла на сайте: Александра. Это ваш ребёнок?" },
+      { role: "user", content: "Да, это Александра" },
+      { role: "user", content: "Нужна отработка пропуска" },
+      { role: "user", content: "суббота" },
+    ];
+    const facts = factsFromMessages(msgs);
+    assert.equal(facts.identified, true);
+    assert.equal(facts.intent, "отработка");
+    assert.equal(facts.day, "суббота");
+    assert.match(nextStepOf(facts), /суббота/);
+    assert.doesNotMatch(nextStepOf(facts), /подтвердить имя/);
+    const { chipsForReply } = require("./agent-chips.ts") as typeof import("./agent-chips.ts");
+    const chips = chipsForReply("На какой день поставить отработку", msgs);
+    assert.ok(chips.chips.some((c) => c.label === "Сб"));
   });
 
   it("двойное имя в реплике не рисует два пузыря", async () => {

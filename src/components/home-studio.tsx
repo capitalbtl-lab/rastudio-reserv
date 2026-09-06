@@ -60,6 +60,7 @@ function useSiteStudio(useAdmin = false) {
     if (action === "upload" && "caption" in res) setMsg(`Загружено. DeepSeek: ${res.caption}`);
     if (action === "rewrite") setMsg("Тексты блока обновлены.");
     if (action === "set" && "layout" in res) setMsg("Файл в блоке.");
+    if (action === "embed") setMsg("Агент на странице сохранён.");
     return res;
   }
 
