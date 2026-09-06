@@ -16,14 +16,14 @@ export { digestPrompt };
 
 export async function makeupList(customerId: number, weekday: string) {
   const d = clientDigest(customerId);
-  if (!d) return { digest: null as ClientDigest | null, list: [] as Awaited<ReturnType<typeof import("./alfacrm-schedule").groupsForQuery>>, courseLabel: "" };
+  const empty = { digest: d, list: [] as { gid: string; when: string; chip: string; branchId: number; nextDate: string; timeFrom: string; courseId: string; subjectId?: number; priority: number; seats: string }[], courseLabel: "" };
+  if (!d) return empty;
   const { groupsForQuery } = await import("./alfacrm-schedule.ts");
   const ids = [...new Set(d.groups.map((g) => g.courseId).filter(Boolean))];
   const seen = new Set<string>();
-  const list: Awaited<ReturnType<typeof groupsForQuery>> = [];
-  const queries = ids.length ? ids.slice(0, 4).map((courseId) => ({ courseId, weekday })) : [];
-  for (const q of queries) {
-    const part = await groupsForQuery(q);
+  const list = empty.list;
+  for (const courseId of ids.slice(0, 4)) {
+    const part = await groupsForQuery({ courseId, weekday });
     for (const g of part) {
       const key = `${g.gid}-${g.when}`;
       if (seen.has(key)) continue;
