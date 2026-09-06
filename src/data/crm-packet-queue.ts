@@ -260,6 +260,9 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
     };
   }
   if (!wantAlfaPullChannel("clients") && !opts?.force) {
+    if (wantAlfaPullChannel("customers")) {
+      void import("./dossiers").then((m) => m.syncCustomersDelta()).catch(() => null);
+    }
     void import("./crm-export-queue").then((m) => m.tickExportQueue(3)).catch(() => null);
     return {
       ok: true as const,

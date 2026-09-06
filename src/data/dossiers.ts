@@ -10,7 +10,7 @@ import { clientCardId } from "./ids";
 import { schoolLabelOfSubject } from "./schedule-map";
 import type { DossiersReq } from "./dossiers-fn";
 import { logAdmin } from "./admin-settings";
-import { personRole } from "./crm-person-role";
+import { customerPullCandidate, personRole } from "./crm-person-role";
 import { groupLinkHits, takenMapFromLinks, overlayCgiNeeded } from "./crm-group-disk";
 
 export type PersonName = {
