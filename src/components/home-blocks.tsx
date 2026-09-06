@@ -122,7 +122,7 @@ function HomeCanvasInner({ children }: { children: ReactNode }) {
   return (
     <div className={cn(ctx.editing && "home-layout-on")}>
       <HomeEditorChrome />
-      <div className={cn(ctx.editing && "md:px-60", ctx.editing && deviceW && "mx-auto", deviceW)}>
+      <div className={cn(ctx.editing && "md:px-60 lg:pl-64 lg:pr-[24rem]", ctx.editing && deviceW && "mx-auto", deviceW)}>
         {slots.map((slot) => (
           <HomeSlotFrame
             key={slot.id}

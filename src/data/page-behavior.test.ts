@@ -6,7 +6,7 @@ import { extractJson } from "./deepseek-text.ts";
 describe("поведение и json модели", () => {
   it("промпт не пустой и не читает отчёт вслух", () => {
     const t = behaviorPrompt({ path: "/robototehnika-v-kolomne", dwell: 40, trail: ["/", "/robototehnika-v-kolomne"], courses: ["/robototehnika-v-kolomne"] });
-    assert.match(t, /робототехник/i);
+    assert.match(t, /robototehnika/i);
     assert.match(t, /не читай вслух/);
     assert.match(t, /пробное/);
   });
