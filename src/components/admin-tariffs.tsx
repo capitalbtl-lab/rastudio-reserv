@@ -1376,70 +1376,7 @@ export function AdminTariffs({ embedId, onEmbedClose }: { embedId?: number; onEm
                   {isOpen && opened ? (
                     <tr className="bg-[#edf4fb]">
                       <td colSpan={9} className="px-4 pb-5 pt-2">
-                        <Editor
-                          t={opened}
-                          busy={busy}
-                          tabs={tabs}
-                          typeList={typeList}
-                          subjectList={subjectList}
-                          tree={tree}
-                          courseIds={linksOf(opened.id).map((l) => l.courseId)}
-                          suggest={suggestCourses(opened)}
-                          onAddCourse={(id) => void addTariffCourse(opened.id, id)}
-                          onRemoveCourse={(id) => void removeTariffCourse(opened.id, id)}
-                          subQ={subQ}
-                          setSubQ={setSubQ}
-                          groups={groups}
-                          onPatch={(next) => patch(opened.id, next)}
-                          onSave={async () => {
-                            const current = items.find((x) => x.id === opened.id) || opened;
-                            const { groups: _g, ...tariff } = current;
-                            const res = await run("tariffsSave", { tariff });
-                            if (res.ok) {
-                              setDirty((d) => { const n = new Set(d); n.delete(opened.id); return n; });
-                              setMsg("Сохранено на сайте.");
-                            }
-                            return res;
-                          }}
-                          onPush={async () => {
-                            const current = items.find((x) => x.id === opened.id) || opened;
-                            const { groups: _g, ...tariff } = current;
-                            const oldId = opened.id;
-                            const pending = tariffMap.filter((x) => x.tariffId === oldId && x.courseId);
-                            const saved = await run("tariffsSave", { tariff });
-                            if (!saved.ok) return saved;
-                            const res = await run("tariffsPush", { tariff });
-                            if (res.ok) {
-                              setDirty((d) => { const n = new Set(d); n.delete(oldId); return n; });
-                              const remaps = ((res as { remaps?: { from: number; to: number }[] }).remaps || []).filter((r) => r.to > 0);
-                              const to = remaps.find((r) => r.from === oldId)?.to
-                                || (oldId < 0 ? ((res as { tariffs?: Row[] }).tariffs || []).find((t) => t.id > 0 && t.name === current.name)?.id || 0 : 0);
-                              if (to && pending.length) {
-                                const next = [
-                                  ...tariffMap.filter((x) => x.tariffId !== oldId && x.tariffId !== to),
-                                  ...pending.map((p) => ({ ...p, tariffId: to })),
-                                ];
-                                setTariffMap(next);
-                                await adminScheduleMap({ data: { token: token(), action: "saveTariffs", tariffs: next.filter((x) => x.tariffId > 0) } });
-                                setOpen(to);
-                                setOrderLock((lock) => (lock ? lock.map((id) => (id === oldId ? to : id)) : lock));
-                              }
-                              setMsg(to ? `Абонемент ${to} выгружен в AlfaCRM.` : opened.id > 0 ? `Абонемент ${opened.id} выгружен в AlfaCRM.` : "Новый абонемент создан в AlfaCRM.");
-                            }
-                            return res;
-                          }}
-                          onDelete={async () => {
-                            if (!confirm("Удалить этот абонемент? В CRM он уйдёт в архив.")) return { ok: false, error: "Отменено." };
-                            const res = await run("tariffsDelete", { ids: [String(opened.id)] });
-                            if (res.ok) {
-                              setOpen(null);
-                              setOrderLock(null);
-                              setPicked((s) => { const n = new Set(s); n.delete(opened.id); return n; });
-                              setMsg("Абонемент удалён.");
-                            }
-                            return res;
-                          }}
-                        />
+                        {editor}
                       </td>
                     </tr>
                   ) : null}

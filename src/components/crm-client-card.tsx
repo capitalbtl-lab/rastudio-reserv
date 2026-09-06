@@ -19,6 +19,7 @@ import {
   type GroupOffer,
 } from "@/data/crm-cards";
 import { Button } from "@/components/ui/button";
+import { AdminTariffs } from "@/components/admin-tariffs";
 import { LessonStrip, toYmd } from "@/components/lesson-strip";
 import { RaSelect } from "@/components/ra-select";
 import { SCHOOLS } from "@/data/site";
@@ -359,6 +360,7 @@ export function CrmClientCard({
   const [groupOpen, setGroupOpen] = useState(false);
   const [dropGroup, setDropGroup] = useState<{ id: number; branchId: number; name: string } | null>(null);
   const [dropTariff, setDropTariff] = useState<{ id: number; name: string } | null>(null);
+  const [peekTariffId, setPeekTariffId] = useState(0);
   const [groupId, setGroupId] = useState(0);
   const [groupBranch, setGroupBranch] = useState(0);
   const [groupDir, setGroupDir] = useState("");
@@ -877,7 +879,13 @@ export function CrmClientCard({
               <ul className="mt-2 space-y-1.5">
                 {activeTariffs.map((t) => (
                   <li key={t.id} className="flex items-stretch gap-1.5">
-                    <div className="min-w-0 flex-1 rounded-xl bg-white px-3 py-2 ring-1 ring-black/6">
+                    <button
+                      type="button"
+                      data-op="open-tariff"
+                      title="Открыть карточку абонемента"
+                      className="min-w-0 flex-1 rounded-xl bg-white px-3 py-2 text-left ring-1 ring-primary/20 hover:bg-primary/5"
+                      onClick={() => setPeekTariffId(Number(t.tariffId || t.id) || 0)}
+                    >
                       <p className="font-semibold text-sm">{t.name}</p>
                       <p className="text-[0.75rem] text-muted">
                         {[
@@ -888,19 +896,18 @@ export function CrmClientCard({
                           .filter(Boolean)
                           .join(" · ") || (t.rest ? money(t.rest) : "")}
                       </p>
-                    </div>
+                    </button>
                     <button
                       type="button"
                       data-op="remove-tariff"
                       title="Удалить абонемент"
                       disabled={!onAction || Boolean(busy)}
                       onClick={() => setDropTariff({ id: t.id, name: t.name })}
-                      className="grid h-auto min-w-8 shrink-0 place-items-center rounded-xl px-1.5 text-[0.62rem] font-semibold uppercase tracking-wide text-muted ring-1 ring-black/6 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"
+                      className="grid h-auto w-8 shrink-0 place-items-center rounded-xl text-muted ring-1 ring-black/6 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40"
                     >
-                      <svg viewBox="0 0 24 24" className="mb-0.5 h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                         <path d="M4 7h16M9 7V5h6v2m-8 0 1 12h8l1-12" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
-                      Удалить
                     </button>
                   </li>
                 ))}
