@@ -1094,11 +1094,23 @@ export function AgentChat() {
     cancelSpeech();
     writePartner(next);
     setPartner(next);
-    setClientMsgs((prev) => {
-      const onlyHello = prev.length <= 1 && !prev.some((m) => m.role === "user");
-      if (onlyHello) return [{ role: "assistant", content: greeting(next, pageAgent) }];
-      return prev;
-    });
+    const onlyHello = clientMsgsRef.current.length <= 1 && !clientMsgsRef.current.some((m) => m.role === "user");
+    if (onlyHello) {
+      const hello = greeting(next, pageAgent);
+      clientMsgsRef.current = [{ role: "assistant", content: hello }];
+      setClientMsgs(clientMsgsRef.current);
+      if (voiceOnRef.current) {
+        void maybeSpeak(hello).then(() => {
+          if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
+        });
+        return;
+      }
+    }
+    if (voiceOnRef.current) {
+      window.setTimeout(() => {
+        if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
+      }, 80);
+    }
   }
 
   function onResizeStart(e: PointerEvent<HTMLButtonElement>) {
