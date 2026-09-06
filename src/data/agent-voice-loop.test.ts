@@ -22,7 +22,7 @@ describe("голосовой контур: эхо и перебивание", ()
       isVoiceEcho("назовите дату и время удобные для вас", "Назовите дату и время, удобные для вас"),
       true,
     );
-    assert.equal(isVoiceEcho("привет", HELLO, { speaking: true }), false);
+    assert.equal(isVoiceEcho("привет", HELLO, { speaking: true }), true);
     assert.equal(isVoiceEcho("здравствуйте", HELLO, { speaking: true }), true);
     assert.equal(
       isVoiceEcho("вы уже занимаетесь у нас или подбираете впервые", HELLO, { speaking: true, spokenAgoMs: 2500 }),

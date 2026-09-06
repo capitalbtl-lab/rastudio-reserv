@@ -9,7 +9,7 @@ function lastAssistant(messages: { role: string; content: string }[]) {
   return [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
 }
 
-const FORK_ASK = "Нажмите кнопку или скажите: уже ходим, подбираем впервые — или вас интересуют правила и цены.";
+export const FORK_ASK = "Нажмите кнопку или скажите: уже ходим, подбираем впервые — или вас интересуют правила и цены.";
 
 /** Один слот — всегда видимая и озвучиваемая фраза. Молчание запрещено: ответ не удаляется. */
 export function lockedFunnelReply(

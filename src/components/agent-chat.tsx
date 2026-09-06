@@ -16,7 +16,7 @@ import { parseTurns, faceOf, type Who } from "@/data/agent-turns";
 import { PageLink } from "@/components/page-link";
 import { SITE } from "@/data/site";
 import { cn } from "@/lib/utils";
-import { publicPageAgent } from "@/data/page-agents-fn";
+import { FORK_ASK } from "@/data/agent-funnel";
 import type { PageAgent } from "@/data/page-agents-core";
 import { useRouterState } from "@tanstack/react-router";
 import {
@@ -57,7 +57,7 @@ function greeting(who: "oleg" | "olga", page?: PageAgent | null) {
   const name = who === "olga" ? "Ольга" : "Олег";
   const custom = String(page?.greeting || "").replace(/^(Олег|Ольга):\s*/i, "").trim();
   if (page?.on && custom) return `${name}: ${custom}`;
-  return `${name}: Здравствуйте. Я ${name}, студия «Развивайся». Вы уже занимаетесь у нас или подбираете впервые?`;
+  return `${name}: Здравствуйте. Я ${name}, студия «Развивайся». ${FORK_ASK}`;
 }
 
 function goSitePath(path: string) {
@@ -1095,7 +1095,7 @@ export function AgentChat() {
       /* */
     }
     const spoken = [...(inAdminUi ? adminMsgsRef.current : clientMsgsRef.current)].reverse().find((m) => m.role === "assistant")?.content;
-    if (spoken) await maybeSpeak(spoken);
+    if (spoken) await speak(spoken);
     if (voiceOnRef.current && !busyRef.current && !speakingRef.current) startListen();
   }
 
@@ -1450,9 +1450,8 @@ export function AgentChat() {
               {voiceOn ? (
                 <button
                   type="button"
-                  disabled={busy}
                   onClick={() => void replayLast()}
-                  className="flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#eef1f7] px-3 text-[0.72rem] font-semibold text-fg disabled:opacity-40"
+                  className="flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#eef1f7] px-3 text-[0.72rem] font-semibold text-fg"
                   title="Повторить ответ"
                 >
                   <Repeat2 className="size-3.5" />

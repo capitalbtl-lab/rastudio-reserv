@@ -36,7 +36,8 @@ export function isVoiceEcho(
   const b = normalizeSaid(spoken);
   if (!a || !b) return false;
   if (isSocialHello(a)) {
-    if (opts?.speaking && b.includes(a)) return true;
+    if (opts?.speaking) return true;
+    if ((opts?.spokenAgoMs || 0) <= echoTailMs()) return true;
     return false;
   }
   if (isDirectChoice(a)) return false;
