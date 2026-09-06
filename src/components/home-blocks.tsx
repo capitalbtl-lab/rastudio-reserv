@@ -2,8 +2,8 @@
 
 import { Children, isValidElement, useState, type ReactElement, type ReactNode } from "react";
 import { GripVertical } from "lucide-react";
-import { HomeEditorChrome, HomeEditorProvider, useHomeEditor } from "@/components/home-editor";
-import { homeBlockLabel, isCustomBlockId, placeHomeBlock, visibleHomeOrder, type HomeBlockId, type HomeCustomBlock, type HomeLayoutDoc } from "@/data/home-layout-core";
+import { EditText, HomeEditorChrome, HomeEditorProvider, useHomeEditor } from "@/components/home-editor";
+import { homeBlockLabel, placeHomeBlock, visibleHomeOrder, type HomeBlockId, type HomeCustomBlock, type HomeLayoutDoc } from "@/data/home-layout-core";
 import { SiteVideo } from "@/components/site-video";
 import { SeoImage } from "@/components/seo-image";
 import { PageLink } from "@/components/page-link";
@@ -53,13 +53,24 @@ export function BlockMedia({
 function CustomHomeBlock({ block }: { block: HomeCustomBlock }) {
   const ctx = useHomeEditor();
   const src = ctx?.doc.media[block.id] || block.image;
+  const kicker = ctx?.text(`${block.id}.kicker`, block.kicker) || block.kicker;
+  const title = ctx?.text(`${block.id}.title`, block.title) || block.title;
+  const text = ctx?.text(`${block.id}.text`, block.text) || block.text;
   return (
     <section className="page-wrap py-12 md:py-16">
       <div className="grid items-center gap-8 overflow-hidden rounded-[2rem] bg-surface p-6 shadow-[var(--shadow-border)] md:grid-cols-2 md:gap-12 md:p-10">
         <div>
-          {block.kicker ? <p className="kicker text-primary">{block.kicker}</p> : null}
-          <h2 className="section-title mt-3">{block.title}</h2>
-          <p className="mt-5 text-[0.98rem] leading-relaxed text-muted">{block.text}</p>
+          {kicker ? (
+            <EditText id={`${block.id}.kicker`} as="p" className="kicker text-primary">
+              {kicker}
+            </EditText>
+          ) : null}
+          <EditText id={`${block.id}.title`} as="h2" className="section-title mt-3">
+            {title}
+          </EditText>
+          <EditText id={`${block.id}.text`} as="p" className="mt-5 text-[0.98rem] leading-relaxed text-muted">
+            {text}
+          </EditText>
           {block.ctaLabel ? (
             <div className="mt-6">
               <Button asChild size="lg">
@@ -75,10 +86,10 @@ function CustomHomeBlock({ block }: { block: HomeCustomBlock }) {
         {src ? (
           /\.mp4($|\?)/i.test(src) ? (
             <div className="overflow-hidden rounded-3xl bg-header">
-              <SiteVideo src={src} title={block.title} mode="ambient" className="aspect-[4/3] w-full" />
+              <SiteVideo src={src} title={title} mode="ambient" className="aspect-[4/3] w-full" />
             </div>
           ) : (
-            <SeoImage src={src} alt={block.title} filename={block.title} className="aspect-[4/3] rounded-3xl" />
+            <SeoImage src={src} alt={title} filename={title} className="aspect-[4/3] rounded-3xl" />
           )
         ) : null}
       </div>
