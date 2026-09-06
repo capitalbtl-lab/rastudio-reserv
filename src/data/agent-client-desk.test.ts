@@ -2,7 +2,6 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { digestPrompt, type ClientDigest } from "./agent-client-desk-core.ts";
-import { lockedClientTurn, type DeskRights } from "./agent-client-desk.ts";
 
 describe("действующий клиент: стол консультанта", () => {
   it("карточка только по customerId, без угадывания группы", () => {
