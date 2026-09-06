@@ -902,6 +902,10 @@ export function AdminSchedule() {
     });
   }, []);
 
+  useAdminReload(() => {
+    void run("get");
+  });
+
   useEffect(() => {
     promptRef.current = aiPrompt;
   }, [aiPrompt]);
