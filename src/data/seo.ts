@@ -11,6 +11,7 @@ import {
   shouldNoindex,
   stripBrand,
   GENERIC_HEADING,
+  pickDescription,
 } from "@/data/seo-core";
 
 export {
@@ -68,10 +69,8 @@ export function enrichPage(page: HeadPage): HeadPage {
   const decoded = decodePath(path);
   const extra = SEO_COPY[path] || SEO_COPY[decoded];
   const wixTitle = stripBrand(page.title || "").trim();
-  const rawDescription = (page.description || "").replace(/\s+/g, " ").trim();
   const title = brandTitle(wixTitle || extra?.title || SITE.homeTitle);
-  const description =
-    rawDescription || extra?.description || fallbackDescription({ ...page, title });
+  const description = pickDescription({ ...page, title }, extra);
   return {
     ...page,
     title,

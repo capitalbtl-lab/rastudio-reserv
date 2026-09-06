@@ -96,6 +96,13 @@ export function bodyDescription(page: SeoSeed) {
   return "";
 }
 
+export function pickDescription(page: SeoSeed, extra?: { description?: string }) {
+  const raw = String(page.description || "").replace(/\s+/g, " ").trim();
+  if (raw) return raw;
+  if (extra?.description) return extra.description;
+  return fallbackDescription(page);
+}
+
 export function fallbackDescription(page: SeoSeed) {
   const heading = GENERIC_HEADING.test((page.h1 || "").trim()) ? page.title : page.h1 || page.title;
   const name = stripBrand(heading || "").replace(/[«»"]/g, "").trim();

@@ -5,12 +5,12 @@ import {
   brandTitle,
   fallbackDescription,
   isCourseSchemaPath,
+  pickDescription,
   shouldNoindex,
   stripBrand,
 } from "./seo-core.ts";
 import { SEO_COPY } from "./seo-copy.ts";
 import { SITE, SCHOOLS } from "./site.ts";
-import { enrichPage } from "./seo.ts";
 import { cleanWixAlt, imageTitle } from "./wix-seo-core.ts";
 
 describe("seo", () => {
@@ -36,13 +36,12 @@ describe("seo", () => {
     const school = SCHOOLS.find((s) => s.href === "/languageschool");
     assert.equal(school?.filename.includes("11062b"), false);
     assert.match(school?.blurb || "", /английскому, корейскому/);
-    const lang = enrichPage({
+    const lang = pickDescription({
       path: "/languageschool",
       title: 'Школа иностранных языков в Студии "Развивайся" | Коломна',
       description: "Обучение английскому, корейскому, китайскому, японскому языкам для детей в Коломне.",
-      canonical: "https://www.rastudio.org/languageschool",
-    });
-    assert.match(lang.description, /английскому, корейскому, китайскому, японскому/);
+    } as never);
+    assert.match(lang, /английскому, корейскому, китайскому, японскому/);
     assert.equal(imageTitle("11062b_e2ae833a8eaa43e38e4aa6d32eb3b8f7f000.jpg", "Школа иностранных языков"), "Школа иностранных языков");
     assert.equal(
       imageTitle("Школа иностранных языков в Студии Развивайся | Коломна.jpg", "x"),
@@ -51,42 +50,34 @@ describe("seo", () => {
   });
 
   it("не переписывает description, уже прописанный в Wix", () => {
-    const about = enrichPage({
-      path: "/o-nas",
+    const about = pickDescription({
       title: 'Студия "РАЗВИВАЙСЯ" в Коломне | О нас',
       description:
         'Студия искусств и интеллектуального развития "Развивайся" - это дополнительное образование для детей и творческие курсы для взрослых в Коломне в качественно новом формате.',
-      canonical: "https://www.rastudio.org/o-nas",
     });
-    assert.match(about.description, /качественно новом формате/);
-    assert.doesNotMatch(about.description, /с 2016 года: художественная школа/);
-    const team = enrichPage({
-      path: "/team",
+    assert.match(about, /качественно новом формате/);
+    assert.doesNotMatch(about, /с 2016 года: художественная школа/);
+    const team = pickDescription({
       title: 'Педагоги Студии и ЦМИТ "Развивайся" (Коломна)',
       description: 'Знакомьтесь с педагогами Студии "Развивайся". Выбирайте профессионалов!',
-      canonical: "https://www.rastudio.org/team",
     });
-    assert.match(team.description, /Выбирайте профессионалов/);
+    assert.match(team, /Выбирайте профессионалов/);
     assert.equal(SEO_COPY["/o-nas"], undefined);
     assert.equal(SEO_COPY["/team"], undefined);
     assert.equal(SEO_COPY["/master-class"], undefined);
-    const robot = enrichPage({
-      path: "/robototehnika-5-7",
+    const robot = pickDescription({
       title: "Школа робототехники в Коломне | Для детей 5-7 лет",
       description:
         "Целью обучения детей робототехнике в возрасте 5-7 лет является формирование интереса к дальнейшему развитию в направлении инженерии, информационных технологий и научно-технического творчества, а также формирование естественно-научной картины мира.",
-      canonical: "https://www.rastudio.org/robototehnika-5-7",
     });
-    assert.match(robot.description, /5-7 лет является формирование интереса/);
-    assert.doesNotMatch(robot.description, /7-9 лет/);
-    const podium = enrichPage({
-      path: "/model-school",
+    assert.match(robot, /5-7 лет является формирование интереса/);
+    assert.doesNotMatch(robot, /7-9 лет/);
+    const podium = pickDescription({
       title: 'Модельная школа "Подиум" в Коломне | Студия "Развивайся"',
       description:
         "Юные леди познакомятся с азами модельного дела. Вас ждут личностные тренинги, знакомство с правилами красоты и ухода за собой, фотосесии и уроки дефиле, изучение правил этикета и развитие уверенности в каждом новом шаге.",
-      canonical: "https://www.rastudio.org/model-school",
     });
-    assert.match(podium.description, /азами модельного дела/);
+    assert.match(podium, /азами модельного дела/);
   });
 
   it("берёт alt с Wix и убирает расширение файла", () => {
