@@ -794,9 +794,6 @@ export const chatAgent = createServerFn({ method: "POST" })
     const lessonBlock = factsLessons.length
       ? `\nТемы недавних занятий (с диска, без ФИО учеников):\n${factsLessons.map((x) => `— ${x}`).join("\n")}\n`
       : "";
-    const lessonBlock = factsLessons.length
-      ? `\nТемы недавних занятий (с диска, без ФИО учеников):\n${factsLessons.map((x) => `— ${x}`).join("\n")}\n`
-      : "";
     let commsBlock = "";
     if (!admin && file?.crmId) {
       try {
@@ -889,6 +886,14 @@ export const chatAgent = createServerFn({ method: "POST" })
                 continue;
               }
               const kind = String(args.lesson_type || args.kind || "trial");
+              if (!allowedLessonType(loadBrain().settings, kind)) {
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: `Тип занятия «${kind}» консультанту выключен в окне ассистента. Назови слоты и телефон 8 (800) 511-34-01. Заявку не создавай.`,
+                });
+                continue;
+              }
               const gid = String(args.gid || "").replace(/\D/g, "");
               if (gid && (kind === "group" || kind === "trial")) {
                 try {
@@ -1147,14 +1152,14 @@ export const chatAgent = createServerFn({ method: "POST" })
                     content: d ? desk.digestPrompt(d) : "Карточки на диске нет.",
                   });
                 } else if (call.function.name === "note_skip") {
-                  if (loadBrain().settings.consultantCanJournal === false) {
+                  if (loadBrain().settings.consultantCanSkip === false) {
                     messages.push({ role: "tool", tool_call_id: call.id, content: "Пропуск консультантом выключен. Телефон 8 (800) 511-34-01." });
                   } else {
                     const res = desk.applySkip(cid, String(args.date || ""), String(args.reason || ""));
                     messages.push({ role: "tool", tool_call_id: call.id, content: res.ok ? res.text : res.error });
                   }
                 } else if (call.function.name === "pause_classes") {
-                  if (loadBrain().settings.consultantCanJournal === false) {
+                  if (loadBrain().settings.consultantCanPause === false) {
                     messages.push({ role: "tool", tool_call_id: call.id, content: "Пауза консультантом выключена. Телефон 8 (800) 511-34-01." });
                   } else {
                     const res = desk.applyPause(cid, String(args.until || ""), String(args.reason || ""));
