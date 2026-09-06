@@ -1,19 +1,48 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { packAlfaPayCreate, locationIdForBranch, ALFA_PAY_ITEMS, payItemGroups } from "./crm-pay-alfa.ts";
+import {
+  packAlfaPayCreate,
+  locationIdForBranch,
+  locationBelongsToBranch,
+  locationsOfBranch,
+  defaultPayItemId,
+  payItemGroups,
+  ALFA_PAY_ITEMS,
+} from "./crm-pay-alfa.ts";
 
-describe("касса Alfa: поля модалки «Добавить доход»", () => {
-  it("статьи как в форме Alfa", () => {
-    assert.ok(ALFA_PAY_ITEMS.some((x) => x.id === 2 && x.name === "Групповые занятия"));
-    assert.ok(ALFA_PAY_ITEMS.some((x) => x.id === 23 && x.name === "Пробные занятия"));
-    assert.equal(payItemGroups().length, 2);
+describe("касса Alfa по филиалам", () => {
+  it("Гражданская: локация id=1 из формы Alfa", () => {
     assert.equal(locationIdForBranch(1), 1);
-    assert.equal(locationIdForBranch(2), 0);
+    assert.equal(locationBelongsToBranch(1, 1), true);
+    assert.equal(locationsOfBranch(1)[0].name.includes("Гражданская"), true);
+    assert.equal(defaultPayItemId(1), 2);
   });
 
-  it("pay.create несёт счёт, статью, локацию, клиента", () => {
+  it("ЦМИТ, Луховицы, Лето: не подставлять локацию Гражданской", () => {
+    assert.equal(locationIdForBranch(2), 0);
+    assert.equal(locationIdForBranch(3), 0);
+    assert.equal(locationIdForBranch(4), 0);
+    assert.equal(locationBelongsToBranch(1, 2), false);
+    assert.equal(locationBelongsToBranch(1, 3), false);
+    assert.match(locationsOfBranch(2)[0].name, /ЦМИТ/);
+    assert.match(locationsOfBranch(3)[0].name, /Луховицы/);
+    assert.equal(defaultPayItemId(4), 11);
+  });
+
+  it("статьи: студия vs лето", () => {
+    const studio = payItemGroups(2).flatMap((g) => g.options).map((o) => o.value);
+    assert.ok(studio.includes("2"));
+    assert.equal(studio.includes("11"), false);
+    const summer = payItemGroups(4).flatMap((g) => g.options).map((o) => o.value);
+    assert.ok(summer.includes("11"));
+    assert.equal(summer.includes("2"), false);
+    assert.ok(ALFA_PAY_ITEMS.some((x) => x.id === 23));
+  });
+
+  it("pay.create Гражданская несёт location_id 1", () => {
     const body = packAlfaPayCreate({
       customerId: 7759,
+      branchId: 1,
       documentDate: "06.09.2026",
       income: 5000,
       expenditure: 0,
@@ -23,38 +52,51 @@ describe("касса Alfa: поля модалки «Добавить доход
       payAccountId: 1,
       payItemId: 2,
       locationId: 1,
-      managerId: 501,
-      cttId: 88,
-      payerName: "Иванова",
       groupId: 406,
-      payMethod: "card",
     });
-    assert.equal(body.customer_id, 7759);
-    assert.equal(body.pay_account_id, 1);
-    assert.equal(body.pay_item_id, 2);
     assert.equal(body.location_id, 1);
-    assert.equal(body.manager_id, 501);
-    assert.equal(body.ctt_id, 88);
-    assert.equal(body.payer_name, "Иванова");
-    assert.equal(body.group_id, 406);
-    assert.equal(body.income, 5000);
-    assert.match(String(body.note), /Карта/);
-    assert.equal(body.customer_contract_id, undefined);
+    assert.equal(body.pay_item_id, 2);
+    assert.equal(body.pay_account_id, 1);
   });
 
-  it("пустые справочники не уходят нулями", () => {
+  it("pay.create ЦМИТ не уносит location_id=1", () => {
     const body = packAlfaPayCreate({
-      customerId: 1,
+      customerId: 100,
+      branchId: 2,
       documentDate: "06.09.2026",
-      income: 100,
+      income: 3000,
       expenditure: 0,
       note: "",
-      localId: -1,
+      localId: -3,
+      kind: "income",
+      locationId: 1,
+      payItemId: 2,
+    });
+    assert.equal(body.location_id, undefined);
+    assert.equal(body.pay_item_id, 2);
+    const lukh = packAlfaPayCreate({
+      customerId: 101,
+      branchId: 3,
+      documentDate: "06.09.2026",
+      income: 2000,
+      expenditure: 0,
+      note: "",
+      localId: -4,
       kind: "income",
     });
-    assert.equal(body.pay_account_id, 1);
-    assert.equal(body.pay_item_id, undefined);
-    assert.equal(body.location_id, undefined);
-    assert.equal(body.manager_id, undefined);
+    assert.equal(lukh.location_id, undefined);
+    const summer = packAlfaPayCreate({
+      customerId: 102,
+      branchId: 4,
+      documentDate: "06.09.2026",
+      income: 8000,
+      expenditure: 0,
+      note: "",
+      localId: -5,
+      kind: "income",
+      payItemId: 11,
+    });
+    assert.equal(summer.location_id, undefined);
+    assert.equal(summer.pay_item_id, 11);
   });
 });

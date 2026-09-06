@@ -1,7 +1,5 @@
 /** Поля кассы как в модалке Alfa «Добавить доход». Локация id подтверждена только у филиала 1. */
 
-import { CRM_BRANCH } from "./ids";
-
 export const ALFA_PAY_BRANCHES = [1, 2, 3, 4] as const;
 
 export const ALFA_PAY_ACCOUNTS = [{ id: 1, name: "Основная касса" }] as const;
@@ -43,10 +41,7 @@ export const ALFA_PAY_METHODS = [
 
 export function locationsOfBranch(branchId: number) {
   const b = Number(branchId) || 0;
-  const known = ALFA_PAY_LOCATIONS.filter((x) => x.branchId === b);
-  if (known.length) return known;
-  const name = CRM_BRANCH[b]?.name;
-  return name ? [{ id: 0, branchId: b, name }] : [];
+  return ALFA_PAY_LOCATIONS.filter((x) => x.branchId === b);
 }
 
 export function locationIdForBranch(branchId: number) {
