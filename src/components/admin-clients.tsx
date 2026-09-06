@@ -22,6 +22,7 @@ import { crmSyncMinutes } from "@/components/admin-crm-settings";
 import type { CrmSlot, GroupCalLesson } from "@/data/crm-slots-core";
 import { GROUP_STATUSES, isAdminGroup } from "@/data/group-status";
 import { keepByLiveTariff, type TariffHave } from "@/data/pupil-tariffs";
+import { tidyHttpError } from "@/data/http-error";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -497,7 +498,13 @@ export function AdminClients({
         setPull((u) => (u.done ? u : { ...u, step: step || u.step, lines, added: done, total: totalN, kind: "clients" }));
       })) as { ok?: boolean; error?: string; lines?: { ok: boolean; text: string }[]; added?: number; total?: number };
       if (!res.ok || res.error) {
-        setPull((u) => ({ ...u, done: true, error: res.error || "AlfaCRM не ответила.", lines: res.lines || u.lines, kind: "clients" }));
+        setPull((u) => ({
+          ...u,
+          done: true,
+          error: tidyHttpError(res.error, "AlfaCRM не ответила."),
+          lines: res.lines || u.lines,
+          kind: "clients",
+        }));
         return;
       }
       setPull({
@@ -524,7 +531,7 @@ export function AdminClients({
       setPull((u) => ({
         ...u,
         done: true,
-        error: e instanceof Error && e.message ? e.message : "Не удалось загрузить клиентов.",
+        error: tidyHttpError(e, "Не удалось загрузить клиентов."),
         kind: "clients",
       }));
     }

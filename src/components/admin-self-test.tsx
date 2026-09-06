@@ -4,16 +4,10 @@ import { forwardRef, useImperativeHandle, useState, type ReactNode } from "react
 import { adminSelfTest, type CheckResult } from "@/data/admin-selftest";
 import { InfoTip } from "@/components/info-tip";
 import { cn } from "@/lib/utils";
+import { tidyHttpError } from "@/data/http-error";
 
 function tidyError(raw: string) {
-  const s = String(raw || "");
-  if (/<!DOCTYPE|<html|502 Bad Gateway|504 Gateway|nginx/i.test(s)) {
-    return "Сервер не ответил (перезапуск). Обновите страницу и нажмите «Проверить» ещё раз.";
-  }
-  if (/node:fs|readFileSync|externalized for browser/i.test(s)) {
-    return "Серверная проверка попала в браузер. Обновите страницу — это уже починено.";
-  }
-  return s.slice(0, 400);
+  return tidyHttpError(raw, "Не удалось проверить");
 }
 
 function token() {

@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { adminGhostBtn, AdminSelfTest } from "@/components/admin-self-test";
 import { cn } from "@/lib/utils";
+import { tidyHttpError } from "@/data/http-error";
 
 const AdminCalls = lazy(() => import("@/components/admin-calls").then((m) => ({ default: m.AdminCalls })));
 const AdminAgent = lazy(() => import("@/components/admin-agent").then((m) => ({ default: m.AdminAgent })));
@@ -205,14 +206,20 @@ export function AdminPrices() {
   async function login(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const res = await adminLogin({ data: { password: pass } });
-    setBusy(false);
-    if (!res.ok) {
-      setErr(res.error);
-      return;
+    setErr("");
+    try {
+      const res = await adminLogin({ data: { password: pass } });
+      if (!res.ok) {
+        setErr(tidyHttpError(res.error, "Неверный пароль."));
+        return;
+      }
+      persist(res.token);
+      await load(res.token);
+    } catch (e) {
+      setErr(tidyHttpError(e, "Кабинет перезапускается. Обновите страницу."));
+    } finally {
+      setBusy(false);
     }
-    persist(res.token);
-    await load(res.token);
   }
 
   if (!in_) {

@@ -30,17 +30,25 @@ export const adminDebugMode = createServerFn({ method: "POST" })
 export const unlockDebug = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { password?: string })
   .handler(async ({ data }) => {
-    if (!checkPassword(String(data.password || ""))) {
-      return { ok: false as const, error: "Пароль не подошёл." };
+    try {
+      if (!checkPassword(String(data.password || ""))) {
+        return { ok: false as const, error: "Пароль не подошёл." };
+      }
+      const s = loadDebug();
+      return { ok: true as const, token: makeAdminToken(2 * 60 * 60 * 1000), tools: s.tools, widget: s.widget };
+    } catch {
+      return { ok: false as const, error: "Кабинет перезапускается. Подождите несколько секунд и войдите снова." };
     }
-    const s = loadDebug();
-    return { ok: true as const, token: makeAdminToken(2 * 60 * 60 * 1000), tools: s.tools, widget: s.widget };
   });
 
 export const debugSession = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string })
   .handler(async ({ data }) => {
-    if (!tokenOk(data.token)) return { ok: false as const };
-    const s = loadDebug();
-    return { ok: true as const, tools: s.tools, widget: s.widget };
+    try {
+      if (!tokenOk(data.token)) return { ok: false as const };
+      const s = loadDebug();
+      return { ok: true as const, tools: s.tools, widget: s.widget };
+    } catch {
+      return { ok: false as const };
+    }
   });

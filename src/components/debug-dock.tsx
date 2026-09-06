@@ -7,6 +7,7 @@ import { saveHomeLayoutFn } from "@/data/home-layout-fn";
 import { slotsFromMessages } from "@/data/funnel-state";
 import { factsFromMessages } from "@/data/agent-facts";
 import { Button } from "@/components/ui/button";
+import { tidyHttpError } from "@/data/http-error";
 
 const KEY = "ra_debug";
 
@@ -58,21 +59,25 @@ export function DebugDock() {
 
   async function enter() {
     setErr("");
-    const res = await unlockDebug({ data: { password: pass } });
-    if (!res.ok) {
-      setErr(res.error || "Нет");
-      return;
-    }
     try {
-      sessionStorage.setItem(KEY, res.token);
-    } catch {
-      /* */
+      const res = await unlockDebug({ data: { password: pass } });
+      if (!res.ok) {
+        setErr(tidyHttpError("error" in res ? res.error : "", "Пароль не подошёл."));
+        return;
+      }
+      try {
+        sessionStorage.setItem(KEY, res.token);
+      } catch {
+        /* */
+      }
+      setTools(res.tools || {});
+      setOn(true);
+      setAsk(false);
+      setPass("");
+      debugSessionChanged();
+    } catch (e) {
+      setErr(tidyHttpError(e, "Кабинет перезапускается. Подождите несколько секунд."));
     }
-    setTools(res.tools || {});
-    setOn(true);
-    setAsk(false);
-    setPass("");
-    debugSessionChanged();
   }
 
   function leave() {

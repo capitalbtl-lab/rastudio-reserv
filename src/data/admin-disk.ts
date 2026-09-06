@@ -19,6 +19,14 @@ export type DiskReq = {
 export const adminDisk = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as DiskReq)
   .handler(async ({ data }) => {
-    const { handleAdminDisk } = await import("./admin-disk-run");
-    return handleAdminDisk(data);
+    try {
+      const { handleAdminDisk } = await import("./admin-disk-run");
+      return handleAdminDisk(data);
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : "";
+      const error = /502|504|ENOMEM|heap|out of memory/i.test(raw)
+        ? "Кабинет перезапускается. Данные на сайте не пропали — повторите импорт через минуту."
+        : raw || "Не удалось прочитать файл на сайте.";
+      return { ok: false as const, error };
+    }
   });

@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, type ReactNode } from "react";
 import { SITE } from "@/data/site";
 import { SiteHeader } from "@/components/site-header";

@@ -518,7 +518,7 @@ export async function loadLeadsBoard(branchId = 0, force = false, delta = false)
     );
     try {
       const { searchClientViews } = await import("./dossiers");
-      const local = searchClientViews("", 5000, "все", branchId || 0);
+      const local = searchClientViews("", 800, "все", branchId || 0);
       const have = new Map(items.map((x) => [x.id, x]));
       for (const row of local.items) {
         const id = Number(row.crmId || 0);

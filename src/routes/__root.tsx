@@ -3,10 +3,12 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { SITE } from "@/data/site";
 import { NotFoundPage } from "@/components/not-found";
+import { AppErrorComponent } from "@/lib/error-component";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
   notFoundComponent: NotFoundPage,
+  errorComponent: AppErrorComponent,
   head: () => ({
     meta: [
       { charSet: "utf-8" },

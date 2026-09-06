@@ -26,12 +26,16 @@ import {
 export const adminLogin = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { password: string })
   .handler(async ({ data }) => {
-    loadAdminSettings();
-    if (!checkPassword(data.password || "")) {
-      return { ok: false as const, error: "Неверный пароль." };
+    try {
+      loadAdminSettings();
+      if (!checkPassword(data.password || "")) {
+        return { ok: false as const, error: "Неверный пароль." };
+      }
+      logAdmin("Вход в кабинет");
+      return { ok: true as const, token: makeAdminToken(7 * 24 * 60 * 60 * 1000) };
+    } catch {
+      return { ok: false as const, error: "Кабинет перезапускается. Подождите несколько секунд и войдите снова." };
     }
-    logAdmin("Вход в кабинет");
-    return { ok: true as const, token: makeAdminToken(7 * 24 * 60 * 60 * 1000) };
   });
 
 export const adminPrices = createServerFn({ method: "POST" })
