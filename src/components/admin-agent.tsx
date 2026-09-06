@@ -139,7 +139,12 @@ export function AdminAgent() {
             <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-950 ring-1 ring-amber-200">
               Окно чата на сайте скрыто. Посетитель кнопку «Подобрать курс» не видит. Включить — галочка ниже. Проверить скрытое — вкладка «Отладка», не здесь.
             </p>
-          ) : null}
+          ) : (
+            <p className="rounded-2xl bg-surface px-4 py-3 text-sm text-muted shadow-[var(--shadow-border)]">
+              На сайте: окно {settings.showChat !== false ? "видно" : "скрыто"} · голос {settings.allowVoice !== false ? "вкл" : "выкл"} · Ольга {settings.allowOlga !== false ? "да" : "нет"} · Олег {settings.allowOleg !== false ? "да" : "нет"} · сброс {settings.allowReset !== false ? "да" : "нет"} · перебивание {settings.allowBarge !== false ? "да" : "нет"} · админ-режим {settings.allowAdminMode !== false ? "да" : "нет"}.
+              Ответы {settings.keepAssistantReplies !== false ? "не стираются" : "могут затираться"} · озвучка {settings.speakEveryReply !== false ? "каждого вопроса" : "выкл"}.
+            </p>
+          )}
           <div>
             <h3 className="font-display text-xl">На сайте</h3>
             <p className="mt-1 max-w-2xl text-sm text-muted">Что видит родитель. Чипы — вкладка «Кнопки». Скрытое себе — «Отладка».</p>

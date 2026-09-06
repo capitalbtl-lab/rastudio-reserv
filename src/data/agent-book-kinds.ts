@@ -106,5 +106,5 @@ export function bookTypesPrompt(s: BookSettings) {
   for (const f of BOOK_TYPE_FLAGS) {
     (flagOf(s, f.id) ? on : off).push(f.title);
   }
-  return `Можно ставить: ${on.join(", ") || "ничего"}.${off.length ? ` Нельзя: ${off.join(", ")}.` : ""}`;
+  return `Можно ставить: ${on.join(", ") || "ничего"}.${off.length ? ` Нельзя: ${off.join(", ")}.` : ""} Индивидуальное и сверхурочное — teacher_id + дата и время.`;
 }

@@ -70,6 +70,10 @@ describe("окно агента: права и типы занятий", () => {
     assert.match(chat, /войти в административный режим/);
     assert.match(chat, /Включить голосовой режим/);
     assert.match(chat, /echoCancellation: true/);
+    assert.match(chat, /agent-voice-loop/);
+    assert.match(chat, /vadTick/);
+    assert.match(chat, /bargeInterimReady/);
+    assert.match(chat, /srShouldRestart/);
     const server = readFileSync(new URL("./agent-chat.ts", import.meta.url), "utf8");
     assert.match(server, /allowedLessonType/);
     assert.match(server, /consultantCanSkip === false/);

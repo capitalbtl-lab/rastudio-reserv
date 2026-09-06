@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { digestPrompt, type ClientDigest } from "./agent-client-desk-core.ts";
+import { lockedClientTurn, type DeskRights } from "./agent-client-desk.ts";
 
 describe("действующий клиент: стол консультанта", () => {
   it("карточка только по customerId, без угадывания группы", () => {
@@ -38,6 +39,12 @@ describe("действующий клиент: стол консультанта
     assert.match(cfg, /consultantCanSkip/);
     assert.match(cfg, /consultantCanPause/);
     assert.match(cfg, /consultantCanTariff/);
+    const desk = readFileSync(new URL("./agent-client-desk.ts", import.meta.url), "utf8");
+    assert.match(desk, /DeskRights/);
+    assert.match(desk, /consultantCanSkip === false/);
+    assert.match(desk, /consultantCanPause === false/);
+    assert.match(desk, /allowedLessonType\(rights, "makeup"\)/);
+    assert.match(desk, /teacher_id=/);
     const map = readFileSync(new URL("../components/admin-schedule-map.tsx", import.meta.url), "utf8");
     assert.match(map, /Схема/);
     assert.match(map, /layout === "scheme"/);

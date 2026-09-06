@@ -910,7 +910,28 @@ export const chatAgent = createServerFn({ method: "POST" })
                 });
                 continue;
               }
+              const fromChip = String(lastUser || "");
+              if (!args.gid) {
+                const g = fromChip.match(/gid=(\d+)/i);
+                if (g) args.gid = g[1];
+              }
+              if (!args.teacher_id) {
+                const t = fromChip.match(/teacher_id=(\d+)/i);
+                if (t) args.teacher_id = Number(t[1]);
+              }
+              if (!args.subject_id) {
+                const s = fromChip.match(/subject_id=(\d+)/i);
+                if (s) args.subject_id = Number(s[1]);
+              }
               const gid = String(args.gid || "").replace(/\D/g, "");
+              if ((kind === "individual" || kind === "overtime") && !Number(args.teacher_id) && !gid) {
+                messages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: `Для «${kind}» нужен педагог teacher_id и дата/время. Возьми teacherId из list_groups или спроси, к кому записать.`,
+                });
+                continue;
+              }
               if (gid && (kind === "group" || kind === "trial")) {
                 try {
                   const { listAdminSlots } = await import("./alfacrm-schedule");
