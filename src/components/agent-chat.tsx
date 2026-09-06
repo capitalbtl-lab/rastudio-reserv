@@ -1269,7 +1269,7 @@ export function AgentChat() {
                 <X className="size-5" />
               </button>
             </div>
-            <div className="flex items-end gap-2 pr-16 sm:gap-3 sm:pr-20">
+            <div className="flex items-end gap-2 pr-[7.25rem] sm:gap-3 sm:pr-[8.5rem]">
               <div className="shrink-0">
                 {inAdminUi ? <Face who="olga" mood={mood} size={48} /> : <Face who={partner} mood={mood} size={48} />}
               </div>
