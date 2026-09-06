@@ -61,7 +61,7 @@ export async function lockedClientTurn(who: "oleg" | "olga", facts: SessionFacts
     };
   }
   if (intent === "пауза") {
-    if (/на неделю|на две|на месяц|до\s+\d/i.test(String(facts.day || ""))) return null;
+    if (facts.pauseUntil) return null;
     return {
       reply: `${n}: На какой срок поставить паузу ${child}? Напишите дату «до …» или выберите срок.`,
       chips: [

@@ -591,6 +591,33 @@ export type LiveGroup = {
   statusId: number;
 };
 
+function whenMatchesWeekday(when: string, weekday: string) {
+  const w = String(weekday || "").trim().toLowerCase();
+  if (!w) return true;
+  const src = String(when || "");
+  const aliases: Record<string, number> = {
+    понедельник: 0,
+    пн: 0,
+    вторник: 1,
+    вт: 1,
+    среда: 2,
+    ср: 2,
+    четверг: 3,
+    чт: 3,
+    пятница: 4,
+    пт: 4,
+    суббота: 5,
+    сб: 5,
+    воскресенье: 6,
+    вс: 6,
+  };
+  const i = aliases[w];
+  if (i == null) {
+    return src.toLowerCase().includes(w);
+  }
+  return src.includes(DAYS[i]) || src.includes(DAY_SHORT[i]);
+}
+
 function seatsText(limit: number, taken: number) {
   if (!limit) return taken ? `в группе ${taken}` : "места уточним";
   const free = Math.max(0, limit - taken);
@@ -618,6 +645,7 @@ export async function groupsForQuery(q: {
   schoolId?: string;
   branchId?: number;
   subjectId?: number;
+  weekday?: string;
 }) {
   if (!listAdminSlots().length) {
     await loadCrm().catch(() => null);
@@ -650,6 +678,7 @@ export async function groupsForQuery(q: {
     if (!gid || !branchId) continue;
     if (kolomnaOnly && branchId === 3) continue;
     if (!slotFitsAgent(slot, ask, tree)) continue;
+    if (q.weekday && !whenMatchesWeekday(session.when, q.weekday)) continue;
     if (q.age) {
       if (session.age && !agesOverlap(session.age, q.age, q.age)) continue;
       if (!session.age) continue;
@@ -699,14 +728,24 @@ export async function groupsForQuery(q: {
   return out.slice(0, 24);
 }
 
-export function formatGroups(list: LiveGroup[], age?: number) {
+export function formatGroups(list: LiveGroup[], age?: number, kind?: string) {
   if (!list.length) {
+    if (kind === "makeup") {
+      return "На этот день в этом курсе живых групп нет. Предложи другой день той же школы или телефон 8 (800) 511-34-01. Не предлагай пробное вместо отработки.";
+    }
     return age
       ? `По фильтру живых групп на ${age} лет сейчас не видно. Это НЕ «мест нет». Не говори, что набор закрыт. Предложи заявку на пробное (дату согласуем) и другие направления на этот возраст. Телефон 8 (800) 511-34-01.`
       : "Группы не найдены. Спроси возраст и филиал.";
   }
   const first = list.filter((g) => g.priority === 1);
   const lines = list.map((g, i) => `${i + 1}. ${agentGroupLine(g)}`);
+  if (kind === "makeup") {
+    return [
+      `Группы того же курса для отработки (${list.length}). Своя группа не обязательна — любой gid этого courseId с местами.`,
+      "Запись: book_lesson lesson_type=makeup. Пробное не предлагать. gid вслух не читай.",
+      ...lines,
+    ].join("\n");
+  }
   return [
     `Все подходящие группы (${list.length}), сначала приоритет 1. Назови родителю ВСЕ, не только первые. Ключ — gid+филиал и courseId, не имя. gid вслух не читай.`,
     first.length

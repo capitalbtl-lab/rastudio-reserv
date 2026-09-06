@@ -16,6 +16,7 @@ export type SessionFacts = {
   phone?: string;
   intent?: string;
   day?: string;
+  pauseUntil?: string;
   briefed?: boolean;
 };
 
@@ -272,6 +273,19 @@ export function factsFromMessages(messages: { role: string; content: string }[])
       .reverse()
       .find(Boolean);
     if (day) facts.day = day;
+    const pause = [...messages]
+      .filter((m) => m.role === "user")
+      .map((m) => m.content)
+      .reverse()
+      .map((u) => {
+        if (/на две недели/i.test(u)) return "две недели";
+        if (/на неделю/i.test(u)) return "неделя";
+        if (/на месяц/i.test(u)) return "месяц";
+        const till = u.match(/до\s+(\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?)/i);
+        return till ? till[1] : "";
+      })
+      .find(Boolean);
+    if (pause) facts.pauseUntil = pause;
     if (facts.identified && !facts.child) {
       const named = messages
         .filter((m) => m.role === "user")
