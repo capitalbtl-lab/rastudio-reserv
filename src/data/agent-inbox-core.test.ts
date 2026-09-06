@@ -71,7 +71,9 @@ describe("разбор входящих каналов", () => {
     const cb = maxKeyboard([{ label: "Уже ходим", send: "Мы уже ходим к вам" }]);
     assert.equal(cb?.[0].payload.buttons[0][0].type, "callback");
     const greet = greetingFor("vk", "olga");
-    assert.match(greet, /уже занимаетесь у нас или подбираете впервые/);
+    assert.match(greet, /уже ходим/);
+    assert.match(greet, /подбираем впервые/);
+    assert.match(greet, /правил/);
     const thread = appendTurn({ id: "vk:1", channel: "vk", peerId: "1", messages: [], at: new Date().toISOString() }, "привет", "Ольга: да");
     assert.equal(thread.messages.length, 2);
     assert.equal(duplicateTurn(thread, "привет"), true);

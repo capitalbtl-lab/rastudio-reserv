@@ -1,4 +1,4 @@
-/** Разбор входящих ВК / MAX / Novofon. Без сети. */
+import { FORK_ASK } from "./agent-voice-loop.ts";
 
 export type HookChannel = "vk" | "max" | "phone";
 
@@ -153,9 +153,9 @@ export function appendTurn(thread: InboxThread, user: string, assistant: string)
 export function greetingFor(channel: HookChannel, who: "oleg" | "olga" = "olga") {
   const name = who === "olga" ? "Ольга" : "Олег";
   if (channel === "phone") {
-    return `${name}: Здравствуйте, студия «Развивайся». Вы уже занимаетесь у нас или подбираете впервые?`;
+    return `${name}: Здравствуйте, студия «Развивайся». ${FORK_ASK}`;
   }
-  return `${name}: Здравствуйте. Я ${name}, студия «Развивайся». Вы уже занимаетесь у нас или подбираете впервые?`;
+  return `${name}: Здравствуйте. Я ${name}, студия «Развивайся». ${FORK_ASK}`;
 }
 
 export function vkKeyboard(chips: InboxChip[]) {

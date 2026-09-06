@@ -9,9 +9,9 @@ describe("развилка новый / уже ходим", () => {
   it("приветствие не спрашивает возраст", () => {
     const msgs = [{ role: "assistant", content: "Ольга: Здравствуйте. Вы уже занимаетесь у нас или подбираете впервые?" }];
     assert.equal(modeFromMessages(msgs), "fork");
-    assert.match(nextStepOf(factsFromMessages(msgs)), /впервые|уже занимаетесь/);
+    assert.match(nextStepOf(factsFromMessages(msgs)), /впервые|уже занимаетесь|уже ходим/);
     const greet = readFileSync(new URL("../components/agent-chat.tsx", import.meta.url), "utf8");
-    assert.match(greet, /уже занимаетесь у нас или подбираете впервые/);
+    assert.match(greet, /FORK_ASK/);
     assert.doesNotMatch(greet, /Сколько лет ребёнку\?/);
     const chips = readFileSync(new URL("./agent-chips.ts", import.meta.url), "utf8");
     assert.match(chips, /Уже ходим/);

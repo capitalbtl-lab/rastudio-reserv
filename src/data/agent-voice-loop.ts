@@ -15,6 +15,8 @@ export function isSocialHello(s: string) {
   return HELLO_RE.test(normalizeSaid(s));
 }
 
+export const FORK_ASK = "Нажмите кнопку или скажите: уже ходим, подбираем впервые — или вас интересуют правила и цены.";
+
 /** Короткий ответ на развилку — не эхо своей фразы «скажите: уже ходим». */
 export function isDirectChoice(s: string) {
   const a = normalizeSaid(s);

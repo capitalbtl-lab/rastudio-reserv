@@ -1,7 +1,7 @@
 import { nextSlot, PROMPT, slotsFromMessages, type Slots } from "./funnel-state.ts";
 import { modeFromMessages, factsFromMessages, wantsEnroll } from "./agent-facts.ts";
 import { STUDIO_ADDR_SHORT, STUDIO_HOURS_SHORT, STUDIO_RULES_SHORT } from "./agent-client-desk-core.ts";
-import { isSocialHello } from "./agent-voice-loop.ts";
+import { isSocialHello, FORK_ASK } from "./agent-voice-loop.ts";
 
 export type FunnelHit = { reply: string };
 
@@ -9,7 +9,7 @@ function lastAssistant(messages: { role: string; content: string }[]) {
   return [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
 }
 
-export const FORK_ASK = "Нажмите кнопку или скажите: уже ходим, подбираем впервые — или вас интересуют правила и цены.";
+export { FORK_ASK };
 
 /** Один слот — всегда видимая и озвучиваемая фраза. Молчание запрещено: ответ не удаляется. */
 export function lockedFunnelReply(
