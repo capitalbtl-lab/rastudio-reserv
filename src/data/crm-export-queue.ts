@@ -127,6 +127,7 @@ export async function tickExportQueue(take = 2) {
             time: job.body.time ? String(job.body.time) : undefined,
             duration: Number(job.body.duration) || undefined,
             note: job.body.note ? String(job.body.note) : undefined,
+            teacherId: Number(job.body.teacherId) || undefined,
           });
           if (!booked.ok) throw new Error(booked.error || "урок не создался");
         } else if (job.op === "subject.create") {

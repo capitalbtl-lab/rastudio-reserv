@@ -141,6 +141,7 @@ export async function saveTrialLead(data: TrialPayload) {
     time: data.time,
     duration: data.duration,
     note,
+    teacherId: Number(data.teacherId) || undefined,
   };
   try {
     const { findDossier, upsertDossier } = await import("./dossiers");

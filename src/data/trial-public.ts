@@ -30,4 +30,5 @@ export type TrialPayload = {
   time?: string;
   duration?: number;
   subjectId?: number;
+  teacherId?: number;
 };

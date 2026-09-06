@@ -948,6 +948,7 @@ export const chatAgent = createServerFn({ method: "POST" })
                 time: args.time ? String(args.time) : "",
                 duration: args.duration != null ? Number(args.duration) : undefined,
                 subjectId: Number(args.subject_id) || undefined,
+                teacherId: Number(args.teacher_id) || undefined,
               });
               const lessonName = saved.ok && saved.lesson?.type ? saved.lesson.type : "занятие";
               if (saved.ok && "id" in saved && saved.id) {
@@ -1028,7 +1029,7 @@ export const chatAgent = createServerFn({ method: "POST" })
                         .slice(0, 8)
                         .map((g, i) => ({
                           label: `Отработка · ${g.chip}`,
-                          send: `Поставьте отработку gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""}`,
+                          send: `Поставьте отработку gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""} teacher_id=${g.teacherId || ""}`,
                           primary: i === 0,
                         }));
                       messages.push({
@@ -1067,7 +1068,7 @@ export const chatAgent = createServerFn({ method: "POST" })
                     .slice(0, 8)
                     .map((g, i) => ({
                       label: `Отработка · ${g.chip}`,
-                      send: `Поставьте отработку gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""}`,
+                      send: `Поставьте отработку gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""} teacher_id=${g.teacherId || ""}`,
                       primary: i === 0,
                     }));
                 } else {
@@ -1076,7 +1077,7 @@ export const chatAgent = createServerFn({ method: "POST" })
                     { label: "Сразу в группу", send: "Запишите сразу в группу" },
                     ...shown.slice(0, 6).map((g) => ({
                       label: `Пробное · ${g.chip}`,
-                      send: `Запишите на пробное gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""}`,
+                      send: `Запишите на пробное gid=${g.gid} филиал=${g.branchId} дата=${g.nextDate || ""} время=${g.timeFrom || ""} курс=${g.courseId || ""} subject_id=${g.subjectId || ""} teacher_id=${g.teacherId || ""}`,
                     })),
                   ];
                 }
