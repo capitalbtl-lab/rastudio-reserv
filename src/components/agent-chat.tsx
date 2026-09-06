@@ -24,6 +24,7 @@ import {
   emptyVad,
   ignoreAfterSpeakMs,
   ignoreWhileSpeakStartMs,
+  isSocialHello,
   isVoiceEcho,
   listenGapAfterSpeakMs,
   srFatal,
@@ -713,10 +714,7 @@ export function AgentChat() {
         const next = vadTick(vadStateRef.current, rms, true);
         vadStateRef.current = next.state;
         if (next.fire) {
-          stop();
-          cancelSpeech();
-          startListen();
-          return;
+          vadStateRef.current = emptyVad();
         }
         vadRafRef.current = requestAnimationFrame(tick);
       };
@@ -790,8 +788,9 @@ export function AgentChat() {
 
   function isEcho(said: string, loose = false) {
     return isVoiceEcho(said, spokenRef.current, {
-      loose,
-      spokenAgoMs: Date.now() - spokenAtRef.current,
+      loose: loose || speakingRef.current,
+      speaking: speakingRef.current,
+      spokenAgoMs: speakingRef.current ? 0 : Date.now() - spokenAtRef.current,
     });
   }
 
@@ -848,9 +847,14 @@ export function AgentChat() {
       const isFinal = !("isFinal" in last) || last.isFinal !== false;
       if (speakingRef.current) {
         if (!bargeRef.current) return;
+        if (isSocialHello(said) && isFinal) {
+          cancelSpeech();
+          void send(said);
+          return;
+        }
         if (!bargeInterimReady(said, isFinal)) return;
-        cancelSpeech();
         if (!isFinal) return;
+        cancelSpeech();
       }
       if (!isFinal) return;
       void send(said);

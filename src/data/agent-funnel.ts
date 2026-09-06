@@ -1,12 +1,15 @@
 import { nextSlot, PROMPT, slotsFromMessages, type Slots } from "./funnel-state.ts";
 import { modeFromMessages, factsFromMessages } from "./agent-facts.ts";
 import { STUDIO_ADDR_SHORT, STUDIO_HOURS_SHORT, STUDIO_RULES_SHORT } from "./agent-client-desk-core.ts";
+import { isSocialHello } from "./agent-voice-loop.ts";
 
 export type FunnelHit = { reply: string };
 
 function lastAssistant(messages: { role: string; content: string }[]) {
   return [...messages].reverse().find((m) => m.role === "assistant")?.content || "";
 }
+
+const FORK_ASK = "Нажмите кнопку или скажите: уже ходим, подбираем впервые — или вас интересуют правила и цены.";
 
 /** Один слот — всегда видимая и озвучиваемая фраза. Молчание запрещено: ответ не удаляется. */
 export function lockedFunnelReply(
@@ -29,8 +32,8 @@ export function lockedFunnelReply(
     if (/где .{0,16}наход|как пройти|как проехать|адрес|филиал/i.test(lastUser)) {
       return { reply: `${n}: ${STUDIO_ADDR_SHORT} Уже ходите к нам или подбираете впервые?` };
     }
-    if (/уже занимаетесь|подбираете впервые/i.test(last)) {
-      return { reply: `${n}: Нажмите кнопку или скажите: уже ходим или подбираем впервые.` };
+    if (isSocialHello(lastUser) || /уже занимаетесь|подбираете впервые|с чего начнём|нажмите кнопку/i.test(last)) {
+      return { reply: `${n}: ${FORK_ASK}` };
     }
     return { reply: `${n}: Вы уже занимаетесь у нас или подбираете впервые?` };
   }

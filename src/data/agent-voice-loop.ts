@@ -8,19 +8,35 @@ export function normalizeSaid(s: string) {
     .trim();
 }
 
+const HELLO_RE =
+  /^(привет|приветствую|здравствуйте|здравствуй|добрый день|добрый вечер|доброе утро|алло|хай|хеллоу|hello|hi)(те)?$/i;
+
+export function isSocialHello(s: string) {
+  return HELLO_RE.test(normalizeSaid(s));
+}
+
+export function echoTailMs() {
+  return 1800;
+}
+
 export function isVoiceEcho(
   said: string,
   spoken: string,
-  opts?: { loose?: boolean; spokenAgoMs?: number },
+  opts?: { loose?: boolean; spokenAgoMs?: number; speaking?: boolean },
 ) {
-  if ((opts?.spokenAgoMs || 0) > 900) return false;
   const a = normalizeSaid(said);
   const b = normalizeSaid(spoken);
   if (!a || !b) return false;
-  const words = a.split(" ").filter((w) => w.length > 2);
-  if (words.length < 2) return b.includes(a) && a.length > 10;
+  if (!opts?.speaking && (opts?.spokenAgoMs || 0) > echoTailMs()) return false;
+  if (isSocialHello(a) && !b.split(" ").includes(a) && a !== "здравствуйте" && a !== "здравствуй") return false;
+  const words = a.split(" ").filter((w) => w.length > 1);
+  if (words.length < 2) {
+    const w = words[0] || a;
+    if (w.length < 4) return false;
+    return b.includes(w);
+  }
   const hits = words.filter((w) => b.includes(w)).length;
-  return hits / words.length >= (opts?.loose ? 0.55 : 0.78);
+  return hits / words.length >= (opts?.speaking || opts?.loose ? 0.45 : 0.72);
 }
 
 export type VadState = { noise: number; over: number; samples: number };
@@ -29,7 +45,7 @@ export function emptyVad(): VadState {
   return { noise: 0.012, over: 0, samples: 0 };
 }
 
-/** RMS после echoCancellation. Порог от шума, не константа 0.11 — из‑за неё перебивание молчало. */
+/** RMS после echoCancellation. Порог от шума. Сам по себе не глушит TTS — это делает распознавание без эха. */
 export function vadTick(state: VadState, rms: number, bargeOn: boolean): { state: VadState; fire: boolean } {
   if (!bargeOn) return { state: emptyVad(), fire: false };
   const samples = state.samples + 1;
@@ -39,9 +55,9 @@ export function vadTick(state: VadState, rms: number, bargeOn: boolean): { state
     return { state: { noise, over: 0, samples }, fire: false };
   }
   noise = Math.min(0.045, noise * 0.995 + Math.min(rms, 0.06) * 0.005);
-  const thresh = Math.max(0.032, noise * 2.8);
+  const thresh = Math.max(0.038, noise * 3.2);
   const over = rms > thresh ? state.over + 1 : Math.max(0, state.over - 1);
-  if (over >= 4) return { state: { noise, over: 0, samples }, fire: true };
+  if (over >= 8) return { state: { noise, over: 0, samples }, fire: true };
   return { state: { noise, over, samples }, fire: false };
 }
 
@@ -54,6 +70,7 @@ export function srShouldRestart(err: string) {
 }
 
 export function bargeInterimReady(said: string, isFinal: boolean) {
+  if (isSocialHello(said)) return isFinal;
   const words = String(said || "")
     .trim()
     .split(/\s+/)
@@ -63,13 +80,13 @@ export function bargeInterimReady(said: string, isFinal: boolean) {
 }
 
 export function ignoreWhileSpeakStartMs(barge: boolean) {
-  return barge ? 200 : 380;
+  return barge ? 480 : 700;
 }
 
 export function ignoreAfterSpeakMs(barge: boolean) {
-  return barge ? 90 : 120;
+  return barge ? 700 : 1000;
 }
 
 export function listenGapAfterSpeakMs(barge: boolean) {
-  return barge ? 20 : 40;
+  return barge ? 80 : 120;
 }
