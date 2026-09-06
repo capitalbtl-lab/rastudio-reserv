@@ -291,7 +291,7 @@ export function factsFromMessages(messages: { role: string; content: string }[])
     /понятно|к пробному|к записи|давайте к/i.test(user);
   if (facts.mode !== "client") {
     if (/правил|оферт|цен[аыу]|сколько стоит|стоимост/i.test(lastUser)) facts.intent = "правила";
-    else if (/час[ыа] работ|когда открыт|график работ|во сколько работаете/i.test(lastUser)) facts.intent = "часы";
+    else if (/час[ыа] работ|когда открыт|график работ|во сколько работаете|когда вы работа|когда работаете|во сколько открыт/i.test(lastUser)) facts.intent = "часы";
     else if (/где наход|как пройти|как проехать|адрес/i.test(lastUser)) facts.intent = "адрес";
   }
   if (facts.mode === "client") {
