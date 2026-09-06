@@ -35,16 +35,18 @@ function Toggle({
   hint,
   tip,
   set,
+  disabled,
 }: {
   on: boolean;
   title: string;
   hint: string;
   tip: string;
   set: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
-    <label className="flex items-start gap-3 rounded-3xl bg-surface p-5 text-sm shadow-[var(--shadow-border)]">
-      <input type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} className="mt-1" />
+    <label className={cn("flex items-start gap-3 rounded-3xl bg-surface p-5 text-sm shadow-[var(--shadow-border)]", disabled && "opacity-50")}>
+      <input type="checkbox" checked={on} disabled={disabled} onChange={(e) => set(e.target.checked)} className="mt-1" />
       <span className="min-w-0">
         <span className="flex items-center gap-2 font-semibold">
           {title}
@@ -189,22 +191,27 @@ export function AdminAgent() {
               Олег и Ольга — родителям. Голос кабинета — сотруднику. Отладка эти права не дублирует.
             </p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
-              {ROLE_FLAGS.map((f) => (
+              {ROLE_FLAGS.map((f) => {
+                const offByDefault = f.id === "consultantCanManage" || f.id === "adminVoiceCanConsult" || f.id === "consultantCanTariff";
+                return (
                 <Toggle
                   key={f.id}
-                  on={Boolean(settings[f.id])}
+                  on={offByDefault ? settings[f.id] === true : settings[f.id] !== false}
                   set={(v) => setSettings({ ...settings, [f.id]: v })}
                   title={f.title}
                   hint={f.hint}
                   tip={f.tip}
                 />
-              ))}
+                );
+              })}
             </div>
           </div>
           <div>
             <h3 className="font-display text-xl">Какие занятия консультант ставит</h3>
             <p className="mt-1 max-w-2xl text-sm text-muted">
-              Ольга вызывает book_lesson с lesson_type. Правило Alfa одно на тип: группа только где можно, пробное — без group_ids. Выключен — телефон 8 (800) 511-34-01.
+              {settings.consultantCanBook === false
+                ? "Общая запись выключена выше — типы серые, Ольга даёт телефон. Включите «Консультант записывает сам», чтобы типы заработали."
+                : "Ольга вызывает book_lesson с lesson_type. Правило Alfa одно на тип. Выключен тип — телефон 8 (800) 511-34-01."}
             </p>
             {LESSON_POLICY_GROUPS.map((g) => (
               <div key={g.title} className="mt-4">
@@ -218,6 +225,7 @@ export function AdminAgent() {
                       <Toggle
                         key={f.id}
                         on={settings[f.id] !== false}
+                        disabled={settings.consultantCanBook === false}
                         set={(v) => setSettings({ ...settings, [f.id]: v })}
                         title={`${f.title} · Alfa ${rule.typeId}`}
                         hint={rule.hint}
