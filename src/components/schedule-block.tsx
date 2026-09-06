@@ -5,7 +5,7 @@ import { MapPin } from "lucide-react";
 import type { CmsSession } from "@/data/cms";
 import { AGE_BANDS, type AgeBandId } from "@/data/ages";
 import { cn } from "@/lib/utils";
-import { branchMeta, branchRank, compactWhen, matchesAgeBand } from "@/lib/schedule";
+import { branchMeta, branchRank, compactWhen, listBranches, matchesAgeBand } from "@/lib/schedule";
 import { freePlaces, formatTrialDate, nextLessonDate, tidyGroupName, whenShort } from "@/lib/trial-slot";
 import { GroupCtas } from "@/components/group-ctas";
 import { SITE_SIGNUP_DEFAULT, type SiteSignup } from "@/data/site-signup-core";
@@ -34,8 +34,10 @@ export function ScheduleBlock({
     () => [...new Set(sessions.map((s) => branchMeta(s).city).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru")),
     [sessions],
   );
+  const branches = useMemo(() => listBranches(sessions), [sessions]);
 
   const [city, setCity] = useState("");
+  const [branch, setBranch] = useState("");
   const [age, setAge] = useState<AgeBandId | "">("");
   const ageBands = useMemo(
     () => AGE_BANDS.filter((band) => sessions.some((s) => matchesAgeBand(s.age, band.id))),
@@ -48,6 +50,7 @@ export function ScheduleBlock({
   const filtered = sessions.filter((s) => {
     const meta = branchMeta(s);
     if (city && meta.city !== city) return false;
+    if (branch && meta.id !== branch) return false;
     if (age && !matchesAgeBand(s.age, age)) return false;
     return true;
   });
@@ -83,15 +86,43 @@ export function ScheduleBlock({
             Все города
           </FilterChip>
           {cities.map((item) => (
-            <FilterChip key={item} on={city === item} onClick={() => setCity(item)}>
+            <FilterChip
+              key={item}
+              on={city === item}
+              onClick={() => {
+                setCity(item);
+                const hit = branches.find((b) => b.id === branch);
+                if (hit && hit.city !== item) setBranch("");
+              }}
+            >
               {item}
             </FilterChip>
           ))}
         </div>
       ) : null}
 
-      {showAge ? (
+      {branches.length > 1 ? (
         <div className={cn("flex flex-wrap gap-2", cities.length > 1 ? "mt-2" : "mt-4")}>
+          <FilterChip on={!branch} onClick={() => setBranch("")}>
+            Все филиалы
+          </FilterChip>
+          {(city ? branches.filter((b) => b.city === city) : branches).map((item) => (
+            <FilterChip
+              key={item.id}
+              on={branch === item.id}
+              onClick={() => {
+                setBranch(item.id);
+                setCity(item.city);
+              }}
+            >
+              {item.short}
+            </FilterChip>
+          ))}
+        </div>
+      ) : null}
+
+      {showAge ? (
+        <div className={cn("flex flex-wrap gap-2", cities.length > 1 || branches.length > 1 ? "mt-2" : "mt-4")}>
           <FilterChip on={!age} onClick={() => setAge("")}>
             Все возраста
           </FilterChip>
