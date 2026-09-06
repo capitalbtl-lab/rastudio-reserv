@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { emptyCrmQueue, mergeCrmPacket, overlayStale, overlayEnqueueOffset, pickNextPacket, type CrmPacket, type CrmPacketDraft, type CrmQueueState } from "./crm-packet-queue-core";
 import { loadCachePolicy, stampOverlay, stampJournalCursor, journalStale } from "./crm-cache-policy";
 import { logAdmin } from "./admin-settings";
-import { alfaLinkedNow } from "./crm-alfa-link";
+import { alfaLinkedNow, wantAlfaPullChannel } from "./crm-alfa-link";
 
 export type { CrmPacket, CrmQueueState };
 
@@ -257,6 +257,19 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
       next: pol.overlayNext,
       scanned: ids.length,
       extra: "без Alfa",
+    };
+  }
+  if (!wantAlfaPullChannel("clients") && !opts?.force) {
+    return {
+      ok: true as const,
+      ids,
+      total,
+      live: ids.length,
+      fromCache: true,
+      done: true,
+      next: pol.overlayNext,
+      scanned: ids.length,
+      extra: "канал учеников выключен",
     };
   }
   const rule = pol.rules.pupilTariffs;

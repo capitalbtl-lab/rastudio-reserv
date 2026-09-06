@@ -81,7 +81,7 @@ export async function tickExportQueue(take = 2) {
     if (g.__raCrmExportBusyAt && Date.now() - g.__raCrmExportBusyAt > BUSY_MS) g.__raCrmExportBusy = false;
     else return crmExportSnapshot();
   }
-  const { alfaLinkedNow } = await import("./crm-alfa-link");
+  const { alfaLinkedNow, wantAlfaPush } = await import("./crm-alfa-link");
   if (!alfaLinkedNow()) {
     const q = loadExport();
     const note = q.jobs.length ? `без Alfa · в очереди ${q.jobs.length}` : "без Alfa";
@@ -97,10 +97,17 @@ export async function tickExportQueue(take = 2) {
     const { token, request } = await import("./alfacrm");
     const t = await token();
     let q = loadExport();
-    const first = q.jobs.find(canRunExportJob) || q.jobs[0];
+    const first = q.jobs.find((j) => canRunExportJob(j) && wantAlfaPush(j.op, j.body)) || q.jobs.find(canRunExportJob);
     const n = isSingleExportOp(first?.op || "group.update") ? 1 : Math.max(1, take);
-    const batch = q.jobs.filter(canRunExportJob).slice(0, n);
-    if (!batch.length) return crmExportSnapshot();
+    const batch = q.jobs.filter((j) => canRunExportJob(j) && wantAlfaPush(j.op, j.body)).slice(0, n);
+    if (!batch.length) {
+      const held = q.jobs.filter(canRunExportJob).length;
+      if (held && q.lastNote !== "канал выгрузки выключен") {
+        q.lastNote = held ? `канал выгрузки выключен · в очереди ${q.jobs.length}` : q.lastNote;
+        saveExport(q);
+      }
+      return crmExportSnapshot();
+    }
     for (const job of batch) {
       try {
         if (job.op === "cgi.apply") {

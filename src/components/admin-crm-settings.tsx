@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { CRM_ACTORS, actorLabel, actorOf, type CrmActorsState } from "@/data/crm-actors";
 import { CACHE_KIND_META, type CacheKind, type CachePolicy } from "@/data/crm-cache-policy-core";
 import { exportOpLabel, type CrmExportOp } from "@/data/crm-export-queue-core";
-import { ALFA_LINK_MODES, type AlfaLinkMode } from "@/data/crm-alfa-link-core";
+import { ALFA_LINK_MODES, ALFA_PULL_CH, ALFA_PUSH_CH, ALFA_SYNC_DEFAULT, type AlfaLinkMode, type AlfaPullCh, type AlfaPushCh } from "@/data/crm-alfa-link-core";
 
 export const CRM_SYNC_MIN_KEY = "ra_crm_sync_min";
 
@@ -49,6 +49,8 @@ export function AdminCrmSettings() {
   const [actors, setActors] = useState<CrmActorsState | null>(null);
   const [humanName, setHumanName] = useState("Администратор");
   const [alfaMode, setAlfaMode] = useState<AlfaLinkMode>("linked");
+  const [pull, setPull] = useState(ALFA_SYNC_DEFAULT.pull);
+  const [push, setPush] = useState(ALFA_SYNC_DEFAULT.push);
   const [queue, setQueue] = useState<{
     pending?: number;
     lastNote?: string;
@@ -61,6 +63,20 @@ export function AdminCrmSettings() {
     jobs?: { op: string; entityId: number; actor?: string; tries?: number }[];
   } | null>(null);
   const dragId = useRef(0);
+
+  function applyLink(link: { mode?: AlfaLinkMode; pull?: typeof pull; push?: typeof push; minutes?: number }) {
+    setAlfaMode(link.mode === "offline" ? "offline" : "linked");
+    if (link.pull) setPull({ ...ALFA_SYNC_DEFAULT.pull, ...link.pull });
+    if (link.push) setPush({ ...ALFA_SYNC_DEFAULT.push, ...link.push });
+    if (link.minutes) {
+      setSyncMin(link.minutes);
+      try {
+        localStorage.setItem(CRM_SYNC_MIN_KEY, String(link.minutes));
+      } catch {
+        /* */
+      }
+    }
+  }
 
   useEffect(() => {
     setSyncMin(crmSyncMinutes());
@@ -98,10 +114,10 @@ export function AdminCrmSettings() {
     try {
       const res = (await adminSchedule({
         data: { token: token(), action: "cachePolicyGet" } as never,
-      })) as { ok?: boolean; policy?: CachePolicy; queue?: typeof queue; alfaLink?: { mode?: AlfaLinkMode } };
+      })) as { ok?: boolean; policy?: CachePolicy; queue?: typeof queue; alfaLink?: { mode?: AlfaLinkMode; pull?: typeof pull; push?: typeof push; minutes?: number } };
       if (res.ok && res.policy) setCache(res.policy);
       if (res.ok && res.queue) setQueue(res.queue);
-      if (res.ok && res.alfaLink?.mode) setAlfaMode(res.alfaLink.mode === "offline" ? "offline" : "linked");
+      if (res.ok && res.alfaLink) applyLink(res.alfaLink);
     } catch {
       /* defaults */
     }

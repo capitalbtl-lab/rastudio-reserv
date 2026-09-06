@@ -1225,7 +1225,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         funnelAuto?: import("./funnel-auto").FunnelAuto;
         offset?: number;
         take?: number;
-        alfaLink?: string;
+        alfaLink?: string | { mode?: string; pull?: unknown; push?: unknown; minutes?: number };
         cachePolicy?: import("./crm-cache-policy").CachePolicy;
         groupKeys?: { branchId: number; groupId: number }[];
         pupilItems?: import("./pupil-tariffs").PupilTariffItem[];
@@ -2655,8 +2655,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
       return { ok: true as const, policy: saveCachePolicy(raw), kinds: CACHE_KIND_META };
     }
     if (data.action === "alfaLinkSave") {
-      const next = saveAlfaLink(alfaLinkOf(data.alfaLink));
-      logAdmin(`Связь AlfaCRM: ${next.mode === "offline" ? "без Alfa" : "с Alfa"}`);
+      const raw = data.alfaLink;
+      const next = saveAlfaLink(typeof raw === "object" && raw ? raw : alfaLinkOf(typeof raw === "string" ? raw : ""));
+      logAdmin(`Связь AlfaCRM: ${next.mode === "offline" ? "без Alfa" : "фон"}`);
       if (next.mode === "linked") {
         void import("./crm-packet-queue").then((q) => void q.tickCrmQueue(1));
         void import("./crm-export-queue").then((e) => void e.tickExportQueue(3));
