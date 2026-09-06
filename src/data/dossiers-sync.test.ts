@@ -17,8 +17,13 @@ describe("импорт лидов не валит кабинет", () => {
     assert.match(chunk, /applyCrmCustomer\(item, branch, study === 2, teacherMap, BULK\)/);
     assert.match(chunk, /if \(n && n % 50 === 0\) saveStore/);
     assert.match(chunk, /await yieldLoop/);
-    assert.match(chunk, /if \(leadsOnly\)/);
-    assert.equal(/overlayMembershipFromCrm/.test(chunk.slice(chunk.indexOf("if (leadsOnly)"))), false);
+    const leadRet = chunk.indexOf("if (leadsOnly)");
+    const overlay = chunk.indexOf("overlayMembershipFromCrm");
+    assert.ok(leadRet > 0, "leadsOnly early-return");
+    assert.ok(overlay > leadRet, "overlay только после лидов");
+    const leadBlock = chunk.slice(leadRet, overlay);
+    assert.match(leadBlock, /return \{ ok: true as const, count: n, purged/);
+    assert.equal(/overlayMembershipFromCrm/.test(leadBlock), false);
   });
 
   it("upsert без persist не вызывает saveStore", () => {

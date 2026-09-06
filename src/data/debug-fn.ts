@@ -8,23 +8,27 @@ import { loadDebug, saveDebug } from "./debug-mode";
 export const adminDebugMode = createServerFn({ method: "POST" })
   .validator((data: unknown) => data as { token?: string; action: "get" | "save"; tools?: Record<string, boolean>; widget?: Record<string, boolean> })
   .handler(async ({ data }) => {
-    if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
-    if (data.action === "save") {
-      const cur = loadDebug();
-      const tools = { ...cur.tools };
-      for (const t of DEBUG_TOOLS) {
-        if (data.tools && t.id in data.tools) tools[t.id] = Boolean(data.tools[t.id]);
+    try {
+      if (!isAdminRequest(data.token)) return { ok: false as const, error: "Нужен вход администратора." };
+      if (data.action === "save") {
+        const cur = loadDebug();
+        const tools = { ...cur.tools };
+        for (const t of DEBUG_TOOLS) {
+          if (data.tools && t.id in data.tools) tools[t.id] = Boolean(data.tools[t.id]);
+        }
+        const widget = { ...cur.widget };
+        for (const f of WINDOW_FLAGS) {
+          if (data.widget && f.id in data.widget) widget[f.id] = Boolean(data.widget[f.id]);
+        }
+        saveDebug({ tools, widget, last: cur.last || [] });
+        logAdmin("Режим отладки: набор инструментов обновлён");
+        return { ok: true as const, tools, widget, last: cur.last || [] };
       }
-      const widget = { ...cur.widget };
-      for (const f of WINDOW_FLAGS) {
-        if (data.widget && f.id in data.widget) widget[f.id] = Boolean(data.widget[f.id]);
-      }
-      saveDebug({ tools, widget, last: cur.last || [] });
-      logAdmin("Режим отладки: набор инструментов обновлён");
-      return { ok: true as const, tools, widget, last: cur.last || [] };
+      const s = loadDebug();
+      return { ok: true as const, tools: s.tools, widget: s.widget, last: s.last || [] };
+    } catch {
+      return { ok: false as const, error: "Кабинет перезапускается. Подождите несколько секунд." };
     }
-    const s = loadDebug();
-    return { ok: true as const, tools: s.tools, widget: s.widget, last: s.last || [] };
   });
 
 export const unlockDebug = createServerFn({ method: "POST" })
