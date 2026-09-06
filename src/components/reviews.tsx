@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { REVIEWS, YANDEX_RATING, YANDEX_REVIEWS, reviewsForPath, type Review } from "@/data/reviews";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,16 @@ function initials(name: string) {
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+}
+
+function Stars({ className }: { className?: string }) {
+  return (
+    <span className="flex gap-0.5">
+      {Array.from({ length: 5 }).map((_, s) => (
+        <Star key={s} className={cn("size-3 fill-primary text-primary", className)} strokeWidth={0} />
+      ))}
+    </span>
+  );
 }
 
 function FeaturedReview() {
@@ -29,50 +39,77 @@ function FeaturedReview() {
   }, [paused]);
 
   const item = REVIEWS[index];
+  const go = (dir: number) => setIndex((i) => (i + dir + REVIEWS.length) % REVIEWS.length);
 
   return (
     <article
-      className="review-ink relative flex min-h-[22rem] flex-col overflow-hidden rounded-3xl p-5 text-header-fg sm:col-span-2 sm:min-h-[26rem] lg:row-span-2 lg:p-8"
+      className="mt-6 overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border)]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      <div key={item.name + item.date} className="review-fade relative z-1 flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center justify-between gap-3">
-          <span className="rounded-full bg-white/12 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-header-fg">
-            {item.course}
-          </span>
-          <span className="flex gap-0.5">
-            {Array.from({ length: 5 }).map((_, s) => (
-              <Star key={s} className="size-3 fill-white/80 text-white/80" strokeWidth={0} />
-            ))}
-          </span>
+      <div className="grid md:grid-cols-[10.5rem_minmax(0,1fr)]">
+        <div className="flex items-center gap-4 border-b border-border/70 px-5 py-4 md:flex-col md:items-start md:justify-center md:border-b-0 md:border-r md:px-6 md:py-6">
+          <p className="display text-5xl leading-none text-primary md:text-6xl">{YANDEX_RATING.score}</p>
+          <div>
+            <Stars className="size-3.5" />
+            <p className="mt-1 text-xs text-muted">
+              Яндекс · {YANDEX_RATING.ratings} оценок
+            </p>
+          </div>
         </div>
-        <p className="display mt-5 text-xl leading-snug text-header-fg md:text-2xl md:leading-snug">
-          {item.text}
-        </p>
-        <div className="mt-auto flex items-center gap-3 pt-6">
-          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white/12 text-sm font-semibold">
-            {initials(item.name)}
-          </span>
-          <span>
-            <span className="block text-sm font-semibold">{item.name}</span>
-            <span className="text-xs text-header-fg/55">{item.date}</span>
-          </span>
+
+        <div className="relative px-5 py-5 md:px-7 md:py-6">
+          <div key={item.name + item.date} className="review-fade">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-primary">
+                {item.course}
+              </span>
+              <Stars />
+            </div>
+            <p className="display mt-3 max-w-3xl text-xl leading-snug md:text-[1.65rem] md:leading-snug">
+              «{item.text}»
+            </p>
+            <p className="mt-3 text-sm">
+              <span className="font-semibold">{item.name}</span>
+              <span className="text-muted"> · {item.date}</span>
+            </p>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="flex gap-1.5">
+              {REVIEWS.map((review, i) => (
+                <button
+                  key={review.name + review.date}
+                  type="button"
+                  aria-label={review.name}
+                  className={cn(
+                    "h-1.5 rounded-full transition-all",
+                    i === index ? "w-6 bg-primary" : "w-1.5 bg-border hover:bg-primary/40",
+                  )}
+                  onClick={() => setIndex(i)}
+                />
+              ))}
+            </div>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                aria-label="Предыдущий отзыв"
+                className="grid size-9 place-items-center rounded-full bg-surface-2 text-fg hover:bg-primary hover:text-primary-foreground"
+                onClick={() => go(-1)}
+              >
+                <ChevronLeft className="size-4" />
+              </button>
+              <button
+                type="button"
+                aria-label="Следующий отзыв"
+                className="grid size-9 place-items-center rounded-full bg-surface-2 text-fg hover:bg-primary hover:text-primary-foreground"
+                onClick={() => go(1)}
+              >
+                <ChevronRight className="size-4" />
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="relative z-1 mt-5 flex gap-1.5">
-        {REVIEWS.map((review, i) => (
-          <button
-            key={review.name + review.date}
-            type="button"
-            aria-label={review.name}
-            className={cn(
-              "h-1.5 rounded-full transition-all",
-              i === index ? "w-6 bg-white" : "w-1.5 bg-white/30 hover:bg-white/55",
-            )}
-            onClick={() => setIndex(i)}
-          />
-        ))}
       </div>
     </article>
   );
@@ -92,17 +129,16 @@ export function Reviews() {
           rel="noreferrer"
           className="inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 shadow-[var(--shadow-border)]"
         >
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Star key={i} className="size-3.5 fill-primary text-primary" strokeWidth={0} />
-          ))}
+          <Stars className="size-3.5" />
           <span className="display text-lg leading-none">{YANDEX_RATING.score}</span>
           <span className="text-xs text-muted">{YANDEX_RATING.ratings} оценок</span>
         </a>
       </div>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <FeaturedReview />
-        {REVIEWS.slice(1).map((item) => (
+      <FeaturedReview />
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {REVIEWS.map((item) => (
           <ReviewCard key={item.name + item.date} item={item} />
         ))}
       </div>
@@ -131,11 +167,7 @@ function ReviewCard({ item }: { item: Review }) {
         <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-primary">
           {item.course}
         </span>
-        <span className="flex gap-0.5">
-          {Array.from({ length: 5 }).map((_, s) => (
-            <Star key={s} className="size-3 fill-primary text-primary" strokeWidth={0} />
-          ))}
-        </span>
+        <Stars />
       </div>
       <p className="relative mt-4 text-[0.95rem] leading-relaxed text-fg/85">{item.text}</p>
       <div className="relative mt-auto flex items-center gap-3 pt-5">
