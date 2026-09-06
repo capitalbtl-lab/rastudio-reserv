@@ -18,6 +18,8 @@ const UPLOADS = () => join(ROOT(), "media", "uploads");
 const IMAGE = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"]);
 const VIDEO = new Set([".mp4", ".webm"]);
 
+let cache: { at: number; items: SiteMediaItem[] } | null = null;
+
 function walk(dir: string, acc: SiteMediaItem[], depth = 0) {
   if (depth > 6 || acc.length >= 400) return;
   let names: string[] = [];
@@ -55,10 +57,16 @@ function walk(dir: string, acc: SiteMediaItem[], depth = 0) {
   }
 }
 
+export function invalidateSiteMedia() {
+  cache = null;
+}
+
 export function listSiteMedia(): SiteMediaItem[] {
+  if (cache && Date.now() - cache.at < 30_000) return cache.items;
   const acc: SiteMediaItem[] = [];
   walk(join(ROOT(), "media"), acc);
   acc.sort((a, b) => b.at - a.at);
+  cache = { at: Date.now(), items: acc };
   return acc;
 }
 
@@ -74,6 +82,7 @@ export function saveSiteMedia(name: string, buf: Buffer) {
   const file = `${Date.now().toString(36)}-${safe.toLowerCase()}`;
   const full = join(UPLOADS(), file);
   writeFileSync(full, buf);
+  invalidateSiteMedia();
   logAdmin(`Медиа: загружен ${file}`);
   const src = `/media/uploads/${file}`;
   return {
@@ -95,6 +104,7 @@ export function deleteSiteUpload(src: string) {
   const full = join(ROOT(), rel);
   if (!existsSync(full)) return { ok: false as const, error: "Файла нет." };
   unlinkSync(full);
+  invalidateSiteMedia();
   logAdmin(`Медиа: удалён ${rel}`);
   return { ok: true as const };
 }

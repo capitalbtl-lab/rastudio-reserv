@@ -57,7 +57,8 @@ export const siteStudio = createServerFn({ method: "POST" })
           | "place"
           | "rewrite"
           | "agents"
-          | "embed";
+          | "embed"
+          | "set";
         name?: string;
         mime?: string;
         base64?: string;
@@ -73,6 +74,13 @@ export const siteStudio = createServerFn({ method: "POST" })
     if (!guard(data.token)) return { ok: false as const, error: "Нужен вход администратора или режим отладки." };
     if (data.action === "list") {
       return { ok: true as const, media: mediaWithCaptions(), pulse: loadSitePulse(), pages: loadPageAgents().pages };
+    }
+    if (data.action === "set") {
+      const src = String(data.src || "");
+      const slot = String(data.slot || "");
+      if (!src || !slot) return { ok: false as const, error: "Выберите блок и файл." };
+      const layout = saveHomeLayout(setHomeMedia(loadHomeLayout(), slot, src));
+      return { ok: true as const, layout };
     }
     if (data.action === "upload") {
       const raw = String(data.base64 || "").replace(/^data:[^;]+;base64,/, "");

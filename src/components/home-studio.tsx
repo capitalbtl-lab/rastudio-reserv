@@ -41,13 +41,13 @@ function useSiteStudio(useAdmin = false) {
   const tok = () => (useAdmin ? adminToken() : token() || adminToken());
 
   async function run(
-    action: "list" | "upload" | "delete" | "describe" | "pulse" | "invent" | "generate" | "place" | "rewrite" | "agents" | "embed",
+    action: "list" | "upload" | "delete" | "describe" | "pulse" | "invent" | "generate" | "place" | "rewrite" | "agents" | "embed" | "set",
     extra: Record<string, unknown> = {},
   ) {
-    setBusy(action);
+    setBusy(action === "describe" ? "" : action);
     setMsg("");
     const res = await siteStudio({ data: { token: tok(), action, ...extra } });
-    setBusy("");
+    if (action !== "describe") setBusy("");
     if (!res.ok) {
       setMsg(res.error || "Ошибка");
       return res;
@@ -59,7 +59,7 @@ function useSiteStudio(useAdmin = false) {
     if (action === "describe" && "caption" in res) setMsg(String(res.caption));
     if (action === "upload" && "caption" in res) setMsg(`Загружено. DeepSeek: ${res.caption}`);
     if (action === "rewrite") setMsg("Тексты блока обновлены.");
-    if (action === "embed") setMsg("Агент на странице сохранён.");
+    if (action === "set" && "layout" in res) setMsg("Файл в блоке.");
     return res;
   }
 
@@ -84,7 +84,7 @@ export function MediaGrid({
   if (!media.length) return <p className="text-sm text-muted">Нет файлов в этой папке.</p>;
   return (
     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-      {media.slice(0, 80).map((item) => (
+      {media.slice(0, 48).map((item) => (
         <button
           key={item.src}
           type="button"
@@ -97,9 +97,11 @@ export function MediaGrid({
           title={item.caption || item.place || item.name}
         >
           {item.kind === "video" ? (
-            <video src={item.src} className="aspect-square w-full object-cover" muted playsInline />
+            <span className="grid aspect-square w-full place-items-center bg-header px-1 text-center text-[0.65rem] font-semibold leading-tight text-header-fg">
+              видео · {item.name.replace(/\.[^.]+$/, "").slice(0, 22)}
+            </span>
           ) : (
-            <img src={item.src} alt={item.place || item.name} className="aspect-square w-full object-cover" />
+            <img src={item.src} alt={item.place || item.name} loading="lazy" decoding="async" className="aspect-square w-full object-cover" />
           )}
         </button>
       ))}
@@ -128,7 +130,7 @@ export function StudioPanel({
   const s = useSiteStudio(admin);
   const [tab, setTab] = useState<"media" | "ai" | "agent">("media");
   const [q, setQ] = useState("");
-  const [folder, setFolder] = useState("");
+  const [folder, setFolder] = useState("home");
   const [picked, setPicked] = useState("");
   const [rewrite, setRewrite] = useState("");
   const [agent, setAgent] = useState<PageAgent>(() => emptyPageAgent(currentPath()));
@@ -157,9 +159,10 @@ export function StudioPanel({
     setPicked(src);
     onPickMedia?.(src);
     if (slot) {
-      const res = await s.run("describe", { src, slot });
+      const res = await s.run("set", { src, slot });
       if (res.ok && "layout" in res && res.layout) onLayout?.(res.layout);
     }
+    void s.run("describe", { src });
   }
 
   return (
