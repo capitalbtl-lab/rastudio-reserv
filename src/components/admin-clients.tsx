@@ -1294,25 +1294,26 @@ export function AdminClients({
             <button
               type="button"
               className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-[0.8rem] font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
-              title="Подтянуть свежие данные из Alfa"
+              title="Загрузить из Alfa текущих учеников (is_study=1). На диск сайта, в Alfa не пишет."
               disabled={busy || pull.open}
               onClick={() => void pullKind("clients")}
             >
               <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} aria-hidden />
-              Обновить
+              Загрузить «Клиентов»
             </button>
             <button
               type="button"
               className="inline-flex h-10 items-center rounded-full px-3 text-[0.8rem] font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
-              title="Подтянуть воронку лидов из Alfa"
+              title="Загрузить из Alfa лидов и живую доску воронки. На диск сайта, в Alfa не пишет."
               disabled={busy || pull.open}
               onClick={() => void pullKind("clientsLeads")}
             >
-              Воронка из Alfa
+              Загрузить «Лидов»
             </button>
             <button
               type="button"
               className="inline-flex h-10 items-center rounded-full px-3 text-[0.8rem] font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
+              title={counts.архив ? `На сайте уже ${counts.архив}. Открыть архив.` : "Загрузить из Alfa архив (is_study=2). Только на диск сайта."}
               disabled={busy || pull.open}
               onClick={() => {
                 if (!counts.архив) void pullKind("clientsArchive");
@@ -1323,7 +1324,7 @@ export function AdminClients({
                 }
               }}
             >
-              {counts.архив ? `Архив ${counts.архив}` : "Загрузить архив"}
+              Загрузить «Архив»{counts.архив ? ` ${counts.архив}` : ""}
             </button>
           </div>
         </div>
@@ -1455,10 +1456,10 @@ export function AdminClients({
           {synced ? <span className="hidden text-[0.68rem] text-muted xl:inline">на сайте · {agoRu(synced)}</span> : null}
         </div>
         {status === "архив" && !counts.архив ? (
-          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Архив на сайте пуст. Нажмите «Загрузить архив».</p>
+          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Архив на сайте пуст. Нажмите «Загрузить „Архив“».</p>
         ) : null}
         {status === "лид" && !counts.лид ? (
-          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Лидов на сайте нет. Нажмите «Воронка из Alfa».</p>
+          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Лидов на сайте нет. Нажмите «Загрузить „Лидов“».</p>
         ) : null}
       </div>
 
@@ -1680,7 +1681,7 @@ export function AdminClients({
           ) : null}
           {view === "дети" && !busy && !shown.length ? (
             <p className="rounded-[1.2rem] bg-white px-4 py-10 text-center text-sm text-muted ring-1 ring-black/6">
-              {status === "архив" ? "В этой выборке архива нет." : status === "лид" ? "В этой выборке лидов нет." : "В этой выборке никого нет. Смените фильтр или нажмите «Обновить»."}
+              {status === "архив" ? "В этой выборке архива нет." : status === "лид" ? "В этой выборке лидов нет." : "В этой выборке никого нет. Смените фильтр или нажмите «Загрузить „Клиентов“»."}
             </p>
           ) : null}
         </div>

@@ -871,7 +871,7 @@ export function AdminCrmSettings() {
           </div>
           <div className="rounded-xl bg-surface-2 p-3">
             <dt className="font-semibold">Архив</dt>
-            <dd className="mt-1 text-muted">is_study = 2 или removed. С воронки снимается, кнопка «Загрузить архив» на вкладке Клиенты.</dd>
+            <dd className="mt-1 text-muted">is_study = 2 или removed. С воронки снимается, кнопка «Загрузить „Архив“» на вкладке Клиенты.</dd>
           </div>
           <div className="rounded-xl bg-surface-2 p-3">
             <dt className="font-semibold">Ключ API</dt>
