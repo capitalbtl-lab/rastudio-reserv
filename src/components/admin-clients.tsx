@@ -1308,7 +1308,18 @@ export function AdminClients({
             <p className="px-1 py-1 text-[0.72rem] text-muted">{tariffProgress.extra || "Обновляю абонементы…"}</p>
           ) : null}
 
-          <div className="ml-auto flex flex-wrap items-center gap-1">
+          <button
+            type="button"
+            className="ml-auto grid size-10 shrink-0 place-items-center rounded-full text-fg hover:bg-surface-2"
+            title="Перезагрузить кабинет, как F5"
+            aria-label="Перезагрузить кабинет"
+            data-op="reload-admin"
+            onClick={() => window.location.reload()}
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+        <div className="mt-1 flex flex-wrap items-center justify-end gap-1">
             <button
               type="button"
               className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-[0.8rem] font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
