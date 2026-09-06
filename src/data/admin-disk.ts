@@ -24,7 +24,9 @@ export const adminDisk = createServerFn({ method: "POST" })
       return handleAdminDisk(data);
     } catch (e) {
       const raw = e instanceof Error ? e.message : "";
-      const error = /502|504|ENOMEM|heap|out of memory/i.test(raw)
+      const error = /Cannot find module|ENOENT|_ssr/i.test(raw)
+        ? "Кабинет пересобирается. Обновите страницу через минуту — абонементы на сайте на месте."
+        : /502|504|ENOMEM|heap|out of memory/i.test(raw)
         ? "Кабинет перезапускается. Данные на сайте не пропали — повторите импорт через минуту."
         : raw || "Не удалось прочитать файл на сайте.";
       return { ok: false as const, error };

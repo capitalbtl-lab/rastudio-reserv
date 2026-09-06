@@ -7,6 +7,8 @@ import { loadSiteTree } from "./site-tree";
 import { guessTariffLinks, readTariffMap, saveTariffMap } from "./tariff-map";
 import { subjectsWithHref, courseSubjectIndex } from "./crm-tariffs";
 
+/** Каталог абонементов читаем вместе с деревом сайта, без отдельного SSR-чанка. */
+
 type Job = {
   running: boolean;
   kind: PullKind | "";
