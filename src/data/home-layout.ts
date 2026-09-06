@@ -1,24 +1,23 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { defaultHomeOrder, normalizeHomeOrder, type HomeBlockId } from "./home-layout-core";
+import { emptyHomeLayout, normalizeHomeLayout, type HomeLayoutDoc } from "./home-layout-core";
 
 function fileOf() {
   return join(process.cwd(), "storage", "home-layout.json");
 }
 
-export function loadHomeLayout(): HomeBlockId[] {
+export function loadHomeLayout(): HomeLayoutDoc {
   try {
-    if (!existsSync(fileOf())) return defaultHomeOrder();
-    const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as { order?: unknown };
-    return normalizeHomeOrder(raw?.order);
+    if (!existsSync(fileOf())) return emptyHomeLayout();
+    return normalizeHomeLayout(JSON.parse(readFileSync(fileOf(), "utf8")));
   } catch {
-    return defaultHomeOrder();
+    return emptyHomeLayout();
   }
 }
 
-export function saveHomeLayout(order: unknown): HomeBlockId[] {
-  const next = normalizeHomeOrder(order);
+export function saveHomeLayout(raw: unknown): HomeLayoutDoc {
+  const next = normalizeHomeLayout(raw);
   mkdirSync(dirname(fileOf()), { recursive: true });
-  writeFileSync(fileOf(), JSON.stringify({ order: next }, null, 2), "utf8");
+  writeFileSync(fileOf(), JSON.stringify(next, null, 2), "utf8");
   return next;
 }
