@@ -1428,74 +1428,59 @@ export function AgentChat() {
               {voiceOn ? <Mic className="size-4" /> : <Volume2 className="size-4" />}
               {voiceOn ? (listening ? "Слушаю… нажмите, чтобы выключить" : speaking ? "Говорю… нажмите, чтобы выключить" : "Выключить голосовой режим") : "Включить голосовой режим"}
             </button>
-            {voiceOn && uiOn("allowBarge") ? (
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !bargeOn;
-                  setBargeOn(next);
-                  bargeRef.current = next;
-                  try {
-                    localStorage.setItem("ra_barge", next ? "1" : "0");
-                  } catch {
-                    /* */
-                  }
-                  if (voiceOnRef.current && !busyRef.current) {
-                    stopListen(true);
-                    startListen();
-                  }
-                }}
-                className={cn(
-                  "flex h-8 w-full items-center justify-center rounded-full text-[0.72rem] font-semibold",
-                  bargeOn ? "bg-primary/10 text-primary" : "bg-[#eef1f7] text-muted",
-                )}
-              >
-                {bargeOn ? "Перебивать можно — говорите поверх" : "Включить перебивание"}
-              </button>
-            ) : null}
-            {voiceOn ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void replayLast()}
-                className="flex h-8 w-full items-center justify-center gap-1.5 rounded-full bg-[#eef1f7] text-[0.72rem] font-semibold text-fg disabled:opacity-40"
-              >
-                <Repeat2 className="size-3.5" />
-                Повторить ответ
-              </button>
-            ) : null}
             </div>
             ) : null}
-            {voiceOn && uiOn("allowVoice") ? null : (
-            <div className="flex items-center gap-2 rounded-full bg-[#eef1f7] p-1 ring-1 ring-black/8 focus-within:ring-2 focus-within:ring-primary/40">
-              <input
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="Напишите или нажмите кнопку"
-                className="h-10 flex-1 bg-transparent px-3.5 text-base outline-none md:text-sm"
-                maxLength={1000}
-              />
-              <button
-                type="button"
+            <div className="flex items-center gap-1.5">
+              {voiceOn ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void replayLast()}
+                  className="flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#eef1f7] px-3 text-[0.72rem] font-semibold text-fg disabled:opacity-40"
+                  title="Повторить ответ"
+                >
+                  <Repeat2 className="size-3.5" />
+                  <span className="hidden min-[380px]:inline">Повторить</span>
+                </button>
+              ) : null}
+              <div
                 className={cn(
-                  "grid size-10 place-items-center rounded-full",
-                  listening ? "bg-primary text-primary-foreground" : "text-muted hover:bg-black/5",
+                  "flex min-w-0 flex-1 items-center gap-1 rounded-full bg-[#eef1f7] p-1 ring-1 ring-black/8 focus-within:ring-2 focus-within:ring-primary/40",
+                  needText && "agent-input-wink",
                 )}
-                onClick={() => (listening ? stopListen() : startListen())}
-                aria-label="Голосовой ввод"
               >
-                <Mic className="size-4" />
-              </button>
-              <button
-                type="submit"
-                disabled={busy || !text.trim()}
-                className="grid size-10 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
-                aria-label="Отправить"
-              >
-                <Send className="size-4" />
-              </button>
+                <input
+                  ref={inputRef}
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder={typeHint}
+                  className="h-10 min-w-0 flex-1 bg-transparent px-3.5 text-base outline-none md:text-sm"
+                  maxLength={1000}
+                  aria-label={typeHint}
+                />
+                {voiceOn ? null : (
+                  <button
+                    type="button"
+                    className={cn(
+                      "grid size-10 shrink-0 place-items-center rounded-full",
+                      listening ? "bg-primary text-primary-foreground" : "text-muted hover:bg-black/5",
+                    )}
+                    onClick={() => (listening ? stopListen() : startListen())}
+                    aria-label="Голосовой ввод"
+                  >
+                    <Mic className="size-4" />
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={busy || !text.trim()}
+                  className="grid size-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
+                  aria-label="Отправить"
+                >
+                  <Send className="size-4" />
+                </button>
+              </div>
             </div>
-            )}
             <div className="flex items-center justify-between gap-2 px-3 pt-1.5">
               <p className="min-w-0 truncate text-[0.65rem] text-muted">
                 {voiceOn ? (speaking ? "Сейчас говорят" : "Голосовой режим включён") : `Пробное · ${SITE.phone}`}

@@ -273,6 +273,22 @@
   }
 }
 
+@keyframes agent-input-wink {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
+    background-color: #eef1f7;
+  }
+  45% {
+    box-shadow: 0 0 0 3px rgba(32, 94, 220, 0.5);
+    background-color: #fff;
+  }
+}
+
+.agent-input-wink {
+  animation: agent-input-wink 1.15s ease-in-out 4;
+}
+
 .robot-face {
   transform-origin: 50% 80%;
   will-change: transform;
