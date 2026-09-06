@@ -114,20 +114,24 @@ describe("вход по телефону с диска", () => {
     assert.equal(takeWeekday("суббота"), "суббота");
     assert.equal(takeWeekday("в субботу"), "суббота");
     const msgs = [
+      { role: "user", content: "Мы уже ходим к вам" },
       { role: "assistant", content: "Ольга: Нашла на сайте: Александра. Это ваш ребёнок?" },
       { role: "user", content: "Да, это Александра" },
       { role: "user", content: "Нужна отработка пропуска" },
-      { role: "user", content: "суббота" },
     ];
     const facts = factsFromMessages(msgs);
     assert.equal(facts.identified, true);
     assert.equal(facts.intent, "отработка");
-    assert.equal(facts.day, "суббота");
-    assert.match(nextStepOf(facts), /суббота/);
-    assert.doesNotMatch(nextStepOf(facts), /подтвердить имя/);
-    const { chipsForReply } = require("./agent-chips.ts") as typeof import("./agent-chips.ts");
+    assert.equal(facts.day || "", "");
+    assert.match(nextStepOf(facts), /день/);
     const chips = chipsForReply("На какой день поставить отработку", msgs);
     assert.ok(chips.chips.some((c) => c.label === "Сб"));
+    const sat = factsFromMessages([...msgs, { role: "user", content: "суббота" }]);
+    assert.equal(takeWeekday("суббота"), "суббота");
+    assert.equal(takeWeekday("в субботу"), "суббота");
+    assert.equal(sat.day, "суббота");
+    assert.match(nextStepOf(sat), /суббота/);
+    assert.doesNotMatch(nextStepOf(sat), /подтвердить имя/);
   });
 
   it("двойное имя в реплике не рисует два пузыря", async () => {
