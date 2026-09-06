@@ -1,4 +1,4 @@
-import { factsFromMessages, type SessionFacts } from "./agent-facts";
+import { factsFromMessages, type SessionFacts } from "./agent-facts.ts";
 
 export type NoteField = "age" | "city" | "branch" | "school" | "course" | "service";
 

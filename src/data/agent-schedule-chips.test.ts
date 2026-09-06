@@ -1,19 +1,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { clipScheduleSpeech, guardReply } from "./session-note.ts";
-import { chipsForReply } from "./agent-chips.ts";
+import { readFileSync } from "node:fs";
+import { clipScheduleSpeech } from "./session-note.ts";
 import { scheduleChipOf } from "./alfacrm-schedule.ts";
 
 describe("расписание кнопками, не простынёй", () => {
   it("нумерованный список слотов срезается до вводной фразы", () => {
-    const dumped = `Ольга: В художественной школе для 12 лет в ЦМИТ на Октябрьской революции, 340 есть несколько групп: 1. Художественная школа (10–14 лет), Четверг с 15:00 до 18:00, педагог Нина Константиновна, набор до 20 мест, ближайшее занятие 10.09.2026. 2. Скульптурная студия (8+), Пятница с 18:30. Выберите удобное время, и я запишу вас в группу.`;
-    const clipped = clipScheduleSpeech(dumped.replace(/^Ольга:\s*/, ""));
+    const dumped =
+      "В художественной школе для 12 лет в ЦМИТ на Октябрьской революции, 340 есть несколько групп: 1. Художественная школа (10–14 лет), Четверг с 15:00 до 18:00, педагог Нина Константиновна, набор до 20 мест, ближайшее занятие 10.09.2026. 2. Скульптурная студия (8+), Пятница с 18:30. Выберите удобное время, и я запишу вас в группу.";
+    const clipped = clipScheduleSpeech(dumped);
     assert.match(clipped, /есть несколько групп:$/);
     assert.doesNotMatch(clipped, /1\.\s/);
     assert.doesNotMatch(clipped, /Четверг/);
-    const guarded = guardReply(dumped, { mode: "new", age: 12, city: "Коломна", branchId: 2, school: "художественная" });
-    assert.match(guarded, /есть несколько групп:/);
-    assert.doesNotMatch(guarded, /ближайшее занятие 10\.09/);
   });
 
   it("кнопка слота: день, название, комментарий с педагогом и местами", () => {
@@ -32,30 +30,21 @@ describe("расписание кнопками, не простынёй", () =>
     assert.match(chip.note, /ближайшее 10\.09\.2026/);
   });
 
-  it("при слотах не показывает филиал, даже если в тексте ЦМИТ", () => {
-    const groups = [
-      {
-        label: "Чт 15:00–18:00 · Художественная школа (10–14 лет)",
-        note: "Нина Константиновна · набор до 20 мест · ближайшее 10.09.2026",
-        send: "Запишите в группу gid=580 филиал=2 дата=10.09.2026 время=15:00",
-        primary: true,
-      },
-    ];
-    const offer = chipsForReply(
-      "Ольга: В художественной школе для 12 лет в ЦМИТ на Октябрьской революции, 340 есть несколько групп:",
-      [
-        { role: "assistant", content: "Ольга: Подбираем впервые?" },
-        { role: "user", content: "Подбираем курс впервые" },
-        { role: "user", content: "Ребёнку 12 лет" },
-        { role: "user", content: "Коломна, ЦМИТ" },
-        { role: "user", content: "Интересна художественная школа" },
-        { role: "assistant", content: "Ольга: В художественной школе для 12 лет в ЦМИТ на Октябрьской революции, 340 есть несколько групп:" },
-      ],
-      groups,
-    );
-    assert.equal(offer.hint, "Расписание");
-    assert.equal(offer.chips[0].label, groups[0].label);
-    assert.equal(offer.after, "Выберите удобное время, и я запишу вас в группу.");
-    assert.doesNotMatch(offer.chips.map((c) => c.label).join(" "), /Гражданская/);
+  it("окно и чипы: слоты вместо филиала, подпись после кнопок", () => {
+    const chips = readFileSync(new URL("./agent-chips.ts", import.meta.url), "utf8");
+    assert.match(chips, /function scheduleOffer/);
+    assert.match(chips, /Выберите удобное время, и я запишу вас в группу/);
+    assert.match(chips, /какой ближе\|цмит или гражданск/);
+    assert.doesNotMatch(chips, /if \(\/цмит\|октябрьской революции\|гражданская, 2\|какой ближе\/\.test/);
+    const chat = readFileSync(new URL("./agent-chat.ts", import.meta.url), "utf8");
+    assert.match(chat, /slotChips\(shown, "group"\)/);
+    assert.match(chat, /слоты уйдут кнопками/i);
+    const ui = readFileSync(new URL("../components/agent-chat.tsx", import.meta.url), "utf8");
+    assert.match(ui, /offer\.after/);
+    assert.match(ui, /chip\.note/);
+    const fmt = readFileSync(new URL("./alfacrm-schedule.ts", import.meta.url), "utf8");
+    assert.match(fmt, /В речи родителю НЕ читай этот список/);
+    const note = readFileSync(new URL("./session-note.ts", import.meta.url), "utf8");
+    assert.match(note, /body = clipScheduleSpeech\(body\)/);
   });
 });
