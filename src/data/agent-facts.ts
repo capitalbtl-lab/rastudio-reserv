@@ -1,4 +1,4 @@
-import { CLIENT_SERVICE_ASK } from "./agent-identify";
+import { CLIENT_SERVICE_ASK } from "./agent-identify.ts";
 
 export type VisitorMode = "fork" | "new" | "client";
 
