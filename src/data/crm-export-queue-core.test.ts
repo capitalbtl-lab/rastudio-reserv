@@ -308,7 +308,9 @@ describe("очередь выгрузки в Alfa", () => {
     assert.equal(canRunExportJob(jobs[0]), true);
     assert.equal(canRunExportJob({ op: "customer.update", entityId: -40 }), false);
     assert.equal(canRunExportJob({ op: "customer.update", entityId: 7759 }), true);
-    assert.equal(canRunExportJob({ op: "lesson.create", entityId: -12 }), true);
+    assert.equal(canRunExportJob({ op: "lesson.create", entityId: -12 }), false);
+    assert.equal(canRunExportJob({ op: "lesson.create", entityId: -12, body: { customer_ids: [-12] } }), false);
+    assert.equal(canRunExportJob({ op: "lesson.create", entityId: 670, body: { customer_ids: [670], localId: -5 } }), true);
     assert.equal(canRunExportJob({ op: "lesson.create", entityId: 670 }), true);
   });
 });

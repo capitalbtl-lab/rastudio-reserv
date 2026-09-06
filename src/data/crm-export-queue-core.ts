@@ -92,7 +92,16 @@ export function sameExportJob(
 
 const CREATE_OPS: CrmExportOp[] = ["customer.create", "group.create", "lead-status.create", "subject.create", "lesson.create", "pay.create"];
 
-export function canRunExportJob(job: { op: CrmExportOp; entityId: number }) {
+export function canRunExportJob(job: { op: CrmExportOp; entityId: number; body?: Record<string, unknown> }) {
+  if (job.op === "lesson.create") {
+    const raw = Array.isArray(job.body?.customer_ids) ? job.body.customer_ids : [job.entityId];
+    const ids = (raw as unknown[]).map(Number).filter((n) => n);
+    return ids.length > 0 && ids.every((id) => id > 0);
+  }
+  if (job.op === "pay.create") {
+    const cid = Number(job.body?.customer_id || job.entityId) || 0;
+    return cid > 0;
+  }
   if (!isLocalId(job.entityId)) return true;
   return CREATE_OPS.includes(job.op);
 }
@@ -103,7 +112,7 @@ function foldLocalIntoCreate(
   at: string,
 ): CrmExportJob[] | null {
   if (!isLocalId(incoming.entityId)) return null;
-  if (incoming.op !== "customer.update" && incoming.op !== "cgi.apply" && incoming.op !== "lesson.create") return null;
+  if (incoming.op !== "customer.update" && incoming.op !== "cgi.apply") return null;
   const create = jobs.find(
     (j) => j.op === "customer.create" && (j.entityId === incoming.entityId || Number(j.body.localId) === incoming.entityId),
   );
@@ -114,7 +123,6 @@ function foldLocalIntoCreate(
     const gid = Number(incoming.body.groupId) || 0;
     if (gid) body.group_ids = incoming.body.drop ? [] : [gid];
   }
-  if (incoming.op === "lesson.create") body.lesson = { ...(typeof body.lesson === "object" && body.lesson ? body.lesson : {}), ...incoming.body };
   return jobs.map((j) =>
     j.id === create.id ? { ...j, body, at, tries: 0, actor: incoming.actor || j.actor } : j,
   );
@@ -226,7 +234,7 @@ const REMAP_SCALARS = [
   "statusId",
 ] as const;
 
-const REMAP_ARRAYS = ["subject_ids", "group_ids", "branch_ids"] as const;
+const REMAP_ARRAYS = ["subject_ids", "group_ids", "branch_ids", "customer_ids"] as const;
 
 /** Alfa вернула номер — перепись очереди. Свой id (from < 0 или local subject) → crmId. */
 export function remapExportJobs(jobs: CrmExportJob[], from: number, to: number, skipId?: string): CrmExportJob[] {
