@@ -88,6 +88,7 @@ export function bargeInterimReady(said: string, isFinal: boolean) {
     .split(/\s+/)
     .filter((w) => w.length > 1);
   if (isFinal) return words.length >= 1;
+  if (words.some((w) => w.length >= 4)) return true;
   return words.length >= 2;
 }
 

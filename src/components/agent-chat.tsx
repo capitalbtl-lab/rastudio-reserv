@@ -723,8 +723,10 @@ export function AgentChat() {
         }
         const next = vadTick(vadStateRef.current, rms, true);
         vadStateRef.current = next.state;
-        if (next.fire) {
+        if (next.fire && speakingRef.current) {
           vadStateRef.current = emptyVad();
+          const el = audioElRef.current;
+          if (el && !el.paused) el.volume = Math.min(el.volume, 0.28);
         }
         vadRafRef.current = requestAnimationFrame(tick);
       };
@@ -746,7 +748,11 @@ export function AgentChat() {
     ignoreUntilRef.current = Date.now() + ignoreWhileSpeakStartMs(bargeRef.current);
     if (voiceOnRef.current) {
       startListen();
-      if (bargeRef.current) startVad();
+      if (bargeRef.current) {
+        void ensureMic().then(() => {
+          if (speakingRef.current && bargeRef.current && voiceOnRef.current) startVad();
+        });
+      }
     }
     try {
       const mode = adminLeft() > 0 ? "olga" : partnerRef.current;
@@ -857,14 +863,10 @@ export function AgentChat() {
       const isFinal = !("isFinal" in last) || last.isFinal !== false;
       if (speakingRef.current) {
         if (!bargeRef.current) return;
-        if (isSocialHello(said) && isFinal) {
-          cancelSpeech();
-          void send(said);
-          return;
-        }
         if (!bargeInterimReady(said, isFinal)) return;
-        if (!isFinal) return;
         cancelSpeech();
+        void send(said);
+        return;
       }
       if (!isFinal) return;
       void send(said);
@@ -874,9 +876,10 @@ export function AgentChat() {
       recRef.current = null;
       setListening(false);
       if (listenWantedRef.current && voiceOnRef.current && !busyRef.current) {
+        const wait = speakingRef.current && bargeRef.current ? 30 : 80;
         window.setTimeout(() => {
           if (listenWantedRef.current && voiceOnRef.current && !busyRef.current) startListen();
-        }, 80);
+        }, wait);
       }
     };
     rec.onerror = (ev?: { error?: string }) => {
@@ -1196,10 +1199,19 @@ export function AgentChat() {
                     } catch {
                       /* */
                     }
-                    if (voiceOnRef.current && !busyRef.current) {
-                      stopListen(true);
-                      startListen();
+                    if (!voiceOnRef.current) return;
+                    if (next) {
+                      void ensureMic().then(() => {
+                        if (!voiceOnRef.current || !bargeRef.current) return;
+                        if (speakingRef.current) startVad();
+                        startListen();
+                      });
+                      return;
                     }
+                    vadStopRef.current?.();
+                    vadStopRef.current = null;
+                    stopListen(true);
+                    startListen();
                   }}
                 >
                   <AudioLines className="size-4" />
