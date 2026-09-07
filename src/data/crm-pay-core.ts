@@ -90,6 +90,13 @@ export function displayedBalance(rows: PayRow[], fallback?: number | string, com
   return balanceOf(live);
 }
 
+/** Снимок Alfa: rest живых ctt (раздельный счёт абонемента) или customer.balance (базовый). */
+export function snapshotBalance(extra?: number | string | null, cttRest?: number) {
+  const a = extra == null || extra === "" ? 0 : Number(extra) || 0;
+  const b = Number(cttRest) || 0;
+  return b || a;
+}
+
 export function isOpeningRow(row: Pick<PayRow, "note">) {
   return String(row.note || "") === OPENING_NOTE;
 }

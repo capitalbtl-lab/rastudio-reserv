@@ -8,7 +8,7 @@ import { listTeachers, teachersAtBranch } from "./crm-teachers";
 import { loadSubjects } from "./crm-subjects";
 import { isAdminGroup } from "./group-status";
 import { clientLessonFromJournal } from "./crm-journal-core";
-import { customerBalance, cardPays } from "./crm-pay";
+import { customerBalance, cardPays, snapshotBalance } from "./crm-pay";
 import { asCustomerComm, commsOf } from "./crm-comms";
 import { loadTariffs } from "./crm-tariffs";
 import { isPaidCountLabel, parseDossierCtt } from "./pupil-tariffs";
@@ -190,7 +190,13 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
     tariffs,
     comms: commsOf(customerId).map(asCustomerComm),
     pays: cardPays(customerId),
-    balance: customerBalance(customerId, d.extras?.balance),
+    balance: customerBalance(
+      customerId,
+      snapshotBalance(
+        d.extras?.balance,
+        tariffs.filter((t) => !t.archived).reduce((n, t) => n + (Number(t.rest) || 0), 0),
+      ),
+    ),
     catalog: {
       subjects: cat.subjects,
       teachers: teachersAtBranch(useBranch, listTeachers(slots), slots).map((x) => ({ id: x.id, name: x.name })),

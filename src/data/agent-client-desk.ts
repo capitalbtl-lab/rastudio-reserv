@@ -3,10 +3,11 @@
 import { findDossier, upsertDossier, stampDossierLiveTariff } from "./dossiers.ts";
 import { loadGroupCard } from "./group-cards.ts";
 import { journalForCustomer, lessonStatusLabel } from "./crm-journal-core.ts";
-import { customerBalance } from "./crm-pay.ts";
+import { customerBalance, snapshotBalance } from "./crm-pay.ts";
 import { appendComm } from "./crm-comms.ts";
 import { listAdminSlots, scheduleChipOf, slotChips } from "./alfacrm-schedule.ts";
 import { loadTariffs, matchTariffs } from "./crm-tariffs.ts";
+import { parseDossierCtt } from "./pupil-tariffs.ts";
 import { enqueueExport } from "./crm-export-queue.ts";
 import { digestPrompt, pauseUntilIso, STUDIO_RULES_SHORT, type ClientDigest } from "./agent-client-desk-core.ts";
 import { WEEKDAY_CHIPS, type SessionFacts } from "./agent-facts.ts";
@@ -550,7 +551,13 @@ export function clientDigest(customerId: number): ClientDigest | null {
     groups,
     nextLesson,
     lastLessons: last.slice(0, 6),
-    balance: customerBalance(id, d.extras?.balance),
+    balance: customerBalance(
+      id,
+      snapshotBalance(
+        d.extras?.balance,
+        parseDossierCtt(d.extras).filter((t) => !t.archived).reduce((n, t) => n + (Number(t.rest) || 0), 0),
+      ),
+    ),
     tariff: d.extras?.live_tariff === "1" ? d.tariff || "живой" : d.extras?.live_tariff === "0" ? "нет" : d.tariff || "",
     pauseUntil: String(d.extras?.pause_until || ""),
   };

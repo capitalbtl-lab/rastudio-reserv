@@ -17,6 +17,7 @@ import {
   ruDateIso,
   alfaPayIndexDate,
   kindFromAlfaPay,
+  snapshotBalance,
   OPENING_NOTE,
   PAY_POLL_MAX_PER_HOUR,
   type PayKind,
@@ -27,7 +28,7 @@ import { pendingExportIds } from "./crm-export-queue";
 import { logAdmin } from "./admin-settings";
 
 export type { PayKind, PayRow };
-export { displayedBalance, balanceOf, payKindOf, payEffect, OPENING_NOTE };
+export { displayedBalance, balanceOf, payKindOf, payEffect, snapshotBalance, OPENING_NOTE };
 
 type PayPollState = { hits: string[]; branches: Record<string, PayPollStamp>; lastNote?: string };
 type Store = { at: string; items: PayRow[]; poll?: PayPollState; complete?: number[] };
