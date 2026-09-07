@@ -451,7 +451,6 @@ function LessonEdit({
         topic: form.topic,
         homework: form.homework,
         note: form.note,
-        customerIds: form.customerIds,
         customers: form.customers,
       } as never,
     });
@@ -479,17 +478,31 @@ function LessonEdit({
       groupIds: form.groupIds,
       topic: form.topic,
       note: form.note,
+      homework: form.homework,
       customerIds: form.customerIds,
+      pupils: form.customers.map((c) => ({
+        customerId: c.id,
+        name: c.name,
+        attend: c.attend !== false,
+        amount: Number(c.amount) || undefined,
+        cttId: c.cttId,
+        reason: c.reason,
+        grade: c.grade,
+        homeworkGrade: c.homeworkGrade,
+        note: c.note,
+      })),
+      attend: form.customers.filter((c) => c.attend !== false).length,
+      total: form.customers.length,
       lessonId: Number((res as { lessonId?: number }).lessonId || form.id || 0) || form.id,
     });
     onClose();
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[400] flex items-start justify-center overflow-y-auto bg-black/40 p-3 pt-[6vh]" onMouseDown={onClose}>
-      <div className={cn("w-full max-w-lg p-5", RA_POP)} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[400] flex items-start justify-center overflow-y-auto bg-black/40 p-3 pt-[4vh]" onMouseDown={onClose} data-op="lesson-edit">
+      <div className={cn("w-full max-w-4xl p-5", RA_POP)} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
-          <h3 className="font-display text-lg font-semibold text-fg">Групповое — занятие</h3>
+          <h3 className="font-display text-lg font-semibold text-fg">Групповое — {form.status === 3 ? "проведён" : form.status === 2 ? "отменён" : "занятие"}</h3>
           <button type="button" className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white" onClick={onClose}>
             Закрыть
           </button>
