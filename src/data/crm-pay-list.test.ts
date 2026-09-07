@@ -80,8 +80,9 @@ describe("касса список", () => {
     assert.match(pay, /crmUnwrapIndex/);
     assert.match(pay, /payPollStampOrEmpty/);
     assert.match(pay, /payPollFirstFill/);
-    assert.match(pay, /\{ page: 0, pageSize: 50 \}/);
-    assert.equal(/date_from/.test(pay), false);
+    assert.match(pay, /\{ page: 0 \}/);
+    assert.match(pay, /customer_id: customerId \}/);
+    assert.equal(/pay\/index.*, pageSize/.test(pay), false);
     assert.match(pay, /export function filterCashPays/);
     assert.match(pay, /branchId: Number\(x.branchId\) \|\| 0/);
     const save = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");

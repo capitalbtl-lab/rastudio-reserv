@@ -344,7 +344,7 @@ export async function inboundCustomerPays(
   customerId: number,
 ) {
   if (pendingExportIds(["pay.create"]).has(customerId)) return paysOf(customerId);
-  const json = (await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50, customer_id: customerId }, token).catch(
+  const json = (await request(`/v2api/${branchId}/pay/index`, { page: 0, customer_id: customerId }, token).catch(
     () => ({ items: [] }),
   )) as { items?: Record<string, unknown>[] };
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
@@ -400,11 +400,11 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   for (const branchId of branches) {
     const stamp = payPollStampOrEmpty(poll.branches[String(branchId)]);
     try {
-      let json: unknown = await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50 }, t);
+      let json: unknown = await request(`/v2api/${branchId}/pay/index`, { page: 0 }, t);
       pages += 1;
       let pack = crmUnwrapIndex(json);
       if (!pack.items.length) {
-        json = await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50, pay_account_id: 1 }, t);
+        json = await request(`/v2api/${branchId}/pay/index`, { page: 0, pay_account_id: 1 }, t);
         pages += 1;
         pack = crmUnwrapIndex(json);
       }
