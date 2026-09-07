@@ -49,6 +49,19 @@ describe("форма занятия карточки", () => {
     assert.match(strip, /isOneOffLesson/);
     assert.match(strip, /bg-amber-100/);
     assert.match(strip, /all.filter\(isOneOffLesson\)/);
+    assert.match(strip, /data-op="lesson-pupils"/);
+    assert.match(strip, /data-op="lesson-attend"/);
+    assert.match(strip, /Списание/);
+    assert.match(strip, /Кто был\?/);
+    assert.match(strip, /customers: form.customers/);
+    const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
+    assert.match(inbound, /packLessonPupils/);
+    assert.match(inbound, /fanOutLessonWriteoffs/);
+    assert.match(inbound, /ruShift\(-800\)/);
+    const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
+    assert.match(api, /packLessonPupils/);
+    assert.match(api, /fanOutLessonWriteoffs/);
+    assert.match(api, /details/);
   });
 
   it("расписание импортирует reload — иначе вкладка не открывается", () => {

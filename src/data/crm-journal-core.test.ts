@@ -55,5 +55,19 @@ describe("журнал уроков", () => {
     assert.equal(calendarLessonForCard({ group: "Python", groupIds: [80] }, groups), true);
     assert.equal(isCustomerTrialLesson({ type: "Пробное", typeId: 3 }), true);
     assert.equal(calendarLessonForCard({ type: "Пробное", typeId: 3, group: "Пробное" }, groups), true);
+    const stamped = stampJournal(
+      {
+        date: "2026-12-06",
+        from: "09:30",
+        status: 3,
+        pupils: [
+          { customerId: 1, attend: true, amount: 743.75 },
+          { customerId: 2, attend: false, amount: 743.75 },
+        ],
+      },
+    );
+    assert.equal(stamped.attend, 1);
+    assert.equal(stamped.total, 2);
+    assert.deepEqual(stamped.customerIds, [1, 2]);
   });
 });
