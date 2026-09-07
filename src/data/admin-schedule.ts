@@ -769,14 +769,38 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
   const days = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
   const slots = listAdminSlots();
   const regular: NonNullable<CustomerCard["regular"]> = [];
+  try {
+    const { parseDossierRegular, pullCustomerRegular } = await import("./crm-regular-disk");
+    let own = parseDossierRegular(dossier?.extras);
+    if (!own.length) own = await pullCustomerRegular(useBranch, customerId).catch(() => []);
+    for (const r of own) {
+      regular.push({
+        groupId: r.groupId,
+        groupName: r.groupName,
+        day: r.dayLabel,
+        from: r.from,
+        to: r.to,
+        teacher: r.teacher,
+        subject: r.subject,
+        branch: CRM_BRANCH[r.branchId || useBranch]?.short || "",
+        lessonId: r.id,
+        subjectId: r.subjectId,
+        teacherId: r.teacherId,
+        roomId: r.roomId,
+      });
+    }
+  } catch {
+    /* диск */
+  }
   for (const g of packedGroups) {
+    if (regular.some((r) => r.groupId === g.id)) continue;
     const slot = slots.find((s) => s.groupId === g.id && s.branchId === g.branchId) || slots.find((s) => s.groupId === g.id);
     if (!slot) continue;
     for (const b of beatsOf(slot)) {
       regular.push({
         groupId: g.id,
         groupName: g.name || slot.groupName,
-        day: slot.dayLabel || days[Number(b.day)] || "",
+        day: days[Number(b.day)] || slot.dayLabel || "",
         from: b.timeFrom,
         to: b.timeTo,
         teacher: slot.teacher || "",
@@ -1527,11 +1551,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
         if (d) {
           const { cardFromDossier } = await import("./customer-card-disk");
           const { pullCustomerTariffs } = await import("./pupil-tariffs");
+          const { pullCustomerRegular } = await import("./crm-regular-disk");
           let card = cardFromDossier(d, branch);
           const linked = (await import("./crm-alfa-link")).alfaLinkedNow();
           const allow = (await import("./crm-alfa-link")).wantAlfaPullChannel("clients");
           if (linked && allow) {
-            await pullCustomerTariffs(branch, customerId).catch(() => []);
+            await Promise.all([
+              pullCustomerTariffs(branch, customerId).catch(() => []),
+              pullCustomerRegular(branch, customerId).catch(() => []),
+            ]);
             const fresh = findDossier({ crmId: customerId });
             if (fresh) card = cardFromDossier(fresh, branch);
           }
