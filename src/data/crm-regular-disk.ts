@@ -23,21 +23,19 @@ export async function pullCustomerRegular(branchId: number, customerId: number) 
     collected.push(...(json.items || []).map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
   }
   let picked = pickCustomerRegularItems(collected, cid);
-  if (picked.length < 2) {
-    const d = findDossier({ crmId: cid });
-    const gids = (d?.groupLinks || []).map((g) => Number(g.id) || 0).filter(Boolean).slice(0, 4);
-    for (const gid of gids) {
-      for (const bid of uniqueBranches(branch).slice(0, 2)) {
-        const more = await request<{ items?: Record<string, unknown>[] }>(
-          `/v2api/${bid}/regular-lesson/index`,
-          { page: 0, pageSize: 50, related_id: gid },
-          t,
-        ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-        collected.push(...(more.items || []).map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
-      }
+  const d0 = findDossier({ crmId: cid });
+  const gids = (d0?.groupLinks || []).map((g) => Number(g.id) || 0).filter(Boolean).slice(0, 4);
+  for (const gid of gids) {
+    for (const bid of uniqueBranches(branch).slice(0, 2)) {
+      const more = await request<{ items?: Record<string, unknown>[] }>(
+        `/v2api/${bid}/regular-lesson/index`,
+        { page: 0, pageSize: 50, related_id: gid },
+        t,
+      ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+      collected.push(...(more.items || []).map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
     }
-    picked = pickCustomerRegularItems(collected, cid);
   }
+  picked = pickCustomerRegularItems(collected, cid);
   const teachers = new Map(loadTeachers().map((x) => [x.id, x.name]));
   const subjects = new Map(loadSubjects().map((x) => [x.id, x.name]));
   const d = findDossier({ crmId: cid });

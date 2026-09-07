@@ -166,6 +166,23 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   const catalogGroups = cat.groups.slice().sort((a, b) => Number(b.branchId === useBranch) - Number(a.branchId === useBranch) || a.name.localeCompare(b.name, "ru"));
   const catalogTariffs = loadTariffs().items;
   let tariffs = parseDossierCtt(d.extras);
+  const accountLessons = Number(d.extras?.paid_count || 0) || 0;
+  const accountPaid = Number(d.extras?.paid || 0) || 0;
+  if (!tariffs.some((t) => !t.archived) && (accountLessons || accountPaid)) {
+    tariffs = [
+      {
+        id: -(Number(d.crmId) || customerId),
+        name: "Остаток на счёте",
+        rest: accountPaid,
+        lessons: accountLessons,
+        archived: false,
+        bDate: "",
+        eDate: String(d.extras?.paid_till || ""),
+        price: 0,
+      },
+      ...tariffs,
+    ];
+  }
   if (!tariffs.length && String(d.extras?.live_tariff) === "1") {
     const tariffId = Number(d.extras?.tariff_id || 0);
     const fromCat = catalogTariffs.find((t) => t.id === tariffId);

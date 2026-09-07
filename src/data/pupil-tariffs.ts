@@ -703,6 +703,7 @@ export async function pullCustomerAccount(branchId: number, customerId: number) 
         paid: String(best.paid || ""),
         paid_till: best.paid_till,
         balance: String(best.paid || best.balance || ""),
+        ...(best.paid_count > 0 || best.paid > 0 ? { live_tariff: "1" } : {}),
       },
       source: "alfacrm",
       crmWins: true,

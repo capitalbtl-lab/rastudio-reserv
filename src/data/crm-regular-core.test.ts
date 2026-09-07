@@ -38,4 +38,19 @@ describe("постоянное расписание ученика", () => {
     assert.deepEqual(froms, ["11:10", "15:30", "15:30"]);
     assert.equal(picked.some((x) => String(x.time_from_v) === "18:10"), false);
   });
+
+  it("если customer_id вернул слот без состава — related_id с копиями его вытесняет", () => {
+    const picked = pickCustomerRegularItems(
+      [
+        { id: 9, related_id: 80, day: 5, time_from_v: "18:10", time_to_v: "20:40" },
+        { id: 10, related_id: 80, day: 7, time_from_v: "11:10", time_to_v: "13:40" },
+        { id: 1176, related_id: 80, day: 7, time_from_v: "11:10", time_to_v: "13:40", customer_ids: [670] },
+        { id: 1603, related_id: 80, day: 3, time_from_v: "15:30", time_to_v: "18:00", customer_ids: [670] },
+        { id: 1604, related_id: 80, day: 5, time_from_v: "15:30", time_to_v: "18:00", customer_ids: [670] },
+      ],
+      670,
+    );
+    assert.equal(picked.some((x) => String(x.time_from_v) === "18:10"), false);
+    assert.equal(picked.length, 3);
+  });
 });

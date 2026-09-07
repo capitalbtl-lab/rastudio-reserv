@@ -701,12 +701,14 @@ export function stampDossierCtt(
 ) {
   const live = rows.filter((t) => t.id && !t.archived);
   const first = live[0];
+  const d = findDossier({ crmId: customerId });
+  const accountLive = Number(d?.extras?.paid_count || d?.extras?.paid || 0) > 0;
   upsertDossier({
     crmId: customerId,
     branchId,
-    tariff: first?.name || "",
+    tariff: first?.name || d?.tariff || "",
     extras: {
-      live_tariff: live.length ? "1" : "0",
+      live_tariff: live.length || accountLive ? "1" : "0",
       tariff_id: first?.tariffId ? String(first.tariffId) : "",
       ctt: JSON.stringify(rows.slice(0, 80)),
     },
