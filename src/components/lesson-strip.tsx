@@ -188,11 +188,12 @@ function LessonCard({
     ["Домашнее задание", l.homework || ""],
   ];
   if (done && (l.total || 0) > 0) rows.push(["Присутствие", `${l.attend || 0} из ${l.total}`]);
+  const roster = pupilRows(l);
   const canAct = Boolean(onOpen);
   const btn = "h-8 rounded-lg bg-[#d8dce3] text-[0.75rem] font-semibold text-[#5c636c] disabled:opacity-45";
   return (
     <div
-      className={cn("fixed z-[240] w-[20.5rem] p-3 text-left text-[0.78rem] leading-snug text-fg", RA_POP)}
+      className={cn("fixed z-[240] w-[22rem] p-3 text-left text-[0.78rem] leading-snug text-fg", RA_POP)}
       style={{ top, left }}
       onMouseDown={(e) => e.stopPropagation()}
       onMouseEnter={onEnter}
@@ -219,6 +220,29 @@ function LessonCard({
             </div>
           ))}
       </dl>
+      {roster.length ? (
+        <ol className="mt-2 max-h-56 space-y-0.5 overflow-y-auto border-t border-black/8 pt-2 text-[0.75rem]" data-op="lesson-pupils">
+          {roster.map((p, i) => {
+            const sum = ruMoney(p.amount);
+            const line = (
+              <span className="flex min-w-0 items-center justify-between gap-2">
+                <span className={cn("min-w-0 truncate", p.attend ? "text-fg" : "text-muted")}>{p.name || `клиент ${p.customerId}`}</span>
+                {sum ? <span className="shrink-0 tabular-nums text-fg/80">{sum}</span> : null}
+              </span>
+            );
+            return (
+              <li key={p.customerId || i} className="flex items-center gap-1.5">
+                <span className="w-4 shrink-0 text-[0.68rem] text-muted">{i + 1}.</span>
+                {p.attend ? (
+                  <span className="min-w-0 flex-1">{line}</span>
+                ) : (
+                  <s className="min-w-0 flex-1 text-muted">{line}</s>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      ) : null}
       {error ? <p className="mt-2 text-[0.75rem] text-red-600">{error}</p> : null}
       {canAct ? (
         <div className="mt-3 grid grid-cols-3 gap-1.5">
@@ -252,11 +276,27 @@ type LessonForm = {
   roomId: number;
   groupIds: number[];
   customerIds: number[];
-  customers: { id: number; name: string }[];
+  customers: LessonCustomer[];
   subjectId: number;
   teacherIds: number[];
   topic: string;
+  homework: string;
   note: string;
+  status?: number;
+};
+
+type LessonCustomer = {
+  id: number;
+  name: string;
+  attend?: boolean;
+  amount?: number;
+  cttId?: number;
+  reasonId?: number;
+  reason?: string;
+  grade?: string;
+  homeworkGrade?: string;
+  note?: string;
+  rest?: string;
 };
 
 const FIELD = "mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none";
@@ -288,7 +328,9 @@ function LessonEdit({
     subjectId: seed.subjectId || 0,
     teacherIds: seed.teacherIds || [],
     topic: seed.topic || "",
+    homework: seed.homework || "",
     note: seed.note || "",
+    status: seed.status,
   };
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -335,13 +377,19 @@ function LessonEdit({
         subjects: { id: number; name: string }[];
         groups: { id: number; name: string }[];
       };
+      const customers = (pack.lesson.customers || []).map((c) => ({
+        ...c,
+        attend: c.attend !== false,
+        amount: Number(c.amount) || 0,
+      }));
       setForm({
         ...pack.lesson,
         date: toYmd(pack.lesson.date),
         groupIds: pack.lesson.groupIds?.length ? pack.lesson.groupIds : groupId ? [groupId] : [],
-        customerIds: pack.lesson.customerIds || [],
-        customers: pack.lesson.customers || [],
+        customerIds: pack.lesson.customerIds || customers.map((c) => c.id),
+        customers,
         teacherIds: pack.lesson.teacherIds || [],
+        homework: pack.lesson.homework || "",
       });
       setRooms(pack.rooms || []);
       setTeachers(pack.teachers || []);
@@ -401,7 +449,10 @@ function LessonEdit({
         subjectId: form.subjectId,
         teacherIds: form.teacherIds,
         topic: form.topic,
+        homework: form.homework,
         note: form.note,
+        customerIds: form.customerIds,
+        customers: form.customers,
       } as never,
     });
     setSaving(false);
