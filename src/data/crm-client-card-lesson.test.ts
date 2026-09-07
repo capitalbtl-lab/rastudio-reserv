@@ -30,6 +30,10 @@ describe("форма занятия карточки", () => {
     assert.match(src, /data-op="lesson-writeoffs"/);
     assert.match(src, /cttSelectLabel/);
     assert.match(src, /Базовый счет/);
+    assert.match(src, /Общий остаток/);
+    assert.match(src, /data-op="basic-account"/);
+    assert.match(src, /платежей на этот счёт/);
+    assert.match(src, /Счета и абонементы/);
     assert.match(src, /label: "Архивные"/);
     assert.match(src, /date < today/);
     assert.match(src, /l\.amount/);
@@ -51,7 +55,12 @@ describe("форма занятия карточки", () => {
     const disk = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(disk, /parseDossierRegular/);
+    assert.match(disk, /accountSnapOf/);
+    assert.match(disk, /paySumForCtt/);
+    assert.match(disk, /Базовый счет/);
+    assert.doesNotMatch(disk, /extras\?\.paid \|\| 0/);
     assert.match(api, /pullCustomerRegular/);
+    assert.match(api, /rows.length > 0/);
   });
 });
 

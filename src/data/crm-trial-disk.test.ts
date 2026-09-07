@@ -25,7 +25,7 @@ describe("пробное Чудновой на диск", () => {
     assert.match(inbound, /inboundCustomerLessons/);
     assert.match(inbound, /customer_id: id/);
     assert.match(inbound, /isOneOffLesson/);
-    assert.match(inbound, /dateFrom = ruShift\(-400\)/);
+    assert.match(inbound, /dateFrom = ruShift\(-2200\)/);
     assert.equal(/if \(!isOneOffLesson/.test(inbound), false);
     const get = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(get, /inboundCustomerLessons/);

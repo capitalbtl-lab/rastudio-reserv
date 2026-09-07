@@ -11,6 +11,11 @@ describe("журнал оплат и списаний", () => {
     assert.equal(ledgerMoney({ paySum: 1075, writeoffSum: 0, snap: 1000, complete: false }), 1000);
   });
 
+  it("снимок 0 — остаток 0, даже если оплаты есть, а списаний ещё нет", () => {
+    assert.equal(ledgerMoney({ paySum: 152475, writeoffSum: 0, snap: 0 }), 0);
+    assert.equal(ledgerMoney({ paySum: 152475, writeoffSum: 0 }), 152475);
+  });
+
   it("сумма списания из полей урока", () => {
     assert.equal(lessonWriteoffAmount({ commission: 537.5 }), 537.5);
     assert.equal(lessonWriteoffAmount({ details: [{ cost: 537.5 }] }), 537.5);

@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, stampLiveTariff, changeListRows, batchesOfThree, keepByLiveTariff, alfaCalculationType, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
@@ -554,5 +555,15 @@ describe("мастер абонементов учеников", () => {
     const collapsed = collapsePupilsByCustomer([a, b]);
     assert.equal(collapsed.length, 1);
     assert.equal(collapsed[0].groupName, "группа 586 · группа 592");
+  });
+
+  it("остаток счёта — rest Alfa, не сумма оплат paid", () => {
+    const src = readFileSync(new URL("./pupil-tariffs.ts", import.meta.url), "utf8");
+    const pull = src.slice(src.indexOf("export async function pullCustomerAccount"), src.indexOf("export async function pullCustomerAccount") + 2200);
+    assert.match(pull, /balance: String\(best.balance\)/);
+    assert.doesNotMatch(pull, /best.paid \|\| best.balance/);
+    assert.match(pull, /if \(found\)/);
+    const pack = src.slice(src.indexOf("export function packCardTariff"), src.indexOf("export function parseDossierCtt"));
+    assert.doesNotMatch(pack, /it\.paid/);
   });
 });

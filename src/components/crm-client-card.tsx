@@ -1085,7 +1085,7 @@ export function CrmClientCard({
           </div>
           <div className="min-w-0 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="active-tariff">
             <div className={cn(compact ? "flex flex-col items-start gap-2" : "flex items-center gap-2")}>
-              <p className="min-w-0 flex-1 truncate text-[0.68rem] font-semibold uppercase tracking-wider text-muted">Действующий абонемент</p>
+              <p className="min-w-0 flex-1 truncate text-[0.68rem] font-semibold uppercase tracking-wider text-muted">Счета и абонементы</p>
               <Button
                 type="button"
                 size="sm"
@@ -1097,6 +1097,16 @@ export function CrmClientCard({
                 Добавить абонемент
               </Button>
             </div>
+            {basicAccount ? (
+              <div className="mt-2 rounded-xl bg-white px-3 py-2 ring-1 ring-black/6" data-op="basic-account">
+                <p className="font-semibold text-sm">Базовый счет</p>
+                <p className="text-[0.75rem] text-muted">Счет клиента по умолчанию</p>
+                <p className="text-[0.75rem] font-semibold">
+                  Остаток {money(basicAccount.rest)} ({basicAccount.lessons || 0} ур.)
+                  {basicAccount.payCount ? ` · ${basicAccount.payCount} платежей` : ""}
+                </p>
+              </div>
+            ) : null}
             {activeTariffs.length ? (
               <ul className="mt-2 space-y-1.5">
                 {activeTariffs.map((t) => (
@@ -1113,7 +1123,8 @@ export function CrmClientCard({
                         {[
                           t.bDate && t.eDate ? `${t.bDate} — ${t.eDate}` : t.bDate || "",
                           t.lessons ? `${t.lessons} ур.` : "",
-                          money(t.rest),
+                          `остаток ${money(t.rest)}`,
+                          t.payCount ? `${t.payCount} платежей на этот счёт` : "",
                         ]
                           .filter(Boolean)
                           .join(" · ")}
@@ -1135,7 +1146,7 @@ export function CrmClientCard({
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-sm text-muted">Нет действующего абонемента.</p>
+              <p className="mt-2 text-sm text-muted">Нет действующего абонемента — платежи идут на базовый счет.</p>
             )}
             {archivedTariffs.length ? (
               <div className="mt-3 border-t border-black/8 pt-2" data-op="archived-tariffs">
@@ -1144,7 +1155,9 @@ export function CrmClientCard({
                   {archivedTariffs.map((t) => (
                     <li key={t.id} className="rounded-xl bg-white/70 px-3 py-1.5 text-[0.75rem] text-muted ring-1 ring-black/6">
                       <span className="font-semibold text-fg/80">{t.name}</span>
-                      <span className="mt-0.5 block">{cttSelectLabel(t)}</span>
+                      <span className="mt-0.5 block">
+                        {[cttSelectLabel(t), t.payCount ? `${t.payCount} платежей` : "", `остаток ${money(t.rest)}`].filter(Boolean).join(" · ")}
+                      </span>
                     </li>
                   ))}
                 </ul>

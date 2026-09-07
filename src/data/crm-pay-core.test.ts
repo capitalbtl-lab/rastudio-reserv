@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, snapshotBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, snapshotBalance, accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -39,6 +39,23 @@ describe("журнал денег", () => {
     assert.equal(snapshotBalance("5000", 0), 5000);
     assert.equal(snapshotBalance("", 0), 0);
     assert.equal(snapshotBalance("1"), 1);
+    assert.equal(snapshotBalance("152475", 0, true), 0);
+    assert.equal(snapshotBalance("152475", 0, false), 152475);
+    assert.equal(accountSnapOf("152475", [{ id: 5016, rest: 0, archived: false }]), 0);
+    assert.equal(accountSnapOf("5000", [{ id: 1, rest: 0, archived: true }]), 5000);
+    assert.equal(accountSnapOf("5000", []), 5000);
+    assert.equal(liveCttOf([{ id: 0, archived: false }, { id: 5016, rest: 0, archived: false }]).length, 1);
+    const alehinPays = [
+      row({ id: 1, kind: "income", income: 4350, expenditure: 0, cttId: 5016 }),
+      row({ id: 2, kind: "income", income: 3950, expenditure: 0, cttId: 4175 }),
+      row({ id: 3, kind: "income", income: 200, expenditure: 0 }),
+      row({ id: 4, kind: "product", income: 50, expenditure: 0, cttId: 5016 }),
+      row({ id: 5, kind: "income", income: 10, expenditure: 0, cttId: 5016, deleted: true }),
+    ];
+    assert.equal(paySumForCtt(alehinPays, 5016), 4350);
+    assert.equal(payCountForCtt(alehinPays, 5016), 2);
+    assert.equal(paySumForCtt(alehinPays, 0), 200);
+    assert.equal(payCountForCtt(alehinPays, 0), 1);
   });
 
   it("вход из Alfa не затирает очередь и свои id", () => {
