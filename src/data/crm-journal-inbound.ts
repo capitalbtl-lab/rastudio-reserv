@@ -113,6 +113,9 @@ export async function inboundJournalGroup(
   const byKey = new Map<string, GroupCalLesson>();
   for (const les of packs) {
     for (const item of les.items || []) {
+      const gids = (item.group_ids || []).map(Number).filter((n) => n > 0);
+      if (gids.length && !gids.includes(gid)) continue;
+      if (!gids.length && Number(item.lesson_type_id || 0) === 2) continue;
       const packed = packLight(item, ctx);
       if (!packed) continue;
       byKey.set(`${packed.lessonId || 0}|${packed.date}|${packed.from}`, packed);
@@ -164,28 +167,28 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
   const id = Number(customerId) || 0;
   if (!alfaLinkedNow() || id <= 0) return { ok: true as const, count: 0 };
   const { token, request } = await import("./alfacrm");
-  const { upsertCustomerCalendar } = await import("./group-cards");
+  const { replaceCustomerCalendar, loadCustomerCalendar } = await import("./group-cards");
   const { listAdminSlots } = await import("./alfacrm-schedule");
   const t = await token();
-  const dateFrom = "01.01.2018";
+  const dateFrom = ruShift(-120);
   const dateTo = ruShift(90);
   const slots = listAdminSlots();
   const packs: { items?: Parameters<typeof packLight>[0][] }[] = [];
-  for (const bid of uniqueBranches(branch)) {
+  for (const bid of uniqueBranches(branch).slice(0, 2)) {
     for (const status of [1, 2, 3]) {
-      for (let page = 0; page < 5; page++) {
+      for (let page = 0; page < 4; page++) {
         const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
           `/v2api/${bid}/lesson/index`,
-          { page, pageSize: 200, status, customer_id: id, date_from: dateFrom, date_to: dateTo },
+          { page, pageSize: 100, status, customer_id: id, date_from: dateFrom, date_to: dateTo },
           t,
         ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
         const chunk = les.items || [];
         if (chunk.length) packs.push(les);
-        if (chunk.length < 200) break;
+        if (chunk.length < 100) break;
       }
     }
   }
-  let count = 0;
+  const pulled: ReturnType<typeof packLight>[] = [];
   for (const les of packs) {
     for (const item of les.items || []) {
       const ids = (item.customer_ids || []).map(Number);
@@ -204,12 +207,20 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
       );
       if (!packed) continue;
       packed.date = ymd(packed.date);
-      packed.customerIds = packed.customerIds?.length ? packed.customerIds : [id];
-      upsertCustomerCalendar(id, packed);
-      count += 1;
+      packed.customerIds = ids;
+      pulled.push(packed);
     }
   }
-  return { ok: true as const, count };
+  const local = loadCustomerCalendar(id).filter((l) => Number(l.lessonId || 0) < 0);
+  const seen = new Set<string>();
+  const next = [...local, ...pulled].filter((l) => {
+    const key = String(l.lessonId || `${l.date}|${l.from}`);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  replaceCustomerCalendar(id, next);
+  return { ok: true as const, count: pulled.length };
 }
 
 export async function inboundJournalChunk(offset = 0, take = 2) {

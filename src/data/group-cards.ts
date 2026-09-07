@@ -171,13 +171,28 @@ export function upsertCustomerCalendar(customerId: number, lesson: GroupCalLesso
   return list;
 }
 
+export function replaceCustomerCalendar(customerId: number, lessons: GroupCalLesson[]) {
+  const id = Number(customerId) || 0;
+  if (!id) return [];
+  const store = loadCustomerCals();
+  const list = (lessons || []).slice(0, 800);
+  store.items[String(id)] = list;
+  store.at = new Date().toISOString();
+  writeCustomerCals(store);
+  rememberLessons(list);
+  return list;
+}
+
 export function collectCustomerJournal(
   customerId: number,
   groups: { id: number; branchId: number; name?: string }[],
 ): GroupCalLesson[] {
   const out: GroupCalLesson[] = [];
   const seen = new Set<string>();
+  const id = Number(customerId) || 0;
   const push = (les: GroupCalLesson, groupName?: string) => {
+    const ids = (les.customerIds || []).map(Number);
+    if (Number(les.lessonId || 0) > 0 && id && !ids.includes(id)) return;
     const row = { ...les, group: les.group || groupName || "" };
     const key = String(row.lessonId || `${row.date}|${row.from}|${row.type}|${row.group}`);
     if (seen.has(key)) return;

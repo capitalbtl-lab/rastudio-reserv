@@ -24,18 +24,15 @@ describe("журнал уроков", () => {
     assert.equal(lessonStatusLabel(1), "план");
   });
 
-  it("карточка ученика берёт только свои занятия, пустые — всей группе", () => {
+  it("карточка ученика берёт только свои занятия", () => {
     const cal = [
       stampJournal({ date: "2026-09-01", from: "16:00", lessonId: 1, group: "А" }, [10]),
       stampJournal({ date: "2026-09-02", from: "16:00", lessonId: 2, group: "А" }, [11]),
       { date: "2026-09-03", from: "16:00", lessonId: 3, group: "А" },
     ];
     const mine = journalForCustomer(cal, 10);
-    assert.equal(mine.length, 2);
-    assert.deepEqual(
-      mine.map((x) => x.lessonId),
-      [1, 3],
-    );
+    assert.equal(mine.length, 1);
+    assert.equal(mine[0].lessonId, 1);
     const row = clientLessonFromJournal(mine[0], "Роботы");
     assert.equal(row.id, 1);
     assert.equal(row.group, "Роботы");

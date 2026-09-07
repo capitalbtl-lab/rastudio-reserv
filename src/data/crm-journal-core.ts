@@ -54,9 +54,12 @@ export function lessonHasCustomer(lesson: { customerIds?: number[] }, customerId
   return ids.includes(id);
 }
 
+/** Карточка ученика: только явка с её id. Пустой список — для журнала группы, не клиента. */
 export function journalForCustomer<T extends JournalLesson>(lessons: T[], customerId: number): T[] {
+  const id = Number(customerId) || 0;
+  if (!id) return [];
   return (lessons || [])
-    .filter((l) => lessonHasCustomer(l, customerId))
+    .filter((l) => journalIds(l).includes(id))
     .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")));
 }
 
