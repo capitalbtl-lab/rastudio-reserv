@@ -84,6 +84,8 @@ describe("касса список", () => {
     assert.match(pay, /date_from: alfaPayIndexDate/);
     assert.doesNotMatch(pay, /01\.01\.2020/);
     assert.doesNotMatch(pay, /pageSize: 50, \.\.\.dates/);
+    assert.match(pay, /kindFromAlfaPay/);
+    assert.match(pay, /pay_type_id: 3/);
     assert.match(pay, /dropAlfaAuth/);
     assert.match(pay, /export function filterCashPays/);
     assert.match(pay, /branchId: Number\(x.branchId\) \|\| 0/);
