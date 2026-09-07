@@ -39,6 +39,7 @@ import {
 import { mergeRooms, roomsSelectGroups, SEED_ROOMS } from "@/data/crm-rooms";
 import { addMinsHm, DUR_OPTS } from "@/data/crm-lesson-time";
 import { CASH_PAGE_SIZES, cashPageSlice, payAccountLabel } from "@/data/crm-pay-core";
+import { regularBelongsToGroups } from "@/data/crm-regular-core";
 
 function money(n?: number) {
   return `${Number(n || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`;
@@ -249,14 +250,21 @@ function weekdayNum(label: string) {
   return 0;
 }
 
-function lessonsForCard(calendar: ClientLesson[] | undefined, regular: ClientRegular[] | undefined): GroupCalLesson[] {
+function lessonsForCard(
+  calendar: ClientLesson[] | undefined,
+  regular: ClientRegular[] | undefined,
+  groups: { id: number; name: string; subjectId?: number }[] = [],
+): GroupCalLesson[] {
   const today = toYmd(new Date().toISOString().slice(0, 10));
   const out: GroupCalLesson[] = [];
   const seen = new Set<string>();
+  const names = groups.map((g) => g.name).filter(Boolean);
   for (const l of calendar || []) {
     const date = toYmd(l.date);
     if (!date || date.length < 10 || date < today) continue;
     if (Number(l.status) === 2 || Number(l.status) === 3) continue;
+    const trial = Number(l.typeId) === 3 || /пробн/i.test(String(l.type || l.group || ""));
+    if (l.group && names.length && !trial && !names.some((n) => n === l.group || l.group.includes(n) || n.includes(l.group))) continue;
     const key = `${date}|${l.from}|${l.group}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -277,6 +285,7 @@ function lessonsForCard(calendar: ClientLesson[] | undefined, regular: ClientReg
   const d0 = new Date();
   d0.setHours(12, 0, 0, 0);
   for (const r of regular || []) {
+    if (groups.length && !regularBelongsToGroups(r, groups)) continue;
     const wd = weekdayNum(r.day);
     if (!wd) continue;
     const jsWant = wd === 7 ? 0 : wd;
@@ -456,7 +465,7 @@ export function CrmClientCard({
     return [...set];
   }, [card.comms]);
   const comms = channel ? (card.comms || []).filter((c) => (c.channel || "сообщение") === channel) : card.comms || [];
-  const tiles = useMemo(() => lessonsForCard(card.calendar, card.regular), [card.calendar, card.regular]);
+  const tiles = useMemo(() => lessonsForCard(card.calendar, card.regular, card.groups), [card.calendar, card.regular, card.groups]);
   const writeOffs = useMemo(
     () =>
       (card.calendar || [])
@@ -1144,9 +1153,6 @@ export function CrmClientCard({
           <LessonStrip
             lessons={tiles}
             title="Ближайшие занятия"
-            group={(card.groups || [])[0]?.name}
-            teacher={card.teacher || (card.regular || [])[0]?.teacher}
-            subject={(card.regular || [])[0]?.subject}
           />
         </div>
 

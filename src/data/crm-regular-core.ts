@@ -52,18 +52,19 @@ export function regularBelongsToGroups(
   if (sid && gs && sid !== gs) return false;
   return true;
 }
+
+export function packCustomerRegular(
   it: Record<string, unknown>,
   ctx: { groupName?: string; teacher?: string; subject?: string; branchId?: number; customerId?: number; fallbackGroupId?: number },
 ): DiskRegular | null {
   if (Number(it.disabled || it.is_disabled || 0) === 1) return null;
   const cid = Number(ctx.customerId || 0);
   const id = Number(it.id || 0);
-  let groupId = regularGroupIdOf(it, cid);
-  if (!groupId) groupId = Number(ctx.fallbackGroupId || 0) || 0;
+  const groupId = regularGroupIdOf(it, cid) || Number(it.group_id || it.groupId || 0) || 0;
   const day = Number(it.day || 0);
   const from = hm(String(it.time_from_v || it.time_from || it.timeFrom || ""));
   if (!id || !from) return null;
-  if (cid && groupId === cid) return null;
+  if (cid && (!groupId || groupId === cid)) return null;
   const teacherId = Array.isArray(it.teacher_ids) ? Number(it.teacher_ids[0] || 0) : Number(it.teacher_id || 0);
   return {
     id,

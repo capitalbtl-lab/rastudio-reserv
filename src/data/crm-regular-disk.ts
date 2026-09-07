@@ -1,4 +1,4 @@
-import { packCustomerRegular, parseDossierRegular, pickCustomerRegularItems } from "./crm-regular-core";
+import { packCustomerRegular, parseDossierRegular, pickCustomerRegularItems, regularBelongsToGroups, regularGroupIdOf } from "./crm-regular-core";
 import { uniqueBranches } from "./crm-ledger-core";
 
 export { packCustomerRegular, parseDossierRegular, regularDayLabel, pickCustomerRegularItems } from "./crm-regular-core";
@@ -44,27 +44,27 @@ export async function pullCustomerRegular(branchId: number, customerId: number) 
       collected.push(...(await regularPages(request, t, bid, { group_id: gid })));
     }
   }
-  const picked = pickCustomerRegularItems(collected, cid);
+  const picked = pickCustomerRegularItems(collected, cid, gids);
   const teachers = new Map(loadTeachers().map((x) => [x.id, x.name]));
   const subjects = new Map(loadSubjects().map((x) => [x.id, x.name]));
   const d = findDossier({ crmId: cid });
-  const groupName = (gid: number) => (d?.groupLinks || []).find((g) => g.id === gid)?.name || "";
-  const fallbackGroupId = Number(d?.groupLinks?.[0]?.id || 0);
+  const links = d?.groupLinks || [];
+  const groupName = (gid: number) => links.find((g) => g.id === gid)?.name || "";
   const rows = picked
     .map((it) => {
       const teacherId = Array.isArray(it.teacher_ids) ? Number(it.teacher_ids[0] || 0) : Number(it.teacher_id || 0);
       const subjectId = Number(it.subject_id || 0);
-      const gid = Number(it.group_id || it.groupId || it.related_id || 0);
+      const gid = regularGroupIdOf(it, cid);
       return packCustomerRegular(it, {
         branchId: Number(it.branch_id || branch) || branch,
         teacher: teachers.get(teacherId) || "",
         subject: subjects.get(subjectId) || "",
-        groupName: groupName(gid === cid ? fallbackGroupId : gid),
+        groupName: groupName(gid),
         customerId: cid,
-        fallbackGroupId,
       });
     })
-    .filter((x): x is NonNullable<typeof x> => Boolean(x));
+    .filter((x): x is NonNullable<typeof x> => Boolean(x))
+    .filter((r) => regularBelongsToGroups(r, links));
   stampDossierRegular(cid, rows, branch);
   return rows;
 }

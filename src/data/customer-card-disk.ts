@@ -12,7 +12,7 @@ import { customerBalance, cardPays, snapshotBalance, isPayJournalComplete } from
 import { asCustomerComm, commsOf } from "./crm-comms";
 import { loadTariffs } from "./crm-tariffs";
 import { isPaidCountLabel, parseDossierCtt } from "./pupil-tariffs";
-import { parseDossierRegular } from "./crm-regular-core";
+import { parseDossierRegular, regularBelongsToGroups } from "./crm-regular-core";
 import { roomsCatalog } from "./crm-rooms";
 import { loadRooms } from "./crm-rooms-disk";
 import { ensureChudnovaTrialDisk } from "./crm-trial-disk";
@@ -101,7 +101,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   const regular: NonNullable<CustomerCard["regular"]> = [];
   const calendar: NonNullable<CustomerCard["calendar"]> = [];
   const activeGroups = groups.filter((x) => x.active);
-  const ownRegular = parseDossierRegular(d.extras);
+  const ownRegular = parseDossierRegular(d.extras).filter((r) => regularBelongsToGroups(r, groups));
   if (ownRegular.length) {
     for (const r of ownRegular) {
       const g = groups.find((x) => x.id === r.groupId);
