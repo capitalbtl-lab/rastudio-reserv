@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
+import type { LessonPupil } from "@/data/crm-slots-core";
 import { adminSchedule } from "@/data/admin-schedule";
 import { RA_POP } from "@/data/admin-ui";
 import { RaSelect } from "@/components/ra-select";
@@ -54,6 +55,17 @@ function token() {
   if (typeof document === "undefined") return "";
   const m = document.cookie.match(/(?:^|;\s*)ra_admin=([^;]+)/);
   return m ? decodeURIComponent(m[1]) : localStorage.getItem("ra_admin") || "";
+}
+
+function ruMoney(n?: number) {
+  const v = Number(n) || 0;
+  if (!v) return "";
+  return v.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function pupilRows(l: GroupCalLesson): LessonPupil[] {
+  if (l.pupils?.length) return l.pupils;
+  return (l.customerIds || []).map((id) => ({ customerId: id, attend: true, amount: l.amount }));
 }
 
 function addMins(hhmm: string, mins: number) {

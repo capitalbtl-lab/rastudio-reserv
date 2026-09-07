@@ -3924,7 +3924,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
             teacher_ids: teacherIds,
             topic: String(data.topic || ""),
             note: String(data.note || ""),
+            homework: String(data.homework || ""),
             lesson_type_id: 2,
+            ...(details.length ? { details } : {}),
           },
         });
       } else {
@@ -3945,7 +3947,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
             teacher_ids: teacherIds,
             topic: String(data.topic || ""),
             note: String(data.note || ""),
+            homework: String(data.homework || ""),
             lesson_type_id: 2,
+            ...(details.length ? { details } : {}),
           },
         });
       }
