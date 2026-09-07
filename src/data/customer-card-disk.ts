@@ -12,6 +12,7 @@ import { customerBalance, cardPays, snapshotBalance } from "./crm-pay";
 import { asCustomerComm, commsOf } from "./crm-comms";
 import { loadTariffs } from "./crm-tariffs";
 import { isPaidCountLabel, parseDossierCtt } from "./pupil-tariffs";
+import { parseDossierRegular } from "./crm-regular-core";
 import { roomsCatalog } from "./crm-rooms";
 import { loadRooms } from "./crm-rooms-disk";
 import { ensureChudnovaTrialDisk } from "./crm-trial-disk";
@@ -100,6 +101,26 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   const regular: NonNullable<CustomerCard["regular"]> = [];
   const calendar: NonNullable<CustomerCard["calendar"]> = [];
   const activeGroups = groups.filter((x) => x.active);
+  const ownRegular = parseDossierRegular(d.extras);
+  if (ownRegular.length) {
+    for (const r of ownRegular) {
+      const g = groups.find((x) => x.id === r.groupId);
+      regular.push({
+        groupId: r.groupId || g?.id || 0,
+        groupName: r.groupName || g?.name || "",
+        day: r.dayLabel,
+        from: r.from,
+        to: r.to,
+        teacher: r.teacher || "",
+        subject: r.subject || "",
+        branch: CRM_BRANCH[r.branchId || g?.branchId || useBranch]?.short || "",
+        lessonId: r.id,
+        subjectId: r.subjectId,
+        teacherId: r.teacherId,
+        roomId: r.roomId,
+      });
+    }
+  }
   const art = activeGroups.find((g) => /художествен/i.test(g.name || g.school || "")) || activeGroups[0];
   const artSlot = art
     ? slots.find((s) => s.groupId === art.id && s.branchId === art.branchId) || slots.find((s) => s.groupId === art.id)
@@ -117,6 +138,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
     teacher: artSlot?.teacher,
   });
   for (const g of activeGroups) {
+    if (ownRegular.length && ownRegular.some((r) => r.groupId === g.id)) continue;
     const slot = slots.find((s) => s.groupId === g.id && s.branchId === g.branchId) || slots.find((s) => s.groupId === g.id);
     if (slot) {
       for (const b of beatsOf(slot)) {

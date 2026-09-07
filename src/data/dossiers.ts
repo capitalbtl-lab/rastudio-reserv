@@ -717,6 +717,36 @@ export function stampDossierCtt(
   return live.length;
 }
 
+export function stampDossierRegular(
+  customerId: number,
+  rows: {
+    id: number;
+    groupId: number;
+    groupName?: string;
+    day?: number;
+    dayLabel?: string;
+    from: string;
+    to?: string;
+    teacher?: string;
+    teacherId?: number;
+    subject?: string;
+    subjectId?: number;
+    roomId?: number;
+    branchId?: number;
+  }[],
+  branchId?: number,
+) {
+  upsertDossier({
+    crmId: customerId,
+    branchId,
+    extras: { regular: JSON.stringify(rows.slice(0, 40)) },
+    source: "alfacrm",
+    crmWins: true,
+    quiet: true,
+  });
+  return rows.length;
+}
+
 /** Кто на доске CRM — лид на сайте, даже если Alfa оставила is_study=1. */
 export function stampFunnelOnDossiers(ids: number[]) {
   const on = new Set(ids.map(Number).filter(Boolean));
