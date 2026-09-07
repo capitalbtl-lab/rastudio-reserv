@@ -30,7 +30,7 @@ export type { PayKind, PayRow };
 export { displayedBalance, balanceOf, payKindOf, payEffect, OPENING_NOTE };
 
 type PayPollState = { hits: string[]; branches: Record<string, PayPollStamp>; lastNote?: string };
-type Store = { at: string; items: PayRow[]; poll?: PayPollState };
+type Store = { at: string; items: PayRow[]; poll?: PayPollState; complete?: number[] };
 
 let mem: Store | null = null;
 let memMtime = 0;
@@ -66,12 +66,13 @@ function load(): Store {
       at: String(raw.at || ""),
       items: Array.isArray(raw.items) ? raw.items : [],
       poll: raw.poll && typeof raw.poll === "object" ? { hits: Array.isArray(raw.poll.hits) ? raw.poll.hits : [], branches: raw.poll.branches || {}, lastNote: raw.poll.lastNote || "" } : emptyPoll(),
+      complete: Array.isArray(raw.complete) ? raw.complete.map(Number).filter((n) => n) : [],
     };
     memMtime = mtime;
     index(mem);
     return mem;
   } catch {
-    mem = { at: "", items: [], poll: emptyPoll() };
+    mem = { at: "", items: [], poll: emptyPoll(), complete: [] };
     memMtime = 0;
     byCustomer = new Map();
     return mem;
@@ -86,7 +87,7 @@ function save(store: Store) {
   poll.hits = payPollHitsInWindow(poll.hits).slice(-24);
   writeFileSync(
     fileOf(),
-    JSON.stringify({ at: new Date().toISOString(), items: store.items.slice(-8000), poll }, null, 0),
+    JSON.stringify({ at: new Date().toISOString(), items: store.items.slice(-8000), poll, complete: (store.complete || []).slice(-4000) }, null, 0),
     "utf8",
   );
   try {
@@ -149,7 +150,20 @@ export function cardPays(customerId: number) {
 }
 
 export function customerBalance(customerId: number, fallback?: number | string) {
-  return displayedBalance(paysOf(customerId), fallback);
+  const id = Number(customerId) || 0;
+  const complete = Boolean(id && (load().complete || []).includes(id));
+  return displayedBalance(paysOf(id), fallback, complete);
+}
+
+export function markPayJournalComplete(customerId: number) {
+  const id = Number(customerId) || 0;
+  if (!id) return;
+  const store = load();
+  const set = new Set(store.complete || []);
+  if (set.has(id)) return;
+  set.add(id);
+  store.complete = [...set];
+  save(store);
 }
 
 export type CashListOpts = {
@@ -345,16 +359,27 @@ export async function inboundCustomerPays(
   customerId: number,
 ) {
   if (pendingExportIds(["pay.create"]).has(customerId)) return paysOf(customerId);
-  const json = (await request(`/v2api/${branchId}/pay/index`, { page: 0, customer_id: customerId }, token).catch(
-    () => ({ items: [] }),
-  )) as { items?: Record<string, unknown>[] };
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
-  const pulled = crmUnwrapIndex(json)
-    .items.map((it) => packPay(it, customerId, branchId))
-    .filter((x): x is PayRow => Boolean(x));
+  const raw: Record<string, unknown>[] = [];
+  let done = false;
+  for (let page = 0; page < 10; page += 1) {
+    try {
+      const json = await request(`/v2api/${branchId}/pay/index`, { page, customer_id: customerId }, token);
+      const pack = crmUnwrapIndex(json);
+      raw.push(...pack.items);
+      if (pack.items.length < 50) {
+        done = true;
+        break;
+      }
+    } catch {
+      break;
+    }
+  }
+  const pulled = raw.map((it) => packPay(it, customerId, branchId)).filter((x): x is PayRow => Boolean(x));
   const hold = holdPayIds();
   const merged = mergePayInbound(pulled, paysOf(customerId), hold);
   replaceCustomerPays(customerId, merged);
+  if (done) markPayJournalComplete(customerId);
   return merged;
 }
 

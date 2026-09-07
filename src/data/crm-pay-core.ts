@@ -80,10 +80,14 @@ export function balanceOf(rows: PayRow[]) {
   return n;
 }
 
-export function displayedBalance(rows: PayRow[], fallback?: number | string) {
+export function displayedBalance(rows: PayRow[], fallback?: number | string, complete?: boolean) {
   const live = rows.filter((x) => !x.deleted);
-  if (live.length) return balanceOf(live);
-  return Number(fallback || 0) || 0;
+  const snap = fallback == null || fallback === "" ? Number.NaN : Number(fallback);
+  if (!live.length) return Number.isFinite(snap) ? snap : 0;
+  const opened = live.some((x) => String(x.note || "") === OPENING_NOTE);
+  if (complete || opened) return balanceOf(live);
+  if (Number.isFinite(snap)) return snap;
+  return balanceOf(live);
 }
 
 export function isOpeningRow(row: Pick<PayRow, "note">) {

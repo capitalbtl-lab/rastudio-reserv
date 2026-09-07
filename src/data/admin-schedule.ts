@@ -1558,6 +1558,14 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const { inboundCustomerComms, commsOf, asCustomerComm } = await import("./crm-comms");
       await Promise.all([inboundCustomerPays(request, t, branch, customerId), inboundCustomerComms(request, t, branch, customerId)]);
       customer.balance = customerBalance(customerId, customer.balance);
+      const dAfter = findDossier({ crmId: customerId });
+      if (dAfter) {
+        upsertDossier({
+          crmId: customerId,
+          extras: { ...(dAfter.extras || {}), balance: String(customer.balance) },
+          source: "sync",
+        } as never);
+      }
       customer.comms = commsOf(customerId).map(asCustomerComm);
       customer.pays = cardPays(customerId);
       if (crmPush) customer.crmPush = crmPush;

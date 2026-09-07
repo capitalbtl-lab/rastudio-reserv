@@ -31,6 +31,10 @@ describe("журнал денег", () => {
     assert.equal(balanceOf(rows), 1500);
     assert.equal(displayedBalance([], "800"), 800);
     assert.equal(displayedBalance(rows, "800"), 1500);
+    const fragment = [row({ id: 23529, kind: "income", income: 6450, expenditure: 0 })];
+    assert.equal(displayedBalance(fragment, "500"), 500);
+    assert.equal(displayedBalance(fragment, "500", true), 6450);
+    assert.equal(displayedBalance(fragment, "0"), 0);
   });
 
   it("вход из Alfa не затирает очередь и свои id", () => {
