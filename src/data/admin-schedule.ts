@@ -770,9 +770,9 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
   const slots = listAdminSlots();
   const regular: NonNullable<CustomerCard["regular"]> = [];
   try {
-    const { parseDossierRegular, pullCustomerRegular } = await import("./crm-regular-disk");
-    let own = parseDossierRegular(dossier?.extras);
-    if (!own.length) own = await pullCustomerRegular(useBranch, customerId).catch(() => []);
+    const { parseDossierRegular, pullCustomerRegular, regularBelongsToGroups } = await import("./crm-regular-disk");
+    let own = parseDossierRegular(dossier?.extras).filter((r) => regularBelongsToGroups(r, packedGroups));
+    if (!own.length) own = (await pullCustomerRegular(useBranch, customerId).catch(() => [])).filter((r) => regularBelongsToGroups(r, packedGroups));
     for (const r of own) {
       regular.push({
         groupId: r.groupId,

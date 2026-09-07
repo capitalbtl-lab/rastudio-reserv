@@ -34,6 +34,9 @@ describe("форма занятия карточки", () => {
     assert.match(src, /date < today/);
     assert.match(src, /l\.amount/);
     assert.match(src, /Отмен:/);
+    assert.match(src, /regularBelongsToGroups/);
+    assert.match(src, /lessonsForCard\(card.calendar, card.regular, card.groups\)/);
+    assert.doesNotMatch(src, /group=\{\(card.groups \|\| \[\]\)\[0\]\?\.name\}/);
     const strip = readFileSync(new URL("../components/lesson-strip.tsx", import.meta.url), "utf8");
     assert.match(strip, /isOneOffLesson/);
     assert.match(strip, /bg-amber-100/);

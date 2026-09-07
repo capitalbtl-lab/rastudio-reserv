@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { packCustomerRegular, parseDossierRegular, pickCustomerRegularItems } from "./crm-regular-core.ts";
+import { packCustomerRegular, parseDossierRegular, pickCustomerRegularItems, regularBelongsToGroups } from "./crm-regular-core.ts";
 
 describe("постоянное расписание ученика", () => {
   it("пакует вс/ср/пт Чудновой и не берёт выключенные", () => {
@@ -70,5 +70,39 @@ describe("постоянное расписание ученика", () => {
     );
     assert.equal(picked.length, 1);
     assert.equal(String(picked[0].time_from_v), "15:30");
+  });
+
+  it("без копий ученика не тащит чужие группы; python ≠ художественная", () => {
+    const cid = 670;
+    const dumped = pickCustomerRegularItems(
+      [
+        { id: 1, related_id: 80, day: 3, time_from_v: "15:30", time_to_v: "18:00" },
+        { id: 2, related_id: 465, day: 3, time_from_v: "18:00", time_to_v: "19:30", subject_id: 11 },
+        { id: 3, related_id: 12, day: 2, time_from_v: "16:00" },
+      ],
+      cid,
+    );
+    assert.equal(dumped.length, 0);
+    const art = pickCustomerRegularItems(
+      [
+        { id: 1, related_id: 80, day: 3, time_from_v: "15:30", time_to_v: "18:00" },
+        { id: 2, related_id: 465, day: 3, time_from_v: "18:00", time_to_v: "19:30" },
+      ],
+      cid,
+      [80],
+    );
+    assert.deepEqual(
+      art.map((x) => Number(x.related_id)),
+      [80],
+    );
+    const groups = [{ id: 80, name: "2026 Художественная школа (10-14 лет)", subjectId: 92 }];
+    assert.equal(regularBelongsToGroups({ groupId: 80, subjectId: 92 }, groups), true);
+    assert.equal(regularBelongsToGroups({ groupId: 80, subjectId: 11, groupName: "2026 Художественная школа (10-14 лет)" }, groups), false);
+    assert.equal(regularBelongsToGroups({ groupId: 465, subjectId: 11, groupName: "Python" }, groups), false);
+    const poison = packCustomerRegular(
+      { id: 9, related_id: 670, day: 3, time_from_v: "18:00", subject_id: 11 },
+      { customerId: 670, fallbackGroupId: 80, groupName: "2026 Художественная школа (10-14 лет)" },
+    );
+    assert.equal(poison, null);
   });
 });

@@ -1,7 +1,7 @@
 import { packCustomerRegular, parseDossierRegular, pickCustomerRegularItems, regularBelongsToGroups, regularGroupIdOf } from "./crm-regular-core";
 import { uniqueBranches } from "./crm-ledger-core";
 
-export { packCustomerRegular, parseDossierRegular, regularDayLabel, pickCustomerRegularItems } from "./crm-regular-core";
+export { packCustomerRegular, parseDossierRegular, regularDayLabel, pickCustomerRegularItems, regularBelongsToGroups, regularGroupIdOf } from "./crm-regular-core";
 export type { DiskRegular } from "./crm-regular-core";
 
 async function regularPages(
