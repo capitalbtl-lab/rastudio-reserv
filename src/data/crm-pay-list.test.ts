@@ -80,8 +80,8 @@ describe("касса список", () => {
     assert.match(pay, /crmUnwrapIndex/);
     assert.match(pay, /payPollStampOrEmpty/);
     assert.match(pay, /payPollFirstFill/);
-    assert.match(pay, /\{ page: 0, currency: "rub" \}/);
-    assert.match(pay, /pay_type_id: 1/);
+    assert.match(pay, /date_from: from/);
+    assert.match(pay, /yyyy|2020\.01\.01/);
     assert.match(pay, /dropAlfaAuth/);
     assert.match(pay, /export function filterCashPays/);
     assert.match(pay, /branchId: Number\(x.branchId\) \|\| 0/);
