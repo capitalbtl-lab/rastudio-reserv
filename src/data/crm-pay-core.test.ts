@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, OPENING_NOTE, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, OPENING_NOTE, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -91,5 +91,10 @@ describe("журнал денег", () => {
     assert.deepEqual(payPollStampOrEmpty({ lastId: 0, lastDate: "2026-09-07" }), { lastId: 0, lastDate: "" });
     assert.equal(payAfterStamp({ id: 9, documentDate: "01.01.2025" }, payPollStampOrEmpty({ lastId: 0, lastDate: "2026-09-07" })), true);
     assert.equal(payPollStampOrEmpty({ lastId: 80, lastDate: "07.09.2026" }).lastId, 80);
+    assert.equal(payPollFirstFill({}), true);
+    assert.equal(payPollFirstFill({ "1": { lastId: 0, lastDate: "2026-09-07" } }), true);
+    assert.equal(payPollFirstFill({ "1": { lastId: 9, lastDate: "2026-09-07" }, "2": { lastId: 0, lastDate: "" }, "3": { lastId: 0, lastDate: "" }, "4": { lastId: 0, lastDate: "" } }), false);
+    assert.equal(payCustomerIdOf({ customer_id: 12 }), 12);
+    assert.equal(payCustomerIdOf({ customer: { id: 44 } }), 44);
   });
 });

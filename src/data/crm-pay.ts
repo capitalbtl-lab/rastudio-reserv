@@ -10,8 +10,10 @@ import {
   payEffect,
   payKindOf,
   payPollAllowed,
+  payPollFirstFill,
   payPollHitsInWindow,
   payPollStampOrEmpty,
+  payCustomerIdOf,
   ruDateIso,
   OPENING_NOTE,
   PAY_POLL_MAX_PER_HOUR,
@@ -305,7 +307,7 @@ export function packPay(item: Record<string, unknown>, customerId: number, branc
   const income = Number(item.income || 0) || 0;
   const expenditure = Number(item.expenditure || 0) || 0;
   if (!id && !income && !expenditure) return null;
-  const cid = Number(item.customer_id || customerId) || 0;
+  const cid = payCustomerIdOf(item, customerId);
   if (!cid) return null;
   const kind: PayKind = expenditure && !income ? "refund" : "income";
   return {
@@ -375,7 +377,8 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   const store = load();
   const poll = store.poll || emptyPoll();
   const now = Date.now();
-  if (!payPollAllowed(poll.hits, now)) {
+  const firstFill = payPollFirstFill(poll.branches);
+  if (!payPollAllowed(poll.hits, now) && !firstFill) {
     const note = `касса poll: лимит ${payPollHitsInWindow(poll.hits, now).length}/10 за час`;
     poll.lastNote = note;
     store.poll = poll;
@@ -389,24 +392,23 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   const t = await token();
   const branches = [1, 2, 3, 4];
   let newCount = 0;
+  let pulledCount = 0;
   let pages = 0;
   let hit429 = false;
   const errs: string[] = [];
   const hold = holdPayIds();
-  const pendingCustomers = pendingExportIds(["pay.create"]);
   for (const branchId of branches) {
     const stamp = payPollStampOrEmpty(poll.branches[String(branchId)]);
-    const dateFrom = stamp.lastDate ? ruDateIso(stamp.lastDate).split("-").reverse().join(".") : "";
     try {
-      const json = await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50, ...(dateFrom ? { date_from: dateFrom } : {}) }, t);
+      const json = await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50 }, t);
       pages += 1;
       const pulled = crmUnwrapIndex(json)
-        .items.map((it) => packPay(it as Record<string, unknown>, Number((it as { customer_id?: unknown }).customer_id) || 0, branchId))
+        .items.map((it) => packPay(it as Record<string, unknown>, payCustomerIdOf(it as Record<string, unknown>), branchId))
         .filter((x): x is PayRow => Boolean(x));
+      pulledCount += pulled.length;
       const fresh = pulled.filter((x) => payAfterStamp(x, stamp));
       const byCid = new Map<number, PayRow[]>();
       for (const row of fresh) {
-        if (pendingCustomers.has(row.customerId)) continue;
         const list = byCid.get(row.customerId) || [];
         list.push(row);
         byCid.set(row.customerId, list);
@@ -426,7 +428,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
       errs.push(`ф${branchId}: ${e instanceof Error ? e.message.slice(0, 80) : String(e).slice(0, 80)}`);
     }
   }
-  const note = `Касса inbound: филиалы ${branches.join(",")}, новых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"})${errs.length ? `. ${errs.join("; ")}` : ""}`;
+  const note = `Касса inbound: филиалы ${branches.join(",")}, пришло ${pulledCount}, новых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"})${errs.length ? `. ${errs.join("; ")}` : ""}`;
   poll.lastNote = note;
   const freshStore = load();
   freshStore.poll = poll;

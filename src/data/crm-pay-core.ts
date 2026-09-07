@@ -89,7 +89,7 @@ export function mergePayInbound(pulled: PayRow[], prev: PayRow[] | undefined, ho
   }
   for (const p of pulled) {
     const lid = Number(p.id) || 0;
-    if (lid < 0 || hold.has(lid) || hold.has(Number(p.customerId) || 0)) continue;
+    if (lid < 0 || hold.has(lid)) continue;
     const k = payKey(p);
     const cur = map.get(k);
     if (cur && (Number(cur.id) < 0 || hold.has(Number(cur.id)) || cur.deleted)) continue;
@@ -116,6 +116,16 @@ export function ruDateIso(raw: string) {
   if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   return s.slice(0, 10);
+}
+
+export function payPollFirstFill(branches: Record<string, PayPollStamp | undefined> | undefined) {
+  const b = branches || {};
+  return [1, 2, 3, 4].every((id) => !Number(b[String(id)]?.lastId));
+}
+
+export function payCustomerIdOf(item: Record<string, unknown>, fallback = 0) {
+  const nested = item.customer && typeof item.customer === "object" ? Number((item.customer as { id?: unknown }).id) : 0;
+  return Number(item.customer_id || item.customerId || nested || fallback) || 0;
 }
 
 export function payPollStampOrEmpty(s?: PayPollStamp | null): PayPollStamp {
