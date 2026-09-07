@@ -29,11 +29,12 @@ function hm(raw?: string) {
 
 export function packCustomerRegular(
   it: Record<string, unknown>,
-  ctx: { groupName?: string; teacher?: string; subject?: string; branchId?: number },
+  ctx: { groupName?: string; teacher?: string; subject?: string; branchId?: number; customerId?: number; fallbackGroupId?: number },
 ): DiskRegular | null {
   if (Number(it.disabled || it.is_disabled || 0) === 1) return null;
   const id = Number(it.id || 0);
-  const groupId = Number(it.related_id || it.group_id || it.groupId || 0);
+  let groupId = Number(it.group_id || it.groupId || it.related_id || 0);
+  if (ctx.customerId && groupId === ctx.customerId) groupId = Number(it.group_id || ctx.fallbackGroupId || 0);
   const day = Number(it.day || 0);
   const from = hm(String(it.time_from_v || it.time_from || it.timeFrom || ""));
   if (!id || !from) return null;

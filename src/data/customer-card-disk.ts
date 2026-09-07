@@ -167,7 +167,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   const catalogTariffs = loadTariffs().items;
   let tariffs = parseDossierCtt(d.extras);
   const accountLessons = Number(d.extras?.paid_count || 0) || 0;
-  const accountPaid = Number(d.extras?.paid || 0) || 0;
+  const accountPaid = Number(d.extras?.paid || 0) || Number(d.extras?.balance || 0) || 0;
   if (!tariffs.some((t) => !t.archived) && (accountLessons || accountPaid)) {
     tariffs = [
       {
