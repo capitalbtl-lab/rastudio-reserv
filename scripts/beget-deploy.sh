@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Выкладка rastudio.org на Beget.
 # Сборка в .output-next. Живой процесс не трогаем, пока index.mjs не готов.
+# Второй проход после выкладки aae6012 — уже этот скрипт.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
