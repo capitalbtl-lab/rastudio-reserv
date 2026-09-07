@@ -38,6 +38,7 @@ import {
 } from "@/data/crm-pay-alfa";
 import { mergeRooms, roomsSelectGroups, SEED_ROOMS } from "@/data/crm-rooms";
 import { addMinsHm, DUR_OPTS } from "@/data/crm-lesson-time";
+import { CASH_PAGE_SIZES, cashPageSlice, payAccountLabel } from "@/data/crm-pay-core";
 
 function money(n?: number) {
   return `${Number(n || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`;
@@ -385,6 +386,8 @@ export function CrmClientCard({
   const [payNote, setPayNote] = useState("");
   const [payMethod, setPayMethod] = useState("");
   const [payBranch, setPayBranch] = useState(0);
+  const [cashSize, setCashSize] = useState<(typeof CASH_PAGE_SIZES)[number]>(50);
+  const [cashPage, setCashPage] = useState(0);
   const [dropPay, setDropPay] = useState<{ id: number; label: string } | null>(null);
   const [headMenu, setHeadMenu] = useState<"" | "pay" | "lesson">("");
   const headLeave = useRef(0);
@@ -541,15 +544,17 @@ export function CrmClientCard({
   }, [activeTariffs, payCttId]);
   const cttName = (id?: number) => {
     const n = Number(id) || 0;
-    if (n === -1) return "Базовый счет";
+    const base = payAccountLabel(n);
+    if (n <= 0) return base;
     const t = (card.tariffs || []).find((x) => x.id === n);
-    return t ? cttSelectLabel(t) : n ? `ctt ${n}` : "—";
+    return t ? `${base} · ${cttSelectLabel(t)}` : `${base} · абонемент ${n}`;
   };
   const journalPays = useMemo(() => {
     const list = card.pays || [];
     if (!payBranch) return list;
     return list.filter((p) => Number(p.branchId || card.branchId) === payBranch);
   }, [card.pays, card.branchId, payBranch]);
+  const cashView = useMemo(() => cashPageSlice(journalPays, cashPage, cashSize), [journalPays, cashPage, cashSize]);
   const journalBranches = useMemo(() => {
     const ids = new Set<number>();
     for (const p of card.pays || []) ids.add(Number(p.branchId || card.branchId) || 0);

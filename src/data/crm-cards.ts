@@ -123,6 +123,7 @@ export type CustomerCard = {
   tariffs?: ClientTariff[];
   comms: CustomerComm[];
   pays?: CustomerPay[];
+  paysComplete?: boolean;
   crmPush?: string;
   catalog?: LessonCatalog;
 };

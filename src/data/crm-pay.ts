@@ -501,6 +501,18 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
         } catch (e) {
           if (is429(e)) throw e;
         }
+        for (let extra = 1; extra <= 2; extra += 1) {
+          try {
+            const moreJson = await request(`/v2api/${branchId}/pay/index`, { page: extra, ...dates }, t);
+            pages += 1;
+            const more = crmUnwrapIndex(moreJson).items;
+            if (more.length) pack = { ...pack, items: [...pack.items, ...more] };
+            if (more.length < 30) break;
+          } catch (e) {
+            if (is429(e)) throw e;
+            break;
+          }
+        }
       }
       for (const it of pack.items) {
         const t = String(it.pay_type_id ?? it.payTypeId ?? "?");

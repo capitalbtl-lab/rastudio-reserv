@@ -1961,7 +1961,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
       });
       const q = String(data.q || "").trim().toLowerCase();
       const qDigits = q.replace(/\D/g, "");
-      const take = Math.min(Math.max(Number(data.take) || 500, 1), 2000);
+      const take = Math.min(Math.max(Number(data.take) || 50, 1), 500);
+      const skip = Math.max(Number(data.skip) || 0, 0);
       const matched: (typeof listed.items[number] & { name: string; parent: string; phone: string; branchName: string })[] = [];
       for (const row of listed.items) {
         const d = findDossier({ crmId: row.customerId });
@@ -1981,7 +1982,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           branchName: CRM_BRANCH[row.branchId]?.short || String(row.branchId || ""),
         });
       }
-      return { ok: true as const, items: matched.slice(0, take), total: matched.length, poll: listed.poll };
+      return { ok: true as const, items: matched.slice(skip, skip + take), total: matched.length, poll: listed.poll };
     }
     if (data.action === "cashPoll") {
       const { pollPaysFromAlfa } = await import("./crm-pay");
