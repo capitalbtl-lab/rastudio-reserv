@@ -181,6 +181,7 @@ export function markPayJournalComplete(customerId: number) {
   if (set.has(id)) return;
   set.add(id);
   store.complete = [...set];
+  if (store.payFill) delete store.payFill[String(id)];
   save(store);
 }
 
@@ -378,31 +379,54 @@ export async function inboundCustomerPays(
 ) {
   if (pendingExportIds(["pay.create"]).has(customerId)) return paysOf(customerId);
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
+  const store = load();
+  const filled = (store.complete || []).includes(customerId);
+  const branches = uniqueBranches(branchId);
   const raw: Record<string, unknown>[] = [];
-  let done = true;
-  for (const bid of uniqueBranches(branchId)) {
-    let branchDone = false;
-    for (let page = 0; page < 10; page += 1) {
+  let bidIdx = 0;
+  let page = 0;
+  if (!filled) {
+    const cur = store.payFill?.[String(customerId)];
+    if (cur) {
+      const i = branches.indexOf(cur.bid);
+      bidIdx = i >= 0 ? i : 0;
+      page = Number(cur.page) || 0;
+    }
+  }
+  let ran = 0;
+  let done = filled;
+  let lastShort = false;
+  const maxRun = filled ? Math.max(branches.length, 1) : PAY_INBOUND_RUN;
+  outer: for (let b = bidIdx; b < branches.length; b += 1) {
+    const bid = branches[b];
+    let p = filled ? 0 : b === bidIdx ? page : 0;
+    for (;;) {
+      if (ran >= maxRun) {
+        done = false;
+        store.payFill = { ...(store.payFill || {}), [String(customerId)]: { bid, page: p } };
+        save(store);
+        break outer;
+      }
       try {
-        const json = await request(`/v2api/${bid}/pay/index`, { page, pageSize: 50, customer_id: customerId }, token);
+        const json = await request(`/v2api/${bid}/pay/index`, { page: p, pageSize: PAY_INBOUND_PAGE, customer_id: customerId }, token);
         const pack = crmUnwrapIndex(json);
         raw.push(...pack.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
-        if (pack.items.length < 50) {
-          branchDone = true;
-          break;
-        }
+        ran += 1;
+        lastShort = pack.items.length < PAY_INBOUND_PAGE;
+        if (filled || lastShort) break;
+        p += 1;
       } catch {
-        branchDone = page === 0;
+        lastShort = true;
         break;
       }
     }
-    if (!branchDone) done = false;
+    if (b === branches.length - 1) done = filled || lastShort;
   }
+  if (done && !filled) markPayJournalComplete(customerId);
   const pulled = raw.map((it) => packPay(it, customerId, branchId)).filter((x): x is PayRow => Boolean(x));
   const hold = holdPayIds();
   const merged = mergePayInbound(pulled, paysOf(customerId), hold);
   replaceCustomerPays(customerId, merged);
-  if (done) markPayJournalComplete(customerId);
   return merged;
 }
 
