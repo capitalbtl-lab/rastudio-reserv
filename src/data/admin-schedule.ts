@@ -1951,17 +1951,17 @@ export const adminSchedule = createServerFn({ method: "POST" })
       };
     }
     if (data.action === "cashList") {
-      const { listCashPays } = await import("./crm-pay");
+      const { listCashPays, cashTakeOf } = await import("./crm-pay");
       const listed = listCashPays({
         branchId: Number(data.branchId) || 0,
         kind: data.payKind,
         customerId: Number(data.customerId) || 0,
         includeDeleted: Boolean(data.includeDeleted),
-        limit: 20000,
+        limit: 40000,
       });
       const q = String(data.q || "").trim().toLowerCase();
       const qDigits = q.replace(/\D/g, "");
-      const take = Math.min(Math.max(Number(data.take) || 50, 1), 500);
+      const take = cashTakeOf(data.take);
       const skip = Math.max(Number(data.skip) || 0, 0);
       const matched: (typeof listed.items[number] & { name: string; parent: string; phone: string; branchName: string })[] = [];
       for (const row of listed.items) {

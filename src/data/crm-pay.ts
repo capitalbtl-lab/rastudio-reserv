@@ -389,6 +389,21 @@ function holdPayIds() {
   return pendingExportIds(["pay.create", "pay.delete"]);
 }
 
+function mergePulledPays(pulled: PayRow[], hold: Iterable<number>) {
+  const byCid = new Map<number, PayRow[]>();
+  for (const row of pulled) {
+    const cid = Number(row.customerId) || 0;
+    if (!cid) continue;
+    const list = byCid.get(cid) || [];
+    list.push(row);
+    byCid.set(cid, list);
+  }
+  for (const [cid, rows] of byCid) {
+    replaceCustomerPays(cid, mergePayInbound(rows, paysOf(cid), hold));
+  }
+  return byCid.size;
+}
+
 export async function inboundCustomerPays(
   request: (path: string, body: Record<string, unknown>, token: string) => Promise<unknown>,
   token: string,
@@ -456,6 +471,7 @@ export type PayPollResult = {
   pages: number;
   hit429: boolean;
   note: string;
+  fill?: PayFillCursor;
 };
 
 function payIndexDates(stamp: PayPollStamp): Record<string, string> {
@@ -545,16 +561,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
         .filter((x): x is PayRow => Boolean(x));
       pulledCount += pulled.length;
       const fresh = pulled.filter((x) => payAfterStamp(x, stamp));
-      const byCid = new Map<number, PayRow[]>();
-      for (const row of pulled) {
-        const list = byCid.get(row.customerId) || [];
-        list.push(row);
-        byCid.set(row.customerId, list);
-      }
-      for (const [cid, rows] of byCid) {
-        const merged = mergePayInbound(rows, paysOf(cid), hold);
-        replaceCustomerPays(cid, merged);
-      }
+      mergePulledPays(pulled, hold);
       newCount += fresh.length;
       if (fresh.length) poll.branches[String(branchId)] = nextPayStamp(fresh, stamp);
       else poll.branches[String(branchId)] = stamp;
@@ -566,12 +573,38 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
       errs.push(`ф${branchId}: ${e instanceof Error ? e.message.slice(0, 80) : String(e).slice(0, 80)}`);
     }
   }
+  let fill = payFillOf(poll.fill) || payFillStart();
+  if (!hit429 && !fill.done) {
+    let ran = 0;
+    while (ran < PAY_INBOUND_RUN && !fill.done) {
+      try {
+        const json = await request(`/v2api/${fill.bid}/pay/index`, { page: fill.page, pageSize: PAY_INBOUND_PAGE }, t);
+        pages += 1;
+        ran += 1;
+        const pack = crmUnwrapIndex(json);
+        const pulled = pack.items
+          .map((it) => packPay(it, payCustomerIdOf(it), fill.bid))
+          .filter((x): x is PayRow => Boolean(x));
+        pulledCount += pulled.length;
+        mergePulledPays(pulled, hold);
+        fill = payFillAdvance(fill, pack.items.length < PAY_INBOUND_PAGE);
+      } catch (e) {
+        if (is429(e)) {
+          hit429 = true;
+          break;
+        }
+        errs.push(`история ф${fill.bid}стр${fill.page}: ${e instanceof Error ? e.message.slice(0, 60) : String(e).slice(0, 60)}`);
+        break;
+      }
+    }
+  }
+  poll.fill = fill;
   const types = [...typeCounts.entries()].map(([k, n]) => `${k}×${n}`).join(",") || "нет";
-  const note = `${new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow" })} Касса inbound: филиалы ${branches.join(",")}, пришло ${pulledCount}, новых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"}), типы ${types}${errs.length ? `. ${errs.join("; ")}` : ""}`;
+  const note = `${new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow" })} Касса inbound: филиалы ${branches.join(",")}, пришло ${pulledCount}, новых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"}), ${payFillNote(fill)}, типы ${types}${errs.length ? `. ${errs.join("; ")}` : ""}`;
   poll.lastNote = note;
   const freshStore = load();
   freshStore.poll = poll;
   save(freshStore);
   logAdmin(note, "sync");
-  return { ok: !hit429, branches, newCount, pages, hit429, note } satisfies PayPollResult;
+  return { ok: !hit429, branches, newCount, pages, hit429, note, fill } satisfies PayPollResult;
 }

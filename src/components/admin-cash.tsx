@@ -60,7 +60,7 @@ type CashRow = {
   branchName: string;
 };
 
-type CashPoll = { lastNote?: string; hits?: number; max?: number; allowed?: boolean };
+type CashPoll = { lastNote?: string; hits?: number; max?: number; allowed?: boolean; fillDone?: boolean; fillNote?: string };
 
 export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenClient: (customerId: number, branchId: number) => void }) {
   const [q, setQ] = useState("");
@@ -137,19 +137,22 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
         <div>
           <p className="font-display text-xl">Касса</p>
           <p className="mt-1 max-w-2xl text-sm text-muted">
-            Правда на диске. Остаток клиента = сумма строк, не paid_till. «Обновить кассу» — опрос Alfa 10 раз в час, не выгрузка всего справочника.
+            Правда на диске. Базовый счет — без абонемента, раздельный — с абонементом. «Обновить кассу» подтягивает историю Alfa порциями (и новые). По 50 / 100 / 500 строк на странице.
           </p>
         </div>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") void load({ q: e.currentTarget.value });
+            if (e.key === "Enter") {
+              setPage(0);
+              void load({ q: e.currentTarget.value, page: 0 });
+            }
           }}
           placeholder="id клиента, имя, телефон"
           className="ml-auto h-9 w-64 rounded-full bg-white px-3 text-sm ring-1 ring-black/10"
         />
-        <Button type="button" size="sm" className="h-9" variant="secondary" disabled={Boolean(busy)} onClick={() => void load()}>
+        <Button type="button" size="sm" className="h-9" variant="secondary" disabled={Boolean(busy)} onClick={() => { setPage(0); void load({ page: 0 }); }}>
           Найти
         </Button>
         <Button type="button" size="sm" className="h-9" data-op="cash-poll" disabled={Boolean(busy)} onClick={() => void pollAlfa()}>
@@ -181,7 +184,8 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
           type="button"
           onClick={() => {
             setKind("");
-            void load({ payKind: "" });
+            setPage(0);
+            void load({ payKind: "", page: 0 });
           }}
           className={cn("rounded-full px-3 py-1 text-[0.78rem] font-semibold ring-1", !kind ? "bg-fg text-white ring-fg" : "bg-white text-fg ring-black/10")}
         >
@@ -223,6 +227,7 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
 
       <p className="mt-3 text-[0.78rem] text-muted">
         {total} платежей · на странице {items.length} · сумма строк {money(selectionSum)} · опрос {poll.hits || 0}/{poll.max || 10} за час
+        {poll.fillNote ? ` · ${poll.fillNote}` : ""}
         {poll.lastNote ? ` · ${poll.lastNote}` : ""}
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -236,8 +241,9 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
               void load({ take: n, page: 0 });
             }}
             className={cn("rounded-full px-3 py-1 text-[0.78rem] font-semibold ring-1", take === n ? "bg-primary text-white ring-primary" : "bg-white text-fg ring-black/10")}
+            data-op="cash-page-size"
           >
-            {n}
+            по {n}
           </button>
         ))}
         <span className="ml-auto flex items-center gap-1 text-[0.78rem] text-muted">
@@ -316,7 +322,7 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
                   <td className="px-2 py-2">{methodName(p.payMethod)}</td>
                   <td className="max-w-[12rem] truncate px-2 py-2" title={payAccountLabel(p.cttId)}>
                     {payAccountLabel(p.cttId)}
-                    {Number(p.cttId) > 0 ? ` · ${p.cttId}` : ""}
+                    {Number(p.cttId) > 0 ? ` · абонемент ${p.cttId}` : ""}
                   </td>
                   <td className="max-w-[12rem] truncate px-2 py-2" title={p.note}>
                     {p.note || "—"}

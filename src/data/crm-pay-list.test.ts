@@ -106,6 +106,7 @@ describe("касса список", () => {
     assert.match(card, /CASH_PAGE_SIZES/);
     assert.match(card, /payAccountLabel/);
     assert.match(card, /cashPageSlice/);
+    assert.match(card, /по \$\{n\}/);
     const tab = readFileSync(new URL("../components/admin-cash.tsx", import.meta.url), "utf8");
     assert.match(tab, /onOpenClient/);
     assert.match(tab, /cashPoll/);
@@ -113,10 +114,16 @@ describe("касса список", () => {
     assert.match(tab, /CASH_PAGE_SIZES/);
     assert.match(tab, /payAccountLabel/);
     assert.match(tab, /skip: pg \* size/);
+    assert.match(tab, /по \$\{n\}/);
+    assert.match(tab, /fillNote/);
     assert.equal(/kind:\s*["']pays["']/.test(tab), false);
     assert.match(pay, /PAY_INBOUND_RUN/);
     assert.match(pay, /payFill/);
     assert.match(pay, /isPayJournalComplete/);
+    assert.match(pay, /payFillAdvance/);
+    assert.match(pay, /page: fill.page, pageSize: PAY_INBOUND_PAGE/);
+    assert.match(pay, /cashTakeOf/);
+    assert.match(pay, /PAY_STORE_CAP/);
     const sched = readFileSync(new URL("../components/admin-schedule.tsx", import.meta.url), "utf8");
     assert.match(sched, /\["cash", "Касса"\]/);
     assert.match(sched, /AdminCash/);
