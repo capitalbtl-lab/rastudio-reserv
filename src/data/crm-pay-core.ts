@@ -118,6 +118,16 @@ export function ruDateIso(raw: string) {
   return s.slice(0, 10);
 }
 
+/** Alfa pay/index: d.m.Y. Не YYYY.MM.DD — иначе total=0 при живой кассе. */
+export function alfaPayDate(raw?: string) {
+  const iso = String(raw || "").trim() ? ruDateIso(String(raw)) : "";
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+  const sv = new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow" }).slice(0, 10);
+  const n = sv.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return n ? `${n[3]}.${n[2]}.${n[1]}` : "";
+}
+
 export function payPollFirstFill(branches: Record<string, PayPollStamp | undefined> | undefined) {
   const b = branches || {};
   return [1, 2, 3, 4].every((id) => !Number(b[String(id)]?.lastId));
