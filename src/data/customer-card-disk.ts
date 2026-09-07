@@ -138,7 +138,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
     teacher: artSlot?.teacher,
   });
   for (const g of activeGroups) {
-    if (ownRegular.length && ownRegular.some((r) => r.groupId === g.id)) continue;
+    if (ownRegular.length) continue;
     const slot = slots.find((s) => s.groupId === g.id && s.branchId === g.branchId) || slots.find((s) => s.groupId === g.id);
     if (slot) {
       for (const b of beatsOf(slot)) {
