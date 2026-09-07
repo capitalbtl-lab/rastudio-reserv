@@ -197,7 +197,6 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
   const id = Number(customerId) || 0;
   if (!alfaLinkedNow() || id <= 0) return { ok: true as const, count: 0 };
   const { token, request } = await import("./alfacrm");
-  const { replaceCustomerCalendar, loadCustomerCalendar } = await import("./group-cards");
   const { listAdminSlots } = await import("./alfacrm-schedule");
   const t = await token();
   const dateFrom = ruShift(-2200);
@@ -209,7 +208,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
       for (let page = 0; page < 8; page++) {
         const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
           `/v2api/${bid}/lesson/index`,
-          { page, pageSize: 100, status, customer_id: id, date_from: dateFrom, date_to: dateTo },
+          { page, pageSize: 100, status, customer_id: id, date_from: dateFrom, date_to: dateTo, removed: 0 },
           t,
         ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
         const chunk = les.items || [];
@@ -218,12 +217,15 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
       }
     }
   }
+  const prevMap = new Map(
+    loadCustomerCalendar(id).map((l) => [String(l.lessonId || `${l.date}|${l.from}`), l] as const),
+  );
   const pulled: GroupCalLesson[] = [];
   for (const les of packs) {
     for (const item of les.items || []) {
       const rec = item as Record<string, unknown>;
       const ids = lessonCustomerIds(rec);
-      if (ids.length && !ids.includes(id)) continue;
+      if (ids.length && !ids.includes(id) && !packLessonPupils(rec).some((p) => p.customerId === id)) continue;
       const gid = Number((item.group_ids || [])[0] || 0);
       const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
       const packed = packLight(
@@ -240,6 +242,12 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
       if (!packed) continue;
       packed.date = ymd(packed.date);
       if (!packed.customerIds?.length) packed.customerIds = [id];
+      const prev = prevMap.get(String(packed.lessonId || `${packed.date}|${packed.from}`));
+      if (prev) {
+        if (!(Number(packed.amount) > 0) && Number(prev.amount) > 0) packed.amount = prev.amount;
+        if (!(Number(packed.cttId) > 0) && Number(prev.cttId) > 0) packed.cttId = prev.cttId;
+        if (!(packed.pupils && packed.pupils.length) && prev.pupils?.length) packed.pupils = prev.pupils;
+      }
       pulled.push(packed);
     }
   }

@@ -32,8 +32,9 @@ import { isLocalSubject } from "./crm-local-id";
 import type { GroupCalLesson } from "./crm-slots-core";
 import { beatsOf } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
-import { loadGroupCard, saveGroupCard, nextLocalLessonId, upsertGroupCalendar, mergeLocalCalendar, upsertCustomerCalendar, collectCustomerJournal } from "./group-cards";
+import { loadGroupCard, saveGroupCard, nextLocalLessonId, upsertGroupCalendar, mergeLocalCalendar, upsertCustomerCalendar, collectCustomerJournal, fanOutLessonWriteoffs } from "./group-cards";
 import { stampJournal, clientLessonFromJournal } from "./crm-journal-core";
+import { packLessonPupils, chargeFromPupils } from "./crm-ledger-core";
 import { wantAlfaPull, loadAlfaLink, saveAlfaLink, alfaLinkOf } from "./crm-alfa-link";
 import { scheduleVoiceTurn } from "./schedule-voice";
 import { loadSiteTree, addTreeSchool, addTreeCourse, deleteTreeCourse, deleteTreeSchool, moveSlotsToCourse, saveSiteTree, slotTreeKey } from "./site-tree";
@@ -944,7 +945,7 @@ function packCrmLesson(
     topic?: string | null;
     note?: string | null;
     homework?: string | null;
-    details?: { is_attend?: number | null }[];
+    details?: { is_attend?: number | null; commission?: number; cost?: number; customer_id?: number; ctt_id?: number; customer_name?: string; reason_id?: number; grade?: string; note?: string }[];
     customer_ids?: number[];
     group_ids?: number[];
   },
@@ -963,9 +964,11 @@ function packCrmLesson(
   const from = hm(item.time_from) || ctx.fallbackFrom;
   const to = hm(item.time_to) || ctx.fallbackTo;
   const teacher = (item.teacher_ids || []).map((id) => ctx.teachers.get(Number(id)) || "").filter(Boolean).join(", ") || ctx.fallbackTeacher;
+  const rec = item as Record<string, unknown>;
   const ids = (item.customer_ids || []).map(Number).filter((n) => n > 0);
-  const fromDetails = (item.details || []).filter((d) => d.is_attend === 1).length;
-  const total = (item.details || []).length || ids.length;
+  const pupils = packLessonPupils(rec);
+  const fromDetails = pupils.filter((p) => p.attend).length;
+  const total = pupils.length || (item.details || []).length || ids.length;
   return {
     date,
     from,
@@ -988,7 +991,8 @@ function packCrmLesson(
     teacherIds: (item.teacher_ids || []).map(Number).filter((n) => n > 0),
     subjectId: Number(item.subject_id || 0) || undefined,
     groupIds: (item.group_ids || []).map(Number).filter((n) => n > 0),
-    customerIds: ids,
+    customerIds: ids.length ? ids : pupils.map((p) => p.customerId),
+    pupils: pupils.length ? pupils : undefined,
   };
 }
 
