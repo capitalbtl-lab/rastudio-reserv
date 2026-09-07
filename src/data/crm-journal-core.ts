@@ -24,6 +24,7 @@ export type JournalLesson = {
   teacher?: string;
   room?: string;
   topic?: string;
+  amount?: number;
 };
 
 export function journalIds(lesson: { customerIds?: number[] }) {
@@ -72,5 +73,6 @@ export function clientLessonFromJournal(lesson: JournalLesson, groupName?: strin
     status: Number(lesson.status || 0),
     subject: lesson.subject || "",
     room: String(lesson.room || ""),
+    amount: Number(lesson.amount || 0) || undefined,
   };
 }

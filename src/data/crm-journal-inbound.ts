@@ -5,6 +5,7 @@ import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor } from "./crm-cache-policy";
 import { journalFingerprint } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
+import { lessonWriteoffAmount, uniqueBranches } from "./crm-ledger-core";
 
 function hm(raw?: string) {
   const m = String(raw || "").match(/(\d{1,2}):(\d{2})/);
@@ -76,6 +77,7 @@ function packLight(
     subjectId: Number(item.subject_id || 0) || undefined,
     groupIds: (item.group_ids || []).map(Number).filter((n) => n > 0),
     customerIds: ids,
+    amount: lessonWriteoffAmount(item as Record<string, unknown>),
   };
 }
 
@@ -165,34 +167,23 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
   const { upsertCustomerCalendar } = await import("./group-cards");
   const { listAdminSlots } = await import("./alfacrm-schedule");
   const t = await token();
-  const dateFrom = ruShift(-400);
+  const dateFrom = "01.01.2018";
   const dateTo = ruShift(90);
   const slots = listAdminSlots();
   const packs: { items?: Parameters<typeof packLight>[0][] }[] = [];
-  const first = await Promise.all(
-    [1, 2, 3].map((status) =>
-      request<{ items?: Parameters<typeof packLight>[0][] }>(
-        `/v2api/${branch}/lesson/index`,
-        { page: 0, pageSize: 50, status, customer_id: id, date_from: dateFrom, date_to: dateTo },
-        t,
-      ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] })),
-    ),
-  );
-  packs.push(...first);
-  const extra = first
-    .map((les, i) => ((les.items || []).length >= 50 ? i : -1))
-    .filter((i) => i >= 0);
-  if (extra.length) {
-    const more = await Promise.all(
-      extra.map((i) =>
-        request<{ items?: Parameters<typeof packLight>[0][] }>(
-          `/v2api/${branch}/lesson/index`,
-          { page: 1, pageSize: 50, status: i + 1, customer_id: id, date_from: dateFrom, date_to: dateTo },
+  for (const bid of uniqueBranches(branch)) {
+    for (const status of [1, 2, 3]) {
+      for (let page = 0; page < 5; page++) {
+        const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
+          `/v2api/${bid}/lesson/index`,
+          { page, pageSize: 200, status, customer_id: id, date_from: dateFrom, date_to: dateTo },
           t,
-        ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] })),
-      ),
-    );
-    packs.push(...more);
+        ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
+        const chunk = les.items || [];
+        if (chunk.length) packs.push(les);
+        if (chunk.length < 200) break;
+      }
+    }
   }
   let count = 0;
   for (const les of packs) {

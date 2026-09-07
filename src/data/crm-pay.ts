@@ -374,7 +374,7 @@ export async function inboundCustomerPays(
       try {
         const json = await request(`/v2api/${bid}/pay/index`, { page, pageSize: 50, customer_id: customerId }, token);
         const pack = crmUnwrapIndex(json);
-        raw.push(...pack.items);
+        raw.push(...pack.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
         if (pack.items.length < 50) {
           branchDone = true;
           break;

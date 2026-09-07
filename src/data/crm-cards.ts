@@ -38,6 +38,7 @@ export type ClientLesson = {
   status?: number;
   subject?: string;
   room?: string;
+  amount?: number;
 };
 
 export type ClientTariff = {
