@@ -77,6 +77,8 @@ describe("касса список", () => {
   it("экраны: pollPaysFromAlfa кнопкой, не kind:pays; журнал и вкладка", () => {
     const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
     assert.match(pay, /export function listCashPays/);
+    assert.match(pay, /crmUnwrapIndex/);
+    assert.match(pay, /payPollStampOrEmpty/);
     assert.match(pay, /export function filterCashPays/);
     assert.match(pay, /branchId: Number\(x.branchId\) \|\| 0/);
     const save = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");

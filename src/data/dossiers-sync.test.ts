@@ -61,4 +61,13 @@ describe("импорт лидов не валит кабинет", () => {
     assert.match(core, /id: "customers"/);
     assert.match(core, /Клиенты/);
   });
+
+  it("поиск по имени не режет статус Текущие/Лиды", () => {
+    const src = readFileSync(join(dir, "dossiers.ts"), "utf8");
+    const at = src.indexOf("export function searchClientViews");
+    const chunk = src.slice(at, at + 2500);
+    assert.match(chunk, /if \(!needle\)/);
+    assert.match(chunk, /if \(d\.status === "удалён"\) return false/);
+    assert.equal(/if \(want === "лид" && d\.status !== "лид"\) return false/.test(chunk), false);
+  });
 });

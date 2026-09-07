@@ -118,6 +118,11 @@ export function ruDateIso(raw: string) {
   return s.slice(0, 10);
 }
 
+export function payPollStampOrEmpty(s?: PayPollStamp | null): PayPollStamp {
+  if (!s || !Number(s.lastId)) return { lastId: 0, lastDate: "" };
+  return { lastId: Number(s.lastId) || 0, lastDate: ruDateIso(s.lastDate) };
+}
+
 export function payAfterStamp(row: { id: number; documentDate: string }, stamp: PayPollStamp) {
   const d = ruDateIso(row.documentDate);
   const s = ruDateIso(stamp.lastDate);

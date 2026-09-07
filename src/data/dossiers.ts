@@ -1698,13 +1698,14 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
     if (branchCounts[b] != null) branchCounts[b] += 1;
   }
   const items = views.filter((d) => {
-    if (hidden(d) && !needle) return false;
-    if (d.status === "архив" && want !== "архив") return false;
-    if (want === "лид" && d.status !== "лид") return false;
-    if (want && want !== "все") {
-      if (d.status !== want) return false;
-    } else if (!want && !needle) {
-      if (d.status !== "учится") return false;
+    if (d.status === "удалён") return false;
+    if (!needle) {
+      if (d.status === "архив" && want !== "архив") return false;
+      if (want && want !== "все") {
+        if (d.status !== want) return false;
+      } else if (!want) {
+        if (d.status !== "учится") return false;
+      }
     }
     if (branchId && Number(d.branchId) !== branchId) return false;
     if (ageBand && d.ageBand !== ageBand) return false;

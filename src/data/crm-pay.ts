@@ -11,6 +11,7 @@ import {
   payKindOf,
   payPollAllowed,
   payPollHitsInWindow,
+  payPollStampOrEmpty,
   ruDateIso,
   OPENING_NOTE,
   PAY_POLL_MAX_PER_HOUR,
@@ -344,8 +345,9 @@ export async function inboundCustomerPays(
   const json = (await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50, customer_id: customerId }, token).catch(
     () => ({ items: [] }),
   )) as { items?: Record<string, unknown>[] };
-  const pulled = (json.items || [])
-    .map((it) => packPay(it, customerId, branchId))
+  const { crmUnwrapIndex } = await import("./crm-leads-stages");
+  const pulled = crmUnwrapIndex(json)
+    .items.map((it) => packPay(it, customerId, branchId))
     .filter((x): x is PayRow => Boolean(x));
   const hold = holdPayIds();
   const merged = mergePayInbound(pulled, paysOf(customerId), hold);
@@ -362,11 +364,6 @@ export type PayPollResult = {
   hit429: boolean;
   note: string;
 };
-
-function todayStamp(): PayPollStamp {
-  const iso = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Moscow" });
-  return { lastId: 0, lastDate: iso };
-}
 
 function is429(e: unknown) {
   const s = e instanceof Error ? e.message : String(e);
@@ -388,23 +385,23 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   }
   poll.hits = [...payPollHitsInWindow(poll.hits, now), new Date(now).toISOString()];
   const { token, request } = await import("./alfacrm");
+  const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const t = await token();
   const branches = [1, 2, 3, 4];
   let newCount = 0;
   let pages = 0;
   let hit429 = false;
+  const errs: string[] = [];
   const hold = holdPayIds();
   const pendingCustomers = pendingExportIds(["pay.create"]);
   for (const branchId of branches) {
-    const stamp = poll.branches[String(branchId)] || todayStamp();
+    const stamp = payPollStampOrEmpty(poll.branches[String(branchId)]);
     const dateFrom = stamp.lastDate ? ruDateIso(stamp.lastDate).split("-").reverse().join(".") : "";
     try {
-      const json = (await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50, ...(dateFrom ? { date_from: dateFrom } : {}) }, t)) as {
-        items?: Record<string, unknown>[];
-      };
+      const json = await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50, ...(dateFrom ? { date_from: dateFrom } : {}) }, t);
       pages += 1;
-      const pulled = (json.items || [])
-        .map((it) => packPay(it, Number(it.customer_id) || 0, branchId))
+      const pulled = crmUnwrapIndex(json)
+        .items.map((it) => packPay(it as Record<string, unknown>, Number((it as { customer_id?: unknown }).customer_id) || 0, branchId))
         .filter((x): x is PayRow => Boolean(x));
       const fresh = pulled.filter((x) => payAfterStamp(x, stamp));
       const byCid = new Map<number, PayRow[]>();
@@ -426,9 +423,10 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
         hit429 = true;
         break;
       }
+      errs.push(`ф${branchId}: ${e instanceof Error ? e.message.slice(0, 80) : String(e).slice(0, 80)}`);
     }
   }
-  const note = `Касса inbound: филиалы ${branches.join(",")}, новых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"})`;
+  const note = `Касса inbound: филиалы ${branches.join(",")}, новых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"})${errs.length ? `. ${errs.join("; ")}` : ""}`;
   poll.lastNote = note;
   const freshStore = load();
   freshStore.poll = poll;

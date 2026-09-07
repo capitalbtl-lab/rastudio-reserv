@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, OPENING_NOTE, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, OPENING_NOTE, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -88,5 +88,8 @@ describe("журнал денег", () => {
     assert.equal(payPollAllowed(hits, now), false);
     assert.equal(payPollAllowed(hits.slice(1), now), true);
     assert.equal(payPollHitsInWindow(["2026-09-07T10:00:00Z", "2026-09-07T11:50:00Z"], now).length, 1);
+    assert.deepEqual(payPollStampOrEmpty({ lastId: 0, lastDate: "2026-09-07" }), { lastId: 0, lastDate: "" });
+    assert.equal(payAfterStamp({ id: 9, documentDate: "01.01.2025" }, payPollStampOrEmpty({ lastId: 0, lastDate: "2026-09-07" })), true);
+    assert.equal(payPollStampOrEmpty({ lastId: 80, lastDate: "07.09.2026" }).lastId, 80);
   });
 });
