@@ -31,7 +31,8 @@ describe("форма занятия карточки", () => {
     assert.match(src, /cttSelectLabel/);
     assert.match(src, /Базовый счет/);
     assert.match(src, /label: "Архивные"/);
-    assert.match(src, /import \{ SCHOOLS \} from "@\/data\/site"/);
+    assert.match(src, /date < today/);
+    assert.match(src, /regs\.map\(\(r\) => `\$\{r\.day\} \$\{r\.from\}/);
     const strip = readFileSync(new URL("../components/lesson-strip.tsx", import.meta.url), "utf8");
     assert.match(strip, /isOneOffLesson/);
     assert.match(strip, /bg-amber-100/);
@@ -43,6 +44,10 @@ describe("форма занятия карточки", () => {
     assert.match(sched, /import \{ AdminReloadBtn, useAdminReload \} from "@\/components\/admin-reload-btn"/);
     assert.match(sched, /useAdminReload\(/);
     assert.match(sched, /from "@\/data\/crm-teachers-core"/);
+    const disk = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
+    const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
+    assert.match(disk, /parseDossierRegular/);
+    assert.match(api, /pullCustomerRegular/);
   });
 });
 

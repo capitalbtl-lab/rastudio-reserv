@@ -17,6 +17,31 @@ export async function pullCustomerRegular(branchId: number, customerId: number) 
     { page: 0, pageSize: 50, customer_id: cid },
     t,
   ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+  let raw = json.items || [];
+  const mine = raw.filter((it) => {
+    const ids = Array.isArray(it.customer_ids) ? it.customer_ids.map(Number) : [];
+    return ids.includes(cid);
+  });
+  if (mine.length) raw = mine;
+  else if (raw.some((it) => Array.isArray(it.customer_ids) && it.customer_ids.length)) raw = [];
+  if (!raw.length) {
+    const { findDossier } = await import("./dossiers");
+    const d = findDossier({ crmId: cid });
+    const gids = (d?.groupLinks || []).map((g) => Number(g.id) || 0).filter(Boolean).slice(0, 4);
+    for (const gid of gids) {
+      const more = await request<{ items?: Record<string, unknown>[] }>(
+        `/v2api/${branch}/regular-lesson/index`,
+        { page: 0, pageSize: 50, related_id: gid },
+        t,
+      ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+      raw.push(
+        ...(more.items || []).filter((it) => {
+          const ids = Array.isArray(it.customer_ids) ? it.customer_ids.map(Number) : [];
+          return ids.includes(cid);
+        }),
+      );
+    }
+  }
   const teachers = new Map(loadTeachers().map((x) => [x.id, x.name]));
   const subjects = new Map(loadSubjects().map((x) => [x.id, x.name]));
   const rows = (json.items || [])
