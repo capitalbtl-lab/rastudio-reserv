@@ -598,7 +598,7 @@ export function packCardTariff(it: Record<string, unknown>, catalog?: CatalogTar
     id: Number(it.id) || 0,
     tariffId: Number(it.tariff_id || it.tariffId || 0) || undefined,
     name: customerTariffLabel(it, catalog),
-    rest: Number(it.balance ?? it.rest ?? 0) || 0,
+    rest: Number(it.balance ?? it.rest ?? it.paid ?? 0) || 0,
     lessons: Number(it.lesson_count ?? it.lessons_count ?? it.paid_count ?? 0) || 0,
     archived: !live,
     bDate: String(it.b_date || it.bDate || ""),

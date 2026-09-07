@@ -871,6 +871,10 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
       eDate: t.eDate,
       calculationType: t.calculationType,
     }));
+  const liveCtt = tariffs.filter((x) => !x.archived);
+  const liveCttRest = liveCtt.reduce((n, x) => n + (Number(x.rest) || 0), 0);
+  const liveCttLessons = liveCtt.reduce((n, x) => n + (Number(x.lessons) || 0), 0);
+  const liveCttE = liveCtt.map((x) => x.eDate || "").filter(Boolean).sort().slice(-1)[0] || "";
   return {
     id: customerId,
     cardId: clientCardId(customerId),
@@ -889,10 +893,10 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
     studyStatus: statusName,
     studyStatusId,
     note: String(c.note || "").trim(),
-    paidTill: String(c.paid_till || ""),
+    paidTill: String(c.paid_till || liveCttE || ""),
     teacher: String(c.teacher_name || "").trim(),
-    balance: Number(c.balance ?? tariffs[0]?.rest ?? 0),
-    lessonsLeft: Number(c.paid_count ?? tariffs.filter((x) => !x.archived).reduce((n, x) => n + x.lessons, 0) ?? 0),
+    balance: liveCttRest || Number(c.balance ?? 0),
+    lessonsLeft: Number(c.paid_count ?? 0) || liveCttLessons,
     url: `https://studiyarazvivaysya.s20.online/company/${useBranch}/customer/view?id=${customerId}`,
     schools: dossier?.schools || [],
     groups: packedGroups,
