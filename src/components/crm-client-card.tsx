@@ -39,6 +39,7 @@ import {
 import { mergeRooms, roomsSelectGroups, SEED_ROOMS } from "@/data/crm-rooms";
 import { addMinsHm, DUR_OPTS } from "@/data/crm-lesson-time";
 import { CASH_PAGE_SIZES, cashPageSlice, payAccountLabel } from "@/data/crm-pay-core";
+import { ledgerMoney, writeoffSumForCtt } from "@/data/crm-ledger-core";
 import { regularBelongsToGroups } from "@/data/crm-regular-core";
 import { calendarLessonForCard } from "@/data/crm-journal-core";
 

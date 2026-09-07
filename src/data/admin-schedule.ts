@@ -1578,9 +1578,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
               const fresh = findDossier({ crmId: customerId });
               const rows = (card.tariffs || []).filter((t) => !t.archived && Number(t.id) > 0);
               const cttRest = rows.reduce((n, t) => n + (Number(t.rest) || 0), 0);
+              const { writeoffSumOf } = await import("./crm-ledger-core");
+              const { loadCustomerCalendar } = await import("./group-cards");
               const next = customerBalance(
                 customerId,
                 snapshotBalance(fresh?.extras?.balance ?? card.balance, cttRest, rows.length > 0),
+                writeoffSumOf(loadCustomerCalendar(customerId)),
               );
               upsertDossier({ crmId: customerId, extras: { ...(fresh?.extras || {}), balance: String(next) }, source: "sync" } as never);
               const again = findDossier({ crmId: customerId });
@@ -1608,7 +1611,13 @@ export const adminSchedule = createServerFn({ method: "POST" })
       await Promise.all([inboundCustomerPays(request, t, branch, customerId), inboundCustomerComms(request, t, branch, customerId)]);
       const liveRows = (customer.tariffs || []).filter((t) => !t.archived && Number(t.id) > 0);
       const cttRest = liveRows.reduce((n, t) => n + (Number(t.rest) || 0), 0);
-      customer.balance = customerBalance(customerId, snapshotBalance(customer.balance, cttRest, liveRows.length > 0));
+      const { writeoffSumOf } = await import("./crm-ledger-core");
+      const { loadCustomerCalendar } = await import("./group-cards");
+      customer.balance = customerBalance(
+        customerId,
+        snapshotBalance(customer.balance, cttRest, liveRows.length > 0),
+        writeoffSumOf(loadCustomerCalendar(customerId)),
+      );
       const dAfter = findDossier({ crmId: customerId });
       if (dAfter) {
         upsertDossier({
