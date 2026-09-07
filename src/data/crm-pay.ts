@@ -44,7 +44,7 @@ import {
 } from "./crm-pay-core";
 import { pendingExportIds } from "./crm-export-queue";
 import { logAdmin } from "./admin-settings";
-import { ledgerMoney, uniqueBranches } from "./crm-ledger-core";
+import { ledgerMoney, uniqueBranches, payCttIdOf } from "./crm-ledger-core";
 
 export type { PayKind, PayRow };
 export { displayedBalance, balanceOf, payKindOf, payEffect, snapshotBalance, accountSnapOf, liveCttOf, cttRestSum, paySumForCtt, payCountForCtt, cttIdOfPay, OPENING_NOTE, payAccountLabel, CASH_PAGE_SIZES, cashPageSlice, cashTakeOf, payFillNote };
@@ -379,7 +379,7 @@ export function packPay(item: Record<string, unknown>, customerId: number, branc
     documentDate: String(item.document_date || item.date || ruToday()),
     at: new Date().toISOString(),
     ...extrasOf({
-      cttId: Number(item.ctt_id || item.cttId) || 0,
+      cttId: payCttIdOf(item),
       tariffId: Number(item.tariff_id || item.tariffId) || 0,
       payItemId: Number(item.pay_item_id || item.payItemId) || 0,
       payAccountId: Number(item.pay_account_id || item.payAccountId) || 0,
@@ -462,6 +462,40 @@ export async function inboundCustomerPays(
     if (b === branches.length - 1) done = filled || lastShort;
   }
   if (done && !filled) markPayJournalComplete(customerId);
+  const known: number[] = [];
+  try {
+    const { findDossier } = await import("./dossiers");
+    const { parseDossierCtt } = await import("./pupil-tariffs");
+    const d = findDossier({ crmId: customerId });
+    known.push(...parseDossierCtt(d?.extras).map((t) => Number(t.id) || 0).filter((n) => n > 0));
+  } catch {
+    /* диск абонементов необязателен */
+  }
+  const unlabeled = raw.some((it) => !payCttIdOf(it));
+  if (unlabeled && known.length) {
+    for (const ctt of [...new Set(known)]) {
+      for (let p = 0; p < 6; p += 1) {
+        try {
+          const json = await request(
+            `/v2api/${branchId}/pay/index`,
+            { page: p, pageSize: PAY_INBOUND_PAGE, customer_id: customerId, ctt_id: ctt },
+            token,
+          );
+          const pack = crmUnwrapIndex(json);
+          raw.push(
+            ...pack.items.map((it) => ({
+              ...it,
+              branch_id: Number(it.branch_id || branchId) || branchId,
+              ctt_id: Number(it.ctt_id || ctt) || ctt,
+            })),
+          );
+          if (pack.items.length < PAY_INBOUND_PAGE) break;
+        } catch {
+          break;
+        }
+      }
+    }
+  }
   const pulled = raw.map((it) => packPay(it, customerId, branchId)).filter((x): x is PayRow => Boolean(x));
   const hold = holdPayIds();
   const merged = mergePayInbound(pulled, paysOf(customerId), hold);

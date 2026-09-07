@@ -1,6 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { ledgerMoney, lessonWriteoffAmount, uniqueBranches } from "./crm-ledger-core.ts";
+import {
+  ledgerMoney,
+  lessonWriteoffAmount,
+  lessonWriteoffCtt,
+  lessonCustomerIds,
+  payCttIdOf,
+  writeoffSumOf,
+  writeoffSumForCtt,
+  uniqueBranches,
+} from "./crm-ledger-core.ts";
 
 describe("журнал оплат и списаний", () => {
   it("полный журнал: оплаты минус списания", () => {
@@ -20,6 +29,36 @@ describe("журнал оплат и списаний", () => {
     assert.equal(lessonWriteoffAmount({ commission: 537.5 }), 537.5);
     assert.equal(lessonWriteoffAmount({ details: [{ cost: 537.5 }] }), 537.5);
     assert.equal(lessonWriteoffAmount({}), 0);
+  });
+
+  it("Алифанов: комиссия и абонемент только своей details, чужая не берётся", () => {
+    const lesson = {
+      customer_ids: [88, 91],
+      details: [
+        { customer_id: 88, ctt_id: 4412, commission: 850 },
+        { customer_id: 91, ctt_id: 5016, commission: 1200 },
+      ],
+    };
+    assert.deepEqual(lessonCustomerIds(lesson), [88, 91]);
+    assert.equal(lessonWriteoffAmount(lesson, 91), 1200);
+    assert.equal(lessonWriteoffCtt(lesson, 91), 5016);
+    assert.equal(lessonWriteoffAmount(lesson, 88), 850);
+    assert.equal(lessonWriteoffCtt(lesson, 88), 4412);
+    assert.deepEqual(lessonCustomerIds({ details: [{ customer_id: 91, commission: 400 }] }), [91]);
+    assert.equal(payCttIdOf({ ctt_id: 4412 }), 4412);
+    assert.equal(payCttIdOf({ customer_tariff_id: 4412 }), 4412);
+    assert.equal(payCttIdOf({ ctt: { id: 4412 } }), 4412);
+    assert.equal(payCttIdOf({ ctt_id: -1 }), 0);
+    const done = [
+      { status: 3, amount: 850, cttId: 4412 },
+      { status: 3, amount: 850, cttId: 4412 },
+      { status: 2, amount: 850, cttId: 4412 },
+      { status: 3, amount: 400, cttId: 0 },
+    ];
+    assert.equal(writeoffSumOf(done), 2100);
+    assert.equal(writeoffSumForCtt(done, 4412), 1700);
+    assert.equal(writeoffSumForCtt(done, 0), 400);
+    assert.equal(ledgerMoney({ paySum: 12000, writeoffSum: 1700, snap: 12000, complete: true }), 10300);
   });
 
   it("филиалы 1–4, основной первый", () => {

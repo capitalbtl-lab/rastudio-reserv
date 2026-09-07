@@ -108,6 +108,7 @@ export type GroupCalLesson = {
   lessonId?: number;
   customerIds?: number[];
   amount?: number;
+  cttId?: number;
 };
 
 export type SlotVersion = { at: string; reason: string; count: number; slots: CrmSlot[] };

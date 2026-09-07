@@ -5,7 +5,7 @@ import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor } from "./crm-cache-policy";
 import { journalFingerprint } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
-import { lessonWriteoffAmount, uniqueBranches } from "./crm-ledger-core";
+import { lessonWriteoffAmount, lessonWriteoffCtt, lessonCustomerIds, uniqueBranches } from "./crm-ledger-core";
 
 function hm(raw?: string) {
   const m = String(raw || "").match(/(\d{1,2}):(\d{2})/);
@@ -42,23 +42,29 @@ function packLight(
     topic?: string | null;
     note?: string | null;
     homework?: string | null;
-    details?: { is_attend?: number | null; commission?: number; cost?: number }[];
+    details?: { is_attend?: number | null; commission?: number; cost?: number; customer_id?: number; ctt_id?: number }[];
     customer_ids?: number[];
     group_ids?: number[];
     duration?: number;
     ctt_id?: number;
+    customer_id?: number;
     commission?: number;
     cost?: number;
   },
   ctx: { groupName: string; from: string; to: string; teacher: string; subject: string },
+  customerId?: number,
 ): GroupCalLesson | null {
   const date = ymd(item.date || item.time_from || "");
   if (!date) return null;
   const from = hm(item.time_from) || ctx.from;
   const to = hm(item.time_to) || ctx.to;
-  const ids = (item.customer_ids || []).map(Number).filter((n) => n > 0);
+  const rec = item as Record<string, unknown>;
+  const ids = lessonCustomerIds(rec);
   const fromDetails = (item.details || []).filter((d) => d.is_attend === 1).length;
   const total = (item.details || []).length || ids.length;
+  const cid = Number(customerId) || 0;
+  const amount = cid ? lessonWriteoffAmount(rec, cid) : 0;
+  const cttId = cid ? lessonWriteoffCtt(rec, cid) : 0;
   return {
     date,
     from,
@@ -80,8 +86,9 @@ function packLight(
     teacherIds: (item.teacher_ids || []).map(Number).filter((n) => n > 0),
     subjectId: Number(item.subject_id || 0) || undefined,
     groupIds: (item.group_ids || []).map(Number).filter((n) => n > 0),
-    customerIds: ids,
-    amount: lessonWriteoffAmount(item as Record<string, unknown>),
+    customerIds: cid && !ids.includes(cid) ? [...ids, cid] : ids,
+    amount: amount || undefined,
+    cttId: cttId || undefined,
     duration: Number(item.duration || 0) || undefined,
   };
 }
@@ -196,12 +203,13 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
   const pulled: ReturnType<typeof packLight>[] = [];
   for (const les of packs) {
     for (const item of les.items || []) {
-      const ids = (item.customer_ids || []).map(Number);
-      if (!ids.includes(id)) continue;
+      const rec = item as Record<string, unknown>;
+      const ids = lessonCustomerIds(rec);
+      if (ids.length && !ids.includes(id)) continue;
       const gid = Number((item.group_ids || [])[0] || 0);
       const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
       const packed = packLight(
-        { ...item, date: ymd(item.date) },
+        { ...item, date: ymd(item.date), customer_ids: ids.length ? ids : [id] },
         {
           groupName: slot?.groupName || String(item.lesson_type_name || "занятие"),
           from: hm(item.time_from) || "",
@@ -209,6 +217,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
           teacher: slot?.teacher || "",
           subject: slot?.subject || "",
         },
+        id,
       );
       if (!packed) continue;
       packed.date = ymd(packed.date);

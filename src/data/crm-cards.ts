@@ -39,6 +39,7 @@ export type ClientLesson = {
   subject?: string;
   room?: string;
   amount?: number;
+  cttId?: number;
 };
 
 export type ClientTariff = {

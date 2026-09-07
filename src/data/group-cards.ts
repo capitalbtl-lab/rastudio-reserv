@@ -190,21 +190,22 @@ export function collectCustomerJournal(
   const out: GroupCalLesson[] = [];
   const seen = new Set<string>();
   const id = Number(customerId) || 0;
-  const push = (les: GroupCalLesson, groupName?: string) => {
+  const push = (les: GroupCalLesson, groupName?: string, pastWriteoff = false) => {
     const ids = (les.customerIds || []).map(Number);
-    if (id && !ids.includes(id)) return;
+    if (id && ids.length && !ids.includes(id)) return;
+    if (id && !ids.length && !pastWriteoff) return;
     const row = { ...les, group: les.group || groupName || "" };
-    if (groups.length && !calendarLessonForCard(row, groups)) return;
+    if (groups.length && !pastWriteoff && !calendarLessonForCard(row, groups)) return;
     const key = String(row.lessonId || `${row.date}|${row.from}|${row.type}|${row.group}`);
     if (seen.has(key)) return;
     seen.add(key);
     out.push(row);
   };
+  for (const les of loadCustomerCalendar(customerId)) push(les, undefined, Number(les.status) === 3);
   for (const g of groups) {
     const gcard = loadGroupCard(g.branchId, g.id);
     for (const les of journalForCustomer(gcard?.calendar || [], customerId)) push(les, g.name);
   }
-  for (const les of loadCustomerCalendar(customerId)) push(les);
   return out.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")));
 }
 
