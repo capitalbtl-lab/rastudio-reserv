@@ -3123,7 +3123,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
                 const gids = (item.group_ids || []).map(Number);
                 if (gids.length && !gids.includes(gid)) continue;
                 const packed = packCrmLesson(item, ctx);
-                if (packed) byDate.set(packed.date, packed);
+                if (packed) byDate.set(`${packed.lessonId || 0}|${packed.date}|${packed.from}`, packed);
               }
               if (chunk.length < 200) break;
             }
@@ -3139,6 +3139,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         (await import("./crm-export-queue")).pendingExportIds(["lesson.update", "lesson.create"]),
       );
       rememberLessons(calendar);
+      fanOutLessonWriteoffs(calendar);
       const levels = await fetchLevels(t, branch).catch(() => SEED_LEVELS);
       const group = {
           id: gid,
