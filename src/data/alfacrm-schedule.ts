@@ -348,7 +348,6 @@ export async function refreshCrmSchedule(opts?: { mode?: CrmScheduleMode }) {
   } catch {
     /* лог необязателен */
   }
-  const saved = saveAdminSlots(merged.slots);
   return {
     at: new Date(saved.at).toISOString(),
     count: saved.slots.length,
