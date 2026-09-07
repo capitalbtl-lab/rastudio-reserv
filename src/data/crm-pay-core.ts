@@ -41,18 +41,18 @@ export function payKindOf(raw?: string | null): PayKind {
   return PAY_KINDS.some((k) => k.id === raw) ? (raw as PayKind) : "income";
 }
 
-/** Alfa pay_type_id: 1 приход, 2 расход/возврат, 3 корректировка. Товар — commodity_id. */
+/** Alfa PayType: 1 доход, 2 продажа товара, 3 возврат, 4 корректировка. */
 export function kindFromAlfaPay(item: Record<string, unknown>): PayKind {
   const typeId = Number(item.pay_type_id || item.payTypeId || item.type_id || 0) || 0;
-  if (typeId === 3) return "correct";
-  if (Number(item.commodity_id || item.commodityId) || typeId === 4) return "product";
-  if (typeId === 2) return "refund";
+  if (typeId === 4) return "correct";
+  if (typeId === 2 || Number(item.commodity_id || item.commodityId)) return "product";
+  if (typeId === 3) return "refund";
   const income = Number(item.income || 0) || 0;
   const expenditure = Number(item.expenditure || 0) || 0;
   const label = String(item.pay_type || item.type_name || item.note || "").toLowerCase();
-  if (/коррект/.test(label)) return "correct";
-  if (/товар|продаж/.test(label)) return "product";
-  if (expenditure && !income) return "refund";
+  if (/коррект/.test(label) || typeId === 4) return "correct";
+  if (/товар|продаж/.test(label) || typeId === 2) return "product";
+  if (/возврат/.test(label) || typeId === 3 || (expenditure && !income)) return "refund";
   return "income";
 }
 

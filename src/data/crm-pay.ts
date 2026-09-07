@@ -384,7 +384,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   const poll = store.poll || emptyPoll();
   const now = Date.now();
   const firstFill = payPollFirstFill(poll.branches);
-  if (!payPollAllowed(poll.hits, now) && !firstFill) {
+  if (!payPollAllowed(poll.hits, now) && !firstFill && opts?.via !== "button") {
     const note = `касса poll: лимит ${payPollHitsInWindow(poll.hits, now).length}/10 за час`;
     poll.lastNote = note;
     store.poll = poll;
@@ -404,6 +404,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   let hit429 = false;
   const errs: string[] = [];
   const hold = holdPayIds();
+  const typeCounts = new Map<string, number>();
   for (const branchId of branches) {
     const stamp = payPollStampOrEmpty(poll.branches[String(branchId)]);
     try {
@@ -421,13 +422,17 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
       }
       if (opts?.via === "button" || firstFill) {
         try {
-          const corrJson = await request(`/v2api/${branchId}/pay/index`, { page: 0, pay_type_id: 3 }, t);
+          const corrJson = await request(`/v2api/${branchId}/pay/index`, { page: 0, pay_type_id: 4 }, t);
           pages += 1;
           const extra = crmUnwrapIndex(corrJson).items;
           if (extra.length) pack = { ...pack, items: [...pack.items, ...extra] };
         } catch (e) {
           if (is429(e)) throw e;
         }
+      }
+      for (const it of pack.items) {
+        const t = String(it.pay_type_id ?? it.payTypeId ?? "?");
+        typeCounts.set(t, (typeCounts.get(t) || 0) + 1);
       }
       if (!pack.items.length) {
         const raw = JSON.stringify(json).slice(0, 120);
@@ -459,7 +464,8 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
       errs.push(`ф${branchId}: ${e instanceof Error ? e.message.slice(0, 80) : String(e).slice(0, 80)}`);
     }
   }
-  const note = `${new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow" })} Касса inbound: филиалы ${branches.join(",")}, пришло ${pulledCount}, новых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"})${errs.length ? `. ${errs.join("; ")}` : ""}`;
+  const types = [...typeCounts.entries()].map(([k, n]) => `${k}×${n}`).join(",") || "нет";
+  const note = `${new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow" })} Касса inbound: филиалы ${branches.join(",")}, пришло ${pulledCount}, новых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"}), типы ${types}${errs.length ? `. ${errs.join("; ")}` : ""}`;
   poll.lastNote = note;
   const freshStore = load();
   freshStore.poll = poll;

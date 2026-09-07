@@ -95,8 +95,9 @@ describe("журнал денег", () => {
     assert.equal(payPollFirstFill({ "1": { lastId: 0, lastDate: "2026-09-07" } }), true);
     assert.equal(payPollFirstFill({ "1": { lastId: 9, lastDate: "2026-09-07" }, "2": { lastId: 0, lastDate: "" }, "3": { lastId: 0, lastDate: "" }, "4": { lastId: 0, lastDate: "" } }), false);
     assert.equal(kindFromAlfaPay({ pay_type_id: 1, income: 100 }), "income");
-    assert.equal(kindFromAlfaPay({ pay_type_id: 2, expenditure: 50 }), "refund");
-    assert.equal(kindFromAlfaPay({ pay_type_id: 3, income: 10 }), "correct");
+    assert.equal(kindFromAlfaPay({ pay_type_id: 2, income: 200 }), "product");
+    assert.equal(kindFromAlfaPay({ pay_type_id: 3, expenditure: 50 }), "refund");
+    assert.equal(kindFromAlfaPay({ pay_type_id: 4, income: 10 }), "correct");
     assert.equal(kindFromAlfaPay({ commodity_id: 9, income: 200 }), "product");
     assert.equal(kindFromAlfaPay({ note: "Корректировка остатка", income: 1 }), "correct");
     assert.equal(kindFromAlfaPay({ expenditure: 80 }), "refund");
