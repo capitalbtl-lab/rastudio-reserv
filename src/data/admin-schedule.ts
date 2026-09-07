@@ -1333,6 +1333,19 @@ export const adminSchedule = createServerFn({ method: "POST" })
         timeTo?: string;
         lessonId?: number;
         diskOnly?: boolean;
+        homework?: string;
+        customers?: {
+          id: number;
+          name?: string;
+          attend?: boolean;
+          amount?: number;
+          cttId?: number;
+          reasonId?: number;
+          reason?: string;
+          grade?: string;
+          homeworkGrade?: string;
+          note?: string;
+        }[];
       };
     },
   )
@@ -3748,14 +3761,48 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const from = hm(String(raw?.time_from || data.time || ""));
       const to = hm(String(raw?.time_to || data.timeTo || ""));
       const teacherIds = (Array.isArray(raw?.teacher_ids) ? raw!.teacher_ids : data.teacherIds || []).map(Number).filter((n) => n > 0);
-      const customerIds = (Array.isArray(raw?.customer_ids) ? raw!.customer_ids : data.customerIds || []).map(Number).filter((n) => n > 0);
+      const pupils = raw ? packLessonPupils(raw as Record<string, unknown>) : [];
+      const customerIds = (pupils.length ? pupils.map((p) => p.customerId) : Array.isArray(raw?.customer_ids) ? raw!.customer_ids : data.customerIds || []).map(Number).filter((n) => n > 0);
       const groupIds = (Array.isArray(raw?.group_ids) ? raw!.group_ids : []).map(Number).filter((n) => n > 0);
       if (!groupIds.length && gid) groupIds.push(gid);
-      const customers = customerIds.map((cid) => {
+      const { parseDossierCtt } = await import("./pupil-tariffs");
+      const customers = (pupils.length ? pupils : customerIds.map((cid) => ({ customerId: cid, attend: true, amount: 0 }))).map((p) => {
+        const cid = Number(p.customerId);
         const d = findDossier({ crmId: cid });
-        const name = String(d?.child?.fio || d?.parent?.fio || "").trim();
-        return { id: cid, name: name || `клиент ${cid}` };
+        const name = String(("name" in p && p.name) || d?.child?.fio || d?.parent?.fio || "").trim();
+        const live = parseDossierCtt(d?.extras).filter((t) => !t.archived);
+        const t0 = live[0];
+        const till = String(t0?.eDate || "").replace(/^(\d{2})\.(\d{2})\.(\d{4})$/, "$1.$2");
+        const left = Number(t0?.lessons) || 0;
+        return {
+          id: cid,
+          name: name || `клиент ${cid}`,
+          attend: "attend" in p ? Boolean(p.attend) : true,
+          amount: Number(p.amount) || 0,
+          cttId: Number("cttId" in p ? p.cttId : 0) || 0,
+          reasonId: Number("reasonId" in p ? p.reasonId : 0) || 0,
+          reason: String("reason" in p ? p.reason || "" : ""),
+          grade: String("grade" in p ? p.grade || "" : ""),
+          homeworkGrade: String("homeworkGrade" in p ? p.homeworkGrade || "" : ""),
+          note: String("note" in p ? p.note || "" : ""),
+          rest: t0 ? (till ? `${left} ост, ${till}` : `${left} ост`) : "",
+        };
       });
+      if (gid && raw) {
+        const packed = packCrmLesson(raw as Parameters<typeof packCrmLesson>[0], {
+          rooms: new Map(rooms.map((r) => [r.id, r.name])),
+          teachers: new Map(teachers.map((x) => [x.id, x.name])),
+          subjects: new Map(catalog.subjects.map((s) => [s.id, s.name])),
+          groupName: slot?.groupName || "",
+          fallbackFrom: from,
+          fallbackTo: to,
+          fallbackTeacher: slot?.teacher || "",
+        });
+        if (packed) {
+          upsertGroupCalendar(branch, gid, packed, { name: slot?.groupName, subjectId: slot?.subjectId, subject: slot?.subject });
+          fanOutLessonWriteoffs([packed]);
+        }
+      }
       return {
         ok: true as const,
         fromCache: false,
@@ -3772,9 +3819,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
           groupIds,
           customerIds,
           customers,
+          pupils,
           subjectId: Number(raw?.subject_id || data.subjectId || 0),
           teacherIds,
           topic: String(raw?.topic || data.topic || ""),
+          homework: String(raw?.homework || ""),
           note: String(raw?.note || data.note || ""),
         },
         rooms: rooms.length ? rooms : alfaRooms,
@@ -3795,42 +3844,66 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const dateRu = formatRuDob(dateIso);
       const gid = Number(data.groupId) || Number((data.groupIds || [])[0]) || 0;
       const teacherIds = (data.teacherIds || []).map(Number).filter((n) => n > 0);
-      const customerIds = (data.customerIds || []).map(Number).filter((n) => n > 0);
+      const rawCustomers = Array.isArray(data.customers) ? data.customers : [];
+      const pupils = rawCustomers
+        .map((c) => ({
+          customerId: Number(c.id) || 0,
+          name: String(c.name || "").trim() || undefined,
+          attend: c.attend !== false,
+          amount: Number(c.amount) || undefined,
+          cttId: Number(c.cttId) || undefined,
+          reasonId: Number(c.reasonId) || undefined,
+          reason: String(c.reason || "").trim() || undefined,
+          grade: String(c.grade || "").trim() || undefined,
+          homeworkGrade: String(c.homeworkGrade || "").trim() || undefined,
+          note: String(c.note || "").trim() || undefined,
+        }))
+        .filter((p) => p.customerId > 0);
+      const customerIds = (pupils.length ? pupils.map((p) => p.customerId) : data.customerIds || []).map(Number).filter((n) => n > 0);
       const groupIds = (data.groupIds || []).map(Number).filter((n) => n > 0);
       if (!groupIds.length && gid) groupIds.push(gid);
       const subjectId = Number(data.subjectId) || 0;
       const roomId = Number(data.roomId) || 0;
       const lessonId = rawId || nextLocalLessonId();
+      const details = pupils.map((p) => ({
+        customer_id: p.customerId,
+        is_attend: p.attend ? 1 : 0,
+        commission: Number(p.amount) || 0,
+        ...(p.cttId ? { ctt_id: p.cttId } : {}),
+        ...(p.reasonId ? { reason_id: p.reasonId } : {}),
+        ...(p.grade ? { grade: p.grade } : {}),
+        ...(p.homeworkGrade ? { homework_grade: p.homeworkGrade } : {}),
+        ...(p.note ? { note: p.note } : {}),
+      }));
       if (gid) {
         const slot = listAdminSlots().find((s) => s.groupId === gid && s.branchId === branch) || listAdminSlots().find((s) => s.groupId === gid);
         const prevHit = loadGroupCard(branch, gid)?.calendar.find(
           (x) => Number(x.lessonId) === lessonId || (dateIso && x.date === dateIso && x.from === from),
         );
-        upsertGroupCalendar(
-          branch,
-          gid,
-          stampJournal(
-            {
-              date: dateIso,
-              from,
-              to,
-              duration,
-              status: prevHit?.status || 1,
-              type: prevHit?.type || "Групповое",
-              typeId: prevHit?.typeId || 2,
-              roomId: roomId || undefined,
-              teacherIds,
-              subjectId: subjectId || undefined,
-              groupIds,
-              customerIds,
-              topic: String(data.topic || ""),
-              note: String(data.note || ""),
-              lessonId,
-            },
+        const saved = stampJournal(
+          {
+            date: dateIso,
+            from,
+            to,
+            duration,
+            status: prevHit?.status || 1,
+            type: prevHit?.type || "Групповое",
+            typeId: prevHit?.typeId || 2,
+            roomId: roomId || undefined,
+            teacherIds,
+            subjectId: subjectId || undefined,
+            groupIds,
             customerIds,
-          ),
-          { name: slot?.groupName, subjectId: slot?.subjectId, subject: slot?.subject },
+            topic: String(data.topic || ""),
+            homework: String(data.homework || prevHit?.homework || ""),
+            note: String(data.note || ""),
+            lessonId,
+            pupils: pupils.length ? pupils : prevHit?.pupils,
+          },
+          customerIds,
         );
+        upsertGroupCalendar(branch, gid, saved, { name: slot?.groupName, subjectId: slot?.subjectId, subject: slot?.subject });
+        fanOutLessonWriteoffs([saved]);
       }
       if (lessonId < 0) {
         enqueueExport({
