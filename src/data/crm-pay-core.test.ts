@@ -75,7 +75,7 @@ describe("журнал денег", () => {
       row({ id: 2, kind: "income", income: 500, expenditure: 0, deleted: true }),
     ];
     assert.equal(balanceOf(rows), 1000);
-    assert.equal(displayedBalance(rows, "0"), 1000);
+    assert.equal(displayedBalance(rows, "0", true), 1000);
   });
 
   it("штамп: дата/id ≥, автоопрос 10/час", () => {
