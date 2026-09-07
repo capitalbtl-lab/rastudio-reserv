@@ -1,9 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { publicSiteBoard, publicGroupsOfCourse, publicCourseIdOf } from "./public-bind-core.ts";
-import { resolveGroupCourseId, joinCourseSubject, subjectIdOfCourse, courseSubjectGapText } from "./course-subject-core.ts";
+import { resolveGroupCourseId, joinCourseSubject, subjectIdOfCourse, courseSubjectGapText, patchAssignForInbound, assignWriteSource } from "./course-subject-core.ts";
 import { DISK_RULES } from "./crm-disk-rules.ts";
 import type { SiteTree } from "./site-tree.ts";
+import { readFileSync } from "node:fs";
 
 const tree: SiteTree = {
   schools: [
@@ -112,5 +113,40 @@ describe("раздел Сайт по ID", () => {
     assert.match(DISK_RULES[6].not, /paid_till|F5/);
     assert.match(DISK_RULES[7].field, /comms/);
     assert.match(DISK_RULES[7].not, /communication\/index/);
+  });
+
+  it("applyScheduleMap при источнике map не пишет assign", () => {
+    const map = [{ subjectId: 114, courseId: "/roboticsinenglish" }];
+    const robotTree = {
+      ...tree,
+      courses: [...tree.courses, { id: "/roboticsinenglish", href: "/roboticsinenglish", schoolId: "/robototehnika-v-kolomne", label: "en" }],
+      assign: {},
+    };
+    const mapped = { id: "n", groupId: 900, branchId: 3, courseId: "", subjectId: 114 };
+    const join = joinCourseSubject(mapped, robotTree, map);
+    assert.equal(join.source, "map");
+    assert.equal(assignWriteSource(join.source), false);
+    const patched = patchAssignForInbound({}, mapped, robotTree, map);
+    assert.equal(patched.wrote, false);
+    assert.equal(patched.assign["gid:3:900"], undefined);
+
+    const card = { id: "c", groupId: 465, branchId: 3, courseId: "/robototehnika-7-9", subjectId: 114 };
+    const fromSlot = patchAssignForInbound({}, card, robotTree, map);
+    assert.equal(fromSlot.source, "slot");
+    assert.equal(fromSlot.wrote, true);
+    assert.equal(fromSlot.assign["gid:3:465"], "/robototehnika-7-9");
+  });
+
+  it("resolveGroupCourseId без карты не берёт заводской SUBJECT_TO_COURSE", () => {
+    const ids = readFileSync(new URL("./ids.ts", import.meta.url), "utf8");
+    assert.match(ids, /37:\s*"\/robototehnika-7-9"/);
+    assert.match(ids, /114:\s*"\/roboticsinenglish"/);
+    const empty = { schools: tree.schools, courses: tree.courses, assign: {} as Record<string, string> };
+    assert.equal(resolveGroupCourseId({ groupId: 465, branchId: 3, subjectId: 37, courseId: "" }, empty), "");
+    assert.equal(resolveGroupCourseId({ groupId: 465, branchId: 3, subjectId: 114, courseId: "" }, empty), "");
+    assert.equal(
+      resolveGroupCourseId({ groupId: 465, branchId: 3, subjectId: 37, courseId: "" }, empty, [{ subjectId: 37, courseId: "" }]),
+      "",
+    );
   });
 });

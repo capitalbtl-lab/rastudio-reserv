@@ -13,6 +13,8 @@
 Ядро (только вкладка A): см. `src/data/kernel.ts` (`KERNEL_FILES`).
 Не расширять список и не переименовывать ключи без этой вкладки.
 `src/data/ids.ts`, `crm-disk-rules.ts`, `crm-local-id.ts`, очередь Alfa, `dossiers*.ts`, карты course/tariff, схема `Brain` в `agent-config.ts`.
+Ночной inbound групп: `src/data/crm-night-groups.ts`, 04:00 Europe/Moscow, diff по `branchId+groupId`.
+Касса: `crm-pays.json`, очередь `pay.create`/`pay.delete`, автоопрос 10/час (`scripts/crm-pay-poll.mjs`). Карточка «Обновить» одного клиента — не в лимите.
 
 ---
 

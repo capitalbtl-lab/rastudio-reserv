@@ -827,6 +827,7 @@ export async function overlayMembershipChunk(
   offset = 0,
   take = 8,
   only?: { groupId: number; branchId: number; name: string; taken?: number }[],
+  opts?: { forceCgi?: boolean; skipTariffs?: boolean },
 ) {
   const { pagedIndex, request } = await import("./alfacrm");
   const { cgiCustomerId, tariffRowCustomerId, CRM_READ_GAP_MS, cgiRecordLive } = await import("./pupil-tariffs");
@@ -857,9 +858,9 @@ export async function overlayMembershipChunk(
   let scanned = 0;
   let cgiN = 0;
 
-  async function cgiOf(g: (typeof slice)[0]) {
+  async function cgiOf(g: (typeof slice)[0], force = false) {
     const diskPeople = dossiersInGroup(g.branchId, g.groupId);
-    if (!overlayCgiNeeded(diskPeople.length, Number(g.taken) || 0)) {
+    if (!force && !overlayCgiNeeded(diskPeople.length, Number(g.taken) || 0)) {
       for (const d of diskPeople) {
         const cid = Number(d.crmId) || 0;
         if (!cid) continue;
@@ -907,19 +908,21 @@ export async function overlayMembershipChunk(
     return n;
   }
 
-  const needCgi = slice.filter((g) => overlayCgiNeeded(dossiersInGroup(g.branchId, g.groupId).length, Number(g.taken) || 0));
-  const fromDisk = slice.filter((g) => !needCgi.includes(g));
-  for (const g of fromDisk) await cgiOf(g);
+  const forceCgi = Boolean(opts?.forceCgi);
+  const skipTariffs = Boolean(opts?.skipTariffs);
+  const needCgi = forceCgi ? [...slice] : slice.filter((g) => overlayCgiNeeded(dossiersInGroup(g.branchId, g.groupId).length, Number(g.taken) || 0));
+  const fromDisk = forceCgi ? [] : slice.filter((g) => !needCgi.includes(g));
+  for (const row of fromDisk) await cgiOf(row, false);
   if (needCgi.length) {
     t = await alfaToken();
     for (let i = 0; i < needCgi.length; i += 2) {
       if (i) await wait(CRM_READ_GAP_MS);
-      await Promise.all(needCgi.slice(i, i + 2).map((g) => cgiOf(g)));
+      await Promise.all(needCgi.slice(i, i + 2).map((row) => cgiOf(row, forceCgi)));
     }
   }
 
   const cids = [...byCustomer.keys()];
-  const unknown = cids.filter((cid) => !bag(cid).seenTariff);
+  const unknown = skipTariffs ? [] : cids.filter((cid) => !bag(cid).seenTariff);
   const gmem = globalThis as { __raTariffByBranch?: { at: number; live: Map<number, Set<number>>; seen: Set<number> } };
   if (stampCursor && from === 0) gmem.__raTariffByBranch = undefined;
   const bagLive = (gmem.__raTariffByBranch ||= { at: Date.now(), live: new Map(), seen: new Set() });
@@ -1014,7 +1017,9 @@ export async function overlayMembershipChunk(
     if (hit.seenTariff) d.extras.live_tariff = hit.live ? "1" : "0";
   }
   const liveFromIndex = new Set<number>();
-  for (const set of bagLive.live.values()) for (const id of set) liveFromIndex.add(id);
+  if (!skipTariffs) {
+    for (const set of bagLive.live.values()) for (const id of set) liveFromIndex.add(id);
+  }
   if (liveFromIndex.size) {
     for (const d of store.items) {
       const id = Number(d.crmId || 0);
@@ -1048,6 +1053,7 @@ export async function overlayMembershipChunk(
     withGroups,
     live: ids.length,
     ids,
+    customerIds: cids,
     extra,
   };
 }

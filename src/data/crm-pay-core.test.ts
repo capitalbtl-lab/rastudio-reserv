@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, mergePayInbound, OPENING_NOTE, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, OPENING_NOTE, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -46,5 +46,47 @@ describe("журнал денег", () => {
     assert.equal(merged.some((x) => x.id === -4), true);
     assert.equal(merged.some((x) => x.id === 99), true);
     assert.equal(merged.find((x) => x.id === -4)?.income, 700);
+  });
+
+  it("inbound сохраняет cttId; pending create/delete и deleted не затирает", () => {
+    const prev = [
+      row({ id: -7, kind: "income", income: 400, expenditure: 0, cttId: 55 }),
+      row({ id: 201, kind: "income", income: 100, expenditure: 0, cttId: 12, deleted: true }),
+    ];
+    const pulled = [
+      row({ id: 201, kind: "income", income: 100, expenditure: 0, cttId: 12 }),
+      row({ id: 202, kind: "income", income: 800, expenditure: 0, cttId: 77, tariffId: 9, groupId: 465 }),
+    ];
+    const merged = mergePayInbound(pulled, prev, [-7, 201]);
+    assert.equal(merged.some((x) => x.id === -7), true);
+    assert.equal(merged.find((x) => x.id === 201)?.deleted, true);
+    assert.equal(merged.find((x) => x.id === 202)?.cttId, 77);
+    assert.equal(merged.find((x) => x.id === 202)?.tariffId, 9);
+    assert.equal(merged.find((x) => x.id === 202)?.groupId, 465);
+  });
+
+  it("deleted не двигает остаток", () => {
+    const rows = [
+      row({ id: 1, kind: "income", income: 1000, expenditure: 0 }),
+      row({ id: 2, kind: "income", income: 500, expenditure: 0, deleted: true }),
+    ];
+    assert.equal(balanceOf(rows), 1000);
+    assert.equal(displayedBalance(rows, "0"), 1000);
+  });
+
+  it("штамп: дата/id ≥, автоопрос 10/час", () => {
+    const stamp = { lastId: 50, lastDate: "2026-09-07" };
+    assert.equal(payAfterStamp({ id: 51, documentDate: "07.09.2026" }, stamp), true);
+    assert.equal(payAfterStamp({ id: 50, documentDate: "07.09.2026" }, stamp), false);
+    assert.equal(payAfterStamp({ id: 1, documentDate: "08.09.2026" }, stamp), true);
+    assert.equal(payAfterStamp({ id: 99, documentDate: "06.09.2026" }, stamp), false);
+    const next = nextPayStamp([{ id: 80, documentDate: "07.09.2026" }, { id: 3, documentDate: "08.09.2026" }], stamp);
+    assert.equal(next.lastDate, "2026-09-08");
+    assert.equal(next.lastId, 3);
+    const now = Date.parse("2026-09-07T12:00:00Z");
+    const hits = Array.from({ length: 10 }, (_, i) => new Date(now - i * 60_000).toISOString());
+    assert.equal(payPollAllowed(hits, now), false);
+    assert.equal(payPollAllowed(hits.slice(1), now), true);
+    assert.equal(payPollHitsInWindow(["2026-09-07T10:00:00Z", "2026-09-07T11:50:00Z"], now).length, 1);
   });
 });

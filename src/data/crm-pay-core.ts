@@ -11,6 +11,9 @@ export const PAY_KINDS: { id: PayKind; name: string }[] = [
 
 export const OPENING_NOTE = "остаток на диске";
 
+export const PAY_POLL_MAX_PER_HOUR = 10;
+export const PAY_POLL_WINDOW_MS = 60 * 60 * 1000;
+
 export type PayRow = {
   id: number;
   customerId: number;
@@ -21,7 +24,18 @@ export type PayRow = {
   note: string;
   documentDate: string;
   at: string;
+  cttId?: number;
+  tariffId?: number;
+  payItemId?: number;
+  payAccountId?: number;
+  locationId?: number;
+  managerId?: number;
+  payMethod?: string;
+  groupId?: number;
+  deleted?: boolean;
 };
+
+export type PayPollStamp = { lastId: number; lastDate: string };
 
 export function payKindOf(raw?: string | null): PayKind {
   return PAY_KINDS.some((k) => k.id === raw) ? (raw as PayKind) : "income";
@@ -38,7 +52,8 @@ export function payEffect(kind: PayKind, sum: number, prev: number) {
   return { income: n, expenditure: 0, next: prev + n };
 }
 
-export function rowDelta(row: Pick<PayRow, "kind" | "income" | "expenditure">) {
+export function rowDelta(row: Pick<PayRow, "kind" | "income" | "expenditure" | "deleted">) {
+  if (row.deleted) return 0;
   if (row.kind === "product") return 0;
   return Number(row.income || 0) - Number(row.expenditure || 0);
 }
@@ -50,7 +65,8 @@ export function balanceOf(rows: PayRow[]) {
 }
 
 export function displayedBalance(rows: PayRow[], fallback?: number | string) {
-  if (rows.length) return balanceOf(rows);
+  const live = rows.filter((x) => !x.deleted);
+  if (live.length) return balanceOf(live);
   return Number(fallback || 0) || 0;
 }
 
@@ -58,21 +74,81 @@ export function isOpeningRow(row: Pick<PayRow, "note">) {
   return String(row.note || "") === OPENING_NOTE;
 }
 
+function payKey(x: Pick<PayRow, "id" | "at" | "income" | "expenditure">) {
+  const lid = Number(x.id) || 0;
+  return lid ? `id:${lid}` : `t:${x.at}|${x.income}|${x.expenditure}`;
+}
+
+/** Очередь create/delete старше входа. Удалённые с диска Alfa не воскрешает. */
 export function mergePayInbound(pulled: PayRow[], prev: PayRow[] | undefined, holdIds: Iterable<number> = []) {
   const hold = new Set([...holdIds].map(Number).filter((n) => n));
   const map = new Map<string, PayRow>();
   const base = pulled.length ? (prev || []).filter((x) => !isOpeningRow(x)) : prev || [];
   for (const x of base) {
-    const lid = Number(x.id) || 0;
-    map.set(lid ? `id:${lid}` : `t:${x.at}|${x.income}|${x.expenditure}`, x);
+    map.set(payKey(x), x);
   }
   for (const p of pulled) {
     const lid = Number(p.id) || 0;
-    if (lid < 0 || hold.has(lid)) continue;
-    const k = lid ? `id:${lid}` : `t:${p.at}|${p.income}|${p.expenditure}`;
+    if (lid < 0 || hold.has(lid) || hold.has(Number(p.customerId) || 0)) continue;
+    const k = payKey(p);
     const cur = map.get(k);
-    if (cur && (Number(cur.id) < 0 || hold.has(Number(cur.id)))) continue;
-    map.set(k, p);
+    if (cur && (Number(cur.id) < 0 || hold.has(Number(cur.id)) || cur.deleted)) continue;
+    map.set(k, {
+      ...(cur || {}),
+      ...p,
+      cttId: Number(p.cttId || cur?.cttId) || undefined,
+      tariffId: Number(p.tariffId || cur?.tariffId) || undefined,
+      payItemId: Number(p.payItemId || cur?.payItemId) || undefined,
+      payAccountId: Number(p.payAccountId || cur?.payAccountId) || undefined,
+      locationId: Number(p.locationId || cur?.locationId) || undefined,
+      managerId: Number(p.managerId || cur?.managerId) || undefined,
+      groupId: Number(p.groupId || cur?.groupId) || undefined,
+      payMethod: String(p.payMethod || cur?.payMethod || "") || undefined,
+      deleted: Boolean(cur?.deleted || p.deleted) || undefined,
+    });
   }
   return [...map.values()].sort((a, b) => String(a.documentDate).localeCompare(String(b.documentDate)) || String(a.at).localeCompare(String(b.at)));
+}
+
+export function ruDateIso(raw: string) {
+  const s = String(raw || "").trim();
+  const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return s.slice(0, 10);
+}
+
+export function payAfterStamp(row: { id: number; documentDate: string }, stamp: PayPollStamp) {
+  const d = ruDateIso(row.documentDate);
+  const s = ruDateIso(stamp.lastDate);
+  if (!s) return Number(row.id) > Number(stamp.lastId || 0);
+  if (d > s) return true;
+  if (d === s && Number(row.id) > Number(stamp.lastId || 0)) return true;
+  return false;
+}
+
+export function nextPayStamp(rows: { id: number; documentDate: string }[], prev: PayPollStamp): PayPollStamp {
+  let lastId = Number(prev.lastId) || 0;
+  let lastDate = ruDateIso(prev.lastDate);
+  for (const r of rows) {
+    const d = ruDateIso(r.documentDate);
+    if (!d) continue;
+    if (!lastDate || d > lastDate || (d === lastDate && Number(r.id) > lastId)) {
+      lastDate = d;
+      lastId = Number(r.id) || lastId;
+    }
+  }
+  return { lastId, lastDate };
+}
+
+export function payPollHitsInWindow(hits: string[], now = Date.now()) {
+  const cut = now - PAY_POLL_WINDOW_MS;
+  return (hits || []).filter((t) => {
+    const n = Date.parse(t);
+    return Number.isFinite(n) && n >= cut;
+  });
+}
+
+export function payPollAllowed(hits: string[], now = Date.now()) {
+  return payPollHitsInWindow(hits, now).length < PAY_POLL_MAX_PER_HOUR;
 }

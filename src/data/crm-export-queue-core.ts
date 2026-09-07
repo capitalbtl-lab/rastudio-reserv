@@ -16,6 +16,7 @@ export type CrmExportOp =
   | "lesson.update"
   | "lesson.create"
   | "pay.create"
+  | "pay.delete"
   | "subject.create"
   | "lead-status.create"
   | "lead-status.update"
@@ -75,6 +76,7 @@ export function sameExportJob(
   }
   if (a.op === "customer-tariff.clear") return a.entityId === b.entityId;
   if (a.op === "pay.create") return false;
+  if (a.op === "pay.delete") return a.entityId === b.entityId;
   if (a.op === "lesson.create") {
     const aLocal = Number(a.body.localId || (a.entityId < 0 ? a.entityId : 0));
     const bLocal = Number(b.body.localId || (b.entityId < 0 ? b.entityId : 0));
@@ -102,6 +104,7 @@ export function canRunExportJob(job: { op: CrmExportOp; entityId: number; body?:
     const cid = Number(job.body?.customer_id || job.entityId) || 0;
     return cid > 0;
   }
+  if (job.op === "pay.delete") return Number(job.entityId) > 0 && !isLocalId(job.entityId);
   if (!isLocalId(job.entityId)) return true;
   return CREATE_OPS.includes(job.op);
 }
@@ -136,6 +139,12 @@ export function mergeExportJob(jobs: CrmExportJob[], incoming: Omit<CrmExportJob
       (j) => !(j.op === "lead-status.create" && (j.entityId === incoming.entityId || Number(j.body.localId) === incoming.entityId)),
     );
   }
+  if (incoming.op === "pay.delete") {
+    const payId = Number(incoming.entityId) || 0;
+    const withoutCreate = jobs.filter((j) => !(j.op === "pay.create" && Number(j.body.localId) === payId));
+    if (isLocalId(payId) || payId < 0) return withoutCreate;
+    jobs = withoutCreate;
+  }
   const folded = foldLocalIntoCreate(jobs, incoming, at);
   if (folded) return folded;
   const hit = jobs.find((j) => sameExportJob(j, incoming));
@@ -169,6 +178,7 @@ export function exportPath(job: CrmExportJob) {
   if (job.op === "lesson.update") return `/v2api/${job.branchId}/lesson/update?id=${job.entityId}`;
   if (job.op === "lesson.create") return `/v2api/${job.branchId}/lesson/create`;
   if (job.op === "pay.create") return `/v2api/${job.branchId}/pay/create`;
+  if (job.op === "pay.delete") return `/v2api/${job.branchId}/pay/delete`;
   if (job.op === "group.create") return `/v2api/${job.branchId}/group/create`;
   if (job.op === "subject.create") return `/v2api/2/subject/create`;
   if (job.op === "lead-status.create") return `/v2api/1/lead-status/create`;
@@ -182,6 +192,13 @@ export function exportBody(job: CrmExportJob) {
   if (job.op === "pay.create") {
     const { localId: _localId, kind: _kind, ...rest } = job.body;
     return rest;
+  }
+  if (job.op === "pay.delete") {
+    const id = Number(job.entityId || job.body.id) || 0;
+    const out: Record<string, unknown> = { id };
+    const cid = Number(job.body.customer_id) || 0;
+    if (cid) out.customer_id = cid;
+    return out;
   }
   if (job.op === "lesson.create") {
     const { localId: _localId, via: _via, ...rest } = job.body;
@@ -275,7 +292,8 @@ export function isSingleExportOp(op: CrmExportOp) {
     op === "subject.create" ||
     op === "lead-status.create" ||
     op === "lesson.create" ||
-    op === "pay.create"
+    op === "pay.create" ||
+    op === "pay.delete"
   );
 }
 
@@ -304,6 +322,7 @@ export function exportOpLabel(op: CrmExportOp) {
   if (op === "regular-lesson.update") return "расписание";
   if (op === "regular-lesson.create") return "слот";
   if (op === "pay.create") return "платёж";
+  if (op === "pay.delete") return "удалить платёж";
   if (op === "subject.create") return "предмет";
   if (op === "lead-status.create") return "новый этап";
   if (op === "lead-status.update") return "этап воронки";

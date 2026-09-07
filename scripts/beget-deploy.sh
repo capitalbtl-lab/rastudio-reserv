@@ -38,10 +38,12 @@ fi
 npm run build:beget
 pm2 restart rastudio --update-env
 
-if ! pm2 describe rastudio-deploy >/dev/null 2>&1; then
-  pm2 start ecosystem.config.cjs --only rastudio-deploy
-  pm2 save
-fi
+for app in rastudio-deploy rastudio-night-groups rastudio-pay-poll; do
+  if ! pm2 describe "$app" >/dev/null 2>&1; then
+    pm2 start ecosystem.config.cjs --only "$app"
+  fi
+done
+pm2 save
 
 echo "[deploy] live $(git rev-parse --short HEAD)"
 node scripts/ping-indexnow.mjs || echo "[deploy] IndexNow skip"

@@ -100,7 +100,7 @@ export function pushAllowed(state: AlfaGate, op: string, body?: Record<string, u
 /** Канал выгрузки по операции очереди. Пробное — customer.create с is_study 0 или lesson.type trial. */
 export function exportOpPushChannel(op: string, body?: Record<string, unknown>): AlfaPushCh {
   if (op.startsWith("lead-status")) return "leads";
-  if (op === "pay.create") return "pay";
+  if (op === "pay.create" || op === "pay.delete") return "pay";
   if (op.startsWith("customer-tariff")) return "tariffs";
   if (op === "cgi.apply" || op.startsWith("group") || op === "subject.create") return "groups";
   if (op.startsWith("lesson") || op.startsWith("regular-lesson")) {

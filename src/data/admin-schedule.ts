@@ -1795,6 +1795,14 @@ export const adminSchedule = createServerFn({ method: "POST" })
         expenditure: fx.expenditure,
         note,
         documentDate: ru,
+        cttId: Number(data.cttId) || undefined,
+        tariffId: Number(data.tariffId) || undefined,
+        payItemId: Number(data.payItemId) || undefined,
+        payAccountId: Number(data.payAccountId) || undefined,
+        locationId: Number(data.locationId) || undefined,
+        managerId: Number(data.managerId) || undefined,
+        payMethod: String(data.payMethod || "") || undefined,
+        groupId: Number(data.groupId) || undefined,
       });
       upsertDossier({
         crmId: customerId,

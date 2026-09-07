@@ -11,7 +11,7 @@ function fileOf() {
   return join(process.cwd(), "storage", "crm-packet-queue.json");
 }
 
-const g = globalThis as { __raCrmQueueBusy?: boolean; __raCrmLastKind?: string };
+const g = globalThis as { __raCrmQueueBusy?: boolean; __raCrmLastKind?: string; __raNightGroups?: boolean };
 
 function loadQueue(): CrmQueueState {
   try {
@@ -110,7 +110,7 @@ function dropPacket(id: string) {
   saveQueue(q);
 }
 
-async function runCustomersPacket(branchId: number, ids: number[]) {
+export async function runCustomersPacket(branchId: number, ids: number[]) {
   const { request, token } = await import("./alfacrm");
   const { listCgiByCustomer, groupsOfCustomerFromCgi } = await import("./crm-membership");
   const { tariffRowLive, tariffRowCustomerId } = await import("./crm-tariff-row");
@@ -163,7 +163,7 @@ async function runCustomersPacket(branchId: number, ids: number[]) {
     }
   }
   const all = liveTariffIdsFromStore();
-  return { ok: true as const, done: false, ids: all, live: all.length, extra: `проверка ${ids.length} учеников, живых в пакете ${liveN}`, next: 0, total: 0, scanned: ids.length };
+  return { ok: true as const, done: false, ids: all, live: all.length, liveInPacket: liveN, extra: `проверка ${ids.length} учеников, живых в пакете ${liveN}`, next: 0, total: 0, scanned: ids.length };
 }
 
 export async function tickCrmQueue(take = 3, opts?: { skipJournal?: boolean }) {
@@ -182,6 +182,7 @@ export async function tickCrmQueue(take = 3, opts?: { skipJournal?: boolean }) {
       fromCache: true,
     };
   }
+  if (g.__raNightGroups) return { ok: true as const, busy: true, done: false, ids: [] as number[], next: 0, total: 0, extra: "ночной inbound групп" };
   if (g.__raCrmQueueBusy) return { ok: true as const, busy: true, done: false, ids: [] as number[], next: 0, total: 0, extra: "пакет уже идёт" };
   g.__raCrmQueueBusy = true;
   try {

@@ -50,6 +50,13 @@ describe("статусы групп CRM", () => {
     assert.equal(slotPublicGroup(g4, pub), false);
     assert.equal(slotOnPublicSchedule({ statusId: 2, priority: 1 }, pub), false);
   });
+
+  it("витрина не показывает слот с истекшим eDate", () => {
+    const pub = mergeStatusPublish(null);
+    const slot = { statusId: 2, priority: 1, courseId: "/model-school-podium", bDate: "2020-01-01", eDate: "2020-06-01" };
+    assert.equal(slotOnPublicSchedule(slot, pub), false);
+    assert.equal(slotOnPublicSchedule({ ...slot, eDate: "2099-12-31" }, pub), true);
+  });
 });
 
 describe("школа по subjectId", () => {

@@ -61,6 +61,7 @@ describe("режим фона с AlfaCRM", () => {
     assert.equal(exportOpPushChannel("cgi.apply", {}), "groups");
     assert.equal(exportOpPushChannel("customer-tariff.create", {}), "tariffs");
     assert.equal(exportOpPushChannel("pay.create", {}), "pay");
+    assert.equal(exportOpPushChannel("pay.delete", {}), "pay");
     assert.equal(exportOpPushChannel("lead-status.update", {}), "leads");
     assert.equal(exportOpPushChannel("customer.update", {}), "clients");
     assert.equal(exportOpPushChannel("customer.create", { is_study: 1 }), "leads");

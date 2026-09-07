@@ -8,15 +8,19 @@ import type { CmsSession } from "@/data/cms";
 import { request, token } from "@/data/alfacrm";
 import { agesOverlap } from "@/data/ages";
 import { dayLabel, slotFromSession, stampTimes, toSession, normalizeArtSlot, beatsOf, stampSubjects, type CrmSlot } from "@/data/crm-slots";
-import { applyScheduleMap } from "@/data/schedule-map";
+import { applyScheduleMap, loadScheduleMap } from "@/data/schedule-map";
+import { joinCourseSubject, groupAssignKey } from "./ids";
+import { mergeInboundSiteFields, inboundGroupLogLine } from "./crm-inbound-core";
 import { nextLessonDate } from "@/lib/trial-slot";
 import { isAdminGroup, isArchivedGroup, isCampStatus, readPriority, crmPriorityOf, slotOnPublicSchedule, sessionMatchesPage } from "./group-status";
+import { logAdmin } from "./admin-settings";
 import { loadSiteSignup } from "./site-signup";
 import { loadSiteTree, saveSiteTree } from "./site-tree";
-import { mergeTeacher, saveTeachers, pickTeacherIds, type CrmTeacher } from "./crm-teachers";
+import { mergeTeacher, saveTeachers, pickTeacherIds, loadTeachers, type CrmTeacher } from "./crm-teachers";
 import { listCgiBranch, takenByGroupFromCgi } from "./crm-membership";
 import { slotFitsAgent, agentGroupLine, scheduleChipOf } from "./agent-groups";
 import { takenOfGroup } from "./crm-group-disk";
+import { loadSubjects } from "./crm-subjects";
 
 const DAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 const DAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -65,6 +69,19 @@ type Teacher = { id: number; name?: string };
 
 type SeatInfo = { limit: number; taken: number; study?: number; lead?: number };
 type CacheBag = { at: number; sessions: CmsSession[]; seats: Map<string, SeatInfo>; slots: CrmSlot[] };
+
+export type CrmInboundGroup = {
+  branchId: number;
+  groupId: number;
+  statusId: number;
+  bDate: string;
+  eDate: string;
+  name: string;
+};
+
+let lastInbound: { groups: CrmInboundGroup[]; pages: number } = { groups: [], pages: 0 };
+
+export type CrmScheduleMode = "full" | "night";
 
 let cache: CacheBag | null = null;
 const TTL = 10 * 60 * 1000;
@@ -210,31 +227,43 @@ function gidKey(s: CrmSlot) {
   return s.groupId ? `${s.branchId}:${s.groupId}` : "";
 }
 
-export function mergeCrmIntoSite(incoming: CrmSlot[], existing: CrmSlot[]) {
+export function mergeCrmIntoSite(incoming: CrmSlot[], existing: CrmSlot[], opts?: { holdGroupIds?: Iterable<number> }) {
   const prev = new Map<string, CrmSlot>();
   for (const s of existing) {
     const k = gidKey(s);
     if (k) prev.set(k, s);
   }
+  const hold = new Set([... (opts?.holdGroupIds || [])].map(Number).filter((n) => n));
+  let treeAssign: Record<string, string> = {};
+  try {
+    treeAssign = loadSiteTree().assign || {};
+  } catch {
+    treeAssign = {};
+  }
   const seen = new Set<string>();
   let added = 0;
   let updated = 0;
   const out: CrmSlot[] = [];
+  const notes: string[] = [];
   for (const s of incoming) {
     const k = gidKey(s);
     if (k) seen.add(k);
     const old = k ? prev.get(k) : undefined;
+    const akey = groupAssignKey(s.groupId ? s : old || s);
+    const hasAssign = Boolean(akey && treeAssign[akey]);
+    const pending = hold.has(Number(s.groupId) || 0) || hold.has(Number(old?.groupId) || 0);
+    const site = mergeInboundSiteFields(s, old, { pending, hasAssign });
     if (old) {
       out.push({
         ...old,
         ...s,
-        subjectId: Number(s.subjectId) || Number(old.subjectId) || 0,
-        subject: s.subject || old.subject,
-        school: "",
-        course: s.course || old.course,
-        courseId: "",
-        schoolId: "",
-        path: "",
+        subjectId: site.subjectId,
+        subject: site.subject,
+        school: site.school,
+        course: site.course,
+        courseId: site.courseId,
+        schoolId: site.schoolId,
+        path: site.path,
         age: s.age || old.age,
         beats: s.beats?.length ? s.beats : old.beats,
         remarks: old.remarks || s.remarks || "",
@@ -251,16 +280,23 @@ export function mergeCrmIntoSite(incoming: CrmSlot[], existing: CrmSlot[]) {
       });
       updated += 1;
     } else {
-      out.push(s);
+      out.push({ ...s, subjectId: site.subjectId, subject: site.subject });
       added += 1;
     }
+    notes.push(
+      inboundGroupLogLine(
+        { groupId: s.groupId || old?.groupId, branchId: s.branchId || old?.branchId, subjectId: site.skipAlfaIds ? site.subjectId : Number(s.subjectId) || site.subjectId, courseId: site.courseId, path: site.path },
+        site.skipAlfaIds ? "skip" : site.keepSite ? "disk" : "alfa",
+      ),
+    );
   }
   for (const s of existing) {
     const k = gidKey(s);
     if (k && seen.has(k)) continue;
     if (!k || String(s.id).startsWith("local-")) out.push(s);
   }
-  return { slots: applyScheduleMap(stampSubjects(stampTimes(out))), added, updated };
+  const slots = applyScheduleMap(stampSubjects(stampTimes(out)));
+  return { slots, added, updated, notes };
 }
 
 export function sessionsFromDisk(): CmsSession[] {
@@ -280,11 +316,38 @@ export async function sessionsFromCrm(): Promise<CmsSession[]> {
   }
 }
 
-export async function refreshCrmSchedule() {
+export async function refreshCrmSchedule(opts?: { mode?: CrmScheduleMode }) {
   const existing = listAdminSlots();
   cache = null;
-  const bag = await loadCrm(true);
-  const merged = mergeCrmIntoSite(stampTimes((bag.slots || []).map(normalizeArtSlot)), existing);
+  const bag = await loadCrm(true, { night: opts?.mode === "night", existing });
+  let holdGroupIds: number[] = [];
+  try {
+    const { pendingExportIds } = await import("./crm-export-queue");
+    holdGroupIds = [...pendingExportIds(["group.update", "group.create"])];
+  } catch {
+    holdGroupIds = [];
+  }
+  const merged = mergeCrmIntoSite(stampTimes((bag.slots || []).map(normalizeArtSlot)), existing, { holdGroupIds });
+  const saved = saveAdminSlots(merged.slots);
+  try {
+    const tree = loadSiteTree();
+    const map = loadScheduleMap();
+    const by = { assign: 0, slot: 0, map: 0, none: 0 };
+    const lines: string[] = [];
+    for (const s of saved.slots) {
+      const inc = (bag.slots || []).find((x) => x.groupId === s.groupId && x.branchId === s.branchId);
+      const src = joinCourseSubject(s, tree, map.courses).source;
+      by[src] += 1;
+      lines.push(inboundGroupLogLine({ groupId: s.groupId, branchId: s.branchId, subjectId: inc?.subjectId ?? s.subjectId, courseId: s.courseId, path: s.path }, src));
+    }
+    const head = lines.filter((x) => /source (assign|slot)/.test(x)).slice(0, 16);
+    logAdmin(
+      `Inbound групп: ${saved.slots.length}, assign ${by.assign}, slot ${by.slot}, map ${by.map}, none ${by.none}. ${head.join("; ") || lines.slice(0, 8).join("; ")}`,
+      "sync",
+    );
+  } catch {
+    /* лог необязателен */
+  }
   const saved = saveAdminSlots(merged.slots);
   return {
     at: new Date(saved.at).toISOString(),
@@ -293,6 +356,8 @@ export async function refreshCrmSchedule() {
     slots: saved.slots,
     added: merged.added,
     updated: merged.updated,
+    inbound: lastInbound.groups,
+    pages: lastInbound.pages,
   };
 }
 
@@ -398,10 +463,11 @@ export function bumpGroupTaken(branchId: number, groupId: number, delta: number)
   return next;
 }
 
-async function paged<T>(path: string, t: string): Promise<T[]> {
+async function paged<T>(path: string, t: string, tally?: { pages: number }): Promise<T[]> {
   const items: T[] = [];
   for (let page = 0; page < 15; page += 1) {
     const res = await request<{ items?: T[]; total?: number }>(path, { page, pageSize: 200 }, t);
+    if (tally) tally.pages += 1;
     const batch = res.items || [];
     items.push(...batch);
     const total = Number(res.total || 0);
@@ -424,7 +490,7 @@ function teacherOf(raw: unknown, teachers: Map<number, string>) {
   return { ids, name: names.filter(Boolean).join(", ") };
 }
 
-async function loadCrm(force = false): Promise<CacheBag> {
+async function loadCrm(force = false, opts?: { night?: boolean; existing?: CrmSlot[] }): Promise<CacheBag> {
   if (!force && cache && Date.now() - cache.at < TTL) return cache;
   if (!force) {
     const snap = readSnap();
@@ -433,50 +499,107 @@ async function loadCrm(force = false): Promise<CacheBag> {
       return snap;
     }
   }
+  const night = Boolean(opts?.night);
+  const existing = opts?.existing || [];
   const t = await token();
   const seats = new Map<string, SeatInfo>();
   const subjects = new Map<number, string>();
   const teachers = new Map<number, string>();
   const teacherBag: CrmTeacher[] = [];
   const groupsById = new Map<number, { g: Group; fromBranch: number }>();
+  const inbound: CrmInboundGroup[] = [];
   const lessons: Lesson[] = [];
-  const sub = await paged<Subject>("/v2api/2/subject/index", t);
-  for (const s of sub) subjects.set(s.id, s.name);
-  for (const branch of [1, 2, 3, 4]) {
-    const tr = await paged<Teacher>(`/v2api/${branch}/teacher/index`, t).catch(() => [] as Teacher[]);
-    for (const p of tr) {
+  const tally = { pages: 0 };
+  if (night) {
+    for (const s of loadSubjects()) if (s.id) subjects.set(s.id, s.name);
+    for (const s of existing) if (s.subjectId) subjects.set(s.subjectId, s.subject || String(s.subjectId));
+    for (const p of loadTeachers()) {
       if (!p.id) continue;
       teachers.set(p.id, p.name || String(p.id));
-      mergeTeacher(teacherBag, p.id, p.name || String(p.id), branch);
+      mergeTeacher(teacherBag, p.id, p.name || String(p.id), 0);
     }
-    const groups = await paged<Group>(`/v2api/${branch}/group/index`, t);
-    const roster = await loadRoster(branch, t).catch(() => ({ study: new Map<number, number>(), lead: new Map<number, number>() }));
+  } else {
+    const sub = await paged<Subject>("/v2api/2/subject/index", t, tally);
+    for (const s of sub) subjects.set(s.id, s.name);
+  }
+  const branchPause = night ? 2500 : 0;
+  for (const branch of [1, 2, 3, 4]) {
+    if (branch !== 1 && branchPause) await new Promise((r) => setTimeout(r, branchPause));
+    if (!night) {
+      const tr = await paged<Teacher>(`/v2api/${branch}/teacher/index`, t, tally).catch(() => [] as Teacher[]);
+      for (const p of tr) {
+        if (!p.id) continue;
+        teachers.set(p.id, p.name || String(p.id));
+        mergeTeacher(teacherBag, p.id, p.name || String(p.id), branch);
+      }
+    }
+    const groups = await paged<Group>(`/v2api/${branch}/group/index`, t, tally);
+    const roster = night
+      ? { study: new Map<number, number>(), lead: new Map<number, number>() }
+      : await loadRoster(branch, t).catch(() => ({ study: new Map<number, number>(), lead: new Map<number, number>() }));
     for (const g of groups) {
       if (!groupsById.has(g.id)) groupsById.set(g.id, { g, fromBranch: branch });
+      inbound.push({
+        branchId: Number(g.branch_ids?.[0]) || branch,
+        groupId: Number(g.id) || 0,
+        statusId: Number(g.status_id || 0),
+        bDate: String(g.b_date || ""),
+        eDate: String(g.e_date || ""),
+        name: String(g.name || ""),
+      });
       const study = roster.study.get(g.id) || 0;
       const lead = roster.lead.get(g.id) || 0;
       const qty = Number(g.quantity ?? g.cnt ?? g.customers_count ?? 0) || 0;
       const cgiOk = roster.study.size + roster.lead.size > 0;
       const cgiN = study + lead;
+      const old = existing.find((s) => s.groupId === g.id && (s.branchId === branch || !branch));
       seats.set(seatKey(branch, g.id), {
         limit: Number(g.limit) || 0,
-        taken: cgiOk ? cgiN : Math.max(qty, cgiN),
-        study: cgiOk ? study : study || qty,
-        lead,
+        taken: night ? Number(old?.taken) || qty : cgiOk ? cgiN : Math.max(qty, cgiN),
+        study: night ? Number(old?.takenStudy) || qty : cgiOk ? study : study || qty,
+        lead: night ? Number(old?.takenLead) || 0 : lead,
       });
     }
-    lessons.push(...(await paged<Lesson>(`/v2api/${branch}/regular-lesson/index`, t)));
+    lessons.push(...(await paged<Lesson>(`/v2api/${branch}/regular-lesson/index`, t, tally)));
   }
-  for (const [id, wrap] of groupsById) {
-    if (!isLiveGroup(wrap.g)) continue;
-    const branch = Number(wrap.g.branch_ids?.[0]) || wrap.fromBranch;
-    const json = await request<{ items?: Group[] }>(`/v2api/${branch}/group/index`, { id, page: 0, pageSize: 1 }, t).catch(
-      () => ({ items: [] as Group[] }),
-    );
-    const hit = (json.items || []).find((x) => Number(x.id) === id);
-    if (hit) wrap.g = { ...wrap.g, ...hit };
+  if (!night) {
+    for (const [id, wrap] of groupsById) {
+      if (!isLiveGroup(wrap.g)) continue;
+      const branch = Number(wrap.g.branch_ids?.[0]) || wrap.fromBranch;
+      const json = await request<{ items?: Group[] }>(`/v2api/${branch}/group/index`, { id, page: 0, pageSize: 1 }, t).catch(
+        () => ({ items: [] as Group[] }),
+      );
+      const hit = (json.items || []).find((x) => Number(x.id) === id);
+      if (hit) wrap.g = { ...wrap.g, ...hit };
+    }
+  } else {
+    const holes: { id: number; branch: number }[] = [];
+    for (const s of existing) {
+      const gid = Number(s.groupId) || 0;
+      if (!gid || !isAdminGroup(s.statusId)) continue;
+      const wrap = groupsById.get(gid);
+      const g = wrap?.g;
+      const missing = !g || g.status_id == null || (g.b_date == null && g.e_date == null && !s.bDate && !s.eDate);
+      if (missing) holes.push({ id: gid, branch: Number(s.branchId) || wrap?.fromBranch || 1 });
+    }
+    for (let i = 0; i < holes.length; i += 6) {
+      if (i) await new Promise((r) => setTimeout(r, 2500));
+      const batch = holes.slice(i, i + 6);
+      await Promise.all(
+        batch.map(async (h) => {
+          const json = await request<{ items?: Group[] }>(`/v2api/${h.branch}/group/index`, { id: h.id, page: 0, pageSize: 1 }, t).catch(
+            () => ({ items: [] as Group[] }),
+          );
+          tally.pages += 1;
+          const hit = (json.items || []).find((x) => Number(x.id) === h.id);
+          const wrap = groupsById.get(h.id);
+          if (hit && wrap) wrap.g = { ...wrap.g, ...hit };
+        }),
+      );
+    }
   }
-  saveTeachers(teacherBag);
+  if (!night) saveTeachers(teacherBag);
+  lastInbound = { groups: inbound.filter((g) => g.groupId), pages: tally.pages };
   const lessonsByGid = new Map<number, Lesson[]>();
   for (const lesson of lessons) {
     const gid = Number(lesson.related_id || 0);

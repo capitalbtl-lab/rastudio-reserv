@@ -1,6 +1,6 @@
 /**
  * Статусы групп AlfaCRM и правила: админка / сайт / запись.
- * Имя группы не участвует. Только statusId + priority.
+ * Имя группы не участвует. Ключи: statusId, priority, courseId, bDate/eDate.
  */
 export const GROUP_STATUSES = [
   { id: 1, name: "Идет набор (ожидает старта)", short: "Набор", admin: true },
@@ -105,6 +105,8 @@ export type PublicSlotHint = {
   courseId?: string;
   path?: string;
   siteCourseId?: string;
+  bDate?: string;
+  eDate?: string;
 };
 
 /** Курс сайта слота: courseId дерева. Число CRM не курс. */
@@ -116,13 +118,44 @@ export function sessionCourseId(s: { courseId?: string; siteCourseId?: string; p
   return "";
 }
 
-/** Витрина rastudio.org: статус пускает расписание и priority ≥ 1, курс сайта привязан. */
+/** Календарный день Europe/Moscow, YYYY-MM-DD. */
+export function todayIsoMsk(now = Date.now()) {
+  return new Date(now).toLocaleDateString("en-CA", { timeZone: "Europe/Moscow" });
+}
+
+/** b_date/e_date группы → YYYY-MM-DD. Пустое и 0000-00-00 — нет срока. */
+export function slotDateIso(raw?: string) {
+  const s = String(raw || "").trim();
+  if (!s || s.startsWith("0000")) return "";
+  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  return "";
+}
+
+/** Нет eDate или eDate >= сегодня; если есть bDate — bDate <= сегодня. Пояс Москвы. */
+export function slotActiveToday(s: { bDate?: string; eDate?: string }, today = todayIsoMsk()) {
+  const e = slotDateIso(s.eDate);
+  if (e && e < today) return false;
+  const b = slotDateIso(s.bDate);
+  if (b && b > today) return false;
+  return true;
+}
+
+function boundToSite(s: PublicSlotHint) {
+  return Boolean(sessionCourseId(s));
+}
+
+/** Витрина rastudio.org: живой статус, сегодня действует, priority ≥ 1, галочка расписания, курс сайта. */
 export function slotOnPublicSchedule(s: PublicSlotHint, table?: Record<string, StatusPublish> | null) {
   if (!isAdminGroup(s.statusId)) return false;
+  if (!slotActiveToday(s)) return false;
   if (readPriority(s.priority) <= 0) return false;
   if (!publishOf(s.statusId, table).schedule) return false;
   return boundToSite(s);
 }
+
 
 export function slotPublicTrial(s: PublicSlotHint, table?: Record<string, StatusPublish> | null) {
   if (!slotOnPublicSchedule(s, table)) return false;
@@ -159,10 +192,6 @@ function treeIdOf(raw?: string) {
   const s = String(raw || "").trim();
   if (!s || /^\d+$/.test(s)) return "";
   return s;
-}
-
-function boundToSite(s: PublicSlotHint) {
-  return Boolean(sessionCourseId(s));
 }
 
 export function sessionMatchesPage(

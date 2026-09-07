@@ -114,6 +114,21 @@ describe("очередь выгрузки в Alfa", () => {
     assert.equal(exportPath(payB[0]), "/v2api/1/pay/create");
     assert.equal(exportBody(payB[0]).customer_id, 7759);
     assert.equal(exportBody(payB[0]).id, undefined);
+    let payDel = mergeExportJob(payB, { op: "pay.delete", branchId: 1, entityId: -12, body: { localId: -12 } });
+    payDel = mergeExportJob(payDel, {
+      op: "pay.create",
+      branchId: 1,
+      entityId: 7759,
+      body: { customer_id: 7759, income: 200, localId: -12 },
+    });
+    payDel = mergeExportJob(payDel, { op: "pay.delete", branchId: 1, entityId: -12, body: { localId: -12 } });
+    assert.equal(payDel.some((j) => j.op === "pay.create" && Number(j.body.localId) === -12), false);
+    const gone = mergeExportJob([], { op: "pay.delete", branchId: 1, entityId: 9001, body: { customer_id: 7759 } });
+    assert.equal(exportPath(gone[0]), "/v2api/1/pay/delete");
+    assert.deepEqual(exportBody(gone[0]), { id: 9001, customer_id: 7759 });
+    assert.equal(canRunExportJob(gone[0]), true);
+    assert.equal(canRunExportJob({ op: "pay.delete", branchId: 1, entityId: -12, body: {} }), false);
+    assert.equal(exportOpLabel("pay.delete"), "удалить платёж");
     const created = mergeExportJob([], { op: "lesson.create", branchId: 1, entityId: 7759, body: { subject_id: 12, customer_ids: [7759] } });
     assert.equal(exportPath(created[0]), "/v2api/1/lesson/create");
     assert.equal(exportBody(created[0]).subject_id, 12);

@@ -43,8 +43,9 @@ export function canonSchoolId(tree: JoinTree, raw: string) {
 
 export function courseIdOfGroup(s: JoinSlot, tree: JoinTree) {
   const key = groupAssignKey(s);
-  const id = (key && tree.assign?.[key]) || s.courseId || "";
-  return courseIdInTree(tree, id);
+  const fromAssign = courseIdInTree(tree, (key && tree.assign?.[key]) || "");
+  if (fromAssign) return fromAssign;
+  return courseIdInTree(tree, String(s.courseId || ""));
 }
 
 export function courseIdOfSubject(subjectId: number, tree: JoinTree, mapCourses?: IdMapCourse[]) {
@@ -109,6 +110,32 @@ export function courseSubjectGapText(join: CourseSubjectJoin) {
     return `courseId ${join.courseId} без предмета CRM. Выберите subjectId филиала в карточке группы.`;
   }
   return "";
+}
+
+/** В assign только курс карточки. Карта subjectId → courseId на экран, в дерево не пишем. */
+export function assignWriteSource(source: CourseSubjectSource) {
+  return source === "assign" || source === "slot";
+}
+
+export function patchAssignForInbound(
+  assign: Record<string, string>,
+  slot: JoinSlot,
+  tree: JoinTree,
+  mapCourses?: IdMapCourse[],
+) {
+  const join = joinCourseSubject(slot, tree, mapCourses);
+  const key = groupAssignKey(slot);
+  const next = { ...assign };
+  let wrote = false;
+  if (key && join.courseId && join.source === "slot" && next[key] !== join.courseId) {
+    next[key] = join.courseId;
+    wrote = true;
+  }
+  if (key && !join.courseId && next[key] && !tree.courses.some((c) => c.id === next[key] || c.href === next[key])) {
+    delete next[key];
+    wrote = true;
+  }
+  return { assign: next, wrote, source: join.source, courseId: join.courseId };
 }
 
 export function subjectIdsOfCourse(courseId: string, mapCourses?: IdMapCourse[]): number[] {

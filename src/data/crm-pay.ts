@@ -1,22 +1,30 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { nextLocalId } from "./crm-local-id";
+import { isLocalId, nextLocalId } from "./crm-local-id";
 import {
   balanceOf,
   displayedBalance,
   mergePayInbound,
+  nextPayStamp,
+  payAfterStamp,
   payEffect,
   payKindOf,
+  payPollAllowed,
+  payPollHitsInWindow,
+  ruDateIso,
   OPENING_NOTE,
   type PayKind,
+  type PayPollStamp,
   type PayRow,
 } from "./crm-pay-core";
 import { pendingExportIds } from "./crm-export-queue";
+import { logAdmin } from "./admin-settings";
 
 export type { PayKind, PayRow };
 export { displayedBalance, balanceOf, payKindOf, payEffect, OPENING_NOTE };
 
-type Store = { at: string; items: PayRow[] };
+type PayPollState = { hits: string[]; branches: Record<string, PayPollStamp>; lastNote?: string };
+type Store = { at: string; items: PayRow[]; poll?: PayPollState };
 
 let mem: Store | null = null;
 let memMtime = 0;
@@ -38,18 +46,26 @@ function index(store: Store) {
   byCustomer = m;
 }
 
+function emptyPoll(): PayPollState {
+  return { hits: [], branches: {} };
+}
+
 function load(): Store {
   try {
     const p = fileOf();
     const mtime = existsSync(p) ? statSync(p).mtimeMs : 0;
     if (mem && memMtime === mtime && byCustomer) return mem;
     const raw = JSON.parse(readFileSync(p, "utf8")) as Store;
-    mem = { at: String(raw.at || ""), items: Array.isArray(raw.items) ? raw.items : [] };
+    mem = {
+      at: String(raw.at || ""),
+      items: Array.isArray(raw.items) ? raw.items : [],
+      poll: raw.poll && typeof raw.poll === "object" ? { hits: Array.isArray(raw.poll.hits) ? raw.poll.hits : [], branches: raw.poll.branches || {}, lastNote: raw.poll.lastNote || "" } : emptyPoll(),
+    };
     memMtime = mtime;
     index(mem);
     return mem;
   } catch {
-    mem = { at: "", items: [] };
+    mem = { at: "", items: [], poll: emptyPoll() };
     memMtime = 0;
     byCustomer = new Map();
     return mem;
@@ -60,12 +76,45 @@ function save(store: Store) {
   mem = store;
   index(store);
   mkdirSync(dirname(fileOf()), { recursive: true });
-  writeFileSync(fileOf(), JSON.stringify({ at: new Date().toISOString(), items: store.items.slice(-8000) }, null, 0), "utf8");
+  const poll = store.poll || emptyPoll();
+  poll.hits = payPollHitsInWindow(poll.hits).slice(-24);
+  writeFileSync(
+    fileOf(),
+    JSON.stringify({ at: new Date().toISOString(), items: store.items.slice(-8000), poll }, null, 0),
+    "utf8",
+  );
   try {
     memMtime = statSync(fileOf()).mtimeMs;
   } catch {
     memMtime = Date.now();
   }
+}
+
+function numOpt(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) && n ? n : undefined;
+}
+
+function extrasOf(row: Partial<PayRow>): Partial<PayRow> {
+  const out: Partial<PayRow> = {};
+  const ctt = numOpt(row.cttId);
+  if (ctt) out.cttId = ctt;
+  const tariff = numOpt(row.tariffId);
+  if (tariff) out.tariffId = tariff;
+  const item = numOpt(row.payItemId);
+  if (item) out.payItemId = item;
+  const acc = numOpt(row.payAccountId);
+  if (acc) out.payAccountId = acc;
+  const loc = numOpt(row.locationId);
+  if (loc) out.locationId = loc;
+  const man = numOpt(row.managerId);
+  if (man) out.managerId = man;
+  const gid = numOpt(row.groupId);
+  if (gid) out.groupId = gid;
+  const method = String(row.payMethod || "").trim();
+  if (method) out.payMethod = method;
+  if (row.deleted) out.deleted = true;
+  return out;
 }
 
 export function paysOf(customerId: number) {
@@ -77,6 +126,7 @@ export function paysOf(customerId: number) {
 
 export function cardPays(customerId: number) {
   return paysOf(customerId)
+    .filter((x) => !x.deleted)
     .slice(-12)
     .map((x) => ({
       id: Number(x.id) || 0,
@@ -85,6 +135,9 @@ export function cardPays(customerId: number) {
       expenditure: Number(x.expenditure) || 0,
       note: String(x.note || ""),
       documentDate: String(x.documentDate || ""),
+      cttId: Number(x.cttId) || 0,
+      tariffId: Number(x.tariffId) || 0,
+      groupId: Number(x.groupId) || 0,
     }));
 }
 
@@ -111,6 +164,7 @@ export function appendPay(row: Omit<PayRow, "id" | "at"> & { id?: number; at?: s
     note: String(row.note || ""),
     documentDate: String(row.documentDate || ruToday()),
     at: row.at || new Date().toISOString(),
+    ...extrasOf(row),
   };
   store.items.push(next);
   save(store);
@@ -149,33 +203,83 @@ export function applyCreatedPay(localId: number, crmId: number) {
   if (n) save(store);
 }
 
+export function applyDeletedPay(payId: number) {
+  const id = Number(payId) || 0;
+  if (!id) return;
+  const store = load();
+  const next = store.items.filter((x) => Number(x.id) !== id);
+  if (next.length === store.items.length) return;
+  store.items = next;
+  save(store);
+}
+
+export function deletePay(payId: number) {
+  const id = Number(payId) || 0;
+  if (!id) return { ok: false as const, error: "нет id платежа" };
+  const store = load();
+  const row = store.items.find((x) => Number(x.id) === id);
+  if (!row) return { ok: false as const, error: "платёж не на диске" };
+  if (isLocalId(id) || id < 0) {
+    store.items = store.items.filter((x) => Number(x.id) !== id);
+    save(store);
+  } else {
+    store.items = store.items.map((x) => (Number(x.id) === id ? { ...x, deleted: true } : x));
+    save(store);
+  }
+  void import("./crm-export-queue").then(({ enqueueExport }) => {
+    enqueueExport({
+      op: "pay.delete",
+      branchId: Number(row.branchId) || 1,
+      entityId: id,
+      body: { id, customer_id: Number(row.customerId) || 0, localId: id },
+    });
+  });
+  return { ok: true as const, local: isLocalId(id) || id < 0 };
+}
+
 export function replaceCustomerPays(customerId: number, rows: PayRow[]) {
   const id = Number(customerId) || 0;
   const prev = paysOf(id);
-  const print = (list: PayRow[]) => list.map((x) => `${x.id}|${x.income}|${x.expenditure}|${x.documentDate}`).join(";");
+  const print = (list: PayRow[]) => list.map((x) => `${x.id}|${x.income}|${x.expenditure}|${x.documentDate}|${x.cttId || 0}|${x.deleted ? 1 : 0}`).join(";");
   if (print(prev) === print(rows)) return;
   const store = load();
   store.items = [...store.items.filter((x) => Number(x.customerId) !== id), ...rows];
   save(store);
 }
 
-function packPay(item: Record<string, unknown>, customerId: number, branchId: number): PayRow | null {
+export function packPay(item: Record<string, unknown>, customerId: number, branchId: number): PayRow | null {
   const id = Number(item.id || 0) || 0;
   const income = Number(item.income || 0) || 0;
   const expenditure = Number(item.expenditure || 0) || 0;
   if (!id && !income && !expenditure) return null;
+  const cid = Number(item.customer_id || customerId) || 0;
+  if (!cid) return null;
   const kind: PayKind = expenditure && !income ? "refund" : "income";
   return {
     id: id || 0,
-    customerId,
-    branchId,
+    customerId: cid,
+    branchId: Number(item.branch_id || branchId) || branchId,
     kind,
     income,
     expenditure,
     note: String(item.note || "").trim(),
     documentDate: String(item.document_date || item.date || ruToday()),
     at: new Date().toISOString(),
+    ...extrasOf({
+      cttId: Number(item.ctt_id || item.cttId) || 0,
+      tariffId: Number(item.tariff_id || item.tariffId) || 0,
+      payItemId: Number(item.pay_item_id || item.payItemId) || 0,
+      payAccountId: Number(item.pay_account_id || item.payAccountId) || 0,
+      locationId: Number(item.location_id || item.locationId) || 0,
+      managerId: Number(item.manager_id || item.managerId) || 0,
+      groupId: Number(item.group_id || item.groupId) || 0,
+      payMethod: String(item.pay_method || item.payMethod || ""),
+    }),
   };
+}
+
+function holdPayIds() {
+  return pendingExportIds(["pay.create", "pay.delete"]);
 }
 
 export async function inboundCustomerPays(
@@ -191,8 +295,92 @@ export async function inboundCustomerPays(
   const pulled = (json.items || [])
     .map((it) => packPay(it, customerId, branchId))
     .filter((x): x is PayRow => Boolean(x));
-  const hold = pendingExportIds(["pay.create"]);
+  const hold = holdPayIds();
   const merged = mergePayInbound(pulled, paysOf(customerId), hold);
   replaceCustomerPays(customerId, merged);
   return merged;
+}
+
+export type PayPollResult = {
+  ok: boolean;
+  skipped?: string;
+  branches: number[];
+  newCount: number;
+  pages: number;
+  hit429: boolean;
+  note: string;
+};
+
+function todayStamp(): PayPollStamp {
+  const iso = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Moscow" });
+  return { lastId: 0, lastDate: iso };
+}
+
+function is429(e: unknown) {
+  const s = e instanceof Error ? e.message : String(e);
+  return /\b429\b/.test(s) || /too many requests/i.test(s);
+}
+
+/** Авто и кнопка D кассы. Карточка одного клиента — inboundCustomerPays, не сюда. */
+export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
+  const store = load();
+  const poll = store.poll || emptyPoll();
+  const now = Date.now();
+  if (!payPollAllowed(poll.hits, now)) {
+    const note = `касса poll: лимит ${payPollHitsInWindow(poll.hits, now).length}/10 за час`;
+    poll.lastNote = note;
+    store.poll = poll;
+    save(store);
+    logAdmin(note, "sync");
+    return { ok: false, skipped: "rate", branches: [] as number[], newCount: 0, pages: 0, hit429: false, note };
+  }
+  poll.hits = [...payPollHitsInWindow(poll.hits, now), new Date(now).toISOString()];
+  const { token, request } = await import("./alfacrm");
+  const t = await token();
+  const branches = [1, 2, 3, 4];
+  let newCount = 0;
+  let pages = 0;
+  let hit429 = false;
+  const hold = holdPayIds();
+  const pendingCustomers = pendingExportIds(["pay.create"]);
+  for (const branchId of branches) {
+    const stamp = poll.branches[String(branchId)] || todayStamp();
+    const dateFrom = stamp.lastDate ? ruDateIso(stamp.lastDate).split("-").reverse().join(".") : "";
+    try {
+      const json = (await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50, ...(dateFrom ? { date_from: dateFrom } : {}) }, t)) as {
+        items?: Record<string, unknown>[];
+      };
+      pages += 1;
+      const pulled = (json.items || [])
+        .map((it) => packPay(it, Number(it.customer_id) || 0, branchId))
+        .filter((x): x is PayRow => Boolean(x));
+      const fresh = pulled.filter((x) => payAfterStamp(x, stamp));
+      const byCid = new Map<number, PayRow[]>();
+      for (const row of fresh) {
+        if (pendingCustomers.has(row.customerId)) continue;
+        const list = byCid.get(row.customerId) || [];
+        list.push(row);
+        byCid.set(row.customerId, list);
+      }
+      for (const [cid, rows] of byCid) {
+        const merged = mergePayInbound(rows, paysOf(cid), hold);
+        replaceCustomerPays(cid, merged);
+        newCount += rows.length;
+      }
+      if (fresh.length) poll.branches[String(branchId)] = nextPayStamp(fresh, stamp);
+      else poll.branches[String(branchId)] = stamp;
+    } catch (e) {
+      if (is429(e)) {
+        hit429 = true;
+        break;
+      }
+    }
+  }
+  const note = `Касса inbound: филиалы ${branches.join(",")}, новых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"})`;
+  poll.lastNote = note;
+  const freshStore = load();
+  freshStore.poll = poll;
+  save(freshStore);
+  logAdmin(note, "sync");
+  return { ok: !hit429, branches, newCount, pages, hit429, note } satisfies PayPollResult;
 }

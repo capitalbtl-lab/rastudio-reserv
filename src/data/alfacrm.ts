@@ -99,7 +99,11 @@ type TokenCache = { token: string; exp: number };
 let cache: TokenCache | null = null;
 let lastAt = 0;
 let gate: Promise<void> = Promise.resolve();
-const GAP_MS = 400;
+function gapMs() {
+  const rps = Number(process.env.ALFACRM_RPS || 0);
+  if (Number.isFinite(rps) && rps > 0) return Math.max(200, Math.round(1000 / rps));
+  return 400;
+}
 const INDEX_TTL = 45_000;
 const indexCache = new Map<string, { at: number; json: unknown }>();
 const inflight = new Map<string, Promise<unknown>>();
@@ -139,7 +143,7 @@ async function enqueue<T>(fn: () => Promise<T>): Promise<T> {
     release = resolve;
   });
   await prev;
-  const wait = GAP_MS - (Date.now() - lastAt);
+  const wait = gapMs() - (Date.now() - lastAt);
   if (wait > 0) await sleep(wait);
   lastAt = Date.now();
   try {

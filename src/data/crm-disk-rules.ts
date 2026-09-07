@@ -63,8 +63,8 @@ export const DISK_RULES: DiskRule[] = [
     stage: 8,
     title: "Деньги",
     field: "pays[].id + customerId",
-    truth: "Журнал платежей на диске. Остаток = сумма строк (товар не двигает). Нет строк — снимок extras.balance. Alfa касса — очередь pay.create и «Обновить».",
-    not: "live customer.balance на F5, paid_till, живой абонемент как касса",
+    truth: "Журнал платежей на диске. Остаток = сумма строк (товар и deleted не двигают). Нет строк — снимок extras.balance. Alfa касса — очередь pay.create/pay.delete, автоопрос 10/час и «Обновить» карточки. Ключи: pays[].id, customerId, cttId, tariffId.",
+    not: "live customer.balance на F5, paid_till, живой абонемент как касса, poll каждую минуту, обход всех customerId",
   },
   {
     id: "comms",

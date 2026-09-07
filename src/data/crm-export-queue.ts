@@ -12,6 +12,7 @@ import {
   canRunExportJob,
   type CrmExportJob,
   type CrmExportState,
+  type CrmExportOp,
 } from "./crm-export-queue-core";
 import { pendingEntityIds } from "./crm-inbound-core";
 import { logAdmin } from "./admin-settings";
@@ -62,7 +63,8 @@ export function enqueueExport(incoming: Omit<CrmExportJob, "id" | "at" | "tries"
   q.lastAt = new Date().toISOString();
   q.lastNote = `${incoming.op} ${incoming.entityId}`;
   saveExport(q);
-  void tickExportQueue(3);
+  const payNow = incoming.op === "pay.create" || incoming.op === "pay.delete";
+  void tickExportQueue(payNow ? 1 : 3, payNow ? incoming.op : undefined);
   return crmExportSnapshot();
 }
 
@@ -76,7 +78,7 @@ function followExport() {
   }, 600);
 }
 
-export async function tickExportQueue(take = 2) {
+export async function tickExportQueue(take = 2, preferOp?: CrmExportOp) {
   if (!g.__raPayTestKick) {
     g.__raPayTestKick = true;
     const { maybeRunChudnovaPayTest } = await import("./crm-pay-test");
@@ -120,9 +122,12 @@ export async function tickExportQueue(take = 2) {
       }
     }
     let q = loadExport();
-    const first = q.jobs.find((j) => canRunExportJob(j) && wantAlfaPush(j.op, j.body)) || q.jobs.find(canRunExportJob);
+    const runnable = q.jobs.filter((j) => canRunExportJob(j) && wantAlfaPush(j.op, j.body));
+    const preferred = preferOp ? runnable.filter((j) => j.op === preferOp) : [];
+    const first = preferred[0] || runnable[0] || q.jobs.find((j) => canRunExportJob(j) && wantAlfaPush(j.op, j.body)) || q.jobs.find(canRunExportJob);
     const n = isSingleExportOp(first?.op || "group.update") ? 1 : Math.max(1, take);
-    const batch = q.jobs.filter((j) => canRunExportJob(j) && wantAlfaPush(j.op, j.body)).slice(0, n);
+    const pool = preferred.length ? preferred : runnable;
+    const batch = pool.slice(0, n);
     if (!batch.length) {
       const held = q.jobs.filter(canRunExportJob).length;
       const note = held ? `канал выгрузки выключен · в очереди ${q.jobs.length}` : q.lastNote;
@@ -327,6 +332,10 @@ export async function tickExportQueue(take = 2) {
               q.jobs = remapExportJobs(q.jobs, localId, pid, job.id);
               saveExport(q);
             }
+          }
+          if (job.op === "pay.delete") {
+            const { applyDeletedPay } = await import("./crm-pay");
+            applyDeletedPay(Number(job.entityId) || 0);
           }
         }
         q = loadExport();

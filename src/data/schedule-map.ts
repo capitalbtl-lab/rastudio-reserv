@@ -9,7 +9,7 @@ import { SEED_SUBJECTS, loadSubjects } from "@/data/crm-subjects";
 import { type CrmSlot } from "@/data/crm-slots-core";
 import { slotMismatch } from "@/data/slot-mismatch";
 import { loadSiteTree, saveSiteTree } from "./site-tree";
-import { SUBJECT_TO_COURSE, resolveGroupCourseId, joinCourseSubject, courseSubjectGapText, groupAssignKey, canonCourseId, canonSchoolId } from "./ids";
+import { SUBJECT_TO_COURSE, joinCourseSubject, courseSubjectGapText, canonCourseId, canonSchoolId, patchAssignForInbound } from "./ids";
 import { UNMAPPED_SCHOOL } from "./group-status";
 
 export type SchoolLink = { schedule: string; siteHref: string; schoolId?: string };
@@ -194,14 +194,11 @@ export function applyScheduleMap(slots: CrmSlot[]): CrmSlot[] {
   const map = loadScheduleMap();
   let assignDirty = false;
   const mapped = slots.map((s) => {
-    const cid = resolveGroupCourseId(s, tree, map.courses);
-    const key = groupAssignKey(s);
-    if (key && cid && tree.assign[key] !== cid) {
-      tree.assign[key] = cid;
-      assignDirty = true;
-    }
-    if (key && !cid && tree.assign[key] && !tree.courses.some((c) => c.id === tree.assign[key] || c.href === tree.assign[key])) {
-      delete tree.assign[key];
+    const join = joinCourseSubject(s, tree, map.courses);
+    const cid = join.courseId;
+    const patched = patchAssignForInbound(tree.assign || {}, s, tree, map.courses);
+    if (patched.wrote) {
+      tree.assign = patched.assign;
       assignDirty = true;
     }
     const course = cid ? tree.courses.find((c) => c.id === cid || c.href === cid) : undefined;

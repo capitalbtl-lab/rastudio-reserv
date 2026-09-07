@@ -59,6 +59,19 @@ describe("касса Alfa по филиалам", () => {
     assert.equal(body.pay_item_id, 2);
     assert.equal(body.pay_account_id, 1);
     assert.equal(body.pay_type_id, 1);
+    const withCtt = packAlfaPayCreate({
+      customerId: 7759,
+      branchId: 1,
+      documentDate: "06.09.2026",
+      income: 5000,
+      expenditure: 0,
+      note: "Оплата за обучение",
+      localId: -12,
+      kind: "income",
+      cttId: 4412,
+      tariffId: 9,
+    });
+    assert.equal(withCtt.ctt_id, 4412);
   });
 
   it("pay.create ЦМИТ — location_id 2, не Гражданская", () => {
