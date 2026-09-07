@@ -3638,9 +3638,51 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (lessonId < 0 || (!wantAlfaPull(data.fresh) && (hit || slot))) {
         const { dossiersInGroup } = await import("./dossiers");
         const people = gid ? dossiersInGroup(branch, gid) : [];
-        const customerIds = (hit?.customerIds?.length ? hit.customerIds : people.map((d) => d.crmId)).map(Number).filter((n) => n > 0);
+        const pupils = hit?.pupils || [];
+        const customerIds = (
+          pupils.length
+            ? pupils.map((p) => p.customerId)
+            : hit?.customerIds?.length
+              ? hit.customerIds
+              : people.map((d) => d.crmId)
+        )
+          .map(Number)
+          .filter((n) => n > 0);
         const from = hm(String(hit?.from || slot?.timeFrom || data.time || ""));
         const to = hm(String(hit?.to || slot?.timeTo || data.timeTo || ""));
+        const { parseDossierCtt } = await import("./pupil-tariffs");
+        function restHint(cid: number) {
+          const d = people.find((x) => x.crmId === cid) || findDossier({ crmId: cid });
+          const live = parseDossierCtt(d?.extras).filter((t) => !t.archived);
+          if (!live.length) return "";
+          const t = live[0];
+          const till = String(t.eDate || "").replace(/^(\d{2})\.(\d{2})\.(\d{4})$/, "$1.$2");
+          const left = Number(t.lessons) || 0;
+          return till ? `${left} ост, ${till}` : `${left} ост`;
+        }
+        function personName(cid: number, fallback?: string) {
+          if (fallback) return fallback;
+          const d = people.find((x) => x.crmId === cid) || findDossier({ crmId: cid });
+          return String(d?.child?.fio || d?.parent?.fio || "").trim() || `клиент ${cid}`;
+        }
+        const customers = (pupils.length ? pupils : customerIds.map((cid) => ({ customerId: cid, attend: true as boolean, amount: undefined as number | undefined })))
+          .map((p) => {
+            const cid = Number("customerId" in p ? p.customerId : p);
+            const row = p as { customerId?: number; name?: string; attend?: boolean; amount?: number; cttId?: number; reasonId?: number; reason?: string; grade?: string; homeworkGrade?: string; note?: string };
+            return {
+              id: cid,
+              name: personName(cid, row.name),
+              attend: row.attend !== false,
+              amount: Number(row.amount) || 0,
+              cttId: Number(row.cttId) || 0,
+              reasonId: Number(row.reasonId) || 0,
+              reason: String(row.reason || ""),
+              grade: String(row.grade || ""),
+              homeworkGrade: String(row.homeworkGrade || ""),
+              note: String(row.note || ""),
+              rest: restHint(cid),
+            };
+          });
         return {
           ok: true as const,
           fromCache: true,
@@ -3656,14 +3698,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
             roomId: Number(hit?.roomId || 0),
             groupIds: (hit?.groupIds?.length ? hit.groupIds : gid ? [gid] : []).map(Number).filter((n) => n > 0),
             customerIds,
-            customers: customerIds.map((cid) => {
-              const d = people.find((x) => x.crmId === cid) || findDossier({ crmId: cid });
-              const name = String(d?.child?.fio || d?.parent?.fio || "").trim();
-              return { id: cid, name: name || `клиент ${cid}` };
-            }),
+            customers,
+            pupils,
             subjectId: Number(hit?.subjectId || slot?.subjectId || data.subjectId || 0),
             teacherIds: (hit?.teacherIds?.length ? hit.teacherIds : slot?.teacherId ? [slot.teacherId] : []).map(Number).filter((n) => n > 0),
             topic: String(hit?.topic || data.topic || ""),
+            homework: String(hit?.homework || ""),
             note: String(hit?.note || data.note || ""),
           },
           rooms,
