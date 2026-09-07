@@ -26,6 +26,8 @@ export type JournalLesson = {
   topic?: string;
   amount?: number;
   cttId?: number;
+  groupIds?: number[];
+  pupils?: { customerId: number; attend?: boolean; amount?: number; cttId?: number }[];
 };
 
 export function journalIds(lesson: { customerIds?: number[] }) {
@@ -34,6 +36,12 @@ export function journalIds(lesson: { customerIds?: number[] }) {
 
 /** Список на занятии — источник явки. attend/total считаются с него. */
 export function stampJournal<T extends JournalLesson>(lesson: T, customerIds?: number[]): T {
+  const pupils = lesson.pupils || [];
+  if (pupils.length) {
+    const ids = pupils.map((p) => Number(p.customerId) || 0).filter((n) => n);
+    const attend = pupils.filter((p) => p.attend !== false).length;
+    return { ...lesson, customerIds: ids, attend, total: pupils.length };
+  }
   const ids = (customerIds ?? lesson.customerIds ?? []).map(Number).filter((n) => n);
   return { ...lesson, customerIds: ids, attend: ids.length, total: ids.length };
 }
@@ -98,5 +106,6 @@ export function clientLessonFromJournal(lesson: JournalLesson, groupName?: strin
     room: String(lesson.room || ""),
     amount: Number(lesson.amount || 0) || undefined,
     cttId: Number(lesson.cttId || 0) || undefined,
+    groupIds: (lesson.groupIds || []).map(Number).filter((n) => n) || undefined,
   };
 }

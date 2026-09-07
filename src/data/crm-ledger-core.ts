@@ -1,11 +1,35 @@
 /** Остаток = оплаты − списания проведённых. Не путать со снимком customer.balance. */
 
+import type { LessonPupil } from "./crm-slots-core";
+
 export const ALFA_BRANCH_IDS = [1, 2, 3, 4] as const;
 
 type LessonDetail = Record<string, unknown>;
 
 export function lessonDetailsOf(item: Record<string, unknown>): LessonDetail[] {
   return Array.isArray(item.details) ? (item.details as LessonDetail[]) : [];
+}
+
+function numId(v: unknown) {
+  const n = Number(v || 0);
+  return n > 0 ? n : 0;
+}
+
+function detailFlag(v: unknown): boolean | null {
+  if (v == null || v === "") return null;
+  if (v === true || v === 1 || v === "1") return true;
+  if (v === false || v === 0 || v === "0") return false;
+  return Number(v) === 1;
+}
+
+function detailAmount(d: LessonDetail) {
+  const n = Number(d.commission ?? d.commision ?? d.cost ?? d.sum ?? d.paid ?? d.price ?? d.lesson_cost ?? d.amount ?? 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function detailName(d: LessonDetail) {
+  const s = String(d.customer_name || d.customerName || d.name || d.fio || "").trim();
+  return s || undefined;
 }
 
 /** Явка и списание — details[].customer_id. Пустой customer_ids не значит «чужой урок». */
@@ -36,10 +60,10 @@ export function lessonDetailOf(item: Record<string, unknown>, customerId?: numbe
 export function lessonWriteoffAmount(item: Record<string, unknown>, customerId?: number) {
   const d = lessonDetailOf(item, customerId);
   if (d) {
-    const n = Number(d.commission ?? d.cost ?? 0);
-    if (Number.isFinite(n) && n > 0) return n;
+    const n = detailAmount(d);
+    if (n > 0) return n;
   }
-  const keys = ["commission", "cost", "sum", "paid", "price", "lesson_cost", "amount"];
+  const keys = ["commission", "commision", "cost", "sum", "paid", "price", "lesson_cost", "amount"];
   for (const k of keys) {
     const n = Number(item[k]);
     if (Number.isFinite(n) && n > 0) return n;
@@ -52,6 +76,92 @@ export function lessonWriteoffCtt(item: Record<string, unknown>, customerId?: nu
   const d = lessonDetailOf(item, customerId);
   const n = Number(d?.ctt_id || d?.cttId || item.ctt_id || item.cttId || 0);
   return n > 0 ? n : 0;
+}
+
+/** Состав занятия из Alfa details[]: кто был и сколько списали. */
+export function packLessonPupils(item: Record<string, unknown>): LessonPupil[] {
+  const details = lessonDetailsOf(item);
+  const ids = lessonCustomerIds(item);
+  const out: LessonPupil[] = [];
+  const seen = new Set<number>();
+  for (const d of details) {
+    const customerId = numId(d.customer_id || d.customerId);
+    if (!customerId) continue;
+    seen.add(customerId);
+    const flag = detailFlag(d.is_attend ?? d.isAttend ?? d.attend);
+    const attend = flag == null ? ids.includes(customerId) || ids.length === 0 : flag;
+    const cttId = numId(d.ctt_id || d.cttId);
+    const reasonId = numId(d.reason_id || d.reasonId);
+    const reason = String(d.reason_name || d.reasonName || d.reason || "").trim();
+    const grade = String(d.grade || d.mark || "").trim();
+    const homeworkGrade = String(d.homework_grade || d.homeworkGrade || d.hw_grade || "").trim();
+    const note = String(d.note || d.comment || "").trim();
+    const amount = detailAmount(d);
+    out.push({
+      customerId,
+      name: detailName(d),
+      attend,
+      amount: amount || undefined,
+      cttId: cttId || undefined,
+      reasonId: reasonId || undefined,
+      reason: reason || undefined,
+      grade: grade || undefined,
+      homeworkGrade: homeworkGrade || undefined,
+      note: note || undefined,
+    });
+  }
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    const amount = lessonWriteoffAmount(item, id);
+    const cttId = lessonWriteoffCtt(item, id);
+    out.push({
+      customerId: id,
+      attend: true,
+      amount: amount || undefined,
+      cttId: cttId || undefined,
+    });
+  }
+  return out;
+}
+
+export function pupilOf(pupils: LessonPupil[] | undefined, customerId: number) {
+  const cid = Number(customerId) || 0;
+  if (!cid) return undefined;
+  return (pupils || []).find((p) => Number(p.customerId) === cid);
+}
+
+/** Списание этого ученика с занятия: сначала его строка в журнале педагога. */
+export function chargeFromPupils(
+  lesson: { pupils?: LessonPupil[]; amount?: number; cttId?: number },
+  customerId: number,
+) {
+  const p = pupilOf(lesson.pupils, customerId);
+  if (p) {
+    return {
+      amount: Number(p.amount) || 0,
+      cttId: Number(p.cttId) || 0,
+      attend: Boolean(p.attend),
+    };
+  }
+  return {
+    amount: Number(lesson.amount) || 0,
+    cttId: Number(lesson.cttId) || 0,
+    attend: true,
+  };
+}
+
+export function lessonPupilsKey(
+  lessons: { lessonId?: number; pupils?: { customerId?: number; amount?: number; attend?: boolean }[] }[],
+) {
+  return (lessons || [])
+    .map((l) => {
+      const bits = (l.pupils || [])
+        .map((p) => `${Number(p.customerId) || 0}:${p.attend ? 1 : 0}:${Number(p.amount) || 0}`)
+        .join(",");
+      return `${Number(l.lessonId) || 0}:${bits}`;
+    })
+    .sort()
+    .join(";");
 }
 
 export function payCttIdOf(item: Record<string, unknown>) {

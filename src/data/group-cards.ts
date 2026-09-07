@@ -5,6 +5,7 @@ import { rememberLessons } from "./crm-lessons";
 import { nextLocalId } from "./crm-local-id";
 import { mergeJournalInbound } from "./crm-inbound-core";
 import { journalForCustomer, calendarLessonForCard } from "./crm-journal-core";
+import { chargeFromPupils } from "./crm-ledger-core";
 
 export type CachedGroupCard = {
   id: number;
