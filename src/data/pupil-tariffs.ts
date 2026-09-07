@@ -7,7 +7,7 @@ import { tariffRowLive, tariffRowCustomerId, tariffTodayIso } from "./crm-tariff
 import { cgiRecordLive } from "./crm-membership";
 
 export { cgiCustomerId, cgiRecordLive } from "./crm-membership";
-export { tariffDateToIso, tariffRowLive, tariffRowHasTemplate, tariffRowCustomerId } from "./crm-tariff-row";
+export { tariffDateToIso, tariffRowLive, tariffRowHasTemplate, tariffRowCustomerId, cttSelectLabel } from "./crm-tariff-row";
 
 export type PupilGroup = {
   key: string;
@@ -325,12 +325,6 @@ export function customerTariffLabel(it: Record<string, unknown>, catalog?: Catal
   const any = catalog?.find((t) => t.id === tariffId);
   if (any?.name) return any.name;
   return tariffId ? `абонемент #${tariffId}` : "абонемент";
-}
-
-export function cttSelectLabel(t: { name?: string; bDate?: string; rest?: number }) {
-  const rest = Number(t.rest || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const date = String(t.bDate || "").trim();
-  return [t.name || "абонемент", date, rest].filter(Boolean).join(" / ");
 }
 
 export function withCatalogNames(

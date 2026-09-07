@@ -57,3 +57,9 @@ export function liveTariffCustomerIds(items: Record<string, unknown>[], today = 
   }
   return ids;
 }
+
+export function cttSelectLabel(t: { name?: string; bDate?: string; rest?: number }) {
+  const rest = Number(t.rest || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const date = String(t.bDate || "").trim();
+  return [t.name || "абонемент", date, rest].filter(Boolean).join(" / ");
+}

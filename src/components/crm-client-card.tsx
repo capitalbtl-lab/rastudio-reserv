@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { AdminTariffs } from "@/components/admin-tariffs";
 import { LessonStrip, toYmd } from "@/components/lesson-strip";
 import { RaSelect } from "@/components/ra-select";
-import { SCHOOLS } from "@/data/site";
+import { cttSelectLabel } from "@/data/crm-tariff-row";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
 import { commChannelLabel } from "@/data/crm-comms-core";
 import {
@@ -451,6 +451,14 @@ export function CrmClientCard({
   }, [card.comms]);
   const comms = channel ? (card.comms || []).filter((c) => (c.channel || "сообщение") === channel) : card.comms || [];
   const tiles = useMemo(() => lessonsForCard(card.calendar, card.regular), [card.calendar, card.regular]);
+  const writeOffs = useMemo(
+    () =>
+      (card.calendar || [])
+        .filter((l) => Number(l.status) === 3)
+        .slice()
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.from).localeCompare(String(a.from))),
+    [card.calendar],
+  );
   const catalog: LessonCatalog = card.catalog || { subjects: [], teachers: [], rooms: [], tariffs: [], groups: [] };
   const tariffOffers: TariffOffer[] = catalog.tariffs || [];
   const groupOffers: GroupOffer[] = groupChoices?.length ? groupChoices : catalog.groups || [];
@@ -522,7 +530,19 @@ export function CrmClientCard({
   }, [card.groups]);
   const activeGroups = pupilGroups.filter((g) => g.active);
   const activeTariffs = (card.tariffs || []).filter((t) => !t.archived);
+  const archivedTariffs = (card.tariffs || []).filter((t) => t.archived);
   const liveTariffs = activeTariffs;
+  useEffect(() => {
+    if (payCttId) return;
+    const first = activeTariffs[0];
+    if (first?.id) setPayCttId(String(first.id));
+  }, [activeTariffs, payCttId]);
+  const cttName = (id?: number) => {
+    const n = Number(id) || 0;
+    if (n === -1) return "Базовый счет";
+    const t = (card.tariffs || []).find((x) => x.id === n);
+    return t ? cttSelectLabel(t) : n ? `ctt ${n}` : "—";
+  };
   const journalPays = useMemo(() => {
     const list = card.pays || [];
     if (!payBranch) return list;
@@ -1065,12 +1085,12 @@ export function CrmClientCard({
                       <p className="font-semibold text-sm">{t.name}</p>
                       <p className="text-[0.75rem] text-muted">
                         {[
-                          t.bDate && t.eDate ? `${t.bDate} — ${t.eDate}` : "",
+                          t.bDate && t.eDate ? `${t.bDate} — ${t.eDate}` : t.bDate || "",
                           t.lessons ? `${t.lessons} ур.` : "",
-                          t.price ? money(t.price) : t.rest ? money(t.rest) : "",
+                          money(t.rest),
                         ]
                           .filter(Boolean)
-                          .join(" · ") || (t.rest ? money(t.rest) : "")}
+                          .join(" · ")}
                       </p>
                     </button>
                     <button
@@ -1091,6 +1111,19 @@ export function CrmClientCard({
             ) : (
               <p className="mt-2 text-sm text-muted">Нет действующего абонемента.</p>
             )}
+            {archivedTariffs.length ? (
+              <div className="mt-3 border-t border-black/8 pt-2" data-op="archived-tariffs">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">Архивные</p>
+                <ul className="mt-1.5 space-y-1">
+                  {archivedTariffs.map((t) => (
+                    <li key={t.id} className="rounded-xl bg-white/70 px-3 py-1.5 text-[0.75rem] text-muted ring-1 ring-black/6">
+                      <span className="font-semibold text-fg/80">{t.name}</span>
+                      <span className="mt-0.5 block">{cttSelectLabel(t)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
         </div>
 
