@@ -111,6 +111,8 @@ export function regularItemForCustomer(it: Record<string, unknown>, customerId: 
     customer_ids: [cid],
   };
 }
+
+export function customerIdsOfRegular(it: Record<string, unknown>) {
   return Array.isArray(it.customer_ids) ? it.customer_ids.map(Number).filter((n) => n > 0) : [];
 }
 

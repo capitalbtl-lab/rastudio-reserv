@@ -53,4 +53,22 @@ describe("постоянное расписание ученика", () => {
     assert.equal(picked.some((x) => String(x.time_from_v) === "18:10"), false);
     assert.equal(picked.length, 3);
   });
+
+  it("время ученика из customers[] важнее слота группы 18:10", () => {
+    const picked = pickCustomerRegularItems(
+      [
+        {
+          id: 9,
+          related_id: 80,
+          day: 5,
+          time_from_v: "18:10",
+          time_to_v: "20:40",
+          customers: [{ id: 670, time_from: "15:30", time_to: "18:00" }],
+        },
+      ],
+      670,
+    );
+    assert.equal(picked.length, 1);
+    assert.equal(String(picked[0].time_from_v), "15:30");
+  });
 });
