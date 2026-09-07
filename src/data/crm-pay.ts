@@ -387,7 +387,8 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
     return { ok: false, skipped: "rate", branches: [] as number[], newCount: 0, pages: 0, hit429: false, note };
   }
   poll.hits = [...payPollHitsInWindow(poll.hits, now), new Date(now).toISOString()];
-  const { token, request } = await import("./alfacrm");
+  const { token, request, dropAlfaAuth } = await import("./alfacrm");
+  dropAlfaAuth();
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const t = await token();
   const branches = [1, 2, 3, 4];
@@ -400,11 +401,11 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   for (const branchId of branches) {
     const stamp = payPollStampOrEmpty(poll.branches[String(branchId)]);
     try {
-      let json: unknown = await request(`/v2api/${branchId}/pay/index`, { page: 0 }, t);
+      let json: unknown = await request(`/v2api/${branchId}/pay/index`, { page: 0, currency: "rub" }, t);
       pages += 1;
       let pack = crmUnwrapIndex(json);
       if (!pack.items.length) {
-        json = await request(`/v2api/${branchId}/pay/index`, { page: 0, pay_account_id: 1 }, t);
+        json = await request(`/v2api/${branchId}/pay/index`, { page: 0, pay_type_id: 1 }, t);
         pages += 1;
         pack = crmUnwrapIndex(json);
       }
@@ -438,7 +439,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
       errs.push(`ф${branchId}: ${e instanceof Error ? e.message.slice(0, 80) : String(e).slice(0, 80)}`);
     }
   }
-  const note = `Касса inbound: филиалы ${branches.join(",")}, пришло ${pulledCount}, новых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"})${errs.length ? `. ${errs.join("; ")}` : ""}`;
+  const note = `${new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow" })} Касса inbound: филиалы ${branches.join(",")}, пришло ${pulledCount}, новых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"})${errs.length ? `. ${errs.join("; ")}` : ""}`;
   poll.lastNote = note;
   const freshStore = load();
   freshStore.poll = poll;

@@ -271,6 +271,11 @@ export async function pagedIndex<T extends Record<string, unknown>>(
   return { loaded, total: Number.isFinite(total) ? total : loaded };
 }
 
+export function dropAlfaAuth() {
+  cache = null;
+  dropIndexCache();
+}
+
 export async function token() {
   if (cache && cache.exp > Date.now()) return cache.token;
   const email = EMAIL();
