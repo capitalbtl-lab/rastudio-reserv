@@ -38,6 +38,10 @@ describe("форма занятия карточки", () => {
     assert.match(src, /date < today/);
     assert.match(src, /l\.amount/);
     assert.match(src, /Отмен:/);
+    assert.match(src, /writeoffSumForCtt/);
+    assert.match(src, /списано/);
+    assert.match(src, /cttName\(l\.cttId\)/);
+    assert.match(src, /как в Alfa/);
     assert.match(src, /calendarLessonForCard/);
     assert.match(src, /g.active !== false/);
     assert.doesNotMatch(src, /group=\{\(card.groups \|\| \[\]\)\[0\]\?\.name\}/);

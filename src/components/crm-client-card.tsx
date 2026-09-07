@@ -562,6 +562,13 @@ export function CrmClientCard({
     const t = (card.tariffs || []).find((x) => x.id === n);
     return t ? `${base} · ${cttSelectLabel(t)}` : `${base} · абонемент ${n}`;
   };
+  const accountRest = (t: { id?: number; rest?: number; paySum?: number }) => {
+    const wo = writeoffSumForCtt(writeOffs, Number(t.id) || 0);
+    return {
+      wo,
+      rest: ledgerMoney({ paySum: Number(t.paySum) || 0, writeoffSum: wo, snap: t.rest }),
+    };
+  };
   const journalPays = useMemo(() => {
     const list = card.pays || [];
     if (!payBranch) return list;
@@ -1101,10 +1108,11 @@ export function CrmClientCard({
             {basicAccount ? (
               <div className="mt-2 rounded-xl bg-white px-3 py-2 ring-1 ring-black/6" data-op="basic-account">
                 <p className="font-semibold text-sm">Базовый счет</p>
-                <p className="text-[0.75rem] text-muted">Счет клиента по умолчанию</p>
+                <p className="text-[0.75rem] text-muted">Счет клиента по умолчанию · без абонемента</p>
                 <p className="text-[0.75rem] font-semibold">
-                  Остаток {money(basicAccount.rest)} ({basicAccount.lessons || 0} ур.)
+                  Остаток {money(accountRest(basicAccount).rest)} ({basicAccount.lessons || 0} ур.)
                   {basicAccount.payCount ? ` · ${basicAccount.payCount} платежей` : ""}
+                  {accountRest(basicAccount).wo ? ` · списано ${money(accountRest(basicAccount).wo)}` : ""}
                 </p>
               </div>
             ) : null}
@@ -1124,8 +1132,9 @@ export function CrmClientCard({
                         {[
                           t.bDate && t.eDate ? `${t.bDate} — ${t.eDate}` : t.bDate || "",
                           t.lessons ? `${t.lessons} ур.` : "",
-                          `остаток ${money(t.rest)}`,
+                          `остаток ${money(accountRest(t).rest)}`,
                           t.payCount ? `${t.payCount} платежей на этот счёт` : "",
+                          accountRest(t).wo ? `списано ${money(accountRest(t).wo)}` : "",
                         ]
                           .filter(Boolean)
                           .join(" · ")}
@@ -1157,7 +1166,7 @@ export function CrmClientCard({
                     <li key={t.id} className="rounded-xl bg-white/70 px-3 py-1.5 text-[0.75rem] text-muted ring-1 ring-black/6">
                       <span className="font-semibold text-fg/80">{t.name}</span>
                       <span className="mt-0.5 block">
-                        {[cttSelectLabel(t), t.payCount ? `${t.payCount} платежей` : "", `остаток ${money(t.rest)}`].filter(Boolean).join(" · ")}
+                        {[cttSelectLabel(t), t.payCount ? `${t.payCount} платежей` : "", `остаток ${money(accountRest(t).rest)}`, accountRest(t).wo ? `списано ${money(accountRest(t).wo)}` : ""].filter(Boolean).join(" · ")}
                       </span>
                     </li>
                   ))}
@@ -1183,7 +1192,7 @@ export function CrmClientCard({
         <div className="mt-4 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="lesson-writeoffs">
           <p className="font-display text-lg">Списания занятий</p>
           <p className="mt-0.5 text-[0.72rem] text-muted">
-            Проведённые — списание с абонемента. Отменённые не списывают деньги.
+            Проведённые списывают деньги с абонемента, как в Alfa. Отменённые не списывают.
             {(card.calendar || []).filter((l) => Number(l.status) === 2).length
               ? ` Отмен: ${(card.calendar || []).filter((l) => Number(l.status) === 2).length}.`
               : ""}
@@ -1195,6 +1204,7 @@ export function CrmClientCard({
                   <span className="min-w-0 truncate">
                     {l.date} {l.from || ""} · {l.type || "занятие"}
                     {l.group ? ` · ${l.group}` : ""}
+                    {` · ${cttName(l.cttId)}`}
                   </span>
                   <span className="shrink-0 text-rose-700">
                     {Number(l.amount) > 0 ? `−${money(l.amount)}` : "−1 занятие"}

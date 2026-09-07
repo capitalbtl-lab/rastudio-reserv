@@ -38,6 +38,12 @@ describe("журнал уроков", () => {
     const row = clientLessonFromJournal(mine[0], "Роботы");
     assert.equal(row.id, 1);
     assert.equal(row.group, "Роботы");
+    const charged = clientLessonFromJournal(
+      { date: "2026-09-01", lessonId: 9, amount: 850, cttId: 4412, status: 3 },
+      "Роботы",
+    );
+    assert.equal(charged.amount, 850);
+    assert.equal(charged.cttId, 4412);
   });
 
   it("карточка: только её группа, python и пустое имя не входят", () => {

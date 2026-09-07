@@ -124,6 +124,9 @@ describe("касса список", () => {
     assert.match(pay, /page: fill.page, pageSize: PAY_INBOUND_PAGE/);
     assert.match(pay, /cashTakeOf/);
     assert.match(pay, /PAY_STORE_CAP/);
+    assert.match(pay, /payCttIdOf/);
+    assert.match(pay, /ctt_id: ctt/);
+    assert.match(pay, /parseDossierCtt/);
     const sched = readFileSync(new URL("../components/admin-schedule.tsx", import.meta.url), "utf8");
     assert.match(sched, /\["cash", "Касса"\]/);
     assert.match(sched, /AdminCash/);

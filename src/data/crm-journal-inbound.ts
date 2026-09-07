@@ -221,7 +221,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
       );
       if (!packed) continue;
       packed.date = ymd(packed.date);
-      packed.customerIds = ids;
+      if (!packed.customerIds?.length) packed.customerIds = [id];
       pulled.push(packed);
     }
   }
