@@ -876,7 +876,10 @@ export function CrmClientCard({
   const balanceBox = (
           <div className={cn("shrink-0 text-right", compact ? "pl-1.5" : "pb-0.5 pr-1")}>
             <p className={cn("font-display leading-none tabular-nums tracking-tight", compact ? "text-[1.2rem]" : "text-[2.15rem]")}>{money(card.balance)}</p>
-            <p className={cn("mt-0.5 text-muted", compact ? "text-[0.6rem]" : "text-[0.68rem]")}>{card.lessonsLeft || 0} ур. · до {card.paidTill || "—"}</p>
+            <p className={cn("mt-0.5 text-muted", compact ? "text-[0.6rem]" : "text-[0.68rem]")}>
+              {card.lessonsLeft || 0} ур. · до {card.paidTill || "—"}
+              {(card.pays || []).length ? "" : " · снимок Alfa"}
+            </p>
           </div>
   );
 
@@ -1200,7 +1203,11 @@ export function CrmClientCard({
               </table>
             </div>
           ) : (
-            <p className="mt-2 text-sm text-muted">Нет платежей на диске. Добавить — кнопка «Оплата».</p>
+            <p className="mt-2 text-sm text-muted">
+              {Number(card.balance)
+                ? `Остаток ${money(card.balance)} — снимок Alfa, строк журнала нет. Откройте карточку ещё раз или нажмите «Оплата».`
+                : "Нет платежей на диске. Добавить — кнопка «Оплата»."}
+            </p>
           )}
         </div>
 

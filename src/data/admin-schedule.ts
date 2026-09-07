@@ -1538,6 +1538,21 @@ export const adminSchedule = createServerFn({ method: "POST" })
             const fresh = findDossier({ crmId: customerId });
             if (fresh) card = cardFromDossier(fresh, branch);
           }
+          if (!(card.pays || []).length && linked && allow) {
+            const { token, request } = await import("./alfacrm");
+            const { inboundCustomerPays, customerBalance } = await import("./crm-pay");
+            const t = await token().catch(() => "");
+            if (t) {
+              await inboundCustomerPays(request, t, branch, customerId).catch(() => []);
+              const fresh = findDossier({ crmId: customerId });
+              const next = customerBalance(customerId, fresh?.extras?.balance ?? card.balance);
+              if (fresh) {
+                upsertDossier({ crmId: customerId, extras: { ...(fresh.extras || {}), balance: String(next) }, source: "sync" } as never);
+              }
+              const again = findDossier({ crmId: customerId });
+              if (again) card = cardFromDossier(again, branch);
+            }
+          }
           return { ok: true as const, fromCache: true, customer: withPush(card) };
         }
         return { ok: false as const, error: "Ученик не найден на сайте." };
