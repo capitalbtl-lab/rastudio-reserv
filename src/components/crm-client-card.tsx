@@ -249,11 +249,13 @@ function weekdayNum(label: string) {
 }
 
 function lessonsForCard(calendar: ClientLesson[] | undefined, regular: ClientRegular[] | undefined): GroupCalLesson[] {
+  const today = toYmd(new Date().toISOString().slice(0, 10));
   const out: GroupCalLesson[] = [];
   const seen = new Set<string>();
   for (const l of calendar || []) {
     const date = toYmd(l.date);
-    if (!date || date.length < 10) continue;
+    if (!date || date.length < 10 || date < today) continue;
+    if (Number(l.status) === 2 || Number(l.status) === 3) continue;
     const key = `${date}|${l.from}|${l.group}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -271,18 +273,18 @@ function lessonsForCard(calendar: ClientLesson[] | undefined, regular: ClientReg
       lessonId: l.id || undefined,
     });
   }
-  if (out.length >= 4) return out.sort((a, b) => a.date.localeCompare(b.date));
   const d0 = new Date();
   d0.setHours(12, 0, 0, 0);
   for (const r of regular || []) {
     const wd = weekdayNum(r.day);
     if (!wd) continue;
     const jsWant = wd === 7 ? 0 : wd;
-    for (let i = -56; i <= 126; i++) {
+    for (let i = 0; i <= 126; i++) {
       const cur = new Date(d0);
       cur.setDate(d0.getDate() + i);
       if (cur.getDay() !== jsWant) continue;
       const date = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
+      if (date < today) continue;
       const key = `${date}|${r.from}|${r.groupName}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -298,7 +300,7 @@ function lessonsForCard(calendar: ClientLesson[] | undefined, regular: ClientReg
       });
     }
   }
-  return out.sort((a, b) => a.date.localeCompare(b.date));
+  return out.sort((a, b) => a.date.localeCompare(b.date) || String(a.from).localeCompare(String(b.from)));
 }
 
 export type CardAction = "customerSave" | "customerLesson" | "customerPay" | "customerTariff" | "customerGroup" | "customerPayDelete";
@@ -1019,7 +1021,9 @@ export function CrmClientCard({
             {activeGroups.length ? (
               <ul className="mt-2 space-y-1.5">
                 {activeGroups.map((g) => {
-                  const reg = (card.regular || []).find((r) => r.groupId === g.id);
+                  const regs = (card.regular || []).filter((r) => r.groupId === g.id);
+                  const when = regs.map((r) => `${r.day} ${r.from}–${r.to}`).filter((s) => /\d/.test(s)).join(" · ");
+                  const teachers = [...new Set(regs.map((r) => r.teacher).filter(Boolean))].join(", ");
                   return (
                     <li key={`${g.branchId}-${g.id}`} className="flex items-stretch gap-1">
                       <button
@@ -1032,9 +1036,7 @@ export function CrmClientCard({
                       >
                         <p className="font-semibold text-sm">{g.name || `группа ${g.id}`}</p>
                         <p className="text-[0.75rem] text-muted">
-                          {[reg ? `${reg.day} ${reg.from}–${reg.to}` : "", reg?.teacher || "", CRM_BRANCH[g.branchId]?.short]
-                            .filter(Boolean)
-                            .join(" · ")}
+                          {[when, teachers, CRM_BRANCH[g.branchId]?.short].filter(Boolean).join(" · ")}
                         </p>
                       </button>
                       <button
