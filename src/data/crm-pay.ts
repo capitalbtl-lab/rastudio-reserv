@@ -496,7 +496,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
     store.poll = poll;
     save(store);
     logAdmin(note, "sync");
-    return { ok: false, skipped: "rate", branches: [] as number[], newCount: 0, pages: 0, hit429: false, note };
+    return { ok: false, skipped: "rate", branches: [] as number[], newCount: 0, pages: 0, hit429: false, note, fill: poll.fill };
   }
   poll.hits = [...payPollHitsInWindow(poll.hits, now), new Date(now).toISOString()];
   const { token, request, dropAlfaAuth } = await import("./alfacrm");

@@ -101,12 +101,12 @@ describe("касса список", () => {
     const card = readFileSync(new URL("../components/crm-client-card.tsx", import.meta.url), "utf8");
     assert.match(card, /data-op="cash-journal"/);
     assert.match(card, /customerPayDelete/);
-    assert.match(card, /liveTariffs/);
+    assert.match(card, /paysComplete/);
     assert.match(card, /payKindName\(payKind\)/);
     assert.match(card, /CASH_PAGE_SIZES/);
     assert.match(card, /payAccountLabel/);
     assert.match(card, /cashPageSlice/);
-    assert.match(card, /по \$\{n\}/);
+    assert.match(card, /по \{n\}/);
     const tab = readFileSync(new URL("../components/admin-cash.tsx", import.meta.url), "utf8");
     assert.match(tab, /onOpenClient/);
     assert.match(tab, /cashPoll/);
@@ -114,7 +114,7 @@ describe("касса список", () => {
     assert.match(tab, /CASH_PAGE_SIZES/);
     assert.match(tab, /payAccountLabel/);
     assert.match(tab, /skip: pg \* size/);
-    assert.match(tab, /по \$\{n\}/);
+    assert.match(tab, /по \{n\}/);
     assert.match(tab, /fillNote/);
     assert.equal(/kind:\s*["']pays["']/.test(tab), false);
     assert.match(pay, /PAY_INBOUND_RUN/);
