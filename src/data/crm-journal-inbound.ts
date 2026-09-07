@@ -122,32 +122,38 @@ export async function inboundJournalGroup(
     teacher: String(slot?.teacher || ""),
     subject: String(cached?.subject || slot?.subject || ""),
   };
-  const dateFrom = opts?.dateFrom || ruShift(-45);
+  const dateFrom = opts?.dateFrom || ruShift(-90);
   const dateTo = opts?.dateTo || ruShift(21);
-  const packs = await Promise.all(
-    [1, 2, 3].map((status) =>
-      request<{ items?: Parameters<typeof packLight>[0][] }>(
-        `/v2api/${branch}/lesson/index`,
-        { page: 0, pageSize: 50, status, group_id: gid, date_from: dateFrom, date_to: dateTo },
-        t,
-      ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] })),
-    ),
-  );
+  const doneFrom = opts?.dateFrom || ruShift(-800);
   const byKey = new Map<string, GroupCalLesson>();
-  for (const les of packs) {
-    for (const item of les.items || []) {
-      const gids = (item.group_ids || []).map(Number).filter((n) => n > 0);
-      if (gids.length && !gids.includes(gid)) continue;
-      if (!gids.length && Number(item.lesson_type_id || 0) === 2) continue;
-      const packed = packLight(item, ctx);
-      if (!packed) continue;
-      byKey.set(`${packed.lessonId || 0}|${packed.date}|${packed.from}`, packed);
+  async function pull(status: number, date_from: string, date_to: string, pages: number, pageSize: number) {
+    for (let page = 0; page < pages; page++) {
+      const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
+        `/v2api/${branch}/lesson/index`,
+        { page, pageSize, status, group_id: gid, date_from, date_to, removed: 0 },
+        t,
+      ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
+      const chunk = les.items || [];
+      for (const item of chunk) {
+        const gids = (item.group_ids || []).map(Number).filter((n) => n > 0);
+        if (gids.length && !gids.includes(gid)) continue;
+        if (!gids.length && Number(item.lesson_type_id || 0) === 2) continue;
+        const packed = packLight(item, ctx);
+        if (!packed) continue;
+        byKey.set(`${packed.lessonId || 0}|${packed.date}|${packed.from}`, packed);
+      }
+      if (chunk.length < pageSize) break;
     }
   }
+  await pull(1, dateFrom, dateTo, 2, 50);
+  await pull(2, dateFrom, dateTo, 2, 50);
+  await pull(3, doneFrom, dateTo, 6, 100);
   const pulled = [...byKey.values()];
   const hold = opts?.hold || pendingExportIds(["lesson.update", "lesson.create"]);
   const calendar = mergeLocalCalendar(pulled, cached?.calendar, hold, "union");
-  if (cached && journalFingerprint(calendar) === journalFingerprint(cached.calendar || [])) {
+  const samePrint = cached && journalFingerprint(calendar) === journalFingerprint(cached.calendar || []);
+  const sameMoney = cached && lessonPupilsKey(calendar) === lessonPupilsKey(cached.calendar || []);
+  if (samePrint && sameMoney) {
     return { ok: true as const, extra: `журнал ${gid}: без изменений`, count: calendar.length, calendar };
   }
   const card = {
@@ -175,6 +181,7 @@ export async function inboundJournalGroup(
   if (!opts?.defer) {
     saveGroupCard(card);
     rememberLessons(calendar);
+    fanOutLessonWriteoffs(calendar);
   }
   return { ok: true as const, extra: `журнал ${gid}: ${calendar.length}`, count: calendar.length, calendar, card };
 }
@@ -263,15 +270,14 @@ export async function inboundJournalChunk(offset = 0, take = 2) {
   const slots = listAdminSlots();
   const hold = pendingExportIds(["lesson.update", "lesson.create"]);
   const t = await token();
-  const dateFrom = ruShift(-45);
-  const dateTo = ruShift(21);
   const results = await Promise.all(
-    slice.map((g) => inboundJournalGroup(g.branchId, g.groupId, { token: t, slots, hold, dateFrom, dateTo, defer: true })),
+    slice.map((g) => inboundJournalGroup(g.branchId, g.groupId, { token: t, slots, hold, defer: true })),
   );
   const cards = results.flatMap((r) => (r.card ? [r.card] : []));
   if (cards.length) {
     saveGroupCards(cards);
     rememberLessons(cards.flatMap((c) => c.calendar || []));
+    fanOutLessonWriteoffs(cards.flatMap((c) => c.calendar || []));
   }
   const n = results.reduce((s, r) => s + r.count, 0);
   const next = from + slice.length;
