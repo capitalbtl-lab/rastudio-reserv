@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, snapshotBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, snapshotBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, CASH_PAGE_SIZES, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -129,5 +129,22 @@ describe("журнал денег", () => {
     assert.equal(alfaPayIndexDate("07.09.2026"), "2026.09.07");
     assert.equal(alfaPayIndexDate("2026-09-07"), "2026.09.07");
     assert.equal(ruDateIso("07.09.2026"), "2026-09-07");
+  });
+
+  it("базовый счет без абонемента, раздельный — с абонементом; страницы 50/100/500", () => {
+    assert.equal(payAccountLabel(undefined), "Базовый счет");
+    assert.equal(payAccountLabel(0), "Базовый счет");
+    assert.equal(payAccountLabel(-1), "Базовый счет");
+    assert.equal(payAccountLabel(192), "Раздельный счет");
+    assert.deepEqual([...CASH_PAGE_SIZES], [50, 100, 500]);
+    const rows = Array.from({ length: 120 }, (_, i) => i);
+    const a = cashPageSlice(rows, 0, 50);
+    assert.equal(a.items.length, 50);
+    assert.equal(a.pages, 3);
+    assert.equal(a.total, 120);
+    const b = cashPageSlice(rows, 2, 50);
+    assert.deepEqual(b.items[0], 100);
+    const c = cashPageSlice(rows, 0, 999);
+    assert.equal(c.size, 50);
   });
 });

@@ -222,9 +222,52 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
       </div>
 
       <p className="mt-3 text-[0.78rem] text-muted">
-        {total} платежей · сумма строк {money(selectionSum)} · опрос {poll.hits || 0}/{poll.max || 10} за час
+        {total} платежей · на странице {items.length} · сумма строк {money(selectionSum)} · опрос {poll.hits || 0}/{poll.max || 10} за час
         {poll.lastNote ? ` · ${poll.lastNote}` : ""}
       </p>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {CASH_PAGE_SIZES.map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => {
+              setTake(n);
+              setPage(0);
+              void load({ take: n, page: 0 });
+            }}
+            className={cn("rounded-full px-3 py-1 text-[0.78rem] font-semibold ring-1", take === n ? "bg-primary text-white ring-primary" : "bg-white text-fg ring-black/10")}
+          >
+            {n}
+          </button>
+        ))}
+        <span className="ml-auto flex items-center gap-1 text-[0.78rem] text-muted">
+          <button
+            type="button"
+            disabled={page <= 0 || Boolean(busy)}
+            className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/10 disabled:opacity-40"
+            onClick={() => {
+              const next = Math.max(0, page - 1);
+              setPage(next);
+              void load({ page: next });
+            }}
+          >
+            ←
+          </button>
+          стр. {page + 1} / {Math.max(1, Math.ceil(total / take) || 1)}
+          <button
+            type="button"
+            disabled={Boolean(busy) || (page + 1) * take >= total}
+            className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/10 disabled:opacity-40"
+            onClick={() => {
+              const next = page + 1;
+              setPage(next);
+              void load({ page: next });
+            }}
+          >
+            →
+          </button>
+        </span>
+      </div>
       {note ? <p className="mt-1 text-sm font-medium text-primary">{note}</p> : null}
 
       <div className="mt-4 overflow-x-auto">
@@ -238,7 +281,7 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
               <th className="px-2 py-2">Сумма</th>
               <th className="px-2 py-2">Статья</th>
               <th className="px-2 py-2">Способ</th>
-              <th className="px-2 py-2">cttId</th>
+              <th className="px-2 py-2">Счёт</th>
               <th className="px-2 py-2">Коммент</th>
               <th className="px-2 py-2">id</th>
               <th className="px-2 py-2" />
@@ -271,7 +314,10 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
                   </td>
                   <td className="px-2 py-2">{itemName(p.payItemId)}</td>
                   <td className="px-2 py-2">{methodName(p.payMethod)}</td>
-                  <td className="px-2 py-2 tabular-nums">{p.cttId || "—"}</td>
+                  <td className="max-w-[12rem] truncate px-2 py-2" title={payAccountLabel(p.cttId)}>
+                    {payAccountLabel(p.cttId)}
+                    {Number(p.cttId) > 0 ? ` · ${p.cttId}` : ""}
+                  </td>
                   <td className="max-w-[12rem] truncate px-2 py-2" title={p.note}>
                     {p.note || "—"}
                   </td>

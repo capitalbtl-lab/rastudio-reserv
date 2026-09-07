@@ -1957,7 +1957,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         kind: data.payKind,
         customerId: Number(data.customerId) || 0,
         includeDeleted: Boolean(data.includeDeleted),
-        limit: 8000,
+        limit: 20000,
       });
       const q = String(data.q || "").trim().toLowerCase();
       const qDigits = q.replace(/\D/g, "");
