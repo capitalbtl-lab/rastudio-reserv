@@ -564,6 +564,7 @@ describe("мастер абонементов учеников", () => {
     assert.doesNotMatch(pull, /best.paid \|\| best.balance/);
     assert.match(pull, /if \(found\)/);
     const pack = src.slice(src.indexOf("export function packCardTariff"), src.indexOf("export function parseDossierCtt"));
-    assert.doesNotMatch(pack, /it\.paid/);
+    assert.match(pack, /it\.balance \?\? it\.rest \?\? 0/);
+    assert.doesNotMatch(pack, /it\.rest \?\? it\.paid/);
   });
 });
