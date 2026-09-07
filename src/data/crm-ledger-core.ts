@@ -20,10 +20,9 @@ export function ledgerMoney(opts: { paySum: number; writeoffSum: number; snap?: 
   const pay = Number(opts.paySum) || 0;
   const wo = Number(opts.writeoffSum) || 0;
   const snap = opts.snap == null || opts.snap === undefined ? Number.NaN : Number(opts.snap);
-  if (opts.complete && wo > 0) return pay - wo;
-  if (opts.complete) return Number.isFinite(snap) && snap > 0 ? snap : pay;
-  if (Number.isFinite(snap) && snap > 0) return snap;
-  return pay - wo;
+  if (wo > 0) return pay - wo;
+  if (Number.isFinite(snap)) return snap;
+  return pay;
 }
 
 export function uniqueBranches(primary?: number) {

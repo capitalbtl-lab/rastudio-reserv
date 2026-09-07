@@ -144,11 +144,41 @@ export function displayedBalance(rows: PayRow[], fallback?: number | string, com
   return balanceOf(live);
 }
 
-/** Снимок Alfa: rest живых ctt (раздельный счёт абонемента) или customer.balance (базовый). */
-export function snapshotBalance(extra?: number | string | null, cttRest?: number) {
-  const a = extra == null || extra === "" ? 0 : Number(extra) || 0;
+/** Снимок Alfa: rest живых ctt (раздельный счёт) или customer.balance (базовый). 0 — валидный остаток, не «нет данных». */
+export function snapshotBalance(extra?: number | string | null, cttRest?: number, hasCtt?: boolean) {
   const b = Number(cttRest) || 0;
-  return b || a;
+  if (hasCtt) return b;
+  if (extra == null || extra === "") return b;
+  const a = Number(extra);
+  return Number.isFinite(a) ? a : 0;
+}
+
+export function cttIdOfPay(cttId?: number | null) {
+  return (Number(cttId) || 0) > 0 ? Number(cttId) : 0;
+}
+
+/** Сумма строк кассы на счёт: 0 — базовый, иначе cttId абонемента. */
+export function paySumForCtt(rows: { kind?: string; income?: number; expenditure?: number; deleted?: boolean; cttId?: number | null }[], cttId: number) {
+  const want = cttIdOfPay(cttId);
+  let n = 0;
+  for (const r of rows) {
+    if (r.deleted) continue;
+    if (cttIdOfPay(r.cttId) !== want) continue;
+    if (r.kind === "product") continue;
+    n += Number(r.income || 0) - Number(r.expenditure || 0);
+  }
+  return n;
+}
+
+export function payCountForCtt(rows: { deleted?: boolean; cttId?: number | null }[], cttId: number) {
+  const want = cttIdOfPay(cttId);
+  let n = 0;
+  for (const r of rows) {
+    if (r.deleted) continue;
+    if (cttIdOfPay(r.cttId) !== want) continue;
+    n += 1;
+  }
+  return n;
 }
 
 export function isOpeningRow(row: Pick<PayRow, "note">) {
