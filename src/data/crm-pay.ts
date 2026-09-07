@@ -400,10 +400,20 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   for (const branchId of branches) {
     const stamp = payPollStampOrEmpty(poll.branches[String(branchId)]);
     try {
-      const json = await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50 }, t);
+      let json: unknown = await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50 }, t);
       pages += 1;
-      const pulled = crmUnwrapIndex(json)
-        .items.map((it) => packPay(it as Record<string, unknown>, payCustomerIdOf(it as Record<string, unknown>), branchId))
+      let pack = crmUnwrapIndex(json);
+      if (!pack.items.length) {
+        json = await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50, pay_account_id: 1 }, t);
+        pages += 1;
+        pack = crmUnwrapIndex(json);
+      }
+      if (!pack.items.length) {
+        const raw = JSON.stringify(json).slice(0, 140);
+        errs.push(`ф${branchId} пусто total=${pack.total ?? "?"} ${raw}`);
+      }
+      const pulled = pack.items
+        .map((it) => packPay(it, payCustomerIdOf(it), branchId))
         .filter((x): x is PayRow => Boolean(x));
       pulledCount += pulled.length;
       const fresh = pulled.filter((x) => payAfterStamp(x, stamp));
