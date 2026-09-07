@@ -92,7 +92,7 @@ ${row("Тип", p.kind)}
 ${row("Сумма", p.sum)}
 ${row("Статья", p.article || "")}
 ${row("Способ", p.method || "")}
-${row("cttId", p.cttId ? String(p.cttId) : "")}
+${row("Счёт", p.cttId && Number(p.cttId) > 0 ? `Раздельный счет · абонемент ${p.cttId}` : "Базовый счет")}
 ${row("id", p.id ? String(p.id) : "")}
 ${row("Комментарий", p.note || "")}
 </table>
@@ -1201,16 +1201,17 @@ export function CrmClientCard({
               <button
                 key={n}
                 type="button"
+                data-op="cash-page-size"
                 onClick={() => {
                   setCashSize(n);
                   setCashPage(0);
                 }}
                 className={cn("rounded-full px-2 py-0.5 text-[0.7rem] font-semibold", cashSize === n ? "bg-primary text-white" : "bg-white ring-1 ring-black/8")}
               >
-                {n}
+                по {n}
               </button>
             ))}
-            {cashView.total > cashView.size ? (
+            {cashView.total > 0 ? (
               <span className="ml-auto flex items-center gap-1 text-[0.7rem] text-muted">
                 <button type="button" disabled={cashView.page <= 0} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => Math.max(0, p - 1))}>
                   ←
@@ -1222,7 +1223,7 @@ export function CrmClientCard({
               </span>
             ) : null}
           </div>
-          {card.paysComplete === false ? <p className="mt-1 text-[0.7rem] text-muted">Подтягиваем кассу из Alfa постепенно. Откройте карточку ещё раз — подгрузятся следующие страницы.</p> : null}
+          {card.paysComplete === false ? <p className="mt-1 text-[0.7rem] text-muted">Подтягиваем кассу из Alfa постепенно: карточка — следующие страницы этого ученика, вкладка «Касса» — всю историю студии.</p> : null}
           {journalPays.length ? (
             <div className="mt-2 overflow-x-auto">
               <table className="w-full min-w-[40rem] text-left text-[0.75rem]">
