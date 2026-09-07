@@ -144,7 +144,7 @@ export function displayedBalance(rows: PayRow[], fallback?: number | string, com
   return balanceOf(live);
 }
 
-/** Снимок Alfa: rest живых ctt (раздельный счёт) или customer.balance (базовый). 0 — валидный остаток, не «нет данных». */
+/** Снимок Alfa: rest живых ctt (раздельный счёт) или customer.balance (базовый). 0 — валидный остаток, не «нет данных». extras.paid — история оплат, не остаток. */
 export function snapshotBalance(extra?: number | string | null, cttRest?: number, hasCtt?: boolean) {
   const b = Number(cttRest) || 0;
   if (hasCtt) return b;
@@ -155,6 +155,21 @@ export function snapshotBalance(extra?: number | string | null, cttRest?: number
 
 export function cttIdOfPay(cttId?: number | null) {
   return (Number(cttId) || 0) > 0 ? Number(cttId) : 0;
+}
+
+/** Живые раздельные счета (ctt > 0). Базовый (id 0) не считается. */
+export function liveCttOf<T extends { id?: number; archived?: boolean }>(tariffs?: T[] | null) {
+  return (tariffs || []).filter((t) => !t.archived && cttIdOfPay(t.id) > 0);
+}
+
+export function cttRestSum(tariffs?: { rest?: number; archived?: boolean; id?: number }[] | null) {
+  return liveCttOf(tariffs).reduce((n, t) => n + (Number(t.rest) || 0), 0);
+}
+
+/** Остаток как в Alfa: rest живых ctt, иначе extras.balance. extras.paid не подставлять. */
+export function accountSnapOf(extraBalance?: number | string | null, tariffs?: { rest?: number; archived?: boolean; id?: number }[] | null) {
+  const live = liveCttOf(tariffs);
+  return snapshotBalance(extraBalance, cttRestSum(live), live.length > 0);
 }
 
 /** Сумма строк кассы на счёт: 0 — базовый, иначе cttId абонемента. */
@@ -180,6 +195,7 @@ export function payCountForCtt(rows: { deleted?: boolean; cttId?: number | null 
   }
   return n;
 }
+
 
 export function isOpeningRow(row: Pick<PayRow, "note">) {
   return String(row.note || "") === OPENING_NOTE;

@@ -51,6 +51,9 @@ export type ClientTariff = {
   bDate?: string;
   eDate?: string;
   price?: number;
+  paySum?: number;
+  payCount?: number;
+  basic?: boolean;
 };
 
 export type GroupMember = {
@@ -115,6 +118,8 @@ export type CustomerCard = {
   teacher?: string;
   balance?: number;
   lessonsLeft?: number;
+  lessonsPlan?: number;
+  lessonsFact?: number;
   url: string;
   schools: string[];
   groups: ClientGroupLink[];

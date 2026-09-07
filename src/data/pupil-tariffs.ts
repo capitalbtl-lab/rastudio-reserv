@@ -598,7 +598,7 @@ export function packCardTariff(it: Record<string, unknown>, catalog?: CatalogTar
     id: Number(it.id) || 0,
     tariffId: Number(it.tariff_id || it.tariffId || 0) || undefined,
     name: customerTariffLabel(it, catalog),
-    rest: Number(it.balance ?? it.rest ?? it.paid ?? 0) || 0,
+    rest: Number(it.balance ?? it.rest ?? 0) || 0,
     lessons: Number(it.lesson_count ?? it.lessons_count ?? it.paid_count ?? 0) || 0,
     archived: !live,
     bDate: String(it.b_date || it.bDate || ""),
@@ -679,6 +679,7 @@ export async function pullCustomerAccount(branchId: number, customerId: number) 
   const { applyCrmCustomer, upsertDossier } = await import("./dossiers");
   const t = await token();
   let best = { paid_count: 0, paid: 0, paid_till: "", balance: 0 };
+  let found = false;
   for (const bid of uniqueBranches(Number(branchId) || 1)) {
     const json = await request<{ items?: Record<string, unknown>[] }>(
       `/v2api/${bid}/customer/index`,
@@ -691,18 +692,19 @@ export async function pullCustomerAccount(branchId: number, customerId: number) 
     const pc = Number(c.paid_count || 0);
     const paid = Number(c.paid || 0);
     const bal = Number(c.balance || 0);
-    if (pc > best.paid_count || paid > best.paid || (pc === best.paid_count && bal > best.balance)) {
-      best = { paid_count: pc, paid, paid_till: String(c.paid_till || ""), balance: bal };
+    if (!found || pc > best.paid_count) {
+      found = true;
+      best = { paid_count: pc, paid, paid_till: String(c.paid_till || ""), balance: Number.isFinite(bal) ? bal : 0 };
     }
   }
-  if (best.paid_count || best.paid || best.balance) {
+  if (found) {
     upsertDossier({
       crmId: cid,
       extras: {
         paid_count: String(best.paid_count || ""),
         paid: String(best.paid || ""),
         paid_till: best.paid_till,
-        balance: String(best.paid || best.balance || ""),
+        balance: String(best.balance),
         ...(best.paid_count > 0 || best.paid > 0 ? { live_tariff: "1" } : {}),
       },
       source: "alfacrm",
@@ -710,5 +712,5 @@ export async function pullCustomerAccount(branchId: number, customerId: number) 
       quiet: true,
     });
   }
-  return best;
+  return found ? best : null;
 }

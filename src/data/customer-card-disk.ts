@@ -1,14 +1,15 @@
 import type { Dossier } from "./dossiers";
 import type { CustomerCard } from "./crm-cards";
 import { listAdminSlots } from "./alfacrm-schedule";
-import { collectCustomerJournal } from "./group-cards";
+import { collectCustomerJournal, loadCustomerCalendar } from "./group-cards";
 import { beatsOf } from "./crm-slots-core";
 import { clientCardId, CRM_BRANCH } from "./ids";
 import { listTeachers, teachersAtBranch } from "./crm-teachers";
 import { loadSubjects } from "./crm-subjects";
 import { isAdminGroup } from "./group-status";
 import { clientLessonFromJournal } from "./crm-journal-core";
-import { customerBalance, cardPays, snapshotBalance, isPayJournalComplete } from "./crm-pay";
+import { customerBalance, cardPays, isPayJournalComplete } from "./crm-pay";
+import { accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt } from "./crm-pay-core";
 import { asCustomerComm, commsOf } from "./crm-comms";
 import { loadTariffs } from "./crm-tariffs";
 import { isPaidCountLabel, parseDossierCtt } from "./pupil-tariffs";
@@ -166,23 +167,6 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   const catalogGroups = cat.groups.slice().sort((a, b) => Number(b.branchId === useBranch) - Number(a.branchId === useBranch) || a.name.localeCompare(b.name, "ru"));
   const catalogTariffs = loadTariffs().items;
   let tariffs = parseDossierCtt(d.extras);
-  const accountLessons = Number(d.extras?.paid_count || 0) || 0;
-  const accountPaid = Number(d.extras?.paid || 0) || Number(d.extras?.balance || 0) || 0;
-  if (!tariffs.some((t) => !t.archived) && (accountLessons || accountPaid)) {
-    tariffs = [
-      {
-        id: -(Number(d.crmId) || customerId),
-        name: "Остаток на счёте",
-        rest: accountPaid,
-        lessons: accountLessons,
-        archived: false,
-        bDate: "",
-        eDate: String(d.extras?.paid_till || ""),
-        price: 0,
-      },
-      ...tariffs,
-    ];
-  }
   if (!tariffs.length && String(d.extras?.live_tariff) === "1") {
     const tariffId = Number(d.extras?.tariff_id || 0);
     const fromCat = catalogTariffs.find((t) => t.id === tariffId);
@@ -204,11 +188,33 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
       ];
     }
   }
-  const liveCtt = tariffs.filter((t) => !t.archived);
-  const writeoffSum = calendar.filter((l) => Number(l.status) === 3).reduce((n, l) => n + (Number(l.amount) || 0), 0);
+  const pays = cardPays(customerId);
+  tariffs = tariffs.map((t) => ({
+    ...t,
+    paySum: paySumForCtt(pays, t.id),
+    payCount: payCountForCtt(pays, t.id),
+  }));
+  const liveCtt = liveCttOf(tariffs);
+  const allLessons = loadCustomerCalendar(customerId);
+  const lessonsPlan = allLessons.filter((l) => Number(l.status) !== 2).length;
+  const lessonsFact = allLessons.filter((l) => Number(l.status) === 3).length;
+  const writeoffSum = allLessons.filter((l) => Number(l.status) === 3).reduce((n, l) => n + (Number(l.amount) || 0), 0);
   const paidTill = liveCtt.map((t) => t.eDate || "").filter(Boolean).sort().slice(-1)[0] || String(d.extras?.paid_till || "");
-  const paidCount = liveCtt.reduce((n, t) => n + (Number(t.lessons) || 0), 0) || Number(d.extras?.paid_count || 0) || 0;
-  const paidMoney = liveCtt.reduce((n, t) => n + (Number(t.rest) || 0), 0) || Number(d.extras?.paid || 0) || 0;
+  const paidCount = liveCtt.reduce((n, t) => n + (Number(t.lessons) || 0), 0);
+  const snap = accountSnapOf(d.extras?.balance, tariffs);
+  tariffs = [
+    {
+      id: 0,
+      name: "Базовый счет",
+      rest: liveCtt.length ? 0 : snap,
+      lessons: 0,
+      archived: false,
+      basic: true,
+      paySum: paySumForCtt(pays, 0),
+      payCount: payCountForCtt(pays, 0),
+    },
+    ...tariffs,
+  ];
   return {
     id: customerId,
     cardId: clientCardId(customerId),
@@ -227,6 +233,8 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
     note: "",
     paidTill,
     lessonsLeft: paidCount,
+    lessonsPlan,
+    lessonsFact,
     url: d.url || "",
     schools: d.schools || [],
     groups,
@@ -234,16 +242,9 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
     calendar,
     tariffs,
     comms: commsOf(customerId).map(asCustomerComm),
-    pays: cardPays(customerId),
+    pays,
     paysComplete: isPayJournalComplete(customerId),
-    balance: customerBalance(
-      customerId,
-      snapshotBalance(
-        d.extras?.balance,
-        paidMoney,
-      ),
-      writeoffSum,
-    ),
+    balance: customerBalance(customerId, snap, writeoffSum),
     catalog: {
       subjects: cat.subjects,
       teachers: teachersAtBranch(useBranch, listTeachers(slots), slots).map((x) => ({ id: x.id, name: x.name })),
