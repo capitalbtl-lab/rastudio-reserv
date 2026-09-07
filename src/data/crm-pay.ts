@@ -26,6 +26,7 @@ import {
 } from "./crm-pay-core";
 import { pendingExportIds } from "./crm-export-queue";
 import { logAdmin } from "./admin-settings";
+import { ledgerMoney, uniqueBranches } from "./crm-ledger-core";
 
 export type { PayKind, PayRow };
 export { displayedBalance, balanceOf, payKindOf, payEffect, snapshotBalance, OPENING_NOTE };
@@ -150,14 +151,14 @@ export function cardPays(customerId: number) {
     }));
 }
 
-export function customerBalance(customerId: number, fallback?: number | string) {
+export function customerBalance(customerId: number, fallback?: number | string, writeoffSum = 0) {
   const id = Number(customerId) || 0;
   const rows = paysOf(id);
-  if (rows.some((x) => String(x.note || "") === OPENING_NOTE)) return displayedBalance(rows, fallback, true);
-  const snap = fallback == null || fallback === "" ? Number.NaN : Number(fallback);
-  if (Number.isFinite(snap)) return snap;
   const complete = Boolean(id && (load().complete || []).includes(id));
-  return displayedBalance(rows, fallback, complete);
+  const opened = rows.some((x) => String(x.note || "") === OPENING_NOTE);
+  const paySum = displayedBalance(rows, undefined, true);
+  const snap = fallback == null || fallback === "" ? Number.NaN : Number(fallback);
+  return ledgerMoney({ paySum, writeoffSum, snap, complete: opened || complete });
 }
 
 export function markPayJournalComplete(customerId: number) {
@@ -366,19 +367,24 @@ export async function inboundCustomerPays(
   if (pendingExportIds(["pay.create"]).has(customerId)) return paysOf(customerId);
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const raw: Record<string, unknown>[] = [];
-  let done = false;
-  for (let page = 0; page < 10; page += 1) {
-    try {
-      const json = await request(`/v2api/${branchId}/pay/index`, { page, customer_id: customerId }, token);
-      const pack = crmUnwrapIndex(json);
-      raw.push(...pack.items);
-      if (pack.items.length < 50) {
-        done = true;
+  let done = true;
+  for (const bid of uniqueBranches(branchId)) {
+    let branchDone = false;
+    for (let page = 0; page < 10; page += 1) {
+      try {
+        const json = await request(`/v2api/${bid}/pay/index`, { page, pageSize: 50, customer_id: customerId }, token);
+        const pack = crmUnwrapIndex(json);
+        raw.push(...pack.items);
+        if (pack.items.length < 50) {
+          branchDone = true;
+          break;
+        }
+      } catch {
+        branchDone = page === 0;
         break;
       }
-    } catch {
-      break;
     }
+    if (!branchDone) done = false;
   }
   const pulled = raw.map((it) => packPay(it, customerId, branchId)).filter((x): x is PayRow => Boolean(x));
   const hold = holdPayIds();
