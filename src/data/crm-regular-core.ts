@@ -27,17 +27,43 @@ function hm(raw?: string) {
   return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
 }
 
-export function packCustomerRegular(
+export function regularGroupIdOf(it: Record<string, unknown>, customerId = 0) {
+  const cid = Number(customerId) || 0;
+  const g = Number(it.group_id || it.groupId || 0);
+  const r = Number(it.related_id || 0);
+  if (g && g !== cid) return g;
+  if (r && r !== cid) return r;
+  return 0;
+}
+
+/** Слот ученика: его группа. Чужой subjectId при том же groupId — яд (подставили первую группу). */
+export function regularBelongsToGroups(
+  row: { groupId?: number; groupName?: string; subjectId?: number },
+  groups: { id: number; name?: string; subjectId?: number }[],
+) {
+  if (!groups.length) return true;
+  const gid = Number(row.groupId) || 0;
+  const g =
+    (gid && groups.find((x) => Number(x.id) === gid)) ||
+    groups.find((x) => x.name && row.groupName && x.name === row.groupName);
+  if (!g) return false;
+  const sid = Number(row.subjectId) || 0;
+  const gs = Number(g.subjectId) || 0;
+  if (sid && gs && sid !== gs) return false;
+  return true;
+}
   it: Record<string, unknown>,
   ctx: { groupName?: string; teacher?: string; subject?: string; branchId?: number; customerId?: number; fallbackGroupId?: number },
 ): DiskRegular | null {
   if (Number(it.disabled || it.is_disabled || 0) === 1) return null;
+  const cid = Number(ctx.customerId || 0);
   const id = Number(it.id || 0);
-  let groupId = Number(it.group_id || it.groupId || it.related_id || 0);
-  if (ctx.customerId && groupId === ctx.customerId) groupId = Number(it.group_id || ctx.fallbackGroupId || 0);
+  let groupId = regularGroupIdOf(it, cid);
+  if (!groupId) groupId = Number(ctx.fallbackGroupId || 0) || 0;
   const day = Number(it.day || 0);
   const from = hm(String(it.time_from_v || it.time_from || it.timeFrom || ""));
   if (!id || !from) return null;
+  if (cid && groupId === cid) return null;
   const teacherId = Array.isArray(it.teacher_ids) ? Number(it.teacher_ids[0] || 0) : Number(it.teacher_id || 0);
   return {
     id,
@@ -116,14 +142,18 @@ export function customerIdsOfRegular(it: Record<string, unknown>) {
   return Array.isArray(it.customer_ids) ? it.customer_ids.map(Number).filter((n) => n > 0) : [];
 }
 
-/** Копии ученика, не общий слот группы на 18:10. */
-export function pickCustomerRegularItems(items: Record<string, unknown>[], customerId: number) {
+/** Копии ученика. Пустой состав — только слоты его групп, не вся студия. */
+export function pickCustomerRegularItems(items: Record<string, unknown>[], customerId: number, groupIds: number[] = []) {
   const cid = Number(customerId) || 0;
+  const allowed = new Set(groupIds.map(Number).filter((n) => n && n !== cid));
   const mapped = (items || []).map((it) => regularItemForCustomer(it, cid));
   const hit = mapped.filter((it) => {
     if (Number(it.disabled || it.is_disabled || 0) === 1) return false;
     const ids = customerIdsOfRegular(it);
-    return !ids.length || ids.includes(cid);
+    const gid = regularGroupIdOf(it, cid);
+    if (ids.includes(cid)) return !allowed.size || !gid || allowed.has(gid);
+    if (ids.length) return false;
+    return Boolean(gid && allowed.has(gid));
   });
   const personal = hit.filter((it) => {
     const ids = customerIdsOfRegular(it);
@@ -134,7 +164,7 @@ export function pickCustomerRegularItems(items: Record<string, unknown>[], custo
   const map = new Map<string, Record<string, unknown>>();
   for (const it of list) {
     const from = String(it.time_from_v || it.time_from || "");
-    const key = `${Number(it.day || 0)}|${from}|${Number(it.related_id || it.group_id || 0)}`;
+    const key = `${Number(it.day || 0)}|${from}|${regularGroupIdOf(it, cid)}`;
     const prev = map.get(key);
     const n = customerIdsOfRegular(it).length;
     if (!prev || n < customerIdsOfRegular(prev).length || n === 1) map.set(key, it);
