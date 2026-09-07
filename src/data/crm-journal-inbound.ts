@@ -189,7 +189,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
   for (const les of packs) {
     for (const item of les.items || []) {
       const ids = (item.customer_ids || []).map(Number);
-      if (ids.length && !ids.includes(id)) continue;
+      if (!ids.includes(id)) continue;
       const gid = Number((item.group_ids || [])[0] || 0);
       const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
       const packed = packLight(

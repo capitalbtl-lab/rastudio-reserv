@@ -1568,7 +1568,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
             const fresh = findDossier({ crmId: customerId });
             if (fresh) card = cardFromDossier(fresh, branch);
           }
-          if (!(card.pays || []).length && linked && allow) {
+          if (linked && allow) {
             const { token, request } = await import("./alfacrm");
             const { inboundCustomerPays, customerBalance, snapshotBalance } = await import("./crm-pay");
             const t = await token().catch(() => "");

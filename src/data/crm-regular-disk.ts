@@ -41,6 +41,7 @@ export async function pullCustomerRegular(branchId: number, customerId: number) 
   for (const gid of gids) {
     for (const bid of uniqueBranches(branch).slice(0, 2)) {
       collected.push(...(await regularPages(request, t, bid, { related_id: gid })));
+      collected.push(...(await regularPages(request, t, bid, { group_id: gid })));
     }
   }
   const picked = pickCustomerRegularItems(collected, cid);

@@ -89,14 +89,36 @@ export function parseDossierRegular(extras?: Record<string, string> | null): Dis
   }
 }
 
-export function customerIdsOfRegular(it: Record<string, unknown>) {
+export function regularItemForCustomer(it: Record<string, unknown>, customerId: number): Record<string, unknown> {
+  const cid = Number(customerId) || 0;
+  const list = Array.isArray(it.customers)
+    ? it.customers
+    : Array.isArray(it.streaming)
+      ? it.streaming
+      : [];
+  const mine = list.find((row) => {
+    if (!row || typeof row !== "object") return false;
+    const rec = row as Record<string, unknown>;
+    return Number(rec.id || rec.customer_id || rec.customerId || 0) === cid;
+  }) as Record<string, unknown> | undefined;
+  if (!mine) return it;
+  return {
+    ...it,
+    time_from_v: mine.time_from_v || mine.time_from || it.time_from_v,
+    time_to_v: mine.time_to_v || mine.time_to || it.time_to_v,
+    teacher_ids: mine.teacher_ids || it.teacher_ids,
+    day: mine.day || it.day,
+    customer_ids: [cid],
+  };
+}
   return Array.isArray(it.customer_ids) ? it.customer_ids.map(Number).filter((n) => n > 0) : [];
 }
 
 /** Копии ученика, не общий слот группы на 18:10. */
 export function pickCustomerRegularItems(items: Record<string, unknown>[], customerId: number) {
   const cid = Number(customerId) || 0;
-  const hit = (items || []).filter((it) => {
+  const mapped = (items || []).map((it) => regularItemForCustomer(it, cid));
+  const hit = mapped.filter((it) => {
     if (Number(it.disabled || it.is_disabled || 0) === 1) return false;
     const ids = customerIdsOfRegular(it);
     return !ids.length || ids.includes(cid);
