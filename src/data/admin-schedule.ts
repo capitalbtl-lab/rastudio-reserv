@@ -1304,6 +1304,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         funnelAuto?: import("./funnel-auto").FunnelAuto;
         offset?: number;
         take?: number;
+        skip?: number;
         alfaLink?: string | { mode?: string; pull?: unknown; push?: unknown; minutes?: number };
         cachePolicy?: import("./crm-cache-policy").CachePolicy;
         groupKeys?: { branchId: number; groupId: number }[];
