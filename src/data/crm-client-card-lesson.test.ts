@@ -31,6 +31,7 @@ describe("форма занятия карточки", () => {
     assert.match(src, /cttSelectLabel/);
     assert.match(src, /Базовый счет/);
     assert.match(src, /label: "Архивные"/);
+    assert.match(src, /import \{ SCHOOLS \} from "@\/data\/site"/);
     const strip = readFileSync(new URL("../components/lesson-strip.tsx", import.meta.url), "utf8");
     assert.match(strip, /isOneOffLesson/);
     assert.match(strip, /bg-amber-100/);

@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { AdminTariffs } from "@/components/admin-tariffs";
 import { LessonStrip, toYmd } from "@/components/lesson-strip";
 import { RaSelect } from "@/components/ra-select";
+import { SCHOOLS } from "@/data/site";
 import { cttSelectLabel } from "@/data/crm-tariff-row";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
 import { commChannelLabel } from "@/data/crm-comms-core";
