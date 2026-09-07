@@ -73,6 +73,18 @@ describe("журнал денег", () => {
     assert.equal(merged.find((x) => x.id === 202)?.groupId, 465);
   });
 
+  it("вход Alfa снимает локальную корректировку с отрицательным id", () => {
+    const prev = [
+      row({ id: -808, kind: "correct", income: 999, expenditure: 0, note: "корректировка" }),
+      row({ id: -1, kind: "correct", income: 1, expenditure: 0, note: OPENING_NOTE }),
+    ];
+    const pulled = [row({ id: 19767, kind: "income", income: 100, expenditure: 0 })];
+    const merged = mergePayInbound(pulled, prev, []);
+    assert.equal(merged.some((x) => x.id === -808), false);
+    assert.equal(merged.some((x) => x.id === -1), false);
+    assert.equal(merged.some((x) => x.id === 19767), true);
+  });
+
   it("deleted не двигает остаток", () => {
     const rows = [
       row({ id: 1, kind: "income", income: 1000, expenditure: 0 }),

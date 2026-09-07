@@ -110,7 +110,9 @@ function payKey(x: Pick<PayRow, "id" | "at" | "income" | "expenditure">) {
 export function mergePayInbound(pulled: PayRow[], prev: PayRow[] | undefined, holdIds: Iterable<number> = []) {
   const hold = new Set([...holdIds].map(Number).filter((n) => n));
   const map = new Map<string, PayRow>();
-  const base = pulled.length ? (prev || []).filter((x) => !isOpeningRow(x)) : prev || [];
+  const base = pulled.length
+    ? (prev || []).filter((x) => !(isOpeningRow(x) || (Number(x.id) < 0 && x.kind === "correct")))
+    : prev || [];
   for (const x of base) {
     map.set(payKey(x), x);
   }

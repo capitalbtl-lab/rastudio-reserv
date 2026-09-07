@@ -170,7 +170,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
   const { replaceCustomerCalendar, loadCustomerCalendar } = await import("./group-cards");
   const { listAdminSlots } = await import("./alfacrm-schedule");
   const t = await token();
-  const dateFrom = ruShift(-120);
+  const dateFrom = ruShift(-400);
   const dateTo = ruShift(90);
   const slots = listAdminSlots();
   const packs: { items?: Parameters<typeof packLight>[0][] }[] = [];
