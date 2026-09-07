@@ -22,21 +22,28 @@ import {
   PAY_POLL_MAX_PER_HOUR,
   PAY_INBOUND_PAGE,
   PAY_INBOUND_RUN,
+  PAY_STORE_CAP,
   payAccountLabel,
   CASH_PAGE_SIZES,
   cashPageSlice,
+  cashTakeOf,
+  payFillStart,
+  payFillOf,
+  payFillAdvance,
+  payFillNote,
   type PayKind,
   type PayPollStamp,
   type PayRow,
+  type PayFillCursor,
 } from "./crm-pay-core";
 import { pendingExportIds } from "./crm-export-queue";
 import { logAdmin } from "./admin-settings";
 import { ledgerMoney, uniqueBranches } from "./crm-ledger-core";
 
 export type { PayKind, PayRow };
-export { displayedBalance, balanceOf, payKindOf, payEffect, snapshotBalance, OPENING_NOTE, payAccountLabel, CASH_PAGE_SIZES, cashPageSlice };
+export { displayedBalance, balanceOf, payKindOf, payEffect, snapshotBalance, OPENING_NOTE, payAccountLabel, CASH_PAGE_SIZES, cashPageSlice, cashTakeOf, payFillNote };
 
-type PayPollState = { hits: string[]; branches: Record<string, PayPollStamp>; lastNote?: string };
+type PayPollState = { hits: string[]; branches: Record<string, PayPollStamp>; lastNote?: string; fill?: PayFillCursor };
 type PayFill = { bid: number; page: number };
 type Store = { at: string; items: PayRow[]; poll?: PayPollState; complete?: number[]; payFill?: Record<string, PayFill> };
 
@@ -73,7 +80,14 @@ function load(): Store {
     mem = {
       at: String(raw.at || ""),
       items: Array.isArray(raw.items) ? raw.items : [],
-      poll: raw.poll && typeof raw.poll === "object" ? { hits: Array.isArray(raw.poll.hits) ? raw.poll.hits : [], branches: raw.poll.branches || {}, lastNote: raw.poll.lastNote || "" } : emptyPoll(),
+      poll: raw.poll && typeof raw.poll === "object"
+        ? {
+            hits: Array.isArray(raw.poll.hits) ? raw.poll.hits : [],
+            branches: raw.poll.branches || {},
+            lastNote: raw.poll.lastNote || "",
+            fill: payFillOf(raw.poll.fill),
+          }
+        : emptyPoll(),
       complete: Array.isArray(raw.complete) ? raw.complete.map(Number).filter((n) => n) : [],
       payFill: raw.payFill && typeof raw.payFill === "object" ? raw.payFill : {},
     };
@@ -96,7 +110,7 @@ function save(store: Store) {
   poll.hits = payPollHitsInWindow(poll.hits).slice(-24);
   writeFileSync(
     fileOf(),
-    JSON.stringify({ at: new Date().toISOString(), items: store.items.slice(-40000), poll, complete: (store.complete || []).slice(-4000), payFill: store.payFill || {} }, null, 0),
+    JSON.stringify({ at: new Date().toISOString(), items: store.items.slice(-PAY_STORE_CAP), poll, complete: (store.complete || []).slice(-4000), payFill: store.payFill || {} }, null, 0),
     "utf8",
   );
   try {
@@ -169,8 +183,10 @@ export function customerBalance(customerId: number, fallback?: number | string, 
 }
 
 export function isPayJournalComplete(customerId: number) {
+  const store = load();
+  if (store.poll?.fill?.done) return true;
   const id = Number(customerId) || 0;
-  return Boolean(id && (load().complete || []).includes(id));
+  return Boolean(id && (store.complete || []).includes(id));
 }
 
 export function markPayJournalComplete(customerId: number) {
@@ -193,7 +209,7 @@ export type CashListOpts = {
   limit?: number;
 };
 
-export type CashPollInfo = { lastNote: string; hits: number; max: number; allowed: boolean };
+export type CashPollInfo = { lastNote: string; hits: number; max: number; allowed: boolean; fillDone: boolean; fillNote: string };
 
 /** Диск. Alfa не ходим. Новые сверху. */
 export function filterCashPays(items: PayRow[], opts: CashListOpts = {}) {
@@ -221,7 +237,7 @@ export function listCashPays(opts: CashListOpts = {}) {
   const store = load();
   const all = filterCashPays(store.items, opts);
   const cap = Number(opts.limit);
-  const limit = Number.isFinite(cap) && cap > 0 ? Math.min(Math.floor(cap), 8000) : 8000;
+  const limit = Number.isFinite(cap) && cap > 0 ? Math.min(Math.floor(cap), PAY_STORE_CAP) : PAY_STORE_CAP;
   const hits = store.poll?.hits || [];
   return {
     items: all.slice(0, limit),
@@ -231,6 +247,8 @@ export function listCashPays(opts: CashListOpts = {}) {
       hits: payPollHitsInWindow(hits).length,
       max: PAY_POLL_MAX_PER_HOUR,
       allowed: payPollAllowed(hits),
+      fillDone: Boolean(store.poll?.fill?.done),
+      fillNote: payFillNote(store.poll?.fill),
     } satisfies CashPollInfo,
   };
 }

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, snapshotBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, CASH_PAGE_SIZES, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, snapshotBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -146,5 +146,21 @@ describe("журнал денег", () => {
     assert.deepEqual(b.items[0], 100);
     const c = cashPageSlice(rows, 0, 999);
     assert.equal(c.size, 50);
+    assert.equal(cashTakeOf(100), 100);
+    assert.equal(cashTakeOf(500), 500);
+    assert.equal(cashTakeOf(25), 50);
+  });
+
+  it("курсор истории кассы: порции по филиалам, короткая страница — следующий", () => {
+    assert.deepEqual(payFillStart(), { bid: 1, page: 0 });
+    assert.deepEqual(payFillAdvance({ bid: 1, page: 0 }, false), { bid: 1, page: 1 });
+    assert.deepEqual(payFillAdvance({ bid: 1, page: 9 }, true), { bid: 2, page: 0 });
+    assert.deepEqual(payFillAdvance({ bid: 4, page: 3 }, true), { bid: 4, page: 3, done: true });
+    assert.equal(payFillAdvance({ bid: 4, page: 3, done: true }, false).done, true);
+    assert.equal(payFillOf({ bid: 2, page: 4 })?.page, 4);
+    assert.equal(payFillOf(null), undefined);
+    assert.match(payFillNote({ bid: 3, page: 11 }), /филиал 3/);
+    assert.equal(payFillNote({ bid: 4, page: 0, done: true }), "вся касса на диске");
+    assert.match(payFillNote(undefined), /ещё не выгружалась/);
   });
 });
