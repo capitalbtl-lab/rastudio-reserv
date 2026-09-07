@@ -327,6 +327,12 @@ export function customerTariffLabel(it: Record<string, unknown>, catalog?: Catal
   return tariffId ? `абонемент #${tariffId}` : "абонемент";
 }
 
+export function cttSelectLabel(t: { name?: string; bDate?: string; rest?: number }) {
+  const rest = Number(t.rest || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const date = String(t.bDate || "").trim();
+  return [t.name || "абонемент", date, rest].filter(Boolean).join(" / ");
+}
+
 export function withCatalogNames(
   list: { id: number; tariffId: number; name: string }[],
   catalog?: CatalogTariff[],
@@ -620,7 +626,7 @@ export function parseDossierCtt(extras?: Record<string, string> | null) {
           id,
           tariffId: Number(it.tariffId || it.tariff_id || 0) || undefined,
           name: String(it.name || "абонемент"),
-          rest: Number(it.rest || 0) || 0,
+          rest: Number(it.rest || it.balance || 0) || 0,
           lessons: Number(it.lessons || 0) || 0,
           archived: Boolean(it.archived),
           bDate: String(it.bDate || it.b_date || ""),
@@ -647,13 +653,16 @@ export async function pullCustomerTariffs(branchId: number, customerId: number) 
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const { loadTariffs } = await import("./crm-tariffs");
   const t = await token();
-  const json = await request(customerTariffIndexPath(branch, cid), { page: 0, pageSize: 50, customer_id: cid }, t).catch(
-    () => ({}),
-  );
   const catalog = loadTariffs().items.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price }));
-  const rows = crmUnwrapIndex(json)
-    .items.filter((it) => Number(it.id) && (!tariffRowCustomerId(it) || tariffRowCustomerId(it) === cid))
-    .map((it) => packCardTariff(it, catalog));
+  const rows: ReturnType<typeof packCardTariff>[] = [];
+  for (let page = 0; page < 3; page += 1) {
+    const json = await request(customerTariffIndexPath(branch, cid), { page, pageSize: 50, customer_id: cid }, t).catch(
+      () => ({}),
+    );
+    const pack = crmUnwrapIndex(json).items.filter((it) => Number(it.id) && (!tariffRowCustomerId(it) || tariffRowCustomerId(it) === cid));
+    rows.push(...pack.map((it) => packCardTariff(it, catalog)));
+    if (pack.length < 50) break;
+  }
   const { stampDossierCtt } = await import("./dossiers");
   stampDossierCtt(cid, rows, branch);
   return rows;

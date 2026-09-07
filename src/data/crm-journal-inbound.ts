@@ -163,10 +163,13 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
   if (!alfaLinkedNow() || id <= 0) return { ok: true as const, count: 0 };
   const { token, request } = await import("./alfacrm");
   const { upsertCustomerCalendar } = await import("./group-cards");
+  const { listAdminSlots } = await import("./alfacrm-schedule");
   const t = await token();
-  const dateFrom = ruShift(-45);
-  const dateTo = ruShift(60);
-  const packs = await Promise.all(
+  const dateFrom = ruShift(-400);
+  const dateTo = ruShift(90);
+  const slots = listAdminSlots();
+  const packs: { items?: Parameters<typeof packLight>[0][] }[] = [];
+  const first = await Promise.all(
     [1, 2, 3].map((status) =>
       request<{ items?: Parameters<typeof packLight>[0][] }>(
         `/v2api/${branch}/lesson/index`,
@@ -175,15 +178,38 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
       ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] })),
     ),
   );
+  packs.push(...first);
+  const extra = first
+    .map((les, i) => ((les.items || []).length >= 50 ? i : -1))
+    .filter((i) => i >= 0);
+  if (extra.length) {
+    const more = await Promise.all(
+      extra.map((i) =>
+        request<{ items?: Parameters<typeof packLight>[0][] }>(
+          `/v2api/${branch}/lesson/index`,
+          { page: 1, pageSize: 50, status: i + 1, customer_id: id, date_from: dateFrom, date_to: dateTo },
+          t,
+        ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] })),
+      ),
+    );
+    packs.push(...more);
+  }
   let count = 0;
   for (const les of packs) {
     for (const item of les.items || []) {
       const ids = (item.customer_ids || []).map(Number);
       if (ids.length && !ids.includes(id)) continue;
-      if (!isOneOffLesson(item)) continue;
+      const gid = Number((item.group_ids || [])[0] || 0);
+      const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
       const packed = packLight(
         { ...item, date: ymd(item.date) },
-        { groupName: String(item.lesson_type_name || "Пробное"), from: "", to: "", teacher: "", subject: "" },
+        {
+          groupName: slot?.groupName || String(item.lesson_type_name || "занятие"),
+          from: hm(item.time_from) || "",
+          to: hm(item.time_to) || "",
+          teacher: slot?.teacher || "",
+          subject: slot?.subject || "",
+        },
       );
       if (!packed) continue;
       packed.date = ymd(packed.date);

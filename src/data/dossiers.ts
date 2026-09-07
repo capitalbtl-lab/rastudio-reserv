@@ -708,7 +708,7 @@ export function stampDossierCtt(
     extras: {
       live_tariff: live.length ? "1" : "0",
       tariff_id: first?.tariffId ? String(first.tariffId) : "",
-      ctt: JSON.stringify(rows.slice(0, 24)),
+      ctt: JSON.stringify(rows.slice(0, 80)),
     },
     source: "alfacrm",
     crmWins: true,

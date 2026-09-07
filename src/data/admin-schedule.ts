@@ -1526,14 +1526,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!wantAlfaPull(data.fresh)) {
         if (d) {
           const { cardFromDossier } = await import("./customer-card-disk");
-          const { parseDossierCtt, pullCustomerTariffs } = await import("./pupil-tariffs");
+          const { pullCustomerTariffs } = await import("./pupil-tariffs");
           let card = cardFromDossier(d, branch);
-          const fake =
-            !parseDossierCtt(d.extras).length ||
-            (card.tariffs || []).every((t) => /занятий по абонементу|оплачено до/i.test(t.name || ""));
           const linked = (await import("./crm-alfa-link")).alfaLinkedNow();
           const allow = (await import("./crm-alfa-link")).wantAlfaPullChannel("clients");
-          if (fake && linked && allow) {
+          if (linked && allow) {
             await pullCustomerTariffs(branch, customerId).catch(() => []);
             const fresh = findDossier({ crmId: customerId });
             if (fresh) card = cardFromDossier(fresh, branch);
