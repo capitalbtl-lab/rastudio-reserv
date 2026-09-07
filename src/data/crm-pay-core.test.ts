@@ -96,5 +96,8 @@ describe("журнал денег", () => {
     assert.equal(payPollFirstFill({ "1": { lastId: 9, lastDate: "2026-09-07" }, "2": { lastId: 0, lastDate: "" }, "3": { lastId: 0, lastDate: "" }, "4": { lastId: 0, lastDate: "" } }), false);
     assert.equal(payCustomerIdOf({ customer_id: 12 }), 12);
     assert.equal(payCustomerIdOf({ customer: { id: 44 } }), 44);
+    assert.equal(alfaPayDate("2026-09-07"), "07.09.2026");
+    assert.equal(alfaPayDate("07.09.2026"), "07.09.2026");
+    assert.equal(ruDateIso("07.09.2026"), "2026-09-07");
   });
 });
