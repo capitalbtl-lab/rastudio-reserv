@@ -32,7 +32,8 @@ describe("форма занятия карточки", () => {
     assert.match(src, /Базовый счет/);
     assert.match(src, /label: "Архивные"/);
     assert.match(src, /date < today/);
-    assert.match(src, /regs\.map\(\(r\) => `\$\{r\.day\} \$\{r\.from\}/);
+    assert.match(src, /l\.amount/);
+    assert.match(src, /Отмен:/);
     const strip = readFileSync(new URL("../components/lesson-strip.tsx", import.meta.url), "utf8");
     assert.match(strip, /isOneOffLesson/);
     assert.match(strip, /bg-amber-100/);
