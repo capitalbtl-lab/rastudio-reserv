@@ -8,6 +8,7 @@ import { ALFA_PAY_ITEMS, ALFA_PAY_METHODS } from "@/data/crm-pay-alfa";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { printCashDraft } from "@/components/crm-client-card";
+import { CASH_PAGE_SIZES, payAccountLabel } from "@/data/crm-pay-core";
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -71,10 +72,14 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
   const [poll, setPoll] = useState<CashPoll>({});
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState("");
+  const [take, setTake] = useState<(typeof CASH_PAGE_SIZES)[number]>(50);
+  const [page, setPage] = useState(0);
 
   const load = useCallback(
-    async (extra: { q?: string; branchId?: number; payKind?: string; includeDeleted?: boolean } = {}) => {
+    async (extra: { q?: string; branchId?: number; payKind?: string; includeDeleted?: boolean; take?: number; page?: number } = {}) => {
       setBusy("list");
+      const size = extra.take ?? take;
+      const pg = extra.page ?? page;
       try {
         const res = await adminSchedule({
           data: {
@@ -84,7 +89,8 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
             branchId: extra.branchId ?? branch,
             payKind: extra.payKind ?? kind,
             includeDeleted: extra.includeDeleted ?? includeDeleted,
-            take: 500,
+            take: size,
+            skip: pg * size,
           } as never,
         });
         if (!res.ok) {
@@ -101,7 +107,7 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
         setBusy("");
       }
     },
-    [q, branch, kind, includeDeleted],
+    [q, branch, kind, includeDeleted, take, page],
   );
 
   useEffect(() => {
@@ -158,7 +164,8 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
             type="button"
             onClick={() => {
               setBranch(b.id);
-              void load({ branchId: b.id });
+              setPage(0);
+              void load({ branchId: b.id, page: 0 });
             }}
             className={cn(
               "rounded-full px-3 py-1 text-[0.78rem] font-semibold ring-1",
@@ -186,7 +193,8 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
             type="button"
             onClick={() => {
               setKind(k.id);
-              void load({ payKind: k.id });
+              setPage(0);
+              void load({ payKind: k.id, page: 0 });
             }}
             className={cn(
               "rounded-full px-3 py-1 text-[0.78rem] font-semibold ring-1",
@@ -201,7 +209,8 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
           onClick={() => {
             const next = !includeDeleted;
             setIncludeDeleted(next);
-            void load({ includeDeleted: next });
+            setPage(0);
+            void load({ includeDeleted: next, page: 0 });
           }}
           className={cn(
             "rounded-full px-3 py-1 text-[0.78rem] font-semibold ring-1",

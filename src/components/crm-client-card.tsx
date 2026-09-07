@@ -1181,20 +1181,48 @@ export function CrmClientCard({
           <div className="flex flex-wrap items-center gap-1.5">
             <p className="font-display text-lg">Касса</p>
             <span className="text-[0.75rem] text-muted">остаток {money(card.balance)}</span>
-            <button type="button" onClick={() => setPayBranch(0)} className={cn("rounded-full px-2 py-0.5 text-[0.7rem] font-semibold", !payBranch ? "bg-fg text-white" : "bg-white ring-1 ring-black/8")}>
+            <button type="button" onClick={() => { setPayBranch(0); setCashPage(0); }} className={cn("rounded-full px-2 py-0.5 text-[0.7rem] font-semibold", !payBranch ? "bg-fg text-white" : "bg-white ring-1 ring-black/8")}>
               Все
             </button>
             {journalBranches.map((id) => (
               <button
                 key={id}
                 type="button"
-                onClick={() => setPayBranch(id)}
+                onClick={() => {
+                  setPayBranch(id);
+                  setCashPage(0);
+                }}
                 className={cn("rounded-full px-2 py-0.5 text-[0.7rem] font-semibold", payBranch === id ? "bg-fg text-white" : "bg-white ring-1 ring-black/8")}
               >
                 {CRM_BRANCH[id]?.short || id}
               </button>
             ))}
+            {CASH_PAGE_SIZES.map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => {
+                  setCashSize(n);
+                  setCashPage(0);
+                }}
+                className={cn("rounded-full px-2 py-0.5 text-[0.7rem] font-semibold", cashSize === n ? "bg-primary text-white" : "bg-white ring-1 ring-black/8")}
+              >
+                {n}
+              </button>
+            ))}
+            {cashView.total > cashView.size ? (
+              <span className="ml-auto flex items-center gap-1 text-[0.7rem] text-muted">
+                <button type="button" disabled={cashView.page <= 0} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => Math.max(0, p - 1))}>
+                  ←
+                </button>
+                {cashView.page + 1}/{cashView.pages}
+                <button type="button" disabled={cashView.page >= cashView.pages - 1} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => p + 1)}>
+                  →
+                </button>
+              </span>
+            ) : null}
           </div>
+          {card.paysComplete === false ? <p className="mt-1 text-[0.7rem] text-muted">Подтягиваем кассу из Alfa постепенно. Откройте карточку ещё раз — подгрузятся следующие страницы.</p> : null}
           {journalPays.length ? (
             <div className="mt-2 overflow-x-auto">
               <table className="w-full min-w-[40rem] text-left text-[0.75rem]">
@@ -1213,7 +1241,7 @@ export function CrmClientCard({
                   </tr>
                 </thead>
                 <tbody>
-                  {journalPays.map((p) => {
+                  {cashView.items.map((p) => {
                     const sum = payRowSum(p);
                     const bid = Number(p.branchId || card.branchId) || 0;
                     return (
