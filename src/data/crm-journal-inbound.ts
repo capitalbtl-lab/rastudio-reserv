@@ -1,11 +1,19 @@
-import { loadGroupCard, saveGroupCard, saveGroupCards, mergeLocalCalendar } from "./group-cards";
+import { loadGroupCard, saveGroupCard, saveGroupCards, mergeLocalCalendar, fanOutLessonWriteoffs, loadCustomerCalendar, replaceCustomerCalendar } from "./group-cards";
 import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor } from "./crm-cache-policy";
 import { journalFingerprint } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
-import { lessonWriteoffAmount, lessonWriteoffCtt, lessonCustomerIds, uniqueBranches } from "./crm-ledger-core";
+import {
+  lessonWriteoffAmount,
+  lessonWriteoffCtt,
+  lessonCustomerIds,
+  uniqueBranches,
+  packLessonPupils,
+  chargeFromPupils,
+  lessonPupilsKey,
+} from "./crm-ledger-core";
 
 function hm(raw?: string) {
   const m = String(raw || "").match(/(\d{1,2}):(\d{2})/);
@@ -42,7 +50,7 @@ function packLight(
     topic?: string | null;
     note?: string | null;
     homework?: string | null;
-    details?: { is_attend?: number | null; commission?: number; cost?: number; customer_id?: number; ctt_id?: number }[];
+    details?: { is_attend?: number | null; commission?: number; cost?: number; customer_id?: number; ctt_id?: number; reason_id?: number; grade?: string; note?: string; homework_grade?: string; customer_name?: string }[];
     customer_ids?: number[];
     group_ids?: number[];
     duration?: number;
@@ -60,11 +68,13 @@ function packLight(
   const to = hm(item.time_to) || ctx.to;
   const rec = item as Record<string, unknown>;
   const ids = lessonCustomerIds(rec);
-  const fromDetails = (item.details || []).filter((d) => d.is_attend === 1).length;
-  const total = (item.details || []).length || ids.length;
+  const pupils = packLessonPupils(rec);
+  const fromDetails = pupils.filter((p) => p.attend).length;
+  const total = pupils.length || (item.details || []).length || ids.length;
   const cid = Number(customerId) || 0;
-  const amount = cid ? lessonWriteoffAmount(rec, cid) : 0;
-  const cttId = cid ? lessonWriteoffCtt(rec, cid) : 0;
+  const charge = cid ? chargeFromPupils({ pupils, amount: lessonWriteoffAmount(rec, cid), cttId: lessonWriteoffCtt(rec, cid) }, cid) : { amount: 0, cttId: 0 };
+  const amount = cid ? charge.amount : 0;
+  const cttId = cid ? charge.cttId : 0;
   return {
     date,
     from,
@@ -86,10 +96,11 @@ function packLight(
     teacherIds: (item.teacher_ids || []).map(Number).filter((n) => n > 0),
     subjectId: Number(item.subject_id || 0) || undefined,
     groupIds: (item.group_ids || []).map(Number).filter((n) => n > 0),
-    customerIds: cid && !ids.includes(cid) ? [...ids, cid] : ids,
+    customerIds: cid && !ids.includes(cid) ? [...ids, cid] : ids.length ? ids : pupils.map((p) => p.customerId),
     amount: amount || undefined,
     cttId: cttId || undefined,
     duration: Number(item.duration || 0) || undefined,
+    pupils: pupils.length ? pupils : undefined,
   };
 }
 

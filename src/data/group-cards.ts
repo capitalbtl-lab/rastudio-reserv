@@ -193,12 +193,25 @@ export function collectCustomerJournal(
   const id = Number(customerId) || 0;
   const push = (les: GroupCalLesson, groupName?: string, pastWriteoff = false) => {
     const ids = (les.customerIds || []).map(Number);
-    if (id && ids.length && !ids.includes(id)) return;
-    if (id && !ids.length && !pastWriteoff) return;
-    const row = { ...les, group: les.group || groupName || "" };
+    const pupil = (les.pupils || []).some((p) => Number(p.customerId) === id);
+    if (id && ids.length && !ids.includes(id) && !pupil) return;
+    if (id && !ids.length && !pupil && !pastWriteoff) return;
+    const charge = id ? chargeFromPupils(les, id) : { amount: Number(les.amount) || 0, cttId: Number(les.cttId) || 0 };
+    const row: GroupCalLesson = {
+      ...les,
+      group: les.group || groupName || "",
+      amount: charge.amount || les.amount,
+      cttId: charge.cttId || les.cttId,
+    };
     if (groups.length && !pastWriteoff && !calendarLessonForCard(row, groups)) return;
     const key = String(row.lessonId || `${row.date}|${row.from}|${row.type}|${row.group}`);
-    if (seen.has(key)) return;
+    const prev = seen.has(key) ? out.find((x) => String(x.lessonId || `${x.date}|${x.from}|${x.type}|${x.group}`) === key) : undefined;
+    if (prev) {
+      if (!(Number(prev.amount) > 0) && Number(row.amount) > 0) prev.amount = row.amount;
+      if (!(Number(prev.cttId) > 0) && Number(row.cttId) > 0) prev.cttId = row.cttId;
+      if (!(prev.pupils && prev.pupils.length) && row.pupils?.length) prev.pupils = row.pupils;
+      return;
+    }
     seen.add(key);
     out.push(row);
   };
@@ -206,8 +219,42 @@ export function collectCustomerJournal(
   for (const g of groups) {
     const gcard = loadGroupCard(g.branchId, g.id);
     for (const les of journalForCustomer(gcard?.calendar || [], customerId)) push(les, g.name);
+    for (const les of gcard?.calendar || []) {
+      if ((les.pupils || []).some((p) => Number(p.customerId) === id)) push(les, g.name, Number(les.status) === 3);
+    }
   }
   return out.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")));
+}
+
+/** Проведённое занятие: сумма списания каждого ученика — в его журнал на диске. */
+export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
+  const rows = (lessons || []).filter((l) => Number(l.status) === 3 && (l.pupils || []).length);
+  if (!rows.length) return 0;
+  const store = loadCustomerCals();
+  let n = 0;
+  for (const lesson of rows) {
+    for (const p of lesson.pupils || []) {
+      const cid = Number(p.customerId) || 0;
+      if (!cid) continue;
+      const key = String(cid);
+      const charge = chargeFromPupils(lesson, cid);
+      const { list } = mergeLessonInto(store.items[key] || [], {
+        ...lesson,
+        amount: charge.amount || undefined,
+        cttId: charge.cttId || undefined,
+        customerIds: [cid],
+        attend: p.attend ? 1 : 0,
+        total: 1,
+      });
+      store.items[key] = list.slice(0, 800);
+      n += 1;
+    }
+  }
+  if (n) {
+    store.at = new Date().toISOString();
+    writeCustomerCals(store);
+  }
+  return n;
 }
 
 export function upsertGroupCalendar(
