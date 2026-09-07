@@ -30,7 +30,8 @@ import { AdminClients } from "@/components/admin-clients";
 import { AdminCrmSettings } from "@/components/admin-crm-settings";
 import { AdminPublicSite } from "@/components/admin-public-site";
 import { AdminTeachers } from "@/components/admin-teachers";
-import { CrmClientCard } from "@/components/crm-client-card";
+import { AdminCash } from "@/components/admin-cash";
+import { CrmClientCard, type CardAction } from "@/components/crm-client-card";
 import { CrmGroupMembers } from "@/components/crm-group-card";
 import { RaSelect } from "@/components/ra-select";
 import { GroupLessonStrip } from "@/components/lesson-strip";
@@ -768,8 +769,8 @@ export function AdminSchedule() {
   const [view, setView] = useState<Record<string, number>>({});
   const [fileOpen, setFileOpen] = useState(false);
   const [pull, setPull] = useState<CrmPullState>(emptyPull("groups"));
-  const [pane, setPane] = useState<"groups" | "clients" | "subjects" | "teachers" | "prices" | "tariffs" | "map" | "crm" | "public">("groups");
-  const [seen, setSeen] = useState({ groups: true, clients: false, subjects: false, teachers: false, prices: false, tariffs: false, map: false, crm: false, public: false });
+  const [pane, setPane] = useState<"groups" | "clients" | "cash" | "subjects" | "teachers" | "prices" | "tariffs" | "map" | "crm" | "public">("groups");
+  const [seen, setSeen] = useState({ groups: true, clients: false, cash: false, subjects: false, teachers: false, prices: false, tariffs: false, map: false, crm: false, public: false });
   function showPane(id: typeof pane) {
     setPane(id);
     setSeen((s) => (s[id] ? s : { ...s, [id]: true }));
@@ -1217,7 +1218,7 @@ export function AdminSchedule() {
     await openPupil({ id: crmId, name: "", parent: "", dob: "", age: "", gender: "", phones: [], status: "" }, branchId);
   }
 
-  async function mutatePupil(action: "customerSave" | "customerLesson" | "customerPay" | "customerTariff" | "customerGroup", extra: Record<string, unknown> = {}) {
+  async function mutatePupil(action: CardAction, extra: Record<string, unknown> = {}) {
     if (!pupil) return;
     const res = await adminSchedule({
       data: { token: token(), action, customerId: pupil.id, branchId: pupil.branchId, ...extra } as never,
@@ -2219,7 +2220,7 @@ export function AdminSchedule() {
       if (kind === "openTab" || kind === "openClient" || kind === "openGroup") {
         if (paneTo === "clients" || kind === "openClient") showPane("clients");
         else if (paneTo === "groups" || kind === "openGroup") showPane("groups");
-        else if (paneTo === "subjects" || paneTo === "teachers" || paneTo === "tariffs" || paneTo === "map" || paneTo === "prices" || paneTo === "public" || paneTo === "crm") {
+        else if (paneTo === "subjects" || paneTo === "teachers" || paneTo === "tariffs" || paneTo === "map" || paneTo === "prices" || paneTo === "public" || paneTo === "crm" || paneTo === "cash") {
           showPane(paneTo);
         }
         if (kind === "openClient" && customerId) {
@@ -2547,6 +2548,7 @@ export function AdminSchedule() {
         {([
           ["groups", "Группы"],
           ["clients", "Клиенты"],
+          ["cash", "Касса"],
           ["subjects", "Предметы"],
           ["teachers", "Педагоги"],
           ["prices", "Цены курсов"],
@@ -2620,6 +2622,19 @@ export function AdminSchedule() {
           hidden={pane !== "clients"}
         >
           <AdminClients onOpenGroup={openGroupFromLink} hint={ask} slots={slots} wide={groupsWide} active={pane === "clients"} />
+        </div>
+      ) : null}
+      {seen.cash ? (
+        <div className={cn(groupsWide && pane === "cash" && "min-h-0 flex-1 overflow-y-auto")} style={pane === "cash" ? undefined : { display: "none" }} hidden={pane !== "cash"}>
+          <AdminCash
+            active={pane === "cash"}
+            onOpenClient={(customerId, branchId) => {
+              showPane("clients");
+              window.setTimeout(() => {
+                window.dispatchEvent(new CustomEvent("ra-open-client", { detail: { customerId, branchId: branchId || 1 } }));
+              }, 80);
+            }}
+          />
         </div>
       ) : null}
       {seen.groups ? (

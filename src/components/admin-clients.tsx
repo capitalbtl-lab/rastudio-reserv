@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { RefreshCw, Search, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CrmClientCard } from "@/components/crm-client-card";
+import { CrmClientCard, type CardAction } from "@/components/crm-client-card";
 import { CrmPullDialog, emptyPull, type CrmPullState } from "@/components/crm-pull-dialog";
 import { loadFromDisk, pullFromCrm } from "@/lib/crm-pull";
 import { retryFetch } from "@/lib/retry-fetch";
@@ -691,7 +691,7 @@ export function AdminClients({
     }
   }
 
-  async function mutateCard(action: "customerSave" | "customerLesson" | "customerPay" | "customerTariff" | "customerGroup", extra: Record<string, unknown> = {}) {
+  async function mutateCard(action: CardAction, extra: Record<string, unknown> = {}) {
     if (!card) return;
     const res = await adminSchedule({
       data: { token: token(), action, customerId: card.id, branchId: card.branchId, ...extra } as never,

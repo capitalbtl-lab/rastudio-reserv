@@ -27,6 +27,7 @@ import type { GroupCalLesson } from "@/data/crm-slots-core";
 import { commChannelLabel } from "@/data/crm-comms-core";
 import {
   ALFA_PAY_ACCOUNTS,
+  ALFA_PAY_ITEMS,
   ALFA_PAY_MANAGERS,
   ALFA_PAY_METHODS,
   defaultPayItemId,
@@ -39,6 +40,63 @@ import { addMinsHm, DUR_OPTS } from "@/data/crm-lesson-time";
 
 function money(n?: number) {
   return `${Number(n || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`;
+}
+
+function payKindName(kind: string) {
+  return CARD_PAY_KINDS.find((k) => k.id === kind)?.name || "Доход";
+}
+
+function payItemName(id?: number) {
+  const n = Number(id) || 0;
+  return ALFA_PAY_ITEMS.find((x) => x.id === n)?.name || (n ? `#${n}` : "");
+}
+
+function payMethodName(id?: string) {
+  const s = String(id || "");
+  return ALFA_PAY_METHODS.find((x) => x.id === s)?.name || "";
+}
+
+function payRowSum(p: { kind?: string; income?: number; expenditure?: number }) {
+  if (p.kind === "product") return Number(p.income || 0);
+  return Number(p.income || 0) - Number(p.expenditure || 0);
+}
+
+export function printCashDraft(p: {
+  name?: string;
+  parent?: string;
+  date: string;
+  kind: string;
+  sum: string;
+  article?: string;
+  method?: string;
+  cttId?: number;
+  note?: string;
+  id?: number;
+  branch?: string;
+}) {
+  const w = window.open("", "_blank", "width=720,height=900");
+  if (!w) return;
+  const row = (k: string, v: string) => (v ? `<tr><td>${k}</td><td>${v}</td></tr>` : "");
+  w.document.write(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Черновик квитанции</title>
+<style>body{font-family:system-ui,sans-serif;padding:28px;color:#111}h1{font-size:22px;margin:8px 0 16px}table{width:100%;border-collapse:collapse}td{padding:8px 0;border-bottom:1px solid #eee}td:first-child{color:#666;width:40%} .muted{color:#666;font-size:12px}</style></head><body>
+<p class="muted">Черновик кабинета rastudio.org · не номер счёта Alfa</p>
+<h1>Квитанция (черновик)</h1>
+<table>
+${row("Клиент", p.name || "")}
+${row("Заказчик", p.parent || "")}
+${row("Дата", p.date)}
+${row("Филиал", p.branch || "")}
+${row("Тип", p.kind)}
+${row("Сумма", p.sum)}
+${row("Статья", p.article || "")}
+${row("Способ", p.method || "")}
+${row("cttId", p.cttId ? String(p.cttId) : "")}
+${row("id", p.id ? String(p.id) : "")}
+${row("Комментарий", p.note || "")}
+</table>
+<script>window.onload=function(){window.print()}</script>
+</body></html>`);
+  w.document.close();
 }
 
 function todayIso() {
@@ -242,7 +300,7 @@ function lessonsForCard(calendar: ClientLesson[] | undefined, regular: ClientReg
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-type CardAction = "customerSave" | "customerLesson" | "customerPay" | "customerTariff" | "customerGroup";
+export type CardAction = "customerSave" | "customerLesson" | "customerPay" | "customerTariff" | "customerGroup" | "customerPayDelete";
 
 function LeadField({ label, area, span, children }: { label: string; area?: string; span?: boolean; children: ReactNode }) {
   return (
@@ -323,6 +381,8 @@ export function CrmClientCard({
   const [payGroupId, setPayGroupId] = useState("");
   const [payNote, setPayNote] = useState("");
   const [payMethod, setPayMethod] = useState("");
+  const [payBranch, setPayBranch] = useState(0);
+  const [dropPay, setDropPay] = useState<{ id: number; label: string } | null>(null);
   const [headMenu, setHeadMenu] = useState<"" | "pay" | "lesson">("");
   const headLeave = useRef(0);
 
@@ -462,6 +522,18 @@ export function CrmClientCard({
   }, [card.groups]);
   const activeGroups = pupilGroups.filter((g) => g.active);
   const activeTariffs = (card.tariffs || []).filter((t) => !t.archived);
+  const liveTariffs = activeTariffs;
+  const journalPays = useMemo(() => {
+    const list = card.pays || [];
+    if (!payBranch) return list;
+    return list.filter((p) => Number(p.branchId || card.branchId) === payBranch);
+  }, [card.pays, card.branchId, payBranch]);
+  const journalBranches = useMemo(() => {
+    const ids = new Set<number>();
+    for (const p of card.pays || []) ids.add(Number(p.branchId || card.branchId) || 0);
+    if (card.branchId) ids.add(card.branchId);
+    return [...ids].filter(Boolean).sort((a, b) => a - b);
+  }, [card.pays, card.branchId]);
   const subjectsBySchool = useMemo(() => {
     const map = new Map<string, { id: number; name: string }[]>();
     const seen = new Set<number>();
@@ -657,6 +729,7 @@ export function CrmClientCard({
       setGroupOpen(false);
       setDropGroup(null);
       setDropTariff(null);
+      setDropPay(null);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Не удалось сохранить.");
     } finally {
@@ -690,6 +763,7 @@ export function CrmClientCard({
                   setPayDate(todayIso());
                   setPayAccountId("1");
                   setPayItemId(String(defaultPayItemId(card.branchId)));
+                  setPayKind("income");
                   setHeadMenu("pay");
                 }}
                 className={cn(
@@ -1031,6 +1105,103 @@ export function CrmClientCard({
             teacher={card.teacher || (card.regular || [])[0]?.teacher}
             subject={(card.regular || [])[0]?.subject}
           />
+        </div>
+
+        <div className="mt-4 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="cash-journal">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="font-display text-lg">Касса</p>
+            <span className="text-[0.75rem] text-muted">остаток {money(card.balance)}</span>
+            <button type="button" onClick={() => setPayBranch(0)} className={cn("rounded-full px-2 py-0.5 text-[0.7rem] font-semibold", !payBranch ? "bg-fg text-white" : "bg-white ring-1 ring-black/8")}>
+              Все
+            </button>
+            {journalBranches.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setPayBranch(id)}
+                className={cn("rounded-full px-2 py-0.5 text-[0.7rem] font-semibold", payBranch === id ? "bg-fg text-white" : "bg-white ring-1 ring-black/8")}
+              >
+                {CRM_BRANCH[id]?.short || id}
+              </button>
+            ))}
+          </div>
+          {journalPays.length ? (
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full min-w-[40rem] text-left text-[0.75rem]">
+                <thead className="text-[0.65rem] uppercase tracking-wider text-muted">
+                  <tr>
+                    <th className="px-1 py-1">Дата</th>
+                    <th className="px-1 py-1">Филиал</th>
+                    <th className="px-1 py-1">Тип</th>
+                    <th className="px-1 py-1">Сумма</th>
+                    <th className="px-1 py-1">Статья</th>
+                    <th className="px-1 py-1">Способ</th>
+                    <th className="px-1 py-1">cttId</th>
+                    <th className="px-1 py-1">Коммент</th>
+                    <th className="px-1 py-1">id</th>
+                    <th className="px-1 py-1" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {journalPays.map((p) => {
+                    const sum = payRowSum(p);
+                    const bid = Number(p.branchId || card.branchId) || 0;
+                    return (
+                      <tr key={p.id} className="border-t border-black/6">
+                        <td className="px-1 py-1 whitespace-nowrap">{p.documentDate || "—"}</td>
+                        <td className="px-1 py-1">{CRM_BRANCH[bid]?.short || bid || "—"}</td>
+                        <td className="px-1 py-1">{payKindName(p.kind)}</td>
+                        <td className={cn("px-1 py-1 whitespace-nowrap tabular-nums font-semibold", sum < 0 ? "text-rose-600" : "")}>
+                          {sum > 0 ? "+" : ""}
+                          {money(sum)}
+                        </td>
+                        <td className="px-1 py-1">{payItemName(p.payItemId) || "—"}</td>
+                        <td className="px-1 py-1">{payMethodName(p.payMethod) || "—"}</td>
+                        <td className="px-1 py-1 tabular-nums">{p.cttId || "—"}</td>
+                        <td className="max-w-[8rem] truncate px-1 py-1" title={p.note}>{p.note || "—"}</td>
+                        <td className="px-1 py-1 tabular-nums text-muted">{p.id}</td>
+                        <td className="px-1 py-1 whitespace-nowrap">
+                          <button
+                            type="button"
+                            className="mr-1 text-[0.68rem] font-semibold text-primary"
+                            data-op="pay-print"
+                            onClick={() =>
+                              printCashDraft({
+                                name: card.name,
+                                parent: card.parent,
+                                date: p.documentDate,
+                                kind: payKindName(p.kind),
+                                sum: money(sum),
+                                article: payItemName(p.payItemId),
+                                method: payMethodName(p.payMethod),
+                                cttId: p.cttId,
+                                note: p.note,
+                                id: p.id,
+                                branch: CRM_BRANCH[bid]?.short || String(bid),
+                              })
+                            }
+                          >
+                            Печать
+                          </button>
+                          <button
+                            type="button"
+                            data-op="pay-delete"
+                            disabled={!onAction || Boolean(busy)}
+                            className="text-[0.68rem] font-semibold text-rose-600 disabled:opacity-40"
+                            onClick={() => setDropPay({ id: p.id, label: `${p.documentDate || ""} ${money(sum)}` })}
+                          >
+                            Удалить
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted">Нет платежей на диске. Добавить — кнопка «Оплата».</p>
+          )}
         </div>
 
         {card.url ? (
@@ -1656,6 +1827,37 @@ export function CrmClientCard({
     </div>
   ) : null;
   const dropTariffNode = dropTariffDialog && typeof document !== "undefined" ? createPortal(dropTariffDialog, document.body) : dropTariffDialog;
+  const dropPayDialog = dropPay ? (
+    <div
+      className="fixed inset-0 z-[270] flex items-center justify-center bg-black/45 p-4"
+      onClick={() => setDropPay(null)}
+      data-op="pay-delete-dialog"
+    >
+      <div className={cn("w-full max-w-sm p-5", RA_POP)} onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-display text-lg">Удалить платёж?</h3>
+        <p className="mt-2 text-sm text-muted">
+          {dropPay.label}. id {dropPay.id}
+          {dropPay.id < 0 ? " — только диск, в Alfa ещё не уходил." : " — диск сразу, Alfa очередью pay.delete."}
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" className="h-9 rounded-full px-4 text-sm font-semibold text-muted hover:bg-surface-2" onClick={() => setDropPay(null)}>
+            Отмена
+          </button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 bg-rose-600 text-white hover:bg-rose-700"
+            data-op="pay-delete-confirm"
+            disabled={Boolean(busy)}
+            onClick={() => void run("customerPayDelete", { payId: dropPay.id, id: dropPay.id })}
+          >
+            {busy === "customerPayDelete" ? "Удаляю…" : "Удалить"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+  const dropPayNode = dropPayDialog && typeof document !== "undefined" ? createPortal(dropPayDialog, document.body) : dropPayDialog;
   const peekDialog = peekTariff ? (
     <div className="fixed inset-0 z-[280] flex items-start justify-center overflow-y-auto bg-black/45 p-3 md:p-6" onClick={() => setPeekTariff(null)}>
       <div className={cn("my-4 w-full max-w-5xl p-4", RA_POP)} onClick={(e) => e.stopPropagation()} data-op="tariff-peek">
@@ -1683,7 +1885,7 @@ export function CrmClientCard({
       >
         <header className="flex shrink-0 items-start justify-between gap-3 px-5 pb-2 pt-4">
           <div className="min-w-0">
-            <h3 className="font-display text-[1.25rem] leading-tight">Добавить доход</h3>
+            <h3 className="font-display text-[1.25rem] leading-tight">{payKind ? `Добавить · ${payKindName(payKind)}` : "Добавить в кассу"}</h3>
             <p className="mt-0.5 text-[0.78rem] text-muted">Остаток {money(card.balance)}</p>
           </div>
           <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full text-lg leading-none text-muted hover:bg-surface-2" onClick={() => setHeadMenu("")} aria-label="Закрыть">
@@ -1708,7 +1910,7 @@ export function CrmClientCard({
             <div className="grid grid-cols-1 items-center gap-x-3 gap-y-2 text-[0.78rem] sm:grid-cols-[7.5rem_minmax(0,1fr)]">
               <span className="text-muted">Тип и дата</span>
               <div className="flex min-w-0 gap-1">
-                <span className="flex h-9 min-w-0 flex-1 items-center truncate rounded-lg bg-surface-2 px-2 text-muted">Доход</span>
+                <span className="flex h-9 min-w-0 flex-1 items-center truncate rounded-lg bg-surface-2 px-2 text-muted">{payKindName(payKind)}</span>
                 <input
                   type="date"
                   value={payDate}
@@ -1759,7 +1961,7 @@ export function CrmClientCard({
                   onChange={setPayCttId}
                   options={[
                     { value: "", label: "(не задано)" },
-                    ...(card.tariffs || []).map((t) => ({ value: String(t.id), label: t.name })),
+                    ...liveTariffs.map((t) => ({ value: String(t.id), label: t.name })),
                   ]}
                 />
               </div>
@@ -1809,11 +2011,15 @@ export function CrmClientCard({
           )}
           {(card.pays || []).length ? (
             <ul className="mt-3 max-h-28 overflow-y-auto border-t border-black/8 pt-2">
-              {[...(card.pays || [])].reverse().map((p) => (
+              {(card.pays || []).slice(0, 12).map((p) => (
                 <li key={p.id} className="flex justify-between gap-2 px-0.5 py-0.5 text-[0.72rem]">
-                  <span className="min-w-0 truncate text-muted">{p.documentDate || p.note}</span>
+                  <span className="min-w-0 truncate text-muted">
+                    {p.documentDate || "—"} · {payKindName(p.kind)}
+                    {p.cttId ? ` · ctt ${p.cttId}` : ""}
+                  </span>
                   <span className="shrink-0 tabular-nums font-semibold">
-                    {p.income ? `+${money(p.income)}` : `−${money(p.expenditure)}`}
+                    {payRowSum(p) > 0 ? "+" : ""}
+                    {money(payRowSum(p))}
                   </span>
                 </li>
               ))}
@@ -1840,6 +2046,7 @@ export function CrmClientCard({
                   locationId: Number(payLocationId) || 0,
                   managerId: Number(payManagerId) || 0,
                   cttId: Number(payCttId) || 0,
+                  tariffId: Number(liveTariffs.find((t) => String(t.id) === payCttId)?.tariffId) || 0,
                   payerName: payPayer,
                   groupId: Number(payGroupId) || 0,
                   note: payNote,
@@ -1866,6 +2073,7 @@ export function CrmClientCard({
         {groupNode}
         {dropNode}
         {dropTariffNode}
+        {dropPayNode}
         {peekNode}
         {payNode}
       </>
@@ -1885,6 +2093,7 @@ export function CrmClientCard({
         {groupDialog}
         {dropDialog}
         {dropTariffDialog}
+        {dropPayDialog}
         {peekDialog}
         {payDialog}
       </>
@@ -1898,6 +2107,7 @@ export function CrmClientCard({
       {groupNode}
       {dropNode}
       {dropTariffNode}
+      {dropPayNode}
       {peekNode}
       {payNode}
     </>

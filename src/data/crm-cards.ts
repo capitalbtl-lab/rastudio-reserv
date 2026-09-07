@@ -84,6 +84,12 @@ export type CustomerPay = {
   expenditure: number;
   note: string;
   documentDate: string;
+  branchId?: number;
+  cttId?: number;
+  tariffId?: number;
+  payItemId?: number;
+  payMethod?: string;
+  groupId?: number;
 };
 
 export type CustomerCard = {

@@ -13,6 +13,7 @@ import {
   payPollHitsInWindow,
   ruDateIso,
   OPENING_NOTE,
+  PAY_POLL_MAX_PER_HOUR,
   type PayKind,
   type PayPollStamp,
   type PayRow,
@@ -125,9 +126,7 @@ export function paysOf(customerId: number) {
 }
 
 export function cardPays(customerId: number) {
-  return paysOf(customerId)
-    .filter((x) => !x.deleted)
-    .slice(-12)
+  return filterCashPays(paysOf(customerId))
     .map((x) => ({
       id: Number(x.id) || 0,
       kind: String(x.kind || "income"),
@@ -135,14 +134,67 @@ export function cardPays(customerId: number) {
       expenditure: Number(x.expenditure) || 0,
       note: String(x.note || ""),
       documentDate: String(x.documentDate || ""),
+      branchId: Number(x.branchId) || 0,
       cttId: Number(x.cttId) || 0,
       tariffId: Number(x.tariffId) || 0,
+      payItemId: Number(x.payItemId) || 0,
+      payMethod: String(x.payMethod || ""),
       groupId: Number(x.groupId) || 0,
     }));
 }
 
 export function customerBalance(customerId: number, fallback?: number | string) {
   return displayedBalance(paysOf(customerId), fallback);
+}
+
+export type CashListOpts = {
+  branchId?: number;
+  kind?: string;
+  customerId?: number;
+  includeDeleted?: boolean;
+  limit?: number;
+};
+
+export type CashPollInfo = { lastNote: string; hits: number; max: number; allowed: boolean };
+
+/** Диск. Alfa не ходим. Новые сверху. */
+export function filterCashPays(items: PayRow[], opts: CashListOpts = {}) {
+  const branchId = Number(opts.branchId) || 0;
+  const kind = String(opts.kind || "").trim();
+  const customerId = Number(opts.customerId) || 0;
+  const includeDeleted = Boolean(opts.includeDeleted);
+  const out = items.filter((x) => {
+    if (!includeDeleted && x.deleted) return false;
+    if (branchId && Number(x.branchId) !== branchId) return false;
+    if (kind && payKindOf(x.kind) !== payKindOf(kind)) return false;
+    if (customerId && Number(x.customerId) !== customerId) return false;
+    return true;
+  });
+  out.sort(
+    (a, b) =>
+      ruDateIso(b.documentDate).localeCompare(ruDateIso(a.documentDate)) ||
+      String(b.at).localeCompare(String(a.at)) ||
+      Number(b.id) - Number(a.id),
+  );
+  return out;
+}
+
+export function listCashPays(opts: CashListOpts = {}) {
+  const store = load();
+  const all = filterCashPays(store.items, opts);
+  const cap = Number(opts.limit);
+  const limit = Number.isFinite(cap) && cap > 0 ? Math.min(Math.floor(cap), 8000) : 8000;
+  const hits = store.poll?.hits || [];
+  return {
+    items: all.slice(0, limit),
+    total: all.length,
+    poll: {
+      lastNote: store.poll?.lastNote || "",
+      hits: payPollHitsInWindow(hits).length,
+      max: PAY_POLL_MAX_PER_HOUR,
+      allowed: payPollAllowed(hits),
+    } satisfies CashPollInfo,
+  };
 }
 
 function ruToday() {

@@ -139,7 +139,20 @@ export type CustomerCard = {
   calendar?: { id: number; date: string; from: string; to: string; type: string; typeId: number; group: string; teacher: string; status?: number; subject?: string; room?: string }[];
   tariffs?: { id: number; tariffId?: number; name: string; rest: number; lessons: number; archived?: boolean; bDate?: string; eDate?: string; price?: number }[];
   comms: CustomerComm[];
-  pays?: { id: number; kind: string; income: number; expenditure: number; note: string; documentDate: string }[];
+  pays?: {
+    id: number;
+    kind: string;
+    income: number;
+    expenditure: number;
+    note: string;
+    documentDate: string;
+    branchId?: number;
+    cttId?: number;
+    tariffId?: number;
+    payItemId?: number;
+    payMethod?: string;
+    groupId?: number;
+  }[];
   crmPush?: string;
   catalog?: { subjects: { id: number; name: string }[]; teachers: { id: number; name: string }[]; rooms: { id: number; name: string }[]; tariffs?: { id: number; name: string; price: number; lessons: number; subjectIds?: number[]; lessonTypeIds?: number[]; periodCount?: number; periodType?: number; periodLabel?: string; eDate?: string; calculationType?: number }[]; groups?: { id: number; name: string; branchId: number; subjectId?: number; teacher?: string; day?: string; from?: string; to?: string }[] };
 };
@@ -1110,6 +1123,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "customerSave"
           | "customerLesson"
           | "customerPay"
+          | "customerPayDelete"
+          | "cashList"
+          | "cashPoll"
           | "customerTariff"
           | "customerGroup"
           | "customerCreate"
@@ -1210,6 +1226,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
         payerName?: string;
         payMethod?: string;
         documentDate?: string;
+        payId?: number;
+        includeDeleted?: boolean;
         tariffId?: number;
         tariffRowId?: number;
         id?: number;
@@ -1846,6 +1864,69 @@ export const adminSchedule = createServerFn({ method: "POST" })
         queued: true,
         customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId, balance: fx.next },
       };
+    }
+    if (data.action === "customerPayDelete") {
+      const branch = Number(data.branchId) || 1;
+      const customerId = Number(data.customerId) || 0;
+      const payId = Number(data.payId || data.id) || 0;
+      if (!payId) return { ok: false as const, error: "Нет id платежа." };
+      const { deletePay, customerBalance } = await import("./crm-pay");
+      const { cardFromDossier } = await import("./customer-card-disk");
+      const res = deletePay(payId);
+      if (!res.ok) return { ok: false as const, error: res.error };
+      const d = findDossier({ crmId: customerId });
+      if (d && customerId) {
+        upsertDossier({
+          crmId: customerId,
+          extras: { ...(d.extras || {}), balance: String(customerBalance(customerId, d.extras?.balance)) },
+          source: "admin",
+        } as never);
+      }
+      logAdmin(`Клиент ${customerId}: платёж ${payId} удалён${res.local ? " только диск" : ", очередь pay.delete"}`);
+      const fresh = findDossier({ crmId: customerId });
+      return {
+        ok: true as const,
+        queued: !res.local,
+        customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId },
+      };
+    }
+    if (data.action === "cashList") {
+      const { listCashPays } = await import("./crm-pay");
+      const listed = listCashPays({
+        branchId: Number(data.branchId) || 0,
+        kind: data.payKind,
+        customerId: Number(data.customerId) || 0,
+        includeDeleted: Boolean(data.includeDeleted),
+        limit: 8000,
+      });
+      const q = String(data.q || "").trim().toLowerCase();
+      const qDigits = q.replace(/\D/g, "");
+      const take = Math.min(Math.max(Number(data.take) || 500, 1), 2000);
+      const matched: (typeof listed.items[number] & { name: string; parent: string; phone: string; branchName: string })[] = [];
+      for (const row of listed.items) {
+        const d = findDossier({ crmId: row.customerId });
+        const name = d?.child.fio || "";
+        const parent = d?.parent.fio || "";
+        const phone = (d?.phones || [])[0] || "";
+        if (q) {
+          const hay = `${row.customerId} ${row.id} ${row.note} ${row.cttId || ""} ${row.payMethod || ""} ${name} ${parent} ${phone}`.toLowerCase();
+          const digits = `${d?.phoneDigits || ""}${phone}`;
+          if (!hay.includes(q) && !(qDigits.length >= 4 && digits.includes(qDigits))) continue;
+        }
+        matched.push({
+          ...row,
+          name,
+          parent,
+          phone,
+          branchName: CRM_BRANCH[row.branchId]?.short || String(row.branchId || ""),
+        });
+      }
+      return { ok: true as const, items: matched.slice(0, take), total: matched.length, poll: listed.poll };
+    }
+    if (data.action === "cashPoll") {
+      const { pollPaysFromAlfa } = await import("./crm-pay");
+      const res = await pollPaysFromAlfa({ via: "button" });
+      return { ok: res.ok, skipped: res.skipped, branches: res.branches, newCount: res.newCount, pages: res.pages, hit429: res.hit429, note: res.note };
     }
     if (data.action === "customerTariff") {
       const { formatRuDob } = await import("./alfacrm");
