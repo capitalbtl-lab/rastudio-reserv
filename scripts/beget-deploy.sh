@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Выкладка rastudio.org на Beget.
-# Сборка падает → старый процесс не трогаем.
+# Сборка в .output-next. Живой процесс не трогаем, пока index.mjs не готов.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -35,8 +35,23 @@ if [ ! -d node_modules ] || ! git diff --quiet "$BEFORE" HEAD -- package-lock.js
   npm ci
 fi
 
-npm run build:beget
-pm2 restart rastudio --update-env
+rm -rf .output-next
+NITRO_OUTPUT=.output-next npm run build:beget
+if [ ! -f .output-next/server/index.mjs ]; then
+  echo "[deploy] нет .output-next/server/index.mjs — живой процесс не трогаю"
+  exit 1
+fi
+
+pm2 stop rastudio >/dev/null 2>&1 || true
+if [ -d .output ]; then
+  rm -rf .output.bak
+  mv .output .output.bak
+fi
+mv .output-next .output
+rm -rf .output.bak
+
+pm2 delete rastudio >/dev/null 2>&1 || true
+pm2 start ecosystem.config.cjs --only rastudio
 
 for app in rastudio-deploy rastudio-night-groups rastudio-pay-poll; do
   if ! pm2 describe "$app" >/dev/null 2>&1; then

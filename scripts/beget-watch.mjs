@@ -26,7 +26,8 @@ async function tick() {
     const remote = await git(["rev-parse", "origin/main"]);
     if (!remote || local === remote) return;
     console.log(`[deploy] ${local.slice(0, 7)} → ${remote.slice(0, 7)}`);
-    await exec("bash", [path.join(root, "scripts/beget-deploy.sh")], {
+    await git(["reset", "--hard", "origin/main"]);
+    await exec("bash", [path.join(root, "scripts/beget-deploy.sh"), "--force"], {
       cwd: root,
       env: process.env,
       timeout: 8 * 60 * 1000,
