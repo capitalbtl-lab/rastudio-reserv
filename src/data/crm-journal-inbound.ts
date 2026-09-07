@@ -200,7 +200,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
       }
     }
   }
-  const pulled: ReturnType<typeof packLight>[] = [];
+  const pulled: GroupCalLesson[] = [];
   for (const les of packs) {
     for (const item of les.items || []) {
       const rec = item as Record<string, unknown>;
