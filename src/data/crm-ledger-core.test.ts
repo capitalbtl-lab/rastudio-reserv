@@ -9,6 +9,9 @@ import {
   writeoffSumOf,
   writeoffSumForCtt,
   uniqueBranches,
+  packLessonPupils,
+  chargeFromPupils,
+  lessonPupilsKey,
 } from "./crm-ledger-core.ts";
 
 describe("журнал оплат и списаний", () => {
@@ -63,5 +66,25 @@ describe("журнал оплат и списаний", () => {
 
   it("филиалы 1–4, основной первый", () => {
     assert.deepEqual(uniqueBranches(2), [2, 1, 3, 4]);
+  });
+
+  it("состав занятия: явка и сумма списания по каждому ученику", () => {
+    const lesson = {
+      customer_ids: [6218, 7381, 2696],
+      details: [
+        { customer_id: 6218, is_attend: 1, commission: 743.75, ctt_id: 438, customer_name: "Артамонова Арина Сергеевна" },
+        { customer_id: 7381, is_attend: 1, commission: 743.75, ctt_id: 438 },
+        { customer_id: 2696, is_attend: 0, commission: 743.75, reason_name: "По любой причине", customer_name: "Рахманина Александра Владиславовна" },
+        { customer_id: 3485, is_attend: 1, commission: 587.5, ctt_id: 501 },
+      ],
+    };
+    const pupils = packLessonPupils(lesson);
+    assert.equal(pupils.length, 4);
+    assert.equal(pupils.find((p) => p.customerId === 2696)?.attend, false);
+    assert.equal(pupils.find((p) => p.customerId === 2696)?.amount, 743.75);
+    assert.equal(pupils.find((p) => p.customerId === 3485)?.amount, 587.5);
+    assert.equal(chargeFromPupils({ pupils }, 3485).amount, 587.5);
+    assert.equal(chargeFromPupils({ pupils }, 2696).attend, false);
+    assert.match(lessonPupilsKey([{ lessonId: 49042, pupils }]), /2696:0:743\.75/);
   });
 });

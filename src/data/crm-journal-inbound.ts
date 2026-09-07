@@ -145,9 +145,11 @@ export async function inboundJournalGroup(
       if (chunk.length < pageSize) break;
     }
   }
-  await pull(1, dateFrom, dateTo, 2, 50);
-  await pull(2, dateFrom, dateTo, 2, 50);
-  await pull(3, doneFrom, dateTo, 6, 100);
+  await Promise.all([
+    pull(1, dateFrom, dateTo, 2, 50),
+    pull(2, dateFrom, dateTo, 2, 50),
+    pull(3, doneFrom, dateTo, 6, 100),
+  ]);
   const pulled = [...byKey.values()];
   const hold = opts?.hold || pendingExportIds(["lesson.update", "lesson.create"]);
   const calendar = mergeLocalCalendar(pulled, cached?.calendar, hold, "union");

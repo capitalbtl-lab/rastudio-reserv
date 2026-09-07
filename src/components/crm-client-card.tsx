@@ -262,8 +262,8 @@ function lessonsForCard(
   const seen = new Set<string>();
   for (const l of calendar || []) {
     const date = toYmd(l.date);
-    if (!date || date.length < 10 || date < today) continue;
-    if (Number(l.status) === 2 || Number(l.status) === 3) continue;
+    if (!date || date.length < 10) continue;
+    if (Number(l.status) === 2) continue;
     if (!calendarLessonForCard(l, groups)) continue;
     const key = `${date}|${l.from}|${l.group}`;
     if (seen.has(key)) continue;
@@ -278,8 +278,11 @@ function lessonsForCard(
       teacher: l.teacher,
       subject: l.subject,
       group: l.group,
+      groupIds: l.groupIds,
       room: l.room,
       lessonId: l.id || undefined,
+      amount: l.amount,
+      cttId: l.cttId,
     });
   }
   const d0 = new Date();
@@ -1186,6 +1189,8 @@ export function CrmClientCard({
           <LessonStrip
             lessons={tiles}
             title="Ближайшие занятия"
+            branchId={card.branchId}
+            groupId={(card.groups || []).find((g) => g.active !== false)?.id || (card.groups || [])[0]?.id}
           />
         </div>
 
