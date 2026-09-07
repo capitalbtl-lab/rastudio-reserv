@@ -63,6 +63,25 @@ export function journalForCustomer<T extends JournalLesson>(lessons: T[], custom
     .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")));
 }
 
+export function isCustomerTrialLesson(lesson: { type?: string; typeId?: number; group?: string }) {
+  return Number(lesson.typeId) === 3 || /пробн/i.test(`${lesson.type || ""} ${lesson.group || ""}`);
+}
+
+/** Карточка ученика: только её группа. Пустое и чужое имя — нет. Пробное её — да. */
+export function calendarLessonForCard(
+  lesson: { group?: string; type?: string; typeId?: number; groupIds?: number[] },
+  groups: { id?: number; name?: string }[],
+) {
+  if (isCustomerTrialLesson(lesson)) return true;
+  const ids = new Set(groups.map((g) => Number(g.id) || 0).filter(Boolean));
+  const names = new Set(groups.map((g) => String(g.name || "").trim()).filter(Boolean));
+  const gids = (lesson.groupIds || []).map(Number).filter(Boolean);
+  if (gids.length && ids.size) return gids.some((n) => ids.has(n));
+  const name = String(lesson.group || "").trim();
+  if (!name || !names.size) return false;
+  return names.has(name);
+}
+
 export function clientLessonFromJournal(lesson: JournalLesson, groupName?: string) {
   return {
     id: Number(lesson.lessonId || 0),

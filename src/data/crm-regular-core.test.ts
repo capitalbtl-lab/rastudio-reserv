@@ -99,6 +99,7 @@ describe("постоянное расписание ученика", () => {
     assert.equal(regularBelongsToGroups({ groupId: 80, subjectId: 92 }, groups), true);
     assert.equal(regularBelongsToGroups({ groupId: 80, subjectId: 11, groupName: "2026 Художественная школа (10-14 лет)" }, groups), false);
     assert.equal(regularBelongsToGroups({ groupId: 465, subjectId: 11, groupName: "Python" }, groups), false);
+    assert.equal(regularBelongsToGroups({ groupId: 80, subjectId: 92 }, []), false);
     const poison = packCustomerRegular(
       { id: 9, related_id: 670, day: 3, time_from_v: "18:00", subject_id: 11 },
       { customerId: 670, fallbackGroupId: 80, groupName: "2026 Художественная школа (10-14 лет)" },

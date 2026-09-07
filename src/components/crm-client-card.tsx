@@ -40,6 +40,7 @@ import { mergeRooms, roomsSelectGroups, SEED_ROOMS } from "@/data/crm-rooms";
 import { addMinsHm, DUR_OPTS } from "@/data/crm-lesson-time";
 import { CASH_PAGE_SIZES, cashPageSlice, payAccountLabel } from "@/data/crm-pay-core";
 import { regularBelongsToGroups } from "@/data/crm-regular-core";
+import { calendarLessonForCard } from "@/data/crm-journal-core";
 
 function money(n?: number) {
   return `${Number(n || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`;
@@ -258,13 +259,11 @@ function lessonsForCard(
   const today = toYmd(new Date().toISOString().slice(0, 10));
   const out: GroupCalLesson[] = [];
   const seen = new Set<string>();
-  const names = groups.map((g) => g.name).filter(Boolean);
   for (const l of calendar || []) {
     const date = toYmd(l.date);
     if (!date || date.length < 10 || date < today) continue;
     if (Number(l.status) === 2 || Number(l.status) === 3) continue;
-    const trial = Number(l.typeId) === 3 || /пробн/i.test(String(l.type || l.group || ""));
-    if (l.group && names.length && !trial && !names.some((n) => n === l.group || l.group.includes(n) || n.includes(l.group))) continue;
+    if (!calendarLessonForCard(l, groups)) continue;
     const key = `${date}|${l.from}|${l.group}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -285,7 +284,7 @@ function lessonsForCard(
   const d0 = new Date();
   d0.setHours(12, 0, 0, 0);
   for (const r of regular || []) {
-    if (groups.length && !regularBelongsToGroups(r, groups)) continue;
+    if (!regularBelongsToGroups(r, groups)) continue;
     const wd = weekdayNum(r.day);
     if (!wd) continue;
     const jsWant = wd === 7 ? 0 : wd;
@@ -465,7 +464,10 @@ export function CrmClientCard({
     return [...set];
   }, [card.comms]);
   const comms = channel ? (card.comms || []).filter((c) => (c.channel || "сообщение") === channel) : card.comms || [];
-  const tiles = useMemo(() => lessonsForCard(card.calendar, card.regular, card.groups), [card.calendar, card.regular, card.groups]);
+  const tiles = useMemo(() => {
+    const mine = (card.groups || []).filter((g) => g.active !== false);
+    return lessonsForCard(card.calendar, card.regular, mine.length ? mine : card.groups || []);
+  }, [card.calendar, card.regular, card.groups]);
   const writeOffs = useMemo(
     () =>
       (card.calendar || [])

@@ -41,7 +41,7 @@ export function regularBelongsToGroups(
   row: { groupId?: number; groupName?: string; subjectId?: number },
   groups: { id: number; name?: string; subjectId?: number }[],
 ) {
-  if (!groups.length) return true;
+  if (!groups.length) return false;
   const gid = Number(row.groupId) || 0;
   const g =
     (gid && groups.find((x) => Number(x.id) === gid)) ||

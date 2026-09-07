@@ -4,7 +4,7 @@ import type { GroupCalLesson } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { nextLocalId } from "./crm-local-id";
 import { mergeJournalInbound } from "./crm-inbound-core";
-import { journalForCustomer } from "./crm-journal-core";
+import { journalForCustomer, calendarLessonForCard } from "./crm-journal-core";
 
 export type CachedGroupCard = {
   id: number;
@@ -192,8 +192,9 @@ export function collectCustomerJournal(
   const id = Number(customerId) || 0;
   const push = (les: GroupCalLesson, groupName?: string) => {
     const ids = (les.customerIds || []).map(Number);
-    if (Number(les.lessonId || 0) > 0 && id && !ids.includes(id)) return;
+    if (id && !ids.includes(id)) return;
     const row = { ...les, group: les.group || groupName || "" };
+    if (groups.length && !calendarLessonForCard(row, groups)) return;
     const key = String(row.lessonId || `${row.date}|${row.from}|${row.type}|${row.group}`);
     if (seen.has(key)) return;
     seen.add(key);

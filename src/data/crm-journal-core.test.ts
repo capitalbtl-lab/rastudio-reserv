@@ -7,6 +7,8 @@ import {
   journalForCustomer,
   lessonStatusLabel,
   clientLessonFromJournal,
+  calendarLessonForCard,
+  isCustomerTrialLesson,
 } from "./crm-journal-core.ts";
 
 describe("журнал уроков", () => {
@@ -36,5 +38,16 @@ describe("журнал уроков", () => {
     const row = clientLessonFromJournal(mine[0], "Роботы");
     assert.equal(row.id, 1);
     assert.equal(row.group, "Роботы");
+  });
+
+  it("карточка: только её группа, python и пустое имя не входят", () => {
+    const groups = [{ id: 80, name: "2026 Художественная школа (10-14 лет)" }];
+    assert.equal(calendarLessonForCard({ group: "2026 Художественная школа (10-14 лет)" }, groups), true);
+    assert.equal(calendarLessonForCard({ group: 'IT-Школа: "Программирование на Python с CodeBOOK"' }, groups), false);
+    assert.equal(calendarLessonForCard({ group: "" }, groups), false);
+    assert.equal(calendarLessonForCard({ group: "Python", groupIds: [465] }, groups), false);
+    assert.equal(calendarLessonForCard({ group: "Python", groupIds: [80] }, groups), true);
+    assert.equal(isCustomerTrialLesson({ type: "Пробное", typeId: 3 }), true);
+    assert.equal(calendarLessonForCard({ type: "Пробное", typeId: 3, group: "Пробное" }, groups), true);
   });
 });
