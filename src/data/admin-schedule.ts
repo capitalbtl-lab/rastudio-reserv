@@ -1540,12 +1540,18 @@ export const adminSchedule = createServerFn({ method: "POST" })
           }
           if (!(card.pays || []).length && linked && allow) {
             const { token, request } = await import("./alfacrm");
-            const { inboundCustomerPays, customerBalance } = await import("./crm-pay");
+            const { inboundCustomerPays, customerBalance, snapshotBalance } = await import("./crm-pay");
             const t = await token().catch(() => "");
             if (t) {
               await inboundCustomerPays(request, t, branch, customerId).catch(() => []);
               const fresh = findDossier({ crmId: customerId });
-              const next = customerBalance(customerId, fresh?.extras?.balance ?? card.balance);
+              const next = customerBalance(
+                customerId,
+                snapshotBalance(
+                  fresh?.extras?.balance ?? card.balance,
+                  (card.tariffs || []).filter((t) => !t.archived).reduce((n, t) => n + (Number(t.rest) || 0), 0),
+                ),
+              );
               if (fresh) {
                 upsertDossier({ crmId: customerId, extras: { ...(fresh.extras || {}), balance: String(next) }, source: "sync" } as never);
               }
@@ -1569,10 +1575,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const t = await token();
       const customer = await loadCustomerCard(request, t, branch, customerId);
       if (!customer) return { ok: false as const, error: "Ученик не найден в AlfaCRM." };
-      const { inboundCustomerPays, customerBalance, cardPays } = await import("./crm-pay");
+      const { inboundCustomerPays, customerBalance, cardPays, snapshotBalance } = await import("./crm-pay");
       const { inboundCustomerComms, commsOf, asCustomerComm } = await import("./crm-comms");
       await Promise.all([inboundCustomerPays(request, t, branch, customerId), inboundCustomerComms(request, t, branch, customerId)]);
-      customer.balance = customerBalance(customerId, customer.balance);
+      const cttRest = (customer.tariffs || []).filter((t) => !t.archived).reduce((n, t) => n + (Number(t.rest) || 0), 0);
+      customer.balance = customerBalance(customerId, snapshotBalance(customer.balance, cttRest));
       const dAfter = findDossier({ crmId: customerId });
       if (dAfter) {
         upsertDossier({

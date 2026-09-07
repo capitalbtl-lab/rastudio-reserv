@@ -152,8 +152,12 @@ export function cardPays(customerId: number) {
 
 export function customerBalance(customerId: number, fallback?: number | string) {
   const id = Number(customerId) || 0;
+  const rows = paysOf(id);
+  if (rows.some((x) => String(x.note || "") === OPENING_NOTE)) return displayedBalance(rows, fallback, true);
+  const snap = fallback == null || fallback === "" ? Number.NaN : Number(fallback);
+  if (Number.isFinite(snap)) return snap;
   const complete = Boolean(id && (load().complete || []).includes(id));
-  return displayedBalance(paysOf(id), fallback, complete);
+  return displayedBalance(rows, fallback, complete);
 }
 
 export function markPayJournalComplete(customerId: number) {

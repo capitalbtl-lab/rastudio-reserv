@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, snapshotBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -35,6 +35,10 @@ describe("журнал денег", () => {
     assert.equal(displayedBalance(fragment, "500"), 500);
     assert.equal(displayedBalance(fragment, "500", true), 6450);
     assert.equal(displayedBalance(fragment, "0"), 0);
+    assert.equal(snapshotBalance("1", 6450), 6450);
+    assert.equal(snapshotBalance("5000", 0), 5000);
+    assert.equal(snapshotBalance("", 0), 0);
+    assert.equal(snapshotBalance("1"), 1);
   });
 
   it("вход из Alfa не затирает очередь и свои id", () => {
