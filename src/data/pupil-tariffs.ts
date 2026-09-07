@@ -646,16 +646,25 @@ export async function pullCustomerTariffs(branchId: number, customerId: number) 
   const { request, token } = await import("./alfacrm");
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const { loadTariffs } = await import("./crm-tariffs");
+  const { uniqueBranches } = await import("./crm-ledger-core");
   const t = await token();
   const catalog = loadTariffs().items.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price }));
+  const seen = new Set<number>();
   const rows: ReturnType<typeof packCardTariff>[] = [];
-  for (let page = 0; page < 3; page += 1) {
-    const json = await request(customerTariffIndexPath(branch, cid), { page, pageSize: 50, customer_id: cid }, t).catch(
-      () => ({}),
-    );
-    const pack = crmUnwrapIndex(json).items.filter((it) => Number(it.id) && (!tariffRowCustomerId(it) || tariffRowCustomerId(it) === cid));
-    rows.push(...pack.map((it) => packCardTariff(it, catalog)));
-    if (pack.length < 50) break;
+  for (const bid of uniqueBranches(branch)) {
+    for (let page = 0; page < 3; page += 1) {
+      const json = await request(customerTariffIndexPath(bid, cid), { page, pageSize: 50, customer_id: cid }, t).catch(
+        () => ({}),
+      );
+      const pack = crmUnwrapIndex(json).items.filter((it) => Number(it.id) && (!tariffRowCustomerId(it) || tariffRowCustomerId(it) === cid));
+      for (const it of pack) {
+        const id = Number(it.id);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        rows.push(packCardTariff(it, catalog));
+      }
+      if (pack.length < 50) break;
+    }
   }
   const { stampDossierCtt } = await import("./dossiers");
   stampDossierCtt(cid, rows, branch);

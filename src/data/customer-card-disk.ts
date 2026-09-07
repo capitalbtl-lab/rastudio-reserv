@@ -187,6 +187,9 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
       ];
     }
   }
+  const liveCtt = tariffs.filter((t) => !t.archived);
+  const writeoffSum = calendar.filter((l) => Number(l.status) === 3).reduce((n, l) => n + (Number(l.amount) || 0), 0);
+  const paidTill = liveCtt.map((t) => t.eDate || "").filter(Boolean).sort().slice(-1)[0] || String(d.extras?.paid_till || "");
   return {
     id: customerId,
     cardId: clientCardId(customerId),
@@ -203,7 +206,8 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
     isStudy: Number.isFinite(study) ? study : undefined,
     studyStatusId: studyStatusId || undefined,
     note: "",
-    paidTill: "",
+    paidTill,
+    lessonsLeft: liveCtt.reduce((n, t) => n + (Number(t.lessons) || 0), 0),
     url: d.url || "",
     schools: d.schools || [],
     groups,
@@ -216,8 +220,9 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
       customerId,
       snapshotBalance(
         d.extras?.balance,
-        tariffs.filter((t) => !t.archived).reduce((n, t) => n + (Number(t.rest) || 0), 0),
+        liveCtt.reduce((n, t) => n + (Number(t.rest) || 0), 0),
       ),
+      writeoffSum,
     ),
     catalog: {
       subjects: cat.subjects,

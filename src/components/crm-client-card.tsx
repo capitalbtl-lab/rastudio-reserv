@@ -1147,7 +1147,12 @@ export function CrmClientCard({
 
         <div className="mt-4 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="lesson-writeoffs">
           <p className="font-display text-lg">Списания занятий</p>
-          <p className="mt-0.5 text-[0.72rem] text-muted">Проведённые уроки из Alfa — каждое списание с абонемента.</p>
+          <p className="mt-0.5 text-[0.72rem] text-muted">
+            Проведённые — списание с абонемента. Отменённые не списывают деньги.
+            {(card.calendar || []).filter((l) => Number(l.status) === 2).length
+              ? ` Отмен: ${(card.calendar || []).filter((l) => Number(l.status) === 2).length}.`
+              : ""}
+          </p>
           {writeOffs.length ? (
             <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto text-[0.78rem]">
               {writeOffs.slice(0, 40).map((l) => (
@@ -1156,7 +1161,9 @@ export function CrmClientCard({
                     {l.date} {l.from || ""} · {l.type || "занятие"}
                     {l.group ? ` · ${l.group}` : ""}
                   </span>
-                  <span className="shrink-0 text-rose-700">−1 занятие</span>
+                  <span className="shrink-0 text-rose-700">
+                    {Number(l.amount) > 0 ? `−${money(l.amount)}` : "−1 занятие"}
+                  </span>
                 </li>
               ))}
             </ul>
