@@ -546,8 +546,9 @@ export function CrmClientCard({
     return list;
   }, [card.groups]);
   const activeGroups = pupilGroups.filter((g) => g.active);
-  const activeTariffs = (card.tariffs || []).filter((t) => !t.archived);
-  const archivedTariffs = (card.tariffs || []).filter((t) => t.archived);
+  const basicAccount = (card.tariffs || []).find((t) => t.basic || Number(t.id) === 0);
+  const activeTariffs = (card.tariffs || []).filter((t) => !t.archived && Number(t.id) > 0);
+  const archivedTariffs = (card.tariffs || []).filter((t) => t.archived && Number(t.id) > 0);
   useEffect(() => {
     if (payCttId) return;
     const first = activeTariffs[0];
@@ -911,12 +912,19 @@ export function CrmClientCard({
           </div>
   );
 
+  const payN = (card.pays || []).length;
+  const planN = Number(card.lessonsPlan) || 0;
+  const factN = Number(card.lessonsFact) || 0;
   const balanceBox = (
-          <div className={cn("shrink-0 text-right", compact ? "pl-1.5" : "pb-0.5 pr-1")}>
-            <p className={cn("font-display leading-none tabular-nums tracking-tight", compact ? "text-[1.2rem]" : "text-[2.15rem]")}>{money(card.balance)}</p>
+          <div className={cn("shrink-0 text-right", compact ? "pl-1.5" : "pb-0.5 pr-1")} data-op="account-rest">
+            <p className={cn("font-semibold uppercase tracking-wider text-muted", compact ? "text-[0.55rem]" : "text-[0.62rem]")}>Общий остаток</p>
+            <p className={cn("font-display leading-none tabular-nums tracking-tight", compact ? "text-[1.2rem]" : "text-[2.15rem]", Number(card.balance) ? "" : "text-rose-700")}>{money(card.balance)}</p>
             <p className={cn("mt-0.5 text-muted", compact ? "text-[0.6rem]" : "text-[0.68rem]")}>
-              {card.lessonsLeft || 0} ур. · до {card.paidTill || "—"}
-              {(card.pays || []).length ? "" : " · снимок Alfa"}
+              {card.lessonsLeft || 0} ур.{card.paidTill ? ` · до ${card.paidTill}` : ""}
+            </p>
+            <p className={cn("text-muted", compact ? "text-[0.58rem]" : "text-[0.65rem]")}>
+              {payN ? `${payN} шт` : "нет платежей"}
+              {planN || factN ? ` · п ${planN} / ф ${factN}` : ""}
             </p>
           </div>
   );

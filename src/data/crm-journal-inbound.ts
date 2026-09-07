@@ -42,9 +42,13 @@ function packLight(
     topic?: string | null;
     note?: string | null;
     homework?: string | null;
-    details?: { is_attend?: number | null }[];
+    details?: { is_attend?: number | null; commission?: number; cost?: number }[];
     customer_ids?: number[];
     group_ids?: number[];
+    duration?: number;
+    ctt_id?: number;
+    commission?: number;
+    cost?: number;
   },
   ctx: { groupName: string; from: string; to: string; teacher: string; subject: string },
 ): GroupCalLesson | null {
@@ -78,6 +82,7 @@ function packLight(
     groupIds: (item.group_ids || []).map(Number).filter((n) => n > 0),
     customerIds: ids,
     amount: lessonWriteoffAmount(item as Record<string, unknown>),
+    duration: Number(item.duration || 0) || undefined,
   };
 }
 
@@ -170,13 +175,13 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
   const { replaceCustomerCalendar, loadCustomerCalendar } = await import("./group-cards");
   const { listAdminSlots } = await import("./alfacrm-schedule");
   const t = await token();
-  const dateFrom = ruShift(-400);
+  const dateFrom = ruShift(-2200);
   const dateTo = ruShift(90);
   const slots = listAdminSlots();
   const packs: { items?: Parameters<typeof packLight>[0][] }[] = [];
-  for (const bid of uniqueBranches(branch).slice(0, 2)) {
+  for (const bid of uniqueBranches(branch)) {
     for (const status of [1, 2, 3]) {
-      for (let page = 0; page < 4; page++) {
+      for (let page = 0; page < 8; page++) {
         const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
           `/v2api/${bid}/lesson/index`,
           { page, pageSize: 100, status, customer_id: id, date_from: dateFrom, date_to: dateTo },

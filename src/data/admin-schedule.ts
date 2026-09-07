@@ -871,7 +871,7 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
       eDate: t.eDate,
       calculationType: t.calculationType,
     }));
-  const liveCtt = tariffs.filter((x) => !x.archived);
+  const liveCtt = tariffs.filter((x) => !x.archived && Number(x.id) > 0);
   const liveCttRest = liveCtt.reduce((n, x) => n + (Number(x.rest) || 0), 0);
   const liveCttLessons = liveCtt.reduce((n, x) => n + (Number(x.lessons) || 0), 0);
   const liveCttE = liveCtt.map((x) => x.eDate || "").filter(Boolean).sort().slice(-1)[0] || "";
@@ -895,7 +895,7 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
     note: String(c.note || "").trim(),
     paidTill: String(c.paid_till || liveCttE || ""),
     teacher: String(c.teacher_name || "").trim(),
-    balance: liveCttRest || Number(c.balance ?? 0),
+    balance: liveCtt.length ? liveCttRest : Number(c.balance ?? 0) || 0,
     lessonsLeft: Number(c.paid_count ?? 0) || liveCttLessons,
     url: `https://studiyarazvivaysya.s20.online/company/${useBranch}/customer/view?id=${customerId}`,
     schools: dossier?.schools || [],
@@ -1576,16 +1576,13 @@ export const adminSchedule = createServerFn({ method: "POST" })
             if (t) {
               await inboundCustomerPays(request, t, branch, customerId).catch(() => []);
               const fresh = findDossier({ crmId: customerId });
+              const rows = (card.tariffs || []).filter((t) => !t.archived && Number(t.id) > 0);
+              const cttRest = rows.reduce((n, t) => n + (Number(t.rest) || 0), 0);
               const next = customerBalance(
                 customerId,
-                snapshotBalance(
-                  fresh?.extras?.balance ?? card.balance,
-                  (card.tariffs || []).filter((t) => !t.archived).reduce((n, t) => n + (Number(t.rest) || 0), 0),
-                ),
+                snapshotBalance(fresh?.extras?.balance ?? card.balance, cttRest, rows.length > 0),
               );
-              if (fresh && !Number(fresh.extras?.paid_count || fresh.extras?.paid || 0)) {
-                upsertDossier({ crmId: customerId, extras: { ...(fresh.extras || {}), balance: String(next) }, source: "sync" } as never);
-              }
+              upsertDossier({ crmId: customerId, extras: { ...(fresh?.extras || {}), balance: String(next) }, source: "sync" } as never);
               const again = findDossier({ crmId: customerId });
               if (again) card = cardFromDossier(again, branch);
             }
@@ -1609,8 +1606,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const { inboundCustomerPays, customerBalance, cardPays, snapshotBalance } = await import("./crm-pay");
       const { inboundCustomerComms, commsOf, asCustomerComm } = await import("./crm-comms");
       await Promise.all([inboundCustomerPays(request, t, branch, customerId), inboundCustomerComms(request, t, branch, customerId)]);
-      const cttRest = (customer.tariffs || []).filter((t) => !t.archived).reduce((n, t) => n + (Number(t.rest) || 0), 0);
-      customer.balance = customerBalance(customerId, snapshotBalance(customer.balance, cttRest));
+      const liveRows = (customer.tariffs || []).filter((t) => !t.archived && Number(t.id) > 0);
+      const cttRest = liveRows.reduce((n, t) => n + (Number(t.rest) || 0), 0);
+      customer.balance = customerBalance(customerId, snapshotBalance(customer.balance, cttRest, liveRows.length > 0));
       const dAfter = findDossier({ crmId: customerId });
       if (dAfter) {
         upsertDossier({

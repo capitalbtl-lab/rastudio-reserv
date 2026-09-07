@@ -543,6 +543,7 @@ export function clientDigest(customerId: number): ClientDigest | null {
       last.push(`${l.date} ${g.name} ${lessonStatusLabel(Number(l.status || 1))}`.trim());
     }
   }
+  const ctt = parseDossierCtt(d.extras).filter((t) => !t.archived && Number(t.id) > 0);
   return {
     customerId: id,
     child: d.child.fio || "",
@@ -555,7 +556,8 @@ export function clientDigest(customerId: number): ClientDigest | null {
       id,
       snapshotBalance(
         d.extras?.balance,
-        parseDossierCtt(d.extras).filter((t) => !t.archived).reduce((n, t) => n + (Number(t.rest) || 0), 0),
+        ctt.reduce((n, t) => n + (Number(t.rest) || 0), 0),
+        ctt.length > 0,
       ),
     ),
     tariff: d.extras?.live_tariff === "1" ? d.tariff || "живой" : d.extras?.live_tariff === "0" ? "нет" : d.tariff || "",
