@@ -118,7 +118,16 @@ export function ruDateIso(raw: string) {
   return s.slice(0, 10);
 }
 
-/** Alfa pay/index: d.m.Y. Не YYYY.MM.DD — иначе total=0 при живой кассе. */
+/** Alfa pay/index фильтр: yyyy.mm.dd. Не DD.MM.YYYY — это document_date в pay/create. */
+export function alfaPayIndexDate(raw?: string) {
+  const iso = String(raw || "").trim() ? ruDateIso(String(raw)) : "";
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[1]}.${m[2]}.${m[3]}`;
+  const sv = new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow" }).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(sv) ? sv.replace(/-/g, ".") : "";
+}
+
+/** Касса UI / pay.create: dd.mm.yyyy. */
 export function alfaPayDate(raw?: string) {
   const iso = String(raw || "").trim() ? ruDateIso(String(raw)) : "";
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);

@@ -15,7 +15,7 @@ import {
   payPollStampOrEmpty,
   payCustomerIdOf,
   ruDateIso,
-  alfaPayDate,
+  alfaPayIndexDate,
   OPENING_NOTE,
   PAY_POLL_MAX_PER_HOUR,
   type PayKind,
@@ -368,10 +368,9 @@ export type PayPollResult = {
   note: string;
 };
 
-function payIndexDates(stamp: PayPollStamp) {
-  const to = alfaPayDate();
-  if (!stamp.lastDate) return { date_from: "01.01.2020", date_to: to };
-  return { date_from: alfaPayDate(stamp.lastDate), date_to: to };
+function payIndexDates(stamp: PayPollStamp): Record<string, string> {
+  if (!stamp.lastDate) return {};
+  return { date_from: alfaPayIndexDate(stamp.lastDate), date_to: alfaPayIndexDate() };
 }
 
 function is429(e: unknown) {
@@ -409,17 +408,20 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
     const stamp = payPollStampOrEmpty(poll.branches[String(branchId)]);
     try {
       const dates = payIndexDates(stamp);
-      let json: unknown = await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50, ...dates }, t);
+      const firstBody: Record<string, unknown> = { page: 0, ...dates };
+      let lastBody = firstBody;
+      let json: unknown = await request(`/v2api/${branchId}/pay/index`, firstBody, t);
       pages += 1;
       let pack = crmUnwrapIndex(json);
       if (!pack.items.length) {
-        json = await request(`/v2api/${branchId}/pay/index`, { page: 0, pageSize: 50 }, t);
+        lastBody = { page: 0 };
+        json = await request(`/v2api/${branchId}/pay/index`, lastBody, t);
         pages += 1;
         pack = crmUnwrapIndex(json);
       }
       if (!pack.items.length) {
-        const raw = JSON.stringify(json).slice(0, 140);
-        errs.push(`ф${branchId} пусто total=${pack.total ?? "?"} ${raw}`);
+        const raw = JSON.stringify(json).slice(0, 120);
+        errs.push(`ф${branchId} пусто body=${JSON.stringify(lastBody)} total=${pack.total ?? "?"} ${raw}`);
       }
       const pulled = pack.items
         .map((it) => packPay(it, payCustomerIdOf(it), branchId))

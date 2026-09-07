@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, alfaPayDate, ruDateIso, OPENING_NOTE, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, alfaPayDate, alfaPayIndexDate, ruDateIso, OPENING_NOTE, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -98,6 +98,8 @@ describe("журнал денег", () => {
     assert.equal(payCustomerIdOf({ customer: { id: 44 } }), 44);
     assert.equal(alfaPayDate("2026-09-07"), "07.09.2026");
     assert.equal(alfaPayDate("07.09.2026"), "07.09.2026");
+    assert.equal(alfaPayIndexDate("07.09.2026"), "2026.09.07");
+    assert.equal(alfaPayIndexDate("2026-09-07"), "2026.09.07");
     assert.equal(ruDateIso("07.09.2026"), "2026-09-07");
   });
 });

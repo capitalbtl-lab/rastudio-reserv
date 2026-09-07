@@ -80,11 +80,10 @@ describe("касса список", () => {
     assert.match(pay, /crmUnwrapIndex/);
     assert.match(pay, /payPollStampOrEmpty/);
     assert.match(pay, /payPollFirstFill/);
-    assert.match(pay, /date_from: "01\.01\.2020"/);
-    assert.match(pay, /alfaPayDate/);
-    assert.match(pay, /01\.01\.2020/);
-    assert.doesNotMatch(pay, /2020\.01\.01/);
-    assert.doesNotMatch(pay, /en-CA/);
+    assert.match(pay, /alfaPayIndexDate/);
+    assert.match(pay, /date_from: alfaPayIndexDate/);
+    assert.doesNotMatch(pay, /01\.01\.2020/);
+    assert.doesNotMatch(pay, /pageSize: 50, \.\.\.dates/);
     assert.match(pay, /dropAlfaAuth/);
     assert.match(pay, /export function filterCashPays/);
     assert.match(pay, /branchId: Number\(x.branchId\) \|\| 0/);
