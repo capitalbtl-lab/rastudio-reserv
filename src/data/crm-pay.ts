@@ -20,6 +20,11 @@ import {
   snapshotBalance,
   OPENING_NOTE,
   PAY_POLL_MAX_PER_HOUR,
+  PAY_INBOUND_PAGE,
+  PAY_INBOUND_RUN,
+  payAccountLabel,
+  CASH_PAGE_SIZES,
+  cashPageSlice,
   type PayKind,
   type PayPollStamp,
   type PayRow,
@@ -29,10 +34,11 @@ import { logAdmin } from "./admin-settings";
 import { ledgerMoney, uniqueBranches } from "./crm-ledger-core";
 
 export type { PayKind, PayRow };
-export { displayedBalance, balanceOf, payKindOf, payEffect, snapshotBalance, OPENING_NOTE };
+export { displayedBalance, balanceOf, payKindOf, payEffect, snapshotBalance, OPENING_NOTE, payAccountLabel, CASH_PAGE_SIZES, cashPageSlice };
 
 type PayPollState = { hits: string[]; branches: Record<string, PayPollStamp>; lastNote?: string };
-type Store = { at: string; items: PayRow[]; poll?: PayPollState; complete?: number[] };
+type PayFill = { bid: number; page: number };
+type Store = { at: string; items: PayRow[]; poll?: PayPollState; complete?: number[]; payFill?: Record<string, PayFill> };
 
 let mem: Store | null = null;
 let memMtime = 0;
@@ -69,12 +75,13 @@ function load(): Store {
       items: Array.isArray(raw.items) ? raw.items : [],
       poll: raw.poll && typeof raw.poll === "object" ? { hits: Array.isArray(raw.poll.hits) ? raw.poll.hits : [], branches: raw.poll.branches || {}, lastNote: raw.poll.lastNote || "" } : emptyPoll(),
       complete: Array.isArray(raw.complete) ? raw.complete.map(Number).filter((n) => n) : [],
+      payFill: raw.payFill && typeof raw.payFill === "object" ? raw.payFill : {},
     };
     memMtime = mtime;
     index(mem);
     return mem;
   } catch {
-    mem = { at: "", items: [], poll: emptyPoll(), complete: [] };
+    mem = { at: "", items: [], poll: emptyPoll(), complete: [], payFill: {} };
     memMtime = 0;
     byCustomer = new Map();
     return mem;
@@ -89,7 +96,7 @@ function save(store: Store) {
   poll.hits = payPollHitsInWindow(poll.hits).slice(-24);
   writeFileSync(
     fileOf(),
-    JSON.stringify({ at: new Date().toISOString(), items: store.items.slice(-8000), poll, complete: (store.complete || []).slice(-4000) }, null, 0),
+    JSON.stringify({ at: new Date().toISOString(), items: store.items.slice(-40000), poll, complete: (store.complete || []).slice(-4000), payFill: store.payFill || {} }, null, 0),
     "utf8",
   );
   try {
@@ -159,6 +166,11 @@ export function customerBalance(customerId: number, fallback?: number | string, 
   const paySum = displayedBalance(rows, undefined, true);
   const snap = fallback == null || fallback === "" ? Number.NaN : Number(fallback);
   return ledgerMoney({ paySum, writeoffSum, snap, complete: opened || complete });
+}
+
+export function isPayJournalComplete(customerId: number) {
+  const id = Number(customerId) || 0;
+  return Boolean(id && (load().complete || []).includes(id));
 }
 
 export function markPayJournalComplete(customerId: number) {

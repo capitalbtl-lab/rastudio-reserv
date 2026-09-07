@@ -13,6 +13,23 @@ export const OPENING_NOTE = "остаток на диске";
 
 export const PAY_POLL_MAX_PER_HOUR = 10;
 export const PAY_POLL_WINDOW_MS = 60 * 60 * 1000;
+export const CASH_PAGE_SIZES = [50, 100, 500] as const;
+export const PAY_INBOUND_PAGE = 50;
+export const PAY_INBOUND_RUN = 4;
+
+/** Базовый счет — без абонемента (ctt −1/0). Раздельный — с абонементом (ctt > 0). */
+export function payAccountLabel(cttId?: number | null) {
+  return (Number(cttId) || 0) > 0 ? "Раздельный счет" : "Базовый счет";
+}
+
+export function cashPageSlice<T>(items: T[], page: number, size: number) {
+  const allowed = CASH_PAGE_SIZES as readonly number[];
+  const s = allowed.includes(Number(size)) ? Number(size) : 50;
+  const total = items.length;
+  const pages = Math.max(1, Math.ceil(total / s) || 1);
+  const p = Math.min(Math.max(0, Number(page) || 0), pages - 1);
+  return { items: items.slice(p * s, p * s + s), page: p, pages, size: s, total };
+}
 
 export type PayRow = {
   id: number;
