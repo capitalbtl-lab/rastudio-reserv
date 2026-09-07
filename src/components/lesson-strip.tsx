@@ -828,7 +828,7 @@ export function LessonStrip({
     if (left + width > window.innerWidth - 8) left = Math.max(8, r.left - width - 8);
     if (left < 8) left = 8;
     let top = r.top;
-    if (top + 320 > window.innerHeight) top = Math.max(8, window.innerHeight - 328);
+    if (top + 420 > window.innerHeight) top = Math.max(8, window.innerHeight - 428);
     return { top, left };
   }
 

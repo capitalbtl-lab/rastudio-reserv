@@ -5,15 +5,7 @@ import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor } from "./crm-cache-policy";
 import { journalFingerprint } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
-import {
-  lessonWriteoffAmount,
-  lessonWriteoffCtt,
-  lessonCustomerIds,
-  uniqueBranches,
-  packLessonPupils,
-  chargeFromPupils,
-  lessonPupilsKey,
-} from "./crm-ledger-core";
+import { findDossier } from "./dossiers";
 
 function hm(raw?: string) {
   const m = String(raw || "").match(/(\d{1,2}):(\d{2})/);
@@ -104,6 +96,20 @@ function packLight(
   };
 }
 
+function withPupilNames(lesson: GroupCalLesson): GroupCalLesson {
+  if (!lesson.pupils?.length) return lesson;
+  let hit = false;
+  const pupils = lesson.pupils.map((p) => {
+    if (p.name) return p;
+    const d = findDossier({ crmId: p.customerId });
+    const name = String(d?.child?.fio || d?.parent?.fio || "").trim();
+    if (!name) return p;
+    hit = true;
+    return { ...p, name };
+  });
+  return hit ? { ...lesson, pupils } : lesson;
+}
+
 export async function inboundJournalGroup(
   branch: number,
   gid: number,
@@ -140,7 +146,7 @@ export async function inboundJournalGroup(
         if (!gids.length && Number(item.lesson_type_id || 0) === 2) continue;
         const packed = packLight(item, ctx);
         if (!packed) continue;
-        byKey.set(`${packed.lessonId || 0}|${packed.date}|${packed.from}`, packed);
+        byKey.set(`${packed.lessonId || 0}|${packed.date}|${packed.from}`, withPupilNames(packed));
       }
       if (chunk.length < pageSize) break;
     }
@@ -250,7 +256,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
         if (!(Number(packed.cttId) > 0) && Number(prev.cttId) > 0) packed.cttId = prev.cttId;
         if (!(packed.pupils && packed.pupils.length) && prev.pupils?.length) packed.pupils = prev.pupils;
       }
-      pulled.push(packed);
+      pulled.push(withPupilNames(packed));
     }
   }
   const local = loadCustomerCalendar(id).filter((l) => Number(l.lessonId || 0) < 0);
