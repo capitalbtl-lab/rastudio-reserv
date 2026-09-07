@@ -40,10 +40,10 @@ export function stampJournal<T extends JournalLesson>(lesson: T, customerIds?: n
   if (pupils.length) {
     const ids = pupils.map((p) => Number(p.customerId) || 0).filter((n) => n);
     const attend = pupils.filter((p) => p.attend !== false).length;
-    return { ...lesson, customerIds: ids, attend, total: pupils.length };
+    return { ...lesson, customerIds: ids, attend, total: pupils.length } as T;
   }
   const ids = (customerIds ?? lesson.customerIds ?? []).map(Number).filter((n) => n);
-  return { ...lesson, customerIds: ids, attend: ids.length, total: ids.length };
+  return { ...lesson, customerIds: ids, attend: ids.length, total: ids.length } as T;
 }
 
 export function journalAttend(lesson: JournalLesson) {
