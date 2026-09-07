@@ -16,6 +16,7 @@ import {
   payCustomerIdOf,
   ruDateIso,
   alfaPayIndexDate,
+  kindFromAlfaPay,
   OPENING_NOTE,
   PAY_POLL_MAX_PER_HOUR,
   type PayKind,
@@ -309,8 +310,7 @@ export function packPay(item: Record<string, unknown>, customerId: number, branc
   const expenditure = Number(item.expenditure || 0) || 0;
   if (!id && !income && !expenditure) return null;
   const cid = payCustomerIdOf(item, customerId);
-  if (!cid) return null;
-  const kind: PayKind = expenditure && !income ? "refund" : "income";
+  const kind = kindFromAlfaPay(item);
   return {
     id: id || 0,
     customerId: cid,
@@ -419,6 +419,16 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
         pages += 1;
         pack = crmUnwrapIndex(json);
       }
+      if (opts?.via === "button" || firstFill) {
+        try {
+          const corrJson = await request(`/v2api/${branchId}/pay/index`, { page: 0, pay_type_id: 3 }, t);
+          pages += 1;
+          const extra = crmUnwrapIndex(corrJson).items;
+          if (extra.length) pack = { ...pack, items: [...pack.items, ...extra] };
+        } catch (e) {
+          if (is429(e)) throw e;
+        }
+      }
       if (!pack.items.length) {
         const raw = JSON.stringify(json).slice(0, 120);
         errs.push(`ф${branchId} пусто body=${JSON.stringify(lastBody)} total=${pack.total ?? "?"} ${raw}`);
@@ -429,7 +439,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
       pulledCount += pulled.length;
       const fresh = pulled.filter((x) => payAfterStamp(x, stamp));
       const byCid = new Map<number, PayRow[]>();
-      for (const row of fresh) {
+      for (const row of pulled) {
         const list = byCid.get(row.customerId) || [];
         list.push(row);
         byCid.set(row.customerId, list);
@@ -437,8 +447,8 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
       for (const [cid, rows] of byCid) {
         const merged = mergePayInbound(rows, paysOf(cid), hold);
         replaceCustomerPays(cid, merged);
-        newCount += rows.length;
       }
+      newCount += fresh.length;
       if (fresh.length) poll.branches[String(branchId)] = nextPayStamp(fresh, stamp);
       else poll.branches[String(branchId)] = stamp;
     } catch (e) {
