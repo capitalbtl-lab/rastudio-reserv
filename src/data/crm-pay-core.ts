@@ -146,9 +146,11 @@ export function displayedBalance(rows: PayRow[], fallback?: number | string, com
 
 /** Снимок Alfa: rest живых ctt (раздельный счёт) или customer.balance (базовый). 0 — валидный остаток, не «нет данных». extras.paid — история оплат, не остаток. */
 export function snapshotBalance(extra?: number | string | null, cttRest?: number, hasCtt?: boolean) {
-  const b = Number(cttRest) || 0;
-  if (hasCtt) return b;
-  if (extra == null || extra === "") return b;
+  const raw = Number(cttRest);
+  const rest = Number.isFinite(raw) ? raw : 0;
+  if (hasCtt) return rest;
+  if (rest) return rest;
+  if (extra == null || extra === "") return rest;
   const a = Number(extra);
   return Number.isFinite(a) ? a : 0;
 }

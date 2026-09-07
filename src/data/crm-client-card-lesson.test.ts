@@ -52,15 +52,10 @@ describe("форма занятия карточки", () => {
     assert.match(sched, /import \{ AdminReloadBtn, useAdminReload \} from "@\/components\/admin-reload-btn"/);
     assert.match(sched, /useAdminReload\(/);
     assert.match(sched, /from "@\/data\/crm-teachers-core"/);
-    const disk = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
-    const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
-    assert.match(disk, /parseDossierRegular/);
-    assert.match(disk, /accountSnapOf/);
-    assert.match(disk, /paySumForCtt/);
-    assert.match(disk, /Базовый счет/);
-    assert.doesNotMatch(disk, /extras\?\.paid \|\| 0/);
-    assert.match(api, /pullCustomerRegular/);
-    assert.match(api, /rows.length > 0/);
+    const pullSrc = readFileSync(new URL("./pupil-tariffs.ts", import.meta.url), "utf8");
+    const pull = pullSrc.slice(pullSrc.indexOf("export async function pullCustomerAccount"), pullSrc.indexOf("export async function pullCustomerAccount") + 2200);
+    assert.match(pull, /balance: String\(best.balance\)/);
+    assert.doesNotMatch(pull, /best.paid \|\| best.balance/);
   });
 });
 
