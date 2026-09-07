@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { packCustomerRegular, parseDossierRegular } from "./crm-regular-core.ts";
+import { packCustomerRegular, parseDossierRegular, pickCustomerRegularItems } from "./crm-regular-core.ts";
 
 describe("постоянное расписание ученика", () => {
   it("пакует вс/ср/пт Чудновой и не берёт выключенные", () => {
@@ -21,5 +21,21 @@ describe("постоянное расписание ученика", () => {
     });
     assert.equal(rows.length, 1);
     assert.equal(rows[0].from, "15:30");
+  });
+
+  it("берёт копии ученика, не слот группы 18:10", () => {
+    const cid = 670;
+    const picked = pickCustomerRegularItems(
+      [
+        { id: 9, related_id: 80, day: 5, time_from_v: "18:10", time_to_v: "20:40", customer_ids: [670, 1, 2, 3, 4] },
+        { id: 1176, related_id: 80, day: 7, time_from_v: "11:10", time_to_v: "13:40", customer_ids: [670] },
+        { id: 1603, related_id: 80, day: 3, time_from_v: "15:30", time_to_v: "18:00", customer_ids: [670] },
+        { id: 1604, related_id: 80, day: 5, time_from_v: "15:30", time_to_v: "18:00", customer_ids: [670] },
+      ],
+      cid,
+    );
+    const froms = picked.map((x) => String(x.time_from_v)).sort();
+    assert.deepEqual(froms, ["11:10", "15:30", "15:30"]);
+    assert.equal(picked.some((x) => String(x.time_from_v) === "18:10"), false);
   });
 });

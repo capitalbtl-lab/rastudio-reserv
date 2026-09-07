@@ -670,3 +670,44 @@ export async function pullCustomerTariffs(branchId: number, customerId: number) 
   stampDossierCtt(cid, rows, branch);
   return rows;
 }
+
+export async function pullCustomerAccount(branchId: number, customerId: number) {
+  const cid = Number(customerId) || 0;
+  if (!cid) return null;
+  const { request, token } = await import("./alfacrm");
+  const { uniqueBranches } = await import("./crm-ledger-core");
+  const { applyCrmCustomer, upsertDossier } = await import("./dossiers");
+  const t = await token();
+  let best = { paid_count: 0, paid: 0, paid_till: "", balance: 0 };
+  for (const bid of uniqueBranches(Number(branchId) || 1)) {
+    const json = await request<{ items?: Record<string, unknown>[] }>(
+      `/v2api/${bid}/customer/index`,
+      { id: cid, page: 0, pageSize: 1 },
+      t,
+    ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+    const c = (json.items || []).find((it) => Number(it.id) === cid);
+    if (!c) continue;
+    applyCrmCustomer(c, bid);
+    const pc = Number(c.paid_count || 0);
+    const paid = Number(c.paid || 0);
+    const bal = Number(c.balance || 0);
+    if (pc > best.paid_count || paid > best.paid || (pc === best.paid_count && bal > best.balance)) {
+      best = { paid_count: pc, paid, paid_till: String(c.paid_till || ""), balance: bal };
+    }
+  }
+  if (best.paid_count || best.paid || best.balance) {
+    upsertDossier({
+      crmId: cid,
+      extras: {
+        paid_count: String(best.paid_count || ""),
+        paid: String(best.paid || ""),
+        paid_till: best.paid_till,
+        balance: String(best.paid || best.balance || ""),
+      },
+      source: "alfacrm",
+      crmWins: true,
+      quiet: true,
+    });
+  }
+  return best;
+}

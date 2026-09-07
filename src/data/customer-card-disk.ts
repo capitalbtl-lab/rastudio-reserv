@@ -190,6 +190,8 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   const liveCtt = tariffs.filter((t) => !t.archived);
   const writeoffSum = calendar.filter((l) => Number(l.status) === 3).reduce((n, l) => n + (Number(l.amount) || 0), 0);
   const paidTill = liveCtt.map((t) => t.eDate || "").filter(Boolean).sort().slice(-1)[0] || String(d.extras?.paid_till || "");
+  const paidCount = liveCtt.reduce((n, t) => n + (Number(t.lessons) || 0), 0) || Number(d.extras?.paid_count || 0) || 0;
+  const paidMoney = liveCtt.reduce((n, t) => n + (Number(t.rest) || 0), 0) || Number(d.extras?.paid || 0) || 0;
   return {
     id: customerId,
     cardId: clientCardId(customerId),
@@ -207,7 +209,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
     studyStatusId: studyStatusId || undefined,
     note: "",
     paidTill,
-    lessonsLeft: liveCtt.reduce((n, t) => n + (Number(t.lessons) || 0), 0),
+    lessonsLeft: paidCount,
     url: d.url || "",
     schools: d.schools || [],
     groups,
@@ -220,7 +222,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
       customerId,
       snapshotBalance(
         d.extras?.balance,
-        liveCtt.reduce((n, t) => n + (Number(t.rest) || 0), 0),
+        paidMoney,
       ),
       writeoffSum,
     ),

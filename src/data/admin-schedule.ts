@@ -1554,7 +1554,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!wantAlfaPull(data.fresh)) {
         if (d) {
           const { cardFromDossier } = await import("./customer-card-disk");
-          const { pullCustomerTariffs } = await import("./pupil-tariffs");
+          const { pullCustomerTariffs, pullCustomerAccount } = await import("./pupil-tariffs");
           const { pullCustomerRegular } = await import("./crm-regular-disk");
           let card = cardFromDossier(d, branch);
           const linked = (await import("./crm-alfa-link")).alfaLinkedNow();
@@ -1563,6 +1563,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
             await Promise.all([
               pullCustomerTariffs(branch, customerId).catch(() => []),
               pullCustomerRegular(branch, customerId).catch(() => []),
+              pullCustomerAccount(branch, customerId).catch(() => null),
             ]);
             const fresh = findDossier({ crmId: customerId });
             if (fresh) card = cardFromDossier(fresh, branch);
@@ -1581,7 +1582,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
                   (card.tariffs || []).filter((t) => !t.archived).reduce((n, t) => n + (Number(t.rest) || 0), 0),
                 ),
               );
-              if (fresh) {
+              if (fresh && !Number(fresh.extras?.paid_count || fresh.extras?.paid || 0)) {
                 upsertDossier({ crmId: customerId, extras: { ...(fresh.extras || {}), balance: String(next) }, source: "sync" } as never);
               }
               const again = findDossier({ crmId: customerId });
