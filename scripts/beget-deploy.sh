@@ -46,7 +46,23 @@ if [ -d .output ]; then
   rm -rf .output.bak
   mv .output .output.bak
 fi
-rm -rf .output-next
+rm -rf .output-next .output
+
+# Vite rmdir падает ENOTEMPTY на public/media/imported (~сотни МБ).
+# На время сборки убираем каталог, после — symlink в .output.
+HOLD="$ROOT/.media-imported-hold"
+restore_media() {
+  if [ -d "$HOLD" ]; then
+    mkdir -p "$ROOT/public/media"
+    rm -rf "$ROOT/public/media/imported"
+    mv "$HOLD" "$ROOT/public/media/imported"
+  fi
+}
+trap restore_media EXIT
+if [ -d public/media/imported ]; then
+  rm -rf "$HOLD"
+  mv public/media/imported "$HOLD"
+fi
 
 npm run build:beget
 css="$(ls .output/public/assets/*.css 2>/dev/null | head -1 || true)"
@@ -54,10 +70,17 @@ if [ ! -f .output/server/index.mjs ] || [ -z "$css" ]; then
   echo "[deploy] сборка без index.mjs или CSS — возвращаю предыдущую"
   rm -rf .output
   if [ -d .output.bak ]; then mv .output.bak .output; fi
+  restore_media
   pm2 start ecosystem.config.cjs --only rastudio >/dev/null 2>&1 || pm2 restart rastudio --update-env || true
   exit 1
 fi
 rm -rf .output.bak
+restore_media
+trap - EXIT
+mkdir -p .output/public/media
+if [ -d public/media/imported ] && [ ! -e .output/public/media/imported ]; then
+  ln -sfn "$ROOT/public/media/imported" .output/public/media/imported
+fi
 
 pm2 delete rastudio >/dev/null 2>&1 || true
 pm2 start ecosystem.config.cjs --only rastudio

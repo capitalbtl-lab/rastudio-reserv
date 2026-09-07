@@ -23,5 +23,6 @@ content/raw/
 
 storage/
 data/build.json
+.media-imported-hold
 __pycache__/
 *.pyc
