@@ -531,7 +531,6 @@ export function CrmClientCard({
   const activeGroups = pupilGroups.filter((g) => g.active);
   const activeTariffs = (card.tariffs || []).filter((t) => !t.archived);
   const archivedTariffs = (card.tariffs || []).filter((t) => t.archived);
-  const liveTariffs = activeTariffs;
   useEffect(() => {
     if (payCttId) return;
     const first = activeTariffs[0];
@@ -1143,6 +1142,26 @@ export function CrmClientCard({
           />
         </div>
 
+        <div className="mt-4 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="lesson-writeoffs">
+          <p className="font-display text-lg">Списания занятий</p>
+          <p className="mt-0.5 text-[0.72rem] text-muted">Проведённые уроки из Alfa — каждое списание с абонемента.</p>
+          {writeOffs.length ? (
+            <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto text-[0.78rem]">
+              {writeOffs.slice(0, 40).map((l) => (
+                <li key={`${l.id}-${l.date}-${l.from}`} className="flex justify-between gap-2 border-t border-black/6 py-1.5 first:border-t-0">
+                  <span className="min-w-0 truncate">
+                    {l.date} {l.from || ""} · {l.type || "занятие"}
+                    {l.group ? ` · ${l.group}` : ""}
+                  </span>
+                  <span className="shrink-0 text-rose-700">−1 занятие</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm text-muted">Нет проведённых занятий на диске. Откройте карточку — подтянем журнал Alfa.</p>
+          )}
+        </div>
+
         <div className="mt-4 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="cash-journal">
           <div className="flex flex-wrap items-center gap-1.5">
             <p className="font-display text-lg">Касса</p>
@@ -1172,7 +1191,7 @@ export function CrmClientCard({
                     <th className="px-1 py-1">Сумма</th>
                     <th className="px-1 py-1">Статья</th>
                     <th className="px-1 py-1">Способ</th>
-                    <th className="px-1 py-1">cttId</th>
+                    <th className="px-1 py-1">Счёт</th>
                     <th className="px-1 py-1">Коммент</th>
                     <th className="px-1 py-1">id</th>
                     <th className="px-1 py-1" />
@@ -1193,7 +1212,7 @@ export function CrmClientCard({
                         </td>
                         <td className="px-1 py-1">{payItemName(p.payItemId) || "—"}</td>
                         <td className="px-1 py-1">{payMethodName(p.payMethod) || "—"}</td>
-                        <td className="px-1 py-1 tabular-nums">{p.cttId || "—"}</td>
+                        <td className="max-w-[10rem] truncate px-1 py-1" title={cttName(p.cttId)}>{cttName(p.cttId)}</td>
                         <td className="max-w-[8rem] truncate px-1 py-1" title={p.note}>{p.note || "—"}</td>
                         <td className="px-1 py-1 tabular-nums text-muted">{p.id}</td>
                         <td className="px-1 py-1 whitespace-nowrap">
@@ -1999,9 +2018,17 @@ export function CrmClientCard({
                 <RaSelect
                   value={payCttId}
                   onChange={setPayCttId}
-                  options={[
-                    { value: "", label: "(не задано)" },
-                    ...liveTariffs.map((t) => ({ value: String(t.id), label: t.name })),
+                  groups={[
+                    {
+                      label: "Действующие",
+                      options: [
+                        { value: "-1", label: "Базовый счет 0,00" },
+                        ...activeTariffs.map((t) => ({ value: String(t.id), label: cttSelectLabel(t) })),
+                      ],
+                    },
+                    ...(archivedTariffs.length
+                      ? [{ label: "Архивные", options: archivedTariffs.map((t) => ({ value: String(t.id), label: cttSelectLabel(t) })) }]
+                      : []),
                   ]}
                 />
               </div>
@@ -2055,7 +2082,7 @@ export function CrmClientCard({
                 <li key={p.id} className="flex justify-between gap-2 px-0.5 py-0.5 text-[0.72rem]">
                   <span className="min-w-0 truncate text-muted">
                     {p.documentDate || "—"} · {payKindName(p.kind)}
-                    {p.cttId ? ` · ctt ${p.cttId}` : ""}
+                    {p.cttId ? ` · ${cttName(p.cttId)}` : ""}
                   </span>
                   <span className="shrink-0 tabular-nums font-semibold">
                     {payRowSum(p) > 0 ? "+" : ""}
@@ -2086,7 +2113,7 @@ export function CrmClientCard({
                   locationId: Number(payLocationId) || 0,
                   managerId: Number(payManagerId) || 0,
                   cttId: Number(payCttId) || 0,
-                  tariffId: Number(liveTariffs.find((t) => String(t.id) === payCttId)?.tariffId) || 0,
+                  tariffId: Number((card.tariffs || []).find((t) => String(t.id) === payCttId)?.tariffId) || 0,
                   payerName: payPayer,
                   groupId: Number(payGroupId) || 0,
                   note: payNote,

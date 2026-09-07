@@ -26,7 +26,11 @@ describe("форма занятия карточки", () => {
     assert.match(src, /g\?\.teacherId/);
     assert.match(src, /const lessonRoomCount = lessonRooms.filter/);
     assert.match(src, /card.crmPush/);
-    assert.match(src, /data-op="crm-push"/);
+    assert.match(src, /data-op="archived-tariffs"/);
+    assert.match(src, /data-op="lesson-writeoffs"/);
+    assert.match(src, /cttSelectLabel/);
+    assert.match(src, /Базовый счет/);
+    assert.match(src, /label: "Архивные"/);
     const strip = readFileSync(new URL("../components/lesson-strip.tsx", import.meta.url), "utf8");
     assert.match(strip, /isOneOffLesson/);
     assert.match(strip, /bg-amber-100/);
