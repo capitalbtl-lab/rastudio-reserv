@@ -422,7 +422,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
       }
       if (opts?.via === "button" || firstFill) {
         try {
-          const corrJson = await request(`/v2api/${branchId}/pay/index`, { page: 0, pay_type_id: 4 }, t);
+          const corrJson = await request(`/v2api/${branchId}/pay/index`, { page: 0, pay_type_id: 6 }, t);
           pages += 1;
           const extra = crmUnwrapIndex(corrJson).items;
           if (extra.length) pack = { ...pack, items: [...pack.items, ...extra] };
