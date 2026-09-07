@@ -551,22 +551,144 @@ function LessonEdit({
               <RaSelect value={String(form.groupIds[0] || "")} placeholder="— группа —" className={FIELD} menuMinWidth={280} options={groups.map((g) => ({ value: String(g.id), label: g.name }))} onChange={(v) => set("groupIds", Number(v) ? [Number(v)] : [])} />
             </label>
             <div>
-              <p className="text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">Клиент или лид</p>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {form.customers.map((c) => (
-                  <span key={c.id} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[0.75rem] ring-1 ring-black/8">
-                    {c.name}
-                    <button
-                      type="button"
-                      className="text-muted"
-                      onClick={() => setForm((f) => (f ? { ...f, customerIds: f.customerIds.filter((id) => id !== c.id), customers: f.customers.filter((x) => x.id !== c.id) } : f))}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">Кто был?</p>
+                {form.customers.length ? (
+                  <button
+                    type="button"
+                    className="text-[0.72rem] text-primary underline-offset-2 hover:underline"
+                    onClick={() => {
+                      const allOn = form.customers.every((c) => c.attend !== false);
+                      setForm((f) => (f ? { ...f, customers: f.customers.map((c) => ({ ...c, attend: !allOn })) } : f));
+                    }}
+                  >
+                    {form.customers.every((c) => c.attend !== false) ? "снять все" : "выбрать все"}
+                  </button>
+                ) : null}
               </div>
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="поиск клиента" className={FIELD} />
+              {form.customers.length ? (
+                <div className="mt-1 overflow-x-auto rounded-xl bg-white ring-1 ring-black/8" data-op="lesson-attend">
+                  <table className="w-full min-w-[36rem] text-left text-[0.75rem]">
+                    <thead className="text-[0.62rem] uppercase tracking-wide text-muted">
+                      <tr>
+                        <th className="px-2 py-1.5 font-medium">Состояние клиента</th>
+                        <th className="w-28 px-2 py-1.5 font-medium">Списание</th>
+                        <th className="w-36 px-2 py-1.5 font-medium">Оценка / Причина</th>
+                        <th className="w-28 px-2 py-1.5 font-medium">Оценка за ДЗ</th>
+                        <th className="px-2 py-1.5 font-medium">Примечание</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {form.customers.map((c) => {
+                        const zero = /(?:^|[^\d])0 ост/.test(String(c.rest || "")) || c.rest?.startsWith("0 ");
+                        return (
+                          <tr key={c.id} className={cn("border-t border-black/6", c.attend === false && "bg-amber-50")}>
+                            <td className="px-2 py-1.5">
+                              <label className="flex cursor-pointer items-start gap-2">
+                                <input
+                                  type="checkbox"
+                                  className="mt-0.5"
+                                  checked={c.attend !== false}
+                                  onChange={() =>
+                                    setForm((f) =>
+                                      f
+                                        ? {
+                                            ...f,
+                                            customers: f.customers.map((x) => (x.id === c.id ? { ...x, attend: x.attend === false } : x)),
+                                          }
+                                        : f,
+                                    )
+                                  }
+                                />
+                                <span className="min-w-0">
+                                  <span className={cn("block font-medium", zero || c.attend === false ? "text-rose-600" : "text-sky-800")}>{c.name}</span>
+                                  {c.rest ? <span className="block text-[0.65rem] text-muted">({c.rest})</span> : null}
+                                </span>
+                              </label>
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <span className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={c.amount || ""}
+                                  onChange={(e) =>
+                                    setForm((f) =>
+                                      f
+                                        ? {
+                                            ...f,
+                                            customers: f.customers.map((x) => (x.id === c.id ? { ...x, amount: Number(e.target.value) || 0 } : x)),
+                                          }
+                                        : f,
+                                    )
+                                  }
+                                  className="h-7 w-[5.5rem] rounded-md bg-white px-1.5 tabular-nums ring-1 ring-black/10"
+                                />
+                                <span className="text-muted">р.</span>
+                              </span>
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                value={c.attend === false ? c.reason || "" : c.grade || ""}
+                                placeholder={c.attend === false ? "причина" : "оценка"}
+                                onChange={(e) =>
+                                  setForm((f) =>
+                                    f
+                                      ? {
+                                          ...f,
+                                          customers: f.customers.map((x) =>
+                                            x.id === c.id ? (c.attend === false ? { ...x, reason: e.target.value } : { ...x, grade: e.target.value }) : x,
+                                          ),
+                                        }
+                                      : f,
+                                  )
+                                }
+                                className="h-7 w-full rounded-md bg-white px-1.5 ring-1 ring-black/10"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                value={c.homeworkGrade || ""}
+                                onChange={(e) =>
+                                  setForm((f) =>
+                                    f
+                                      ? {
+                                          ...f,
+                                          customers: f.customers.map((x) => (x.id === c.id ? { ...x, homeworkGrade: e.target.value } : x)),
+                                        }
+                                      : f,
+                                  )
+                                }
+                                className="h-7 w-full rounded-md bg-white px-1.5 ring-1 ring-black/10"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                value={c.note || ""}
+                                placeholder="Примечание"
+                                onChange={(e) =>
+                                  setForm((f) =>
+                                    f
+                                      ? {
+                                          ...f,
+                                          customers: f.customers.map((x) => (x.id === c.id ? { ...x, note: e.target.value } : x)),
+                                        }
+                                      : f,
+                                  )
+                                }
+                                className="h-7 w-full rounded-md bg-white px-1.5 ring-1 ring-black/10"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="mt-1 text-[0.75rem] text-muted">Состав занятия ещё не на диске. Откройте после выгрузки журнала Alfa.</p>
+              )}
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="добавить клиента" className={FIELD} />
               {hits.length ? (
                 <ul className={cn("mt-1 max-h-36 overflow-y-auto py-1", RA_POP)}>
                   {hits.map((h) => (
@@ -577,7 +699,11 @@ function LessonEdit({
                         onClick={() => {
                           setForm((f) => {
                             if (!f || f.customerIds.includes(h.id)) return f;
-                            return { ...f, customerIds: [...f.customerIds, h.id], customers: [...f.customers, h] };
+                            return {
+                              ...f,
+                              customerIds: [...f.customerIds, h.id],
+                              customers: [...f.customers, { ...h, attend: true, amount: 0 }],
+                            };
                           });
                           setQ("");
                           setHits([]);
@@ -608,6 +734,10 @@ function LessonEdit({
             <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
               Тема
               <input value={form.topic} onChange={(e) => set("topic", e.target.value)} className={FIELD} />
+            </label>
+            <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+              Домашнее задание
+              <textarea value={form.homework} onChange={(e) => set("homework", e.target.value)} rows={2} className="mt-1 w-full rounded-lg bg-white px-2.5 py-1.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none" />
             </label>
             <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
               Комментарий
@@ -837,7 +967,7 @@ export function LessonStrip({
         <div data-op="lesson-edit">
           <LessonEdit
             branchId={branchId}
-            groupId={groupId || 0}
+            groupId={Number(edit.groupIds?.[0] || groupId || 0)}
             seed={edit}
             onClose={() => setEdit(null)}
             onSaved={(patch) => {
