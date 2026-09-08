@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import type { GroupCalLesson, LessonRosterPerson } from "@/data/crm-slots-core";
-import { mergeLessonRoster, lessonRestLeft } from "@/data/crm-slots-core";
+import { mergeLessonRoster, lessonRestLeft, maskHm, maskRuDate } from "@/data/crm-slots-core";
 import { adminSchedule } from "@/data/admin-schedule";
 import { RA_POP } from "@/data/admin-ui";
 import { RaSelect } from "@/components/ra-select";
@@ -305,7 +305,50 @@ type LessonCustomer = {
   rest?: string;
 };
 
-const FIELD = "mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none";
+const FIELD = "mt-0.5 h-7 w-full rounded-lg bg-white px-2 text-[0.78rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none";
+const LBL = "block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80";
+const GRADE_OPTS = ["5", "4", "3", "2", "зачёт"];
+const MISS_REASONS = ["Болезнь", "По уважительной причине", "Без уважительной причины", "По любой причине"];
+
+function TeacherDrop({
+  teachers,
+  ids,
+  onToggle,
+}: {
+  teachers: { id: number; name: string }[];
+  ids: number[];
+  onToggle: (id: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+  const label = teachers.filter((t) => ids.includes(t.id)).map((t) => t.name).join(", ");
+  return (
+    <div ref={box} className="relative" data-op="lesson-teachers">
+      <button type="button" className={cn(FIELD, "flex items-center justify-between gap-2 text-left")} onClick={() => setOpen((v) => !v)}>
+        <span className={cn("truncate", !label && "text-muted")}>{label || "— педагоги —"}</span>
+        <span className="text-muted">▾</span>
+      </button>
+      {open ? (
+        <div className={cn("absolute z-30 mt-1 max-h-44 w-full overflow-y-auto p-1", RA_POP)}>
+          {teachers.map((t) => (
+            <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-[0.78rem] hover:bg-black/[0.04]">
+              <input type="checkbox" checked={ids.includes(t.id)} onChange={() => onToggle(t.id)} />
+              {t.name}
+            </label>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function LessonEdit({
   branchId,
@@ -433,6 +476,21 @@ function LessonEdit({
   function set<K extends keyof LessonForm>(key: K, value: LessonForm[K]) {
     setForm((f) => (f ? { ...f, [key]: value } : f));
   }
+  function patchCustomer(id: number, patch: Partial<LessonCustomer>) {
+    setForm((f) => (f ? { ...f, customers: f.customers.map((c) => (c.id === id ? { ...c, ...patch } : c)) } : f));
+  }
+  function removeCustomer(id: number) {
+    setForm((f) =>
+      f
+        ? {
+            ...f,
+            customerIds: f.customerIds.filter((x) => x !== id),
+            customers: f.customers.filter((c) => c.id !== id),
+          }
+        : f,
+    );
+  }
+  const dateShown = /^\d{4}-\d{2}-\d{2}$/.test(form.date) ? ruDate(form.date) : form.date;
 
   async function save() {
     if (!form) return;
@@ -505,8 +563,14 @@ function LessonEdit({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[400] flex items-start justify-center overflow-y-auto bg-black/40 p-3 pt-[4vh]" onMouseDown={onClose} data-op="lesson-edit">
-      <div className={cn("w-full max-w-4xl p-5", RA_POP)} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[400] flex items-center justify-center bg-black/40 p-3"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      data-op="lesson-edit"
+    >
+      <div className={cn("w-full max-w-[40rem] p-4", RA_POP)} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-display text-lg font-semibold text-fg">Групповое — {form.status === 3 ? "проведён" : form.status === 2 ? "отменён" : "занятие"}</h3>
           <button type="button" className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white" onClick={onClose}>
@@ -514,186 +578,68 @@ function LessonEdit({
           </button>
         </div>
         {loading ? <p className="mt-2 text-[0.75rem] text-muted">Открываю занятие…</p> : null}
-        <div className="mt-4 grid gap-3">
-            <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+        <div className="mt-3 grid gap-2">
+          <div className="grid grid-cols-[minmax(8.2rem,1fr)_minmax(0,1.35fr)_4.4rem_4.6rem] items-end gap-2" data-op="lesson-when">
+            <label className={LBL}>
               Дата
-              <input value={form.date} onChange={(e) => set("date", toYmd(e.target.value))} className={FIELD} />
+              <input
+                value={dateShown}
+                onChange={(e) => {
+                  const next = maskRuDate(e.target.value);
+                  set("date", next.length === 10 ? toYmd(next) : next);
+                }}
+                inputMode="numeric"
+                maxLength={10}
+                placeholder="дд.мм.гггг"
+                className={FIELD}
+              />
             </label>
-            <div className="grid grid-cols-[1fr_6.5rem_5.5rem] gap-2">
-              <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
-                Время с
-                <input
-                  value={form.from}
-                  onChange={(e) => {
-                    const from = e.target.value;
-                    setForm((f) => (f ? { ...f, from, to: addMins(from, f.duration) || f.to } : f));
-                  }}
-                  className={FIELD}
-                />
-              </label>
-              <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
-                Мин
-                <input
-                  type="number"
-                  value={form.duration}
-                  onChange={(e) => {
-                    const duration = Number(e.target.value) || 0;
-                    setForm((f) => (f ? { ...f, duration, to: addMins(f.from, duration) || f.to } : f));
-                  }}
-                  className={FIELD}
-                />
-              </label>
-              <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
-                До
-                <input value={form.to} readOnly className={cn(FIELD, "bg-white/70")} />
-              </label>
-            </div>
-            <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+            <label className={LBL}>
+              Время с
+              <input
+                value={form.from}
+                onChange={(e) => {
+                  const from = maskHm(e.target.value);
+                  setForm((f) => (f ? { ...f, from, to: addMins(from, f.duration) || f.to } : f));
+                }}
+                inputMode="numeric"
+                maxLength={5}
+                placeholder="18:00"
+                className={FIELD}
+              />
+            </label>
+            <label className={LBL}>
+              Мин
+              <input
+                type="number"
+                min={0}
+                max={1000}
+                value={form.duration}
+                onChange={(e) => {
+                  const duration = Number(e.target.value) || 0;
+                  setForm((f) => (f ? { ...f, duration, to: addMins(f.from, duration) || f.to } : f));
+                }}
+                className={FIELD}
+              />
+            </label>
+            <label className={LBL}>
+              До
+              <input value={form.to} readOnly className={cn(FIELD, "bg-white/70")} />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-2" data-op="lesson-place">
+            <label className={LBL}>
               Аудитория
               <RaSelect value={form.roomId ? String(form.roomId) : ""} placeholder="— не задана —" className={FIELD} options={rooms.map((r) => ({ value: String(r.id), label: r.name }))} onChange={(v) => set("roomId", Number(v) || 0)} />
             </label>
-            <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+            <label className={LBL}>
               Группа
               <RaSelect value={String(form.groupIds[0] || "")} placeholder="— группа —" className={FIELD} menuMinWidth={280} options={groups.map((g) => ({ value: String(g.id), label: g.name }))} onChange={(v) => set("groupIds", Number(v) ? [Number(v)] : [])} />
             </label>
-            <div>
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">Кто был?</p>
-                {form.customers.length ? (
-                  <button
-                    type="button"
-                    className="text-[0.72rem] text-primary underline-offset-2 hover:underline"
-                    onClick={() => {
-                      const allOn = form.customers.every((c) => c.attend !== false);
-                      setForm((f) => (f ? { ...f, customers: f.customers.map((c) => ({ ...c, attend: !allOn })) } : f));
-                    }}
-                  >
-                    {form.customers.every((c) => c.attend !== false) ? "снять все" : "выбрать все"}
-                  </button>
-                ) : null}
-              </div>
-              {form.customers.length ? (
-                <div className="mt-1 overflow-x-auto rounded-xl bg-white ring-1 ring-black/8" data-op="lesson-attend">
-                  <table className="w-full min-w-[36rem] text-left text-[0.75rem]">
-                    <thead className="text-[0.62rem] uppercase tracking-wide text-muted">
-                      <tr>
-                        <th className="px-2 py-1.5 font-medium">Состояние клиента</th>
-                        <th className="w-28 px-2 py-1.5 font-medium">Списание</th>
-                        <th className="w-36 px-2 py-1.5 font-medium">Оценка / Причина</th>
-                        <th className="w-28 px-2 py-1.5 font-medium">Оценка за ДЗ</th>
-                        <th className="px-2 py-1.5 font-medium">Примечание</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {form.customers.map((c) => {
-                        const zero = /(?:^|[^\d])0 ост/.test(String(c.rest || "")) || c.rest?.startsWith("0 ");
-                        return (
-                          <tr key={c.id} className={cn("border-t border-black/6", c.attend === false && "bg-amber-50")}>
-                            <td className="px-2 py-1.5">
-                              <label className="flex cursor-pointer items-start gap-2">
-                                <input
-                                  type="checkbox"
-                                  className="mt-0.5"
-                                  checked={c.attend !== false}
-                                  onChange={() =>
-                                    setForm((f) =>
-                                      f
-                                        ? {
-                                            ...f,
-                                            customers: f.customers.map((x) => (x.id === c.id ? { ...x, attend: x.attend === false } : x)),
-                                          }
-                                        : f,
-                                    )
-                                  }
-                                />
-                                <span className="min-w-0">
-                                  <span className={cn("block font-medium", zero || c.attend === false ? "text-rose-600" : "text-sky-800")}>{c.name}</span>
-                                  {c.rest ? <span className="block text-[0.65rem] text-muted">({c.rest})</span> : null}
-                                </span>
-                              </label>
-                            </td>
-                            <td className="px-2 py-1.5">
-                              <span className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={c.amount || ""}
-                                  onChange={(e) =>
-                                    setForm((f) =>
-                                      f
-                                        ? {
-                                            ...f,
-                                            customers: f.customers.map((x) => (x.id === c.id ? { ...x, amount: Number(e.target.value) || 0 } : x)),
-                                          }
-                                        : f,
-                                    )
-                                  }
-                                  className="h-7 w-[5.5rem] rounded-md bg-white px-1.5 tabular-nums ring-1 ring-black/10"
-                                />
-                                <span className="text-muted">р.</span>
-                              </span>
-                            </td>
-                            <td className="px-2 py-1.5">
-                              <input
-                                value={c.attend === false ? c.reason || "" : c.grade || ""}
-                                placeholder={c.attend === false ? "причина" : "оценка"}
-                                onChange={(e) =>
-                                  setForm((f) =>
-                                    f
-                                      ? {
-                                          ...f,
-                                          customers: f.customers.map((x) =>
-                                            x.id === c.id ? (c.attend === false ? { ...x, reason: e.target.value } : { ...x, grade: e.target.value }) : x,
-                                          ),
-                                        }
-                                      : f,
-                                  )
-                                }
-                                className="h-7 w-full rounded-md bg-white px-1.5 ring-1 ring-black/10"
-                              />
-                            </td>
-                            <td className="px-2 py-1.5">
-                              <input
-                                value={c.homeworkGrade || ""}
-                                onChange={(e) =>
-                                  setForm((f) =>
-                                    f
-                                      ? {
-                                          ...f,
-                                          customers: f.customers.map((x) => (x.id === c.id ? { ...x, homeworkGrade: e.target.value } : x)),
-                                        }
-                                      : f,
-                                  )
-                                }
-                                className="h-7 w-full rounded-md bg-white px-1.5 ring-1 ring-black/10"
-                              />
-                            </td>
-                            <td className="px-2 py-1.5">
-                              <input
-                                value={c.note || ""}
-                                placeholder="Примечание"
-                                onChange={(e) =>
-                                  setForm((f) =>
-                                    f
-                                      ? {
-                                          ...f,
-                                          customers: f.customers.map((x) => (x.id === c.id ? { ...x, note: e.target.value } : x)),
-                                        }
-                                      : f,
-                                  )
-                                }
-                                className="h-7 w-full rounded-md bg-white px-1.5 ring-1 ring-black/10"
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="mt-1 text-[0.75rem] text-muted">Состав занятия ещё не на диске. Откройте после выгрузки журнала Alfa.</p>
-              )}
+          </div>
+          <div className="grid grid-cols-2 gap-2" data-op="lesson-who">
+            <label className={LBL}>
+              Добавить клиента
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="добавить клиента" className={FIELD} />
               {hits.length ? (
                 <ul className={cn("mt-1 max-h-36 overflow-y-auto py-1", RA_POP)}>
@@ -721,49 +667,150 @@ function LessonEdit({
                   ))}
                 </ul>
               ) : null}
-            </div>
-            <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+            </label>
+            <label className={LBL}>
               Предмет
               <RaSelect value={form.subjectId ? String(form.subjectId) : ""} placeholder="— предмет —" className={FIELD} menuMinWidth={280} options={subjects.map((s) => ({ value: String(s.id), label: s.name }))} onChange={(v) => set("subjectId", Number(v) || 0)} />
             </label>
+          </div>
+          {form.customers.length ? (
             <div>
-              <p className="text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">Педагог(и)</p>
-              <div className={cn("mt-1 max-h-36 overflow-y-auto p-2", RA_POP)}>
-                {teachers.map((t) => (
-                  <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-[0.8rem] hover:bg-black/[0.04]">
-                    <input type="checkbox" checked={form.teacherIds.includes(t.id)} onChange={() => set("teacherIds", form.teacherIds.includes(t.id) ? form.teacherIds.filter((id) => id !== t.id) : [...form.teacherIds, t.id])} />
-                    {t.name}
-                  </label>
-                ))}
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">Кто был?</p>
+                <button
+                  type="button"
+                  className="text-[0.72rem] text-primary underline-offset-2 hover:underline"
+                  onClick={() => {
+                    const allOn = form.customers.every((c) => c.attend !== false);
+                    setForm((f) => (f ? { ...f, customers: f.customers.map((c) => ({ ...c, attend: !allOn })) } : f));
+                  }}
+                >
+                  {form.customers.every((c) => c.attend !== false) ? "снять все" : "выбрать все"}
+                </button>
+              </div>
+              <div className="mt-1 max-h-[11.5rem] overflow-y-auto rounded-xl bg-white ring-1 ring-black/8" data-op="lesson-attend">
+                <table className="w-full min-w-[32rem] text-left text-[0.75rem]">
+                  <thead className="sticky top-0 bg-white text-[0.62rem] uppercase tracking-wide text-muted">
+                    <tr>
+                      <th className="px-2 py-1.5 font-medium">Состояние клиента</th>
+                      <th className="w-24 px-2 py-1.5 font-medium">Списание</th>
+                      <th className="w-36 px-2 py-1.5 font-medium">Оценка / Причина</th>
+                      <th className="w-24 px-2 py-1.5 font-medium">Оценка за ДЗ</th>
+                      <th className="px-2 py-1.5 font-medium">Примечание</th>
+                      <th className="w-8 px-1 py-1.5" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {form.customers.map((c) => {
+                      const zero = /(?:^|[^\d])0 ост/.test(String(c.rest || "")) || c.rest?.startsWith("0 ");
+                      return (
+                        <tr key={c.id} className={cn("border-t border-black/6", c.attend === false && "bg-amber-50")}>
+                          <td className="px-2 py-1">
+                            <label className="flex cursor-pointer items-start gap-2">
+                              <input type="checkbox" className="mt-0.5" checked={c.attend !== false} onChange={() => patchCustomer(c.id, { attend: c.attend === false })} />
+                              <span className="min-w-0">
+                                <span className={cn("block font-medium", zero || c.attend === false ? "text-rose-600" : "text-sky-800")}>{c.name}</span>
+                                {c.rest ? <span className="block text-[0.65rem] text-muted">({c.rest})</span> : null}
+                              </span>
+                            </label>
+                          </td>
+                          <td className="px-2 py-1">
+                            <span className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={c.amount || ""}
+                                onChange={(e) => patchCustomer(c.id, { amount: Number(e.target.value) || 0 })}
+                                className="h-7 w-[4.8rem] rounded-md bg-white px-1.5 tabular-nums ring-1 ring-black/10"
+                              />
+                              <span className="text-muted">р.</span>
+                            </span>
+                          </td>
+                          <td className="px-2 py-1">
+                            {c.attend === false ? (
+                              <select value={c.reason || ""} onChange={(e) => patchCustomer(c.id, { reason: e.target.value })} className="h-7 w-full rounded-md bg-white px-1 text-[0.72rem] ring-1 ring-black/10">
+                                <option value="">причина</option>
+                                {MISS_REASONS.map((r) => (
+                                  <option key={r} value={r}>
+                                    {r}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <select value={c.grade || ""} onChange={(e) => patchCustomer(c.id, { grade: e.target.value })} className="h-7 w-full rounded-md bg-white px-1 text-[0.72rem] ring-1 ring-black/10">
+                                <option value="">оценка</option>
+                                {GRADE_OPTS.map((g) => (
+                                  <option key={g} value={g}>
+                                    {g}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </td>
+                          <td className="px-2 py-1">
+                            <select value={c.homeworkGrade || ""} onChange={(e) => patchCustomer(c.id, { homeworkGrade: e.target.value })} className="h-7 w-full rounded-md bg-white px-1 text-[0.72rem] ring-1 ring-black/10">
+                              <option value="">ДЗ</option>
+                              {GRADE_OPTS.map((g) => (
+                                <option key={g} value={g}>
+                                  {g}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-2 py-1">
+                            <input value={c.note || ""} placeholder="Примечание" onChange={(e) => patchCustomer(c.id, { note: e.target.value })} className="h-7 w-full rounded-md bg-white px-1.5 ring-1 ring-black/10" />
+                          </td>
+                          <td className="px-1 py-1">
+                            <button type="button" className="grid size-6 place-items-center rounded-full text-muted hover:bg-rose-50 hover:text-rose-600" aria-label="Удалить ученика" onClick={() => removeCustomer(c.id)}>
+                              ×
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
-            <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
-              Тема
-              <input value={form.topic} onChange={(e) => set("topic", e.target.value)} className={FIELD} />
-            </label>
-            <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+          ) : null}
+          <label className={LBL}>
+            Педагог(и)
+            <TeacherDrop
+              teachers={teachers}
+              ids={form.teacherIds}
+              onToggle={(id) => set("teacherIds", form.teacherIds.includes(id) ? form.teacherIds.filter((x) => x !== id) : [...form.teacherIds, id])}
+            />
+          </label>
+          <label className={LBL}>
+            Тема
+            <input value={form.topic} onChange={(e) => set("topic", e.target.value)} className={FIELD} />
+          </label>
+          <div className="grid grid-cols-2 gap-2" data-op="lesson-hw">
+            <label className={LBL}>
               Домашнее задание
-              <textarea value={form.homework} onChange={(e) => set("homework", e.target.value)} rows={2} className="mt-1 w-full rounded-lg bg-white px-2.5 py-1.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none" />
+              <textarea value={form.homework} onChange={(e) => set("homework", e.target.value)} rows={2} className="mt-0.5 w-full rounded-lg bg-white px-2 py-1.5 text-[0.78rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none" />
             </label>
-            <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+            <label className={LBL}>
               Комментарий
-              <textarea value={form.note} onChange={(e) => set("note", e.target.value)} rows={2} className="mt-1 w-full rounded-lg bg-white px-2.5 py-1.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none" />
+              <textarea value={form.note} onChange={(e) => set("note", e.target.value)} rows={2} className="mt-0.5 w-full rounded-lg bg-white px-2 py-1.5 text-[0.78rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none" />
             </label>
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
-            <div className="flex justify-end gap-2 pt-1">
-              <button type="button" className="rounded-full bg-[#d8dce3] px-3 py-1 text-sm font-semibold text-[#5c636c]" onClick={onClose}>
-                Отмена
-              </button>
-              <button type="button" disabled={saving} className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white disabled:opacity-50" onClick={() => void save()}>
-                {saving ? "Сохраняю…" : "Сохранить в AlfaCRM"}
-              </button>
-            </div>
           </div>
+          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" className="rounded-full bg-[#d8dce3] px-3 py-1 text-sm font-semibold text-[#5c636c]" onClick={onClose}>
+              Отмена
+            </button>
+            <button type="button" disabled={saving} className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white disabled:opacity-50" onClick={() => void save()}>
+              {saving ? "Сохраняю…" : "Сохранить в AlfaCRM"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>,
     document.body,
   );
 }
+
 
 export function LessonStrip({
   lessons,

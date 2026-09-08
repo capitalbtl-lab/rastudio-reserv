@@ -99,6 +99,18 @@ describe("форма занятия карточки", () => {
     assert.match(strip, /Списание/);
     assert.match(strip, /Кто был\?/);
     assert.match(strip, /customers: form.customers/);
+    assert.match(strip, /data-op="lesson-when"/);
+    assert.match(strip, /data-op="lesson-place"/);
+    assert.match(strip, /data-op="lesson-who"/);
+    assert.match(strip, /data-op="lesson-hw"/);
+    assert.match(strip, /data-op="lesson-teachers"/);
+    assert.match(strip, /max-w-\[40rem\]/);
+    assert.match(strip, /maskHm/);
+    assert.match(strip, /maskRuDate/);
+    assert.match(strip, /removeCustomer/);
+    assert.match(strip, /GRADE_OPTS/);
+    assert.match(strip, /MISS_REASONS/);
+    assert.match(strip, /Удалить ученика/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /packLessonPupils/);
     assert.match(inbound, /fanOutLessonWriteoffs/);
