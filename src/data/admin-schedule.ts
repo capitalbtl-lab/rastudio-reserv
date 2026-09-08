@@ -1156,6 +1156,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "customerLesson"
           | "customerPay"
           | "customerPayDelete"
+          | "customerPayPush"
           | "cashList"
           | "cashPoll"
           | "customerTariff"
@@ -1852,32 +1853,65 @@ export const adminSchedule = createServerFn({ method: "POST" })
         String(data.note || "").trim() ||
         (kind === "product" ? "продажа товара" : kind === "refund" ? "возврат средств" : kind === "correct" ? "корректировка" : "Оплата за обучение");
       const d = findDossier({ crmId: customerId });
-      ensureOpening(customerId, Number(d?.branchId || branch), d?.extras?.balance);
+      const payBranch = Number(d?.branchId || branch) || 1;
+      const cttId = Number(data.cttId) || -1;
+      const payItemId = Number(data.payItemId) || 0;
+      const locationId = Number(data.locationId) || 0;
+      const existingId = Number(data.payId || data.id) || 0;
+      if (existingId) {
+        const { updatePay, pushPayToAlfa } = await import("./crm-pay");
+        const saved = updatePay(existingId, {
+          kind,
+          sum,
+          note,
+          documentDate: ru,
+          cttId,
+          tariffId: Number(data.tariffId) || undefined,
+          payItemId,
+          payAccountId: Number(data.payAccountId) || 1,
+          locationId,
+          managerId: Number(data.managerId) || undefined,
+          payMethod: String(data.payMethod || "") || undefined,
+          groupId: Number(data.groupId) || undefined,
+          payerName: String(data.payerName || d?.parent || "") || undefined,
+        });
+        if (!saved.ok) return { ok: false as const, error: saved.error };
+        upsertDossier({
+          crmId: customerId,
+          extras: { ...(d?.extras || {}), balance: String(customerBalance(customerId, d?.extras?.balance)) },
+          source: "admin",
+        } as never);
+        const sent = await pushPayToAlfa(existingId);
+        logAdmin(`Клиент ${customerId}: правка платежа ${existingId}${sent.ok ? " → Alfa" : ""}`);
+        const fresh = findDossier({ crmId: customerId });
+        return { ok: true as const, queued: sent.ok, customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId } };
+      }
+      ensureOpening(customerId, payBranch, d?.extras?.balance);
       const prev = customerBalance(customerId, d?.extras?.balance);
       const fx = payEffect(kind, sum, prev);
       const pay = appendPay({
         customerId,
-        branchId: Number(d?.branchId || branch),
+        branchId: payBranch,
         kind,
         income: fx.income,
         expenditure: fx.expenditure,
         note,
         documentDate: ru,
-        cttId: Number(data.cttId) || undefined,
+        cttId,
         tariffId: Number(data.tariffId) || undefined,
-        payItemId: Number(data.payItemId) || undefined,
-        payAccountId: Number(data.payAccountId) || undefined,
-        locationId: Number(data.locationId) || undefined,
+        payItemId,
+        payAccountId: Number(data.payAccountId) || 1,
+        locationId,
         managerId: Number(data.managerId) || undefined,
         payMethod: String(data.payMethod || "") || undefined,
         groupId: Number(data.groupId) || undefined,
+        payerName: String(data.payerName || d?.parent || "") || undefined,
       });
       upsertDossier({
         crmId: customerId,
         extras: { ...(d?.extras || {}), balance: String(fx.next) },
         source: "admin",
       } as never);
-      const payBranch = Number(d?.branchId || branch) || 1;
       const { enqueueExport } = await import("./crm-export-queue");
       enqueueExport({
         op: "pay.create",
@@ -1893,10 +1927,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
           localId: pay.id,
           kind,
           payAccountId: Number(data.payAccountId) || 1,
-          payItemId: Number(data.payItemId) || 0,
-          locationId: Number(data.locationId) || locationIdForBranch(payBranch),
+          payItemId,
+          locationId: locationId || locationIdForBranch(payBranch),
           managerId: Number(data.managerId) || 0,
-          cttId: Number(data.cttId) || 0,
+          cttId,
           contractId: Number(data.contractId) || 0,
           payerName: String(data.payerName || d?.parent || ""),
           groupId: Number(data.groupId) || 0,
@@ -1940,6 +1974,19 @@ export const adminSchedule = createServerFn({ method: "POST" })
         queued: !res.local,
         customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId },
       };
+    }
+    if (data.action === "customerPayPush") {
+      const payId = Number(data.payId || data.id) || 0;
+      if (!payId) return { ok: false as const, error: "Нет id платежа." };
+      const { pushPayToAlfa } = await import("./crm-pay");
+      const { cardFromDossier } = await import("./customer-card-disk");
+      const res = await pushPayToAlfa(payId);
+      if (!res.ok) return { ok: false as const, error: res.error };
+      const customerId = Number(data.customerId) || 0;
+      const branch = Number(data.branchId) || 1;
+      logAdmin(`Клиент ${customerId}: платёж ${payId} вручную в Alfa`);
+      const fresh = customerId ? findDossier({ crmId: customerId }) : null;
+      return { ok: true as const, queued: true, local: res.local, customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId } };
     }
     if (data.action === "cashList") {
       const { listCashPays, cashTakeOf } = await import("./crm-pay");

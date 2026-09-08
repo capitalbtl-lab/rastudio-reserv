@@ -119,6 +119,19 @@ describe("очередь выгрузки в Alfa", () => {
     assert.equal(sameLocal[0].body.pay_item_id, 2);
     assert.equal(sameLocal[0].tries, 0);
     assert.equal(exportPath(payB[0]), "/v2api/1/pay/create");
+    assert.equal(exportPath({ ...payB[0], op: "pay.update", entityId: 9001 }), "/v2api/1/pay/update?id=9001");
+    assert.equal(exportOpLabel("pay.update"), "править платёж");
+    const updBody = exportBody({
+      ...payB[0],
+      op: "pay.update",
+      entityId: 9001,
+      body: { customer_id: 7759, income: 500, localId: -3, kind: "income" },
+    });
+    assert.equal(updBody.id, 9001);
+    assert.equal(updBody.localId, undefined);
+    assert.equal(updBody.kind, undefined);
+    assert.equal(canRunExportJob({ op: "pay.update", branchId: 1, entityId: 9001, body: {} }), true);
+    assert.equal(canRunExportJob({ op: "pay.update", branchId: 1, entityId: -12, body: {} }), false);
     assert.equal(exportBody(payB[0]).customer_id, 7759);
     assert.equal(exportBody(payB[0]).id, undefined);
     let payDel = mergeExportJob(payB, { op: "pay.delete", branchId: 1, entityId: -12, body: { localId: -12 } });

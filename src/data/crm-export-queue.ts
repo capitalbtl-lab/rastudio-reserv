@@ -63,7 +63,7 @@ export function enqueueExport(incoming: Omit<CrmExportJob, "id" | "at" | "tries"
   q.lastAt = new Date().toISOString();
   q.lastNote = `${incoming.op} ${incoming.entityId}`;
   saveExport(q);
-  const payOp = incoming.op === "pay.create" || incoming.op === "pay.delete";
+  const payOp = incoming.op === "pay.create" || incoming.op === "pay.update" || incoming.op === "pay.delete";
   void import("./crm-alfa-link").then(({ wantAlfaPipe }) => {
     if (payOp && wantAlfaPipe("instantPay")) {
       void tickExportQueue(1, incoming.op, { lean: true });

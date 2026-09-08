@@ -94,8 +94,12 @@ export type CustomerPay = {
   cttId?: number;
   tariffId?: number;
   payItemId?: number;
+  payAccountId?: number;
+  locationId?: number;
+  managerId?: number;
   payMethod?: string;
   groupId?: number;
+  payerName?: string;
 };
 
 export type CustomerCard = {

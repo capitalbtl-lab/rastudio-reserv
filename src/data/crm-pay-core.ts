@@ -87,6 +87,7 @@ export type PayRow = {
   managerId?: number;
   payMethod?: string;
   groupId?: number;
+  payerName?: string;
   deleted?: boolean;
 };
 
@@ -236,6 +237,7 @@ export function mergePayInbound(pulled: PayRow[], prev: PayRow[] | undefined, ho
       managerId: Number(p.managerId || cur?.managerId) || undefined,
       groupId: Number(p.groupId || cur?.groupId) || undefined,
       payMethod: String(p.payMethod || cur?.payMethod || "") || undefined,
+      payerName: String(p.payerName || cur?.payerName || "") || undefined,
       deleted: Boolean(cur?.deleted || p.deleted) || undefined,
     });
   }

@@ -1,14 +1,35 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { adminSchedule } from "@/data/admin-schedule";
 import { CRM_BRANCH } from "@/data/ids";
 import { CARD_PAY_KINDS } from "@/data/crm-cards";
-import { ALFA_PAY_ITEMS, ALFA_PAY_METHODS } from "@/data/crm-pay-alfa";
+import {
+  ALFA_PAY_ACCOUNTS,
+  ALFA_PAY_ITEMS,
+  ALFA_PAY_MANAGERS,
+  ALFA_PAY_METHODS,
+  defaultPayItemId,
+  locationIdForBranch,
+  locationsOfBranch,
+  payItemGroups,
+} from "@/data/crm-pay-alfa";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { printCashDraft } from "@/components/crm-client-card";
+import { RaSelect } from "@/components/ra-select";
 import { CASH_PAGE_SIZES, payAccountLabel } from "@/data/crm-pay-core";
+import { ISO_DATE_MAX, ISO_DATE_MIN, RA_POP, clampIsoDate } from "@/data/admin-ui";
+
+function ruToIso(d: string) {
+  const s = String(d || "").trim();
+  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
 
 function token() {
   if (typeof document === "undefined") return "";
@@ -51,14 +72,61 @@ type CashRow = {
   at?: string;
   cttId?: number;
   payItemId?: number;
+  payAccountId?: number;
+  locationId?: number;
+  managerId?: number;
   payMethod?: string;
   groupId?: number;
+  payerName?: string;
   deleted?: boolean;
   name: string;
   parent: string;
   phone: string;
   branchName: string;
 };
+
+type CashEdit = {
+  id: number;
+  customerId: number;
+  branchId: number;
+  name: string;
+  parent: string;
+  kind: string;
+  sum: string;
+  date: string;
+  payAccountId: string;
+  payItemId: string;
+  locationId: string;
+  managerId: string;
+  cttId: string;
+  payer: string;
+  groupId: string;
+  note: string;
+  payMethod: string;
+};
+
+function editFromRow(p: CashRow): CashEdit {
+  const bid = Number(p.branchId) || 1;
+  return {
+    id: p.id,
+    customerId: p.customerId,
+    branchId: bid,
+    name: p.name,
+    parent: p.parent,
+    kind: p.kind || "income",
+    sum: String(p.kind === "refund" ? p.expenditure || "" : p.income || ""),
+    date: ruToIso(p.documentDate || ""),
+    payAccountId: String(p.payAccountId || 1),
+    payItemId: String(p.payItemId || defaultPayItemId(bid)),
+    locationId: String(p.locationId || locationIdForBranch(bid) || ""),
+    managerId: p.managerId ? String(p.managerId) : "",
+    cttId: p.cttId != null && Number(p.cttId) !== 0 ? String(p.cttId) : "-1",
+    payer: p.payerName || p.parent || "",
+    groupId: p.groupId ? String(p.groupId) : "",
+    note: p.note || "",
+    payMethod: p.payMethod || "",
+  };
+}
 
 type CashPoll = { lastNote?: string; hits?: number; max?: number; allowed?: boolean; fillDone?: boolean; fillNote?: string };
 
@@ -74,6 +142,7 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
   const [note, setNote] = useState("");
   const [take, setTake] = useState<(typeof CASH_PAGE_SIZES)[number]>(50);
   const [page, setPage] = useState(0);
+  const [edit, setEdit] = useState<CashEdit | null>(null);
 
   const load = useCallback(
     async (extra: { q?: string; branchId?: number; payKind?: string; includeDeleted?: boolean; take?: number; page?: number } = {}) => {
@@ -130,6 +199,76 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
   }
 
   const selectionSum = useMemo(() => items.reduce((n, p) => n + rowSum(p), 0), [items]);
+
+  async function pushPay(p: { id: number; customerId: number; branchId: number }) {
+    setBusy("push");
+    try {
+      const res = (await adminSchedule({
+        data: { token: token(), action: "customerPayPush", payId: p.id, id: p.id, customerId: p.customerId, branchId: p.branchId } as never,
+      })) as { ok?: boolean; error?: string };
+      setNote(res.ok ? `Платёж ${p.id} в очереди Alfa` : res.error || "Не ушло");
+      await load();
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : "Не ушло");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function saveEdit(andPush: boolean) {
+    if (!edit) return;
+    const sum = Number(String(edit.sum).replace(",", "."));
+    if (!sum) {
+      setNote("Укажите сумму.");
+      return;
+    }
+    if (!edit.payItemId) {
+      setNote("Укажите статью — Alfa без неё платёж не примет.");
+      return;
+    }
+    setBusy(andPush ? "push" : "save");
+    try {
+      const saved = (await adminSchedule({
+        data: {
+          token: token(),
+          action: "customerPay",
+          customerId: edit.customerId,
+          branchId: edit.branchId,
+          payId: edit.id,
+          payKind: edit.kind,
+          sum,
+          payAccountId: Number(edit.payAccountId) || 1,
+          payItemId: Number(edit.payItemId) || 0,
+          locationId: Number(edit.locationId) || 0,
+          managerId: Number(edit.managerId) || 0,
+          cttId: Number(edit.cttId) || -1,
+          payerName: edit.payer,
+          groupId: Number(edit.groupId) || 0,
+          note: edit.note,
+          payMethod: edit.payMethod,
+          documentDate: edit.date,
+        } as never,
+      })) as { ok?: boolean; error?: string };
+      if (!saved.ok) {
+        setNote(saved.error || "Не сохранилось");
+        return;
+      }
+      if (andPush) {
+        const sent = (await adminSchedule({
+          data: { token: token(), action: "customerPayPush", payId: edit.id, id: edit.id, customerId: edit.customerId, branchId: edit.branchId } as never,
+        })) as { ok?: boolean; error?: string };
+        setNote(sent.ok ? `Платёж ${edit.id} сохранён и в очереди Alfa` : sent.error || "Сохранено, в Alfa не ушло");
+      } else {
+        setNote(`Платёж ${edit.id} сохранён`);
+      }
+      setEdit(null);
+      await load();
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : "Не сохранилось");
+    } finally {
+      setBusy("");
+    }
+  }
 
   return (
     <div className="rounded-3xl bg-surface p-5 shadow-[var(--shadow-border)]" data-op="cash-tab">
@@ -351,6 +490,24 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
                     >
                       Печать
                     </button>
+                    <button
+                      type="button"
+                      data-op="pay-edit"
+                      className="ml-2 text-[0.72rem] font-semibold text-primary disabled:opacity-40"
+                      disabled={Boolean(busy) || p.deleted}
+                      onClick={() => setEdit(editFromRow(p))}
+                    >
+                      Изменить
+                    </button>
+                    <button
+                      type="button"
+                      data-op="cash-pay-push"
+                      className="ml-2 text-[0.72rem] font-semibold text-primary disabled:opacity-40"
+                      disabled={Boolean(busy) || p.deleted}
+                      onClick={() => void pushPay(p)}
+                    >
+                      В CRM
+                    </button>
                   </td>
                 </tr>
               );
@@ -360,6 +517,146 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
         {!items.length && busy !== "list" ? <p className="px-2 py-6 text-sm text-muted">На диске нет платежей в этой выборке.</p> : null}
         {busy === "list" ? <p className="px-2 py-3 text-sm text-muted">Читаю диск…</p> : null}
       </div>
+      {edit && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/50 p-3 backdrop-blur-[3px]" onClick={() => setEdit(null)} data-op="cash-pay-edit">
+              <div className={cn("flex max-h-[min(92vh,40rem)] w-full max-w-[28rem] flex-col overflow-hidden", RA_POP)} onClick={(e) => e.stopPropagation()}>
+                <header className="flex shrink-0 items-start justify-between gap-3 px-5 pb-2 pt-4">
+                  <div className="min-w-0">
+                    <h3 className="font-display text-[1.25rem] leading-tight">Править платёж · {edit.id}</h3>
+                    <p className="mt-0.5 text-[0.78rem] text-muted">
+                      {edit.name || `клиент ${edit.customerId}`}
+                      {edit.id < 0 ? " · ещё только на диске" : " · уже в Alfa"}
+                    </p>
+                  </div>
+                  <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full text-lg leading-none text-muted hover:bg-surface-2" onClick={() => setEdit(null)} aria-label="Закрыть">
+                    ×
+                  </button>
+                </header>
+                <div className="shrink-0 flex flex-wrap gap-0.5 px-5 pb-2">
+                  {CARD_PAY_KINDS.map((k) => (
+                    <button
+                      key={k.id}
+                      type="button"
+                      className={cn("rounded-lg px-2 py-1 text-[0.72rem] font-medium", edit.kind === k.id ? "bg-primary/10 text-primary" : "hover:bg-surface-2")}
+                      onClick={() => setEdit({ ...edit, kind: k.id })}
+                    >
+                      {k.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-4">
+                  <div className="grid grid-cols-1 items-center gap-x-3 gap-y-2 text-[0.78rem] sm:grid-cols-[7.5rem_minmax(0,1fr)]">
+                    <span className="text-muted">Тип и дата</span>
+                    <div className="flex min-w-0 gap-1">
+                      <span className="flex h-9 min-w-0 flex-1 items-center truncate rounded-lg bg-surface-2 px-2 text-muted">{kindName(edit.kind)}</span>
+                      <input
+                        type="date"
+                        value={edit.date}
+                        min={ISO_DATE_MIN}
+                        max={ISO_DATE_MAX}
+                        onChange={(e) => setEdit({ ...edit, date: clampIsoDate(e.target.value) })}
+                        className="h-9 w-[10.5rem] shrink-0 rounded-lg bg-surface-2 px-1.5 ring-1 ring-black/8"
+                      />
+                    </div>
+                    <span className="text-muted">Счёт</span>
+                    <div className="min-w-0">
+                      <RaSelect
+                        value={edit.payAccountId}
+                        onChange={(v) => setEdit({ ...edit, payAccountId: v })}
+                        options={ALFA_PAY_ACCOUNTS.map((x) => ({ value: String(x.id), label: x.name }))}
+                      />
+                    </div>
+                    <span className="text-muted">Статья</span>
+                    <div className="min-w-0">
+                      <RaSelect value={edit.payItemId} onChange={(v) => setEdit({ ...edit, payItemId: v })} groups={payItemGroups(edit.branchId)} placeholder="Статья дохода" />
+                    </div>
+                    <span className="text-muted">Локация</span>
+                    <div className="min-w-0">
+                      <RaSelect
+                        value={edit.locationId}
+                        onChange={(v) => setEdit({ ...edit, locationId: v })}
+                        options={[
+                          { value: "", label: "(не задано)" },
+                          ...locationsOfBranch(edit.branchId)
+                            .filter((x) => x.id > 0)
+                            .map((x) => ({ value: String(x.id), label: x.name })),
+                        ]}
+                      />
+                    </div>
+                    <span className="text-muted">Менеджер</span>
+                    <div className="min-w-0">
+                      <RaSelect
+                        value={edit.managerId}
+                        onChange={(v) => setEdit({ ...edit, managerId: v })}
+                        options={[{ value: "", label: "(не задано)" }, ...ALFA_PAY_MANAGERS.map((x) => ({ value: String(x.id), label: x.name }))]}
+                      />
+                    </div>
+                    <span className="text-muted">Клиентский счёт</span>
+                    <div className="min-w-0">
+                      <RaSelect
+                        value={edit.cttId}
+                        onChange={(v) => setEdit({ ...edit, cttId: v })}
+                        options={[
+                          { value: "-1", label: "Базовый счет" },
+                          ...(Number(edit.cttId) > 0 ? [{ value: edit.cttId, label: `Абонемент ${edit.cttId}` }] : []),
+                        ]}
+                      />
+                    </div>
+                    <span className="text-muted">Сумма</span>
+                    <input
+                      value={edit.sum}
+                      onChange={(e) => setEdit({ ...edit, sum: e.target.value })}
+                      placeholder="Например, 5000"
+                      className="h-9 min-w-0 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8"
+                    />
+                    <span className="text-muted">Плательщик</span>
+                    <input
+                      value={edit.payer}
+                      onChange={(e) => setEdit({ ...edit, payer: e.target.value })}
+                      placeholder="ФИО родителя"
+                      className="h-9 min-w-0 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8"
+                    />
+                    <span className="text-muted">Группа</span>
+                    <input
+                      value={edit.groupId}
+                      onChange={(e) => setEdit({ ...edit, groupId: e.target.value.replace(/\D/g, "") })}
+                      placeholder="id группы"
+                      className="h-9 min-w-0 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8"
+                    />
+                    <span className="text-muted">Комментарий</span>
+                    <input
+                      value={edit.note}
+                      onChange={(e) => setEdit({ ...edit, note: e.target.value })}
+                      placeholder="Оплата за обучение"
+                      className="h-9 min-w-0 rounded-lg bg-surface-2 px-2 ring-1 ring-black/8"
+                    />
+                    <span className="text-muted">Способ внесения</span>
+                    <div className="min-w-0">
+                      <RaSelect
+                        value={edit.payMethod}
+                        onChange={(v) => setEdit({ ...edit, payMethod: v })}
+                        options={ALFA_PAY_METHODS.map((x) => ({ value: x.id, label: x.name }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <footer className="flex shrink-0 justify-end gap-2 border-t border-black/8 px-5 py-3">
+                  <Button type="button" size="sm" className="h-9 px-4" variant="ghost" onClick={() => setEdit(null)}>
+                    Отмена
+                  </Button>
+                  <Button type="button" size="sm" className="h-9 px-4" variant="ghost" data-op="customerPayPush" disabled={Boolean(busy)} onClick={() => void saveEdit(true)}>
+                    {busy === "push" ? "Отправляю…" : "Отправить в CRM"}
+                  </Button>
+                  <Button type="button" size="sm" className="h-9 px-4" data-op="customerPay" disabled={Boolean(busy) || !edit.payItemId} onClick={() => void saveEdit(false)}>
+                    {busy === "save" ? "Сохраняю…" : "Сохранить"}
+                  </Button>
+                </footer>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

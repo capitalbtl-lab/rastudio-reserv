@@ -151,6 +151,8 @@ function extrasOf(row: Partial<PayRow>): Partial<PayRow> {
   if (gid) out.groupId = gid;
   const method = String(row.payMethod || "").trim();
   if (method) out.payMethod = method;
+  const payer = String(row.payerName || "").trim();
+  if (payer) out.payerName = payer.slice(0, 2000);
   if (row.deleted) out.deleted = true;
   return out;
 }
@@ -175,8 +177,12 @@ export function cardPays(customerId: number) {
       cttId: Number(x.cttId) || 0,
       tariffId: Number(x.tariffId) || 0,
       payItemId: Number(x.payItemId) || 0,
+      payAccountId: Number(x.payAccountId) || 0,
+      locationId: Number(x.locationId) || 0,
+      managerId: Number(x.managerId) || 0,
       payMethod: String(x.payMethod || ""),
       groupId: Number(x.groupId) || 0,
+      payerName: String(x.payerName || ""),
     }));
 }
 
@@ -319,8 +325,9 @@ export async function flushLocalPaysToAlfa() {
         payItemId: Number(row.payItemId) || 0,
         locationId: Number(row.locationId) || locationIdForBranch(Number(row.branchId) || 1),
         managerId: Number(row.managerId) || 0,
-        cttId: Number(row.cttId) || 0,
+        cttId: Number(row.cttId) || -1,
         groupId: Number(row.groupId) || 0,
+        payerName: String(row.payerName || ""),
         payMethod: String(row.payMethod || ""),
       }),
     });
@@ -369,6 +376,65 @@ export function applyCreatedPay(localId: number, crmId: number) {
     return { ...x, id: to };
   });
   if (n) save(store);
+}
+
+export function updatePay(payId: number, patch: Partial<PayRow> & { sum?: number }) {
+  const id = Number(payId) || 0;
+  if (!id) return { ok: false as const, error: "нет id платежа" };
+  const store = load();
+  const i = store.items.findIndex((x) => Number(x.id) === id);
+  if (i < 0) return { ok: false as const, error: "платёж не на диске" };
+  const prev = store.items[i];
+  const kind = payKindOf(patch.kind || prev.kind);
+  const sum = patch.sum != null ? Number(patch.sum) : NaN;
+  const fx = Number.isFinite(sum) && sum ? payEffect(kind, sum, 0) : null;
+  const next: PayRow = {
+    ...prev,
+    kind,
+    income: fx ? fx.income : patch.income != null ? Number(patch.income) || 0 : prev.income,
+    expenditure: fx ? fx.expenditure : patch.expenditure != null ? Number(patch.expenditure) || 0 : prev.expenditure,
+    note: patch.note != null ? String(patch.note) : prev.note,
+    documentDate: patch.documentDate != null ? String(patch.documentDate) : prev.documentDate,
+    ...extrasOf({ ...prev, ...patch, cttId: patch.cttId != null ? patch.cttId : prev.cttId }),
+  };
+  store.items[i] = next;
+  save(store);
+  return { ok: true as const, row: next };
+}
+
+export async function pushPayToAlfa(payId: number) {
+  const id = Number(payId) || 0;
+  const row = load().items.find((x) => Number(x.id) === id);
+  if (!row || row.deleted) return { ok: false as const, error: "нет платежа" };
+  if (Number(row.customerId) <= 0) return { ok: false as const, error: "нет клиента Alfa" };
+  const { packAlfaPayCreate, locationIdForBranch } = await import("./crm-pay-alfa");
+  const { enqueueExport } = await import("./crm-export-queue");
+  const local = isLocalId(row.id) || row.id < 0;
+  const body = packAlfaPayCreate({
+    customerId: Number(row.customerId),
+    branchId: Number(row.branchId) || 1,
+    documentDate: String(row.documentDate || ""),
+    income: Number(row.income) || 0,
+    expenditure: Number(row.expenditure) || 0,
+    note: String(row.note || ""),
+    localId: Number(row.id),
+    kind: row.kind,
+    payAccountId: Number(row.payAccountId) || 1,
+    payItemId: Number(row.payItemId) || 0,
+    locationId: Number(row.locationId) || locationIdForBranch(Number(row.branchId) || 1),
+    managerId: Number(row.managerId) || 0,
+    cttId: Number(row.cttId) || -1,
+    groupId: Number(row.groupId) || 0,
+    payerName: String(row.payerName || ""),
+    payMethod: String(row.payMethod || ""),
+  });
+  enqueueExport({
+    op: local ? "pay.create" : "pay.update",
+    branchId: Number(row.branchId) || 1,
+    entityId: local ? Number(row.customerId) : Number(row.id),
+    body: local ? body : { ...body, id: Number(row.id) },
+  });
+  return { ok: true as const, queued: true, local };
 }
 
 export function applyDeletedPay(payId: number) {

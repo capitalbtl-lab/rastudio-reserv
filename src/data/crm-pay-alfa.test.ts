@@ -71,6 +71,21 @@ describe("касса Alfa по филиалам", () => {
     });
     assert.equal(noItem.pay_item_id, 2);
     assert.equal(noItem.location_id, 1);
+    const basic = packAlfaPayCreate({
+      customerId: 670,
+      branchId: 1,
+      documentDate: "08.09.2026",
+      income: 1,
+      expenditure: 0,
+      note: "тест",
+      localId: -3,
+      kind: "income",
+      cttId: -1,
+      payerName: "Чуднова Ольга Сергеевна",
+    });
+    assert.equal(basic.ctt_id, -1);
+    assert.equal(basic.customer_id, 670);
+    assert.equal(basic.payer_name, "Чуднова Ольга Сергеевна");
     const withCtt = packAlfaPayCreate({
       customerId: 7759,
       branchId: 1,

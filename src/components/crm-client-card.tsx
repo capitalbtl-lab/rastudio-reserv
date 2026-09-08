@@ -109,6 +109,14 @@ function todayIso() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function ruToIso(d: string) {
+  const s = String(d || "").trim();
+  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return todayIso();
+}
+
 function addPeriod(iso: string, count: number, type: number) {
   if (!iso || !count) return "";
   const d = new Date(`${iso}T12:00:00`);
@@ -316,7 +324,7 @@ function lessonsForCard(
   return out.sort((a, b) => a.date.localeCompare(b.date) || String(a.from).localeCompare(String(b.from)));
 }
 
-export type CardAction = "customerSave" | "customerLesson" | "customerPay" | "customerTariff" | "customerGroup" | "customerPayDelete";
+export type CardAction = "customerSave" | "customerLesson" | "customerPay" | "customerTariff" | "customerGroup" | "customerPayDelete" | "customerPayPush";
 
 function LeadField({ label, area, span, children }: { label: string; area?: string; span?: boolean; children: ReactNode }) {
   return (
@@ -397,6 +405,7 @@ export function CrmClientCard({
   const [payGroupId, setPayGroupId] = useState("");
   const [payNote, setPayNote] = useState("");
   const [payMethod, setPayMethod] = useState("");
+  const [payEditId, setPayEditId] = useState(0);
   const [payBranch, setPayBranch] = useState(0);
   const [cashSize, setCashSize] = useState<(typeof CASH_PAGE_SIZES)[number]>(50);
   const [cashPage, setCashPage] = useState(0);
@@ -555,9 +564,8 @@ export function CrmClientCard({
   const archivedTariffs = (card.tariffs || []).filter((t) => t.archived && Number(t.id) > 0);
   useEffect(() => {
     if (payCttId) return;
-    const first = activeTariffs[0];
-    if (first?.id) setPayCttId(String(first.id));
-  }, [activeTariffs, payCttId]);
+    setPayCttId("-1");
+  }, [payCttId]);
   const cttName = (id?: number) => {
     const n = Number(id) || 0;
     const base = payAccountLabel(n);
@@ -772,6 +780,7 @@ export function CrmClientCard({
       setMsg("Сохранено.");
       setPayKind("");
       setPaySum("");
+      setPayEditId(0);
       setHeadMenu("");
       setLessonKey("");
       setLessonOpen(false);
@@ -804,15 +813,18 @@ export function CrmClientCard({
                     return;
                   }
                   const loc = locationIdForBranch(card.branchId);
+                  setPayEditId(0);
                   setPayLocationId(loc ? String(loc) : "");
                   setPayPayer(card.parent || "");
-                  const live = (card.tariffs || []).filter((t) => !t.archived);
-                  setPayCttId(live.length === 1 ? String(live[0].id) : live[0] ? String(live[0].id) : "");
-                  const gs = card.groups || [];
-                  setPayGroupId(gs.length === 1 ? String(gs[0].id) : "");
+                  setPayCttId("-1");
+                  setPayGroupId("");
                   setPayDate(todayIso());
                   setPayAccountId("1");
                   setPayItemId(String(defaultPayItemId(card.branchId)));
+                  setPaySum("");
+                  setPayNote("");
+                  setPayMethod("");
+                  setPayManagerId("");
                   setPayKind("income");
                   setHeadMenu("pay");
                 }}
@@ -1326,6 +1338,39 @@ export function CrmClientCard({
                             }
                           >
                             Печать
+                          </button>
+                          <button
+                            type="button"
+                            className="mr-1 text-[0.68rem] font-semibold text-primary"
+                            data-op="pay-edit"
+                            disabled={!onAction || Boolean(busy)}
+                            onClick={() => {
+                              setPayEditId(p.id);
+                              setPayKind((p.kind as "income" | "product" | "refund" | "correct") || "income");
+                              setPaySum(String(p.kind === "refund" ? p.expenditure || "" : p.income || ""));
+                              setPayDate(ruToIso(p.documentDate || ""));
+                              setPayAccountId(String(p.payAccountId || 1));
+                              setPayItemId(String(p.payItemId || defaultPayItemId(card.branchId)));
+                              setPayLocationId(String(p.locationId || locationIdForBranch(card.branchId) || ""));
+                              setPayManagerId(p.managerId ? String(p.managerId) : "");
+                              setPayCttId(p.cttId != null && Number(p.cttId) !== 0 ? String(p.cttId) : "-1");
+                              setPayPayer(p.payerName || card.parent || "");
+                              setPayGroupId(p.groupId ? String(p.groupId) : "");
+                              setPayNote(p.note || "");
+                              setPayMethod(p.payMethod || "");
+                              setHeadMenu("pay");
+                            }}
+                          >
+                            Изменить
+                          </button>
+                          <button
+                            type="button"
+                            className="mr-1 text-[0.68rem] font-semibold text-primary"
+                            data-op="pay-push"
+                            disabled={!onAction || Boolean(busy)}
+                            onClick={() => void run("customerPayPush", { payId: p.id, id: p.id })}
+                          >
+                            В CRM
                           </button>
                           <button
                             type="button"
@@ -2024,7 +2069,7 @@ export function CrmClientCard({
   const payDialog = headMenu === "pay" ? (
     <div
       className="fixed inset-0 z-[260] flex items-center justify-center bg-black/50 p-3 backdrop-blur-[3px]"
-      onClick={() => setHeadMenu("")}
+      onClick={() => { setHeadMenu(""); setPayEditId(0); }}
       data-op="pay-menu"
     >
       <div
@@ -2033,10 +2078,14 @@ export function CrmClientCard({
       >
         <header className="flex shrink-0 items-start justify-between gap-3 px-5 pb-2 pt-4">
           <div className="min-w-0">
-            <h3 className="font-display text-[1.25rem] leading-tight">{payKind ? `Добавить · ${payKindName(payKind)}` : "Добавить в кассу"}</h3>
-            <p className="mt-0.5 text-[0.78rem] text-muted">Остаток {money(card.balance)}</p>
+            <h3 className="font-display text-[1.25rem] leading-tight">
+              {payEditId ? `Править платёж · ${payEditId}` : payKind ? `Добавить · ${payKindName(payKind)}` : "Добавить в кассу"}
+            </h3>
+            <p className="mt-0.5 text-[0.78rem] text-muted">
+              {payEditId < 0 ? "Ещё только на диске — «В CRM» отправит в Alfa." : payEditId ? "Уже в Alfa — сохранение обновит запись." : `Остаток ${money(card.balance)}`}
+            </p>
           </div>
-          <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full text-lg leading-none text-muted hover:bg-surface-2" onClick={() => setHeadMenu("")} aria-label="Закрыть">
+          <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full text-lg leading-none text-muted hover:bg-surface-2" onClick={() => { setHeadMenu(""); setPayEditId(0); }} aria-label="Закрыть">
             ×
           </button>
         </header>
@@ -2111,7 +2160,7 @@ export function CrmClientCard({
                     {
                       label: "Действующие",
                       options: [
-                        { value: "-1", label: "Базовый счет 0,00" },
+                        { value: "-1", label: `Базовый счет ${money(card.balance)}` },
                         ...activeTariffs.map((t) => ({ value: String(t.id), label: cttSelectLabel(t) })),
                       ],
                     },
@@ -2184,24 +2233,55 @@ export function CrmClientCard({
         </div>
         {payKind ? (
           <footer className="flex shrink-0 justify-end gap-2 border-t border-black/8 px-5 py-3">
-            <Button type="button" size="sm" className="h-9 px-4" variant="ghost" onClick={() => setHeadMenu("")}>
+            <Button type="button" size="sm" className="h-9 px-4" variant="ghost" onClick={() => { setHeadMenu(""); setPayEditId(0); }}>
               Отмена
             </Button>
+            {payEditId ? (
+              <Button
+                type="button"
+                size="sm"
+                className="h-9 px-4"
+                variant="ghost"
+                data-op="customerPayPush"
+                disabled={Boolean(busy) || !payItemId}
+                onClick={() =>
+                  void run("customerPay", {
+                    payId: payEditId,
+                    payKind,
+                    sum: Number(String(paySum).replace(",", ".")),
+                    payAccountId: Number(payAccountId) || 1,
+                    payItemId: Number(payItemId) || 0,
+                    locationId: Number(payLocationId) || 0,
+                    managerId: Number(payManagerId) || 0,
+                    cttId: Number(payCttId) || -1,
+                    tariffId: Number((card.tariffs || []).find((t) => String(t.id) === payCttId)?.tariffId) || 0,
+                    payerName: payPayer,
+                    groupId: Number(payGroupId) || 0,
+                    note: payNote,
+                    payMethod,
+                    documentDate: payDate,
+                  })
+                }
+              >
+                {busy === "customerPay" ? "Отправляю…" : "Отправить в CRM"}
+              </Button>
+            ) : null}
             <Button
               type="button"
               size="sm"
               className="h-9 px-4"
               data-op="customerPay"
-              disabled={Boolean(busy)}
+              disabled={Boolean(busy) || !payItemId}
               onClick={() =>
                 void run("customerPay", {
+                  payId: payEditId || undefined,
                   payKind,
                   sum: Number(String(paySum).replace(",", ".")),
                   payAccountId: Number(payAccountId) || 1,
                   payItemId: Number(payItemId) || 0,
                   locationId: Number(payLocationId) || 0,
                   managerId: Number(payManagerId) || 0,
-                  cttId: Number(payCttId) || 0,
+                  cttId: Number(payCttId) || -1,
                   tariffId: Number((card.tariffs || []).find((t) => String(t.id) === payCttId)?.tariffId) || 0,
                   payerName: payPayer,
                   groupId: Number(payGroupId) || 0,
@@ -2211,7 +2291,7 @@ export function CrmClientCard({
                 })
               }
             >
-              {busy === "customerPay" ? "Сохраняю…" : "Сохранить"}
+              {busy === "customerPay" ? "Сохраняю…" : payEditId ? "Сохранить" : "Сохранить"}
             </Button>
           </footer>
         ) : null}
