@@ -31,7 +31,7 @@ import {
 import { loadSubjects, saveSubjects, pullSubjectsFromCrm, pushSubjectsToCrm, createLocalSubject } from "./crm-subjects";
 import { isLocalSubject } from "./crm-local-id";
 import type { GroupCalLesson } from "./crm-slots-core";
-import { beatsOf } from "./crm-slots-core";
+import { beatsOf, lessonRestLabel } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { loadGroupCard, saveGroupCard, nextLocalLessonId, upsertGroupCalendar, mergeLocalCalendar, upsertCustomerCalendar, collectCustomerJournal, fanOutLessonWriteoffs } from "./group-cards";
 import { stampJournal, clientLessonFromJournal } from "./crm-journal-core";
@@ -87,6 +87,7 @@ export type GroupMember = {
   to: string;
   archived: boolean;
   status: string;
+  rest?: string;
 };
 
 export type CustomerComm = {
@@ -323,6 +324,7 @@ function packPupilGroups(groups: import("./pupil-tariffs").PupilGroup[]) {
 async function membersFromDisk(branch: number, gid: number): Promise<{ active: GroupMember[]; archive: GroupMember[] }> {
   const { dossiersInGroup } = await import("./dossiers");
   const { personRole } = await import("./crm-person-role");
+  const { parseDossierCtt } = await import("./pupil-tariffs");
   const active: GroupMember[] = [];
   const archive: GroupMember[] = [];
   const seen = new Set<number>();
@@ -341,6 +343,7 @@ async function membersFromDisk(branch: number, gid: number): Promise<{ active: G
     const archived = hit?.active === false || role === "архив" || role === "удалён";
     const dob = String(d.child.dob || "");
     const phones = (d.phones || []).filter(Boolean);
+    const live = parseDossierCtt(d.extras).filter((t) => !t.archived);
     const row: GroupMember = {
       id,
       name: d.child.fio || "",
@@ -355,6 +358,7 @@ async function membersFromDisk(branch: number, gid: number): Promise<{ active: G
       to: "",
       archived,
       status: archived ? "архив" : role === "лид" ? "лид" : "учится",
+      rest: live[0] ? lessonRestLabel(live[0]) : "",
     };
     if (archived) archive.push(row);
     else active.push(row);
@@ -971,7 +975,12 @@ function packCrmLesson(
   const teacher = (item.teacher_ids || []).map((id) => ctx.teachers.get(Number(id)) || "").filter(Boolean).join(", ") || ctx.fallbackTeacher;
   const rec = item as Record<string, unknown>;
   const ids = (item.customer_ids || []).map(Number).filter((n) => n > 0);
-  const pupils = packLessonPupils(rec);
+  const pupils = packLessonPupils(rec).map((p) => {
+    if (p.name && !/^клиент\s+\d+$/i.test(p.name)) return p;
+    const d = findDossier({ crmId: p.customerId });
+    const name = String(d?.child?.fio || d?.parent?.fio || "").trim();
+    return name ? { ...p, name } : p;
+  });
   const fromDetails = pupils.filter((p) => p.attend).length;
   const total = pupils.length || (item.details || []).length || ids.length;
   return {

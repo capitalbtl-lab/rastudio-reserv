@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import type { GroupCalLesson } from "@/data/crm-slots-core";
-import type { LessonPupil } from "@/data/crm-slots-core";
+import type { GroupCalLesson, LessonRosterPerson } from "@/data/crm-slots-core";
+import { mergeLessonRoster, lessonRestLeft } from "@/data/crm-slots-core";
 import { adminSchedule } from "@/data/admin-schedule";
 import { RA_POP } from "@/data/admin-ui";
 import { RaSelect } from "@/components/ra-select";
@@ -55,17 +55,6 @@ function token() {
   if (typeof document === "undefined") return "";
   const m = document.cookie.match(/(?:^|;\s*)ra_admin=([^;]+)/);
   return m ? decodeURIComponent(m[1]) : localStorage.getItem("ra_admin") || "";
-}
-
-function ruMoney(n?: number) {
-  const v = Number(n) || 0;
-  if (!v) return "";
-  return v.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function pupilRows(l: GroupCalLesson): LessonPupil[] {
-  if (l.pupils?.length) return l.pupils;
-  return (l.customerIds || []).map((id) => ({ customerId: id, attend: true, amount: l.amount }));
 }
 
 function addMins(hhmm: string, mins: number) {
@@ -144,11 +133,13 @@ function LessonCard({
   group,
   subject,
   teacher,
+  people,
   pinned,
   busy,
   error,
   onClose,
   onOpen,
+  onOpenPupil,
   onConduct,
   onCancel,
   onReturn,
@@ -161,11 +152,13 @@ function LessonCard({
   group?: string;
   subject?: string;
   teacher?: string;
+  people?: LessonRosterPerson[];
   pinned?: boolean;
   busy?: boolean;
   error?: string;
   onClose?: () => void;
   onOpen?: () => void;
+  onOpenPupil?: (id: number) => void;
   onConduct?: () => void;
   onCancel?: () => void;
   onReturn?: () => void;
@@ -188,7 +181,7 @@ function LessonCard({
     ["Домашнее задание", l.homework || ""],
   ];
   if (done && (l.total || 0) > 0) rows.push(["Присутствие", `${l.attend || 0} из ${l.total}`]);
-  const roster = pupilRows(l);
+  const roster = mergeLessonRoster(l, people);
   const canAct = Boolean(onOpen);
   const btn = "h-8 rounded-lg bg-[#d8dce3] text-[0.75rem] font-semibold text-[#5c636c] disabled:opacity-45";
   return (
@@ -221,19 +214,32 @@ function LessonCard({
           ))}
       </dl>
       {roster.length ? (
-        <ol className="mt-2 max-h-56 space-y-0.5 overflow-y-auto border-t border-black/8 pt-2 text-[0.75rem]" data-op="lesson-pupils">
+        <ol className="pretty-scroll mt-2 max-h-64 space-y-0.5 overflow-y-auto border-t border-black/8 pt-2 text-[0.75rem]" data-op="lesson-pupils">
           {roster.map((p, i) => {
-            const sum = ruMoney(p.amount);
+            const name = p.name || `клиент ${p.customerId}`;
+            const left = lessonRestLeft(p.rest);
+            const tone = left == null ? "" : left > 0 ? "text-emerald-700" : "text-red-700";
             const line = (
-              <span className="flex min-w-0 items-center justify-between gap-2">
-                <span className={cn("min-w-0 truncate", p.attend ? "text-fg" : "text-muted")}>{p.name || `клиент ${p.customerId}`}</span>
-                {sum ? <span className="shrink-0 tabular-nums text-fg/80">{sum}</span> : null}
+              <span className={cn("flex min-w-0 items-center gap-1.5", p.attend ? tone || "text-fg" : "text-muted")}>
+                <span className="min-w-0 truncate">{name}</span>
+                {p.rest ? <span className="shrink-0 tabular-nums">({p.rest})</span> : null}
               </span>
             );
             return (
-              <li key={p.customerId || i} className="flex items-center gap-1.5">
+              <li key={p.customerId || i} className="flex min-w-0 items-center gap-1.5">
                 <span className="w-4 shrink-0 text-[0.68rem] text-muted">{i + 1}.</span>
-                {p.attend ? (
+                {onOpenPupil && p.customerId ? (
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 truncate text-left hover:underline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenPupil(p.customerId);
+                    }}
+                  >
+                    {p.attend ? line : <s className="text-muted">{line}</s>}
+                  </button>
+                ) : p.attend ? (
                   <span className="min-w-0 flex-1">{line}</span>
                 ) : (
                   <s className="min-w-0 flex-1 text-muted">{line}</s>
@@ -768,7 +774,9 @@ export function LessonStrip({
   className,
   branchId,
   groupId,
+  people,
   onLessons,
+  onOpenPupil,
 }: {
   lessons: GroupCalLesson[];
   group?: string;
@@ -778,7 +786,9 @@ export function LessonStrip({
   className?: string;
   branchId?: number;
   groupId?: number;
+  people?: LessonRosterPerson[];
   onLessons?: (next: GroupCalLesson[]) => void;
+  onOpenPupil?: (id: number) => void;
 }) {
   const today = todayYmd();
   const [range, setRange] = useState<(typeof RANGE_OPTS)[number]["id"]>("10");
@@ -945,6 +955,7 @@ export function LessonStrip({
                 group={group}
                 subject={subject}
                 teacher={teacher}
+                people={people}
                 pinned={Boolean(pin)}
                 busy={busy}
                 error={error}
@@ -953,6 +964,7 @@ export function LessonStrip({
                   setError("");
                 }}
                 onOpen={branchId ? () => { setEdit(pop.lesson); setPin(null); setTip(null); } : undefined}
+                onOpenPupil={onOpenPupil}
                 onConduct={() => void setStatus(3)}
                 onCancel={() => void setStatus(2)}
                 onReturn={() => void setStatus(1)}

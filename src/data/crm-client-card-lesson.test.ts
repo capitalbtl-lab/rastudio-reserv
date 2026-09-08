@@ -52,6 +52,8 @@ describe("форма занятия карточки", () => {
     assert.match(strip, /bg-amber-100/);
     assert.match(strip, /all.filter\(isOneOffLesson\)/);
     assert.match(strip, /data-op="lesson-pupils"/);
+    assert.match(strip, /mergeLessonRoster/);
+    assert.match(strip, /onOpenPupil/);
     assert.match(strip, /data-op="lesson-attend"/);
     assert.match(strip, /Списание/);
     assert.match(strip, /Кто был\?/);

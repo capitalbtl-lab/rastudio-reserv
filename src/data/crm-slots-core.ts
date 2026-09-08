@@ -99,6 +99,15 @@ export type LessonPupil = {
   grade?: string;
   homeworkGrade?: string;
   note?: string;
+  /** Остаток абонемента, как в Alfa: «0 / 8 ост». */
+  rest?: string;
+};
+
+export type LessonRosterPerson = {
+  id: number;
+  name?: string;
+  rest?: string;
+  status?: string;
 };
 
 export type GroupCalLesson = {
@@ -130,6 +139,66 @@ export type GroupCalLesson = {
 };
 
 export type SlotVersion = { at: string; reason: string; count: number; slots: CrmSlot[] };
+
+function pupilNameOk(name?: string) {
+  const s = String(name || "").trim();
+  return s && !/^клиент\s+\d+$/i.test(s) ? s : "";
+}
+
+/** Состав карточки занятия: все ученики группы + имена с диска. Лиды и архив — только если уже в уроке. */
+export function mergeLessonRoster(
+  lesson: { pupils?: LessonPupil[]; customerIds?: number[] },
+  people: LessonRosterPerson[] = [],
+): LessonPupil[] {
+  const fromLesson: LessonPupil[] = lesson.pupils?.length
+    ? lesson.pupils
+    : (lesson.customerIds || []).map((id) => ({ customerId: Number(id) || 0, attend: true }));
+  const byId = new Map<number, LessonPupil>();
+  for (const p of fromLesson) {
+    const id = Number(p.customerId) || 0;
+    if (!id) continue;
+    byId.set(id, { ...p, customerId: id });
+  }
+  for (const m of people) {
+    const id = Number(m.id) || 0;
+    if (!id) continue;
+    const skip = m.status === "архив" || m.status === "лид";
+    if (skip && !byId.has(id)) continue;
+    const prev = byId.get(id);
+    byId.set(id, {
+      customerId: id,
+      attend: prev?.attend ?? true,
+      amount: prev?.amount,
+      cttId: prev?.cttId,
+      reasonId: prev?.reasonId,
+      reason: prev?.reason,
+      grade: prev?.grade,
+      homeworkGrade: prev?.homeworkGrade,
+      note: prev?.note,
+      name: pupilNameOk(prev?.name) || String(m.name || "").trim() || prev?.name || "",
+      rest: prev?.rest || m.rest || "",
+    });
+  }
+  return [...byId.values()].sort(
+    (a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ru") || a.customerId - b.customerId,
+  );
+}
+
+/** Подпись остатка как в Alfa: «0 / 8 ост», «128 ост», «0 / 6 ост, 27.06». */
+export function lessonRestLabel(t?: { rest?: number; lessons?: number; eDate?: string } | null): string {
+  if (!t) return "";
+  const left = Number(t.rest) || 0;
+  const total = Number(t.lessons) || 0;
+  const till = String(t.eDate || "").replace(/^(\d{2})\.(\d{2})\.(\d{4})$/, "$1.$2");
+  const core = total > 0 && total !== left ? `${left} / ${total} ост` : `${left} ост`;
+  return till ? `${core}, ${till}` : core;
+}
+
+export function lessonRestLeft(raw?: string): number | null {
+  if (!raw) return null;
+  const m = String(raw).match(/-?\d+/);
+  return m ? Number(m[0]) : null;
+}
 
 export function validBeat(b?: LessonBeat | null): boolean {
   if (!b) return false;

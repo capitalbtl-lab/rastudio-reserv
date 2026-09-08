@@ -3779,7 +3779,12 @@ export function AdminSchedule() {
                         teacher={detail.slot.teacher}
                         branchId={detail.branchId}
                         groupId={detail.groupId}
+                        people={[...detail.members, ...detail.archive].map((m) => ({ id: m.id, name: m.name, rest: m.rest, status: m.status }))}
                         onLessons={(calendar) => setDetail((d) => (d ? { ...d, calendar } : d))}
+                        onOpenPupil={(id) => {
+                          const m = detail.members.find((x) => x.id === id) || detail.archive.find((x) => x.id === id);
+                          if (m) void openPupil(m, detail.branchId);
+                        }}
                       />
                       </div>
                     ) : null}
