@@ -111,7 +111,7 @@ describe("журнал денег", () => {
     assert.equal(displayedBalance(rows, "0", true), 1000);
   });
 
-  it("штамп: дата/id ≥, автоопрос 10/час", () => {
+  it("штамп: дата/id ≥, автоопрос 12/час", () => {
     const stamp = { lastId: 50, lastDate: "2026-09-07" };
     assert.equal(payAfterStamp({ id: 51, documentDate: "07.09.2026" }, stamp), true);
     assert.equal(payAfterStamp({ id: 50, documentDate: "07.09.2026" }, stamp), false);
@@ -121,7 +121,7 @@ describe("журнал денег", () => {
     assert.equal(next.lastDate, "2026-09-08");
     assert.equal(next.lastId, 3);
     const now = Date.parse("2026-09-07T12:00:00Z");
-    const hits = Array.from({ length: 10 }, (_, i) => new Date(now - i * 60_000).toISOString());
+    const hits = Array.from({ length: 12 }, (_, i) => new Date(now - i * 60_000).toISOString());
     assert.equal(payPollAllowed(hits, now), false);
     assert.equal(payPollAllowed(hits.slice(1), now), true);
     assert.equal(payPollHitsInWindow(["2026-09-07T10:00:00Z", "2026-09-07T11:50:00Z"], now).length, 1);
