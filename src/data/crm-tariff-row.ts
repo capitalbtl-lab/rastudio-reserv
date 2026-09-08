@@ -58,8 +58,40 @@ export function liveTariffCustomerIds(items: Record<string, unknown>[], today = 
   return ids;
 }
 
-export function cttSelectLabel(t: { name?: string; bDate?: string; rest?: number }) {
+/** Подпись счёта как в Alfa: имя / предмет / дд.мм.гг / остаток. */
+
+export function isGenericTariffName(raw?: string) {
+  const s = String(raw || "").trim();
+  if (!s) return true;
+  return /^абонемент(\s*[#№]?\s*\d+)?$/i.test(s);
+}
+
+export function alfaDateShort(raw?: string) {
+  const s = String(raw || "").trim();
+  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/);
+  if (ru) {
+    const y = ru[3].length === 4 ? ru[3].slice(-2) : ru[3].padStart(2, "0");
+    return `${ru[1].padStart(2, "0")}.${ru[2].padStart(2, "0")}.${y}`;
+  }
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}.${iso[2]}.${iso[1].slice(2)}`;
+  return s;
+}
+
+export function alfaSubjectShort(name?: string) {
+  const s = String(name || "").trim();
+  if (!s) return "";
+  return s.length > 12 ? s.slice(0, 12) : s;
+}
+
+export function cttSelectLabel(t: { name?: string; bDate?: string; rest?: number; subject?: string }) {
   const rest = Number(t.rest || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const date = String(t.bDate || "").trim();
-  return [t.name || "абонемент", date, rest].filter(Boolean).join(" / ");
+  const date = alfaDateShort(t.bDate);
+  const sub = alfaSubjectShort(t.subject);
+  const name = String(t.name || "абонемент").trim() || "абонемент";
+  const bits = [name];
+  if (sub && !name.toLowerCase().includes(sub.slice(0, 8).toLowerCase())) bits.push(sub);
+  if (date) bits.push(date);
+  bits.push(rest);
+  return bits.join(" / ");
 }

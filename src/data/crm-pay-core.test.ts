@@ -163,12 +163,12 @@ describe("журнал денег", () => {
     assert.equal(ruDateIso("07.09.2026"), "2026-09-07");
   });
 
-  it("базовый счет без абонемента, раздельный — с абонементом; страницы 50/100/500", () => {
+  it("базовый счет без абонемента, раздельный — с абонементом; страницы 3/50/100/500", () => {
     assert.equal(payAccountLabel(undefined), "Базовый счет");
     assert.equal(payAccountLabel(0), "Базовый счет");
     assert.equal(payAccountLabel(-1), "Базовый счет");
     assert.equal(payAccountLabel(192), "Раздельный счет");
-    assert.deepEqual([...CASH_PAGE_SIZES], [50, 100, 500]);
+    assert.deepEqual([...CASH_PAGE_SIZES], [3, 50, 100, 500]);
     const rows = Array.from({ length: 120 }, (_, i) => i);
     const a = cashPageSlice(rows, 0, 50);
     assert.equal(a.items.length, 50);
@@ -178,9 +178,13 @@ describe("журнал денег", () => {
     assert.deepEqual(b.items[0], 100);
     const c = cashPageSlice(rows, 0, 999);
     assert.equal(c.size, 50);
+    assert.equal(cashTakeOf(3), 3);
     assert.equal(cashTakeOf(100), 100);
     assert.equal(cashTakeOf(500), 500);
     assert.equal(cashTakeOf(25), 50);
+    const three = cashPageSlice(rows, 0, 3);
+    assert.equal(three.items.length, 3);
+    assert.equal(three.pages, 40);
   });
 
   it("курсор истории кассы: порции по филиалам, короткая страница — следующий", () => {

@@ -23,7 +23,7 @@ import { AdminTariffs } from "@/components/admin-tariffs";
 import { LessonStrip, toYmd } from "@/components/lesson-strip";
 import { RaSelect } from "@/components/ra-select";
 import { SCHOOLS } from "@/data/site";
-import { cttSelectLabel } from "@/data/crm-tariff-row";
+import { cttSelectLabel, alfaDateShort } from "@/data/crm-tariff-row";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
 import { commChannelLabel } from "@/data/crm-comms-core";
 import {
@@ -411,8 +411,9 @@ export function CrmClientCard({
   const [payMethod, setPayMethod] = useState("");
   const [payEditId, setPayEditId] = useState(0);
   const [payBranch, setPayBranch] = useState(0);
-  const [cashSize, setCashSize] = useState<(typeof CASH_PAGE_SIZES)[number]>(50);
+  const [cashSize, setCashSize] = useState<(typeof CASH_PAGE_SIZES)[number]>(3);
   const [cashPage, setCashPage] = useState(0);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [dropPay, setDropPay] = useState<{ id: number; label: string } | null>(null);
   const [headMenu, setHeadMenu] = useState<"" | "pay" | "lesson">("");
   const headLeave = useRef(0);
@@ -581,13 +582,17 @@ export function CrmClientCard({
     const wo = writeoffSumForCtt(writeOffs, Number(t.id) || 0);
     return {
       wo,
-      rest: ledgerMoney({ paySum: Number(t.paySum) || 0, writeoffSum: wo, snap: t.rest }),
+      rest: ledgerMoney({ paySum: Number(t.paySum) || 0, writeoffSum: wo, snap: t.rest, complete: card.paysComplete }),
     };
   };
   const journalPays = useMemo(() => {
     const list = card.pays || [];
-    if (!payBranch) return list;
-    return list.filter((p) => Number(p.branchId || card.branchId) === payBranch);
+    const filtered = !payBranch ? list : list.filter((p) => Number(p.branchId || card.branchId) === payBranch);
+    return filtered.slice().sort((a, b) => {
+      const da = ruToIso(a.documentDate || "");
+      const db = ruToIso(b.documentDate || "");
+      return db.localeCompare(da) || (Number(b.id) || 0) - (Number(a.id) || 0);
+    });
   }, [card.pays, card.branchId, payBranch]);
   const cashView = useMemo(() => cashPageSlice(journalPays, cashPage, cashSize), [journalPays, cashPage, cashSize]);
   const journalBranches = useMemo(() => {
@@ -896,7 +901,7 @@ export function CrmClientCard({
   );
 
   const statusChips = (
-            <div className={cn("flex min-w-0 items-center gap-1.5", compact ? "flex-1 flex-nowrap overflow-hidden" : "flex-wrap pb-1")}>
+            <div className={cn("flex min-w-0 items-center gap-1.5", compact ? "flex-wrap" : "flex-wrap pb-0")}>
             <button
               type="button"
               data-op="set-client-status"
@@ -942,73 +947,24 @@ export function CrmClientCard({
   const payN = (card.pays || []).length;
   const planN = Number(card.lessonsPlan) || 0;
   const factN = Number(card.lessonsFact) || 0;
+  const restLine = [
+    `${card.lessonsLeft || 0} ур.`,
+    payN ? `${payN} шт` : "нет платежей",
+    planN || factN ? `п ${planN} / ф ${factN}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const balanceBox = (
-          <div className={cn("shrink-0 text-right", compact ? "pl-1.5" : "pb-0.5 pr-1")} data-op="account-rest">
-            <p className={cn("font-semibold uppercase tracking-wider text-muted", compact ? "text-[0.55rem]" : "text-[0.62rem]")}>Общий остаток</p>
-            <p className={cn("font-display leading-none tabular-nums tracking-tight", compact ? "text-[1.2rem]" : "text-[2.15rem]", Number(card.balance) ? "" : "text-rose-700")}>{money(card.balance)}</p>
-            <p className={cn("mt-0.5 text-muted", compact ? "text-[0.6rem]" : "text-[0.68rem]")}>
-              {card.lessonsLeft || 0} ур.{card.paidTill ? ` · до ${card.paidTill}` : ""}
-            </p>
-            <p className={cn("text-muted", compact ? "text-[0.58rem]" : "text-[0.65rem]")}>
-              {payN ? `${payN} шт` : "нет платежей"}
-              {planN || factN ? ` · п ${planN} / ф ${factN}` : ""}
-            </p>
+          <div className={cn("shrink-0", compact ? "" : "text-right")} data-op="account-rest">
+            <div className={cn("flex items-baseline gap-2", compact ? "" : "justify-end")}>
+              <p className={cn("font-semibold uppercase tracking-wider text-muted", compact ? "text-[0.55rem]" : "text-[0.62rem]")}>Общий остаток</p>
+              <p className={cn("font-display leading-none tabular-nums tracking-tight", compact ? "text-[1.35rem]" : "text-[1.85rem]", Number(card.balance) ? "" : "text-rose-700")}>{money(card.balance)}</p>
+            </div>
+            <p className={cn("mt-0.5 text-muted", compact ? "text-[0.6rem]" : "text-[0.68rem]")}>{restLine}</p>
           </div>
   );
 
-  const article = (
-    <article
-      ref={articleRef}
-      className={cn(
-        "relative flex flex-col overflow-hidden",
-        variant === "overlay"
-          ? "max-h-[min(92vh,960px)] w-full max-w-4xl rounded-[1.4rem] shadow-[0_22px_60px_rgba(15,23,42,0.28)]"
-          : "h-full min-h-0 w-full rounded-[1.2rem] shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]",
-      )}
-      style={{ background: ADMIN_PANEL_BLUE, containerType: "inline-size" }}
-      onClick={variant === "overlay" ? (e) => e.stopPropagation() : undefined}
-      data-card-id={cardKey}
-      data-customer-id={id || undefined}
-      data-layout={layout}
-      data-card-w={cardW || undefined}
-      data-is-study={card.isStudy ?? (card.status === "учится" ? 1 : card.status === "архив" ? 2 : 0)}
-      data-balance={card.balance ?? 0}
-    >
-      {compact ? (
-      <header className="flex shrink-0 flex-col gap-2 px-3.5 pt-3.5">
-        {headBtns}
-        <div className="min-w-0">
-          <h4 className="font-display text-[1.22rem] leading-[1.2] break-words">{title || (loading ? "Загружаю…" : "Без имени")}</h4>
-          {metaLine ? <p className="mt-0.5 truncate whitespace-nowrap text-[0.75rem] text-muted">{metaLine}</p> : null}
-        </div>
-        <div className="flex items-center gap-2">
-          {statusChips}
-          {balanceBox}
-        </div>
-      </header>
-      ) : (
-      <header className="flex shrink-0 flex-col gap-3 px-4 pt-4 md:px-5">
-        <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-sm font-semibold text-primary ring-1 ring-black/6">
-            {initialsOf(title)}
-          </span>
-          <div className="min-w-0">
-            <h4 className="font-display text-[1.35rem] leading-tight">{title || (loading ? "Загружаю…" : "Без имени")}</h4>
-            <p className="mt-1 truncate whitespace-nowrap text-[0.78rem] text-muted">{metaLine}</p>
-          </div>
-        </div>
-        {headBtns}
-        </div>
-        <div className="flex items-end justify-between gap-3">
-          {statusChips}
-          {balanceBox}
-        </div>
-      </header>
-      )}
-
-      <div className="pretty-scroll mt-3 min-h-0 flex-1 overflow-y-auto px-4 pb-5 md:px-5">
-        {clientLayout ? (
+  const contactsRow = clientLayout ? (
           <div className="grid grid-cols-5 gap-x-3 gap-y-1">
             {["Ребёнок", "Заказчик", "Телефон", "Почта", "Заметка"].map((cap) => (
               <span key={cap} className="min-w-0 truncate text-[0.68rem] font-semibold uppercase tracking-wide text-muted">
@@ -1044,10 +1000,77 @@ export function CrmClientCard({
               <input value={note} onChange={(e) => setNote(e.target.value)} className="h-9 w-full min-w-0 rounded-lg bg-white px-2.5 text-sm text-fg ring-1 ring-black/8" />
             </label>
           </div>
-        )}
-        {card.dob ? <p className="mt-2 text-[0.78rem] text-muted">Дата рождения {card.dob}{card.age ? ` · ${card.age}` : ""}</p> : null}
+        );
 
-        <div className={cn("mt-4 grid gap-3", !compact && "sm:grid-cols-2")}>
+  const article = (
+    <article
+      ref={articleRef}
+      className={cn(
+        "relative flex flex-col overflow-hidden",
+        variant === "overlay"
+          ? "max-h-[min(92vh,960px)] w-full max-w-4xl rounded-[1.4rem] shadow-[0_22px_60px_rgba(15,23,42,0.28)]"
+          : "h-full min-h-0 w-full rounded-[1.2rem] shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]",
+      )}
+      style={{ background: ADMIN_PANEL_BLUE, containerType: "inline-size" }}
+      onClick={variant === "overlay" ? (e) => e.stopPropagation() : undefined}
+      data-card-id={cardKey}
+      data-customer-id={id || undefined}
+      data-layout={layout}
+      data-card-w={cardW || undefined}
+      data-is-study={card.isStudy ?? (card.status === "учится" ? 1 : card.status === "архив" ? 2 : 0)}
+      data-balance={card.balance ?? 0}
+    >
+      {compact ? (
+      <header className="flex shrink-0 flex-col gap-1.5 px-3.5 pt-3.5">
+        {headBtns}
+        <div className="min-w-0">
+          <h4 className="font-display text-[1.22rem] leading-[1.2] break-words">{title || (loading ? "Загружаю…" : "Без имени")}</h4>
+          {metaLine ? <p className="mt-0.5 truncate whitespace-nowrap text-[0.75rem] text-muted">{metaLine}</p> : null}
+        </div>
+        {statusChips}
+        {balanceBox}
+      </header>
+      ) : (
+      <header className="flex shrink-0 flex-col gap-2 px-4 pt-4 md:px-5">
+        <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-sm font-semibold text-primary ring-1 ring-black/6">
+            {initialsOf(title)}
+          </span>
+          <div className="min-w-0">
+            <h4 className="font-display text-[1.35rem] leading-tight">{title || (loading ? "Загружаю…" : "Без имени")}</h4>
+            <p className="mt-1 truncate whitespace-nowrap text-[0.78rem] text-muted">{metaLine}</p>
+            <div className="mt-1.5">{statusChips}</div>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          {headBtns}
+          {balanceBox}
+        </div>
+        </div>
+        <div className="mt-1">{contactsRow}</div>
+        {card.dob ? <p className="text-[0.78rem] text-muted">Дата рождения {card.dob}{card.age ? ` · ${card.age}` : ""}</p> : null}
+      </header>
+      )}
+
+      <div className={cn("pretty-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-5 md:px-5", compact ? "mt-3" : "mt-2")}>
+        {compact ? (
+          <>
+            {contactsRow}
+            {card.dob ? <p className="mt-2 text-[0.78rem] text-muted">Дата рождения {card.dob}{card.age ? ` · ${card.age}` : ""}</p> : null}
+          </>
+        ) : null}
+
+        <div className="mt-3 rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-black/6" data-op="card-schedule">
+          <LessonStrip
+            lessons={tiles}
+            title="Расписание"
+            branchId={card.branchId}
+            groupId={(card.groups || []).find((g) => g.active !== false)?.id || (card.groups || [])[0]?.id}
+          />
+        </div>
+
+        <div className={cn("mt-3 grid gap-3", !compact && "sm:grid-cols-2")}>
           <div className="min-w-0 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="active-group">
             <div className={cn(compact ? "flex flex-col items-start gap-2" : "flex items-center gap-2")}>
               <p className="min-w-0 flex-1 truncate text-[0.68rem] font-semibold uppercase tracking-wider text-muted">Действующая группа</p>
@@ -1179,17 +1202,38 @@ export function CrmClientCard({
             )}
             {archivedTariffs.length ? (
               <div className="mt-3 border-t border-black/8 pt-2" data-op="archived-tariffs">
-                <p className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted">Архивные</p>
+                <button
+                  type="button"
+                  data-op="archive-toggle"
+                  onClick={() => setArchiveOpen((v) => !v)}
+                  className="rounded-full bg-white px-2.5 py-1 text-[0.72rem] font-semibold text-fg ring-1 ring-black/8 hover:bg-black/[0.04]"
+                >
+                  {archiveOpen ? "Скрыть" : "Раскрыть"}
+                  <span className="ml-1.5 font-medium text-muted">архивные {archivedTariffs.length}</span>
+                </button>
+                {archiveOpen ? (
                 <ul className="mt-1.5 space-y-1">
-                  {archivedTariffs.map((t) => (
+                  {archivedTariffs.map((t) => {
+                    const rest = accountRest(t);
+                    return (
                     <li key={t.id} className="rounded-xl bg-white/70 px-3 py-1.5 text-[0.75rem] text-muted ring-1 ring-black/6">
                       <span className="font-semibold text-fg/80">{t.name}</span>
                       <span className="mt-0.5 block">
-                        {[cttSelectLabel(t), t.payCount ? `${t.payCount} платежей` : "", `остаток ${money(accountRest(t).rest)}`, accountRest(t).wo ? `списано ${money(accountRest(t).wo)}` : ""].filter(Boolean).join(" · ")}
+                        {[
+                          alfaDateShort(t.bDate || t.eDate),
+                          money(rest.rest),
+                          `${t.lessons || 0} ур.`,
+                          t.payCount ? `${t.payCount} платежей` : "",
+                          rest.wo ? `списано ${money(rest.wo)}` : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </span>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -1200,15 +1244,6 @@ export function CrmClientCard({
             {card.crmPush}
           </p>
         ) : null}
-
-        <div className="mt-4 rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-black/6">
-          <LessonStrip
-            lessons={tiles}
-            title="Ближайшие занятия"
-            branchId={card.branchId}
-            groupId={(card.groups || []).find((g) => g.active !== false)?.id || (card.groups || [])[0]?.id}
-          />
-        </div>
 
         <div className="mt-4 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="lesson-writeoffs">
           <p className="font-display text-lg">Списания занятий</p>
@@ -1320,32 +1355,11 @@ export function CrmClientCard({
                         <td className="max-w-[10rem] truncate px-1 py-1" title={cttName(p.cttId)}>{cttName(p.cttId)}</td>
                         <td className="max-w-[8rem] truncate px-1 py-1" title={p.note}>{p.note || "—"}</td>
                         <td className="px-1 py-1 tabular-nums text-muted">{p.id}</td>
-                        <td className="px-1 py-1 whitespace-nowrap">
+                        <td className="px-1 py-1">
+                          <div className="flex flex-wrap gap-1">
                           <button
                             type="button"
-                            className="mr-1 text-[0.68rem] font-semibold text-primary"
-                            data-op="pay-print"
-                            onClick={() =>
-                              printCashDraft({
-                                name: card.name,
-                                parent: card.parent,
-                                date: p.documentDate,
-                                kind: payKindName(p.kind),
-                                sum: money(sum),
-                                article: payItemName(p.payItemId),
-                                method: payMethodName(p.payMethod),
-                                cttId: p.cttId,
-                                note: p.note,
-                                id: p.id,
-                                branch: CRM_BRANCH[bid]?.short || String(bid),
-                              })
-                            }
-                          >
-                            Печать
-                          </button>
-                          <button
-                            type="button"
-                            className="mr-1 text-[0.68rem] font-semibold text-primary"
+                            className="h-6 shrink-0 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold leading-none text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
                             data-op="pay-edit"
                             disabled={!onAction || Boolean(busy)}
                             onClick={() => {
@@ -1369,22 +1383,23 @@ export function CrmClientCard({
                           </button>
                           <button
                             type="button"
-                            className="mr-1 text-[0.68rem] font-semibold text-primary"
+                            className="h-6 shrink-0 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold leading-none text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
                             data-op="pay-push"
                             disabled={!onAction || Boolean(busy)}
                             onClick={() => void run("customerPayPush", { payId: p.id, id: p.id })}
                           >
-                            В CRM
+                            Экспорт в CRM
                           </button>
                           <button
                             type="button"
                             data-op="pay-delete"
                             disabled={!onAction || Boolean(busy)}
-                            className="text-[0.68rem] font-semibold text-rose-600 disabled:opacity-40"
+                            className="h-6 shrink-0 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold leading-none text-rose-600 ring-1 ring-black/10 hover:bg-rose-50 disabled:opacity-40"
                             onClick={() => setDropPay({ id: p.id, label: `${p.documentDate || ""} ${money(sum)}` })}
                           >
                             Удалить
                           </button>
+                          </div>
                         </td>
                       </tr>
                     );

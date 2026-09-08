@@ -198,9 +198,9 @@ export function ledgerMoney(opts: { paySum: number; writeoffSum: number; snap?: 
   const pay = Number(opts.paySum) || 0;
   const wo = Number(opts.writeoffSum) || 0;
   const snap = opts.snap == null ? Number.NaN : Number(opts.snap);
-  if (wo > 0) return pay - wo;
+  if (opts.complete) return pay - wo;
   if (Number.isFinite(snap)) return snap;
-  return pay;
+  return pay - wo;
 }
 
 export function uniqueBranches(primary?: number) {

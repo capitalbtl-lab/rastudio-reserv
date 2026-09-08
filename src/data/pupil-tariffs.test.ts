@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, stampLiveTariff, changeListRows, batchesOfThree, keepByLiveTariff, alfaCalculationType, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, withCatalogCtt, isGenericTariffName, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, stampLiveTariff, changeListRows, batchesOfThree, keepByLiveTariff, alfaCalculationType, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 import type { CrmTariff } from "./crm-tariffs.ts";
@@ -436,8 +436,16 @@ describe("мастер абонементов учеников", () => {
   });
 
   it("имя абонемента берётся из каталога, повтор схлопывается", () => {
+    assert.equal(isGenericTariffName("абонемент #192"), true);
+    assert.equal(isGenericTariffName("абонемент#192"), true);
+    assert.equal(isGenericTariffName("Индивидуальный абонемент"), false);
     assert.equal(customerTariffLabel({ tariff_id: 386 }, [{ id: 386, name: "Абонемент 3850/4/90" }]), "Абонемент 3850/4/90");
     assert.equal(customerTariffLabel({ tariff_id: 9 }), "абонемент #9");
+    assert.equal(
+      customerTariffLabel({ tariff_id: 192, name: "абонемент #192" }, [{ id: 192, name: "Индивидуальный абонемент" }]),
+      "Индивидуальный абонемент",
+    );
+    assert.equal(withCatalogCtt([{ name: "абонемент #192", tariffId: 192 }], [{ id: 192, name: "Индивидуальный абонемент" }])[0].name, "Индивидуальный абонемент");
     const named = withCatalogNames(
       [
         { id: 1, tariffId: 386, name: "абонемент" },

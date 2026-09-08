@@ -58,6 +58,7 @@ export type ClientTariff = {
   paySum?: number;
   payCount?: number;
   basic?: boolean;
+  subject?: string;
 };
 
 export type GroupMember = {

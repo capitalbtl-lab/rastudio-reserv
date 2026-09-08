@@ -12,7 +12,7 @@ import { customerBalance, cardPays, isPayJournalComplete } from "./crm-pay";
 import { accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt } from "./crm-pay-core";
 import { asCustomerComm, commsOf } from "./crm-comms";
 import { loadTariffs } from "./crm-tariffs";
-import { isPaidCountLabel, parseDossierCtt } from "./pupil-tariffs";
+import { isPaidCountLabel, parseDossierCtt, withCatalogCtt } from "./pupil-tariffs";
 import { parseDossierRegular, regularBelongsToGroups } from "./crm-regular-core";
 import { roomsCatalog } from "./crm-rooms";
 import { loadRooms } from "./crm-rooms-disk";
@@ -170,7 +170,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   const cat = catalogBase();
   const catalogGroups = cat.groups.slice().sort((a, b) => Number(b.branchId === useBranch) - Number(a.branchId === useBranch) || a.name.localeCompare(b.name, "ru"));
   const catalogTariffs = loadTariffs().items;
-  let tariffs = parseDossierCtt(d.extras);
+  let tariffs = withCatalogCtt(parseDossierCtt(d.extras), catalogTariffs, cat.subjects);
   if (!tariffs.length && String(d.extras?.live_tariff) === "1") {
     const tariffId = Number(d.extras?.tariff_id || 0);
     const fromCat = catalogTariffs.find((t) => t.id === tariffId);

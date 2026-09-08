@@ -696,6 +696,7 @@ export function stampDossierCtt(
     bDate?: string;
     eDate?: string;
     price?: number;
+    subject?: string;
   }[],
   branchId?: number,
 ) {

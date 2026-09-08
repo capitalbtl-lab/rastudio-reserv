@@ -23,6 +23,11 @@ describe("журнал оплат и списаний", () => {
     assert.equal(ledgerMoney({ paySum: 1075, writeoffSum: 0, snap: 1000, complete: false }), 1000);
   });
 
+  it("неполный журнал со списаниями не перебивает снимок Alfa", () => {
+    assert.equal(ledgerMoney({ paySum: 50000, writeoffSum: 777, snap: 47504, complete: false }), 47504);
+    assert.equal(ledgerMoney({ paySum: 50000, writeoffSum: 777, snap: 47504, complete: true }), 49223);
+  });
+
   it("снимок 0 — остаток 0, даже если оплаты есть, а списаний ещё нет", () => {
     assert.equal(ledgerMoney({ paySum: 152475, writeoffSum: 0, snap: 0 }), 0);
     assert.equal(ledgerMoney({ paySum: 152475, writeoffSum: 0 }), 152475);

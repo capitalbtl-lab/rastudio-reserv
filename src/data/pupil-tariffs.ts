@@ -3,11 +3,11 @@ import type { CrmTariff } from "./crm-tariffs";
 import { matchTariffs, tariffFitsSlot } from "./crm-tariffs";
 import { guessTariffLinks } from "./tariff-map";
 import { UNMAPPED_SCHOOL } from "./group-status";
-import { tariffRowLive, tariffRowCustomerId, tariffTodayIso } from "./crm-tariff-row";
+import { tariffRowLive, tariffRowCustomerId, tariffTodayIso, isGenericTariffName } from "./crm-tariff-row";
 import { cgiRecordLive } from "./crm-membership";
 
 export { cgiCustomerId, cgiRecordLive } from "./crm-membership";
-export { tariffDateToIso, tariffRowLive, tariffRowHasTemplate, tariffRowCustomerId, cttSelectLabel } from "./crm-tariff-row";
+export { tariffDateToIso, tariffRowLive, tariffRowHasTemplate, tariffRowCustomerId, cttSelectLabel, isGenericTariffName } from "./crm-tariff-row";
 
 export type PupilGroup = {
   key: string;
@@ -293,7 +293,7 @@ export function customerTariffDeletePath(branch: number, tariffRowId: number, cu
   return `/v2api/${Number(branch) || 1}/customer-tariff/delete?id=${Number(tariffRowId) || 0}&customer_id=${Number(customerId) || 0}`;
 }
 
-export type CatalogTariff = { id: number; name: string; archive?: boolean; price?: number };
+export type CatalogTariff = { id: number; name: string; archive?: boolean; price?: number; subjectIds?: number[] };
 
 /** Живая строка — tariffRowLive. Каталог не участвует. */
 export function customerTariffLive(it: Record<string, unknown>, _catalog?: CatalogTariff[], today = tariffTodayIso()) {
@@ -319,7 +319,7 @@ export function preferCurrentTariffs(
 export function customerTariffLabel(it: Record<string, unknown>, catalog?: CatalogTariff[]) {
   const tariffId = Number(it.tariff_id || it.tariffId || 0);
   const raw = String(it.tariff_name || it.tariffName || it.name || it.title || "").trim();
-  if (raw && !/^абонемент(#\s*\d+)?$/i.test(raw) && !/занятий по абонементу|оплачено до/i.test(raw)) return raw;
+  if (raw && !isGenericTariffName(raw) && !/занятий по абонементу|оплачено до/i.test(raw)) return raw;
   const live = catalog?.find((t) => t.id === tariffId && !t.archive);
   if (live?.name) return live.name;
   const any = catalog?.find((t) => t.id === tariffId);
@@ -337,7 +337,7 @@ export function withCatalogNames(
     if (live?.name) return { ...t, name: live.name };
     const any = catalog.find((c) => c.id === t.tariffId);
     if (any?.name) return { ...t, name: any.name };
-    if (t.name && !/^абонемент(#\s*\d+)?$/i.test(t.name)) return t;
+    if (t.name && !isGenericTariffName(t.name)) return t;
     return { ...t, name: t.tariffId ? `абонемент #${t.tariffId}` : "абонемент" };
   });
 }
@@ -592,8 +592,44 @@ export function todayIso() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Moscow" });
 }
 
-export function packCardTariff(it: Record<string, unknown>, catalog?: CatalogTariff[]) {
+export function customerTariffSubject(it: Record<string, unknown>) {
+  const nested = it.subject && typeof it.subject === "object" ? String((it.subject as { name?: unknown }).name || "").trim() : "";
+  if (nested) return nested;
+  const nestedTariff =
+    it.tariff && typeof it.tariff === "object" ? (it.tariff as { subject?: unknown; subject_name?: unknown }) : null;
+  const fromTariff = String(nestedTariff?.subject_name || (nestedTariff?.subject && typeof nestedTariff.subject === "object" ? (nestedTariff.subject as { name?: unknown }).name : "") || "").trim();
+  if (fromTariff) return fromTariff;
+  const list = Array.isArray(it.subjects) ? it.subjects : [];
+  for (const x of list) {
+    if (x && typeof x === "object") {
+      const n = String((x as { name?: unknown }).name || "").trim();
+      if (n) return n;
+    }
+  }
+  return String(it.subject_name || it.subjectName || "").trim();
+}
+
+export function withCatalogCtt<T extends { name: string; tariffId?: number; subject?: string }>(
+  rows: T[],
+  catalog?: CatalogTariff[],
+  subjects?: { id: number; name: string }[],
+): T[] {
+  return rows.map((t) => {
+    const fromCat = catalog?.find((c) => c.id === (t.tariffId || 0));
+    const generic = isGenericTariffName(t.name);
+    const name = generic && fromCat?.name ? fromCat.name : t.name;
+    let subject = String(t.subject || "");
+    if (!subject && fromCat?.subjectIds?.length && subjects?.length) {
+      subject = fromCat.subjectIds.map((id) => subjects.find((s) => s.id === id)?.name || "").find(Boolean) || "";
+    }
+    return { ...t, name, subject };
+  });
+}
+
+export function packCardTariff(it: Record<string, unknown>, catalog?: CatalogTariff[], subjects?: { id: number; name: string }[]) {
   const live = tariffRowLive(it);
+  const sid = Number(it.subject_id || it.subjectId || 0) || (Array.isArray(it.subject_ids) ? Number(it.subject_ids[0] || 0) : 0);
+  const subject = customerTariffSubject(it) || subjects?.find((s) => s.id === sid)?.name || "";
   return {
     id: Number(it.id) || 0,
     tariffId: Number(it.tariff_id || it.tariffId || 0) || undefined,
@@ -604,6 +640,7 @@ export function packCardTariff(it: Record<string, unknown>, catalog?: CatalogTar
     bDate: String(it.b_date || it.bDate || ""),
     eDate: String(it.e_date || it.eDate || ""),
     price: Number(it.price || 0) || 0,
+    subject: subject || undefined,
   };
 }
 
@@ -626,6 +663,7 @@ export function parseDossierCtt(extras?: Record<string, string> | null) {
           bDate: String(it.bDate || it.b_date || ""),
           eDate: String(it.eDate || it.e_date || ""),
           price: Number(it.price || 0) || 0,
+          subject: String(it.subject || it.subject_name || "").trim() || undefined,
         };
       })
       .filter((x): x is NonNullable<typeof x> => Boolean(x));
@@ -646,9 +684,11 @@ export async function pullCustomerTariffs(branchId: number, customerId: number) 
   const { request, token } = await import("./alfacrm");
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const { loadTariffs } = await import("./crm-tariffs");
+  const { loadSubjects } = await import("./crm-subjects");
   const { uniqueBranches } = await import("./crm-ledger-core");
   const t = await token();
-  const catalog = loadTariffs().items.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price }));
+  const catalog = loadTariffs().items.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price, subjectIds: x.subjectIds }));
+  const subjects = loadSubjects().map((s) => ({ id: s.id, name: s.name }));
   const seen = new Set<number>();
   const rows: ReturnType<typeof packCardTariff>[] = [];
   for (const bid of uniqueBranches(branch)) {
@@ -661,7 +701,7 @@ export async function pullCustomerTariffs(branchId: number, customerId: number) 
         const id = Number(it.id);
         if (!id || seen.has(id)) continue;
         seen.add(id);
-        rows.push(packCardTariff(it, catalog));
+        rows.push(packCardTariff(it, catalog, subjects));
       }
       if (pack.length < 50) break;
     }

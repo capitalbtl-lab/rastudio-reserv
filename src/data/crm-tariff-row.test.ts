@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { liveTariffCustomerIds, tariffDateToIso, tariffRowHasTemplate, tariffRowLive, cttSelectLabel } from "./crm-tariff-row.ts";
+import { liveTariffCustomerIds, tariffDateToIso, tariffRowHasTemplate, tariffRowLive, cttSelectLabel, isGenericTariffName } from "./crm-tariff-row.ts";
 
 describe("живая строка абонемента", () => {
   const today = "2026-09-05";
@@ -27,6 +27,11 @@ describe("живая строка абонемента", () => {
     assert.equal(tariffRowLive({ id: 1, tariff_id: 12, paid_till: "01.01.2020", balance: 0 }, today), true);
     assert.equal(tariffRowLive({ id: 1, removed: 1, paid_till: "01.01.2030", balance: 9000 }, today), false);
     assert.match(cttSelectLabel({ name: "Абонемент 64 / Художественн", bDate: "05.09.26", rest: 6450 }), /6.?450/);
+    assert.equal(isGenericTariffName(""), true);
+    assert.equal(isGenericTariffName("абонемент"), true);
+    assert.equal(isGenericTariffName("абонемент #192"), true);
+    assert.equal(isGenericTariffName("абонемент#192"), true);
+    assert.equal(isGenericTariffName("Индивидуальный абонемент"), false);
   });
 
   it("счётчик — уникальные ученики с живой строкой", () => {
