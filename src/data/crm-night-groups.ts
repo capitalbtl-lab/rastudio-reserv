@@ -131,6 +131,15 @@ export async function runNightGroupInbound(opts?: { force?: boolean; now?: numbe
     const row = empty({ skipped: "не 04:00 Europe/Moscow", ok: true, note: "окно закрыто" });
     return row;
   }
+  try {
+    const { alfaLinkedNow, wantAlfaPullChannel } = await import("./crm-alfa-link");
+    if (!alfaLinkedNow() || !wantAlfaPullChannel("groups")) {
+      const row = empty({ skipped: "канал групп", ok: true, note: "подгрузка групп выключена" });
+      return row;
+    }
+  } catch {
+    /* настройки связи не обязательны для окна */
+  }
   if (g.__raNightGroups || !tryNightLock(opts?.now)) {
     const row = empty({ skipped: "уже идёт", ok: true, note: "второй экземпляр не стартовал" });
     writeLog(row);

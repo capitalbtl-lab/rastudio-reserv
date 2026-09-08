@@ -78,6 +78,48 @@ function followExport() {
   }, 600);
 }
 
+async function recoverCreatedPay(
+  request: (path: string, body: Record<string, unknown>, token: string) => Promise<unknown>,
+  token: string,
+  job: CrmExportJob,
+) {
+  const { matchAlfaPayId } = await import("./crm-pay-core");
+  const { crmUnwrapIndex } = await import("./crm-leads-stages");
+  const cid = Number(job.body.customer_id || job.entityId) || 0;
+  if (!cid) return 0;
+  const json = await request(`/v2api/${job.branchId}/pay/index`, { page: 0, pageSize: 50, customer_id: cid }, token);
+  return matchAlfaPayId(crmUnwrapIndex(json).items, {
+    customerId: cid,
+    income: Number(job.body.income),
+    expenditure: Number(job.body.expenditure),
+    documentDate: String(job.body.document_date || ""),
+    note: String(job.body.note || ""),
+  });
+}
+
+async function recoverCreatedCustomer(
+  request: (path: string, body: Record<string, unknown>, token: string) => Promise<unknown>,
+  token: string,
+  job: CrmExportJob,
+) {
+  const phone = Array.isArray(job.body.phone) ? String(job.body.phone[0] || "") : String(job.body.phone || "");
+  const digits = phone.replace(/\D/g, "").slice(-10);
+  if (digits.length < 10) return 0;
+  const { crmUnwrapIndex } = await import("./crm-leads-stages");
+  const json = await request(`/v2api/${job.branchId}/customer/index`, { page: 0, pageSize: 20, phone: digits }, token);
+  const items = crmUnwrapIndex(json).items;
+  const hit = items.find((it) => String(JSON.stringify(it.phone || it.legal_phone || "")).replace(/\D/g, "").includes(digits));
+  return Number(hit?.id) || 0;
+}
+
+function finishExportJob(job: CrmExportJob, note: string) {
+  const q = loadExport();
+  q.jobs = q.jobs.filter((j) => j.id !== job.id);
+  q.lastAt = new Date().toISOString();
+  q.lastNote = note;
+  saveExport(q);
+}
+
 export async function tickExportQueue(take = 2, preferOp?: CrmExportOp) {
   if (!g.__raPayTestKick) {
     g.__raPayTestKick = true;
@@ -139,6 +181,42 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp) {
     }
     for (const job of batch) {
       try {
+        const { wantAlfaPipe } = await import("./crm-alfa-link");
+        if (job.tries > 0 && wantAlfaPipe("verifyCreate")) {
+          if (job.op === "pay.create") {
+            const pid = await recoverCreatedPay(request, t, job);
+            if (pid) {
+              const localId = Number(job.body.localId) || 0;
+              if (localId < 0) {
+                const { applyCreatedPay } = await import("./crm-pay");
+                applyCreatedPay(localId, pid);
+                q = loadExport();
+                q.jobs = remapExportJobs(q.jobs, localId, pid, job.id);
+                saveExport(q);
+              }
+              finishExportJob(job, `${job.op} ${job.entityId} ok · уже в Alfa #${pid}`);
+              continue;
+            }
+          }
+          if (job.op === "customer.create") {
+            const cid = await recoverCreatedCustomer(request, t, job);
+            if (cid) {
+              const localId = Number(job.body.localId) || job.entityId;
+              const { applyCreatedCustomer } = await import("./trial-save");
+              await applyCreatedCustomer(localId, cid, job.branchId, {
+                phone: Array.isArray(job.body.phone) ? String(job.body.phone[0] || "") : String(job.body.phone || ""),
+                child: String(job.body.name || ""),
+                parent: String(job.body.legal_name || ""),
+                isStudy: Number(job.body.is_study) || 0,
+              });
+              q = loadExport();
+              q.jobs = remapExportJobs(q.jobs, localId, cid, job.id);
+              saveExport(q);
+              finishExportJob(job, `${job.op} ${job.entityId} ok · уже в Alfa #${cid}`);
+              continue;
+            }
+          }
+        }
         if (job.op === "cgi.apply") {
           const { applyGroupMembership } = await import("./crm-membership");
           const res = await applyGroupMembership(request, t, {
@@ -345,6 +423,28 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp) {
         saveExport(q);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        let recovered = false;
+        try {
+          const { wantAlfaPipe } = await import("./crm-alfa-link");
+          if (wantAlfaPipe("verifyCreate") && job.op === "pay.create") {
+            const pid = await recoverCreatedPay(request, t, job);
+            if (pid) {
+              const localId = Number(job.body.localId) || 0;
+              if (localId < 0) {
+                const { applyCreatedPay } = await import("./crm-pay");
+                applyCreatedPay(localId, pid);
+                q = loadExport();
+                q.jobs = remapExportJobs(q.jobs, localId, pid, job.id);
+                saveExport(q);
+              }
+              finishExportJob(job, `${job.op} ${job.entityId} ok · уже в Alfa #${pid}`);
+              recovered = true;
+            }
+          }
+        } catch {
+          /* поиск не затирает исходную ошибку */
+        }
+        if (recovered) continue;
         q = loadExport();
         q.jobs = q.jobs.map((j) => (j.id === job.id ? { ...j, tries: j.tries + 1 } : j)).filter((j) => j.tries < MAX_TRIES);
         q.lastAt = new Date().toISOString();

@@ -547,11 +547,19 @@ function is429(e: unknown) {
   return /\b429\b/.test(s) || /too many requests/i.test(s);
 }
 
-/** Авто каждые 15 мин — окно 3 дня, все типы (доход, продажи, возвраты, корректировки). Кнопка D ещё дочитывает историю. Карточка — inboundCustomerPays. */
+/** Авто каждые 15 мин — окно дней из настроек, все типы. Кнопка D ещё дочитывает историю. Карточка — inboundCustomerPays. */
 export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   const store = load();
   const poll = store.poll || emptyPoll();
   const now = Date.now();
+  const { wantAlfaPullChannel, wantAlfaPipe, alfaPayDays, alfaLinkedNow } = await import("./crm-alfa-link");
+  if (!alfaLinkedNow() || (opts?.via !== "button" && !wantAlfaPullChannel("pay"))) {
+    const note = "касса poll: канал кассы выключен";
+    poll.lastNote = note;
+    store.poll = poll;
+    save(store);
+    return { ok: false, skipped: "channel", branches: [] as number[], newCount: 0, pages: 0, hit429: false, note, fill: poll.fill };
+  }
   const firstFill = payPollFirstFill(poll.branches);
   if (!payPollAllowed(poll.hits, now) && !firstFill && opts?.via !== "button") {
     const note = `касса poll: лимит ${payPollHitsInWindow(poll.hits, now).length}/${PAY_POLL_MAX_PER_HOUR} за час`;
@@ -562,8 +570,9 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
     return { ok: false, skipped: "rate", branches: [] as number[], newCount: 0, pages: 0, hit429: false, note, fill: poll.fill };
   }
   poll.hits = [...payPollHitsInWindow(poll.hits, now), new Date(now).toISOString()];
-  const { token, request, dropAlfaAuth } = await import("./alfacrm");
-  dropAlfaAuth();
+  const { token, request, dropAlfaAuth, dropAlfaIndex } = await import("./alfacrm");
+  if (!wantAlfaPipe("keepToken")) dropAlfaAuth();
+  else dropAlfaIndex();
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const t = await token();
   const branches = [1, 2, 3, 4];
@@ -575,7 +584,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   const hold = holdPayIds();
   const typeCounts = new Map<string, number>();
   const touched: number[] = [];
-  const windowDates = payPollLookbackDates();
+  const windowDates = payPollLookbackDates(alfaPayDays());
   const windowPages = opts?.via === "button" ? 6 : 4;
 
   async function pullPages(branchId: number, extra: Record<string, unknown>, take: number) {
