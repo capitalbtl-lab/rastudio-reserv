@@ -518,14 +518,29 @@ async function loadCrm(force = false, opts?: { night?: boolean; existing?: CrmSl
       mergeTeacher(teacherBag, p.id, p.name || String(p.id), 0);
     }
   } else {
-    const sub = await paged<Subject>("/v2api/2/subject/index", t, tally);
-    for (const s of sub) subjects.set(s.id, s.name);
+    const { wantAlfaPullChannel } = await import("./crm-alfa-link");
+    if (wantAlfaPullChannel("subjects")) {
+      const sub = await paged<Subject>("/v2api/2/subject/index", t, tally);
+      for (const s of sub) subjects.set(s.id, s.name);
+    } else {
+      for (const s of loadSubjects()) if (s.id) subjects.set(s.id, s.name);
+    }
   }
   const branchPause = night ? 2500 : 0;
   for (const branch of [1, 2, 3, 4]) {
     if (branch !== 1 && branchPause) await new Promise((r) => setTimeout(r, branchPause));
     if (!night) {
-      const tr = await paged<Teacher>(`/v2api/${branch}/teacher/index`, t, tally).catch(() => [] as Teacher[]);
+      const { wantAlfaPullChannel } = await import("./crm-alfa-link");
+      const tr = wantAlfaPullChannel("teachers")
+        ? await paged<Teacher>(`/v2api/${branch}/teacher/index`, t, tally).catch(() => [] as Teacher[])
+        : [];
+      if (!tr.length) {
+        for (const p of loadTeachers()) {
+          if (!p.id) continue;
+          teachers.set(p.id, p.name || String(p.id));
+          mergeTeacher(teacherBag, p.id, p.name || String(p.id), branch);
+        }
+      }
       for (const p of tr) {
         if (!p.id) continue;
         teachers.set(p.id, p.name || String(p.id));
