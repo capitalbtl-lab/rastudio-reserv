@@ -1294,6 +1294,7 @@ export function CrmClientCard({
             title="Расписание"
             branchId={card.branchId}
             groupId={(card.groups || []).find((g) => g.active !== false)?.id || (card.groups || [])[0]?.id}
+            customerId={card.id}
           />
         </div>
 

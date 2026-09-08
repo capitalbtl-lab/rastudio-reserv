@@ -90,7 +90,15 @@ describe("форма занятия карточки", () => {
     assert.doesNotMatch(src, /group=\{\(card.groups \|\| \[\]\)\[0\]\?\.name\}/);
     const strip = readFileSync(new URL("../components/lesson-strip.tsx", import.meta.url), "utf8");
     assert.match(strip, /isOneOffLesson/);
-    assert.match(strip, /bg-amber-100/);
+    assert.match(strip, /lessonTileTone/);
+    assert.match(strip, /data-tile-tone/);
+    assert.match(strip, /bg-\[#ffe08a\]/);
+    assert.match(strip, /bg-\[#ffc9c9\]/);
+    assert.match(strip, /не был, без списания/);
+    assert.match(strip, /не проведено/);
+    assert.match(strip, /customerId=\{customerId\}/);
+    assert.match(src, /customerId=\{card.id\}/);
+    assert.doesNotMatch(strip, /planned && trial && "bg-amber-100/);
     assert.match(strip, /all.filter\(isOneOffLesson\)/);
     assert.match(strip, /data-op="lesson-pupils"/);
     assert.match(strip, /mergeLessonRoster/);

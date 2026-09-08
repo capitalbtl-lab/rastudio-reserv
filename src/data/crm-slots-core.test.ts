@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { inheritRegularPeriod, isoDateOrEmpty, ruDate, beatFollowsGroup, stampBeatsPeriodIfFollow, maskHm, maskRuDate, mergeLessonRoster, lessonRestLabel, lessonRestLeft, pupilNameOk, lessonRosterThin, mergeLessonPupils } from "./crm-slots-core.ts";
+import { inheritRegularPeriod, isoDateOrEmpty, ruDate, beatFollowsGroup, stampBeatsPeriodIfFollow, maskHm, maskRuDate, mergeLessonRoster, lessonRestLabel, lessonRestLeft, pupilNameOk, lessonRosterThin, mergeLessonPupils, lessonTileTone } from "./crm-slots-core.ts";
 
 describe("второй урок в группе копирует период первого", () => {
   it("isoDateOrEmpty не подставляет сегодня", () => {
@@ -136,5 +136,33 @@ describe("карточка занятия группы: весь состав", 
     assert.equal(merged?.find((p) => p.customerId === 1)?.name, "Алехин Дмитрий");
     assert.equal(merged?.find((p) => p.customerId === 1)?.amount, 1087.5);
     assert.equal(merged?.find((p) => p.customerId === 5842)?.amount, 350);
+  });
+});
+
+describe("цвет ячейки как в Alfa", () => {
+  const today = "2026-09-09";
+  it("проведён и был — зелёный, не был без списания — жёлтый, списание вручную — зелёный", () => {
+    const cid = 670;
+    assert.equal(
+      lessonTileTone({ date: "2026-03-08", status: 3, pupils: [{ customerId: cid, attend: true, amount: 350 }] }, today, cid),
+      "done",
+    );
+    assert.equal(
+      lessonTileTone({ date: "2026-03-10", status: 3, pupils: [{ customerId: cid, attend: false, amount: 0 }] }, today, cid),
+      "missed",
+    );
+    assert.equal(
+      lessonTileTone({ date: "2026-03-15", status: 3, pupils: [{ customerId: cid, attend: false, amount: 350 }] }, today, cid),
+      "done",
+    );
+  });
+  it("пробное проведённое зелёное, будущее белое, прошлое непроведённое красное", () => {
+    assert.equal(lessonTileTone({ date: "2026-02-08", status: 3, type: "Пробное", typeId: 3 } as never, today, 670), "done");
+    assert.equal(lessonTileTone({ date: "2026-09-15", status: 1, type: "Пробное", typeId: 3 } as never, today), "planned");
+    assert.equal(lessonTileTone({ date: "2026-09-06", status: 1, type: "Пробное", typeId: 3 } as never, today), "overdue");
+    assert.equal(lessonTileTone({ date: "2026-09-20", status: 1, type: "Групповое" } as never, today), "planned");
+    assert.equal(lessonTileTone({ date: "2026-09-04", status: 1, type: "Групповое" } as never, today), "overdue");
+    assert.equal(lessonTileTone({ date: "2026-09-09", status: 1 }, today), "today");
+    assert.equal(lessonTileTone({ date: "2026-09-09", status: 2 }, today), "cancelled");
   });
 });

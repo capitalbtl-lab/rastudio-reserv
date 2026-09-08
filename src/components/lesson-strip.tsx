@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode
 import { createPortal } from "react-dom";
 import { Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { GroupCalLesson, LessonRosterPerson } from "@/data/crm-slots-core";
-import { mergeLessonRoster, lessonRestLeft, maskHm, maskRuDate, pupilNameOk } from "@/data/crm-slots-core";
+import type { GroupCalLesson, LessonRosterPerson, LessonTileTone } from "@/data/crm-slots-core";
+import { mergeLessonRoster, lessonRestLeft, maskHm, maskRuDate, pupilNameOk, lessonTileTone } from "@/data/crm-slots-core";
 import { adminSchedule } from "@/data/admin-schedule";
 import { RA_POP } from "@/data/admin-ui";
 import { RaSelect } from "@/components/ra-select";
@@ -71,31 +71,41 @@ function ruDate(iso: string) {
   return `${d}.${m}.${y}`;
 }
 
+const TILE_TONE: Record<LessonTileTone, string> = {
+  today: "ra-today-tile text-white",
+  done: "bg-emerald-100 text-fg ring-1 ring-emerald-400/80",
+  missed: "bg-[#ffe08a] text-fg ring-1 ring-amber-500/80",
+  overdue: "bg-[#ffc9c9] text-fg ring-1 ring-rose-400/80",
+  planned: "bg-white text-fg ring-1 ring-neutral-500/55",
+  cancelled: "bg-neutral-200 text-neutral-400 ring-1 ring-neutral-300 line-through",
+};
+
 function LessonTile({
   lesson: l,
   today,
+  customerId,
   onEnter,
   onLeave,
   onClick,
 }: {
   lesson: GroupCalLesson;
   today: string;
+  customerId?: number;
   onEnter: (el: HTMLElement, lesson: GroupCalLesson) => void;
   onLeave: () => void;
   onClick?: (el: HTMLElement, lesson: GroupCalLesson) => void;
 }) {
-  const trial = Number(l.typeId) === 3 || /пробн/i.test(String(l.type || ""));
   const d = parseYmd(l.date);
-  const isToday = l.date === today;
-  const cancelled = l.status === 2;
-  const done = l.status === 3;
-  const planned = l.status === 1 || l.status === 0;
+  const tone = lessonTileTone(l, today, customerId);
+  const cancelled = tone === "cancelled";
+  const isToday = tone === "today";
   return (
     <div
       onMouseEnter={(e) => onEnter(e.currentTarget, l)}
       onMouseLeave={onLeave}
       onClick={(e) => onClick?.(e.currentTarget, l)}
       data-op="lesson-tile"
+      data-tile-tone={tone}
       data-lesson-date={l.date}
       data-lesson-id={l.lessonId || undefined}
       data-lesson-status={l.status}
@@ -103,14 +113,10 @@ function LessonTile({
       title={l.type ? `${l.type} ${l.from || ""}`.trim() : undefined}
       className={cn(
         "flex h-[3.35rem] w-[2.76rem] min-w-[2.76rem] cursor-pointer flex-col items-center justify-center rounded-lg px-0.5 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
-        isToday && !cancelled && "ra-today-tile text-white",
-        !isToday && done && "bg-emerald-100 text-fg ring-1 ring-emerald-400/80",
-        !isToday && planned && !trial && "bg-white text-fg ring-1 ring-neutral-500/55",
-        !isToday && planned && trial && "bg-amber-100 text-fg ring-1 ring-amber-500/80",
-        cancelled && "bg-neutral-200 text-neutral-400 ring-1 ring-neutral-300 line-through",
+        TILE_TONE[tone],
       )}
     >
-      {isToday && !cancelled ? (
+      {isToday ? (
         <>
           <span className="text-[0.83rem] font-semibold tabular-nums text-white">{d.getDate()}</span>
           <span className="text-[0.48rem] font-semibold uppercase leading-none tracking-wide text-white/90">сегодня</span>
@@ -1094,6 +1100,7 @@ export function LessonStrip({
   className,
   branchId,
   groupId,
+  customerId,
   people,
   onLessons,
   onOpenPupil,
@@ -1106,6 +1113,7 @@ export function LessonStrip({
   className?: string;
   branchId?: number;
   groupId?: number;
+  customerId?: number;
   people?: LessonRosterPerson[];
   onLessons?: (next: GroupCalLesson[]) => void;
   onOpenPupil?: (id: number) => void;
@@ -1240,10 +1248,10 @@ export function LessonStrip({
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {past.map((l) => (
-          <LessonTile key={`${l.date}-${l.lessonId || l.from}`} lesson={l} today={today} onEnter={showTip} onLeave={hideTipSoon} onClick={clickTile} />
+          <LessonTile key={`${l.date}-${l.lessonId || l.from}`} lesson={l} today={today} customerId={customerId} onEnter={showTip} onLeave={hideTipSoon} onClick={clickTile} />
         ))}
         {todayHit ? (
-          <LessonTile key={`${todayHit.date}-${todayHit.lessonId || todayHit.from}`} lesson={todayHit} today={today} onEnter={showTip} onLeave={hideTipSoon} onClick={clickTile} />
+          <LessonTile key={`${todayHit.date}-${todayHit.lessonId || todayHit.from}`} lesson={todayHit} today={today} customerId={customerId} onEnter={showTip} onLeave={hideTipSoon} onClick={clickTile} />
         ) : (
           <div className="ra-today-tile flex h-[3.35rem] w-[2.76rem] min-w-[2.76rem] flex-col items-center justify-center rounded-lg px-0.5 text-center text-white" title="Сегодня">
             <span className="text-[0.83rem] font-semibold tabular-nums">{Number(today.slice(8))}</span>
@@ -1252,12 +1260,18 @@ export function LessonStrip({
           </div>
         )}
         {future.map((l) => (
-          <LessonTile key={`${l.date}-${l.lessonId || l.from}`} lesson={l} today={today} onEnter={showTip} onLeave={hideTipSoon} onClick={clickTile} />
+          <LessonTile key={`${l.date}-${l.lessonId || l.from}`} lesson={l} today={today} customerId={customerId} onEnter={showTip} onLeave={hideTipSoon} onClick={clickTile} />
         ))}
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-3 text-[0.68rem] text-muted">
         <span className="inline-flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-100 ring-1 ring-emerald-400/80" /> проведено
+          <span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-100 ring-1 ring-emerald-400/80" /> проведён
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-[3px] bg-[#ffe08a] ring-1 ring-amber-500/80" /> не был, без списания
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-[3px] bg-[#ffc9c9] ring-1 ring-rose-400/80" /> не проведено
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-[3px] bg-white ring-1 ring-neutral-400" /> запланировано

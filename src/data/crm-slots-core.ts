@@ -183,6 +183,29 @@ export function lessonRosterThin(hit?: { status?: number; pupils?: LessonPupil[]
   return false;
 }
 
+/** Цвет ячейки как в виджете посещений Alfa. */
+export type LessonTileTone = "today" | "done" | "missed" | "overdue" | "planned" | "cancelled";
+
+export function lessonTileTone(
+  l: Pick<GroupCalLesson, "date" | "status" | "pupils" | "amount">,
+  today: string,
+  customerId?: number,
+): LessonTileTone {
+  if (Number(l.status) === 2) return "cancelled";
+  const ymd = String(l.date || "").slice(0, 10);
+  const isToday = Boolean(ymd && ymd === today);
+  if (Number(l.status) === 3) {
+    if (customerId) {
+      const mine = (l.pupils || []).find((p) => Number(p.customerId) === customerId);
+      if (mine && mine.attend === false && !(Number(mine.amount ?? l.amount) > 0)) return "missed";
+    }
+    return isToday ? "today" : "done";
+  }
+  if (ymd && ymd < today) return "overdue";
+  if (isToday) return "today";
+  return "planned";
+}
+
 /** Состав карточки занятия: все ученики группы + имена с диска. Лиды и архив — только если уже в уроке. */
 export function mergeLessonRoster(
   lesson: { pupils?: LessonPupil[]; customerIds?: number[] },
