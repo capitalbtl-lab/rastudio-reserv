@@ -3370,6 +3370,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
             continue;
           }
           if (!sid) continue;
+          const own = inheritRegularPeriod({ siblings: [b], groupFrom: period.bDate, groupTo: period.eDate });
           enqueueExport({
             op: "regular-lesson.create",
             branchId: branch,
@@ -3386,8 +3387,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
               days: [b.day],
               time_from_v: b.timeFrom,
               time_to_v: b.timeTo,
-              b_date: period.bDate,
-              e_date: period.eDate,
+              b_date: own.bDate,
+              e_date: own.eDate,
               ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
             },
           });

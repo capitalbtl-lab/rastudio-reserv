@@ -77,6 +77,10 @@ describe("форма занятия карточки", () => {
     assert.match(sched, /applySchedulePeriod/);
     assert.match(sched, /applyGroupPeriod/);
     assert.match(sched, /Период группы/);
+    assert.match(sched, /maskHm/);
+    assert.match(sched, /maskRuDate/);
+    assert.match(sched, /Сохранить на сайте/);
+    assert.match(sched, /Экспорт в AlfaCRM/);
     const disk = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(disk, /parseDossierRegular/);
@@ -89,6 +93,8 @@ describe("форма занятия карточки", () => {
     assert.match(api, /regular-lesson.create/);
     assert.match(api, /inheritRegularPeriod/);
     assert.match(api, /bDate: b.bDate \|\| bDate/);
+    assert.match(api, /siblings: \[b\]/);
+    assert.match(api, /b_date: own.bDate/);
     const queue = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
     assert.match(queue, /b_date: b.bDate \|\| job.body.b_date/);
     assert.match(queue, /e_date: b.eDate \|\| job.body.e_date/);

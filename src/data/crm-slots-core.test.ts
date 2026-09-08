@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { inheritRegularPeriod, isoDateOrEmpty, ruDate, beatFollowsGroup, stampBeatsPeriodIfFollow } from "./crm-slots-core.ts";
+import { inheritRegularPeriod, isoDateOrEmpty, ruDate, beatFollowsGroup, stampBeatsPeriodIfFollow, maskHm, maskRuDate } from "./crm-slots-core.ts";
 
 describe("второй урок в группе копирует период первого", () => {
   it("isoDateOrEmpty не подставляет сегодня", () => {
@@ -59,6 +59,20 @@ describe("второй урок в группе копирует период п
     assert.equal(ruDate("2026-09-01"), "01.09.2026");
     assert.equal(ruDate("01.03.2027"), "01.03.2027");
     assert.equal(ruDate(""), "");
+  });
+
+  it("время — 4 цифры и двоеточие, дата — 8 цифр и точки", () => {
+    assert.equal(maskHm("18"), "18:");
+    assert.equal(maskHm("1800"), "18:00");
+    assert.equal(maskHm("18:00"), "18:00");
+    assert.equal(maskHm("8:00"), "8:00");
+    assert.equal(maskHm("18:0099"), "18:00");
+    assert.equal(maskHm("123456"), "12:34");
+    assert.equal(maskRuDate("01092026"), "01.09.2026");
+    assert.equal(maskRuDate("01.09.2026"), "01.09.2026");
+    assert.equal(maskRuDate("01.09.2026999"), "01.09.2026");
+    assert.equal(maskRuDate("0109"), "01.09.");
+    assert.equal(maskRuDate("01"), "01.");
   });
 
   it("новая группа: даты занятий идут за периодом, пока их не правили", () => {

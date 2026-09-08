@@ -216,6 +216,31 @@ export function ruDate(raw?: string) {
   return iso ? ruFromIso(iso) : String(raw || "").trim();
 }
 
+/** Время HH:MM. Только 4 цифры, двоеточие само. */
+export function maskHm(raw: string): string {
+  const t = String(raw || "");
+  if (t.includes(":")) {
+    const [hPart, mPart = ""] = t.split(":");
+    const h = hPart.replace(/\D/g, "").slice(0, 2);
+    const min = mPart.replace(/\D/g, "").slice(0, 2);
+    if (!h && !min) return "";
+    return `${h}:${min}`;
+  }
+  const d = t.replace(/\D/g, "").slice(0, 4);
+  if (!d) return "";
+  if (d.length <= 2) return d.length === 2 ? `${d}:` : d;
+  return `${d.slice(0, 2)}:${d.slice(2)}`;
+}
+
+/** Дата дд.мм.гггг. Только 8 цифр, точки сами. */
+export function maskRuDate(raw: string): string {
+  const d = String(raw || "").replace(/\D/g, "").slice(0, 8);
+  if (!d) return "";
+  if (d.length <= 2) return d.length === 2 ? `${d}.` : d;
+  if (d.length <= 4) return `${d.slice(0, 2)}.${d.slice(2)}${d.length === 4 ? "." : ""}`;
+  return `${d.slice(0, 2)}.${d.slice(2, 4)}.${d.slice(4)}`;
+}
+
 export function beatFollowsGroup(b: { bDate?: string; eDate?: string }, groupFrom?: string, groupTo?: string) {
   const bb = isoDateOrEmpty(b.bDate);
   const be = isoDateOrEmpty(b.eDate);

@@ -11,7 +11,7 @@ import { SCHOOLS, BRANCHES } from "@/data/site";
 import { slotMismatch, mismatchHint } from "@/data/slot-mismatch";
 import { cn } from "@/lib/utils";
 import { speakAgent } from "@/data/agent-voice";
-import { missingScheduleFields, beatsOf, type LessonBeat, matchBranch, defaultPeriod, ruDate, stampBeatsPeriodIfFollow } from "@/data/crm-slots-core";
+import { missingScheduleFields, beatsOf, type LessonBeat, matchBranch, defaultPeriod, ruDate, stampBeatsPeriodIfFollow, maskHm, maskRuDate } from "@/data/crm-slots-core";
 import { parseDraftFromSpeech } from "@/data/schedule-speech";
 import { AdminSubjects } from "@/components/admin-subjects";
 import { AdminCoursePrices } from "@/components/admin-course-prices";
@@ -601,11 +601,11 @@ function WeekDots({
               <div className="mt-2 flex gap-2">
                 <label className="flex-1 text-[0.7rem] font-medium">
                   С
-                  <input value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 h-9 w-full rounded-full bg-[#f3f5f8] px-2 text-center text-sm ring-1 ring-black/15" />
+                  <input value={from} onChange={(e) => setFrom(maskHm(e.target.value))} inputMode="numeric" maxLength={5} placeholder="18:00" className="mt-1 h-9 w-full rounded-full bg-[#f3f5f8] px-2 text-center text-sm ring-1 ring-black/15" />
                 </label>
                 <label className="flex-1 text-[0.7rem] font-medium">
                   До
-                  <input value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 h-9 w-full rounded-full bg-[#f3f5f8] px-2 text-center text-sm ring-1 ring-black/15" />
+                  <input value={to} onChange={(e) => setTo(maskHm(e.target.value))} inputMode="numeric" maxLength={5} placeholder="19:30" className="mt-1 h-9 w-full rounded-full bg-[#f3f5f8] px-2 text-center text-sm ring-1 ring-black/15" />
                 </label>
               </div>
               <div className="mt-3 flex items-center justify-end gap-3">
@@ -1589,7 +1589,8 @@ export function AdminSchedule() {
   }
 
   function addBeat(s: CrmSlot, b: LessonBeat) {
-    const first = beatsOf(s)[0];
+    const list = beatsOf(s);
+    const first = list[view[s.id] || 0] || list[0];
     const beat: LessonBeat = {
       ...b,
       bDate: b.bDate || first?.bDate || s.bDate || "",
@@ -1604,22 +1605,22 @@ export function AdminSchedule() {
   }
 
   function applyGroupPeriod(bDate: string, eDate: string) {
-    const follow = !detail?.groupId;
     const prevB = detail?.bDate || "";
     const prevE = detail?.eDate || "";
+    const from = maskRuDate(ruDate(bDate) || bDate);
+    const to = maskRuDate(ruDate(eDate) || eDate);
     const id = detail?.id;
     setDetail((d) => {
       if (!d) return d;
-      if (!follow) return { ...d, bDate, eDate };
-      const beats = stampBeatsPeriodIfFollow(beatsOf(d.slot), prevB, prevE, bDate, eDate);
-      const slot = { ...d.slot, bDate, eDate, beats };
-      return { ...d, bDate, eDate, slot };
+      const beats = stampBeatsPeriodIfFollow(beatsOf(d.slot), prevB, prevE, from, to);
+      const slot = { ...d.slot, bDate: from, eDate: to, beats };
+      return { ...d, bDate: from, eDate: to, slot };
     });
-    if (follow && id) {
+    if (id) {
       setSlots((list) =>
         list.map((row) => {
           if (row.id !== id) return row;
-          return { ...row, bDate, eDate, beats: stampBeatsPeriodIfFollow(beatsOf(row), prevB, prevE, bDate, eDate) };
+          return { ...row, bDate: from, eDate: to, beats: stampBeatsPeriodIfFollow(beatsOf(row), prevB, prevE, from, to) };
         }),
       );
       setDirty((d) => new Set(d).add(id));
@@ -1631,7 +1632,9 @@ export function AdminSchedule() {
     const s = detail.slot;
     const beats = beatsOf(s);
     const i = view[s.id] || 0;
-    const next = beats.map((b, n) => (n === i ? { ...b, bDate: from, eDate: to } : b));
+    const bDate = maskRuDate(ruDate(from) || from);
+    const eDate = maskRuDate(ruDate(to) || to);
+    const next = beats.map((b, n) => (n === i ? { ...b, bDate, eDate } : b));
     const apply = (row: CrmSlot) => (row.id === s.id ? { ...row, beats: next } : row);
     setSlots((list) => list.map(apply));
     setDirty((d) => new Set(d).add(s.id));
@@ -3674,19 +3677,19 @@ export function AdminSchedule() {
                       type="button"
                       disabled={detail.saving}
                       title="Сохранить на сайте"
-                      className="h-8 rounded-full bg-white px-3 text-[0.75rem] font-semibold text-fg ring-1 ring-black/8 disabled:opacity-50"
+                      className="h-8 whitespace-nowrap rounded-full bg-white px-3 text-[0.72rem] font-semibold text-fg ring-1 ring-black/8 disabled:opacity-50"
                       onClick={() => void saveDetailSite()}
                     >
-                      {detail.saving ? "…" : "На сайте"}
+                      {detail.saving ? "…" : "Сохранить на сайте"}
                     </button>
                     <button
                       type="button"
                       disabled={detail.saving}
-                      title={detail.groupId ? "Сохранить в AlfaCRM" : "Создать в AlfaCRM"}
-                      className="h-8 rounded-full bg-primary px-3 text-[0.75rem] font-semibold text-white disabled:opacity-50"
+                      title={detail.groupId ? "Экспорт в AlfaCRM" : "Создать группу в AlfaCRM"}
+                      className="h-8 whitespace-nowrap rounded-full bg-primary px-3 text-[0.72rem] font-semibold text-white disabled:opacity-50"
                       onClick={() => void saveDetail()}
                     >
-                      {detail.saving ? "…" : detail.groupId ? "В AlfaCRM" : "Создать"}
+                      {detail.saving ? "…" : "Экспорт в AlfaCRM"}
                     </button>
                     <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full bg-white text-lg leading-none text-muted ring-1 ring-black/8 hover:text-fg" onClick={() => { setPupil(null); resetAddPupil(); setNameEdit(false); setDetail(null); }} aria-label="Закрыть">
                       ×
@@ -3782,7 +3785,7 @@ export function AdminSchedule() {
                     ) : null}
                     <div className={cn(CARD_BOX, "space-y-3")}>
                       <p className={CARD_SEC}>Расписание</p>
-                      <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-[minmax(0,5.5rem)_minmax(0,7.5rem)_minmax(0,8rem)_auto_minmax(0,1fr)_minmax(0,1fr)]">
+                      <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-[minmax(0,5.5rem)_minmax(0,6rem)_minmax(0,6.4rem)_auto_minmax(0,1fr)_minmax(0,1fr)]">
                       {showField("age") ? (
                       <label className={CARD_LBL}>
                         Возраст
@@ -3805,9 +3808,23 @@ export function AdminSchedule() {
                       <label className={CARD_LBL}>
                         Время
                         <span className={CARD_PAIR}>
-                          <input value={shownBeat(detail.slot).timeFrom} onChange={(e) => patchBeat(detail.slot, "timeFrom", e.target.value)} className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.78rem] font-medium text-fg outline-none" />
+                          <input
+                            value={shownBeat(detail.slot).timeFrom}
+                            onChange={(e) => patchBeat(detail.slot, "timeFrom", maskHm(e.target.value))}
+                            inputMode="numeric"
+                            maxLength={5}
+                            placeholder="18:00"
+                            className="h-full min-w-0 flex-1 bg-transparent px-0.5 text-center text-[0.78rem] font-medium tabular-nums text-fg outline-none"
+                          />
                           <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
-                          <input value={shownBeat(detail.slot).timeTo} onChange={(e) => patchBeat(detail.slot, "timeTo", e.target.value)} className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.78rem] font-medium text-fg outline-none" />
+                          <input
+                            value={shownBeat(detail.slot).timeTo}
+                            onChange={(e) => patchBeat(detail.slot, "timeTo", maskHm(e.target.value))}
+                            inputMode="numeric"
+                            maxLength={5}
+                            placeholder="19:30"
+                            className="h-full min-w-0 flex-1 bg-transparent px-0.5 text-center text-[0.78rem] font-medium tabular-nums text-fg outline-none"
+                          />
                         </span>
                       </label>
                       ) : null}
@@ -3828,9 +3845,23 @@ export function AdminSchedule() {
                       <label className={cn(CARD_LBL, "col-span-2 sm:col-span-1")}>
                         Период группы
                         <span className={CARD_PAIR}>
-                          <input value={detail.bDate} onChange={(e) => applyGroupPeriod(e.target.value, detail.eDate)} placeholder="01.09.2026" className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.72rem] font-medium tabular-nums text-fg outline-none" />
+                          <input
+                            value={ruDate(detail.bDate) || detail.bDate}
+                            onChange={(e) => applyGroupPeriod(e.target.value, detail.eDate)}
+                            placeholder="01.09.2026"
+                            inputMode="numeric"
+                            maxLength={10}
+                            className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.72rem] font-medium tabular-nums text-fg outline-none"
+                          />
                           <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
-                          <input value={detail.eDate} onChange={(e) => applyGroupPeriod(detail.bDate, e.target.value)} placeholder="30.06.2027" className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.72rem] font-medium tabular-nums text-fg outline-none" />
+                          <input
+                            value={ruDate(detail.eDate) || detail.eDate}
+                            onChange={(e) => applyGroupPeriod(detail.bDate, e.target.value)}
+                            placeholder="30.06.2027"
+                            inputMode="numeric"
+                            maxLength={10}
+                            className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.72rem] font-medium tabular-nums text-fg outline-none"
+                          />
                         </span>
                       </label>
                       ) : null}
@@ -3842,6 +3873,8 @@ export function AdminSchedule() {
                             value={ruDate(shownBeat(detail.slot).bDate) || ruDate(detail.bDate)}
                             onChange={(e) => applySchedulePeriod(e.target.value, shownBeat(detail.slot).eDate || detail.eDate)}
                             placeholder={detail.bDate || "01.09.2026"}
+                            inputMode="numeric"
+                            maxLength={10}
                             className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.72rem] font-medium tabular-nums text-fg outline-none"
                           />
                           <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
@@ -3849,6 +3882,8 @@ export function AdminSchedule() {
                             value={ruDate(shownBeat(detail.slot).eDate) || ruDate(detail.eDate)}
                             onChange={(e) => applySchedulePeriod(shownBeat(detail.slot).bDate || detail.bDate, e.target.value)}
                             placeholder={detail.eDate || "30.06.2027"}
+                            inputMode="numeric"
+                            maxLength={10}
                             className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.72rem] font-medium tabular-nums text-fg outline-none"
                           />
                         </span>
@@ -4123,7 +4158,7 @@ export function AdminSchedule() {
                       </div>
                     {detail.error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700 ring-1 ring-red-100">{detail.error}</p> : null}
                     {!detail.groupId ? (
-                      <p className="rounded-xl bg-white/80 px-3 py-2 text-sm text-muted ring-1 ring-black/5">Группа пока только на сайте. «На сайте» пишет слот. «Создать» ставит группу в очередь AlfaCRM — нужен предмет филиала. Без предмета не создаём, имя курса не подставляем.</p>
+                      <p className="rounded-xl bg-white/80 px-3 py-2 text-sm text-muted ring-1 ring-black/5">Группа пока только на сайте. «Сохранить на сайте» пишет слот. «Экспорт в AlfaCRM» ставит группу в очередь — нужен предмет филиала. Без предмета не создаём, имя курса не подставляем.</p>
                     ) : null}
                     </div>
                   {showField("members") || showField("leads") || showField("archive") || addPupil ? (
