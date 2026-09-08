@@ -27,7 +27,7 @@ export type JournalLesson = {
   amount?: number;
   cttId?: number;
   groupIds?: number[];
-  pupils?: { customerId: number; attend?: boolean; amount?: number; cttId?: number }[];
+  pupils?: { customerId: number; name?: string; attend?: boolean; amount?: number; cttId?: number }[];
 };
 
 export function journalIds(lesson: { customerIds?: number[] }) {
@@ -107,5 +107,9 @@ export function clientLessonFromJournal(lesson: JournalLesson, groupName?: strin
     amount: Number(lesson.amount || 0) || undefined,
     cttId: Number(lesson.cttId || 0) || undefined,
     groupIds: (lesson.groupIds || []).map(Number).filter((n) => n) || undefined,
+    customerIds: (lesson.customerIds || []).map(Number).filter((n) => n),
+    attend: Number(lesson.attend || 0) || undefined,
+    total: Number(lesson.total || 0) || undefined,
+    pupils: lesson.pupils?.length ? lesson.pupils : undefined,
   };
 }

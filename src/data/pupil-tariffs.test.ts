@@ -588,5 +588,15 @@ describe("мастер абонементов учеников", () => {
     ];
     assert.equal(pickLessonCtt(rows, { subject: "Художественная школа", catalog: cat })?.tariffId, 10);
     assert.equal(pickLessonCtt(rows.filter((r) => r.tariffId === 1), { subjectId: 5, catalog: cat })?.tariffId, 1);
+    assert.equal(
+      pickLessonCtt(
+        [
+          { archived: true, subject: "Робототехника", tariffId: 10, rest: 0 },
+          { archived: false, subject: "Художка", tariffId: 2, rest: 100 },
+        ],
+        { subject: "Робототехника", catalog: cat },
+      )?.tariffId,
+      10,
+    );
   });
 });

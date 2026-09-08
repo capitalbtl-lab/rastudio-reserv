@@ -304,6 +304,10 @@ function lessonsForCard(
       lessonId: l.id || undefined,
       amount: l.amount,
       cttId: l.cttId,
+      customerIds: l.customerIds,
+      pupils: l.pupils,
+      attend: l.attend,
+      total: l.total,
     });
   }
   const d0 = new Date();

@@ -607,13 +607,13 @@ export function lessonWriteoffOf(
   return 0;
 }
 
-/** Живой абонемент ученика под предмет занятия, иначе любой живой. */
+/** Абонемент списания: живой под предмет, иначе архивный того же предмета, иначе любой. */
 export function pickLessonCtt<T extends { archived?: boolean; subject?: string; tariffId?: number; rest?: number }>(
   rows: T[] | null | undefined,
   opts?: { subjectId?: number; subject?: string; catalog?: { id: number; subjectIds?: number[] }[] },
 ): T | undefined {
-  const live = (rows || []).filter((t) => !t.archived);
-  if (!live.length) return undefined;
+  const all = rows || [];
+  if (!all.length) return undefined;
   const subjectId = Number(opts?.subjectId) || 0;
   const needle = String(opts?.subject || "")
     .toLowerCase()
@@ -621,14 +621,15 @@ export function pickLessonCtt<T extends { archived?: boolean; subject?: string; 
     .slice(0, 14);
   let best: T | undefined;
   let score = -1;
-  for (const t of live) {
+  for (const t of all) {
     let s = 0;
     const cat = opts?.catalog?.find((c) => c.id === Number(t.tariffId || 0));
-    if (subjectId && cat?.subjectIds?.includes(subjectId)) s += 3;
+    if (subjectId && cat?.subjectIds?.includes(subjectId)) s += 4;
     const sub = String(t.subject || "")
       .toLowerCase()
       .replace(/[«»"']/g, "");
-    if (needle && sub && (sub.includes(needle) || needle.includes(sub.slice(0, 10)))) s += 3;
+    if (needle && sub && (sub.includes(needle) || needle.includes(sub.slice(0, 10)))) s += 4;
+    if (!t.archived) s += 2;
     if (Number(t.tariffId) > 0) s += 1;
     if (Number(t.rest) > 0) s += 1;
     if (s > score) {

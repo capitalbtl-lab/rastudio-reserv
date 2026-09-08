@@ -140,9 +140,47 @@ export type GroupCalLesson = {
 
 export type SlotVersion = { at: string; reason: string; count: number; slots: CrmSlot[] };
 
-function pupilNameOk(name?: string) {
+export function pupilNameOk(name?: string) {
   const s = String(name || "").trim();
   return s && !/^клиент\s+\d+$/i.test(s) ? s : "";
+}
+
+/** Собрать состав из двух журналов: имена и суммы не теряются, если в одном источнике дырка. */
+export function mergeLessonPupils(a?: LessonPupil[], b?: LessonPupil[]): LessonPupil[] | undefined {
+  const map = new Map<number, LessonPupil>();
+  for (const src of [a || [], b || []]) {
+    for (const p of src) {
+      const id = Number(p.customerId) || 0;
+      if (!id) continue;
+      const prev = map.get(id);
+      if (!prev) {
+        map.set(id, { ...p, customerId: id });
+        continue;
+      }
+      map.set(id, {
+        ...prev,
+        ...p,
+        customerId: id,
+        name: pupilNameOk(p.name) || pupilNameOk(prev.name) || p.name || prev.name,
+        amount: Number(p.amount) > 0 ? p.amount : prev.amount,
+        cttId: Number(p.cttId) > 0 ? p.cttId : prev.cttId,
+        attend: p.attend ?? prev.attend,
+        rest: p.rest || prev.rest,
+      });
+    }
+  }
+  return map.size ? [...map.values()] : undefined;
+}
+
+/** Проведённое без ФИО или сумм — тянуть Alfa, не отдавать дырявый диск. */
+export function lessonRosterThin(hit?: { status?: number; pupils?: LessonPupil[]; customerIds?: number[] } | null) {
+  if (!hit) return false;
+  if (Number(hit.status) !== 3) return false;
+  const pupils = hit.pupils || [];
+  if (!pupils.length) return true;
+  if (pupils.some((p) => !pupilNameOk(p.name))) return true;
+  if (!pupils.some((p) => Number(p.amount) > 0)) return true;
+  return false;
 }
 
 /** Состав карточки занятия: все ученики группы + имена с диска. Лиды и архив — только если уже в уроке. */

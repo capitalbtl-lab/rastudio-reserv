@@ -39,11 +39,25 @@ describe("журнал уроков", () => {
     assert.equal(row.id, 1);
     assert.equal(row.group, "Роботы");
     const charged = clientLessonFromJournal(
-      { date: "2026-09-01", lessonId: 9, amount: 850, cttId: 4412, status: 3 },
+      {
+        date: "2026-09-01",
+        lessonId: 9,
+        amount: 850,
+        cttId: 4412,
+        status: 3,
+        customerIds: [1, 2],
+        pupils: [
+          { customerId: 1, name: "Усов Александр", attend: true, amount: 350 },
+          { customerId: 2, name: "Чуднова Александра", attend: true, amount: 350 },
+        ],
+      },
       "Роботы",
     );
     assert.equal(charged.amount, 850);
     assert.equal(charged.cttId, 4412);
+    assert.equal(charged.pupils?.length, 2);
+    assert.equal(charged.customerIds?.length, 2);
+    assert.equal(charged.pupils?.[0].name, "Усов Александр");
   });
 
   it("карточка: только её группа, python и пустое имя не входят", () => {

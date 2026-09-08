@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { inheritRegularPeriod, isoDateOrEmpty, ruDate, beatFollowsGroup, stampBeatsPeriodIfFollow, maskHm, maskRuDate, mergeLessonRoster, lessonRestLabel, lessonRestLeft } from "./crm-slots-core.ts";
+import { inheritRegularPeriod, isoDateOrEmpty, ruDate, beatFollowsGroup, stampBeatsPeriodIfFollow, maskHm, maskRuDate, mergeLessonRoster, lessonRestLabel, lessonRestLeft, pupilNameOk, lessonRosterThin, mergeLessonPupils } from "./crm-slots-core.ts";
 
 describe("второй урок в группе копирует период первого", () => {
   it("isoDateOrEmpty не подставляет сегодня", () => {
@@ -120,5 +120,21 @@ describe("карточка занятия группы: весь состав", 
     assert.equal(lessonRestLabel({ rest: 0, lessons: 6, eDate: "27.06.2026" }), "0 / 6 ост, 27.06");
     assert.equal(lessonRestLeft("0 / 8 ост"), 0);
     assert.equal(lessonRestLeft("128 ост"), 128);
+    assert.equal(pupilNameOk("клиент 5842"), "");
+    assert.equal(pupilNameOk("Рыбаков Николай Павлович"), "Рыбаков Николай Павлович");
+    assert.equal(lessonRosterThin({ status: 3, pupils: [{ customerId: 5842, attend: true }] }), true);
+    assert.equal(lessonRosterThin({ status: 3, pupils: [{ customerId: 1, name: "Алехин", attend: true, amount: 1087.5 }] }), false);
+    assert.equal(lessonRosterThin({ status: 1, customerIds: [1] }), false);
+    const merged = mergeLessonPupils(
+      [{ customerId: 1, name: "клиент 1", attend: true }],
+      [
+        { customerId: 1, name: "Алехин Дмитрий", attend: true, amount: 1087.5 },
+        { customerId: 5842, name: "клиент 5842", attend: true, amount: 350 },
+      ],
+    );
+    assert.equal(merged?.length, 2);
+    assert.equal(merged?.find((p) => p.customerId === 1)?.name, "Алехин Дмитрий");
+    assert.equal(merged?.find((p) => p.customerId === 1)?.amount, 1087.5);
+    assert.equal(merged?.find((p) => p.customerId === 5842)?.amount, 350);
   });
 });

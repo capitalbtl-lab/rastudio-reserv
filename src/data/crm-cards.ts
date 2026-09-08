@@ -43,6 +43,10 @@ export type ClientLesson = {
   amount?: number;
   cttId?: number;
   groupIds?: number[];
+  customerIds?: number[];
+  attend?: number;
+  total?: number;
+  pupils?: { customerId: number; name?: string; attend?: boolean; amount?: number; cttId?: number }[];
 };
 
 export type ClientTariff = {

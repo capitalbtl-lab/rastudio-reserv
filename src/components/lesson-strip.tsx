@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GroupCalLesson, LessonRosterPerson } from "@/data/crm-slots-core";
-import { mergeLessonRoster, lessonRestLeft, maskHm, maskRuDate } from "@/data/crm-slots-core";
+import { mergeLessonRoster, lessonRestLeft, maskHm, maskRuDate, pupilNameOk } from "@/data/crm-slots-core";
 import { adminSchedule } from "@/data/admin-schedule";
 import { RA_POP } from "@/data/admin-ui";
 import { RaSelect } from "@/components/ra-select";
@@ -187,7 +187,7 @@ function LessonCard({
   const btn = "h-8 rounded-lg bg-[#d8dce3] text-[0.75rem] font-semibold text-[#5c636c] disabled:opacity-45";
   return (
     <div
-      className={cn("fixed z-[240] w-[22rem] p-3 text-left text-[0.78rem] leading-snug text-fg", RA_POP)}
+      className={cn("fixed z-[240] w-[24rem] p-3 text-left text-[0.78rem] leading-snug text-fg", RA_POP)}
       style={{ top, left }}
       onMouseDown={(e) => e.stopPropagation()}
       onMouseEnter={onEnter}
@@ -217,13 +217,19 @@ function LessonCard({
       {roster.length ? (
         <ol className="pretty-scroll mt-2 max-h-64 space-y-0.5 overflow-y-auto border-t border-black/8 pt-2 text-[0.75rem]" data-op="lesson-pupils">
           {roster.map((p, i) => {
-            const name = p.name || `клиент ${p.customerId}`;
+            const name = pupilNameOk(p.name) || `клиент ${p.customerId}`;
             const left = lessonRestLeft(p.rest);
             const tone = left == null ? "" : left > 0 ? "text-emerald-700" : "text-red-700";
+            const amt =
+              done && Number.isFinite(Number(p.amount))
+                ? Number(p.amount).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : "";
             const line = (
-              <span className={cn("flex min-w-0 items-center gap-1.5", p.attend ? tone || "text-fg" : "text-muted")}>
+              <span className={cn("flex min-w-0 flex-1 items-center gap-1.5", p.attend ? tone || "text-fg" : "text-muted")}>
+                {p.attend ? <span className="shrink-0 text-[0.7rem] text-emerald-600">✓</span> : <span className="w-3 shrink-0" />}
                 <span className="min-w-0 truncate">{name}</span>
-                {p.rest ? <span className="shrink-0 tabular-nums">({p.rest})</span> : null}
+                {!amt && p.rest ? <span className="shrink-0 tabular-nums">({p.rest})</span> : null}
+                {amt ? <span className="ml-auto shrink-0 tabular-nums text-fg">{amt}</span> : null}
               </span>
             );
             return (
@@ -232,18 +238,18 @@ function LessonCard({
                 {onOpenPupil && p.customerId ? (
                   <button
                     type="button"
-                    className="min-w-0 flex-1 truncate text-left hover:underline"
+                    className="flex min-w-0 flex-1 truncate text-left hover:underline"
                     onClick={(e) => {
                       e.stopPropagation();
                       onOpenPupil(p.customerId);
                     }}
                   >
-                    {p.attend ? line : <s className="text-muted">{line}</s>}
+                    {p.attend ? line : <s className="flex min-w-0 flex-1 text-muted">{line}</s>}
                   </button>
                 ) : p.attend ? (
-                  <span className="min-w-0 flex-1">{line}</span>
+                  <span className="flex min-w-0 flex-1">{line}</span>
                 ) : (
-                  <s className="min-w-0 flex-1 text-muted">{line}</s>
+                  <s className="flex min-w-0 flex-1 text-muted">{line}</s>
                 )}
               </li>
             );
@@ -1027,7 +1033,7 @@ export function LessonStrip({
 
   function place(el: HTMLElement) {
     const r = el.getBoundingClientRect();
-    const width = 328;
+    const width = 384;
     let left = r.right + 8;
     if (left + width > window.innerWidth - 8) left = Math.max(8, r.left - width - 8);
     if (left < 8) left = 8;

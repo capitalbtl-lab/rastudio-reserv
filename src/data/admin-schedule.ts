@@ -31,7 +31,7 @@ import {
 import { loadSubjects, saveSubjects, pullSubjectsFromCrm, pushSubjectsToCrm, createLocalSubject } from "./crm-subjects";
 import { isLocalSubject } from "./crm-local-id";
 import type { GroupCalLesson } from "./crm-slots-core";
-import { beatsOf, lessonRestLabel } from "./crm-slots-core";
+import { beatsOf, lessonRestLabel, pupilNameOk, lessonRosterThin } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { loadGroupCard, saveGroupCard, nextLocalLessonId, upsertGroupCalendar, mergeLocalCalendar, upsertCustomerCalendar, collectCustomerJournal, fanOutLessonWriteoffs } from "./group-cards";
 import { stampJournal, clientLessonFromJournal } from "./crm-journal-core";
@@ -3742,7 +3742,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         .map((s) => ({ id: s.groupId, name: s.groupName || `группа ${s.groupId}` }))
         .filter((g) => (seen.has(g.id) ? false : (seen.add(g.id), true)));
       const catalog = lessonCatalogOf(branch);
-      if (lessonId < 0 || (!wantAlfaPull(data.fresh) && (hit || slot))) {
+      if (lessonId < 0 || (!wantAlfaPull(data.fresh) && !lessonRosterThin(hit) && (hit || slot))) {
         const { dossiersInGroup } = await import("./dossiers");
         const people = gid ? dossiersInGroup(branch, gid) : [];
         const pupils = hit?.pupils || [];
@@ -3758,6 +3758,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         const from = hm(String(hit?.from || slot?.timeFrom || data.time || ""));
         const to = hm(String(hit?.to || slot?.timeTo || data.timeTo || ""));
         const { parseDossierCtt, pickLessonCtt, lessonWriteoffOf } = await import("./pupil-tariffs");
+        const { cardPays } = await import("./crm-pay");
         const catalogTariffs = loadTariffs().items;
         const subjectName = String(hit?.subject || slot?.subject || "");
         const subjectId = Number(hit?.subjectId || slot?.subjectId || data.subjectId || 0);
@@ -3768,9 +3769,16 @@ export const adminSchedule = createServerFn({ method: "POST" })
           return t ? lessonRestLabel({ rest: Number(t.lessons) || 0, eDate: t.eDate }) : "";
         }
         function personName(cid: number, fallback?: string) {
-          if (fallback) return fallback;
+          const named = pupilNameOk(fallback);
+          if (named) return named;
           const d = people.find((x) => x.crmId === cid) || findDossier({ crmId: cid });
-          return String(d?.child?.fio || d?.parent?.fio || "").trim() || `клиент ${cid}`;
+          const fio = String(d?.child?.fio || d?.parent?.fio || "").trim();
+          if (fio) return fio;
+          for (const row of cardPays(cid)) {
+            const pay = pupilNameOk(row.customerName);
+            if (pay) return pay;
+          }
+          return `клиент ${cid}`;
         }
         function chargeOf(cid: number, stored?: number, reasonId?: number) {
           if (Number(stored) > 0) return Number(stored);
@@ -3839,6 +3847,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const dateRu = dateIso ? formatRuDob(dateIso) : "";
       async function findLesson() {
         if (!lessonId && !dateIso) return null;
+        if (lessonId > 0) {
+          const json = await request<{ items?: Record<string, unknown>[] }>(
+            `/v2api/${branch}/lesson/index`,
+            { page: 0, pageSize: 5, id: lessonId, lesson_id: lessonId },
+            t,
+          ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+          const byId = (json.items || []).find((x) => Number(x.id) === lessonId);
+          if (byId) return byId;
+        }
         const packs = await Promise.all(
           [1, 2, 3].map((status) =>
             request<{ items?: Record<string, unknown>[] }>(
@@ -3862,11 +3879,43 @@ export const adminSchedule = createServerFn({ method: "POST" })
         }
         return null;
       }
-      const [raw, alfaRooms, alfaTeachers] = await Promise.all([
+      const [found, alfaRooms, alfaTeachers] = await Promise.all([
         findLesson(),
         rooms.length ? Promise.resolve(rooms) : roomsOfBranch(request, t, branch),
         teachers.length ? Promise.resolve(teachers) : teachersOfBranch(request, t, branch),
       ]);
+      const raw =
+        found ||
+        (hit
+          ? ({
+              id: hit.lessonId,
+              date: hit.date,
+              time_from: hit.from,
+              time_to: hit.to,
+              status: hit.status,
+              lesson_type_id: hit.typeId,
+              lesson_type_name: hit.type,
+              room_id: hit.roomId,
+              teacher_ids: hit.teacherIds,
+              subject_id: hit.subjectId,
+              topic: hit.topic,
+              note: hit.note,
+              homework: hit.homework,
+              customer_ids: hit.customerIds,
+              group_ids: hit.groupIds,
+              details: (hit.pupils || []).map((p) => ({
+                customer_id: p.customerId,
+                is_attend: p.attend === false ? 0 : 1,
+                commission: p.amount,
+                customer_name: p.name,
+                ctt_id: p.cttId,
+                reason_id: p.reasonId,
+                grade: p.grade,
+                homework_grade: p.homeworkGrade,
+                note: p.note,
+              })),
+            } as Record<string, unknown>)
+          : null);
       const from = hm(String(raw?.time_from || data.time || ""));
       const to = hm(String(raw?.time_to || data.timeTo || ""));
       const teacherIds = (Array.isArray(raw?.teacher_ids) ? raw!.teacher_ids : data.teacherIds || []).map(Number).filter((n) => n > 0);
@@ -3875,13 +3924,23 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const groupIds = (Array.isArray(raw?.group_ids) ? raw!.group_ids : []).map(Number).filter((n) => n > 0);
       if (!groupIds.length && gid) groupIds.push(gid);
       const { parseDossierCtt, pickLessonCtt, lessonWriteoffOf } = await import("./pupil-tariffs");
+      const { cardPays } = await import("./crm-pay");
       const catalogTariffs = loadTariffs().items;
       const subjectName = String(raw?.subject_name || slot?.subject || "");
       const subjectIdRaw = Number(raw?.subject_id || data.subjectId || slot?.subjectId || 0);
       const customers = (pupils.length ? pupils : customerIds.map((cid) => ({ customerId: cid, attend: true, amount: 0 }))).map((p) => {
         const cid = Number(p.customerId);
         const d = findDossier({ crmId: cid });
-        const name = String(("name" in p && p.name) || d?.child?.fio || d?.parent?.fio || "").trim();
+        let name = pupilNameOk(String(("name" in p && p.name) || "")) || String(d?.child?.fio || d?.parent?.fio || "").trim();
+        if (!name) {
+          for (const row of cardPays(cid)) {
+            const pay = pupilNameOk(row.customerName);
+            if (pay) {
+              name = pay;
+              break;
+            }
+          }
+        }
         const live = parseDossierCtt(d?.extras);
         const t0 = pickLessonCtt(live, { subjectId: subjectIdRaw, subject: subjectName, catalog: catalogTariffs });
         const stored = "amount" in p ? Number(p.amount) : 0;

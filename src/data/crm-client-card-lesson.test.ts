@@ -125,6 +125,11 @@ describe("форма занятия карточки", () => {
     assert.match(strip, /whitespace-nowrap/);
     assert.match(strip, /openNotes/);
     assert.match(strip, /aria-label="прим\."/);
+    assert.match(strip, /toLocaleString\("ru-RU"/);
+    assert.match(strip, /pupilNameOk/);
+    assert.match(strip, /Number.isFinite\(Number\(p.amount\)\)/);
+    assert.match(src, /pupils: l.pupils/);
+    assert.match(src, /customerIds: l.customerIds/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /packLessonPupils/);
     assert.match(inbound, /fanOutLessonWriteoffs/);
@@ -139,7 +144,21 @@ describe("форма занятия карточки", () => {
     assert.match(api, /init: 1/);
     assert.match(api, /reasonId === 2/);
     assert.match(api, /rest: Number\(t\.lessons\)/);
-    assert.match(api, /Number\.isFinite\(Number\(c\.amount\)\)/);
+    assert.match(api, /lessonRosterThin/);
+    assert.match(api, /pupilNameOk/);
+    assert.match(api, /cardPays/);
+    assert.match(api, /lesson_id: lessonId/);
+    const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
+    assert.doesNotMatch(cards, /customerIds: \[cid\]/);
+    assert.match(cards, /mergeLessonPupils/);
+    assert.match(cards, /withPupilFio/);
+    const journal = readFileSync(new URL("./crm-journal-core.ts", import.meta.url), "utf8");
+    assert.match(journal, /pupils: lesson.pupils/);
+    const tariffs = readFileSync(new URL("./pupil-tariffs.ts", import.meta.url), "utf8");
+    const pick = tariffs.slice(tariffs.indexOf("export function pickLessonCtt"), tariffs.indexOf("export function todayIso"));
+    assert.match(pick, /for \(const t of all\)/);
+    assert.doesNotMatch(pick, /filter\(\(t\) => !t.archived\)/);
+    assert.match(pick, /if \(!t.archived\) s \+= 2/);
   });
 
   it("расписание импортирует reload — иначе вкладка не открывается", () => {

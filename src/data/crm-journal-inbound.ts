@@ -5,7 +5,9 @@ import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor } from "./crm-cache-policy";
 import { journalFingerprint } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
+import { pupilNameOk } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
+import { cardPays } from "./crm-pay";
 import {
   uniqueBranches,
   packLessonPupils,
@@ -123,9 +125,18 @@ function withPupilNames(lesson: GroupCalLesson): GroupCalLesson {
   if (!lesson.pupils?.length) return lesson;
   let hit = false;
   const pupils = lesson.pupils.map((p) => {
-    if (p.name) return p;
+    if (pupilNameOk(p.name)) return p;
     const d = findDossier({ crmId: p.customerId });
-    const name = String(d?.child?.fio || d?.parent?.fio || "").trim();
+    let name = String(d?.child?.fio || d?.parent?.fio || "").trim();
+    if (!name) {
+      for (const row of cardPays(p.customerId)) {
+        const pay = pupilNameOk(row.customerName);
+        if (pay) {
+          name = pay;
+          break;
+        }
+      }
+    }
     if (!name) return p;
     hit = true;
     return { ...p, name };

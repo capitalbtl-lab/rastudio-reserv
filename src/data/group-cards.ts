@@ -1,11 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { GroupCalLesson } from "./crm-slots-core";
+import { pupilNameOk, mergeLessonPupils } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { nextLocalId } from "./crm-local-id";
 import { mergeJournalInbound } from "./crm-inbound-core";
 import { journalForCustomer, calendarLessonForCard } from "./crm-journal-core";
 import { chargeFromPupils } from "./crm-ledger-core";
+import { findDossier } from "./dossiers";
+import { cardPays } from "./crm-pay";
 
 export type CachedGroupCard = {
   id: number;
@@ -184,6 +187,30 @@ export function replaceCustomerCalendar(customerId: number, lessons: GroupCalLes
   return list;
 }
 
+function fioOf(cid: number) {
+  const d = findDossier({ crmId: cid });
+  const fromDossier = String(d?.child?.fio || d?.parent?.fio || "").trim();
+  if (fromDossier) return fromDossier;
+  for (const row of cardPays(cid)) {
+    const pay = pupilNameOk(row.customerName);
+    if (pay) return pay;
+  }
+  return "";
+}
+
+function withPupilFio(lesson: GroupCalLesson): GroupCalLesson {
+  if (!lesson.pupils?.length) return lesson;
+  let hit = false;
+  const pupils = lesson.pupils.map((p) => {
+    if (pupilNameOk(p.name)) return p;
+    const name = fioOf(p.customerId);
+    if (!name) return p;
+    hit = true;
+    return { ...p, name };
+  });
+  return hit ? { ...lesson, pupils } : lesson;
+}
+
 export function collectCustomerJournal(
   customerId: number,
   groups: { id: number; branchId: number; name?: string }[],
@@ -197,19 +224,30 @@ export function collectCustomerJournal(
     if (id && ids.length && !ids.includes(id) && !pupil) return;
     if (id && !ids.length && !pupil && !pastWriteoff) return;
     const charge = id ? chargeFromPupils(les, id) : { amount: Number(les.amount) || 0, cttId: Number(les.cttId) || 0 };
-    const row: GroupCalLesson = {
+    const row: GroupCalLesson = withPupilFio({
       ...les,
       group: les.group || groupName || "",
       amount: charge.amount || les.amount,
       cttId: charge.cttId || les.cttId,
-    };
+    });
     if (groups.length && !pastWriteoff && !calendarLessonForCard(row, groups)) return;
     const key = String(row.lessonId || `${row.date}|${row.from}|${row.type}|${row.group}`);
     const prev = seen.has(key) ? out.find((x) => String(x.lessonId || `${x.date}|${x.from}|${x.type}|${x.group}`) === key) : undefined;
     if (prev) {
       if (!(Number(prev.amount) > 0) && Number(row.amount) > 0) prev.amount = row.amount;
       if (!(Number(prev.cttId) > 0) && Number(row.cttId) > 0) prev.cttId = row.cttId;
-      if (!(prev.pupils && prev.pupils.length) && row.pupils?.length) prev.pupils = row.pupils;
+      const merged = mergeLessonPupils(prev.pupils, row.pupils);
+      if (merged?.length) {
+        prev.pupils = merged;
+        prev.total = merged.length;
+        prev.attend = merged.filter((p) => p.attend !== false).length;
+      }
+      const idsA = prev.customerIds || [];
+      const idsB = row.customerIds || [];
+      if (idsB.length > idsA.length) prev.customerIds = idsB;
+      else if (!idsA.length && merged?.length) prev.customerIds = merged.map((p) => p.customerId);
+      if ((Number(row.total) || 0) > (Number(prev.total) || 0) && !merged?.length) prev.total = row.total;
+      if ((Number(row.attend) || 0) > (Number(prev.attend) || 0) && !merged?.length) prev.attend = row.attend;
       return;
     }
     seen.add(key);
@@ -242,9 +280,6 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
         ...lesson,
         amount: charge.amount || undefined,
         cttId: charge.cttId || undefined,
-        customerIds: [cid],
-        attend: p.attend ? 1 : 0,
-        total: 1,
       });
       store.items[key] = list.slice(0, 800);
       n += 1;
