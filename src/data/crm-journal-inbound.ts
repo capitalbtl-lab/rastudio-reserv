@@ -6,6 +6,29 @@ import { stampJournalCursor } from "./crm-cache-policy";
 import { journalFingerprint } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
+import {
+  uniqueBranches,
+  packLessonPupils,
+  lessonCustomerIds,
+  chargeFromPupils,
+  lessonWriteoffAmount,
+  lessonWriteoffCtt,
+  lessonPupilsKey,
+} from "./crm-ledger-core";
+import {
+  customerLessonsFresh,
+  customerSyncOf,
+  stampCustomerSync,
+  lessonFillStart,
+  lessonFillOf,
+  lessonFillAdvance,
+  lessonFillBusy,
+  markLessonFillBusy,
+  LESSON_STATUSES,
+  LESSON_INBOUND_RUN,
+  LESSON_RECENT_DAYS,
+} from "./crm-customer-sync";
+
 
 function hm(raw?: string) {
   const m = String(raw || "").match(/(\d{1,2}):(\d{2})/);

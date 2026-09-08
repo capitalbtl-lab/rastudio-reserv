@@ -1,0 +1,74 @@
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import {
+  isSyncFresh,
+  lessonFillStart,
+  lessonFillAdvance,
+  lessonFillOf,
+  CUSTOMER_SYNC_TTL_MS,
+  LESSON_INBOUND_RUN,
+} from "./crm-customer-sync.ts";
+
+describe("штамп входа ученика", () => {
+  it("свежий штамп не старше TTL, пустой — нет", () => {
+    assert.equal(isSyncFresh(""), false);
+    assert.equal(isSyncFresh(undefined), false);
+    const now = Date.parse("2026-09-08T00:00:00.000Z");
+    assert.equal(isSyncFresh(new Date(now - 60_000).toISOString(), now), true);
+    assert.equal(isSyncFresh(new Date(now - CUSTOMER_SYNC_TTL_MS - 1).toISOString(), now), false);
+  });
+
+  it("история занятий: короткая страница двигает статус, потом филиал, потом done", () => {
+    assert.deepEqual(lessonFillStart(2), { bid: 2, statusIdx: 0, page: 0 });
+    assert.deepEqual(lessonFillAdvance({ bid: 1, statusIdx: 0, page: 0 }, false, [1, 2]), { bid: 1, statusIdx: 0, page: 1 });
+    assert.deepEqual(lessonFillAdvance({ bid: 1, statusIdx: 0, page: 2 }, true, [1, 2]), { bid: 1, statusIdx: 1, page: 0 });
+    assert.deepEqual(lessonFillAdvance({ bid: 1, statusIdx: 2, page: 0 }, true, [1, 2]), { bid: 2, statusIdx: 0, page: 0 });
+    assert.equal(lessonFillAdvance({ bid: 2, statusIdx: 2, page: 1 }, true, [1, 2]).done, true);
+    assert.equal(lessonFillOf({ bid: 3, statusIdx: 1, page: 4 })?.statusIdx, 1);
+    assert.equal(LESSON_INBOUND_RUN, 4);
+  });
+});
+
+describe("карточка не ждёт Alfa", () => {
+  it("customerGet отдаёт диск, журнал — void, не await", () => {
+    const src = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
+    const getAt = src.indexOf('data.action === "customerGet"');
+    const getNext = src.indexOf("if (data.action ===", getAt + 10);
+    const get = src.slice(getAt, getNext > getAt ? getNext : getAt + 3500);
+    const diskEnd = get.indexOf("if (customerId < 0)");
+    const disk = get.slice(0, diskEnd > 0 ? diskEnd : get.length);
+    assert.match(get, /inboundCustomerLessons/);
+    assert.match(disk, /cardFromDossier/);
+    assert.match(disk, /fromCache: true/);
+    assert.equal(/pullCustomerTariffs/.test(disk), false);
+    assert.equal(/pullCustomerRegular/.test(disk), false);
+    assert.equal(/inboundCustomerPays/.test(disk), false);
+    assert.equal(/pullCustomerAccount/.test(disk), false);
+    assert.match(get, /void import\("\.\/crm-journal-inbound"\)/);
+    assert.equal(/await import\("\.\/crm-journal-inbound"\)/.test(get), false);
+  });
+
+  it("журнал ученика: полная история один раз, дальше окно и union", () => {
+    const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
+    assert.match(inbound, /dateFrom = ruShift\(-2200\)/);
+    assert.match(inbound, /LESSON_RECENT_DAYS/);
+    assert.match(inbound, /mergeLocalCalendar/);
+    assert.match(inbound, /"union"/);
+    assert.match(inbound, /customerLessonsFresh/);
+    assert.match(inbound, /lessonFillAdvance/);
+    assert.match(inbound, /packLessonPupils/);
+    assert.match(inbound, /uniqueBranches/);
+    const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
+    const at = pay.indexOf("export async function inboundCustomerPays");
+    const chunk = pay.slice(at, at + 2800);
+    assert.match(chunk, /filled \? 1 : PAY_INBOUND_RUN/);
+    assert.match(chunk, /!filled/);
+  });
+
+  it("событие на сайте сразу в очередь Alfa", () => {
+    const q = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
+    assert.match(q, /tickExportQueue\(1,/);
+    assert.match(q, /customer\.update|lesson\.update|pay\.create/);
+  });
+});
