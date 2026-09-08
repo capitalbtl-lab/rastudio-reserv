@@ -196,13 +196,26 @@ export function AdminCrmSettings() {
     }
   }
 
-  async function saveSync(next: { pull?: typeof pull; push?: typeof push; minutes?: number }) {
+  async function saveSync(next: { pull?: typeof pull; push?: typeof push; pipe?: typeof pipe; minutes?: number; payDays?: number }) {
     if (next.pull) setPull(next.pull);
     if (next.push) setPush(next.push);
+    if (next.pipe) setPipe(next.pipe);
     if (next.minutes) setSyncMin(next.minutes);
+    if (next.payDays) setPayDays(next.payDays);
     const res = (await adminSchedule({
-      data: { token: token(), action: "alfaLinkSave", alfaLink: { mode: alfaMode, pull: next.pull || pull, push: next.push || push, minutes: next.minutes || syncMin } } as never,
-    })) as { ok?: boolean; alfaLink?: { mode?: AlfaLinkMode; pull?: typeof pull; push?: typeof push; minutes?: number }; error?: string };
+      data: {
+        token: token(),
+        action: "alfaLinkSave",
+        alfaLink: {
+          mode: alfaMode,
+          pull: next.pull || pull,
+          push: next.push || push,
+          pipe: next.pipe || pipe,
+          minutes: next.minutes || syncMin,
+          payDays: next.payDays || payDays,
+        },
+      } as never,
+    })) as { ok?: boolean; alfaLink?: { mode?: AlfaLinkMode; pull?: typeof pull; push?: typeof push; pipe?: typeof pipe; minutes?: number; payDays?: number }; error?: string };
     if (!res.ok) {
       setMsg(res.error || "Не удалось сохранить каналы Alfa.");
       return;
@@ -390,7 +403,7 @@ export function AdminCrmSettings() {
 
       <Card
         title="Фон с AlfaCRM"
-        hint="Диск сайта — правда. Ольга и формы пишут сюда сразу. Alfa — опциональный фон: лиды, клиенты, пробные, занятия. Полная выгрузка — кнопка «Обновить» в клиентах."
+        hint="Диск сайта — правда. Ольга и формы пишут сюда сразу. Ниже — что подгружать из Alfa, что выгружать обратно, и предохранители трубы (лимит, токен, повтор создания)."
       >
         <div className="grid gap-2 sm:grid-cols-2">
           {ALFA_LINK_MODES.map((m) => {
@@ -458,7 +471,30 @@ export function AdminCrmSettings() {
             </ul>
           </div>
         </div>
-        <label className="mt-4 flex flex-wrap items-center gap-2 text-sm font-semibold">
+        <div className={cn("mt-4", alfaMode === "offline" && "opacity-50")}>
+          <p className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-muted">Труба в Alfa</p>
+          <ul className="mt-2 grid gap-1.5 md:grid-cols-2">
+            {ALFA_PIPE_CH.map((c) => (
+              <li key={c.id}>
+                <label className="flex cursor-pointer items-start gap-2 rounded-xl bg-surface-2 px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    disabled={busy || alfaMode === "offline"}
+                    checked={pipe[c.id as AlfaPipeCh]}
+                    onChange={(e) => void saveSync({ pipe: { ...pipe, [c.id]: e.target.checked } })}
+                  />
+                  <span>
+                    <span className="font-semibold">{c.title}</span>
+                    <span className="mt-0.5 block text-[0.72rem] text-muted">{c.hint}</span>
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
+        <label className="flex flex-wrap items-center gap-2 text-sm font-semibold">
           Сверять каждые
           <select
             className="h-9 rounded-full bg-surface-2 px-3 text-sm font-medium ring-1 ring-black/8"
@@ -473,8 +509,24 @@ export function AdminCrmSettings() {
             ))}
           </select>
         </label>
+        <label className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+          Касса за
+          <select
+            className="h-9 rounded-full bg-surface-2 px-3 text-sm font-medium ring-1 ring-black/8"
+            value={payDays}
+            disabled={busy || alfaMode === "offline"}
+            onChange={(e) => void saveSync({ payDays: Number(e.target.value) })}
+          >
+            {[1, 2, 3, 5, 7, 14].map((n) => (
+              <option key={n} value={n}>
+                {n} дн
+              </option>
+            ))}
+          </select>
+        </label>
+        </div>
         <p className="mt-2 text-[0.75rem] text-muted">
-          Выключенный канал: на сайте запись есть, в Alfa не уходит, пока не включите. Очередь хранит задание.
+          Выключенный канал: на сайте запись есть, в Alfa не уходит, пока не включите. Очередь хранит задание. Касса опрашивает окно дней, не всю историю.
         </p>
       </Card>
 
