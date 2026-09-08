@@ -8,17 +8,21 @@ import {
   pullAllowed,
   pullFreshAllowed,
   pushAllowed,
+  pipeAllowed,
+  payDaysOf,
   type AlfaLinkMode,
   type AlfaPullCh,
   type AlfaPushCh,
+  type AlfaPipeCh,
   type AlfaSyncFlags,
 } from "./crm-alfa-link-core";
 
-export type { AlfaLinkMode, AlfaPullCh, AlfaPushCh, AlfaSyncFlags };
+export type { AlfaLinkMode, AlfaPullCh, AlfaPushCh, AlfaPipeCh, AlfaSyncFlags };
 export {
   ALFA_LINK_MODES,
   ALFA_PULL_CH,
   ALFA_PUSH_CH,
+  ALFA_PIPE_CH,
   ALFA_SYNC_DEFAULT,
   alfaLinked,
   alfaLinkOf,
@@ -27,6 +31,8 @@ export {
   deltaAllowed,
   pullAllowed,
   pushAllowed,
+  pipeAllowed,
+  payDaysOf,
 } from "./crm-alfa-link-core";
 
 export type AlfaLinkState = { mode: AlfaLinkMode; at: string } & AlfaSyncFlags;
@@ -83,4 +89,12 @@ export function wantAlfaPullChannel(ch: AlfaPullCh) {
 
 export function wantAlfaPush(op: string, body?: Record<string, unknown>) {
   return pushAllowed(loadAlfaLink(), op, body);
+}
+
+export function wantAlfaPipe(ch: AlfaPipeCh) {
+  return pipeAllowed(loadAlfaLink(), ch);
+}
+
+export function alfaPayDays() {
+  return payDaysOf(loadAlfaLink());
 }
