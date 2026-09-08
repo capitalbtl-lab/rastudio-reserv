@@ -88,6 +88,7 @@ export type PayRow = {
   payMethod?: string;
   groupId?: number;
   payerName?: string;
+  customerName?: string;
   deleted?: boolean;
 };
 
@@ -238,6 +239,7 @@ export function mergePayInbound(pulled: PayRow[], prev: PayRow[] | undefined, ho
       groupId: Number(p.groupId || cur?.groupId) || undefined,
       payMethod: String(p.payMethod || cur?.payMethod || "") || undefined,
       payerName: String(p.payerName || cur?.payerName || "") || undefined,
+      customerName: String(p.customerName || cur?.customerName || "") || undefined,
       deleted: Boolean(cur?.deleted || p.deleted) || undefined,
     });
   }
@@ -294,6 +296,16 @@ export function payPollFirstFill(branches: Record<string, PayPollStamp | undefin
 export function payCustomerIdOf(item: Record<string, unknown>, fallback = 0) {
   const nested = item.customer && typeof item.customer === "object" ? Number((item.customer as { id?: unknown }).id) : 0;
   return Number(item.customer_id || item.customerId || nested || fallback) || 0;
+}
+
+/** ФИО ученика из pay/index. Не путать с payer_name (заказчик). */
+export function payCustomerNameOf(item: Record<string, unknown>) {
+  const nested = item.customer && typeof item.customer === "object" ? (item.customer as Record<string, unknown>) : null;
+  for (const v of [item.customer_name, item.customerName, nested?.name, nested?.fio, nested?.customer_name]) {
+    const s = String(v || "").replace(/\s+/g, " ").trim();
+    if (s.length >= 2) return s.slice(0, 200);
+  }
+  return "";
 }
 
 /** Найти уже созданный платёж в ответе pay/index, чтобы не слать create повторно. */

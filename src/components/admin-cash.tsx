@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { adminSchedule } from "@/data/admin-schedule";
 import { CRM_BRANCH } from "@/data/ids";
@@ -143,6 +143,7 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
   const [take, setTake] = useState<(typeof CASH_PAGE_SIZES)[number]>(50);
   const [page, setPage] = useState(0);
   const [edit, setEdit] = useState<CashEdit | null>(null);
+  const hydratedIds = useRef(new Set<number>());
 
   const load = useCallback(
     async (extra: { q?: string; branchId?: number; payKind?: string; includeDeleted?: boolean; take?: number; page?: number } = {}) => {
@@ -170,6 +171,33 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
         setTotal("total" in res ? Number(res.total) || 0 : 0);
         setPoll(("poll" in res && res.poll && typeof res.poll === "object" ? res.poll : {}) as CashPoll);
         setNote("");
+        const pageItems = ("items" in res && Array.isArray(res.items) ? res.items : []) as CashRow[];
+        const missing = pageItems.filter((p) => {
+          const cid = Number(p.customerId) || 0;
+          if (!cid || hydratedIds.current.has(cid)) return false;
+          return /^клиент\s+\d+$/i.test(String(p.name || "").trim());
+        });
+        if (missing.length) {
+          for (const p of missing) hydratedIds.current.add(Number(p.customerId));
+          const hyd = await adminSchedule({
+            data: {
+              token: token(),
+              action: "cashHydrateNames",
+              people: missing.slice(0, 12).map((p) => ({ customerId: p.customerId, branchId: p.branchId || 1 })),
+            } as never,
+          });
+          const people = "people" in hyd && Array.isArray(hyd.people) ? (hyd.people as { customerId: number; name?: string; parent?: string; phone?: string }[]) : [];
+          if (people.length) {
+            const byId = new Map(people.map((x) => [Number(x.customerId), x]));
+            setItems((prev) =>
+              prev.map((p) => {
+                const n = byId.get(Number(p.customerId));
+                if (!n?.name || /^клиент\s+\d+$/i.test(n.name)) return p;
+                return { ...p, name: n.name, parent: n.parent || p.parent, phone: n.phone || p.phone };
+              }),
+            );
+          }
+        }
       } catch (e) {
         setNote(e instanceof Error ? e.message : "Не удалось прочитать кассу.");
       } finally {
@@ -445,7 +473,7 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
                       data-op="cash-open-client"
                       onClick={() => onOpenClient(p.customerId, p.branchId || 1)}
                     >
-                      {p.name || `клиент ${p.customerId}`}
+                      {p.name && !/^клиент\s+\d+$/i.test(p.name) ? p.name : p.parent || `клиент ${p.customerId}`}
                     </button>
                     <p className="text-[0.72rem] text-muted">
                       {p.customerId}

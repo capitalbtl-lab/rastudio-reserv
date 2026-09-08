@@ -420,7 +420,7 @@ export function upsertDossier(patch: {
   const digits = digitsPhone(patch.phone);
   const store = loadStore();
   const byCrm = patch.crmId
-    ? store.items.find((d) => d.crmId === patch.crmId)
+    ? store.items.find((d) => Number(d.crmId) === Number(patch.crmId))
     : undefined;
   const byPhone = digits ? store.items.find((d) => d.phoneDigits === digits || d.phones.some((p) => digitsPhone(p) === digits)) : undefined;
   let cur = byCrm || byPhone;
@@ -547,10 +547,27 @@ function isArchivedLeadOnSite(d: Dossier, activeLeadIds: Set<number>, currentMap
 export function findDossier(opts: { crmId?: number; phone?: string; id?: string }) {
   const store = loadStore();
   const digits = digitsPhone(opts.phone);
+  const crm = Number(opts.crmId) || 0;
   return (
-    store.items.find((d) => (opts.id && d.id === opts.id) || (opts.crmId && d.crmId === opts.crmId) || (digits && d.phoneDigits === digits)) ||
+    store.items.find((d) => (opts.id && d.id === opts.id) || (crm && Number(d.crmId) === crm) || (digits && d.phoneDigits === digits)) ||
     null
   );
+}
+
+/** Имена для кассы: ключ — Number(crmId), не строгое ===. */
+export function dossierPayHints() {
+  const m = new Map<number, { name: string; parent: string; phone: string }>();
+  for (const d of loadStore().items) {
+    const id = Number(d.crmId) || 0;
+    if (!id) continue;
+    const name = String(d.child?.fio || "").trim();
+    const parent = String(d.parent?.fio || "").trim();
+    const phone = (d.phones || [])[0] || "";
+    const prev = m.get(id);
+    if (prev?.name && !name) continue;
+    m.set(id, { name, parent, phone });
+  }
+  return m;
 }
 
 export function dossierIsStudying(id: number) {

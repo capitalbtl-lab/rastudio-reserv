@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, snapshotBalance, accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, payPollLookbackDates, PAY_POLL_MAX_PER_HOUR, matchAlfaPayId, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, snapshotBalance, accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, payCustomerNameOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, payPollLookbackDates, PAY_POLL_MAX_PER_HOUR, matchAlfaPayId, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -71,6 +71,11 @@ describe("журнал денег", () => {
     assert.equal(merged.some((x) => x.id === -4), true);
     assert.equal(merged.some((x) => x.id === 99), true);
     assert.equal(merged.find((x) => x.id === -4)?.income, 700);
+    const named = mergePayInbound(
+      [row({ id: 88, kind: "income", income: 100, expenditure: 0, customerName: "Пак Анна Викторовна" })],
+      [row({ id: 88, kind: "income", income: 100, expenditure: 0 })],
+    );
+    assert.equal(named.find((x) => x.id === 88)?.customerName, "Пак Анна Викторовна");
   });
 
   it("inbound сохраняет cttId; pending create/delete и deleted не затирает", () => {
@@ -139,6 +144,9 @@ describe("журнал денег", () => {
       11,
     );
     assert.equal(matchAlfaPayId([{ id: 11, customer_id: 1, income: 10 }], { customerId: 7381, income: 10 }), 0);
+    assert.equal(payCustomerNameOf({ customer_id: 59, customer_name: "Пак Анна Викторовна" }), "Пак Анна Викторовна");
+    assert.equal(payCustomerNameOf({ customer: { id: 59, name: "Пак Анна Викторовна" } }), "Пак Анна Викторовна");
+    assert.equal(payCustomerNameOf({ payer_name: "Пак Ольга Владимировна" }), "");
     assert.equal(payPollHitsInWindow(["2026-09-07T10:00:00Z", "2026-09-07T11:50:00Z"], now).length, 1);
     assert.deepEqual(payPollStampOrEmpty({ lastId: 0, lastDate: "2026-09-07" }), { lastId: 0, lastDate: "" });
     assert.equal(payAfterStamp({ id: 9, documentDate: "01.01.2025" }, payPollStampOrEmpty({ lastId: 0, lastDate: "2026-09-07" })), true);

@@ -14,6 +14,7 @@ import {
   payPollHitsInWindow,
   payPollStampOrEmpty,
   payCustomerIdOf,
+  payCustomerNameOf,
   ruDateIso,
   alfaPayIndexDate,
   kindFromAlfaPay,
@@ -47,9 +48,20 @@ import {
 import { pendingExportIds } from "./crm-export-queue";
 import { logAdmin } from "./admin-settings";
 import { ledgerMoney, uniqueBranches, payCttIdOf } from "./crm-ledger-core";
+import { displayPersonName, isPhoneLike } from "./client-display";
 
 export type { PayKind, PayRow };
-export { displayedBalance, balanceOf, payKindOf, payEffect, snapshotBalance, accountSnapOf, liveCttOf, cttRestSum, paySumForCtt, payCountForCtt, cttIdOfPay, OPENING_NOTE, payAccountLabel, CASH_PAGE_SIZES, cashPageSlice, cashTakeOf, payFillNote };
+export { displayedBalance, balanceOf, payKindOf, payEffect, snapshotBalance, accountSnapOf, liveCttOf, cttRestSum, paySumForCtt, payCountForCtt, cttIdOfPay, OPENING_NOTE, payAccountLabel, CASH_PAGE_SIZES, cashPageSlice, cashTakeOf, payFillNote, payCustomerNameOf };
+
+/** Подпись клиента в кассе: карточка, затем имя из платежа Alfa, иначе «клиент N». */
+export function cashPayLabel(row: Pick<PayRow, "customerId" | "customerName">, person?: { name?: string; parent?: string }) {
+  const titled = displayPersonName(person?.name, person?.parent);
+  if (titled && titled !== "Без имени") return titled;
+  const fromPay = String(row.customerName || "").trim();
+  if (fromPay && !isPhoneLike(fromPay)) return fromPay;
+  const cid = Number(row.customerId) || 0;
+  return cid ? `клиент ${cid}` : "клиент";
+}
 
 type PayPollState = { hits: string[]; branches: Record<string, PayPollStamp>; lastNote?: string; fill?: PayFillCursor };
 type PayFill = { bid: number; page: number };
@@ -153,6 +165,8 @@ function extrasOf(row: Partial<PayRow>): Partial<PayRow> {
   if (method) out.payMethod = method;
   const payer = String(row.payerName || "").trim();
   if (payer) out.payerName = payer.slice(0, 2000);
+  const customerName = String(row.customerName || "").trim();
+  if (customerName) out.customerName = customerName.slice(0, 200);
   if (row.deleted) out.deleted = true;
   return out;
 }
@@ -183,6 +197,7 @@ export function cardPays(customerId: number) {
       payMethod: String(x.payMethod || ""),
       groupId: Number(x.groupId) || 0,
       payerName: String(x.payerName || ""),
+      customerName: String(x.customerName || ""),
     }));
 }
 
@@ -527,8 +542,63 @@ export function packPay(item: Record<string, unknown>, customerId: number, branc
       managerId: Number(item.manager_id || item.managerId) || 0,
       groupId: Number(item.group_id || item.groupId) || 0,
       payMethod: String(item.pay_method || item.payMethod || ""),
+      payerName: String(item.payer_name || item.payerName || ""),
+      customerName: payCustomerNameOf(item),
     }),
   };
+}
+
+async function stampPayCustomerNames(rows: PayRow[]) {
+  const { findDossier, upsertDossier } = await import("./dossiers");
+  let last: PayRow | null = null;
+  for (const row of rows) {
+    const cid = Number(row.customerId) || 0;
+    const name = String(row.customerName || "").trim();
+    if (!cid || !name) continue;
+    const d = findDossier({ crmId: cid });
+    if (String(d?.child?.fio || "").trim()) continue;
+    last = row;
+    upsertDossier({
+      crmId: cid,
+      branchId: Number(row.branchId) || 1,
+      child: name,
+      parent: String(row.payerName || ""),
+      source: "pay",
+      quiet: true,
+      persist: false,
+    });
+  }
+  if (last) {
+    upsertDossier({
+      crmId: Number(last.customerId),
+      branchId: Number(last.branchId) || 1,
+      child: String(last.customerName || ""),
+      source: "pay",
+      quiet: true,
+    });
+  }
+}
+
+/** Карточек нет на диске — один customer/index по id. Лимит, чтобы не словить 429. */
+export async function hydrateMissingPayCustomers(rows: { customerId?: number; branchId?: number }[], limit = 8) {
+  const { findDossier, syncDossierFromCrm } = await import("./dossiers");
+  const seen = new Set<number>();
+  let n = 0;
+  for (const row of rows) {
+    if (n >= limit) break;
+    const cid = Number(row.customerId) || 0;
+    if (!cid || seen.has(cid)) continue;
+    seen.add(cid);
+    const d = findDossier({ crmId: cid });
+    if (String(d?.child?.fio || d?.parent?.fio || "").trim()) continue;
+    try {
+      await syncDossierFromCrm(cid, Number(row.branchId || d?.branchId) || 1);
+      n += 1;
+    } catch {
+      /* нет карточки или 429 */
+    }
+  }
+  return n;
 }
 
 function holdPayIds() {
@@ -662,6 +732,7 @@ export async function inboundCustomerPays(
   const hold = holdPayIds();
   const merged = mergePayInbound(pulled, paysOf(customerId), hold);
   replaceCustomerPays(customerId, merged);
+  await stampPayCustomerNames(pulled).catch(() => null);
   return merged;
 }
 
@@ -724,6 +795,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   const hold = holdPayIds();
   const typeCounts = new Map<string, number>();
   const touched: number[] = [];
+  const named: PayRow[] = [];
   const windowDates = payPollLookbackDates(alfaPayDays());
   const windowPages = opts?.via === "button" ? 6 : 4;
 
@@ -767,6 +839,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
       if (!unique.length) errs.push(`ф${branchId} пусто window=${JSON.stringify(windowDates)}`);
       const pulled = unique.map((it) => packPay(it, payCustomerIdOf(it), branchId)).filter((x): x is PayRow => Boolean(x));
       pulledCount += pulled.length;
+      named.push(...pulled);
       const fresh = pulled.filter((x) => payAfterStamp(x, stamp));
       touched.push(...mergePulledPays(pulled, hold));
       newCount += fresh.length;
@@ -793,6 +866,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
           .map((it) => packPay(it, payCustomerIdOf(it), fill.bid))
           .filter((x): x is PayRow => Boolean(x));
         pulledCount += pulled.length;
+        named.push(...pulled);
         touched.push(...mergePulledPays(pulled, hold));
         fill = payFillAdvance(fill, pack.items.length < PAY_INBOUND_PAGE);
       } catch (e) {
@@ -804,6 +878,10 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
         break;
       }
     }
+  }
+  await stampPayCustomerNames(named).catch(() => null);
+  if (opts?.via === "button" && !hit429) {
+    await hydrateMissingPayCustomers(named, 12).catch(() => null);
   }
   await stampPayBalances(touched).catch(() => null);
   poll.fill = fill;

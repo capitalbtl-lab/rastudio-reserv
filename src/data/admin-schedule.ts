@@ -1173,6 +1173,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "customerPayPush"
           | "cashList"
           | "cashPoll"
+          | "cashHydrateNames"
           | "customerTariff"
           | "customerGroup"
           | "customerCreate"
@@ -1246,6 +1247,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         ids?: string[];
         groupId?: number;
         customerId?: number;
+        people?: { customerId?: number; id?: number; branchId?: number }[];
         leadId?: number;
         leadStatusId?: number;
         sort?: number;
@@ -1991,7 +1993,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
       return { ok: true as const, queued: true, local: res.local, note: res.note, customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId } };
     }
     if (data.action === "cashList") {
-      const { listCashPays, cashTakeOf } = await import("./crm-pay");
+      const { listCashPays, cashTakeOf, cashPayLabel } = await import("./crm-pay");
+      const { dossierPayHints } = await import("./dossiers");
       const listed = listCashPays({
         branchId: Number(data.branchId) || 0,
         kind: data.payKind,
@@ -2003,15 +2006,16 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const qDigits = q.replace(/\D/g, "");
       const take = cashTakeOf(data.take);
       const skip = Math.max(Number(data.skip) || 0, 0);
+      const hints = dossierPayHints();
       const matched: (typeof listed.items[number] & { name: string; parent: string; phone: string; branchName: string })[] = [];
       for (const row of listed.items) {
-        const d = findDossier({ crmId: row.customerId });
-        const name = d?.child.fio || "";
-        const parent = d?.parent.fio || "";
-        const phone = (d?.phones || [])[0] || "";
+        const hint = hints.get(Number(row.customerId)) || { name: "", parent: "", phone: "" };
+        const name = cashPayLabel(row, hint);
+        const parent = hint.parent;
+        const phone = hint.phone;
         if (q) {
-          const hay = `${row.customerId} ${row.id} ${row.note} ${row.cttId || ""} ${row.payMethod || ""} ${name} ${parent} ${phone}`.toLowerCase();
-          const digits = `${d?.phoneDigits || ""}${phone}`;
+          const hay = `${row.customerId} ${row.id} ${row.note} ${row.cttId || ""} ${row.payMethod || ""} ${name} ${parent} ${phone} ${row.customerName || ""} ${row.payerName || ""}`.toLowerCase();
+          const digits = `${phone}`;
           if (!hay.includes(q) && !(qDigits.length >= 4 && digits.includes(qDigits))) continue;
         }
         matched.push({
@@ -2023,6 +2027,33 @@ export const adminSchedule = createServerFn({ method: "POST" })
         });
       }
       return { ok: true as const, items: matched.slice(skip, skip + take), total: matched.length, poll: listed.poll };
+    }
+    if (data.action === "cashHydrateNames") {
+      const { hydrateMissingPayCustomers, cashPayLabel } = await import("./crm-pay");
+      const { findDossier, dossierPayHints } = await import("./dossiers");
+      const people = Array.isArray(data.people) ? data.people : [];
+      const slice = people.slice(0, 12).map((p) => ({
+        customerId: Number((p as { customerId?: number; id?: number }).customerId || (p as { id?: number }).id) || 0,
+        branchId: Number((p as { branchId?: number }).branchId) || 1,
+      }));
+      await hydrateMissingPayCustomers(slice, 12);
+      const hints = dossierPayHints();
+      return {
+        ok: true as const,
+        people: slice.map((p) => {
+          const hint = hints.get(p.customerId) || { name: "", parent: "", phone: "" };
+          const d = hint.name ? hint : (() => {
+            const x = findDossier({ crmId: p.customerId });
+            return { name: String(x?.child?.fio || ""), parent: String(x?.parent?.fio || ""), phone: (x?.phones || [])[0] || "" };
+          })();
+          return {
+            customerId: p.customerId,
+            name: cashPayLabel({ customerId: p.customerId, customerName: "" }, d),
+            parent: d.parent,
+            phone: d.phone,
+          };
+        }),
+      };
     }
     if (data.action === "cashPoll") {
       const { pollPaysFromAlfa } = await import("./crm-pay");

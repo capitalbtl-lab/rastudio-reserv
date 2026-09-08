@@ -106,6 +106,10 @@ describe("касса список", () => {
     assert.match(pay, /tickExportQueue\(1, op, \{ lean: true \}\)/);
     assert.match(pay, /Alfa не приняла платёж/);
     assert.match(pay, /payerName/);
+    assert.match(pay, /customerName/);
+    assert.match(pay, /payCustomerNameOf/);
+    assert.match(pay, /cashPayLabel/);
+    assert.match(pay, /hydrateMissingPayCustomers/);
     assert.match(pay, /cttId: Number\(row.cttId\) > 0 \? Number\(row.cttId\) : 0/);
     assert.match(pay, /branchId: Number\(x.branchId\) \|\| 0/);
     const save = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
@@ -116,6 +120,10 @@ describe("касса список", () => {
     assert.match(save, /pushPayToAlfa/);
     assert.match(save, /updatePay/);
     assert.match(save, /payerName/);
+    assert.match(save, /cashHydrateNames/);
+    assert.match(save, /cashPayLabel/);
+    assert.match(save, /dossierPayHints/);
+    assert.match(save, /hydrateMissingPayCustomers/);
     assert.match(save, /skip/);
     assert.equal(/kind:\s*["']pays["']/.test(save), false);
     const card = readFileSync(new URL("../components/crm-client-card.tsx", import.meta.url), "utf8");
@@ -145,6 +153,8 @@ describe("касса список", () => {
     assert.match(tab, /pay-edit/);
     assert.match(tab, /Отправить в CRM/);
     assert.match(tab, /customerPayPush/);
+    assert.match(tab, /cashHydrateNames/);
+    assert.match(tab, /клиент\\s\+\\d\+/);
     assert.equal(/kind:\s*["']pays["']/.test(tab), false);
     assert.match(pay, /PAY_INBOUND_RUN/);
     assert.match(pay, /payFill/);
@@ -162,5 +172,25 @@ describe("касса список", () => {
     assert.match(sched, /ra-open-client/);
     const clients = readFileSync(new URL("../components/admin-clients.tsx", import.meta.url), "utf8");
     assert.match(clients, /CardAction/);
+  });
+
+  it("касса: имя из карточки, иначе из платежа Alfa, иначе клиент N", () => {
+    function cashPayLabel(row: { customerId: number; customerName?: string }, person?: { name?: string; parent?: string }) {
+      const child = String(person?.name || "").trim();
+      const parent = String(person?.parent || "").trim();
+      if (child) return child;
+      if (parent) return parent;
+      const fromPay = String(row.customerName || "").trim();
+      if (fromPay) return fromPay;
+      return `клиент ${row.customerId}`;
+    }
+    assert.equal(cashPayLabel({ customerId: 59, customerName: "" }, { name: "Пак Анна Викторовна" }), "Пак Анна Викторовна");
+    assert.equal(cashPayLabel({ customerId: 59, customerName: "Пак Анна Викторовна" }, { name: "" }), "Пак Анна Викторовна");
+    assert.equal(cashPayLabel({ customerId: 59, customerName: "" }, { name: "" }), "клиент 59");
+    assert.equal(cashPayLabel({ customerId: 59, customerName: "" }, { parent: "Пак Ольга Владимировна" }), "Пак Ольга Владимировна");
+    const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
+    assert.match(pay, /export function cashPayLabel/);
+    assert.match(pay, /Без имени/);
+    assert.match(pay, /row.customerName/);
   });
 });
