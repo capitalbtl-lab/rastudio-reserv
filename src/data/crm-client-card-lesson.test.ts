@@ -26,8 +26,11 @@ describe("форма занятия карточки", () => {
     assert.match(src, /g\?\.teacherId/);
     assert.match(src, /const lessonRoomCount = lessonRooms.filter/);
     assert.doesNotMatch(src, /data-op="crm-push"/);
-    assert.match(src, /data-op="writeoffs-menu"/);
+    assert.match(src, /data-op="lesson-menu"/);
+    assert.match(src, /grid-cols-2/);
+    assert.match(src, /pointerdown/);
     assert.match(src, /data-op="cash-menu"/);
+    assert.match(src, /data-op="writeoffs-menu"/);
     assert.match(src, /headMenu === "writeoffs"/);
     assert.match(src, /headMenu === "cash"/);
     assert.match(src, /maskRuDate/);

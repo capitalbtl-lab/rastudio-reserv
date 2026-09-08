@@ -441,6 +441,17 @@ export function CrmClientCard({
   }
 
   useEffect(() => () => window.clearTimeout(headLeave.current), []);
+  useEffect(() => {
+    if (headMenu !== "lesson" && headMenu !== "cash" && headMenu !== "writeoffs") return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+      if (t.closest("[data-op=lesson-menu],[data-op=cash-journal],[data-op=lesson-writeoffs],[data-op=assign-lesson],[data-op=cash-menu],[data-op=writeoffs-menu]")) return;
+      setHeadMenu("");
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    return () => document.removeEventListener("pointerdown", onDown, true);
+  }, [headMenu]);
   const [lessonKey, setLessonKey] = useState("");
   const [lessonOpen, setLessonOpen] = useState(false);
   const [lessonDate, setLessonDate] = useState(todayIso());
@@ -1057,22 +1068,30 @@ export function CrmClientCard({
                 Занятие ▾
               </button>
               {headMenu === "lesson" ? (
-                <div className={cn("absolute right-0 top-8 z-[80] w-56 p-1.5", RA_POP)} data-op="lesson-menu">
-                  {CARD_LESSON_TYPES.map((t) => (
-                    <button
-                      key={t.key}
-                      type="button"
-                      data-lesson-type={t.key}
-                      data-lesson-type-id={t.id}
-                      className="block w-full rounded-lg px-2 py-1.5 text-left text-[0.78rem] font-medium hover:bg-surface-2"
-                      onClick={() => {
-                        setHeadMenu("");
-                        openLesson(t.key);
-                      }}
-                    >
-                      {t.name}
-                    </button>
-                  ))}
+                <div
+                  className={cn("absolute right-0 top-8 z-[80] w-[22rem] p-1.5", RA_POP)}
+                  data-op="lesson-menu"
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <div className="grid grid-cols-2 gap-0.5">
+                    {CARD_LESSON_TYPES.map((t) => (
+                      <button
+                        key={t.key}
+                        type="button"
+                        data-lesson-type={t.key}
+                        data-lesson-type-id={t.id}
+                        className="truncate rounded-lg px-2 py-1.5 text-left text-[0.75rem] font-medium hover:bg-surface-2"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setHeadMenu("");
+                          openLesson(t.key);
+                        }}
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : null}
             </div>
