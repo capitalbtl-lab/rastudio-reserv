@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -320,6 +320,44 @@ const MISS_REASONS = [
   { id: 1, label: "По любой причине (100% списания)", pct: 100 },
   { id: 2, label: "По решению руководства (0% списания)", pct: 0 },
 ] as const;
+const ATTEND_COLS_KEY = "ra_lesson_attend_cols";
+const ATTEND_COL_DEF: Record<string, number> = { name: 220, amount: 92, reason: 148, hw: 52, note: 56, del: 28 };
+const ATTEND_COL_MIN: Record<string, number> = { name: 120, amount: 72, reason: 88, hw: 40, note: 40, del: 24 };
+const ATTEND_COL_KEYS = ["name", "amount", "reason", "hw", "note", "del"] as const;
+
+function readAttendCols(): Record<string, number> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = JSON.parse(localStorage.getItem(ATTEND_COLS_KEY) || "{}") as Record<string, number>;
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeAttendCols(w: Record<string, number>) {
+  try {
+    localStorage.setItem(ATTEND_COLS_KEY, JSON.stringify(w));
+  } catch {
+    /* */
+  }
+}
+
+function AttendColHandle({ onDown }: { onDown: (e: PointerEvent<HTMLSpanElement>) => void }) {
+  return (
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Ширина столбца"
+      title="Потяните, чтобы изменить ширину"
+      className="absolute right-0 top-0 z-20 flex h-full w-2.5 cursor-col-resize touch-none items-center justify-center"
+      onPointerDown={onDown}
+    >
+      <span className="pointer-events-none h-[1.1rem] w-px rounded-full bg-black/20 group-hover/col:bg-primary/70" />
+    </span>
+  );
+}
+
 const MONTHS_FULL = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 
 function DateCal({ value, onPick, children }: { value: string; onPick: (iso: string) => void; children: ReactNode }) {
@@ -495,6 +533,14 @@ function LessonEdit({
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<{ id: number; name: string }[]>([]);
   const [openNotes, setOpenNotes] = useState<Record<number, true>>({});
+  const [colW, setColW] = useState<Record<string, number>>({});
+  const colWRef = useRef(colW);
+  colWRef.current = colW;
+
+  useEffect(() => {
+    setColW(readAttendCols());
+    return () => writeAttendCols(colWRef.current);
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -596,8 +642,44 @@ function LessonEdit({
     );
   }
   const dateShown = /^\d{4}-\d{2}-\d{2}$/.test(form.date) ? ruDate(form.date) : form.date;
+  const colPx = (key: string) => {
+    const n = Number(colW[key]);
+    return n > 0 ? n : ATTEND_COL_DEF[key];
+  };
+  const tableW = ATTEND_COL_KEYS.reduce((n, k) => n + colPx(k), 0);
+  function closeForm() {
+    writeAttendCols(colWRef.current);
+    onClose();
+  }
+  function resizeCol(key: string, e: PointerEvent<HTMLSpanElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const startX = e.clientX;
+    const startW = colPx(key);
+    const min = ATTEND_COL_MIN[key] || 40;
+    const prevUser = document.body.style.userSelect;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    const move = (ev: globalThis.PointerEvent) => {
+      const next = Math.round(Math.min(560, Math.max(min, startW + ev.clientX - startX)));
+      setColW((cur) => ({ ...cur, [key]: next }));
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      document.body.style.userSelect = prevUser;
+      document.body.style.cursor = prevCursor;
+      writeAttendCols(colWRef.current);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }
 
-  async function save() {
+  async function save(asConduct = false) {
     if (!form) return;
     setSaving(true);
     setError("");
@@ -621,7 +703,7 @@ function LessonEdit({
         homework: form.homework,
         note: form.note,
         customers: form.customers,
-        statusId: conduct || form.status === 3 ? 3 : form.status || 1,
+        statusId: asConduct || form.status === 3 ? 3 : form.status || 1,
       } as never,
     });
     setSaving(false);
@@ -663,24 +745,24 @@ function LessonEdit({
       })),
       attend: form.customers.filter((c) => c.attend !== false).length,
       total: form.customers.length,
-      status: conduct || form.status === 3 ? 3 : form.status,
+      status: asConduct || form.status === 3 ? 3 : form.status,
       lessonId: Number((res as { lessonId?: number }).lessonId || form.id || 0) || form.id,
     });
-    onClose();
+    closeForm();
   }
 
   return createPortal(
     <div
       className="fixed inset-0 z-[400] flex items-center justify-center bg-black/40 p-3"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) closeForm();
       }}
       data-op="lesson-edit"
     >
       <div className={cn("w-full max-w-[46rem] p-4", RA_POP, "overflow-visible")} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()} data-op={conduct ? "lesson-conduct" : "lesson-edit-card"}>
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-display text-lg font-semibold text-fg">Групповое — {conduct ? "провести" : form.status === 3 ? "проведён" : form.status === 2 ? "отменён" : "занятие"}</h3>
-          <button type="button" className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white" onClick={onClose}>
+          <button type="button" className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white" onClick={closeForm}>
             Закрыть
           </button>
         </div>
@@ -803,16 +885,36 @@ function LessonEdit({
                   {form.customers.every((c) => c.attend !== false) ? "снять все" : "выбрать все"}
                 </button>
               </div>
-              <div className="mt-1 max-h-[11.5rem] overflow-y-auto rounded-xl bg-white ring-1 ring-black/8" data-op="lesson-attend">
-                <table className="w-full text-left text-[0.75rem]">
-                  <thead className="sticky top-0 bg-white text-[0.62rem] uppercase tracking-wide text-muted">
+              <div className="mt-1 max-h-[11.5rem] overflow-auto rounded-xl bg-white ring-1 ring-black/8" data-op="lesson-attend">
+                <table className="text-left text-[0.75rem]" style={{ tableLayout: "fixed", width: tableW, minWidth: tableW }}>
+                  <colgroup>
+                    {ATTEND_COL_KEYS.map((k) => (
+                      <col key={k} style={{ width: colPx(k) }} />
+                    ))}
+                  </colgroup>
+                  <thead className="sticky top-0 z-10 bg-white text-[0.62rem] uppercase tracking-wide text-muted">
                     <tr>
-                      <th className="px-2 py-1.5 font-medium">Состояние клиента</th>
-                      <th className="w-16 px-1 py-1.5 font-medium" title="Списание">Списание</th>
-                      <th className="w-[9rem] px-1 py-1.5 font-medium" title="Оценка / Причина">Оц. / причина</th>
-                      <th className="w-11 px-1 py-1.5 font-medium" title="Оценка за ДЗ">ДЗ</th>
-                      <th className="w-12 px-1 py-1.5 font-medium" title="Примечание">прим.</th>
-                      <th className="w-7 px-0.5 py-1.5" />
+                      <th className="group/col relative px-2 py-1.5 font-medium">
+                        Состояние клиента
+                        <AttendColHandle onDown={(e) => resizeCol("name", e)} />
+                      </th>
+                      <th className="group/col relative px-1 py-1.5 font-medium" title="Списание">
+                        Списание
+                        <AttendColHandle onDown={(e) => resizeCol("amount", e)} />
+                      </th>
+                      <th className="group/col relative px-1 py-1.5 font-medium" title="Оценка / Причина">
+                        Оц. / причина
+                        <AttendColHandle onDown={(e) => resizeCol("reason", e)} />
+                      </th>
+                      <th className="group/col relative px-1 py-1.5 font-medium" title="Оценка за ДЗ">
+                        ДЗ
+                        <AttendColHandle onDown={(e) => resizeCol("hw", e)} />
+                      </th>
+                      <th className="group/col relative px-1 py-1.5 font-medium" title="Примечание">
+                        прим.
+                        <AttendColHandle onDown={(e) => resizeCol("note", e)} />
+                      </th>
+                      <th className="px-0.5 py-1.5" />
                     </tr>
                   </thead>
                   <tbody>
@@ -839,7 +941,7 @@ function LessonEdit({
                                   }
                                 }}
                               />
-                              <span className="min-w-0 whitespace-nowrap">
+                              <span className="min-w-0 truncate">
                                 <span className={cn("font-medium", zero || c.attend === false ? "text-rose-600" : "text-sky-800")}>{c.name}</span>
                                 {c.rest ? <span className="ml-1 text-[0.65rem] text-muted">({c.rest})</span> : null}
                               </span>
@@ -852,7 +954,7 @@ function LessonEdit({
                                 step="0.01"
                                 value={c.amount ?? ""}
                                 onChange={(e) => patchCustomer(c.id, { amount: Number(e.target.value) || 0, baseAmount: Number(e.target.value) || 0 })}
-                                className="h-7 w-[4.4rem] rounded-md bg-white px-1 text-center tabular-nums ring-1 ring-black/10"
+                                className="h-7 w-full min-w-0 rounded-md bg-white px-1 text-center tabular-nums ring-1 ring-black/10"
                               />
                               <span className="text-[0.65rem] text-muted">р.</span>
                             </span>
@@ -870,7 +972,7 @@ function LessonEdit({
                                     amount: hit?.pct === 0 ? 0 : c.baseAmount || c.amount || 0,
                                   });
                                 }}
-                                className="h-7 w-[8.6rem] rounded-md bg-white px-0.5 text-[0.65rem] ring-1 ring-black/10"
+                                className="h-7 w-full min-w-0 rounded-md bg-white px-0.5 text-[0.65rem] ring-1 ring-black/10"
                               >
                                 <option value="">причина</option>
                                 {MISS_REASONS.map((r) => (
@@ -880,7 +982,7 @@ function LessonEdit({
                                 ))}
                               </select>
                             ) : (
-                              <select value={c.grade || ""} onChange={(e) => patchCustomer(c.id, { grade: e.target.value })} className="h-7 w-[3.2rem] rounded-md bg-white px-0.5 text-center text-[0.72rem] ring-1 ring-black/10">
+                              <select value={c.grade || ""} onChange={(e) => patchCustomer(c.id, { grade: e.target.value })} className="h-7 w-full min-w-0 rounded-md bg-white px-0.5 text-center text-[0.72rem] ring-1 ring-black/10">
                                 <option value="" />
                                 {GRADE_OPTS.map((g) => (
                                   <option key={g} value={g}>
@@ -891,7 +993,7 @@ function LessonEdit({
                             )}
                           </td>
                           <td className="px-1 py-1">
-                            <select value={c.homeworkGrade || ""} onChange={(e) => patchCustomer(c.id, { homeworkGrade: e.target.value })} className="h-7 w-[3.2rem] rounded-md bg-white px-0.5 text-center text-[0.72rem] ring-1 ring-black/10">
+                            <select value={c.homeworkGrade || ""} onChange={(e) => patchCustomer(c.id, { homeworkGrade: e.target.value })} className="h-7 w-full min-w-0 rounded-md bg-white px-0.5 text-center text-[0.72rem] ring-1 ring-black/10">
                               <option value="" />
                               {GRADE_OPTS.map((g) => (
                                 <option key={g} value={g}>
@@ -906,7 +1008,7 @@ function LessonEdit({
                                 value={c.note || ""}
                                 placeholder="прим."
                                 onChange={(e) => patchCustomer(c.id, { note: e.target.value })}
-                                className="h-7 w-[5.2rem] rounded-md bg-white px-1.5 text-[0.72rem] ring-1 ring-black/10"
+                                className="h-7 w-full min-w-0 rounded-md bg-white px-1.5 text-[0.72rem] ring-1 ring-black/10"
                               />
                             ) : (
                               <button
@@ -949,12 +1051,31 @@ function LessonEdit({
           </div>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" className="rounded-full bg-[#d8dce3] px-3 py-1 text-sm font-semibold text-[#5c636c]" onClick={onClose}>
+            <button type="button" className="rounded-full bg-[#d8dce3] px-3 py-1 text-sm font-semibold text-[#5c636c]" onClick={closeForm}>
               Отмена
             </button>
-            <button type="button" disabled={saving} className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white disabled:opacity-50" onClick={() => void save()}>
-              {saving ? "Сохраняю…" : "Сохранить в AlfaCRM"}
+            <button
+              type="button"
+              disabled={saving}
+              className={cn(
+                "rounded-full px-3 py-1 text-sm font-semibold disabled:opacity-50",
+                form.status !== 3 ? "bg-[#d8dce3] text-[#5c636c]" : "bg-primary text-white",
+              )}
+              onClick={() => void save(false)}
+            >
+              {saving ? "Сохраняю…" : form.status !== 3 && conduct ? "Сохранить" : "Сохранить в AlfaCRM"}
             </button>
+            {form.status !== 3 ? (
+              <button
+                type="button"
+                disabled={saving}
+                data-op="lesson-conduct-btn"
+                className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white disabled:opacity-50"
+                onClick={() => void save(true)}
+              >
+                {saving ? "Провожу…" : "Провести"}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
