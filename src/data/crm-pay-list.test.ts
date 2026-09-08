@@ -133,7 +133,6 @@ describe("касса список", () => {
     assert.match(card, /CASH_PAGE_SIZES/);
     assert.match(card, /payAccountLabel/);
     assert.match(card, /cashPageSlice/);
-    assert.match(card, /по \{n\}/);
     const tab = readFileSync(new URL("../components/admin-cash.tsx", import.meta.url), "utf8");
     assert.match(tab, /onOpenClient/);
     assert.match(tab, /cashPoll/);

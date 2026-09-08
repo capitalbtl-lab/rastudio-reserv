@@ -427,7 +427,7 @@ export function CrmClientCard({
   const [cashPage, setCashPage] = useState(0);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [dropPay, setDropPay] = useState<{ id: number; label: string } | null>(null);
-  const [headMenu, setHeadMenu] = useState<"" | "pay" | "lesson">("");
+  const [headMenu, setHeadMenu] = useState<"" | "pay" | "lesson" | "cash" | "lessons">("");
   const headLeave = useRef(0);
 
   function armHeadLeave() {
@@ -610,12 +610,6 @@ export function CrmClientCard({
     });
   }, [card.pays, card.branchId, payBranch]);
   const cashView = useMemo(() => cashPageSlice(journalPays, cashPage, cashSize), [journalPays, cashPage, cashSize]);
-  const journalBranches = useMemo(() => {
-    const ids = new Set<number>();
-    for (const p of card.pays || []) ids.add(Number(p.branchId || card.branchId) || 0);
-    if (card.branchId) ids.add(card.branchId);
-    return [...ids].filter(Boolean).sort((a, b) => a - b);
-  }, [card.pays, card.branchId]);
   const subjectsBySchool = useMemo(() => {
     const map = new Map<string, { id: number; name: string }[]>();
     const seen = new Set<number>();
@@ -845,6 +839,132 @@ export function CrmClientCard({
 
   const headBtns = (
     <div className={cn("flex shrink-0 items-center gap-1", compact && "flex-wrap justify-end")}>
+            <div className="relative" onMouseEnter={cancelHeadLeave} onMouseLeave={armHeadLeave}>
+              <button
+                type="button"
+                data-op="lessons-menu"
+                onClick={() => {
+                  cancelHeadLeave();
+                  setHeadMenu((v) => (v === "lessons" ? "" : "lessons"));
+                }}
+                className={cn(
+                  "h-7 rounded-full font-semibold",
+                  compact ? "px-2 text-[0.65rem]" : "px-2.5 text-[0.68rem]",
+                  headMenu === "lessons" ? "bg-black/20 text-fg" : "bg-black/8 text-muted hover:bg-black/12",
+                )}
+              >
+                Занятия ▾
+              </button>
+              {headMenu === "lessons" ? (
+                <div className={cn("absolute right-0 top-8 z-[90] w-[min(36rem,calc(100vw-2rem))] p-3", RA_POP)} data-op="card-schedule">
+                  <LessonStrip
+                    lessons={tiles}
+                    title="Расписание"
+                    branchId={card.branchId}
+                    groupId={(card.groups || []).find((g) => g.active !== false)?.id || (card.groups || [])[0]?.id}
+                  />
+                </div>
+              ) : null}
+            </div>
+            <div className="relative" onMouseEnter={cancelHeadLeave} onMouseLeave={armHeadLeave}>
+              <button
+                type="button"
+                data-op="cash-menu"
+                onClick={() => {
+                  cancelHeadLeave();
+                  setHeadMenu((v) => (v === "cash" ? "" : "cash"));
+                }}
+                className={cn(
+                  "h-7 rounded-full font-semibold",
+                  compact ? "px-2 text-[0.65rem]" : "px-2.5 text-[0.68rem]",
+                  headMenu === "cash" ? "bg-black/20 text-fg" : "bg-black/8 text-muted hover:bg-black/12",
+                )}
+              >
+                Касса ▾
+              </button>
+              {headMenu === "cash" ? (
+                <div className={cn("absolute right-0 top-8 z-[90] w-[min(28rem,calc(100vw-2rem))] p-2.5", RA_POP)} data-op="cash-journal">
+                  <div className="mb-2 flex flex-wrap items-center gap-1">
+                    <p className="font-display text-[1.05rem]">Касса</p>
+                    <span className="text-[0.72rem] text-muted">{money(card.balance)}</span>
+                    {cashView.total > 0 ? (
+                      <span className="ml-auto flex items-center gap-1 text-[0.7rem] text-muted">
+                        <button type="button" disabled={cashView.page <= 0} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => Math.max(0, p - 1))}>←</button>
+                        {cashView.page + 1}/{cashView.pages}
+                        <button type="button" disabled={cashView.page >= cashView.pages - 1} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => p + 1)}>→</button>
+                      </span>
+                    ) : null}
+                  </div>
+                  {journalPays.length ? (
+                    <ul className="space-y-1.5">
+                      {cashView.items.map((p) => {
+                        const sum = payRowSum(p);
+                        return (
+                          <li key={p.id} className="rounded-xl bg-white px-2.5 py-1.5 ring-1 ring-black/6">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="min-w-0 truncate text-[0.75rem] text-muted">
+                                {p.documentDate || "—"} · {payKindName(p.kind)}
+                                {p.note ? ` · ${p.note}` : ""}
+                              </span>
+                              <span className={cn("shrink-0 text-[0.82rem] font-semibold tabular-nums", sum < 0 ? "text-rose-600" : "")}>
+                                {sum > 0 ? "+" : ""}
+                                {money(sum)}
+                              </span>
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              <button
+                                type="button"
+                                className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
+                                data-op="pay-edit"
+                                disabled={!onAction || Boolean(busy)}
+                                onClick={() => {
+                                  setPayEditId(p.id);
+                                  setPayKind((p.kind as "income" | "product" | "refund" | "correct") || "income");
+                                  setPaySum(String(p.kind === "refund" ? p.expenditure || "" : p.income || ""));
+                                  setPayDate(ruToIso(p.documentDate || ""));
+                                  setPayAccountId(String(p.payAccountId || 1));
+                                  setPayItemId(String(p.payItemId || defaultPayItemId(card.branchId)));
+                                  setPayLocationId(String(p.locationId || locationIdForBranch(card.branchId) || ""));
+                                  setPayManagerId(p.managerId ? String(p.managerId) : "");
+                                  setPayCttId(p.cttId != null && Number(p.cttId) !== 0 ? String(p.cttId) : "-1");
+                                  setPayPayer(p.payerName || card.parent || "");
+                                  setPayGroupId(p.groupId ? String(p.groupId) : "");
+                                  setPayNote(p.note || "");
+                                  setPayMethod(p.payMethod || "");
+                                  setHeadMenu("pay");
+                                }}
+                              >
+                                Изменить
+                              </button>
+                              <button
+                                type="button"
+                                className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
+                                data-op="pay-push"
+                                disabled={!onAction || Boolean(busy)}
+                                onClick={() => void run("customerPayPush", { payId: p.id, id: p.id })}
+                              >
+                                Экспорт в CRM
+                              </button>
+                              <button
+                                type="button"
+                                data-op="pay-delete"
+                                disabled={!onAction || Boolean(busy)}
+                                className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-rose-600 ring-1 ring-black/10 hover:bg-rose-50 disabled:opacity-40"
+                                onClick={() => setDropPay({ id: p.id, label: `${p.documentDate || ""} ${money(sum)}` })}
+                              >
+                                Удалить
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="text-[0.78rem] text-muted">Нет платежей на диске.</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
             <div className="relative">
               <button
                 type="button"
@@ -999,8 +1119,8 @@ export function CrmClientCard({
   );
 
   const contactsRow = clientLayout ? (
-          <div className="grid grid-cols-5 gap-x-3 gap-y-1">
-            {["Ребёнок", "Заказчик", "Телефон", "Почта", "Заметка"].map((cap) => (
+          <div className="grid grid-cols-6 gap-x-2 gap-y-1">
+            {["Ребёнок", "Заказчик", "Телефон", "Почта", "Заметка", "Дата рождения"].map((cap) => (
               <span key={cap} className="min-w-0 truncate text-[0.68rem] font-semibold uppercase tracking-wide text-muted">
                 {cap}
               </span>
@@ -1010,6 +1130,7 @@ export function CrmClientCard({
             <input value={phone} onChange={(e) => setPhone(e.target.value)} className="h-9 w-full min-w-0 rounded-lg bg-white px-2.5 text-sm text-fg ring-1 ring-black/8" />
             <input value={email} onChange={(e) => setEmail(e.target.value)} className="h-9 w-full min-w-0 rounded-lg bg-white px-2.5 text-sm text-fg ring-1 ring-black/8" />
             <input value={note} onChange={(e) => setNote(e.target.value)} className="h-9 w-full min-w-0 rounded-lg bg-white px-2.5 text-sm text-fg ring-1 ring-black/8" />
+            <input readOnly value={card.dob || "—"} title={card.age || ""} className="h-9 w-full min-w-0 rounded-lg bg-white/80 px-2.5 text-sm text-fg ring-1 ring-black/8" />
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-x-3 gap-y-2">
@@ -1029,9 +1150,13 @@ export function CrmClientCard({
               <span className="mb-1 block text-[0.68rem] font-semibold uppercase tracking-wide text-muted">Почта</span>
               <input value={email} onChange={(e) => setEmail(e.target.value)} className="h-9 w-full min-w-0 rounded-lg bg-white px-2.5 text-sm text-fg ring-1 ring-black/8" />
             </label>
-            <label className="col-span-2 block min-w-0">
+            <label className="block min-w-0">
               <span className="mb-1 block text-[0.68rem] font-semibold uppercase tracking-wide text-muted">Заметка</span>
               <input value={note} onChange={(e) => setNote(e.target.value)} className="h-9 w-full min-w-0 rounded-lg bg-white px-2.5 text-sm text-fg ring-1 ring-black/8" />
+            </label>
+            <label className="block min-w-0">
+              <span className="mb-1 block text-[0.68rem] font-semibold uppercase tracking-wide text-muted">Дата рождения</span>
+              <input readOnly value={card.dob || "—"} title={card.age || ""} className="h-9 w-full min-w-0 rounded-lg bg-white/80 px-2.5 text-sm text-fg ring-1 ring-black/8" />
             </label>
           </div>
         );
@@ -1083,7 +1208,6 @@ export function CrmClientCard({
         </div>
         </div>
         <div className="mt-1">{contactsRow}</div>
-        {card.dob ? <p className="text-[0.78rem] text-muted">Дата рождения {card.dob}{card.age ? ` · ${card.age}` : ""}</p> : null}
       </header>
       )}
 
@@ -1091,21 +1215,11 @@ export function CrmClientCard({
         {compact ? (
           <>
             {contactsRow}
-            {card.dob ? <p className="mt-2 text-[0.78rem] text-muted">Дата рождения {card.dob}{card.age ? ` · ${card.age}` : ""}</p> : null}
           </>
         ) : null}
 
-        <div className="mt-3 rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-black/6" data-op="card-schedule">
-          <LessonStrip
-            lessons={tiles}
-            title="Расписание"
-            branchId={card.branchId}
-            groupId={(card.groups || []).find((g) => g.active !== false)?.id || (card.groups || [])[0]?.id}
-          />
-        </div>
-
-        <div className={cn("mt-3 grid gap-3", !compact && "sm:grid-cols-2")}>
-          <div className="min-w-0 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="active-group">
+        <div className={cn("mt-3 grid gap-3 items-stretch", !compact && "sm:grid-cols-2")}>
+          <div className="flex h-full min-w-0 flex-col rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="active-group">
             <div className={cn(compact ? "flex flex-col items-start gap-2" : "flex items-center gap-2")}>
               <p className="min-w-0 flex-1 truncate text-[0.68rem] font-semibold uppercase tracking-wider text-muted">Действующая группа</p>
               <Button
@@ -1127,7 +1241,7 @@ export function CrmClientCard({
               </Button>
             </div>
             {activeGroups.length ? (
-              <ul className="mt-2 space-y-1.5">
+              <ul className="mt-2 flex-1 space-y-1.5">
                 {activeGroups.map((g) => {
                   const regs = (card.regular || []).filter((r) => r.groupId === g.id);
                   const when = regs.map((r) => `${r.day} ${r.from}–${r.to}`).filter((s) => /\d/.test(s)).join(" · ");
@@ -1167,7 +1281,7 @@ export function CrmClientCard({
               <p className="mt-2 text-sm text-muted">Ещё не в группе — можно записать ниже.</p>
             )}
           </div>
-          <div className="min-w-0 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="active-tariff">
+          <div className="flex h-full min-w-0 flex-col rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="active-tariff">
             <div className="flex min-w-0 items-center gap-1.5">
               <p className="min-w-0 flex-1 truncate text-[0.68rem] font-semibold uppercase tracking-wider text-muted">Счета и абонементы</p>
               <Button
@@ -1197,9 +1311,8 @@ export function CrmClientCard({
             {showBasicAccount || activeTariffs.length ? (
               <div className={cn("mt-2 grid gap-2", accountsPair && "sm:grid-cols-2")} data-op="live-accounts">
                 {showBasicAccount && basicAccount ? (
-                  <div className="min-w-0 rounded-xl bg-white px-3 py-2 ring-1 ring-black/6" data-op="basic-account">
+                  <div className="min-w-0 flex-1 rounded-xl bg-white px-3 py-2 ring-1 ring-black/6" data-op="basic-account">
                     <p className="font-semibold text-sm">Базовый счет</p>
-                    <p className="text-[0.75rem] text-muted">Счет клиента по умолчанию · без абонемента</p>
                     <p className="text-[0.75rem] font-semibold">
                       Остаток {money(accountRest(basicAccount).rest)} ({basicAccount.lessons || 0} ур.)
                       {basicAccount.payCount ? ` · ${basicAccount.payCount} платежей` : ""}
@@ -1246,13 +1359,9 @@ export function CrmClientCard({
                       </li>
                     ))}
                   </ul>
-                ) : (
-                  <p className="self-center text-sm text-muted">Нет действующего абонемента — платежи идут на базовый счет.</p>
-                )}
+                ) : null}
               </div>
-            ) : (
-              <p className="mt-2 text-sm text-muted">Нет действующего абонемента — платежи идут на базовый счет.</p>
-            )}
+            ) : null}
             <div className={cn("mt-2", !archiveOpen && "hidden")} data-op="archived-tariffs">
               {archiveOpen && archivedTariffs.length ? (
                 <ul className="space-y-1">
@@ -1280,12 +1389,6 @@ export function CrmClientCard({
             </div>
           </div>
         </div>
-
-        {card.crmPush ? (
-          <p className="mt-3 rounded-xl bg-white/90 px-3 py-2 text-[0.8rem] text-fg ring-1 ring-black/8" data-op="crm-push">
-            {card.crmPush}
-          </p>
-        ) : null}
 
         <div className="mt-4 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="lesson-writeoffs">
           <p className="font-display text-lg">Списания занятий</p>
@@ -1315,148 +1418,7 @@ export function CrmClientCard({
           )}
         </div>
 
-        <div className="mt-4 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="cash-journal">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <p className="font-display text-lg">Касса</p>
-            <span className="text-[0.75rem] text-muted">остаток {money(card.balance)}</span>
-            <button type="button" onClick={() => { setPayBranch(0); setCashPage(0); }} className={cn("rounded-full px-2 py-0.5 text-[0.7rem] font-semibold", !payBranch ? "bg-fg text-white" : "bg-white ring-1 ring-black/8")}>
-              Все
-            </button>
-            {journalBranches.map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setPayBranch(id);
-                  setCashPage(0);
-                }}
-                className={cn("rounded-full px-2 py-0.5 text-[0.7rem] font-semibold", payBranch === id ? "bg-fg text-white" : "bg-white ring-1 ring-black/8")}
-              >
-                {CRM_BRANCH[id]?.short || id}
-              </button>
-            ))}
-            {CASH_PAGE_SIZES.map((n) => (
-              <button
-                key={n}
-                type="button"
-                data-op="cash-page-size"
-                onClick={() => {
-                  setCashSize(n);
-                  setCashPage(0);
-                }}
-                className={cn("rounded-full px-2 py-0.5 text-[0.7rem] font-semibold", cashSize === n ? "bg-primary text-white" : "bg-white ring-1 ring-black/8")}
-              >
-                по {n}
-              </button>
-            ))}
-            {cashView.total > 0 ? (
-              <span className="ml-auto flex items-center gap-1 text-[0.7rem] text-muted">
-                <button type="button" disabled={cashView.page <= 0} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => Math.max(0, p - 1))}>
-                  ←
-                </button>
-                {cashView.page + 1}/{cashView.pages}
-                <button type="button" disabled={cashView.page >= cashView.pages - 1} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => p + 1)}>
-                  →
-                </button>
-              </span>
-            ) : null}
-          </div>
-          {card.paysComplete === false ? <p className="mt-1 text-[0.7rem] text-muted">Подтягиваем кассу из Alfa постепенно: карточка — следующие страницы этого ученика, вкладка «Касса» — всю историю студии.</p> : null}
-          {journalPays.length ? (
-            <div className="mt-2 overflow-x-auto">
-              <table className="w-full min-w-[40rem] text-left text-[0.75rem]">
-                <thead className="text-[0.65rem] uppercase tracking-wider text-muted">
-                  <tr>
-                    <th className="px-1 py-1">Дата</th>
-                    <th className="px-1 py-1">Филиал</th>
-                    <th className="px-1 py-1">Тип</th>
-                    <th className="px-1 py-1">Сумма</th>
-                    <th className="px-1 py-1">Статья</th>
-                    <th className="px-1 py-1">Способ</th>
-                    <th className="px-1 py-1">Счёт</th>
-                    <th className="px-1 py-1">Коммент</th>
-                    <th className="px-1 py-1">id</th>
-                    <th className="px-1 py-1" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {cashView.items.map((p) => {
-                    const sum = payRowSum(p);
-                    const bid = Number(p.branchId || card.branchId) || 0;
-                    return (
-                      <tr key={p.id} className="border-t border-black/6">
-                        <td className="px-1 py-1 whitespace-nowrap">{p.documentDate || "—"}</td>
-                        <td className="px-1 py-1">{CRM_BRANCH[bid]?.short || bid || "—"}</td>
-                        <td className="px-1 py-1">{payKindName(p.kind)}</td>
-                        <td className={cn("px-1 py-1 whitespace-nowrap tabular-nums font-semibold", sum < 0 ? "text-rose-600" : "")}>
-                          {sum > 0 ? "+" : ""}
-                          {money(sum)}
-                        </td>
-                        <td className="px-1 py-1">{payItemName(p.payItemId) || "—"}</td>
-                        <td className="px-1 py-1">{payMethodName(p.payMethod) || "—"}</td>
-                        <td className="max-w-[10rem] truncate px-1 py-1" title={cttName(p.cttId)}>{cttName(p.cttId)}</td>
-                        <td className="max-w-[8rem] truncate px-1 py-1" title={p.note}>{p.note || "—"}</td>
-                        <td className="px-1 py-1 tabular-nums text-muted">{p.id}</td>
-                        <td className="px-1 py-1">
-                          <div className="flex flex-wrap gap-1">
-                          <button
-                            type="button"
-                            className="h-6 shrink-0 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold leading-none text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
-                            data-op="pay-edit"
-                            disabled={!onAction || Boolean(busy)}
-                            onClick={() => {
-                              setPayEditId(p.id);
-                              setPayKind((p.kind as "income" | "product" | "refund" | "correct") || "income");
-                              setPaySum(String(p.kind === "refund" ? p.expenditure || "" : p.income || ""));
-                              setPayDate(ruToIso(p.documentDate || ""));
-                              setPayAccountId(String(p.payAccountId || 1));
-                              setPayItemId(String(p.payItemId || defaultPayItemId(card.branchId)));
-                              setPayLocationId(String(p.locationId || locationIdForBranch(card.branchId) || ""));
-                              setPayManagerId(p.managerId ? String(p.managerId) : "");
-                              setPayCttId(p.cttId != null && Number(p.cttId) !== 0 ? String(p.cttId) : "-1");
-                              setPayPayer(p.payerName || card.parent || "");
-                              setPayGroupId(p.groupId ? String(p.groupId) : "");
-                              setPayNote(p.note || "");
-                              setPayMethod(p.payMethod || "");
-                              setHeadMenu("pay");
-                            }}
-                          >
-                            Изменить
-                          </button>
-                          <button
-                            type="button"
-                            className="h-6 shrink-0 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold leading-none text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
-                            data-op="pay-push"
-                            disabled={!onAction || Boolean(busy)}
-                            onClick={() => void run("customerPayPush", { payId: p.id, id: p.id })}
-                          >
-                            Экспорт в CRM
-                          </button>
-                          <button
-                            type="button"
-                            data-op="pay-delete"
-                            disabled={!onAction || Boolean(busy)}
-                            className="h-6 shrink-0 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold leading-none text-rose-600 ring-1 ring-black/10 hover:bg-rose-50 disabled:opacity-40"
-                            onClick={() => setDropPay({ id: p.id, label: `${p.documentDate || ""} ${money(sum)}` })}
-                          >
-                            Удалить
-                          </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-muted">
-              {Number(card.balance)
-                ? `Остаток ${money(card.balance)} — снимок Alfa, строк журнала нет. Откройте карточку ещё раз или нажмите «Оплата».`
-                : "Нет платежей на диске. Добавить — кнопка «Оплата»."}
-            </p>
-          )}
-        </div>
+
 
         {card.url ? (
           <a href={card.url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-primary">

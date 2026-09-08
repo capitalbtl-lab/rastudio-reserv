@@ -25,7 +25,12 @@ describe("форма занятия карточки", () => {
     assert.match(src, /lessonGroupOffers/);
     assert.match(src, /g\?\.teacherId/);
     assert.match(src, /const lessonRoomCount = lessonRooms.filter/);
-    assert.match(src, /card.crmPush/);
+    assert.doesNotMatch(src, /data-op="crm-push"/);
+    assert.match(src, /data-op="lessons-menu"/);
+    assert.match(src, /data-op="cash-menu"/);
+    assert.match(src, /grid-cols-6/);
+    assert.match(src, /Дата рождения/);
+    assert.doesNotMatch(src, /Нет действующего абонемента/);
     assert.match(src, /data-op="archived-tariffs"/);
     assert.match(src, /data-op="archive-toggle"/);
     assert.match(src, /Архивный абонемент/);
