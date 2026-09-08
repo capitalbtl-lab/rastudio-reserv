@@ -85,7 +85,14 @@ describe("касса список", () => {
     assert.doesNotMatch(pay, /01\.01\.2020/);
     assert.doesNotMatch(pay, /pageSize: 50, \.\.\.dates/);
     assert.match(pay, /markPayJournalComplete/);
+    assert.match(pay, /payPollLookbackDates/);
+    assert.match(pay, /pay_type_id: 2/);
+    assert.match(pay, /pay_type_id: 3/);
     assert.match(pay, /pay_type_id: 6/);
+    assert.match(pay, /stampPayBalances/);
+    const eco = readFileSync(new URL("../../ecosystem.config.cjs", import.meta.url), "utf8");
+    assert.match(eco, /rastudio-pay-poll/);
+    assert.match(eco, /\*\/15 \* \* \* \*/);
     assert.match(pay, /opts\?\.via !== "button"/);
     assert.match(pay, /dropAlfaAuth/);
     assert.match(pay, /export function filterCashPays/);
