@@ -88,7 +88,25 @@ function str(v: unknown) {
   return String(v || "").trim();
 }
 
-/** Тело v2api/{branch}/pay/create: только поля этого филиала. */
+function ruPayDate(raw: unknown) {
+  const s = String(raw || "").trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}.${iso[2]}.${iso[1]}`;
+  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (ru) return `${ru[1].padStart(2, "0")}.${ru[2].padStart(2, "0")}.${ru[3]}`;
+  return s;
+}
+
+function payTypeId(kind: string, income: number, expenditure: number) {
+  if (kind === "product") return 2;
+  if (kind === "refund") return 3;
+  if (kind === "correct") return 6;
+  if (expenditure && !income) return 3;
+  return 1;
+}
+
+/** Тело v2api/{branch}/pay/create: только поля этого филиала.
+ *  ctt_id −1 в форме Alfa = «Базовый счет». В API такого id нет — не шлём. */
 export function packAlfaPayCreate(input: {
   customerId: number;
   branchId?: number;
@@ -108,27 +126,31 @@ export function packAlfaPayCreate(input: {
   groupId?: number;
   payMethod?: string;
 }) {
-  const branchId = num(input.branchId);
+  const branchId = num(input.branchId) || 1;
+  const kind = str(input.kind) || "income";
+  const income = Number(input.income) || 0;
+  const expenditure = Number(input.expenditure) || 0;
   const body: Record<string, unknown> = {
-    document_date: str(input.documentDate),
-    income: Number(input.income) || 0,
-    expenditure: Number(input.expenditure) || 0,
+    branch_id: branchId,
+    document_date: ruPayDate(input.documentDate),
+    income,
+    expenditure,
     note: str(input.note),
-    localId: num(input.localId),
-    kind: str(input.kind) || "income",
+    localId: Number.isFinite(Number(input.localId)) ? Number(input.localId) : 0,
+    kind,
+    pay_type_id: payTypeId(kind, income, expenditure),
   };
   const customer = num(input.customerId);
   if (customer) body.customer_id = customer;
-  if ((Number(input.income) || 0) > 0 && !(Number(input.expenditure) || 0)) body.pay_type_id = 1;
   body.pay_account_id = num(input.payAccountId) || 1;
   const item = num(input.payItemId) || defaultPayItemId(branchId);
   if (item) body.pay_item_id = item;
   const loc = num(input.locationId) || locationIdForBranch(branchId);
-  if (loc && (!branchId || locationBelongsToBranch(loc, branchId))) body.location_id = loc;
+  if (loc && locationBelongsToBranch(loc, branchId)) body.location_id = loc;
   const manager = num(input.managerId);
   if (manager) body.manager_id = manager;
-  const ctt = num(input.cttId);
-  if (ctt) body.ctt_id = ctt;
+  const ctt = Number(input.cttId);
+  if (Number.isFinite(ctt) && ctt > 0) body.ctt_id = ctt;
   const contract = num(input.contractId);
   if (contract) body.customer_contract_id = contract;
   const payer = str(input.payerName);
@@ -142,3 +164,4 @@ export function packAlfaPayCreate(input: {
   }
   return body;
 }
+

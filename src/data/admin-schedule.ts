@@ -1840,7 +1840,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!customerId) return { ok: false as const, error: "Нет customerId." };
       if (!sum) return { ok: false as const, error: "Укажите сумму." };
       const { payKindOf, payEffect, appendPay, ensureOpening, customerBalance } = await import("./crm-pay");
-      const { packAlfaPayCreate, locationIdForBranch } = await import("./crm-pay-alfa");
+      const { locationIdForBranch, defaultPayItemId } = await import("./crm-pay-alfa");
       const { cardFromDossier } = await import("./customer-card-disk");
       const { formatRuDob } = await import("./alfacrm");
       const kind = payKindOf(data.payKind);
@@ -1855,8 +1855,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const d = findDossier({ crmId: customerId });
       const payBranch = Number(d?.branchId || branch) || 1;
       const cttId = Number(data.cttId) || -1;
-      const payItemId = Number(data.payItemId) || 0;
-      const locationId = Number(data.locationId) || 0;
+      const payItemId = Number(data.payItemId) || defaultPayItemId(payBranch);
+      const locationId = Number(data.locationId) || locationIdForBranch(payBranch);
       const existingId = Number(data.payId || data.id) || 0;
       if (existingId) {
         const { updatePay, pushPayToAlfa } = await import("./crm-pay");
@@ -1882,9 +1882,12 @@ export const adminSchedule = createServerFn({ method: "POST" })
           source: "admin",
         } as never);
         const sent = await pushPayToAlfa(existingId);
-        logAdmin(`Клиент ${customerId}: правка платежа ${existingId}${sent.ok ? " → Alfa" : ""}`);
+        logAdmin(`Клиент ${customerId}: правка платежа ${existingId}${sent.ok ? " → Alfa" : ` · ${sent.error || ""}`}`);
         const fresh = findDossier({ crmId: customerId });
-        return { ok: true as const, queued: sent.ok, customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId } };
+        if (!sent.ok) {
+          return { ok: false as const, error: `на диске есть, в Alfa нет: ${sent.error || "не приняла"}`, queued: false, customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId } };
+        }
+        return { ok: true as const, queued: true, customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId } };
       }
       ensureOpening(customerId, payBranch, d?.extras?.balance);
       const prev = customerBalance(customerId, d?.extras?.balance);
@@ -1912,38 +1915,23 @@ export const adminSchedule = createServerFn({ method: "POST" })
         extras: { ...(d?.extras || {}), balance: String(fx.next) },
         source: "admin",
       } as never);
-      const { enqueueExport } = await import("./crm-export-queue");
-      enqueueExport({
-        op: "pay.create",
-        branchId: payBranch,
-        entityId: customerId,
-        body: packAlfaPayCreate({
-          customerId,
-          branchId: payBranch,
-          documentDate: ru,
-          income: fx.income,
-          expenditure: fx.expenditure,
-          note,
-          localId: pay.id,
-          kind,
-          payAccountId: Number(data.payAccountId) || 1,
-          payItemId,
-          locationId: locationId || locationIdForBranch(payBranch),
-          managerId: Number(data.managerId) || 0,
-          cttId,
-          contractId: Number(data.contractId) || 0,
-          payerName: String(data.payerName || d?.parent || ""),
-          groupId: Number(data.groupId) || 0,
-          payMethod: String(data.payMethod || ""),
-        }),
-      });
-      logAdmin(`Клиент ${customerId}: ${note} ${sum} в очереди`);
+      const { pushPayToAlfa } = await import("./crm-pay");
+      const sent = await pushPayToAlfa(pay.id);
+      logAdmin(`Клиент ${customerId}: ${note} ${sum}${sent.ok ? " → Alfa" : ` · ${sent.error || "очередь"}`}`);
       if (kind !== "refund") {
         void import("./funnel-auto").then((m) =>
           m.applyFunnelAuto("tariff", { customerId, branchId: branch, isStudy: Number(d?.extras?.is_study), statusId: Number(d?.extras?.lead_status_id || 0) }),
         );
       }
       const fresh = findDossier({ crmId: customerId });
+      if (!sent.ok) {
+        return {
+          ok: false as const,
+          error: `на диске есть, в Alfa нет: ${sent.error || "не приняла"}`,
+          queued: false,
+          customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId, balance: fx.next },
+        };
+      }
       return {
         ok: true as const,
         queued: true,
@@ -1986,7 +1974,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const branch = Number(data.branchId) || 1;
       logAdmin(`Клиент ${customerId}: платёж ${payId} вручную в Alfa`);
       const fresh = customerId ? findDossier({ crmId: customerId }) : null;
-      return { ok: true as const, queued: true, local: res.local, customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId } };
+      return { ok: true as const, queued: true, local: res.local, note: res.note, customer: fresh ? cardFromDossier(fresh, branch) : { id: customerId } };
     }
     if (data.action === "cashList") {
       const { listCashPays, cashTakeOf } = await import("./crm-pay");

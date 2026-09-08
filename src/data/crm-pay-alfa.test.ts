@@ -59,6 +59,8 @@ describe("касса Alfa по филиалам", () => {
     assert.equal(body.pay_item_id, 2);
     assert.equal(body.pay_account_id, 1);
     assert.equal(body.pay_type_id, 1);
+    assert.equal(body.branch_id, 1);
+    assert.equal(body.ctt_id, undefined);
     const noItem = packAlfaPayCreate({
       customerId: 7759,
       branchId: 1,
@@ -83,9 +85,11 @@ describe("касса Alfa по филиалам", () => {
       cttId: -1,
       payerName: "Чуднова Ольга Сергеевна",
     });
-    assert.equal(basic.ctt_id, -1);
+    assert.equal(basic.ctt_id, undefined);
+    assert.equal(basic.branch_id, 1);
     assert.equal(basic.customer_id, 670);
     assert.equal(basic.payer_name, "Чуднова Ольга Сергеевна");
+    assert.equal(basic.document_date, "08.09.2026");
     const withCtt = packAlfaPayCreate({
       customerId: 7759,
       branchId: 1,
@@ -99,6 +103,20 @@ describe("касса Alfa по филиалам", () => {
       tariffId: 9,
     });
     assert.equal(withCtt.ctt_id, 4412);
+    const iso = packAlfaPayCreate({
+      customerId: 670,
+      branchId: 1,
+      documentDate: "2026-09-08",
+      income: 1,
+      expenditure: 0,
+      note: "",
+      localId: -7,
+      kind: "income",
+      cttId: -1,
+    });
+    assert.equal(iso.document_date, "08.09.2026");
+    assert.equal(iso.ctt_id, undefined);
+    assert.equal(iso.pay_type_id, 1);
   });
 
   it("pay.create ЦМИТ — location_id 2, не Гражданская", () => {

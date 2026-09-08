@@ -325,7 +325,7 @@ export async function flushLocalPaysToAlfa() {
         payItemId: Number(row.payItemId) || 0,
         locationId: Number(row.locationId) || locationIdForBranch(Number(row.branchId) || 1),
         managerId: Number(row.managerId) || 0,
-        cttId: Number(row.cttId) || -1,
+        cttId: Number(row.cttId) > 0 ? Number(row.cttId) : 0,
         groupId: Number(row.groupId) || 0,
         payerName: String(row.payerName || ""),
         payMethod: String(row.payMethod || ""),
@@ -408,8 +408,11 @@ export async function pushPayToAlfa(payId: number) {
   if (!row || row.deleted) return { ok: false as const, error: "нет платежа" };
   if (Number(row.customerId) <= 0) return { ok: false as const, error: "нет клиента Alfa" };
   const { packAlfaPayCreate, locationIdForBranch } = await import("./crm-pay-alfa");
-  const { enqueueExport } = await import("./crm-export-queue");
+  const { enqueueExport, tickExportQueue, crmExportSnapshot } = await import("./crm-export-queue");
+  const { alfaLinkedNow, wantAlfaPush } = await import("./crm-alfa-link");
+  if (!alfaLinkedNow()) return { ok: false as const, error: "нет связи с Alfa" };
   const local = isLocalId(row.id) || row.id < 0;
+  const op = local ? ("pay.create" as const) : ("pay.update" as const);
   const body = packAlfaPayCreate({
     customerId: Number(row.customerId),
     branchId: Number(row.branchId) || 1,
@@ -423,18 +426,35 @@ export async function pushPayToAlfa(payId: number) {
     payItemId: Number(row.payItemId) || 0,
     locationId: Number(row.locationId) || locationIdForBranch(Number(row.branchId) || 1),
     managerId: Number(row.managerId) || 0,
-    cttId: Number(row.cttId) || -1,
+    cttId: Number(row.cttId) > 0 ? Number(row.cttId) : 0,
     groupId: Number(row.groupId) || 0,
     payerName: String(row.payerName || ""),
     payMethod: String(row.payMethod || ""),
   });
+  if (!wantAlfaPush(op, body)) return { ok: false as const, error: "выгрузка кассы выключена в настройках" };
   enqueueExport({
-    op: local ? "pay.create" : "pay.update",
+    op,
     branchId: Number(row.branchId) || 1,
     entityId: local ? Number(row.customerId) : Number(row.id),
     body: local ? body : { ...body, id: Number(row.id) },
   });
-  return { ok: true as const, queued: true, local };
+  for (let i = 0; i < 15; i += 1) {
+    if (!crmExportSnapshot().busy) break;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  const snap = await tickExportQueue(1, op, { lean: true });
+  const after = load().items.find((x) => Number(x.id) === id);
+  const note = String(snap.lastNote || "");
+  if (local && after && (isLocalId(after.id) || after.id < 0)) {
+    return { ok: false as const, error: note && !/ ok/.test(note) ? note : "Alfa не приняла платёж. Смотрите текст ошибки — часто статья или счёт.", queued: true, local: true, note };
+  }
+  if (/канал выгрузки выключен|без Alfa/.test(note)) {
+    return { ok: false as const, error: note, queued: true, local, note };
+  }
+  if (note.includes(`${op} `) && note.includes(":") && !note.includes(" ok")) {
+    return { ok: false as const, error: note, queued: true, local, note };
+  }
+  return { ok: true as const, queued: true, local: Boolean(after && (isLocalId(after.id) || after.id < 0)), note };
 }
 
 export function applyDeletedPay(payId: number) {

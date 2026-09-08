@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mergeExportJob, exportPath, exportBody, exportJobSnap, exportOpLabel, remapExportJobs, canRunExportJob, type CrmExportJob } from "./crm-export-queue-core.ts";
+import { mergeExportJob, exportPath, exportBody, exportJobSnap, exportOpLabel, remapExportJobs, canRunExportJob, crmCreatedId, type CrmExportJob } from "./crm-export-queue-core.ts";
 import { isLocalId, isCrmId, isLocalSubject, nextLocalId } from "./crm-local-id.ts";
 
 describe("очередь выгрузки в Alfa", () => {
@@ -132,6 +132,9 @@ describe("очередь выгрузки в Alfa", () => {
     assert.equal(updBody.kind, undefined);
     assert.equal(canRunExportJob({ op: "pay.update", branchId: 1, entityId: 9001, body: {} }), true);
     assert.equal(canRunExportJob({ op: "pay.update", branchId: 1, entityId: -12, body: {} }), false);
+    assert.equal(crmCreatedId({ model: { id: 88 } }), 88);
+    assert.equal(crmCreatedId({ data: { id: 91 } }), 91);
+    assert.equal(crmCreatedId({ success: true, model: { id: null } }), 0);
     assert.equal(exportBody(payB[0]).customer_id, 7759);
     assert.equal(exportBody(payB[0]).id, undefined);
     let payDel = mergeExportJob(payB, { op: "pay.delete", branchId: 1, entityId: -12, body: { localId: -12 } });

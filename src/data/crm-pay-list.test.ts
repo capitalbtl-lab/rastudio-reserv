@@ -103,8 +103,10 @@ describe("касса список", () => {
     assert.match(pay, /export function filterCashPays/);
     assert.match(pay, /export function updatePay/);
     assert.match(pay, /export async function pushPayToAlfa/);
+    assert.match(pay, /tickExportQueue\(1, op, \{ lean: true \}\)/);
+    assert.match(pay, /Alfa не приняла платёж/);
     assert.match(pay, /payerName/);
-    assert.match(pay, /cttId: Number\(row.cttId\) \|\| -1/);
+    assert.match(pay, /cttId: Number\(row.cttId\) > 0 \? Number\(row.cttId\) : 0/);
     assert.match(pay, /branchId: Number\(x.branchId\) \|\| 0/);
     const save = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(save, /cashPoll/);

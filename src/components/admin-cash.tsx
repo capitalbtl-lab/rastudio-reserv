@@ -205,8 +205,8 @@ export function AdminCash({ active, onOpenClient }: { active?: boolean; onOpenCl
     try {
       const res = (await adminSchedule({
         data: { token: token(), action: "customerPayPush", payId: p.id, id: p.id, customerId: p.customerId, branchId: p.branchId } as never,
-      })) as { ok?: boolean; error?: string };
-      setNote(res.ok ? `Платёж ${p.id} в очереди Alfa` : res.error || "Не ушло");
+      })) as { ok?: boolean; error?: string; local?: boolean; note?: string };
+      setNote(res.ok ? (res.local ? `Платёж ${p.id} ещё на диске: ${res.note || "Alfa не ответила"}` : `Платёж ${p.id} ушёл в Alfa`) : res.error || "Не ушло");
       await load();
     } catch (e) {
       setNote(e instanceof Error ? e.message : "Не ушло");

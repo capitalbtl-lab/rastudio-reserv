@@ -243,8 +243,8 @@ export function exportBody(job: CrmExportJob) {
 
 export function crmCreatedId(res: unknown) {
   if (!res || typeof res !== "object") return 0;
-  const r = res as { model?: { id?: number }; id?: number };
-  return Number(r.model?.id || r.id || 0) || 0;
+  const r = res as { model?: { id?: number }; id?: number; data?: { id?: number } };
+  return Number(r.model?.id || r.id || r.data?.id || 0) || 0;
 }
 
 const REMAP_SCALARS = [

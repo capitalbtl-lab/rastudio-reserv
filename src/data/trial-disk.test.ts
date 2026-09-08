@@ -490,9 +490,8 @@ describe("кабинет: новый ученик диск сразу", () => {
     const next = save.indexOf("if (data.action ===", at + 10);
     const chunk = save.slice(at, next > at ? next : at + 3500);
     assert.match(chunk, /appendPay/);
-    assert.match(chunk, /pay.create/);
-    assert.match(chunk, /localId/);
-    assert.match(chunk, /packAlfaPayCreate/);
+    assert.match(chunk, /pushPayToAlfa/);
+    assert.match(chunk, /на диске есть, в Alfa нет/);
     const card = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
     assert.match(card, /customerBalance/);
     const rules = readFileSync(new URL("./crm-disk-rules.ts", import.meta.url), "utf8");

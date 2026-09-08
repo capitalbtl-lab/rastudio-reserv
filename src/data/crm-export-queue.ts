@@ -21,6 +21,17 @@ const MAX_TRIES = 5;
 const BUSY_MS = 45000;
 const g = globalThis as { __raCrmExportBusy?: boolean; __raCrmExportBusyAt?: number; __raCrmExportFollow?: ReturnType<typeof setTimeout>; __raPayTestKick?: boolean; __raTrialTestKick?: boolean; __raRoomsKick?: boolean };
 
+function alfaErrText(raw: unknown) {
+  if (!raw) return "";
+  if (typeof raw === "string") return raw.slice(0, 240);
+  if (Array.isArray(raw)) return raw.map(String).join("; ").slice(0, 240);
+  if (typeof raw === "object") {
+    const parts = Object.entries(raw as Record<string, unknown>).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`);
+    return parts.join("; ").slice(0, 240);
+  }
+  return String(raw).slice(0, 240);
+}
+
 function fileOf() {
   return join(process.cwd(), "storage", "crm-export-queue.json");
 }
@@ -326,7 +337,7 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: {
           }
         } else {
           const res = await request<{ success?: boolean; errors?: unknown; model?: { id?: number }; id?: number }>(exportPath(job), exportBody(job), t);
-          if (res.success === false) throw new Error(JSON.stringify(res.errors || res));
+          if (res.success === false) throw new Error(alfaErrText(res.errors) || JSON.stringify(res.errors || res).slice(0, 240));
           if (job.op === "group.create") {
             const gid = crmCreatedId(res);
             if (!gid) throw new Error("AlfaCRM не вернула номер группы");
@@ -413,7 +424,8 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: {
           if (job.op === "pay.create") {
             const pid = crmCreatedId(res);
             const localId = Number(job.body.localId) || 0;
-            if (pid && localId < 0) {
+            if (!pid) throw new Error(alfaErrText((res as { errors?: unknown }).errors) || "AlfaCRM не вернула номер платежа");
+            if (localId < 0) {
               const { applyCreatedPay } = await import("./crm-pay");
               applyCreatedPay(localId, pid);
               q = loadExport();
