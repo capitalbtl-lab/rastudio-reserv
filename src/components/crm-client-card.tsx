@@ -20,11 +20,12 @@ import {
 } from "@/data/crm-cards";
 import { Button } from "@/components/ui/button";
 import { AdminTariffs } from "@/components/admin-tariffs";
-import { LessonStrip, toYmd } from "@/components/lesson-strip";
+import { LessonStrip, toYmd, todayYmd } from "@/components/lesson-strip";
 import { RaSelect } from "@/components/ra-select";
 import { SCHOOLS } from "@/data/site";
 import { cttSelectLabel, alfaDateShort } from "@/data/crm-tariff-row";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
+import { maskRuDate } from "@/data/crm-slots-core";
 import { commChannelLabel } from "@/data/crm-comms-core";
 import {
   ALFA_PAY_ACCOUNTS,
@@ -406,6 +407,7 @@ export function CrmClientCard({
   const [phone, setPhone] = useState(card.phones[0] || "");
   const [email, setEmail] = useState(card.emails[0] || "");
   const [note, setNote] = useState(card.note);
+  const [dob, setDob] = useState(card.dob || "");
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
   const [channel, setChannel] = useState("");
@@ -427,7 +429,7 @@ export function CrmClientCard({
   const [cashPage, setCashPage] = useState(0);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [dropPay, setDropPay] = useState<{ id: number; label: string } | null>(null);
-  const [headMenu, setHeadMenu] = useState<"" | "pay" | "lesson" | "cash" | "lessons">("");
+  const [headMenu, setHeadMenu] = useState<"" | "pay" | "lesson" | "cash" | "writeoffs">("");
   const headLeave = useRef(0);
 
   function armHeadLeave() {
@@ -480,6 +482,7 @@ export function CrmClientCard({
     setPhone(card.phones[0] || "");
     setEmail(card.emails[0] || "");
     setNote(card.note);
+    setDob(card.dob || "");
     setLessonTime(card.regular?.[0]?.from || "16:00");
   }, [card]);
 
@@ -498,14 +501,19 @@ export function CrmClientCard({
     const mine = (card.groups || []).filter((g) => g.active !== false);
     return lessonsForCard(card.calendar, card.regular, mine.length ? mine : card.groups || []);
   }, [card.calendar, card.regular, card.groups]);
-  const writeOffs = useMemo(
-    () =>
-      (card.calendar || [])
-        .filter((l) => Number(l.status) === 3)
-        .slice()
-        .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.from).localeCompare(String(a.from))),
-    [card.calendar],
-  );
+  const writeOffs = useMemo(() => {
+    const today = todayYmd();
+    return (card.calendar || [])
+      .filter((l) => {
+        const st = Number(l.status);
+        if (st === 2) return false;
+        if (st === 3) return true;
+        const ymd = toYmd(String(l.date || ""));
+        return Boolean(ymd && ymd < today);
+      })
+      .slice()
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.from).localeCompare(String(a.from)));
+  }, [card.calendar]);
   const catalog: LessonCatalog = card.catalog || { subjects: [], teachers: [], rooms: [], tariffs: [], groups: [] };
   const tariffOffers: TariffOffer[] = catalog.tariffs || [];
   const groupOffers: GroupOffer[] = groupChoices?.length ? groupChoices : catalog.groups || [];
@@ -842,19 +850,47 @@ export function CrmClientCard({
             <div className="relative">
               <button
                 type="button"
-                data-op="lessons-menu"
+                data-op="writeoffs-menu"
                 onClick={() => {
                   cancelHeadLeave();
-                  setHeadMenu((v) => (v === "lessons" ? "" : "lessons"));
+                  setHeadMenu((v) => (v === "writeoffs" ? "" : "writeoffs"));
                 }}
                 className={cn(
                   "h-7 rounded-full font-semibold",
                   compact ? "px-2 text-[0.65rem]" : "px-2.5 text-[0.68rem]",
-                  headMenu === "lessons" ? "bg-black/20 text-fg" : "bg-black/8 text-muted hover:bg-black/12",
+                  headMenu === "writeoffs" ? "bg-black/20 text-fg" : "bg-black/8 text-muted hover:bg-black/12",
                 )}
               >
-                Занятия ▾
+                Списания ▾
               </button>
+              {headMenu === "writeoffs" ? (
+                <div
+                  className={cn("absolute right-0 top-8 z-[90] w-[min(24rem,calc(100vw-2rem))] p-2.5", RA_POP)}
+                  data-op="lesson-writeoffs"
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <p className="font-display text-[1.05rem]">Списания занятий</p>
+                  <p className="mt-0.5 text-[0.68rem] text-muted">Проведённые и предыдущие. Отменённые не списывают.</p>
+                  {writeOffs.length ? (
+                    <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto text-[0.75rem]">
+                      {writeOffs.slice(0, 40).map((l) => (
+                        <li key={`${l.id}-${l.date}-${l.from}`} className="flex justify-between gap-2 border-t border-black/6 py-1.5 first:border-t-0">
+                          <span className="min-w-0 truncate">
+                            {l.date} {l.from || ""} · {l.type || "занятие"}
+                            {l.group ? ` · ${l.group}` : ""}
+                            {` · ${cttName(l.cttId)}`}
+                          </span>
+                          <span className="shrink-0 text-rose-700">
+                            {Number(l.amount) > 0 ? `−${money(l.amount)}` : "−1 занятие"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-[0.78rem] text-muted">Нет проведённых и прошлых занятий на диске.</p>
+                  )}
+                </div>
+              ) : null}
             </div>
             <div className="relative">
               <button
@@ -872,6 +908,102 @@ export function CrmClientCard({
               >
                 Касса ▾
               </button>
+              {headMenu === "cash" ? (
+                <div
+                  className={cn("absolute right-0 top-8 z-[90] w-[min(26rem,calc(100vw-2rem))] p-2.5", RA_POP)}
+                  data-op="cash-journal"
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <div className="mb-2 flex flex-wrap items-center gap-1">
+                    <p className="font-display text-[1.05rem]">Касса</p>
+                    <span className="text-[0.72rem] text-muted">{money(card.balance)}</span>
+                    {cashView.total > 0 ? (
+                      <span className="ml-auto flex items-center gap-1 text-[0.7rem] text-muted">
+                        <button type="button" disabled={cashView.page <= 0} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => Math.max(0, p - 1))}>←</button>
+                        {cashView.page + 1}/{cashView.pages}
+                        <button type="button" disabled={cashView.page >= cashView.pages - 1} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => p + 1)}>→</button>
+                      </span>
+                    ) : null}
+                  </div>
+                  {journalPays.length ? (
+                    <ul className="space-y-1.5">
+                      {cashView.items.map((p) => {
+                        const sum = payRowSum(p);
+                        return (
+                          <li key={p.id} className="rounded-xl bg-white px-2.5 py-1.5 ring-1 ring-black/6">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="min-w-0 truncate text-[0.75rem] text-muted">
+                                {p.documentDate || "—"} · {payKindName(p.kind)}
+                                {p.note ? ` · ${p.note}` : ""}
+                              </span>
+                              <span className={cn("shrink-0 text-[0.82rem] font-semibold tabular-nums", sum < 0 ? "text-rose-600" : "")}>
+                                {sum > 0 ? "+" : ""}
+                                {money(sum)}
+                              </span>
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              <button
+                                type="button"
+                                className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
+                                data-op="pay-edit"
+                                disabled={!onAction || Boolean(busy)}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPayEditId(p.id);
+                                  setPayKind((p.kind as "income" | "product" | "refund" | "correct") || "income");
+                                  setPaySum(String(p.kind === "refund" ? p.expenditure || "" : p.income || ""));
+                                  setPayDate(ruToIso(p.documentDate || ""));
+                                  setPayAccountId(String(p.payAccountId || 1));
+                                  setPayItemId(String(p.payItemId || defaultPayItemId(card.branchId)));
+                                  setPayLocationId(String(p.locationId || locationIdForBranch(card.branchId) || ""));
+                                  setPayManagerId(p.managerId ? String(p.managerId) : "");
+                                  setPayCttId(p.cttId != null && Number(p.cttId) !== 0 ? String(p.cttId) : "-1");
+                                  setPayPayer(p.payerName || card.parent || "");
+                                  setPayGroupId(p.groupId ? String(p.groupId) : "");
+                                  setPayNote(p.note || "");
+                                  setPayMethod(p.payMethod || "");
+                                  setHeadMenu("pay");
+                                }}
+                              >
+                                Изменить
+                              </button>
+                              <button
+                                type="button"
+                                className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
+                                data-op="pay-push"
+                                disabled={!onAction || Boolean(busy)}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void run("customerPayPush", { payId: p.id, id: p.id });
+                                }}
+                              >
+                                Экспорт в CRM
+                              </button>
+                              <button
+                                type="button"
+                                data-op="pay-delete"
+                                disabled={!onAction || Boolean(busy)}
+                                className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-rose-600 ring-1 ring-black/10 hover:bg-rose-50 disabled:opacity-40"
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDropPay({ id: p.id, label: `${p.documentDate || ""} ${money(sum)}` });
+                                }}
+                              >
+                                Удалить
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="text-[0.78rem] text-muted">Нет платежей на диске.</p>
+                  )}
+                </div>
+              ) : null}
             </div>
             <div className="relative">
               <button
@@ -950,7 +1082,7 @@ export function CrmClientCard({
               className={cn("h-8 px-3 text-[0.78rem]", compact && "h-7 px-2.5 text-[0.72rem]")}
               data-op="save-contacts"
               disabled={!onAction || Boolean(busy)}
-              onClick={() => void run("customerSave", { patch: { name, parent: legal, phone, email, note } })}
+              onClick={() => void run("customerSave", { patch: { name, parent: legal, phone, email, note, dob } })}
             >
               {busy === "customerSave" ? "Сохраняю…" : "Сохранить"}
             </Button>
@@ -1038,7 +1170,13 @@ export function CrmClientCard({
             <input value={phone} onChange={(e) => setPhone(e.target.value)} className="h-9 w-full min-w-0 rounded-lg bg-white px-2.5 text-sm text-fg ring-1 ring-black/8" />
             <input value={email} onChange={(e) => setEmail(e.target.value)} className="h-9 w-full min-w-0 rounded-lg bg-white px-2.5 text-sm text-fg ring-1 ring-black/8" />
             <input value={note} onChange={(e) => setNote(e.target.value)} className="h-9 w-full min-w-0 rounded-lg bg-white px-2.5 text-sm text-fg ring-1 ring-black/8" />
-            <input readOnly value={card.dob || "—"} title={card.age || ""} className="h-9 w-full min-w-0 rounded-lg bg-white/80 px-2.5 text-sm text-fg ring-1 ring-black/8" />
+            <input
+              value={dob}
+              onChange={(e) => setDob(maskRuDate(e.target.value))}
+              placeholder="дд.мм.гггг"
+              inputMode="numeric"
+              className="h-9 w-full min-w-0 rounded-lg bg-white px-2.5 text-sm text-fg ring-1 ring-black/8"
+            />
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-x-3 gap-y-2">
@@ -1064,7 +1202,13 @@ export function CrmClientCard({
             </label>
             <label className="block min-w-0">
               <span className="mb-1 block text-[0.68rem] font-semibold uppercase tracking-wide text-muted">Дата рождения</span>
-              <input readOnly value={card.dob || "—"} title={card.age || ""} className="h-9 w-full min-w-0 rounded-lg bg-white/80 px-2.5 text-sm text-fg ring-1 ring-black/8" />
+              <input
+              value={dob}
+              onChange={(e) => setDob(maskRuDate(e.target.value))}
+              placeholder="дд.мм.гггг"
+              inputMode="numeric"
+              className="h-9 w-full min-w-0 rounded-lg bg-white px-2.5 text-sm text-fg ring-1 ring-black/8"
+            />
             </label>
           </div>
         );
@@ -1121,98 +1265,14 @@ export function CrmClientCard({
 
       <div className={cn("pretty-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-5 md:px-5", compact ? "mt-3" : "mt-2")}>
         {compact ? contactsRow : null}
-        {headMenu === "lessons" ? (
-          <div className="mt-3 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="card-schedule">
-            <LessonStrip
-              lessons={tiles}
-              title="Расписание"
-              branchId={card.branchId}
-              groupId={(card.groups || []).find((g) => g.active !== false)?.id || (card.groups || [])[0]?.id}
-            />
-          </div>
-        ) : null}
-        {headMenu === "cash" ? (
-          <div className="mt-3 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="cash-journal">
-            <div className="mb-2 flex flex-wrap items-center gap-1">
-              <p className="font-display text-[1.05rem]">Касса</p>
-              <span className="text-[0.72rem] text-muted">{money(card.balance)}</span>
-              {cashView.total > 0 ? (
-                <span className="ml-auto flex items-center gap-1 text-[0.7rem] text-muted">
-                  <button type="button" disabled={cashView.page <= 0} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => Math.max(0, p - 1))}>←</button>
-                  {cashView.page + 1}/{cashView.pages}
-                  <button type="button" disabled={cashView.page >= cashView.pages - 1} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => p + 1)}>→</button>
-                </span>
-              ) : null}
-            </div>
-            {journalPays.length ? (
-              <ul className="space-y-1.5">
-                {cashView.items.map((p) => {
-                  const sum = payRowSum(p);
-                  return (
-                    <li key={p.id} className="rounded-xl bg-white px-2.5 py-1.5 ring-1 ring-black/6">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="min-w-0 truncate text-[0.75rem] text-muted">
-                          {p.documentDate || "—"} · {payKindName(p.kind)}
-                          {p.note ? ` · ${p.note}` : ""}
-                        </span>
-                        <span className={cn("shrink-0 text-[0.82rem] font-semibold tabular-nums", sum < 0 ? "text-rose-600" : "")}>
-                          {sum > 0 ? "+" : ""}
-                          {money(sum)}
-                        </span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        <button
-                          type="button"
-                          className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
-                          data-op="pay-edit"
-                          disabled={!onAction || Boolean(busy)}
-                          onClick={() => {
-                            setPayEditId(p.id);
-                            setPayKind((p.kind as "income" | "product" | "refund" | "correct") || "income");
-                            setPaySum(String(p.kind === "refund" ? p.expenditure || "" : p.income || ""));
-                            setPayDate(ruToIso(p.documentDate || ""));
-                            setPayAccountId(String(p.payAccountId || 1));
-                            setPayItemId(String(p.payItemId || defaultPayItemId(card.branchId)));
-                            setPayLocationId(String(p.locationId || locationIdForBranch(card.branchId) || ""));
-                            setPayManagerId(p.managerId ? String(p.managerId) : "");
-                            setPayCttId(p.cttId != null && Number(p.cttId) !== 0 ? String(p.cttId) : "-1");
-                            setPayPayer(p.payerName || card.parent || "");
-                            setPayGroupId(p.groupId ? String(p.groupId) : "");
-                            setPayNote(p.note || "");
-                            setPayMethod(p.payMethod || "");
-                            setHeadMenu("pay");
-                          }}
-                        >
-                          Изменить
-                        </button>
-                        <button
-                          type="button"
-                          className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
-                          data-op="pay-push"
-                          disabled={!onAction || Boolean(busy)}
-                          onClick={() => void run("customerPayPush", { payId: p.id, id: p.id })}
-                        >
-                          Экспорт в CRM
-                        </button>
-                        <button
-                          type="button"
-                          data-op="pay-delete"
-                          disabled={!onAction || Boolean(busy)}
-                          className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-rose-600 ring-1 ring-black/10 hover:bg-rose-50 disabled:opacity-40"
-                          onClick={() => setDropPay({ id: p.id, label: `${p.documentDate || ""} ${money(sum)}` })}
-                        >
-                          Удалить
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="text-[0.78rem] text-muted">Нет платежей на диске.</p>
-            )}
-          </div>
-        ) : null}
+        <div className="mt-3 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="card-schedule">
+          <LessonStrip
+            lessons={tiles}
+            title="Расписание"
+            branchId={card.branchId}
+            groupId={(card.groups || []).find((g) => g.active !== false)?.id || (card.groups || [])[0]?.id}
+          />
+        </div>
 
         <div className={cn("mt-3 grid gap-3 items-stretch", !compact && "sm:grid-cols-2")}>
           <div className="flex h-full min-w-0 flex-col rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="active-group">
@@ -1385,42 +1445,6 @@ export function CrmClientCard({
             </div>
           </div>
         </div>
-
-        <div className="mt-4 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="lesson-writeoffs">
-          <p className="font-display text-lg">Списания занятий</p>
-          <p className="mt-0.5 text-[0.72rem] text-muted">
-            Проведённые списывают деньги с абонемента, как в Alfa. Отменённые не списывают.
-            {(card.calendar || []).filter((l) => Number(l.status) === 2).length
-              ? ` Отмен: ${(card.calendar || []).filter((l) => Number(l.status) === 2).length}.`
-              : ""}
-          </p>
-          {writeOffs.length ? (
-            <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto text-[0.78rem]">
-              {writeOffs.slice(0, 40).map((l) => (
-                <li key={`${l.id}-${l.date}-${l.from}`} className="flex justify-between gap-2 border-t border-black/6 py-1.5 first:border-t-0">
-                  <span className="min-w-0 truncate">
-                    {l.date} {l.from || ""} · {l.type || "занятие"}
-                    {l.group ? ` · ${l.group}` : ""}
-                    {` · ${cttName(l.cttId)}`}
-                  </span>
-                  <span className="shrink-0 text-rose-700">
-                    {Number(l.amount) > 0 ? `−${money(l.amount)}` : "−1 занятие"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-2 text-sm text-muted">Нет проведённых занятий на диске. Откройте карточку — подтянем журнал Alfa.</p>
-          )}
-        </div>
-
-
-
-        {card.url ? (
-          <a href={card.url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-semibold text-primary">
-            Открыть в AlfaCRM
-          </a>
-        ) : null}
 
         <div className="mt-5">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -2336,7 +2360,7 @@ export function CrmClientCard({
     );
   }
   const overlay = (
-    <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 p-3 md:p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 p-3 md:p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       {article}
     </div>
   );
