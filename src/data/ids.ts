@@ -180,7 +180,7 @@ AlfaCRM не источник ответа. Она догоняет очеред
 Актор записи: human · assistant · consultant · sync. Настройка CRM → Люди и роли.
 Свой id < 0, пока Alfa не вернула номер. Перепись диска и очереди. 9000+ только у старых предметов.
 Журнал уроков: calendar[].lessonId. Явка = customerIds, не cgi и не last_attend. status 1 план · 2 отмена · 3 проведено.
-Деньги: pays[].id + customerId + cttId. Остаток = сумма строк диска (deleted нет). Alfa касса — pay.create/pay.delete сразу, автоопрос 10/час, «Обновить» карточки. Не F5. paid_till не касса.
+Деньги: pays[].id + customerId + cttId. Остаток = сумма строк диска (deleted нет). Alfa касса — pay.create/pay.delete сразу, автоопрос каждые 15 мин за 3 дня, «Обновить» карточки. Не F5. paid_till не касса.
 Каналы: comms[].id + customerId + channel. Чат, заявка, ВК, MAX и SMS — на диск сразу. Alfa communication — «Обновить».
 Связь Alfa: разъём, не склад. linked — очередь и «Обновить». offline — уход, кабинет тот же, очередь копит.
 
