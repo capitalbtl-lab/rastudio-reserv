@@ -420,7 +420,7 @@ export async function inboundCustomerPays(
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const store = load();
   const filled = (store.complete || []).includes(customerId);
-  const branches = uniqueBranches(branchId);
+  const branches = filled ? [Number(branchId) || 1] : uniqueBranches(branchId);
   const raw: Record<string, unknown>[] = [];
   let bidIdx = 0;
   let page = 0;
@@ -435,7 +435,7 @@ export async function inboundCustomerPays(
   let ran = 0;
   let done = filled;
   let lastShort = false;
-  const maxRun = filled ? Math.max(branches.length, 1) : PAY_INBOUND_RUN;
+  const maxRun = filled ? 1 : PAY_INBOUND_RUN;
   outer: for (let b = bidIdx; b < branches.length; b += 1) {
     const bid = branches[b];
     let p = filled ? 0 : b === bidIdx ? page : 0;
@@ -472,7 +472,7 @@ export async function inboundCustomerPays(
     /* диск абонементов необязателен */
   }
   const unlabeled = raw.some((it) => !payCttIdOf(it));
-  if (unlabeled && known.length) {
+  if (!filled && unlabeled && known.length) {
     for (const ctt of [...new Set(known)]) {
       for (let p = 0; p < 6; p += 1) {
         try {

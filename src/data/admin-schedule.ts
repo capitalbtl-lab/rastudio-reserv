@@ -1591,13 +1591,13 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const { inboundCustomerPays, customerBalance, cardPays, snapshotBalance } = await import("./crm-pay");
       const { inboundCustomerComms, commsOf, asCustomerComm } = await import("./crm-comms");
       await Promise.all([inboundCustomerPays(request, t, branch, customerId), inboundCustomerComms(request, t, branch, customerId)]);
-      const liveRows = (customer.tariffs || []).filter((t) => !t.archived && Number(t.id) > 0);
-      const cttRest = liveRows.reduce((n, t) => n + (Number(t.rest) || 0), 0);
+      const rows = (customer.tariffs || []).filter((t) => !t.archived && Number(t.id) > 0);
+      const cttRest = rows.reduce((n, t) => n + (Number(t.rest) || 0), 0);
       const { writeoffSumOf } = await import("./crm-ledger-core");
       const { loadCustomerCalendar } = await import("./group-cards");
       customer.balance = customerBalance(
         customerId,
-        snapshotBalance(customer.balance, cttRest, liveRows.length > 0),
+        snapshotBalance(customer.balance, cttRest, rows.length > 0),
         writeoffSumOf(loadCustomerCalendar(customerId)),
       );
       const dAfter = findDossier({ crmId: customerId });

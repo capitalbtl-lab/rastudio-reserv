@@ -63,8 +63,8 @@ export function enqueueExport(incoming: Omit<CrmExportJob, "id" | "at" | "tries"
   q.lastAt = new Date().toISOString();
   q.lastNote = `${incoming.op} ${incoming.entityId}`;
   saveExport(q);
-  const payNow = incoming.op === "pay.create" || incoming.op === "pay.delete";
-  void tickExportQueue(payNow ? 1 : 3, payNow ? incoming.op : undefined);
+  const instant = /^(pay|customer|lesson|cgi|customer-tariff|regular-lesson)\./.test(incoming.op);
+  void tickExportQueue(1, instant ? incoming.op : undefined);
   return crmExportSnapshot();
 }
 
