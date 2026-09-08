@@ -227,6 +227,8 @@ function isOneOffLesson(item: { lesson_type_id?: number; group_ids?: number[] })
 export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean }) {
   const id = Number(customerId) || 0;
   if (!alfaLinkedNow() || id <= 0) return { ok: true as const, count: 0 };
+  const { wantAlfaPullChannel } = await import("./crm-alfa-link");
+  if (!wantAlfaPullChannel("lessons")) return { ok: true as const, count: 0, skipped: "канал" as const };
   if (lessonFillBusy(id)) return { ok: true as const, count: 0, skipped: "busy" as const };
   const wantFull = Boolean(opts?.full) || !customerSyncOf(id).lessonsFull;
   if (!wantFull && customerLessonsFresh(id)) return { ok: true as const, count: 0, skipped: "fresh" as const };

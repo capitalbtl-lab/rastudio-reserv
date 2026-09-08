@@ -815,6 +815,8 @@ export function overlayAdminGroups() {
 
 /** Живые абонементы — индекс филиала, не обход 76 групп. */
 export async function stampLiveTariffsFromBranches() {
+  const { wantAlfaPullChannel } = await import("./crm-alfa-link");
+  if (!wantAlfaPullChannel("tariffs")) return { ids: liveTariffIdsFromStore(), live: 0, scanned: 0, branches: 0, empty: true as const, skipped: "канал" as const };
   const { pagedIndex } = await import("./alfacrm");
   const { tariffRowCustomerId, CRM_READ_GAP_MS } = await import("./pupil-tariffs");
   const { tariffRowLive } = await import("./crm-tariff-row");

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { CRM_ACTORS, actorLabel, actorOf, type CrmActorsState } from "@/data/crm-actors";
 import { CACHE_KIND_META, type CacheKind, type CachePolicy } from "@/data/crm-cache-policy-core";
 import { exportOpLabel, type CrmExportOp } from "@/data/crm-export-queue-core";
-import { ALFA_LINK_MODES, ALFA_PULL_CH, ALFA_PUSH_CH, ALFA_SYNC_DEFAULT, type AlfaLinkMode, type AlfaPullCh, type AlfaPushCh } from "@/data/crm-alfa-link-core";
+import { ALFA_LINK_MODES, ALFA_PULL_CH, ALFA_PUSH_CH, ALFA_PIPE_CH, ALFA_SYNC_DEFAULT, type AlfaLinkMode, type AlfaPullCh, type AlfaPushCh, type AlfaPipeCh } from "@/data/crm-alfa-link-core";
 
 export const CRM_SYNC_MIN_KEY = "ra_crm_sync_min";
 
@@ -51,6 +51,8 @@ export function AdminCrmSettings() {
   const [alfaMode, setAlfaMode] = useState<AlfaLinkMode>("linked");
   const [pull, setPull] = useState(ALFA_SYNC_DEFAULT.pull);
   const [push, setPush] = useState(ALFA_SYNC_DEFAULT.push);
+  const [pipe, setPipe] = useState(ALFA_SYNC_DEFAULT.pipe);
+  const [payDays, setPayDays] = useState(ALFA_SYNC_DEFAULT.payDays);
   const [queue, setQueue] = useState<{
     pending?: number;
     lastNote?: string;
@@ -64,10 +66,18 @@ export function AdminCrmSettings() {
   } | null>(null);
   const dragId = useRef(0);
 
-  function applyLink(link: { mode?: AlfaLinkMode; pull?: typeof pull; push?: typeof push; minutes?: number }) {
+  function applyLink(link: {
+    mode?: AlfaLinkMode;
+    pull?: typeof pull;
+    push?: typeof push;
+    pipe?: typeof pipe;
+    minutes?: number;
+    payDays?: number;
+  }) {
     setAlfaMode(link.mode === "offline" ? "offline" : "linked");
     if (link.pull) setPull({ ...ALFA_SYNC_DEFAULT.pull, ...link.pull });
     if (link.push) setPush({ ...ALFA_SYNC_DEFAULT.push, ...link.push });
+    if (link.pipe) setPipe({ ...ALFA_SYNC_DEFAULT.pipe, ...link.pipe });
     if (link.minutes) {
       setSyncMin(link.minutes);
       try {
@@ -76,6 +86,7 @@ export function AdminCrmSettings() {
         /* */
       }
     }
+    if (link.payDays) setPayDays(link.payDays);
   }
 
   useEffect(() => {
@@ -114,7 +125,7 @@ export function AdminCrmSettings() {
     try {
       const res = (await adminSchedule({
         data: { token: token(), action: "cachePolicyGet" } as never,
-      })) as { ok?: boolean; policy?: CachePolicy; queue?: typeof queue; alfaLink?: { mode?: AlfaLinkMode; pull?: typeof pull; push?: typeof push; minutes?: number } };
+      })) as { ok?: boolean; policy?: CachePolicy; queue?: typeof queue; alfaLink?: { mode?: AlfaLinkMode; pull?: typeof pull; push?: typeof push; pipe?: typeof pipe; minutes?: number; payDays?: number } };
       if (res.ok && res.policy) setCache(res.policy);
       if (res.ok && res.queue) setQueue(res.queue);
       if (res.ok && res.alfaLink) applyLink(res.alfaLink);
@@ -170,8 +181,8 @@ export function AdminCrmSettings() {
     setBusy(true);
     try {
       const res = (await adminSchedule({
-        data: { token: token(), action: "alfaLinkSave", alfaLink: { mode, pull, push, minutes: syncMin } } as never,
-      })) as { ok?: boolean; alfaLink?: { mode?: AlfaLinkMode; pull?: typeof pull; push?: typeof push; minutes?: number }; error?: string };
+        data: { token: token(), action: "alfaLinkSave", alfaLink: { mode, pull, push, pipe, minutes: syncMin, payDays } } as never,
+      })) as { ok?: boolean; alfaLink?: { mode?: AlfaLinkMode; pull?: typeof pull; push?: typeof push; pipe?: typeof pipe; minutes?: number; payDays?: number }; error?: string };
       if (!res.ok) {
         setMsg(res.error || "Не удалось сменить связь с Alfa.");
         return;
