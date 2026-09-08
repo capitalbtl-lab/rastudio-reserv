@@ -24,6 +24,8 @@ export type ClientRegular = {
   subjectId?: number;
   teacherId?: number;
   roomId?: number;
+  bDate?: string;
+  eDate?: string;
 };
 
 export type ClientLesson = {

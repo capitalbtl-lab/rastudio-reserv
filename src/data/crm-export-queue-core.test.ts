@@ -205,11 +205,21 @@ describe("очередь выгрузки в Alfa", () => {
       op: "regular-lesson.create",
       branchId: 1,
       entityId: 580,
-      body: { slotId: "gid:1:580", related_id: 580, day: 1, time_from_v: "16:00" },
+      body: { slotId: "gid:1:580", related_id: 580, day: 1, time_from_v: "16:00", b_date: "2026-09-01", e_date: "2027-03-01" },
     });
     assert.equal(exportPath(lessonNew[0]), "/v2api/1/regular-lesson/create");
     assert.equal(exportBody(lessonNew[0]).slotId, undefined);
     assert.equal(exportBody(lessonNew[0]).related_id, 580);
+    assert.equal(exportBody(lessonNew[0]).b_date, "2026-09-01");
+    assert.equal(exportBody(lessonNew[0]).e_date, "2027-03-01");
+    const twoDays = mergeExportJob(lessonNew, {
+      op: "regular-lesson.create",
+      branchId: 1,
+      entityId: 580,
+      body: { slotId: "gid:1:580", related_id: 580, day: 4, time_from_v: "16:00", b_date: "2026-09-01", e_date: "2027-03-01" },
+    });
+    assert.equal(twoDays.length, 2);
+    assert.equal(twoDays[1].body.day, 4);
     let subjects = mergeExportJob([], {
       op: "subject.create",
       branchId: 2,

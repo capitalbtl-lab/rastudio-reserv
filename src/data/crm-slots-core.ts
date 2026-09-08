@@ -14,6 +14,9 @@ export type LessonBeat = {
   timeFrom: string;
   timeTo: string;
   lessonId: number;
+  /** Период этого регулярного урока. Второй урок в группе копирует первый. */
+  bDate?: string;
+  eDate?: string;
 };
 
 export type CrmSlot = {
@@ -164,6 +167,17 @@ function isoDate(raw?: string) {
   return new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
+/** Дата или пусто. Не подставляет сегодня — иначе наследование периода врёт. */
+export function isoDateOrEmpty(raw?: string) {
+  const t = String(raw || "").trim();
+  if (!t) return "";
+  const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const ru = t.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
+  return "";
+}
+
 function academicEndIso(startIso: string) {
   const [y, m] = startIso.split("-").map(Number);
   const endY = m >= 6 ? y + 1 : y;
@@ -179,6 +193,47 @@ export function defaultPeriod(from?: string, to?: string) {
   const start = isoDate(from);
   const end = to ? isoDate(to) : academicEndIso(start);
   return { bDate: ruFromIso(start), eDate: ruFromIso(end) };
+}
+
+export type RegularPeriodHint = {
+  bDate?: string;
+  eDate?: string;
+  b_date?: string;
+  e_date?: string;
+  id?: number;
+  lessonId?: number;
+};
+
+function periodOfHint(row?: RegularPeriodHint | null) {
+  if (!row) return null;
+  const b = isoDateOrEmpty(row.bDate || row.b_date);
+  const e = isoDateOrEmpty(row.eDate || row.e_date);
+  return b && e ? { bDate: b, eDate: e } : null;
+}
+
+/**
+ * Второй урок в группе берёт период первого, не учебный год до мая.
+ * Известный regular — свои даты. Иначе первый sibling с датами. Иначе период группы.
+ */
+export function inheritRegularPeriod(opts: {
+  siblings?: RegularPeriodHint[];
+  groupFrom?: string;
+  groupTo?: string;
+  preferId?: number;
+}): { bDate: string; eDate: string } {
+  const rows = opts.siblings || [];
+  const prefer = Number(opts.preferId) || 0;
+  if (prefer) {
+    const hit = periodOfHint(rows.find((x) => Number(x.id || x.lessonId) === prefer));
+    if (hit) return hit;
+  }
+  for (const row of rows) {
+    const hit = periodOfHint(row);
+    if (hit) return hit;
+  }
+  const start = isoDateOrEmpty(opts.groupFrom) || isoDate(opts.groupFrom);
+  const end = isoDateOrEmpty(opts.groupTo) || academicEndIso(start);
+  return { bDate: start, eDate: end };
 }
 
 export type SlotDraft = {

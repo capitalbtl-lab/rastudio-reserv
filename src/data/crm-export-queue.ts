@@ -338,6 +338,13 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: {
         } else {
           const res = await request<{ success?: boolean; errors?: unknown; model?: { id?: number }; id?: number }>(exportPath(job), exportBody(job), t);
           if (res.success === false) throw new Error(alfaErrText(res.errors) || JSON.stringify(res.errors || res).slice(0, 240));
+          if (job.op === "regular-lesson.create") {
+            const lid = crmCreatedId(res);
+            if (!lid) throw new Error("AlfaCRM не вернула номер регулярного занятия");
+            const { applyCreatedLesson } = await import("./alfacrm-schedule");
+            const slotId = String(job.body.slotId || "") || `gid:${job.branchId}:${Number(job.body.related_id || job.entityId) || 0}`;
+            applyCreatedLesson(slotId, Number(job.body.day) || 1, String(job.body.time_from_v || ""), lid);
+          }
           if (job.op === "group.create") {
             const gid = crmCreatedId(res);
             if (!gid) throw new Error("AlfaCRM не вернула номер группы");

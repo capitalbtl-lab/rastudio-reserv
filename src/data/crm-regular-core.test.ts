@@ -5,13 +5,15 @@ import { packCustomerRegular, parseDossierRegular, pickCustomerRegularItems, reg
 describe("постоянное расписание ученика", () => {
   it("пакует вс/ср/пт Чудновой и не берёт выключенные", () => {
     const sun = packCustomerRegular(
-      { id: 1176, related_id: 80, day: 7, time_from_v: "11:10", time_to_v: "13:40", teacher_ids: [1], subject_id: 92 },
+      { id: 1176, related_id: 80, day: 7, time_from_v: "11:10", time_to_v: "13:40", teacher_ids: [1], subject_id: 92, b_date: "01.09.2026", e_date: "01.03.2027" },
       { groupName: "2026 Художественная школа (10-14 лет)", teacher: "Самсонова", subject: "Художественная школа (10-14 лет)", branchId: 1 },
     );
     const off = packCustomerRegular({ id: 1, related_id: 80, day: 5, time_from_v: "18:10", disabled: 1 }, {});
     assert.equal(sun?.dayLabel, "Вс");
     assert.equal(sun?.from, "11:10");
     assert.equal(sun?.to, "13:40");
+    assert.equal(sun?.bDate, "01.09.2026");
+    assert.equal(sun?.eDate, "01.03.2027");
     assert.equal(off, null);
   });
 

@@ -119,6 +119,8 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
         subjectId: r.subjectId,
         teacherId: r.teacherId,
         roomId: r.roomId,
+        bDate: r.bDate,
+        eDate: r.eDate,
       });
     }
   }
@@ -156,6 +158,8 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
           subjectId: slot.subjectId,
           teacherId: slot.teacherId || undefined,
           roomId: slot.roomId || undefined,
+          bDate: b.bDate || slot.bDate,
+          eDate: b.eDate || slot.eDate,
         });
       }
     }

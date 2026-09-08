@@ -63,6 +63,8 @@ type Lesson = {
   time_to?: string;
   teacher_ids?: number[];
   room_id?: number;
+  b_date?: string;
+  e_date?: string;
 };
 type Subject = { id: number; name: string };
 type Teacher = { id: number; name?: string };
@@ -641,6 +643,8 @@ async function loadCrm(force = false, opts?: { night?: boolean; existing?: CrmSl
         timeFrom: String(lesson.time_from_v || lesson.time_from || "").slice(0, 5),
         timeTo: String(lesson.time_to_v || lesson.time_to || "").slice(0, 5),
         lessonId: Number(lesson.id) || 0,
+        bDate: String(lesson.b_date || ""),
+        eDate: String(lesson.e_date || ""),
       }))
       .filter((b) => b.lessonId || /^\d{1,2}:\d{2}$/.test(b.timeFrom))
       .sort((a, b) => a.day - b.day || a.timeFrom.localeCompare(b.timeFrom));

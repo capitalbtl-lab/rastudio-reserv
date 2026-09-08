@@ -306,6 +306,10 @@ function lessonsForCard(
       if (cur.getDay() !== jsWant) continue;
       const date = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
       if (date < today) continue;
+      const from = toYmd(r.bDate || "");
+      const to = toYmd(r.eDate || "");
+      if (from.length === 10 && date < from) continue;
+      if (to.length === 10 && date > to) continue;
       const key = `${date}|${r.from}|${r.groupName}`;
       if (seen.has(key)) continue;
       seen.add(key);

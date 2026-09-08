@@ -9,7 +9,7 @@ import { request } from "@/data/alfacrm";
 import { yandexJson } from "@/data/agent-channels";
 import { loadSubjects, pickSubjectForSlot } from "@/data/crm-subjects";
 import { teachersAtBranch, listTeachers, teacherIdsOfSlot } from "@/data/crm-teachers";
-import { type CrmSlot, type SlotVersion, type LessonBeat, beatsOf, validBeat, levelName } from "@/data/crm-slots-core";
+import { type CrmSlot, type SlotVersion, type LessonBeat, beatsOf, validBeat, levelName, inheritRegularPeriod } from "@/data/crm-slots-core";
 import { loadSiteTree } from "@/data/site-tree";
 import { subjectIdOfCourse } from "@/data/ids";
 import { loadScheduleMap } from "@/data/schedule-map";
@@ -19,7 +19,7 @@ import { bulkPriorityFromPrompt, bulkLimitFromPrompt } from "./schedule-bulk";
 
 export { bulkPriorityFromPrompt, bulkLimitFromPrompt } from "./schedule-bulk";
 
-export { SCHOOL_ORDER, beatsOf, validBeat, type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
+export { SCHOOL_ORDER, beatsOf, validBeat, inheritRegularPeriod, isoDateOrEmpty, type CrmSlot, type SlotVersion, type LessonBeat } from "@/data/crm-slots-core";
 
 function signupOf(branch: number, gid: string | number) {
   return `https://studiyarazvivaysya.s20.online/common/${branch}/lead/create?gid=${gid}`;
@@ -930,8 +930,15 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
         day: Math.max(1, Math.min(7, Number(b.day) || Number(s.day) || 1)),
       }));
       const existing = groupId ? await regularsOfGroup(branch, groupId, t, request).catch(() => []) : [];
-      const fromCrm = existing.map((x) => isoDate(x.b_date || "")).filter(Boolean);
-      if (fromCrm.length) startIso = laterIso(startIso, fromCrm.sort()[fromCrm.length - 1] || startIso);
+      const period = inheritRegularPeriod({
+        siblings: [
+          ...existing.map((x) => ({ b_date: x.b_date, e_date: x.e_date, id: Number(x.id) || 0 })),
+          ...beats,
+        ],
+        groupFrom: startIso,
+        groupTo: endIso,
+        preferId: Number(beats.find((x) => x.lessonId)?.lessonId) || 0,
+      });
       const used = new Set<number>();
       const savedBeats: LessonBeat[] = [];
       for (const b of beats) {
@@ -949,8 +956,13 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
           if (hit?.id) lessonId = Number(hit.id);
         }
         const known = existing.find((x) => Number(x.id) === lessonId);
-        const bDate = laterIso(startIso, known?.b_date ? isoDate(known.b_date) : "");
-        const eDate = laterIso(endIso, known?.e_date ? isoDate(known.e_date) : academicEndIso(bDate));
+        const own = inheritRegularPeriod({
+          siblings: known ? [{ b_date: known.b_date, e_date: known.e_date, id: Number(known.id) || 0 }] : [],
+          groupFrom: period.bDate,
+          groupTo: period.eDate,
+        });
+        const bDate = own.bDate;
+        const eDate = own.eDate;
         const payload = {
           related_class: "Group",
           related_id: groupId,
@@ -971,7 +983,7 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
         if (lessonId) {
           await postCrm(`/v2api/${branch}/regular-lesson/update?id=${lessonId}`, { id: lessonId, ...payload });
           used.add(lessonId);
-          savedBeats.push({ ...b, lessonId });
+          savedBeats.push({ ...b, lessonId, bDate, eDate });
         } else {
           let created: unknown;
           try {
@@ -1006,7 +1018,7 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
             e_date: eDate,
           }).catch(() => null);
           used.add(newId);
-          savedBeats.push({ ...b, lessonId: newId });
+          savedBeats.push({ ...b, lessonId: newId, bDate, eDate });
           if (!s.lessonId) s.lessonId = newId;
         }
       }

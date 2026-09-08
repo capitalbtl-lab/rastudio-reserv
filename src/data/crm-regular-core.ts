@@ -14,6 +14,8 @@ export type DiskRegular = {
   subjectId?: number;
   roomId?: number;
   branchId: number;
+  bDate?: string;
+  eDate?: string;
 };
 
 const DAYS = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -80,6 +82,8 @@ export function packCustomerRegular(
     subjectId: Number(it.subject_id || 0) || undefined,
     roomId: Number(it.room_id || 0) || undefined,
     branchId: Number(it.branch_id || ctx.branchId || 0) || 0,
+    bDate: String(it.b_date || it.bDate || "").trim() || undefined,
+    eDate: String(it.e_date || it.eDate || "").trim() || undefined,
   };
 }
 
@@ -108,6 +112,8 @@ export function parseDossierRegular(extras?: Record<string, string> | null): Dis
           subjectId: Number(it.subjectId || 0) || undefined,
           roomId: Number(it.roomId || 0) || undefined,
           branchId: Number(it.branchId || 0) || 0,
+          bDate: String(it.bDate || it.b_date || "").trim() || undefined,
+          eDate: String(it.eDate || it.e_date || "").trim() || undefined,
         } satisfies DiskRegular;
       })
       .filter((x): x is DiskRegular => Boolean(x));

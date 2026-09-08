@@ -1576,7 +1576,13 @@ export function AdminSchedule() {
   }
 
   function addBeat(s: CrmSlot, b: LessonBeat) {
-    const beats = [...beatsOf(s), b];
+    const first = beatsOf(s)[0];
+    const beat: LessonBeat = {
+      ...b,
+      bDate: b.bDate || first?.bDate || s.bDate || "",
+      eDate: b.eDate || first?.eDate || s.eDate || "",
+    };
+    const beats = [...beatsOf(s), beat];
     const apply = (row: CrmSlot) => (row.id === s.id ? { ...row, beats, timesPerWeek: beats.length } : row);
     setSlots((list) => list.map(apply));
     setView((v) => ({ ...v, [s.id]: beats.length - 1 }));

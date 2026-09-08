@@ -36,6 +36,8 @@ describe("форма занятия карточки", () => {
     assert.match(src, /Счета и абонементы/);
     assert.match(src, /label: "Архивные"/);
     assert.match(src, /date < today/);
+    assert.match(src, /r\.bDate/);
+    assert.match(src, /r\.eDate/);
     assert.match(src, /l\.amount/);
     assert.match(src, /Отмен:/);
     assert.match(src, /writeoffSumForCtt/);
@@ -69,6 +71,8 @@ describe("форма занятия карточки", () => {
     assert.match(sched, /import \{ AdminReloadBtn, useAdminReload \} from "@\/components\/admin-reload-btn"/);
     assert.match(sched, /useAdminReload\(/);
     assert.match(sched, /from "@\/data\/crm-teachers-core"/);
+    assert.match(sched, /bDate: b.bDate \|\| first\?\.bDate/);
+    assert.match(sched, /eDate: b.eDate \|\| first\?\.eDate/);
     const disk = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(disk, /parseDossierRegular/);
@@ -78,6 +82,8 @@ describe("форма занятия карточки", () => {
     assert.doesNotMatch(disk, /extras\?\.paid \|\| 0/);
     assert.match(api, /pullCustomerRegular/);
     assert.match(api, /rows.length > 0/);
+    assert.match(api, /regular-lesson.create/);
+    assert.match(api, /inheritRegularPeriod/);
     const pullSrc = readFileSync(new URL("./pupil-tariffs.ts", import.meta.url), "utf8");
     const pull = pullSrc.slice(pullSrc.indexOf("export async function pullCustomerAccount"), pullSrc.indexOf("export async function pullCustomerAccount") + 2200);
     assert.match(pull, /balance: String\(best.balance\)/);

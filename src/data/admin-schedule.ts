@@ -24,6 +24,7 @@ import {
   slotsToXls,
   versionSlots,
   defaultPeriod,
+  inheritRegularPeriod,
   type CrmSlot,
   type SlotDraft,
 } from "./crm-slots";
@@ -788,6 +789,8 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
         subjectId: r.subjectId,
         teacherId: r.teacherId,
         roomId: r.roomId,
+        bDate: r.bDate,
+        eDate: r.eDate,
       });
     }
   } catch {
@@ -811,6 +814,8 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
         subjectId: slot.subjectId,
         teacherId: slot.teacherId || undefined,
         roomId: slot.roomId || undefined,
+        bDate: b.bDate || slot.bDate,
+        eDate: b.eDate || slot.eDate,
       });
     }
   }
@@ -3327,22 +3332,57 @@ export const adminSchedule = createServerFn({ method: "POST" })
           },
         });
         const slotNow = next.find((s) => s.id === found.id) || found;
-        for (const b of slotNow.beats?.length ? slotNow.beats : [{ day: slotNow.day, timeFrom: slotNow.timeFrom, timeTo: slotNow.timeTo, lessonId: slotNow.lessonId }]) {
-          if (!b.lessonId) continue;
+        const beatsNow = slotNow.beats?.length
+          ? slotNow.beats
+          : [{ day: slotNow.day, timeFrom: slotNow.timeFrom, timeTo: slotNow.timeTo, lessonId: slotNow.lessonId, bDate: slotNow.bDate, eDate: slotNow.eDate }];
+        const period = inheritRegularPeriod({
+          siblings: beatsNow,
+          groupFrom: bDate,
+          groupTo: eDate,
+          preferId: Number(beatsNow.find((x) => x.lessonId)?.lessonId) || Number(slotNow.lessonId) || 0,
+        });
+        const sid = Number(subjectId || slotNow.subjectId || 0);
+        for (const b of beatsNow) {
+          if (!b.timeFrom || !b.timeTo) continue;
+          if (b.lessonId) {
+            enqueueExport({
+              op: "regular-lesson.update",
+              branchId: branch,
+              entityId: b.lessonId,
+              body: {
+                related_class: "Group",
+                related_id: gid,
+                ...(sid ? { subject_id: sid } : {}),
+                day: b.day,
+                days: [b.day],
+                time_from_v: b.timeFrom,
+                time_to_v: b.timeTo,
+                b_date: isoish(bDate),
+                e_date: isoish(eDate),
+                ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+              },
+            });
+            continue;
+          }
+          if (!sid) continue;
           enqueueExport({
-            op: "regular-lesson.update",
+            op: "regular-lesson.create",
             branchId: branch,
-            entityId: b.lessonId,
+            entityId: gid,
             body: {
+              slotId: slotNow.id,
               related_class: "Group",
               related_id: gid,
-              ...(subjectId || slotNow.subjectId ? { subject_id: subjectId || slotNow.subjectId } : {}),
+              subject_id: sid,
+              subject_ids: [sid],
+              branch_id: branch,
+              lesson_type_id: 2,
               day: b.day,
               days: [b.day],
               time_from_v: b.timeFrom,
               time_to_v: b.timeTo,
-              b_date: isoish(bDate),
-              e_date: isoish(eDate),
+              b_date: period.bDate,
+              e_date: period.eDate,
               ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
             },
           });
