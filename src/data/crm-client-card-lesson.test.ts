@@ -73,6 +73,10 @@ describe("форма занятия карточки", () => {
     assert.match(sched, /from "@\/data\/crm-teachers-core"/);
     assert.match(sched, /bDate: b.bDate \|\| first\?\.bDate/);
     assert.match(sched, /eDate: b.eDate \|\| first\?\.eDate/);
+    assert.match(sched, /Даты занятий/);
+    assert.match(sched, /applySchedulePeriod/);
+    assert.match(sched, /applyGroupPeriod/);
+    assert.match(sched, /Период группы/);
     const disk = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(disk, /parseDossierRegular/);
@@ -84,6 +88,10 @@ describe("форма занятия карточки", () => {
     assert.match(api, /rows.length > 0/);
     assert.match(api, /regular-lesson.create/);
     assert.match(api, /inheritRegularPeriod/);
+    assert.match(api, /bDate: b.bDate \|\| bDate/);
+    const queue = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
+    assert.match(queue, /b_date: b.bDate \|\| job.body.b_date/);
+    assert.match(queue, /e_date: b.eDate \|\| job.body.e_date/);
     const pullSrc = readFileSync(new URL("./pupil-tariffs.ts", import.meta.url), "utf8");
     const pull = pullSrc.slice(pullSrc.indexOf("export async function pullCustomerAccount"), pullSrc.indexOf("export async function pullCustomerAccount") + 2200);
     assert.match(pull, /balance: String\(best.balance\)/);

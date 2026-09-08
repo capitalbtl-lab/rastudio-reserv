@@ -11,7 +11,7 @@ import { SCHOOLS, BRANCHES } from "@/data/site";
 import { slotMismatch, mismatchHint } from "@/data/slot-mismatch";
 import { cn } from "@/lib/utils";
 import { speakAgent } from "@/data/agent-voice";
-import { missingScheduleFields, beatsOf, type LessonBeat, matchBranch, defaultPeriod } from "@/data/crm-slots-core";
+import { missingScheduleFields, beatsOf, type LessonBeat, matchBranch, defaultPeriod, ruDate, stampBeatsPeriodIfFollow } from "@/data/crm-slots-core";
 import { parseDraftFromSpeech } from "@/data/schedule-speech";
 import { AdminSubjects } from "@/components/admin-subjects";
 import { AdminCoursePrices } from "@/components/admin-course-prices";
@@ -110,6 +110,7 @@ const CARD_FIELDS = [
   { id: "age", label: "Возраст" },
   { id: "day", label: "День" },
   { id: "period", label: "Период" },
+  { id: "schedulePeriod", label: "Даты занятий" },
   { id: "time", label: "Время" },
   { id: "week", label: "×нед" },
   { id: "places", label: "Места" },
@@ -1038,6 +1039,11 @@ export function AdminSchedule() {
     openingRef.current = s.id;
     const still = () => openingRef.current === s.id;
     const period = defaultPeriod(s.bDate, s.eDate);
+    const groupFrom = s.bDate || period.bDate;
+    const groupTo = s.eDate || period.eDate;
+    const slot = s.groupId
+      ? s
+      : { ...s, bDate: groupFrom, eDate: groupTo, beats: stampBeatsPeriodIfFollow(beatsOf(s), "", "", groupFrom, groupTo) };
     const base = (): GroupDetail => ({
       id: s.id,
       groupId: s.groupId,
@@ -1047,8 +1053,8 @@ export function AdminSchedule() {
       hashtags: (s.hashtags || "").replace(/\s+/g, " ").trim(),
       makeup: s.makeup || "",
       statusId: s.statusId || 0,
-      bDate: s.bDate || period.bDate,
-      eDate: s.eDate || period.eDate,
+      bDate: groupFrom,
+      eDate: groupTo,
       levelId: s.levelId || 0,
       signup: leadHref(s),
       subjectId: s.subjectId || 0,
@@ -1056,7 +1062,7 @@ export function AdminSchedule() {
       members: [],
       archive: [],
       saving: false,
-      slot: s,
+      slot,
       tariffId: s.tariffId || 0,
       tariffs: [],
       priority: readPriority(s.priority),
@@ -1586,6 +1592,41 @@ export function AdminSchedule() {
     const apply = (row: CrmSlot) => (row.id === s.id ? { ...row, beats, timesPerWeek: beats.length } : row);
     setSlots((list) => list.map(apply));
     setView((v) => ({ ...v, [s.id]: beats.length - 1 }));
+    setDirty((d) => new Set(d).add(s.id));
+    setDetail((d) => (d && d.id === s.id ? { ...d, slot: apply(d.slot) } : d));
+  }
+
+  function applyGroupPeriod(bDate: string, eDate: string) {
+    const follow = !detail?.groupId;
+    const prevB = detail?.bDate || "";
+    const prevE = detail?.eDate || "";
+    const id = detail?.id;
+    setDetail((d) => {
+      if (!d) return d;
+      if (!follow) return { ...d, bDate, eDate };
+      const beats = stampBeatsPeriodIfFollow(beatsOf(d.slot), prevB, prevE, bDate, eDate);
+      const slot = { ...d.slot, bDate, eDate, beats };
+      return { ...d, bDate, eDate, slot };
+    });
+    if (follow && id) {
+      setSlots((list) =>
+        list.map((row) => {
+          if (row.id !== id) return row;
+          return { ...row, bDate, eDate, beats: stampBeatsPeriodIfFollow(beatsOf(row), prevB, prevE, bDate, eDate) };
+        }),
+      );
+      setDirty((d) => new Set(d).add(id));
+    }
+  }
+
+  function applySchedulePeriod(from: string, to: string) {
+    if (!detail) return;
+    const s = detail.slot;
+    const beats = beatsOf(s);
+    const i = view[s.id] || 0;
+    const next = beats.map((b, n) => (n === i ? { ...b, bDate: from, eDate: to } : b));
+    const apply = (row: CrmSlot) => (row.id === s.id ? { ...row, beats: next } : row);
+    setSlots((list) => list.map(apply));
     setDirty((d) => new Set(d).add(s.id));
     setDetail((d) => (d && d.id === s.id ? { ...d, slot: apply(d.slot) } : d));
   }
@@ -3742,11 +3783,31 @@ export function AdminSchedule() {
                       ) : null}
                       {showField("period") ? (
                       <label className="col-span-2 block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80 sm:col-auto">
-                        Период
+                        Период группы
                         <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
-                          <input value={detail.bDate} onChange={(e) => setDetail((d) => (d ? { ...d, bDate: e.target.value } : d))} placeholder="01.09.2026" className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none" />
+                          <input value={detail.bDate} onChange={(e) => applyGroupPeriod(e.target.value, detail.eDate)} placeholder="01.09.2026" className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none" />
                           <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
-                          <input value={detail.eDate} onChange={(e) => setDetail((d) => (d ? { ...d, eDate: e.target.value } : d))} placeholder="30.06.2027" className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none" />
+                          <input value={detail.eDate} onChange={(e) => applyGroupPeriod(detail.bDate, e.target.value)} placeholder="30.06.2027" className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none" />
+                        </span>
+                      </label>
+                      ) : null}
+                      {showField("schedulePeriod") || showField("period") ? (
+                      <label className="col-span-2 block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80 sm:col-auto">
+                        Даты занятий
+                        <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
+                          <input
+                            value={ruDate(shownBeat(detail.slot).bDate) || ruDate(detail.bDate)}
+                            onChange={(e) => applySchedulePeriod(e.target.value, shownBeat(detail.slot).eDate || detail.eDate)}
+                            placeholder={detail.bDate || "01.09.2026"}
+                            className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none"
+                          />
+                          <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
+                          <input
+                            value={ruDate(shownBeat(detail.slot).eDate) || ruDate(detail.eDate)}
+                            onChange={(e) => applySchedulePeriod(shownBeat(detail.slot).bDate || detail.bDate, e.target.value)}
+                            placeholder={detail.eDate || "30.06.2027"}
+                            className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none"
+                          />
                         </span>
                       </label>
                       ) : null}

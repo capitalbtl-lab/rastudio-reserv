@@ -351,7 +351,7 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: {
             const { applyCreatedGroup, applyCreatedLesson } = await import("./alfacrm-schedule");
             applyCreatedGroup(String(job.body.slotId || ""), gid, job.branchId);
             const beats = Array.isArray(job.body.beats)
-              ? (job.body.beats as { day?: number; timeFrom?: string; timeTo?: string; lessonId?: number }[])
+              ? (job.body.beats as { day?: number; timeFrom?: string; timeTo?: string; lessonId?: number; bDate?: string; eDate?: string }[])
               : [];
             for (const b of beats) {
               if (Number(b.lessonId) || !b.timeFrom || !b.timeTo) continue;
@@ -369,8 +369,8 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: {
                   time_from_v: b.timeFrom,
                   time_to_v: b.timeTo,
                   ...(Array.isArray(job.body.teacher_ids) ? { teacher_ids: job.body.teacher_ids } : {}),
-                  b_date: job.body.b_date,
-                  e_date: job.body.e_date,
+                  b_date: b.bDate || job.body.b_date,
+                  e_date: b.eDate || job.body.e_date,
                 },
                 t,
               );

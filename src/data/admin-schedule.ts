@@ -3345,6 +3345,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
         for (const b of beatsNow) {
           if (!b.timeFrom || !b.timeTo) continue;
           if (b.lessonId) {
+            const dates = inheritRegularPeriod({
+              siblings: [b],
+              groupFrom: bDate,
+              groupTo: eDate,
+            });
             enqueueExport({
               op: "regular-lesson.update",
               branchId: branch,
@@ -3357,8 +3362,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
                 days: [b.day],
                 time_from_v: b.timeFrom,
                 time_to_v: b.timeTo,
-                b_date: isoish(bDate),
-                e_date: isoish(eDate),
+                b_date: dates.bDate,
+                e_date: dates.eDate,
                 ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
               },
             });
@@ -3421,8 +3426,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
           ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
           beats: (slotNow.beats?.length
             ? slotNow.beats
-            : [{ day: slotNow.day, timeFrom: slotNow.timeFrom, timeTo: slotNow.timeTo, lessonId: slotNow.lessonId }]
-          ).map((b) => ({ day: b.day, timeFrom: b.timeFrom, timeTo: b.timeTo, lessonId: b.lessonId || 0 })),
+            : [{ day: slotNow.day, timeFrom: slotNow.timeFrom, timeTo: slotNow.timeTo, lessonId: slotNow.lessonId, bDate: slotNow.bDate, eDate: slotNow.eDate }]
+          ).map((b) => ({
+            day: b.day,
+            timeFrom: b.timeFrom,
+            timeTo: b.timeTo,
+            lessonId: b.lessonId || 0,
+            bDate: b.bDate || bDate,
+            eDate: b.eDate || eDate,
+          })),
         },
       });
       logAdmin(`Группа ${found.id}: на сайте, создание в очереди Alfa`);

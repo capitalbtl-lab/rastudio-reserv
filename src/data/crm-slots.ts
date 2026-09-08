@@ -549,6 +549,9 @@ export function buildSlot(draft: SlotDraft, catalog: CrmSlot[]): CrmSlot {
   const mappedSid = courseRow?.id ? subjectIdOfCourse(courseRow.id, map.courses) : 0;
   const subjectId = Number(draft.subjectId) || Number(twin?.subjectId) || mappedSid || 0;
   const sub = subjectId ? loadSubjects().find((x) => x.id === subjectId) : undefined;
+  const period = defaultPeriod();
+  const timeFrom = eveningTime(draft.timeFrom);
+  const timeTo = eveningTime(draft.timeTo);
   return {
     id,
     lessonId: 0,
@@ -568,10 +571,10 @@ export function buildSlot(draft: SlotDraft, catalog: CrmSlot[]): CrmSlot {
     age: age || twin?.age || "",
     day,
     dayLabel: dayLabel(day),
-    timeFrom: eveningTime(draft.timeFrom),
-    timeTo: eveningTime(draft.timeTo),
+    timeFrom,
+    timeTo,
     timesPerWeek: 1,
-    beats: [{ day, timeFrom: eveningTime(draft.timeFrom), timeTo: eveningTime(draft.timeTo), lessonId: 0 }],
+    beats: [{ day, timeFrom, timeTo, lessonId: 0, bDate: period.bDate, eDate: period.eDate }],
     branchId: br.id,
     city: br.city,
     branch: br.branch,
@@ -580,7 +583,7 @@ export function buildSlot(draft: SlotDraft, catalog: CrmSlot[]): CrmSlot {
     teacherIds: teacherHit?.teacherIds || [],
     teacher,
     roomId: 0,
-    ...defaultPeriod(),
+    ...period,
   };
 }
 

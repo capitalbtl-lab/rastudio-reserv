@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { inheritRegularPeriod, isoDateOrEmpty } from "./crm-slots-core.ts";
+import { inheritRegularPeriod, isoDateOrEmpty, ruDate, beatFollowsGroup, stampBeatsPeriodIfFollow } from "./crm-slots-core.ts";
 
 describe("второй урок в группе копирует период первого", () => {
   it("isoDateOrEmpty не подставляет сегодня", () => {
@@ -53,5 +53,32 @@ describe("второй урок в группе копирует период п
   it("без дат группы — конец учебного года от старта", () => {
     const got = inheritRegularPeriod({ groupFrom: "2026-09-01" });
     assert.deepEqual(got, { bDate: "2026-09-01", eDate: "2027-05-31" });
+  });
+
+  it("ruDate приводит ISO к д.м.г", () => {
+    assert.equal(ruDate("2026-09-01"), "01.09.2026");
+    assert.equal(ruDate("01.03.2027"), "01.03.2027");
+    assert.equal(ruDate(""), "");
+  });
+
+  it("новая группа: даты занятий идут за периодом, пока их не правили", () => {
+    const linked = stampBeatsPeriodIfFollow(
+      [{ day: 2, timeFrom: "16:00", timeTo: "18:00", lessonId: 0, bDate: "01.09.2026", eDate: "30.06.2027" }],
+      "01.09.2026",
+      "30.06.2027",
+      "01.09.2026",
+      "01.03.2027",
+    );
+    assert.equal(linked[0].eDate, "01.03.2027");
+    const edited = stampBeatsPeriodIfFollow(
+      [{ day: 2, timeFrom: "16:00", timeTo: "18:00", lessonId: 0, bDate: "01.09.2026", eDate: "01.03.2027" }],
+      "01.09.2026",
+      "30.06.2027",
+      "01.09.2026",
+      "31.05.2027",
+    );
+    assert.equal(edited[0].eDate, "01.03.2027");
+    assert.equal(beatFollowsGroup({ bDate: "", eDate: "" }, "01.09.2026", "30.06.2027"), true);
+    assert.equal(beatFollowsGroup({ bDate: "01.09.2026", eDate: "01.03.2027" }, "01.09.2026", "30.06.2027"), false);
   });
 });

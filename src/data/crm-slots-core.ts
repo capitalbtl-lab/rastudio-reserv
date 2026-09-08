@@ -140,10 +140,10 @@ export function validBeat(b?: LessonBeat | null): boolean {
 export function beatsOf(s: CrmSlot): LessonBeat[] {
   const raw = s.beats?.length
     ? s.beats
-    : [{ day: s.day, timeFrom: s.timeFrom, timeTo: s.timeTo, lessonId: s.lessonId }];
+    : [{ day: s.day, timeFrom: s.timeFrom, timeTo: s.timeTo, lessonId: s.lessonId, bDate: s.bDate, eDate: s.eDate }];
   const good = raw.filter(validBeat);
   if (good.length) return good;
-  return [{ day: Number(s.day) || 1, timeFrom: s.timeFrom || "", timeTo: s.timeTo || "", lessonId: s.lessonId || 0 }];
+  return [{ day: Number(s.day) || 1, timeFrom: s.timeFrom || "", timeTo: s.timeTo || "", lessonId: s.lessonId || 0, bDate: s.bDate, eDate: s.eDate }];
 }
 
 const BRANCHES = [
@@ -209,6 +209,26 @@ function periodOfHint(row?: RegularPeriodHint | null) {
   const b = isoDateOrEmpty(row.bDate || row.b_date);
   const e = isoDateOrEmpty(row.eDate || row.e_date);
   return b && e ? { bDate: b, eDate: e } : null;
+}
+
+export function ruDate(raw?: string) {
+  const iso = isoDateOrEmpty(raw);
+  return iso ? ruFromIso(iso) : String(raw || "").trim();
+}
+
+export function beatFollowsGroup(b: { bDate?: string; eDate?: string }, groupFrom?: string, groupTo?: string) {
+  const bb = isoDateOrEmpty(b.bDate);
+  const be = isoDateOrEmpty(b.eDate);
+  if (!bb && !be) return true;
+  return bb === isoDateOrEmpty(groupFrom) && be === isoDateOrEmpty(groupTo);
+}
+
+export function stampBeatsPeriod(beats: LessonBeat[], bDate: string, eDate: string): LessonBeat[] {
+  return beats.map((b) => ({ ...b, bDate, eDate }));
+}
+
+export function stampBeatsPeriodIfFollow(beats: LessonBeat[], prevFrom: string, prevTo: string, bDate: string, eDate: string): LessonBeat[] {
+  return beats.map((b) => (beatFollowsGroup(b, prevFrom, prevTo) ? { ...b, bDate, eDate } : b));
 }
 
 /**
