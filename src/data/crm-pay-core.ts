@@ -11,8 +11,9 @@ export const PAY_KINDS: { id: PayKind; name: string }[] = [
 
 export const OPENING_NOTE = "остаток на диске";
 
-export const PAY_POLL_MAX_PER_HOUR = 12;
+export const PAY_POLL_MAX_PER_HOUR = 4;
 export const PAY_POLL_WINDOW_MS = 60 * 60 * 1000;
+export const PAY_POLL_LOOKBACK_DAYS = 3;
 export const CASH_PAGE_SIZES = [50, 100, 500] as const;
 export const PAY_INBOUND_PAGE = 50;
 export const PAY_INBOUND_RUN = 4;
@@ -256,6 +257,21 @@ export function alfaPayIndexDate(raw?: string) {
   if (m) return `${m[1]}.${m[2]}.${m[3]}`;
   const sv = new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow" }).slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(sv) ? sv.replace(/-/g, ".") : "";
+}
+
+export function shiftMskDate(days: number, now = new Date()) {
+  const iso = now.toLocaleString("sv-SE", { timeZone: "Europe/Moscow" }).slice(0, 10);
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return iso;
+  const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  dt.setUTCDate(dt.getUTCDate() + (Number(days) || 0));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** Окно автоопроса кассы: последние N дней МСК, формат Alfa yyyy.mm.dd. */
+export function payPollLookbackDates(days = PAY_POLL_LOOKBACK_DAYS, now = new Date()) {
+  const n = Math.max(1, Number(days) || PAY_POLL_LOOKBACK_DAYS);
+  return { date_from: alfaPayIndexDate(shiftMskDate(-n, now)), date_to: alfaPayIndexDate(shiftMskDate(0, now)) };
 }
 
 /** Касса UI / pay.create: dd.mm.yyyy. */

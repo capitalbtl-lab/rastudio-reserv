@@ -37,6 +37,7 @@ import {
   payFillOf,
   payFillAdvance,
   payFillNote,
+  payPollLookbackDates,
   type PayKind,
   type PayPollStamp,
   type PayRow,
@@ -407,7 +408,29 @@ function mergePulledPays(pulled: PayRow[], hold: Iterable<number>) {
   for (const [cid, rows] of byCid) {
     replaceCustomerPays(cid, mergePayInbound(rows, paysOf(cid), hold));
   }
-  return byCid.size;
+  return [...byCid.keys()];
+}
+
+async function stampPayBalances(cids: number[]) {
+  if (!cids.length) return;
+  const { findDossier, upsertDossier } = await import("./dossiers");
+  const { writeoffSumOf } = await import("./crm-ledger-core");
+  const { loadCustomerCalendar } = await import("./group-cards");
+  const { parseDossierCtt } = await import("./pupil-tariffs");
+  for (const cid of [...new Set(cids.map(Number).filter((n) => n > 0))]) {
+    const d = findDossier({ crmId: cid });
+    const live = parseDossierCtt(d?.extras).filter((t) => !t.archived && Number(t.id) > 0);
+    const cttRest = live.reduce((n, t) => n + (Number(t.rest) || 0), 0);
+    const next = customerBalance(
+      cid,
+      snapshotBalance(d?.extras?.balance, cttRest, live.length > 0),
+      writeoffSumOf(loadCustomerCalendar(cid)),
+    );
+    if (!d) continue;
+    const prev = String(d.extras?.balance ?? "");
+    if (prev === String(next)) continue;
+    upsertDossier({ crmId: cid, extras: { ...(d.extras || {}), balance: String(next) }, source: "sync", quiet: true } as never);
+  }
 }
 
 export async function inboundCustomerPays(
