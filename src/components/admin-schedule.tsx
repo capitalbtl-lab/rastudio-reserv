@@ -130,8 +130,15 @@ const CARD_FIELDS = [
   { id: "archive", label: "Архивные ученики" },
 ] as const;
 
+const CARD_LBL = "block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80";
 const CARD_SEL =
-  "mt-1 h-8 rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07]";
+  "mt-1 h-8 w-full min-w-0 rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07]";
+const CARD_IN =
+  "mt-1 h-8 w-full min-w-0 rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35";
+const CARD_PAIR =
+  "mt-1 flex h-8 min-w-0 items-center overflow-hidden rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35";
+const CARD_SEC = "text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-muted";
+const CARD_BOX = "min-w-0 overflow-hidden rounded-2xl bg-white/75 p-3 ring-1 ring-black/6";
 
 const DAYS_RU = ["", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 
@@ -3600,7 +3607,7 @@ export function AdminSchedule() {
       {detail
         ? createPortal(
             <div
-              className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4 md:p-6"
+              className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden bg-black/45 p-3 backdrop-blur-[3px] sm:p-5"
               onPointerDown={(e) => {
                 if (Date.now() < closeGuard.current) {
                   e.preventDefault();
@@ -3616,16 +3623,20 @@ export function AdminSchedule() {
               }}
             >
               <article
-                className={cn("relative flex max-h-[min(90vh,920px)] w-full max-w-4xl flex-col overflow-hidden", RA_POP)}
+                className="relative flex max-h-[min(92vh,920px)] w-full min-w-0 max-w-[52rem] flex-col overflow-hidden overscroll-x-none rounded-[1.4rem] shadow-[0_22px_60px_rgba(15,23,42,0.28)]"
                 style={{ background: ADMIN_PANEL_BLUE }}
                 onClick={(e) => e.stopPropagation()}
                 data-card-id={groupCardId(detail.branchId, detail.groupId)}
                 data-group-id={detail.groupId || undefined}
                 data-branch-id={detail.branchId || undefined}
               >
-                <div className="relative z-30 flex shrink-0 items-start gap-3 px-4 pt-8 md:px-6 md:pt-9">
-                  <div className="min-w-0 flex-1 pr-2">
-                    <p className="text-[0.62rem] font-semibold uppercase tracking-wider text-muted">Карточка группы · {groupCardId(detail.branchId, detail.groupId)}</p>
+                <header className="shrink-0 border-b border-black/[0.06] px-4 pb-3.5 pt-4 md:px-5">
+                  <div className="flex min-w-0 flex-wrap items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[0.7rem] font-bold tabular-nums text-primary ring-1 ring-black/6">
+                      {detail.groupId || "•"}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                    <p className="truncate text-[0.62rem] font-semibold uppercase tracking-wider text-muted">Карточка группы · {groupCardId(detail.branchId, detail.groupId)}</p>
                     {nameEdit ? (
                       <input
                         autoFocus
@@ -3635,48 +3646,53 @@ export function AdminSchedule() {
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === "Escape") setNameEdit(false);
                         }}
-                        className="mt-0.5 h-9 w-full max-w-xl bg-transparent font-display text-[1.35rem] font-semibold leading-tight tracking-tight text-fg outline-none"
+                          className="mt-0.5 h-9 w-full min-w-0 bg-transparent font-display text-[1.28rem] font-semibold leading-tight tracking-tight text-fg outline-none"
                       />
                     ) : (
                       <h2
-                        className="mt-0.5 cursor-text font-display text-[1.35rem] font-semibold leading-tight tracking-tight text-fg"
+                          className="mt-0.5 cursor-text break-words font-display text-[1.28rem] font-semibold leading-tight tracking-tight text-fg"
                         title="Нажмите, чтобы переименовать"
                         onClick={() => setNameEdit(true)}
                       >
                         {detail.slot.groupName || "Без названия"}
                       </h2>
                     )}
-                    <p className="mt-1 text-[0.78rem] text-muted">
-                      <span className="font-bold text-fg">№ {detail.groupId || "на сайте"}</span>
+                    <p className="mt-1 truncate text-[0.78rem] text-muted">
+                      <span className="font-semibold text-fg">№ {detail.groupId || "на сайте"}</span>
                       {" · "}
                       {detail.slot.city}, {detail.slot.branch}
                     </p>
-                    <p className="mt-0.5 whitespace-nowrap text-[0.78rem] text-muted">
-                      Учится {detail.slot.takenStudy ?? "—"} · лиды {detail.slot.takenLead ?? "—"} · всего {detail.slot.taken}
-                    </p>
-                  </div>
-                  <div className="ml-auto flex shrink-0 items-start gap-1.5">
+                    <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[0.68rem] font-semibold text-fg ring-1 ring-black/6">учится {detail.slot.takenStudy ?? "—"}</span>
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[0.68rem] font-semibold text-amber-900 ring-1 ring-amber-200/80">лиды {detail.slot.takenLead ?? "—"}</span>
+                      <span className="rounded-full bg-white/70 px-2 py-0.5 text-[0.68rem] font-medium text-muted ring-1 ring-black/5">всего {detail.slot.taken}</span>
+                    </div>
+                    </div>
+                    <div className="ml-auto flex shrink-0 flex-col items-end gap-1.5">
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
                     <button
                       type="button"
                       disabled={detail.saving}
-                      className="rounded-full bg-[#d8dce3] px-3 py-1 text-sm font-semibold text-[#5c636c] disabled:opacity-50"
+                      title="Сохранить на сайте"
+                      className="h-8 rounded-full bg-white px-3 text-[0.75rem] font-semibold text-fg ring-1 ring-black/8 disabled:opacity-50"
                       onClick={() => void saveDetailSite()}
                     >
-                      {detail.saving ? "Сохраняю…" : "Сохранить на сайте"}
+                      {detail.saving ? "…" : "На сайте"}
                     </button>
                     <button
                       type="button"
                       disabled={detail.saving}
-                      className="rounded-full bg-[#d8dce3] px-3 py-1 text-sm font-semibold text-[#5c636c] disabled:opacity-50"
+                      title={detail.groupId ? "Сохранить в AlfaCRM" : "Создать в AlfaCRM"}
+                      className="h-8 rounded-full bg-primary px-3 text-[0.75rem] font-semibold text-white disabled:opacity-50"
                       onClick={() => void saveDetail()}
                     >
-                      {detail.saving ? "Сохраняю…" : detail.groupId ? "Сохранить в AlfaCRM" : "Создать в AlfaCRM"}
+                      {detail.saving ? "…" : detail.groupId ? "В AlfaCRM" : "Создать"}
                     </button>
-                    <div className="flex flex-col items-end">
-                    <button type="button" className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white" onClick={() => { setPupil(null); resetAddPupil(); setNameEdit(false); setDetail(null); }}>
-                      Закрыть
+                    <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full bg-white text-lg leading-none text-muted ring-1 ring-black/8 hover:text-fg" onClick={() => { setPupil(null); resetAddPupil(); setNameEdit(false); setDetail(null); }} aria-label="Закрыть">
+                      ×
                     </button>
-                    <div className="group/gear relative mt-2.5">
+                      </div>
+                    <div className="group/gear relative">
                       <button
                         type="button"
                         aria-label="Поля карточки"
@@ -3688,7 +3704,7 @@ export function AdminSchedule() {
                         </svg>
                       </button>
                       <div className="pointer-events-none invisible absolute right-0 top-full z-[40] pt-1 opacity-0 transition group-hover/gear:pointer-events-auto group-hover/gear:visible group-hover/gear:opacity-100 group-focus-within/gear:pointer-events-auto group-focus-within/gear:visible group-focus-within/gear:opacity-100">
-                        <div className={cn("w-[15.5rem] p-2", RA_POP)}>
+                        <div className={cn("w-[min(15.5rem,calc(100vw-2.5rem))] p-2", RA_POP)}>
                           <p className="px-1.5 pb-1 text-[0.65rem] font-semibold uppercase tracking-wider text-muted">Поля карточки</p>
                           <div className="pretty-scroll max-h-64 overflow-y-auto">
                             {CARD_FIELDS.map((f) => (
@@ -3713,10 +3729,10 @@ export function AdminSchedule() {
                     </div>
                     </div>
                   </div>
-                </div>
+                </header>
                 {subjectOffer && !subjectOffer.ok && subjectOffer.missingInCrm ? (
                   <div
-                    className="mx-5 mt-3 shrink-0 rounded-xl px-4 py-3 md:mx-6"
+                    className="mx-4 mt-3 min-w-0 shrink-0 overflow-hidden rounded-2xl px-4 py-3 md:mx-5"
                     style={{ background: "#FFD54A", color: "#1A1408", boxShadow: "inset 0 0 0 2px #E6B000" }}
                   >
                     <p className="text-[0.95rem] font-semibold leading-snug">
@@ -3733,25 +3749,27 @@ export function AdminSchedule() {
                     {detail.error ? <p className="mt-2 text-sm font-semibold text-red-800">{detail.error}</p> : null}
                   </div>
                 ) : null}
-                <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-4 md:px-6 md:pb-5">
-                <div className="mt-[1.7rem]">
-                    <div className="grid gap-3 md:grid-cols-2">
+                <div className="pretty-scroll mt-3 min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-x-none px-4 pb-5 md:px-5">
+                <div className="min-w-0 max-w-full space-y-3 overflow-x-hidden">
+                    {showField("remarks") || showField("description") ? (
+                    <div className={cn(CARD_BOX, "grid gap-2.5 sm:grid-cols-2")}>
                     {showField("remarks") ? (
-                    <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                    <label className={CARD_LBL}>
                       Примечания
-                      <input value={detail.remarks} onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
+                      <input value={detail.remarks} onChange={(e) => setDetail((d) => (d ? { ...d, remarks: e.target.value } : d))} className={CARD_IN} />
                     </label>
                     ) : null}
                     {showField("description") ? (
-                    <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                    <label className={CARD_LBL}>
                       Описание
-                      <input value={detail.description} onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
+                      <input value={detail.description} onChange={(e) => setDetail((d) => (d ? { ...d, description: e.target.value } : d))} className={CARD_IN} />
                     </label>
                     ) : null}
                     </div>
+                    ) : null}
                     {showField("calendar") ? (
+                      <div className={CARD_BOX}>
                       <GroupLessonStrip
-                        className="mt-[1.06rem]"
                         lessons={detail.calendar}
                         group={detail.slot.groupName}
                         subject={detail.slot.subject}
@@ -3760,17 +3778,19 @@ export function AdminSchedule() {
                         groupId={detail.groupId}
                         onLessons={(calendar) => setDetail((d) => (d ? { ...d, calendar } : d))}
                       />
+                      </div>
                     ) : null}
-                    <div className="mt-5 grid gap-3">
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-[6.75rem_8.75rem_minmax(10.5rem,1fr)_8.25rem_auto_5.5rem]">
+                    <div className={cn(CARD_BOX, "space-y-3")}>
+                      <p className={CARD_SEC}>Расписание</p>
+                      <div className="grid min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-4">
                       {showField("age") ? (
-                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                      <label className={CARD_LBL}>
                         Возраст
-                        <input value={detail.slot.age} onChange={(e) => patch(detail.id, "age", e.target.value)} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
+                        <input value={detail.slot.age} onChange={(e) => patch(detail.id, "age", e.target.value)} className={CARD_IN} />
                       </label>
                       ) : null}
                       {showField("day") ? (
-                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                      <label className={CARD_LBL}>
                         День
                         <RaSelect
                           value={String(shownBeat(detail.slot).day || "")}
@@ -3781,10 +3801,33 @@ export function AdminSchedule() {
                         />
                       </label>
                       ) : null}
+                      {showField("time") ? (
+                      <label className={CARD_LBL}>
+                        Время
+                        <span className={CARD_PAIR}>
+                          <input value={shownBeat(detail.slot).timeFrom} onChange={(e) => patchBeat(detail.slot, "timeFrom", e.target.value)} className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.8rem] font-medium text-fg outline-none" />
+                          <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
+                          <input value={shownBeat(detail.slot).timeTo} onChange={(e) => patchBeat(detail.slot, "timeTo", e.target.value)} className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.8rem] font-medium text-fg outline-none" />
+                        </span>
+                      </label>
+                      ) : null}
+                      {showField("week") ? (
+                      <div className={CARD_LBL}>
+                        ×нед
+                        <div className="mt-1 flex h-8 items-center">
+                          <WeekDots
+                            s={detail.slot}
+                            index={view[detail.slot.id] || 0}
+                            onView={(i) => setView((v) => ({ ...v, [detail.slot.id]: i }))}
+                            onAdd={(b) => addBeat(detail.slot, b)}
+                          />
+                        </div>
+                      </div>
+                      ) : null}
                       {showField("period") ? (
-                      <label className="col-span-2 block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80 sm:col-auto">
+                      <label className={cn(CARD_LBL, "col-span-2")}>
                         Период группы
-                        <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
+                        <span className={CARD_PAIR}>
                           <input value={detail.bDate} onChange={(e) => applyGroupPeriod(e.target.value, detail.eDate)} placeholder="01.09.2026" className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none" />
                           <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
                           <input value={detail.eDate} onChange={(e) => applyGroupPeriod(detail.bDate, e.target.value)} placeholder="30.06.2027" className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none" />
@@ -3792,9 +3835,9 @@ export function AdminSchedule() {
                       </label>
                       ) : null}
                       {showField("schedulePeriod") || showField("period") ? (
-                      <label className="col-span-2 block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80 sm:col-auto">
+                      <label className={cn(CARD_LBL, "col-span-2")}>
                         Даты занятий
-                        <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
+                        <span className={CARD_PAIR}>
                           <input
                             value={ruDate(shownBeat(detail.slot).bDate) || ruDate(detail.bDate)}
                             onChange={(e) => applySchedulePeriod(e.target.value, shownBeat(detail.slot).eDate || detail.eDate)}
@@ -3811,33 +3854,10 @@ export function AdminSchedule() {
                         </span>
                       </label>
                       ) : null}
-                      {showField("time") ? (
-                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
-                        Время
-                        <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
-                          <input value={shownBeat(detail.slot).timeFrom} onChange={(e) => patchBeat(detail.slot, "timeFrom", e.target.value)} className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.8rem] font-medium text-fg outline-none" />
-                          <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
-                          <input value={shownBeat(detail.slot).timeTo} onChange={(e) => patchBeat(detail.slot, "timeTo", e.target.value)} className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.8rem] font-medium text-fg outline-none" />
-                        </span>
-                      </label>
-                      ) : null}
-                      {showField("week") ? (
-                      <div className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
-                        ×нед
-                        <div className="mt-1 flex h-8 items-center">
-                          <WeekDots
-                            s={detail.slot}
-                            index={view[detail.slot.id] || 0}
-                            onView={(i) => setView((v) => ({ ...v, [detail.slot.id]: i }))}
-                            onAdd={(b) => addBeat(detail.slot, b)}
-                          />
-                        </div>
-                      </div>
-                      ) : null}
                       {showField("places") ? (
-                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                      <label className={CARD_LBL}>
                         Места
-                        <span className="mt-1 flex h-8 items-center rounded-lg bg-white ring-1 ring-black/[0.07] transition focus-within:ring-primary/35">
+                        <span className={CARD_PAIR}>
                           <input
                             value={detail.slot.limit}
                             onChange={(e) => patch(detail.id, "limit", Number(e.target.value) || 0)}
@@ -3848,9 +3868,11 @@ export function AdminSchedule() {
                       </label>
                       ) : null}
                       </div>
-                      <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
+                      <div className="h-px bg-black/[0.06]" />
+                      <p className={CARD_SEC}>Привязки</p>
+                      <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2">
                       {showField("branch") ? (
-                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                      <label className={CARD_LBL}>
                         Филиал
                         <RaSelect
                           value={detail.slot.branchId ? String(detail.slot.branchId) : ""}
@@ -3870,7 +3892,7 @@ export function AdminSchedule() {
                       </label>
                       ) : null}
                       {showField("teacher") ? (
-                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                      <label className={CARD_LBL}>
                         Педагог
                         <RaSelect
                           value={detail.slot.teacher}
@@ -3893,10 +3915,8 @@ export function AdminSchedule() {
                         />
                       </label>
                       ) : null}
-                      </div>
-                      <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
                     {showField("tariff") ? (
-                    <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                    <label className={CARD_LBL}>
                       Абонемент
                       <RaSelect
                         value={detail.tariffId ? String(detail.tariffId) : ""}
@@ -3928,14 +3948,14 @@ export function AdminSchedule() {
                     </label>
                     ) : null}
                     {showField("hashtags") ? (
-                    <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                    <label className={CARD_LBL}>
                       Хэштеги
                       <span className="ml-1 font-normal normal-case tracking-normal text-muted/60">не для привязок</span>
-                      <input value={detail.hashtags} onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2.5 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
+                      <input value={detail.hashtags} onChange={(e) => setDetail((d) => (d ? { ...d, hashtags: e.target.value } : d))} className={CARD_IN} />
                     </label>
                     ) : null}
                     {showField("course") ? (
-                    <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                    <label className={CARD_LBL}>
                       Курс на сайте
                       <RaSelect
                         value={siteCourseValue(detail.slot, siteTree)}
@@ -3988,7 +4008,7 @@ export function AdminSchedule() {
                     </label>
                     ) : null}
                     {showField("subject") ? (
-                    <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                    <label className={CARD_LBL}>
                       Предмет
                       {(() => {
                         const courseId = siteCourseValue(detail.slot, siteTree);
@@ -4040,17 +4060,19 @@ export function AdminSchedule() {
                     </label>
                     ) : null}
                       </div>
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-[9.25rem_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_5.75rem]">
+                      <div className="h-px bg-black/[0.06]" />
+                      <p className={CARD_SEC}>Статус</p>
+                      <div className="grid min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-3">
                       {showField("signup") ? (
-                      <label className="block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                      <label className={CARD_LBL}>
                         Запись
-                        <a href={detail.signup || leadHref(detail.slot)} target="_blank" rel="noreferrer" className="mt-1 flex h-8 items-center justify-center whitespace-nowrap rounded-lg bg-white px-2.5 text-[0.75rem] font-semibold text-primary ring-1 ring-black/[0.07] transition hover:ring-primary/30">
+                        <a href={detail.signup || leadHref(detail.slot)} target="_blank" rel="noreferrer" className="mt-1 flex h-8 min-w-0 items-center justify-center truncate rounded-lg bg-white px-2.5 text-[0.75rem] font-semibold text-primary ring-1 ring-black/[0.07] transition hover:bg-primary/5 hover:ring-primary/30">
                           в группу {detail.groupId || "—"}
                         </a>
                       </label>
                       ) : null}
                       {showField("level") ? (
-                      <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                      <label className={CARD_LBL}>
                         Уровень
                         <RaSelect
                           value={detail.levelId ? String(detail.levelId) : ""}
@@ -4067,7 +4089,7 @@ export function AdminSchedule() {
                       </label>
                       ) : null}
                       {showField("status") ? (
-                      <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                      <label className={CARD_LBL}>
                         Статус
                         <RaSelect
                           value={detail.statusId ? String(detail.statusId) : ""}
@@ -4080,7 +4102,7 @@ export function AdminSchedule() {
                       </label>
                       ) : null}
                       {showField("priority") ? (
-                      <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                      <label className={CARD_LBL}>
                         Приоритет
                         <RaSelect
                           value={String(detail.priority)}
@@ -4093,22 +4115,21 @@ export function AdminSchedule() {
                       </label>
                       ) : null}
                       {showField("makeup") ? (
-                      <label className="block min-w-0 text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80">
+                      <label className={CARD_LBL}>
                         Отработка
-                        <input value={detail.makeup} onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))} className="mt-1 h-8 w-full rounded-lg bg-white px-2 text-[0.8rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none transition focus:ring-primary/35" />
+                        <input value={detail.makeup} onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))} className={CARD_IN} />
                       </label>
                       ) : null}
                       </div>
-                    {detail.error ? <p className="text-sm text-red-600">{detail.error}</p> : null}
+                    {detail.error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700 ring-1 ring-red-100">{detail.error}</p> : null}
                     {!detail.groupId ? (
-                      <p className="text-sm text-muted">Группа пока только на сайте. «Сохранить на сайте» пишет слот. Экспорт в AlfaCRM ставит создание в очередь — нужен subjectId филиала. Без предмета не создаём, имя курса не подставляем.</p>
+                      <p className="rounded-xl bg-white/80 px-3 py-2 text-sm text-muted ring-1 ring-black/5">Группа пока только на сайте. «На сайте» пишет слот. «Создать» ставит группу в очередь AlfaCRM — нужен предмет филиала. Без предмета не создаём, имя курса не подставляем.</p>
                     ) : null}
                     </div>
-                  </div>
                   {showField("members") || showField("leads") || showField("archive") || addPupil ? (
-                  <section className="mt-3 rounded-xl bg-white/80 p-3 ring-1 ring-black/6">
+                  <section className={cn(CARD_BOX, "[&>:first-child]:mt-0")}>
                     {addPupil ? (
-                      <div className="mb-3 rounded-xl bg-[#eef2f7] p-3">
+                      <div className="mb-3 rounded-2xl bg-[#eef2f7] p-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Добавить ученика</p>
                           <button type="button" className="text-sm font-semibold text-muted hover:text-fg" onClick={resetAddPupil}>
@@ -4216,6 +4237,7 @@ export function AdminSchedule() {
                     ) : null}
                   </section>
                   ) : null}
+                </div>
                 </div>
               </article>
             </div>,
