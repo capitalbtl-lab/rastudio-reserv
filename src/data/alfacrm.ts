@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { serverEnv } from "./server-env";
 import { formatRuPhone } from "./ru-phone";
 import { crmIndexAccumTotal, crmIndexShouldStop, crmUnwrapIndex } from "./crm-leads-stages";
@@ -107,9 +109,90 @@ function gapMs() {
 const INDEX_TTL = 45_000;
 const indexCache = new Map<string, { at: number; json: unknown }>();
 const inflight = new Map<string, Promise<unknown>>();
+let tokenFlight: Promise<string> | null = null;
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function rpsFile() {
+  return join(process.cwd(), "storage", "alfa-rps.json");
+}
+function rpsLock() {
+  return join(process.cwd(), "storage", "alfa-rps.lock");
+}
+
+function pidAlive(pid: number) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function pipeOn(ch: "sharedLimiter" | "keepToken" | "verifyCreate" | "retry401") {
+  try {
+    const { wantAlfaPipe } = require("./crm-alfa-link") as { wantAlfaPipe: (id: string) => boolean };
+    return wantAlfaPipe(ch);
+  } catch {
+    return true;
+  }
+}
+
+function readRpsAt() {
+  try {
+    return Number(JSON.parse(readFileSync(rpsFile(), "utf8")).at) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeRpsAt(at: number) {
+  mkdirSync(dirname(rpsFile()), { recursive: true });
+  writeFileSync(rpsFile(), JSON.stringify({ at }), "utf8");
+}
+
+async function acquireRpsLock() {
+  const file = rpsLock();
+  mkdirSync(dirname(file), { recursive: true });
+  for (let i = 0; i < 50; i += 1) {
+    let busy = false;
+    try {
+      if (existsSync(file)) {
+        const raw = JSON.parse(readFileSync(file, "utf8")) as { pid?: number; at?: string };
+        const age = Date.now() - Date.parse(String(raw.at || "")) || 9e9;
+        if (Number(raw.pid) && pidAlive(Number(raw.pid)) && age < 8000) busy = true;
+      }
+    } catch {
+      busy = false;
+    }
+    if (!busy) {
+      writeFileSync(file, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }), "utf8");
+      return;
+    }
+    await sleep(40);
+  }
+}
+
+function releaseRpsLock() {
+  try {
+    if (existsSync(rpsLock())) unlinkSync(rpsLock());
+  } catch {
+    /* */
+  }
+}
+
+async function waitSharedGap() {
+  if (!pipeOn("sharedLimiter")) return;
+  await acquireRpsLock();
+  try {
+    const wait = gapMs() - (Date.now() - readRpsAt());
+    if (wait > 0) await sleep(wait);
+    writeRpsAt(Date.now());
+  } finally {
+    releaseRpsLock();
+  }
 }
 
 function stableBody(body: unknown) {

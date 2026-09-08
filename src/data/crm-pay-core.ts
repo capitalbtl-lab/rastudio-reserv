@@ -294,6 +294,29 @@ export function payCustomerIdOf(item: Record<string, unknown>, fallback = 0) {
   return Number(item.customer_id || item.customerId || nested || fallback) || 0;
 }
 
+/** Найти уже созданный платёж в ответе pay/index, чтобы не слать create повторно. */
+export function matchAlfaPayId(
+  items: Record<string, unknown>[],
+  want: { customerId?: number; income?: number; expenditure?: number; documentDate?: string; note?: string },
+) {
+  const cid = Number(want.customerId) || 0;
+  const date = want.documentDate ? ruDateIso(String(want.documentDate)) : "";
+  const note = String(want.note || "").trim();
+  const hasIncome = want.income != null;
+  const hasExp = want.expenditure != null;
+  for (const it of items || []) {
+    const id = Number(it.id) || 0;
+    if (id <= 0) continue;
+    if (cid && payCustomerIdOf(it) !== cid) continue;
+    if (hasIncome && Number(it.income || 0) !== Number(want.income)) continue;
+    if (hasExp && Number(it.expenditure || 0) !== Number(want.expenditure)) continue;
+    if (date && ruDateIso(String(it.document_date || it.date || "")) !== date) continue;
+    if (note && String(it.note || "").trim() !== note) continue;
+    return id;
+  }
+  return 0;
+}
+
 export function payPollStampOrEmpty(s?: PayPollStamp | null): PayPollStamp {
   if (!s || !Number(s.lastId)) return { lastId: 0, lastDate: "" };
   return { lastId: Number(s.lastId) || 0, lastDate: ruDateIso(s.lastDate) };
