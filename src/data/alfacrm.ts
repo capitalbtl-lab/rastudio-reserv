@@ -4,6 +4,7 @@ import { serverEnv } from "./server-env";
 import { formatRuPhone } from "./ru-phone";
 import { crmIndexAccumTotal, crmIndexShouldStop, crmUnwrapIndex } from "./crm-leads-stages";
 import { lessonAllowsGroup, lessonOmitsRoom } from "./lesson-type-rules";
+import { wantAlfaPipe } from "./crm-alfa-link";
 
 const HOST = () => (serverEnv("ALFACRM_HOST") || "https://studiyarazvivaysya.s20.online").replace(/\/$/, "");
 const EMAIL = () => serverEnv("ALFACRM_EMAIL") || process.env.ALFACRM_EMAIL || "";
@@ -133,7 +134,6 @@ function pidAlive(pid: number) {
 
 function pipeOn(ch: "sharedLimiter" | "keepToken" | "verifyCreate" | "retry401") {
   try {
-    const { wantAlfaPipe } = require("./crm-alfa-link") as { wantAlfaPipe: (id: string) => boolean };
     return wantAlfaPipe(ch);
   } catch {
     return true;
@@ -230,6 +230,8 @@ async function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   if (wait > 0) await sleep(wait);
   lastAt = Date.now();
   try {
+    await waitSharedGap();
+    lastAt = Date.now();
     return await fn();
   } finally {
     release();
@@ -294,6 +296,14 @@ export async function request<T>(path: string, body: unknown, tok?: string): Pro
       lastAt = Date.now();
       res = await send();
     }
+    if (res.status === 401 && tok && pipeOn("retry401") && !/\/auth\/login/.test(url)) {
+      cache = null;
+      const fresh = await loginFetch();
+      headers["X-ALFACRM-TOKEN"] = fresh;
+      lastAt = Date.now();
+      res = await send();
+      if (res.status === 401) throw new Error("alfacrm 401 ключ API или пользователь");
+    }
     if (res.status === 429 || res.status === 503) {
       await sleep(2000);
       lastAt = Date.now();
@@ -354,20 +364,47 @@ export async function pagedIndex<T extends Record<string, unknown>>(
   return { loaded, total: Number.isFinite(total) ? total : loaded };
 }
 
+export function dropAlfaIndex() {
+  dropIndexCache();
+}
+
 export function dropAlfaAuth() {
   cache = null;
   dropIndexCache();
 }
 
-export async function token() {
-  if (cache && cache.exp > Date.now()) return cache.token;
+async function loginFetch() {
   const email = EMAIL();
   const apiKey = API_KEY();
   if (!email || !apiKey) throw new Error("no-alfacrm");
-  const json = await request<{ token?: string }>("/v2api/auth/login", { email, api_key: apiKey });
+  const res = await fetch(`${HOST()}/v2api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ email, api_key: apiKey }),
+    signal: AbortSignal.timeout(18000),
+  });
+  const text = await res.text();
+  let json: { token?: string } = {};
+  try {
+    json = text ? (JSON.parse(text) as { token?: string }) : {};
+  } catch {
+    json = {};
+  }
   if (!json.token) throw new Error("no-alfacrm-token");
   cache = { token: json.token, exp: Date.now() + 50 * 60 * 1000 };
   return json.token;
+}
+
+export async function token() {
+  if (cache && cache.exp > Date.now()) return cache.token;
+  if (tokenFlight) return tokenFlight;
+  tokenFlight = enqueue(async () => {
+    if (cache && cache.exp > Date.now()) return cache.token;
+    return loginFetch();
+  }).finally(() => {
+    tokenFlight = null;
+  });
+  return tokenFlight;
 }
 
 type Customer = {
