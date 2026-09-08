@@ -3782,7 +3782,7 @@ export function AdminSchedule() {
                     ) : null}
                     <div className={cn(CARD_BOX, "space-y-3")}>
                       <p className={CARD_SEC}>Расписание</p>
-                      <div className="grid min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-4">
+                      <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-[minmax(0,5.5rem)_minmax(0,7.5rem)_minmax(0,8rem)_auto_minmax(0,1fr)_minmax(0,1fr)]">
                       {showField("age") ? (
                       <label className={CARD_LBL}>
                         Возраст
@@ -3805,9 +3805,9 @@ export function AdminSchedule() {
                       <label className={CARD_LBL}>
                         Время
                         <span className={CARD_PAIR}>
-                          <input value={shownBeat(detail.slot).timeFrom} onChange={(e) => patchBeat(detail.slot, "timeFrom", e.target.value)} className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.8rem] font-medium text-fg outline-none" />
+                          <input value={shownBeat(detail.slot).timeFrom} onChange={(e) => patchBeat(detail.slot, "timeFrom", e.target.value)} className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.78rem] font-medium text-fg outline-none" />
                           <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
-                          <input value={shownBeat(detail.slot).timeTo} onChange={(e) => patchBeat(detail.slot, "timeTo", e.target.value)} className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.8rem] font-medium text-fg outline-none" />
+                          <input value={shownBeat(detail.slot).timeTo} onChange={(e) => patchBeat(detail.slot, "timeTo", e.target.value)} className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.78rem] font-medium text-fg outline-none" />
                         </span>
                       </label>
                       ) : null}
@@ -3825,45 +3825,32 @@ export function AdminSchedule() {
                       </div>
                       ) : null}
                       {showField("period") ? (
-                      <label className={cn(CARD_LBL, "col-span-2")}>
+                      <label className={cn(CARD_LBL, "col-span-2 sm:col-span-1")}>
                         Период группы
                         <span className={CARD_PAIR}>
-                          <input value={detail.bDate} onChange={(e) => applyGroupPeriod(e.target.value, detail.eDate)} placeholder="01.09.2026" className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none" />
+                          <input value={detail.bDate} onChange={(e) => applyGroupPeriod(e.target.value, detail.eDate)} placeholder="01.09.2026" className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.72rem] font-medium tabular-nums text-fg outline-none" />
                           <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
-                          <input value={detail.eDate} onChange={(e) => applyGroupPeriod(detail.bDate, e.target.value)} placeholder="30.06.2027" className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none" />
+                          <input value={detail.eDate} onChange={(e) => applyGroupPeriod(detail.bDate, e.target.value)} placeholder="30.06.2027" className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.72rem] font-medium tabular-nums text-fg outline-none" />
                         </span>
                       </label>
                       ) : null}
                       {showField("schedulePeriod") || showField("period") ? (
-                      <label className={cn(CARD_LBL, "col-span-2")}>
+                      <label className={cn(CARD_LBL, "col-span-2 sm:col-span-1")}>
                         Даты занятий
                         <span className={CARD_PAIR}>
                           <input
                             value={ruDate(shownBeat(detail.slot).bDate) || ruDate(detail.bDate)}
                             onChange={(e) => applySchedulePeriod(e.target.value, shownBeat(detail.slot).eDate || detail.eDate)}
                             placeholder={detail.bDate || "01.09.2026"}
-                            className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none"
+                            className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.72rem] font-medium tabular-nums text-fg outline-none"
                           />
                           <span className="shrink-0 text-[0.65rem] text-muted/70">—</span>
                           <input
                             value={ruDate(shownBeat(detail.slot).eDate) || ruDate(detail.eDate)}
                             onChange={(e) => applySchedulePeriod(shownBeat(detail.slot).bDate || detail.bDate, e.target.value)}
                             placeholder={detail.eDate || "30.06.2027"}
-                            className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.78rem] font-medium text-fg outline-none"
+                            className="h-full min-w-0 flex-1 bg-transparent px-1 text-center text-[0.72rem] font-medium tabular-nums text-fg outline-none"
                           />
-                        </span>
-                      </label>
-                      ) : null}
-                      {showField("places") ? (
-                      <label className={CARD_LBL}>
-                        Места
-                        <span className={CARD_PAIR}>
-                          <input
-                            value={detail.slot.limit}
-                            onChange={(e) => patch(detail.id, "limit", Number(e.target.value) || 0)}
-                            className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.8rem] font-medium text-fg outline-none"
-                          />
-                          <span className="shrink-0 pr-2 text-[0.75rem] font-medium text-muted">/ {detail.slot.taken}</span>
                         </span>
                       </label>
                       ) : null}
@@ -4118,6 +4105,19 @@ export function AdminSchedule() {
                       <label className={CARD_LBL}>
                         Отработка
                         <input value={detail.makeup} onChange={(e) => setDetail((d) => (d ? { ...d, makeup: e.target.value } : d))} className={CARD_IN} />
+                      </label>
+                      ) : null}
+                      {showField("places") ? (
+                      <label className={CARD_LBL}>
+                        Места
+                        <span className={CARD_PAIR}>
+                          <input
+                            value={detail.slot.limit}
+                            onChange={(e) => patch(detail.id, "limit", Number(e.target.value) || 0)}
+                            className="h-full min-w-0 flex-1 bg-transparent px-1.5 text-center text-[0.8rem] font-medium text-fg outline-none"
+                          />
+                          <span className="shrink-0 pr-2 text-[0.75rem] font-medium text-muted">/ {detail.slot.taken}</span>
+                        </span>
                       </label>
                       ) : null}
                       </div>
