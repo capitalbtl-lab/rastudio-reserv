@@ -123,6 +123,9 @@ describe("касса список", () => {
     assert.match(card, /pay-edit/);
     assert.match(card, /Отправить в CRM/);
     assert.match(card, /Экспорт в CRM/);
+    assert.match(card, /Наличный/);
+    assert.match(card, /Электронно/);
+    assert.match(card, /data-op="pay-fiscal-cash"/);
     assert.match(card, /data-op="cash-journal"/);
     assert.match(card, /customerPayDelete/);
     assert.match(card, /paysComplete/);
