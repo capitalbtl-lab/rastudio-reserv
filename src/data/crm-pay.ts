@@ -547,7 +547,7 @@ function is429(e: unknown) {
   return /\b429\b/.test(s) || /too many requests/i.test(s);
 }
 
-/** Авто и кнопка D кассы. Карточка одного клиента — inboundCustomerPays, не сюда. */
+/** Авто каждые 15 мин — окно 3 дня, все типы (доход, продажи, возвраты, корректировки). Кнопка D ещё дочитывает историю. Карточка — inboundCustomerPays. */
 export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   const store = load();
   const poll = store.poll || emptyPoll();
@@ -574,57 +574,52 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   const errs: string[] = [];
   const hold = holdPayIds();
   const typeCounts = new Map<string, number>();
+  const touched: number[] = [];
+  const windowDates = payPollLookbackDates();
+  const windowPages = opts?.via === "button" ? 6 : 4;
+
+  async function pullPages(branchId: number, extra: Record<string, unknown>, take: number) {
+    const items: Record<string, unknown>[] = [];
+    for (let page = 0; page < take; page += 1) {
+      const json = await request(
+        `/v2api/${branchId}/pay/index`,
+        { page, pageSize: PAY_INBOUND_PAGE, ...windowDates, ...extra },
+        t,
+      );
+      pages += 1;
+      const pack = crmUnwrapIndex(json);
+      items.push(...pack.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || branchId) || branchId })));
+      if (pack.items.length < PAY_INBOUND_PAGE) break;
+    }
+    return items;
+  }
+
   for (const branchId of branches) {
     const stamp = payPollStampOrEmpty(poll.branches[String(branchId)]);
     try {
-      const dates = payIndexDates(stamp);
-      const firstBody: Record<string, unknown> = { page: 0, ...dates };
-      let lastBody = firstBody;
-      let json: unknown = await request(`/v2api/${branchId}/pay/index`, firstBody, t);
-      pages += 1;
-      let pack = crmUnwrapIndex(json);
-      if (!pack.items.length && (opts?.via === "button" || !stamp.lastDate)) {
-        lastBody = { page: 0 };
-        json = await request(`/v2api/${branchId}/pay/index`, lastBody, t);
-        pages += 1;
-        pack = crmUnwrapIndex(json);
+      const raw = [
+        ...(await pullPages(branchId, {}, windowPages)),
+        ...(await pullPages(branchId, { pay_type_id: 2 }, 2)),
+        ...(await pullPages(branchId, { pay_type_id: 3 }, 2)),
+        ...(await pullPages(branchId, { pay_type_id: 6 }, 2)),
+      ];
+      const seen = new Set<number>();
+      const unique: Record<string, unknown>[] = [];
+      for (const it of raw) {
+        const id = Number(it.id || 0);
+        if (id && seen.has(id)) continue;
+        if (id) seen.add(id);
+        unique.push(it);
       }
-      if (opts?.via === "button") {
-        try {
-          const corrJson = await request(`/v2api/${branchId}/pay/index`, { page: 0, pay_type_id: 6 }, t);
-          pages += 1;
-          const extra = crmUnwrapIndex(corrJson).items;
-          if (extra.length) pack = { ...pack, items: [...pack.items, ...extra] };
-        } catch (e) {
-          if (is429(e)) throw e;
-        }
-        for (let extra = 1; extra <= 2; extra += 1) {
-          try {
-            const moreJson = await request(`/v2api/${branchId}/pay/index`, { page: extra, ...dates }, t);
-            pages += 1;
-            const more = crmUnwrapIndex(moreJson).items;
-            if (more.length) pack = { ...pack, items: [...pack.items, ...more] };
-            if (more.length < 30) break;
-          } catch (e) {
-            if (is429(e)) throw e;
-            break;
-          }
-        }
+      for (const it of unique) {
+        const typ = String(it.pay_type_id ?? it.payTypeId ?? "?");
+        typeCounts.set(typ, (typeCounts.get(typ) || 0) + 1);
       }
-      for (const it of pack.items) {
-        const t = String(it.pay_type_id ?? it.payTypeId ?? "?");
-        typeCounts.set(t, (typeCounts.get(t) || 0) + 1);
-      }
-      if (!pack.items.length) {
-        const raw = JSON.stringify(json).slice(0, 120);
-        errs.push(`ф${branchId} пусто body=${JSON.stringify(lastBody)} total=${pack.total ?? "?"} ${raw}`);
-      }
-      const pulled = pack.items
-        .map((it) => packPay(it, payCustomerIdOf(it), branchId))
-        .filter((x): x is PayRow => Boolean(x));
+      if (!unique.length) errs.push(`ф${branchId} пусто window=${JSON.stringify(windowDates)}`);
+      const pulled = unique.map((it) => packPay(it, payCustomerIdOf(it), branchId)).filter((x): x is PayRow => Boolean(x));
       pulledCount += pulled.length;
       const fresh = pulled.filter((x) => payAfterStamp(x, stamp));
-      mergePulledPays(opts?.via === "button" ? pulled : fresh, hold);
+      touched.push(...mergePulledPays(pulled, hold));
       newCount += fresh.length;
       if (fresh.length) poll.branches[String(branchId)] = nextPayStamp(fresh, stamp);
       else poll.branches[String(branchId)] = stamp;
@@ -649,7 +644,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
           .map((it) => packPay(it, payCustomerIdOf(it), fill.bid))
           .filter((x): x is PayRow => Boolean(x));
         pulledCount += pulled.length;
-        mergePulledPays(pulled, hold);
+        touched.push(...mergePulledPays(pulled, hold));
         fill = payFillAdvance(fill, pack.items.length < PAY_INBOUND_PAGE);
       } catch (e) {
         if (is429(e)) {
@@ -661,9 +656,10 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
       }
     }
   }
+  await stampPayBalances(touched).catch(() => null);
   poll.fill = fill;
   const types = [...typeCounts.entries()].map(([k, n]) => `${k}×${n}`).join(",") || "нет";
-  const note = `${new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow" })} Касса inbound: филиалы ${branches.join(",")}, пришло ${pulledCount}, новых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"}), ${payFillNote(fill)}, типы ${types}${errs.length ? `. ${errs.join("; ")}` : ""}`;
+  const note = `${new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow" })} Касса inbound: филиалы ${branches.join(",")}, окно ${windowDates.date_from}…${windowDates.date_to}, пришло ${pulledCount}, новых/изменённых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"}), ${payFillNote(fill)}, типы ${types}${errs.length ? `. ${errs.join("; ")}` : ""}`;
   poll.lastNote = note;
   const freshStore = load();
   freshStore.poll = poll;
