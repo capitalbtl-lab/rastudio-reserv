@@ -1549,7 +1549,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       let crmPush = "";
       const { alfaLinkedNow } = await import("./crm-alfa-link");
       if (alfaLinkedNow() && customerId > 0) {
-        await import("./crm-journal-inbound")
+        void import("./crm-journal-inbound")
           .then((m) => m.inboundCustomerLessons(branch, customerId))
           .catch(() => null);
       }
@@ -1572,42 +1572,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!wantAlfaPull(data.fresh)) {
         if (d) {
           const { cardFromDossier } = await import("./customer-card-disk");
-          const { pullCustomerTariffs, pullCustomerAccount } = await import("./pupil-tariffs");
-          const { pullCustomerRegular } = await import("./crm-regular-disk");
-          let card = cardFromDossier(d, branch);
-          const linked = (await import("./crm-alfa-link")).alfaLinkedNow();
-          const allow = (await import("./crm-alfa-link")).wantAlfaPullChannel("clients");
-          if (linked && allow) {
-            await Promise.all([
-              pullCustomerTariffs(branch, customerId).catch(() => []),
-              pullCustomerRegular(branch, customerId).catch(() => []),
-              pullCustomerAccount(branch, customerId).catch(() => null),
-            ]);
-            const fresh = findDossier({ crmId: customerId });
-            if (fresh) card = cardFromDossier(fresh, branch);
-          }
-          if (linked && allow) {
-            const { token, request } = await import("./alfacrm");
-            const { inboundCustomerPays, customerBalance, snapshotBalance } = await import("./crm-pay");
-            const t = await token().catch(() => "");
-            if (t) {
-              await inboundCustomerPays(request, t, branch, customerId).catch(() => []);
-              const fresh = findDossier({ crmId: customerId });
-              const rows = (card.tariffs || []).filter((t) => !t.archived && Number(t.id) > 0);
-              const cttRest = rows.reduce((n, t) => n + (Number(t.rest) || 0), 0);
-              const { writeoffSumOf } = await import("./crm-ledger-core");
-              const { loadCustomerCalendar } = await import("./group-cards");
-              const next = customerBalance(
-                customerId,
-                snapshotBalance(fresh?.extras?.balance ?? card.balance, cttRest, rows.length > 0),
-                writeoffSumOf(loadCustomerCalendar(customerId)),
-              );
-              upsertDossier({ crmId: customerId, extras: { ...(fresh?.extras || {}), balance: String(next) }, source: "sync" } as never);
-              const again = findDossier({ crmId: customerId });
-              if (again) card = cardFromDossier(again, branch);
-            }
-          }
-          return { ok: true as const, fromCache: true, customer: withPush(card) };
+          return { ok: true as const, fromCache: true, customer: withPush(cardFromDossier(d, branch)) };
         }
         return { ok: false as const, error: "Ученик не найден на сайте." };
       }

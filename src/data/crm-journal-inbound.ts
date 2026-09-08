@@ -224,19 +224,36 @@ function isOneOffLesson(item: { lesson_type_id?: number; group_ids?: number[] })
   return groups.length === 0 && typeId !== 2;
 }
 
-export async function inboundCustomerLessons(branch: number, customerId: number) {
+export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean }) {
   const id = Number(customerId) || 0;
   if (!alfaLinkedNow() || id <= 0) return { ok: true as const, count: 0 };
-  const { token, request } = await import("./alfacrm");
-  const { listAdminSlots } = await import("./alfacrm-schedule");
-  const t = await token();
-  const dateFrom = ruShift(-2200);
-  const dateTo = ruShift(90);
-  const slots = listAdminSlots();
-  const packs: { items?: Parameters<typeof packLight>[0][] }[] = [];
-  for (const bid of uniqueBranches(branch)) {
-    for (const status of [1, 2, 3]) {
-      for (let page = 0; page < 8; page++) {
+  if (lessonFillBusy(id)) return { ok: true as const, count: 0, skipped: "busy" as const };
+  const wantFull = Boolean(opts?.full) || !customerSyncOf(id).lessonsFull;
+  if (!wantFull && customerLessonsFresh(id)) return { ok: true as const, count: 0, skipped: "fresh" as const };
+  markLessonFillBusy(id, true);
+  try {
+    const { token, request } = await import("./alfacrm");
+    const { listAdminSlots } = await import("./alfacrm-schedule");
+    const t = await token();
+    const dateFrom = wantFull ? ruShift(-2200) : ruShift(LESSON_RECENT_DAYS);
+    const dateTo = ruShift(90);
+    const slots = listAdminSlots();
+    const branches = wantFull ? uniqueBranches(branch) : [Number(branch) || 1];
+    const prevCal = loadCustomerCalendar(id);
+    const prevMap = new Map(prevCal.map((l) => [String(l.lessonId || `${l.date}|${l.from}`), l] as const));
+    const packs: { items?: Parameters<typeof packLight>[0][] }[] = [];
+    let cur = wantFull ? lessonFillOf(customerSyncOf(id).lessonFill) || lessonFillStart(branches[0] || branch) : lessonFillStart(branches[0] || branch);
+    let ran = 0;
+    const maxRun = wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
+    const maxPages = wantFull ? 8 : 2;
+    outer: while (ran < maxRun && !cur.done) {
+      const bid = cur.bid;
+      const status = LESSON_STATUSES[cur.statusIdx] || 1;
+      if (!branches.includes(bid)) {
+        cur = lessonFillAdvance(cur, true, branches);
+        continue;
+      }
+      for (let page = cur.page; page < maxPages; page += 1) {
         const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
           `/v2api/${bid}/lesson/index`,
           { page, pageSize: 100, status, customer_id: id, date_from: dateFrom, date_to: dateTo, removed: 0 },
@@ -244,55 +261,59 @@ export async function inboundCustomerLessons(branch: number, customerId: number)
         ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
         const chunk = les.items || [];
         if (chunk.length) packs.push(les);
-        if (chunk.length < 100) break;
+        ran += 1;
+        const lastShort = chunk.length < 100;
+        cur = lastShort ? lessonFillAdvance({ ...cur, page }, true, branches) : { bid, statusIdx: cur.statusIdx, page: page + 1 };
+        if (ran >= maxRun || cur.done || lastShort) break;
+      }
+      if (cur.done) break outer;
+    }
+    const pulled: GroupCalLesson[] = [];
+    for (const les of packs) {
+      for (const item of les.items || []) {
+        const rec = item as Record<string, unknown>;
+        const ids = lessonCustomerIds(rec);
+        if (ids.length && !ids.includes(id) && !packLessonPupils(rec).some((p) => p.customerId === id)) continue;
+        const gid = Number((item.group_ids || [])[0] || 0);
+        const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
+        const packed = packLight(
+          { ...item, date: ymd(item.date), customer_ids: ids.length ? ids : [id] },
+          {
+            groupName: slot?.groupName || String(item.lesson_type_name || "занятие"),
+            from: hm(item.time_from) || "",
+            to: hm(item.time_to) || "",
+            teacher: slot?.teacher || "",
+            subject: slot?.subject || "",
+          },
+          id,
+        );
+        if (!packed) continue;
+        packed.date = ymd(packed.date);
+        if (!packed.customerIds?.length) packed.customerIds = [id];
+        const prev = prevMap.get(String(packed.lessonId || `${packed.date}|${packed.from}`));
+        if (prev) {
+          if (!(Number(packed.amount) > 0) && Number(prev.amount) > 0) packed.amount = prev.amount;
+          if (!(Number(packed.cttId) > 0) && Number(prev.cttId) > 0) packed.cttId = prev.cttId;
+          if (!(packed.pupils && packed.pupils.length) && prev.pupils?.length) packed.pupils = prev.pupils;
+        }
+        pulled.push(withPupilNames(packed));
       }
     }
+    const hold = pendingExportIds(["lesson.update", "lesson.create"]);
+    const next = mergeLocalCalendar(pulled, prevCal, hold, "union");
+    replaceCustomerCalendar(id, next);
+    const done = Boolean(cur.done) || !wantFull;
+    stampCustomerSync(id, {
+      lessonsAt: new Date().toISOString(),
+      lessonsFull: customerSyncOf(id).lessonsFull || done,
+      lessonFill: done ? undefined : cur,
+    });
+    return { ok: true as const, count: pulled.length, done };
+  } finally {
+    markLessonFillBusy(id, false);
   }
-  const prevMap = new Map(
-    loadCustomerCalendar(id).map((l) => [String(l.lessonId || `${l.date}|${l.from}`), l] as const),
-  );
-  const pulled: GroupCalLesson[] = [];
-  for (const les of packs) {
-    for (const item of les.items || []) {
-      const rec = item as Record<string, unknown>;
-      const ids = lessonCustomerIds(rec);
-      if (ids.length && !ids.includes(id) && !packLessonPupils(rec).some((p) => p.customerId === id)) continue;
-      const gid = Number((item.group_ids || [])[0] || 0);
-      const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
-      const packed = packLight(
-        { ...item, date: ymd(item.date), customer_ids: ids.length ? ids : [id] },
-        {
-          groupName: slot?.groupName || String(item.lesson_type_name || "занятие"),
-          from: hm(item.time_from) || "",
-          to: hm(item.time_to) || "",
-          teacher: slot?.teacher || "",
-          subject: slot?.subject || "",
-        },
-        id,
-      );
-      if (!packed) continue;
-      packed.date = ymd(packed.date);
-      if (!packed.customerIds?.length) packed.customerIds = [id];
-      const prev = prevMap.get(String(packed.lessonId || `${packed.date}|${packed.from}`));
-      if (prev) {
-        if (!(Number(packed.amount) > 0) && Number(prev.amount) > 0) packed.amount = prev.amount;
-        if (!(Number(packed.cttId) > 0) && Number(prev.cttId) > 0) packed.cttId = prev.cttId;
-        if (!(packed.pupils && packed.pupils.length) && prev.pupils?.length) packed.pupils = prev.pupils;
-      }
-      pulled.push(withPupilNames(packed));
-    }
-  }
-  const local = loadCustomerCalendar(id).filter((l) => Number(l.lessonId || 0) < 0);
-  const seen = new Set<string>();
-  const next = [...local, ...pulled].filter((l) => {
-    const key = String(l.lessonId || `${l.date}|${l.from}`);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  replaceCustomerCalendar(id, next);
-  return { ok: true as const, count: pulled.length };
 }
+
 
 export async function inboundJournalChunk(offset = 0, take = 2) {
   if (!alfaLinkedNow()) {
