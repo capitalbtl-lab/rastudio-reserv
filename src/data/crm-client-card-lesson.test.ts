@@ -38,6 +38,13 @@ describe("форма занятия карточки", () => {
     assert.match(src, /savePay\("cash"\)/);
     assert.match(src, /savePay\("card"\)/);
     assert.match(src, /showBasicAccount/);
+    assert.match(src, /placeholder="Не привязано"/);
+    assert.match(src, /activeGroups\.length/);
+    assert.match(src, /payKind !== "correct"/);
+    assert.match(src, /PAY_FOOT_BTN/);
+    assert.match(src, /overflow-visible/);
+    assert.match(src, /data-op="pay-group"/);
+    assert.doesNotMatch(src, /defaultPayGroupId/);
     assert.doesNotMatch(src, /Раскрыть/);
     assert.doesNotMatch(src, /slice\(0, 12\)/);
     assert.match(src, /data-op="lesson-writeoffs"/);

@@ -76,6 +76,8 @@ function payRowSum(p: { kind?: string; income?: number; expenditure?: number }) 
   return Number(p.income || 0) - Number(p.expenditure || 0);
 }
 
+const PAY_FOOT_BTN = "h-8 min-w-0 flex-1 px-1 text-[0.75rem]";
+
 export function printCashDraft(p: {
   name?: string;
   parent?: string;
@@ -2132,7 +2134,7 @@ export function CrmClientCard({
       data-op="pay-menu"
     >
       <div
-        className={cn("flex max-h-[min(92vh,32rem)] w-full max-w-[28rem] flex-col overflow-hidden", RA_POP)}
+        className={cn("flex w-full max-w-[28rem] flex-col overflow-visible", RA_POP)}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex shrink-0 items-start justify-between gap-3 px-4 pb-1.5 pt-3">
@@ -2173,7 +2175,7 @@ export function CrmClientCard({
             </button>
           ))}
         </div>
-        <div className="pretty-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-3">
+        <div className="px-4 pb-3">
           {payKind ? (
             <div className="grid grid-cols-1 items-center gap-x-3 gap-y-1.5 text-[0.75rem] sm:grid-cols-[6.6rem_minmax(0,1fr)]">
               <span className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted sm:col-span-2">Сумма</span>
@@ -2213,13 +2215,10 @@ export function CrmClientCard({
                   value={payLocationId}
                   onChange={setPayLocationId}
                   className={PAY_SEL}
-                  options={[
-                    { value: "", label: "(не задано)" },
-                    ...locationsOfBranch(card.branchId)
-                      .filter((x) => x.id > 0)
-                      .map((x) => ({ value: String(x.id), label: x.name })),
-                  ]}
-                  placeholder={locationsOfBranch(card.branchId)[0]?.name || "(не задано)"}
+                  placeholder="(не задано)"
+                  options={locationsOfBranch(card.branchId)
+                    .filter((x) => x.id > 0)
+                    .map((x) => ({ value: String(x.id), label: x.name }))}
                 />
               </div>
               <span className="text-muted">Менеджер</span>
@@ -2228,7 +2227,8 @@ export function CrmClientCard({
                   value={payManagerId}
                   onChange={setPayManagerId}
                   className={PAY_SEL}
-                  options={[{ value: "", label: "(не задано)" }, ...ALFA_PAY_MANAGERS.map((x) => ({ value: String(x.id), label: x.name }))]}
+                  placeholder="(не задано)"
+                  options={ALFA_PAY_MANAGERS.map((x) => ({ value: String(x.id), label: x.name }))}
                 />
               </div>
               <span className="text-muted">Клиентский счёт</span>
@@ -2258,18 +2258,20 @@ export function CrmClientCard({
                 placeholder="ФИО родителя"
                 className={PAY_CTL}
               />
-              <span className="text-muted">Группа</span>
-              <div className="min-w-0">
-                <RaSelect
-                  value={payGroupId}
-                  onChange={setPayGroupId}
-                  className={PAY_SEL}
-                  options={[
-                    { value: "", label: "Выберите" },
-                    ...(card.groups || []).map((g) => ({ value: String(g.id), label: g.name })),
-                  ]}
-                />
-              </div>
+              {activeGroups.length ? (
+                <>
+                  <span className="text-muted">Группа</span>
+                  <div className="min-w-0" data-op="pay-group">
+                    <RaSelect
+                      value={payGroupId}
+                      onChange={setPayGroupId}
+                      className={PAY_SEL}
+                      placeholder="Не привязано"
+                      options={activeGroups.map((g) => ({ value: String(g.id), label: g.name }))}
+                    />
+                  </div>
+                </>
+              ) : null}
               <span className="text-muted">Комментарий</span>
               <input
                 value={payNote}
@@ -2284,7 +2286,7 @@ export function CrmClientCard({
         </div>
         {payKind ? (
           <footer className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 border-t border-black/8 px-4 py-2.5">
-            <Button type="button" size="sm" className="h-8 px-3 text-[0.75rem]" variant="ghost" onClick={() => { setHeadMenu(""); setPayEditId(0); }}>
+            <Button type="button" size="sm" className={PAY_FOOT_BTN} variant="ghost" onClick={() => { setHeadMenu(""); setPayEditId(0); }}>
               Отмена
             </Button>
             {payEditId ? (
@@ -2320,35 +2322,39 @@ export function CrmClientCard({
             <Button
               type="button"
               size="sm"
-              className="h-8 px-3 text-[0.75rem]"
+              className={PAY_FOOT_BTN}
               data-op="customerPay"
               disabled={Boolean(busy) || !payItemId}
               onClick={() => savePay("")}
             >
               {busy === "customerPay" ? "Сохраняю…" : "Сохранить"}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="h-8 px-3 text-[0.75rem]"
-              data-op="pay-fiscal-cash"
-              disabled={Boolean(busy) || !payItemId}
-              onClick={() => savePay("cash")}
-            >
-              Наличный
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="h-8 px-3 text-[0.75rem]"
-              data-op="pay-fiscal-card"
-              disabled={Boolean(busy) || !payItemId}
-              onClick={() => savePay("card")}
-            >
-              Электронно
-            </Button>
+            {payKind !== "correct" ? (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className={PAY_FOOT_BTN}
+                  data-op="pay-fiscal-cash"
+                  disabled={Boolean(busy) || !payItemId}
+                  onClick={() => savePay("cash")}
+                >
+                  Наличный
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className={PAY_FOOT_BTN}
+                  data-op="pay-fiscal-card"
+                  disabled={Boolean(busy) || !payItemId}
+                  onClick={() => savePay("card")}
+                >
+                  Электронно
+                </Button>
+              </>
+            ) : null}
           </footer>
         ) : null}
       </div>
