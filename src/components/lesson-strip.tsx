@@ -391,6 +391,7 @@ function LessonEdit({
   const [groups, setGroups] = useState<{ id: number; name: string }[]>([]);
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<{ id: number; name: string }[]>([]);
+  const [openNotes, setOpenNotes] = useState<Record<number, true>>({});
 
   useEffect(() => {
     let live = true;
@@ -570,7 +571,7 @@ function LessonEdit({
       }}
       data-op="lesson-edit"
     >
-      <div className={cn("w-full max-w-[40rem] p-4", RA_POP)} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className={cn("w-full max-w-[46rem] p-4", RA_POP)} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-display text-lg font-semibold text-fg">Групповое — {form.status === 3 ? "проведён" : form.status === 2 ? "отменён" : "занятие"}</h3>
           <button type="button" className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white" onClick={onClose}>
@@ -579,7 +580,7 @@ function LessonEdit({
         </div>
         {loading ? <p className="mt-2 text-[0.75rem] text-muted">Открываю занятие…</p> : null}
         <div className="mt-3 grid gap-2">
-          <div className="grid grid-cols-[minmax(8.2rem,1fr)_minmax(0,1.35fr)_4.4rem_4.6rem] items-end gap-2" data-op="lesson-when">
+          <div className="grid grid-cols-[7.4rem_4.15rem_3.35rem_3.7rem_minmax(7rem,1fr)] items-end gap-1.5" data-op="lesson-when">
             <label className={LBL}>
               Дата
               <input
@@ -591,11 +592,11 @@ function LessonEdit({
                 inputMode="numeric"
                 maxLength={10}
                 placeholder="дд.мм.гггг"
-                className={FIELD}
+                className={cn(FIELD, "px-1.5 text-center")}
               />
             </label>
             <label className={LBL}>
-              Время с
+              Время
               <input
                 value={form.from}
                 onChange={(e) => {
@@ -605,7 +606,7 @@ function LessonEdit({
                 inputMode="numeric"
                 maxLength={5}
                 placeholder="18:00"
-                className={FIELD}
+                className={cn(FIELD, "px-1 text-center")}
               />
             </label>
             <label className={LBL}>
@@ -619,27 +620,29 @@ function LessonEdit({
                   const duration = Number(e.target.value) || 0;
                   setForm((f) => (f ? { ...f, duration, to: addMins(f.from, duration) || f.to } : f));
                 }}
-                className={FIELD}
+                className={cn(FIELD, "px-1 text-center")}
               />
             </label>
             <label className={LBL}>
               До
-              <input value={form.to} readOnly className={cn(FIELD, "bg-white/70")} />
+              <input value={form.to} readOnly className={cn(FIELD, "bg-white/70 px-1 text-center")} />
             </label>
-          </div>
-          <div className="grid grid-cols-2 gap-2" data-op="lesson-place">
             <label className={LBL}>
               Аудитория
               <RaSelect value={form.roomId ? String(form.roomId) : ""} placeholder="— не задана —" className={FIELD} options={rooms.map((r) => ({ value: String(r.id), label: r.name }))} onChange={(v) => set("roomId", Number(v) || 0)} />
             </label>
+          </div>
+          <div className="grid grid-cols-[minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(7.5rem,0.85fr)] items-end gap-1.5" data-op="lesson-place">
             <label className={LBL}>
               Группа
               <RaSelect value={String(form.groupIds[0] || "")} placeholder="— группа —" className={FIELD} menuMinWidth={280} options={groups.map((g) => ({ value: String(g.id), label: g.name }))} onChange={(v) => set("groupIds", Number(v) ? [Number(v)] : [])} />
             </label>
-          </div>
-          <div className="grid grid-cols-2 gap-2" data-op="lesson-who">
             <label className={LBL}>
-              Добавить клиента
+              Предмет
+              <RaSelect value={form.subjectId ? String(form.subjectId) : ""} placeholder="— предмет —" className={FIELD} menuMinWidth={280} options={subjects.map((s) => ({ value: String(s.id), label: s.name }))} onChange={(v) => set("subjectId", Number(v) || 0)} />
+            </label>
+            <label className={LBL} data-op="lesson-who">
+              Клиент
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="добавить клиента" className={FIELD} />
               {hits.length ? (
                 <ul className={cn("mt-1 max-h-36 overflow-y-auto py-1", RA_POP)}>
@@ -668,10 +671,6 @@ function LessonEdit({
                 </ul>
               ) : null}
             </label>
-            <label className={LBL}>
-              Предмет
-              <RaSelect value={form.subjectId ? String(form.subjectId) : ""} placeholder="— предмет —" className={FIELD} menuMinWidth={280} options={subjects.map((s) => ({ value: String(s.id), label: s.name }))} onChange={(v) => set("subjectId", Number(v) || 0)} />
-            </label>
           </div>
           {form.customers.length ? (
             <div>
@@ -689,46 +688,44 @@ function LessonEdit({
                 </button>
               </div>
               <div className="mt-1 max-h-[11.5rem] overflow-y-auto rounded-xl bg-white ring-1 ring-black/8" data-op="lesson-attend">
-                <table className="w-full min-w-[32rem] text-left text-[0.75rem]">
+                <table className="w-full text-left text-[0.75rem]">
                   <thead className="sticky top-0 bg-white text-[0.62rem] uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-2 py-1.5 font-medium">Состояние клиента</th>
-                      <th className="w-24 px-2 py-1.5 font-medium">Списание</th>
-                      <th className="w-36 px-2 py-1.5 font-medium">Оценка / Причина</th>
-                      <th className="w-24 px-2 py-1.5 font-medium">Оценка за ДЗ</th>
-                      <th className="px-2 py-1.5 font-medium">Примечание</th>
-                      <th className="w-8 px-1 py-1.5" />
+                      <th className="w-14 px-1 py-1.5 font-medium" title="Списание">Спис.</th>
+                      <th className="w-12 px-1 py-1.5 font-medium" title="Оценка / Причина">Оц.</th>
+                      <th className="w-11 px-1 py-1.5 font-medium" title="Оценка за ДЗ">ДЗ</th>
+                      <th className="w-12 px-1 py-1.5 font-medium" title="Примечание">прим.</th>
+                      <th className="w-7 px-0.5 py-1.5" />
                     </tr>
                   </thead>
                   <tbody>
                     {form.customers.map((c) => {
                       const zero = /(?:^|[^\d])0 ост/.test(String(c.rest || "")) || c.rest?.startsWith("0 ");
+                      const showNote = Boolean(c.note) || openNotes[c.id];
                       return (
                         <tr key={c.id} className={cn("border-t border-black/6", c.attend === false && "bg-amber-50")}>
                           <td className="px-2 py-1">
-                            <label className="flex cursor-pointer items-start gap-2">
-                              <input type="checkbox" className="mt-0.5" checked={c.attend !== false} onChange={() => patchCustomer(c.id, { attend: c.attend === false })} />
-                              <span className="min-w-0">
-                                <span className={cn("block font-medium", zero || c.attend === false ? "text-rose-600" : "text-sky-800")}>{c.name}</span>
-                                {c.rest ? <span className="block text-[0.65rem] text-muted">({c.rest})</span> : null}
+                            <label className="flex cursor-pointer items-center gap-2">
+                              <input type="checkbox" className="shrink-0" checked={c.attend !== false} onChange={() => patchCustomer(c.id, { attend: c.attend === false })} />
+                              <span className="min-w-0 whitespace-nowrap">
+                                <span className={cn("font-medium", zero || c.attend === false ? "text-rose-600" : "text-sky-800")}>{c.name}</span>
+                                {c.rest ? <span className="ml-1 text-[0.65rem] text-muted">({c.rest})</span> : null}
                               </span>
                             </label>
                           </td>
-                          <td className="px-2 py-1">
-                            <span className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={c.amount || ""}
-                                onChange={(e) => patchCustomer(c.id, { amount: Number(e.target.value) || 0 })}
-                                className="h-7 w-[4.8rem] rounded-md bg-white px-1.5 tabular-nums ring-1 ring-black/10"
-                              />
-                              <span className="text-muted">р.</span>
-                            </span>
+                          <td className="px-1 py-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={c.amount || ""}
+                              onChange={(e) => patchCustomer(c.id, { amount: Number(e.target.value) || 0 })}
+                              className="h-7 w-[3.4rem] rounded-md bg-white px-1 text-center tabular-nums ring-1 ring-black/10"
+                            />
                           </td>
-                          <td className="px-2 py-1">
+                          <td className="px-1 py-1">
                             {c.attend === false ? (
-                              <select value={c.reason || ""} onChange={(e) => patchCustomer(c.id, { reason: e.target.value })} className="h-7 w-full rounded-md bg-white px-1 text-[0.72rem] ring-1 ring-black/10">
+                              <select value={c.reason || ""} onChange={(e) => patchCustomer(c.id, { reason: e.target.value })} className="h-7 w-[7.2rem] rounded-md bg-white px-0.5 text-[0.68rem] ring-1 ring-black/10">
                                 <option value="">причина</option>
                                 {MISS_REASONS.map((r) => (
                                   <option key={r} value={r}>
@@ -737,8 +734,8 @@ function LessonEdit({
                                 ))}
                               </select>
                             ) : (
-                              <select value={c.grade || ""} onChange={(e) => patchCustomer(c.id, { grade: e.target.value })} className="h-7 w-full rounded-md bg-white px-1 text-[0.72rem] ring-1 ring-black/10">
-                                <option value="">оценка</option>
+                              <select value={c.grade || ""} onChange={(e) => patchCustomer(c.id, { grade: e.target.value })} className="h-7 w-[3.2rem] rounded-md bg-white px-0.5 text-center text-[0.72rem] ring-1 ring-black/10">
+                                <option value="" />
                                 {GRADE_OPTS.map((g) => (
                                   <option key={g} value={g}>
                                     {g}
@@ -747,9 +744,9 @@ function LessonEdit({
                               </select>
                             )}
                           </td>
-                          <td className="px-2 py-1">
-                            <select value={c.homeworkGrade || ""} onChange={(e) => patchCustomer(c.id, { homeworkGrade: e.target.value })} className="h-7 w-full rounded-md bg-white px-1 text-[0.72rem] ring-1 ring-black/10">
-                              <option value="">ДЗ</option>
+                          <td className="px-1 py-1">
+                            <select value={c.homeworkGrade || ""} onChange={(e) => patchCustomer(c.id, { homeworkGrade: e.target.value })} className="h-7 w-[3.2rem] rounded-md bg-white px-0.5 text-center text-[0.72rem] ring-1 ring-black/10">
+                              <option value="" />
                               {GRADE_OPTS.map((g) => (
                                 <option key={g} value={g}>
                                   {g}
@@ -757,10 +754,27 @@ function LessonEdit({
                               ))}
                             </select>
                           </td>
-                          <td className="px-2 py-1">
-                            <input value={c.note || ""} placeholder="Примечание" onChange={(e) => patchCustomer(c.id, { note: e.target.value })} className="h-7 w-full rounded-md bg-white px-1.5 ring-1 ring-black/10" />
-                          </td>
                           <td className="px-1 py-1">
+                            {showNote ? (
+                              <input
+                                value={c.note || ""}
+                                placeholder="прим."
+                                onChange={(e) => patchCustomer(c.id, { note: e.target.value })}
+                                className="h-7 w-[5.2rem] rounded-md bg-white px-1.5 text-[0.72rem] ring-1 ring-black/10"
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                className="grid size-7 place-items-center rounded-md text-base font-semibold text-muted ring-1 ring-black/10 hover:bg-black/[0.04] hover:text-fg"
+                                aria-label="прим."
+                                title="примечание"
+                                onClick={() => setOpenNotes((m) => ({ ...m, [c.id]: true }))}
+                              >
+                                +
+                              </button>
+                            )}
+                          </td>
+                          <td className="px-0.5 py-1">
                             <button type="button" className="grid size-6 place-items-center rounded-full text-muted hover:bg-rose-50 hover:text-rose-600" aria-label="Удалить ученика" onClick={() => removeCustomer(c.id)}>
                               ×
                             </button>
