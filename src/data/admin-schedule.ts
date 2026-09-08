@@ -1877,14 +1877,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
         extras: { ...(d?.extras || {}), balance: String(fx.next) },
         source: "admin",
       } as never);
+      const payBranch = Number(d?.branchId || branch) || 1;
       const { enqueueExport } = await import("./crm-export-queue");
       enqueueExport({
         op: "pay.create",
-        branchId: branch,
+        branchId: payBranch,
         entityId: customerId,
         body: packAlfaPayCreate({
           customerId,
-          branchId: Number(d?.branchId || branch),
+          branchId: payBranch,
           documentDate: ru,
           income: fx.income,
           expenditure: fx.expenditure,
@@ -1893,7 +1894,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           kind,
           payAccountId: Number(data.payAccountId) || 1,
           payItemId: Number(data.payItemId) || 0,
-          locationId: Number(data.locationId) || locationIdForBranch(Number(d?.branchId || branch)),
+          locationId: Number(data.locationId) || locationIdForBranch(payBranch),
           managerId: Number(data.managerId) || 0,
           cttId: Number(data.cttId) || 0,
           contractId: Number(data.contractId) || 0,

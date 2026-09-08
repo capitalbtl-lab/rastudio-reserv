@@ -57,7 +57,9 @@ async function findChudnova(
 export async function maybeRunChudnovaPayTest() {
   if (g.__raPayTest) return { skipped: "busy" as const };
   const mark = loadMark();
-  if (mark.done === PAY_TEST_ID) return { skipped: "done" as const };
+  const { localPaysPending } = await import("./crm-pay");
+  const stuck = localPaysPending().filter((x) => /тест rastudio\.org/.test(String(x.note || "")));
+  if (mark.done === PAY_TEST_ID && !stuck.length) return { skipped: "done" as const };
   g.__raPayTest = true;
   try {
     const { token, request } = await import("./alfacrm");
@@ -69,11 +71,11 @@ export async function maybeRunChudnovaPayTest() {
       g.__raPayTest = false;
       return { ok: false as const, error: "нет клиента" };
     }
-    const { appendPay } = await import("./crm-pay");
+    const { appendPay, flushLocalPaysToAlfa } = await import("./crm-pay");
     const { enqueueExport, tickExportQueue } = await import("./crm-export-queue");
     const date = ruToday();
-    const jobs = planChudnovaPays(who.id, who.branchId, date);
-    const ids: number[] = [];
+    const jobs = stuck.length ? [] : planChudnovaPays(who.id, who.branchId, date);
+    const ids: number[] = stuck.map((x) => Number(x.id));
     for (const row of jobs) {
       const pay = appendPay({
         customerId: row.customerId,
@@ -106,14 +108,17 @@ export async function maybeRunChudnovaPayTest() {
         }),
       });
     }
+    await tickExportQueue(4, "pay.create", { lean: true });
+    const flush = await flushLocalPaysToAlfa();
+    const left = localPaysPending().filter((x) => /тест rastudio\.org/.test(String(x.note || "")) || ids.includes(Number(x.id)));
     saveMark({
-      done: PAY_TEST_ID,
+      done: left.length ? "" : PAY_TEST_ID,
       at: new Date().toISOString(),
-      note: `${who.name} #${who.id} филиал ${who.branchId} · ${ids.length} шт.`,
+      note: `${who.name} #${who.id} филиал ${who.branchId} · ${ids.length} шт.${left.length ? ` · ждут Alfa ${left.map((x) => x.id).join(",")}` : ""}`,
     });
-    logAdmin(`Тест кассы: ${who.name} #${who.id} филиал ${who.branchId} · 1 ₽ наличные и карта`, "sync");
-    await tickExportQueue(4);
-    return { ok: true as const, customerId: who.id, branchId: who.branchId, name: who.name, pays: ids };
+    logAdmin(`Тест кассы: ${who.name} #${who.id} филиал ${who.branchId} · 1 ₽ наличные и карта${left.length ? " · ещё на диске" : ""}`, "sync");
+    g.__raPayTest = false;
+    return { ok: true as const, customerId: who.id, branchId: who.branchId, name: who.name, pays: ids, left: left.length, flush };
   } catch (e) {
     g.__raPayTest = false;
     const msg = e instanceof Error ? e.message : "тест кассы";

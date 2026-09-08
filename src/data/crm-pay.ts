@@ -294,15 +294,13 @@ export function localPaysPending() {
 
 /** Кнопка «Обновить кассу» и авто: сначала свои платежи в Alfa одним create, потом опрос. */
 export async function flushLocalPaysToAlfa() {
-  const { enqueueExport, tickExportQueue, pendingExportIds } = await import("./crm-export-queue");
+  const { enqueueExport, tickExportQueue, pendingExportIds, crmExportSnapshot } = await import("./crm-export-queue");
   const { packAlfaPayCreate, locationIdForBranch } = await import("./crm-pay-alfa");
   const { alfaLinkedNow, wantAlfaPush } = await import("./crm-alfa-link");
   if (!alfaLinkedNow()) return { ok: false as const, local: 0, queued: 0, note: "без Alfa" };
-  const hold = pendingExportIds(["pay.create"]);
   const local = localPaysPending();
   let queued = 0;
   for (const row of local) {
-    if (hold.has(Number(row.id))) continue;
     if (!wantAlfaPush("pay.create", { customer_id: row.customerId })) continue;
     enqueueExport({
       op: "pay.create",
@@ -328,11 +326,15 @@ export async function flushLocalPaysToAlfa() {
     });
     queued += 1;
   }
-  if (!queued && (hold.size || local.length)) {
+  if (local.length) {
+    for (let i = 0; i < 12; i += 1) {
+      if (!crmExportSnapshot().busy) break;
+      await new Promise((r) => setTimeout(r, 400));
+    }
     await tickExportQueue(8, "pay.create", { lean: true });
   }
   const left = localPaysPending().length;
-  const note = queued || local.length ? `касса исходящая: своих ${local.length}, в очередь ${queued}, ждут ${left}` : "касса исходящая: своих нет";
+  const note = local.length ? `касса исходящая: своих ${local.length}, в очередь ${queued}, ждут ${left}` : "касса исходящая: своих нет";
   logAdmin(note, "sync");
   return { ok: true as const, local: local.length, queued, left, note };
 }

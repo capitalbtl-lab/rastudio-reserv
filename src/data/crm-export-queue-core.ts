@@ -75,7 +75,11 @@ export function sameExportJob(
     return a.entityId === b.entityId && Number(a.body.tariffId) === Number(b.body.tariffId) && String(a.body.bDate || "") === String(b.body.bDate || "");
   }
   if (a.op === "customer-tariff.clear") return a.entityId === b.entityId;
-  if (a.op === "pay.create") return false;
+  if (a.op === "pay.create") {
+    const aLocal = Number(a.body.localId || 0);
+    const bLocal = Number(b.body.localId || 0);
+    return Boolean(aLocal) && aLocal === bLocal;
+  }
   if (a.op === "pay.delete") return a.entityId === b.entityId;
   if (a.op === "lesson.create") {
     const aLocal = Number(a.body.localId || (a.entityId < 0 ? a.entityId : 0));

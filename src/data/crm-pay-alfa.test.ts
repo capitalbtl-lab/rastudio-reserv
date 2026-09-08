@@ -59,6 +59,18 @@ describe("касса Alfa по филиалам", () => {
     assert.equal(body.pay_item_id, 2);
     assert.equal(body.pay_account_id, 1);
     assert.equal(body.pay_type_id, 1);
+    const noItem = packAlfaPayCreate({
+      customerId: 7759,
+      branchId: 1,
+      documentDate: "06.09.2026",
+      income: 1,
+      expenditure: 0,
+      note: "тест",
+      localId: -1,
+      kind: "income",
+    });
+    assert.equal(noItem.pay_item_id, 2);
+    assert.equal(noItem.location_id, 1);
     const withCtt = packAlfaPayCreate({
       customerId: 7759,
       branchId: 1,

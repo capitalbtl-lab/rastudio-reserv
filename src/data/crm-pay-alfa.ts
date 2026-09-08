@@ -121,7 +121,7 @@ export function packAlfaPayCreate(input: {
   if (customer) body.customer_id = customer;
   if ((Number(input.income) || 0) > 0 && !(Number(input.expenditure) || 0)) body.pay_type_id = 1;
   body.pay_account_id = num(input.payAccountId) || 1;
-  const item = num(input.payItemId);
+  const item = num(input.payItemId) || defaultPayItemId(branchId);
   if (item) body.pay_item_id = item;
   const loc = num(input.locationId) || locationIdForBranch(branchId);
   if (loc && (!branchId || locationBelongsToBranch(loc, branchId))) body.location_id = loc;
