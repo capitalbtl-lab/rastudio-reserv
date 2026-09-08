@@ -311,6 +311,11 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       lessonsFull: customerSyncOf(id).lessonsFull || done,
       lessonFill: done ? undefined : cur,
     });
+    if (wantFull && !done) {
+      setTimeout(() => {
+        void inboundCustomerLessons(branch, id).catch(() => null);
+      }, 700);
+    }
     return { ok: true as const, count: pulled.length, done };
   } finally {
     markLessonFillBusy(id, false);

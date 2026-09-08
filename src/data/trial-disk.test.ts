@@ -266,6 +266,8 @@ describe("кабинет: новый ученик диск сразу", () => {
     const diskEnd = get.indexOf("if (customerId < 0)");
     const disk = get.slice(0, diskEnd > 0 ? diskEnd : get.length);
     assert.equal(/enqueueCustomerPacket/.test(disk), false);
+    assert.equal(/pullCustomerTariffs/.test(disk), false);
+    assert.equal(/inboundCustomerPays/.test(disk), false);
     assert.match(get, /enqueueCustomerPacket/);
     assert.match(get, /fromCache: true/);
     assert.match(get, /wantAlfaPull\(data\.fresh\)/);
