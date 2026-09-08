@@ -14,6 +14,9 @@ import {
   ALFA_PULL_CH,
   ALFA_PUSH_CH,
   ALFA_SYNC_DEFAULT,
+  ALFA_PIPE_CH,
+  pipeAllowed,
+  payDaysOf,
 } from "./crm-alfa-link-core.ts";
 
 const linked = { mode: "linked" as const, ...ALFA_SYNC_DEFAULT };
@@ -30,11 +33,16 @@ describe("режим фона с AlfaCRM", () => {
       ALFA_LINK_MODES.map((m) => m.id),
       ["linked", "offline"],
     );
-    assert.equal(ALFA_PULL_CH.length, 4);
-    assert.equal(ALFA_PUSH_CH.length, 7);
+    assert.equal(ALFA_PULL_CH.length, 9);
+    assert.equal(ALFA_PUSH_CH.length, 8);
+    assert.equal(ALFA_PIPE_CH.length, 4);
     assert.equal(ALFA_SYNC_DEFAULT.pull.leads, true);
-    assert.equal(ALFA_SYNC_DEFAULT.pull.customers, true);
+    assert.equal(ALFA_SYNC_DEFAULT.pull.pay, true);
+    assert.equal(ALFA_SYNC_DEFAULT.pull.teachers, true);
     assert.equal(ALFA_SYNC_DEFAULT.push.trials, true);
+    assert.equal(ALFA_SYNC_DEFAULT.push.subjects, true);
+    assert.equal(ALFA_SYNC_DEFAULT.pipe.verifyCreate, true);
+    assert.equal(ALFA_SYNC_DEFAULT.payDays, 3);
   });
 
   it("alfaSyncOf мержит только указанные флаги, минуты 2…60", () => {
@@ -49,6 +57,13 @@ describe("режим фона с AlfaCRM", () => {
     assert.equal(alfaSyncOf({ minutes: 1 }).minutes, 2);
     assert.equal(alfaSyncOf({ minutes: 99 }).minutes, 60);
     assert.equal(alfaSyncOf({ minutes: 15 }).minutes, 15);
+    assert.equal(alfaSyncOf({ payDays: 7 }).payDays, 7);
+    assert.equal(alfaSyncOf({ payDays: 99 }).payDays, 14);
+    assert.equal(alfaSyncOf({ pipe: { keepToken: false } }).pipe.keepToken, false);
+    assert.equal(alfaSyncOf({ pipe: { keepToken: false } }).pipe.retry401, true);
+    assert.equal(payDaysOf({ payDays: 3 }), 3);
+    assert.equal(pipeAllowed({ pipe: { sharedLimiter: false } }, "sharedLimiter"), false);
+    assert.equal(pipeAllowed({}, "verifyCreate"), true);
   });
 
   it("пробное Ольги — канал trials, занятие trial тоже", () => {
@@ -59,6 +74,7 @@ describe("режим фона с AlfaCRM", () => {
     assert.equal(exportOpPushChannel("lesson.create", { type: "regular" }), "lessons");
     assert.equal(exportOpPushChannel("lesson.create", {}), "lessons");
     assert.equal(exportOpPushChannel("cgi.apply", {}), "groups");
+    assert.equal(exportOpPushChannel("subject.create", {}), "subjects");
     assert.equal(exportOpPushChannel("customer-tariff.create", {}), "tariffs");
     assert.equal(exportOpPushChannel("pay.create", {}), "pay");
     assert.equal(exportOpPushChannel("pay.delete", {}), "pay");
@@ -111,7 +127,9 @@ describe("режим фона с AlfaCRM", () => {
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /Фон с AlfaCRM/);
     assert.match(ui, /ALFA_PUSH_CH/);
-    assert.match(ui, /ALFA_PULL_CH/);
+    assert.match(ui, /ALFA_PIPE_CH/);
+    assert.match(ui, /Касса за/);
+    assert.match(ui, /Труба в Alfa/);
     assert.match(ui, /saveSync/);
     const link = readFileSync(new URL("./crm-alfa-link.ts", import.meta.url), "utf8");
     assert.match(link, /wantAlfaDelta/);
