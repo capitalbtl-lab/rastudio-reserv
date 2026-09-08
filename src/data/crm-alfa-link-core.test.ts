@@ -114,7 +114,12 @@ describe("режим фона с AlfaCRM", () => {
     assert.match(chunk, /alfaLinkedNow/);
     assert.match(chunk, /wantAlfaPush/);
     assert.match(chunk, /без Alfa/);
-    assert.ok(chunk.indexOf("await import(\"./alfacrm\")") > chunk.indexOf("if (!alfaLinkedNow())"));
+    assert.match(exp, /recoverCreatedPay/);
+    assert.match(exp, /verifyCreate/);
+    const alfa = readFileSync(new URL("./alfacrm.ts", import.meta.url), "utf8");
+    assert.match(alfa, /waitSharedGap/);
+    assert.match(alfa, /loginFetch/);
+    assert.match(alfa, /retry401/);
     const pack = readFileSync(new URL("./crm-packet-queue.ts", import.meta.url), "utf8");
     assert.match(pack, /if \(!alfaLinkedNow\(\)\)/);
     assert.match(pack, /wantAlfaPullChannel\("clients"\)/);

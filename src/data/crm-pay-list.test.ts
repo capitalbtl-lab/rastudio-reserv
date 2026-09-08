@@ -95,6 +95,9 @@ describe("касса список", () => {
     assert.match(eco, /\*\/15 \* \* \* \*/);
     assert.match(pay, /opts\?\.via !== "button"/);
     assert.match(pay, /dropAlfaAuth/);
+    assert.match(pay, /dropAlfaIndex/);
+    assert.match(pay, /wantAlfaPullChannel\("pay"\)/);
+    assert.match(pay, /alfaPayDays/);
     assert.match(pay, /export function filterCashPays/);
     assert.match(pay, /branchId: Number\(x.branchId\) \|\| 0/);
     const save = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
