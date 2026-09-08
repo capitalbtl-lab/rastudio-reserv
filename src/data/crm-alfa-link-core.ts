@@ -39,7 +39,7 @@ export const ALFA_PUSH_CH = [
   { id: "groups", title: "Группы", hint: "Состав cgi и слот." },
   { id: "subjects", title: "Предметы", hint: "Новый предмет с сайта." },
   { id: "tariffs", title: "Абонементы", hint: "Назначение и снятие." },
-  { id: "pay", title: "Касса", hint: "Платежи с сайта в очередь кассы Alfa." },
+  { id: "pay", title: "Касса", hint: "Платежи из админки в Alfa. Если включена «Касса сразу» — одним запросом после сохранения." },
 ] as const;
 
 export const ALFA_PIPE_CH = [
@@ -47,6 +47,7 @@ export const ALFA_PIPE_CH = [
   { id: "keepToken", title: "Не логиниться зря", hint: "Токен живёт час. Опрос кассы не сбрасывает его." },
   { id: "verifyCreate", title: "Не создавать повторно", hint: "После сбоя сначала ищем запись в Alfa, потом create. Иначе двойные оплаты и карточки." },
   { id: "retry401", title: "Обновить токен при 401", hint: "Один повтор исходного запроса. Второй 401 — стоп, проверьте ключ API." },
+  { id: "instantPay", title: "Касса сразу в Alfa", hint: "Платёж из админки после записи на диск уходит одним запросом. Без опроса кассы и без справочников." },
 ] as const;
 
 export type AlfaPullCh = (typeof ALFA_PULL_CH)[number]["id"];
@@ -74,7 +75,7 @@ export const ALFA_SYNC_DEFAULT: AlfaSyncFlags = {
     teachers: true,
   },
   push: { leads: true, trials: true, clients: true, lessons: true, groups: true, subjects: true, tariffs: true, pay: true },
-  pipe: { sharedLimiter: true, keepToken: true, verifyCreate: true, retry401: true },
+  pipe: { sharedLimiter: true, keepToken: true, verifyCreate: true, retry401: true, instantPay: true },
   minutes: 10,
   payDays: 3,
 };

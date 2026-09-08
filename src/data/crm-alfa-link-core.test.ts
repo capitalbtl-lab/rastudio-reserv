@@ -35,7 +35,8 @@ describe("режим фона с AlfaCRM", () => {
     );
     assert.equal(ALFA_PULL_CH.length, 9);
     assert.equal(ALFA_PUSH_CH.length, 8);
-    assert.equal(ALFA_PIPE_CH.length, 4);
+    assert.equal(ALFA_PIPE_CH.length, 5);
+    assert.equal(ALFA_SYNC_DEFAULT.pipe.instantPay, true);
     assert.equal(ALFA_SYNC_DEFAULT.pull.leads, true);
     assert.equal(ALFA_SYNC_DEFAULT.pull.pay, true);
     assert.equal(ALFA_SYNC_DEFAULT.pull.teachers, true);
@@ -116,6 +117,8 @@ describe("режим фона с AlfaCRM", () => {
     assert.match(chunk, /без Alfa/);
     assert.match(exp, /recoverCreatedPay/);
     assert.match(exp, /verifyCreate/);
+    assert.match(exp, /instantPay/);
+    assert.match(exp, /lean: true/);
     const alfa = readFileSync(new URL("./alfacrm.ts", import.meta.url), "utf8");
     assert.match(alfa, /waitSharedGap/);
     assert.match(alfa, /loginFetch/);

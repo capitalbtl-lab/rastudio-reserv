@@ -63,8 +63,15 @@ export function enqueueExport(incoming: Omit<CrmExportJob, "id" | "at" | "tries"
   q.lastAt = new Date().toISOString();
   q.lastNote = `${incoming.op} ${incoming.entityId}`;
   saveExport(q);
-  const instant = /^(pay|customer|lesson|cgi|customer-tariff|regular-lesson)\./.test(incoming.op);
-  void tickExportQueue(1, instant ? incoming.op : undefined);
+  const payOp = incoming.op === "pay.create" || incoming.op === "pay.delete";
+  void import("./crm-alfa-link").then(({ wantAlfaPipe }) => {
+    if (payOp && wantAlfaPipe("instantPay")) {
+      void tickExportQueue(1, incoming.op, { lean: true });
+      return;
+    }
+    const instant = /^(pay|customer|lesson|cgi|customer-tariff|regular-lesson)\./.test(incoming.op);
+    void tickExportQueue(1, instant ? incoming.op : undefined);
+  });
   return crmExportSnapshot();
 }
 
@@ -120,16 +127,19 @@ function finishExportJob(job: CrmExportJob, note: string) {
   saveExport(q);
 }
 
-export async function tickExportQueue(take = 2, preferOp?: CrmExportOp) {
-  if (!g.__raPayTestKick) {
-    g.__raPayTestKick = true;
-    const { maybeRunChudnovaPayTest } = await import("./crm-pay-test");
-    await maybeRunChudnovaPayTest().catch(() => null);
-  }
-  if (!g.__raTrialTestKick) {
-    g.__raTrialTestKick = true;
-    const { maybeBookChudnovaTrial } = await import("./crm-trial-test");
-    await maybeBookChudnovaTrial().catch(() => null);
+export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: { lean?: boolean }) {
+  const lean = Boolean(opts?.lean);
+  if (!lean) {
+    if (!g.__raPayTestKick) {
+      g.__raPayTestKick = true;
+      const { maybeRunChudnovaPayTest } = await import("./crm-pay-test");
+      await maybeRunChudnovaPayTest().catch(() => null);
+    }
+    if (!g.__raTrialTestKick) {
+      g.__raTrialTestKick = true;
+      const { maybeBookChudnovaTrial } = await import("./crm-trial-test");
+      await maybeBookChudnovaTrial().catch(() => null);
+    }
   }
   if (g.__raCrmExportBusy) {
     if (g.__raCrmExportBusyAt && Date.now() - g.__raCrmExportBusyAt > BUSY_MS) g.__raCrmExportBusy = false;
@@ -150,7 +160,7 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp) {
   try {
     const { token, request } = await import("./alfacrm");
     const t = await token();
-    if (!g.__raRoomsKick) {
+    if (!lean && !g.__raRoomsKick) {
       g.__raRoomsKick = true;
       try {
         const { roomsOfBranchList } = await import("./crm-rooms");
