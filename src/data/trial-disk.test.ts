@@ -375,8 +375,8 @@ describe("кабинет: новый ученик диск сразу", () => {
 
     const exp = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
     assert.match(exp, /exportJobSnap/);
-    const createdAt = exp.indexOf('if (job.op === "customer.create")');
-    const created = exp.slice(createdAt, createdAt + 1800);
+    const createdAt = exp.indexOf("AlfaCRM не вернула номер клиента");
+    const created = exp.slice(Math.max(0, createdAt - 80), createdAt + 1600);
     assert.match(created, /op: "lesson.create"/);
     assert.equal(/await createAlfaLesson/.test(created), false);
   });
