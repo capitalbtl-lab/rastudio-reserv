@@ -438,7 +438,7 @@ function TeacherDrop({
         <span className="text-muted">▾</span>
       </button>
       {open ? (
-        <div className={cn("absolute z-30 mt-1 max-h-44 w-full overflow-y-auto p-1", RA_POP)}>
+        <div className={cn("absolute z-50 mt-1 max-h-44 min-w-full w-max overflow-y-auto p-1", RA_POP)}>
           {teachers.map((t) => (
             <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-[0.78rem] hover:bg-black/[0.04]">
               <input type="checkbox" checked={ids.includes(t.id)} onChange={() => onToggle(t.id)} />
@@ -686,7 +686,7 @@ function LessonEdit({
         </div>
         {loading ? <p className="mt-2 text-[0.75rem] text-muted">Открываю занятие…</p> : null}
         <div className="mt-3 grid gap-2">
-          <div className="grid grid-cols-[7.4rem_4.15rem_3.35rem_3.7rem_minmax(7rem,1fr)] items-end gap-1.5" data-op="lesson-when">
+          <div className="grid grid-cols-[7.4rem_4.15rem_3.35rem_3.7rem_minmax(5.2rem,0.55fr)_minmax(11rem,1.2fr)] items-end gap-1.5" data-op="lesson-when">
             <label className={LBL}>
               Дата
               <DateCal value={form.date} onPick={(iso) => set("date", iso)}>
@@ -738,6 +738,14 @@ function LessonEdit({
             <label className={LBL}>
               Аудитория
               <RaSelect value={form.roomId ? String(form.roomId) : ""} placeholder="— не задана —" className={FIELD} options={rooms.map((r) => ({ value: String(r.id), label: r.name }))} onChange={(v) => set("roomId", Number(v) || 0)} />
+            </label>
+            <label className={LBL}>
+              Педагог
+              <TeacherDrop
+                teachers={teachers}
+                ids={form.teacherIds}
+                onToggle={(id) => set("teacherIds", form.teacherIds.includes(id) ? form.teacherIds.filter((x) => x !== id) : [...form.teacherIds, id])}
+              />
             </label>
           </div>
           <div className="grid grid-cols-[minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(7.5rem,0.85fr)] items-end gap-1.5" data-op="lesson-place">
@@ -925,14 +933,6 @@ function LessonEdit({
               </div>
             </div>
           ) : null}
-          <label className={LBL}>
-            Педагог(и)
-            <TeacherDrop
-              teachers={teachers}
-              ids={form.teacherIds}
-              onToggle={(id) => set("teacherIds", form.teacherIds.includes(id) ? form.teacherIds.filter((x) => x !== id) : [...form.teacherIds, id])}
-            />
-          </label>
           <label className={LBL}>
             Тема
             <input value={form.topic} onChange={(e) => set("topic", e.target.value)} className={FIELD} />

@@ -104,6 +104,8 @@ describe("форма занятия карточки", () => {
     assert.match(strip, /data-op="lesson-who"/);
     assert.match(strip, /data-op="lesson-hw"/);
     assert.match(strip, /data-op="lesson-teachers"/);
+    assert.match(strip, /Аудитория[\s\S]{0,500}TeacherDrop/);
+    assert.doesNotMatch(strip, /Педагог\(и\)/);
     assert.match(strip, /max-w-\[46rem\]/);
     assert.match(strip, /maskHm/);
     assert.match(strip, /maskRuDate/);
