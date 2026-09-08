@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, withCatalogCtt, isGenericTariffName, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, stampLiveTariff, changeListRows, batchesOfThree, keepByLiveTariff, alfaCalculationType, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, withCatalogCtt, isGenericTariffName, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, stampLiveTariff, changeListRows, batchesOfThree, keepByLiveTariff, alfaCalculationType, lessonWriteoffOf, pickLessonCtt, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 import type { CrmTariff } from "./crm-tariffs.ts";
@@ -574,5 +574,19 @@ describe("мастер абонементов учеников", () => {
     const pack = src.slice(src.indexOf("export function packCardTariff"), src.indexOf("export function parseDossierCtt"));
     assert.match(pack, /it\.balance \?\? it\.rest \?\? 0/);
     assert.doesNotMatch(pack, /it\.rest \?\? it\.paid/);
+  });
+
+  it("списание занятия = цена абонемента / число уроков", () => {
+    const cat = [{ id: 10, price: 6450, lessonsCount: 8, pricePerLesson: 806.25, subjectIds: [5] }];
+    assert.equal(lessonWriteoffOf({ tariffId: 10 }, cat), 806.25);
+    assert.equal(lessonWriteoffOf({ tariffId: 10, price: 6450 }, [{ id: 10, price: 6450, lessonsCount: 8, pricePerLesson: 0 }]), 806.25);
+    assert.equal(lessonWriteoffOf(null, cat), 0);
+    assert.equal(lessonWriteoffOf({ tariffId: 10, rest: 6450, lessons: 8 }, cat), 806.25);
+    const rows = [
+      { archived: false, subject: "Роботы", tariffId: 1, rest: 100 },
+      { archived: false, subject: "Художественная школа", tariffId: 10, rest: 6450 },
+    ];
+    assert.equal(pickLessonCtt(rows, { subject: "Художественная школа", catalog: cat })?.tariffId, 10);
+    assert.equal(pickLessonCtt(rows.filter((r) => r.tariffId === 1), { subjectId: 5, catalog: cat })?.tariffId, 1);
   });
 });

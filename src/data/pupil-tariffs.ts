@@ -588,6 +588,57 @@ export function tariffMatchesSubject(tariff: { subjectIds?: number[] } | null | 
   return ids.includes(id);
 }
 
+function roundMoney(n: number) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+/** Списание за занятие: цена урока абонемента, как в Alfa (6450 / 8 = 806.25). */
+export function lessonWriteoffOf(
+  ctt?: { rest?: number; lessons?: number; price?: number; tariffId?: number } | null,
+  catalog?: { id: number; price: number; lessonsCount: number; pricePerLesson?: number }[],
+) {
+  if (!ctt) return 0;
+  const cat = catalog?.find((c) => c.id === Number(ctt.tariffId || 0));
+  const per = Number(cat?.pricePerLesson) || 0;
+  if (per > 0) return roundMoney(per);
+  const price = Number(cat?.price || ctt.price) || 0;
+  const count = Number(cat?.lessonsCount) || 0;
+  if (price > 0 && count > 0) return roundMoney(price / count);
+  return 0;
+}
+
+/** Живой абонемент ученика под предмет занятия, иначе любой живой. */
+export function pickLessonCtt<T extends { archived?: boolean; subject?: string; tariffId?: number; rest?: number }>(
+  rows: T[] | null | undefined,
+  opts?: { subjectId?: number; subject?: string; catalog?: { id: number; subjectIds?: number[] }[] },
+): T | undefined {
+  const live = (rows || []).filter((t) => !t.archived);
+  if (!live.length) return undefined;
+  const subjectId = Number(opts?.subjectId) || 0;
+  const needle = String(opts?.subject || "")
+    .toLowerCase()
+    .replace(/[«»"']/g, "")
+    .slice(0, 14);
+  let best: T | undefined;
+  let score = -1;
+  for (const t of live) {
+    let s = 0;
+    const cat = opts?.catalog?.find((c) => c.id === Number(t.tariffId || 0));
+    if (subjectId && cat?.subjectIds?.includes(subjectId)) s += 3;
+    const sub = String(t.subject || "")
+      .toLowerCase()
+      .replace(/[«»"']/g, "");
+    if (needle && sub && (sub.includes(needle) || needle.includes(sub.slice(0, 10)))) s += 3;
+    if (Number(t.tariffId) > 0) s += 1;
+    if (Number(t.rest) > 0) s += 1;
+    if (s > score) {
+      score = s;
+      best = t;
+    }
+  }
+  return best;
+}
+
 export function todayIso() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Moscow" });
 }

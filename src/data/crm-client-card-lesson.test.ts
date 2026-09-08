@@ -110,6 +110,17 @@ describe("форма занятия карточки", () => {
     assert.match(strip, /removeCustomer/);
     assert.match(strip, /GRADE_OPTS/);
     assert.match(strip, /MISS_REASONS/);
+    assert.match(strip, /По любой причине \(100% списания\)/);
+    assert.match(strip, /По решению руководства \(0% списания\)/);
+    assert.match(strip, /data-op="lesson-date-cal"/);
+    assert.match(strip, /aria-label="Календарь"/);
+    assert.match(strip, /conduct/);
+    assert.match(strip, /conduct \? "провести"/);
+    assert.match(strip, /statusId: conduct/);
+    assert.match(strip, /setConduct\(true\)/);
+    assert.match(strip, /c\.amount \?\? ""/);
+    assert.match(strip, /RA_POP, "overflow-visible"/);
+    assert.match(strip, /baseAmount/);
     assert.match(strip, /Удалить ученика/);
     assert.match(strip, /whitespace-nowrap/);
     assert.match(strip, /openNotes/);
@@ -122,6 +133,13 @@ describe("форма занятия карточки", () => {
     assert.match(api, /packLessonPupils/);
     assert.match(api, /fanOutLessonWriteoffs/);
     assert.match(api, /details/);
+    assert.match(api, /lessonWriteoffOf/);
+    assert.match(api, /pickLessonCtt/);
+    assert.match(api, /status: nextStatus \|\| prevHit/);
+    assert.match(api, /init: 1/);
+    assert.match(api, /reasonId === 2/);
+    assert.match(api, /rest: Number\(t\.lessons\)/);
+    assert.match(api, /Number\.isFinite\(Number\(c\.amount\)\)/);
   });
 
   it("расписание импортирует reload — иначе вкладка не открывается", () => {

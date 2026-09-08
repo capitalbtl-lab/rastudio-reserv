@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GroupCalLesson, LessonRosterPerson } from "@/data/crm-slots-core";
 import { mergeLessonRoster, lessonRestLeft, maskHm, maskRuDate } from "@/data/crm-slots-core";
@@ -296,6 +297,7 @@ type LessonCustomer = {
   name: string;
   attend?: boolean;
   amount?: number;
+  baseAmount?: number;
   cttId?: number;
   reasonId?: number;
   reason?: string;
@@ -308,7 +310,100 @@ type LessonCustomer = {
 const FIELD = "mt-0.5 h-7 w-full rounded-lg bg-white px-2 text-[0.78rem] font-medium text-fg ring-1 ring-black/[0.07] outline-none";
 const LBL = "block text-[0.62rem] font-medium uppercase tracking-[0.05em] text-muted/80";
 const GRADE_OPTS = ["5", "4", "3", "2", "зачёт"];
-const MISS_REASONS = ["Болезнь", "По уважительной причине", "Без уважительной причины", "По любой причине"];
+const MISS_REASONS = [
+  { id: 1, label: "По любой причине (100% списания)", pct: 100 },
+  { id: 2, label: "По решению руководства (0% списания)", pct: 0 },
+] as const;
+const MONTHS_FULL = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+
+function DateCal({ value, onPick, children }: { value: string; onPick: (iso: string) => void; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const iso = toYmd(value);
+  const selected = parseYmd(iso || todayYmd());
+  const [viewY, setViewY] = useState(selected.getFullYear());
+  const [viewM, setViewM] = useState(selected.getMonth());
+  useEffect(() => {
+    if (!open) return;
+    setViewY(selected.getFullYear());
+    setViewM(selected.getMonth());
+    const close = (e: MouseEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open, iso]);
+  const first = new Date(viewY, viewM, 1);
+  const start = (first.getDay() + 6) % 7;
+  const days = new Date(viewY, viewM + 1, 0).getDate();
+  const cells: (number | null)[] = [...Array(start).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)];
+  while (cells.length % 7) cells.push(null);
+  const today = todayYmd();
+  const sel = iso;
+  function shiftMonth(delta: number) {
+    const d = new Date(viewY, viewM + delta, 1);
+    setViewY(d.getFullYear());
+    setViewM(d.getMonth());
+  }
+  return (
+    <div ref={box} className="relative mt-0.5" data-op="lesson-date-cal">
+      {children}
+      <button
+        type="button"
+        className="absolute right-1 top-1/2 z-10 -translate-y-1/2 rounded p-0.5 text-muted hover:bg-black/[0.05] hover:text-fg"
+        aria-label="Календарь"
+        title="Календарь"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Calendar className="size-3.5" />
+      </button>
+      {open ? (
+        <div className={cn("absolute left-0 top-full z-40 mt-1 w-[16.5rem] p-2", RA_POP)} onMouseDown={(e) => e.stopPropagation()}>
+          <div className="mb-1.5 flex items-center justify-between px-1">
+            <button type="button" className="grid size-6 place-items-center rounded-md text-muted hover:bg-black/[0.05] hover:text-fg" onClick={() => shiftMonth(-1)} aria-label="Предыдущий месяц">
+              ‹
+            </button>
+            <p className="text-[0.78rem] font-semibold capitalize text-fg">
+              {MONTHS_FULL[viewM]} {viewY}
+            </p>
+            <button type="button" className="grid size-6 place-items-center rounded-md text-muted hover:bg-black/[0.05] hover:text-fg" onClick={() => shiftMonth(1)} aria-label="Следующий месяц">
+              ›
+            </button>
+          </div>
+          <div className="grid grid-cols-7 gap-0.5 text-center text-[0.62rem] font-medium uppercase text-muted">
+            {WD.map((d) => (
+              <span key={d}>{d}</span>
+            ))}
+          </div>
+          <div className="mt-0.5 grid grid-cols-7 gap-0.5">
+            {cells.map((day, i) => {
+              if (!day) return <span key={`e${i}`} />;
+              const ymd = `${viewY}-${String(viewM + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+              const isSel = ymd === sel;
+              const isToday = ymd === today;
+              return (
+                <button
+                  key={ymd}
+                  type="button"
+                  className={cn(
+                    "grid h-7 place-items-center rounded-md text-[0.75rem] font-medium",
+                    isSel ? "bg-primary text-white" : isToday ? "bg-sky-100 text-sky-800" : "text-fg hover:bg-black/[0.05]",
+                  )}
+                  onClick={() => {
+                    onPick(ymd);
+                    setOpen(false);
+                  }}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function TeacherDrop({
   teachers,
@@ -354,12 +449,14 @@ function LessonEdit({
   branchId,
   groupId,
   seed,
+  conduct,
   onClose,
   onSaved,
 }: {
   branchId: number;
   groupId: number;
   seed: GroupCalLesson;
+  conduct?: boolean;
   onClose: () => void;
   onSaved: (patch: Partial<GroupCalLesson>) => void;
 }) {
@@ -431,6 +528,7 @@ function LessonEdit({
         ...c,
         attend: c.attend !== false,
         amount: Number(c.amount) || 0,
+        baseAmount: Number(c.amount) || 0,
       }));
       setForm({
         ...pack.lesson,
@@ -517,6 +615,7 @@ function LessonEdit({
         homework: form.homework,
         note: form.note,
         customers: form.customers,
+        statusId: conduct || form.status === 3 ? 3 : form.status || 1,
       } as never,
     });
     setSaving(false);
@@ -558,6 +657,7 @@ function LessonEdit({
       })),
       attend: form.customers.filter((c) => c.attend !== false).length,
       total: form.customers.length,
+      status: conduct || form.status === 3 ? 3 : form.status,
       lessonId: Number((res as { lessonId?: number }).lessonId || form.id || 0) || form.id,
     });
     onClose();
@@ -571,9 +671,9 @@ function LessonEdit({
       }}
       data-op="lesson-edit"
     >
-      <div className={cn("w-full max-w-[46rem] p-4", RA_POP)} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className={cn("w-full max-w-[46rem] p-4", RA_POP, "overflow-visible")} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()} data-op={conduct ? "lesson-conduct" : "lesson-edit-card"}>
         <div className="flex items-start justify-between gap-3">
-          <h3 className="font-display text-lg font-semibold text-fg">Групповое — {form.status === 3 ? "проведён" : form.status === 2 ? "отменён" : "занятие"}</h3>
+          <h3 className="font-display text-lg font-semibold text-fg">Групповое — {conduct ? "провести" : form.status === 3 ? "проведён" : form.status === 2 ? "отменён" : "занятие"}</h3>
           <button type="button" className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white" onClick={onClose}>
             Закрыть
           </button>
@@ -583,17 +683,19 @@ function LessonEdit({
           <div className="grid grid-cols-[7.4rem_4.15rem_3.35rem_3.7rem_minmax(7rem,1fr)] items-end gap-1.5" data-op="lesson-when">
             <label className={LBL}>
               Дата
-              <input
-                value={dateShown}
-                onChange={(e) => {
-                  const next = maskRuDate(e.target.value);
-                  set("date", next.length === 10 ? toYmd(next) : next);
-                }}
-                inputMode="numeric"
-                maxLength={10}
-                placeholder="дд.мм.гггг"
-                className={cn(FIELD, "px-1.5 text-center")}
-              />
+              <DateCal value={form.date} onPick={(iso) => set("date", iso)}>
+                <input
+                  value={dateShown}
+                  onChange={(e) => {
+                    const next = maskRuDate(e.target.value);
+                    set("date", next.length === 10 ? toYmd(next) : next);
+                  }}
+                  inputMode="numeric"
+                  maxLength={10}
+                  placeholder="дд.мм.гггг"
+                  className={cn(FIELD, "mt-0 px-1.5 pr-7 text-center")}
+                />
+              </DateCal>
             </label>
             <label className={LBL}>
               Время
@@ -657,7 +759,7 @@ function LessonEdit({
                             return {
                               ...f,
                               customerIds: [...f.customerIds, h.id],
-                              customers: [...f.customers, { ...h, attend: true, amount: 0 }],
+                              customers: [...f.customers, { ...h, attend: true, amount: 0, baseAmount: 0 }],
                             };
                           });
                           setQ("");
@@ -692,8 +794,8 @@ function LessonEdit({
                   <thead className="sticky top-0 bg-white text-[0.62rem] uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-2 py-1.5 font-medium">Состояние клиента</th>
-                      <th className="w-14 px-1 py-1.5 font-medium" title="Списание">Спис.</th>
-                      <th className="w-12 px-1 py-1.5 font-medium" title="Оценка / Причина">Оц.</th>
+                      <th className="w-16 px-1 py-1.5 font-medium" title="Списание">Списание</th>
+                      <th className="w-[9rem] px-1 py-1.5 font-medium" title="Оценка / Причина">Оц. / причина</th>
                       <th className="w-11 px-1 py-1.5 font-medium" title="Оценка за ДЗ">ДЗ</th>
                       <th className="w-12 px-1 py-1.5 font-medium" title="Примечание">прим.</th>
                       <th className="w-7 px-0.5 py-1.5" />
@@ -707,7 +809,22 @@ function LessonEdit({
                         <tr key={c.id} className={cn("border-t border-black/6", c.attend === false && "bg-amber-50")}>
                           <td className="px-2 py-1">
                             <label className="flex cursor-pointer items-center gap-2">
-                              <input type="checkbox" className="shrink-0" checked={c.attend !== false} onChange={() => patchCustomer(c.id, { attend: c.attend === false })} />
+                              <input
+                                type="checkbox"
+                                className="shrink-0"
+                                checked={c.attend !== false}
+                                onChange={() => {
+                                  if (c.attend === false) {
+                                    patchCustomer(c.id, { attend: true, reason: "", reasonId: 0, amount: c.baseAmount || c.amount || 0 });
+                                  } else {
+                                    patchCustomer(c.id, {
+                                      attend: false,
+                                      reason: MISS_REASONS[0].label,
+                                      reasonId: MISS_REASONS[0].id,
+                                    });
+                                  }
+                                }}
+                              />
                               <span className="min-w-0 whitespace-nowrap">
                                 <span className={cn("font-medium", zero || c.attend === false ? "text-rose-600" : "text-sky-800")}>{c.name}</span>
                                 {c.rest ? <span className="ml-1 text-[0.65rem] text-muted">({c.rest})</span> : null}
@@ -715,21 +832,36 @@ function LessonEdit({
                             </label>
                           </td>
                           <td className="px-1 py-1">
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={c.amount || ""}
-                              onChange={(e) => patchCustomer(c.id, { amount: Number(e.target.value) || 0 })}
-                              className="h-7 w-[3.4rem] rounded-md bg-white px-1 text-center tabular-nums ring-1 ring-black/10"
-                            />
+                            <span className="flex items-center gap-0.5">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={c.amount ?? ""}
+                                onChange={(e) => patchCustomer(c.id, { amount: Number(e.target.value) || 0, baseAmount: Number(e.target.value) || 0 })}
+                                className="h-7 w-[4.4rem] rounded-md bg-white px-1 text-center tabular-nums ring-1 ring-black/10"
+                              />
+                              <span className="text-[0.65rem] text-muted">р.</span>
+                            </span>
                           </td>
                           <td className="px-1 py-1">
                             {c.attend === false ? (
-                              <select value={c.reason || ""} onChange={(e) => patchCustomer(c.id, { reason: e.target.value })} className="h-7 w-[7.2rem] rounded-md bg-white px-0.5 text-[0.68rem] ring-1 ring-black/10">
+                              <select
+                                value={c.reasonId || MISS_REASONS.find((r) => r.label === c.reason)?.id || ""}
+                                onChange={(e) => {
+                                  const id = Number(e.target.value) || 0;
+                                  const hit = MISS_REASONS.find((r) => r.id === id);
+                                  patchCustomer(c.id, {
+                                    reasonId: id,
+                                    reason: hit?.label || "",
+                                    amount: hit?.pct === 0 ? 0 : c.baseAmount || c.amount || 0,
+                                  });
+                                }}
+                                className="h-7 w-[8.6rem] rounded-md bg-white px-0.5 text-[0.65rem] ring-1 ring-black/10"
+                              >
                                 <option value="">причина</option>
                                 {MISS_REASONS.map((r) => (
-                                  <option key={r} value={r}>
-                                    {r}
+                                  <option key={r.id} value={r.id}>
+                                    {r.label}
                                   </option>
                                 ))}
                               </select>
@@ -856,6 +988,7 @@ export function LessonStrip({
   const [tip, setTip] = useState<{ lesson: GroupCalLesson; top: number; left: number } | null>(null);
   const [pin, setPin] = useState<{ lesson: GroupCalLesson; top: number; left: number } | null>(null);
   const [edit, setEdit] = useState<GroupCalLesson | null>(null);
+  const [conduct, setConduct] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pinRef = useRef(pin);
@@ -1024,9 +1157,9 @@ export function LessonStrip({
                   setPin(null);
                   setError("");
                 }}
-                onOpen={branchId ? () => { setEdit(pop.lesson); setPin(null); setTip(null); } : undefined}
+                onOpen={branchId ? () => { setConduct(false); setEdit(pop.lesson); setPin(null); setTip(null); } : undefined}
                 onOpenPupil={onOpenPupil}
-                onConduct={() => void setStatus(3)}
+                onConduct={branchId ? () => { setConduct(true); setEdit(pop.lesson); setPin(null); setTip(null); } : undefined}
                 onCancel={() => void setStatus(2)}
                 onReturn={() => void setStatus(1)}
                 onEnter={keepTip}
@@ -1042,11 +1175,13 @@ export function LessonStrip({
             branchId={branchId}
             groupId={Number(edit.groupIds?.[0] || groupId || 0)}
             seed={edit}
-            onClose={() => setEdit(null)}
+            conduct={conduct}
+            onClose={() => { setEdit(null); setConduct(false); }}
             onSaved={(patch) => {
               const id = Number(patch.lessonId || edit.lessonId || 0);
               if (id) patchLesson(id, patch);
               setEdit(null);
+              setConduct(false);
               setPin(null);
             }}
           />

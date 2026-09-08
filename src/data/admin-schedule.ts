@@ -3757,20 +3757,35 @@ export const adminSchedule = createServerFn({ method: "POST" })
           .filter((n) => n > 0);
         const from = hm(String(hit?.from || slot?.timeFrom || data.time || ""));
         const to = hm(String(hit?.to || slot?.timeTo || data.timeTo || ""));
-        const { parseDossierCtt } = await import("./pupil-tariffs");
+        const { parseDossierCtt, pickLessonCtt, lessonWriteoffOf } = await import("./pupil-tariffs");
+        const catalogTariffs = loadTariffs().items;
+        const subjectName = String(hit?.subject || slot?.subject || "");
+        const subjectId = Number(hit?.subjectId || slot?.subjectId || data.subjectId || 0);
         function restHint(cid: number) {
           const d = people.find((x) => x.crmId === cid) || findDossier({ crmId: cid });
-          const live = parseDossierCtt(d?.extras).filter((t) => !t.archived);
-          if (!live.length) return "";
-          const t = live[0];
-          const till = String(t.eDate || "").replace(/^(\d{2})\.(\d{2})\.(\d{4})$/, "$1.$2");
-          const left = Number(t.lessons) || 0;
-          return till ? `${left} ост, ${till}` : `${left} ост`;
+          const live = parseDossierCtt(d?.extras);
+          const t = pickLessonCtt(live, { subjectId, subject: subjectName, catalog: catalogTariffs });
+          return t ? lessonRestLabel({ rest: Number(t.lessons) || 0, eDate: t.eDate }) : "";
         }
         function personName(cid: number, fallback?: string) {
           if (fallback) return fallback;
           const d = people.find((x) => x.crmId === cid) || findDossier({ crmId: cid });
           return String(d?.child?.fio || d?.parent?.fio || "").trim() || `клиент ${cid}`;
+        }
+        function chargeOf(cid: number, stored?: number, reasonId?: number) {
+          if (Number(stored) > 0) return Number(stored);
+          if (Number(reasonId) === 2) return 0;
+          const d = people.find((x) => x.crmId === cid) || findDossier({ crmId: cid });
+          const live = parseDossierCtt(d?.extras);
+          const t = pickLessonCtt(live, { subjectId, subject: subjectName, catalog: catalogTariffs });
+          return lessonWriteoffOf(t, catalogTariffs);
+        }
+        function cttOf(cid: number, stored?: number) {
+          if (Number(stored) > 0) return Number(stored);
+          const d = people.find((x) => x.crmId === cid) || findDossier({ crmId: cid });
+          const live = parseDossierCtt(d?.extras);
+          const t = pickLessonCtt(live, { subjectId, subject: subjectName, catalog: catalogTariffs });
+          return Number(t?.id) || 0;
         }
         const customers = (pupils.length ? pupils : customerIds.map((cid) => ({ customerId: cid, attend: true as boolean, amount: undefined as number | undefined })))
           .map((p) => {
@@ -3780,8 +3795,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
               id: cid,
               name: personName(cid, row.name),
               attend: row.attend !== false,
-              amount: Number(row.amount) || 0,
-              cttId: Number(row.cttId) || 0,
+              amount: chargeOf(cid, row.amount, Number(row.reasonId) || 0),
+              cttId: cttOf(cid, row.cttId),
               reasonId: Number(row.reasonId) || 0,
               reason: String(row.reason || ""),
               grade: String(row.grade || ""),
@@ -3859,27 +3874,30 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const customerIds = (pupils.length ? pupils.map((p) => p.customerId) : Array.isArray(raw?.customer_ids) ? raw!.customer_ids : data.customerIds || []).map(Number).filter((n) => n > 0);
       const groupIds = (Array.isArray(raw?.group_ids) ? raw!.group_ids : []).map(Number).filter((n) => n > 0);
       if (!groupIds.length && gid) groupIds.push(gid);
-      const { parseDossierCtt } = await import("./pupil-tariffs");
+      const { parseDossierCtt, pickLessonCtt, lessonWriteoffOf } = await import("./pupil-tariffs");
+      const catalogTariffs = loadTariffs().items;
+      const subjectName = String(raw?.subject_name || slot?.subject || "");
+      const subjectIdRaw = Number(raw?.subject_id || data.subjectId || slot?.subjectId || 0);
       const customers = (pupils.length ? pupils : customerIds.map((cid) => ({ customerId: cid, attend: true, amount: 0 }))).map((p) => {
         const cid = Number(p.customerId);
         const d = findDossier({ crmId: cid });
         const name = String(("name" in p && p.name) || d?.child?.fio || d?.parent?.fio || "").trim();
-        const live = parseDossierCtt(d?.extras).filter((t) => !t.archived);
-        const t0 = live[0];
-        const till = String(t0?.eDate || "").replace(/^(\d{2})\.(\d{2})\.(\d{4})$/, "$1.$2");
-        const left = Number(t0?.lessons) || 0;
+        const live = parseDossierCtt(d?.extras);
+        const t0 = pickLessonCtt(live, { subjectId: subjectIdRaw, subject: subjectName, catalog: catalogTariffs });
+        const stored = "amount" in p ? Number(p.amount) : 0;
+        const reasonId = Number("reasonId" in p ? p.reasonId : 0) || 0;
         return {
           id: cid,
           name: name || `клиент ${cid}`,
           attend: "attend" in p ? Boolean(p.attend) : true,
-          amount: Number(p.amount) || 0,
-          cttId: Number("cttId" in p ? p.cttId : 0) || 0,
-          reasonId: Number("reasonId" in p ? p.reasonId : 0) || 0,
+          amount: stored > 0 ? stored : reasonId === 2 ? 0 : lessonWriteoffOf(t0, catalogTariffs),
+          cttId: Number("cttId" in p ? p.cttId : 0) || Number(t0?.id) || 0,
+          reasonId,
           reason: String("reason" in p ? p.reason || "" : ""),
           grade: String("grade" in p ? p.grade || "" : ""),
           homeworkGrade: String("homeworkGrade" in p ? p.homeworkGrade || "" : ""),
           note: String("note" in p ? p.note || "" : ""),
-          rest: t0 ? (till ? `${left} ост, ${till}` : `${left} ост`) : "",
+          rest: t0 ? lessonRestLabel({ rest: Number(t0.lessons) || 0, eDate: t0.eDate }) : "",
         };
       });
       if (gid && raw) {
@@ -3944,7 +3962,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           customerId: Number(c.id) || 0,
           name: String(c.name || "").trim() || undefined,
           attend: c.attend !== false,
-          amount: Number(c.amount) || undefined,
+          amount: Number.isFinite(Number(c.amount)) ? Number(c.amount) : undefined,
           cttId: Number(c.cttId) || undefined,
           reasonId: Number(c.reasonId) || undefined,
           reason: String(c.reason || "").trim() || undefined,
@@ -3959,6 +3977,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const subjectId = Number(data.subjectId) || 0;
       const roomId = Number(data.roomId) || 0;
       const lessonId = rawId || nextLocalLessonId();
+      const nextStatus = Number(data.statusId || 0) || 0;
       const details = pupils.map((p) => ({
         customer_id: p.customerId,
         is_attend: p.attend ? 1 : 0,
@@ -3980,7 +3999,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
             from,
             to,
             duration,
-            status: prevHit?.status || 1,
+            status: nextStatus || prevHit?.status || 1,
             type: prevHit?.type || "Групповое",
             typeId: prevHit?.typeId || 2,
             roomId: roomId || undefined,
@@ -4020,6 +4039,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
             note: String(data.note || ""),
             homework: String(data.homework || ""),
             lesson_type_id: 2,
+            ...(nextStatus ? { status: nextStatus } : {}),
+            ...(nextStatus === 3 ? { init: 1 } : {}),
             ...(details.length ? { details } : {}),
           },
         });
@@ -4043,6 +4064,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
             note: String(data.note || ""),
             homework: String(data.homework || ""),
             lesson_type_id: 2,
+            ...(nextStatus ? { status: nextStatus } : {}),
+            ...(nextStatus === 3 ? { init: 1 } : {}),
             ...(details.length ? { details } : {}),
           },
         });
