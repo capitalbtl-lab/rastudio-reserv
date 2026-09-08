@@ -87,7 +87,7 @@ module.exports = {
       instances: 1,
       exec_mode: "fork",
       autorestart: false,
-      cron_restart: "*/6 * * * *",
+      cron_restart: "*/5 * * * *",
       watch: false,
       env: {
         TZ: "Europe/Moscow",

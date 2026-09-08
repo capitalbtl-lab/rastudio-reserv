@@ -531,7 +531,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   const now = Date.now();
   const firstFill = payPollFirstFill(poll.branches);
   if (!payPollAllowed(poll.hits, now) && !firstFill && opts?.via !== "button") {
-    const note = `касса poll: лимит ${payPollHitsInWindow(poll.hits, now).length}/10 за час`;
+    const note = `касса poll: лимит ${payPollHitsInWindow(poll.hits, now).length}/${PAY_POLL_MAX_PER_HOUR} за час`;
     poll.lastNote = note;
     store.poll = poll;
     save(store);
@@ -560,13 +560,13 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
       let json: unknown = await request(`/v2api/${branchId}/pay/index`, firstBody, t);
       pages += 1;
       let pack = crmUnwrapIndex(json);
-      if (!pack.items.length) {
+      if (!pack.items.length && (opts?.via === "button" || !stamp.lastDate)) {
         lastBody = { page: 0 };
         json = await request(`/v2api/${branchId}/pay/index`, lastBody, t);
         pages += 1;
         pack = crmUnwrapIndex(json);
       }
-      if (opts?.via === "button" || firstFill) {
+      if (opts?.via === "button") {
         try {
           const corrJson = await request(`/v2api/${branchId}/pay/index`, { page: 0, pay_type_id: 6 }, t);
           pages += 1;
@@ -601,7 +601,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
         .filter((x): x is PayRow => Boolean(x));
       pulledCount += pulled.length;
       const fresh = pulled.filter((x) => payAfterStamp(x, stamp));
-      mergePulledPays(pulled, hold);
+      mergePulledPays(opts?.via === "button" ? pulled : fresh, hold);
       newCount += fresh.length;
       if (fresh.length) poll.branches[String(branchId)] = nextPayStamp(fresh, stamp);
       else poll.branches[String(branchId)] = stamp;

@@ -11,7 +11,7 @@ export const PAY_KINDS: { id: PayKind; name: string }[] = [
 
 export const OPENING_NOTE = "остаток на диске";
 
-export const PAY_POLL_MAX_PER_HOUR = 10;
+export const PAY_POLL_MAX_PER_HOUR = 12;
 export const PAY_POLL_WINDOW_MS = 60 * 60 * 1000;
 export const CASH_PAGE_SIZES = [50, 100, 500] as const;
 export const PAY_INBOUND_PAGE = 50;
