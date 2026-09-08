@@ -89,7 +89,9 @@ describe("касса список", () => {
     assert.match(pay, /pay_type_id: 2/);
     assert.match(pay, /pay_type_id: 3/);
     assert.match(pay, /pay_type_id: 6/);
-    assert.match(pay, /stampPayBalances/);
+    assert.match(pay, /flushLocalPaysToAlfa/);
+    assert.match(pay, /localPaysPending/);
+    assert.match(pay, /isOpeningRow/);
     const eco = readFileSync(new URL("../../ecosystem.config.cjs", import.meta.url), "utf8");
     assert.match(eco, /rastudio-pay-poll/);
     assert.match(eco, /\*\/15 \* \* \* \*/);

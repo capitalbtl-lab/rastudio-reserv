@@ -25,6 +25,7 @@ import {
   liveCttOf,
   cttRestSum,
   OPENING_NOTE,
+  isOpeningRow,
   PAY_POLL_MAX_PER_HOUR,
   PAY_INBOUND_PAGE,
   PAY_INBOUND_RUN,
@@ -284,6 +285,56 @@ export function appendPay(row: Omit<PayRow, "id" | "at"> & { id?: number; at?: s
   store.items.push(next);
   save(store);
   return next;
+}
+
+/** Свои платежи (id < 0), которые ещё не ушли в Alfa. Не «остаток на диске». */
+export function localPaysPending() {
+  return load().items.filter((x) => isLocalId(x.id) && !x.deleted && !isOpeningRow(x) && Number(x.customerId) > 0);
+}
+
+/** Кнопка «Обновить кассу» и авто: сначала свои платежи в Alfa одним create, потом опрос. */
+export async function flushLocalPaysToAlfa() {
+  const { enqueueExport, tickExportQueue, pendingExportIds } = await import("./crm-export-queue");
+  const { packAlfaPayCreate, locationIdForBranch } = await import("./crm-pay-alfa");
+  const { alfaLinkedNow, wantAlfaPush } = await import("./crm-alfa-link");
+  if (!alfaLinkedNow()) return { ok: false as const, local: 0, queued: 0, note: "без Alfa" };
+  const hold = pendingExportIds(["pay.create"]);
+  const local = localPaysPending();
+  let queued = 0;
+  for (const row of local) {
+    if (hold.has(Number(row.id))) continue;
+    if (!wantAlfaPush("pay.create", { customer_id: row.customerId })) continue;
+    enqueueExport({
+      op: "pay.create",
+      branchId: Number(row.branchId) || 1,
+      entityId: Number(row.customerId),
+      body: packAlfaPayCreate({
+        customerId: Number(row.customerId),
+        branchId: Number(row.branchId) || 1,
+        documentDate: String(row.documentDate || ""),
+        income: Number(row.income) || 0,
+        expenditure: Number(row.expenditure) || 0,
+        note: String(row.note || ""),
+        localId: Number(row.id),
+        kind: row.kind,
+        payAccountId: Number(row.payAccountId) || 1,
+        payItemId: Number(row.payItemId) || 0,
+        locationId: Number(row.locationId) || locationIdForBranch(Number(row.branchId) || 1),
+        managerId: Number(row.managerId) || 0,
+        cttId: Number(row.cttId) || 0,
+        groupId: Number(row.groupId) || 0,
+        payMethod: String(row.payMethod || ""),
+      }),
+    });
+    queued += 1;
+  }
+  if (!queued && (hold.size || local.length)) {
+    await tickExportQueue(8, "pay.create", { lean: true });
+  }
+  const left = localPaysPending().length;
+  const note = queued || local.length ? `касса исходящая: своих ${local.length}, в очередь ${queued}, ждут ${left}` : "касса исходящая: своих нет";
+  logAdmin(note, "sync");
+  return { ok: true as const, local: local.length, queued, left, note };
 }
 
 export function ensureOpening(customerId: number, branchId: number, fallback?: number | string) {
@@ -553,8 +604,9 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   const poll = store.poll || emptyPoll();
   const now = Date.now();
   const { wantAlfaPullChannel, wantAlfaPipe, alfaPayDays, alfaLinkedNow } = await import("./crm-alfa-link");
+  const flush = await flushLocalPaysToAlfa();
   if (!alfaLinkedNow() || (opts?.via !== "button" && !wantAlfaPullChannel("pay"))) {
-    const note = "касса poll: канал кассы выключен";
+    const note = flush.note || "касса poll: канал кассы выключен";
     poll.lastNote = note;
     store.poll = poll;
     save(store);
@@ -668,7 +720,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
   await stampPayBalances(touched).catch(() => null);
   poll.fill = fill;
   const types = [...typeCounts.entries()].map(([k, n]) => `${k}×${n}`).join(",") || "нет";
-  const note = `${new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow" })} Касса inbound: филиалы ${branches.join(",")}, окно ${windowDates.date_from}…${windowDates.date_to}, пришло ${pulledCount}, новых/изменённых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"}), ${payFillNote(fill)}, типы ${types}${errs.length ? `. ${errs.join("; ")}` : ""}`;
+  const note = `${flush.note ? `${flush.note}. ` : ""}${new Date().toLocaleString("sv-SE", { timeZone: "Europe/Moscow" })} Касса inbound: филиалы ${branches.join(",")}, окно ${windowDates.date_from}…${windowDates.date_to}, пришло ${pulledCount}, новых/изменённых ${newCount}, страниц ${pages}${hit429 ? ", 429" : ", без 429"} (${opts?.via || "auto"}), ${payFillNote(fill)}, типы ${types}${errs.length ? `. ${errs.join("; ")}` : ""}`;
   poll.lastNote = note;
   const freshStore = load();
   freshStore.poll = poll;
