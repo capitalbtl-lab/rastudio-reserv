@@ -28,6 +28,8 @@ describe("форма занятия карточки", () => {
     assert.doesNotMatch(src, /data-op="crm-push"/);
     assert.match(src, /data-op="lessons-menu"/);
     assert.match(src, /data-op="cash-menu"/);
+    assert.match(src, /headMenu === "lessons"/);
+    assert.match(src, /headMenu === "cash"/);
     assert.match(src, /grid-cols-6/);
     assert.match(src, /Дата рождения/);
     assert.doesNotMatch(src, /Нет действующего абонемента/);

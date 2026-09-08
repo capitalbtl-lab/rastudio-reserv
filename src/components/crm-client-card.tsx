@@ -839,7 +839,7 @@ export function CrmClientCard({
 
   const headBtns = (
     <div className={cn("flex shrink-0 items-center gap-1", compact && "flex-wrap justify-end")}>
-            <div className="relative" onMouseEnter={cancelHeadLeave} onMouseLeave={armHeadLeave}>
+            <div className="relative">
               <button
                 type="button"
                 data-op="lessons-menu"
@@ -855,18 +855,8 @@ export function CrmClientCard({
               >
                 Занятия ▾
               </button>
-              {headMenu === "lessons" ? (
-                <div className={cn("absolute right-0 top-8 z-[90] w-[min(36rem,calc(100vw-2rem))] p-3", RA_POP)} data-op="card-schedule">
-                  <LessonStrip
-                    lessons={tiles}
-                    title="Расписание"
-                    branchId={card.branchId}
-                    groupId={(card.groups || []).find((g) => g.active !== false)?.id || (card.groups || [])[0]?.id}
-                  />
-                </div>
-              ) : null}
             </div>
-            <div className="relative" onMouseEnter={cancelHeadLeave} onMouseLeave={armHeadLeave}>
+            <div className="relative">
               <button
                 type="button"
                 data-op="cash-menu"
@@ -882,88 +872,6 @@ export function CrmClientCard({
               >
                 Касса ▾
               </button>
-              {headMenu === "cash" ? (
-                <div className={cn("absolute right-0 top-8 z-[90] w-[min(28rem,calc(100vw-2rem))] p-2.5", RA_POP)} data-op="cash-journal">
-                  <div className="mb-2 flex flex-wrap items-center gap-1">
-                    <p className="font-display text-[1.05rem]">Касса</p>
-                    <span className="text-[0.72rem] text-muted">{money(card.balance)}</span>
-                    {cashView.total > 0 ? (
-                      <span className="ml-auto flex items-center gap-1 text-[0.7rem] text-muted">
-                        <button type="button" disabled={cashView.page <= 0} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => Math.max(0, p - 1))}>←</button>
-                        {cashView.page + 1}/{cashView.pages}
-                        <button type="button" disabled={cashView.page >= cashView.pages - 1} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => p + 1)}>→</button>
-                      </span>
-                    ) : null}
-                  </div>
-                  {journalPays.length ? (
-                    <ul className="space-y-1.5">
-                      {cashView.items.map((p) => {
-                        const sum = payRowSum(p);
-                        return (
-                          <li key={p.id} className="rounded-xl bg-white px-2.5 py-1.5 ring-1 ring-black/6">
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="min-w-0 truncate text-[0.75rem] text-muted">
-                                {p.documentDate || "—"} · {payKindName(p.kind)}
-                                {p.note ? ` · ${p.note}` : ""}
-                              </span>
-                              <span className={cn("shrink-0 text-[0.82rem] font-semibold tabular-nums", sum < 0 ? "text-rose-600" : "")}>
-                                {sum > 0 ? "+" : ""}
-                                {money(sum)}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              <button
-                                type="button"
-                                className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
-                                data-op="pay-edit"
-                                disabled={!onAction || Boolean(busy)}
-                                onClick={() => {
-                                  setPayEditId(p.id);
-                                  setPayKind((p.kind as "income" | "product" | "refund" | "correct") || "income");
-                                  setPaySum(String(p.kind === "refund" ? p.expenditure || "" : p.income || ""));
-                                  setPayDate(ruToIso(p.documentDate || ""));
-                                  setPayAccountId(String(p.payAccountId || 1));
-                                  setPayItemId(String(p.payItemId || defaultPayItemId(card.branchId)));
-                                  setPayLocationId(String(p.locationId || locationIdForBranch(card.branchId) || ""));
-                                  setPayManagerId(p.managerId ? String(p.managerId) : "");
-                                  setPayCttId(p.cttId != null && Number(p.cttId) !== 0 ? String(p.cttId) : "-1");
-                                  setPayPayer(p.payerName || card.parent || "");
-                                  setPayGroupId(p.groupId ? String(p.groupId) : "");
-                                  setPayNote(p.note || "");
-                                  setPayMethod(p.payMethod || "");
-                                  setHeadMenu("pay");
-                                }}
-                              >
-                                Изменить
-                              </button>
-                              <button
-                                type="button"
-                                className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
-                                data-op="pay-push"
-                                disabled={!onAction || Boolean(busy)}
-                                onClick={() => void run("customerPayPush", { payId: p.id, id: p.id })}
-                              >
-                                Экспорт в CRM
-                              </button>
-                              <button
-                                type="button"
-                                data-op="pay-delete"
-                                disabled={!onAction || Boolean(busy)}
-                                className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-rose-600 ring-1 ring-black/10 hover:bg-rose-50 disabled:opacity-40"
-                                onClick={() => setDropPay({ id: p.id, label: `${p.documentDate || ""} ${money(sum)}` })}
-                              >
-                                Удалить
-                              </button>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : (
-                    <p className="text-[0.78rem] text-muted">Нет платежей на диске.</p>
-                  )}
-                </div>
-              ) : null}
             </div>
             <div className="relative">
               <button
@@ -1212,10 +1120,98 @@ export function CrmClientCard({
       )}
 
       <div className={cn("pretty-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-5 md:px-5", compact ? "mt-3" : "mt-2")}>
-        {compact ? (
-          <>
-            {contactsRow}
-          </>
+        {compact ? contactsRow : null}
+        {headMenu === "lessons" ? (
+          <div className="mt-3 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="card-schedule">
+            <LessonStrip
+              lessons={tiles}
+              title="Расписание"
+              branchId={card.branchId}
+              groupId={(card.groups || []).find((g) => g.active !== false)?.id || (card.groups || [])[0]?.id}
+            />
+          </div>
+        ) : null}
+        {headMenu === "cash" ? (
+          <div className="mt-3 rounded-2xl bg-white/80 px-3 py-3 ring-1 ring-black/6" data-op="cash-journal">
+            <div className="mb-2 flex flex-wrap items-center gap-1">
+              <p className="font-display text-[1.05rem]">Касса</p>
+              <span className="text-[0.72rem] text-muted">{money(card.balance)}</span>
+              {cashView.total > 0 ? (
+                <span className="ml-auto flex items-center gap-1 text-[0.7rem] text-muted">
+                  <button type="button" disabled={cashView.page <= 0} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => Math.max(0, p - 1))}>←</button>
+                  {cashView.page + 1}/{cashView.pages}
+                  <button type="button" disabled={cashView.page >= cashView.pages - 1} className="rounded-full px-2 py-0.5 font-semibold ring-1 ring-black/8 disabled:opacity-40" onClick={() => setCashPage((p) => p + 1)}>→</button>
+                </span>
+              ) : null}
+            </div>
+            {journalPays.length ? (
+              <ul className="space-y-1.5">
+                {cashView.items.map((p) => {
+                  const sum = payRowSum(p);
+                  return (
+                    <li key={p.id} className="rounded-xl bg-white px-2.5 py-1.5 ring-1 ring-black/6">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="min-w-0 truncate text-[0.75rem] text-muted">
+                          {p.documentDate || "—"} · {payKindName(p.kind)}
+                          {p.note ? ` · ${p.note}` : ""}
+                        </span>
+                        <span className={cn("shrink-0 text-[0.82rem] font-semibold tabular-nums", sum < 0 ? "text-rose-600" : "")}>
+                          {sum > 0 ? "+" : ""}
+                          {money(sum)}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
+                          data-op="pay-edit"
+                          disabled={!onAction || Boolean(busy)}
+                          onClick={() => {
+                            setPayEditId(p.id);
+                            setPayKind((p.kind as "income" | "product" | "refund" | "correct") || "income");
+                            setPaySum(String(p.kind === "refund" ? p.expenditure || "" : p.income || ""));
+                            setPayDate(ruToIso(p.documentDate || ""));
+                            setPayAccountId(String(p.payAccountId || 1));
+                            setPayItemId(String(p.payItemId || defaultPayItemId(card.branchId)));
+                            setPayLocationId(String(p.locationId || locationIdForBranch(card.branchId) || ""));
+                            setPayManagerId(p.managerId ? String(p.managerId) : "");
+                            setPayCttId(p.cttId != null && Number(p.cttId) !== 0 ? String(p.cttId) : "-1");
+                            setPayPayer(p.payerName || card.parent || "");
+                            setPayGroupId(p.groupId ? String(p.groupId) : "");
+                            setPayNote(p.note || "");
+                            setPayMethod(p.payMethod || "");
+                            setHeadMenu("pay");
+                          }}
+                        >
+                          Изменить
+                        </button>
+                        <button
+                          type="button"
+                          className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-primary ring-1 ring-black/10 hover:bg-black/[0.04] disabled:opacity-40"
+                          data-op="pay-push"
+                          disabled={!onAction || Boolean(busy)}
+                          onClick={() => void run("customerPayPush", { payId: p.id, id: p.id })}
+                        >
+                          Экспорт в CRM
+                        </button>
+                        <button
+                          type="button"
+                          data-op="pay-delete"
+                          disabled={!onAction || Boolean(busy)}
+                          className="h-6 rounded-md bg-white px-1.5 text-[0.62rem] font-semibold text-rose-600 ring-1 ring-black/10 hover:bg-rose-50 disabled:opacity-40"
+                          onClick={() => setDropPay({ id: p.id, label: `${p.documentDate || ""} ${money(sum)}` })}
+                        >
+                          Удалить
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-[0.78rem] text-muted">Нет платежей на диске.</p>
+            )}
+          </div>
         ) : null}
 
         <div className={cn("mt-3 grid gap-3 items-stretch", !compact && "sm:grid-cols-2")}>
