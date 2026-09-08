@@ -614,7 +614,7 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
     }
   }
   let fill = payFillOf(poll.fill) || payFillStart();
-  if (!hit429 && !fill.done) {
+  if (opts?.via === "button" && !hit429 && !fill.done) {
     let ran = 0;
     while (ran < PAY_INBOUND_RUN && !fill.done) {
       try {
