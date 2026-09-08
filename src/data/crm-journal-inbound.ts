@@ -235,7 +235,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const { token, request } = await import("./alfacrm");
     const { listAdminSlots } = await import("./alfacrm-schedule");
     const t = await token();
-    const dateFrom = wantFull ? ruShift(-2200) : ruShift(LESSON_RECENT_DAYS);
+    const dateFrom = ruShift(-2200);
     const dateTo = ruShift(90);
     const slots = listAdminSlots();
     const branches = wantFull ? uniqueBranches(branch) : [Number(branch) || 1];
@@ -246,27 +246,30 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     let ran = 0;
     const maxRun = wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
     const maxPages = wantFull ? 8 : 2;
-    outer: while (ran < maxRun && !cur.done) {
+    const from = wantFull ? dateFrom : ruShift(LESSON_RECENT_DAYS);
+    while (ran < maxRun && !cur.done) {
       const bid = cur.bid;
       const status = LESSON_STATUSES[cur.statusIdx] || 1;
       if (!branches.includes(bid)) {
         cur = lessonFillAdvance(cur, true, branches);
         continue;
       }
+      let progressed = false;
       for (let page = cur.page; page < maxPages; page += 1) {
         const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
           `/v2api/${bid}/lesson/index`,
-          { page, pageSize: 100, status, customer_id: id, date_from: dateFrom, date_to: dateTo, removed: 0 },
+          { page, pageSize: 100, status, customer_id: id, date_from: from, date_to: dateTo, removed: 0 },
           t,
         ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
         const chunk = les.items || [];
         if (chunk.length) packs.push(les);
         ran += 1;
+        progressed = true;
         const lastShort = chunk.length < 100;
         cur = lastShort ? lessonFillAdvance({ ...cur, page }, true, branches) : { bid, statusIdx: cur.statusIdx, page: page + 1 };
         if (ran >= maxRun || cur.done || lastShort) break;
       }
-      if (cur.done) break outer;
+      if (!progressed && !cur.done) cur = lessonFillAdvance(cur, true, branches);
     }
     const pulled: GroupCalLesson[] = [];
     for (const les of packs) {
