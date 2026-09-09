@@ -65,7 +65,13 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Порция за одно нажатие/);
     assert.match(ui, /сверено/);
     assert.match(ui, /пропусков не обнаружено|дубликатов нет/);
-    assert.match(ui, /CRM_SET_TABS/);
+    assert.match(ui, /HIST_TABS/);
+    assert.match(ui, /Календарь ученика/);
+    assert.match(ui, /Деньги на карточке/);
+    assert.match(ui, /На странице/);
+    assert.match(ui, /toggleOpen/);
+    assert.doesNotMatch(ui, /max-h-\[36rem\]/);
+    assert.doesNotMatch(ui, /if \(open && aid === open\) return -1/);
     assert.match(ui, /История из Alfa/);
     assert.match(ui, /crm-settings-tab/);
     assert.match(ui, /Шаг 2 · ДЗ и комментарии/);

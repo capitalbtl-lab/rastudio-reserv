@@ -46,6 +46,12 @@ const CRM_SET_TABS = [
   { id: "branches", label: "Филиалы" },
 ] as const;
 type CrmSetTab = (typeof CRM_SET_TABS)[number]["id"];
+type HistTab = "groups" | "students" | "money";
+const HIST_TABS: { id: HistTab; label: string }[] = [
+  { id: "groups", label: "Занятия в группах" },
+  { id: "students", label: "Календарь ученика" },
+  { id: "money", label: "Деньги на карточке" },
+];
 
 type MissPack = {
   total: number;
@@ -175,38 +181,58 @@ function GroupFillList({
   const [open, setOpen] = useState("");
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"all" | "no" | "part" | "ok">("all");
-  const listRef = useRef<HTMLUListElement>(null);
+  const [pageSize, setPageSize] = useState(20);
+  const [page, setPage] = useState(0);
   const q = query.trim().toLowerCase();
   const scoped = rows.filter((r) => !school || r.school === school);
   const raw = scoped.filter((r) => {
-    const id = `${r.branchId}-${r.groupId}`;
     const chunks = packGrain(r.parts, clampGrain(r.age, grain));
     const doneN = chunks.filter((c) => c.done).length;
     const total = chunks.length;
     const full = Boolean(r.complete) && total > 0 && doneN >= total && !chunks.some((c) => c.weak);
     const nameOk = !q || r.name.toLowerCase().includes(q) || String(r.school || "").toLowerCase().includes(q);
     if (!nameOk) return false;
-    if (open === id) return true;
     if (tab === "ok") return full;
     if (tab === "no") return !doneN;
     if (tab === "part") return Boolean(doneN) && !full;
     return true;
   });
-  const list = [...raw].sort((a, b) => {
-    const aid = `${a.branchId}-${a.groupId}`;
-    const bid = `${b.branchId}-${b.groupId}`;
-    if (open && aid === open) return -1;
-    if (open && bid === open) return 1;
-    return 0;
-  });
   const nAll = scoped.length;
   const nOk = scoped.filter((r) => r.complete && (r.total || 0) > 0).length;
   const nNo = scoped.filter((r) => !r.done).length;
   const nPart = Math.max(0, nAll - nOk - nNo);
+  const pages = Math.max(1, Math.ceil(raw.length / pageSize) || 1);
+  const safePage = Math.min(page, pages - 1);
+  const list = raw.slice(safePage * pageSize, safePage * pageSize + pageSize);
+  const fromN = raw.length ? safePage * pageSize + 1 : 0;
+  const toN = Math.min(raw.length, (safePage + 1) * pageSize);
+  useEffect(() => {
+    setPage(0);
+  }, [q, tab, school, pageSize]);
+  useEffect(() => {
+    try {
+      const n = Number(localStorage.getItem("crm-journal-page") || 20);
+      if (n === 10 || n === 20 || n === 30 || n === 100) setPageSize(n);
+    } catch {
+      /* */
+    }
+  }, []);
   useEffect(() => {
     if (!loading?.groupId) return;
     setOpen(`${loading.branchId}-${loading.groupId}`);
   }, [loading?.groupId, loading?.branchId]);
+  function pickPageSize(n: number) {
+    setPageSize(n);
+    setPage(0);
+    try {
+      localStorage.setItem("crm-journal-page", String(n));
+    } catch {
+      /* */
+    }
+  }
+  function toggleOpen(id: string) {
+    setOpen((cur) => (cur === id ? "" : id));
+  }
   if (!scoped.length) return <p className="mt-3 text-sm text-muted">Нет групп в этом фильтре.</p>;
   return (
     <div className="mt-3">
@@ -216,7 +242,7 @@ function GroupFillList({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-      <div className="mt-2 flex flex-wrap gap-1">
+      <div className="mt-2 flex flex-wrap items-center gap-1">
         {(
           [
             ["all", `все ${nAll}`],
@@ -235,8 +261,44 @@ function GroupFillList({
           </button>
         ))}
       </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-[0.78rem]">
+        <span className="text-muted">На странице</span>
+        {([10, 20, 30, 100] as const).map((n) => (
+          <button
+            key={n}
+            type="button"
+            className={cn("h-8 rounded-full px-3 font-semibold", pageSize === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
+            onClick={() => pickPageSize(n)}
+          >
+            {n}
+          </button>
+        ))}
+        <span className="text-muted">
+          {raw.length ? `${fromN}–${toN} из ${raw.length}` : "пусто"}
+        </span>
+        {pages > 1 ? (
+          <span className="ml-auto flex flex-wrap items-center gap-1">
+            <button type="button" className="h-8 rounded-full bg-white px-3 font-semibold ring-1 ring-black/10 disabled:opacity-40" disabled={safePage <= 0} onClick={() => setPage(safePage - 1)}>
+              Назад
+            </button>
+            {Array.from({ length: pages }, (_, i) => i).map((i) => (
+              <button
+                key={i}
+                type="button"
+                className={cn("h-8 min-w-8 rounded-full px-2 font-semibold", i === safePage ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
+                onClick={() => setPage(i)}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button type="button" className="h-8 rounded-full bg-white px-3 font-semibold ring-1 ring-black/10 disabled:opacity-40" disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)}>
+              Дальше
+            </button>
+          </span>
+        ) : null}
+      </div>
       {!list.length ? <p className="mt-3 text-sm text-muted">Нет групп в этой вкладке.</p> : null}
-      <ul ref={listRef} className="mt-2 max-h-[36rem] space-y-2 overflow-auto">
+      <ul className="mt-2 space-y-2">
         {list.map((row) => {
           const id = `${row.branchId}-${row.groupId}`;
           const useGrain = clampGrain(row.age, grain);
@@ -253,7 +315,7 @@ function GroupFillList({
           const loadLabel = active ? loading?.label || chunks.find((c) => c.key === loading?.periodKey)?.label || wiz.part?.label || "" : "";
           return (
             <li key={id} data-gid={id} className={cn("rounded-2xl bg-white p-3 ring-1", full ? "ring-emerald-300" : active ? "ring-black" : "ring-black/8")}>
-              <button type="button" className="w-full text-left" onClick={() => setOpen(shown ? "" : id)}>
+              <button type="button" className="w-full text-left" onClick={() => toggleOpen(id)}>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="font-medium">{row.name}</span>
                   <span className="flex flex-wrap items-center gap-1">
@@ -588,6 +650,7 @@ export function AdminCrmSettings() {
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
   const [crmTab, setCrmTab] = useState<CrmSetTab>("history");
+  const [histTab, setHistTab] = useState<HistTab>("groups");
   const [openMiss, setOpenMiss] = useState<"g" | "j1" | "j2" | "c1" | "c2" | "">("");
   const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string } | null>(null);
   const stopSchool = useRef(false);
@@ -598,9 +661,11 @@ export function AdminCrmSettings() {
       const s = localStorage.getItem("crm-journal-school") || "";
       const g = localStorage.getItem("crm-journal-grain") || "";
       const t = localStorage.getItem("crm-settings-tab") || "";
+      const h = localStorage.getItem("crm-history-tab") || "";
       if (s) setJournalSchool(s);
       if (g === "quarter" || g === "half" || g === "year") setJournalGrain(g);
       if (CRM_SET_TABS.some((x) => x.id === t)) setCrmTab(t as CrmSetTab);
+      if (h === "groups" || h === "students" || h === "money") setHistTab(h);
     } catch {
       /* */
     }
@@ -610,6 +675,15 @@ export function AdminCrmSettings() {
     setCrmTab(v);
     try {
       localStorage.setItem("crm-settings-tab", v);
+    } catch {
+      /* */
+    }
+  }
+
+  function pickHistTab(v: HistTab) {
+    setHistTab(v);
+    try {
+      localStorage.setItem("crm-history-tab", v);
     } catch {
       /* */
     }
@@ -1273,9 +1347,22 @@ export function AdminCrmSettings() {
           return (
             <div className={cn("space-y-3", offline && "opacity-50")}>
               {journal?.note ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
+              <div className="flex flex-wrap gap-1">
+                {HIST_TABS.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", histTab === t.id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
+                    onClick={() => pickHistTab(t.id)}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
 
+              {histTab === "groups" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <p className="font-display text-[1.15rem]">1. Занятия в группах</p>
+                <p className="font-display text-[1.15rem]">Занятия в группах</p>
                 <p className="mt-1 text-sm text-muted">Сначала сроки по расписанию: молодая группа — пара кварталов, старая — несколько лет. Потом грузите только эти порции.</p>
                 <ProgressBar done={schoolDone} total={schoolRows.length} />
                 <p className="mt-1 text-[0.72rem] text-muted">
@@ -1428,12 +1515,14 @@ export function AdminCrmSettings() {
                   }
                 />
                 <p className="mt-2 text-[0.72rem] text-muted">
-                  Мастер: шаг 1 — явки, шаг 2 — ДЗ и комментарии. Кнопка ДЗ пропадает, когда по периоду грузить нечего. Июл–дек без кнопки = проведённых без темы нет.
+                  Название группы раскрывает карточку на месте, без прыжка вверх. Другая группа — эта закрывается. Список без внутреннего скролла.
                 </p>
               </section>
+              ) : null}
 
+              {histTab === "students" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <p className="font-display text-[1.15rem]">2. Календарь ученика</p>
+                <p className="font-display text-[1.15rem]">Календарь ученика</p>
                 <p className="mt-1 text-sm text-muted">Цветные клетки на карточке. Готово — только полный личный журнал или все группы ученика сверены. Одна старая явка больше не закрывает карточку.</p>
                 <p className="mt-2 text-sm font-semibold">Сейчас ходят</p>
                 <ProgressBar done={p?.live?.journalDone || 0} total={p?.live?.total || 0} />
@@ -1456,9 +1545,11 @@ export function AdminCrmSettings() {
                 {openMiss === "j1" ? <MissList pack={p?.live?.missJournal} empty="У всех текущих календарь уже есть." /> : null}
                 {openMiss === "j2" ? <MissList pack={p?.archive?.missJournal} empty="У архивных календарь уже есть." /> : null}
               </section>
+              ) : null}
 
+              {histTab === "money" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <p className="font-display text-[1.15rem]">3. Деньги на карточке</p>
+                <p className="font-display text-[1.15rem]">Деньги на карточке</p>
                 <p className="mt-1 text-sm text-muted">Платежи и списания. Без этого остаток не совпадёт с Alfa.</p>
                 <p className="mt-2 text-sm font-semibold">Сейчас ходят</p>
                 <ProgressBar done={p?.live?.cardDone || 0} total={p?.live?.total || 0} />
@@ -1481,6 +1572,7 @@ export function AdminCrmSettings() {
                 {openMiss === "c1" ? <MissList pack={p?.live?.missCard} empty="У текущих деньги уже есть." /> : null}
                 {openMiss === "c2" ? <MissList pack={p?.archive?.missCard} empty="У архивных деньги уже есть." /> : null}
               </section>
+              ) : null}
             </div>
           );
         })()}
