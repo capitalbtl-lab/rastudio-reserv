@@ -402,11 +402,11 @@ function GroupFillList({
                 </p>
               </button>
               <p className="mt-2 h-5 truncate text-[0.78rem] font-semibold">{active ? `загрузка · ${loadLabel}` : wiz.step}</p>
-              <div className="mt-1 flex h-8 gap-2">
+              <div className="mt-1 flex h-8 items-center gap-2">
                 <button
                   type="button"
                   disabled={busy && !active}
-                  className={cn(BTN_LOAD_SM, "min-w-0 flex-1", active && "ra-progress-run")}
+                  className={cn(BTN_LOAD_SM, "w-fit shrink-0 px-4", active && "ra-progress-run")}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (wiz.kind === "load" && wiz.part) onLoad(row, wiz.part, Boolean(wiz.part.done || wiz.part.weak));
@@ -462,12 +462,12 @@ function GroupFillList({
                           {c.weak ? "пакет оборвался" : c.err && !c.done ? c.err : c.lessons ? `${c.lessons} зан.` : loaded ? "занятий за квартал нет" : "ещё не загружали"}
                           {c.at ? ` · ${ruAt(c.at)}` : ""}
                         </p>
-                        <div className="flex flex-col gap-1 pt-1">
+                        <div className="flex flex-col items-start gap-1 pt-1">
                           <button
                             type="button"
                             disabled={busy && !spinJ}
                             className={cn(
-                              "h-8 truncate rounded-full px-2 text-[0.72rem] font-semibold disabled:opacity-50",
+                              "h-8 w-fit rounded-full px-4 text-[0.78rem] font-semibold disabled:opacity-50",
                               spinJ ? "ra-progress-run text-white" : !loaded || c.weak ? "bg-primary text-primary-foreground hover:bg-primary-hover" : "bg-white text-fg ring-1 ring-black/10 hover:bg-primary/5",
                             )}
                             onClick={(e) => {
@@ -481,7 +481,7 @@ function GroupFillList({
                             type="button"
                             disabled={!loaded || detailsOk || noHw || (busy && !spinD)}
                             className={cn(
-                              "h-8 truncate rounded-full px-2 text-[0.72rem] font-semibold disabled:opacity-40",
+                              "h-8 w-fit rounded-full px-4 text-[0.78rem] font-semibold disabled:opacity-40",
                               spinD
                                 ? "ra-progress-run text-white"
                                 : detailsOk || noHw
