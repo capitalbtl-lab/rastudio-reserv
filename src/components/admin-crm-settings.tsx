@@ -110,6 +110,8 @@ type PeopleRow = {
   name: string;
   groups: string[];
   lessons: number;
+  alfa?: number;
+  short?: boolean;
   journal?: boolean;
   pays?: boolean;
   rechecked?: boolean;
@@ -627,6 +629,7 @@ function byPeopleName(a: PeopleRow, b: PeopleRow) {
 }
 
 function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
+  if (row.short) return false;
   if (kind === "balance") return Boolean(row.journal && row.pays);
   return Boolean(row.journal);
 }
@@ -742,21 +745,26 @@ function PeopleFillList({
     const id = peopleId(row);
     const full = peopleFinished(row, kind);
     const needsRecheck = peopleNeedsRecheck(row, kind);
+    const short = Boolean(row.short);
     const active = loadingCid === row.cid;
     const shown = open === id;
-    const pct = full ? 100 : row.lessons ? 50 : 0;
+    const pct = full ? 100 : short || row.lessons ? 50 : 0;
     const step = active
       ? `загрузка · ${row.name}`
-      : full
+      : short
+        ? `на диске ${row.lessons} · в Alfa ${row.alfa} — добрать`
+        : full
         ? kind === "balance"
           ? "Касса и журнал на месте"
-          : "Календарь на месте"
+          : row.alfa
+            ? `на диске ${row.lessons} · в Alfa ${row.alfa}`
+            : "Календарь на месте"
         : kind === "balance"
           ? "Шаг 1 · загрузить кассу"
           : "Шаг 1 · загрузить календарь";
-    const btn = full ? "Перепроверить" : kind === "balance" ? "Загрузить кассу" : "Загрузить календарь";
+    const btn = full ? "Перепроверить" : kind === "balance" ? "Загрузить кассу" : short ? "Добрать" : "Загрузить календарь";
     return (
-      <li key={id} className={cn("rounded-2xl p-3 ring-1", needsRecheck ? "bg-sky-50 ring-sky-400" : full ? "bg-white ring-emerald-300" : active ? "bg-white ring-primary" : "bg-white ring-black/8")}>
+      <li key={id} className={cn("rounded-2xl p-3 ring-1", short ? "bg-amber-50 ring-amber-400" : needsRecheck ? "bg-sky-50 ring-sky-400" : full ? "bg-white ring-emerald-300" : active ? "bg-white ring-primary" : "bg-white ring-black/8")}>
         <div className="flex items-center gap-2">
           <button type="button" className="min-w-0 flex-1 truncate text-left font-medium" onClick={() => setOpen((cur) => (cur === id ? "" : id))} title={row.name}>
             {row.name}
@@ -769,6 +777,8 @@ function PeopleFillList({
               ) : (
                 <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">загрузка завершена</span>
               )
+            ) : short ? (
+              <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950">в Alfa больше</span>
             ) : (
               <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">требуют загрузки</span>
             )}
@@ -783,10 +793,11 @@ function PeopleFillList({
             {shown ? "−" : "+"}
           </button>
         </div>
-        <FillBar pct={pct} run={active} done={full && !needsRecheck} warn={needsRecheck} />
+        <FillBar pct={pct} run={active} done={full && !needsRecheck} warn={needsRecheck || short} />
         <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
           {(row.groups || []).slice(0, 2).join(" · ") || "групп на карточке нет"}
-          {row.lessons ? ` · ${row.lessons} зан.` : ""}
+          {row.lessons ? ` · на диске ${row.lessons}` : ""}
+          {row.alfa ? ` · в Alfa ${row.alfa}` : ""}
         </p>
         <p className="mt-2 h-5 truncate text-[0.78rem] font-semibold">{step}</p>
         <div className="mt-1 flex h-8 items-center gap-2">
@@ -816,8 +827,9 @@ function PeopleFillList({
         </div>
         {shown ? (
           <div className="mt-2 rounded-xl bg-white px-2.5 py-2 text-[0.72rem] leading-snug ring-1 ring-black/10">
-            <CheckLine on={Boolean(row.journal)} text="календарь загружен" />
+            <CheckLine on={Boolean(row.journal) && !short} text="календарь загружен" />
             <CheckLine on={Boolean(row.rechecked)} text="календарь перепроверен" />
+            <CheckLine on={Boolean(row.alfa) && !short} text={row.alfa ? `счёт: диск ${row.lessons} · Alfa ${row.alfa}` : "счёт с Alfa ещё не сверяли"} />
             <CheckLine on={Boolean(row.rechecked)} text="дубликатов нет" />
             {kind === "balance" ? (
               <>
@@ -1346,6 +1358,7 @@ export function AdminCrmSettings() {
     grain?: Grain;
     recheck?: boolean;
     customerId?: number;
+    probe?: boolean;
   }) {
     setBusy(true);
     if (opts.kind === "group" || opts.kind === "details") {
@@ -1369,6 +1382,7 @@ export function AdminCrmSettings() {
           grain: opts.grain || journalGrain,
           recheck: Boolean(opts.recheck),
           customerId: opts.customerId || 0,
+          probe: Boolean(opts.probe),
         } as never,
       })) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit };
       if (res) setJournal(res);
@@ -1459,21 +1473,26 @@ export function AdminCrmSettings() {
 
   async function recheckPeople(kind: "students" | "balance", study: "1" | "2") {
     const pack = study === "2" ? journal?.progress?.archive?.people : journal?.progress?.live?.people;
-    const queue = (pack || []).filter((r) => !peopleFinished(r, kind) || peopleNeedsRecheck(r, kind));
-    if (!queue.length) {
-      setMsg(study === "2" ? "В архиве все сверены." : "У текущих все сверены.");
+    const all = pack || [];
+    if (!all.length) {
+      setMsg(study === "2" ? "Нет архивных учеников в списке." : "Нет текущих учеников в списке.");
       return;
     }
+    const needLoad = all.filter((r) => !peopleFinished(r, kind));
+    const queue = needLoad.length ? needLoad : all;
+    const sweep = !needLoad.length;
     stopSchool.current = false;
     holdFill.current = true;
     setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
+    let n = 0;
     try {
       for (let i = 0; i < queue.length; i += 1) {
         if (stopSchool.current) break;
         const row = queue[i];
         setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
         setFillLoading({ kind, label: row.name, customerId: row.cid });
-        await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: peopleFinished(row, kind) });
+        await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind) });
+        n += 1;
       }
     } finally {
       holdFill.current = false;
@@ -1481,7 +1500,52 @@ export function AdminCrmSettings() {
       setBusy(false);
       setSchoolRun(null);
     }
-    if (stopSchool.current) setMsg("Очередь учеников остановлена.");
+    if (stopSchool.current) {
+      setMsg(`Очередь учеников остановлена · прошло ${n} из ${queue.length}.`);
+      return;
+    }
+    setMsg(
+      sweep
+        ? `Перепроверили ${n} учеников. Alfa ещё раз прошла личный журнал и дописала дырки, дублей нет.`
+        : `Догрузили ${n} учеников, у кого ещё не было журнала или в Alfa больше занятий.`,
+    );
+  }
+
+  async function probePeople(study: "1" | "2") {
+    const pack = study === "2" ? journal?.progress?.archive?.people : journal?.progress?.live?.people;
+    const all = pack || [];
+    if (!all.length) {
+      setMsg(study === "2" ? "Нет архивных учеников в списке." : "Нет текущих учеников в списке.");
+      return;
+    }
+    const unseen = all.filter((r) => !r.alfa);
+    const queue = (unseen.length ? unseen : all).slice(0, 20);
+    stopSchool.current = false;
+    holdFill.current = true;
+    setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
+    let n = 0;
+    let shortN = 0;
+    try {
+      for (let i = 0; i < queue.length; i += 1) {
+        if (stopSchool.current) break;
+        const row = queue[i];
+        setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
+        setFillLoading({ kind: "students", label: row.name, customerId: row.cid });
+        const res = await runJournal({ kind: "students", study, customerId: row.cid, branchId: row.branchId, probe: true });
+        n += 1;
+        if (/не хватает/i.test(String(res?.extra || ""))) shortN += 1;
+      }
+    } finally {
+      holdFill.current = false;
+      setFillLoading(null);
+      setBusy(false);
+      setSchoolRun(null);
+    }
+    if (stopSchool.current) {
+      setMsg(`Сверку остановили · прошло ${n} из ${queue.length}.`);
+      return;
+    }
+    setMsg(shortN ? `Сверили ${n}: у ${shortN} в Alfa больше, чем на диске — жмите «Добрать».` : `Сверили ${n}: счёт сошёлся.`);
   }
 
   async function recheckSchool() {
@@ -2129,7 +2193,7 @@ export function AdminCrmSettings() {
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Календарь ученика</p>
                 <p className="mt-1 text-sm text-muted">
-                  Личный журнал по номеру ученика. Активные и архив — отдельно. Карточка как у группы: загрузить, потом перепроверить.
+                  «Всё есть» только если загружен личный журнал, не из зелёных групп. «Сверить счёт» — лёгкий запрос: сколько в Alfa и сколько на диске. Если в Alfa больше — жёлтый, «Добрать». Когда слева никого нет — синяя кнопка перепроверяет всех.
                 </p>
                 <div className="mt-3">
                   <ScopePills
@@ -2144,6 +2208,7 @@ export function AdminCrmSettings() {
                   const done = side?.journalDone || 0;
                   const total = side?.total || 0;
                   const run = fillLoading?.kind === "students";
+                  const allIn = total > 0 && done >= total;
                   return (
                     <>
                       <ProgressBar done={done} total={total} run={run} />
@@ -2155,7 +2220,18 @@ export function AdminCrmSettings() {
                           disabled={offline || busy}
                           onClick={() => void recheckPeople("students", peopleStudy)}
                         >
-                          {run && schoolRun ? `Очередь ${schoolRun.n}/${schoolRun.total}` : peopleStudy === "2" ? "Перепроверить архивных" : "Перепроверить текущих"}
+                          {run && schoolRun
+                            ? `Очередь ${schoolRun.n}/${schoolRun.total}`
+                            : allIn
+                              ? peopleStudy === "2"
+                                ? "Перепроверить всех архивных"
+                                : "Перепроверить всех текущих"
+                              : peopleStudy === "2"
+                                ? "Догрузить архивных"
+                                : "Догрузить текущих"}
+                        </button>
+                        <button type="button" className={BTN_GHOST} disabled={offline || busy} onClick={() => void probePeople(peopleStudy)}>
+                          Сверить счёт
                         </button>
                         <button
                           type="button"
@@ -2188,7 +2264,9 @@ export function AdminCrmSettings() {
               {histTab === "money" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Деньги на карточке</p>
-                <p className="mt-1 text-sm text-muted">Платежи и абонементы. Активные и архив — отдельно. Стиль как у групп: загрузить, потом перепроверить.</p>
+                <p className="mt-1 text-sm text-muted">
+                  Платежи и абонементы. Активные и архив — отдельно. Пока касса не у всех — кнопка догружает. Когда все загружено — перепроверяет всех ещё раз из Alfa.
+                </p>
                 <div className="mt-3">
                   <ScopePills
                     value={peopleStudy === "2" ? "archive" : "live"}

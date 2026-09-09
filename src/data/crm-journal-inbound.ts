@@ -351,6 +351,36 @@ export async function probeGroupLife(branch: number, gid: number, opts?: { token
   return { from, to, lessons, ok: true as const };
 }
 
+/** Сколько занятий у ученика в Alfa: 1–3 лёгких запроса, не весь журнал. */
+export async function probeCustomerLessons(branch: number, customerId: number, opts?: { token?: string }) {
+  const id = Number(customerId) || 0;
+  if (!alfaLinkedNow() || id <= 0) return { total: 0, ok: false as const };
+  const { token, request } = await import("./alfacrm");
+  const t = opts?.token || (await token());
+  const bid = Number(branch) || 1;
+  const dateFrom = "2015-01-01";
+  const dateTo = ymd(ruShift(90));
+  async function count(status?: number) {
+    const raw = await request<unknown>(
+      `/v2api/${bid}/lesson/index`,
+      { page: 0, pageSize: 1, customer_id: id, date_from: dateFrom, date_to: dateTo, ...(status ? { status } : {}) },
+      t,
+    );
+    const pack = crmUnwrapIndex(raw);
+    return Number(pack.total) || pack.items.length || 0;
+  }
+  try {
+    const all = await count();
+    if (all > 0) return { total: all, ok: true as const };
+    const conducted = await count(3);
+    const planned = await count(1);
+    const cancelled = await count(2);
+    return { total: conducted + planned + cancelled, ok: true as const };
+  } catch {
+    return { total: 0, ok: false as const };
+  }
+}
+
 function isOneOffLesson(item: { lesson_type_id?: number; group_ids?: number[] }) {
   const typeId = Number(item.lesson_type_id || 0);
   const groups = (item.group_ids || []).map(Number).filter((n) => n > 0);

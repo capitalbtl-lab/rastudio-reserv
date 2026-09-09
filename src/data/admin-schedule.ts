@@ -3075,6 +3075,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         grain: (data as { grain?: string }).grain === "half" || (data as { grain?: string }).grain === "year" ? (data as { grain: "half" | "year" }).grain : "quarter",
         recheck: Boolean((data as { recheck?: boolean }).recheck),
         customerId: Number((data as { customerId?: number }).customerId) || 0,
+        probe: Boolean((data as { probe?: boolean }).probe),
       });
       logAdmin(`Журнал Alfa: ${res.extra || res.error || kind}`);
       return res;

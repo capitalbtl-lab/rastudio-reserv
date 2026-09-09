@@ -433,6 +433,8 @@ export function journalPullProgress() {
       name: string;
       groups: string[];
       lessons: number;
+      alfa?: number;
+      short?: boolean;
       journal: boolean;
       pays: boolean;
       rechecked: boolean;
@@ -442,20 +444,21 @@ export function journalPullProgress() {
     }[] = [];
     let journalDone = 0;
     let cardDone = 0;
-    const readyG = new Map(rows.map((r) => [`${r.branchId}-${r.groupId}`, Boolean(r.complete)]));
     for (const p of people) {
       const sync = customerSyncOf(p.cid);
       const d = findDossier({ crmId: p.cid });
       const links = d?.groupLinks || [];
       const own = groups.filter((g) => links.some((l) => Number(l.id) === g.groupId && (!l.branchId || l.branchId === g.branchId)));
-      const groupsReady = own.length > 0 && own.every((g) => readyG.get(`${g.branchId}-${g.groupId}`));
-      const journal = Boolean(sync.lessonsFull && sync.lessonsAttend) || groupsReady;
+      const diskN = loadCustomerCalendar(p.cid).length;
+      const alfaN = Number(sync.lessonsAlfa) || 0;
+      const short = alfaN > 0 && diskN < alfaN;
+      const journal = Boolean(sync.lessonsFull && sync.lessonsAttend) && !short;
       const pays = isPayJournalComplete(p.cid);
       const name = fioOf(p.cid);
       const glist = groupsOfStudent(p.cid).slice(0, 3);
       const gnames = glist.join(", ") || own.map((g) => g.name).filter(Boolean).slice(0, 3).join(", ");
       if (journal) journalDone += 1;
-      else missJ.push({ id: p.cid, name, extra: gnames ? gnames : own.length ? "группы ещё не сверены" : "нет полного журнала" });
+      else missJ.push({ id: p.cid, name, extra: short ? `на диске ${diskN}, в Alfa ${alfaN}` : gnames ? gnames : own.length ? "группы ещё не сверены" : "нет полного журнала" });
       if (journal && pays) cardDone += 1;
       else missC.push({ id: p.cid, name, extra: journal ? "нет кассы" : gnames || (own.length ? "группы ещё не сверены" : "нет явки") });
       peopleRows.push({
@@ -463,12 +466,14 @@ export function journalPullProgress() {
         branchId: p.branchId,
         name,
         groups: glist.length ? glist : own.map((g) => g.name).filter(Boolean).slice(0, 3),
-        lessons: loadCustomerCalendar(p.cid).length,
+        lessons: diskN,
+        alfa: alfaN || undefined,
+        short,
         journal,
         pays,
-        rechecked: Boolean(sync.lessonsRecheckAt),
+        rechecked: Boolean(sync.lessonsRecheckAt) && !short,
         paysRechecked: Boolean(sync.paysRecheckAt),
-        extra: gnames,
+        extra: short ? `на диске ${diskN} · в Alfa ${alfaN}` : gnames,
         at: sync.lessonsAt || "",
       });
     }
@@ -621,12 +626,22 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     tariffs = rows.length;
   }
   const at = new Date().toISOString();
-  stampCustomerSync(cid, balance
-    ? { paysAt: at, ...(recheck ? { paysRecheckAt: at, lessonsRecheckAt: at } : {}) }
-    : recheck
-      ? { lessonsRecheckAt: at }
-      : {});
-  return { cid, lessons, done, pays, tariffs };
+  const { probeCustomerLessons } = await import("./crm-journal-inbound");
+  const disk = loadCustomerCalendar(cid).length;
+  const probed = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
+  const alfaN = probed.ok ? probed.total : 0;
+  const short = alfaN > 0 && disk < alfaN;
+  stampCustomerSync(cid, {
+    lessonsAlfa: probed.ok ? alfaN : undefined,
+    lessonsAlfaAt: probed.ok ? at : undefined,
+    ...(short ? { lessonsFull: false } : {}),
+    ...(balance
+      ? { paysAt: at, ...(recheck && !short ? { paysRecheckAt: at, lessonsRecheckAt: at } : {}) }
+      : recheck && !short
+        ? { lessonsRecheckAt: at }
+        : {}),
+  });
+  return { cid, lessons, done: done && !short, pays, tariffs, alfa: alfaN, short };
 }
 
 export async function journalPull(opts: {
@@ -639,6 +654,7 @@ export async function journalPull(opts: {
   grain?: Grain;
   recheck?: boolean;
   customerId?: number;
+  probe?: boolean;
 }) {
   if (!alfaLinkedNow()) {
     return { ok: false as const, error: "Фон с AlfaCRM выключен.", ...journalPullState() };
@@ -1003,12 +1019,31 @@ export async function journalPull(opts: {
     const picked = pickSlice(people, idx, 1);
     store.studentIdx[key] = picked.next;
   }
+  if (opts.probe) {
+    const { probeCustomerLessons } = await import("./crm-journal-inbound");
+    const disk = loadCustomerCalendar(one.cid).length;
+    const probed = await probeCustomerLessons(one.branchId, one.cid).catch(() => ({ total: 0, ok: false as const }));
+    const alfaN = probed.ok ? probed.total : 0;
+    const short = alfaN > 0 && disk < alfaN;
+    stampCustomerSync(one.cid, {
+      lessonsAlfa: probed.ok ? alfaN : undefined,
+      lessonsAlfaAt: new Date().toISOString(),
+      ...(short ? { lessonsFull: false } : {}),
+    });
+    const name = fioOf(one.cid);
+    store.note = probed.ok
+      ? `${name}: на диске ${disk} · в Alfa ${alfaN}${short ? " — не хватает, добрать" : disk ? " — счёт сошёлся" : ""}`
+      : `${name}: Alfa не ответила на сверку`;
+    store.at = new Date().toISOString();
+    saveStore(store);
+    return { ok: probed.ok, extra: store.note, count: alfaN, scanned: 1, more: false, ...journalPullState() };
+  }
   const balance = kind === "balance";
   const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck));
   const sync = customerSyncOf(one.cid);
   const gnames = groupsOfStudent(one.cid);
   const name = fioOf(one.cid);
-  const landed = Boolean(sync.lessonsFull) || (row.done && row.lessons > 0);
+  const landed = Boolean(sync.lessonsFull && sync.lessonsAttend) && !row.short;
   const who = study === "1" ? "текущие" : study === "2" ? "архив" : "ученики";
   const hit: StudentHit = {
     cid: one.cid,
@@ -1030,8 +1065,10 @@ export async function journalPull(opts: {
     total: people.length,
     rows: merged,
   };
-  store.note = landed
-    ? `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · ${row.lessons} зан.`
+  store.note = row.short
+    ? `${who}: ${name} · на диске ${loadCustomerCalendar(one.cid).length} · в Alfa ${row.alfa} — не хватает, добрать`
+    : landed
+    ? `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · ${row.lessons} зан.${row.alfa ? ` · Alfa ${row.alfa}` : ""}`
     : `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · не попал в выдачу${row.done ? " (Alfa пусто)" : " (обрыв)"}`;
   store.at = new Date().toISOString();
   saveStore(store);

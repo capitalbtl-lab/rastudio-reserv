@@ -19,6 +19,9 @@ export type CustomerSyncStamp = {
   paysAt?: string;
   lessonsRecheckAt?: string;
   paysRecheckAt?: string;
+  /** Сколько занятий Alfa отдаёт по customer_id (сверка с диском). */
+  lessonsAlfa?: number;
+  lessonsAlfaAt?: string;
 };
 
 type Store = { at: string; byId: Record<string, CustomerSyncStamp> };

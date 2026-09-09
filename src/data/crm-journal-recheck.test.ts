@@ -109,9 +109,15 @@ describe("перепроверка журнала", () => {
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /holdFill/);
     assert.match(ui, /colLock/);
+    assert.match(ui, /Сверить счёт/);
+    assert.match(ui, /Перепроверить всех текущих/);
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(api, /"union"/);
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
     assert.match(pull, /fanOutLessonWriteoffs\(calendar\)/);
+    assert.match(pull, /lessonsFull && sync\.lessonsAttend\) && !short/);
+    assert.doesNotMatch(pull, /groupsReady/);
+    const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
+    assert.match(inbound, /export async function probeCustomerLessons/);
   });
 });
