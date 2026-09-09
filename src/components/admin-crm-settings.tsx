@@ -347,12 +347,18 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
   return (
     <div className="mt-2">
       <p className="text-[1.05rem] tabular-nums">
-        <span className="font-semibold text-emerald-800">{done} готово</span>
-        <span className="mx-2 text-muted">·</span>
-        <span className={left ? "font-semibold text-rose-800" : "text-muted"}>{left ? `${left} ещё нет` : "всё есть"}</span>
+        {total <= 0 ? (
+          <span className="font-semibold text-muted">нет на диске</span>
+        ) : (
+          <>
+            <span className="font-semibold text-emerald-800">{done} готово</span>
+            <span className="mx-2 text-muted">·</span>
+            <span className={left ? "font-semibold text-rose-800" : "text-muted"}>{left ? `${left} ещё нет` : "всё есть"}</span>
+          </>
+        )}
       </p>
       <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-black/10">
-        <div className={cn("h-2.5 rounded-full", left ? "bg-black" : "bg-emerald-600")} style={{ width: `${pct}%` }} />
+        <div className={cn("h-2.5 rounded-full", total <= 0 ? "bg-black/20" : left ? "bg-black" : "bg-emerald-600")} style={{ width: `${total <= 0 ? 0 : pct}%` }} />
       </div>
     </div>
   );
@@ -984,6 +990,7 @@ export function AdminCrmSettings() {
           const p = journal?.progress;
           const schoolRows = (p?.groups?.rows || []).filter((r) => !journalSchool || r.school === journalSchool);
           const schoolDone = schoolRows.filter((r) => r.complete && (r.total || 0) > 0).length;
+          const schoolPart = schoolRows.filter((r) => !r.complete && (r.done || 0) > 0).length;
           return (
             <div className={cn("space-y-3", offline && "opacity-50")}>
               {journal?.note ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
@@ -993,7 +1000,8 @@ export function AdminCrmSettings() {
                 <p className="mt-1 text-sm text-muted">Сначала сроки по расписанию: молодая группа — пара кварталов, старая — несколько лет. Потом грузите только эти порции.</p>
                 <ProgressBar done={schoolDone} total={schoolRows.length} />
                 <p className="mt-1 text-[0.72rem] text-muted">
-                  {journalSchool ? `Школа «${journalSchool}»: сверено ${schoolDone} из ${schoolRows.length}.` : "Все школы. Выберите школу — счётчик только по ней."}
+                  {journalSchool ? `Школа «${journalSchool}»: сверено ${schoolDone} из ${schoolRows.length}` : "Все школы. Выберите школу — счётчик только по ней"}
+                  {schoolPart ? ` · частично ${schoolPart}` : ""}.
                 </p>
                 <div className="mt-3 flex flex-wrap items-start gap-3">
                   <button
