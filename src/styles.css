@@ -961,6 +961,21 @@
   animation: ra-flash 0.55s ease-in-out 4;
 }
 
+@keyframes ra-progress-sheen {
+  0% {
+    background-position: 0% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.ra-progress-run {
+  background-image: linear-gradient(90deg, #184bb3, #205edc, #6eb0ff, #205edc, #184bb3);
+  background-size: 200% 100%;
+  animation: ra-progress-sheen 1.15s linear infinite;
+}
+
 @keyframes ra-mismatch {
   0%,
   100% {

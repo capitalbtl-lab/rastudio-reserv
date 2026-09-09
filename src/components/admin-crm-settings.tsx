@@ -45,6 +45,27 @@ function token() {
   return m ? decodeURIComponent(m[1]) : localStorage.getItem("ra_admin") || "";
 }
 
+const BTN_LOAD =
+  "inline-flex h-10 items-center justify-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-border)] hover:bg-primary-hover disabled:opacity-50";
+const BTN_LOAD_SM =
+  "inline-flex h-8 items-center justify-center truncate rounded-full bg-primary px-3 text-[0.78rem] font-semibold text-primary-foreground hover:bg-primary-hover disabled:opacity-50";
+const BTN_GHOST =
+  "inline-flex h-10 items-center justify-center rounded-full bg-white px-4 text-sm font-semibold ring-1 ring-black/10 hover:bg-primary/5 hover:ring-primary/25";
+const BTN_GHOST_SM =
+  "inline-flex h-8 items-center justify-center shrink-0 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10 hover:bg-primary/5 disabled:opacity-40";
+
+function FillBar({ pct, run, done }: { pct: number; run?: boolean; done?: boolean }) {
+  const w = run ? Math.max(18, Math.min(100, pct)) : Math.max(0, Math.min(100, pct));
+  return (
+    <div className="mt-1.5 h-3 overflow-hidden rounded-full bg-primary/12 ring-1 ring-primary/20">
+      <div
+        className={cn("h-full rounded-full transition-[width] duration-300", run ? "ra-progress-run" : done ? "bg-emerald-500" : "bg-primary")}
+        style={{ width: `${w}%` }}
+      />
+    </div>
+  );
+}
+
 function Card({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
     <section className="rounded-[1.2rem] bg-white p-4 ring-1 ring-black/8 md:p-5">
@@ -372,9 +393,7 @@ function GroupFillList({
                     ) : null}
                   </span>
                 </div>
-                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/10">
-                  <div className={cn("h-1.5 rounded-full", full ? "bg-emerald-600" : "bg-black")} style={{ width: `${pct}%` }} />
-                </div>
+                <FillBar pct={pct} run={active} done={full} />
                 <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
                   {active ? `загрузка · ${loadLabel}` : [row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
                   {!active && row.lessons ? ` · ${row.lessons} зан.` : ""}
@@ -387,7 +406,7 @@ function GroupFillList({
                 <button
                   type="button"
                   disabled={busy && !active}
-                  className="h-8 min-w-0 flex-1 truncate rounded-full bg-black px-3 text-[0.8rem] font-semibold text-white disabled:opacity-50"
+                  className={cn(BTN_LOAD_SM, "min-w-0 flex-1", active && "ra-progress-run")}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (wiz.kind === "load" && wiz.part) onLoad(row, wiz.part, Boolean(wiz.part.done || wiz.part.weak));
@@ -400,7 +419,7 @@ function GroupFillList({
                 <button
                   type="button"
                   disabled={!active}
-                  className="h-8 shrink-0 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10 disabled:opacity-40"
+                  className={BTN_GHOST_SM}
                   onClick={(e) => {
                     e.stopPropagation();
                     onStop?.();
@@ -424,7 +443,7 @@ function GroupFillList({
                         key={c.key}
                         className={cn(
                           "flex min-h-[17.5rem] flex-col rounded-xl px-2.5 py-2 ring-1",
-                          c.weak ? "bg-amber-50 ring-amber-300" : loaded ? "bg-emerald-50 ring-emerald-200" : spinJ ? "bg-black/5 ring-black" : "bg-white ring-black/10",
+                          c.weak ? "bg-amber-50 ring-amber-300" : loaded ? "bg-emerald-50 ring-emerald-200" : spinJ || spinD ? "bg-primary/8 ring-primary" : "bg-white ring-black/10",
                         )}
                       >
                         <p className="font-medium text-sm">{c.label}</p>
@@ -448,8 +467,8 @@ function GroupFillList({
                             type="button"
                             disabled={busy && !spinJ}
                             className={cn(
-                              "h-8 truncate rounded-lg px-2 text-[0.72rem] font-semibold disabled:opacity-50",
-                              !loaded || c.weak ? "bg-black text-white" : "bg-white ring-1 ring-black/10",
+                              "h-8 truncate rounded-full px-2 text-[0.72rem] font-semibold disabled:opacity-50",
+                              spinJ ? "ra-progress-run text-white" : !loaded || c.weak ? "bg-primary text-primary-foreground hover:bg-primary-hover" : "bg-white text-fg ring-1 ring-black/10 hover:bg-primary/5",
                             )}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -461,7 +480,16 @@ function GroupFillList({
                           <button
                             type="button"
                             disabled={!loaded || detailsOk || noHw || (busy && !spinD)}
-                            className="h-8 truncate rounded-lg bg-white px-2 text-[0.72rem] font-semibold ring-1 ring-violet-300 disabled:opacity-40"
+                            className={cn(
+                              "h-8 truncate rounded-full px-2 text-[0.72rem] font-semibold disabled:opacity-40",
+                              spinD
+                                ? "ra-progress-run text-white"
+                                : detailsOk || noHw
+                                  ? "bg-white text-muted ring-1 ring-black/10"
+                                  : loaded
+                                    ? "bg-primary/12 text-primary ring-1 ring-primary/35 hover:bg-primary hover:text-white"
+                                    : "bg-white text-muted ring-1 ring-black/10",
+                            )}
                             onClick={(e) => {
                               e.stopPropagation();
                               onDetails(row, c);
@@ -527,25 +555,23 @@ function MissList({
   );
 }
 
-function ProgressBar({ done, total }: { done: number; total: number }) {
+function ProgressBar({ done, total, run }: { done: number; total: number; run?: boolean }) {
   const left = Math.max(0, total - done);
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   return (
     <div className="mt-2">
-      <p className="text-[1.05rem] tabular-nums">
+      <p className="font-display text-xl tabular-nums leading-none">
         {total <= 0 ? (
           <span className="font-semibold text-muted">нет на диске</span>
         ) : (
           <>
-            <span className="font-semibold text-emerald-800">{done} готово</span>
+            <span className="font-semibold text-primary">{done} готово</span>
             <span className="mx-2 text-muted">·</span>
             <span className={left ? "font-semibold text-rose-800" : "text-muted"}>{left ? `${left} ещё нет` : "всё есть"}</span>
           </>
         )}
       </p>
-      <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-black/10">
-        <div className={cn("h-2.5 rounded-full", total <= 0 ? "bg-black/20" : left ? "bg-black" : "bg-emerald-600")} style={{ width: `${total <= 0 ? 0 : pct}%` }} />
-      </div>
+      <FillBar pct={pct} run={run} done={!left && total > 0} />
     </div>
   );
 }
@@ -1349,7 +1375,7 @@ export function AdminCrmSettings() {
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Занятия в группах</p>
                 <p className="mt-1 text-sm text-muted">Сначала сроки по расписанию: молодая группа — пара кварталов, старая — несколько лет. Потом грузите только эти порции.</p>
-                <ProgressBar done={schoolDone} total={schoolRows.length} />
+                <ProgressBar done={schoolDone} total={schoolRows.length} run={Boolean(schoolRun || fillLoading)} />
                 <p className="mt-1 text-[0.72rem] text-muted">
                   {journalSchool ? `Школа «${journalSchool}»: сверено ${schoolDone} из ${schoolRows.length}` : "Все школы. Выберите школу — счётчик только по ней"}
                   {schoolPart ? ` · частично ${schoolPart}` : ""}.
@@ -1357,7 +1383,7 @@ export function AdminCrmSettings() {
                 <div className="mt-3 flex flex-wrap items-start gap-3">
                   <button
                     type="button"
-                    className="h-10 shrink-0 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
+                    className={cn(BTN_LOAD, (busy && !schoolRun) && "ra-progress-run")}
                     disabled={busy || offline}
                     onClick={() => void runJournal({ kind: "life", school: journalSchool })}
                   >
@@ -1438,7 +1464,7 @@ export function AdminCrmSettings() {
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    className="h-10 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
+                    className={cn(BTN_LOAD, schoolRun && "ra-progress-run")}
                     disabled={offline || Boolean(schoolRun)}
                     onClick={() => void recheckSchool()}
                   >
@@ -1447,7 +1473,7 @@ export function AdminCrmSettings() {
                   {schoolRun ? (
                     <button
                       type="button"
-                      className="h-10 rounded-full bg-white px-4 text-sm font-semibold ring-1 ring-black/10"
+                      className={BTN_GHOST}
                       onClick={() => {
                         stopSchool.current = true;
                       }}
@@ -1510,20 +1536,20 @@ export function AdminCrmSettings() {
                 <p className="font-display text-[1.15rem]">Календарь ученика</p>
                 <p className="mt-1 text-sm text-muted">Цветные клетки на карточке. Готово — только полный личный журнал или все группы ученика сверены. Одна старая явка больше не закрывает карточку.</p>
                 <p className="mt-2 text-sm font-semibold">Сейчас ходят</p>
-                <ProgressBar done={p?.live?.journalDone || 0} total={p?.live?.total || 0} />
+                <ProgressBar done={p?.live?.journalDone || 0} total={p?.live?.total || 0} run={fillLoading?.kind === "students"} />
                 <p className="mt-3 text-sm font-semibold">Уже не ходят (архив)</p>
-                <ProgressBar done={p?.archive?.journalDone || 0} total={p?.archive?.total || 0} />
+                <ProgressBar done={p?.archive?.journalDone || 0} total={p?.archive?.total || 0} run={fillLoading?.kind === "students"} />
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" className="h-10 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || offline} onClick={() => void runJournal({ kind: "students", study: "1" })}>
+                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "students" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runJournal({ kind: "students", study: "1" })}>
                     Загрузить 10 текущих
                   </button>
-                  <button type="button" className="h-10 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || offline} onClick={() => void runJournal({ kind: "students", study: "2" })}>
+                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "students" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runJournal({ kind: "students", study: "2" })}>
                     Загрузить 10 архивных
                   </button>
-                  <button type="button" className="h-10 rounded-full bg-white px-4 text-sm font-semibold ring-1 ring-black/10" onClick={() => setOpenMiss(openMiss === "j1" ? "" : "j1")}>
+                  <button type="button" className={BTN_GHOST} onClick={() => setOpenMiss(openMiss === "j1" ? "" : "j1")}>
                     {openMiss === "j1" ? "Скрыть" : "Кому из текущих нет"}
                   </button>
-                  <button type="button" className="h-10 rounded-full bg-white px-4 text-sm font-semibold ring-1 ring-black/10" onClick={() => setOpenMiss(openMiss === "j2" ? "" : "j2")}>
+                  <button type="button" className={BTN_GHOST} onClick={() => setOpenMiss(openMiss === "j2" ? "" : "j2")}>
                     {openMiss === "j2" ? "Скрыть" : "Кому из архива нет"}
                   </button>
                 </div>
@@ -1537,20 +1563,20 @@ export function AdminCrmSettings() {
                 <p className="font-display text-[1.15rem]">Деньги на карточке</p>
                 <p className="mt-1 text-sm text-muted">Платежи и списания. Без этого остаток не совпадёт с Alfa.</p>
                 <p className="mt-2 text-sm font-semibold">Сейчас ходят</p>
-                <ProgressBar done={p?.live?.cardDone || 0} total={p?.live?.total || 0} />
+                <ProgressBar done={p?.live?.cardDone || 0} total={p?.live?.total || 0} run={fillLoading?.kind === "balance"} />
                 <p className="mt-3 text-sm font-semibold">Уже не ходят (архив)</p>
-                <ProgressBar done={p?.archive?.cardDone || 0} total={p?.archive?.total || 0} />
+                <ProgressBar done={p?.archive?.cardDone || 0} total={p?.archive?.total || 0} run={fillLoading?.kind === "balance"} />
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" className="h-10 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || offline} onClick={() => void runJournal({ kind: "balance", study: "1" })}>
+                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "balance" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runJournal({ kind: "balance", study: "1" })}>
                     10 текущих с деньгами
                   </button>
-                  <button type="button" className="h-10 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || offline} onClick={() => void runJournal({ kind: "balance", study: "2" })}>
+                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "balance" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runJournal({ kind: "balance", study: "2" })}>
                     10 архивных с деньгами
                   </button>
-                  <button type="button" className="h-10 rounded-full bg-white px-4 text-sm font-semibold ring-1 ring-black/10" onClick={() => setOpenMiss(openMiss === "c1" ? "" : "c1")}>
+                  <button type="button" className={BTN_GHOST} onClick={() => setOpenMiss(openMiss === "c1" ? "" : "c1")}>
                     {openMiss === "c1" ? "Скрыть" : "У кого из текущих нет"}
                   </button>
-                  <button type="button" className="h-10 rounded-full bg-white px-4 text-sm font-semibold ring-1 ring-black/10" onClick={() => setOpenMiss(openMiss === "c2" ? "" : "c2")}>
+                  <button type="button" className={BTN_GHOST} onClick={() => setOpenMiss(openMiss === "c2" ? "" : "c2")}>
                     {openMiss === "c2" ? "Скрыть" : "У кого из архива нет"}
                   </button>
                 </div>
