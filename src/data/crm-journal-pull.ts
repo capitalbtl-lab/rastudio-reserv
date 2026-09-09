@@ -7,13 +7,14 @@ import { isCampStatus } from "./group-status";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { loadCachePolicy } from "./crm-cache-policy";
 import { listAdminSlots } from "./alfacrm-schedule";
+import { loadScheduleMap } from "./schedule-map";
 import { allDossierCrmIds, findDossier, dossiersInGroup } from "./dossiers";
 import { loadGroupCard, saveGroupCard } from "./group-cards";
 import { customerSyncOf } from "./crm-customer-sync";
 import { isPayJournalComplete } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 
-export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details";
+export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives";
 export type JournalPullStudy = "1" | "2" | "all";
 
 export type JournalPullGroup = {
@@ -43,6 +44,15 @@ type LifeReport = {
   left?: number;
 };
 
+type ArchivesReport = {
+  at: string;
+  added: number;
+  total: number;
+  branch: string;
+  more: boolean;
+  names: string[];
+};
+
 type PullStore = {
   at: string;
   note: string;
@@ -50,6 +60,7 @@ type PullStore = {
   schoolIdx: Record<string, number>;
   studentIdx: Record<string, number>;
   lastLife?: LifeReport | null;
+  lastArchives?: ArchivesReport | null;
 };
 
 function fileOf() {
@@ -57,7 +68,7 @@ function fileOf() {
 }
 
 function emptyStore(): PullStore {
-  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null };
+  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null, lastArchives: null };
 }
 
 function loadStore(): PullStore {
@@ -71,6 +82,7 @@ function loadStore(): PullStore {
       schoolIdx: raw.schoolIdx && typeof raw.schoolIdx === "object" ? raw.schoolIdx : {},
       studentIdx: raw.studentIdx && typeof raw.studentIdx === "object" ? raw.studentIdx : {},
       lastLife: raw.lastLife && typeof raw.lastLife === "object" ? (raw.lastLife as LifeReport) : null,
+      lastArchives: raw.lastArchives && typeof raw.lastArchives === "object" ? (raw.lastArchives as ArchivesReport) : null,
     };
   } catch {
     return emptyStore();
@@ -81,6 +93,53 @@ function saveStore(next: PullStore) {
   mkdirSync(dirname(fileOf()), { recursive: true });
   writeFileSync(fileOf(), JSON.stringify(next, null, 0), "utf8");
   return next;
+}
+
+type ArchiveBag = { at: string; branchIdx: number; items: JournalPullGroup[] };
+
+function archiveFile() {
+  return join(process.cwd(), "storage", "crm-journal-archive-groups.json");
+}
+
+function emptyArchive(): ArchiveBag {
+  return { at: "", branchIdx: 0, items: [] };
+}
+
+export function loadJournalArchiveGroups(): JournalPullGroup[] {
+  try {
+    if (!existsSync(archiveFile())) return [];
+    const raw = JSON.parse(readFileSync(archiveFile(), "utf8")) as Partial<ArchiveBag>;
+    return Array.isArray(raw.items) ? raw.items.filter((g) => Number(g?.groupId) && Number(g?.branchId)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadArchiveBag(): ArchiveBag {
+  try {
+    if (!existsSync(archiveFile())) return emptyArchive();
+    const raw = JSON.parse(readFileSync(archiveFile(), "utf8")) as Partial<ArchiveBag>;
+    return {
+      at: String(raw.at || ""),
+      branchIdx: Math.max(0, Number(raw.branchIdx) || 0),
+      items: Array.isArray(raw.items) ? raw.items.filter((g) => Number(g?.groupId) && Number(g?.branchId)) : [],
+    };
+  } catch {
+    return emptyArchive();
+  }
+}
+
+function saveArchiveBag(next: ArchiveBag) {
+  mkdirSync(dirname(archiveFile()), { recursive: true });
+  writeFileSync(archiveFile(), JSON.stringify(next, null, 0), "utf8");
+  return next;
+}
+
+function schoolOfArchive(subjectId: number) {
+  const hit = loadScheduleMap().courses.find((c) => c.subjectId === subjectId);
+  if (hit?.school) return hit.school;
+  const live = listAdminSlots().find((s) => Number(s.subjectId) === subjectId && s.school);
+  return String(live?.school || "").trim() || "Прочее";
 }
 
 function schoolOf(s: { school?: string }) {
@@ -107,6 +166,21 @@ export function journalPullGroups(): JournalPullGroup[] {
       archived: Number(s.statusId) === 3,
       bDate: String(s.bDate || ""),
       eDate: String(s.eDate || ""),
+    });
+  }
+  for (const g of loadJournalArchiveGroups()) {
+    const k = `${g.branchId}:${g.groupId}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({
+      groupId: g.groupId,
+      branchId: g.branchId,
+      name: g.name,
+      school: schoolOf(g),
+      taken: Number(g.taken) || 0,
+      archived: true,
+      bDate: String(g.bDate || ""),
+      eDate: String(g.eDate || ""),
     });
   }
   const schoolRank = (name: string) => {
@@ -361,7 +435,7 @@ export function journalPullProgress() {
       periods: periods.length,
       miss: packList(groupsMiss, 200),
       doneList: packList(groupsDone, 200),
-      rows: rows.slice(0, 200),
+      rows: rows.slice(0, 800),
     },
     live,
     archive: arch,
@@ -391,6 +465,7 @@ export function journalPullState() {
     linked: alfaLinkedNow(),
     progress: journalPullProgress(),
     lastLife: store.lastLife || null,
+    lastArchives: store.lastArchives || null,
   };
 }
 
@@ -510,6 +585,81 @@ export async function journalPull(opts: {
   const study = (opts.study === "1" || opts.study === "2" ? opts.study : "all") as JournalPullStudy;
   const selectedGid = Number(opts.groupId) || 0;
   const selectedBid = Number(opts.branchId) || 0;
+
+  if (kind === "archives") {
+    const { token, request } = await import("./alfacrm");
+    const { crmUnwrapIndex } = await import("./crm-leads-stages");
+    const { ALFA_BRANCH_IDS } = await import("./crm-ledger-core");
+    const { CRM_BRANCH } = await import("./ids");
+    const t = await token().catch(() => "");
+    if (!t) {
+      store.note = "Нет входа в AlfaCRM.";
+      store.at = new Date().toISOString();
+      saveStore(store);
+      return { ok: false as const, error: store.note, more: false, ...journalPullState() };
+    }
+    const bag = loadArchiveBag();
+    const liveKeys = new Set(listAdminSlots().map((s) => `${Number(s.branchId) || 0}:${Number(s.groupId) || 0}`));
+    const seen = new Set(bag.items.map((g) => `${g.branchId}:${g.groupId}`));
+    const idx = bag.branchIdx % ALFA_BRANCH_IDS.length;
+    const branch = ALFA_BRANCH_IDS[idx];
+    const branchName = CRM_BRANCH[branch]?.short || `филиал ${branch}`;
+    const added: JournalPullGroup[] = [];
+    for (let page = 0; page < 15; page += 1) {
+      const json = await request<unknown>(
+        `/v2api/${branch}/group/index`,
+        { page, pageSize: 50, status_id: 3 },
+        t,
+      ).catch(() => null);
+      const pack = crmUnwrapIndex(json);
+      for (const raw of pack.items) {
+        const statusId = Number(raw.status_id || 0);
+        if (statusId !== 3 || isCampStatus(statusId)) continue;
+        const gid = Number(raw.id) || 0;
+        const bid = Number((Array.isArray(raw.branch_ids) ? raw.branch_ids[0] : 0) || branch);
+        if (!gid || !bid) continue;
+        const k = `${bid}:${gid}`;
+        if (liveKeys.has(k) || seen.has(k)) continue;
+        seen.add(k);
+        added.push({
+          groupId: gid,
+          branchId: bid,
+          name: String(raw.name || `группа ${gid}`),
+          school: schoolOfArchive(Number(raw.subject_id) || 0),
+          taken: Number(raw.quantity || raw.cnt || raw.customers_count || 0) || 0,
+          archived: true,
+          bDate: String(raw.b_date || raw.bDate || ""),
+          eDate: String(raw.e_date || raw.eDate || ""),
+        });
+      }
+      if (!pack.items.length || pack.items.length < 50) break;
+      const total = Number(pack.total) || 0;
+      if (total && (page + 1) * 50 >= total) break;
+    }
+    bag.items = bag.items.concat(added);
+    bag.at = new Date().toISOString();
+    const nextIdx = idx + 1;
+    const more = nextIdx < ALFA_BRANCH_IDS.length;
+    bag.branchIdx = more ? nextIdx : 0;
+    saveArchiveBag(bag);
+    const lastArchives: ArchivesReport = {
+      at: bag.at,
+      added: added.length,
+      total: bag.items.length,
+      branch: branchName,
+      more,
+      names: added.slice(0, 4).map((g) => g.name),
+    };
+    store.lastArchives = lastArchives;
+    store.note = added.length
+      ? `Архив «${branchName}»: +${added.length}. На диске ${bag.items.length} архивных групп${more ? ". Нажмите ещё — следующий пакет." : "."}`
+      : more
+        ? `В «${branchName}» новых архивных нет. На диске ${bag.items.length}. Нажмите ещё — следующий филиал.`
+        : `Архивных групп на диске ${bag.items.length}. Все 4 филиала просмотрены.`;
+    store.at = bag.at;
+    saveStore(store);
+    return { ok: true as const, extra: store.note, count: added.length, scanned: added.length, more, lastArchives, ...journalPullState() };
+  }
 
   if (kind === "life") {
     const scoped = school ? groups.filter((g) => g.school === school) : groups;

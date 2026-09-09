@@ -359,6 +359,9 @@ function GroupFillList({
                   {row.name}
                 </button>
                 <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                    {row.archived ? (
+                      <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[0.72rem] font-semibold text-zinc-800">архив</span>
+                    ) : null}
                     {row.ageLabel ? (
                       <span
                         className={cn(
@@ -677,6 +680,7 @@ export function AdminCrmSettings() {
       probed?: number;
       left?: number;
     } | null;
+    lastArchives?: { at?: string; added: number; total: number; branch: string; more: boolean; names?: string[] } | null;
   } | null>(null);
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
@@ -940,7 +944,7 @@ export function AdminCrmSettings() {
   }
 
   async function runJournal(opts: {
-    kind: "group" | "school" | "students" | "balance" | "life" | "details";
+    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives";
     study?: "1" | "2" | "all";
     school?: string;
     groupId?: number;
@@ -953,6 +957,8 @@ export function AdminCrmSettings() {
     setBusy(true);
     if (opts.kind === "group" || opts.kind === "details") {
       setFillLoading({ groupId: opts.groupId || 0, branchId: opts.branchId || 0, periodKey: opts.periodKey || "", label: opts.periodLabel || "", kind: opts.kind });
+    } else if (opts.kind === "life" || opts.kind === "archives") {
+      setFillLoading({ kind: opts.kind });
     }
     try {
       const res = (await adminSchedule({
@@ -1412,7 +1418,7 @@ export function AdminCrmSettings() {
               {histTab === "groups" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Занятия в группах</p>
-                <p className="mt-1 text-sm text-muted">Сначала сроки по расписанию: молодая группа — пара кварталов, старая — несколько лет. Потом грузите только эти порции.</p>
+                <p className="mt-1 text-sm text-muted">Сначала подгрузите архивные группы — баланс ученика часто сидит в старых составах. Потом сроки и порции журнала.</p>
                 <ProgressBar done={schoolDone} total={schoolRows.length} run={Boolean(schoolRun || fillLoading)} />
                 <p className="mt-1 text-[0.72rem] text-muted">
                   {journalSchool ? `Школа «${journalSchool}»: загрузка завершена ${schoolDone} из ${schoolRows.length}` : "Все школы. Выберите школу — счётчик только по ней"}
@@ -1421,12 +1427,42 @@ export function AdminCrmSettings() {
                 <div className="mt-3 flex flex-wrap items-start gap-3">
                   <button
                     type="button"
-                    className={cn(BTN_LOAD, (busy && !schoolRun) && "ra-progress-run")}
+                    className={cn(BTN_LOAD, fillLoading?.kind === "archives" && "ra-progress-run")}
+                    disabled={busy || offline}
+                    onClick={() => void runJournal({ kind: "archives" })}
+                  >
+                    {fillLoading?.kind === "archives"
+                      ? "Читаю архив Alfa…"
+                      : journal?.lastArchives?.total
+                        ? journal.lastArchives.more
+                          ? `Ещё архивные · на диске ${journal.lastArchives.total}`
+                          : `Архивные ещё раз · ${journal.lastArchives.total}`
+                        : "Загрузить архивные группы"}
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(BTN_LOAD, fillLoading?.kind === "life" && "ra-progress-run")}
                     disabled={busy || offline}
                     onClick={() => void runJournal({ kind: "life", school: journalSchool })}
                   >
-                    {busy && !schoolRun ? "Смотрю сроки…" : schoolNeedLife ? `Уточнить ещё ${schoolNeedLife}` : "Определить сроки групп"}
+                    {fillLoading?.kind === "life" ? "Смотрю сроки…" : schoolNeedLife ? `Уточнить ещё ${schoolNeedLife}` : "Определить сроки групп"}
                   </button>
+                  {journal?.lastArchives ? (
+                    <div className="min-w-[16rem] flex-1 rounded-2xl bg-white px-4 py-3 text-sm ring-1 ring-black/10">
+                      <p className="font-semibold">
+                        Архив «{journal.lastArchives.branch}»: {journal.lastArchives.added ? `+${journal.lastArchives.added}` : "новых нет"}
+                      </p>
+                      <p className="mt-1 text-[0.92rem]">
+                        На диске {journal.lastArchives.total} архивных групп. Живое расписание не трогали.
+                      </p>
+                      {journal.lastArchives.names?.length ? (
+                        <p className="mt-1 text-[0.72rem] text-muted">{journal.lastArchives.names.join(", ")}</p>
+                      ) : null}
+                      <p className="mt-2 text-[0.72rem] text-muted">
+                        {journal.lastArchives.more ? "Нажмите ещё — следующий филиал." : "Четыре филиала просмотрены. Дальше — сроки и явки, как у живых."}
+                      </p>
+                    </div>
+                  ) : null}
                   {journal?.lastLife ? (
                     <div className="min-w-[16rem] flex-1 rounded-2xl bg-white px-4 py-3 text-sm ring-1 ring-black/10">
                       <p className="font-semibold">

@@ -32,7 +32,10 @@ describe("ручной журнал с Alfa", () => {
 
   it("только кнопка группы и порция, фон сам не качает", () => {
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
-    assert.match(pull, /kind === "life"/);
+    assert.match(pull, /kind === "archives"/);
+    assert.match(pull, /crm-journal-archive-groups\.json/);
+    assert.match(pull, /loadJournalArchiveGroups/);
+    assert.match(pull, /status_id: 3/);
     assert.match(pull, /journalLife/);
     assert.match(pull, /lastLife/);
     assert.match(pull, /Определено/);
@@ -60,10 +63,12 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Стоп/);
     assert.match(inbound, /probeGroupLife/);
     assert.match(ui, /Определить сроки групп/);
+    assert.match(ui, /Загрузить архивные группы/);
+    assert.match(ui, /lastArchives/);
     assert.match(ui, /lastLife/);
     assert.match(ui, /Определено/);
     assert.match(ui, /ageLabel/);
-    assert.match(ui, /молодая/);
+    assert.match(ui, /молод/);
     assert.match(ui, /GroupFillList/);
     assert.match(ui, /I квартал|Квартал/);
     assert.match(ui, /Порция за одно нажатие/);
@@ -97,5 +102,6 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(pack, /inboundJournalChunk\(polJ.journalNext/);
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(api, /periodKey/);
+    assert.match(api, /kind !== "archives"/);
   });
 });
