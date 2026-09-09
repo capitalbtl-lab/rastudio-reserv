@@ -105,8 +105,13 @@ describe("перепроверка журнала", () => {
     const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
     assert.match(cards, /detailsAt: old\.detailsAt \|\| row\.detailsAt/);
     assert.match(cards, /topic: String\(row\.topic/);
+    assert.match(cards, /mode: "replace" \| "union" = "union"/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /holdFill/);
     assert.match(ui, /colLock/);
+    const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
+    assert.match(api, /"union"/);
+    const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
+    assert.match(pull, /fanOutLessonWriteoffs\(calendar\)/);
   });
 });

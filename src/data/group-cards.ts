@@ -112,6 +112,28 @@ export function nextLocalLessonId() {
   return nextLocalId(used);
 }
 
+function mergeLessonPatch(old: GroupCalLesson, row: GroupCalLesson): GroupCalLesson {
+  const newN = row.pupils?.length || 0;
+  const oldN = old.pupils?.length || 0;
+  const pupils =
+    newN >= oldN && newN
+      ? mergeLessonPupils(old.pupils, row.pupils)
+      : mergeLessonPupils(row.pupils, old.pupils) || old.pupils || row.pupils;
+  return {
+    ...old,
+    ...row,
+    topic: String(row.topic || "").trim() || old.topic,
+    homework: String(row.homework || "").trim() || old.homework,
+    note: String(row.note || "").trim() || old.note,
+    detailsAt: old.detailsAt || row.detailsAt,
+    pupils: pupils?.length ? pupils : row.pupils || old.pupils,
+    customerIds: row.customerIds?.length ? row.customerIds : old.customerIds || (pupils || []).map((p) => p.customerId),
+    amount: Number(row.amount) > 0 ? row.amount : old.amount,
+    cttId: Number(row.cttId) > 0 ? row.cttId : old.cttId,
+    lessonId: Number(row.lessonId) || old.lessonId,
+  };
+}
+
 function mergeLessonInto(cal: GroupCalLesson[], lesson: GroupCalLesson) {
   const next = [...cal];
   const lid = Number(lesson.lessonId) || 0;
@@ -119,7 +141,7 @@ function mergeLessonInto(cal: GroupCalLesson[], lesson: GroupCalLesson) {
   const from = String(lesson.from || "");
   let i = lid ? next.findIndex((x) => Number(x.lessonId) === lid) : -1;
   if (i < 0 && date) i = next.findIndex((x) => String(x.date) === date && String(x.from || "") === from);
-  if (i >= 0) next[i] = { ...next[i], ...lesson, lessonId: lid || next[i].lessonId };
+  if (i >= 0) next[i] = mergeLessonPatch(next[i], lesson);
   else next.push(lesson);
   return { list: next, item: i >= 0 ? next[i] : lesson };
 }
@@ -385,7 +407,7 @@ export function mergeLocalCalendar(
   pulled: GroupCalLesson[],
   prev: GroupCalLesson[] | undefined,
   holdIds?: Iterable<number>,
-  mode: "replace" | "union" = "replace",
+  mode: "replace" | "union" = "union",
 ): GroupCalLesson[] {
   const list = mergeJournalInbound(pulled, prev, holdIds, mode);
   if (!prev?.length) return list;
@@ -393,23 +415,7 @@ export function mergeLocalCalendar(
   return list.map((row) => {
     const old = prevMap.get(String(row.lessonId || `${row.date}|${row.from}`));
     if (!old) return row;
-    const newN = row.pupils?.length || 0;
-    const oldN = old.pupils?.length || 0;
-    const pupils =
-      newN >= oldN && newN
-        ? mergeLessonPupils(old.pupils, row.pupils)
-        : mergeLessonPupils(row.pupils, old.pupils) || old.pupils || row.pupils;
-    return {
-      ...row,
-      topic: String(row.topic || "").trim() || old.topic,
-      homework: String(row.homework || "").trim() || old.homework,
-      note: String(row.note || "").trim() || old.note,
-      detailsAt: old.detailsAt || row.detailsAt,
-      pupils: pupils?.length ? pupils : row.pupils || old.pupils,
-      customerIds: row.customerIds?.length ? row.customerIds : old.customerIds || (pupils || []).map((p) => p.customerId),
-      amount: Number(row.amount) > 0 ? row.amount : old.amount,
-      cttId: Number(row.cttId) > 0 ? row.cttId : old.cttId,
-    };
+    return mergeLessonPatch(old, row);
   });
 }
 

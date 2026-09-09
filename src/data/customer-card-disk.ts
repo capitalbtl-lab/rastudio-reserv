@@ -215,7 +215,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   const liveCtt = liveCttOf(tariffs);
   const lessonsPlan = journal.filter((l) => Number(l.status) !== 2).length;
   const lessonsFact = journal.filter((l) => Number(l.status) === 3).length;
-  const writeoffSum = writeoffSumOf(journal);
+  const writeoffSum = writeoffSumOf(journal, customerId);
   const paidTill = liveCtt.map((t) => t.eDate || "").filter(Boolean).sort().slice(-1)[0] || String(d.extras?.paid_till || "");
   const paidCount = liveCtt.reduce((n, t) => n + (Number(t.lessons) || 0), 0);
   const snap = accountSnapOf(d.extras?.balance, tariffs);

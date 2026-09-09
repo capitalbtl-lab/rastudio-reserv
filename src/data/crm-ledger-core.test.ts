@@ -92,4 +92,20 @@ describe("журнал оплат и списаний", () => {
     assert.equal(chargeFromPupils({ pupils }, 2696).attend, false);
     assert.match(lessonPupilsKey([{ lessonId: 49042, pupils }]), /2696:0:743\.75/);
   });
+
+  it("списание с состава ученика, если шапка урока 0", () => {
+    const lesson = {
+      status: 3,
+      amount: 0,
+      pupils: [
+        { customerId: 88, amount: 850, attend: true },
+        { customerId: 91, amount: 1200, attend: true },
+      ],
+    };
+    assert.equal(writeoffSumOf([lesson]), 0);
+    assert.equal(writeoffSumOf([lesson], 91), 1200);
+    assert.equal(writeoffSumOf([lesson], 88), 850);
+    assert.equal(chargeFromPupils({ pupils: lesson.pupils, amount: 0 }, 91).amount, 1200);
+    assert.equal(chargeFromPupils({ pupils: [{ customerId: 91, amount: 0, attend: true }], amount: 400 }, 91).amount, 400);
+  });
 });

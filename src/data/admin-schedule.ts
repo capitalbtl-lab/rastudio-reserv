@@ -1621,7 +1621,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       customer.balance = customerBalance(
         customerId,
         snapshotBalance(customer.balance, cttRest, rows.length > 0),
-        writeoffSumOf(loadCustomerCalendar(customerId)),
+        writeoffSumOf(loadCustomerCalendar(customerId), customerId),
       );
       const dAfter = findDossier({ crmId: customerId });
       if (dAfter) {
@@ -3228,6 +3228,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)),
         cached?.calendar,
         (await import("./crm-export-queue")).pendingExportIds(["lesson.update", "lesson.create"]),
+        "union",
       );
       rememberLessons(calendar);
       fanOutLessonWriteoffs(calendar);

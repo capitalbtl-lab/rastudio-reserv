@@ -633,7 +633,7 @@ async function stampPayBalances(cids: number[]) {
     const next = customerBalance(
       cid,
       snapshotBalance(d?.extras?.balance, cttRest, live.length > 0),
-      writeoffSumOf(loadCustomerCalendar(cid)),
+      writeoffSumOf(loadCustomerCalendar(cid), cid),
     );
     if (!d) continue;
     const prev = String(d.extras?.balance ?? "");

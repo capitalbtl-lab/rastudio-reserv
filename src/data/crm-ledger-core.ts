@@ -138,8 +138,8 @@ export function chargeFromPupils(
   const p = pupilOf(lesson.pupils, customerId);
   if (p) {
     return {
-      amount: Number(p.amount) || 0,
-      cttId: Number(p.cttId) || 0,
+      amount: Number(p.amount) || Number(lesson.amount) || 0,
+      cttId: Number(p.cttId) || Number(lesson.cttId) || 0,
       attend: Boolean(p.attend),
     };
   }
@@ -174,20 +174,36 @@ export function payCttIdOf(item: Record<string, unknown>) {
   return n > 0 ? n : 0;
 }
 
-export function writeoffSumOf(lessons: { status?: number; amount?: number }[]) {
+export function writeoffSumOf(
+  lessons: { status?: number; amount?: number; pupils?: LessonPupil[]; customerIds?: number[] }[],
+  customerId?: number,
+) {
   let n = 0;
+  const cid = Number(customerId) || 0;
   for (const l of lessons || []) {
     if (Number(l.status) !== 3) continue;
+    if (cid) {
+      n += chargeFromPupils(l, cid).amount || Number(l.amount) || 0;
+      continue;
+    }
     n += Number(l.amount) || 0;
   }
   return n;
 }
 
-export function writeoffSumForCtt(lessons: { status?: number; amount?: number; cttId?: number }[], cttId: number) {
+export function writeoffSumForCtt(
+  lessons: { status?: number; amount?: number; cttId?: number; pupils?: LessonPupil[] }[],
+  cttId: number,
+) {
   const want = Number(cttId) || 0;
   let n = 0;
   for (const l of lessons || []) {
     if (Number(l.status) !== 3) continue;
+    const fromPupil = (l.pupils || []).find((p) => (Number(p.cttId) || 0) === want);
+    if (fromPupil && (Number(fromPupil.amount) || 0) > 0 && want) {
+      n += Number(fromPupil.amount) || 0;
+      continue;
+    }
     if ((Number(l.cttId) || 0) !== want) continue;
     n += Number(l.amount) || 0;
   }

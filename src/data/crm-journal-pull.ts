@@ -9,7 +9,7 @@ import { loadCachePolicy } from "./crm-cache-policy";
 import { listAdminSlots } from "./alfacrm-schedule";
 import { loadScheduleMap } from "./schedule-map";
 import { allDossierCrmIds, findDossier, dossiersInGroup } from "./dossiers";
-import { loadGroupCard, saveGroupCard, loadCustomerCalendar } from "./group-cards";
+import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs } from "./group-cards";
 import { customerSyncOf, stampCustomerSync } from "./crm-customer-sync";
 import { isPayJournalComplete } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
@@ -877,7 +877,9 @@ export async function journalPull(opts: {
     if (enriched.changed) {
       const byId = new Map((card.calendar || []).map((l) => [`${l.lessonId || 0}|${l.date}|${l.from}`, l]));
       for (const l of enriched.calendar) byId.set(`${l.lessonId || 0}|${l.date}|${l.from}`, l);
-      saveGroupCard({ ...card, calendar: [...byId.values()], journalAt: new Date().toISOString() });
+      const calendar = [...byId.values()];
+      saveGroupCard({ ...card, calendar, journalAt: new Date().toISOString() });
+      fanOutLessonWriteoffs(calendar);
     }
     const after = loadGroupCard(hit.branchId, hit.groupId);
     const leftNow = (period
