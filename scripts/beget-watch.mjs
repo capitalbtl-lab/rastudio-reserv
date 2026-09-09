@@ -30,12 +30,21 @@ async function tick() {
     await exec("bash", [path.join(root, "scripts/beget-deploy.sh"), "--force"], {
       cwd: root,
       env: process.env,
-      timeout: 8 * 60 * 1000,
+      timeout: 15 * 60 * 1000,
     });
   } catch (e) {
     const err = e;
     const extra = err && typeof err === "object" && "stderr" in err ? String(err.stderr || "") : "";
     console.error("[deploy]", extra || (e instanceof Error ? e.message : e));
+    try {
+      await exec("pm2", ["start", "ecosystem.config.cjs", "--only", "rastudio"], { cwd: root });
+    } catch {
+      try {
+        await exec("pm2", ["restart", "rastudio"], { cwd: root });
+      } catch {
+        /* */
+      }
+    }
   } finally {
     busy = false;
   }

@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # Выкладка rastudio.org на Beget.
-# Сборка только в .output (Nitro прописывает этот путь в сервер и public).
-# Сначала стоп rastudio — иначе чанки CSS/JS пишутся поверх живого процесса.
-# 924d474: повторный проход, уже этот скрипт.
+# Живой процесс не гасим до готовой новой сборки — иначе 8 минут 502.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,7 +9,7 @@ cd "$ROOT"
 LOCK=/tmp/rastudio-deploy.lock
 if [ -f "$LOCK" ]; then
   age=$(( $(date +%s) - $(stat -c %Y "$LOCK" 2>/dev/null || echo 0) ))
-  if [ "$age" -gt 720 ]; then
+  if [ "$age" -gt 900 ]; then
     echo "[deploy] снимаю зависший lock (${age}s)"
     rm -f "$LOCK"
   fi
@@ -41,15 +39,27 @@ if [ ! -d node_modules ] || ! git diff --quiet "$BEFORE" HEAD -- package-lock.js
   npm ci
 fi
 
-pm2 stop rastudio >/dev/null 2>&1 || true
-if [ -d .output ]; then
-  rm -rf .output.bak
-  mv .output .output.bak
-fi
-rm -rf .output-next .output
+bring_up() {
+  if [ ! -f "$ROOT/.output/server/index.mjs" ] && [ -f "$ROOT/.output.bak/server/index.mjs" ]; then
+    echo "[deploy] возвращаю предыдущую сборку"
+    rm -rf "$ROOT/.output"
+    mv "$ROOT/.output.bak" "$ROOT/.output"
+  fi
+  if [ -f "$ROOT/.output/server/index.mjs" ]; then
+    pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio >/dev/null 2>&1 || pm2 restart rastudio --update-env >/dev/null 2>&1 || true
+  fi
+}
 
-# Vite rmdir падает ENOTEMPTY на public/media/imported (~сотни МБ).
-# На время сборки убираем каталог, после — symlink в .output.
+# Если прошлый прогон остановил сайт — поднять сразу, не ждать сборки.
+bring_up
+
+STAGE="$ROOT/.build-stage"
+rm -rf "$STAGE"
+mkdir -p "$STAGE"
+git archive HEAD | tar -x -C "$STAGE"
+if [ -f "$ROOT/.env" ]; then cp "$ROOT/.env" "$STAGE/.env"; fi
+ln -sfn "$ROOT/node_modules" "$STAGE/node_modules"
+
 HOLD="$ROOT/.media-imported-hold"
 restore_media() {
   if [ -d "$HOLD" ]; then
@@ -64,30 +74,39 @@ if [ -d public/media/imported ]; then
   mv public/media/imported "$HOLD"
 fi
 
-npm run build:beget
-css="$(ls .output/public/assets/*.css 2>/dev/null | head -1 || true)"
-if [ ! -f .output/server/index.mjs ] || [ -z "$css" ]; then
-  echo "[deploy] сборка без index.mjs или CSS — возвращаю предыдущую"
-  rm -rf .output
-  if [ -d .output.bak ]; then mv .output.bak .output; fi
+(cd "$STAGE" && npm run build:beget)
+css="$(ls "$STAGE/.output/public/assets/"*.css 2>/dev/null | head -1 || true)"
+if [ ! -f "$STAGE/.output/server/index.mjs" ] || [ -z "$css" ]; then
+  echo "[deploy] сборка без index.mjs или CSS — оставляю текущий сайт"
+  rm -rf "$STAGE"
   restore_media
-  pm2 start ecosystem.config.cjs --only rastudio >/dev/null 2>&1 || pm2 restart rastudio --update-env || true
+  bring_up
   exit 1
 fi
-rm -rf .output.bak
+
 restore_media
 trap - EXIT
-mkdir -p .output/public/media
-if [ -d public/media/imported ] && [ ! -e .output/public/media/imported ]; then
-  ln -sfn "$ROOT/public/media/imported" .output/public/media/imported
+
+pm2 stop rastudio >/dev/null 2>&1 || true
+if [ -d "$ROOT/.output" ]; then
+  rm -rf "$ROOT/.output.bak"
+  mv "$ROOT/.output" "$ROOT/.output.bak"
+fi
+mv "$STAGE/.output" "$ROOT/.output"
+rm -rf "$STAGE"
+
+mkdir -p "$ROOT/.output/public/media"
+if [ -d "$ROOT/public/media/imported" ] && [ ! -e "$ROOT/.output/public/media/imported" ]; then
+  ln -sfn "$ROOT/public/media/imported" "$ROOT/.output/public/media/imported"
 fi
 
 pm2 delete rastudio >/dev/null 2>&1 || true
-pm2 start ecosystem.config.cjs --only rastudio
+pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio
+rm -rf "$ROOT/.output.bak"
 
 for app in rastudio-deploy rastudio-night-groups rastudio-pay-poll; do
   if ! pm2 describe "$app" >/dev/null 2>&1; then
-    pm2 start ecosystem.config.cjs --only "$app"
+    pm2 start "$ROOT/ecosystem.config.cjs" --only "$app"
   fi
 done
 pm2 save
