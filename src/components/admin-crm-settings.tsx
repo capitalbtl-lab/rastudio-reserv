@@ -439,7 +439,7 @@ function GroupFillList({
                           </p>
                           <p>{c.at ? ruAt(c.at) : "\u00a0"}</p>
                         </div>
-                        <div className="flex flex-col items-start gap-1 pt-1">
+                        <div className="flex flex-wrap items-center gap-1 pt-1">
                           <button
                             type="button"
                             disabled={busy && !spinJ}
