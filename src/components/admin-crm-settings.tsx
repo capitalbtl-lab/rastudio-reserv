@@ -124,6 +124,14 @@ type FillRow = {
   parts?: FillPart[];
 };
 
+function ruLessons(n: number) {
+  const n10 = n % 10;
+  const n100 = n % 100;
+  if (n10 === 1 && n100 !== 11) return `${n} занятие`;
+  if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return `${n} занятия`;
+  return `${n} занятий`;
+}
+
 function ruAt(iso?: string) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -416,10 +424,12 @@ function GroupFillList({
                             extra={noHw ? "грузить нечего" : !detailsOk && c.needDetails ? `осталось ${c.needDetails}` : undefined}
                           />
                         </div>
-                        <p className="mt-auto pt-1 text-[0.72rem] leading-4 text-muted">
-                          {c.weak ? "пакет оборвался" : c.err && !c.done ? c.err : c.lessons ? `${c.lessons} зан.` : loaded ? "занятий за квартал нет" : "ещё не загружали"}
-                          {c.at ? ` · ${ruAt(c.at)}` : ""}
-                        </p>
+                        <div className="mt-auto pt-1 text-[0.72rem] leading-4 text-muted">
+                          <p>
+                            {c.weak ? "пакет оборвался" : c.err && !c.done ? c.err : c.lessons ? ruLessons(c.lessons) : loaded ? "занятий за квартал нет" : "ещё не загружали"}
+                          </p>
+                          <p>{c.at ? ruAt(c.at) : "\u00a0"}</p>
+                        </div>
                         <div className="flex flex-col items-start gap-1 pt-1">
                           <button
                             type="button"
