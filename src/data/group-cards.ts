@@ -30,6 +30,8 @@ export type CachedGroupCard = {
   priority?: number;
   calendar: GroupCalLesson[];
   at: string;
+  /** Когда журнал группы последний раз дочитали из Alfa (даже если занятий 0). */
+  journalAt?: string;
 };
 
 type Store = { at: string; items: Record<string, CachedGroupCard> };

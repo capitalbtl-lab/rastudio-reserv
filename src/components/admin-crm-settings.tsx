@@ -775,7 +775,7 @@ export function AdminCrmSettings() {
                     void runJournal({ kind: "group", groupId: Number(row.groupId) || 0, branchId: Number(row.branchId) || 0 })
                   }
                 />
-                <p className="mt-2 text-[0.72rem] text-muted">Красный столбец — нажмите группу, загрузится только она. Зелёный — журнал уже на сайте.</p>
+                <p className="mt-2 text-[0.72rem] text-muted">Кнопка берёт только красные. После загрузки группа уходит в зелёный — даже если в Alfa занятий 0.</p>
               </section>
 
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">

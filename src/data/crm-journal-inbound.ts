@@ -170,13 +170,19 @@ export async function inboundJournalGroup(
   const dateFrom = opts?.dateFrom || ruShift(-2600);
   const dateTo = opts?.dateTo || ruShift(90);
   const byKey = new Map<string, GroupCalLesson>();
+  let alfaOk = 0;
   async function pull(status: number, date_from: string, date_to: string, pages: number, pageSize: number) {
     for (let page = 0; page < pages; page++) {
       const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
         `/v2api/${branch}/lesson/index`,
-        { page, pageSize, status, group_id: gid, date_from, date_to, removed: 0 },
+        { page, pageSize, status, group_id: gid, date_from, date_to },
         t,
-      ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
+      )
+        .then((x) => {
+          alfaOk += 1;
+          return x;
+        })
+        .catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
       const chunk = les.items || [];
       for (const item of chunk) {
         const gids = (item.group_ids || []).map(Number).filter((n) => n > 0);
@@ -194,25 +200,32 @@ export async function inboundJournalGroup(
     pull(2, dateFrom, dateTo, 4, 100),
     pull(3, dateFrom, dateTo, 10, 100),
   ]);
+  if (!alfaOk) {
+    return { ok: false as const, extra: `«${ctx.groupName}»: Alfa не ответила`, count: 0, calendar: cached?.calendar || [] };
+  }
   const pulled = [...byKey.values()];
   const hold = opts?.hold || pendingExportIds(["lesson.update", "lesson.create"]);
   const calendar = mergeLocalCalendar(pulled, cached?.calendar, hold, "union");
+  const now = new Date().toISOString();
+  const noteOf = (n: number, suffix = "") =>
+    n > 0 ? `«${ctx.groupName}»: ${n} зан.${suffix}` : `«${ctx.groupName}»: в Alfa занятий нет${suffix}`;
   const samePrint = cached && journalFingerprint(calendar) === journalFingerprint(cached.calendar || []);
   const sameMoney = cached && lessonPupilsKey(calendar) === lessonPupilsKey(cached.calendar || []);
   if (samePrint && sameMoney) {
     if (opts?.deep) {
       const enriched = await enrichCalendarDetails(branch, calendar, { token: t, take: 16 });
       if (enriched.changed) {
-        const card0 = { ...(cached || { id: gid, branchId: branch, name: ctx.groupName, calendar: [] as GroupCalLesson[], at: "", subject: ctx.subject, subjectId: Number(slot?.subjectId || 0) }), calendar: enriched.calendar };
+        const card0 = { ...(cached || { id: gid, branchId: branch, name: ctx.groupName, calendar: [] as GroupCalLesson[], at: "", subject: ctx.subject, subjectId: Number(slot?.subjectId || 0) }), calendar: enriched.calendar, journalAt: now, at: now };
         if (!opts?.defer) {
           saveGroupCard(card0);
           rememberLessons(enriched.calendar);
           fanOutLessonWriteoffs(enriched.calendar);
         }
-        return { ok: true as const, extra: `журнал ${gid}: ${enriched.calendar.length}, детали ${enriched.filled}`, count: enriched.calendar.length, calendar: enriched.calendar, card: card0 };
+        return { ok: true as const, extra: noteOf(enriched.calendar.length, `, детали ${enriched.filled}`), count: enriched.calendar.length, calendar: enriched.calendar, card: card0 };
       }
     }
-    return { ok: true as const, extra: `журнал ${gid}: без изменений`, count: calendar.length, calendar };
+    if (cached) saveGroupCard({ ...cached, calendar, journalAt: now, at: cached.at || now });
+    return { ok: true as const, extra: noteOf(calendar.length, calendar.length ? ", без изменений" : ""), count: calendar.length, calendar };
   }
   const card = {
     ...(cached || {
@@ -235,6 +248,8 @@ export async function inboundJournalGroup(
       at: "",
     }),
     calendar,
+    journalAt: now,
+    at: now,
   };
   if (!opts?.defer) {
     saveGroupCard(card);
@@ -245,15 +260,16 @@ export async function inboundJournalGroup(
     const enriched = await enrichCalendarDetails(branch, calendar, { token: t, take: 16 });
     if (enriched.changed) {
       card.calendar = enriched.calendar;
+      card.journalAt = now;
       if (!opts?.defer) {
         saveGroupCard(card);
         rememberLessons(enriched.calendar);
         fanOutLessonWriteoffs(enriched.calendar);
       }
-      return { ok: true as const, extra: `журнал ${gid}: ${enriched.calendar.length}, детали ${enriched.filled}`, count: enriched.calendar.length, calendar: enriched.calendar, card };
+      return { ok: true as const, extra: noteOf(enriched.calendar.length, `, детали ${enriched.filled}`), count: enriched.calendar.length, calendar: enriched.calendar, card };
     }
   }
-  return { ok: true as const, extra: `журнал ${gid}: ${calendar.length}`, count: calendar.length, calendar, card };
+  return { ok: true as const, extra: noteOf(calendar.length), count: calendar.length, calendar, card };
 }
 
 function isOneOffLesson(item: { lesson_type_id?: number; group_ids?: number[] }) {

@@ -166,7 +166,7 @@ export function journalPullProgress() {
   const groupRows = groups.map((g) => {
     const card = loadGroupCard(g.branchId, g.groupId);
     const lessons = (card?.calendar || []).length;
-    const done = Boolean(card?.at) && lessons > 0;
+    const done = Boolean(card?.journalAt) || lessons > 0;
     return { ...g, lessons, done };
   });
   const groupsMiss = groupRows.filter((g) => !g.done).map((g) => ({
@@ -174,7 +174,7 @@ export function journalPullProgress() {
     branchId: g.branchId,
     name: g.name,
     school: g.school,
-    extra: g.lessons ? `${g.lessons} зан. неполно` : "нет журнала",
+    extra: "ещё не загружали",
     archived: g.archived,
   }));
   const groupsDone = groupRows.filter((g) => g.done).map((g) => ({
@@ -182,7 +182,7 @@ export function journalPullProgress() {
     branchId: g.branchId,
     name: g.name,
     school: g.school,
-    extra: `${g.lessons} зан.`,
+    extra: g.lessons ? `${g.lessons} зан.` : "проверено, занятий нет",
     archived: g.archived,
   }));
 
@@ -310,42 +310,42 @@ export async function journalPull(opts: {
   const selectedBid = Number(opts.branchId) || 0;
 
   if (kind === "group" || kind === "school") {
-    const pool = school ? groups.filter((g) => g.school === school) : groups;
-    if (!pool.length) {
+    const scoped = school ? groups.filter((g) => g.school === school) : groups;
+    if (!scoped.length) {
       store.note = school ? `В школе «${school}» нет групп на сайте.` : "Сначала загрузите группы из Alfa.";
       store.at = new Date().toISOString();
       saveStore(store);
-      return { ok: false as const, error: store.note, ...journalPullState() };
+      return { ok: false as const, error: store.note, more: false, ...journalPullState() };
     }
-    const take = kind === "school" ? 3 : 1;
+    const miss = scoped.filter((g) => {
+      const card = loadGroupCard(g.branchId, g.groupId);
+      return !card?.journalAt && !(card?.calendar || []).length;
+    });
     let slice: JournalPullGroup[] = [];
-    let next = 0;
-    let wrapped = false;
     if (kind === "group" && selectedGid) {
-      const hit = pool.find((g) => g.groupId === selectedGid && (!selectedBid || g.branchId === selectedBid)) || pool.find((g) => g.groupId === selectedGid);
+      const hit = scoped.find((g) => g.groupId === selectedGid && (!selectedBid || g.branchId === selectedBid)) || scoped.find((g) => g.groupId === selectedGid);
       slice = hit ? [hit] : [];
-      next = store.groupIdx;
     } else {
-      const key = school || "*";
-      const idx = school ? Number(store.schoolIdx[key]) || 0 : store.groupIdx;
-      const picked = pickSlice(pool, idx, take);
-      slice = picked.slice;
-      next = picked.next;
-      wrapped = picked.wrapped;
-      if (school) store.schoolIdx[key] = next;
-      else store.groupIdx = next;
+      if (!miss.length) {
+        store.note = school ? `В «${school}» все группы уже проверены.` : "Все группы уже проверены.";
+        store.at = new Date().toISOString();
+        saveStore(store);
+        return { ok: true as const, extra: store.note, count: 0, scanned: 0, more: false, ...journalPullState() };
+      }
+      slice = miss.slice(0, kind === "school" ? 3 : 1);
     }
     const parts: string[] = [];
     let n = 0;
     for (const g of slice) {
-      const res = await pullOneGroup(g).catch(() => ({ extra: `${g.name}: ошибка`, count: 0 }));
+      const res = await pullOneGroup(g).catch(() => ({ extra: `«${g.name}»: ошибка`, count: 0 }));
       n += Number(res.count) || 0;
-      parts.push(res.extra || `${g.name}: ${res.count}`);
+      parts.push(res.extra || `«${g.name}»: ${res.count}`);
     }
-    store.note = `${parts.join(" · ")}${wrapped ? " · круг закрыт" : ""}`;
+    const left = miss.length - slice.length;
+    store.note = parts.join(" · ") + (kind === "school" && left > 0 ? ` · осталось ${left}` : "");
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: n, scanned: slice.length, more: kind === "group" ? false : !wrapped, ...journalPullState() };
+    return { ok: true as const, extra: store.note, count: n, scanned: slice.length, more: kind === "school" && left > 0, ...journalPullState() };
   }
 
   const group = selectedGid ? { groupId: selectedGid, branchId: selectedBid || 1 } : undefined;

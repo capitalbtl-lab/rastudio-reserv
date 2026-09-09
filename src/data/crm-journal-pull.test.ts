@@ -7,7 +7,6 @@ describe("ручной журнал с Alfa", () => {
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
     assert.match(pull, /kind === "group"/);
     assert.match(pull, /kind === "school"/);
-    assert.match(pull, /take = kind === "school" \? 3 : 1/);
     assert.match(pull, /pickSlice\(people, idx, 10\)/);
     assert.match(pull, /kind === "balance"/);
     assert.match(pull, /inboundJournalGroup\(g.branchId, g.groupId, \{ deep: true \}\)/);
@@ -15,11 +14,13 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /inboundCustomerPays/);
     assert.match(pull, /pullCustomerTariffs/);
     assert.match(pull, /force: true/);
+    assert.match(pull, /все группы уже проверены/);
+    assert.match(pull, /miss.slice\(0, kind === "school" \? 3 : 1\)/);
+    assert.match(pull, /card\?\.journalAt/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
-    assert.match(inbound, /export async function enrichCalendarDetails/);
-    assert.match(inbound, /opts\?\.deep/);
-    assert.match(inbound, /raw.homework/);
-    assert.match(inbound, /opts\?\.force/);
+    assert.match(inbound, /journalAt: now/);
+    assert.doesNotMatch(inbound, /group_id: gid, date_from, date_to, removed: 0/);
+    assert.match(inbound, /в Alfa занятий нет/);
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(api, /"journalPull"/);
     assert.match(api, /journalPullState/);
