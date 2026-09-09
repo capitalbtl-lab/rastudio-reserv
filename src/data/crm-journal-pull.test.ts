@@ -74,6 +74,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Деньги на карточке/);
     assert.match(ui, /На странице/);
     assert.match(ui, /toggleOpen/);
+    assert.match(ui, /aria-label=\{shown \? "свернуть" : "развернуть"\}/);
     assert.doesNotMatch(ui, /max-h-\[36rem\]/);
     assert.doesNotMatch(ui, /if \(open && aid === open\) return -1/);
     assert.match(ui, /История из Alfa/);

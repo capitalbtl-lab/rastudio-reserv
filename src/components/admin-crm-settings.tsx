@@ -333,10 +333,11 @@ function GroupFillList({
           const loadLabel = active ? loading?.label || chunks.find((c) => c.key === loading?.periodKey)?.label || wiz.part?.label || "" : "";
           return (
             <li key={id} data-gid={id} className={cn("rounded-2xl bg-white p-3 ring-1", full ? "ring-emerald-300" : active ? "ring-primary" : "ring-black/8")}>
-              <button type="button" className="w-full text-left" onClick={() => toggleOpen(id)}>
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="font-medium">{row.name}</span>
-                  <span className="flex flex-wrap items-center gap-1">
+              <div className="flex items-center gap-2">
+                <button type="button" className="min-w-0 flex-1 text-left font-medium" onClick={() => toggleOpen(id)}>
+                  {row.name}
+                </button>
+                <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
                     {row.ageLabel ? (
                       <span
                         className={cn(
@@ -357,16 +358,24 @@ function GroupFillList({
                     {detailsLeft > 0 ? (
                       <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[0.72rem] font-semibold text-violet-900">без темы/ДЗ · {detailsLeft}</span>
                     ) : null}
-                  </span>
-                </div>
-                <FillBar pct={pct} run={active} done={full} />
-                <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
+                </span>
+                <button
+                  type="button"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg font-semibold leading-none ring-1 ring-black/20 hover:bg-black/5"
+                  aria-expanded={shown}
+                  aria-label={shown ? "свернуть" : "развернуть"}
+                  onClick={() => toggleOpen(id)}
+                >
+                  {shown ? "−" : "+"}
+                </button>
+              </div>
+              <FillBar pct={pct} run={active} done={full} />
+              <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
                   {active ? `загрузка · ${loadLabel}` : [row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
                   {!active && row.lessons ? ` · ${row.lessons} зан.` : ""}
                   {!active && row.weight ? ` · ${row.weight}` : ""}
                   {row.archived ? " · архив" : ""}
-                </p>
-              </button>
+              </p>
               <p className="mt-2 h-5 truncate text-[0.78rem] font-semibold">{active ? `загрузка · ${loadLabel}` : wiz.step}</p>
               <div className="mt-1 flex h-8 items-center gap-2">
                 <button
