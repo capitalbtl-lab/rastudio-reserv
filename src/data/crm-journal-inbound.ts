@@ -491,43 +491,78 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
 }
 
 
-export async function inboundJournalChunk(offset = 0, take = 2) {
+export async function inboundJournalChunk(offset = 0, _take = 1) {
   if (!alfaLinkedNow()) {
     return { ok: true as const, done: true, next: 0, total: 0, extra: "без Alfa", ids: [] as number[], live: 0, fromCache: true };
   }
-  const { overlayAdminGroups } = await import("./dossiers");
-  const { listAdminSlots } = await import("./alfacrm-schedule");
-  const { token } = await import("./alfacrm");
-  const groups = overlayAdminGroups();
+  const { journalPullGroups } = await import("./crm-journal-pull");
+  const { journalPeriods, inferredPeriodKeys, nextPeriod, inPeriod } = await import("./crm-journal-periods");
+  const groups = journalPullGroups();
   const total = groups.length;
-  const size = Math.max(1, Math.min(2, Number(take) || 2));
-  const from = Math.max(0, Number(offset) || 0);
-  const slice = groups.slice(from, from + size);
-  const slots = listAdminSlots();
-  const hold = pendingExportIds(["lesson.update", "lesson.create"]);
-  const t = await token();
-  const results = await Promise.all(
-    slice.map((g) => inboundJournalGroup(g.branchId, g.groupId, { token: t, slots, hold, defer: true })),
-  );
-  const cards = results.flatMap((r) => (r.card ? [r.card] : []));
-  if (cards.length) {
-    saveGroupCards(cards);
-    rememberLessons(cards.flatMap((c) => c.calendar || []));
-    fanOutLessonWriteoffs(cards.flatMap((c) => c.calendar || []));
+  if (!total) {
+    stampJournalCursor(0, 0);
+    return { ok: true as const, done: true, next: 0, total: 0, extra: "нет групп", ids: [] as number[], live: 0 };
   }
-  const n = results.reduce((s, r) => s + r.count, 0);
-  const next = from + slice.length;
-  const done = next >= total || !slice.length;
-  stampJournalCursor(done ? total : next, total);
+  const periods = journalPeriods();
+  const start = Math.max(0, Number(offset) || 0) % total;
+  for (let i = 0; i < total; i += 1) {
+    const idx = (start + i) % total;
+    const g = groups[idx];
+    const card0 = loadGroupCard(g.branchId, g.groupId);
+    const have = inferredPeriodKeys(card0?.calendar, card0?.journalFill?.done);
+    const period = nextPeriod(have, periods);
+    if (!period) continue;
+    const res = await inboundJournalGroup(g.branchId, g.groupId, {
+      lite: true,
+      deep: false,
+      dateFrom: period.from,
+      dateTo: period.to,
+    });
+    const ok = res.ok !== false;
+    const card = loadGroupCard(g.branchId, g.groupId);
+    if (card) {
+      const doneKeys = inferredPeriodKeys(card.calendar, card.journalFill?.done);
+      const fail = { ...(card.journalFill?.fail || {}) };
+      if (ok) {
+        if (!doneKeys.includes(period.key)) doneKeys.push(period.key);
+        delete fail[period.key];
+      } else {
+        fail[period.key] = String(res.extra || "Alfa не ответила");
+      }
+      saveGroupCard({ ...card, journalFill: { done: doneKeys, fail }, journalAt: new Date().toISOString() });
+    }
+    const n = (res.calendar || []).filter((l) => inPeriod(l.date, period.from, period.to)).length;
+    const after = loadGroupCard(g.branchId, g.groupId);
+    const still = after ? nextPeriod(inferredPeriodKeys(after.calendar, after.journalFill?.done), periods) : null;
+    const next = ok && still ? idx : (idx + 1) % total;
+    const allDone = groups.every((row) => {
+      const c = loadGroupCard(row.branchId, row.groupId);
+      return !nextPeriod(inferredPeriodKeys(c?.calendar, c?.journalFill?.done), periods);
+    });
+    stampJournalCursor(allDone ? total : next, total);
+    return {
+      ok: true as const,
+      done: allDone,
+      next: allDone ? total : next,
+      total,
+      extra: ok
+        ? `журнал «${g.name}»: ${period.label} · ${n} зан.`
+        : String(res.extra || `«${g.name}»: ${period.label} — Alfa не ответила`),
+      ids: [] as number[],
+      live: n,
+      scanned: 1,
+    };
+  }
+  stampJournalCursor(total, total);
   return {
     ok: true as const,
-    done,
-    next: done ? total : next,
+    done: true,
+    next: total,
     total,
-    extra: `журнал ${from + 1}–${Math.min(next, total)}/${total}`,
+    extra: "все полугодия групп проверены",
     ids: [] as number[],
-    live: n,
-    scanned: slice.length,
+    live: 0,
+    scanned: 0,
   };
 }
 

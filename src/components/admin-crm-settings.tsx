@@ -220,6 +220,8 @@ export function AdminCrmSettings() {
   const [openMiss, setOpenMiss] = useState<"g" | "j1" | "j2" | "c1" | "c2" | "">("");
   const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number } | null>(null);
   const dragId = useRef(0);
+  const tickLock = useRef(false);
+  const busyRef = useRef(false);
 
   function applyLink(link: {
     mode?: AlfaLinkMode;
@@ -252,6 +254,19 @@ export function AdminCrmSettings() {
     void loadActors();
     void loadJournal();
   }, []);
+
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
+
+  useEffect(() => {
+    if (alfaMode !== "linked") return;
+    const id = window.setInterval(() => {
+      if (document.hidden || busyRef.current || tickLock.current) return;
+      void tickQueue(false, true);
+    }, 18000);
+    return () => window.clearInterval(id);
+  }, [alfaMode]);
 
   async function loadAuto() {
     try {
@@ -380,17 +395,22 @@ export function AdminCrmSettings() {
     setMsg("Каналы фона с Alfa записаны. Ольга по-прежнему пишет на диск.");
   }
 
-  async function tickQueue(force: boolean) {
-    setBusy(true);
+  async function tickQueue(force: boolean, silent = false) {
+    if (tickLock.current) return;
+    tickLock.current = true;
+    if (!silent) setBusy(true);
     try {
       const res = (await adminSchedule({
         data: { token: token(), action: "crmQueueTick", force } as never,
       })) as { ok?: boolean; extra?: string; queue?: typeof queue; error?: string; live?: number };
       if (res.queue) setQueue(res.queue);
-      setMsg(res.error || res.extra || (res.ok ? `Пакет прошёл${res.live != null ? `, живых ${res.live}` : ""}` : "Очередь не ответила."));
+      if (!silent) setMsg(res.error || res.extra || (res.ok ? `Пакет прошёл${res.live != null ? `, живых ${res.live}` : ""}` : "Очередь не ответила."));
+      else if (res.extra) setMsg(res.extra);
       await loadCache();
+      void loadJournal();
     } finally {
-      setBusy(false);
+      tickLock.current = false;
+      if (!silent) setBusy(false);
     }
   }
 
@@ -732,7 +752,7 @@ export function AdminCrmSettings() {
 
       <Card
         title="Загрузить историю из Alfa"
-        hint="Группы грузятся по полугодиям. Полоска у группы — сколько полугодий уже есть. «Есть с …» — с какого месяца есть занятия."
+        hint="Пока вкладка открыта, фон сам снимает одно полугодие журнала каждые ~18 секунд. Полоска у группы растёт."
       >
         {(() => {
           const offline = alfaMode === "offline";

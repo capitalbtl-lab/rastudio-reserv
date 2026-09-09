@@ -33,11 +33,17 @@ describe("ручной журнал с Alfa", () => {
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /opts\?\.lite \|\| windowed/);
     assert.match(inbound, /journalAt: now/);
+    assert.match(inbound, /inboundJournalChunk/);
+    assert.match(inbound, /dateFrom: period.from/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /GroupFillList/);
     assert.match(ui, /полугодий/);
     assert.match(ui, /Загрузить следующее полугодие/);
     assert.match(ui, /грузим/);
+    const pack = readFileSync(new URL("./crm-packet-queue.ts", import.meta.url), "utf8");
+    assert.match(pack, /inboundJournalChunk\(polJ.journalNext/);
+    assert.match(pack, /inboundJournalChunk\(loadCachePolicy\(\).journalNext/);
+    assert.doesNotMatch(pack, /void tickCrmQueue\(3\)/);
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(api, /"journalPull"/);
     assert.match(api, /journalPullState/);
