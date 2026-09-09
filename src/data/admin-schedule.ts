@@ -3023,10 +3023,6 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const raw = data.alfaLink;
       const next = saveAlfaLink(typeof raw === "object" && raw ? raw : alfaLinkOf(typeof raw === "string" ? raw : ""));
       logAdmin(`Связь AlfaCRM: ${next.mode === "offline" ? "без Alfa" : "фон"}`);
-      if (next.mode === "linked") {
-        void import("./crm-packet-queue").then((q) => void q.tickCrmQueue(1));
-        void import("./crm-export-queue").then((e) => void e.tickExportQueue(3));
-      }
       return { ok: true as const, alfaLink: next };
     }
     if (data.action === "actorsGet") {

@@ -1284,9 +1284,8 @@ export function AdminCrmSettings() {
         return;
       }
       if (res.alfaLink) applyLink(res.alfaLink);
-      setMsg(mode === "offline" ? "Без AlfaCRM: очередь копит, в CRM не уходит. Ольга пишет на диск." : "Фон с AlfaCRM: очередь выгружает по включённым каналам.");
-      if (mode === "linked") await tickQueue(false);
-      else await loadCache();
+      setMsg(mode === "offline" ? "Без AlfaCRM: очередь копит, в CRM не уходит. Ольга пишет на диск." : "Фон с AlfaCRM: очередь выгружает по включённым каналам. Запуск пакетов — вкладка «Очередь».");
+      await loadCache();
     } finally {
       setBusy(false);
     }
