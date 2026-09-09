@@ -76,12 +76,18 @@ export function isCustomerTrialLesson(lesson: { type?: string; typeId?: number; 
   return Number(lesson.typeId) === 3 || /пробн/i.test(`${lesson.type || ""} ${lesson.group || ""}`);
 }
 
-/** Карточка ученика: только её группа. Пустое и чужое имя — нет. Пробное её — да. */
+/** Карточка ученика: её группа, пробное, или урок уже в её журнале. */
 export function calendarLessonForCard(
-  lesson: { group?: string; type?: string; typeId?: number; groupIds?: number[] },
+  lesson: { group?: string; type?: string; typeId?: number; groupIds?: number[]; customerIds?: number[]; pupils?: { customerId?: number }[] },
   groups: { id?: number; name?: string }[],
+  customerId?: number,
 ) {
   if (isCustomerTrialLesson(lesson)) return true;
+  const cid = Number(customerId) || 0;
+  if (cid) {
+    if ((lesson.customerIds || []).map(Number).includes(cid)) return true;
+    if ((lesson.pupils || []).some((p) => Number(p.customerId) === cid)) return true;
+  }
   const ids = new Set(groups.map((g) => Number(g.id) || 0).filter(Boolean));
   const names = new Set(groups.map((g) => String(g.name || "").trim()).filter(Boolean));
   const gids = (lesson.groupIds || []).map(Number).filter(Boolean);

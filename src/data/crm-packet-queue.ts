@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { emptyCrmQueue, mergeCrmPacket, overlayStale, overlayEnqueueOffset, pickNextPacket, type CrmPacket, type CrmPacketDraft, type CrmQueueState } from "./crm-packet-queue-core";
-import { loadCachePolicy, stampOverlay, stampJournalCursor, journalStale } from "./crm-cache-policy";
+import { loadCachePolicy, stampOverlay, stampJournalCursor, journalStale, stampLessonsCursor, lessonsAttendStale } from "./crm-cache-policy";
 import { logAdmin } from "./admin-settings";
 import { alfaLinkedNow, wantAlfaPullChannel } from "./crm-alfa-link";
+import { clearLessonsAttendStamps } from "./crm-customer-sync";
 
 export type { CrmPacket, CrmQueueState };
 
@@ -91,6 +92,26 @@ export function enqueueJournalOverlay(fromStart = false) {
   if (plan.skip) return crmQueueSnapshot();
   if (plan.restart) stampJournalCursor(0, pol.journalTotal || 0);
   return enqueueCrmPacket({ kind: "journal", offset: plan.offset });
+}
+
+export function enqueueLessonsOverlay(fromStart = false) {
+  if (!alfaLinkedNow()) return crmQueueSnapshot();
+  if (!fromStart) {
+    const q = loadQueue();
+    if (q.packets.some((p) => p.kind === "lessons")) return crmQueueSnapshot();
+  }
+  const pol = loadCachePolicy();
+  const stale = fromStart || lessonsAttendStale();
+  const plan = overlayEnqueueOffset({
+    fromStart,
+    overlayNext: pol.lessonsNext || 0,
+    overlayTotal: pol.lessonsTotal || 0,
+    stale,
+  });
+  if (plan.skip) return crmQueueSnapshot();
+  if (plan.restart) stampLessonsCursor(0, pol.lessonsTotal || 0);
+  if (fromStart) clearLessonsAttendStamps();
+  return enqueueCrmPacket({ kind: "lessons", offset: plan.offset });
 }
 
 export function enqueueGroupPacket(branchId: number, groupId: number, name?: string) {
@@ -219,6 +240,25 @@ export async function tickCrmQueue(take = 3, opts?: { skipJournal?: boolean }) {
         g.__raCrmLastKind = picked.kind;
         return { ...res, busy: false };
       }
+      dropPacket(picked.id);
+      enqueueLessonsOverlay(false);
+    } else if (picked.kind === "lessons") {
+      const { inboundCustomerLessonsChunk } = await import("./crm-journal-inbound");
+      const offset = Math.max(0, picked.offset || 0);
+      res = await inboundCustomerLessonsChunk(offset, 2);
+      if (!res.done) {
+        const nq = loadQueue();
+        nq.packets = mergeCrmPacket(
+          nq.packets.filter((p) => p.id !== picked.id),
+          { kind: "lessons", offset: Number(res.next) || offset + 2 },
+        );
+        nq.lastAt = new Date().toISOString();
+        nq.lastNote = res.extra || "";
+        saveQueue(nq);
+        g.__raCrmLastKind = picked.kind;
+        return { ...res, busy: false };
+      }
+      dropPacket(picked.id);
     } else {
       const total = overlayAdminGroups().length;
       const offset = Math.max(0, picked.offset || 0);
@@ -315,7 +355,10 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
   }
   if (opts?.force) {
     enqueueCrmOverlay(true);
-    if (wantAlfaPullChannel("lessons")) enqueueJournalOverlay(true);
+    if (wantAlfaPullChannel("lessons")) {
+      enqueueJournalOverlay(true);
+      enqueueLessonsOverlay(true);
+    }
   } else if (stale || opts?.offset != null) {
     const q = loadQueue();
     if (!q.packets.some((p) => p.kind === "overlay")) {
@@ -323,6 +366,7 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
     }
   }
   if (wantAlfaPullChannel("lessons") && journalStale() && !opts?.force) enqueueJournalOverlay(false);
+  if (wantAlfaPullChannel("lessons") && lessonsAttendStale() && !opts?.force) enqueueLessonsOverlay(false);
   const take = Number(opts?.take) || 3;
   const res = await tickCrmQueue(take, { skipJournal: true });
   kickBackground();
@@ -347,9 +391,11 @@ function kickBackground() {
     overlayTotal: pol.overlayTotal,
   });
   const needJournal = wantAlfaPullChannel("lessons") && journalStale();
-  if (!cgiStale && !needJournal) return;
+  const needLessons = wantAlfaPullChannel("lessons") && lessonsAttendStale();
+  if (!cgiStale && !needJournal && !needLessons) return;
   if (cgiStale) enqueueCrmOverlay(false);
   if (needJournal) enqueueJournalOverlay(false);
+  if (needLessons) enqueueLessonsOverlay(false);
   if (g.__raCrmQueueBusy) return;
   void tickCrmQueue(3);
 }

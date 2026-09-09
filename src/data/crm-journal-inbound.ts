@@ -2,7 +2,7 @@ import { loadGroupCard, saveGroupCard, saveGroupCards, mergeLocalCalendar, fanOu
 import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
-import { stampJournalCursor } from "./crm-cache-policy";
+import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
 import { journalFingerprint } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk } from "./crm-slots-core";
@@ -29,6 +29,7 @@ import {
   LESSON_STATUSES,
   LESSON_INBOUND_RUN,
   LESSON_RECENT_DAYS,
+  customerLessonsNeedAttend,
 } from "./crm-customer-sync";
 
 
@@ -162,9 +163,8 @@ export async function inboundJournalGroup(
     teacher: String(slot?.teacher || ""),
     subject: String(cached?.subject || slot?.subject || ""),
   };
-  const dateFrom = opts?.dateFrom || ruShift(-90);
-  const dateTo = opts?.dateTo || ruShift(21);
-  const doneFrom = opts?.dateFrom || ruShift(-800);
+  const dateFrom = opts?.dateFrom || ruShift(-2200);
+  const dateTo = opts?.dateTo || ruShift(90);
   const byKey = new Map<string, GroupCalLesson>();
   async function pull(status: number, date_from: string, date_to: string, pages: number, pageSize: number) {
     for (let page = 0; page < pages; page++) {
@@ -186,9 +186,9 @@ export async function inboundJournalGroup(
     }
   }
   await Promise.all([
-    pull(1, dateFrom, dateTo, 2, 50),
-    pull(2, dateFrom, dateTo, 2, 50),
-    pull(3, doneFrom, dateTo, 6, 100),
+    pull(1, dateFrom, dateTo, 8, 100),
+    pull(2, dateFrom, dateTo, 4, 100),
+    pull(3, dateFrom, dateTo, 10, 100),
   ]);
   const pulled = [...byKey.values()];
   const hold = opts?.hold || pendingExportIds(["lesson.update", "lesson.create"]);
@@ -235,14 +235,14 @@ function isOneOffLesson(item: { lesson_type_id?: number; group_ids?: number[] })
   return groups.length === 0 && typeId !== 2;
 }
 
-export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean }) {
+export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean }) {
   const id = Number(customerId) || 0;
-  if (!alfaLinkedNow() || id <= 0) return { ok: true as const, count: 0 };
+  if (!alfaLinkedNow() || id <= 0) return { ok: true as const, count: 0, done: true };
   const { wantAlfaPullChannel } = await import("./crm-alfa-link");
-  if (!wantAlfaPullChannel("lessons")) return { ok: true as const, count: 0, skipped: "канал" as const };
-  if (lessonFillBusy(id)) return { ok: true as const, count: 0, skipped: "busy" as const };
-  const wantFull = Boolean(opts?.full) || !customerSyncOf(id).lessonsFull;
-  if (!wantFull && customerLessonsFresh(id)) return { ok: true as const, count: 0, skipped: "fresh" as const };
+  if (!wantAlfaPullChannel("lessons")) return { ok: true as const, count: 0, skipped: "канал" as const, done: true };
+  if (lessonFillBusy(id)) return { ok: true as const, count: 0, skipped: "busy" as const, done: false };
+  const wantFull = Boolean(opts?.full) || !customerSyncOf(id).lessonsFull || customerLessonsNeedAttend(id);
+  if (!wantFull && customerLessonsFresh(id)) return { ok: true as const, count: 0, skipped: "fresh" as const, done: true };
   markLessonFillBusy(id, true);
   try {
     const { token, request } = await import("./alfacrm");
@@ -258,7 +258,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     let cur = wantFull ? lessonFillOf(customerSyncOf(id).lessonFill) || lessonFillStart(branches[0] || branch) : lessonFillStart(branches[0] || branch);
     let ran = 0;
     const maxRun = wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
-    const maxPages = wantFull ? 8 : 2;
+    const maxPages = wantFull ? 12 : 2;
     const from = wantFull ? dateFrom : ruShift(LESSON_RECENT_DAYS);
     while (ran < maxRun && !cur.done) {
       const bid = cur.bid;
@@ -322,9 +322,10 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     stampCustomerSync(id, {
       lessonsAt: new Date().toISOString(),
       lessonsFull: customerSyncOf(id).lessonsFull || done,
+      lessonsAttend: customerSyncOf(id).lessonsAttend || done,
       lessonFill: done ? undefined : cur,
     });
-    if (wantFull && !done) {
+    if (wantFull && !done && opts?.continueLater !== false) {
       setTimeout(() => {
         void inboundCustomerLessons(branch, id).catch(() => null);
       }, 700);
@@ -371,6 +372,63 @@ export async function inboundJournalChunk(offset = 0, take = 2) {
     total,
     extra: `журнал ${from + 1}–${Math.min(next, total)}/${total}`,
     ids: [] as number[],
+    live: n,
+    scanned: slice.length,
+  };
+}
+
+/** Очередь: полная явка по текущим и архиву. Лидов не гоняем. */
+export async function inboundCustomerLessonsChunk(offset = 0, take = 2) {
+  if (!alfaLinkedNow()) {
+    return { ok: true as const, done: true, next: 0, total: 0, extra: "без Alfa", ids: [] as number[], live: 0 };
+  }
+  const { allDossierCrmIds } = await import("./dossiers");
+  const ranked = allDossierCrmIds()
+    .map((cid) => {
+      const d = findDossier({ crmId: cid });
+      const study = Number(d?.extras?.is_study);
+      return { cid, study: Number.isFinite(study) ? study : -1 };
+    })
+    .filter((x) => x.study !== 0)
+    .sort((a, b) => {
+      const ra = a.study === 1 ? 0 : a.study === 2 ? 1 : 2;
+      const rb = b.study === 1 ? 0 : b.study === 2 ? 1 : 2;
+      return ra - rb || a.cid - b.cid;
+    });
+  const ids = ranked.map((x) => x.cid);
+  const total = ids.length;
+  const size = Math.max(1, Math.min(3, Number(take) || 2));
+  const from = Math.max(0, Number(offset) || 0);
+  const slice = ids.slice(from, from + size);
+  let n = 0;
+  for (const cid of slice) {
+    const d = findDossier({ crmId: cid });
+    const branch = Number(d?.branchId || 1) || 1;
+    for (let round = 0; round < 6; round += 1) {
+      const res = await inboundCustomerLessons(branch, cid, { continueLater: false }).catch(() => ({
+        ok: true as const,
+        count: 0,
+        done: true as const,
+        skipped: undefined as string | undefined,
+      }));
+      n += Number(res.count) || 0;
+      if ("skipped" in res && res.skipped === "busy") {
+        await new Promise((r) => setTimeout(r, 300));
+        continue;
+      }
+      if (res.done !== false) break;
+    }
+  }
+  const next = from + slice.length;
+  const done = next >= total || !slice.length;
+  stampLessonsCursor(done ? total : next, total);
+  return {
+    ok: true as const,
+    done,
+    next: done ? total : next,
+    total,
+    extra: `явка ${from + 1}–${Math.min(next, total)}/${total}`,
+    ids: slice,
     live: n,
     scanned: slice.length,
   };

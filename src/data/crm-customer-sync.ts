@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export const CUSTOMER_SYNC_TTL_MS = 10 * 60 * 1000;
-export const LESSON_INBOUND_RUN = 4;
+export const LESSON_INBOUND_RUN = 8;
 export const LESSON_STATUSES = [1, 2, 3] as const;
 export const LESSON_RECENT_DAYS = -21;
 
@@ -13,6 +13,8 @@ export type LessonFillCursor = { bid: number; statusIdx: number; page: number; d
 export type CustomerSyncStamp = {
   lessonsAt?: string;
   lessonsFull?: boolean;
+  /** Детали явки (is_attend) за весь период уже сняты с Alfa. */
+  lessonsAttend?: boolean;
   lessonFill?: LessonFillCursor;
   paysAt?: string;
 };
@@ -64,7 +66,29 @@ export function stampCustomerSync(customerId: number, patch: CustomerSyncStamp) 
 
 export function customerLessonsFresh(customerId: number, now = Date.now()) {
   const s = customerSyncOf(customerId);
-  return Boolean(s.lessonsFull) && isSyncFresh(s.lessonsAt, now);
+  return Boolean(s.lessonsFull) && Boolean(s.lessonsAttend) && isSyncFresh(s.lessonsAt, now);
+}
+
+export function customerLessonsNeedAttend(customerId: number) {
+  const s = customerSyncOf(customerId);
+  return !s.lessonsAttend;
+}
+
+/** Полный круг явки заново: «Загрузить клиентов» и принудительное обновление. */
+export function clearLessonsAttendStamps() {
+  const store = load();
+  let n = 0;
+  for (const id of Object.keys(store.byId)) {
+    const s = store.byId[id];
+    if (!s) continue;
+    if (!s.lessonsAttend && !s.lessonsFull && !s.lessonFill) continue;
+    s.lessonsAttend = false;
+    s.lessonsFull = false;
+    delete s.lessonFill;
+    n += 1;
+  }
+  if (n) save(store);
+  return n;
 }
 
 export function lessonFillStart(branch: number): LessonFillCursor {

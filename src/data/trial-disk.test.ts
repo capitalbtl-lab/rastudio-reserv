@@ -472,6 +472,8 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.match(pack, /kind === "journal"/);
     assert.match(pack, /inboundJournalChunk/);
     assert.match(pack, /skipJournal/);
+    assert.match(pack, /kind === "lessons"/);
+    assert.match(pack, /inboundCustomerLessonsChunk/);
   });
 
   it("этап 8: деньги — журнал на диске, Alfa касса очередь", () => {

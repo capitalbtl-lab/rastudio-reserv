@@ -164,7 +164,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
       }
     }
   }
-  for (const les of collectCustomerJournal(customerId, activeGroups)) {
+  for (const les of collectCustomerJournal(customerId, groups)) {
     calendar.push(clientLessonFromJournal(les, les.group));
   }
   const cat = catalogBase();

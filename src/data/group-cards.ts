@@ -179,7 +179,7 @@ export function replaceCustomerCalendar(customerId: number, lessons: GroupCalLes
   const id = Number(customerId) || 0;
   if (!id) return [];
   const store = loadCustomerCals();
-  const list = (lessons || []).slice(0, 800);
+  const list = (lessons || []).slice(0, 2500);
   store.items[String(id)] = list;
   store.at = new Date().toISOString();
   writeCustomerCals(store);
@@ -218,11 +218,11 @@ export function collectCustomerJournal(
   const out: GroupCalLesson[] = [];
   const seen = new Set<string>();
   const id = Number(customerId) || 0;
-  const push = (les: GroupCalLesson, groupName?: string, pastWriteoff = false) => {
+  const push = (les: GroupCalLesson, groupName?: string, fromOwn = false) => {
     const ids = (les.customerIds || []).map(Number);
     const pupil = (les.pupils || []).some((p) => Number(p.customerId) === id);
     if (id && ids.length && !ids.includes(id) && !pupil) return;
-    if (id && !ids.length && !pupil && !pastWriteoff) return;
+    if (id && !ids.length && !pupil && !fromOwn) return;
     const charge = id ? chargeFromPupils(les, id) : { amount: Number(les.amount) || 0, cttId: Number(les.cttId) || 0 };
     const row: GroupCalLesson = withPupilFio({
       ...les,
@@ -230,7 +230,7 @@ export function collectCustomerJournal(
       amount: charge.amount || les.amount,
       cttId: charge.cttId || les.cttId,
     });
-    if (groups.length && !pastWriteoff && !calendarLessonForCard(row, groups)) return;
+    if (groups.length && !fromOwn && !calendarLessonForCard(row, groups, id)) return;
     const key = String(row.lessonId || `${row.date}|${row.from}|${row.type}|${row.group}`);
     const prev = seen.has(key) ? out.find((x) => String(x.lessonId || `${x.date}|${x.from}|${x.type}|${x.group}`) === key) : undefined;
     if (prev) {
@@ -253,12 +253,12 @@ export function collectCustomerJournal(
     seen.add(key);
     out.push(row);
   };
-  for (const les of loadCustomerCalendar(customerId)) push(les, undefined, Number(les.status) === 3);
+  for (const les of loadCustomerCalendar(customerId)) push(les, undefined, true);
   for (const g of groups) {
     const gcard = loadGroupCard(g.branchId, g.id);
     for (const les of journalForCustomer(gcard?.calendar || [], customerId)) push(les, g.name);
     for (const les of gcard?.calendar || []) {
-      if ((les.pupils || []).some((p) => Number(p.customerId) === id)) push(les, g.name, Number(les.status) === 3);
+      if ((les.pupils || []).some((p) => Number(p.customerId) === id)) push(les, g.name, true);
     }
   }
   return out.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")));
@@ -281,7 +281,7 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
         amount: charge.amount || undefined,
         cttId: charge.cttId || undefined,
       });
-      store.items[key] = list.slice(0, 800);
+      store.items[key] = list.slice(0, 2500);
       n += 1;
     }
   }
@@ -331,7 +331,24 @@ export function mergeLocalCalendar(
   holdIds?: Iterable<number>,
   mode: "replace" | "union" = "replace",
 ): GroupCalLesson[] {
-  return mergeJournalInbound(pulled, prev, holdIds, mode);
+  const list = mergeJournalInbound(pulled, prev, holdIds, mode);
+  if (mode !== "union" || !prev?.length) return list;
+  const prevMap = new Map(prev.map((x) => [String(x.lessonId || `${x.date}|${x.from}`), x]));
+  return list.map((row) => {
+    const old = prevMap.get(String(row.lessonId || `${row.date}|${row.from}`));
+    if (!old) return row;
+    const newN = row.pupils?.length || 0;
+    const oldN = old.pupils?.length || 0;
+    const pupils = newN >= oldN && newN ? mergeLessonPupils(old.pupils, row.pupils) : mergeLessonPupils(row.pupils, old.pupils) || old.pupils || row.pupils;
+    if (!pupils?.length) return row;
+    return {
+      ...row,
+      pupils,
+      customerIds: row.customerIds?.length ? row.customerIds : old.customerIds || pupils.map((p) => p.customerId),
+      amount: Number(row.amount) > 0 ? row.amount : old.amount,
+      cttId: Number(row.cttId) > 0 ? row.cttId : old.cttId,
+    };
+  });
 }
 
 export function applyCreatedCalendarLesson(localId: number, crmId: number) {

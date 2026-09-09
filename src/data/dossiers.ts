@@ -685,6 +685,16 @@ export function liveTariffIdsFromStore() {
     .filter(Boolean);
 }
 
+/** Все номера CRM на диске: текущие, лиды и архив. */
+export function allDossierCrmIds(): number[] {
+  const seen = new Set<number>();
+  for (const d of loadStore().items) {
+    const id = Number(d.crmId) || 0;
+    if (id > 0) seen.add(id);
+  }
+  return [...seen];
+}
+
 export function stampDossierLiveTariff(ids: number[], live: boolean) {
   const set = new Set(ids.map(Number).filter(Boolean));
   if (!set.size) return liveTariffIdsFromStore();

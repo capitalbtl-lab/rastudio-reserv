@@ -10,7 +10,7 @@ function fileOf() {
 }
 
 function empty(): CachePolicy {
-  return { at: "", overlayAt: "", overlayNext: 0, overlayTotal: 0, journalAt: "", journalNext: 0, journalTotal: 0, rules: { ...DEFAULT_CACHE_RULES } };
+  return { at: "", overlayAt: "", overlayNext: 0, overlayTotal: 0, journalAt: "", journalNext: 0, journalTotal: 0, lessonsAt: "", lessonsNext: 0, lessonsTotal: 0, rules: { ...DEFAULT_CACHE_RULES } };
 }
 
 export function loadCachePolicy(): CachePolicy {
@@ -35,6 +35,9 @@ export function loadCachePolicy(): CachePolicy {
       journalAt: String(raw.journalAt || ""),
       journalNext: Math.max(0, Number(raw.journalNext) || 0),
       journalTotal: Math.max(0, Number(raw.journalTotal) || 0),
+      lessonsAt: String(raw.lessonsAt || ""),
+      lessonsNext: Math.max(0, Number(raw.lessonsNext) || 0),
+      lessonsTotal: Math.max(0, Number(raw.lessonsTotal) || 0),
       rules,
     };
   } catch {
@@ -54,6 +57,9 @@ export function saveCachePolicy(next: CachePolicy) {
     journalAt: String(next.journalAt ?? cur.journalAt ?? ""),
     journalNext: Number.isFinite(Number(next.journalNext)) ? Math.max(0, Number(next.journalNext)) : cur.journalNext || 0,
     journalTotal: Number.isFinite(Number(next.journalTotal)) ? Math.max(0, Number(next.journalTotal)) : cur.journalTotal || 0,
+    lessonsAt: String(next.lessonsAt ?? cur.lessonsAt ?? ""),
+    lessonsNext: Number.isFinite(Number(next.lessonsNext)) ? Math.max(0, Number(next.lessonsNext)) : cur.lessonsNext || 0,
+    lessonsTotal: Number.isFinite(Number(next.lessonsTotal)) ? Math.max(0, Number(next.lessonsTotal)) : cur.lessonsTotal || 0,
     rules: { ...cur.rules },
   };
   for (const k of Object.keys(DEFAULT_CACHE_RULES) as CacheKind[]) {
@@ -97,5 +103,22 @@ export function journalStale(now = Date.now()) {
   const t = Date.parse(pol.journalAt || "");
   if (!Number.isFinite(t) || t <= 0) return true;
   if (!pol.journalTotal || (Number(pol.journalNext) || 0) < pol.journalTotal) return true;
+  return now - t >= ttl * 60_000;
+}
+
+export function stampLessonsCursor(next: number, total: number) {
+  const cur = loadCachePolicy();
+  cur.lessonsAt = new Date().toISOString();
+  cur.lessonsNext = next;
+  cur.lessonsTotal = total;
+  return saveCachePolicy(cur);
+}
+
+export function lessonsAttendStale(now = Date.now()) {
+  const pol = loadCachePolicy();
+  const ttl = Math.max(30, Number(pol.rules.lessons?.ttlMin) || 10) * 6;
+  const t = Date.parse(pol.lessonsAt || "");
+  if (!Number.isFinite(t) || t <= 0) return true;
+  if (!pol.lessonsTotal || (Number(pol.lessonsNext) || 0) < pol.lessonsTotal) return true;
   return now - t >= ttl * 60_000;
 }

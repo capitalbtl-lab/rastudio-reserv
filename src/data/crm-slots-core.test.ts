@@ -136,6 +136,16 @@ describe("карточка занятия группы: весь состав", 
     assert.equal(merged?.find((p) => p.customerId === 1)?.name, "Алехин Дмитрий");
     assert.equal(merged?.find((p) => p.customerId === 1)?.amount, 1087.5);
     assert.equal(merged?.find((p) => p.customerId === 5842)?.amount, 350);
+    const missed = mergeLessonPupils(
+      [{ customerId: 7913, name: "Андреева", attend: true }],
+      [{ customerId: 7913, name: "Андреева", attend: false, amount: 0 }],
+    );
+    assert.equal(missed?.find((p) => p.customerId === 7913)?.attend, false);
+    const keepMiss = mergeLessonPupils(
+      [{ customerId: 7913, attend: false }],
+      [{ customerId: 7913, attend: undefined as never }],
+    );
+    assert.equal(keepMiss?.find((p) => p.customerId === 7913)?.attend, false);
   });
 });
 

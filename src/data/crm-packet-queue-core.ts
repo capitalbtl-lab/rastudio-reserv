@@ -1,12 +1,14 @@
 export type CrmPacket =
   | { id: string; kind: "overlay"; offset: number }
   | { id: string; kind: "journal"; offset: number }
+  | { id: string; kind: "lessons"; offset: number }
   | { id: string; kind: "group"; branchId: number; groupId: number; name?: string }
   | { id: string; kind: "customers"; branchId: number; ids: number[] };
 
 export type CrmPacketDraft =
   | { id?: string; kind: "overlay"; offset: number }
   | { id?: string; kind: "journal"; offset: number }
+  | { id?: string; kind: "lessons"; offset: number }
   | { id?: string; kind: "group"; branchId: number; groupId: number; name?: string }
   | { id?: string; kind: "customers"; branchId: number; ids: number[] };
 
@@ -39,6 +41,12 @@ export function mergeCrmPacket(packets: CrmPacket[], incoming: CrmPacketDraft): 
     const offset = Math.min(Number(incoming.offset) || 0, old && old.kind === "journal" ? old.offset : Number(incoming.offset) || 0);
     return [...rest, { id: old?.id || id, kind: "journal", offset }];
   }
+  if (incoming.kind === "lessons") {
+    const rest = packets.filter((p) => p.kind !== "lessons");
+    const old = packets.find((p) => p.kind === "lessons");
+    const offset = Math.min(Number(incoming.offset) || 0, old && old.kind === "lessons" ? old.offset : Number(incoming.offset) || 0);
+    return [...rest, { id: old?.id || id, kind: "lessons", offset }];
+  }
   if (incoming.kind === "group") {
     if (packets.some((p) => p.kind === "group" && p.groupId === incoming.groupId && p.branchId === incoming.branchId)) return packets;
     return [...packets, { id, kind: "group", branchId: incoming.branchId, groupId: incoming.groupId, name: incoming.name }];
@@ -62,6 +70,7 @@ export function pickNextPacket(packets: CrmPacket[]) {
     packets.find((p) => p.kind === "group") ||
     packets.find((p) => p.kind === "customers") ||
     packets.find((p) => p.kind === "journal") ||
+    packets.find((p) => p.kind === "lessons") ||
     packets.find((p) => p.kind === "overlay") ||
     packets[0] ||
     null

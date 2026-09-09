@@ -13,6 +13,9 @@ export type CachePolicy = {
   journalAt: string;
   journalNext: number;
   journalTotal: number;
+  lessonsAt: string;
+  lessonsNext: number;
+  lessonsTotal: number;
   rules: Record<CacheKind, CacheRule>;
 };
 

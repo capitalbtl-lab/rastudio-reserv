@@ -277,6 +277,7 @@ function lessonsForCard(
   calendar: ClientLesson[] | undefined,
   regular: ClientRegular[] | undefined,
   groups: { id: number; name: string; subjectId?: number }[] = [],
+  customerId?: number,
 ): GroupCalLesson[] {
   const today = toYmd(new Date().toISOString().slice(0, 10));
   const out: GroupCalLesson[] = [];
@@ -284,8 +285,7 @@ function lessonsForCard(
   for (const l of calendar || []) {
     const date = toYmd(l.date);
     if (!date || date.length < 10) continue;
-    if (Number(l.status) === 2) continue;
-    if (!calendarLessonForCard(l, groups)) continue;
+    if (!calendarLessonForCard(l, groups, customerId)) continue;
     const key = `${date}|${l.from}|${l.group}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -513,9 +513,8 @@ export function CrmClientCard({
   }, [card.comms]);
   const comms = channel ? (card.comms || []).filter((c) => (c.channel || "сообщение") === channel) : card.comms || [];
   const tiles = useMemo(() => {
-    const mine = (card.groups || []).filter((g) => g.active !== false);
-    return lessonsForCard(card.calendar, card.regular, mine.length ? mine : card.groups || []);
-  }, [card.calendar, card.regular, card.groups]);
+    return lessonsForCard(card.calendar, card.regular, card.groups || [], card.id);
+  }, [card.calendar, card.regular, card.groups, card.id]);
   const writeOffs = useMemo(() => {
     const today = todayYmd();
     return (card.calendar || [])

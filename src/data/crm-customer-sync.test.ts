@@ -26,7 +26,7 @@ describe("штамп входа ученика", () => {
     assert.deepEqual(lessonFillAdvance({ bid: 1, statusIdx: 2, page: 0 }, true, [1, 2]), { bid: 2, statusIdx: 0, page: 0 });
     assert.equal(lessonFillAdvance({ bid: 2, statusIdx: 2, page: 1 }, true, [1, 2]).done, true);
     assert.equal(lessonFillOf({ bid: 3, statusIdx: 1, page: 4 })?.statusIdx, 1);
-    assert.equal(LESSON_INBOUND_RUN, 4);
+    assert.equal(LESSON_INBOUND_RUN, 8);
   });
 });
 
@@ -59,6 +59,28 @@ describe("карточка не ждёт Alfa", () => {
     assert.match(inbound, /lessonFillAdvance/);
     assert.match(inbound, /packLessonPupils/);
     assert.match(inbound, /uniqueBranches/);
+    assert.match(inbound, /lessonsAttend/);
+    assert.match(inbound, /customerLessonsNeedAttend/);
+    assert.match(inbound, /inboundCustomerLessonsChunk/);
+    assert.match(inbound, /allDossierCrmIds/);
+    assert.match(inbound, /pull\(1, dateFrom, dateTo, 8, 100\)/);
+    assert.match(inbound, /continueLater/);
+    assert.match(inbound, /study !== 0/);
+    const queue = readFileSync(new URL("./crm-packet-queue.ts", import.meta.url), "utf8");
+    assert.match(queue, /kind: "lessons"/);
+    assert.match(queue, /enqueueLessonsOverlay/);
+    assert.match(queue, /clearLessonsAttendStamps/);
+    assert.match(queue, /inboundCustomerLessonsChunk/);
+    const run = readFileSync(new URL("./admin-disk-run.ts", import.meta.url), "utf8");
+    assert.match(run, /enqueueLessonsOverlay\(true\)/);
+    assert.match(run, /Читаю архив AlfaCRM/);
+    assert.match(run, /syncAllFromCrm\([\s\S]*\[2\]/);
+    const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
+    assert.match(cards, /slice\(0, 2500\)/);
+    const card = readFileSync(new URL("../components/crm-client-card.tsx", import.meta.url), "utf8");
+    assert.match(card, /lessonsForCard\(card.calendar, card.regular, card.groups \|\| \[\], card.id\)/);
+    const sync = readFileSync(new URL("./crm-customer-sync.ts", import.meta.url), "utf8");
+    assert.match(sync, /clearLessonsAttendStamps/);
     const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
     const at = pay.indexOf("export async function inboundCustomerPays");
     const chunk = pay.slice(at, at + 2800);

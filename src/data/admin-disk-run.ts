@@ -157,7 +157,23 @@ async function runPull(kind: PullKind) {
       }
       lines.push({ ok: local.all > 0, text: `В базе на сайте: ${local.all}` });
       if (studies[0] === 1) lines.push({ ok: true, text: `Текущих уникальных: ${local.counts.учится}` });
-      lines.push({ ok: true, text: "Архив и лиды подгружаются отдельными кнопками — AlfaCRM не читаем целиком." });
+      if (studies[0] === 1) {
+        setJob({ step: "Читаю архив AlfaCRM — иначе явка за годы не сходится…" });
+        const arch = await syncAllFromCrm((p) => {
+          setJob({ step: p.step || "Архив…", added: p.n, total: Math.max(p.n, p.total || 0) });
+        }, [2]);
+        const archLocal = searchClientViews("", 1, "архив");
+        lines.push({ ok: true, text: `архив: обработано ${arch.count}, на сайте ${archLocal.all}` });
+      }
+      try {
+        const q = await import("./crm-packet-queue");
+        q.enqueueJournalOverlay(true);
+        q.enqueueLessonsOverlay(true);
+        void q.tickCrmQueue(2);
+        lines.push({ ok: true, text: "В очередь: журнал групп и явка по всем карточкам за весь период." });
+      } catch {
+        /* очередь не обязательна для самой загрузки списка */
+      }
       setJob({ done: true, running: false, total: local.all || res.count, added: res.count, lines, step: "" });
       logAdmin(`Клиенты из AlfaCRM (${label}): ${res.count}`);
       return;
