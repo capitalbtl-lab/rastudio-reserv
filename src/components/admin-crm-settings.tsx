@@ -128,7 +128,14 @@ function ruAt(iso?: string) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function packGrain(parts: FillPart[] | undefined, grain: Grain) {
@@ -409,7 +416,7 @@ function GroupFillList({
                             extra={noHw ? "грузить нечего" : !detailsOk && c.needDetails ? `осталось ${c.needDetails}` : undefined}
                           />
                         </div>
-                        <p className="mt-auto h-4 truncate pt-1 text-[0.72rem] text-muted">
+                        <p className="mt-auto pt-1 text-[0.72rem] leading-4 text-muted">
                           {c.weak ? "пакет оборвался" : c.err && !c.done ? c.err : c.lessons ? `${c.lessons} зан.` : loaded ? "занятий за квартал нет" : "ещё не загружали"}
                           {c.at ? ` · ${ruAt(c.at)}` : ""}
                         </p>
