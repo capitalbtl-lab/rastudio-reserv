@@ -9,21 +9,18 @@ cd "$ROOT"
 LOCK=/tmp/rastudio-deploy.lock
 if [ -f "$LOCK" ]; then
   age=$(( $(date +%s) - $(stat -c %Y "$LOCK" 2>/dev/null || echo 0) ))
-  if [ "$age" -gt 900 ]; then
+  if [ "$age" -gt 1500 ]; then
     echo "[deploy] снимаю зависший lock (${age}s)"
     rm -f "$LOCK"
   fi
-fi
-exec 9>"$LOCK"
-if ! flock -w 15 9; then
-  echo "[deploy] уже идёт"
-  exit 0
 fi
 
 git fetch origin main
 BEFORE="$(git rev-parse HEAD)"
 AFTER="$(git rev-parse origin/main)"
-if [ "${1:-}" != "--force" ] && [ "$BEFORE" = "$AFTER" ]; then
+STAMP_FILE="$ROOT/.output/.deploy-rev"
+LIVE="$(cat "$STAMP_FILE" 2>/dev/null || true)"
+if [ "${1:-}" != "--force" ] && [ "$BEFORE" = "$AFTER" ] && [ "$LIVE" = "$AFTER" ]; then
   echo "[deploy] уже актуально $(git rev-parse --short HEAD)"
   exit 0
 fi
@@ -53,11 +50,26 @@ bring_up() {
 # Если прошлый прогон остановил сайт — поднять сразу, не ждать сборки.
 bring_up
 
-# Watch убивает bash через 8 минут. Сборку уводим в фон, сайт остаётся живым.
+# Вотчер ждёт этот процесс. Сборку отвязываем (setsid), сами ждём метку — иначе git уже новый, а сайт старый.
 if [ "${RA_DEPLOY_BG:-}" != "1" ]; then
   echo "[deploy] сборка в фоне, текущий сайт не гасим"
-  nohup env RA_DEPLOY_REEXEC=1 RA_DEPLOY_BG=1 bash "$ROOT/scripts/beget-deploy.sh" --force >>/tmp/rastudio-deploy.bg.log 2>&1 &
-  disown || true
+  setsid env RA_DEPLOY_REEXEC=1 RA_DEPLOY_BG=1 bash "$ROOT/scripts/beget-deploy.sh" --force </dev/null >>/tmp/rastudio-deploy.bg.log 2>&1 &
+  want="$(git rev-parse HEAD)"
+  for _ in $(seq 1 70); do
+    live="$(cat "$ROOT/.output/.deploy-rev" 2>/dev/null || true)"
+    if [ "$live" = "$want" ]; then
+      echo "[deploy] сайт $(git rev-parse --short HEAD)"
+      exit 0
+    fi
+    sleep 12
+  done
+  echo "[deploy] сборка ещё идёт, сайт пока прежний — вотчер повторит"
+  exit 1
+fi
+
+exec 9>"$LOCK"
+if ! flock -w 20 9; then
+  echo "[deploy] сборка уже идёт"
   exit 0
 fi
 
@@ -120,5 +132,6 @@ for app in rastudio-night-groups rastudio-pay-poll; do
 done
 pm2 save
 
+git rev-parse HEAD > "$ROOT/.output/.deploy-rev"
 echo "[deploy] live $(git rev-parse --short HEAD)"
 node scripts/ping-indexnow.mjs || echo "[deploy] IndexNow skip"

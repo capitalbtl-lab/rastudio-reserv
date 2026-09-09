@@ -4,6 +4,7 @@
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,6 +18,14 @@ async function git(args) {
   return String(stdout || "").trim();
 }
 
+async function liveRev() {
+  try {
+    return String(await readFile(path.join(root, ".output", ".deploy-rev"), "utf8")).trim();
+  } catch {
+    return "";
+  }
+}
+
 async function tick() {
   if (busy) return;
   busy = true;
@@ -24,13 +33,19 @@ async function tick() {
     await git(["fetch", "origin", "main"]);
     const local = await git(["rev-parse", "HEAD"]);
     const remote = await git(["rev-parse", "origin/main"]);
-    if (!remote || local === remote) return;
-    console.log(`[deploy] ${local.slice(0, 7)} → ${remote.slice(0, 7)}`);
-    await git(["reset", "--hard", "origin/main"]);
+    const live = await liveRev();
+    if (!remote) return;
+    if (local === remote && live === remote) return;
+    if (local !== remote) {
+      console.log(`[deploy] ${local.slice(0, 7)} → ${remote.slice(0, 7)}`);
+      await git(["reset", "--hard", "origin/main"]);
+    } else {
+      console.log(`[deploy] git ${remote.slice(0, 7)}, сайт ${live.slice(0, 7) || "без метки"} — пересобираю`);
+    }
     await exec("bash", [path.join(root, "scripts/beget-deploy.sh"), "--force"], {
       cwd: root,
       env: process.env,
-      timeout: 15 * 60 * 1000,
+      timeout: 20 * 60 * 1000,
     });
   } catch (e) {
     const err = e;
