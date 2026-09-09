@@ -64,6 +64,23 @@ export function AdminCrmSettings() {
     exportNote?: string;
     jobs?: { op: string; entityId: number; actor?: string; tries?: number }[];
   } | null>(null);
+  const [journal, setJournal] = useState<{
+    note?: string;
+    at?: string;
+    extra?: string;
+    error?: string;
+    groups?: { groupId: number; branchId: number; name: string; school: string; taken?: number; archived?: boolean }[];
+    schools?: { name: string; groups: number }[];
+    journalNext?: number;
+    journalTotal?: number;
+    lessonsNext?: number;
+    lessonsTotal?: number;
+    students?: { all: number; live: number; archive: number };
+    linked?: boolean;
+  } | null>(null);
+  const [journalSchool, setJournalSchool] = useState("");
+  const [journalGroup, setJournalGroup] = useState("");
+  const [journalStudy, setJournalStudy] = useState<"1" | "2" | "all">("1");
   const dragId = useRef(0);
 
   function applyLink(link: {
@@ -95,6 +112,7 @@ export function AdminCrmSettings() {
     void loadAuto();
     void loadCache();
     void loadActors();
+    void loadJournal();
   }, []);
 
   async function loadAuto() {
@@ -233,6 +251,41 @@ export function AdminCrmSettings() {
       if (res.queue) setQueue(res.queue);
       setMsg(res.error || res.extra || (res.ok ? `Пакет прошёл${res.live != null ? `, живых ${res.live}` : ""}` : "Очередь не ответила."));
       await loadCache();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadJournal() {
+    try {
+      const res = (await adminSchedule({
+        data: { token: token(), action: "journalPull" } as never,
+      })) as typeof journal;
+      if (res) setJournal(res);
+    } catch {
+      /* */
+    }
+  }
+
+  async function runJournal(kind: "group" | "school" | "students" | "balance") {
+    setBusy(true);
+    try {
+      const [gid, bid] = journalGroup.split(":").map(Number);
+      const res = (await adminSchedule({
+        data: {
+          token: token(),
+          action: "journalPull",
+          kind,
+          school: journalSchool,
+          groupId: gid || 0,
+          branchId: bid || 0,
+          study: journalStudy,
+        } as never,
+      })) as typeof journal & { ok?: boolean };
+      if (res) setJournal(res);
+      setMsg(res?.error || res?.extra || (res?.ok ? "Пакет журнала записан." : "Журнал не ответил."));
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Журнал не ответил.");
     } finally {
       setBusy(false);
     }
@@ -528,6 +581,114 @@ export function AdminCrmSettings() {
         <p className="mt-2 text-[0.75rem] text-muted">
           Выключенный канал: на сайте запись есть, в Alfa не уходит, пока не включите. Очередь хранит задание. Касса опрашивает окно дней, не всю историю.
         </p>
+      </Card>
+
+      <Card
+        title="Журнал с Alfa вручную"
+        hint="Не всё сразу. Один клик — одна группа, до трёх групп школы или 10 учеников. Подтягиваются посещения, пропуски, тема, ДЗ, комментарий и списания. «Карточка целиком» ещё кассу и абонементы — иначе баланс не сходится."
+      >
+        <div className={cn(alfaMode === "offline" && "opacity-50")}>
+          <p className="text-[0.78rem] text-muted">
+            Группы {journal?.journalNext ?? 0}/{journal?.journalTotal ?? 0}
+            <span className="mx-2">·</span>
+            личные {journal?.lessonsNext ?? 0}/{journal?.lessonsTotal ?? 0}
+            {journal?.students ? ` · учеников ${journal.students.live} + архив ${journal.students.archive}` : ""}
+          </p>
+          {journal?.note ? <p className="mt-1 text-[0.78rem] font-medium text-fg">{journal.note}</p> : null}
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+              Школа
+              <select
+                className="mt-1 h-9 w-full rounded-full bg-surface-2 px-3 text-sm font-medium text-fg ring-1 ring-black/8"
+                value={journalSchool}
+                disabled={busy || alfaMode === "offline"}
+                onChange={(e) => {
+                  setJournalSchool(e.target.value);
+                  setJournalGroup("");
+                }}
+              >
+                <option value="">Все школы</option>
+                {(journal?.schools || []).map((s) => (
+                  <option key={s.name} value={s.name}>
+                    {s.name} · {s.groups}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+              Группа
+              <select
+                className="mt-1 h-9 w-full rounded-full bg-surface-2 px-3 text-sm font-medium text-fg ring-1 ring-black/8"
+                value={journalGroup}
+                disabled={busy || alfaMode === "offline"}
+                onChange={(e) => setJournalGroup(e.target.value)}
+              >
+                <option value="">Следующая по кругу</option>
+                {(journal?.groups || [])
+                  .filter((g) => !journalSchool || g.school === journalSchool)
+                  .map((g) => (
+                    <option key={`${g.branchId}:${g.groupId}`} value={`${g.groupId}:${g.branchId}`}>
+                      {g.archived ? "Архив · " : ""}
+                      {g.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+              Ученики
+              <select
+                className="mt-1 h-9 w-full rounded-full bg-surface-2 px-3 text-sm font-medium text-fg ring-1 ring-black/8"
+                value={journalStudy}
+                disabled={busy || alfaMode === "offline"}
+                onChange={(e) => setJournalStudy(e.target.value as "1" | "2" | "all")}
+              >
+                <option value="1">Текущие</option>
+                <option value="2">Архив</option>
+                <option value="all">Текущие и архив</option>
+              </select>
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
+              disabled={busy || alfaMode === "offline"}
+              onClick={() => void runJournal("group")}
+            >
+              1 группа
+            </button>
+            <button
+              type="button"
+              className="h-9 rounded-full bg-black/8 px-4 text-sm font-semibold disabled:opacity-50"
+              disabled={busy || alfaMode === "offline"}
+              onClick={() => void runJournal("school")}
+            >
+              Школа · до 3 групп
+            </button>
+            <button
+              type="button"
+              className="h-9 rounded-full bg-black/8 px-4 text-sm font-semibold disabled:opacity-50"
+              disabled={busy || alfaMode === "offline"}
+              onClick={() => void runJournal("students")}
+            >
+              10 журналов
+            </button>
+            <button
+              type="button"
+              className="h-9 rounded-full bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50"
+              disabled={busy || alfaMode === "offline"}
+              onClick={() => void runJournal("balance")}
+            >
+              10 карточек целиком
+            </button>
+          </div>
+          <ul className="mt-3 space-y-1 text-[0.75rem] text-muted">
+            <li>1 группа — журнал посещений и пропусков этой группы, состав, тема, ДЗ, списания.</li>
+            <li>Школа — следующие 3 группы выбранной школы. Нажмите ещё раз, пока круг не закроется.</li>
+            <li>10 журналов — личная явка 10 учеников (сначала текущие, потом архив).</li>
+            <li>10 карточек целиком — журнал + касса + абонементы. Это баланс и все списания на карточке.</li>
+          </ul>
+        </div>
       </Card>
 
       <Card

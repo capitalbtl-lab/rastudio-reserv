@@ -1215,6 +1215,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "actorsGet"
           | "actorsSave"
           | "crmQueueTick"
+          | "journalPull"
           | "voiceAsk"
           | "customersSearch"
           | "tariffsGet"
@@ -1254,6 +1255,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
         stageId?: number;
         stageIds?: number[];
         force?: boolean;
+        kind?: string;
+        school?: string;
+        study?: string;
         delta?: boolean;
         light?: boolean;
         color?: string;
@@ -3054,6 +3058,22 @@ export const adminSchedule = createServerFn({ method: "POST" })
           jobs: out.jobs,
         },
       };
+    }
+    if (data.action === "journalPull") {
+      const { journalPull, journalPullState } = await import("./crm-journal-pull");
+      const kind = String(data.kind || "");
+      if (kind !== "group" && kind !== "school" && kind !== "students" && kind !== "balance") {
+        return journalPullState();
+      }
+      const res = await journalPull({
+        kind,
+        groupId: Number(data.groupId) || 0,
+        branchId: Number(data.branchId) || 0,
+        school: String(data.school || ""),
+        study: data.study === "1" || data.study === "2" ? data.study : "all",
+      });
+      logAdmin(`Журнал Alfa: ${res.extra || res.error || kind}`);
+      return res;
     }
     if (data.action === "voiceAsk") {
       const prompt = String(data.prompt || "").trim();

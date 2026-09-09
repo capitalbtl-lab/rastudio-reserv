@@ -5,7 +5,7 @@ import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
 import { journalFingerprint } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
-import { pupilNameOk, mergeLessonPupils } from "./crm-slots-core";
+import { pupilNameOk, mergeLessonPupils, lessonRosterThin } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
 import { cardPays } from "./crm-pay";
 import {
@@ -152,7 +152,7 @@ function withPupilNames(lesson: GroupCalLesson): GroupCalLesson {
 export async function inboundJournalGroup(
   branch: number,
   gid: number,
-  opts?: { token?: string; slots?: CrmSlot[]; hold?: Set<number>; dateFrom?: string; dateTo?: string; defer?: boolean },
+  opts?: { token?: string; slots?: CrmSlot[]; hold?: Set<number>; dateFrom?: string; dateTo?: string; defer?: boolean; deep?: boolean },
 ) {
   if (!alfaLinkedNow() || !gid) return { ok: true as const, extra: "без Alfa", count: 0, calendar: [] as GroupCalLesson[] };
   const slots = opts?.slots || (await import("./alfacrm-schedule")).listAdminSlots();
@@ -200,6 +200,18 @@ export async function inboundJournalGroup(
   const samePrint = cached && journalFingerprint(calendar) === journalFingerprint(cached.calendar || []);
   const sameMoney = cached && lessonPupilsKey(calendar) === lessonPupilsKey(cached.calendar || []);
   if (samePrint && sameMoney) {
+    if (opts?.deep) {
+      const enriched = await enrichCalendarDetails(branch, calendar, { token: t, take: 16 });
+      if (enriched.changed) {
+        const card0 = { ...(cached || { id: gid, branchId: branch, name: ctx.groupName, calendar: [] as GroupCalLesson[], at: "", subject: ctx.subject, subjectId: Number(slot?.subjectId || 0) }), calendar: enriched.calendar };
+        if (!opts?.defer) {
+          saveGroupCard(card0);
+          rememberLessons(enriched.calendar);
+          fanOutLessonWriteoffs(enriched.calendar);
+        }
+        return { ok: true as const, extra: `журнал ${gid}: ${enriched.calendar.length}, детали ${enriched.filled}`, count: enriched.calendar.length, calendar: enriched.calendar, card: card0 };
+      }
+    }
     return { ok: true as const, extra: `журнал ${gid}: без изменений`, count: calendar.length, calendar };
   }
   const card = {
@@ -229,6 +241,18 @@ export async function inboundJournalGroup(
     rememberLessons(calendar);
     fanOutLessonWriteoffs(calendar);
   }
+  if (opts?.deep && calendar.length) {
+    const enriched = await enrichCalendarDetails(branch, calendar, { token: t, take: 16 });
+    if (enriched.changed) {
+      card.calendar = enriched.calendar;
+      if (!opts?.defer) {
+        saveGroupCard(card);
+        rememberLessons(enriched.calendar);
+        fanOutLessonWriteoffs(enriched.calendar);
+      }
+      return { ok: true as const, extra: `журнал ${gid}: ${enriched.calendar.length}, детали ${enriched.filled}`, count: enriched.calendar.length, calendar: enriched.calendar, card };
+    }
+  }
   return { ok: true as const, extra: `журнал ${gid}: ${calendar.length}`, count: calendar.length, calendar, card };
 }
 
@@ -239,11 +263,66 @@ function isOneOffLesson(item: { lesson_type_id?: number; group_ids?: number[] })
   return groups.length === 0 && typeId !== 2;
 }
 
-export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number }) {
+function lessonNeedsDetails(l: GroupCalLesson) {
+  if (!(Number(l.lessonId) > 0)) return false;
+  if (Number(l.status) === 3 && lessonRosterThin(l)) return true;
+  if (Number(l.status) === 3 && !String(l.topic || l.homework || l.note || "").trim()) return true;
+  return false;
+}
+
+/** Тема, ДЗ, комментарий и явка с суммами — lesson/index по id, не весь журнал. */
+export async function enrichCalendarDetails(
+  branch: number,
+  calendar: GroupCalLesson[],
+  opts?: { token?: string; take?: number; customerId?: number },
+) {
+  const list = (calendar || []).slice();
+  const need = list.filter(lessonNeedsDetails).slice(0, Math.max(1, Math.min(24, Number(opts?.take) || 12)));
+  if (!need.length) return { calendar: list, filled: 0, changed: false };
+  const { token, request } = await import("./alfacrm");
+  const t = opts?.token || (await token());
+  const home = Number(branch) || 1;
+  const cid = Number(opts?.customerId) || 0;
+  let filled = 0;
+  for (const l of need) {
+    const json = await request<{ items?: Parameters<typeof packLight>[0][] }>(
+      `/v2api/${home}/lesson/index`,
+      { page: 0, pageSize: 5, id: l.lessonId, lesson_id: l.lessonId },
+      t,
+    ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
+    const raw = (json.items || []).find((x) => Number(x.id) === Number(l.lessonId));
+    if (!raw) continue;
+    const rec = raw as Record<string, unknown>;
+    const pupils = packLessonPupils(rec);
+    if (pupils.length) {
+      const merged = mergeLessonPupils(l.pupils, pupils);
+      if (merged?.length) l.pupils = merged;
+      l.attend = (l.pupils || []).filter((p) => p.attend !== false).length;
+      l.total = (l.pupils || []).length;
+    }
+    const topic = String(raw.topic || "").trim();
+    const homework = String(raw.homework || "").trim();
+    const note = String(raw.note || "").trim();
+    if (topic) l.topic = topic;
+    if (homework) l.homework = homework;
+    if (note) l.note = note;
+    if (cid) {
+      const charge = chargeFromPupils({ pupils: l.pupils, amount: lessonWriteoffAmount(rec, cid), cttId: lessonWriteoffCtt(rec, cid) }, cid);
+      if (charge.amount > 0) l.amount = charge.amount;
+      if (charge.cttId > 0) l.cttId = charge.cttId;
+    }
+    const named = withPupilNames(l);
+    if (named.pupils) l.pupils = named.pupils;
+    filled += 1;
+  }
+  return { calendar: list, filled, changed: filled > 0 };
+}
+
+export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean }) {
   const id = Number(customerId) || 0;
   if (!alfaLinkedNow() || id <= 0) return { ok: true as const, count: 0, done: true };
   const { wantAlfaPullChannel } = await import("./crm-alfa-link");
-  if (!wantAlfaPullChannel("lessons")) return { ok: true as const, count: 0, skipped: "канал" as const, done: true };
+  if (!wantAlfaPullChannel("lessons") && !opts?.force) return { ok: true as const, count: 0, skipped: "канал" as const, done: true };
   if (lessonFillBusy(id)) {
     if (Number(opts?.take) > 0) {
       for (let i = 0; i < 16 && lessonFillBusy(id); i += 1) {
@@ -327,11 +406,12 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         pulled.push(withPupilNames(packed));
       }
     }
-    const detailCap = Number(opts?.take) > 0 ? 3 : 6;
+    const detailCap = Number(opts?.deep) > 0 ? Math.min(24, Number(opts.deep)) : Number(opts?.take) > 0 ? 3 : 6;
     const home = Number(branches[0] || branch) || 1;
     const thin = pulled
       .filter((l) => {
         if (Number(l.status) !== 3 || !(Number(l.lessonId) > 0)) return false;
+        if (lessonNeedsDetails(l)) return true;
         const mine = (l.pupils || []).find((p) => Number(p.customerId) === id);
         if (!mine) return true;
         if (mine.attend === false) return false;
@@ -348,14 +428,21 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       if (!raw) continue;
       const rec = raw as Record<string, unknown>;
       const pupils = packLessonPupils(rec);
-      if (!pupils.length) continue;
-      const merged = mergeLessonPupils(l.pupils, pupils);
-      if (merged?.length) l.pupils = merged;
+      if (pupils.length) {
+        const merged = mergeLessonPupils(l.pupils, pupils);
+        if (merged?.length) l.pupils = merged;
+      }
       const charge = chargeFromPupils({ pupils: l.pupils, amount: lessonWriteoffAmount(rec, id), cttId: lessonWriteoffCtt(rec, id) }, id);
       if (charge.amount > 0) l.amount = charge.amount;
       if (charge.cttId > 0) l.cttId = charge.cttId;
       l.attend = (l.pupils || []).filter((p) => p.attend !== false).length;
       l.total = (l.pupils || []).length;
+      const topic = String(raw.topic || "").trim();
+      const homework = String(raw.homework || "").trim();
+      const note = String(raw.note || "").trim();
+      if (topic) l.topic = topic;
+      if (homework) l.homework = homework;
+      if (note) l.note = note;
       const named = withPupilNames(l);
       if (named.pupils) l.pupils = named.pupils;
     }
