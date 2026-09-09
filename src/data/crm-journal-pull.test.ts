@@ -76,6 +76,8 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(ui, /if \(open && aid === open\) return -1/);
     assert.match(ui, /История из Alfa/);
     assert.match(ui, /crm-settings-tab/);
+    assert.match(ui, /lockTabY/);
+    assert.match(ui, /overflow-anchor:none/);
     assert.match(ui, /Шаг 2 · тема, ДЗ, комментарий, таблица учеников/);
     assert.match(ui, /Загрузить явки/);
     assert.match(ui, /Загрузить тему, ДЗ, комментарий и таблицу учеников всех кварталов/);

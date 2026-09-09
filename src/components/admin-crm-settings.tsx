@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
 import { CRM_STAGE_COLORS, LEAD_STAGES, mergeStages, pinUnsorted, type LeadStage } from "@/data/crm-leads-stages";
 import { FUNNEL_AUTO_DEFAULT, type FunnelAuto } from "@/data/funnel-auto-core";
@@ -11,6 +11,25 @@ import { CACHE_KIND_META, type CacheKind, type CachePolicy } from "@/data/crm-ca
 import { exportOpLabel, type CrmExportOp } from "@/data/crm-export-queue-core";
 import { ALFA_LINK_MODES, ALFA_PULL_CH, ALFA_PUSH_CH, ALFA_PIPE_CH, ALFA_SYNC_DEFAULT, type AlfaLinkMode, type AlfaPullCh, type AlfaPushCh, type AlfaPipeCh } from "@/data/crm-alfa-link-core";
 import { journalChunks, clampGrain, type Grain } from "@/data/crm-journal-periods";
+
+function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
+  let n = from?.parentElement || null;
+  while (n && n !== document.body) {
+    const oy = getComputedStyle(n).overflowY;
+    if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight + 1) return n;
+    n = n.parentElement;
+  }
+  return window;
+}
+
+function lockTabY(el: HTMLElement | null, prevTop: number) {
+  if (!el) return;
+  const dy = el.getBoundingClientRect().top - prevTop;
+  if (Math.abs(dy) < 1) return;
+  const root = scrollRoot(el);
+  if (root === window) window.scrollBy(0, dy);
+  else (root as HTMLElement).scrollTop += dy;
+}
 
 export const CRM_SYNC_MIN_KEY = "ra_crm_sync_min";
 
@@ -204,6 +223,8 @@ function GroupFillList({
     const full = Boolean(r.complete) && total > 0 && doneN >= total && !chunks.some((c) => c.weak);
     const nameOk = !q || r.name.toLowerCase().includes(q) || String(r.school || "").toLowerCase().includes(q);
     if (!nameOk) return false;
+    const gid = `${r.branchId}-${r.groupId}`;
+    if (open === gid || (loading?.groupId === r.groupId && loading?.branchId === r.branchId)) return true;
     if (tab === "ok") return full;
     if (tab === "no") return !doneN;
     if (tab === "part") return Boolean(doneN) && !full;
@@ -369,7 +390,6 @@ function GroupFillList({
                   className="h-8 min-w-0 flex-1 truncate rounded-full bg-black px-3 text-[0.8rem] font-semibold text-white disabled:opacity-50"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (open !== id) setOpen(id);
                     if (wiz.kind === "load" && wiz.part) onLoad(row, wiz.part, Boolean(wiz.part.done || wiz.part.weak));
                     else if (wiz.kind === "details") onDetails(row);
                     else onRecheckAll(row);
@@ -433,7 +453,6 @@ function GroupFillList({
                             )}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (open !== id) setOpen(id);
                               onLoad(row, c, Boolean(loaded || c.weak));
                             }}
                           >
@@ -445,7 +464,6 @@ function GroupFillList({
                             className="h-8 truncate rounded-lg bg-white px-2 text-[0.72rem] font-semibold ring-1 ring-violet-300 disabled:opacity-40"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (open !== id) setOpen(id);
                               onDetails(row, c);
                             }}
                           >
@@ -600,6 +618,10 @@ export function AdminCrmSettings() {
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
   const [crmTab, setCrmTab] = useState<CrmSetTab>("history");
   const [histTab, setHistTab] = useState<HistTab>("groups");
+  const crmTabsRef = useRef<HTMLDivElement>(null);
+  const histTabsRef = useRef<HTMLDivElement>(null);
+  const tabLockY = useRef<number | null>(null);
+  const tabLockKind = useRef<"crm" | "hist" | null>(null);
   const [openMiss, setOpenMiss] = useState<"g" | "j1" | "j2" | "c1" | "c2" | "">("");
   const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string } | null>(null);
   const stopSchool = useRef(false);
@@ -621,6 +643,8 @@ export function AdminCrmSettings() {
   }, []);
 
   function pickCrmTab(v: CrmSetTab) {
+    tabLockY.current = crmTabsRef.current?.getBoundingClientRect().top ?? null;
+    tabLockKind.current = "crm";
     setCrmTab(v);
     try {
       localStorage.setItem("crm-settings-tab", v);
@@ -630,6 +654,8 @@ export function AdminCrmSettings() {
   }
 
   function pickHistTab(v: HistTab) {
+    tabLockY.current = histTabsRef.current?.getBoundingClientRect().top ?? crmTabsRef.current?.getBoundingClientRect().top ?? null;
+    tabLockKind.current = "hist";
     setHistTab(v);
     try {
       localStorage.setItem("crm-history-tab", v);
@@ -637,6 +663,15 @@ export function AdminCrmSettings() {
       /* */
     }
   }
+
+  useLayoutEffect(() => {
+    const y = tabLockY.current;
+    const kind = tabLockKind.current;
+    tabLockY.current = null;
+    tabLockKind.current = null;
+    if (y == null) return;
+    lockTabY(kind === "hist" ? histTabsRef.current || crmTabsRef.current : crmTabsRef.current, y);
+  }, [crmTab, histTab]);
 
   function pickJournalSchool(v: string) {
     setJournalSchool(v);
@@ -1058,14 +1093,14 @@ export function AdminCrmSettings() {
   const unsorted = stages.find((s) => s.id === 0) || LEAD_STAGES[0];
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-4 pb-8 [overflow-anchor:none]">
       <div>
         <h2 className="font-display text-3xl">Настройка CRM</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted">
           Этапы, журнал и связь с Alfa — по вкладкам, не одной простынёй.
         </p>
       </div>
-      <div className="flex flex-wrap gap-1">
+      <div ref={crmTabsRef} className="sticky top-0 z-20 -mx-1 flex flex-wrap gap-1 bg-[var(--color-bg)] px-1 py-2">
         {CRM_SET_TABS.map((t) => (
           <button
             key={t.id}
@@ -1078,6 +1113,7 @@ export function AdminCrmSettings() {
         ))}
       </div>
 
+      <div className="min-h-[70vh]">
       {crmTab === "people" ? (
       <Card
         title="Люди и роли"
@@ -1296,7 +1332,7 @@ export function AdminCrmSettings() {
           return (
             <div className={cn("space-y-3", offline && "opacity-50")}>
               {journal?.note ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
-              <div className="flex flex-wrap gap-1">
+              <div ref={histTabsRef} className="flex flex-wrap gap-1">
                 {HIST_TABS.map((t) => (
                   <button
                     key={t.id}
@@ -1916,6 +1952,7 @@ export function AdminCrmSettings() {
         </dl>
       </Card>
       ) : null}
+      </div>
     </div>
   );
 }
