@@ -204,7 +204,7 @@ describe("форма занятия карточки", () => {
     assert.match(api, /inboundCustomerLessons\(branch, customerId, \{ take: 6 \}\)/);
     assert.match(api, /emptyCal/);
     assert.match(api, /if \(emptyCal\) await job/);
-    assert.match(inbound, /customer_id: id, date_from: from, date_to: dateTo \}/);
+    assert.match(inbound, /customer_id: id, date_from: ymd\(from\), date_to: ymd\(dateTo\) \}/);
     assert.doesNotMatch(inbound, /customer_id: id, date_from: from, date_to: dateTo, removed: 0/);
     assert.match(inbound, /Number\(opts\?\.take\) > 0/);
     assert.match(api, /data.pull/);

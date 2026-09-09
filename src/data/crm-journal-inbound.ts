@@ -177,7 +177,7 @@ export async function inboundJournalGroup(
       try {
         const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
           `/v2api/${branch}/lesson/index`,
-          { page, pageSize, status, group_id: gid, date_from, date_to },
+          { page, pageSize, status, group_id: gid, date_from: ymd(date_from), date_to: ymd(date_to) },
           t,
         );
         alfaOk += 1;
@@ -384,7 +384,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       for (let page = cur.page; page < maxPages; page += 1) {
         const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
           `/v2api/${bid}/lesson/index`,
-          { page, pageSize: 100, status, customer_id: id, date_from: from, date_to: dateTo },
+          { page, pageSize: 100, status, customer_id: id, date_from: ymd(from), date_to: ymd(dateTo) },
           t,
         ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
         const chunk = les.items || [];

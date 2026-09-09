@@ -36,6 +36,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /chunkOverlapsLife/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /opts\?\.lite \|\| windowed/);
+    assert.match(inbound, /date_from: ymd\(date_from\)/);
+    assert.match(inbound, /date_to: ymd\(date_to\)/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /Определить сроки групп/);
     assert.match(ui, /lastLife/);
