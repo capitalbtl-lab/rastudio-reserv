@@ -173,6 +173,14 @@ function DetailsFields({ on, extra }: { on: boolean; extra?: string }) {
   );
 }
 
+function fillFinished(chunks: FillPart[]) {
+  return chunks.length > 0 && chunks.every((c) => c.done && !c.weak && !(c.needDetails || 0));
+}
+
+function fillFinishedRow(row: FillRow, grain: Grain) {
+  return fillFinished(packGrain(row.parts, clampGrain(row.age, grain)));
+}
+
 function nextRecheckPart(row: FillRow, grain: Grain) {
   const chunks = packGrain(row.parts, clampGrain(row.age, grain));
   const hole = chunks.find((c) => !c.done || c.weak);
@@ -232,37 +240,29 @@ function GroupFillList({
 }) {
   const [open, setOpen] = useState("");
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<"all" | "no" | "part" | "ok">("all");
   const [pageSize, setPageSize] = useState(20);
-  const [page, setPage] = useState(0);
+  const [pageNeed, setPageNeed] = useState(0);
+  const [pageDone, setPageDone] = useState(0);
   const q = query.trim().toLowerCase();
-  const scoped = rows.filter((r) => !school || r.school === school);
-  const raw = scoped.filter((r) => {
-    const chunks = packGrain(r.parts, clampGrain(r.age, grain));
-    const doneN = chunks.filter((c) => c.done).length;
-    const total = chunks.length;
-    const full = Boolean(r.complete) && total > 0 && doneN >= total && !chunks.some((c) => c.weak);
-    const nameOk = !q || r.name.toLowerCase().includes(q) || String(r.school || "").toLowerCase().includes(q);
-    if (!nameOk) return false;
-    const gid = `${r.branchId}-${r.groupId}`;
-    if (open === gid || (loading?.groupId === r.groupId && loading?.branchId === r.branchId)) return true;
-    if (tab === "ok") return full;
-    if (tab === "no") return !doneN;
-    if (tab === "part") return Boolean(doneN) && !full;
-    return true;
+  const scoped = rows.filter((r) => {
+    if (school && r.school !== school) return false;
+    if (!q) return true;
+    return r.name.toLowerCase().includes(q) || String(r.school || "").toLowerCase().includes(q);
   });
-  const nAll = scoped.length;
-  const nOk = scoped.filter((r) => r.complete && (r.total || 0) > 0).length;
-  const nNo = scoped.filter((r) => !r.done).length;
-  const nPart = Math.max(0, nAll - nOk - nNo);
-  const pages = Math.max(1, Math.ceil(raw.length / pageSize) || 1);
-  const safePage = Math.min(page, pages - 1);
-  const list = raw.slice(safePage * pageSize, safePage * pageSize + pageSize);
-  const fromN = raw.length ? safePage * pageSize + 1 : 0;
-  const toN = Math.min(raw.length, (safePage + 1) * pageSize);
+  const needRows = scoped.filter((r) => !fillFinishedRow(r, grain));
+  const doneRows = scoped.filter((r) => fillFinishedRow(r, grain));
+  const nNeed = needRows.length;
+  const nDone = doneRows.length;
+  const pagesNeed = Math.max(1, Math.ceil(nNeed / pageSize) || 1);
+  const pagesDone = Math.max(1, Math.ceil(nDone / pageSize) || 1);
+  const safeNeed = Math.min(pageNeed, pagesNeed - 1);
+  const safeDone = Math.min(pageDone, pagesDone - 1);
+  const listNeed = needRows.slice(safeNeed * pageSize, safeNeed * pageSize + pageSize);
+  const listDone = doneRows.slice(safeDone * pageSize, safeDone * pageSize + pageSize);
   useEffect(() => {
-    setPage(0);
-  }, [q, tab, school, pageSize]);
+    setPageNeed(0);
+    setPageDone(0);
+  }, [q, school, pageSize]);
   useEffect(() => {
     try {
       const n = Number(localStorage.getItem("crm-journal-page") || 20);
@@ -273,7 +273,8 @@ function GroupFillList({
   }, []);
   function pickPageSize(n: number) {
     setPageSize(n);
-    setPage(0);
+    setPageNeed(0);
+    setPageDone(0);
     try {
       localStorage.setItem("crm-journal-page", String(n));
     } catch {
@@ -283,73 +284,25 @@ function GroupFillList({
   function toggleOpen(id: string) {
     setOpen((cur) => (cur === id ? "" : id));
   }
-  if (!scoped.length) return <p className="mt-3 text-sm text-muted">Нет групп в этом фильтре.</p>;
-  return (
-    <div className="mt-3">
-      <input
-        className="h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10"
-        placeholder="Найти группу…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-      <div className="mt-2 flex flex-wrap items-center gap-1">
-        {(
-          [
-            ["all", `все ${nAll}`],
-            ["no", `ещё нет ${nNo}`],
-            ["part", `частично ${nPart}`],
-            ["ok", `готово ${nOk}`],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", tab === id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
-            onClick={() => setTab(id)}
-          >
-            {label}
+  function pager(page: number, pages: number, onPage: (n: number) => void) {
+    if (pages <= 1) return null;
+    return (
+      <span className="ml-auto flex flex-wrap items-center gap-1">
+        <button type="button" className="h-8 rounded-full bg-white px-3 font-semibold ring-1 ring-black/10 disabled:opacity-40" disabled={page <= 0} onClick={() => onPage(page - 1)}>
+          Назад
+        </button>
+        {Array.from({ length: pages }, (_, i) => i).map((i) => (
+          <button key={i} type="button" className={cn("h-8 min-w-8 rounded-full px-2 font-semibold", i === page ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => onPage(i)}>
+            {i + 1}
           </button>
         ))}
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-[0.78rem]">
-        <span className="text-muted">На странице</span>
-        {([10, 20, 30, 100] as const).map((n) => (
-          <button
-            key={n}
-            type="button"
-            className={cn("h-8 rounded-full px-3 font-semibold", pageSize === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
-            onClick={() => pickPageSize(n)}
-          >
-            {n}
-          </button>
-        ))}
-        <span className="text-muted">
-          {raw.length ? `${fromN}–${toN} из ${raw.length}` : "пусто"}
-        </span>
-        {pages > 1 ? (
-          <span className="ml-auto flex flex-wrap items-center gap-1">
-            <button type="button" className="h-8 rounded-full bg-white px-3 font-semibold ring-1 ring-black/10 disabled:opacity-40" disabled={safePage <= 0} onClick={() => setPage(safePage - 1)}>
-              Назад
-            </button>
-            {Array.from({ length: pages }, (_, i) => i).map((i) => (
-              <button
-                key={i}
-                type="button"
-                className={cn("h-8 min-w-8 rounded-full px-2 font-semibold", i === safePage ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
-                onClick={() => setPage(i)}
-              >
-                {i + 1}
-              </button>
-            ))}
-            <button type="button" className="h-8 rounded-full bg-white px-3 font-semibold ring-1 ring-black/10 disabled:opacity-40" disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)}>
-              Дальше
-            </button>
-          </span>
-        ) : null}
-      </div>
-      {!list.length ? <p className="mt-3 text-sm text-muted">Нет групп в этой вкладке.</p> : null}
-      <ul className="mt-2 space-y-2 [overflow-anchor:none]">
-        {list.map((row) => {
+        <button type="button" className="h-8 rounded-full bg-white px-3 font-semibold ring-1 ring-black/10 disabled:opacity-40" disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>
+          Дальше
+        </button>
+      </span>
+    );
+  }
+  function renderGroup(row: FillRow) {
           const id = `${row.branchId}-${row.groupId}`;
           const useGrain = clampGrain(row.age, grain);
           const chunks = packGrain(row.parts, useGrain);
@@ -357,14 +310,14 @@ function GroupFillList({
           const total = chunks.length;
           const pct = total > 0 ? Math.min(100, Math.round((doneN / total) * 100)) : 0;
           const active = loading && loading.groupId === row.groupId && loading.branchId === row.branchId;
-          const full = Boolean(row.complete) && total > 0 && doneN >= total && !chunks.some((c) => c.weak);
+          const full = fillFinished(chunks);
           const shown = open === id;
           const wiz = nextWizard(chunks);
           const detailsLeft = chunks.reduce((s, c) => s + (c.needDetails || 0), 0);
           const loadKind = active ? loading?.kind || "group" : "";
           const loadLabel = active ? loading?.label || chunks.find((c) => c.key === loading?.periodKey)?.label || wiz.part?.label || "" : "";
           return (
-            <li key={id} data-gid={id} className={cn("rounded-2xl bg-white p-3 ring-1", full ? "ring-emerald-300" : active ? "ring-black" : "ring-black/8")}>
+            <li key={id} data-gid={id} className={cn("rounded-2xl bg-white p-3 ring-1", full ? "ring-emerald-300" : active ? "ring-primary" : "ring-black/8")}>
               <button type="button" className="w-full text-left" onClick={() => toggleOpen(id)}>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="font-medium">{row.name}</span>
@@ -380,13 +333,11 @@ function GroupFillList({
                       </span>
                     ) : null}
                     {full ? (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">сверено</span>
-                    ) : doneN ? (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-900">
-                        частично · {doneN}/{total}
-                      </span>
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">загрузка завершена</span>
                     ) : (
-                      <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">ещё не сверяли</span>
+                      <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">
+                        требуют загрузки{total ? ` · ${doneN}/${total}` : ""}
+                      </span>
                     )}
                     {detailsLeft > 0 ? (
                       <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[0.72rem] font-semibold text-violet-900">без темы/ДЗ · {detailsLeft}</span>
@@ -511,8 +462,48 @@ function GroupFillList({
               ) : null}
             </li>
           );
-        })}
-      </ul>
+  }
+
+  if (!scoped.length) return <p className="mt-3 text-sm text-muted">Нет групп в этом фильтре.</p>;
+  return (
+    <div className="mt-3">
+      <input
+        className="h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10"
+        placeholder="Найти группу…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-[0.78rem]">
+        <span className="text-muted">На странице</span>
+        {([10, 20, 30, 100] as const).map((n) => (
+          <button
+            key={n}
+            type="button"
+            className={cn("h-8 rounded-full px-3 font-semibold", pageSize === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
+            onClick={() => pickPageSize(n)}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 grid items-start gap-3 lg:grid-cols-2">
+        <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-rose-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="font-display text-[1.05rem] text-rose-900">Требуют загрузки данных · {nNeed}</h4>
+            {pager(safeNeed, pagesNeed, setPageNeed)}
+          </div>
+          <p className="mt-1 text-[0.72rem] text-muted">Явки, тема, ДЗ, комментарий и таблица учеников — пока чего-то нет, группа здесь.</p>
+          {listNeed.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listNeed.map(renderGroup)}</ul> : <p className="mt-3 text-sm text-muted">Все группы этой школы уже загружены.</p>}
+        </section>
+        <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="font-display text-[1.05rem] text-emerald-900">Загрузка данных завершена · {nDone}</h4>
+            {pager(safeDone, pagesDone, setPageDone)}
+          </div>
+          <p className="mt-1 text-[0.72rem] text-muted">Каждый квартал: явки есть, тема/ДЗ/комментарий/таблица на месте, пакет не оборвался.</p>
+          {listDone.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listDone.map(renderGroup)}</ul> : <p className="mt-3 text-sm text-muted">Пока ни одна группа не загружена до конца.</p>}
+        </section>
+      </div>
     </div>
   );
 }
@@ -565,9 +556,9 @@ function ProgressBar({ done, total, run }: { done: number; total: number; run?: 
           <span className="font-semibold text-muted">нет на диске</span>
         ) : (
           <>
-            <span className="font-semibold text-primary">{done} готово</span>
+            <span className="font-semibold text-primary">{done} загрузка завершена</span>
             <span className="mx-2 text-muted">·</span>
-            <span className={left ? "font-semibold text-rose-800" : "text-muted"}>{left ? `${left} ещё нет` : "всё есть"}</span>
+            <span className={left ? "font-semibold text-rose-800" : "text-muted"}>{left ? `${left} требуют загрузки` : "всё есть"}</span>
           </>
         )}
       </p>
@@ -1352,8 +1343,8 @@ export function AdminCrmSettings() {
           const offline = alfaMode === "offline";
           const p = journal?.progress;
           const schoolRows = (p?.groups?.rows || []).filter((r) => !journalSchool || r.school === journalSchool);
-          const schoolDone = schoolRows.filter((r) => r.complete && (r.total || 0) > 0).length;
-          const schoolPart = schoolRows.filter((r) => !r.complete && (r.done || 0) > 0).length;
+          const schoolDone = schoolRows.filter((r) => fillFinishedRow(r, journalGrain)).length;
+          const schoolNeed = Math.max(0, schoolRows.length - schoolDone);
           const schoolNeedLife = schoolRows.filter((r) => r.source !== "alfa").length;
           return (
             <div className={cn("space-y-3", offline && "opacity-50")}>
@@ -1377,8 +1368,8 @@ export function AdminCrmSettings() {
                 <p className="mt-1 text-sm text-muted">Сначала сроки по расписанию: молодая группа — пара кварталов, старая — несколько лет. Потом грузите только эти порции.</p>
                 <ProgressBar done={schoolDone} total={schoolRows.length} run={Boolean(schoolRun || fillLoading)} />
                 <p className="mt-1 text-[0.72rem] text-muted">
-                  {journalSchool ? `Школа «${journalSchool}»: сверено ${schoolDone} из ${schoolRows.length}` : "Все школы. Выберите школу — счётчик только по ней"}
-                  {schoolPart ? ` · частично ${schoolPart}` : ""}.
+                  {journalSchool ? `Школа «${journalSchool}»: загрузка завершена ${schoolDone} из ${schoolRows.length}` : "Все школы. Выберите школу — счётчик только по ней"}
+                  {schoolNeed ? ` · требуют загрузки ${schoolNeed}` : ""}.
                 </p>
                 <div className="mt-3 flex flex-wrap items-start gap-3">
                   <button

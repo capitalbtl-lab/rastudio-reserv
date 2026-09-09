@@ -51,7 +51,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /clampGrain/);
     assert.match(ui, /Перепроверить школу|Перепроверить все группы/);
     assert.match(ui, /Найти группу/);
-    assert.match(ui, /ещё нет/);
+    assert.match(ui, /Требуют загрузки данных/);
+    assert.match(ui, /Загрузка данных завершена/);
+    assert.match(ui, /fillFinished/);
     assert.match(ui, /домашнее задание/);
     assert.match(ui, /таблица учеников/);
     assert.match(ui, /тема, ДЗ, комментарий/);
