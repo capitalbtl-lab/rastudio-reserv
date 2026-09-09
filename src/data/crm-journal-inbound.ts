@@ -5,7 +5,7 @@ import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
 import { journalFingerprint } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
-import { pupilNameOk } from "./crm-slots-core";
+import { pupilNameOk, mergeLessonPupils } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
 import { cardPays } from "./crm-pay";
 import {
@@ -310,10 +310,43 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         if (prev) {
           if (!(Number(packed.amount) > 0) && Number(prev.amount) > 0) packed.amount = prev.amount;
           if (!(Number(packed.cttId) > 0) && Number(prev.cttId) > 0) packed.cttId = prev.cttId;
-          if (!(packed.pupils && packed.pupils.length) && prev.pupils?.length) packed.pupils = prev.pupils;
+          const merged = mergeLessonPupils(prev.pupils, packed.pupils);
+          if (merged?.length) packed.pupils = merged;
         }
         pulled.push(withPupilNames(packed));
       }
+    }
+    const detailCap = Number(opts?.take) > 0 ? 3 : 6;
+    const home = Number(branches[0] || branch) || 1;
+    const thin = pulled
+      .filter((l) => {
+        if (Number(l.status) !== 3 || !(Number(l.lessonId) > 0)) return false;
+        const mine = (l.pupils || []).find((p) => Number(p.customerId) === id);
+        if (!mine) return true;
+        if (mine.attend === false) return false;
+        return !pupilNameOk(mine.name);
+      })
+      .slice(0, detailCap);
+    for (const l of thin) {
+      const json = await request<{ items?: Parameters<typeof packLight>[0][] }>(
+        `/v2api/${home}/lesson/index`,
+        { page: 0, pageSize: 5, id: l.lessonId, lesson_id: l.lessonId },
+        t,
+      ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
+      const raw = (json.items || []).find((x) => Number(x.id) === Number(l.lessonId));
+      if (!raw) continue;
+      const rec = raw as Record<string, unknown>;
+      const pupils = packLessonPupils(rec);
+      if (!pupils.length) continue;
+      const merged = mergeLessonPupils(l.pupils, pupils);
+      if (merged?.length) l.pupils = merged;
+      const charge = chargeFromPupils({ pupils: l.pupils, amount: lessonWriteoffAmount(rec, id), cttId: lessonWriteoffCtt(rec, id) }, id);
+      if (charge.amount > 0) l.amount = charge.amount;
+      if (charge.cttId > 0) l.cttId = charge.cttId;
+      l.attend = (l.pupils || []).filter((p) => p.attend !== false).length;
+      l.total = (l.pupils || []).length;
+      const named = withPupilNames(l);
+      if (named.pupils) l.pupils = named.pupils;
     }
     const hold = pendingExportIds(["lesson.update", "lesson.create"]);
     const next = mergeLocalCalendar(pulled, prevCal, hold, "union");

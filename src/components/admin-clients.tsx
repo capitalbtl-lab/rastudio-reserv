@@ -1360,16 +1360,9 @@ export function AdminClients({
             <button
               type="button"
               className="inline-flex h-10 items-center rounded-full px-3 text-[0.8rem] font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
-              title={counts.архив ? `На сайте уже ${counts.архив}. Открыть архив.` : "Загрузить из Alfa архив (is_study=2). Только на диск сайта."}
+              title="Загрузить из Alfa архив (is_study=2) и показать в списке. Только на диск сайта."
               disabled={busy || pull.open}
-              onClick={() => {
-                if (!counts.архив) void pullKind("clientsArchive");
-                else {
-                  setStatus("архив");
-                  setCap(120);
-                  void load(q, "архив", branch, age);
-                }
-              }}
+              onClick={() => void pullKind("clientsArchive")}
             >
               Загрузить «Архив»{counts.архив ? ` ${counts.архив}` : ""}
             </button>

@@ -268,10 +268,9 @@ function LessonCard({
             const name = pupilNameOk(p.name) || `клиент ${p.customerId}`;
             const left = lessonRestLeft(p.rest);
             const tone = left == null ? "" : left > 0 ? "text-emerald-700" : "text-red-700";
-            const amt =
-              done && Number.isFinite(Number(p.amount))
-                ? Number(p.amount).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                : "";
+            const amt = done
+              ? Number(p.amount || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+              : "";
             const line = (
               <span className={cn("flex min-w-0 flex-1 items-center gap-1.5", p.attend ? tone || "text-fg" : "text-muted")}>
                 {p.attend ? <span className="shrink-0 text-[0.7rem] text-emerald-600">✓</span> : <span className="w-3 shrink-0" />}

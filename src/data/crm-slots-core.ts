@@ -164,7 +164,7 @@ export function mergeLessonPupils(a?: LessonPupil[], b?: LessonPupil[]): LessonP
         name: pupilNameOk(p.name) || pupilNameOk(prev.name) || p.name || prev.name,
         amount: Number(p.amount) > 0 ? p.amount : prev.amount,
         cttId: Number(p.cttId) > 0 ? p.cttId : prev.cttId,
-        attend: p.attend ?? prev.attend,
+        attend: p.attend === false || (prev.attend === false && !pupilNameOk(p.name) && !(Number(p.amount) > 0)) ? false : p.attend ?? prev.attend,
         rest: p.rest || prev.rest,
       });
     }

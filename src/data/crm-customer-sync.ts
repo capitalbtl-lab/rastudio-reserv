@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 
 export const CUSTOMER_SYNC_TTL_MS = 10 * 60 * 1000;
 export const LESSON_INBOUND_RUN = 8;
-export const LESSON_STATUSES = [1, 2, 3] as const;
+export const LESSON_STATUSES = [3, 1, 2] as const;
 export const LESSON_RECENT_DAYS = -21;
 
 export type LessonFillCursor = { bid: number; statusIdx: number; page: number; done?: boolean };

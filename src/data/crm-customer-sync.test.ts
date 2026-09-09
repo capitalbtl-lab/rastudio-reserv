@@ -8,6 +8,7 @@ import {
   lessonFillOf,
   CUSTOMER_SYNC_TTL_MS,
   LESSON_INBOUND_RUN,
+  LESSON_STATUSES,
 } from "./crm-customer-sync.ts";
 
 describe("штамп входа ученика", () => {
@@ -27,6 +28,7 @@ describe("штамп входа ученика", () => {
     assert.equal(lessonFillAdvance({ bid: 2, statusIdx: 2, page: 1 }, true, [1, 2]).done, true);
     assert.equal(lessonFillOf({ bid: 3, statusIdx: 1, page: 4 })?.statusIdx, 1);
     assert.equal(LESSON_INBOUND_RUN, 8);
+    assert.equal(LESSON_STATUSES[0], 3);
   });
 });
 
@@ -64,7 +66,8 @@ describe("карточка не ждёт Alfa", () => {
     assert.match(inbound, /inboundCustomerLessonsChunk/);
     assert.match(inbound, /allDossierCrmIds/);
     assert.match(inbound, /pull\(1, dateFrom, dateTo, 8, 100\)/);
-    assert.match(inbound, /continueLater/);
+    assert.match(inbound, /lesson_id: l.lessonId/);
+    assert.match(inbound, /mergeLessonPupils/);
     assert.match(inbound, /study !== 0/);
     const queue = readFileSync(new URL("./crm-packet-queue.ts", import.meta.url), "utf8");
     assert.match(queue, /kind: "lessons"/);
@@ -75,6 +78,9 @@ describe("карточка не ждёт Alfa", () => {
     assert.match(run, /enqueueLessonsOverlay\(true\)/);
     assert.match(run, /Читаю архив AlfaCRM/);
     assert.match(run, /syncAllFromCrm\([\s\S]*\[2\]/);
+    const clientsUi = readFileSync(new URL("../components/admin-clients.tsx", import.meta.url), "utf8");
+    assert.match(clientsUi, /void pullKind\("clientsArchive"\)/);
+    assert.doesNotMatch(clientsUi, /if \(!counts.архив\) void pullKind\("clientsArchive"\)/);
     const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
     assert.match(cards, /slice\(0, 2500\)/);
     const card = readFileSync(new URL("../components/crm-client-card.tsx", import.meta.url), "utf8");

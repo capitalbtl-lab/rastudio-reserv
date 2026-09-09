@@ -146,6 +146,16 @@ describe("карточка занятия группы: весь состав", 
       [{ customerId: 7913, attend: undefined as never }],
     );
     assert.equal(keepMiss?.find((p) => p.customerId === 7913)?.attend, false);
+    const stubTrue = mergeLessonPupils(
+      [{ customerId: 7913, attend: false, name: "Андреева" }],
+      [{ customerId: 7913, attend: true }],
+    );
+    assert.equal(stubTrue?.find((p) => p.customerId === 7913)?.attend, false);
+    const explicitTrue = mergeLessonPupils(
+      [{ customerId: 7913, attend: false }],
+      [{ customerId: 7913, attend: true, name: "Андреева", amount: 350 }],
+    );
+    assert.equal(explicitTrue?.find((p) => p.customerId === 7913)?.attend, true);
   });
 });
 

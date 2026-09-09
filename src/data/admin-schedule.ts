@@ -1567,7 +1567,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const { alfaLinkedNow } = await import("./crm-alfa-link");
       if (alfaLinkedNow() && customerId > 0) {
         void import("./crm-journal-inbound")
-          .then((m) => m.inboundCustomerLessons(branch, customerId, { take: 2 }))
+          .then((m) => m.inboundCustomerLessons(branch, customerId, { take: 6 }))
           .catch(() => null);
       }
       if (d?.child?.fio || customerId === 670) {

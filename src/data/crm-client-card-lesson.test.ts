@@ -146,7 +146,7 @@ describe("форма занятия карточки", () => {
     assert.match(strip, /aria-label="прим\."/);
     assert.match(strip, /toLocaleString\("ru-RU"/);
     assert.match(strip, /pupilNameOk/);
-    assert.match(strip, /Number.isFinite\(Number\(p.amount\)\)/);
+    assert.match(strip, /Number\(p.amount \|\| 0\)\.toLocaleString/);
     assert.match(strip, /ra_lesson_attend_cols/);
     assert.match(strip, /cursor-col-resize/);
     assert.match(strip, /aria-label="Ширина столбца"/);
@@ -192,7 +192,7 @@ describe("форма занятия карточки", () => {
     assert.match(api, /pullMissingLessonCtt/);
     assert.match(api, /void pullMissingLessonCtt/);
     assert.doesNotMatch(api, /await pullMissingLessonCtt/);
-    assert.match(api, /inboundCustomerLessons\(branch, customerId, \{ take: 2 \}\)/);
+    assert.match(api, /inboundCustomerLessons\(branch, customerId, \{ take: 6 \}\)/);
     assert.match(api, /data.pull/);
     assert.match(api, /pullCustomerTariffs\(branch, customerId\)/);
     assert.match(src, /pull: true/);
