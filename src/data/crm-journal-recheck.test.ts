@@ -11,6 +11,7 @@ import {
   clampGrain,
 } from "./crm-journal-periods.ts";
 import { lessonNeedsHomework, lessonNeedsDetails } from "./crm-slots-core.ts";
+import { readFileSync } from "node:fs";
 
 function completeOf(lifeFrom: string, lifeTo: string, fill: { done?: string[]; pulled?: Record<string, string>; weak?: string[] }) {
   const done = pulledPeriodKeys(fill);
@@ -98,5 +99,14 @@ describe("перепроверка журнала", () => {
     assert.equal(lessonNeedsHomework({ ...raw, detailsAt: "2026-09-09T12:00:00Z" }), false);
     assert.equal(lessonNeedsHomework({ ...raw, status: 1 }), false);
     assert.equal(lessonNeedsDetails({ ...raw, detailsAt: "x" }), false);
+  });
+
+  it("перепроверка явок не стирает уже скачанные тему, ДЗ и таблицу", () => {
+    const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
+    assert.match(cards, /detailsAt: old\.detailsAt \|\| row\.detailsAt/);
+    assert.match(cards, /topic: String\(row\.topic/);
+    const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
+    assert.match(ui, /holdFill/);
+    assert.match(ui, /colLock/);
   });
 });

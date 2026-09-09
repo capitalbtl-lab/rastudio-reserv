@@ -343,19 +343,25 @@ export function mergeLocalCalendar(
   mode: "replace" | "union" = "replace",
 ): GroupCalLesson[] {
   const list = mergeJournalInbound(pulled, prev, holdIds, mode);
-  if (mode !== "union" || !prev?.length) return list;
+  if (!prev?.length) return list;
   const prevMap = new Map(prev.map((x) => [String(x.lessonId || `${x.date}|${x.from}`), x]));
   return list.map((row) => {
     const old = prevMap.get(String(row.lessonId || `${row.date}|${row.from}`));
     if (!old) return row;
     const newN = row.pupils?.length || 0;
     const oldN = old.pupils?.length || 0;
-    const pupils = newN >= oldN && newN ? mergeLessonPupils(old.pupils, row.pupils) : mergeLessonPupils(row.pupils, old.pupils) || old.pupils || row.pupils;
-    if (!pupils?.length) return row;
+    const pupils =
+      newN >= oldN && newN
+        ? mergeLessonPupils(old.pupils, row.pupils)
+        : mergeLessonPupils(row.pupils, old.pupils) || old.pupils || row.pupils;
     return {
       ...row,
-      pupils,
-      customerIds: row.customerIds?.length ? row.customerIds : old.customerIds || pupils.map((p) => p.customerId),
+      topic: String(row.topic || "").trim() || old.topic,
+      homework: String(row.homework || "").trim() || old.homework,
+      note: String(row.note || "").trim() || old.note,
+      detailsAt: old.detailsAt || row.detailsAt,
+      pupils: pupils?.length ? pupils : row.pupils || old.pupils,
+      customerIds: row.customerIds?.length ? row.customerIds : old.customerIds || (pupils || []).map((p) => p.customerId),
       amount: Number(row.amount) > 0 ? row.amount : old.amount,
       cttId: Number(row.cttId) > 0 ? row.cttId : old.cttId,
     };

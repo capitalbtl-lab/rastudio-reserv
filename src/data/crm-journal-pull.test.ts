@@ -94,7 +94,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Загрузить явки/);
     assert.match(ui, /Загрузить тему, ДЗ, комментарий и таблицу учеников всех кварталов/);
     assert.match(ui, /грузить нечего/);
-    assert.match(ui, /перепроверен/);
+    assert.match(ui, /holdFill/);
+    assert.match(ui, /colLock/);
     assert.match(pull, /rechecked/);
     assert.match(ui, /periodKey: part.key/);
     assert.doesNotMatch(ui, /setInterval\(\(\) => \{\s*if \(document.hidden/);

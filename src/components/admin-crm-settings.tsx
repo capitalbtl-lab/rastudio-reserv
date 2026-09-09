@@ -275,6 +275,7 @@ function GroupFillList({
   const [pageNeed, setPageNeed] = useState(0);
   const [pageDone, setPageDone] = useState(0);
   const q = query.trim().toLowerCase();
+  const colLock = useRef<Record<string, boolean>>({});
   const scoped = rows.filter((r) => {
     if (school && r.school !== school) return false;
     if (!q) return true;
@@ -285,8 +286,19 @@ function GroupFillList({
     if (loading && loading.groupId === r.groupId && loading.branchId === r.branchId) return true;
     return false;
   };
-  const needRows = scoped.filter((r) => !fillFinishedRow(r, grain)).slice().sort(byFillName);
-  const doneRows = scoped.filter((r) => fillFinishedRow(r, grain)).slice().sort(byFillName);
+  const lockedId = loading?.groupId && loading?.branchId != null ? `${loading.branchId}-${loading.groupId}` : "";
+  const finishedOf = (r: FillRow) => {
+    const id = fillGid(r);
+    const now = fillFinishedRow(r, grain);
+    if (lockedId && id === lockedId) {
+      if (colLock.current[id] == null) colLock.current[id] = now;
+      return colLock.current[id];
+    }
+    colLock.current[id] = now;
+    return now;
+  };
+  const needRows = scoped.filter((r) => !finishedOf(r)).slice().sort(byFillName);
+  const doneRows = scoped.filter((r) => finishedOf(r)).slice().sort(byFillName);
   const nNeed = needRows.length;
   const nDone = doneRows.length;
   const pagesNeed = Math.max(1, Math.ceil(nNeed / pageSize) || 1);
@@ -692,6 +704,7 @@ export function AdminCrmSettings() {
   const tabLockKind = useRef<"crm" | "hist" | null>(null);
   const [openMiss, setOpenMiss] = useState<"g" | "j1" | "j2" | "c1" | "c2" | "">("");
   const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string } | null>(null);
+  const holdFill = useRef(false);
   const stopSchool = useRef(false);
   const [schoolRun, setSchoolRun] = useState<{ cur: string; n: number; total: number } | null>(null);
   const dragId = useRef(0);
@@ -980,8 +993,12 @@ export function AdminCrmSettings() {
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Журнал не ответил.");
     } finally {
-      setBusy(false);
-      setFillLoading(null);
+      if (!holdFill.current) {
+        setBusy(false);
+        setFillLoading(null);
+      } else {
+        setBusy(false);
+      }
     }
   }
 
@@ -1021,22 +1038,37 @@ export function AdminCrmSettings() {
       return;
     }
     stopSchool.current = false;
+    holdFill.current = true;
+    setFillLoading({ groupId: Number(row.groupId) || 0, branchId: Number(row.branchId) || 0, kind: "group", label: chunks[0]?.label || "" });
     setSchoolRun({ cur: row.name, n: 0, total: chunks.length });
-    for (let i = 0; i < chunks.length; i += 1) {
-      if (stopSchool.current) break;
-      const part = chunks[i];
-      setSchoolRun({ cur: `${row.name} · ${part.label}`, n: i + 1, total: chunks.length });
-      await runJournal({
-        kind: "group",
-        groupId: Number(row.groupId) || 0,
-        branchId: Number(row.branchId) || 0,
-        periodKey: part.key,
-        periodLabel: part.label,
-        grain: journalGrain,
-        recheck: true,
-      });
+    try {
+      for (let i = 0; i < chunks.length; i += 1) {
+        if (stopSchool.current) break;
+        const part = chunks[i];
+        setSchoolRun({ cur: `${row.name} · ${part.label}`, n: i + 1, total: chunks.length });
+        setFillLoading({
+          groupId: Number(row.groupId) || 0,
+          branchId: Number(row.branchId) || 0,
+          periodKey: part.key,
+          label: part.label,
+          kind: "group",
+        });
+        await runJournal({
+          kind: "group",
+          groupId: Number(row.groupId) || 0,
+          branchId: Number(row.branchId) || 0,
+          periodKey: part.key,
+          periodLabel: part.label,
+          grain: journalGrain,
+          recheck: true,
+        });
+      }
+    } finally {
+      holdFill.current = false;
+      setFillLoading(null);
+      setBusy(false);
+      setSchoolRun(null);
     }
-    setSchoolRun(null);
     if (stopSchool.current) setMsg("Очередь группы остановлена.");
   }
 
