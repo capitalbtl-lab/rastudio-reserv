@@ -28,8 +28,23 @@ function lessonKey(x: { lessonId?: number; date?: string; from?: string }) {
   return lid ? `id:${lid}` : `d:${slotKey(x)}`;
 }
 
+function foldLesson<T extends { lessonId?: number; date?: string; from?: string; amount?: number }>(old: T, row: T): T {
+  const lid = Number(row.lessonId) || Number(old.lessonId) || 0;
+  const rec = row as T & { topic?: string; homework?: string; note?: string };
+  const prev = old as T & { topic?: string; homework?: string; note?: string };
+  return {
+    ...old,
+    ...row,
+    lessonId: lid || old.lessonId,
+    amount: Number(row.amount) > 0 ? row.amount : old.amount,
+    topic: String(rec.topic || "").trim() || prev.topic,
+    homework: String(rec.homework || "").trim() || prev.homework,
+    note: String(rec.note || "").trim() || prev.note,
+  };
+}
+
 /** Один урок — одна строка: номер занятия важнее пары дата+время. Два разных номера не склеиваем. */
-export function collapseLessonRows<T extends { lessonId?: number; date?: string; from?: string }>(list: T[]): T[] {
+export function collapseLessonRows<T extends { lessonId?: number; date?: string; from?: string; amount?: number }>(list: T[]): T[] {
   const byId = new Map<number, T>();
   const noId: T[] = [];
   for (const row of list || []) {
@@ -39,15 +54,23 @@ export function collapseLessonRows<T extends { lessonId?: number; date?: string;
       continue;
     }
     const prev = byId.get(lid);
-    byId.set(lid, prev ? { ...prev, ...row, lessonId: lid } : row);
+    byId.set(lid, prev ? foldLesson(prev, row) : row);
   }
-  const slots = new Set([...byId.values()].map(slotKey));
   const bySlot = new Map<string, T>();
   for (const row of noId) {
     const s = slotKey(row);
-    if (slots.has(s)) continue;
+    const host = [...byId.values()].find((x) => slotKey(x) === s);
+    if (host) {
+      const lid = Number(host.lessonId) || 0;
+      if (lid) byId.set(lid, foldLesson(row, host));
+      continue;
+    }
+    if (!(row.date || row.from)) {
+      bySlot.set(`${bySlot.size}|empty`, row);
+      continue;
+    }
     const prev = bySlot.get(s);
-    bySlot.set(s, prev ? { ...prev, ...row } : row);
+    bySlot.set(s, prev ? foldLesson(prev, row) : row);
   }
   return [...byId.values(), ...bySlot.values()].sort(
     (a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")),

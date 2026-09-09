@@ -69,6 +69,19 @@ describe("вход из Alfa", () => {
     assert.equal(merged.length, 1);
     assert.equal(merged[0]?.lessonId, 50);
   });
+
+  it("склейка без номера сохраняет сумму и тему", () => {
+    const merged = mergeJournalInbound(
+      [{ lessonId: 50, date: "01.09.2026", from: "10:00", status: 3, amount: 0, topic: "" }],
+      [{ date: "01.09.2026", from: "10:00", status: 3, amount: 350, topic: "роботы" }],
+      [],
+      "union",
+    );
+    assert.equal(merged.length, 1);
+    assert.equal(merged[0]?.lessonId, 50);
+    assert.equal(merged[0]?.amount, 350);
+    assert.equal((merged[0] as { topic?: string }).topic, "роботы");
+  });
 });
 
 describe("ночной diff групп", () => {
