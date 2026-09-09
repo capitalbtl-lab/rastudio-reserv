@@ -91,7 +91,10 @@ describe("форма занятия карточки", () => {
     assert.match(src, /g.active !== false/);
     assert.doesNotMatch(src, /group=\{\(card.groups \|\| \[\]\)\[0\]\?\.name\}/);
     const strip = readFileSync(new URL("../components/lesson-strip.tsx", import.meta.url), "utf8");
-    assert.match(strip, /isOneOffLesson/);
+    assert.match(strip, /±360 дней/);
+    assert.match(strip, /±2 года/);
+    assert.match(strip, /±7 лет/);
+    assert.match(strip, /id: "2555"/);
     assert.match(strip, /lessonTileTone/);
     assert.match(strip, /lessonTileMark/);
     assert.match(strip, /data-tile-tone/);
@@ -158,7 +161,7 @@ describe("форма занятия карточки", () => {
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /packLessonPupils/);
     assert.match(inbound, /fanOutLessonWriteoffs/);
-    assert.match(inbound, /ruShift\(-2200\)/);
+    assert.match(inbound, /ruShift\(-2600\)/);
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(api, /packLessonPupils/);
     assert.match(api, /fanOutLessonWriteoffs/);

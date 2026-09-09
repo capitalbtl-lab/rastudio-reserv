@@ -20,6 +20,12 @@ const RANGE_OPTS = [
   { id: "90", label: "±90 дней" },
   { id: "180", label: "±180 дней" },
   { id: "360", label: "±360 дней" },
+  { id: "730", label: "±2 года" },
+  { id: "1095", label: "±3 года" },
+  { id: "1460", label: "±4 года" },
+  { id: "1825", label: "±5 лет" },
+  { id: "2190", label: "±6 лет" },
+  { id: "2555", label: "±7 лет" },
 ] as const;
 
 function isOneOffLesson(l: GroupCalLesson) {

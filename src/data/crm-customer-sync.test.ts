@@ -53,7 +53,7 @@ describe("карточка не ждёт Alfa", () => {
 
   it("журнал ученика: полная история один раз, дальше окно и union", () => {
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
-    assert.match(inbound, /dateFrom = ruShift\(-2200\)/);
+    assert.match(inbound, /dateFrom = ruShift\(-2600\)/);
     assert.match(inbound, /LESSON_RECENT_DAYS/);
     assert.match(inbound, /mergeLocalCalendar/);
     assert.match(inbound, /"union"/);

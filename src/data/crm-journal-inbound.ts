@@ -163,7 +163,7 @@ export async function inboundJournalGroup(
     teacher: String(slot?.teacher || ""),
     subject: String(cached?.subject || slot?.subject || ""),
   };
-  const dateFrom = opts?.dateFrom || ruShift(-2200);
+  const dateFrom = opts?.dateFrom || ruShift(-2600);
   const dateTo = opts?.dateTo || ruShift(90);
   const byKey = new Map<string, GroupCalLesson>();
   async function pull(status: number, date_from: string, date_to: string, pages: number, pageSize: number) {
@@ -248,7 +248,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const { token, request } = await import("./alfacrm");
     const { listAdminSlots } = await import("./alfacrm-schedule");
     const t = await token();
-    const dateFrom = ruShift(-2200);
+    const dateFrom = ruShift(-2600);
     const dateTo = ruShift(90);
     const slots = listAdminSlots();
     const branches = wantFull ? uniqueBranches(branch) : [Number(branch) || 1];
