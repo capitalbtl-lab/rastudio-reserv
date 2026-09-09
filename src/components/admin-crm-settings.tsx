@@ -36,6 +36,17 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
   );
 }
 
+const CRM_SET_TABS = [
+  { id: "people", label: "Люди и роли" },
+  { id: "alfa", label: "Фон с AlfaCRM" },
+  { id: "history", label: "История из Alfa" },
+  { id: "queue", label: "Очередь" },
+  { id: "funnel", label: "Воронка" },
+  { id: "cache", label: "Кэш сайта" },
+  { id: "branches", label: "Филиалы" },
+] as const;
+type CrmSetTab = (typeof CRM_SET_TABS)[number]["id"];
+
 type MissPack = {
   total: number;
   more?: number;
@@ -558,6 +569,7 @@ export function AdminCrmSettings() {
   } | null>(null);
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
+  const [crmTab, setCrmTab] = useState<CrmSetTab>("history");
   const [openMiss, setOpenMiss] = useState<"g" | "j1" | "j2" | "c1" | "c2" | "">("");
   const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string } | null>(null);
   const stopSchool = useRef(false);
@@ -567,12 +579,23 @@ export function AdminCrmSettings() {
     try {
       const s = localStorage.getItem("crm-journal-school") || "";
       const g = localStorage.getItem("crm-journal-grain") || "";
+      const t = localStorage.getItem("crm-settings-tab") || "";
       if (s) setJournalSchool(s);
       if (g === "quarter" || g === "half" || g === "year") setJournalGrain(g);
+      if (CRM_SET_TABS.some((x) => x.id === t)) setCrmTab(t as CrmSetTab);
     } catch {
       /* */
     }
   }, []);
+
+  function pickCrmTab(v: CrmSetTab) {
+    setCrmTab(v);
+    try {
+      localStorage.setItem("crm-settings-tab", v);
+    } catch {
+      /* */
+    }
+  }
 
   function pickJournalSchool(v: string) {
     setJournalSchool(v);
@@ -998,10 +1021,23 @@ export function AdminCrmSettings() {
       <div>
         <h2 className="font-display text-3xl">Настройка CRM</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted">
-          Этапы воронки, автоматизация и синхронизация с AlfaCRM. Порядок столбцов здесь — тот же, что в кабинете CRM и на доске лидов.
+          Этапы, журнал и связь с Alfa — по вкладкам, не одной простынёй.
         </p>
       </div>
+      <div className="flex flex-wrap gap-1">
+        {CRM_SET_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", crmTab === t.id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
+            onClick={() => pickCrmTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
+      {crmTab === "people" ? (
       <Card
         title="Люди и роли"
         hint="Кто пишет на диск. Alfa догоняет очередью и не меняет автора. Пароль кабинета один — сотрудник. Два ИИ без пароля: ассистент в админке, консультант на сайте. Очередь — пакеты cgi и выгрузка."
@@ -1033,7 +1069,10 @@ export function AdminCrmSettings() {
         </ul>
         <p className="mt-3 text-[0.75rem] text-muted">Пароль входа тот же. Несколько сотрудников — следующим шагом, не смешивать с ИИ.</p>
       </Card>
+      ) : null}
 
+      {crmTab === "alfa" ? (
+      <>
       <Card
         title="Фон с AlfaCRM"
         hint="Диск сайта — правда. Ольга и формы пишут сюда сразу. Ниже — что подгружать из Alfa, что выгружать обратно, и предохранители трубы (лимит, токен, повтор создания)."
@@ -1163,6 +1202,45 @@ export function AdminCrmSettings() {
         </p>
       </Card>
 
+      <Card
+        title="Люди в Alfa"
+        hint="Сейчас работают и у нас, и в Alfa. Интервал и каналы — выше. F5 Alfa не ждёт."
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="text-sm font-semibold">
+            Сверять CRM каждые
+            <select
+              className="ml-2 h-9 rounded-full bg-surface-2 px-3 text-sm ring-1 ring-black/8"
+              value={syncMin}
+              onChange={(e) => setMinutes(Number(e.target.value))}
+            >
+              {[5, 10, 15, 30].map((n) => (
+                <option key={n} value={n}>
+                  {n} мин
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void loadStages()}
+            className="h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-black/10 hover:bg-black/5"
+          >
+            Обновить этапы
+          </button>
+        </div>
+        <ul className="mt-3 space-y-1 text-[0.82rem] text-muted">
+          <li>Состав и абонементы — фоновые пакеты.</li>
+          <li>Лиды — только карточки с новым updated_at.</li>
+          <li>Журнал урока — фон по 2 группы, как состав. Очередь старше входа. «Обновить» у группы — сразу.</li>
+          <li>Касса пока в Alfa: платёж у нас сразу на диск и в очередь.</li>
+        </ul>
+      </Card>
+      </>
+      ) : null}
+
+      {crmTab === "history" ? (
       <Card
         title="Загрузить историю из Alfa"
         hint="Только по кнопке. ○ сверить · ~ оборвалось · ✓ сверено с Alfa. Зелёное — не «уже на сайте», а сверенный квартал."
@@ -1389,7 +1467,9 @@ export function AdminCrmSettings() {
           );
         })()}
       </Card>
+      ) : null}
 
+      {crmTab === "queue" ? (
       <Card
         title="Очередь в Alfa"
         hint={
@@ -1425,7 +1505,10 @@ export function AdminCrmSettings() {
           </button>
         </div>
       </Card>
+      ) : null}
 
+      {crmTab === "funnel" ? (
+      <>
       <Card
         title="Воронка продаж"
         hint="Как в AlfaCRM: Настройки → Воронки продаж. «Не разобрано» системный, его нельзя сдвинуть. Остальные — перетащите или кнопками вверх/вниз."
@@ -1642,7 +1725,10 @@ export function AdminCrmSettings() {
           Не возвращать с «Оплатил», если снова добавили в группу
         </label>
       </Card>
+      </>
+      ) : null}
 
+      {crmTab === "cache" ? (
       <Card
         title="Кэш сайта"
         hint="Что читать из хранилища админки, а что каждый раз из AlfaCRM. Оперативные данные — на лету. Абонементы учеников: счётчик сразу с диска сайта, без пакетов. Сверка CRM — фоном по филиалам."
@@ -1731,43 +1817,9 @@ export function AdminCrmSettings() {
           </button>
         </div>
       </Card>
+      ) : null}
 
-      <Card
-        title="Люди в Alfa"
-        hint="Сейчас работают и у нас, и в Alfa. Интервал и каналы — блок «Фон с AlfaCRM». F5 Alfa не ждёт."
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="text-sm font-semibold">
-            Сверять CRM каждые
-            <select
-              className="ml-2 h-9 rounded-full bg-surface-2 px-3 text-sm ring-1 ring-black/8"
-              value={syncMin}
-              onChange={(e) => setMinutes(Number(e.target.value))}
-            >
-              {[5, 10, 15, 30].map((n) => (
-                <option key={n} value={n}>
-                  {n} мин
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void loadStages()}
-            className="h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-black/10 hover:bg-black/5"
-          >
-            Обновить этапы
-          </button>
-        </div>
-        <ul className="mt-3 space-y-1 text-[0.82rem] text-muted">
-          <li>Состав и абонементы — фоновые пакеты.</li>
-          <li>Лиды — только карточки с новым updated_at.</li>
-          <li>Журнал урока — фон по 2 группы, как состав. Очередь старше входа. «Обновить» у группы — сразу.</li>
-          <li>Касса пока в Alfa: платёж у нас сразу на диск и в очередь.</li>
-        </ul>
-      </Card>
-
+      {crmTab === "branches" ? (
       <Card title="Филиалы" hint="Лиды и клиенты в AlfaCRM привязаны к филиалу. На сайте тот же список.">
         <ul className="divide-y divide-black/6">
           {([1, 2, 3, 4] as const).map((id) => (
@@ -1781,7 +1833,9 @@ export function AdminCrmSettings() {
           ))}
         </ul>
       </Card>
+      ) : null}
 
+      {crmTab === "funnel" ? (
       <Card title="Какие карточки попадают в воронку">
         <dl className="grid gap-3 text-sm md:grid-cols-2">
           <div className="rounded-xl bg-surface-2 p-3">
@@ -1802,6 +1856,7 @@ export function AdminCrmSettings() {
           </div>
         </dl>
       </Card>
+      ) : null}
     </div>
   );
 }
