@@ -175,6 +175,7 @@ export function journalPullProgress() {
     name: g.name,
     school: g.school,
     extra: g.lessons ? `${g.lessons} зан. неполно` : "нет журнала",
+    archived: g.archived,
   }));
   const groupsDone = groupRows.filter((g) => g.done).map((g) => ({
     groupId: g.groupId,
@@ -182,6 +183,7 @@ export function journalPullProgress() {
     name: g.name,
     school: g.school,
     extra: `${g.lessons} зан.`,
+    archived: g.archived,
   }));
 
   function studentSide(study: JournalPullStudy) {
@@ -216,8 +218,8 @@ export function journalPullProgress() {
     groups: {
       total: groups.length,
       done: groupsDone.length,
-      miss: packList(groupsMiss, 80),
-      doneList: packList(groupsDone, 20),
+      miss: packList(groupsMiss, 200),
+      doneList: packList(groupsDone, 200),
     },
     live,
     archive: arch,

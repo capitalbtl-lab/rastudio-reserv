@@ -30,7 +30,10 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /3\. Деньги на карточке/);
     assert.match(ui, /готово/);
     assert.match(ui, /ещё нет/);
-    assert.match(ui, /Каких групп ещё нет/);
+    assert.match(ui, /Каких групп ещё нет|GroupStatusList|Ещё нет/);
+    assert.match(ui, /Уже есть/);
+    assert.match(ui, /doneList/);
+    assert.match(pull, /doneList: packList\(groupsDone, 200\)/);
     assert.match(ui, /runJournal\(\{ kind: "school"/);
     assert.match(ui, /kind: "students", study: "1"/);
     assert.match(ui, /kind: "balance", study: "2"/);

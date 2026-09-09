@@ -38,8 +38,79 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
 type MissPack = {
   total: number;
   more?: number;
-  items: { id?: number; name: string; extra?: string; groupId?: number; branchId?: number; school?: string }[];
+  items: { id?: number; name: string; extra?: string; groupId?: number; branchId?: number; school?: string; archived?: boolean }[];
 };
+
+function GroupStatusList({
+  miss,
+  done,
+  school,
+  busy,
+  onLoad,
+}: {
+  miss?: MissPack;
+  done?: MissPack;
+  school: string;
+  busy?: boolean;
+  onLoad: (row: MissPack["items"][number]) => void;
+}) {
+  const take = (pack?: MissPack) => (pack?.items || []).filter((r) => !school || r.school === school);
+  const missRows = take(miss);
+  const doneRows = take(done);
+  const missMore = school ? 0 : miss?.more || 0;
+  const doneMore = school ? 0 : done?.more || 0;
+  return (
+    <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <div className="rounded-xl bg-white p-3 ring-1 ring-rose-200">
+        <p className="text-sm font-semibold text-rose-800">Ещё нет · {missRows.length + missMore}</p>
+        {missRows.length ? (
+          <ul className="mt-2 max-h-72 space-y-0.5 overflow-auto text-sm">
+            {missRows.map((row) => (
+              <li key={`m-${row.branchId}-${row.groupId}`}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="w-full rounded-lg px-2 py-1.5 text-left hover:bg-rose-50 disabled:opacity-50"
+                  onClick={() => onLoad(row)}
+                >
+                  <span className="font-medium">{row.name}</span>
+                  <span className="mt-0.5 block text-[0.72rem] text-muted">
+                    {row.school}
+                    {row.archived ? " · архив" : ""}
+                    {row.extra ? ` · ${row.extra}` : ""}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-muted">Все выбранные группы уже с журналом.</p>
+        )}
+        {missMore ? <p className="mt-1 text-[0.72rem] text-muted">и ещё {missMore}</p> : null}
+      </div>
+      <div className="rounded-xl bg-white p-3 ring-1 ring-emerald-200">
+        <p className="text-sm font-semibold text-emerald-800">Уже есть · {doneRows.length + doneMore}</p>
+        {doneRows.length ? (
+          <ul className="mt-2 max-h-72 space-y-0.5 overflow-auto text-sm">
+            {doneRows.map((row) => (
+              <li key={`d-${row.branchId}-${row.groupId}`} className="rounded-lg px-2 py-1.5">
+                <span className="font-medium">{row.name}</span>
+                <span className="mt-0.5 block text-[0.72rem] text-muted">
+                  {row.school}
+                  {row.archived ? " · архив" : ""}
+                  {row.extra ? ` · ${row.extra}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-muted">Пока ни одной группы не загрузили.</p>
+        )}
+        {doneMore ? <p className="mt-1 text-[0.72rem] text-muted">и ещё {doneMore}</p> : null}
+      </div>
+    </div>
+  );
+}
 
 function MissList({
   pack,
@@ -694,25 +765,17 @@ export function AdminCrmSettings() {
                   >
                     {busy ? "Загружаю…" : journalSchool ? `Загрузить 3 группы «${journalSchool}»` : "Загрузить 3 группы"}
                   </button>
-                  <button
-                    type="button"
-                    className="h-10 rounded-full bg-white px-4 text-sm font-semibold ring-1 ring-black/10"
-                    disabled={busy || offline}
-                    onClick={() => setOpenMiss(openMiss === "g" ? "" : "g")}
-                  >
-                    {openMiss === "g" ? "Скрыть список" : "Каких групп ещё нет"}
-                  </button>
                 </div>
-                {openMiss === "g" ? (
-                  <MissList
-                    pack={p?.groups?.miss}
-                    empty="У всех групп журнал уже есть."
-                    onGroup={(row) =>
-                      void runJournal({ kind: "group", groupId: Number(row.groupId) || 0, branchId: Number(row.branchId) || 0 })
-                    }
-                  />
-                ) : null}
-                <p className="mt-2 text-[0.72rem] text-muted">В списке можно нажать группу — загрузится только она.</p>
+                <GroupStatusList
+                  miss={p?.groups?.miss}
+                  done={p?.groups?.doneList}
+                  school={journalSchool}
+                  busy={busy || offline}
+                  onLoad={(row) =>
+                    void runJournal({ kind: "group", groupId: Number(row.groupId) || 0, branchId: Number(row.branchId) || 0 })
+                  }
+                />
+                <p className="mt-2 text-[0.72rem] text-muted">Красный столбец — нажмите группу, загрузится только она. Зелёный — журнал уже на сайте.</p>
               </section>
 
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
