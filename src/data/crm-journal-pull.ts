@@ -44,6 +44,26 @@ type LifeReport = {
   left?: number;
 };
 
+type StudentHit = {
+  cid: number;
+  branchId: number;
+  name: string;
+  groups: string[];
+  lessons: number;
+  pays: number;
+  done: boolean;
+  ok: boolean;
+};
+
+type StudentsReport = {
+  at: string;
+  study: string;
+  who: string;
+  n: number;
+  total: number;
+  rows: StudentHit[];
+};
+
 type ArchivesReport = {
   at: string;
   added: number;
@@ -61,14 +81,15 @@ type PullStore = {
   studentIdx: Record<string, number>;
   lastLife?: LifeReport | null;
   lastArchives?: ArchivesReport | null;
+  lastStudents?: StudentsReport | null;
 };
+
+function emptyStore(): PullStore {
+  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null, lastArchives: null, lastStudents: null };
+}
 
 function fileOf() {
   return join(process.cwd(), "storage", "crm-journal-pull.json");
-}
-
-function emptyStore(): PullStore {
-  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null, lastArchives: null };
 }
 
 function loadStore(): PullStore {
@@ -83,6 +104,7 @@ function loadStore(): PullStore {
       studentIdx: raw.studentIdx && typeof raw.studentIdx === "object" ? raw.studentIdx : {},
       lastLife: raw.lastLife && typeof raw.lastLife === "object" ? (raw.lastLife as LifeReport) : null,
       lastArchives: raw.lastArchives && typeof raw.lastArchives === "object" ? (raw.lastArchives as ArchivesReport) : null,
+      lastStudents: raw.lastStudents && typeof raw.lastStudents === "object" ? (raw.lastStudents as StudentsReport) : null,
     };
   } catch {
     return emptyStore();
@@ -472,6 +494,7 @@ export function journalPullState() {
     progress: journalPullProgress(),
     lastLife: store.lastLife || null,
     lastArchives: store.lastArchives || null,
+    lastStudents: store.lastStudents || null,
   };
 }
 
@@ -580,6 +603,7 @@ export async function journalPull(opts: {
   periodKey?: string;
   grain?: Grain;
   recheck?: boolean;
+  customerId?: number;
 }) {
   if (!alfaLinkedNow()) {
     return { ok: false as const, error: "Фон с AlfaCRM выключен.", ...journalPullState() };
@@ -910,7 +934,8 @@ export async function journalPull(opts: {
 
   const group = selectedGid ? { groupId: selectedGid, branchId: selectedBid || 1 } : undefined;
   const people = rankedStudentIds(study, group, group ? "" : school);
-  if (!people.length) {
+  const wanted = Number(opts.customerId) || 0;
+  if (!people.length && !wanted) {
     store.note = group
       ? "В этой группе нет учеников на диске."
       : school
@@ -922,29 +947,64 @@ export async function journalPull(opts: {
   }
   const key = `${study}:${group ? `${group.branchId}:${group.groupId}` : school || "*"}`;
   const idx = Number(store.studentIdx[key]) || 0;
-  const picked = pickSlice(people, idx, 10);
-  store.studentIdx[key] = picked.next;
-  const balance = kind === "balance";
-  const rows: { cid: number; lessons: number; pays: number; tariffs: number }[] = [];
-  for (const p of picked.slice) {
-    const row = await pullOneStudent(p.cid, p.branchId, balance);
-    rows.push(row);
+  const fromList = wanted ? people.find((p) => p.cid === wanted) : null;
+  const fallback = wanted
+    ? (() => {
+        const d = findDossier({ crmId: wanted });
+        if (!d) return null;
+        return { cid: wanted, branchId: Number(d.branchId || 1) || 1, study: Number(d.extras?.is_study) || -1 };
+      })()
+    : null;
+  const one = fromList || fallback || pickSlice(people, idx, 1).slice[0];
+  if (!one) {
+    store.note = "Нет ученика для загрузки.";
+    store.at = new Date().toISOString();
+    saveStore(store);
+    return { ok: false as const, error: store.note, more: false, ...journalPullState() };
   }
-  const lessons = rows.reduce((s, r) => s + r.lessons, 0);
-  const pays = rows.reduce((s, r) => s + r.pays, 0);
+  if (!wanted) {
+    const picked = pickSlice(people, idx, 1);
+    store.studentIdx[key] = picked.next;
+  }
+  const balance = kind === "balance";
+  const row = await pullOneStudent(one.cid, one.branchId, balance);
+  const sync = customerSyncOf(one.cid);
+  const groups = groupsOfStudent(one.cid);
+  const name = fioOf(one.cid);
+  const ok = Boolean(sync.lessonsFull) || (row.done && row.lessons > 0);
   const who = study === "1" ? "текущие" : study === "2" ? "архив" : "ученики";
-  const names = picked.slice
-    .map((p) => {
-      const hit = rows.find((r) => r.cid === p.cid);
-      const g = groupsOfStudent(p.cid).slice(0, 2).join(", ");
-      return `${fioOf(p.cid)}${g ? ` · ${g}` : ""}${hit ? ` · ${hit.lessons} зан.` : ""}`;
-    })
-    .join("; ");
-  store.note = balance
-    ? `${who} ${picked.start + 1}–${picked.start + picked.slice.length}/${people.length}: уроков ${lessons}, платежей ${pays}. ${names}`
-    : `${who} ${picked.start + 1}–${picked.start + picked.slice.length}/${people.length}: ${names || `уроков ${lessons}`}`;
-  if (picked.wrapped) store.note += " · круг закрыт";
+  const hit: StudentHit = {
+    cid: one.cid,
+    branchId: one.branchId,
+    name,
+    groups,
+    lessons: row.lessons,
+    pays: row.pays,
+    done: row.done,
+    ok,
+  };
+  const prev = store.lastStudents && store.lastStudents.study === study ? store.lastStudents.rows : [];
+  const merged = [hit, ...prev.filter((r) => r.cid !== hit.cid)].slice(0, 40);
+  store.lastStudents = {
+    at: new Date().toISOString(),
+    study,
+    who,
+    n: wanted ? prev.filter((r) => r.cid !== hit.cid).length + 1 : (Number(store.lastStudents?.n) || 0) + 1,
+    total: people.length,
+    rows: merged,
+  };
+  store.note = ok
+    ? `${who}: ${name}${groups.length ? ` · ${groups.slice(0, 2).join(", ")}` : ""} · ${row.lessons} зан.`
+    : `${who}: ${name}${groups.length ? ` · ${groups.slice(0, 2).join(", ")}` : ""} · не попал в выдачу${row.done ? " (Alfa пусто)" : " (обрыв)"}`;
   store.at = new Date().toISOString();
   saveStore(store);
-  return { ok: true as const, extra: store.note, count: lessons, scanned: picked.slice.length, more: !picked.wrapped, ...journalPullState() };
+  return {
+    ok: true as const,
+    extra: store.note,
+    count: row.lessons,
+    scanned: 1,
+    more: !wanted,
+    student: hit,
+    ...journalPullState(),
+  };
 }

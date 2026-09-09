@@ -93,6 +93,17 @@ const HIST_TABS: { id: HistTab; label: string }[] = [
   { id: "money", label: "Деньги на карточке" },
 ];
 
+type StudentHit = {
+  cid: number;
+  branchId: number;
+  name: string;
+  groups: string[];
+  lessons: number;
+  pays?: number;
+  done: boolean;
+  ok: boolean;
+};
+
 type MissPack = {
   total: number;
   more?: number;
@@ -624,6 +635,75 @@ function MissList({
   );
 }
 
+function StudentPackView({
+  rows,
+  cur,
+  n,
+  total,
+  running,
+  busy,
+  onRecheck,
+}: {
+  rows: StudentHit[];
+  cur?: string;
+  n?: number;
+  total?: number;
+  running?: boolean;
+  busy?: boolean;
+  onRecheck: (row: StudentHit) => void;
+}) {
+  const ok = rows.filter((r) => r.ok);
+  const miss = rows.filter((r) => !r.ok);
+  return (
+    <div className="mt-3">
+      <p className="h-6 truncate text-sm font-semibold">
+        {running ? `Сейчас ${n}/${total} · ${cur || "…"}` : rows.length ? `Пакет · ${ok.length} записаны · ${miss.length} не попали в выдачу` : "\u00a0"}
+      </p>
+      <div className="mt-2 grid min-h-[9rem] gap-2 sm:grid-cols-2">
+        <div className="rounded-xl bg-white/80 p-2 ring-1 ring-emerald-200">
+          <p className="text-[0.78rem] font-semibold text-emerald-900">В этом пакете загружены · {ok.length}</p>
+          <ul className="mt-1 space-y-0.5 text-sm">
+            {ok.length ? (
+              ok.map((r) => (
+                <li key={r.cid} className="truncate">
+                  <span className="font-medium">{r.name}</span>
+                  {r.groups?.[0] ? <span className="ml-1 text-[0.72rem] text-muted">{r.groups[0]}</span> : null}
+                  <span className="ml-1 text-[0.72rem] text-muted">{r.lessons} зан.</span>
+                </li>
+              ))
+            ) : (
+              <li className="text-muted">пока никого</li>
+            )}
+          </ul>
+        </div>
+        <div className="rounded-xl bg-white/80 p-2 ring-1 ring-rose-200">
+          <p className="text-[0.78rem] font-semibold text-rose-900">Не попали в выдачу · {miss.length}</p>
+          <ul className="mt-1 space-y-1 text-sm">
+            {miss.length ? (
+              miss.map((r, i) => (
+                <li key={r.cid || i} className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="font-medium">{r.name}</span>
+                    {r.groups?.[0] ? <span className="ml-1 text-[0.72rem] text-muted">{r.groups[0]}</span> : null}
+                    <span className="ml-1 text-[0.72rem] text-rose-800">{r.done ? "Alfa пусто" : "обрыв"}</span>
+                  </span>
+                  {r.cid ? (
+                    <button type="button" className={BTN_GHOST_SM} disabled={busy} onClick={() => onRecheck(r)}>
+                      Перепроверить
+                    </button>
+                  ) : null}
+                </li>
+              ))
+            ) : (
+              <li className="text-muted">все из пакета записались</li>
+            )}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProgressBar({ done, total, run }: { done: number; total: number; run?: boolean }) {
   const left = Math.max(0, total - done);
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
@@ -709,6 +789,7 @@ export function AdminCrmSettings() {
       left?: number;
     } | null;
     lastArchives?: { at?: string; added: number; total: number; branch: string; more: boolean; names?: string[] } | null;
+    lastStudents?: { at?: string; study?: string; who?: string; n?: number; total?: number; rows?: StudentHit[] } | null;
   } | null>(null);
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
@@ -723,6 +804,14 @@ export function AdminCrmSettings() {
   const holdFill = useRef(false);
   const stopSchool = useRef(false);
   const [schoolRun, setSchoolRun] = useState<{ cur: string; n: number; total: number } | null>(null);
+  const [studentRun, setStudentRun] = useState<{
+    kind: "students" | "balance";
+    study: "1" | "2";
+    n: number;
+    total: number;
+    cur: string;
+    rows: StudentHit[];
+  } | null>(null);
   const dragId = useRef(0);
   useEffect(() => {
     try {
@@ -982,13 +1071,14 @@ export function AdminCrmSettings() {
     periodLabel?: string;
     grain?: Grain;
     recheck?: boolean;
+    customerId?: number;
   }) {
     setBusy(true);
     if (opts.kind === "group" || opts.kind === "details") {
       setFillLoading({ groupId: opts.groupId || 0, branchId: opts.branchId || 0, periodKey: opts.periodKey || "", label: opts.periodLabel || "", kind: opts.kind });
     } else if (opts.kind === "life" || opts.kind === "archives") {
       setFillLoading({ kind: opts.kind });
-    } else if (opts.kind === "students" || opts.kind === "balance") {
+    } else if ((opts.kind === "students" || opts.kind === "balance") && !holdFill.current) {
       setFillLoading({ kind: opts.kind, label: opts.study === "2" ? "архивные" : "текущие" });
     }
     try {
@@ -1004,19 +1094,78 @@ export function AdminCrmSettings() {
           periodKey: opts.periodKey || "",
           grain: opts.grain || journalGrain,
           recheck: Boolean(opts.recheck),
+          customerId: opts.customerId || 0,
         } as never,
-      })) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string };
+      })) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit };
       if (res) setJournal(res);
       setMsg(res?.error || res?.extra || (res?.ok ? "Пакет записан на сайт." : "Журнал не ответил."));
+      return res;
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Журнал не ответил.");
+      return null;
     } finally {
       if (!holdFill.current) {
         setBusy(false);
         setFillLoading(null);
-      } else {
-        setBusy(false);
       }
+    }
+  }
+
+  async function runStudentPack(kind: "students" | "balance", study: "1" | "2") {
+    stopSchool.current = false;
+    holdFill.current = true;
+    const total = 10;
+    const who = study === "2" ? "архивные" : "текущие";
+    setFillLoading({ kind, label: who });
+    setStudentRun({ kind, study, n: 0, total, cur: "первый в очереди", rows: [] });
+    const rows: StudentHit[] = [];
+    try {
+      for (let i = 0; i < total; i += 1) {
+        if (stopSchool.current) break;
+        setStudentRun({ kind, study, n: i + 1, total, cur: "запрос в Alfa…", rows: [...rows] });
+        const res = await runJournal({ kind, study });
+        const hit = res?.student;
+        if (hit && hit.cid) {
+          rows.push(hit);
+          setStudentRun({ kind, study, n: i + 1, total, cur: hit.name, rows: [...rows] });
+        } else {
+          rows.push({ cid: 0, branchId: 0, name: res?.error || "нет ответа Alfa", groups: [], lessons: 0, done: false, ok: false });
+          setStudentRun({ kind, study, n: i + 1, total, cur: "нет ответа", rows: [...rows] });
+        }
+      }
+    } finally {
+      holdFill.current = false;
+      setFillLoading(null);
+      setBusy(false);
+      setStudentRun({
+        kind,
+        study,
+        n: rows.length,
+        total,
+        cur: stopSchool.current ? "остановлено" : "пакет готов",
+        rows,
+      });
+    }
+  }
+
+  async function recheckStudent(row: StudentHit, kind: "students" | "balance", study: "1" | "2") {
+    if (!row.cid || busy) return;
+    holdFill.current = true;
+    setFillLoading({ kind, label: study === "2" ? "архивные" : "текущие" });
+    setStudentRun((cur) => (cur ? { ...cur, cur: row.name, n: cur.n, total: cur.total } : { kind, study, n: 1, total: 1, cur: row.name, rows: [row] }));
+    try {
+      const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId });
+      const hit = res?.student;
+      if (hit && hit.cid) {
+        setStudentRun((cur) => {
+          const rows = (cur?.rows || []).map((r) => (r.cid === hit.cid ? hit : r));
+          return { kind, study, n: cur?.n || 1, total: cur?.total || 1, cur: hit.ok ? `${hit.name} · записан` : `${hit.name} · снова пусто`, rows };
+        });
+      }
+    } finally {
+      holdFill.current = false;
+      setFillLoading(null);
+      setBusy(false);
     }
   }
 
@@ -1659,25 +1808,33 @@ export function AdminCrmSettings() {
                   Личный журнал на карточке ученика: явки, пропуски, списания. Это не журнал группы — группа уже грузится во вкладке «Занятия в группах». Здесь Alfa отдаёт занятия <span className="font-semibold text-fg">по номеру ученика</span>.
                 </p>
                 <p className="mt-1 text-sm text-muted">
-                  «Загрузить 10 текущих» берёт следующих 10 из тех, кто сейчас ходит (is_study = учится) и у кого журнал ещё неполный. Один клик — пауза до минуты: Alfa отвечает по каждому. Когда круг пройден, в отчёте будет «круг закрыт».
+                  «Загрузить 10 текущих» идёт по одному ученику: сверху видно ФИО, справа — кто не попал в выдачу Alfa, их можно перепроверить.
                 </p>
                 <p className="mt-2 h-6 truncate text-sm font-semibold">
                   {fillLoading?.kind === "students"
-                    ? `Идёт загрузка · ${fillLoading.label} · Alfa, не нажимайте ещё раз`
-                    : journal?.note && /журнал|текущ|архив|круг/i.test(journal.note)
-                      ? journal.note
-                      : "\u00a0"}
+                    ? `Идёт загрузка · ${studentRun?.n || 0}/${studentRun?.total || 10} · ${studentRun?.cur || fillLoading.label || "Alfa"}`
+                    : "\u00a0"}
                 </p>
                 <p className="mt-2 text-sm font-semibold">Сейчас ходят · {p?.live?.total || 0} учеников</p>
                 <ProgressBar done={p?.live?.journalDone || 0} total={p?.live?.total || 0} run={fillLoading?.kind === "students" && fillLoading.label !== "архивные"} />
                 <p className="mt-3 text-sm font-semibold">Уже не ходят (архив) · {p?.archive?.total || 0} учеников</p>
                 <ProgressBar done={p?.archive?.journalDone || 0} total={p?.archive?.total || 0} run={fillLoading?.kind === "students" && fillLoading.label === "архивные"} />
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "students" && fillLoading.label !== "архивные" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runJournal({ kind: "students", study: "1" })}>
-                    {fillLoading?.kind === "students" && fillLoading.label !== "архивные" ? "Загрузка текущих…" : "Загрузить 10 текущих"}
+                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "students" && fillLoading.label !== "архивные" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runStudentPack("students", "1")}>
+                    Загрузить 10 текущих
                   </button>
-                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "students" && fillLoading.label === "архивные" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runJournal({ kind: "students", study: "2" })}>
-                    {fillLoading?.kind === "students" && fillLoading.label === "архивные" ? "Загрузка архивных…" : "Загрузить 10 архивных"}
+                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "students" && fillLoading.label === "архивные" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runStudentPack("students", "2")}>
+                    Загрузить 10 архивных
+                  </button>
+                  <button
+                    type="button"
+                    className={BTN_GHOST}
+                    disabled={!fillLoading || fillLoading.kind !== "students"}
+                    onClick={() => {
+                      stopSchool.current = true;
+                    }}
+                  >
+                    Стоп
                   </button>
                   <button type="button" className={BTN_GHOST} onClick={() => setOpenMiss(openMiss === "j1" ? "" : "j1")}>
                     {openMiss === "j1" ? "Скрыть список" : `Кому из текущих нет · ${Math.max(0, (p?.live?.total || 0) - (p?.live?.journalDone || 0))}`}
@@ -1686,6 +1843,15 @@ export function AdminCrmSettings() {
                     {openMiss === "j2" ? "Скрыть список" : `Кому из архива нет · ${Math.max(0, (p?.archive?.total || 0) - (p?.archive?.journalDone || 0))}`}
                   </button>
                 </div>
+                <StudentPackView
+                  rows={(studentRun?.kind === "students" ? studentRun.rows : null) || journal?.lastStudents?.rows || []}
+                  cur={studentRun?.cur}
+                  n={studentRun?.n}
+                  total={studentRun?.total}
+                  running={fillLoading?.kind === "students"}
+                  busy={busy || offline}
+                  onRecheck={(row) => void recheckStudent(row, "students", studentRun?.study === "2" || journal?.lastStudents?.study === "2" ? "2" : "1")}
+                />
                 {openMiss === "j1" ? <MissList pack={p?.live?.missJournal} empty="У всех текущих календарь уже есть." /> : null}
                 {openMiss === "j2" ? <MissList pack={p?.archive?.missJournal} empty="У архивных календарь уже есть." /> : null}
               </section>
@@ -1700,10 +1866,10 @@ export function AdminCrmSettings() {
                 <p className="mt-3 text-sm font-semibold">Уже не ходят (архив)</p>
                 <ProgressBar done={p?.archive?.cardDone || 0} total={p?.archive?.total || 0} run={fillLoading?.kind === "balance"} />
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "balance" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runJournal({ kind: "balance", study: "1" })}>
+                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "balance" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runStudentPack("balance", "1")}>
                     10 текущих с деньгами
                   </button>
-                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "balance" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runJournal({ kind: "balance", study: "2" })}>
+                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "balance" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runStudentPack("balance", "2")}>
                     10 архивных с деньгами
                   </button>
                   <button type="button" className={BTN_GHOST} onClick={() => setOpenMiss(openMiss === "c1" ? "" : "c1")}>

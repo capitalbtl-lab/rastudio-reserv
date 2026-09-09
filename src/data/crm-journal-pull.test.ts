@@ -91,7 +91,12 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /crm-settings-tab/);
     assert.match(ui, /w-fit shrink-0/);
     assert.match(ui, /min-w-\[12.5rem\]/);
-    assert.match(ui, /Идёт загрузка/);
+    assert.match(ui, /Не попали в выдачу/);
+    assert.match(ui, /StudentPackView/);
+    assert.match(ui, /runStudentPack/);
+    assert.match(ui, /Сейчас \$\{n\}\/\$\{total\}/);
+    assert.match(pull, /customerId/);
+    assert.match(pull, /lastStudents/);
     assert.match(ui, /Личный журнал на карточке ученика/);
     assert.match(ui, /Кому из текущих нет ·/);
     assert.match(pull, /child\?\.fio/);
@@ -114,5 +119,6 @@ describe("ручной журнал с Alfa", () => {
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(api, /periodKey/);
     assert.match(api, /kind !== "archives"/);
+    assert.match(api, /customerId/);
   });
 });
