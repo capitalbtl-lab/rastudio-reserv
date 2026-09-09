@@ -69,6 +69,7 @@ export function AdminCrmSettings() {
     at?: string;
     extra?: string;
     error?: string;
+    more?: boolean;
     groups?: { groupId: number; branchId: number; name: string; school: string; taken?: number; archived?: boolean }[];
     schools?: { name: string; groups: number }[];
     journalNext?: number;
@@ -78,9 +79,10 @@ export function AdminCrmSettings() {
     students?: { all: number; live: number; archive: number };
     linked?: boolean;
   } | null>(null);
+  const [wizWhat, setWizWhat] = useState<"groups" | "students" | "balance">("groups");
+  const [wizWho, setWizWho] = useState<"one-group" | "school" | "all-groups" | "current" | "archive" | "group-kids" | "school-kids">("one-group");
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGroup, setJournalGroup] = useState("");
-  const [journalStudy, setJournalStudy] = useState<"1" | "2" | "all">("1");
   const dragId = useRef(0);
 
   function applyLink(link: {
@@ -267,19 +269,117 @@ export function AdminCrmSettings() {
     }
   }
 
-  async function runJournal(kind: "group" | "school" | "students" | "balance") {
+  function setWizWhatSafe(next: "groups" | "students" | "balance") {
+    setWizWhat(next);
+    setWizWho(next === "groups" ? "one-group" : "current");
+    setJournalGroup("");
+  }
+
+  function journalPlan() {
+    const [gid, bid] = journalGroup.split(":").map(Number);
+    const groupName = (journal?.groups || []).find((g) => g.groupId === gid && g.branchId === bid)?.name || "";
+    if (wizWhat === "groups") {
+      if (wizWho === "one-group") {
+        return {
+          kind: "group" as const,
+          school: "",
+          groupId: gid || 0,
+          branchId: bid || 0,
+          study: "all" as const,
+          ready: Boolean(gid),
+          need: gid ? "" : "Выберите группу.",
+          preview: gid ? `Журнал группы «${groupName}»: посещения, пропуски, тема, ДЗ, списания.` : "Выберите группу — загрузится только она.",
+          button: gid ? `Загрузить «${groupName}»` : "Загрузить группу",
+        };
+      }
+      if (wizWho === "school") {
+        return {
+          kind: "school" as const,
+          school: journalSchool,
+          groupId: 0,
+          branchId: 0,
+          study: "all" as const,
+          ready: Boolean(journalSchool),
+          need: journalSchool ? "" : "Выберите школу.",
+          preview: journalSchool
+            ? `Следующие 3 группы школы «${journalSchool}». Повторяйте, пока круг не закроется.`
+            : "Выберите школу — пакет по 3 группы.",
+          button: journalSchool ? `3 группы «${journalSchool}»` : "Загрузить школу",
+        };
+      }
+      return {
+        kind: "school" as const,
+        school: "",
+        groupId: 0,
+        branchId: 0,
+        study: "all" as const,
+        ready: true,
+        need: "",
+        preview: "Следующие 3 группы из всех школ. Повторяйте, пока круг не закроется.",
+        button: "Загрузить 3 группы",
+      };
+    }
+    const kind = wizWhat === "balance" ? ("balance" as const) : ("students" as const);
+    const full = kind === "balance";
+    const what = full ? "журнал + касса + абонементы" : "личную явку, ДЗ и списания";
+    if (wizWho === "group-kids") {
+      return {
+        kind,
+        school: "",
+        groupId: gid || 0,
+        branchId: bid || 0,
+        study: "all" as const,
+        ready: Boolean(gid),
+        need: gid ? "" : "Выберите группу.",
+        preview: gid ? `10 учеников группы «${groupName}»: ${what}.` : "Выберите группу — по 10 её учеников.",
+        button: gid ? `10 учеников «${groupName}»` : "Загрузить 10 учеников",
+      };
+    }
+    if (wizWho === "school-kids") {
+      return {
+        kind,
+        school: journalSchool,
+        groupId: 0,
+        branchId: 0,
+        study: "all" as const,
+        ready: Boolean(journalSchool),
+        need: journalSchool ? "" : "Выберите школу.",
+        preview: journalSchool ? `10 учеников школы «${journalSchool}»: ${what}.` : "Выберите школу — по 10 учеников.",
+        button: journalSchool ? `10 учеников «${journalSchool}»` : "Загрузить 10 учеников",
+      };
+    }
+    const study = wizWho === "archive" ? ("2" as const) : ("1" as const);
+    const who = wizWho === "archive" ? "архивных" : "текущих";
+    return {
+      kind,
+      school: "",
+      groupId: 0,
+      branchId: 0,
+      study,
+      ready: true,
+      need: "",
+      preview: `Следующие 10 ${who} учеников: ${what}.`,
+      button: `Загрузить 10 ${who}`,
+    };
+  }
+
+  async function runJournal() {
+    const plan = journalPlan();
+    if (!plan.ready) {
+      setMsg(plan.need);
+      return;
+    }
     setBusy(true);
     try {
-      const [gid, bid] = journalGroup.split(":").map(Number);
       const res = (await adminSchedule({
         data: {
           token: token(),
           action: "journalPull",
-          kind,
-          school: journalSchool,
-          groupId: gid || 0,
-          branchId: bid || 0,
-          study: journalStudy,
+          kind: plan.kind,
+          school: plan.school,
+          groupId: plan.groupId,
+          branchId: plan.branchId,
+          study: plan.study,
         } as never,
       })) as typeof journal & { ok?: boolean };
       if (res) setJournal(res);
@@ -584,111 +684,164 @@ export function AdminCrmSettings() {
       </Card>
 
       <Card
-        title="Журнал с Alfa вручную"
-        hint="Не всё сразу. Один клик — одна группа, до трёх групп школы или 10 учеников. Подтягиваются посещения, пропуски, тема, ДЗ, комментарий и списания. «Карточка целиком» ещё кассу и абонементы — иначе баланс не сходится."
+        title="Мастер журнала Alfa"
+        hint="Три шага: что загрузить → откуда → одна кнопка. Alfa не забиваем: группа целиком, школа пакетами по 3, ученики по 10."
       >
-        <div className={cn(alfaMode === "offline" && "opacity-50")}>
-          <p className="text-[0.78rem] text-muted">
-            Группы {journal?.journalNext ?? 0}/{journal?.journalTotal ?? 0}
-            <span className="mx-2">·</span>
-            личные {journal?.lessonsNext ?? 0}/{journal?.lessonsTotal ?? 0}
-            {journal?.students ? ` · учеников ${journal.students.live} + архив ${journal.students.archive}` : ""}
-          </p>
-          {journal?.note ? <p className="mt-1 text-[0.78rem] font-medium text-fg">{journal.note}</p> : null}
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-              Школа
-              <select
-                className="mt-1 h-9 w-full rounded-full bg-surface-2 px-3 text-sm font-medium text-fg ring-1 ring-black/8"
-                value={journalSchool}
-                disabled={busy || alfaMode === "offline"}
-                onChange={(e) => {
-                  setJournalSchool(e.target.value);
-                  setJournalGroup("");
-                }}
-              >
-                <option value="">Все школы</option>
-                {(journal?.schools || []).map((s) => (
-                  <option key={s.name} value={s.name}>
-                    {s.name} · {s.groups}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-              Группа
-              <select
-                className="mt-1 h-9 w-full rounded-full bg-surface-2 px-3 text-sm font-medium text-fg ring-1 ring-black/8"
-                value={journalGroup}
-                disabled={busy || alfaMode === "offline"}
-                onChange={(e) => setJournalGroup(e.target.value)}
-              >
-                <option value="">Следующая по кругу</option>
-                {(journal?.groups || [])
-                  .filter((g) => !journalSchool || g.school === journalSchool)
-                  .map((g) => (
-                    <option key={`${g.branchId}:${g.groupId}`} value={`${g.groupId}:${g.branchId}`}>
-                      {g.archived ? "Архив · " : ""}
-                      {g.name}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
-              Ученики
-              <select
-                className="mt-1 h-9 w-full rounded-full bg-surface-2 px-3 text-sm font-medium text-fg ring-1 ring-black/8"
-                value={journalStudy}
-                disabled={busy || alfaMode === "offline"}
-                onChange={(e) => setJournalStudy(e.target.value as "1" | "2" | "all")}
-              >
-                <option value="1">Текущие</option>
-                <option value="2">Архив</option>
-                <option value="all">Текущие и архив</option>
-              </select>
-            </label>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
-              disabled={busy || alfaMode === "offline"}
-              onClick={() => void runJournal("group")}
-            >
-              1 группа
-            </button>
-            <button
-              type="button"
-              className="h-9 rounded-full bg-black/8 px-4 text-sm font-semibold disabled:opacity-50"
-              disabled={busy || alfaMode === "offline"}
-              onClick={() => void runJournal("school")}
-            >
-              Школа · до 3 групп
-            </button>
-            <button
-              type="button"
-              className="h-9 rounded-full bg-black/8 px-4 text-sm font-semibold disabled:opacity-50"
-              disabled={busy || alfaMode === "offline"}
-              onClick={() => void runJournal("students")}
-            >
-              10 журналов
-            </button>
-            <button
-              type="button"
-              className="h-9 rounded-full bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50"
-              disabled={busy || alfaMode === "offline"}
-              onClick={() => void runJournal("balance")}
-            >
-              10 карточек целиком
-            </button>
-          </div>
-          <ul className="mt-3 space-y-1 text-[0.75rem] text-muted">
-            <li>1 группа — журнал посещений и пропусков этой группы, состав, тема, ДЗ, списания.</li>
-            <li>Школа — следующие 3 группы выбранной школы. Нажмите ещё раз, пока круг не закроется.</li>
-            <li>10 журналов — личная явка 10 учеников (сначала текущие, потом архив).</li>
-            <li>10 карточек целиком — журнал + касса + абонементы. Это баланс и все списания на карточке.</li>
-          </ul>
-        </div>
+        {(() => {
+          const plan = journalPlan();
+          const offline = alfaMode === "offline";
+          const groupsOfSchool = (journal?.groups || []).filter((g) => !journalSchool || g.school === journalSchool);
+          const whoGroups = [
+            { id: "one-group" as const, title: "Одна группа", hint: "Журнал выбранной группы" },
+            { id: "school" as const, title: "Одна школа", hint: "По 3 группы за раз" },
+            { id: "all-groups" as const, title: "Все группы", hint: "По 3 группы из всех школ" },
+          ];
+          const whoKids = [
+            { id: "current" as const, title: "10 текущих", hint: "Кто учится сейчас" },
+            { id: "archive" as const, title: "10 архивных", hint: "Бывшие ученики" },
+            { id: "group-kids" as const, title: "10 из группы", hint: "Состав выбранной группы" },
+            { id: "school-kids" as const, title: "10 из школы", hint: "Ученики выбранной школы" },
+          ];
+          const who = wizWhat === "groups" ? whoGroups : whoKids;
+          return (
+            <div className={cn(offline && "opacity-50")}>
+              <p className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-muted">1. Что загрузить</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {(
+                  [
+                    { id: "groups" as const, title: "Журнал групп", hint: "Посещения и пропуски занятий" },
+                    { id: "students" as const, title: "Личные журналы", hint: "Явка на карточке ученика" },
+                    { id: "balance" as const, title: "Карточки целиком", hint: "Журнал + касса + абонементы" },
+                  ] as const
+                ).map((opt) => {
+                  const on = wizWhat === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      disabled={busy || offline}
+                      onClick={() => setWizWhatSafe(opt.id)}
+                      className={cn(
+                        "rounded-2xl px-3 py-3 text-left ring-1 transition",
+                        on ? "bg-black text-white ring-black" : "bg-surface-2 ring-black/8 hover:bg-white",
+                      )}
+                    >
+                      <p className="text-sm font-semibold">{opt.title}</p>
+                      <p className={cn("mt-0.5 text-[0.72rem] leading-snug", on ? "text-white/80" : "text-muted")}>{opt.hint}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="mt-4 text-[0.72rem] font-bold uppercase tracking-[0.08em] text-muted">2. Откуда</p>
+              <div className={cn("mt-2 grid gap-2", wizWhat === "groups" ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+                {who.map((opt) => {
+                  const on = wizWho === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      disabled={busy || offline}
+                      onClick={() => setWizWho(opt.id)}
+                      className={cn(
+                        "rounded-2xl px-3 py-2.5 text-left ring-1 transition",
+                        on ? "bg-black text-white ring-black" : "bg-surface-2 ring-black/8 hover:bg-white",
+                      )}
+                    >
+                      <p className="text-sm font-semibold">{opt.title}</p>
+                      <p className={cn("mt-0.5 text-[0.72rem]", on ? "text-white/80" : "text-muted")}>{opt.hint}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {wizWho === "school" || wizWho === "school-kids" ? (
+                <label className="mt-3 block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                  Школа
+                  <select
+                    className="mt-1 h-9 w-full rounded-full bg-surface-2 px-3 text-sm font-medium text-fg ring-1 ring-black/8"
+                    value={journalSchool}
+                    disabled={busy || offline}
+                    onChange={(e) => {
+                      setJournalSchool(e.target.value);
+                      setJournalGroup("");
+                    }}
+                  >
+                    <option value="">Выберите школу</option>
+                    {(journal?.schools || []).map((s) => (
+                      <option key={s.name} value={s.name}>
+                        {s.name} · {s.groups} групп
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+
+              {wizWho === "one-group" || wizWho === "group-kids" ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                    Школа
+                    <select
+                      className="mt-1 h-9 w-full rounded-full bg-surface-2 px-3 text-sm font-medium text-fg ring-1 ring-black/8"
+                      value={journalSchool}
+                      disabled={busy || offline}
+                      onChange={(e) => {
+                        setJournalSchool(e.target.value);
+                        setJournalGroup("");
+                      }}
+                    >
+                      <option value="">Все школы</option>
+                      {(journal?.schools || []).map((s) => (
+                        <option key={s.name} value={s.name}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-[0.72rem] font-semibold uppercase tracking-wider text-muted">
+                    Группа
+                    <select
+                      className="mt-1 h-9 w-full rounded-full bg-surface-2 px-3 text-sm font-medium text-fg ring-1 ring-black/8"
+                      value={journalGroup}
+                      disabled={busy || offline}
+                      onChange={(e) => setJournalGroup(e.target.value)}
+                    >
+                      <option value="">Выберите группу</option>
+                      {groupsOfSchool.map((g) => (
+                        <option key={`${g.branchId}:${g.groupId}`} value={`${g.groupId}:${g.branchId}`}>
+                          {g.archived ? "Архив · " : ""}
+                          {g.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              ) : null}
+
+              <p className="mt-4 text-[0.72rem] font-bold uppercase tracking-[0.08em] text-muted">3. Загрузить пакет</p>
+              <p className="mt-1 text-sm text-fg">{plan.preview}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="h-10 rounded-full bg-black px-5 text-sm font-semibold text-white disabled:opacity-50"
+                  disabled={busy || offline || !plan.ready}
+                  onClick={() => void runJournal()}
+                >
+                  {busy ? "Загружаю…" : journal?.more && plan.ready ? "Ещё пакет" : plan.button}
+                </button>
+              </div>
+              {journal?.note ? (
+                <p className="mt-3 rounded-xl bg-surface-2 px-3 py-2 text-[0.82rem] text-fg">{journal.note}</p>
+              ) : null}
+              <p className="mt-2 text-[0.72rem] text-muted">
+                Групп в очереди фона {journal?.journalNext ?? 0}/{journal?.journalTotal ?? 0}
+                {" · "}
+                личных {journal?.lessonsNext ?? 0}/{journal?.lessonsTotal ?? 0}
+                {journal?.students ? ` · текущих ${journal.students.live}, архив ${journal.students.archive}` : ""}
+              </p>
+            </div>
+          );
+        })()}
       </Card>
 
       <Card

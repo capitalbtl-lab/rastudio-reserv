@@ -104,10 +104,22 @@ export function journalPullSchools() {
     .map((name) => ({ name, groups: map.get(name) || 0 }));
 }
 
-function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; branchId: number }) {
-  const pool = group && group.groupId
-    ? dossiersInGroup(group.branchId, group.groupId).map((d) => Number(d.crmId) || 0).filter(Boolean)
-    : allDossierCrmIds();
+function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; branchId: number }, school?: string) {
+  let pool: number[] = [];
+  if (group && group.groupId) {
+    pool = dossiersInGroup(group.branchId, group.groupId).map((d) => Number(d.crmId) || 0).filter(Boolean);
+  } else if (school) {
+    const seen = new Set<number>();
+    for (const g of journalPullGroups().filter((x) => x.school === school)) {
+      for (const d of dossiersInGroup(g.branchId, g.groupId)) {
+        const id = Number(d.crmId) || 0;
+        if (id) seen.add(id);
+      }
+    }
+    pool = [...seen];
+  } else {
+    pool = allDossierCrmIds();
+  }
   const rows = pool.map((cid) => {
     const d = findDossier({ crmId: cid });
     const st = Number(d?.extras?.is_study);
@@ -250,21 +262,25 @@ export async function journalPull(opts: {
       n += Number(res.count) || 0;
       parts.push(res.extra || `${g.name}: ${res.count}`);
     }
-    store.note = `${parts.join(" · ")}${wrapped ? " · круг школы закрыт" : ""}`;
+    store.note = `${parts.join(" · ")}${wrapped ? " · круг закрыт" : ""}`;
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: n, scanned: slice.length, ...journalPullState() };
+    return { ok: true as const, extra: store.note, count: n, scanned: slice.length, more: kind === "group" ? false : !wrapped, ...journalPullState() };
   }
 
   const group = selectedGid ? { groupId: selectedGid, branchId: selectedBid || 1 } : undefined;
-  const people = rankedStudentIds(study, group);
+  const people = rankedStudentIds(study, group, group ? "" : school);
   if (!people.length) {
-    store.note = group ? "В этой группе нет учеников на диске." : "Сначала загрузите клиентов и архив.";
+    store.note = group
+      ? "В этой группе нет учеников на диске."
+      : school
+        ? `В школе «${school}» нет учеников на диске.`
+        : "Сначала загрузите клиентов и архив.";
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: false as const, error: store.note, ...journalPullState() };
+    return { ok: false as const, error: store.note, more: false, ...journalPullState() };
   }
-  const key = `${study}:${group ? `${group.branchId}:${group.groupId}` : "*"}`;
+  const key = `${study}:${group ? `${group.branchId}:${group.groupId}` : school || "*"}`;
   const idx = Number(store.studentIdx[key]) || 0;
   const picked = pickSlice(people, idx, 10);
   store.studentIdx[key] = picked.next;
@@ -282,5 +298,5 @@ export async function journalPull(opts: {
   if (picked.wrapped) store.note += " · круг закрыт";
   store.at = new Date().toISOString();
   saveStore(store);
-  return { ok: true as const, extra: store.note, count: lessons, scanned: picked.slice.length, ...journalPullState() };
+  return { ok: true as const, extra: store.note, count: lessons, scanned: picked.slice.length, more: !picked.wrapped, ...journalPullState() };
 }
