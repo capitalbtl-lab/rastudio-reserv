@@ -28,7 +28,7 @@ if [ "${1:-}" != "--force" ] && [ "$BEFORE" = "$AFTER" ]; then
   exit 0
 fi
 
-echo "[deploy] ${BEFORE:0:7} → ${AFTER:0:7}"
+echo "[deploy] ${BEFORE:0:7} → ${AFTER:0:7} stamp=2026-09-09-20-09"
 git reset --hard origin/main
 if [ "${RA_DEPLOY_REEXEC:-}" != "1" ]; then
   export RA_DEPLOY_REEXEC=1
