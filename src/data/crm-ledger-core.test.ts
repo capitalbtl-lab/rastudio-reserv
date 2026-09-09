@@ -108,4 +108,13 @@ describe("журнал оплат и списаний", () => {
     assert.equal(chargeFromPupils({ pupils: lesson.pupils, amount: 0 }, 91).amount, 1200);
     assert.equal(chargeFromPupils({ pupils: [{ customerId: 91, amount: 0, attend: true }], amount: 400 }, 91).amount, 400);
   });
+
+  it("одно занятие дважды на диске не удваивает списание", () => {
+    const a = { lessonId: 50, date: "01.09.2026", from: "10:00", status: 3, amount: 350 };
+    const twinId = { ...a, amount: 350 };
+    const shadow = { date: "01.09.2026", from: "10:00", status: 3, amount: 350 };
+    const other = { lessonId: 51, date: "02.09.2026", from: "10:00", status: 3, amount: 200 };
+    assert.equal(writeoffSumOf([a, twinId, shadow, other]), 550);
+    assert.equal(writeoffSumOf([a, twinId, shadow, other], 7), 550);
+  });
 });

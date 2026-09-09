@@ -4,7 +4,7 @@ import type { GroupCalLesson } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { nextLocalId } from "./crm-local-id";
-import { mergeJournalInbound } from "./crm-inbound-core";
+import { mergeJournalInbound, collapseLessonRows } from "./crm-inbound-core";
 import { journalForCustomer, calendarLessonForCard } from "./crm-journal-core";
 import { chargeFromPupils } from "./crm-ledger-core";
 import { findDossier } from "./dossiers";
@@ -135,15 +135,25 @@ function mergeLessonPatch(old: GroupCalLesson, row: GroupCalLesson): GroupCalLes
 }
 
 function mergeLessonInto(cal: GroupCalLesson[], lesson: GroupCalLesson) {
-  const next = [...cal];
   const lid = Number(lesson.lessonId) || 0;
   const date = String(lesson.date || "");
   const from = String(lesson.from || "");
-  let i = lid ? next.findIndex((x) => Number(x.lessonId) === lid) : -1;
-  if (i < 0 && date) i = next.findIndex((x) => String(x.date) === date && String(x.from || "") === from);
-  if (i >= 0) next[i] = mergeLessonPatch(next[i], lesson);
-  else next.push(lesson);
-  return { list: next, item: i >= 0 ? next[i] : lesson };
+  const next = cal.filter((x) => {
+    const xid = Number(x.lessonId) || 0;
+    if (lid && xid === lid) return false;
+    if (date && String(x.date) === date && String(x.from || "") === from && (!xid || !lid || xid === lid)) return false;
+    return true;
+  });
+  const twins = cal.filter((x) => {
+    const xid = Number(x.lessonId) || 0;
+    if (lid && xid === lid) return true;
+    if (date && String(x.date) === date && String(x.from || "") === from && (!xid || !lid)) return true;
+    return false;
+  });
+  let item = lesson;
+  for (const old of twins) item = mergeLessonPatch(old, item);
+  next.push(item);
+  return { list: next, item };
 }
 
 function customerCalFile() {
@@ -207,7 +217,7 @@ export function replaceCustomerCalendar(customerId: number, lessons: GroupCalLes
   const id = Number(customerId) || 0;
   if (!id) return [];
   const store = loadCustomerCals();
-  const list = (lessons || []).slice(0, 2500);
+  const list = collapseLessonRows(lessons || []).slice(0, 2500);
   store.items[String(id)] = list;
   store.at = new Date().toISOString();
   writeCustomerCals(store);

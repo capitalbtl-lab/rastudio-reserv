@@ -58,6 +58,17 @@ describe("вход из Alfa", () => {
     assert.equal(merged.find((x) => x.lessonId === 16)?.status, 3);
     assert.equal(merged.find((x) => x.lessonId === 15)?.status, 3);
   });
+
+  it("урок с номером и без номера на ту же дату не даёт две строки", () => {
+    const merged = mergeJournalInbound(
+      [{ lessonId: 50, date: "01.09.2026", from: "10:00", status: 3 }],
+      [{ date: "01.09.2026", from: "10:00", status: 3, customerIds: [7] }],
+      [],
+      "union",
+    );
+    assert.equal(merged.length, 1);
+    assert.equal(merged[0]?.lessonId, 50);
+  });
 });
 
 describe("ночной diff групп", () => {

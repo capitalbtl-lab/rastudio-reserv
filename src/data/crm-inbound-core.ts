@@ -19,9 +19,39 @@ export function pendingEntityIds(
   return hold;
 }
 
+function slotKey(x: { date?: string; from?: string }) {
+  return `${x.date || ""}|${x.from || ""}`;
+}
+
 function lessonKey(x: { lessonId?: number; date?: string; from?: string }) {
   const lid = Number(x.lessonId) || 0;
-  return lid ? `id:${lid}` : `d:${x.date || ""}|${x.from || ""}`;
+  return lid ? `id:${lid}` : `d:${slotKey(x)}`;
+}
+
+/** Один урок — одна строка: номер занятия важнее пары дата+время. Два разных номера не склеиваем. */
+export function collapseLessonRows<T extends { lessonId?: number; date?: string; from?: string }>(list: T[]): T[] {
+  const byId = new Map<number, T>();
+  const noId: T[] = [];
+  for (const row of list || []) {
+    const lid = Number(row.lessonId) || 0;
+    if (!lid) {
+      noId.push(row);
+      continue;
+    }
+    const prev = byId.get(lid);
+    byId.set(lid, prev ? { ...prev, ...row, lessonId: lid } : row);
+  }
+  const slots = new Set([...byId.values()].map(slotKey));
+  const bySlot = new Map<string, T>();
+  for (const row of noId) {
+    const s = slotKey(row);
+    if (slots.has(s)) continue;
+    const prev = bySlot.get(s);
+    bySlot.set(s, prev ? { ...prev, ...row } : row);
+  }
+  return [...byId.values(), ...bySlot.values()].sort(
+    (a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")),
+  );
 }
 
 function held(x: { lessonId?: number }, hold: Set<number>) {
@@ -46,12 +76,14 @@ export function mergeJournalInbound<T extends { lessonId?: number; date?: string
       if (cur && held(cur, hold)) continue;
       map.set(k, p);
     }
-    return [...map.values()].sort(
-      (a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")),
+    return collapseLessonRows(
+      [...map.values()].sort(
+        (a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")),
+      ),
     );
   }
   const keep = (prev || []).filter((x) => held(x, hold));
-  if (!keep.length) return pulled;
+  if (!keep.length) return collapseLessonRows(pulled);
   const out = [...pulled];
   for (const loc of keep) {
     const k = lessonKey(loc);
@@ -59,7 +91,9 @@ export function mergeJournalInbound<T extends { lessonId?: number; date?: string
     if (i >= 0) out[i] = loc;
     else out.push(loc);
   }
-  return out.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")));
+  return collapseLessonRows(
+    out.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || ""))),
+  );
 }
 
 export function journalFingerprint(lessons: { lessonId?: number; status?: number; date?: string; from?: string; customerIds?: number[] }[]) {

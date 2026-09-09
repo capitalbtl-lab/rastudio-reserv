@@ -175,13 +175,30 @@ export function payCttIdOf(item: Record<string, unknown>) {
 }
 
 export function writeoffSumOf(
-  lessons: { status?: number; amount?: number; pupils?: LessonPupil[]; customerIds?: number[] }[],
+  lessons: { status?: number; amount?: number; lessonId?: number; date?: string; from?: string; pupils?: LessonPupil[]; customerIds?: number[] }[],
   customerId?: number,
 ) {
   let n = 0;
   const cid = Number(customerId) || 0;
+  const seenId = new Set<number>();
+  const seenSlot = new Set<string>();
+  const slotsWithId = new Set<string>();
+  for (const l of lessons || []) {
+    if (!(Number(l.lessonId) > 0)) continue;
+    slotsWithId.add(`${l.date || ""}|${l.from || ""}`);
+  }
   for (const l of lessons || []) {
     if (Number(l.status) !== 3) continue;
+    const lid = Number(l.lessonId) || 0;
+    const slot = `${l.date || ""}|${l.from || ""}`;
+    const hasSlot = Boolean(l.date || l.from);
+    if (lid) {
+      if (seenId.has(lid)) continue;
+      seenId.add(lid);
+    } else if (hasSlot) {
+      if (slotsWithId.has(slot) || seenSlot.has(slot)) continue;
+      seenSlot.add(slot);
+    }
     if (cid) {
       n += chargeFromPupils(l, cid).amount || Number(l.amount) || 0;
       continue;
