@@ -134,8 +134,6 @@ function dropPacket(id: string) {
 export async function runCustomersPacket(branchId: number, ids: number[]) {
   const { request, token } = await import("./alfacrm");
   const { listCgiByCustomer, groupsOfCustomerFromCgi } = await import("./crm-membership");
-  const { tariffRowLive, tariffRowCustomerId } = await import("./crm-tariff-row");
-  const { crmUnwrapIndex } = await import("./crm-leads-stages");
   const { stampDossierLiveTariff, upsertDossier, findDossier, liveTariffIdsFromStore } = await import("./dossiers");
   const { mergeCgiGroupLinks } = await import("./crm-group-disk");
   const t = await token();
@@ -143,26 +141,12 @@ export async function runCustomersPacket(branchId: number, ids: number[]) {
   for (const cid of ids.slice(0, 40)) {
     const cgi = await listCgiByCustomer(request, t, branchId, cid);
     const groups = groupsOfCustomerFromCgi(cgi, cid, branchId);
-    const json = await request(`/v2api/${branchId}/customer-tariff/index?customer_id=${cid}`, { page: 0, pageSize: 30, customer_id: cid }, t).catch(
-      () => ({}),
-    );
-    const items = crmUnwrapIndex(json).items;
-    const live = items.some((it) => tariffRowLive(it) && tariffRowCustomerId(it) === cid);
+    const rows = await import("./pupil-tariffs")
+      .then((m) => m.pullCustomerTariffs(branchId, cid, { quick: true }))
+      .catch(() => [] as { archived?: boolean }[]);
+    const live = rows.some((t) => !t.archived);
     if (live) liveN += 1;
     stampDossierLiveTariff([cid], live);
-    try {
-      const { packCardTariff } = await import("./pupil-tariffs");
-      const { loadTariffs } = await import("./crm-tariffs");
-      const { stampDossierCtt } = await import("./dossiers");
-      const catalog = loadTariffs().items.map((x) => ({ id: x.id, name: x.name, archive: x.archive, price: x.price }));
-      stampDossierCtt(
-        cid,
-        items.filter((it) => Number(it.id)).map((it) => packCardTariff(it, catalog)),
-        branchId,
-      );
-    } catch {
-      /* подпись абонемента необязательна */
-    }
     if (groups.length) {
       const d = findDossier({ crmId: cid });
       upsertDossier({

@@ -432,6 +432,7 @@ export function CrmClientCard({
   const [cashSize, setCashSize] = useState<(typeof CASH_PAGE_SIZES)[number]>(3);
   const [cashPage, setCashPage] = useState(0);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveLoaded, setArchiveLoaded] = useState(false);
   const [dropPay, setDropPay] = useState<{ id: number; label: string } | null>(null);
   const [headMenu, setHeadMenu] = useState<"" | "pay" | "lesson" | "cash" | "writeoffs">("");
   const headLeave = useRef(0);
@@ -445,6 +446,10 @@ export function CrmClientCard({
   }
 
   useEffect(() => () => window.clearTimeout(headLeave.current), []);
+  useEffect(() => {
+    setArchiveOpen(false);
+    setArchiveLoaded(false);
+  }, [card.id]);
   useEffect(() => {
     if (headMenu !== "lesson" && headMenu !== "cash" && headMenu !== "writeoffs") return;
     const onDown = (e: PointerEvent) => {
@@ -1373,19 +1378,30 @@ export function CrmClientCard({
               >
                 Добавить
               </Button>
-              {archivedTariffs.length ? (
-                <button
-                  type="button"
-                  data-op="archive-toggle"
-                  onClick={() => setArchiveOpen((v) => !v)}
-                  className={cn(
-                    "h-7 shrink-0 rounded-full px-2 text-[0.68rem] font-semibold ring-1",
-                    archiveOpen ? "bg-fg text-white ring-fg" : "bg-white text-fg ring-black/10 hover:bg-black/[0.04]",
-                  )}
-                >
-                  Архивный абонемент
-                </button>
-              ) : null}
+              <button
+                type="button"
+                data-op="archive-toggle"
+                disabled={!onAction || Boolean(busy)}
+                onClick={() => {
+                  const next = !archiveOpen;
+                  setArchiveOpen(next);
+                  if (!next || archiveLoaded || !onAction) return;
+                  setBusy("customerTariff");
+                  void onAction("customerTariff", { pull: true })
+                    .catch(() => undefined)
+                    .finally(() => {
+                      setArchiveLoaded(true);
+                      setBusy("");
+                    });
+                }}
+                className={cn(
+                  "h-7 shrink-0 rounded-full px-2 text-[0.68rem] font-semibold ring-1",
+                  archiveOpen ? "bg-fg text-white ring-fg" : "bg-white text-fg ring-black/10 hover:bg-black/[0.04]",
+                  (!onAction || Boolean(busy)) && "opacity-40",
+                )}
+              >
+                {busy === "customerTariff" && archiveOpen ? "Загружаю…" : "Архивный абонемент"}
+              </button>
             </div>
             {showBasicAccount || activeTariffs.length ? (
               <div className={cn("mt-2 grid gap-2", accountsPair && "sm:grid-cols-2")} data-op="live-accounts">
@@ -1464,6 +1480,8 @@ export function CrmClientCard({
                     );
                   })}
                 </ul>
+              ) : archiveOpen ? (
+                <p className="text-[0.75rem] text-muted">{busy === "customerTariff" ? "Догружаю архив из AlfaCRM…" : "Нет архивных абонементов"}</p>
               ) : null}
             </div>
           </div>

@@ -574,6 +574,10 @@ describe("мастер абонементов учеников", () => {
     const pack = src.slice(src.indexOf("export function packCardTariff"), src.indexOf("export function parseDossierCtt"));
     assert.match(pack, /it\.balance \?\? it\.rest \?\? 0/);
     assert.doesNotMatch(pack, /it\.rest \?\? it\.paid/);
+    assert.match(pack, /it.is_archived \|\| it.is_archive/);
+    const pullTariffs = src.slice(src.indexOf("export async function pullCustomerTariffs"), src.indexOf("export async function pullCustomerAccount"));
+    assert.match(pullTariffs, /is_archived: 1/);
+    assert.match(pullTariffs, /quick/);
   });
 
   it("списание занятия = цена абонемента / число уроков", () => {

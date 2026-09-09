@@ -177,6 +177,17 @@ describe("форма занятия карточки", () => {
     assert.match(pick, /for \(const t of all\)/);
     assert.doesNotMatch(pick, /filter\(\(t\) => !t.archived\)/);
     assert.match(pick, /if \(!t.archived\) s \+= 2/);
+    const pull = tariffs.slice(tariffs.indexOf("export async function pullCustomerTariffs"), tariffs.indexOf("export async function pullCustomerAccount"));
+    assert.match(pull, /is_archived: 1/);
+    assert.match(pull, /opts\?\.quick/);
+    const packFn = tariffs.slice(tariffs.indexOf("export function packCardTariff"), tariffs.indexOf("export function parseDossierCtt"));
+    assert.match(packFn, /it.is_archived \|\| it.is_archive/);
+    assert.match(api, /pullMissingLessonCtt/);
+    assert.match(api, /data.pull/);
+    assert.match(api, /pullCustomerTariffs\(branch, customerId\)/);
+    assert.match(src, /pull: true/);
+    assert.match(src, /Догружаю архив из AlfaCRM/);
+    assert.match(src, /setArchiveLoaded\(true\)/);
   });
 
   it("расписание импортирует reload — иначе вкладка не открывается", () => {

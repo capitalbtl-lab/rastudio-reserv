@@ -682,13 +682,14 @@ export function packCardTariff(it: Record<string, unknown>, catalog?: CatalogTar
   const live = tariffRowLive(it);
   const sid = Number(it.subject_id || it.subjectId || 0) || (Array.isArray(it.subject_ids) ? Number(it.subject_ids[0] || 0) : 0);
   const subject = customerTariffSubject(it) || subjects?.find((s) => s.id === sid)?.name || "";
+  const flagged = Number(it.is_archived || it.is_archive || 0) === 1;
   return {
     id: Number(it.id) || 0,
     tariffId: Number(it.tariff_id || it.tariffId || 0) || undefined,
     name: customerTariffLabel(it, catalog),
     rest: Number(it.balance ?? it.rest ?? 0) || 0,
     lessons: Number(it.lesson_count ?? it.lessons_count ?? it.paid_count ?? 0) || 0,
-    archived: !live,
+    archived: !live || flagged,
     bDate: String(it.b_date || it.bDate || ""),
     eDate: String(it.e_date || it.eDate || ""),
     price: Number(it.price || 0) || 0,
@@ -728,8 +729,8 @@ export function isPaidCountLabel(raw?: string) {
   return /занятий по абонементу|оплачено до/i.test(String(raw || ""));
 }
 
-/** Один ученик: строки customer-tariff на диск. */
-export async function pullCustomerTariffs(branchId: number, customerId: number) {
+/** Один ученик: строки customer-tariff на диск, включая архивные. */
+export async function pullCustomerTariffs(branchId: number, customerId: number, opts?: { quick?: boolean }) {
   const cid = Number(customerId) || 0;
   const branch = Number(branchId) || 1;
   if (!cid) return [];
@@ -743,20 +744,35 @@ export async function pullCustomerTariffs(branchId: number, customerId: number) 
   const subjects = loadSubjects().map((s) => ({ id: s.id, name: s.name }));
   const seen = new Set<number>();
   const rows: ReturnType<typeof packCardTariff>[] = [];
-  for (const bid of uniqueBranches(branch)) {
-    for (let page = 0; page < 3; page += 1) {
+  function take(items: Record<string, unknown>[]) {
+    const pack = items.filter((it) => Number(it.id) && (!tariffRowCustomerId(it) || tariffRowCustomerId(it) === cid));
+    for (const it of pack) {
+      const id = Number(it.id);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      rows.push(packCardTariff(it, catalog, subjects));
+    }
+    return pack.length;
+  }
+  const branches = opts?.quick ? [branch] : uniqueBranches(branch);
+  const maxPage = opts?.quick ? 1 : 3;
+  for (const bid of branches) {
+    for (let page = 0; page < maxPage; page += 1) {
       const json = await request(customerTariffIndexPath(bid, cid), { page, pageSize: 50, customer_id: cid }, t).catch(
         () => ({}),
       );
-      const pack = crmUnwrapIndex(json).items.filter((it) => Number(it.id) && (!tariffRowCustomerId(it) || tariffRowCustomerId(it) === cid));
-      for (const it of pack) {
-        const id = Number(it.id);
-        if (!id || seen.has(id)) continue;
-        seen.add(id);
-        rows.push(packCardTariff(it, catalog, subjects));
-      }
-      if (pack.length < 50) break;
+      const n = take(crmUnwrapIndex(json).items);
+      if (n < 50) break;
     }
+  }
+  for (let page = 0; page < maxPage; page += 1) {
+    const json = await request(
+      customerTariffIndexPath(branch, cid),
+      { page, pageSize: 50, customer_id: cid, is_archived: 1 },
+      t,
+    ).catch(() => ({}));
+    const n = take(crmUnwrapIndex(json).items);
+    if (n < 50) break;
   }
   const { stampDossierCtt } = await import("./dossiers");
   stampDossierCtt(cid, rows, branch);

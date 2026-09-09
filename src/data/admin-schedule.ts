@@ -830,10 +830,8 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
   const tariffs: NonNullable<CustomerCard["tariffs"]> = [];
   try {
     const { parseDossierCtt, pullCustomerTariffs } = await import("./pupil-tariffs");
-    let rows = parseDossierCtt(dossier?.extras);
-    if (!rows.length) {
-      rows = await pullCustomerTariffs(useBranch, customerId).catch(() => []);
-    }
+    let rows = await pullCustomerTariffs(useBranch, customerId).catch(() => parseDossierCtt(dossier?.extras));
+    if (!rows.length) rows = parseDossierCtt(dossier?.extras);
     tariffs.push(...rows);
   } catch {
     /* диск */
@@ -2066,8 +2064,14 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const customerId = Number(data.customerId) || 0;
       const tariffId = Number(data.tariffId) || 0;
       if (!customerId) return { ok: false as const, error: "Нет customerId." };
-      const { parseDossierCtt } = await import("./pupil-tariffs");
+      const { parseDossierCtt, pullCustomerTariffs } = await import("./pupil-tariffs");
       const { stampDossierCtt, findDossier } = await import("./dossiers");
+      if (data.pull) {
+        await pullCustomerTariffs(branch, customerId).catch(() => []);
+        const { cardFromDossier } = await import("./customer-card-disk");
+        const d = findDossier({ crmId: customerId });
+        return { ok: true as const, customer: d ? cardFromDossier(d, branch) : { id: customerId, tariffs: parseDossierCtt(d?.extras) } };
+      }
       if (data.remove) {
         const rowId = Number(data.tariffRowId || data.id || 0);
         const d0 = findDossier({ crmId: customerId });
@@ -3742,6 +3746,26 @@ export const adminSchedule = createServerFn({ method: "POST" })
         .map((s) => ({ id: s.groupId, name: s.groupName || `группа ${s.groupId}` }))
         .filter((g) => (seen.has(g.id) ? false : (seen.add(g.id), true)));
       const catalog = lessonCatalogOf(branch);
+      async function pullMissingLessonCtt(ids: number[], subjectId: number, subjectName: string) {
+        const { alfaLinkedNow, wantAlfaPullChannel } = await import("./crm-alfa-link");
+        if (!alfaLinkedNow() || !wantAlfaPullChannel("tariffs")) return;
+        const { parseDossierCtt, pickLessonCtt, pullCustomerTariffs } = await import("./pupil-tariffs");
+        const catalogTariffs = loadTariffs().items;
+        const need = ids.filter((cid) => {
+          const rows = parseDossierCtt(findDossier({ crmId: cid })?.extras);
+          if (!rows.length) return true;
+          const t = pickLessonCtt(rows, { subjectId, subject: subjectName, catalog: catalogTariffs });
+          if (!t) return true;
+          const cat = catalogTariffs.find((c) => c.id === Number(t.tariffId || 0));
+          if (subjectId && cat?.subjectIds?.includes(subjectId)) return false;
+          const needle = subjectName.toLowerCase().replace(/[«»"']/g, "").slice(0, 14);
+          const sub = String(t.subject || "").toLowerCase();
+          return !(needle && sub && (sub.includes(needle) || needle.includes(sub.slice(0, 10))));
+        }).slice(0, 6);
+        for (let i = 0; i < need.length; i += 2) {
+          await Promise.all(need.slice(i, i + 2).map((cid) => pullCustomerTariffs(branch, cid, { quick: true }).catch(() => [])));
+        }
+      }
       if (lessonId < 0 || (!wantAlfaPull(data.fresh) && !lessonRosterThin(hit) && (hit || slot))) {
         const { dossiersInGroup } = await import("./dossiers");
         const people = gid ? dossiersInGroup(branch, gid) : [];
@@ -3762,6 +3786,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         const catalogTariffs = loadTariffs().items;
         const subjectName = String(hit?.subject || slot?.subject || "");
         const subjectId = Number(hit?.subjectId || slot?.subjectId || data.subjectId || 0);
+        await pullMissingLessonCtt(customerIds, subjectId, subjectName);
         function restHint(cid: number) {
           const d = people.find((x) => x.crmId === cid) || findDossier({ crmId: cid });
           const live = parseDossierCtt(d?.extras);
@@ -3928,6 +3953,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const catalogTariffs = loadTariffs().items;
       const subjectName = String(raw?.subject_name || slot?.subject || "");
       const subjectIdRaw = Number(raw?.subject_id || data.subjectId || slot?.subjectId || 0);
+      await pullMissingLessonCtt(customerIds, subjectIdRaw, subjectName);
       const customers = (pupils.length ? pupils : customerIds.map((cid) => ({ customerId: cid, attend: true, amount: 0 }))).map((p) => {
         const cid = Number(p.customerId);
         const d = findDossier({ crmId: cid });
