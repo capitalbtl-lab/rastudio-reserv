@@ -53,6 +53,14 @@ bring_up() {
 # Если прошлый прогон остановил сайт — поднять сразу, не ждать сборки.
 bring_up
 
+# Watch убивает bash через 8 минут. Сборку уводим в фон, сайт остаётся живым.
+if [ "${RA_DEPLOY_BG:-}" != "1" ]; then
+  echo "[deploy] сборка в фоне, текущий сайт не гасим"
+  nohup env RA_DEPLOY_REEXEC=1 RA_DEPLOY_BG=1 bash "$ROOT/scripts/beget-deploy.sh" --force >>/tmp/rastudio-deploy.bg.log 2>&1 &
+  disown || true
+  exit 0
+fi
+
 STAGE="$ROOT/.build-stage"
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
@@ -104,7 +112,8 @@ pm2 delete rastudio >/dev/null 2>&1 || true
 pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio
 rm -rf "$ROOT/.output.bak"
 
-for app in rastudio-deploy rastudio-night-groups rastudio-pay-poll; do
+pm2 restart rastudio-deploy --update-env >/dev/null 2>&1 || pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio-deploy >/dev/null 2>&1 || true
+for app in rastudio-night-groups rastudio-pay-poll; do
   if ! pm2 describe "$app" >/dev/null 2>&1; then
     pm2 start "$ROOT/ecosystem.config.cjs" --only "$app"
   fi
