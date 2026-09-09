@@ -229,10 +229,6 @@ function GroupFillList({
       /* */
     }
   }, []);
-  useEffect(() => {
-    if (!loading?.groupId) return;
-    setOpen(`${loading.branchId}-${loading.groupId}`);
-  }, [loading?.groupId, loading?.branchId]);
   function pickPageSize(n: number) {
     setPageSize(n);
     setPage(0);
@@ -310,7 +306,7 @@ function GroupFillList({
         ) : null}
       </div>
       {!list.length ? <p className="mt-3 text-sm text-muted">Нет групп в этой вкладке.</p> : null}
-      <ul className="mt-2 space-y-2">
+      <ul className="mt-2 space-y-2 [overflow-anchor:none]">
         {list.map((row) => {
           const id = `${row.branchId}-${row.groupId}`;
           const useGrain = clampGrain(row.age, grain);
@@ -358,183 +354,109 @@ function GroupFillList({
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/10">
                   <div className={cn("h-1.5 rounded-full", full ? "bg-emerald-600" : "bg-black")} style={{ width: `${pct}%` }} />
                 </div>
-                <p className="mt-1 text-[0.72rem] text-muted">
-                  {active
-                    ? loadKind === "details"
-                      ? `сейчас тема, ДЗ, комментарий, таблица учеников${loadLabel ? ` · ${loadLabel}` : ""}…`
-                      : `сейчас явки · ${loadLabel || "порция"}…`
-                    : [row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
-                  {row.lessons ? ` · ${row.lessons} зан.` : ""}
-                  {row.weight ? ` · ${row.weight}` : ""}
+                <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
+                  {active ? `загрузка · ${loadLabel}` : [row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
+                  {!active && row.lessons ? ` · ${row.lessons} зан.` : ""}
+                  {!active && row.weight ? ` · ${row.weight}` : ""}
                   {row.archived ? " · архив" : ""}
                 </p>
               </button>
-              <p className="mt-2 text-[0.78rem] font-semibold">{active ? (loadKind === "details" ? "Сейчас · тема, ДЗ, комментарий, таблица учеников" : `Сейчас · ${loadLabel}`) : wiz.step}</p>
-              {wiz.kind === "details" || loadKind === "details" ? (
-                <ul className="mt-1 list-disc pl-4 text-[0.72rem] leading-snug text-muted">
-                  {DETAIL_FIELDS.map((t) => (
-                    <li key={t}>{loadKind === "details" ? `загружаю: ${t}` : t}</li>
-                  ))}
-                </ul>
-              ) : null}
-              <div className="mt-1 flex flex-wrap gap-2">
+              <p className="mt-2 h-5 truncate text-[0.78rem] font-semibold">{active ? `загрузка · ${loadLabel}` : wiz.step}</p>
+              <div className="mt-1 flex h-8 gap-2">
                 <button
                   type="button"
                   disabled={busy && !active}
-                  className="h-8 rounded-full bg-black px-3 text-[0.8rem] font-semibold text-white disabled:opacity-50"
+                  className="h-8 min-w-0 flex-1 truncate rounded-full bg-black px-3 text-[0.8rem] font-semibold text-white disabled:opacity-50"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setOpen(id);
+                    if (open !== id) setOpen(id);
                     if (wiz.kind === "load" && wiz.part) onLoad(row, wiz.part, Boolean(wiz.part.done || wiz.part.weak));
                     else if (wiz.kind === "details") onDetails(row);
                     else onRecheckAll(row);
                   }}
                 >
-                  {active ? (loadKind === "details" ? `Загружаю тему, ДЗ, комментарий и таблицу учеников${loadLabel ? ` · ${loadLabel}` : ""}` : `Загружаю явки · ${loadLabel}`) : wiz.btn}
+                  {active ? `загрузка · ${loadLabel}` : wiz.btn}
                 </button>
-                {active ? (
-                  <button
-                    type="button"
-                    className="h-8 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onStop?.();
-                    }}
-                  >
-                    Стоп
-                  </button>
-                ) : wiz.kind === "done" && detailsLeft === 0 ? null : wiz.kind !== "details" && detailsLeft > 0 ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className="h-8 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpen(id);
-                      onDetails(row);
-                    }}
-                  >
-                    Загрузить тему, ДЗ, комментарий и таблицу учеников всех кварталов · {detailsLeft}
-                  </button>
-                ) : wiz.kind === "details" ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    className="h-8 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpen(id);
-                      onRecheckAll(row);
-                    }}
-                  >
-                    Перепроверить все кварталы · {chunks.length}
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  disabled={!active}
+                  className="h-8 shrink-0 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10 disabled:opacity-40"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStop?.();
+                  }}
+                >
+                  Стоп
+                </button>
               </div>
               {shown ? (
-                <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                <div className="mt-2 grid items-start gap-1 sm:grid-cols-2">
                   {chunks.map((c) => {
                     const spinJ = active && loadKind !== "details" && loading?.periodKey === c.key;
                     const spinD = active && loadKind === "details" && (!loading?.periodKey || loading.periodKey === c.key);
                     const loaded = Boolean(c.done);
                     const verified = Boolean(c.rechecked);
                     const detailsOk = loaded && !(c.needDetails || 0);
+                    const noHw = loaded && (c.conducted || 0) === 0 && !(c.needDetails || 0);
+                    const status = spinJ || spinD ? "загрузка…" : detailsOk && (verified || loaded) ? "готово" : loaded ? "отмечено" : "";
                     return (
                       <div
                         key={c.key}
                         className={cn(
-                          "space-y-1 rounded-xl px-2.5 py-2 ring-1",
+                          "flex min-h-[17.5rem] flex-col rounded-xl px-2.5 py-2 ring-1",
                           c.weak ? "bg-amber-50 ring-amber-300" : loaded ? "bg-emerald-50 ring-emerald-200" : spinJ ? "bg-black/5 ring-black" : "bg-white ring-black/10",
                         )}
                       >
                         <p className="font-medium text-sm">{c.label}</p>
+                        <p className="h-4 text-[0.72rem] font-semibold text-black">{status}</p>
                         <div className="text-[0.72rem] leading-snug">
-                          {spinJ ? (
-                            <span className="text-muted">Загружаю явки {c.label}… пакет идёт из Alfa</span>
-                          ) : spinD && (c.needDetails || 0) > 0 ? (
-                            <ul className="list-disc pl-4 text-muted">
-                              <li className="list-none -ml-4 font-medium">Загружаю {c.label}:</li>
-                              {DETAIL_FIELDS.map((t) => (
-                                <li key={t}>{t}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <>
-                              <CheckLine on={loaded} text={`${c.label} загружен`} />
-                              <CheckLine on={verified} text={`${c.label} перепроверен`} />
-                              <CheckLine on={verified} text="в этом квартале дубликатов нет" />
-                              {loaded ? (
-                                (c.conducted || 0) > 0 || (c.needDetails || 0) > 0 ? (
-                                  <>
-                                    <span className="mt-1 block font-medium text-muted">по каждому уроку:</span>
-                                    <DetailsFields
-                                      on={detailsOk}
-                                      extra={detailsOk ? undefined : `осталось ${c.needDetails}`}
-                                    />
-                                  </>
-                                ) : (
-                                  <CheckLine on text="грузить нечего — проведённых занятий нет" />
-                                )
-                              ) : (
-                                <CheckLine on={false} text={`Загрузить ${c.label}`} />
-                              )}
-                            </>
-                          )}
+                          <CheckLine on={loaded} text={`${c.label} загружен`} />
+                          <CheckLine on={verified} text={`${c.label} перепроверен`} />
+                          <CheckLine on={verified} text="в этом квартале дубликатов нет" />
+                          <span className="mt-1 block font-medium text-muted">по каждому уроку:</span>
+                          <DetailsFields
+                            on={detailsOk}
+                            extra={noHw ? "грузить нечего" : !detailsOk && c.needDetails ? `осталось ${c.needDetails}` : undefined}
+                          />
                         </div>
-                        <p className="text-[0.72rem] text-muted">
-                          {c.lessons ? `${c.lessons} зан.` : loaded ? "занятий за квартал нет" : "ещё не загружали"}
+                        <p className="mt-auto h-4 truncate pt-1 text-[0.72rem] text-muted">
+                          {c.weak ? "пакет оборвался" : c.err && !c.done ? c.err : c.lessons ? `${c.lessons} зан.` : loaded ? "занятий за квартал нет" : "ещё не загружали"}
                           {c.at ? ` · ${ruAt(c.at)}` : ""}
                         </p>
-                        {c.weak ? <p className="text-[0.72rem] text-amber-900">пакет оборвался — нажмите «Загрузить ещё раз»</p> : null}
-                        {c.err && !c.done ? <p className="text-[0.72rem] text-rose-800">{c.err}</p> : null}
                         <div className="flex flex-col gap-1 pt-1">
-                          {!loaded || c.weak ? (
-                            <button
-                              type="button"
-                              disabled={busy && !spinJ}
-                              className="h-8 rounded-lg bg-black px-2 text-[0.72rem] font-semibold text-white disabled:opacity-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpen(id);
-                                onLoad(row, c, Boolean(c.weak));
-                              }}
-                            >
-                              {spinJ ? "Загружаю явки…" : c.weak ? `Загрузить ещё раз ${c.label}` : `Загрузить явки · ${c.label}`}
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={busy && !spinJ}
-                              className="h-8 rounded-lg bg-white px-2 text-[0.72rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpen(id);
-                                onLoad(row, c, true);
-                              }}
-                            >
-                              {spinJ ? "Перепроверяю явки…" : `Перепроверить явки · ${c.label}`}
-                            </button>
-                          )}
-                          {loaded && (c.needDetails || 0) > 0 ? (
-                            <button
-                              type="button"
-                              disabled={busy && !spinD}
-                              className="h-8 rounded-lg bg-white px-2 text-[0.72rem] font-semibold ring-1 ring-violet-300 disabled:opacity-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpen(id);
-                                onDetails(row, c);
-                              }}
-                            >
-                              {spinD ? "Загружаю тему, ДЗ, комментарий и таблицу учеников…" : `Загрузить тему, ДЗ, комментарий и таблицу учеников · ${c.needDetails}`}
-                            </button>
-                          ) : loaded ? (
-                            <p className="text-[0.72rem] text-muted">
-                              {(c.conducted || 0) > 0
-                                ? "Кнопки нет: тема, ДЗ, комментарий и таблица учеников уже на месте или в Alfa пусто"
-                                : "Кнопки нет: проведённых занятий нет"}
-                            </p>
-                          ) : null}
+                          <button
+                            type="button"
+                            disabled={busy && !spinJ}
+                            className={cn(
+                              "h-8 truncate rounded-lg px-2 text-[0.72rem] font-semibold disabled:opacity-50",
+                              !loaded || c.weak ? "bg-black text-white" : "bg-white ring-1 ring-black/10",
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (open !== id) setOpen(id);
+                              onLoad(row, c, Boolean(loaded || c.weak));
+                            }}
+                          >
+                            {spinJ ? "загрузка…" : !loaded || c.weak ? `Загрузить явки · ${c.label}` : `Перепроверить явки · ${c.label}`}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!loaded || detailsOk || noHw || (busy && !spinD)}
+                            className="h-8 truncate rounded-lg bg-white px-2 text-[0.72rem] font-semibold ring-1 ring-violet-300 disabled:opacity-40"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (open !== id) setOpen(id);
+                              onDetails(row, c);
+                            }}
+                          >
+                            {spinD
+                              ? "загрузка…"
+                              : detailsOk || noHw
+                                ? "готово"
+                                : loaded
+                                  ? `Загрузить детали · ${c.needDetails || 0}`
+                                  : "Сначала явки"}
+                          </button>
                         </div>
                       </div>
                     );
