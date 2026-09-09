@@ -1,51 +1,46 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { journalPeriods, nextPeriod, periodOfDate, spanOf } from "./crm-journal-periods.ts";
+import { journalPeriods, journalChunks, nextPeriod, periodOfDate, spanOf, expandPeriodKeys, chunkDone } from "./crm-journal-periods.ts";
 
 describe("ручной журнал с Alfa", () => {
-  it("полугодия с конца в начало", () => {
+  it("кварталы с конца, полугодие и год — пачки", () => {
     const p = journalPeriods(new Date("2026-09-09T12:00:00Z"), 2);
-    assert.equal(p[0].key, "2026-2");
-    assert.equal(p[1].key, "2026-1");
-    assert.equal(p[2].key, "2025-2");
-    assert.equal(p.length, 4);
-    assert.equal(nextPeriod(["2026-2"], p)?.key, "2026-1");
-    assert.equal(periodOfDate(new Date(2024, 2, 5)), "2024-1");
+    assert.equal(p[0].key, "2026q3");
+    assert.equal(p[1].key, "2026q2");
+    assert.equal(p.length, 8);
+    assert.equal(nextPeriod(["2026q3"], p)?.key, "2026q2");
+    assert.equal(periodOfDate(new Date(2024, 2, 5)), "2024q1");
     assert.equal(spanOf([{ date: "01.09.2025" }, { date: "10.03.2026" }]).from, "сен 2025");
+    assert.deepEqual(expandPeriodKeys(["2024-1", "2024-2"]).sort(), ["2024q1", "2024q2", "2024q3", "2024q4"]);
+    const year = journalChunks("year", new Date("2026-09-09T12:00:00Z"), 1);
+    assert.equal(year[0].key, "2026");
+    assert.equal(year[0].keys.length, 4);
+    assert.equal(chunkDone(year[0], year[0].keys), true);
+    const half = journalChunks("half", new Date("2026-09-09T12:00:00Z"), 1);
+    assert.equal(half[0].key, "2026h2");
+    assert.match(half[0].label, /июл–дек 2026/);
   });
 
-  it("пакеты: группа по полугодию, 10 учеников, карточка целиком", () => {
+  it("только кнопка группы и порция, фон сам не качает", () => {
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
-    assert.match(pull, /kind === "group"/);
-    assert.match(pull, /kind === "school"/);
-    assert.match(pull, /pickSlice\(people, idx, 10\)/);
-    assert.match(pull, /kind === "balance"/);
-    assert.match(pull, /dateFrom: period.from/);
-    assert.match(pull, /stampJournalPeriod/);
-    assert.match(pull, /groupFillRow/);
-    assert.match(pull, /есть с/);
-    assert.match(pull, /deep: 12/);
-    assert.match(pull, /inboundCustomerPays/);
-    assert.match(pull, /pullCustomerTariffs/);
-    assert.match(pull, /force: true/);
-    assert.match(pull, /все полугодия/);
+    assert.match(pull, /periodKey/);
+    assert.match(pull, /grain/);
+    assert.match(pull, /Выберите группу и порцию/);
+    assert.match(pull, /вся информация загружена/);
+    assert.match(pull, /parts/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /opts\?\.lite \|\| windowed/);
-    assert.match(inbound, /journalAt: now/);
-    assert.match(inbound, /inboundJournalChunk/);
-    assert.match(inbound, /dateFrom: period.from/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /GroupFillList/);
-    assert.match(ui, /полугодий/);
-    assert.match(ui, /Загрузить следующее полугодие/);
-    assert.match(ui, /грузим/);
+    assert.match(ui, /I квартал|Квартал/);
+    assert.match(ui, /Порция за одно нажатие/);
+    assert.match(ui, /вся информация загружена/);
+    assert.match(ui, /periodKey: part.key/);
+    assert.doesNotMatch(ui, /setInterval\(\(\) => \{\s*if \(document.hidden/);
     const pack = readFileSync(new URL("./crm-packet-queue.ts", import.meta.url), "utf8");
-    assert.match(pack, /inboundJournalChunk\(polJ.journalNext/);
-    assert.match(pack, /inboundJournalChunk\(loadCachePolicy\(\).journalNext/);
-    assert.doesNotMatch(pack, /void tickCrmQueue\(3\)/);
+    assert.doesNotMatch(pack, /inboundJournalChunk\(polJ.journalNext/);
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
-    assert.match(api, /"journalPull"/);
-    assert.match(api, /journalPullState/);
+    assert.match(api, /periodKey/);
   });
 });

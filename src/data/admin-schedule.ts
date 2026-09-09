@@ -3071,6 +3071,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
         branchId: Number(data.branchId) || 0,
         school: String(data.school || ""),
         study: data.study === "1" || data.study === "2" ? data.study : "all",
+        periodKey: String((data as { periodKey?: string }).periodKey || ""),
+        grain: (data as { grain?: string }).grain === "half" || (data as { grain?: string }).grain === "year" ? (data as { grain: "half" | "year" }).grain : "quarter",
       });
       logAdmin(`Журнал Alfa: ${res.extra || res.error || kind}`);
       return res;

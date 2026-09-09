@@ -11,7 +11,7 @@ import { allDossierCrmIds, findDossier, dossiersInGroup } from "./dossiers";
 import { loadGroupCard, loadCustomerCalendar, saveGroupCard } from "./group-cards";
 import { customerSyncOf } from "./crm-customer-sync";
 import { isPayJournalComplete } from "./crm-pay";
-import { journalPeriods, inferredPeriodKeys, nextPeriod, spanOf, inPeriod } from "./crm-journal-periods";
+import { journalPeriods, journalChunks, inferredPeriodKeys, nextPeriod, nextChunk, spanOf, inPeriod, type Grain } from "./crm-journal-periods";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -169,9 +169,34 @@ export function groupFillRow(g: JournalPullGroup) {
   const span = spanOf(card?.calendar);
   const next = nextPeriod(done, periods);
   const fail = card?.journalFill?.fail || {};
-  const err = next && fail[next.key] ? fail[next.key] : "";
+  const byQ = new Map<string, number>();
+  for (const l of card?.calendar || []) {
+    const d = l.date;
+    for (const p of periods) {
+      if (inPeriod(d, p.from, p.to)) {
+        byQ.set(p.key, (byQ.get(p.key) || 0) + 1);
+        break;
+      }
+    }
+  }
+  const parts = periods.map((p) => ({
+    key: p.key,
+    label: p.label,
+    from: p.from,
+    to: p.to,
+    done: done.includes(p.key),
+    lessons: byQ.get(p.key) || 0,
+    err: fail[p.key] || "",
+  }));
   const weight = span.lessons >= 120 ? "тяжёлая" : span.lessons >= 40 ? "средняя" : done.length ? "лёгкая" : "";
-  const fromLabel = span.from ? (span.to && span.to !== span.from ? `есть с ${span.from} по ${span.to}` : `есть с ${span.from}`) : done.length ? "полугодие проверено, занятий нет" : "ещё не загружали";
+  const fromLabel = span.from
+    ? span.to && span.to !== span.from
+      ? `есть с ${span.from} по ${span.to}`
+      : `есть с ${span.from}`
+    : done.length
+      ? "квартал проверен, занятий нет"
+      : "ещё не загружали";
+  const complete = done.length >= periods.length;
   return {
     groupId: g.groupId,
     branchId: g.branchId,
@@ -185,8 +210,10 @@ export function groupFillRow(g: JournalPullGroup) {
     nextKey: next?.key || "",
     from: fromLabel,
     weight,
-    extra: [fromLabel, span.lessons ? `${span.lessons} зан.` : "", weight, next ? `дальше ${next.label}` : "все полугодия"].filter(Boolean).join(" · "),
-    err,
+    complete,
+    extra: complete ? "вся информация загружена" : [fromLabel, span.lessons ? `${span.lessons} зан.` : "", weight].filter(Boolean).join(" · "),
+    err: next && fail[next.key] ? fail[next.key] : "",
+    parts,
   };
 }
 
@@ -294,23 +321,25 @@ export function journalPullState() {
   };
 }
 
-function stampJournalPeriod(branchId: number, gid: number, key: string, patch: { ok: boolean; err?: string }) {
+function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch: { ok: boolean; err?: string }) {
   const card = loadGroupCard(branchId, gid);
   if (!card) return null;
   const done = inferredPeriodKeys(card.calendar, card.journalFill?.done);
   const fail = { ...(card.journalFill?.fail || {}) };
-  if (patch.ok) {
-    if (!done.includes(key)) done.push(key);
-    delete fail[key];
-  } else if (patch.err) {
-    fail[key] = patch.err;
+  for (const key of keys) {
+    if (patch.ok) {
+      if (!done.includes(key)) done.push(key);
+      delete fail[key];
+    } else if (patch.err) {
+      fail[key] = patch.err;
+    }
   }
   const next = { ...card, journalFill: { done, fail }, journalAt: new Date().toISOString() };
   saveGroupCard(next);
   return next;
 }
 
-async function pullOneGroup(g: JournalPullGroup, period: { key: string; from: string; to: string; label: string }) {
+async function pullOneGroup(g: JournalPullGroup, period: { key: string; from: string; to: string; label: string; keys?: string[] }) {
   const { inboundJournalGroup } = await import("./crm-journal-inbound");
   const res = await inboundJournalGroup(g.branchId, g.groupId, {
     deep: false,
@@ -319,11 +348,12 @@ async function pullOneGroup(g: JournalPullGroup, period: { key: string; from: st
     dateTo: period.to,
   });
   const ok = res.ok !== false;
-  stampJournalPeriod(g.branchId, g.groupId, period.key, { ok, err: ok ? "" : String(res.extra || "Alfa не ответила") });
+  const keys = period.keys?.length ? period.keys : [period.key];
+  stampJournalPeriod(g.branchId, g.groupId, keys, { ok, err: ok ? "" : String(res.extra || "Alfa не ответила") });
   const n = (res.calendar || []).filter((l) => inPeriod(l.date, period.from, period.to)).length;
   const total = (res.calendar || []).length;
   const extra = ok
-    ? `«${g.name}»: ${period.label} · ${n} зан. за полугодие · всего ${total}`
+    ? `«${g.name}»: ${period.label} · ${n} зан. за порцию · всего ${total}`
     : String(res.extra || `«${g.name}»: ${period.label} — Alfa не ответила`);
   return { extra, count: n, ok };
 }
@@ -369,6 +399,8 @@ export async function journalPull(opts: {
   branchId?: number;
   school?: string;
   study?: JournalPullStudy;
+  periodKey?: string;
+  grain?: Grain;
 }) {
   if (!alfaLinkedNow()) {
     return { ok: false as const, error: "Фон с AlfaCRM выключен.", ...journalPullState() };
@@ -389,41 +421,40 @@ export async function journalPull(opts: {
       saveStore(store);
       return { ok: false as const, error: store.note, more: false, ...journalPullState() };
     }
-    const pending = scoped
-      .map((g) => {
-        const card = loadGroupCard(g.branchId, g.groupId);
-        const done = inferredPeriodKeys(card?.calendar, card?.journalFill?.done);
-        const next = nextPeriod(done);
-        return { g, done: done.length, next };
-      })
-      .filter((x) => x.next);
-    pending.sort((a, b) => a.done - b.done || a.g.name.localeCompare(b.g.name, "ru"));
-    let target = pending[0];
-    if (kind === "group" && selectedGid) {
-      const hit = pending.find((x) => x.g.groupId === selectedGid && (!selectedBid || x.g.branchId === selectedBid)) || pending.find((x) => x.g.groupId === selectedGid);
-      const scopedHit = scoped.find((g) => g.groupId === selectedGid && (!selectedBid || g.branchId === selectedBid)) || scoped.find((g) => g.groupId === selectedGid);
-      if (hit) target = hit;
-      else if (scopedHit) {
-        const card = loadGroupCard(scopedHit.branchId, scopedHit.groupId);
-        const done = inferredPeriodKeys(card?.calendar, card?.journalFill?.done);
-        target = { g: scopedHit, done: done.length, next: nextPeriod(done) };
-      }
+    const grain = (opts.grain === "half" || opts.grain === "year" ? opts.grain : "quarter") as Grain;
+    const periodKey = String(opts.periodKey || "");
+    if (kind !== "group" || !selectedGid) {
+      store.note = "Выберите группу и порцию (квартал). Фон сам журнал не качает.";
+      store.at = new Date().toISOString();
+      saveStore(store);
+      return { ok: false as const, error: store.note, more: false, ...journalPullState() };
     }
-    if (!target?.next) {
-      store.note = school ? `В «${school}» все полугодия уже проверены.` : "Все полугодия групп уже проверены.";
+    const hit = scoped.find((g) => g.groupId === selectedGid && (!selectedBid || g.branchId === selectedBid)) || scoped.find((g) => g.groupId === selectedGid);
+    if (!hit) {
+      store.note = "Этой группы нет в списке.";
+      store.at = new Date().toISOString();
+      saveStore(store);
+      return { ok: false as const, error: store.note, more: false, ...journalPullState() };
+    }
+    const card = loadGroupCard(hit.branchId, hit.groupId);
+    const doneKeys = inferredPeriodKeys(card?.calendar, card?.journalFill?.done);
+    const chunks = journalChunks(grain);
+    const picked = (periodKey && chunks.find((c) => c.key === periodKey)) || nextChunk(doneKeys, grain);
+    if (!picked) {
+      store.note = `«${hit.name}»: вся информация загружена.`;
       store.at = new Date().toISOString();
       saveStore(store);
       return { ok: true as const, extra: store.note, count: 0, scanned: 0, more: false, ...journalPullState() };
     }
-    const res = await pullOneGroup(target.g, target.next).catch((e) => ({
-      extra: `«${target.g.name}»: ${e instanceof Error ? e.message : "ошибка"}`,
+    const res = await pullOneGroup(hit, picked).catch((e) => ({
+      extra: `«${hit.name}»: ${e instanceof Error ? e.message : "ошибка"}`,
       count: 0,
       ok: false,
     }));
     store.note = res.extra;
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: res.count, scanned: 1, more: pending.length > 1, ...journalPullState() };
+    return { ok: true as const, extra: store.note, count: res.count, scanned: 1, more: Boolean(nextChunk(inferredPeriodKeys(loadGroupCard(hit.branchId, hit.groupId)?.calendar, loadGroupCard(hit.branchId, hit.groupId)?.journalFill?.done), grain)), ...journalPullState() };
   }
 
   const group = selectedGid ? { groupId: selectedGid, branchId: selectedBid || 1 } : undefined;

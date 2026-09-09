@@ -324,13 +324,6 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
     overlayTotal: pol.overlayTotal || total,
   });
   if (opts?.offset == null && !opts?.force && !stale && ids.length) {
-    let extra = "из хранилища сайта";
-    if (wantAlfaPullChannel("lessons")) {
-      if (journalStale()) enqueueJournalOverlay(false);
-      const { inboundJournalChunk } = await import("./crm-journal-inbound");
-      const j = await inboundJournalChunk(loadCachePolicy().journalNext || 0, 1);
-      extra = [extra, j.extra].filter(Boolean).join(" · ");
-    }
     kickBackground();
     return {
       ok: true as const,
@@ -341,7 +334,7 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
       done: true,
       next: pol.overlayNext,
       scanned: ids.length,
-      extra,
+      extra: "из хранилища сайта",
     };
   }
   if (opts?.force) {
@@ -358,19 +351,10 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
   }
   if (wantAlfaPullChannel("lessons") && journalStale() && !opts?.force) enqueueJournalOverlay(false);
   if (wantAlfaPullChannel("lessons") && lessonsAttendStale() && !opts?.force) enqueueLessonsOverlay(false);
-  let extra = "";
-  if (wantAlfaPullChannel("lessons")) {
-    if (journalStale() || opts?.force) enqueueJournalOverlay(Boolean(opts?.force));
-    const polJ = loadCachePolicy();
-    const { inboundJournalChunk } = await import("./crm-journal-inbound");
-    const j = await inboundJournalChunk(polJ.journalNext || 0, 1);
-    extra = String(j.extra || "");
-  }
   const take = Number(opts?.take) || 3;
   const res = await tickCrmQueue(take, { skipJournal: true });
-  extra = [extra, res.extra].filter(Boolean).join(" · ");
   kickBackground();
-  return { ...res, extra, fromCache: false, total: Number(res.total) || total };
+  return { ...res, fromCache: false, total: Number(res.total) || total };
 }
 
 function kickBackground() {

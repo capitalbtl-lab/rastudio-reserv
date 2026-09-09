@@ -1,24 +1,116 @@
-/** Полугодия журнала группы: узкое окно в Alfa, чтобы запрос успевал. */
+/** Кварталы журнала группы. Полугодие и год — пачки из кварталов. */
 
-export type HalfPeriod = { key: string; from: string; to: string; label: string };
+export type Grain = "quarter" | "half" | "year";
+export type JournalChunk = { key: string; from: string; to: string; label: string; keys: string[] };
 
 const MONTHS = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 
-export function journalPeriods(now = new Date(), years = 6): HalfPeriod[] {
-  const out: HalfPeriod[] = [];
+const QMETA = [
+  { q: 1, from: "01.01", to: "31.03", label: "I квартал" },
+  { q: 2, from: "01.04", to: "30.06", label: "II квартал" },
+  { q: 3, from: "01.07", to: "30.09", label: "III квартал" },
+  { q: 4, from: "01.10", to: "31.12", label: "IV квартал" },
+] as const;
+
+export function journalQuarters(now = new Date(), years = 6): JournalChunk[] {
+  const out: JournalChunk[] = [];
   let y = now.getFullYear();
-  let h: 1 | 2 = now.getMonth() < 6 ? 1 : 2;
-  for (let i = 0; i < years * 2; i += 1) {
-    out.push({
-      key: `${y}-${h}`,
-      from: h === 1 ? `01.01.${y}` : `01.07.${y}`,
-      to: h === 1 ? `30.06.${y}` : `31.12.${y}`,
-      label: h === 1 ? `янв–июн ${y}` : `июл–дек ${y}`,
-    });
-    if (h === 1) {
+  let q = Math.floor(now.getMonth() / 3) + 1;
+  for (let i = 0; i < years * 4; i += 1) {
+    const m = QMETA[q - 1];
+    const key = `${y}q${q}`;
+    out.push({ key, from: `${m.from}.${y}`, to: `${m.to}.${y}`, label: `${m.label} ${y}`, keys: [key] });
+    if (q === 1) {
       y -= 1;
-      h = 2;
-    } else h = 1;
+      q = 4;
+    } else q -= 1;
+  }
+  return out;
+}
+
+/** Старые полугодия YYYY-1 / YYYY-2 → кварталы. */
+export function expandPeriodKeys(keys: string[] | undefined) {
+  const out = new Set<string>();
+  for (const raw of keys || []) {
+    const k = String(raw || "");
+    const q = k.match(/^(\d{4})q([1-4])$/);
+    if (q) {
+      out.add(`${q[1]}q${q[2]}`);
+      continue;
+    }
+    const h = k.match(/^(\d{4})-([12])$/);
+    if (h) {
+      if (h[2] === "1") {
+        out.add(`${h[1]}q1`);
+        out.add(`${h[1]}q2`);
+      } else {
+        out.add(`${h[1]}q3`);
+        out.add(`${h[1]}q4`);
+      }
+      continue;
+    }
+    const y = k.match(/^(\d{4})$/);
+    if (y) {
+      out.add(`${y[1]}q1`);
+      out.add(`${y[1]}q2`);
+      out.add(`${y[1]}q3`);
+      out.add(`${y[1]}q4`);
+    }
+  }
+  return [...out];
+}
+
+export function journalChunks(grain: Grain = "quarter", now = new Date(), years = 6): JournalChunk[] {
+  const qs = journalQuarters(now, years);
+  if (grain === "quarter") return qs;
+  if (grain === "half") {
+    const out: JournalChunk[] = [];
+    const byY = new Map<string, JournalChunk[]>();
+    for (const q of qs) {
+      const y = q.key.slice(0, 4);
+      const list = byY.get(y) || [];
+      list.push(q);
+      byY.set(y, list);
+    }
+    const yearsDesc = [...byY.keys()].sort((a, b) => Number(b) - Number(a));
+    for (const y of yearsDesc) {
+      const list = byY.get(y) || [];
+      const h2 = list.filter((x) => x.key.endsWith("q3") || x.key.endsWith("q4"));
+      const h1 = list.filter((x) => x.key.endsWith("q1") || x.key.endsWith("q2"));
+      if (h2.length) {
+        out.push({
+          key: `${y}h2`,
+          from: `01.07.${y}`,
+          to: `31.12.${y}`,
+          label: `июл–дек ${y}`,
+          keys: h2.map((x) => x.key),
+        });
+      }
+      if (h1.length) {
+        out.push({
+          key: `${y}h1`,
+          from: `01.01.${y}`,
+          to: `30.06.${y}`,
+          label: `янв–июн ${y}`,
+          keys: h1.map((x) => x.key),
+        });
+      }
+    }
+    return out;
+  }
+  const out: JournalChunk[] = [];
+  const seen = new Set<string>();
+  for (const q of qs) {
+    const y = q.key.slice(0, 4);
+    if (seen.has(y)) continue;
+    seen.add(y);
+    out.push({
+      key: y,
+      from: `01.01.${y}`,
+      to: `31.12.${y}`,
+      label: `${y} год`,
+      keys: [`${y}q1`, `${y}q2`, `${y}q3`, `${y}q4`],
+    });
   }
   return out;
 }
@@ -49,12 +141,12 @@ export function spanOf(calendar: { date?: string }[] | undefined) {
 }
 
 export function periodOfDate(d: Date) {
-  const h = d.getMonth() < 6 ? 1 : 2;
-  return `${d.getFullYear()}-${h}`;
+  const q = Math.floor(d.getMonth() / 3) + 1;
+  return `${d.getFullYear()}q${q}`;
 }
 
 export function inferredPeriodKeys(calendar: { date?: string }[] | undefined, stored?: string[]) {
-  const set = new Set(stored || []);
+  const set = new Set(expandPeriodKeys(stored));
   for (const l of calendar || []) {
     const d = parseLessonDate(l.date);
     if (d) set.add(periodOfDate(d));
@@ -62,9 +154,13 @@ export function inferredPeriodKeys(calendar: { date?: string }[] | undefined, st
   return [...set];
 }
 
-export function nextPeriod(done: string[], periods = journalPeriods()) {
+export function chunkDone(chunk: JournalChunk, done: string[]) {
   const have = new Set(done);
-  return periods.find((p) => !have.has(p.key)) || null;
+  return chunk.keys.every((k) => have.has(k));
+}
+
+export function nextChunk(done: string[], grain: Grain = "quarter", now = new Date()) {
+  return journalChunks(grain, now).find((c) => !chunkDone(c, done)) || null;
 }
 
 export function inPeriod(date: string | undefined, from: string, to: string) {
@@ -73,4 +169,13 @@ export function inPeriod(date: string | undefined, from: string, to: string) {
   const b = parseLessonDate(to);
   if (!d || !a || !b) return false;
   return d >= a && d <= b;
+}
+
+export function journalPeriods(now = new Date(), years = 6) {
+  return journalQuarters(now, years);
+}
+
+export function nextPeriod(done: string[], periods = journalPeriods()) {
+  const have = new Set(expandPeriodKeys(done));
+  return periods.find((p) => !have.has(p.key)) || null;
 }

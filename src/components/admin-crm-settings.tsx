@@ -10,6 +10,7 @@ import { CRM_ACTORS, actorLabel, actorOf, type CrmActorsState } from "@/data/crm
 import { CACHE_KIND_META, type CacheKind, type CachePolicy } from "@/data/crm-cache-policy-core";
 import { exportOpLabel, type CrmExportOp } from "@/data/crm-export-queue-core";
 import { ALFA_LINK_MODES, ALFA_PULL_CH, ALFA_PUSH_CH, ALFA_PIPE_CH, ALFA_SYNC_DEFAULT, type AlfaLinkMode, type AlfaPullCh, type AlfaPushCh, type AlfaPipeCh } from "@/data/crm-alfa-link-core";
+import { journalChunks, type Grain } from "@/data/crm-journal-periods";
 
 export const CRM_SYNC_MIN_KEY = "ra_crm_sync_min";
 
@@ -41,6 +42,8 @@ type MissPack = {
   items: { id?: number; name: string; extra?: string; groupId?: number; branchId?: number; school?: string; archived?: boolean }[];
 };
 
+type FillPart = { key: string; label: string; from?: string; to?: string; done?: boolean; lessons?: number; err?: string };
+
 type FillRow = {
   groupId?: number;
   branchId?: number;
@@ -52,59 +55,110 @@ type FillRow = {
   done?: number;
   total?: number;
   next?: string;
+  nextKey?: string;
   from?: string;
   weight?: string;
   err?: string;
+  complete?: boolean;
+  parts?: FillPart[];
 };
+
+function packGrain(parts: FillPart[] | undefined, grain: Grain) {
+  const byKey = new Map((parts || []).map((p) => [p.key, p]));
+  return journalChunks(grain).map((c) => {
+    const kids = c.keys.map((k) => byKey.get(k)).filter(Boolean) as FillPart[];
+    const done = c.keys.every((k) => byKey.get(k)?.done);
+    const lessons = kids.reduce((s, p) => s + (p.lessons || 0), 0);
+    const err = kids.find((p) => p.err)?.err || "";
+    return { key: c.key, label: c.label, from: c.from, to: c.to, done, lessons, err };
+  });
+}
 
 function GroupFillList({
   rows,
   school,
   busy,
   loading,
+  grain,
   onLoad,
 }: {
   rows: FillRow[];
   school: string;
   busy?: boolean;
-  loading?: { groupId?: number; branchId?: number };
-  onLoad: (row: FillRow) => void;
+  loading?: { groupId?: number; branchId?: number; periodKey?: string };
+  grain: Grain;
+  onLoad: (row: FillRow, part: FillPart) => void;
 }) {
   const list = rows.filter((r) => !school || r.school === school);
+  const [open, setOpen] = useState("");
   if (!list.length) return <p className="mt-3 text-sm text-muted">Нет групп в этом фильтре.</p>;
   return (
-    <ul className="mt-3 max-h-[28rem] space-y-1 overflow-auto">
+    <ul className="mt-3 max-h-[36rem] space-y-2 overflow-auto">
       {list.map((row) => {
-        const total = row.total || 12;
-        const done = row.done || 0;
-        const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+        const id = `${row.branchId}-${row.groupId}`;
+        const chunks = packGrain(row.parts, grain);
+        const doneN = chunks.filter((c) => c.done).length;
+        const total = chunks.length || 1;
+        const pct = Math.min(100, Math.round((doneN / total) * 100));
         const active = loading && loading.groupId === row.groupId && loading.branchId === row.branchId;
+        const full = Boolean(row.complete) || doneN >= total;
+        const shown = open === id;
         return (
-          <li key={`${row.branchId}-${row.groupId}`}>
-            <button
-              type="button"
-              disabled={busy}
-              className={cn("w-full rounded-xl bg-white px-3 py-2 text-left ring-1 ring-black/8 hover:bg-black/[0.03] disabled:opacity-50", active && "ring-black")}
-              onClick={() => onLoad(row)}
-            >
+          <li key={id} className={cn("rounded-2xl bg-white p-3 ring-1", full ? "ring-emerald-300" : active ? "ring-black" : "ring-black/8")}>
+            <button type="button" className="w-full text-left" onClick={() => setOpen(shown ? "" : id)}>
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="font-medium">{row.name}</span>
-                <span className="text-[0.72rem] tabular-nums text-muted">
-                  {done}/{total} полугодий
-                  {row.weight ? ` · ${row.weight}` : ""}
-                </span>
+                {full ? (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">вся информация загружена</span>
+                ) : doneN ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-900">
+                    частично · {doneN}/{total}
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">ещё не загружали</span>
+                )}
               </div>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-black/10">
-                <div className={cn("h-1.5 rounded-full", pct >= 100 ? "bg-emerald-600" : "bg-black")} style={{ width: `${pct}%` }} />
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/10">
+                <div className={cn("h-1.5 rounded-full", full ? "bg-emerald-600" : "bg-black")} style={{ width: `${pct}%` }} />
               </div>
               <p className="mt-1 text-[0.72rem] text-muted">
-                {active ? `грузим ${row.next || "полугодие"}…` : row.from}
+                {active ? `грузим ${chunks.find((c) => c.key === loading?.periodKey)?.label || "порцию"}…` : row.from}
                 {row.lessons ? ` · ${row.lessons} зан.` : ""}
-                {row.next && !active ? ` · дальше ${row.next}` : ""}
+                {row.weight ? ` · ${row.weight}` : ""}
                 {row.archived ? " · архив" : ""}
               </p>
-              {row.err ? <p className="mt-0.5 text-[0.72rem] text-rose-800">{row.err}</p> : null}
             </button>
+            {shown ? (
+              <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                {chunks.map((c) => {
+                  const spinning = active && loading?.periodKey === c.key;
+                  return (
+                    <button
+                      key={c.key}
+                      type="button"
+                      disabled={busy || c.done}
+                      className={cn(
+                        "rounded-xl px-2.5 py-2 text-left text-sm ring-1 disabled:opacity-70",
+                        c.done ? "bg-emerald-50 ring-emerald-200" : spinning ? "bg-black/5 ring-black" : "bg-white ring-black/10 hover:bg-black/[0.03]",
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!c.done) onLoad(row, c);
+                      }}
+                    >
+                      <span className="block font-medium">
+                        {c.done ? "✓ " : spinning ? "… " : "○ "}
+                        {c.label}
+                      </span>
+                      <span className="block text-[0.72rem] text-muted">
+                        {spinning ? "загрузка…" : c.done ? (c.lessons ? `${c.lessons} зан. · загружено` : "проверено, занятий нет") : "нажмите, чтобы загрузить"}
+                      </span>
+                      {c.err && !c.done ? <span className="mt-0.5 block text-[0.72rem] text-rose-800">{c.err}</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </li>
         );
       })}
@@ -217,11 +271,10 @@ export function AdminCrmSettings() {
     };
   } | null>(null);
   const [journalSchool, setJournalSchool] = useState("");
+  const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
   const [openMiss, setOpenMiss] = useState<"g" | "j1" | "j2" | "c1" | "c2" | "">("");
-  const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number } | null>(null);
+  const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number; periodKey?: string } | null>(null);
   const dragId = useRef(0);
-  const tickLock = useRef(false);
-  const busyRef = useRef(false);
 
   function applyLink(link: {
     mode?: AlfaLinkMode;
@@ -254,19 +307,6 @@ export function AdminCrmSettings() {
     void loadActors();
     void loadJournal();
   }, []);
-
-  useEffect(() => {
-    busyRef.current = busy;
-  }, [busy]);
-
-  useEffect(() => {
-    if (alfaMode !== "linked") return;
-    const id = window.setInterval(() => {
-      if (document.hidden || busyRef.current || tickLock.current) return;
-      void tickQueue(false, true);
-    }, 18000);
-    return () => window.clearInterval(id);
-  }, [alfaMode]);
 
   async function loadAuto() {
     try {
@@ -395,22 +435,17 @@ export function AdminCrmSettings() {
     setMsg("Каналы фона с Alfa записаны. Ольга по-прежнему пишет на диск.");
   }
 
-  async function tickQueue(force: boolean, silent = false) {
-    if (tickLock.current) return;
-    tickLock.current = true;
-    if (!silent) setBusy(true);
+  async function tickQueue(force: boolean) {
+    setBusy(true);
     try {
       const res = (await adminSchedule({
         data: { token: token(), action: "crmQueueTick", force } as never,
       })) as { ok?: boolean; extra?: string; queue?: typeof queue; error?: string; live?: number };
       if (res.queue) setQueue(res.queue);
-      if (!silent) setMsg(res.error || res.extra || (res.ok ? `Пакет прошёл${res.live != null ? `, живых ${res.live}` : ""}` : "Очередь не ответила."));
-      else if (res.extra) setMsg(res.extra);
+      setMsg(res.error || res.extra || (res.ok ? `Пакет прошёл${res.live != null ? `, живых ${res.live}` : ""}` : "Очередь не ответила."));
       await loadCache();
-      void loadJournal();
     } finally {
-      tickLock.current = false;
-      if (!silent) setBusy(false);
+      setBusy(false);
     }
   }
 
@@ -431,10 +466,12 @@ export function AdminCrmSettings() {
     school?: string;
     groupId?: number;
     branchId?: number;
+    periodKey?: string;
+    grain?: Grain;
   }) {
     setBusy(true);
-    if (opts.kind === "group" || opts.kind === "school") {
-      setFillLoading({ groupId: opts.groupId || 0, branchId: opts.branchId || 0 });
+    if (opts.kind === "group") {
+      setFillLoading({ groupId: opts.groupId || 0, branchId: opts.branchId || 0, periodKey: opts.periodKey || "" });
     }
     try {
       const res = (await adminSchedule({
@@ -446,6 +483,8 @@ export function AdminCrmSettings() {
           groupId: opts.groupId || 0,
           branchId: opts.branchId || 0,
           study: opts.study || "all",
+          periodKey: opts.periodKey || "",
+          grain: opts.grain || journalGrain,
         } as never,
       })) as typeof journal & { ok?: boolean };
       if (res) setJournal(res);
@@ -752,7 +791,7 @@ export function AdminCrmSettings() {
 
       <Card
         title="Загрузить историю из Alfa"
-        hint="Пока вкладка открыта, фон сам снимает одно полугодие журнала каждые ~18 секунд. Полоска у группы растёт."
+        hint="Журнал группы только по кнопке. Откройте группу, выберите порцию: квартал, полугодие или год. Зелёное — уже на сайте."
       >
         {(() => {
           const offline = alfaMode === "offline";
@@ -763,9 +802,9 @@ export function AdminCrmSettings() {
 
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">1. Занятия в группах</p>
-                <p className="mt-1 text-sm text-muted">Одно полугодие за нажатие. Тяжёлая группа — много занятий, лёгкая — мало или пусто.</p>
+                <p className="mt-1 text-sm text-muted">Откройте группу и нажмите нужный квартал. Тяжёлую группу грузите по кварталам, лёгкую можно годом.</p>
                 <ProgressBar done={p?.groups?.done || 0} total={p?.groups?.total || 0} />
-                <p className="mt-1 text-[0.72rem] text-muted">Полоска сверху — сколько групп закрыли все {p?.groups?.periods || 12} полугодий.</p>
+                <p className="mt-1 text-[0.72rem] text-muted">Сверху — сколько групп закрыли все {p?.groups?.periods || 24} кварталов.</p>
                 <label className="mt-3 block text-sm font-semibold">
                   Только школа
                   <select
@@ -782,35 +821,42 @@ export function AdminCrmSettings() {
                     ))}
                   </select>
                 </label>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="h-10 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
-                    disabled={busy || offline}
-                    onClick={() => {
-                      const rows = (p?.groups?.rows || []).filter((r) => !journalSchool || r.school === journalSchool);
-                      const next = rows.find((r) => (r.done || 0) < (r.total || 12));
-                      void runJournal({
-                        kind: next ? "group" : "school",
-                        school: journalSchool,
-                        groupId: Number(next?.groupId) || 0,
-                        branchId: Number(next?.branchId) || 0,
-                      });
-                    }}
-                  >
-                    {busy ? "Загружаю полугодие…" : "Загрузить следующее полугодие"}
-                  </button>
+                <p className="mt-3 text-sm font-semibold">Порция за одно нажатие</p>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {(
+                    [
+                      ["quarter", "Квартал"],
+                      ["half", "Полугодие"],
+                      ["year", "Год"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className={cn("h-9 rounded-full px-3 text-sm font-semibold", journalGrain === id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
+                      onClick={() => setJournalGrain(id)}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
                 <GroupFillList
                   rows={p?.groups?.rows || []}
                   school={journalSchool}
                   busy={busy || offline}
                   loading={fillLoading || undefined}
-                  onLoad={(row) =>
-                    void runJournal({ kind: "group", groupId: Number(row.groupId) || 0, branchId: Number(row.branchId) || 0 })
+                  grain={journalGrain}
+                  onLoad={(row, part) =>
+                    void runJournal({
+                      kind: "group",
+                      groupId: Number(row.groupId) || 0,
+                      branchId: Number(row.branchId) || 0,
+                      periodKey: part.key,
+                      grain: journalGrain,
+                    })
                   }
                 />
-                <p className="mt-2 text-[0.72rem] text-muted">Нажмите группу — догрузится её следующее полугодие. Кнопка выше берёт ту, где меньше всего загружено.</p>
+                <p className="mt-2 text-[0.72rem] text-muted">Нажмите имя группы — откроются порции. ✓ уже загружено, ○ ещё нет.</p>
               </section>
 
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
