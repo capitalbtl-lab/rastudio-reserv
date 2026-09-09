@@ -652,7 +652,6 @@ function LessonEdit({
     const n = Number(colW[key]);
     return n > 0 ? n : ATTEND_COL_DEF[key];
   };
-  const tableW = ATTEND_COL_KEYS.reduce((n, k) => n + colPx(k), 0);
   function closeForm() {
     writeAttendCols(colWRef.current);
     onClose();
@@ -669,7 +668,7 @@ function LessonEdit({
     document.body.style.userSelect = "none";
     document.body.style.cursor = "col-resize";
     const move = (ev: globalThis.PointerEvent) => {
-      const next = Math.round(Math.min(560, Math.max(min, startW + ev.clientX - startX)));
+      const next = Math.round(Math.min(280, Math.max(min, startW + ev.clientX - startX)));
       setColW((cur) => ({ ...cur, [key]: next }));
     };
     const up = () => {
@@ -765,7 +764,7 @@ function LessonEdit({
       }}
       data-op="lesson-edit"
     >
-      <div className={cn("w-full max-w-[46rem] p-4", RA_POP, "overflow-visible")} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()} data-op={conduct ? "lesson-conduct" : "lesson-edit-card"}>
+      <div className={cn("w-full max-w-[40rem] p-4", RA_POP, "overflow-visible")} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()} data-op={conduct ? "lesson-conduct" : "lesson-edit-card"}>
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-display text-lg font-semibold text-fg">Групповое — {conduct ? "провести" : form.status === 3 ? "проведён" : form.status === 2 ? "отменён" : "занятие"}</h3>
           <button type="button" className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white" onClick={closeForm}>
@@ -774,7 +773,7 @@ function LessonEdit({
         </div>
         {loading ? <p className="mt-2 text-[0.75rem] text-muted">Открываю занятие…</p> : null}
         <div className="mt-3 grid gap-2">
-          <div className="grid grid-cols-[7.4rem_4.15rem_3.35rem_3.7rem_minmax(5.2rem,0.55fr)_minmax(11rem,1.2fr)] items-end gap-1.5" data-op="lesson-when">
+          <div className="grid grid-cols-[6.8rem_3.9rem_3.1rem_3.4rem_minmax(6.5rem,0.9fr)_minmax(9rem,1.1fr)] items-end gap-x-1.5" data-op="lesson-when">
             <label className={LBL}>
               Дата
               <DateCal value={form.date} onPick={(iso) => set("date", iso)}>
@@ -892,7 +891,7 @@ function LessonEdit({
                 </button>
               </div>
               <div className="mt-1 max-h-[11.5rem] overflow-auto rounded-xl bg-white ring-1 ring-black/8" data-op="lesson-attend">
-                <table className="text-left text-[0.75rem]" style={{ tableLayout: "fixed", width: tableW, minWidth: tableW }}>
+                <table className="w-full text-left text-[0.75rem]" style={{ tableLayout: "fixed" }}>
                   <colgroup>
                     {ATTEND_COL_KEYS.map((k) => (
                       <col key={k} style={{ width: colPx(k) }} />

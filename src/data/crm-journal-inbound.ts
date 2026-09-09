@@ -235,7 +235,7 @@ function isOneOffLesson(item: { lesson_type_id?: number; group_ids?: number[] })
   return groups.length === 0 && typeId !== 2;
 }
 
-export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean }) {
+export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number }) {
   const id = Number(customerId) || 0;
   if (!alfaLinkedNow() || id <= 0) return { ok: true as const, count: 0, done: true };
   const { wantAlfaPullChannel } = await import("./crm-alfa-link");
@@ -257,7 +257,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const packs: { items?: Parameters<typeof packLight>[0][] }[] = [];
     let cur = wantFull ? lessonFillOf(customerSyncOf(id).lessonFill) || lessonFillStart(branches[0] || branch) : lessonFillStart(branches[0] || branch);
     let ran = 0;
-    const maxRun = wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
+    const maxRun = Number(opts?.take) > 0 ? Math.min(LESSON_INBOUND_RUN, Number(opts.take)) : wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
     const maxPages = wantFull ? 12 : 2;
     const from = wantFull ? dateFrom : ruShift(LESSON_RECENT_DAYS);
     while (ran < maxRun && !cur.done) {

@@ -116,7 +116,7 @@ describe("форма занятия карточки", () => {
     assert.match(strip, /data-op="lesson-teachers"/);
     assert.match(strip, /Аудитория[\s\S]{0,500}TeacherDrop/);
     assert.doesNotMatch(strip, /Педагог\(и\)/);
-    assert.match(strip, /max-w-\[46rem\]/);
+    assert.match(strip, /max-w-\[40rem\]/);
     assert.match(strip, /maskHm/);
     assert.match(strip, /maskRuDate/);
     assert.match(strip, /removeCustomer/);
@@ -183,6 +183,9 @@ describe("форма занятия карточки", () => {
     const packFn = tariffs.slice(tariffs.indexOf("export function packCardTariff"), tariffs.indexOf("export function parseDossierCtt"));
     assert.match(packFn, /it.is_archived \|\| it.is_archive/);
     assert.match(api, /pullMissingLessonCtt/);
+    assert.match(api, /void pullMissingLessonCtt/);
+    assert.doesNotMatch(api, /await pullMissingLessonCtt/);
+    assert.match(api, /inboundCustomerLessons\(branch, customerId, \{ take: 2 \}\)/);
     assert.match(api, /data.pull/);
     assert.match(api, /pullCustomerTariffs\(branch, customerId\)/);
     assert.match(src, /pull: true/);

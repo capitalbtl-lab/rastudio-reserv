@@ -830,8 +830,10 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
   const tariffs: NonNullable<CustomerCard["tariffs"]> = [];
   try {
     const { parseDossierCtt, pullCustomerTariffs } = await import("./pupil-tariffs");
-    let rows = await pullCustomerTariffs(useBranch, customerId).catch(() => parseDossierCtt(dossier?.extras));
-    if (!rows.length) rows = parseDossierCtt(dossier?.extras);
+    let rows = parseDossierCtt(dossier?.extras);
+    if (!rows.length) {
+      rows = await pullCustomerTariffs(useBranch, customerId).catch(() => []);
+    }
     tariffs.push(...rows);
   } catch {
     /* диск */
@@ -1565,7 +1567,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const { alfaLinkedNow } = await import("./crm-alfa-link");
       if (alfaLinkedNow() && customerId > 0) {
         void import("./crm-journal-inbound")
-          .then((m) => m.inboundCustomerLessons(branch, customerId))
+          .then((m) => m.inboundCustomerLessons(branch, customerId, { take: 2 }))
           .catch(() => null);
       }
       if (d?.child?.fio || customerId === 670) {
@@ -3786,7 +3788,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         const catalogTariffs = loadTariffs().items;
         const subjectName = String(hit?.subject || slot?.subject || "");
         const subjectId = Number(hit?.subjectId || slot?.subjectId || data.subjectId || 0);
-        await pullMissingLessonCtt(customerIds, subjectId, subjectName);
+        void pullMissingLessonCtt(customerIds, subjectId, subjectName);
         function restHint(cid: number) {
           const d = people.find((x) => x.crmId === cid) || findDossier({ crmId: cid });
           const live = parseDossierCtt(d?.extras);
@@ -3953,7 +3955,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const catalogTariffs = loadTariffs().items;
       const subjectName = String(raw?.subject_name || slot?.subject || "");
       const subjectIdRaw = Number(raw?.subject_id || data.subjectId || slot?.subjectId || 0);
-      await pullMissingLessonCtt(customerIds, subjectIdRaw, subjectName);
+      void pullMissingLessonCtt(customerIds, subjectIdRaw, subjectName);
       const customers = (pupils.length ? pupils : customerIds.map((cid) => ({ customerId: cid, attend: true, amount: 0 }))).map((p) => {
         const cid = Number(p.customerId);
         const d = findDossier({ crmId: cid });
