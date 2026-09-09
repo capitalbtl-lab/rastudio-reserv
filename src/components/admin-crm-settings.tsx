@@ -89,6 +89,7 @@ function GroupFillList({
   loading,
   grain,
   onLoad,
+  onRecheck,
 }: {
   rows: FillRow[];
   school: string;
