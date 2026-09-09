@@ -127,6 +127,11 @@ describe("форма занятия карточки", () => {
     assert.match(strip, /Аудитория[\s\S]{0,500}TeacherDrop/);
     assert.doesNotMatch(strip, /Педагог\(и\)/);
     assert.match(strip, /max-w-\[40rem\]/);
+    assert.match(strip, /sm:grid-cols-4/);
+    assert.match(strip, /action: "lessonGet"/);
+    assert.match(strip, /branchId=\{branchId\}/);
+    assert.doesNotMatch(strip, /w-max/);
+    assert.match(src, /people=\{\[\{ id: card.id/);
     assert.match(strip, /maskHm/);
     assert.match(strip, /maskRuDate/);
     assert.match(strip, /removeCustomer/);
@@ -180,6 +185,7 @@ describe("форма занятия карточки", () => {
     assert.doesNotMatch(cards, /customerIds: \[cid\]/);
     assert.match(cards, /mergeLessonPupils/);
     assert.match(cards, /withPupilFio/);
+    assert.match(cards, /ids.map\(\(customerId\)/);
     const journal = readFileSync(new URL("./crm-journal-core.ts", import.meta.url), "utf8");
     assert.match(journal, /pupils: lesson.pupils/);
     const tariffs = readFileSync(new URL("./pupil-tariffs.ts", import.meta.url), "utf8");

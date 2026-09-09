@@ -1299,6 +1299,7 @@ export function CrmClientCard({
             branchId={card.branchId}
             groupId={(card.groups || []).find((g) => g.active !== false)?.id || (card.groups || [])[0]?.id}
             customerId={card.id}
+            people={[{ id: card.id, name: card.name, status: card.status === "архив" ? "архив" : card.status === "лид" ? "лид" : undefined }]}
           />
         </div>
 

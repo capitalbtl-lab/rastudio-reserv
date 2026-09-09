@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode
 import { createPortal } from "react-dom";
 import { Calendar, Check, HelpCircle, MinusCircle, Pause, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { GroupCalLesson, LessonRosterPerson, LessonTileMark, LessonTileTone } from "@/data/crm-slots-core";
+import type { GroupCalLesson, LessonPupil, LessonRosterPerson, LessonTileMark, LessonTileTone } from "@/data/crm-slots-core";
 import { mergeLessonRoster, lessonRestLeft, maskHm, maskRuDate, pupilNameOk, lessonTileTone, lessonTileMark } from "@/data/crm-slots-core";
 import { adminSchedule } from "@/data/admin-schedule";
 import { RA_POP } from "@/data/admin-ui";
@@ -189,6 +189,8 @@ function LessonCard({
   subject,
   teacher,
   people,
+  branchId,
+  groupId,
   pinned,
   busy,
   error,
@@ -208,6 +210,8 @@ function LessonCard({
   subject?: string;
   teacher?: string;
   people?: LessonRosterPerson[];
+  branchId?: number;
+  groupId?: number;
   pinned?: boolean;
   busy?: boolean;
   error?: string;
@@ -236,7 +240,43 @@ function LessonCard({
     ["Домашнее задание", l.homework || ""],
   ];
   if (done && (l.total || 0) > 0) rows.push(["Присутствие", `${l.attend || 0} из ${l.total}`]);
-  const roster = mergeLessonRoster(l, people);
+  const [fetched, setFetched] = useState<LessonPupil[] | null>(null);
+  useEffect(() => {
+    setFetched(null);
+    if (!pinned || !branchId || !l.lessonId) return;
+    let live = true;
+    void adminSchedule({
+      data: {
+        token: token(),
+        action: "lessonGet",
+        branchId,
+        groupId: groupId || (l.groupIds || [])[0] || 0,
+        lessonId: l.lessonId,
+        date: l.date,
+        time: l.from,
+        timeTo: l.to,
+        duration: l.duration,
+        roomId: l.roomId,
+        subjectId: l.subjectId,
+        teacherIds: l.teacherIds,
+      } as never,
+    }).then((res) => {
+      if (!live || !res.ok || !("lesson" in res)) return;
+      const customers = ((res as { lesson?: { customers?: { id: number; name?: string; attend?: boolean; amount?: number; cttId?: number; rest?: string }[] } }).lesson?.customers || []).map((c) => ({
+        customerId: Number(c.id) || 0,
+        name: c.name,
+        attend: c.attend !== false,
+        amount: Number(c.amount) || 0,
+        cttId: c.cttId,
+        rest: c.rest,
+      }));
+      if (customers.length) setFetched(customers);
+    });
+    return () => {
+      live = false;
+    };
+  }, [pinned, branchId, groupId, l.lessonId, l.date, l.from]);
+  const roster = fetched?.length ? fetched : mergeLessonRoster(l, people);
   const canAct = Boolean(onOpen);
   const btn = "h-8 rounded-lg bg-[#d8dce3] text-[0.75rem] font-semibold text-[#5c636c] disabled:opacity-45";
   return (
@@ -280,9 +320,9 @@ function LessonCard({
             const line = (
               <span className={cn("flex min-w-0 flex-1 items-center gap-1.5", p.attend ? tone || "text-fg" : "text-muted")}>
                 {p.attend ? <span className="shrink-0 text-[0.7rem] text-emerald-600">✓</span> : <span className="w-3 shrink-0" />}
-                <span className="min-w-0 truncate">{name}</span>
+                <span className={cn("min-w-0 truncate", !p.attend && "line-through")}>{name}</span>
                 {!amt && p.rest ? <span className="shrink-0 tabular-nums">({p.rest})</span> : null}
-                {amt ? <span className="ml-auto shrink-0 tabular-nums text-fg">{amt}</span> : null}
+                {amt ? <span className={cn("ml-auto shrink-0 tabular-nums text-fg", !p.attend && "line-through")}>{amt}</span> : null}
               </span>
             );
             return (
@@ -523,17 +563,17 @@ function TeacherDrop({
   }, [open]);
   const label = teachers.filter((t) => ids.includes(t.id)).map((t) => t.name).join(", ");
   return (
-    <div ref={box} className="relative" data-op="lesson-teachers">
-      <button type="button" className={cn(FIELD, "flex items-center justify-between gap-2 text-left")} onClick={() => setOpen((v) => !v)}>
-        <span className={cn("truncate", !label && "text-muted")}>{label || "— педагоги —"}</span>
-        <span className="text-muted">▾</span>
+    <div ref={box} className="relative min-w-0" data-op="lesson-teachers">
+      <button type="button" className={cn(FIELD, "flex min-w-0 items-center justify-between gap-2 text-left")} onClick={() => setOpen((v) => !v)}>
+        <span className={cn("min-w-0 truncate", !label && "text-muted")}>{label || "— педагоги —"}</span>
+        <span className="shrink-0 text-muted">▾</span>
       </button>
       {open ? (
-        <div className={cn("absolute z-50 mt-1 max-h-44 min-w-full w-max overflow-y-auto p-1", RA_POP)}>
+        <div className={cn("absolute left-0 z-50 mt-1 max-h-44 w-full overflow-y-auto p-1", RA_POP)}>
           {teachers.map((t) => (
             <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-[0.78rem] hover:bg-black/[0.04]">
               <input type="checkbox" checked={ids.includes(t.id)} onChange={() => onToggle(t.id)} />
-              {t.name}
+              <span className="min-w-0 whitespace-normal break-words">{t.name}</span>
             </label>
           ))}
         </div>
@@ -811,17 +851,17 @@ function LessonEdit({
       }}
       data-op="lesson-edit"
     >
-      <div className={cn("w-full max-w-[40rem] p-4", RA_POP, "overflow-visible")} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()} data-op={conduct ? "lesson-conduct" : "lesson-edit-card"}>
+      <div className={cn("w-full max-w-[40rem] min-w-0 p-4", RA_POP, "overflow-visible")} style={{ background: "#e8f3fc" }} onMouseDown={(e) => e.stopPropagation()} data-op={conduct ? "lesson-conduct" : "lesson-edit-card"}>
         <div className="flex items-start justify-between gap-3">
-          <h3 className="font-display text-lg font-semibold text-fg">Групповое — {conduct ? "провести" : form.status === 3 ? "проведён" : form.status === 2 ? "отменён" : "занятие"}</h3>
-          <button type="button" className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white" onClick={closeForm}>
+          <h3 className="min-w-0 font-display text-lg font-semibold text-fg">Групповое — {conduct ? "провести" : form.status === 3 ? "проведён" : form.status === 2 ? "отменён" : "занятие"}</h3>
+          <button type="button" className="shrink-0 rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white" onClick={closeForm}>
             Закрыть
           </button>
         </div>
         {loading ? <p className="mt-2 text-[0.75rem] text-muted">Открываю занятие…</p> : null}
-        <div className="mt-3 grid gap-2">
-          <div className="grid grid-cols-[6.8rem_3.9rem_3.1rem_3.4rem_minmax(6.5rem,0.9fr)_minmax(9rem,1.1fr)] items-end gap-x-1.5" data-op="lesson-when">
-            <label className={LBL}>
+        <div className="mt-3 grid min-w-0 gap-2">
+          <div className="grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-4" data-op="lesson-when">
+            <label className={cn(LBL, "min-w-0")}>
               Дата
               <DateCal value={form.date} onPick={(iso) => set("date", iso)}>
                 <input
@@ -869,11 +909,13 @@ function LessonEdit({
               До
               <input value={form.to} readOnly className={cn(FIELD, "bg-white/70 px-1 text-center")} />
             </label>
-            <label className={LBL}>
+          </div>
+          <div className="grid min-w-0 grid-cols-2 gap-1.5">
+            <label className={cn(LBL, "min-w-0")}>
               Аудитория
               <RaSelect value={form.roomId ? String(form.roomId) : ""} placeholder="— не задана —" className={FIELD} options={rooms.map((r) => ({ value: String(r.id), label: r.name }))} onChange={(v) => set("roomId", Number(v) || 0)} />
             </label>
-            <label className={LBL}>
+            <label className={cn(LBL, "min-w-0")}>
               Педагог
               <TeacherDrop
                 teachers={teachers}
@@ -882,7 +924,7 @@ function LessonEdit({
               />
             </label>
           </div>
-          <div className="grid grid-cols-[minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(7.5rem,0.85fr)] items-end gap-1.5" data-op="lesson-place">
+          <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1.15fr)_minmax(7.5rem,0.85fr)]" data-op="lesson-place">
             <label className={LBL}>
               Группа
               <RaSelect value={String(form.groupIds[0] || "")} placeholder="— группа —" className={FIELD} menuMinWidth={280} options={groups.map((g) => ({ value: String(g.id), label: g.name }))} onChange={(v) => set("groupIds", Number(v) ? [Number(v)] : [])} />
@@ -937,7 +979,7 @@ function LessonEdit({
                   {form.customers.every((c) => c.attend !== false) ? "снять все" : "выбрать все"}
                 </button>
               </div>
-              <div className="mt-1 max-h-[11.5rem] overflow-auto rounded-xl bg-white ring-1 ring-black/8" data-op="lesson-attend">
+              <div className="mt-1 max-h-[11.5rem] max-w-full overflow-auto rounded-xl bg-white ring-1 ring-black/8" data-op="lesson-attend">
                 <table className="w-full text-left text-[0.75rem]" style={{ tableLayout: "fixed" }}>
                   <colgroup>
                     {ATTEND_COL_KEYS.map((k) => (
@@ -1343,6 +1385,8 @@ export function LessonStrip({
                 subject={subject}
                 teacher={teacher}
                 people={people}
+                branchId={branchId}
+                groupId={groupId}
                 pinned={Boolean(pin)}
                 busy={busy}
                 error={error}

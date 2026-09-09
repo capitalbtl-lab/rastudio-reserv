@@ -123,9 +123,13 @@ function packLight(
 }
 
 function withPupilNames(lesson: GroupCalLesson): GroupCalLesson {
-  if (!lesson.pupils?.length) return lesson;
-  let hit = false;
-  const pupils = lesson.pupils.map((p) => {
+  const ids = (lesson.customerIds || []).map(Number).filter((n) => n > 0);
+  const base = lesson.pupils?.length
+    ? lesson.pupils
+    : ids.map((customerId) => ({ customerId, attend: true as boolean }));
+  if (!base.length) return lesson;
+  let hit = !lesson.pupils?.length;
+  const pupils = base.map((p) => {
     if (pupilNameOk(p.name)) return p;
     const d = findDossier({ crmId: p.customerId });
     let name = String(d?.child?.fio || d?.parent?.fio || "").trim();
@@ -142,7 +146,7 @@ function withPupilNames(lesson: GroupCalLesson): GroupCalLesson {
     hit = true;
     return { ...p, name };
   });
-  return hit ? { ...lesson, pupils } : lesson;
+  return hit ? { ...lesson, pupils, customerIds: ids.length ? ids : pupils.map((p) => p.customerId) } : lesson;
 }
 
 export async function inboundJournalGroup(
