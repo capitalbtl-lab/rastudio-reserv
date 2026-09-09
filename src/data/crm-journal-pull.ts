@@ -969,19 +969,19 @@ export async function journalPull(opts: {
   const balance = kind === "balance";
   const row = await pullOneStudent(one.cid, one.branchId, balance);
   const sync = customerSyncOf(one.cid);
-  const groups = groupsOfStudent(one.cid);
+  const gnames = groupsOfStudent(one.cid);
   const name = fioOf(one.cid);
-  const ok = Boolean(sync.lessonsFull) || (row.done && row.lessons > 0);
+  const landed = Boolean(sync.lessonsFull) || (row.done && row.lessons > 0);
   const who = study === "1" ? "текущие" : study === "2" ? "архив" : "ученики";
   const hit: StudentHit = {
     cid: one.cid,
     branchId: one.branchId,
     name,
-    groups,
+    groups: gnames,
     lessons: row.lessons,
     pays: row.pays,
     done: row.done,
-    ok,
+    ok: landed,
   };
   const prev = store.lastStudents && store.lastStudents.study === study ? store.lastStudents.rows : [];
   const merged = [hit, ...prev.filter((r) => r.cid !== hit.cid)].slice(0, 40);
@@ -993,13 +993,12 @@ export async function journalPull(opts: {
     total: people.length,
     rows: merged,
   };
-  store.note = ok
-    ? `${who}: ${name}${groups.length ? ` · ${groups.slice(0, 2).join(", ")}` : ""} · ${row.lessons} зан.`
-    : `${who}: ${name}${groups.length ? ` · ${groups.slice(0, 2).join(", ")}` : ""} · не попал в выдачу${row.done ? " (Alfa пусто)" : " (обрыв)"}`;
+  store.note = landed
+    ? `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · ${row.lessons} зан.`
+    : `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · не попал в выдачу${row.done ? " (Alfa пусто)" : " (обрыв)"}`;
   store.at = new Date().toISOString();
   saveStore(store);
   return {
-    ok: true as const,
     extra: store.note,
     count: row.lessons,
     scanned: 1,

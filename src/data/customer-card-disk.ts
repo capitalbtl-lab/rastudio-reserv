@@ -108,6 +108,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
       school: "",
       active: false,
       subjectId: g.subjectId,
+      courseId: undefined,
     });
   }
   const days = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];

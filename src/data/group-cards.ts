@@ -211,7 +211,8 @@ function withPupilFio(lesson: GroupCalLesson): GroupCalLesson {
     : ids.map((customerId) => ({ customerId, attend: true as boolean }));
   if (!base.length) return lesson;
   const pupils = base.map((p) => {
-    if (pupilNameOk(p.name)) return p;
+    const have = String((p as { name?: string }).name || "");
+    if (pupilNameOk(have)) return p;
     const name = fioOf(p.customerId);
     return name ? { ...p, name } : p;
   });
