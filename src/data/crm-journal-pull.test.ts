@@ -34,5 +34,13 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Карточки целиком/);
     assert.match(ui, /Ещё пакет/);
     assert.match(pull, /rankedStudentIds\(study, group, group \? "" : school\)/);
+    assert.match(pull, /export function journalPullProgress/);
+    assert.match(pull, /isPayJournalComplete/);
+    assert.match(pull, /progress: journalPullProgress\(\)/);
+    assert.match(ui, /Общий прогресс/);
+    assert.match(ui, /ProgressBar/);
+    assert.match(ui, /нет \$\{left\}/);
+    assert.match(ui, /Карточки целиком · архив/);
+    assert.match(ui, /Журналы архива/);
   });
 });

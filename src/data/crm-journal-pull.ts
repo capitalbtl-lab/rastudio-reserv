@@ -8,6 +8,9 @@ import { alfaLinkedNow } from "./crm-alfa-link";
 import { loadCachePolicy } from "./crm-cache-policy";
 import { listAdminSlots } from "./alfacrm-schedule";
 import { allDossierCrmIds, findDossier, dossiersInGroup } from "./dossiers";
+import { loadGroupCard, loadCustomerCalendar } from "./group-cards";
+import { customerSyncOf } from "./crm-customer-sync";
+import { isPayJournalComplete } from "./crm-pay";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -147,6 +150,80 @@ function pickSlice<T>(list: T[], idx: number, take: number) {
   return { slice, next, start, wrapped };
 }
 
+const MISS_CAP = 40;
+
+function fioOf(cid: number) {
+  const d = findDossier({ crmId: cid });
+  return String(d?.name || "").trim() || `клиент ${cid}`;
+}
+
+function packList<T>(rows: T[], cap = MISS_CAP) {
+  return { total: rows.length, items: rows.slice(0, cap), more: Math.max(0, rows.length - cap) };
+}
+
+export function journalPullProgress() {
+  const groups = journalPullGroups();
+  const groupRows = groups.map((g) => {
+    const card = loadGroupCard(g.branchId, g.groupId);
+    const lessons = (card?.calendar || []).length;
+    const done = Boolean(card?.at) && lessons > 0;
+    return { ...g, lessons, done };
+  });
+  const groupsMiss = groupRows.filter((g) => !g.done).map((g) => ({
+    groupId: g.groupId,
+    branchId: g.branchId,
+    name: g.name,
+    school: g.school,
+    extra: g.lessons ? `${g.lessons} зан. неполно` : "нет журнала",
+  }));
+  const groupsDone = groupRows.filter((g) => g.done).map((g) => ({
+    groupId: g.groupId,
+    branchId: g.branchId,
+    name: g.name,
+    school: g.school,
+    extra: `${g.lessons} зан.`,
+  }));
+
+  function studentSide(study: JournalPullStudy) {
+    const people = rankedStudentIds(study);
+    const missJ: { id: number; name: string; extra: string }[] = [];
+    const missC: { id: number; name: string; extra: string }[] = [];
+    let journalDone = 0;
+    let cardDone = 0;
+    for (const p of people) {
+      const sync = customerSyncOf(p.cid);
+      const calN = loadCustomerCalendar(p.cid).length;
+      const journal = Boolean(sync.lessonsAttend || sync.lessonsFull) || calN > 0;
+      const pays = isPayJournalComplete(p.cid);
+      const name = fioOf(p.cid);
+      if (journal) journalDone += 1;
+      else missJ.push({ id: p.cid, name, extra: "нет явки" });
+      if (journal && pays) cardDone += 1;
+      else missC.push({ id: p.cid, name, extra: journal ? "нет кассы" : "нет явки" });
+    }
+    return {
+      total: people.length,
+      journalDone,
+      cardDone,
+      missJournal: packList(missJ),
+      missCard: packList(missC),
+    };
+  }
+
+  const live = studentSide("1");
+  const arch = studentSide("2");
+  return {
+    groups: {
+      total: groups.length,
+      done: groupsDone.length,
+      miss: packList(groupsMiss, 80),
+      doneList: packList(groupsDone, 20),
+    },
+    live,
+    archive: arch,
+  };
+}
+
 export function journalPullState() {
   const store = loadStore();
   const pol = loadCachePolicy();
@@ -168,6 +245,7 @@ export function journalPullState() {
     lessonsTotal: Number(pol.lessonsTotal) || all.length,
     students: { all: all.length, live: live.length, archive: arch.length },
     linked: alfaLinkedNow(),
+    progress: journalPullProgress(),
   };
 }
 

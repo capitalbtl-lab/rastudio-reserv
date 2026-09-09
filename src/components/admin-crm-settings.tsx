@@ -35,6 +35,31 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
   );
 }
 
+type MissPack = {
+  total: number;
+  more?: number;
+  items: { id?: number; name: string; extra?: string; groupId?: number; branchId?: number; school?: string }[];
+};
+
+function ProgressBar({ done, total, label }: { done: number; total: number; label: string }) {
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  const left = Math.max(0, total - done);
+  return (
+    <div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+        <span className="font-semibold">{label}</span>
+        <span className="tabular-nums text-muted">
+          {done} из {total}
+          {left ? ` · нет ${left}` : " · всё есть"}
+        </span>
+      </div>
+      <div className="mt-1 h-2 overflow-hidden rounded-full bg-black/10">
+        <div className={cn("h-2 rounded-full", pct >= 100 ? "bg-emerald-600" : "bg-black")} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function AdminCrmSettings() {
   const [stages, setStages] = useState<LeadStage[]>(LEAD_STAGES);
   const [busy, setBusy] = useState(false);
@@ -78,11 +103,17 @@ export function AdminCrmSettings() {
     lessonsTotal?: number;
     students?: { all: number; live: number; archive: number };
     linked?: boolean;
+    progress?: {
+      groups?: { total: number; done: number; miss?: MissPack; doneList?: MissPack };
+      live?: { total: number; journalDone: number; cardDone: number; missJournal?: MissPack; missCard?: MissPack };
+      archive?: { total: number; journalDone: number; cardDone: number; missJournal?: MissPack; missCard?: MissPack };
+    };
   } | null>(null);
   const [wizWhat, setWizWhat] = useState<"groups" | "students" | "balance">("groups");
   const [wizWho, setWizWho] = useState<"one-group" | "school" | "all-groups" | "current" | "archive" | "group-kids" | "school-kids">("one-group");
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGroup, setJournalGroup] = useState("");
+  const [progList, setProgList] = useState<"groups" | "liveJ" | "archJ" | "liveC" | "archC">("groups");
   const dragId = useRef(0);
 
   function applyLink(link: {
@@ -273,6 +304,7 @@ export function AdminCrmSettings() {
     setWizWhat(next);
     setWizWho(next === "groups" ? "one-group" : "current");
     setJournalGroup("");
+    setProgList(next === "groups" ? "groups" : next === "balance" ? "liveC" : "liveJ");
   }
 
   function journalPlan() {
@@ -833,12 +865,90 @@ export function AdminCrmSettings() {
               {journal?.note ? (
                 <p className="mt-3 rounded-xl bg-surface-2 px-3 py-2 text-[0.82rem] text-fg">{journal.note}</p>
               ) : null}
-              <p className="mt-2 text-[0.72rem] text-muted">
-                Групп в очереди фона {journal?.journalNext ?? 0}/{journal?.journalTotal ?? 0}
-                {" · "}
-                личных {journal?.lessonsNext ?? 0}/{journal?.lessonsTotal ?? 0}
-                {journal?.students ? ` · текущих ${journal.students.live}, архив ${journal.students.archive}` : ""}
-              </p>
+
+              {(() => {
+                const p = journal?.progress;
+                const miss =
+                  progList === "groups"
+                    ? p?.groups?.miss
+                    : progList === "liveJ"
+                      ? p?.live?.missJournal
+                      : progList === "archJ"
+                        ? p?.archive?.missJournal
+                        : progList === "liveC"
+                          ? p?.live?.missCard
+                          : p?.archive?.missCard;
+                const tabs: { id: typeof progList; label: string; missN: number }[] = [
+                  { id: "groups", label: "Группы", missN: Math.max(0, (p?.groups?.total || 0) - (p?.groups?.done || 0)) },
+                  { id: "liveJ", label: "Журналы текущих", missN: Math.max(0, (p?.live?.total || 0) - (p?.live?.journalDone || 0)) },
+                  { id: "archJ", label: "Журналы архива", missN: Math.max(0, (p?.archive?.total || 0) - (p?.archive?.journalDone || 0)) },
+                  { id: "liveC", label: "Карточки текущих", missN: Math.max(0, (p?.live?.total || 0) - (p?.live?.cardDone || 0)) },
+                  { id: "archC", label: "Карточки архива", missN: Math.max(0, (p?.archive?.total || 0) - (p?.archive?.cardDone || 0)) },
+                ];
+                return (
+                  <div className="mt-4 space-y-3 border-t border-black/8 pt-4">
+                    <p className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-muted">Общий прогресс — что уже на диске</p>
+                    <ProgressBar done={p?.groups?.done || 0} total={p?.groups?.total || 0} label="Журналы групп" />
+                    <ProgressBar done={p?.live?.journalDone || 0} total={p?.live?.total || 0} label="Личные журналы · текущие" />
+                    <ProgressBar done={p?.archive?.journalDone || 0} total={p?.archive?.total || 0} label="Личные журналы · архив" />
+                    <ProgressBar done={p?.live?.cardDone || 0} total={p?.live?.total || 0} label="Карточки целиком · текущие" />
+                    <ProgressBar done={p?.archive?.cardDone || 0} total={p?.archive?.total || 0} label="Карточки целиком · архив" />
+                    <p className="text-[0.72rem] text-muted">Карточка целиком = явка + касса. «Нет кассы» — баланс на карточке ещё не сходится.</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {tabs.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setProgList(t.id)}
+                          className={cn(
+                            "h-8 rounded-full px-3 text-[0.72rem] font-semibold ring-1",
+                            progList === t.id ? "bg-black text-white ring-black" : "bg-white ring-black/10",
+                          )}
+                        >
+                          {t.label}
+                          {t.missN ? ` · нет ${t.missN}` : " · ок"}
+                        </button>
+                      ))}
+                    </div>
+                    {miss && miss.total ? (
+                      <ul className="max-h-56 space-y-1 overflow-auto text-sm">
+                        {miss.items.map((row) => {
+                          const gid = Number(row.groupId) || 0;
+                          const bid = Number(row.branchId) || 0;
+                          return (
+                            <li key={`${gid || row.id}:${bid || 0}:${row.name}`}>
+                              {gid ? (
+                                <button
+                                  type="button"
+                                  className="w-full rounded-lg px-2 py-1 text-left hover:bg-black/5"
+                                  onClick={() => {
+                                    setWizWhat("groups");
+                                    setWizWho("one-group");
+                                    setJournalSchool(row.school || "");
+                                    setJournalGroup(`${gid}:${bid}`);
+                                    setProgList("groups");
+                                  }}
+                                >
+                                  <span className="font-medium">{row.name}</span>
+                                  <span className="ml-2 text-[0.72rem] text-muted">{row.extra}</span>
+                                </button>
+                              ) : (
+                                <span className="block rounded-lg px-2 py-1">
+                                  <span className="font-medium">{row.name}</span>
+                                  <span className="ml-2 text-[0.72rem] text-muted">{row.extra}</span>
+                                </span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-muted">В этом списке всё загружено.</p>
+                    )}
+                    {miss && miss.more ? <p className="text-[0.72rem] text-muted">Ещё {miss.more} не показаны — грузите пакетами, список короче.</p> : null}
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}
