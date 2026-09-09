@@ -110,6 +110,33 @@ function nextRecheckPart(row: FillRow, grain: Grain) {
   return [...chunks].sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")))[0] || chunks[0] || null;
 }
 
+function nextWizard(chunks: FillPart[]) {
+  const load = chunks.find((c) => !c.done || c.weak);
+  if (load) {
+    return {
+      kind: "load" as const,
+      part: load,
+      step: "Шаг 1 · загрузить явки",
+      btn: load.weak ? `Загрузить ещё раз ${load.label}` : `Загрузить ${load.label}`,
+    };
+  }
+  const detailsLeft = chunks.reduce((s, c) => s + (c.needDetails || 0), 0);
+  if (detailsLeft > 0) {
+    return {
+      kind: "details" as const,
+      part: chunks.find((c) => (c.needDetails || 0) > 0),
+      step: "Шаг 2 · детали уроков",
+      btn: `Загрузить детали уроков всех кварталов · ${detailsLeft}`,
+    };
+  }
+  return {
+    kind: "done" as const,
+    part: chunks[0] || null,
+    step: "Все явки и детали на месте",
+    btn: chunks.length ? `Перепроверить все кварталы · ${chunks.length}` : "Готово",
+  };
+}
+
 function GroupFillList({
   rows,
   school,
@@ -125,7 +152,7 @@ function GroupFillList({
   rows: FillRow[];
   school: string;
   busy?: boolean;
-  loading?: { groupId?: number; branchId?: number; periodKey?: string; label?: string };
+  loading?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string };
   grain: Grain;
   onLoad: (row: FillRow, part: FillPart, recheck?: boolean) => void;
   onRecheck: (row: FillRow, part: FillPart) => void;
@@ -139,7 +166,7 @@ function GroupFillList({
   const listRef = useRef<HTMLUListElement>(null);
   const q = query.trim().toLowerCase();
   const scoped = rows.filter((r) => !school || r.school === school);
-  const list = scoped.filter((r) => {
+  const raw = scoped.filter((r) => {
     const id = `${r.branchId}-${r.groupId}`;
     const chunks = packGrain(r.parts, clampGrain(r.age, grain));
     const doneN = chunks.filter((c) => c.done).length;
@@ -153,17 +180,21 @@ function GroupFillList({
     if (tab === "part") return Boolean(doneN) && !full;
     return true;
   });
+  const list = [...raw].sort((a, b) => {
+    const aid = `${a.branchId}-${a.groupId}`;
+    const bid = `${b.branchId}-${b.groupId}`;
+    if (open && aid === open) return -1;
+    if (open && bid === open) return 1;
+    return 0;
+  });
   const nAll = scoped.length;
   const nOk = scoped.filter((r) => r.complete && (r.total || 0) > 0).length;
   const nNo = scoped.filter((r) => !r.done).length;
   const nPart = Math.max(0, nAll - nOk - nNo);
   useEffect(() => {
     if (!loading?.groupId) return;
-    const id = `${loading.branchId}-${loading.groupId}`;
-    setOpen(id);
-    const el = listRef.current?.querySelector(`[data-gid="${id}"]`);
-    el?.scrollIntoView({ block: "nearest" });
-  }, [loading?.groupId, loading?.branchId, loading?.periodKey]);
+    setOpen(`${loading.branchId}-${loading.groupId}`);
+  }, [loading?.groupId, loading?.branchId]);
   if (!scoped.length) return <p className="mt-3 text-sm text-muted">Нет групп в этом фильтре.</p>;
   return (
     <div className="mt-3">
@@ -204,10 +235,10 @@ function GroupFillList({
           const active = loading && loading.groupId === row.groupId && loading.branchId === row.branchId;
           const full = Boolean(row.complete) && total > 0 && doneN >= total && !chunks.some((c) => c.weak);
           const shown = open === id;
-          const nxt = nextRecheckPart(row, grain);
-          const never = !doneN && !chunks.some((c) => c.weak);
+          const wiz = nextWizard(chunks);
           const detailsLeft = chunks.reduce((s, c) => s + (c.needDetails || 0), 0);
-          const loadLabel = active ? loading?.label || chunks.find((c) => c.key === loading?.periodKey)?.label || nxt?.label || "" : "";
+          const loadKind = active ? loading?.kind || "group" : "";
+          const loadLabel = active ? loading?.label || chunks.find((c) => c.key === loading?.periodKey)?.label || wiz.part?.label || "" : "";
           return (
             <li key={id} data-gid={id} className={cn("rounded-2xl bg-white p-3 ring-1", full ? "ring-emerald-300" : active ? "ring-black" : "ring-black/8")}>
               <button type="button" className="w-full text-left" onClick={() => setOpen(shown ? "" : id)}>
@@ -242,36 +273,31 @@ function GroupFillList({
                   <div className={cn("h-1.5 rounded-full", full ? "bg-emerald-600" : "bg-black")} style={{ width: `${pct}%` }} />
                 </div>
                 <p className="mt-1 text-[0.72rem] text-muted">
-                  {active ? `сейчас ${loadLabel || "порция"}…` : [row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
+                  {active
+                    ? loadKind === "details"
+                      ? `сейчас детали уроков${loadLabel ? ` · ${loadLabel}` : ""}…`
+                      : `сейчас явки · ${loadLabel || "порция"}…`
+                    : [row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
                   {row.lessons ? ` · ${row.lessons} зан.` : ""}
                   {row.weight ? ` · ${row.weight}` : ""}
                   {row.archived ? " · архив" : ""}
                 </p>
               </button>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <p className="mt-2 text-[0.78rem] font-semibold">{active ? (loadKind === "details" ? "Сейчас · детали уроков" : `Сейчас · ${loadLabel}`) : wiz.step}</p>
+              <div className="mt-1 flex flex-wrap gap-2">
                 <button
                   type="button"
                   disabled={busy && !active}
-                  className="h-8 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
+                  className="h-8 rounded-full bg-black px-3 text-[0.8rem] font-semibold text-white disabled:opacity-50"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (full) onRecheckAll(row);
-                    else if (nxt) onRecheck(row, nxt);
+                    setOpen(id);
+                    if (wiz.kind === "load" && wiz.part) onLoad(row, wiz.part, Boolean(wiz.part.done || wiz.part.weak));
+                    else if (wiz.kind === "details") onDetails(row);
+                    else onRecheckAll(row);
                   }}
                 >
-                  {active
-                    ? `Сейчас ${loadLabel}`
-                    : never
-                      ? nxt
-                        ? `Загрузить ${nxt.label}`
-                        : "Загрузить квартал"
-                      : full
-                        ? `Перепроверить все кварталы · ${chunks.length}`
-                        : nxt?.weak
-                          ? `Загрузить ещё раз ${nxt.label}`
-                          : nxt
-                            ? `${nxt.done ? "Перепроверить" : "Загрузить"} ${nxt.label}`
-                            : "Загрузить квартал"}
+                  {active ? (loadKind === "details" ? `Загружаю детали${loadLabel ? ` · ${loadLabel}` : ""}` : `Загружаю явки · ${loadLabel}`) : wiz.btn}
                 </button>
                 {active ? (
                   <button
@@ -284,78 +310,114 @@ function GroupFillList({
                   >
                     Стоп
                   </button>
-                ) : null}
-                {full || detailsLeft > 0 ? (
+                ) : wiz.kind === "done" && detailsLeft === 0 ? null : wiz.kind !== "details" && detailsLeft > 0 ? (
                   <button
                     type="button"
                     disabled={busy}
                     className="h-8 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
                     onClick={(e) => {
                       e.stopPropagation();
+                      setOpen(id);
                       onDetails(row);
                     }}
                   >
-                    {detailsLeft ? `Загрузить детали уроков всех кварталов · ${detailsLeft}` : "Детали уроков всех кварталов загружены"}
+                    Загрузить детали уроков всех кварталов · {detailsLeft}
+                  </button>
+                ) : wiz.kind === "details" ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="h-8 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpen(id);
+                      onRecheckAll(row);
+                    }}
+                  >
+                    Перепроверить все кварталы · {chunks.length}
                   </button>
                 ) : null}
               </div>
               {shown ? (
                 <div className="mt-2 grid gap-1 sm:grid-cols-2">
                   {chunks.map((c) => {
-                    const spinning = active && loading?.periodKey === c.key;
+                    const spinJ = active && loadKind !== "details" && loading?.periodKey === c.key;
+                    const spinD = active && loadKind === "details" && (!loading?.periodKey || loading.periodKey === c.key);
                     const loaded = Boolean(c.done);
                     const verified = Boolean(c.rechecked);
                     const detailsOk = loaded && !(c.needDetails || 0);
                     return (
-                      <div key={c.key} className="space-y-1">
-                        <button
-                          type="button"
-                          disabled={busy}
-                          className={cn(
-                            "w-full rounded-xl px-2.5 py-2 text-left text-sm ring-1 disabled:opacity-70",
-                            c.weak ? "bg-amber-50 ring-amber-300" : loaded ? "bg-emerald-50 ring-emerald-200" : spinning ? "bg-black/5 ring-black" : "bg-white ring-black/10 hover:bg-black/[0.03]",
+                      <div
+                        key={c.key}
+                        className={cn(
+                          "space-y-1 rounded-xl px-2.5 py-2 ring-1",
+                          c.weak ? "bg-amber-50 ring-amber-300" : loaded ? "bg-emerald-50 ring-emerald-200" : spinJ ? "bg-black/5 ring-black" : "bg-white ring-black/10",
+                        )}
+                      >
+                        <p className="font-medium text-sm">{c.label}</p>
+                        <div className="text-[0.72rem] leading-snug">
+                          {spinJ ? (
+                            <span className="text-muted">Загружаю явки {c.label}… пакет идёт из Alfa</span>
+                          ) : spinD && (c.needDetails || 0) > 0 ? (
+                            <span className="text-muted">Загружаю детали уроков · {c.label}…</span>
+                          ) : (
+                            <>
+                              <CheckLine on={loaded} text={`${c.label} загружен`} />
+                              <CheckLine on={verified} text={`${c.label} перепроверен`} />
+                              <CheckLine on={verified} text="в этом квартале дубликатов нет" />
+                              {loaded ? <CheckLine on={detailsOk} text={detailsOk ? `детали ${c.label} загружены` : `детали ${c.label} не загружены · ${c.needDetails}`} /> : <CheckLine on={false} text={`Загрузить ${c.label}`} />}
+                            </>
                           )}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onLoad(row, c, Boolean(c.done || c.weak));
-                          }}
-                        >
-                          <span className="block font-medium">
-                            {spinning ? `Загружаю ${c.label}…` : c.label}
-                          </span>
-                          <span className="mt-1 block text-[0.72rem] leading-snug">
-                            {spinning ? (
-                              <span className="text-muted">подождите, пакет идёт из Alfa</span>
-                            ) : (
-                              <>
-                                {!loaded && !c.weak ? <CheckLine on={false} text={`Загрузить ${c.label}`} /> : null}
-                                <CheckLine on={loaded} text={`${c.label} загружен`} />
-                                <CheckLine on={verified} text={`${c.label} перепроверен`} />
-                                <CheckLine on={verified} text="в этом квартале дубликатов нет" />
-                                {loaded ? <CheckLine on={detailsOk} text={detailsOk ? `детали ${c.label} загружены` : `детали ${c.label} не загружены · ${c.needDetails}`} /> : null}
-                              </>
-                            )}
-                          </span>
-                          <span className="mt-1 block text-[0.72rem] text-muted">
-                            {c.lessons ? `${c.lessons} зан.` : loaded ? "занятий за квартал нет" : "ещё не загружали"}
-                            {c.at ? ` · ${ruAt(c.at)}` : ""}
-                          </span>
-                          {c.weak ? <span className="mt-0.5 block text-[0.72rem] text-amber-900">пакет оборвался — нажмите клетку, чтобы загрузить ещё раз</span> : null}
-                          {c.err && !c.done ? <span className="mt-0.5 block text-[0.72rem] text-rose-800">{c.err}</span> : null}
-                        </button>
-                        {loaded && (c.needDetails || 0) > 0 ? (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            className="h-8 w-full rounded-lg bg-white text-[0.72rem] font-semibold ring-1 ring-black/10"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDetails(row, c);
-                            }}
-                          >
-                            Загрузить детали уроков · {c.label} · {c.needDetails}
-                          </button>
-                        ) : null}
+                        </div>
+                        <p className="text-[0.72rem] text-muted">
+                          {c.lessons ? `${c.lessons} зан.` : loaded ? "занятий за квартал нет" : "ещё не загружали"}
+                          {c.at ? ` · ${ruAt(c.at)}` : ""}
+                        </p>
+                        {c.weak ? <p className="text-[0.72rem] text-amber-900">пакет оборвался — нажмите «Загрузить ещё раз»</p> : null}
+                        {c.err && !c.done ? <p className="text-[0.72rem] text-rose-800">{c.err}</p> : null}
+                        <div className="flex flex-col gap-1 pt-1">
+                          {!loaded || c.weak ? (
+                            <button
+                              type="button"
+                              disabled={busy && !spinJ}
+                              className="h-8 rounded-lg bg-black px-2 text-[0.72rem] font-semibold text-white disabled:opacity-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpen(id);
+                                onLoad(row, c, Boolean(c.weak));
+                              }}
+                            >
+                              {spinJ ? "Загружаю явки…" : c.weak ? `Загрузить ещё раз ${c.label}` : `Загрузить явки · ${c.label}`}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={busy && !spinJ}
+                              className="h-8 rounded-lg bg-white px-2 text-[0.72rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpen(id);
+                                onLoad(row, c, true);
+                              }}
+                            >
+                              {spinJ ? "Перепроверяю явки…" : `Перепроверить явки · ${c.label}`}
+                            </button>
+                          )}
+                          {loaded && (c.needDetails || 0) > 0 ? (
+                            <button
+                              type="button"
+                              disabled={busy && !spinD}
+                              className="h-8 rounded-lg bg-white px-2 text-[0.72rem] font-semibold ring-1 ring-violet-300 disabled:opacity-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpen(id);
+                                onDetails(row, c);
+                              }}
+                            >
+                              {spinD ? "Загружаю детали…" : `Загрузить детали уроков · ${c.label} · ${c.needDetails}`}
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     );
                   })}
@@ -497,7 +559,7 @@ export function AdminCrmSettings() {
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
   const [openMiss, setOpenMiss] = useState<"g" | "j1" | "j2" | "c1" | "c2" | "">("");
-  const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number; periodKey?: string; label?: string } | null>(null);
+  const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string } | null>(null);
   const stopSchool = useRef(false);
   const [schoolRun, setSchoolRun] = useState<{ cur: string; n: number; total: number } | null>(null);
   const dragId = useRef(0);
@@ -727,7 +789,7 @@ export function AdminCrmSettings() {
   }) {
     setBusy(true);
     if (opts.kind === "group" || opts.kind === "details") {
-      setFillLoading({ groupId: opts.groupId || 0, branchId: opts.branchId || 0, periodKey: opts.periodKey || "", label: opts.periodLabel || "" });
+      setFillLoading({ groupId: opts.groupId || 0, branchId: opts.branchId || 0, periodKey: opts.periodKey || "", label: opts.periodLabel || "", kind: opts.kind });
     }
     try {
       const res = (await adminSchedule({
@@ -1270,7 +1332,7 @@ export function AdminCrmSettings() {
                   }
                 />
                 <p className="mt-2 text-[0.72rem] text-muted">
-                  ☐ загрузить · ☑ загружен · ☑ перепроверен · ☑ дубликатов нет. Клетка квартала — явки. «Загрузить детали уроков всех кварталов» — темы, ДЗ и комментарии.
+                  Мастер: шаг 1 — загрузить явки каждого квартала, шаг 2 — детали уроков. Карточка не уезжает. Чеклист не кнопка: явки и детали — отдельные кнопки.
                 </p>
               </section>
 
