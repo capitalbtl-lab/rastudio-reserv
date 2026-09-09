@@ -197,10 +197,11 @@ export async function inboundJournalGroup(
       }
     }
   }
-  if (opts?.lite) {
+  const windowed = Boolean(opts?.dateFrom && opts?.dateTo);
+  if (opts?.lite || windowed) {
     await pull(3, dateFrom, dateTo, 4, 50);
-    await pull(1, dateFrom, dateTo, 2, 50);
-    await pull(2, dateFrom, dateTo, 2, 50);
+    await pull(1, dateFrom, dateTo, 1, 50);
+    await pull(2, dateFrom, dateTo, 1, 50);
   } else {
     await pull(3, dateFrom, dateTo, 10, 100);
     await pull(1, dateFrom, dateTo, 8, 100);

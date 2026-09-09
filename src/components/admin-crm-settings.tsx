@@ -41,74 +41,74 @@ type MissPack = {
   items: { id?: number; name: string; extra?: string; groupId?: number; branchId?: number; school?: string; archived?: boolean }[];
 };
 
-function GroupStatusList({
-  miss,
-  done,
+type FillRow = {
+  groupId?: number;
+  branchId?: number;
+  name: string;
+  school?: string;
+  extra?: string;
+  archived?: boolean;
+  lessons?: number;
+  done?: number;
+  total?: number;
+  next?: string;
+  from?: string;
+  weight?: string;
+  err?: string;
+};
+
+function GroupFillList({
+  rows,
   school,
   busy,
+  loading,
   onLoad,
 }: {
-  miss?: MissPack;
-  done?: MissPack;
+  rows: FillRow[];
   school: string;
   busy?: boolean;
-  onLoad: (row: MissPack["items"][number]) => void;
+  loading?: { groupId?: number; branchId?: number };
+  onLoad: (row: FillRow) => void;
 }) {
-  const take = (pack?: MissPack) => (pack?.items || []).filter((r) => !school || r.school === school);
-  const missRows = take(miss);
-  const doneRows = take(done);
-  const missMore = school ? 0 : miss?.more || 0;
-  const doneMore = school ? 0 : done?.more || 0;
+  const list = rows.filter((r) => !school || r.school === school);
+  if (!list.length) return <p className="mt-3 text-sm text-muted">Нет групп в этом фильтре.</p>;
   return (
-    <div className="mt-3 grid gap-3 md:grid-cols-2">
-      <div className="rounded-xl bg-white p-3 ring-1 ring-rose-200">
-        <p className="text-sm font-semibold text-rose-800">Ещё нет · {missRows.length + missMore}</p>
-        {missRows.length ? (
-          <ul className="mt-2 max-h-72 space-y-0.5 overflow-auto text-sm">
-            {missRows.map((row) => (
-              <li key={`m-${row.branchId}-${row.groupId}`}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="w-full rounded-lg px-2 py-1.5 text-left hover:bg-rose-50 disabled:opacity-50"
-                  onClick={() => onLoad(row)}
-                >
-                  <span className="font-medium">{row.name}</span>
-                  <span className="mt-0.5 block text-[0.72rem] text-muted">
-                    {row.school}
-                    {row.archived ? " · архив" : ""}
-                    {row.extra ? ` · ${row.extra}` : ""}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-2 text-sm text-muted">Все выбранные группы уже с журналом.</p>
-        )}
-        {missMore ? <p className="mt-1 text-[0.72rem] text-muted">и ещё {missMore}</p> : null}
-      </div>
-      <div className="rounded-xl bg-white p-3 ring-1 ring-emerald-200">
-        <p className="text-sm font-semibold text-emerald-800">Уже есть · {doneRows.length + doneMore}</p>
-        {doneRows.length ? (
-          <ul className="mt-2 max-h-72 space-y-0.5 overflow-auto text-sm">
-            {doneRows.map((row) => (
-              <li key={`d-${row.branchId}-${row.groupId}`} className="rounded-lg px-2 py-1.5">
+    <ul className="mt-3 max-h-[28rem] space-y-1 overflow-auto">
+      {list.map((row) => {
+        const total = row.total || 12;
+        const done = row.done || 0;
+        const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+        const active = loading && loading.groupId === row.groupId && loading.branchId === row.branchId;
+        return (
+          <li key={`${row.branchId}-${row.groupId}`}>
+            <button
+              type="button"
+              disabled={busy}
+              className={cn("w-full rounded-xl bg-white px-3 py-2 text-left ring-1 ring-black/8 hover:bg-black/[0.03] disabled:opacity-50", active && "ring-black")}
+              onClick={() => onLoad(row)}
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="font-medium">{row.name}</span>
-                <span className="mt-0.5 block text-[0.72rem] text-muted">
-                  {row.school}
-                  {row.archived ? " · архив" : ""}
-                  {row.extra ? ` · ${row.extra}` : ""}
+                <span className="text-[0.72rem] tabular-nums text-muted">
+                  {done}/{total} полугодий
+                  {row.weight ? ` · ${row.weight}` : ""}
                 </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-2 text-sm text-muted">Пока ни одной группы не загрузили.</p>
-        )}
-        {doneMore ? <p className="mt-1 text-[0.72rem] text-muted">и ещё {doneMore}</p> : null}
-      </div>
-    </div>
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-black/10">
+                <div className={cn("h-1.5 rounded-full", pct >= 100 ? "bg-emerald-600" : "bg-black")} style={{ width: `${pct}%` }} />
+              </div>
+              <p className="mt-1 text-[0.72rem] text-muted">
+                {active ? `грузим ${row.next || "полугодие"}…` : row.from}
+                {row.lessons ? ` · ${row.lessons} зан.` : ""}
+                {row.next && !active ? ` · дальше ${row.next}` : ""}
+                {row.archived ? " · архив" : ""}
+              </p>
+              {row.err ? <p className="mt-0.5 text-[0.72rem] text-rose-800">{row.err}</p> : null}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -211,13 +211,14 @@ export function AdminCrmSettings() {
     students?: { all: number; live: number; archive: number };
     linked?: boolean;
     progress?: {
-      groups?: { total: number; done: number; miss?: MissPack; doneList?: MissPack };
+      groups?: { total: number; done: number; periods?: number; miss?: MissPack; doneList?: MissPack; rows?: FillRow[] };
       live?: { total: number; journalDone: number; cardDone: number; missJournal?: MissPack; missCard?: MissPack };
       archive?: { total: number; journalDone: number; cardDone: number; missJournal?: MissPack; missCard?: MissPack };
     };
   } | null>(null);
   const [journalSchool, setJournalSchool] = useState("");
   const [openMiss, setOpenMiss] = useState<"g" | "j1" | "j2" | "c1" | "c2" | "">("");
+  const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number } | null>(null);
   const dragId = useRef(0);
 
   function applyLink(link: {
@@ -412,6 +413,9 @@ export function AdminCrmSettings() {
     branchId?: number;
   }) {
     setBusy(true);
+    if (opts.kind === "group" || opts.kind === "school") {
+      setFillLoading({ groupId: opts.groupId || 0, branchId: opts.branchId || 0 });
+    }
     try {
       const res = (await adminSchedule({
         data: {
@@ -430,6 +434,7 @@ export function AdminCrmSettings() {
       setMsg(e instanceof Error ? e.message : "Журнал не ответил.");
     } finally {
       setBusy(false);
+      setFillLoading(null);
     }
   }
 
@@ -727,7 +732,7 @@ export function AdminCrmSettings() {
 
       <Card
         title="Загрузить историю из Alfa"
-        hint="Три списка. Зелёное — уже на сайте. Красное — ещё нет. Кнопка догружает пачку, не всё сразу."
+        hint="Группы грузятся по полугодиям. Полоска у группы — сколько полугодий уже есть. «Есть с …» — с какого месяца есть занятия."
       >
         {(() => {
           const offline = alfaMode === "offline";
@@ -738,8 +743,9 @@ export function AdminCrmSettings() {
 
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">1. Занятия в группах</p>
-                <p className="mt-1 text-sm text-muted">Кто пришёл, кто пропустил, тема и ДЗ в журнале группы.</p>
+                <p className="mt-1 text-sm text-muted">Одно полугодие за нажатие. Тяжёлая группа — много занятий, лёгкая — мало или пусто.</p>
                 <ProgressBar done={p?.groups?.done || 0} total={p?.groups?.total || 0} />
+                <p className="mt-1 text-[0.72rem] text-muted">Полоска сверху — сколько групп закрыли все {p?.groups?.periods || 12} полугодий.</p>
                 <label className="mt-3 block text-sm font-semibold">
                   Только школа
                   <select
@@ -761,21 +767,30 @@ export function AdminCrmSettings() {
                     type="button"
                     className="h-10 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
                     disabled={busy || offline}
-                    onClick={() => void runJournal({ kind: "school", school: journalSchool })}
+                    onClick={() => {
+                      const rows = (p?.groups?.rows || []).filter((r) => !journalSchool || r.school === journalSchool);
+                      const next = rows.find((r) => (r.done || 0) < (r.total || 12));
+                      void runJournal({
+                        kind: next ? "group" : "school",
+                        school: journalSchool,
+                        groupId: Number(next?.groupId) || 0,
+                        branchId: Number(next?.branchId) || 0,
+                      });
+                    }}
                   >
-                    {busy ? "Загружаю…" : journalSchool ? `Загрузить группу «${journalSchool}»` : "Загрузить следующую группу"}
+                    {busy ? "Загружаю полугодие…" : "Загрузить следующее полугодие"}
                   </button>
                 </div>
-                <GroupStatusList
-                  miss={p?.groups?.miss}
-                  done={p?.groups?.doneList}
+                <GroupFillList
+                  rows={p?.groups?.rows || []}
                   school={journalSchool}
                   busy={busy || offline}
+                  loading={fillLoading || undefined}
                   onLoad={(row) =>
                     void runJournal({ kind: "group", groupId: Number(row.groupId) || 0, branchId: Number(row.branchId) || 0 })
                   }
                 />
-                <p className="mt-2 text-[0.72rem] text-muted">Одна группа за нажатие. Если Alfa ответила — имя уходит в зелёный. Если нет — сверху будет причина.</p>
+                <p className="mt-2 text-[0.72rem] text-muted">Нажмите группу — догрузится её следующее полугодие. Кнопка выше берёт ту, где меньше всего загружено.</p>
               </section>
 
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
