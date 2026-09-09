@@ -12,7 +12,7 @@ function fileOf() {
   return join(process.cwd(), "storage", "crm-packet-queue.json");
 }
 
-const g = globalThis as { __raCrmQueueBusy?: boolean; __raCrmLastKind?: string; __raNightGroups?: boolean };
+const g = globalThis as { __raCrmQueueBusy?: boolean; __raCrmLastKind?: string; __raNightGroups?: boolean; __raAlfaIdle?: ReturnType<typeof setInterval> };
 
 function loadQueue(): CrmQueueState {
   try {
@@ -351,10 +351,31 @@ export async function ensureAndTick(opts?: { force?: boolean; offset?: number | 
   }
   if (wantAlfaPullChannel("lessons") && journalStale() && !opts?.force) enqueueJournalOverlay(false);
   if (wantAlfaPullChannel("lessons") && lessonsAttendStale() && !opts?.force) enqueueLessonsOverlay(false);
-  const take = Number(opts?.take) || 3;
-  const res = await tickCrmQueue(take, { skipJournal: true });
+  const res = await tickCrmQueue(1);
   kickBackground();
   return { ...res, fromCache: false, total: Number(res.total) || total };
+}
+
+/** Фон: один пакет за раз, без пачки на галочке. Журнал тоже идёт — иначе очередь копит journal и не разбирает. */
+export function startAlfaIdleTick() {
+  if (process.env.NODE_ENV === "test") return;
+  if (g.__raAlfaIdle) return;
+  g.__raAlfaIdle = setInterval(() => {
+    void idleAlfaTick();
+  }, 20_000);
+  setTimeout(() => void idleAlfaTick(), 8000);
+}
+
+async function idleAlfaTick() {
+  if (!alfaLinkedNow()) return;
+  if (g.__raCrmQueueBusy || g.__raNightGroups) return;
+  kickBackground();
+  const q = loadQueue();
+  if (!q.packets.length) {
+    void import("./crm-export-queue").then((m) => m.tickExportQueue(1, undefined, { lean: true })).catch(() => null);
+    return;
+  }
+  await tickCrmQueue(1).catch(() => null);
 }
 
 function kickBackground() {

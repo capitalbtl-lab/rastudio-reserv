@@ -67,6 +67,9 @@ export function saveAlfaLink(raw: AlfaLinkMode | Partial<AlfaLinkState> | string
   };
   mkdirSync(dirname(fileOf()), { recursive: true });
   writeFileSync(fileOf(), JSON.stringify(next, null, 0), "utf8");
+  if (next.mode !== "offline") {
+    void import("./crm-packet-queue").then((m) => m.startAlfaIdleTick()).catch(() => null);
+  }
   return next;
 }
 

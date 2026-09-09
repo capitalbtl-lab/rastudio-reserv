@@ -108,6 +108,7 @@ restore_media
 trap - EXIT
 
 pm2 stop rastudio >/dev/null 2>&1 || true
+fuser -k 3000/tcp >/dev/null 2>&1 || true
 if [ -d "$ROOT/.output" ]; then
   rm -rf "$ROOT/.output.bak"
   mv "$ROOT/.output" "$ROOT/.output.bak"
