@@ -11,7 +11,7 @@ import { allDossierCrmIds, findDossier, dossiersInGroup } from "./dossiers";
 import { loadGroupCard, loadCustomerCalendar, saveGroupCard } from "./group-cards";
 import { customerSyncOf } from "./crm-customer-sync";
 import { isPayJournalComplete } from "./crm-pay";
-import { journalPeriods, journalChunks, inferredPeriodKeys, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, type Grain } from "./crm-journal-periods";
+import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, type Grain } from "./crm-journal-periods";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -203,7 +203,7 @@ function groupLife(g: JournalPullGroup) {
 export function groupFillRow(g: JournalPullGroup) {
   const periods = journalPeriods();
   const card = loadGroupCard(g.branchId, g.groupId);
-  const done = inferredPeriodKeys(card?.calendar, card?.journalFill?.done);
+  const done = pulledPeriodKeys(card?.journalFill);
   const span = spanOf(card?.calendar);
   const fail = card?.journalFill?.fail || {};
   const life = groupLife(g);
@@ -373,17 +373,20 @@ export function journalPullState() {
 function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch: { ok: boolean; err?: string }) {
   const card = loadGroupCard(branchId, gid);
   if (!card) return null;
-  const done = inferredPeriodKeys(card.calendar, card.journalFill?.done);
+  const pulled = { ...(card.journalFill?.pulled || {}) };
+  const done = pulledPeriodKeys({ done: card.journalFill?.done, pulled });
   const fail = { ...(card.journalFill?.fail || {}) };
+  const at = new Date().toISOString();
   for (const key of keys) {
     if (patch.ok) {
+      pulled[key] = at;
       if (!done.includes(key)) done.push(key);
       delete fail[key];
     } else if (patch.err) {
       fail[key] = patch.err;
     }
   }
-  const next = { ...card, journalFill: { done, fail }, journalAt: new Date().toISOString() };
+  const next = { ...card, journalFill: { done: [...new Set([...done, ...Object.keys(pulled)])], fail, pulled }, journalAt: at };
   saveGroupCard(next);
   return next;
 }
@@ -562,7 +565,7 @@ export async function journalPull(opts: {
       return { ok: false as const, error: store.note, more: false, ...journalPullState() };
     }
     const card = loadGroupCard(hit.branchId, hit.groupId);
-    const doneKeys = inferredPeriodKeys(card?.calendar, card?.journalFill?.done);
+    const doneKeys = pulledPeriodKeys(card?.journalFill);
     const chunksAll = journalChunks(grain);
     const life = groupLife(hit);
     const known = Boolean(life.from || life.to);
@@ -582,7 +585,8 @@ export async function journalPull(opts: {
     store.note = res.extra;
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: res.count, scanned: 1, more: Boolean(chunks.some((c) => c.key !== picked.key && !chunkDone(c, inferredPeriodKeys(loadGroupCard(hit.branchId, hit.groupId)?.calendar, loadGroupCard(hit.branchId, hit.groupId)?.journalFill?.done)))), ...journalPullState() };
+    const afterFill = pulledPeriodKeys(loadGroupCard(hit.branchId, hit.groupId)?.journalFill);
+    return { ok: true as const, extra: store.note, count: res.count, scanned: 1, more: Boolean(chunks.some((c) => c.key !== picked.key && !chunkDone(c, afterFill))), ...journalPullState() };
   }
 
   const group = selectedGid ? { groupId: selectedGid, branchId: selectedBid || 1 } : undefined;

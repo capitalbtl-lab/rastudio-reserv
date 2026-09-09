@@ -170,7 +170,15 @@ function GroupFillList({
                         {c.label}
                       </span>
                       <span className="block text-[0.72rem] text-muted">
-                        {spinning ? "загрузка…" : c.done ? (c.lessons ? `${c.lessons} зан. · загружено` : "проверено, занятий нет") : "нажмите, чтобы загрузить"}
+                        {spinning
+                          ? "загрузка…"
+                          : c.done
+                            ? c.lessons
+                              ? `${c.lessons} зан. · сверено с Alfa`
+                              : "сверено с Alfa, занятий нет"
+                            : c.lessons
+                              ? `на сайте ${c.lessons} зан. · нажмите, чтобы сверить`
+                              : "нажмите, чтобы загрузить"}
                       </span>
                       {c.err && !c.done ? <span className="mt-0.5 block text-[0.72rem] text-rose-800">{c.err}</span> : null}
                     </button>

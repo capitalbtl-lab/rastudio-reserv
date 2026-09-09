@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { journalPeriods, journalChunks, nextPeriod, periodOfDate, spanOf, expandPeriodKeys, chunkDone, groupAge, chunkOverlapsLife, lifeLabel } from "./crm-journal-periods.ts";
+import { journalPeriods, journalChunks, nextPeriod, periodOfDate, spanOf, expandPeriodKeys, chunkDone, groupAge, chunkOverlapsLife, lifeLabel, pulledPeriodKeys } from "./crm-journal-periods.ts";
 
 describe("ручной журнал с Alfa", () => {
   it("кварталы с конца, полугодие и год — пачки", () => {
@@ -25,6 +25,9 @@ describe("ручной журнал с Alfa", () => {
     assert.equal(chunkOverlapsLife({ from: "01.01.2024", to: "31.03.2024" }, "01.02.2026", "30.06.2026"), false);
     assert.equal(chunkOverlapsLife({ from: "01.04.2026", to: "30.06.2026" }, "01.02.2026", "30.06.2026"), true);
     assert.match(lifeLabel("01.02.2026", "30.06.2026"), /фев 2026/);
+    assert.deepEqual(pulledPeriodKeys({ done: ["2024q1", "2024q2", "2024q3", "2024q4"] }), []);
+    assert.deepEqual(pulledPeriodKeys({ done: ["2026q3"] }), ["2026q3"]);
+    assert.deepEqual(pulledPeriodKeys({ pulled: { "2026q1": "x" }, done: ["2026q1", "2026q2"] }).sort(), ["2026q1"]);
   });
 
   it("только кнопка группы и порция, фон сам не качает", () => {
@@ -33,7 +36,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /journalLife/);
     assert.match(pull, /lastLife/);
     assert.match(pull, /Определено/);
-    assert.match(pull, /chunkOverlapsLife/);
+    assert.match(pull, /pulledPeriodKeys/);
+    assert.match(pull, /journalFill: \{ done:/);
+    assert.doesNotMatch(pull, /inferredPeriodKeys\(card\?\.calendar/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /opts\?\.lite \|\| windowed/);
     assert.match(inbound, /date_from: ymd\(date_from\)/);

@@ -496,7 +496,7 @@ export async function inboundJournalChunk(offset = 0, _take = 1) {
     return { ok: true as const, done: true, next: 0, total: 0, extra: "без Alfa", ids: [] as number[], live: 0, fromCache: true };
   }
   const { journalPullGroups } = await import("./crm-journal-pull");
-  const { journalPeriods, inferredPeriodKeys, nextPeriod, inPeriod } = await import("./crm-journal-periods");
+  const { journalPeriods, pulledPeriodKeys, nextPeriod, inPeriod } = await import("./crm-journal-periods");
   const groups = journalPullGroups();
   const total = groups.length;
   if (!total) {
@@ -509,7 +509,7 @@ export async function inboundJournalChunk(offset = 0, _take = 1) {
     const idx = (start + i) % total;
     const g = groups[idx];
     const card0 = loadGroupCard(g.branchId, g.groupId);
-    const have = inferredPeriodKeys(card0?.calendar, card0?.journalFill?.done);
+    const have = pulledPeriodKeys(card0?.journalFill);
     const period = nextPeriod(have, periods);
     if (!period) continue;
     const res = await inboundJournalGroup(g.branchId, g.groupId, {
@@ -521,23 +521,26 @@ export async function inboundJournalChunk(offset = 0, _take = 1) {
     const ok = res.ok !== false;
     const card = loadGroupCard(g.branchId, g.groupId);
     if (card) {
-      const doneKeys = inferredPeriodKeys(card.calendar, card.journalFill?.done);
+      const pulled = { ...(card.journalFill?.pulled || {}) };
+      const doneKeys = pulledPeriodKeys({ done: card.journalFill?.done, pulled });
       const fail = { ...(card.journalFill?.fail || {}) };
+      const at = new Date().toISOString();
       if (ok) {
+        pulled[period.key] = at;
         if (!doneKeys.includes(period.key)) doneKeys.push(period.key);
         delete fail[period.key];
       } else {
         fail[period.key] = String(res.extra || "Alfa не ответила");
       }
-      saveGroupCard({ ...card, journalFill: { done: doneKeys, fail }, journalAt: new Date().toISOString() });
+      saveGroupCard({ ...card, journalFill: { done: [...new Set([...doneKeys, ...Object.keys(pulled)])], fail, pulled }, journalAt: at });
     }
     const n = (res.calendar || []).filter((l) => inPeriod(l.date, period.from, period.to)).length;
     const after = loadGroupCard(g.branchId, g.groupId);
-    const still = after ? nextPeriod(inferredPeriodKeys(after.calendar, after.journalFill?.done), periods) : null;
+    const still = after ? nextPeriod(pulledPeriodKeys(after.journalFill), periods) : null;
     const next = ok && still ? idx : (idx + 1) % total;
     const allDone = groups.every((row) => {
       const c = loadGroupCard(row.branchId, row.groupId);
-      return !nextPeriod(inferredPeriodKeys(c?.calendar, c?.journalFill?.done), periods);
+      return !nextPeriod(pulledPeriodKeys(c?.journalFill), periods);
     });
     stampJournalCursor(allDone ? total : next, total);
     return {

@@ -154,6 +154,15 @@ export function inferredPeriodKeys(calendar: { date?: string }[] | undefined, st
   return [...set];
 }
 
+/** Только явно снятые с Alfa порции. Календарь на диске не считается «загружено». */
+export function pulledPeriodKeys(fill?: { done?: string[]; pulled?: Record<string, string> } | null) {
+  const pulled = expandPeriodKeys(Object.keys(fill?.pulled || {}));
+  if (pulled.length) return pulled;
+  const stored = expandPeriodKeys(fill?.done);
+  if (stored.length === 1) return stored;
+  return [];
+}
+
 export function chunkDone(chunk: JournalChunk, done: string[]) {
   const have = new Set(done);
   return chunk.keys.every((k) => have.has(k));
