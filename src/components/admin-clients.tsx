@@ -1228,10 +1228,11 @@ export function AdminClients({
               {busy || groupLoading || funnelLoading ? "…" : view === "группы" ? `${shownGroups.length}` : funnelOn ? `${funnelShown.length}` : `${shown.length}${total > shown.length ? `/${total}` : ""}`}
             </span>
           </label>
-          <div className="flex h-10 items-center rounded-full bg-surface-2 p-1" data-sort-group="status" role="tablist" aria-label="Текущие или лиды">
+          <div className="flex h-10 items-center rounded-full bg-surface-2 p-1" data-sort-group="status" role="tablist" aria-label="Текущие, лиды или архив">
             {([
               ["учится", "Текущие", counts.учится],
               ["лид", "Лиды", counts.лид],
+              ["архив", "Архив", counts.архив],
             ] as const).map(([id, label, n]) => {
               const on = status === id;
               return (
@@ -1270,7 +1271,7 @@ export function AdminClients({
           <div className="flex h-10 items-center rounded-full bg-surface-2 p-1" data-sort-group="entity" role="tablist" aria-label="Группы или дети">
             {([
               ["группы", "Группы", status === "лид" ? (leadKeys ? shownGroups.length : "…") : groupOpts.length],
-              ["дети", "Дети", status === "лид" ? counts.лид : counts.учится],
+              ["дети", "Дети", status === "лид" ? counts.лид : status === "архив" ? counts.архив : counts.учится],
             ] as const).map(([id, label, n]) => {
               const on = id === "группы" ? view === "группы" : view === "дети";
               return (
