@@ -183,26 +183,71 @@ export function lessonRosterThin(hit?: { status?: number; pupils?: LessonPupil[]
   return false;
 }
 
-/** Цвет ячейки как в виджете посещений Alfa. */
-export type LessonTileTone = "today" | "done" | "missed" | "overdue" | "planned" | "cancelled";
+/** Цвет ячейки как легенда виджета посещений Alfa (14 статусов). */
+export type LessonTileTone =
+  | "today"
+  | "planned"
+  | "plannedFree"
+  | "plannedNoCtt"
+  | "prepaid"
+  | "donePaid"
+  | "doneDebt"
+  | "doneFree"
+  | "missDebt"
+  | "missFree"
+  | "missPaid"
+  | "overdue"
+  | "paused"
+  | "prepaidPaused"
+  | "cancelled";
+
+export type LessonTileMark = "check" | "times" | "question" | "pause" | "minus" | "";
+
+function isTrialLike(l: { type?: string; typeId?: number }) {
+  return Number(l.typeId) === 3 || /пробн/i.test(String(l.type || ""));
+}
+
+export function lessonTileMark(tone: LessonTileTone): LessonTileMark {
+  if (tone === "donePaid" || tone === "doneDebt" || tone === "doneFree") return "check";
+  if (tone === "missDebt" || tone === "missFree" || tone === "missPaid") return "times";
+  if (tone === "overdue") return "question";
+  if (tone === "paused" || tone === "prepaidPaused") return "pause";
+  if (tone === "cancelled") return "minus";
+  return "";
+}
 
 export function lessonTileTone(
-  l: Pick<GroupCalLesson, "date" | "status" | "pupils" | "amount">,
+  l: Pick<GroupCalLesson, "date" | "status" | "pupils" | "amount" | "cttId" | "type" | "typeId">,
   today: string,
   customerId?: number,
 ): LessonTileTone {
   if (Number(l.status) === 2) return "cancelled";
   const ymd = String(l.date || "").slice(0, 10);
   const isToday = Boolean(ymd && ymd === today);
+  const trial = isTrialLike(l);
+  const mine = customerId ? (l.pupils || []).find((p) => Number(p.customerId) === customerId) : undefined;
+  const amount = Number(mine?.amount ?? l.amount) || 0;
+  const ctt = Number(mine?.cttId ?? l.cttId) || 0;
+  const reasonId = Number(mine?.reasonId) || 0;
+  const excused = reasonId === 2;
+  const free = trial || excused;
+
   if (Number(l.status) === 3) {
-    if (customerId) {
-      const mine = (l.pupils || []).find((p) => Number(p.customerId) === customerId);
-      if (mine && mine.attend === false && !(Number(mine.amount ?? l.amount) > 0)) return "missed";
+    if (mine && mine.attend === false) {
+      if (amount > 0) return "missPaid";
+      return "missFree";
     }
-    return isToday ? "today" : "done";
+    if (amount > 0) return isToday ? "today" : "donePaid";
+    if (free) return isToday ? "today" : "doneFree";
+    if (mine && amount <= 0 && !ctt && !free) return isToday ? "today" : "doneDebt";
+    return isToday ? "today" : "donePaid";
   }
+
   if (ymd && ymd < today) return "overdue";
   if (isToday) return "today";
+  if (trial) return "plannedFree";
+  if (mine && !ctt && !trial) return "plannedNoCtt";
+  if (ctt) return "prepaid";
   return "planned";
 }
 

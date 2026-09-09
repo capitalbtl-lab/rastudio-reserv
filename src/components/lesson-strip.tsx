@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Calendar } from "lucide-react";
+import { Calendar, Check, HelpCircle, MinusCircle, Pause, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { GroupCalLesson, LessonRosterPerson, LessonTileTone } from "@/data/crm-slots-core";
-import { mergeLessonRoster, lessonRestLeft, maskHm, maskRuDate, pupilNameOk, lessonTileTone } from "@/data/crm-slots-core";
+import type { GroupCalLesson, LessonRosterPerson, LessonTileMark, LessonTileTone } from "@/data/crm-slots-core";
+import { mergeLessonRoster, lessonRestLeft, maskHm, maskRuDate, pupilNameOk, lessonTileTone, lessonTileMark } from "@/data/crm-slots-core";
 import { adminSchedule } from "@/data/admin-schedule";
 import { RA_POP } from "@/data/admin-ui";
 import { RaSelect } from "@/components/ra-select";
@@ -73,12 +73,51 @@ function ruDate(iso: string) {
 
 const TILE_TONE: Record<LessonTileTone, string> = {
   today: "ra-today-tile text-white",
-  done: "bg-emerald-100 text-fg ring-1 ring-emerald-400/80",
-  missed: "bg-[#ffe08a] text-fg ring-1 ring-amber-500/80",
-  overdue: "bg-[#ffc9c9] text-fg ring-1 ring-rose-400/80",
-  planned: "bg-white text-fg ring-1 ring-neutral-500/55",
-  cancelled: "bg-neutral-200 text-neutral-400 ring-1 ring-neutral-300 line-through",
+  planned: "bg-[#f3f3f4] text-fg ring-1 ring-neutral-300",
+  plannedFree: "bg-[#fff3d6] text-fg ring-1 ring-[#f8ac59]/80",
+  plannedNoCtt: "bg-white text-fg ring-1 ring-neutral-400",
+  prepaid: "bg-[#d9f3ec] text-[#0e7c66] ring-1 ring-[#1ab394]/70",
+  donePaid: "bg-[#d9f3ec] text-fg ring-1 ring-[#1ab394]/80",
+  doneDebt: "bg-[#ffc9c9] text-[#c0392b] ring-1 ring-[#ed5565]/80",
+  doneFree: "bg-[#dff6f7] text-fg ring-1 ring-[#23c6c8]/80",
+  missDebt: "bg-[#ffc9c9] text-[#c0392b] ring-1 ring-[#ed5565]/80",
+  missFree: "bg-[#ffe08a] text-fg ring-1 ring-amber-500/80",
+  missPaid: "bg-[#ffe08a] text-[#c0392b] ring-1 ring-[#ed5565]/70",
+  overdue: "bg-[#f3f3f4] text-muted ring-1 ring-dashed ring-[#ed5565]",
+  paused: "bg-[#f3f3f4] text-neutral-400 ring-1 ring-neutral-300",
+  prepaidPaused: "bg-[#d9f3ec] text-neutral-500 ring-1 ring-[#1ab394]/40",
+  cancelled: "bg-[#f3f3f4] text-neutral-400 ring-1 ring-neutral-300",
 };
+
+const TILE_MARK_CLASS = "absolute top-0.5 left-1/2 z-[1] -translate-x-1/2 opacity-50";
+
+function TileMark({ mark, danger }: { mark: LessonTileMark; danger?: boolean }) {
+  if (!mark) return null;
+  const cls = cn(TILE_MARK_CLASS, danger ? "text-[#ed5565]" : "text-current");
+  if (mark === "check") return <Check className={cn(cls, "size-2.5")} strokeWidth={3} />;
+  if (mark === "times") return <X className={cn(cls, "size-2.5")} strokeWidth={3} />;
+  if (mark === "question") return <HelpCircle className={cn(cls, "size-2.5 text-[#ed5565]")} strokeWidth={2.5} />;
+  if (mark === "pause") return <Pause className={cn(cls, "size-2.5")} strokeWidth={2.5} />;
+  if (mark === "minus") return <MinusCircle className={cn(cls, "size-2.5")} strokeWidth={2.5} />;
+  return null;
+}
+
+const TILE_LEGEND: { tone: LessonTileTone; mark: LessonTileMark; danger?: boolean; label: string }[] = [
+  { tone: "planned", mark: "", label: "Запланирован" },
+  { tone: "plannedFree", mark: "", label: "Запланирован бесплатный" },
+  { tone: "plannedNoCtt", mark: "", label: "Запланирован без абонемента" },
+  { tone: "prepaid", mark: "", label: "Предоплачен" },
+  { tone: "donePaid", mark: "check", label: "Проведён и оплачен" },
+  { tone: "doneDebt", mark: "check", danger: true, label: "Проведён в долг" },
+  { tone: "missDebt", mark: "times", danger: true, label: "Пропуск в долг" },
+  { tone: "missFree", mark: "times", label: "Бесплатный пропуск" },
+  { tone: "missPaid", mark: "times", danger: true, label: "Пропуск оплач." },
+  { tone: "overdue", mark: "question", label: "Забыли провести?" },
+  { tone: "paused", mark: "pause", label: "Приостановлен клиентом" },
+  { tone: "cancelled", mark: "minus", label: "Отменён" },
+  { tone: "doneFree", mark: "check", label: "Проведен без списания (бесплатный)" },
+  { tone: "prepaidPaused", mark: "pause", label: "Предоплачен и приостановлен" },
+];
 
 function LessonTile({
   lesson: l,
@@ -97,8 +136,10 @@ function LessonTile({
 }) {
   const d = parseYmd(l.date);
   const tone = lessonTileTone(l, today, customerId);
-  const cancelled = tone === "cancelled";
+  const mark = lessonTileMark(tone);
+  const cancelled = tone === "cancelled" || tone === "paused" || tone === "prepaidPaused";
   const isToday = tone === "today";
+  const dangerMark = tone === "missPaid" || tone === "missDebt" || tone === "doneDebt";
   return (
     <div
       onMouseEnter={(e) => onEnter(e.currentTarget, l)}
@@ -112,10 +153,11 @@ function LessonTile({
       data-lesson-type={l.typeId || undefined}
       title={l.type ? `${l.type} ${l.from || ""}`.trim() : undefined}
       className={cn(
-        "flex h-[3.35rem] w-[2.76rem] min-w-[2.76rem] cursor-pointer flex-col items-center justify-center rounded-lg px-0.5 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
+        "relative flex h-[3.35rem] w-[2.76rem] min-w-[2.76rem] cursor-pointer flex-col items-center justify-center rounded-lg px-0.5 pt-2 text-center leading-tight shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
         TILE_TONE[tone],
       )}
     >
+      <TileMark mark={mark} danger={dangerMark} />
       {isToday ? (
         <>
           <span className="text-[0.83rem] font-semibold tabular-nums text-white">{d.getDate()}</span>
@@ -1125,6 +1167,7 @@ export function LessonStrip({
   const [conduct, setConduct] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [legendOpen, setLegendOpen] = useState(false);
   const pinRef = useRef(pin);
   pinRef.current = pin;
   const hideRef = useRef<number>(0);
@@ -1262,23 +1305,28 @@ export function LessonStrip({
           <LessonTile key={`${l.date}-${l.lessonId || l.from}`} lesson={l} today={today} customerId={customerId} onEnter={showTip} onLeave={hideTipSoon} onClick={clickTile} />
         ))}
       </div>
-      <p className="mt-2 flex flex-wrap items-center gap-3 text-[0.68rem] text-muted">
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-[3px] bg-emerald-100 ring-1 ring-emerald-400/80" /> проведён
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-[3px] bg-[#ffe08a] ring-1 ring-amber-500/80" /> не был, без списания
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-[3px] bg-[#ffc9c9] ring-1 ring-rose-400/80" /> не проведено
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-[3px] bg-white ring-1 ring-neutral-400" /> запланировано
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-[3px] bg-neutral-200 ring-1 ring-neutral-300" /> отменено
-        </span>
-      </p>
+      <div className="mt-2" data-op="lesson-legend">
+        <button
+          type="button"
+          className="text-[0.68rem] text-primary underline-offset-2 hover:underline"
+          onClick={() => setLegendOpen((v) => !v)}
+        >
+          {legendOpen ? "Скрыть легенду" : "Показать легенду"}
+        </button>
+        {legendOpen ? (
+          <div className="mt-2 grid grid-cols-1 gap-x-3 gap-y-1.5 sm:grid-cols-3" data-op="lesson-legend-list">
+            {TILE_LEGEND.map((row) => (
+              <span key={row.tone} className="inline-flex items-center gap-1.5 text-[0.68rem] text-muted">
+                <span className={cn("relative grid h-7 w-9 shrink-0 place-items-center rounded-[4px] text-[0.58rem] font-semibold", TILE_TONE[row.tone])}>
+                  <TileMark mark={row.mark} danger={row.danger} />
+                  <span className={cn(row.mark && "mt-1")}>01.01</span>
+                </span>
+                {row.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
       {pop && !edit
         ? createPortal(
             <div data-op="lesson-pop">
