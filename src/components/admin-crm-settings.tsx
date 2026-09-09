@@ -42,7 +42,7 @@ type MissPack = {
   items: { id?: number; name: string; extra?: string; groupId?: number; branchId?: number; school?: string; archived?: boolean }[];
 };
 
-type FillPart = { key: string; label: string; from?: string; to?: string; done?: boolean; lessons?: number; err?: string };
+type FillPart = { key: string; label: string; from?: string; to?: string; done?: boolean; weak?: boolean; lessons?: number; err?: string };
 
 type FillRow = {
   groupId?: number;
@@ -75,9 +75,10 @@ function packGrain(parts: FillPart[] | undefined, grain: Grain) {
     .map((c) => {
       const kids = c.keys.map((k) => byKey.get(k)).filter(Boolean) as FillPart[];
       const done = c.keys.filter((k) => have.has(k)).every((k) => byKey.get(k)?.done);
+      const weak = c.keys.some((k) => byKey.get(k)?.weak);
       const lessons = kids.reduce((s, p) => s + (p.lessons || 0), 0);
       const err = kids.find((p) => p.err)?.err || "";
-      return { key: c.key, label: c.label, from: c.from, to: c.to, done, lessons, err };
+      return { key: c.key, label: c.label, from: c.from, to: c.to, done, weak, lessons, err };
     });
 }
 
@@ -94,7 +95,8 @@ function GroupFillList({
   busy?: boolean;
   loading?: { groupId?: number; branchId?: number; periodKey?: string };
   grain: Grain;
-  onLoad: (row: FillRow, part: FillPart) => void;
+  onLoad: (row: FillRow, part: FillPart, recheck?: boolean) => void;
+  onRecheck: (row: FillRow) => void;
 }) {
   const list = rows.filter((r) => !school || r.school === school);
   const [open, setOpen] = useState("");
@@ -147,6 +149,19 @@ function GroupFillList({
                 {row.archived ? " · архив" : ""}
               </p>
             </button>
+            <div className="mt-2">
+              <button
+                type="button"
+                disabled={busy}
+                className="h-8 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRecheck(row);
+                }}
+              >
+                {active ? "Перепроверяю…" : "Перепроверить"}
+              </button>
+            </div>
             {shown ? (
               <div className="mt-2 grid gap-1 sm:grid-cols-2">
                 {chunks.map((c) => {
@@ -155,30 +170,32 @@ function GroupFillList({
                     <button
                       key={c.key}
                       type="button"
-                      disabled={busy || c.done}
+                      disabled={busy}
                       className={cn(
                         "rounded-xl px-2.5 py-2 text-left text-sm ring-1 disabled:opacity-70",
-                        c.done ? "bg-emerald-50 ring-emerald-200" : spinning ? "bg-black/5 ring-black" : "bg-white ring-black/10 hover:bg-black/[0.03]",
+                        c.weak ? "bg-amber-50 ring-amber-300" : c.done ? "bg-emerald-50 ring-emerald-200" : spinning ? "bg-black/5 ring-black" : "bg-white ring-black/10 hover:bg-black/[0.03]",
                       )}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (!c.done) onLoad(row, c);
+                        onLoad(row, c, Boolean(c.done || c.weak));
                       }}
                     >
                       <span className="block font-medium">
-                        {c.done ? "✓ " : spinning ? "… " : "○ "}
+                        {spinning ? "… " : c.weak ? "~ " : c.done ? "✓ " : "○ "}
                         {c.label}
                       </span>
                       <span className="block text-[0.72rem] text-muted">
                         {spinning
                           ? "загрузка…"
-                          : c.done
-                            ? c.lessons
-                              ? `${c.lessons} зан. · сверено с Alfa`
-                              : "сверено с Alfa, занятий нет"
-                            : c.lessons
-                              ? `на сайте ${c.lessons} зан. · нажмите, чтобы сверить`
-                              : "нажмите, чтобы загрузить"}
+                          : c.weak
+                            ? `${c.lessons ? `${c.lessons} зан. · ` : ""}пакет оборвался · нажмите ещё`
+                            : c.done
+                              ? c.lessons
+                                ? `${c.lessons} зан. · сверено · нажмите, чтобы перепроверить`
+                                : "сверено с Alfa · нажмите, чтобы перепроверить"
+                              : c.lessons
+                                ? `на сайте ${c.lessons} зан. · нажмите, чтобы сверить`
+                                : "нажмите, чтобы загрузить"}
                       </span>
                       {c.err && !c.done ? <span className="mt-0.5 block text-[0.72rem] text-rose-800">{c.err}</span> : null}
                     </button>
@@ -508,6 +525,7 @@ export function AdminCrmSettings() {
     branchId?: number;
     periodKey?: string;
     grain?: Grain;
+    recheck?: boolean;
   }) {
     setBusy(true);
     if (opts.kind === "group") {
@@ -525,6 +543,7 @@ export function AdminCrmSettings() {
           study: opts.study || "all",
           periodKey: opts.periodKey || "",
           grain: opts.grain || journalGrain,
+          recheck: Boolean(opts.recheck),
         } as never,
       })) as typeof journal & { ok?: boolean };
       if (res) setJournal(res);
@@ -927,13 +946,23 @@ export function AdminCrmSettings() {
                   busy={busy || offline}
                   loading={fillLoading || undefined}
                   grain={journalGrain}
-                  onLoad={(row, part) =>
+                  onLoad={(row, part, recheck) =>
                     void runJournal({
                       kind: "group",
                       groupId: Number(row.groupId) || 0,
                       branchId: Number(row.branchId) || 0,
                       periodKey: part.key,
                       grain: journalGrain,
+                      recheck,
+                    })
+                  }
+                  onRecheck={(row) =>
+                    void runJournal({
+                      kind: "group",
+                      groupId: Number(row.groupId) || 0,
+                      branchId: Number(row.branchId) || 0,
+                      grain: journalGrain,
+                      recheck: true,
                     })
                   }
                 />

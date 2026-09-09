@@ -152,9 +152,9 @@ function withPupilNames(lesson: GroupCalLesson): GroupCalLesson {
 export async function inboundJournalGroup(
   branch: number,
   gid: number,
-  opts?: { token?: string; slots?: CrmSlot[]; hold?: Set<number>; dateFrom?: string; dateTo?: string; defer?: boolean; deep?: boolean; lite?: boolean },
+  opts?: { token?: string; slots?: CrmSlot[]; hold?: Set<number>; dateFrom?: string; dateTo?: string; defer?: boolean; deep?: boolean; lite?: boolean; recheck?: boolean },
 ) {
-  if (!alfaLinkedNow() || !gid) return { ok: true as const, extra: "без Alfa", count: 0, calendar: [] as GroupCalLesson[] };
+  if (!alfaLinkedNow() || !gid) return { ok: true as const, extra: "без Alfa", count: 0, calendar: [] as GroupCalLesson[], capped: false };
   const slots = opts?.slots || (await import("./alfacrm-schedule")).listAdminSlots();
   const slot = slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid);
   const cached = loadGroupCard(branch, gid);
@@ -172,6 +172,7 @@ export async function inboundJournalGroup(
   const byKey = new Map<string, GroupCalLesson>();
   let alfaOk = 0;
   let lastErr = "";
+  let hitCap = false;
   async function pull(status: number, date_from: string, date_to: string, pages: number, pageSize: number) {
     for (let page = 0; page < pages; page++) {
       try {
@@ -191,24 +192,27 @@ export async function inboundJournalGroup(
           byKey.set(`${packed.lessonId || 0}|${packed.date}|${packed.from}`, withPupilNames(packed));
         }
         if (chunk.length < pageSize) break;
+        if (page === pages - 1) hitCap = true;
       } catch (e) {
         lastErr = e instanceof Error ? e.message.replace(/^alfacrm\s+/i, "") : "сеть";
+        if (alfaOk) hitCap = true;
         break;
       }
     }
   }
   const windowed = Boolean(opts?.dateFrom && opts?.dateTo);
+  const deepPages = Boolean(opts?.recheck);
   if (opts?.lite || windowed) {
-    await pull(3, dateFrom, dateTo, 4, 50);
-    await pull(1, dateFrom, dateTo, 1, 50);
-    await pull(2, dateFrom, dateTo, 1, 50);
+    await pull(3, dateFrom, dateTo, deepPages ? 8 : 4, 50);
+    await pull(1, dateFrom, dateTo, deepPages ? 3 : 1, 50);
+    await pull(2, dateFrom, dateTo, deepPages ? 3 : 1, 50);
   } else {
     await pull(3, dateFrom, dateTo, 10, 100);
     await pull(1, dateFrom, dateTo, 8, 100);
     await pull(2, dateFrom, dateTo, 4, 100);
   }
   if (!alfaOk) {
-    return { ok: false as const, extra: `«${ctx.groupName}»: Alfa не ответила${lastErr ? ` (${lastErr.slice(0, 80)})` : ""}`, count: 0, calendar: cached?.calendar || [] };
+    return { ok: false as const, extra: `«${ctx.groupName}»: Alfa не ответила${lastErr ? ` (${lastErr.slice(0, 80)})` : ""}`, count: 0, calendar: cached?.calendar || [], capped: true };
   }
   const pulled = [...byKey.values()];
   const hold = opts?.hold || pendingExportIds(["lesson.update", "lesson.create"]);
@@ -228,11 +232,11 @@ export async function inboundJournalGroup(
           rememberLessons(enriched.calendar);
           fanOutLessonWriteoffs(enriched.calendar);
         }
-        return { ok: true as const, extra: noteOf(enriched.calendar.length, `, детали ${enriched.filled}`), count: enriched.calendar.length, calendar: enriched.calendar, card: card0 };
+        return { ok: true as const, extra: noteOf(enriched.calendar.length, `, детали ${enriched.filled}`), count: enriched.calendar.length, calendar: enriched.calendar, card: card0, capped: hitCap };
       }
     }
     if (cached) saveGroupCard({ ...cached, calendar, journalAt: now, at: cached.at || now });
-    return { ok: true as const, extra: noteOf(calendar.length, calendar.length ? ", без изменений" : ""), count: calendar.length, calendar };
+    return { ok: true as const, extra: noteOf(calendar.length, calendar.length ? ", без изменений" : ""), count: calendar.length, calendar, capped: hitCap };
   }
   const card = {
     ...(cached || {
@@ -273,10 +277,10 @@ export async function inboundJournalGroup(
         rememberLessons(enriched.calendar);
         fanOutLessonWriteoffs(enriched.calendar);
       }
-      return { ok: true as const, extra: noteOf(enriched.calendar.length, `, детали ${enriched.filled}`), count: enriched.calendar.length, calendar: enriched.calendar, card };
+      return { ok: true as const, extra: noteOf(enriched.calendar.length, `, детали ${enriched.filled}`), count: enriched.calendar.length, calendar: enriched.calendar, card, capped: hitCap };
     }
   }
-  return { ok: true as const, extra: noteOf(calendar.length), count: calendar.length, calendar, card };
+  return { ok: true as const, extra: noteOf(calendar.length), count: calendar.length, calendar, card, capped: hitCap };
 }
 
 function isOneOffLesson(item: { lesson_type_id?: number; group_ids?: number[] }) {

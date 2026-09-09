@@ -36,14 +36,17 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /journalLife/);
     assert.match(pull, /lastLife/);
     assert.match(pull, /Определено/);
-    assert.match(pull, /pulledPeriodKeys/);
+    assert.match(pull, /recheck/);
+    assert.match(pull, /пакет оборвался|дозаписали/);
     assert.match(pull, /journalFill: \{ done:/);
     assert.doesNotMatch(pull, /inferredPeriodKeys\(card\?\.calendar/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
+    assert.match(inbound, /hitCap/);
     assert.match(inbound, /opts\?\.lite \|\| windowed/);
     assert.match(inbound, /date_from: ymd\(date_from\)/);
     assert.match(inbound, /date_to: ymd\(date_to\)/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
+    assert.match(ui, /Перепроверить/);
     assert.match(ui, /Определить сроки групп/);
     assert.match(ui, /lastLife/);
     assert.match(ui, /Определено/);
