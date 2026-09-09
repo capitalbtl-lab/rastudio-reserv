@@ -90,6 +90,12 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /История из Alfa/);
     assert.match(ui, /crm-settings-tab/);
     assert.match(ui, /w-fit shrink-0/);
+    assert.match(ui, /min-w-\[12.5rem\]/);
+    assert.match(ui, /Идёт загрузка/);
+    assert.match(ui, /Личный журнал на карточке ученика/);
+    assert.match(ui, /Кому из текущих нет ·/);
+    assert.match(pull, /child\?\.fio/);
+    assert.match(pull, /groupsOfStudent/);
     assert.doesNotMatch(ui, /BTN_LOAD_SM, "min-w-0 flex-1"/);
     assert.match(ui, /ra-progress-run/);
     assert.match(ui, /bg-primary/);

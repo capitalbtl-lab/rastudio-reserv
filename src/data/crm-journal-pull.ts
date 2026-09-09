@@ -251,7 +251,12 @@ const MISS_CAP = 40;
 
 function fioOf(cid: number) {
   const d = findDossier({ crmId: cid });
-  return String(d?.name || "").trim() || `клиент ${cid}`;
+  return String(d?.child?.fio || "").trim() || `клиент ${cid}`;
+}
+
+function groupsOfStudent(cid: number) {
+  const d = findDossier({ crmId: cid });
+  return (d?.groupLinks || []).map((g) => String(g.name || "").trim()).filter(Boolean);
 }
 
 function packList<T>(rows: T[], cap = MISS_CAP) {
@@ -412,10 +417,11 @@ export function journalPullProgress() {
       const journal = Boolean(sync.lessonsFull && sync.lessonsAttend) || groupsReady;
       const pays = isPayJournalComplete(p.cid);
       const name = fioOf(p.cid);
+      const gnames = own.map((g) => g.name).filter(Boolean).slice(0, 3).join(", ");
       if (journal) journalDone += 1;
-      else missJ.push({ id: p.cid, name, extra: own.length ? "группы ещё не сверены" : "нет полного журнала" });
+      else missJ.push({ id: p.cid, name, extra: gnames ? gnames : own.length ? "группы ещё не сверены" : "нет полного журнала" });
       if (journal && pays) cardDone += 1;
-      else missC.push({ id: p.cid, name, extra: journal ? "нет кассы" : own.length ? "группы ещё не сверены" : "нет явки" });
+      else missC.push({ id: p.cid, name, extra: journal ? "нет кассы" : gnames || (own.length ? "группы ещё не сверены" : "нет явки") });
     }
     return {
       total: people.length,
@@ -926,9 +932,17 @@ export async function journalPull(opts: {
   }
   const lessons = rows.reduce((s, r) => s + r.lessons, 0);
   const pays = rows.reduce((s, r) => s + r.pays, 0);
+  const who = study === "1" ? "текущие" : study === "2" ? "архив" : "ученики";
+  const names = picked.slice
+    .map((p) => {
+      const hit = rows.find((r) => r.cid === p.cid);
+      const g = groupsOfStudent(p.cid).slice(0, 2).join(", ");
+      return `${fioOf(p.cid)}${g ? ` · ${g}` : ""}${hit ? ` · ${hit.lessons} зан.` : ""}`;
+    })
+    .join("; ");
   store.note = balance
-    ? `карточки ${picked.start + 1}–${picked.start + picked.slice.length}/${people.length}: уроков ${lessons}, платежей ${pays}`
-    : `журналы ${picked.start + 1}–${picked.start + picked.slice.length}/${people.length}: уроков ${lessons}`;
+    ? `${who} ${picked.start + 1}–${picked.start + picked.slice.length}/${people.length}: уроков ${lessons}, платежей ${pays}. ${names}`
+    : `${who} ${picked.start + 1}–${picked.start + picked.slice.length}/${people.length}: ${names || `уроков ${lessons}`}`;
   if (picked.wrapped) store.note += " · круг закрыт";
   store.at = new Date().toISOString();
   saveStore(store);

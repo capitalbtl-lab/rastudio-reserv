@@ -423,9 +423,9 @@ function GroupFillList({
               </div>
               <FillBar pct={pct} run={active} done={full && !needsRecheck} warn={needsRecheck} />
               <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
-                  {active ? `загрузка · ${loadLabel}` : [row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
-                  {!active && row.lessons ? ` · ${row.lessons} зан.` : ""}
-                  {!active && row.weight ? ` · ${row.weight}` : ""}
+                  {[row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
+                  {row.lessons ? ` · ${row.lessons} зан.` : ""}
+                  {row.weight ? ` · ${row.weight}` : ""}
                   {row.archived ? " · архив" : ""}
               </p>
               <p className="mt-2 h-5 truncate text-[0.78rem] font-semibold">{active ? `загрузка · ${loadLabel}` : wiz.step}</p>
@@ -433,7 +433,7 @@ function GroupFillList({
                 <button
                   type="button"
                   disabled={busy && !active}
-                  className={cn(BTN_LOAD_SM, "w-fit shrink-0 px-4", active && "ra-progress-run")}
+                  className={cn(BTN_LOAD_SM, "min-w-[12.5rem] w-fit shrink-0 px-4", active && "ra-progress-run")}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (wiz.kind === "load" && wiz.part) onLoad(row, wiz.part, Boolean(wiz.part.done || wiz.part.weak));
@@ -441,7 +441,7 @@ function GroupFillList({
                     else onRecheckAll(row);
                   }}
                 >
-                  {active ? `загрузка · ${loadLabel}` : wiz.btn}
+                  {wiz.btn}
                 </button>
                 <button
                   type="button"
@@ -988,6 +988,8 @@ export function AdminCrmSettings() {
       setFillLoading({ groupId: opts.groupId || 0, branchId: opts.branchId || 0, periodKey: opts.periodKey || "", label: opts.periodLabel || "", kind: opts.kind });
     } else if (opts.kind === "life" || opts.kind === "archives") {
       setFillLoading({ kind: opts.kind });
+    } else if (opts.kind === "students" || opts.kind === "balance") {
+      setFillLoading({ kind: opts.kind, label: opts.study === "2" ? "архивные" : "текущие" });
     }
     try {
       const res = (await adminSchedule({
@@ -1056,12 +1058,10 @@ export function AdminCrmSettings() {
     stopSchool.current = false;
     holdFill.current = true;
     setFillLoading({ groupId: Number(row.groupId) || 0, branchId: Number(row.branchId) || 0, kind: "group", label: chunks[0]?.label || "" });
-    setSchoolRun({ cur: row.name, n: 0, total: chunks.length });
     try {
       for (let i = 0; i < chunks.length; i += 1) {
         if (stopSchool.current) break;
         const part = chunks[i];
-        setSchoolRun({ cur: `${row.name} · ${part.label}`, n: i + 1, total: chunks.length });
         setFillLoading({
           groupId: Number(row.groupId) || 0,
           branchId: Number(row.branchId) || 0,
@@ -1083,7 +1083,6 @@ export function AdminCrmSettings() {
       holdFill.current = false;
       setFillLoading(null);
       setBusy(false);
-      setSchoolRun(null);
     }
     if (stopSchool.current) setMsg("Очередь группы остановлена.");
   }
@@ -1604,7 +1603,7 @@ export function AdminCrmSettings() {
                     </button>
                   ) : null}
                 </div>
-                {schoolRun ? <p className="mt-1 text-sm text-muted">Сейчас {schoolRun.cur}</p> : null}
+                <p className="mt-1 h-5 truncate text-sm text-muted">{schoolRun ? `Сейчас ${schoolRun.cur}` : "\u00a0"}</p>
                 <GroupFillList
                   rows={p?.groups?.rows || []}
                   school={journalSchool}
@@ -1656,23 +1655,35 @@ export function AdminCrmSettings() {
               {histTab === "students" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Календарь ученика</p>
-                <p className="mt-1 text-sm text-muted">Цветные клетки на карточке. Готово — только полный личный журнал или все группы ученика сверены. Одна старая явка больше не закрывает карточку.</p>
-                <p className="mt-2 text-sm font-semibold">Сейчас ходят</p>
-                <ProgressBar done={p?.live?.journalDone || 0} total={p?.live?.total || 0} run={fillLoading?.kind === "students"} />
-                <p className="mt-3 text-sm font-semibold">Уже не ходят (архив)</p>
-                <ProgressBar done={p?.archive?.journalDone || 0} total={p?.archive?.total || 0} run={fillLoading?.kind === "students"} />
+                <p className="mt-1 text-sm text-muted">
+                  Личный журнал на карточке ученика: явки, пропуски, списания. Это не журнал группы — группа уже грузится во вкладке «Занятия в группах». Здесь Alfa отдаёт занятия <span className="font-semibold text-fg">по номеру ученика</span>.
+                </p>
+                <p className="mt-1 text-sm text-muted">
+                  «Загрузить 10 текущих» берёт следующих 10 из тех, кто сейчас ходит (is_study = учится) и у кого журнал ещё неполный. Один клик — пауза до минуты: Alfa отвечает по каждому. Когда круг пройден, в отчёте будет «круг закрыт».
+                </p>
+                <p className="mt-2 h-6 truncate text-sm font-semibold">
+                  {fillLoading?.kind === "students"
+                    ? `Идёт загрузка · ${fillLoading.label} · Alfa, не нажимайте ещё раз`
+                    : journal?.note && /журнал|текущ|архив|круг/i.test(journal.note)
+                      ? journal.note
+                      : "\u00a0"}
+                </p>
+                <p className="mt-2 text-sm font-semibold">Сейчас ходят · {p?.live?.total || 0} учеников</p>
+                <ProgressBar done={p?.live?.journalDone || 0} total={p?.live?.total || 0} run={fillLoading?.kind === "students" && fillLoading.label !== "архивные"} />
+                <p className="mt-3 text-sm font-semibold">Уже не ходят (архив) · {p?.archive?.total || 0} учеников</p>
+                <ProgressBar done={p?.archive?.journalDone || 0} total={p?.archive?.total || 0} run={fillLoading?.kind === "students" && fillLoading.label === "архивные"} />
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "students" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runJournal({ kind: "students", study: "1" })}>
-                    Загрузить 10 текущих
+                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "students" && fillLoading.label !== "архивные" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runJournal({ kind: "students", study: "1" })}>
+                    {fillLoading?.kind === "students" && fillLoading.label !== "архивные" ? "Загрузка текущих…" : "Загрузить 10 текущих"}
                   </button>
-                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "students" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runJournal({ kind: "students", study: "2" })}>
-                    Загрузить 10 архивных
+                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "students" && fillLoading.label === "архивные" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runJournal({ kind: "students", study: "2" })}>
+                    {fillLoading?.kind === "students" && fillLoading.label === "архивные" ? "Загрузка архивных…" : "Загрузить 10 архивных"}
                   </button>
                   <button type="button" className={BTN_GHOST} onClick={() => setOpenMiss(openMiss === "j1" ? "" : "j1")}>
-                    {openMiss === "j1" ? "Скрыть" : "Кому из текущих нет"}
+                    {openMiss === "j1" ? "Скрыть список" : `Кому из текущих нет · ${Math.max(0, (p?.live?.total || 0) - (p?.live?.journalDone || 0))}`}
                   </button>
                   <button type="button" className={BTN_GHOST} onClick={() => setOpenMiss(openMiss === "j2" ? "" : "j2")}>
-                    {openMiss === "j2" ? "Скрыть" : "Кому из архива нет"}
+                    {openMiss === "j2" ? "Скрыть список" : `Кому из архива нет · ${Math.max(0, (p?.archive?.total || 0) - (p?.archive?.journalDone || 0))}`}
                   </button>
                 </div>
                 {openMiss === "j1" ? <MissList pack={p?.live?.missJournal} empty="У всех текущих календарь уже есть." /> : null}
