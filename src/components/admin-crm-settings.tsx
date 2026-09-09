@@ -121,6 +121,18 @@ function CheckLine({ on, text }: { on: boolean; text: string }) {
   );
 }
 
+const DETAIL_FIELDS = ["домашнее задание", "тема", "комментарий", "таблица учеников"] as const;
+
+function DetailsFields({ on, extra }: { on: boolean; extra?: string }) {
+  return (
+    <>
+      {DETAIL_FIELDS.map((t, i) => (
+        <CheckLine key={t} on={on} text={i === DETAIL_FIELDS.length - 1 && extra ? `${t} · ${extra}` : t} />
+      ))}
+    </>
+  );
+}
+
 function nextRecheckPart(row: FillRow, grain: Grain) {
   const chunks = packGrain(row.parts, clampGrain(row.age, grain));
   const hole = chunks.find((c) => !c.done || c.weak);
@@ -143,14 +155,14 @@ function nextWizard(chunks: FillPart[]) {
     return {
       kind: "details" as const,
       part: chunks.find((c) => (c.needDetails || 0) > 0),
-      step: "Шаг 2 · ДЗ и комментарии",
-      btn: `Загрузить ДЗ и комментарии всех кварталов · ${detailsLeft}`,
+      step: "Шаг 2 · тема, ДЗ, комментарий, таблица учеников",
+      btn: `Загрузить тему, ДЗ, комментарий и таблицу учеников всех кварталов · ${detailsLeft}`,
     };
   }
   return {
     kind: "done" as const,
     part: chunks[0] || null,
-    step: "Все явки и ДЗ на месте",
+    step: "Все явки, тема, ДЗ, комментарий и таблица учеников на месте",
     btn: chunks.length ? `Перепроверить все кварталы · ${chunks.length}` : "Готово",
   };
 }
@@ -339,7 +351,7 @@ function GroupFillList({
                       <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">ещё не сверяли</span>
                     )}
                     {detailsLeft > 0 ? (
-                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[0.72rem] font-semibold text-violet-900">без ДЗ · {detailsLeft}</span>
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[0.72rem] font-semibold text-violet-900">без темы/ДЗ · {detailsLeft}</span>
                     ) : null}
                   </span>
                 </div>
@@ -349,7 +361,7 @@ function GroupFillList({
                 <p className="mt-1 text-[0.72rem] text-muted">
                   {active
                     ? loadKind === "details"
-                      ? `сейчас ДЗ и комментарии${loadLabel ? ` · ${loadLabel}` : ""}…`
+                      ? `сейчас тема, ДЗ, комментарий, таблица учеников${loadLabel ? ` · ${loadLabel}` : ""}…`
                       : `сейчас явки · ${loadLabel || "порция"}…`
                     : [row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
                   {row.lessons ? ` · ${row.lessons} зан.` : ""}
@@ -357,7 +369,14 @@ function GroupFillList({
                   {row.archived ? " · архив" : ""}
                 </p>
               </button>
-              <p className="mt-2 text-[0.78rem] font-semibold">{active ? (loadKind === "details" ? "Сейчас · ДЗ и комментарии" : `Сейчас · ${loadLabel}`) : wiz.step}</p>
+              <p className="mt-2 text-[0.78rem] font-semibold">{active ? (loadKind === "details" ? "Сейчас · тема, ДЗ, комментарий, таблица учеников" : `Сейчас · ${loadLabel}`) : wiz.step}</p>
+              {wiz.kind === "details" || loadKind === "details" ? (
+                <ul className="mt-1 list-disc pl-4 text-[0.72rem] leading-snug text-muted">
+                  {DETAIL_FIELDS.map((t) => (
+                    <li key={t}>{loadKind === "details" ? `загружаю: ${t}` : t}</li>
+                  ))}
+                </ul>
+              ) : null}
               <div className="mt-1 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -371,7 +390,7 @@ function GroupFillList({
                     else onRecheckAll(row);
                   }}
                 >
-                  {active ? (loadKind === "details" ? `Загружаю тему, ДЗ и комментарии${loadLabel ? ` · ${loadLabel}` : ""}` : `Загружаю явки · ${loadLabel}`) : wiz.btn}
+                  {active ? (loadKind === "details" ? `Загружаю тему, ДЗ, комментарий и таблицу учеников${loadLabel ? ` · ${loadLabel}` : ""}` : `Загружаю явки · ${loadLabel}`) : wiz.btn}
                 </button>
                 {active ? (
                   <button
@@ -395,7 +414,7 @@ function GroupFillList({
                       onDetails(row);
                     }}
                   >
-                    Загрузить ДЗ и комментарии всех кварталов · {detailsLeft}
+                    Загрузить тему, ДЗ, комментарий и таблицу учеников всех кварталов · {detailsLeft}
                   </button>
                 ) : wiz.kind === "details" ? (
                   <button
@@ -433,23 +452,29 @@ function GroupFillList({
                           {spinJ ? (
                             <span className="text-muted">Загружаю явки {c.label}… пакет идёт из Alfa</span>
                           ) : spinD && (c.needDetails || 0) > 0 ? (
-                            <span className="text-muted">Загружаю тему, ДЗ и комментарии · {c.label}…</span>
+                            <ul className="list-disc pl-4 text-muted">
+                              <li className="list-none -ml-4 font-medium">Загружаю {c.label}:</li>
+                              {DETAIL_FIELDS.map((t) => (
+                                <li key={t}>{t}</li>
+                              ))}
+                            </ul>
                           ) : (
                             <>
                               <CheckLine on={loaded} text={`${c.label} загружен`} />
                               <CheckLine on={verified} text={`${c.label} перепроверен`} />
                               <CheckLine on={verified} text="в этом квартале дубликатов нет" />
                               {loaded ? (
-                                <CheckLine
-                                  on={detailsOk}
-                                  text={
-                                    detailsOk
-                                      ? (c.conducted || 0) > 0
-                                        ? `ДЗ и комментарии на месте`
-                                        : `ДЗ грузить нечего — проведённых без темы нет`
-                                      : `ДЗ и комментарии не загружены · ${c.needDetails}`
-                                  }
-                                />
+                                (c.conducted || 0) > 0 || (c.needDetails || 0) > 0 ? (
+                                  <>
+                                    <span className="mt-1 block font-medium text-muted">по каждому уроку:</span>
+                                    <DetailsFields
+                                      on={detailsOk}
+                                      extra={detailsOk ? undefined : `осталось ${c.needDetails}`}
+                                    />
+                                  </>
+                                ) : (
+                                  <CheckLine on text="грузить нечего — проведённых занятий нет" />
+                                )
                               ) : (
                                 <CheckLine on={false} text={`Загрузить ${c.label}`} />
                               )}
@@ -501,11 +526,13 @@ function GroupFillList({
                                 onDetails(row, c);
                               }}
                             >
-                              {spinD ? "Загружаю тему, ДЗ и комментарии…" : `Загрузить тему, ДЗ и комментарии · ${c.needDetails}`}
+                              {spinD ? "Загружаю тему, ДЗ, комментарий и таблицу учеников…" : `Загрузить тему, ДЗ, комментарий и таблицу учеников · ${c.needDetails}`}
                             </button>
                           ) : loaded ? (
                             <p className="text-[0.72rem] text-muted">
-                              {(c.conducted || 0) > 0 ? "Кнопки нет: ДЗ уже на месте или в Alfa пусто" : "Кнопки нет: проведённых занятий без темы нет"}
+                              {(c.conducted || 0) > 0
+                                ? "Кнопки нет: тема, ДЗ, комментарий и таблица учеников уже на месте или в Alfa пусто"
+                                : "Кнопки нет: проведённых занятий нет"}
                             </p>
                           ) : null}
                         </div>
@@ -1510,7 +1537,7 @@ export function AdminCrmSettings() {
                       groupId: Number(row.groupId) || 0,
                       branchId: Number(row.branchId) || 0,
                       periodKey: part?.key || "",
-                      periodLabel: part?.label || "ДЗ",
+                      periodLabel: part?.label || "тема, ДЗ, комментарий",
                     })
                   }
                 />
