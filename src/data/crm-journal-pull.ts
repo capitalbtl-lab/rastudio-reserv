@@ -8,12 +8,12 @@ import { alfaLinkedNow } from "./crm-alfa-link";
 import { loadCachePolicy } from "./crm-cache-policy";
 import { listAdminSlots } from "./alfacrm-schedule";
 import { allDossierCrmIds, findDossier, dossiersInGroup } from "./dossiers";
-import { loadGroupCard, loadCustomerCalendar, saveGroupCard } from "./group-cards";
+import { loadGroupCard, saveGroupCard } from "./group-cards";
 import { customerSyncOf } from "./crm-customer-sync";
 import { isPayJournalComplete } from "./crm-pay";
-import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, type Grain } from "./crm-journal-periods";
+import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, type Grain } from "./crm-journal-periods";
 
-export type JournalPullKind = "group" | "school" | "students" | "balance" | "life";
+export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details";
 export type JournalPullStudy = "1" | "2" | "all";
 
 export type JournalPullGroup = {
@@ -39,6 +39,8 @@ type LifeReport = {
   midNames: string[];
   oldNames: string[];
   unknownNames: string[];
+  probed?: number;
+  left?: number;
 };
 
 type PullStore = {
@@ -220,20 +222,29 @@ export function groupFillRow(g: JournalPullGroup) {
       }
     }
   }
-  const allParts = periods.map((p) => ({
-    key: p.key,
-    label: p.label,
-    from: p.from,
-    to: p.to,
-    done: done.includes(p.key) && !weak.has(p.key),
-    weak: weak.has(p.key),
-    lessons: byQ.get(p.key) || 0,
-    err: fail[p.key] || "",
-  }));
+  const pulledAt = card?.journalFill?.pulled || {};
+  const allParts = periods.map((p) => {
+    const inQ = (card?.calendar || []).filter((l) => inPeriod(l.date, p.from, p.to));
+    const needDetails = inQ.filter((l) => Number(l.status) === 3 && !String(l.topic || l.homework || l.note || "").trim()).length;
+    const at = String(pulledAt[p.key] || "");
+    return {
+      key: p.key,
+      label: p.label,
+      from: p.from,
+      to: p.to,
+      done: done.includes(p.key) && !weak.has(p.key),
+      weak: weak.has(p.key),
+      lessons: byQ.get(p.key) || 0,
+      err: fail[p.key] || "",
+      at,
+      needDetails,
+    };
+  });
   const parts = known ? allParts.filter((p) => chunkOverlapsLife(p, life.from, life.to)) : allParts.slice(0, 4);
   const next = parts.find((p) => !p.done);
   const weight = span.lessons >= 120 ? "тяжёлая" : span.lessons >= 40 ? "средняя" : done.length ? "лёгкая" : "";
   const lifeTxt = lifeLabel(life.from, life.to);
+  const src = life.source === "alfa" ? "по журналу Alfa" : life.source === "slot" ? "по расписанию" : "";
   const fromLabel = !known
     ? "срок неизвестен — сначала определите сроки"
     : span.from
@@ -241,7 +252,7 @@ export function groupFillRow(g: JournalPullGroup) {
         ? `на сайте ${span.from}–${span.to}`
         : `на сайте с ${span.from}`
       : lifeTxt
-        ? `по расписанию ${lifeTxt}`
+        ? `${src} ${lifeTxt}`.trim()
         : "ещё не загружали";
   const complete = parts.length > 0 && parts.every((p) => p.done);
   return {
@@ -261,8 +272,9 @@ export function groupFillRow(g: JournalPullGroup) {
     age: age.id,
     ageLabel: age.label,
     life: lifeTxt,
-    extra: complete ? "вся информация загружена" : [age.label, lifeTxt, span.lessons ? `${span.lessons} зан.` : "", weight].filter(Boolean).join(" · "),
+    extra: complete ? "вся информация загружена" : [age.label, lifeTxt, src, span.lessons ? `${span.lessons} зан.` : "", weight].filter(Boolean).join(" · "),
     err: next && fail[next.key] ? fail[next.key] : "",
+    source: life.source,
     parts,
   };
 }
@@ -272,7 +284,7 @@ export function journalPullProgress() {
   const periods = journalPeriods();
   const rows = groups.map(groupFillRow);
   rows.sort((a, b) => a.done - b.done || a.name.localeCompare(b.name, "ru"));
-  const complete = rows.filter((r) => r.done >= r.total).length;
+  const complete = rows.filter((r) => r.complete).length;
   const groupsMiss = rows.filter((r) => r.done < r.total).map((r) => ({
     groupId: r.groupId,
     branchId: r.branchId,
@@ -310,16 +322,20 @@ export function journalPullProgress() {
     const missC: { id: number; name: string; extra: string }[] = [];
     let journalDone = 0;
     let cardDone = 0;
+    const readyG = new Map(rows.map((r) => [`${r.branchId}-${r.groupId}`, Boolean(r.complete)]));
     for (const p of people) {
       const sync = customerSyncOf(p.cid);
-      const calN = loadCustomerCalendar(p.cid).length;
-      const journal = Boolean(sync.lessonsAttend || sync.lessonsFull) || calN > 0;
+      const d = findDossier({ crmId: p.cid });
+      const links = d?.groupLinks || [];
+      const own = groups.filter((g) => links.some((l) => Number(l.id) === g.groupId && (!l.branchId || l.branchId === g.branchId)));
+      const groupsReady = own.length > 0 && own.every((g) => readyG.get(`${g.branchId}-${g.groupId}`));
+      const journal = Boolean(sync.lessonsFull && sync.lessonsAttend) || groupsReady;
       const pays = isPayJournalComplete(p.cid);
       const name = fioOf(p.cid);
       if (journal) journalDone += 1;
-      else missJ.push({ id: p.cid, name, extra: "нет явки" });
+      else missJ.push({ id: p.cid, name, extra: own.length ? "группы ещё не сверены" : "нет полного журнала" });
       if (journal && pays) cardDone += 1;
-      else missC.push({ id: p.cid, name, extra: journal ? "нет кассы" : "нет явки" });
+      else missC.push({ id: p.cid, name, extra: journal ? "нет кассы" : own.length ? "группы ещё не сверены" : "нет явки" });
     }
     return {
       total: people.length,
@@ -413,14 +429,15 @@ async function pullOneGroup(
     dateTo: period.to,
   });
   const ok = res.ok !== false;
-  const capped = Boolean((res as { capped?: boolean }).capped);
+  const n = (res.calendar || []).filter((l) => inPeriod(l.date, period.from, period.to)).length;
+  const alfaTotal = Number((res as { alfaTotal?: number }).alfaTotal) || 0;
+  const capped = Boolean((res as { capped?: boolean }).capped) || (alfaTotal > 0 && n < alfaTotal);
   const keys = period.keys?.length ? period.keys : [period.key];
   stampJournalPeriod(g.branchId, g.groupId, keys, { ok, err: ok ? "" : String(res.extra || "Alfa не ответила"), weak: !ok || capped });
-  const n = (res.calendar || []).filter((l) => inPeriod(l.date, period.from, period.to)).length;
   const added = Math.max(0, n - before);
   const extra = ok
     ? capped
-      ? `«${g.name}»: ${period.label} · ${n} зан.${added ? `, +${added}` : ""} · пакет оборвался, нажмите ещё раз`
+      ? `«${g.name}»: ${period.label} · ${n} зан.${alfaTotal ? ` из ${alfaTotal}` : ""}${added ? `, +${added}` : ""} · пакет оборвался, нажмите ещё раз`
       : recheck
         ? `перепроверка «${g.name}»: ${period.label} · было ${before}, стало ${n}${added ? `, дозаписали ${added}` : ", дырок нет"}`
         : `«${g.name}»: ${period.label} · ${n} зан. за порцию`
@@ -538,7 +555,50 @@ export async function journalPull(opts: {
         calendar: [],
         at: now,
       };
-      saveGroupCard({ ...card, journalLife: { from, to, source: "slot", at: now } });
+      saveGroupCard({ ...card, journalLife: { from, to, source: from || to ? "slot" : "", at: now } });
+    }
+    const { token } = await import("./alfacrm");
+    const { probeGroupLife } = await import("./crm-journal-inbound");
+    const t = await token().catch(() => "");
+    const needProbe = scoped.filter((g) => loadGroupCard(g.branchId, g.groupId)?.journalLife?.source !== "alfa");
+    const batch = needProbe.slice(0, 4);
+    let probed = 0;
+    if (t) {
+      for (const g of batch) {
+        const hit = await probeGroupLife(g.branchId, g.groupId, { token: t }).catch(() => ({ from: "", to: "", lessons: 0, ok: false as const }));
+        const cur = loadGroupCard(g.branchId, g.groupId);
+        if (!cur) continue;
+        const fromA = hit.from || String(cur.journalLife?.from || g.bDate || "");
+        const toA = hit.to || String(cur.journalLife?.to || g.eDate || "");
+        saveGroupCard({ ...cur, journalLife: { from: fromA, to: toA, source: hit.ok && (hit.from || hit.to || hit.lessons) ? "alfa" : cur.journalLife?.source || "slot", at: now } });
+        probed += 1;
+      }
+    }
+    const left = scoped.filter((g) => loadGroupCard(g.branchId, g.groupId)?.journalLife?.source !== "alfa").length;
+    young = 0;
+    mid = 0;
+    old = 0;
+    unknown = 0;
+    youngNames.length = 0;
+    midNames.length = 0;
+    oldNames.length = 0;
+    unknownNames.length = 0;
+    for (const g of scoped) {
+      const life = groupLife(g);
+      const age = groupAge(life.from, life.to);
+      if (age.id === "young") {
+        young += 1;
+        if (youngNames.length < 4) youngNames.push(g.name);
+      } else if (age.id === "old") {
+        old += 1;
+        if (oldNames.length < 4) oldNames.push(g.name);
+      } else if (age.id === "mid") {
+        mid += 1;
+        if (midNames.length < 4) midNames.push(g.name);
+      } else {
+        unknown += 1;
+        if (unknownNames.length < 4) unknownNames.push(g.name);
+      }
     }
     const lastLife: LifeReport = {
       at: now,
@@ -552,12 +612,50 @@ export async function journalPull(opts: {
       midNames,
       oldNames,
       unknownNames,
+      probed,
+      left,
     };
     store.lastLife = lastLife;
-    store.note = `Определено ${scoped.length} групп${school ? ` в «${school}»` : ""}: молодых ${young}, средних ${mid}, старых ${old}${unknown ? `, без срока ${unknown}` : ""}.`;
+    store.note = `Определено ${scoped.length} групп${school ? ` в «${school}»` : ""}: молодых ${young}, средних ${mid}, старых ${old}${unknown ? `, без срока ${unknown}` : ""}. Срок из Alfa уточнили у ${probed}${left ? `, осталось ${left} — нажмите ещё` : ""}.`;
     store.at = now;
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: scoped.length, scanned: scoped.length, more: false, lastLife, ...journalPullState() };
+    return { ok: true as const, extra: store.note, count: scoped.length, scanned: scoped.length, more: left > 0, lastLife, ...journalPullState() };
+  }
+
+  if (kind === "details") {
+    const hit = groups.find((g) => g.groupId === selectedGid && (!selectedBid || g.branchId === selectedBid)) || groups.find((g) => g.groupId === selectedGid);
+    if (!hit) {
+      store.note = "Этой группы нет в списке.";
+      store.at = new Date().toISOString();
+      saveStore(store);
+      return { ok: false as const, error: store.note, more: false, ...journalPullState() };
+    }
+    const card = loadGroupCard(hit.branchId, hit.groupId);
+    if (!card) {
+      store.note = `«${hit.name}»: сначала загрузите явки.`;
+      return { ok: false as const, error: store.note, more: false, ...journalPullState() };
+    }
+    const periodKey = String(opts.periodKey || "");
+    const periods = journalPeriods();
+    const period = periods.find((p) => p.key === periodKey);
+    const slice = period ? (card.calendar || []).filter((l) => inPeriod(l.date, period.from, period.to)) : card.calendar || [];
+    const { enrichCalendarDetails } = await import("./crm-journal-inbound");
+    const enriched = await enrichCalendarDetails(hit.branchId, slice, { take: 16 });
+    if (enriched.changed) {
+      const byId = new Map((card.calendar || []).map((l) => [`${l.lessonId || 0}|${l.date}|${l.from}`, l]));
+      for (const l of enriched.calendar) byId.set(`${l.lessonId || 0}|${l.date}|${l.from}`, l);
+      saveGroupCard({ ...card, calendar: [...byId.values()], journalAt: new Date().toISOString() });
+    }
+    const left = (period ? slice : card.calendar || []).filter((l) => Number(l.status) === 3 && !String(l.topic || l.homework || l.note || "").trim()).length;
+    const remain = Math.max(0, left - enriched.filled);
+    store.note = enriched.filled
+      ? remain
+        ? `«${hit.name}»: записали детали ${enriched.filled} ур., осталось ${remain} — нажмите ещё`
+        : `«${hit.name}»: детали ${enriched.filled} ур.`
+      : `«${hit.name}»: ${period ? `${period.label} · ` : ""}темы и ДЗ уже есть или уроков нет`;
+    store.at = new Date().toISOString();
+    saveStore(store);
+    return { ok: true as const, extra: store.note, count: enriched.filled, scanned: 1, more: remain > 0, periodKey, periodLabel: period?.label || "", ...journalPullState() };
   }
 
   if (kind === "group" || kind === "school") {
@@ -587,13 +685,17 @@ export async function journalPull(opts: {
     const card = loadGroupCard(hit.branchId, hit.groupId);
     const doneKeys = pulledPeriodKeys(card?.journalFill);
     const weakSet = new Set(card?.journalFill?.weak || []);
-    const chunksAll = journalChunks(grain);
     const life = groupLife(hit);
+    const age = groupAge(life.from, life.to);
+    const useGrain = clampGrain(age.id, grain);
+    const chunksAll = journalChunks(useGrain);
     const known = Boolean(life.from || life.to);
     const chunks = known ? chunksAll.filter((c) => chunkOverlapsLife(c, life.from, life.to)) : chunksAll.slice(0, 4);
     const need = (c: (typeof chunks)[number]) => !chunkDone(c, doneKeys) || c.keys.some((k) => weakSet.has(k));
     const picked =
-      (periodKey && chunksAll.find((c) => c.key === periodKey)) || chunks.find(need) || (recheck ? chunks[0] : null);
+      (periodKey && (chunksAll.find((c) => c.key === periodKey) || journalChunks("quarter").find((c) => c.key === periodKey))) ||
+      chunks.find(need) ||
+      (recheck ? chunks[0] : null);
     if (!picked) {
       store.note = `«${hit.name}»: вся информация загружена.`;
       store.at = new Date().toISOString();
@@ -618,6 +720,8 @@ export async function journalPull(opts: {
       count: res.count,
       scanned: 1,
       more: Boolean(chunks.some((c) => !chunkDone(c, afterFill) || c.keys.some((k) => afterWeak.has(k)))),
+      periodKey: picked.key,
+      periodLabel: picked.label,
       ...journalPullState(),
     };
   }

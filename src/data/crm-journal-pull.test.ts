@@ -46,7 +46,15 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /date_from: ymd\(date_from\)/);
     assert.match(inbound, /date_to: ymd\(date_to\)/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
-    assert.match(ui, /Перепроверить/);
+    assert.match(pull, /probeGroupLife/);
+    assert.match(pull, /kind === "details"/);
+    assert.match(pull, /clampGrain/);
+    assert.match(ui, /Перепроверить школу|Перепроверить все группы/);
+    assert.match(ui, /Найти группу/);
+    assert.match(ui, /ещё нет/);
+    assert.match(ui, /ДЗ и комментарии|Детали уроков/);
+    assert.match(ui, /Стоп/);
+    assert.match(inbound, /probeGroupLife/);
     assert.match(ui, /Определить сроки групп/);
     assert.match(ui, /lastLife/);
     assert.match(ui, /Определено/);
@@ -55,7 +63,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /GroupFillList/);
     assert.match(ui, /I квартал|Квартал/);
     assert.match(ui, /Порция за одно нажатие/);
-    assert.match(ui, /вся информация загружена/);
+    assert.match(ui, /сверено/);
     assert.match(ui, /periodKey: part.key/);
     assert.doesNotMatch(ui, /setInterval\(\(\) => \{\s*if \(document.hidden/);
     const pack = readFileSync(new URL("./crm-packet-queue.ts", import.meta.url), "utf8");

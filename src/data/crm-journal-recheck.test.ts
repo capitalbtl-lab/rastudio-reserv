@@ -8,6 +8,7 @@ import {
   groupAge,
   lifeLabel,
   toAlfaLessonDate,
+  clampGrain,
 } from "./crm-journal-periods.ts";
 
 function completeOf(lifeFrom: string, lifeTo: string, fill: { done?: string[]; pulled?: Record<string, string>; weak?: string[] }) {
@@ -69,5 +70,14 @@ describe("перепроверка журнала", () => {
     assert.equal(chunks.length, 1);
     assert.equal(chunkDone(chunks[0], ["2026q3"]), true);
     assert.equal(chunkDone(chunks[0], []), false);
+  });
+
+  it("0/0 кварталов не готово; год только у молодых", () => {
+    const empty = completeOf("01.01.2090", "02.01.2090", { pulled: {} });
+    assert.ok(empty.total === 0 || empty.complete === false);
+    assert.equal(clampGrain("old", "year"), "half");
+    assert.equal(clampGrain("mid", "year"), "half");
+    assert.equal(clampGrain("young", "year"), "year");
+    assert.equal(clampGrain("old", "quarter"), "quarter");
   });
 });

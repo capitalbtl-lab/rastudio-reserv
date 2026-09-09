@@ -10,7 +10,7 @@ import { CRM_ACTORS, actorLabel, actorOf, type CrmActorsState } from "@/data/crm
 import { CACHE_KIND_META, type CacheKind, type CachePolicy } from "@/data/crm-cache-policy-core";
 import { exportOpLabel, type CrmExportOp } from "@/data/crm-export-queue-core";
 import { ALFA_LINK_MODES, ALFA_PULL_CH, ALFA_PUSH_CH, ALFA_PIPE_CH, ALFA_SYNC_DEFAULT, type AlfaLinkMode, type AlfaPullCh, type AlfaPushCh, type AlfaPipeCh } from "@/data/crm-alfa-link-core";
-import { journalChunks, type Grain } from "@/data/crm-journal-periods";
+import { journalChunks, clampGrain, type Grain } from "@/data/crm-journal-periods";
 
 export const CRM_SYNC_MIN_KEY = "ra_crm_sync_min";
 
@@ -42,7 +42,7 @@ type MissPack = {
   items: { id?: number; name: string; extra?: string; groupId?: number; branchId?: number; school?: string; archived?: boolean }[];
 };
 
-type FillPart = { key: string; label: string; from?: string; to?: string; done?: boolean; weak?: boolean; lessons?: number; err?: string };
+type FillPart = { key: string; label: string; from?: string; to?: string; done?: boolean; weak?: boolean; lessons?: number; err?: string; at?: string; needDetails?: number };
 
 type FillRow = {
   groupId?: number;
@@ -63,8 +63,16 @@ type FillRow = {
   age?: string;
   ageLabel?: string;
   life?: string;
+  source?: string;
   parts?: FillPart[];
 };
+
+function ruAt(iso?: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
 
 function packGrain(parts: FillPart[] | undefined, grain: Grain) {
   const list = parts || [];
@@ -77,9 +85,16 @@ function packGrain(parts: FillPart[] | undefined, grain: Grain) {
       const done = c.keys.filter((k) => have.has(k)).every((k) => byKey.get(k)?.done);
       const weak = c.keys.some((k) => byKey.get(k)?.weak);
       const lessons = kids.reduce((s, p) => s + (p.lessons || 0), 0);
+      const needDetails = kids.reduce((s, p) => s + (p.needDetails || 0), 0);
+      const at = kids.map((p) => p.at).filter(Boolean).sort().at(-1) || "";
       const err = kids.find((p) => p.err)?.err || "";
-      return { key: c.key, label: c.label, from: c.from, to: c.to, done, weak, lessons, err };
+      return { key: c.key, label: c.label, from: c.from, to: c.to, done, weak, lessons, err, at, needDetails };
     });
+}
+
+function nextRecheckPart(row: FillRow, grain: Grain) {
+  const chunks = packGrain(row.parts, clampGrain(row.age, grain));
+  return chunks.find((c) => !c.done || c.weak) || chunks[0] || null;
 }
 
 function GroupFillList({
@@ -90,124 +105,201 @@ function GroupFillList({
   grain,
   onLoad,
   onRecheck,
+  onDetails,
 }: {
   rows: FillRow[];
   school: string;
   busy?: boolean;
-  loading?: { groupId?: number; branchId?: number; periodKey?: string };
+  loading?: { groupId?: number; branchId?: number; periodKey?: string; label?: string };
   grain: Grain;
   onLoad: (row: FillRow, part: FillPart, recheck?: boolean) => void;
-  onRecheck: (row: FillRow) => void;
+  onRecheck: (row: FillRow, part: FillPart) => void;
+  onDetails: (row: FillRow, part?: FillPart) => void;
 }) {
-  const list = rows.filter((r) => !school || r.school === school);
   const [open, setOpen] = useState("");
-  if (!list.length) return <p className="mt-3 text-sm text-muted">Нет групп в этом фильтре.</p>;
+  const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<"all" | "no" | "part" | "ok">("all");
+  const q = query.trim().toLowerCase();
+  const scoped = rows.filter((r) => !school || r.school === school);
+  const list = scoped.filter((r) => {
+    const chunks = packGrain(r.parts, clampGrain(r.age, grain));
+    const doneN = chunks.filter((c) => c.done).length;
+    const total = chunks.length;
+    const full = Boolean(r.complete) && total > 0 && doneN >= total && !chunks.some((c) => c.weak);
+    const nameOk = !q || r.name.toLowerCase().includes(q) || String(r.school || "").toLowerCase().includes(q);
+    if (!nameOk) return false;
+    if (tab === "ok") return full;
+    if (tab === "no") return !doneN;
+    if (tab === "part") return Boolean(doneN) && !full;
+    return true;
+  });
+  const nAll = scoped.length;
+  const nOk = scoped.filter((r) => r.complete && (r.total || 0) > 0).length;
+  const nNo = scoped.filter((r) => !r.done).length;
+  const nPart = Math.max(0, nAll - nOk - nNo);
+  if (!scoped.length) return <p className="mt-3 text-sm text-muted">Нет групп в этом фильтре.</p>;
   return (
-    <ul className="mt-3 max-h-[36rem] space-y-2 overflow-auto">
-      {list.map((row) => {
-        const id = `${row.branchId}-${row.groupId}`;
-        const chunks = packGrain(row.parts, grain);
-        const doneN = chunks.filter((c) => c.done).length;
-        const total = chunks.length || 1;
-        const pct = Math.min(100, Math.round((doneN / total) * 100));
-        const active = loading && loading.groupId === row.groupId && loading.branchId === row.branchId;
-        const full = Boolean(row.complete) || doneN >= total;
-        const shown = open === id;
-        return (
-          <li key={id} className={cn("rounded-2xl bg-white p-3 ring-1", full ? "ring-emerald-300" : active ? "ring-black" : "ring-black/8")}>
-            <button type="button" className="w-full text-left" onClick={() => setOpen(shown ? "" : id)}>
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="font-medium">{row.name}</span>
-                <span className="flex flex-wrap items-center gap-1">
-                  {row.ageLabel ? (
-                    <span
-                      className={cn(
-                        "rounded-full px-2 py-0.5 text-[0.72rem] font-semibold",
-                        row.age === "young" ? "bg-sky-100 text-sky-900" : row.age === "old" ? "bg-zinc-200 text-zinc-800" : row.age === "mid" ? "bg-amber-100 text-amber-900" : "bg-rose-100 text-rose-900",
-                      )}
-                    >
-                      {row.ageLabel}
-                    </span>
-                  ) : null}
-                  {full ? (
-                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">вся информация загружена</span>
-                  ) : doneN ? (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-900">
-                      частично · {doneN}/{total}
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">ещё не загружали</span>
-                  )}
-                </span>
-              </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/10">
-                <div className={cn("h-1.5 rounded-full", full ? "bg-emerald-600" : "bg-black")} style={{ width: `${pct}%` }} />
-              </div>
-              <p className="mt-1 text-[0.72rem] text-muted">
-                {active ? `грузим ${chunks.find((c) => c.key === loading?.periodKey)?.label || "порцию"}…` : [row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
-                {row.lessons ? ` · ${row.lessons} зан.` : ""}
-                {row.weight ? ` · ${row.weight}` : ""}
-                {row.archived ? " · архив" : ""}
-              </p>
-            </button>
-            <div className="mt-2">
-              <button
-                type="button"
-                disabled={busy}
-                className="h-8 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRecheck(row);
-                }}
-              >
-                {active ? "Перепроверяю…" : "Перепроверить"}
+    <div className="mt-3">
+      <input
+        className="h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10"
+        placeholder="Найти группу…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <div className="mt-2 flex flex-wrap gap-1">
+        {(
+          [
+            ["all", `все ${nAll}`],
+            ["no", `ещё нет ${nNo}`],
+            ["part", `частично ${nPart}`],
+            ["ok", `готово ${nOk}`],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", tab === id ? "bg-black text-white" : "bg-white ring-1 ring-black/10")}
+            onClick={() => setTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {!list.length ? <p className="mt-3 text-sm text-muted">Нет групп в этой вкладке.</p> : null}
+      <ul className="mt-2 max-h-[36rem] space-y-2 overflow-auto">
+        {list.map((row) => {
+          const id = `${row.branchId}-${row.groupId}`;
+          const useGrain = clampGrain(row.age, grain);
+          const chunks = packGrain(row.parts, useGrain);
+          const doneN = chunks.filter((c) => c.done).length;
+          const total = chunks.length;
+          const pct = total > 0 ? Math.min(100, Math.round((doneN / total) * 100)) : 0;
+          const active = loading && loading.groupId === row.groupId && loading.branchId === row.branchId;
+          const full = Boolean(row.complete) && total > 0 && doneN >= total && !chunks.some((c) => c.weak);
+          const shown = open === id;
+          const nxt = nextRecheckPart(row, grain);
+          const loadLabel = active ? loading?.label || chunks.find((c) => c.key === loading?.periodKey)?.label || nxt?.label || "" : "";
+          return (
+            <li key={id} className={cn("rounded-2xl bg-white p-3 ring-1", full ? "ring-emerald-300" : active ? "ring-black" : "ring-black/8")}>
+              <button type="button" className="w-full text-left" onClick={() => setOpen(shown ? "" : id)}>
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="font-medium">{row.name}</span>
+                  <span className="flex flex-wrap items-center gap-1">
+                    {row.ageLabel ? (
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[0.72rem] font-semibold",
+                          row.age === "young" ? "bg-sky-100 text-sky-900" : row.age === "old" ? "bg-zinc-200 text-zinc-800" : row.age === "mid" ? "bg-amber-100 text-amber-900" : "bg-rose-100 text-rose-900",
+                        )}
+                      >
+                        {row.ageLabel}
+                      </span>
+                    ) : null}
+                    {full ? (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">сверено</span>
+                    ) : doneN ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-900">
+                        частично · {doneN}/{total}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">ещё не сверяли</span>
+                    )}
+                  </span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/10">
+                  <div className={cn("h-1.5 rounded-full", full ? "bg-emerald-600" : "bg-black")} style={{ width: `${pct}%` }} />
+                </div>
+                <p className="mt-1 text-[0.72rem] text-muted">
+                  {active ? `сейчас ${loadLabel || "порция"}…` : [row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
+                  {row.lessons ? ` · ${row.lessons} зан.` : ""}
+                  {row.weight ? ` · ${row.weight}` : ""}
+                  {row.archived ? " · архив" : ""}
+                </p>
               </button>
-            </div>
-            {shown ? (
-              <div className="mt-2 grid gap-1 sm:grid-cols-2">
-                {chunks.map((c) => {
-                  const spinning = active && loading?.periodKey === c.key;
-                  return (
-                    <button
-                      key={c.key}
-                      type="button"
-                      disabled={busy}
-                      className={cn(
-                        "rounded-xl px-2.5 py-2 text-left text-sm ring-1 disabled:opacity-70",
-                        c.weak ? "bg-amber-50 ring-amber-300" : c.done ? "bg-emerald-50 ring-emerald-200" : spinning ? "bg-black/5 ring-black" : "bg-white ring-black/10 hover:bg-black/[0.03]",
-                      )}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onLoad(row, c, Boolean(c.done || c.weak));
-                      }}
-                    >
-                      <span className="block font-medium">
-                        {spinning ? "… " : c.weak ? "~ " : c.done ? "✓ " : "○ "}
-                        {c.label}
-                      </span>
-                      <span className="block text-[0.72rem] text-muted">
-                        {spinning
-                          ? "загрузка…"
-                          : c.weak
-                            ? `${c.lessons ? `${c.lessons} зан. · ` : ""}пакет оборвался · нажмите ещё`
-                            : c.done
-                              ? c.lessons
-                                ? `${c.lessons} зан. · сверено · нажмите, чтобы перепроверить`
-                                : "сверено с Alfa · нажмите, чтобы перепроверить"
-                              : c.lessons
-                                ? `на сайте ${c.lessons} зан. · нажмите, чтобы сверить`
-                                : "нажмите, чтобы загрузить"}
-                      </span>
-                      {c.err && !c.done ? <span className="mt-0.5 block text-[0.72rem] text-rose-800">{c.err}</span> : null}
-                    </button>
-                  );
-                })}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy && !active}
+                  className="h-8 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (nxt) onRecheck(row, nxt);
+                  }}
+                >
+                  {active ? `Сейчас ${loadLabel}` : nxt ? `Перепроверить · ${nxt.label}` : "Перепроверить"}
+                </button>
+                {full ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="h-8 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDetails(row);
+                    }}
+                  >
+                    Детали уроков
+                  </button>
+                ) : null}
               </div>
-            ) : null}
-          </li>
-        );
-      })}
-    </ul>
+              {shown ? (
+                <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                  {chunks.map((c) => {
+                    const spinning = active && loading?.periodKey === c.key;
+                    return (
+                      <div key={c.key} className="space-y-1">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className={cn(
+                            "w-full rounded-xl px-2.5 py-2 text-left text-sm ring-1 disabled:opacity-70",
+                            c.weak ? "bg-amber-50 ring-amber-300" : c.done ? "bg-emerald-50 ring-emerald-200" : spinning ? "bg-black/5 ring-black" : "bg-white ring-black/10 hover:bg-black/[0.03]",
+                          )}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onLoad(row, c, Boolean(c.done || c.weak));
+                          }}
+                        >
+                          <span className="block font-medium">
+                            {spinning ? "… " : c.weak ? "~ " : c.done ? "✓ " : "○ "}
+                            {c.label}
+                          </span>
+                          <span className="block text-[0.72rem] text-muted">
+                            {spinning
+                              ? "загрузка…"
+                              : c.weak
+                                ? `${c.lessons ? `${c.lessons} зан. · ` : ""}оборвалось · нажмите ещё`
+                                : c.done
+                                  ? `${c.lessons ? `${c.lessons} зан. · ` : ""}сверено${c.at ? ` · ${ruAt(c.at)}` : ""} · нажмите ещё раз`
+                                  : c.lessons
+                                    ? `на сайте ${c.lessons} зан. · сверить`
+                                    : "сверить"}
+                          </span>
+                          {c.err && !c.done ? <span className="mt-0.5 block text-[0.72rem] text-rose-800">{c.err}</span> : null}
+                        </button>
+                        {c.done && (c.needDetails || 0) > 0 ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="h-7 w-full rounded-lg bg-white text-[0.72rem] font-semibold ring-1 ring-black/10"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDetails(row, c);
+                            }}
+                          >
+                            ДЗ и комментарии · {c.needDetails}
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -326,12 +418,16 @@ export function AdminCrmSettings() {
       midNames?: string[];
       oldNames?: string[];
       unknownNames?: string[];
+      probed?: number;
+      left?: number;
     } | null;
   } | null>(null);
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
   const [openMiss, setOpenMiss] = useState<"g" | "j1" | "j2" | "c1" | "c2" | "">("");
-  const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number; periodKey?: string } | null>(null);
+  const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number; periodKey?: string; label?: string } | null>(null);
+  const stopSchool = useRef(false);
+  const [schoolRun, setSchoolRun] = useState<{ cur: string; n: number; total: number } | null>(null);
   const dragId = useRef(0);
 
   function applyLink(link: {
@@ -519,18 +615,19 @@ export function AdminCrmSettings() {
   }
 
   async function runJournal(opts: {
-    kind: "group" | "school" | "students" | "balance" | "life";
+    kind: "group" | "school" | "students" | "balance" | "life" | "details";
     study?: "1" | "2" | "all";
     school?: string;
     groupId?: number;
     branchId?: number;
     periodKey?: string;
+    periodLabel?: string;
     grain?: Grain;
     recheck?: boolean;
   }) {
     setBusy(true);
-    if (opts.kind === "group") {
-      setFillLoading({ groupId: opts.groupId || 0, branchId: opts.branchId || 0, periodKey: opts.periodKey || "" });
+    if (opts.kind === "group" || opts.kind === "details") {
+      setFillLoading({ groupId: opts.groupId || 0, branchId: opts.branchId || 0, periodKey: opts.periodKey || "", label: opts.periodLabel || "" });
     }
     try {
       const res = (await adminSchedule({
@@ -546,7 +643,7 @@ export function AdminCrmSettings() {
           grain: opts.grain || journalGrain,
           recheck: Boolean(opts.recheck),
         } as never,
-      })) as typeof journal & { ok?: boolean };
+      })) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string };
       if (res) setJournal(res);
       setMsg(res?.error || res?.extra || (res?.ok ? "Пакет записан на сайт." : "Журнал не ответил."));
     } catch (e) {
@@ -555,6 +652,35 @@ export function AdminCrmSettings() {
       setBusy(false);
       setFillLoading(null);
     }
+  }
+
+  async function recheckSchool() {
+    const rows = (journal?.progress?.groups?.rows || []).filter((r) => !journalSchool || r.school === journalSchool);
+    const queue = rows.filter((r) => !r.complete || (r.parts || []).some((p) => p.weak));
+    if (!queue.length) {
+      setMsg("В этом фильтре все группы сверены.");
+      return;
+    }
+    stopSchool.current = false;
+    setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
+    for (let i = 0; i < queue.length; i += 1) {
+      if (stopSchool.current) break;
+      const row = queue[i];
+      const part = nextRecheckPart(row, journalGrain);
+      setSchoolRun({ cur: `${row.name}${part ? ` · ${part.label}` : ""}`, n: i + 1, total: queue.length });
+      if (!part) continue;
+      await runJournal({
+        kind: "group",
+        groupId: Number(row.groupId) || 0,
+        branchId: Number(row.branchId) || 0,
+        periodKey: part.key,
+        periodLabel: part.label,
+        grain: journalGrain,
+        recheck: true,
+      });
+    }
+    setSchoolRun(null);
+    if (stopSchool.current) setMsg("Очередь школы остановлена.");
   }
 
   async function loadStages() {
@@ -851,11 +977,13 @@ export function AdminCrmSettings() {
 
       <Card
         title="Загрузить историю из Alfa"
-        hint="Журнал группы только по кнопке. Откройте группу, выберите порцию: квартал, полугодие или год. Зелёное — уже на сайте."
+        hint="Только по кнопке. ○ сверить · ~ оборвалось · ✓ сверено с Alfa. Зелёное — не «уже на сайте», а сверенный квартал."
       >
         {(() => {
           const offline = alfaMode === "offline";
           const p = journal?.progress;
+          const schoolRows = (p?.groups?.rows || []).filter((r) => !journalSchool || r.school === journalSchool);
+          const schoolDone = schoolRows.filter((r) => r.complete && (r.total || 0) > 0).length;
           return (
             <div className={cn("space-y-3", offline && "opacity-50")}>
               {journal?.note ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
@@ -863,8 +991,10 @@ export function AdminCrmSettings() {
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">1. Занятия в группах</p>
                 <p className="mt-1 text-sm text-muted">Сначала сроки по расписанию: молодая группа — пара кварталов, старая — несколько лет. Потом грузите только эти порции.</p>
-                <ProgressBar done={p?.groups?.done || 0} total={p?.groups?.total || 0} />
-                <p className="mt-1 text-[0.72rem] text-muted">Сверху — сколько групп закрыли свои кварталы, не 10 лет истории.</p>
+                <ProgressBar done={schoolDone} total={schoolRows.length} />
+                <p className="mt-1 text-[0.72rem] text-muted">
+                  {journalSchool ? `Школа «${journalSchool}»: сверено ${schoolDone} из ${schoolRows.length}.` : "Все школы. Выберите школу — счётчик только по ней."}
+                </p>
                 <div className="mt-3 flex flex-wrap items-start gap-3">
                   <button
                     type="button"
@@ -872,7 +1002,7 @@ export function AdminCrmSettings() {
                     disabled={busy || offline}
                     onClick={() => void runJournal({ kind: "life", school: journalSchool })}
                   >
-                    {busy ? "Смотрю сроки…" : "Определить сроки групп"}
+                    {busy && !schoolRun ? "Смотрю сроки…" : journal?.lastLife?.left ? `Уточнить ещё ${journal.lastLife.left}` : "Определить сроки групп"}
                   </button>
                   {journal?.lastLife ? (
                     <div className="min-w-[16rem] flex-1 rounded-2xl bg-white px-4 py-3 text-sm ring-1 ring-black/10">
@@ -900,7 +1030,11 @@ export function AdminCrmSettings() {
                           </li>
                         ) : null}
                       </ul>
-                      <p className="mt-2 text-[0.72rem] text-muted">Дальше грузите только видимые кварталы у каждой группы.</p>
+                      <p className="mt-2 text-[0.72rem] text-muted">
+                        {journal.lastLife.probed
+                          ? `Срок из Alfa уточнили у ${journal.lastLife.probed}${journal.lastLife.left ? `, осталось ${journal.lastLife.left} — нажмите ещё` : ""}.`
+                          : "Дальше грузите только видимые кварталы у каждой группы."}
+                      </p>
                     </div>
                   ) : (
                     <p className="pt-2 text-sm text-muted">После нажатия здесь появится отчёт: сколько молодых, средних и старых.</p>
@@ -928,7 +1062,7 @@ export function AdminCrmSettings() {
                     [
                       ["quarter", "Квартал"],
                       ["half", "Полугодие"],
-                      ["year", "Год"],
+                      ["year", "Год (молодые)"],
                     ] as const
                   ).map(([id, label]) => (
                     <button
@@ -941,10 +1075,33 @@ export function AdminCrmSettings() {
                     </button>
                   ))}
                 </div>
+                <p className="mt-1 text-[0.72rem] text-muted">Год — только у молодых. У старых и средних максимум полугодие, даже если выбран год.</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className="h-10 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
+                    disabled={offline || Boolean(schoolRun)}
+                    onClick={() => void recheckSchool()}
+                  >
+                    {schoolRun ? `Школа ${schoolRun.n}/${schoolRun.total}` : journalSchool ? "Перепроверить школу" : "Перепроверить все группы"}
+                  </button>
+                  {schoolRun ? (
+                    <button
+                      type="button"
+                      className="h-10 rounded-full bg-white px-4 text-sm font-semibold ring-1 ring-black/10"
+                      onClick={() => {
+                        stopSchool.current = true;
+                      }}
+                    >
+                      Стоп
+                    </button>
+                  ) : null}
+                </div>
+                {schoolRun ? <p className="mt-1 text-sm text-muted">Сейчас {schoolRun.cur}</p> : null}
                 <GroupFillList
                   rows={p?.groups?.rows || []}
                   school={journalSchool}
-                  busy={busy || offline}
+                  busy={busy || offline || Boolean(schoolRun)}
                   loading={fillLoading || undefined}
                   grain={journalGrain}
                   onLoad={(row, part, recheck) =>
@@ -953,26 +1110,38 @@ export function AdminCrmSettings() {
                       groupId: Number(row.groupId) || 0,
                       branchId: Number(row.branchId) || 0,
                       periodKey: part.key,
+                      periodLabel: part.label,
                       grain: journalGrain,
                       recheck,
                     })
                   }
-                  onRecheck={(row) =>
+                  onRecheck={(row, part) =>
                     void runJournal({
                       kind: "group",
                       groupId: Number(row.groupId) || 0,
                       branchId: Number(row.branchId) || 0,
+                      periodKey: part.key,
+                      periodLabel: part.label,
                       grain: journalGrain,
                       recheck: true,
                     })
                   }
+                  onDetails={(row, part) =>
+                    void runJournal({
+                      kind: "details",
+                      groupId: Number(row.groupId) || 0,
+                      branchId: Number(row.branchId) || 0,
+                      periodKey: part?.key || "",
+                      periodLabel: part?.label || "детали",
+                    })
+                  }
                 />
-                <p className="mt-2 text-[0.72rem] text-muted">Нажмите имя группы — откроются порции. ✓ уже загружено, ○ ещё нет.</p>
+                <p className="mt-2 text-[0.72rem] text-muted">○ сверить · ~ оборвалось · ✓ сверено. После ✓ можно догрузить ДЗ и комментарии.</p>
               </section>
 
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">2. Календарь ученика</p>
-                <p className="mt-1 text-sm text-muted">Цветные клетки на карточке. Если «0 из 0» — этого блока ещё нет.</p>
+                <p className="mt-1 text-sm text-muted">Цветные клетки на карточке. Готово — только полный личный журнал или все группы ученика сверены. Одна старая явка больше не закрывает карточку.</p>
                 <p className="mt-2 text-sm font-semibold">Сейчас ходят</p>
                 <ProgressBar done={p?.live?.journalDone || 0} total={p?.live?.total || 0} />
                 <p className="mt-3 text-sm font-semibold">Уже не ходят (архив)</p>

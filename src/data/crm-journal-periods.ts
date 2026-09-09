@@ -178,6 +178,12 @@ export function chunkDone(chunk: JournalChunk, done: string[]) {
   return chunk.keys.every((k) => have.has(k));
 }
 
+/** Год — только молодые. Старые и средние: максимум полугодие. */
+export function clampGrain(age?: string, grain: Grain = "quarter"): Grain {
+  if (grain === "year" && age !== "young") return "half";
+  return grain;
+}
+
 export function nextChunk(done: string[], grain: Grain = "quarter", now = new Date()) {
   return journalChunks(grain, now).find((c) => !chunkDone(c, done)) || null;
 }

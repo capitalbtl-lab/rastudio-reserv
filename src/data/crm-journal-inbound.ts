@@ -8,6 +8,8 @@ import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonRosterThin } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
 import { cardPays } from "./crm-pay";
+import { crmUnwrapIndex } from "./crm-leads-stages";
+import { parseLessonDate, toAlfaLessonDate } from "./crm-journal-periods";
 import {
   uniqueBranches,
   packLessonPupils,
@@ -45,12 +47,16 @@ function ruShift(days: number) {
 }
 
 function ymd(raw?: string) {
-  const s = String(raw || "").trim();
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-  if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
-  return s.slice(0, 10);
+  return toAlfaLessonDate(raw);
+}
+
+function ruOf(d: Date) {
+  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+}
+
+function ruAny(raw?: string) {
+  const d = parseLessonDate(String(raw || ""));
+  return d ? ruOf(d) : "";
 }
 
 function packLight(
@@ -173,16 +179,24 @@ export async function inboundJournalGroup(
   let alfaOk = 0;
   let lastErr = "";
   let hitCap = false;
+  let reported = 0;
+  let loaded = 0;
   async function pull(status: number, date_from: string, date_to: string, pages: number, pageSize: number) {
+    let got = 0;
+    let total = 0;
     for (let page = 0; page < pages; page++) {
       try {
-        const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
+        const raw = await request<unknown>(
           `/v2api/${branch}/lesson/index`,
           { page, pageSize, status, group_id: gid, date_from: ymd(date_from), date_to: ymd(date_to) },
           t,
         );
         alfaOk += 1;
-        const chunk = les.items || [];
+        const pack = crmUnwrapIndex(raw);
+        const chunk = (pack.items || []) as Parameters<typeof packLight>[0][];
+        if (Number(pack.total) > total) total = Number(pack.total);
+        got += chunk.length;
+        loaded += chunk.length;
         for (const item of chunk) {
           const gids = (item.group_ids || []).map(Number).filter((n) => n > 0);
           if (gids.length && !gids.includes(gid)) continue;
@@ -199,6 +213,8 @@ export async function inboundJournalGroup(
         break;
       }
     }
+    if (total > 0 && got < total) hitCap = true;
+    if (total > reported) reported = total;
   }
   const windowed = Boolean(opts?.dateFrom && opts?.dateTo);
   const deepPages = Boolean(opts?.recheck);
@@ -280,7 +296,59 @@ export async function inboundJournalGroup(
       return { ok: true as const, extra: noteOf(enriched.calendar.length, `, детали ${enriched.filled}`), count: enriched.calendar.length, calendar: enriched.calendar, card, capped: hitCap };
     }
   }
-  return { ok: true as const, extra: noteOf(calendar.length), count: calendar.length, calendar, card, capped: hitCap };
+  return { ok: true as const, extra: noteOf(calendar.length), count: calendar.length, calendar, card, capped: hitCap, alfaTotal: reported };
+}
+
+/** Первая и последняя явка группы в Alfa + даты карточки. 2–3 запроса, не весь журнал. */
+export async function probeGroupLife(branch: number, gid: number, opts?: { token?: string }) {
+  if (!alfaLinkedNow() || !gid) return { from: "", to: "", lessons: 0, ok: false as const };
+  const { token, request } = await import("./alfacrm");
+  const t = opts?.token || (await token());
+  let from = "";
+  let to = "";
+  try {
+    const graw = await request<unknown>(`/v2api/${branch}/group/index`, { page: 0, pageSize: 1, id: gid }, t);
+    const g = crmUnwrapIndex(graw).items[0] as { b_date?: string; e_date?: string; bDate?: string; eDate?: string } | undefined;
+    if (g) {
+      from = ruAny(String(g.b_date || g.bDate || ""));
+      to = ruAny(String(g.e_date || g.eDate || ""));
+    }
+  } catch {
+    /* слот останется */
+  }
+  const dateTo = ymd(ruShift(90));
+  let lessons = 0;
+  try {
+    const newest = await request<unknown>(
+      `/v2api/${branch}/lesson/index`,
+      { page: 0, pageSize: 1, status: 3, group_id: gid, date_from: "2015-01-01", date_to: dateTo },
+      t,
+    );
+    const pack = crmUnwrapIndex(newest);
+    lessons = Number(pack.total) || pack.items.length;
+    const a = pack.items[0] as { date?: string } | undefined;
+    const da = ruAny(String(a?.date || ""));
+    if (da) {
+      if (!from || (parseLessonDate(da) && parseLessonDate(from) && parseLessonDate(da)! < parseLessonDate(from)!)) from = da;
+      if (!to || (parseLessonDate(da) && parseLessonDate(to) && parseLessonDate(da)! > parseLessonDate(to)!)) to = da;
+    }
+    if (lessons > 1) {
+      const oldest = await request<unknown>(
+        `/v2api/${branch}/lesson/index`,
+        { page: Math.max(0, lessons - 1), pageSize: 1, status: 3, group_id: gid, date_from: "2015-01-01", date_to: dateTo },
+        t,
+      );
+      const b = crmUnwrapIndex(oldest).items[0] as { date?: string } | undefined;
+      const db = ruAny(String(b?.date || ""));
+      if (db) {
+        if (!from || (parseLessonDate(db) && parseLessonDate(from) && parseLessonDate(db)! < parseLessonDate(from)!)) from = db;
+        if (!to || (parseLessonDate(db) && parseLessonDate(to) && parseLessonDate(db)! > parseLessonDate(to)!)) to = db;
+      }
+    }
+  } catch {
+    /* оставляем даты карточки */
+  }
+  return { from, to, lessons, ok: true as const };
 }
 
 function isOneOffLesson(item: { lesson_type_id?: number; group_ids?: number[] }) {
