@@ -17,6 +17,8 @@ export type CustomerSyncStamp = {
   lessonsAttend?: boolean;
   lessonFill?: LessonFillCursor;
   paysAt?: string;
+  lessonsRecheckAt?: string;
+  paysRecheckAt?: string;
 };
 
 type Store = { at: string; byId: Record<string, CustomerSyncStamp> };

@@ -9,8 +9,8 @@ import { loadCachePolicy } from "./crm-cache-policy";
 import { listAdminSlots } from "./alfacrm-schedule";
 import { loadScheduleMap } from "./schedule-map";
 import { allDossierCrmIds, findDossier, dossiersInGroup } from "./dossiers";
-import { loadGroupCard, saveGroupCard } from "./group-cards";
-import { customerSyncOf } from "./crm-customer-sync";
+import { loadGroupCard, saveGroupCard, loadCustomerCalendar } from "./group-cards";
+import { customerSyncOf, stampCustomerSync } from "./crm-customer-sync";
 import { isPayJournalComplete } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 
@@ -427,6 +427,19 @@ export function journalPullProgress() {
     const people = rankedStudentIds(study);
     const missJ: { id: number; name: string; extra: string }[] = [];
     const missC: { id: number; name: string; extra: string }[] = [];
+    const peopleRows: {
+      cid: number;
+      branchId: number;
+      name: string;
+      groups: string[];
+      lessons: number;
+      journal: boolean;
+      pays: boolean;
+      rechecked: boolean;
+      paysRechecked: boolean;
+      extra: string;
+      at: string;
+    }[] = [];
     let journalDone = 0;
     let cardDone = 0;
     const readyG = new Map(rows.map((r) => [`${r.branchId}-${r.groupId}`, Boolean(r.complete)]));
@@ -439,18 +452,34 @@ export function journalPullProgress() {
       const journal = Boolean(sync.lessonsFull && sync.lessonsAttend) || groupsReady;
       const pays = isPayJournalComplete(p.cid);
       const name = fioOf(p.cid);
-      const gnames = own.map((g) => g.name).filter(Boolean).slice(0, 3).join(", ");
+      const glist = groupsOfStudent(p.cid).slice(0, 3);
+      const gnames = glist.join(", ") || own.map((g) => g.name).filter(Boolean).slice(0, 3).join(", ");
       if (journal) journalDone += 1;
       else missJ.push({ id: p.cid, name, extra: gnames ? gnames : own.length ? "группы ещё не сверены" : "нет полного журнала" });
       if (journal && pays) cardDone += 1;
       else missC.push({ id: p.cid, name, extra: journal ? "нет кассы" : gnames || (own.length ? "группы ещё не сверены" : "нет явки") });
+      peopleRows.push({
+        cid: p.cid,
+        branchId: p.branchId,
+        name,
+        groups: glist.length ? glist : own.map((g) => g.name).filter(Boolean).slice(0, 3),
+        lessons: loadCustomerCalendar(p.cid).length,
+        journal,
+        pays,
+        rechecked: Boolean(sync.lessonsRecheckAt),
+        paysRechecked: Boolean(sync.paysRecheckAt),
+        extra: gnames,
+        at: sync.lessonsAt || "",
+      });
     }
+    peopleRows.sort((a, b) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid);
     return {
       total: people.length,
       journalDone,
       cardDone,
       missJournal: packList(missJ),
       missCard: packList(missC),
+      people: peopleRows.slice(0, 800),
     };
   }
 
@@ -559,7 +588,7 @@ async function pullOneGroup(
   return { extra, count: n, ok, capped };
 }
 
-async function pullOneStudent(cid: number, branchId: number, balance: boolean) {
+async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false) {
   const { inboundCustomerLessons } = await import("./crm-journal-inbound");
   let lessons = 0;
   let done = false;
@@ -591,6 +620,12 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean) {
     const rows = await pullCustomerTariffs(branchId, cid).catch(() => []);
     tariffs = rows.length;
   }
+  const at = new Date().toISOString();
+  stampCustomerSync(cid, balance
+    ? { paysAt: at, ...(recheck ? { paysRecheckAt: at, lessonsRecheckAt: at } : {}) }
+    : recheck
+      ? { lessonsRecheckAt: at }
+      : {});
   return { cid, lessons, done, pays, tariffs };
 }
 
@@ -967,7 +1002,7 @@ export async function journalPull(opts: {
     store.studentIdx[key] = picked.next;
   }
   const balance = kind === "balance";
-  const row = await pullOneStudent(one.cid, one.branchId, balance);
+  const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck));
   const sync = customerSyncOf(one.cid);
   const gnames = groupsOfStudent(one.cid);
   const name = fioOf(one.cid);

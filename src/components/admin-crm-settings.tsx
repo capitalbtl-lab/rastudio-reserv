@@ -104,6 +104,20 @@ type StudentHit = {
   ok: boolean;
 };
 
+type PeopleRow = {
+  cid: number;
+  branchId: number;
+  name: string;
+  groups: string[];
+  lessons: number;
+  journal?: boolean;
+  pays?: boolean;
+  rechecked?: boolean;
+  paysRechecked?: boolean;
+  extra?: string;
+  at?: string;
+};
+
 type MissPack = {
   total: number;
   more?: number;
@@ -271,6 +285,7 @@ function GroupFillList({
   busy,
   loading,
   grain,
+  archived,
   onLoad,
   onRecheck,
   onRecheckAll,
@@ -282,6 +297,7 @@ function GroupFillList({
   busy?: boolean;
   loading?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string };
   grain: Grain;
+  archived?: boolean;
   onLoad: (row: FillRow, part: FillPart, recheck?: boolean) => void;
   onRecheck: (row: FillRow, part: FillPart) => void;
   onRecheckAll: (row: FillRow) => void;
@@ -296,6 +312,9 @@ function GroupFillList({
   const q = query.trim().toLowerCase();
   const colLock = useRef<Record<string, boolean>>({});
   const scoped = rows.filter((r) => {
+    if (archived) {
+      if (!r.archived) return false;
+    } else if (r.archived) return false;
     if (school && r.school !== school) return false;
     if (!q) return true;
     return r.name.toLowerCase().includes(q) || String(r.school || "").toLowerCase().includes(q) || String(r.groupId || "").includes(q);
@@ -329,7 +348,7 @@ function GroupFillList({
   useEffect(() => {
     setPageNeed(0);
     setPageDone(0);
-  }, [q, school, pageSize]);
+  }, [q, school, pageSize, archived]);
   useEffect(() => {
     try {
       const n = Number(localStorage.getItem("crm-journal-page") || 20);
@@ -553,7 +572,7 @@ function GroupFillList({
           );
   }
 
-  if (!scoped.length) return <p className="mt-3 text-sm text-muted">Нет групп в этом фильтре.</p>;
+  if (!scoped.length) return <p className="mt-3 text-sm text-muted">{archived ? "Нет архивных групп в этом фильтре." : "Нет живых групп в этом фильтре."}</p>;
   return (
     <div className="mt-3">
       <input
@@ -591,6 +610,259 @@ function GroupFillList({
           </div>
           <p className="mt-1 text-[0.72rem] text-muted">Каждый квартал: явки есть, тема/ДЗ/комментарий/таблица на месте, пакет не оборвался.</p>
           {listDone.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listDone.map(renderGroup)}</ul> : <p className="mt-3 text-sm text-muted">Пока ни одна группа не загружена до конца.</p>}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+}
+
+function peopleId(r: PeopleRow) {
+  return String(r.cid);
+}
+
+function byPeopleName(a: PeopleRow, b: PeopleRow) {
+  return a.name.localeCompare(b.name, "ru") || a.cid - b.cid;
+}
+
+function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
+  if (kind === "balance") return Boolean(row.journal && row.pays);
+  return Boolean(row.journal);
+}
+
+function peopleNeedsRecheck(row: PeopleRow, kind: "students" | "balance") {
+  if (!peopleFinished(row, kind)) return false;
+  return kind === "balance" ? !row.paysRechecked : !row.rechecked;
+}
+
+function ScopePills({ value, onChange, live, arch }: { value: "live" | "archive"; onChange: (v: "live" | "archive") => void; live: string; arch: string }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      <button type="button" className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", value === "live" ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => onChange("live")}>
+        {live}
+      </button>
+      <button type="button" className={cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold", value === "archive" ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => onChange("archive")}>
+        {arch}
+      </button>
+    </div>
+  );
+}
+
+function PeopleFillList({
+  rows,
+  kind,
+  busy,
+  loadingCid,
+  onLoad,
+  onRecheck,
+  onStop,
+}: {
+  rows: PeopleRow[];
+  kind: "students" | "balance";
+  busy?: boolean;
+  loadingCid?: number;
+  onLoad: (row: PeopleRow) => void;
+  onRecheck: (row: PeopleRow) => void;
+  onStop?: () => void;
+}) {
+  const [open, setOpen] = useState("");
+  const [query, setQuery] = useState("");
+  const [pageSize, setPageSize] = useState(20);
+  const [pageNeed, setPageNeed] = useState(0);
+  const [pageDone, setPageDone] = useState(0);
+  const q = query.trim().toLowerCase();
+  const colLock = useRef<Record<string, boolean>>({});
+  const scoped = rows.filter((r) => {
+    if (!q) return true;
+    return r.name.toLowerCase().includes(q) || String(r.cid).includes(q) || (r.groups || []).some((g) => g.toLowerCase().includes(q));
+  });
+  const isPinned = (r: PeopleRow) => peopleId(r) === open || r.cid === loadingCid;
+  const finishedOf = (r: PeopleRow) => {
+    const id = peopleId(r);
+    const now = peopleFinished(r, kind);
+    if (loadingCid && r.cid === loadingCid) {
+      if (colLock.current[id] == null) colLock.current[id] = now;
+      return colLock.current[id];
+    }
+    colLock.current[id] = now;
+    return now;
+  };
+  const needRows = scoped.filter((r) => !finishedOf(r)).slice().sort(byPeopleName);
+  const doneRows = scoped.filter((r) => finishedOf(r)).slice().sort(byPeopleName);
+  const nNeed = needRows.length;
+  const nDone = doneRows.length;
+  const pagesNeed = Math.max(1, Math.ceil(nNeed / pageSize) || 1);
+  const pagesDone = Math.max(1, Math.ceil(nDone / pageSize) || 1);
+  const safeNeed = Math.min(pageNeed, pagesNeed - 1);
+  const safeDone = Math.min(pageDone, pagesDone - 1);
+  const listNeed = pageWithPinned(needRows, safeNeed, pageSize, isPinned);
+  const listDone = pageWithPinned(doneRows, safeDone, pageSize, isPinned);
+  useEffect(() => {
+    setPageNeed(0);
+    setPageDone(0);
+  }, [q, pageSize, kind]);
+  useEffect(() => {
+    try {
+      const n = Number(localStorage.getItem("crm-journal-page") || 20);
+      if (n === 10 || n === 20 || n === 30 || n === 100) setPageSize(n);
+    } catch {
+      /* */
+    }
+  }, []);
+  function pickPageSize(n: number) {
+    setPageSize(n);
+    setPageNeed(0);
+    setPageDone(0);
+    try {
+      localStorage.setItem("crm-journal-page", String(n));
+    } catch {
+      /* */
+    }
+  }
+  function pager(page: number, pages: number, onPage: (n: number) => void) {
+    if (pages <= 1) return null;
+    return (
+      <span className="ml-auto flex flex-wrap items-center gap-1">
+        <button type="button" className="h-8 rounded-full bg-white px-3 font-semibold ring-1 ring-black/10 disabled:opacity-40" disabled={page <= 0} onClick={() => onPage(page - 1)}>
+          Назад
+        </button>
+        {Array.from({ length: pages }, (_, i) => i).map((i) => (
+          <button key={i} type="button" className={cn("h-8 min-w-8 rounded-full px-2 font-semibold", i === page ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => onPage(i)}>
+            {i + 1}
+          </button>
+        ))}
+        <button type="button" className="h-8 rounded-full bg-white px-3 font-semibold ring-1 ring-black/10 disabled:opacity-40" disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>
+          Дальше
+        </button>
+      </span>
+    );
+  }
+  function renderPerson(row: PeopleRow) {
+    const id = peopleId(row);
+    const full = peopleFinished(row, kind);
+    const needsRecheck = peopleNeedsRecheck(row, kind);
+    const active = loadingCid === row.cid;
+    const shown = open === id;
+    const pct = full ? 100 : row.lessons ? 50 : 0;
+    const step = active
+      ? `загрузка · ${row.name}`
+      : full
+        ? kind === "balance"
+          ? "Касса и журнал на месте"
+          : "Календарь на месте"
+        : kind === "balance"
+          ? "Шаг 1 · загрузить кассу"
+          : "Шаг 1 · загрузить календарь";
+    const btn = full ? "Перепроверить" : kind === "balance" ? "Загрузить кассу" : "Загрузить календарь";
+    return (
+      <li key={id} className={cn("rounded-2xl p-3 ring-1", needsRecheck ? "bg-sky-50 ring-sky-400" : full ? "bg-white ring-emerald-300" : active ? "bg-white ring-primary" : "bg-white ring-black/8")}>
+        <div className="flex items-center gap-2">
+          <button type="button" className="min-w-0 flex-1 truncate text-left font-medium" onClick={() => setOpen((cur) => (cur === id ? "" : id))} title={row.name}>
+            {row.name}
+          </button>
+          <span className="shrink-0 rounded-full bg-black/10 px-2 py-0.5 text-[0.72rem] font-semibold tabular-nums">№{row.cid}</span>
+          <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+            {full ? (
+              needsRecheck ? (
+                <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[0.72rem] font-semibold text-sky-950">есть неперепроверенные данные</span>
+              ) : (
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">загрузка завершена</span>
+              )
+            ) : (
+              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">требуют загрузки</span>
+            )}
+          </span>
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg font-semibold leading-none ring-1 ring-black/20 hover:bg-black/5"
+            aria-expanded={shown}
+            aria-label={shown ? "свернуть" : "развернуть"}
+            onClick={() => setOpen((cur) => (cur === id ? "" : id))}
+          >
+            {shown ? "−" : "+"}
+          </button>
+        </div>
+        <FillBar pct={pct} run={active} done={full && !needsRecheck} warn={needsRecheck} />
+        <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
+          {(row.groups || []).slice(0, 2).join(" · ") || "групп на карточке нет"}
+          {row.lessons ? ` · ${row.lessons} зан.` : ""}
+        </p>
+        <p className="mt-2 h-5 truncate text-[0.78rem] font-semibold">{step}</p>
+        <div className="mt-1 flex h-8 items-center gap-2">
+          <button
+            type="button"
+            disabled={busy && !active}
+            className={cn(BTN_LOAD_SM, "min-w-[12.5rem] w-fit shrink-0 px-4", active && "ra-progress-run")}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (full) onRecheck(row);
+              else onLoad(row);
+            }}
+          >
+            {btn}
+          </button>
+          <button
+            type="button"
+            disabled={!active}
+            className={BTN_GHOST_SM}
+            onClick={(e) => {
+              e.stopPropagation();
+              onStop?.();
+            }}
+          >
+            Стоп
+          </button>
+        </div>
+        {shown ? (
+          <div className="mt-2 rounded-xl bg-white px-2.5 py-2 text-[0.72rem] leading-snug ring-1 ring-black/10">
+            <CheckLine on={Boolean(row.journal)} text="календарь загружен" />
+            <CheckLine on={Boolean(row.rechecked)} text="календарь перепроверен" />
+            <CheckLine on={Boolean(row.rechecked)} text="дубликатов нет" />
+            {kind === "balance" ? (
+              <>
+                <CheckLine on={Boolean(row.pays)} text="касса загружена" />
+                <CheckLine on={Boolean(row.paysRechecked)} text="касса перепроверена" />
+              </>
+            ) : null}
+            <p className="mt-1 text-muted">{row.lessons ? ruLessons(row.lessons) : "занятий на диске нет"}{row.at ? ` · ${ruAt(row.at)}` : ""}</p>
+          </div>
+        ) : null}
+      </li>
+    );
+  }
+  return (
+    <div className="mt-3">
+      <input
+        className="h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10"
+        placeholder="Найти ученика…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-[0.78rem]">
+        <span className="text-muted">На странице</span>
+        {([10, 20, 30, 100] as const).map((n) => (
+          <button key={n} type="button" className={cn("h-8 rounded-full px-3 font-semibold", pageSize === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => pickPageSize(n)}>
+            {n}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 grid items-start gap-3 lg:grid-cols-2">
+        <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-rose-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="font-display text-[1.05rem] text-rose-900">Требуют загрузки данных · {nNeed}</h4>
+            {pager(safeNeed, pagesNeed, setPageNeed)}
+          </div>
+          <p className="mt-1 text-[0.72rem] text-muted">{kind === "balance" ? "Касса и журнал — пока чего-то нет, ученик здесь." : "Личный календарь ещё неполный — ученик здесь."}</p>
+          {listNeed.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listNeed.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Все ученики этого списка уже загружены.</p>}
+        </section>
+        <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="font-display text-[1.05rem] text-emerald-900">Загрузка данных завершена · {nDone}</h4>
+            {pager(safeDone, pagesDone, setPageDone)}
+          </div>
+          <p className="mt-1 text-[0.72rem] text-muted">{kind === "balance" ? "Касса на месте. Перепроверить — сверка с Alfa." : "Календарь на месте. Перепроверить — сверка с Alfa."}</p>
+          {listDone.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listDone.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Пока ни один ученик не загружен до конца.</p>}
         </section>
       </div>
     </div>
@@ -770,8 +1042,8 @@ export function AdminCrmSettings() {
     linked?: boolean;
     progress?: {
       groups?: { total: number; done: number; periods?: number; miss?: MissPack; doneList?: MissPack; rows?: FillRow[] };
-      live?: { total: number; journalDone: number; cardDone: number; missJournal?: MissPack; missCard?: MissPack };
-      archive?: { total: number; journalDone: number; cardDone: number; missJournal?: MissPack; missCard?: MissPack };
+      live?: { total: number; journalDone: number; cardDone: number; missJournal?: MissPack; missCard?: MissPack; people?: PeopleRow[] };
+      archive?: { total: number; journalDone: number; cardDone: number; missJournal?: MissPack; missCard?: MissPack; people?: PeopleRow[] };
     };
     lastLife?: {
       at?: string;
@@ -800,10 +1072,12 @@ export function AdminCrmSettings() {
   const tabLockY = useRef<number | null>(null);
   const tabLockKind = useRef<"crm" | "hist" | null>(null);
   const [openMiss, setOpenMiss] = useState<"g" | "j1" | "j2" | "c1" | "c2" | "">("");
-  const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string } | null>(null);
+  const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null>(null);
   const holdFill = useRef(false);
   const stopSchool = useRef(false);
   const [schoolRun, setSchoolRun] = useState<{ cur: string; n: number; total: number } | null>(null);
+  const [groupArchived, setGroupArchived] = useState(false);
+  const [peopleStudy, setPeopleStudy] = useState<"1" | "2">("1");
   const [studentRun, setStudentRun] = useState<{
     kind: "students" | "balance";
     study: "1" | "2";
@@ -1167,6 +1441,47 @@ export function AdminCrmSettings() {
       setFillLoading(null);
       setBusy(false);
     }
+  }
+
+  async function loadPerson(row: PeopleRow, kind: "students" | "balance", study: "1" | "2", recheck = false) {
+    if (!row.cid) return;
+    holdFill.current = true;
+    stopSchool.current = false;
+    setFillLoading({ kind, label: row.name, customerId: row.cid });
+    try {
+      await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck });
+    } finally {
+      holdFill.current = false;
+      setFillLoading(null);
+      setBusy(false);
+    }
+  }
+
+  async function recheckPeople(kind: "students" | "balance", study: "1" | "2") {
+    const pack = study === "2" ? journal?.progress?.archive?.people : journal?.progress?.live?.people;
+    const queue = (pack || []).filter((r) => !peopleFinished(r, kind) || peopleNeedsRecheck(r, kind));
+    if (!queue.length) {
+      setMsg(study === "2" ? "В архиве все сверены." : "У текущих все сверены.");
+      return;
+    }
+    stopSchool.current = false;
+    holdFill.current = true;
+    setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
+    try {
+      for (let i = 0; i < queue.length; i += 1) {
+        if (stopSchool.current) break;
+        const row = queue[i];
+        setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
+        setFillLoading({ kind, label: row.name, customerId: row.cid });
+        await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: peopleFinished(row, kind) });
+      }
+    } finally {
+      holdFill.current = false;
+      setFillLoading(null);
+      setBusy(false);
+      setSchoolRun(null);
+    }
+    if (stopSchool.current) setMsg("Очередь учеников остановлена.");
   }
 
   async function recheckSchool() {
@@ -1753,12 +2068,21 @@ export function AdminCrmSettings() {
                   ) : null}
                 </div>
                 <p className="mt-1 h-5 truncate text-sm text-muted">{schoolRun ? `Сейчас ${schoolRun.cur}` : "\u00a0"}</p>
+                <div className="mt-2">
+                  <ScopePills
+                    value={groupArchived ? "archive" : "live"}
+                    onChange={(v) => setGroupArchived(v === "archive")}
+                    live="Сейчас идут"
+                    arch="Архивные группы"
+                  />
+                </div>
                 <GroupFillList
                   rows={p?.groups?.rows || []}
                   school={journalSchool}
                   busy={busy || offline || Boolean(schoolRun)}
                   loading={fillLoading || undefined}
                   grain={journalGrain}
+                  archived={groupArchived}
                   onLoad={(row, part, recheck) =>
                     void runJournal({
                       kind: "group",
@@ -1805,82 +2129,117 @@ export function AdminCrmSettings() {
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Календарь ученика</p>
                 <p className="mt-1 text-sm text-muted">
-                  Личный журнал на карточке ученика: явки, пропуски, списания. Это не журнал группы — группа уже грузится во вкладке «Занятия в группах». Здесь Alfa отдаёт занятия <span className="font-semibold text-fg">по номеру ученика</span>.
+                  Личный журнал по номеру ученика. Активные и архив — отдельно. Карточка как у группы: загрузить, потом перепроверить.
                 </p>
-                <p className="mt-1 text-sm text-muted">
-                  «Загрузить 10 текущих» идёт по одному ученику: сверху видно ФИО, справа — кто не попал в выдачу Alfa, их можно перепроверить.
-                </p>
-                <p className="mt-2 h-6 truncate text-sm font-semibold">
-                  {fillLoading?.kind === "students"
-                    ? `Идёт загрузка · ${studentRun?.n || 0}/${studentRun?.total || 10} · ${studentRun?.cur || fillLoading.label || "Alfa"}`
-                    : "\u00a0"}
-                </p>
-                <p className="mt-2 text-sm font-semibold">Сейчас ходят · {p?.live?.total || 0} учеников</p>
-                <ProgressBar done={p?.live?.journalDone || 0} total={p?.live?.total || 0} run={fillLoading?.kind === "students" && fillLoading.label !== "архивные"} />
-                <p className="mt-3 text-sm font-semibold">Уже не ходят (архив) · {p?.archive?.total || 0} учеников</p>
-                <ProgressBar done={p?.archive?.journalDone || 0} total={p?.archive?.total || 0} run={fillLoading?.kind === "students" && fillLoading.label === "архивные"} />
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "students" && fillLoading.label !== "архивные" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runStudentPack("students", "1")}>
-                    Загрузить 10 текущих
-                  </button>
-                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "students" && fillLoading.label === "архивные" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runStudentPack("students", "2")}>
-                    Загрузить 10 архивных
-                  </button>
-                  <button
-                    type="button"
-                    className={BTN_GHOST}
-                    disabled={!fillLoading || fillLoading.kind !== "students"}
-                    onClick={() => {
-                      stopSchool.current = true;
-                    }}
-                  >
-                    Стоп
-                  </button>
-                  <button type="button" className={BTN_GHOST} onClick={() => setOpenMiss(openMiss === "j1" ? "" : "j1")}>
-                    {openMiss === "j1" ? "Скрыть список" : `Кому из текущих нет · ${Math.max(0, (p?.live?.total || 0) - (p?.live?.journalDone || 0))}`}
-                  </button>
-                  <button type="button" className={BTN_GHOST} onClick={() => setOpenMiss(openMiss === "j2" ? "" : "j2")}>
-                    {openMiss === "j2" ? "Скрыть список" : `Кому из архива нет · ${Math.max(0, (p?.archive?.total || 0) - (p?.archive?.journalDone || 0))}`}
-                  </button>
+                <div className="mt-3">
+                  <ScopePills
+                    value={peopleStudy === "2" ? "archive" : "live"}
+                    onChange={(v) => setPeopleStudy(v === "archive" ? "2" : "1")}
+                    live={`Сейчас ходят · ${p?.live?.total || 0}`}
+                    arch={`Архивные клиенты · ${p?.archive?.total || 0}`}
+                  />
                 </div>
-                <StudentPackView
-                  rows={(studentRun?.kind === "students" ? studentRun.rows : null) || journal?.lastStudents?.rows || []}
-                  cur={studentRun?.cur}
-                  n={studentRun?.n}
-                  total={studentRun?.total}
-                  running={fillLoading?.kind === "students"}
-                  busy={busy || offline}
-                  onRecheck={(row) => void recheckStudent(row, "students", studentRun?.study === "2" || journal?.lastStudents?.study === "2" ? "2" : "1")}
-                />
-                {openMiss === "j1" ? <MissList pack={p?.live?.missJournal} empty="У всех текущих календарь уже есть." /> : null}
-                {openMiss === "j2" ? <MissList pack={p?.archive?.missJournal} empty="У архивных календарь уже есть." /> : null}
+                {(() => {
+                  const side = peopleStudy === "2" ? p?.archive : p?.live;
+                  const done = side?.journalDone || 0;
+                  const total = side?.total || 0;
+                  const run = fillLoading?.kind === "students";
+                  return (
+                    <>
+                      <ProgressBar done={done} total={total} run={run} />
+                      <p className="mt-1 h-5 truncate text-sm text-muted">{run ? `Сейчас ${fillLoading?.label || ""}` : schoolRun?.cur && fillLoading?.kind === "students" ? `Сейчас ${schoolRun.cur}` : "\u00a0"}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          className={cn(BTN_LOAD, run && schoolRun && "ra-progress-run")}
+                          disabled={offline || busy}
+                          onClick={() => void recheckPeople("students", peopleStudy)}
+                        >
+                          {run && schoolRun ? `Очередь ${schoolRun.n}/${schoolRun.total}` : peopleStudy === "2" ? "Перепроверить архивных" : "Перепроверить текущих"}
+                        </button>
+                        <button
+                          type="button"
+                          className={BTN_GHOST}
+                          disabled={!run}
+                          onClick={() => {
+                            stopSchool.current = true;
+                          }}
+                        >
+                          Стоп
+                        </button>
+                      </div>
+                      <PeopleFillList
+                        rows={side?.people || []}
+                        kind="students"
+                        busy={busy || offline}
+                        loadingCid={fillLoading?.kind === "students" ? fillLoading.customerId : undefined}
+                        onLoad={(row) => void loadPerson(row, "students", peopleStudy)}
+                        onRecheck={(row) => void loadPerson(row, "students", peopleStudy, true)}
+                        onStop={() => {
+                          stopSchool.current = true;
+                        }}
+                      />
+                    </>
+                  );
+                })()}
               </section>
               ) : null}
 
               {histTab === "money" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Деньги на карточке</p>
-                <p className="mt-1 text-sm text-muted">Платежи и списания. Без этого остаток не совпадёт с Alfa.</p>
-                <p className="mt-2 text-sm font-semibold">Сейчас ходят</p>
-                <ProgressBar done={p?.live?.cardDone || 0} total={p?.live?.total || 0} run={fillLoading?.kind === "balance"} />
-                <p className="mt-3 text-sm font-semibold">Уже не ходят (архив)</p>
-                <ProgressBar done={p?.archive?.cardDone || 0} total={p?.archive?.total || 0} run={fillLoading?.kind === "balance"} />
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "balance" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runStudentPack("balance", "1")}>
-                    10 текущих с деньгами
-                  </button>
-                  <button type="button" className={cn(BTN_LOAD, fillLoading?.kind === "balance" && "ra-progress-run")} disabled={busy || offline} onClick={() => void runStudentPack("balance", "2")}>
-                    10 архивных с деньгами
-                  </button>
-                  <button type="button" className={BTN_GHOST} onClick={() => setOpenMiss(openMiss === "c1" ? "" : "c1")}>
-                    {openMiss === "c1" ? "Скрыть" : "У кого из текущих нет"}
-                  </button>
-                  <button type="button" className={BTN_GHOST} onClick={() => setOpenMiss(openMiss === "c2" ? "" : "c2")}>
-                    {openMiss === "c2" ? "Скрыть" : "У кого из архива нет"}
-                  </button>
+                <p className="mt-1 text-sm text-muted">Платежи и абонементы. Активные и архив — отдельно. Стиль как у групп: загрузить, потом перепроверить.</p>
+                <div className="mt-3">
+                  <ScopePills
+                    value={peopleStudy === "2" ? "archive" : "live"}
+                    onChange={(v) => setPeopleStudy(v === "archive" ? "2" : "1")}
+                    live={`Сейчас ходят · ${p?.live?.total || 0}`}
+                    arch={`Архивные клиенты · ${p?.archive?.total || 0}`}
+                  />
                 </div>
-                {openMiss === "c1" ? <MissList pack={p?.live?.missCard} empty="У текущих деньги уже есть." /> : null}
-                {openMiss === "c2" ? <MissList pack={p?.archive?.missCard} empty="У архивных деньги уже есть." /> : null}
+                {(() => {
+                  const side = peopleStudy === "2" ? p?.archive : p?.live;
+                  const done = side?.cardDone || 0;
+                  const total = side?.total || 0;
+                  const run = fillLoading?.kind === "balance";
+                  return (
+                    <>
+                      <ProgressBar done={done} total={total} run={run} />
+                      <p className="mt-1 h-5 truncate text-sm text-muted">{run ? `Сейчас ${fillLoading?.label || ""}` : "\u00a0"}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          className={cn(BTN_LOAD, run && schoolRun && "ra-progress-run")}
+                          disabled={offline || busy}
+                          onClick={() => void recheckPeople("balance", peopleStudy)}
+                        >
+                          {run && schoolRun ? `Очередь ${schoolRun.n}/${schoolRun.total}` : peopleStudy === "2" ? "Перепроверить архивных" : "Перепроверить текущих"}
+                        </button>
+                        <button
+                          type="button"
+                          className={BTN_GHOST}
+                          disabled={!run}
+                          onClick={() => {
+                            stopSchool.current = true;
+                          }}
+                        >
+                          Стоп
+                        </button>
+                      </div>
+                      <PeopleFillList
+                        rows={side?.people || []}
+                        kind="balance"
+                        busy={busy || offline}
+                        loadingCid={fillLoading?.kind === "balance" ? fillLoading.customerId : undefined}
+                        onLoad={(row) => void loadPerson(row, "balance", peopleStudy)}
+                        onRecheck={(row) => void loadPerson(row, "balance", peopleStudy, true)}
+                        onStop={() => {
+                          stopSchool.current = true;
+                        }}
+                      />
+                    </>
+                  );
+                })()}
               </section>
               ) : null}
             </div>
