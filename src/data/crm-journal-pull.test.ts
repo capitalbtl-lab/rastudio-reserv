@@ -6,10 +6,10 @@ import { journalPeriods, journalChunks, nextPeriod, periodOfDate, spanOf, expand
 describe("ручной журнал с Alfa", () => {
   it("кварталы с конца, полугодие и год — пачки", () => {
     const p = journalPeriods(new Date("2026-09-09T12:00:00Z"), 2);
-    assert.equal(p[0].key, "2026q3");
-    assert.equal(p[1].key, "2026q2");
-    assert.equal(p.length, 8);
-    assert.equal(nextPeriod(["2026q3"], p)?.key, "2026q2");
+    assert.equal(p[0].key, "2026q4");
+    assert.equal(p[1].key, "2026q3");
+    assert.equal(p.length, 9);
+    assert.equal(nextPeriod(["2026q4"], p)?.key, "2026q3");
     assert.equal(periodOfDate(new Date(2024, 2, 5)), "2024q1");
     assert.equal(spanOf([{ date: "01.09.2025" }, { date: "10.03.2026" }]).from, "сен 2025");
     assert.deepEqual(expandPeriodKeys(["2024-1", "2024-2"]).sort(), ["2024q1", "2024q2", "2024q3", "2024q4"]);

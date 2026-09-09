@@ -72,6 +72,15 @@ describe("перепроверка журнала", () => {
     assert.equal(chunkDone(chunks[0], []), false);
   });
 
+  it("сентябрь показывает IV квартал 2026; октябрьская группа не закрывается одним III", () => {
+    const now = new Date("2026-09-09");
+    const qs = journalChunks("quarter", now);
+    assert.ok(qs.some((c) => c.key === "2026q4"), "должен быть IV квартал 2026");
+    const fall = completeOf("01.10.2026", "31.12.2026", { pulled: { "2026q3": "x" } });
+    assert.ok(fall.keys.includes("2026q4"));
+    assert.equal(fall.complete, false);
+  });
+
   it("0/0 кварталов не готово; год только у молодых", () => {
     const empty = completeOf("01.01.2090", "02.01.2090", { pulled: {} });
     assert.ok(empty.total === 0 || empty.complete === false);

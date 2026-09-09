@@ -11,7 +11,7 @@ import { allDossierCrmIds, findDossier, dossiersInGroup } from "./dossiers";
 import { loadGroupCard, saveGroupCard } from "./group-cards";
 import { customerSyncOf } from "./crm-customer-sync";
 import { isPayJournalComplete } from "./crm-pay";
-import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, type Grain } from "./crm-journal-periods";
+import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -210,8 +210,10 @@ export function groupFillRow(g: JournalPullGroup) {
   const fail = card?.journalFill?.fail || {};
   const weak = new Set(card?.journalFill?.weak || []);
   const life = groupLife(g);
-  const age = groupAge(life.from, life.to);
-  const known = Boolean(life.from || life.to);
+  const clipFrom = earlierRu(life.from, span.fromRu);
+  const clipTo = laterRu(life.to, span.toRu);
+  const age = groupAge(clipFrom || life.from, clipTo || life.to);
+  const known = Boolean(clipFrom || clipTo);
   const byQ = new Map<string, number>();
   for (const l of card?.calendar || []) {
     const d = l.date;
@@ -240,7 +242,7 @@ export function groupFillRow(g: JournalPullGroup) {
       needDetails,
     };
   });
-  const parts = known ? allParts.filter((p) => chunkOverlapsLife(p, life.from, life.to)) : allParts.slice(0, 4);
+  const parts = known ? allParts.filter((p) => chunkOverlapsLife(p, clipFrom, clipTo)) : allParts.slice(0, 4);
   const next = parts.find((p) => !p.done);
   const weight = span.lessons >= 120 ? "тяжёлая" : span.lessons >= 40 ? "средняя" : done.length ? "лёгкая" : "";
   const lifeTxt = lifeLabel(life.from, life.to);
@@ -570,7 +572,15 @@ export async function journalPull(opts: {
         if (!cur) continue;
         const fromA = hit.from || String(cur.journalLife?.from || g.bDate || "");
         const toA = hit.to || String(cur.journalLife?.to || g.eDate || "");
-        saveGroupCard({ ...cur, journalLife: { from: fromA, to: toA, source: hit.ok && (hit.from || hit.to || hit.lessons) ? "alfa" : cur.journalLife?.source || "slot", at: now } });
+        saveGroupCard({
+          ...cur,
+          journalLife: {
+            from: fromA,
+            to: toA,
+            source: hit.ok ? "alfa" : cur.journalLife?.source || "slot",
+            at: now,
+          },
+        });
         probed += 1;
       }
     }
@@ -686,11 +696,14 @@ export async function journalPull(opts: {
     const doneKeys = pulledPeriodKeys(card?.journalFill);
     const weakSet = new Set(card?.journalFill?.weak || []);
     const life = groupLife(hit);
-    const age = groupAge(life.from, life.to);
+    const span = spanOf(card?.calendar);
+    const clipFrom = earlierRu(life.from, span.fromRu);
+    const clipTo = laterRu(life.to, span.toRu);
+    const age = groupAge(clipFrom || life.from, clipTo || life.to);
     const useGrain = clampGrain(age.id, grain);
     const chunksAll = journalChunks(useGrain);
-    const known = Boolean(life.from || life.to);
-    const chunks = known ? chunksAll.filter((c) => chunkOverlapsLife(c, life.from, life.to)) : chunksAll.slice(0, 4);
+    const known = Boolean(clipFrom || clipTo);
+    const chunks = known ? chunksAll.filter((c) => chunkOverlapsLife(c, clipFrom, clipTo)) : chunksAll.slice(0, 4);
     const need = (c: (typeof chunks)[number]) => !chunkDone(c, doneKeys) || c.keys.some((k) => weakSet.has(k));
     const picked =
       (periodKey && (chunksAll.find((c) => c.key === periodKey) || journalChunks("quarter").find((c) => c.key === periodKey))) ||

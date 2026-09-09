@@ -15,8 +15,12 @@ const QMETA = [
 export function journalQuarters(now = new Date(), years = 6): JournalChunk[] {
   const out: JournalChunk[] = [];
   let y = now.getFullYear();
-  let q = Math.floor(now.getMonth() / 3) + 1;
-  for (let i = 0; i < years * 4; i += 1) {
+  let q = Math.floor(now.getMonth() / 3) + 1 + 1;
+  if (q > 4) {
+    q = 1;
+    y += 1;
+  }
+  for (let i = 0; i < years * 4 + 1; i += 1) {
     const m = QMETA[q - 1];
     const key = `${y}q${q}`;
     out.push({ key, from: `${m.from}.${y}`, to: `${m.to}.${y}`, label: `${m.label} ${y}`, keys: [key] });
@@ -138,6 +142,10 @@ function fmtMonth(d: Date) {
   return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+function ruOf(d: Date) {
+  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+}
+
 export function spanOf(calendar: { date?: string }[] | undefined) {
   let min: Date | null = null;
   let max: Date | null = null;
@@ -147,7 +155,29 @@ export function spanOf(calendar: { date?: string }[] | undefined) {
     if (!min || d < min) min = d;
     if (!max || d > max) max = d;
   }
-  return { from: min ? fmtMonth(min) : "", to: max ? fmtMonth(max) : "", lessons: (calendar || []).length };
+  return {
+    from: min ? fmtMonth(min) : "",
+    to: max ? fmtMonth(max) : "",
+    fromRu: min ? ruOf(min) : "",
+    toRu: max ? ruOf(max) : "",
+    lessons: (calendar || []).length,
+  };
+}
+
+export function earlierRu(a?: string, b?: string) {
+  const da = parseLessonDate(a || "");
+  const db = parseLessonDate(b || "");
+  if (!da) return b || "";
+  if (!db) return a || "";
+  return da <= db ? String(a) : String(b);
+}
+
+export function laterRu(a?: string, b?: string) {
+  const da = parseLessonDate(a || "");
+  const db = parseLessonDate(b || "");
+  if (!da) return b || "";
+  if (!db) return a || "";
+  return da >= db ? String(a) : String(b);
 }
 
 export function periodOfDate(d: Date) {
