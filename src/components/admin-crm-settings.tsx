@@ -618,8 +618,6 @@ function GroupFillList({
   );
 }
 
-}
-
 function peopleId(r: PeopleRow) {
   return String(r.cid);
 }
