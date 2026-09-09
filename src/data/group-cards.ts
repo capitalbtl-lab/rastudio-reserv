@@ -222,6 +222,28 @@ function withPupilFio(lesson: GroupCalLesson): GroupCalLesson {
   };
 }
 
+export function journalGroupsOfCustomer(
+  customerId: number,
+  linked: { id: number; branchId: number; name?: string; subjectId?: number }[] = [],
+) {
+  const id = Number(customerId) || 0;
+  const seen = new Set(linked.map((g) => `${Number(g.branchId) || 0}-${Number(g.id) || 0}`));
+  const out = linked.map((g) => ({ id: g.id, branchId: g.branchId, name: g.name, subjectId: g.subjectId }));
+  if (!id) return out;
+  for (const card of listGroupCards()) {
+    const k = `${Number(card.branchId) || 0}-${Number(card.id) || 0}`;
+    if (seen.has(k)) continue;
+    const hit = (card.calendar || []).some(
+      (l) =>
+        (l.customerIds || []).map(Number).includes(id) || (l.pupils || []).some((p) => Number(p.customerId) === id),
+    );
+    if (!hit) continue;
+    seen.add(k);
+    out.push({ id: card.id, branchId: card.branchId, name: card.name, subjectId: card.subjectId || undefined });
+  }
+  return out;
+}
+
 export function collectCustomerJournal(
   customerId: number,
   groups: { id: number; branchId: number; name?: string }[],
@@ -229,6 +251,7 @@ export function collectCustomerJournal(
   const out: GroupCalLesson[] = [];
   const seen = new Set<string>();
   const id = Number(customerId) || 0;
+  const allGroups = journalGroupsOfCustomer(id, groups);
   const push = (les: GroupCalLesson, groupName?: string, fromOwn = false) => {
     const ids = (les.customerIds || []).map(Number);
     const pupil = (les.pupils || []).some((p) => Number(p.customerId) === id);
@@ -241,7 +264,7 @@ export function collectCustomerJournal(
       amount: charge.amount || les.amount,
       cttId: charge.cttId || les.cttId,
     });
-    if (groups.length && !fromOwn && !calendarLessonForCard(row, groups, id)) return;
+    if (groups.length && !fromOwn && !calendarLessonForCard(row, allGroups, id)) return;
     const key = String(row.lessonId || `${row.date}|${row.from}|${row.type}|${row.group}`);
     const prev = seen.has(key) ? out.find((x) => String(x.lessonId || `${x.date}|${x.from}|${x.type}|${x.group}`) === key) : undefined;
     if (prev) {
@@ -259,32 +282,50 @@ export function collectCustomerJournal(
       else if (!idsA.length && merged?.length) prev.customerIds = merged.map((p) => p.customerId);
       if ((Number(row.total) || 0) > (Number(prev.total) || 0) && !merged?.length) prev.total = row.total;
       if ((Number(row.attend) || 0) > (Number(prev.attend) || 0) && !merged?.length) prev.attend = row.attend;
+      if (!String(prev.topic || "").trim() && String(row.topic || "").trim()) prev.topic = row.topic;
+      if (!String(prev.homework || "").trim() && String(row.homework || "").trim()) prev.homework = row.homework;
+      if (!String(prev.note || "").trim() && String(row.note || "").trim()) prev.note = row.note;
+      if (!prev.detailsAt && row.detailsAt) prev.detailsAt = row.detailsAt;
+      if (!prev.teacher && row.teacher) prev.teacher = row.teacher;
+      if (!prev.subject && row.subject) prev.subject = row.subject;
+      if (!prev.group && row.group) prev.group = row.group;
       return;
     }
     seen.add(key);
     out.push(row);
   };
   for (const les of loadCustomerCalendar(customerId)) push(les, undefined, true);
-  for (const g of groups) {
+  for (const g of allGroups) {
     const gcard = loadGroupCard(g.branchId, g.id);
     for (const les of journalForCustomer(gcard?.calendar || [], customerId)) push(les, g.name);
     for (const les of gcard?.calendar || []) {
       if ((les.pupils || []).some((p) => Number(p.customerId) === id)) push(les, g.name, true);
+      else if ((les.customerIds || []).map(Number).includes(id)) push(les, g.name, true);
     }
   }
   return out.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")));
 }
 
-/** Проведённое занятие: сумма списания каждого ученика — в его журнал на диске. */
+/** Явка ученика с занятия — в его журнал на диске. Любой статус: план, пропуск, проведено. */
 export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
-  const rows = (lessons || []).filter((l) => Number(l.status) === 3 && (l.pupils || []).length);
+  const rows = (lessons || []).filter((l) => {
+    if ((l.pupils || []).length) return true;
+    return (l.customerIds || []).some((n) => Number(n) > 0);
+  });
   if (!rows.length) return 0;
   const store = loadCustomerCals();
   let n = 0;
   for (const lesson of rows) {
+    const cids = new Set<number>();
     for (const p of lesson.pupils || []) {
       const cid = Number(p.customerId) || 0;
-      if (!cid) continue;
+      if (cid) cids.add(cid);
+    }
+    for (const raw of lesson.customerIds || []) {
+      const cid = Number(raw) || 0;
+      if (cid) cids.add(cid);
+    }
+    for (const cid of cids) {
       const key = String(cid);
       const charge = chargeFromPupils(lesson, cid);
       const { list } = mergeLessonInto(store.items[key] || [], {
@@ -292,7 +333,10 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
         amount: charge.amount || undefined,
         cttId: charge.cttId || undefined,
       });
-      store.items[key] = list.slice(0, 2500);
+      store.items[key] = list
+        .slice()
+        .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")))
+        .slice(-8000);
       n += 1;
     }
   }

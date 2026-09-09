@@ -57,6 +57,10 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Требуют загрузки данных/);
     assert.match(ui, /Загрузка данных завершена/);
     assert.match(ui, /fillFinished/);
+    assert.match(ui, /fillNeedsRecheck/);
+    assert.match(ui, /есть неперепроверенные данные/);
+    assert.match(ui, /№\{Number\(row.groupId\) \|\| "—"\}/);
+    assert.match(ui, /shrink-0 rounded-full bg-black\/10/);
     assert.match(ui, /домашнее задание/);
     assert.match(ui, /таблица учеников/);
     assert.match(ui, /тема, ДЗ, комментарий/);

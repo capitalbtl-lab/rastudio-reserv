@@ -50,6 +50,9 @@ describe("журнал уроков", () => {
           { customerId: 1, name: "Усов Александр", attend: true, amount: 350 },
           { customerId: 2, name: "Чуднова Александра", attend: true, amount: 350 },
         ],
+        topic: "Перспектива",
+        homework: "натюрморт",
+        note: "молодец",
       },
       "Роботы",
     );
@@ -58,6 +61,9 @@ describe("журнал уроков", () => {
     assert.equal(charged.pupils?.length, 2);
     assert.equal(charged.customerIds?.length, 2);
     assert.equal(charged.pupils?.[0].name, "Усов Александр");
+    assert.equal(charged.topic, "Перспектива");
+    assert.equal(charged.homework, "натюрморт");
+    assert.equal(charged.note, "молодец");
   });
 
   it("карточка: только её группа, python и пустое имя не входят", () => {

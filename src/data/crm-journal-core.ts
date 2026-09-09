@@ -24,6 +24,8 @@ export type JournalLesson = {
   teacher?: string;
   room?: string;
   topic?: string;
+  homework?: string;
+  note?: string;
   amount?: number;
   cttId?: number;
   groupIds?: number[];
@@ -110,6 +112,9 @@ export function clientLessonFromJournal(lesson: JournalLesson, groupName?: strin
     status: Number(lesson.status || 0),
     subject: lesson.subject || "",
     room: String(lesson.room || ""),
+    topic: String(lesson.topic || "").trim() || undefined,
+    homework: String(lesson.homework || "").trim() || undefined,
+    note: String(lesson.note || "").trim() || undefined,
     amount: Number(lesson.amount || 0) || undefined,
     cttId: Number(lesson.cttId || 0) || undefined,
     groupIds: (lesson.groupIds || []).map(Number).filter((n) => n) || undefined,

@@ -163,6 +163,9 @@ describe("форма занятия карточки", () => {
     assert.match(strip, /save\(true\)/);
     assert.match(src, /pupils: l.pupils/);
     assert.match(src, /customerIds: l.customerIds/);
+    assert.match(src, /topic: l.topic/);
+    assert.match(src, /homework: l.homework/);
+    assert.match(src, /note: l.note/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /packLessonPupils/);
     assert.match(inbound, /fanOutLessonWriteoffs/);
@@ -186,6 +189,9 @@ describe("форма занятия карточки", () => {
     assert.match(cards, /mergeLessonPupils/);
     assert.match(cards, /withPupilFio/);
     assert.match(cards, /ids.map\(\(customerId\)/);
+    assert.match(cards, /journalGroupsOfCustomer/);
+    assert.match(cards, /Любой статус/);
+    assert.doesNotMatch(cards, /Number\(l.status\) === 3 && \(l.pupils/);
     const journal = readFileSync(new URL("./crm-journal-core.ts", import.meta.url), "utf8");
     assert.match(journal, /pupils: lesson.pupils/);
     const tariffs = readFileSync(new URL("./pupil-tariffs.ts", import.meta.url), "utf8");

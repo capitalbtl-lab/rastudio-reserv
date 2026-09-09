@@ -40,6 +40,9 @@ export type ClientLesson = {
   status?: number;
   subject?: string;
   room?: string;
+  topic?: string;
+  homework?: string;
+  note?: string;
   amount?: number;
   cttId?: number;
   groupIds?: number[];

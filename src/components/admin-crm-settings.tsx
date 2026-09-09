@@ -54,12 +54,12 @@ const BTN_GHOST =
 const BTN_GHOST_SM =
   "inline-flex h-8 items-center justify-center shrink-0 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10 hover:bg-primary/5 disabled:opacity-40";
 
-function FillBar({ pct, run, done }: { pct: number; run?: boolean; done?: boolean }) {
+function FillBar({ pct, run, done, warn }: { pct: number; run?: boolean; done?: boolean; warn?: boolean }) {
   const w = run ? Math.max(18, Math.min(100, pct)) : Math.max(0, Math.min(100, pct));
   return (
     <div className="mt-1.5 h-3 overflow-hidden rounded-full bg-primary/12 ring-1 ring-primary/20">
       <div
-        className={cn("h-full rounded-full transition-[width] duration-300", run ? "ra-progress-run" : done ? "bg-emerald-500" : "bg-primary")}
+        className={cn("h-full rounded-full transition-[width] duration-300", run ? "ra-progress-run" : warn ? "bg-sky-500" : done ? "bg-emerald-500" : "bg-primary")}
         style={{ width: `${w}%` }}
       />
     </div>
@@ -192,6 +192,14 @@ function fillFinished(chunks: FillPart[]) {
   return chunks.length > 0 && chunks.every((c) => c.done && !c.weak && !(c.needDetails || 0));
 }
 
+function fillRechecked(chunks: FillPart[]) {
+  return chunks.length > 0 && chunks.every((c) => c.rechecked);
+}
+
+function fillNeedsRecheck(chunks: FillPart[]) {
+  return fillFinished(chunks) && !fillRechecked(chunks);
+}
+
 function fillFinishedRow(row: FillRow, grain: Grain) {
   return fillFinished(packGrain(row.parts, clampGrain(row.age, grain)));
 }
@@ -279,7 +287,7 @@ function GroupFillList({
   const scoped = rows.filter((r) => {
     if (school && r.school !== school) return false;
     if (!q) return true;
-    return r.name.toLowerCase().includes(q) || String(r.school || "").toLowerCase().includes(q);
+    return r.name.toLowerCase().includes(q) || String(r.school || "").toLowerCase().includes(q) || String(r.groupId || "").includes(q);
   });
   const isPinned = (r: FillRow) => {
     if (open && fillGid(r) === open) return true;
@@ -359,17 +367,21 @@ function GroupFillList({
           const pct = total > 0 ? Math.min(100, Math.round((doneN / total) * 100)) : 0;
           const active = loading && loading.groupId === row.groupId && loading.branchId === row.branchId;
           const full = fillFinished(chunks);
+          const needsRecheck = fillNeedsRecheck(chunks);
           const shown = open === id;
           const wiz = nextWizard(chunks);
           const detailsLeft = chunks.reduce((s, c) => s + (c.needDetails || 0), 0);
           const loadKind = active ? loading?.kind || "group" : "";
           const loadLabel = active ? loading?.label || chunks.find((c) => c.key === loading?.periodKey)?.label || wiz.part?.label || "" : "";
           return (
-            <li key={id} data-gid={id} className={cn("rounded-2xl bg-white p-3 ring-1", full ? "ring-emerald-300" : active ? "ring-primary" : "ring-black/8")}>
+            <li key={id} data-gid={id} className={cn("rounded-2xl p-3 ring-1", needsRecheck ? "bg-sky-50 ring-sky-400" : full ? "bg-white ring-emerald-300" : active ? "bg-white ring-primary" : "bg-white ring-black/8")}>
               <div className="flex items-center gap-2">
-                <button type="button" className="min-w-0 flex-1 text-left font-medium" onClick={() => toggleOpen(id)}>
+                <button type="button" className="min-w-0 flex-1 truncate text-left font-medium" onClick={() => toggleOpen(id)} title={row.name}>
                   {row.name}
                 </button>
+                <span className="shrink-0 rounded-full bg-black/10 px-2 py-0.5 text-[0.72rem] font-semibold tabular-nums text-fg" title={`группа ${Number(row.groupId) || ""}`}>
+                  №{Number(row.groupId) || "—"}
+                </span>
                 <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
                     {row.archived ? (
                       <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[0.72rem] font-semibold text-zinc-800">архив</span>
@@ -385,7 +397,11 @@ function GroupFillList({
                       </span>
                     ) : null}
                     {full ? (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">загрузка завершена</span>
+                      needsRecheck ? (
+                        <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[0.72rem] font-semibold text-sky-950">есть неперепроверенные данные</span>
+                      ) : (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">загрузка завершена</span>
+                      )
                     ) : (
                       <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">
                         требуют загрузки{total ? ` · ${doneN}/${total}` : ""}
@@ -405,7 +421,7 @@ function GroupFillList({
                   {shown ? "−" : "+"}
                 </button>
               </div>
-              <FillBar pct={pct} run={active} done={full} />
+              <FillBar pct={pct} run={active} done={full && !needsRecheck} warn={needsRecheck} />
               <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
                   {active ? `загрузка · ${loadLabel}` : [row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
                   {!active && row.lessons ? ` · ${row.lessons} зан.` : ""}
