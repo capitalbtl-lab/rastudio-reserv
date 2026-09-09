@@ -64,6 +64,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /I квартал|Квартал/);
     assert.match(ui, /Порция за одно нажатие/);
     assert.match(ui, /сверено/);
+    assert.match(ui, /пропусков не обнаружено|дубликатов нет/);
+    assert.match(ui, /Перепроверить все кварталы/);
+    assert.match(ui, /Загрузить детали уроков всех кварталов/);
+    assert.match(ui, /перепроверен/);
+    assert.match(pull, /rechecked/);
     assert.match(ui, /periodKey: part.key/);
     assert.doesNotMatch(ui, /setInterval\(\(\) => \{\s*if \(document.hidden/);
     const pack = readFileSync(new URL("./crm-packet-queue.ts", import.meta.url), "utf8");

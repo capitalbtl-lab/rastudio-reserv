@@ -42,7 +42,7 @@ type MissPack = {
   items: { id?: number; name: string; extra?: string; groupId?: number; branchId?: number; school?: string; archived?: boolean }[];
 };
 
-type FillPart = { key: string; label: string; from?: string; to?: string; done?: boolean; weak?: boolean; lessons?: number; err?: string; at?: string; needDetails?: number };
+type FillPart = { key: string; label: string; from?: string; to?: string; done?: boolean; weak?: boolean; rechecked?: boolean; lessons?: number; err?: string; at?: string; needDetails?: number };
 
 type FillRow = {
   groupId?: number;
@@ -82,19 +82,32 @@ function packGrain(parts: FillPart[] | undefined, grain: Grain) {
     .filter((c) => c.keys.some((k) => have.has(k)))
     .map((c) => {
       const kids = c.keys.map((k) => byKey.get(k)).filter(Boolean) as FillPart[];
-      const done = c.keys.filter((k) => have.has(k)).every((k) => byKey.get(k)?.done);
-      const weak = c.keys.some((k) => byKey.get(k)?.weak);
+      const present = c.keys.filter((k) => have.has(k));
+      const done = present.every((k) => byKey.get(k)?.done);
+      const weak = present.some((k) => byKey.get(k)?.weak);
+      const rechecked = present.length > 0 && present.every((k) => byKey.get(k)?.rechecked);
       const lessons = kids.reduce((s, p) => s + (p.lessons || 0), 0);
       const needDetails = kids.reduce((s, p) => s + (p.needDetails || 0), 0);
       const at = kids.map((p) => p.at).filter(Boolean).sort().at(-1) || "";
       const err = kids.find((p) => p.err)?.err || "";
-      return { key: c.key, label: c.label, from: c.from, to: c.to, done, weak, lessons, err, at, needDetails };
+      return { key: c.key, label: c.label, from: c.from, to: c.to, done, weak, rechecked, lessons, err, at, needDetails };
     });
+}
+
+function CheckLine({ on, text }: { on: boolean; text: string }) {
+  return (
+    <span className={cn("block", on ? "text-emerald-900" : "text-muted")}>
+      {on ? "☑ " : "☐ "}
+      {text}
+    </span>
+  );
 }
 
 function nextRecheckPart(row: FillRow, grain: Grain) {
   const chunks = packGrain(row.parts, clampGrain(row.age, grain));
-  return chunks.find((c) => !c.done || c.weak) || chunks[0] || null;
+  const hole = chunks.find((c) => !c.done || c.weak);
+  if (hole) return hole;
+  return [...chunks].sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")))[0] || chunks[0] || null;
 }
 
 function GroupFillList({
@@ -105,6 +118,8 @@ function GroupFillList({
   grain,
   onLoad,
   onRecheck,
+  onRecheckAll,
+  onStop,
   onDetails,
 }: {
   rows: FillRow[];
@@ -114,6 +129,8 @@ function GroupFillList({
   grain: Grain;
   onLoad: (row: FillRow, part: FillPart, recheck?: boolean) => void;
   onRecheck: (row: FillRow, part: FillPart) => void;
+  onRecheckAll: (row: FillRow) => void;
+  onStop?: () => void;
   onDetails: (row: FillRow, part?: FillPart) => void;
 }) {
   const [open, setOpen] = useState("");
@@ -189,6 +206,7 @@ function GroupFillList({
           const shown = open === id;
           const nxt = nextRecheckPart(row, grain);
           const never = !doneN && !chunks.some((c) => c.weak);
+          const detailsLeft = chunks.reduce((s, c) => s + (c.needDetails || 0), 0);
           const loadLabel = active ? loading?.label || chunks.find((c) => c.key === loading?.periodKey)?.label || nxt?.label || "" : "";
           return (
             <li key={id} data-gid={id} className={cn("rounded-2xl bg-white p-3 ring-1", full ? "ring-emerald-300" : active ? "ring-black" : "ring-black/8")}>
@@ -215,6 +233,9 @@ function GroupFillList({
                     ) : (
                       <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">ещё не сверяли</span>
                     )}
+                    {detailsLeft > 0 ? (
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[0.72rem] font-semibold text-violet-900">без ДЗ · {detailsLeft}</span>
+                    ) : null}
                   </span>
                 </div>
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/10">
@@ -234,12 +255,37 @@ function GroupFillList({
                   className="h-8 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10 disabled:opacity-50"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (nxt) onRecheck(row, nxt);
+                    if (full) onRecheckAll(row);
+                    else if (nxt) onRecheck(row, nxt);
                   }}
                 >
-                  {active ? `Сейчас ${loadLabel}` : nxt ? `${never ? "Сверить" : "Перепроверить"} · ${nxt.label}` : never ? "Сверить" : "Перепроверить"}
+                  {active
+                    ? `Сейчас ${loadLabel}`
+                    : never
+                      ? nxt
+                        ? `Загрузить ${nxt.label}`
+                        : "Загрузить квартал"
+                      : full
+                        ? `Перепроверить все кварталы · ${chunks.length}`
+                        : nxt?.weak
+                          ? `Загрузить ещё раз ${nxt.label}`
+                          : nxt
+                            ? `${nxt.done ? "Перепроверить" : "Загрузить"} ${nxt.label}`
+                            : "Загрузить квартал"}
                 </button>
-                {full ? (
+                {active ? (
+                  <button
+                    type="button"
+                    className="h-8 rounded-full bg-white px-3 text-[0.8rem] font-semibold ring-1 ring-black/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStop?.();
+                    }}
+                  >
+                    Стоп
+                  </button>
+                ) : null}
+                {full || detailsLeft > 0 ? (
                   <button
                     type="button"
                     disabled={busy}
@@ -249,7 +295,7 @@ function GroupFillList({
                       onDetails(row);
                     }}
                   >
-                    Детали уроков
+                    {detailsLeft ? `Загрузить детали уроков всех кварталов · ${detailsLeft}` : "Детали уроков всех кварталов загружены"}
                   </button>
                 ) : null}
               </div>
@@ -257,6 +303,9 @@ function GroupFillList({
                 <div className="mt-2 grid gap-1 sm:grid-cols-2">
                   {chunks.map((c) => {
                     const spinning = active && loading?.periodKey === c.key;
+                    const loaded = Boolean(c.done);
+                    const verified = Boolean(c.rechecked);
+                    const detailsOk = loaded && !(c.needDetails || 0);
                     return (
                       <div key={c.key} className="space-y-1">
                         <button
@@ -264,7 +313,7 @@ function GroupFillList({
                           disabled={busy}
                           className={cn(
                             "w-full rounded-xl px-2.5 py-2 text-left text-sm ring-1 disabled:opacity-70",
-                            c.weak ? "bg-amber-50 ring-amber-300" : c.done ? "bg-emerald-50 ring-emerald-200" : spinning ? "bg-black/5 ring-black" : "bg-white ring-black/10 hover:bg-black/[0.03]",
+                            c.weak ? "bg-amber-50 ring-amber-300" : loaded ? "bg-emerald-50 ring-emerald-200" : spinning ? "bg-black/5 ring-black" : "bg-white ring-black/10 hover:bg-black/[0.03]",
                           )}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -272,33 +321,39 @@ function GroupFillList({
                           }}
                         >
                           <span className="block font-medium">
-                            {spinning ? "… " : c.weak ? "~ " : c.done ? "✓ " : "○ "}
-                            {c.label}
+                            {spinning ? `Загружаю ${c.label}…` : c.label}
                           </span>
-                          <span className="block text-[0.72rem] text-muted">
-                            {spinning
-                              ? "загрузка…"
-                              : c.weak
-                                ? `${c.lessons ? `${c.lessons} зан. · ` : ""}оборвалось · нажмите ещё`
-                                : c.done
-                                  ? `${c.lessons ? `${c.lessons} зан. · ` : ""}сверено${c.at ? ` · ${ruAt(c.at)}` : ""} · нажмите ещё раз`
-                                  : c.lessons
-                                    ? `на сайте ${c.lessons} зан. · сверить`
-                                    : "сверить"}
+                          <span className="mt-1 block text-[0.72rem] leading-snug">
+                            {spinning ? (
+                              <span className="text-muted">подождите, пакет идёт из Alfa</span>
+                            ) : (
+                              <>
+                                {!loaded && !c.weak ? <CheckLine on={false} text={`Загрузить ${c.label}`} /> : null}
+                                <CheckLine on={loaded} text={`${c.label} загружен`} />
+                                <CheckLine on={verified} text={`${c.label} перепроверен`} />
+                                <CheckLine on={verified} text="в этом квартале дубликатов нет" />
+                                {loaded ? <CheckLine on={detailsOk} text={detailsOk ? `детали ${c.label} загружены` : `детали ${c.label} не загружены · ${c.needDetails}`} /> : null}
+                              </>
+                            )}
                           </span>
+                          <span className="mt-1 block text-[0.72rem] text-muted">
+                            {c.lessons ? `${c.lessons} зан.` : loaded ? "занятий за квартал нет" : "ещё не загружали"}
+                            {c.at ? ` · ${ruAt(c.at)}` : ""}
+                          </span>
+                          {c.weak ? <span className="mt-0.5 block text-[0.72rem] text-amber-900">пакет оборвался — нажмите клетку, чтобы загрузить ещё раз</span> : null}
                           {c.err && !c.done ? <span className="mt-0.5 block text-[0.72rem] text-rose-800">{c.err}</span> : null}
                         </button>
-                        {c.done && (c.needDetails || 0) > 0 ? (
+                        {loaded && (c.needDetails || 0) > 0 ? (
                           <button
                             type="button"
                             disabled={busy}
-                            className="h-7 w-full rounded-lg bg-white text-[0.72rem] font-semibold ring-1 ring-black/10"
+                            className="h-8 w-full rounded-lg bg-white text-[0.72rem] font-semibold ring-1 ring-black/10"
                             onClick={(e) => {
                               e.stopPropagation();
                               onDetails(row, c);
                             }}
                           >
-                            ДЗ и комментарии · {c.needDetails}
+                            Загрузить детали уроков · {c.label} · {c.needDetails}
                           </button>
                         ) : null}
                       </div>
@@ -726,6 +781,32 @@ export function AdminCrmSettings() {
     }
     setSchoolRun(null);
     if (stopSchool.current) setMsg("Очередь школы остановлена.");
+  }
+
+  async function recheckGroup(row: FillRow) {
+    const chunks = packGrain(row.parts, clampGrain(row.age, journalGrain));
+    if (!chunks.length) {
+      setMsg("Нет кварталов у этой группы.");
+      return;
+    }
+    stopSchool.current = false;
+    setSchoolRun({ cur: row.name, n: 0, total: chunks.length });
+    for (let i = 0; i < chunks.length; i += 1) {
+      if (stopSchool.current) break;
+      const part = chunks[i];
+      setSchoolRun({ cur: `${row.name} · ${part.label}`, n: i + 1, total: chunks.length });
+      await runJournal({
+        kind: "group",
+        groupId: Number(row.groupId) || 0,
+        branchId: Number(row.branchId) || 0,
+        periodKey: part.key,
+        periodLabel: part.label,
+        grain: journalGrain,
+        recheck: true,
+      });
+    }
+    setSchoolRun(null);
+    if (stopSchool.current) setMsg("Очередь группы остановлена.");
   }
 
   async function loadStages() {
@@ -1174,6 +1255,10 @@ export function AdminCrmSettings() {
                       recheck: true,
                     })
                   }
+                  onRecheckAll={(row) => void recheckGroup(row)}
+                  onStop={() => {
+                    stopSchool.current = true;
+                  }}
                   onDetails={(row, part) =>
                     void runJournal({
                       kind: "details",
@@ -1184,7 +1269,9 @@ export function AdminCrmSettings() {
                     })
                   }
                 />
-                <p className="mt-2 text-[0.72rem] text-muted">○ сверить · ~ оборвалось · ✓ сверено. После ✓ можно догрузить ДЗ и комментарии.</p>
+                <p className="mt-2 text-[0.72rem] text-muted">
+                  ☐ загрузить · ☑ загружен · ☑ перепроверен · ☑ дубликатов нет. Клетка квартала — явки. «Загрузить детали уроков всех кварталов» — темы, ДЗ и комментарии.
+                </p>
               </section>
 
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">

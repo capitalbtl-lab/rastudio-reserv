@@ -604,7 +604,17 @@ export async function inboundJournalChunk(offset = 0, _take = 1) {
       } else {
         fail[period.key] = String(res.extra || "Alfa не ответила");
       }
-      saveGroupCard({ ...card, journalFill: { done: [...new Set([...doneKeys, ...Object.keys(pulled)])], fail, pulled }, journalAt: at });
+      saveGroupCard({
+        ...card,
+        journalFill: {
+          done: [...new Set([...doneKeys, ...Object.keys(pulled)])],
+          fail,
+          pulled,
+          weak: card.journalFill?.weak,
+          rechecked: card.journalFill?.rechecked,
+        },
+        journalAt: at,
+      });
     }
     const n = (res.calendar || []).filter((l) => inPeriod(l.date, period.from, period.to)).length;
     const after = loadGroupCard(g.branchId, g.groupId);

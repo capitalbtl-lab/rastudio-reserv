@@ -225,6 +225,7 @@ export function groupFillRow(g: JournalPullGroup) {
     }
   }
   const pulledAt = card?.journalFill?.pulled || {};
+  const recheckedSet = new Set(card?.journalFill?.rechecked || []);
   const allParts = periods.map((p) => {
     const inQ = (card?.calendar || []).filter((l) => inPeriod(l.date, p.from, p.to));
     const needDetails = inQ.filter((l) => Number(l.status) === 3 && !String(l.topic || l.homework || l.note || "").trim()).length;
@@ -236,6 +237,7 @@ export function groupFillRow(g: JournalPullGroup) {
       to: p.to,
       done: done.includes(p.key) && !weak.has(p.key),
       weak: weak.has(p.key),
+      rechecked: recheckedSet.has(p.key) && !weak.has(p.key),
       lessons: byQ.get(p.key) || 0,
       err: fail[p.key] || "",
       at,
@@ -390,13 +392,14 @@ export function journalPullState() {
   };
 }
 
-function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch: { ok: boolean; err?: string; weak?: boolean }) {
+function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch: { ok: boolean; err?: string; weak?: boolean; recheck?: boolean }) {
   const card = loadGroupCard(branchId, gid);
   if (!card) return null;
   const pulled = { ...(card.journalFill?.pulled || {}) };
   const done = pulledPeriodKeys({ done: card.journalFill?.done, pulled });
   const fail = { ...(card.journalFill?.fail || {}) };
   const weak = new Set(card.journalFill?.weak || []);
+  const rechecked = new Set(card.journalFill?.rechecked || []);
   const at = new Date().toISOString();
   for (const key of keys) {
     if (patch.ok) {
@@ -404,13 +407,16 @@ function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch
       if (!done.includes(key)) done.push(key);
       delete fail[key];
       if (patch.weak) weak.add(key);
-      else weak.delete(key);
+      else {
+        weak.delete(key);
+        if (patch.recheck) rechecked.add(key);
+      }
     } else if (patch.err) {
       fail[key] = patch.err;
       weak.add(key);
     }
   }
-  const next = { ...card, journalFill: { done: [...new Set([...done, ...Object.keys(pulled)])], fail, pulled, weak: [...weak] }, journalAt: at };
+  const next = { ...card, journalFill: { done: [...new Set([...done, ...Object.keys(pulled)])], fail, pulled, weak: [...weak], rechecked: [...rechecked] }, journalAt: at };
   saveGroupCard(next);
   return next;
 }
@@ -435,7 +441,7 @@ async function pullOneGroup(
   const alfaTotal = Number((res as { alfaTotal?: number }).alfaTotal) || 0;
   const capped = Boolean((res as { capped?: boolean }).capped) || (alfaTotal > 0 && n < alfaTotal);
   const keys = period.keys?.length ? period.keys : [period.key];
-  stampJournalPeriod(g.branchId, g.groupId, keys, { ok, err: ok ? "" : String(res.extra || "Alfa не ответила"), weak: !ok || capped });
+  stampJournalPeriod(g.branchId, g.groupId, keys, { ok, err: ok ? "" : String(res.extra || "Alfa не ответила"), weak: !ok || capped, recheck });
   const added = Math.max(0, n - before);
   const extra = ok
     ? capped
