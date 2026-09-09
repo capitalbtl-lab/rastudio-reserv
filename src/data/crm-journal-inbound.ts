@@ -152,7 +152,7 @@ function withPupilNames(lesson: GroupCalLesson): GroupCalLesson {
 export async function inboundJournalGroup(
   branch: number,
   gid: number,
-  opts?: { token?: string; slots?: CrmSlot[]; hold?: Set<number>; dateFrom?: string; dateTo?: string; defer?: boolean; deep?: boolean },
+  opts?: { token?: string; slots?: CrmSlot[]; hold?: Set<number>; dateFrom?: string; dateTo?: string; defer?: boolean; deep?: boolean; lite?: boolean },
 ) {
   if (!alfaLinkedNow() || !gid) return { ok: true as const, extra: "без Alfa", count: 0, calendar: [] as GroupCalLesson[] };
   const slots = opts?.slots || (await import("./alfacrm-schedule")).listAdminSlots();
@@ -167,41 +167,47 @@ export async function inboundJournalGroup(
     teacher: String(slot?.teacher || ""),
     subject: String(cached?.subject || slot?.subject || ""),
   };
-  const dateFrom = opts?.dateFrom || ruShift(-2600);
+  const dateFrom = opts?.dateFrom || ruShift(opts?.lite ? -400 : -2600);
   const dateTo = opts?.dateTo || ruShift(90);
   const byKey = new Map<string, GroupCalLesson>();
   let alfaOk = 0;
+  let lastErr = "";
   async function pull(status: number, date_from: string, date_to: string, pages: number, pageSize: number) {
     for (let page = 0; page < pages; page++) {
-      const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
-        `/v2api/${branch}/lesson/index`,
-        { page, pageSize, status, group_id: gid, date_from, date_to },
-        t,
-      )
-        .then((x) => {
-          alfaOk += 1;
-          return x;
-        })
-        .catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
-      const chunk = les.items || [];
-      for (const item of chunk) {
-        const gids = (item.group_ids || []).map(Number).filter((n) => n > 0);
-        if (gids.length && !gids.includes(gid)) continue;
-        if (!gids.length && Number(item.lesson_type_id || 0) === 2) continue;
-        const packed = packLight(item, ctx);
-        if (!packed) continue;
-        byKey.set(`${packed.lessonId || 0}|${packed.date}|${packed.from}`, withPupilNames(packed));
+      try {
+        const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
+          `/v2api/${branch}/lesson/index`,
+          { page, pageSize, status, group_id: gid, date_from, date_to },
+          t,
+        );
+        alfaOk += 1;
+        const chunk = les.items || [];
+        for (const item of chunk) {
+          const gids = (item.group_ids || []).map(Number).filter((n) => n > 0);
+          if (gids.length && !gids.includes(gid)) continue;
+          if (!gids.length && Number(item.lesson_type_id || 0) === 2) continue;
+          const packed = packLight(item, ctx);
+          if (!packed) continue;
+          byKey.set(`${packed.lessonId || 0}|${packed.date}|${packed.from}`, withPupilNames(packed));
+        }
+        if (chunk.length < pageSize) break;
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message.replace(/^alfacrm\s+/i, "") : "сеть";
+        break;
       }
-      if (chunk.length < pageSize) break;
     }
   }
-  await Promise.all([
-    pull(1, dateFrom, dateTo, 8, 100),
-    pull(2, dateFrom, dateTo, 4, 100),
-    pull(3, dateFrom, dateTo, 10, 100),
-  ]);
+  if (opts?.lite) {
+    await pull(3, dateFrom, dateTo, 4, 50);
+    await pull(1, dateFrom, dateTo, 2, 50);
+    await pull(2, dateFrom, dateTo, 2, 50);
+  } else {
+    await pull(3, dateFrom, dateTo, 10, 100);
+    await pull(1, dateFrom, dateTo, 8, 100);
+    await pull(2, dateFrom, dateTo, 4, 100);
+  }
   if (!alfaOk) {
-    return { ok: false as const, extra: `«${ctx.groupName}»: Alfa не ответила`, count: 0, calendar: cached?.calendar || [] };
+    return { ok: false as const, extra: `«${ctx.groupName}»: Alfa не ответила${lastErr ? ` (${lastErr.slice(0, 80)})` : ""}`, count: 0, calendar: cached?.calendar || [] };
   }
   const pulled = [...byKey.values()];
   const hold = opts?.hold || pendingExportIds(["lesson.update", "lesson.create"]);

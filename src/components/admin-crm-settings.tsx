@@ -763,7 +763,7 @@ export function AdminCrmSettings() {
                     disabled={busy || offline}
                     onClick={() => void runJournal({ kind: "school", school: journalSchool })}
                   >
-                    {busy ? "Загружаю…" : journalSchool ? `Загрузить 3 группы «${journalSchool}»` : "Загрузить 3 группы"}
+                    {busy ? "Загружаю…" : journalSchool ? `Загрузить группу «${journalSchool}»` : "Загрузить следующую группу"}
                   </button>
                 </div>
                 <GroupStatusList
@@ -775,7 +775,7 @@ export function AdminCrmSettings() {
                     void runJournal({ kind: "group", groupId: Number(row.groupId) || 0, branchId: Number(row.branchId) || 0 })
                   }
                 />
-                <p className="mt-2 text-[0.72rem] text-muted">Кнопка берёт только красные. После загрузки группа уходит в зелёный — даже если в Alfa занятий 0.</p>
+                <p className="mt-2 text-[0.72rem] text-muted">Одна группа за нажатие. Если Alfa ответила — имя уходит в зелёный. Если нет — сверху будет причина.</p>
               </section>
 
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">

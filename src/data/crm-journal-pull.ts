@@ -251,9 +251,9 @@ export function journalPullState() {
   };
 }
 
-async function pullOneGroup(g: JournalPullGroup) {
+async function pullOneGroup(g: JournalPullGroup, deep = false) {
   const { inboundJournalGroup } = await import("./crm-journal-inbound");
-  return inboundJournalGroup(g.branchId, g.groupId, { deep: true });
+  return inboundJournalGroup(g.branchId, g.groupId, { deep, lite: true });
 }
 
 async function pullOneStudent(cid: number, branchId: number, balance: boolean) {
@@ -332,12 +332,13 @@ export async function journalPull(opts: {
         saveStore(store);
         return { ok: true as const, extra: store.note, count: 0, scanned: 0, more: false, ...journalPullState() };
       }
-      slice = miss.slice(0, kind === "school" ? 3 : 1);
+      slice = miss.slice(0, 1);
     }
     const parts: string[] = [];
     let n = 0;
     for (const g of slice) {
-      const res = await pullOneGroup(g).catch(() => ({ extra: `«${g.name}»: ошибка`, count: 0 }));
+      const deep = kind === "group";
+      const res = await pullOneGroup(g, deep).catch((e) => ({ extra: `«${g.name}»: ${e instanceof Error ? e.message : "ошибка"}`, count: 0 }));
       n += Number(res.count) || 0;
       parts.push(res.extra || `«${g.name}»: ${res.count}`);
     }

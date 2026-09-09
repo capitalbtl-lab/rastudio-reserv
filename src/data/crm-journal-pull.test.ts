@@ -3,21 +3,24 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 describe("ручной журнал с Alfa", () => {
-  it("пакеты: группа, школа по 3, 10 учеников, карточка целиком", () => {
+  it("пакеты: группа, школа по 1, 10 учеников, карточка целиком", () => {
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
     assert.match(pull, /kind === "group"/);
     assert.match(pull, /kind === "school"/);
     assert.match(pull, /pickSlice\(people, idx, 10\)/);
     assert.match(pull, /kind === "balance"/);
-    assert.match(pull, /inboundJournalGroup\(g.branchId, g.groupId, \{ deep: true \}\)/);
+    assert.match(pull, /inboundJournalGroup\(g.branchId, g.groupId, \{ deep, lite: true \}\)/);
+    assert.match(pull, /miss.slice\(0, 1\)/);
     assert.match(pull, /deep: 12/);
     assert.match(pull, /inboundCustomerPays/);
     assert.match(pull, /pullCustomerTariffs/);
     assert.match(pull, /force: true/);
     assert.match(pull, /все группы уже проверены/);
-    assert.match(pull, /miss.slice\(0, kind === "school" \? 3 : 1\)/);
+    assert.match(pull, /miss.slice\(0, 1\)/);
     assert.match(pull, /card\?\.journalAt/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
+    assert.match(inbound, /opts\?\.lite/);
+    assert.match(inbound, /ruShift\(opts\?\.lite \? -400 : -2600\)/);
     assert.match(inbound, /journalAt: now/);
     assert.doesNotMatch(inbound, /group_id: gid, date_from, date_to, removed: 0/);
     assert.match(inbound, /в Alfa занятий нет/);
