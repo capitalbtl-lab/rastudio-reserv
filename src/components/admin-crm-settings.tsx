@@ -371,7 +371,7 @@ function GroupFillList({
                     else onRecheckAll(row);
                   }}
                 >
-                  {active ? (loadKind === "details" ? `Загружаю ДЗ${loadLabel ? ` · ${loadLabel}` : ""}` : `Загружаю явки · ${loadLabel}`) : wiz.btn}
+                  {active ? (loadKind === "details" ? `Загружаю тему, ДЗ и комментарии${loadLabel ? ` · ${loadLabel}` : ""}` : `Загружаю явки · ${loadLabel}`) : wiz.btn}
                 </button>
                 {active ? (
                   <button
@@ -433,7 +433,7 @@ function GroupFillList({
                           {spinJ ? (
                             <span className="text-muted">Загружаю явки {c.label}… пакет идёт из Alfa</span>
                           ) : spinD && (c.needDetails || 0) > 0 ? (
-                            <span className="text-muted">Загружаю ДЗ и комментарии · {c.label}…</span>
+                            <span className="text-muted">Загружаю тему, ДЗ и комментарии · {c.label}…</span>
                           ) : (
                             <>
                               <CheckLine on={loaded} text={`${c.label} загружен`} />
@@ -501,7 +501,7 @@ function GroupFillList({
                                 onDetails(row, c);
                               }}
                             >
-                              {spinD ? "Загружаю ДЗ…" : `Загрузить ДЗ и комментарии · ${c.needDetails}`}
+                              {spinD ? "Загружаю тему, ДЗ и комментарии…" : `Загрузить тему, ДЗ и комментарии · ${c.needDetails}`}
                             </button>
                           ) : loaded ? (
                             <p className="text-[0.72rem] text-muted">

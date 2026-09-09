@@ -238,6 +238,7 @@ function LessonCard({
     ["Группа", l.group || group || ""],
     ["Тема", l.topic || ""],
     ["Домашнее задание", l.homework || ""],
+    ["Комментарий", l.note || ""],
   ];
   if (done && (l.total || 0) > 0) rows.push(["Присутствие", `${l.attend || 0} из ${l.total}`]);
   const [fetched, setFetched] = useState<LessonPupil[] | null>(null);
