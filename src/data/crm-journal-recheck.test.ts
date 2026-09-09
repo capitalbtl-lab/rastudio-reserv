@@ -1,0 +1,73 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+  pulledPeriodKeys,
+  chunkOverlapsLife,
+  chunkDone,
+  journalChunks,
+  groupAge,
+  lifeLabel,
+  toAlfaLessonDate,
+} from "./crm-journal-periods.ts";
+
+function completeOf(lifeFrom: string, lifeTo: string, fill: { done?: string[]; pulled?: Record<string, string>; weak?: string[] }) {
+  const done = pulledPeriodKeys(fill);
+  const weak = new Set(fill.weak || []);
+  const parts = journalChunks("quarter").filter((c) => chunkOverlapsLife(c, lifeFrom, lifeTo));
+  const ready = parts.filter((p) => chunkDone(p, done) && !p.keys.some((k) => weak.has(k)));
+  return { total: parts.length, done: ready.length, complete: parts.length > 0 && ready.length === parts.length, keys: parts.map((p) => p.key) };
+}
+
+describe("перепроверка журнала", () => {
+  it("Alfa date_from: 01.07.2026 → 2026-07-01, не 400", () => {
+    assert.equal(toAlfaLessonDate("01.07.2026"), "2026-07-01");
+    assert.equal(toAlfaLessonDate("30.09.2026"), "2026-09-30");
+    assert.equal(toAlfaLessonDate("2026-07-01"), "2026-07-01");
+    assert.equal(toAlfaLessonDate("1.7.2026"), "2026-07-01");
+  });
+
+  it("робототехника: 8 кварталов, один клик не закрывает группу", () => {
+    const lifeFrom = "01.09.2024";
+    const lifeTo = "31.08.2026";
+    const inferred = { done: ["2024q3", "2024q4", "2025q1", "2025q2", "2025q3", "2025q4", "2026q1", "2026q2"] };
+    const polluted = completeOf(lifeFrom, lifeTo, inferred);
+    assert.equal(polluted.complete, false);
+    assert.ok(polluted.total >= 7, `ожидали ~8 кварталов, получили ${polluted.total}: ${polluted.keys.join(",")}`);
+    assert.equal(polluted.done, 0);
+
+    const one = completeOf(lifeFrom, lifeTo, { pulled: { "2026q2": "2026-09-09T00:00:00Z" }, done: inferred.done });
+    assert.equal(one.complete, false);
+    assert.equal(one.done, 1);
+
+    const allPulled: Record<string, string> = {};
+    for (const k of polluted.keys) allPulled[k] = "x";
+    const full = completeOf(lifeFrom, lifeTo, { pulled: allPulled });
+    assert.equal(full.complete, true);
+    assert.equal(full.done, full.total);
+  });
+
+  it("английский на полгода не предлагает 2024", () => {
+    const parts = journalChunks("quarter").filter((c) => chunkOverlapsLife(c, "01.02.2026", "30.06.2026"));
+    assert.ok(parts.every((p) => p.key.startsWith("2026")));
+    assert.ok(!parts.some((p) => p.key.startsWith("2024")));
+    assert.equal(groupAge("01.02.2026", "30.06.2026", new Date("2026-09-09")).id, "young");
+    assert.match(lifeLabel("01.02.2026", "30.06.2026"), /фев 2026/);
+  });
+
+  it("обрыв пакета: weak не даёт зелёный бейдж", () => {
+    const row = completeOf("15.07.2026", "15.09.2026", { pulled: { "2026q3": "x" }, weak: ["2026q3"] });
+    assert.ok(row.keys.includes("2026q3"));
+    assert.equal(row.complete, false);
+    assert.equal(row.done, 0);
+    const ok = completeOf("15.07.2026", "15.09.2026", { pulled: { "2026q3": "x" }, weak: [] });
+    assert.equal(ok.complete, true);
+    assert.equal(ok.done, ok.total);
+  });
+
+  it("перепроверка: повторный квартал остаётся в списке порций", () => {
+    const chunks = journalChunks("quarter").filter((c) => c.key === "2026q3");
+    assert.equal(chunks.length, 1);
+    assert.equal(chunkDone(chunks[0], ["2026q3"]), true);
+    assert.equal(chunkDone(chunks[0], []), false);
+  });
+});

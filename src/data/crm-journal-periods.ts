@@ -124,6 +124,16 @@ export function parseLessonDate(raw?: string) {
   return null;
 }
 
+/** lesson/index: YYYY-MM-DD. DD.MM.YYYY даёт 400 «Неверный формат». */
+export function toAlfaLessonDate(raw?: string) {
+  const s = String(raw || "").trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const ru = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (ru) return `${ru[3]}-${ru[2].padStart(2, "0")}-${ru[1].padStart(2, "0")}`;
+  return s.slice(0, 10);
+}
+
 function fmtMonth(d: Date) {
   return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
