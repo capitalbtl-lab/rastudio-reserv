@@ -230,6 +230,22 @@ function nextWizard(chunks: FillPart[]) {
   };
 }
 
+function fillGid(r: { branchId?: number; groupId?: number }) {
+  return `${r.branchId}-${r.groupId}`;
+}
+
+function byFillName(a: FillRow, b: FillRow) {
+  return a.name.localeCompare(b.name, "ru") || (a.groupId || 0) - (b.groupId || 0);
+}
+
+function pageWithPinned<T>(list: T[], page: number, size: number, isPin: (row: T) => boolean) {
+  const pages = Math.max(1, Math.ceil(list.length / size) || 1);
+  const start = Math.min(page, pages - 1) * size;
+  const slice = list.slice(start, start + size);
+  const extra = list.filter((row) => isPin(row) && !slice.includes(row));
+  return extra.length ? extra.concat(slice) : slice;
+}
+
 function GroupFillList({
   rows,
   school,
@@ -264,16 +280,21 @@ function GroupFillList({
     if (!q) return true;
     return r.name.toLowerCase().includes(q) || String(r.school || "").toLowerCase().includes(q);
   });
-  const needRows = scoped.filter((r) => !fillFinishedRow(r, grain));
-  const doneRows = scoped.filter((r) => fillFinishedRow(r, grain));
+  const isPinned = (r: FillRow) => {
+    if (open && fillGid(r) === open) return true;
+    if (loading && loading.groupId === r.groupId && loading.branchId === r.branchId) return true;
+    return false;
+  };
+  const needRows = scoped.filter((r) => !fillFinishedRow(r, grain)).slice().sort(byFillName);
+  const doneRows = scoped.filter((r) => fillFinishedRow(r, grain)).slice().sort(byFillName);
   const nNeed = needRows.length;
   const nDone = doneRows.length;
   const pagesNeed = Math.max(1, Math.ceil(nNeed / pageSize) || 1);
   const pagesDone = Math.max(1, Math.ceil(nDone / pageSize) || 1);
   const safeNeed = Math.min(pageNeed, pagesNeed - 1);
   const safeDone = Math.min(pageDone, pagesDone - 1);
-  const listNeed = needRows.slice(safeNeed * pageSize, safeNeed * pageSize + pageSize);
-  const listDone = doneRows.slice(safeDone * pageSize, safeDone * pageSize + pageSize);
+  const listNeed = pageWithPinned(needRows, safeNeed, pageSize, isPinned);
+  const listDone = pageWithPinned(doneRows, safeDone, pageSize, isPinned);
   useEffect(() => {
     setPageNeed(0);
     setPageDone(0);

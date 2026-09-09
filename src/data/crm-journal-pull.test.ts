@@ -46,7 +46,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /date_from: ymd\(date_from\)/);
     assert.match(inbound, /date_to: ymd\(date_to\)/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
-    assert.match(pull, /probeGroupLife/);
+    assert.doesNotMatch(pull, /a\.done - b\.done/);
     assert.match(pull, /kind === "details"/);
     assert.match(pull, /clampGrain/);
     assert.match(ui, /Перепроверить школу|Перепроверить все группы/);
@@ -73,7 +73,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Календарь ученика/);
     assert.match(ui, /Деньги на карточке/);
     assert.match(ui, /На странице/);
-    assert.match(ui, /toggleOpen/);
+    assert.match(ui, /pageWithPinned/);
+    assert.match(ui, /byFillName/);
     assert.match(ui, /aria-label=\{shown \? "свернуть" : "развернуть"\}/);
     assert.doesNotMatch(ui, /max-h-\[36rem\]/);
     assert.doesNotMatch(ui, /if \(open && aid === open\) return -1/);

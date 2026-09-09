@@ -289,7 +289,7 @@ export function journalPullProgress() {
   const groups = journalPullGroups();
   const periods = journalPeriods();
   const rows = groups.map(groupFillRow);
-  rows.sort((a, b) => a.done - b.done || a.name.localeCompare(b.name, "ru"));
+  rows.sort((a, b) => a.name.localeCompare(b.name, "ru") || (a.groupId || 0) - (b.groupId || 0));
   const complete = rows.filter((r) => r.complete).length;
   const groupsMiss = rows.filter((r) => r.done < r.total).map((r) => ({
     groupId: r.groupId,
