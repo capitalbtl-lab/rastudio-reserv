@@ -218,7 +218,7 @@ function nextWizard(chunks: FillPart[]) {
     kind: "done" as const,
     part: chunks[0] || null,
     step: "Все явки, тема, ДЗ, комментарий и таблица учеников на месте",
-    btn: chunks.length ? `Перепроверить все кварталы · ${chunks.length}` : "Готово",
+    btn: chunks.length ? "Перепроверить" : "Готово",
   };
 }
 
@@ -433,7 +433,7 @@ function GroupFillList({
                               onLoad(row, c, Boolean(loaded || c.weak));
                             }}
                           >
-                            {spinJ ? "загрузка…" : !loaded || c.weak ? `Загрузить явки · ${c.label}` : `Перепроверить явки · ${c.label}`}
+                            {spinJ ? "загрузка…" : !loaded || c.weak ? `Загрузить явки · ${c.label}` : "Перепроверить"}
                           </button>
                           <button
                             type="button"
