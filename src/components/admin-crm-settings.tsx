@@ -1366,22 +1366,25 @@ export function AdminCrmSettings() {
       setFillLoading({ kind: opts.kind, label: opts.study === "2" ? "архивные" : "текущие" });
     }
     try {
-      const res = (await adminSchedule({
-        data: {
-          token: token(),
-          action: "journalPull",
-          kind: opts.kind,
-          school: opts.school || "",
-          groupId: opts.groupId || 0,
-          branchId: opts.branchId || 0,
-          study: opts.study || "all",
-          periodKey: opts.periodKey || "",
-          grain: opts.grain || journalGrain,
-          recheck: Boolean(opts.recheck),
-          customerId: opts.customerId || 0,
-          probe: Boolean(opts.probe),
-        } as never,
-      })) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit };
+      const res = (await Promise.race([
+        adminSchedule({
+          data: {
+            token: token(),
+            action: "journalPull",
+            kind: opts.kind,
+            school: opts.school || "",
+            groupId: opts.groupId || 0,
+            branchId: opts.branchId || 0,
+            study: opts.study || "all",
+            periodKey: opts.periodKey || "",
+            grain: opts.grain || journalGrain,
+            recheck: Boolean(opts.recheck),
+            customerId: opts.customerId || 0,
+            probe: Boolean(opts.probe),
+          } as never,
+        }),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Alfa не ответила за 25 с — нажмите ещё раз.")), 25000)),
+      ])) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit };
       if (res) setJournal(res);
       setMsg(res?.error || res?.extra || (res?.ok ? "Пакет записан на сайт." : "Журнал не ответил."));
       return res;
@@ -1469,6 +1472,7 @@ export function AdminCrmSettings() {
   }
 
   async function recheckPeople(kind: "students" | "balance", study: "1" | "2") {
+    if (schoolRun && fillLoading?.kind === kind) return;
     const pack = study === "2" ? journal?.progress?.archive?.people : journal?.progress?.live?.people;
     const all = pack || [];
     if (!all.length) {
@@ -1480,6 +1484,8 @@ export function AdminCrmSettings() {
     const sweep = !needLoad.length;
     stopSchool.current = false;
     holdFill.current = true;
+    setBusy(true);
+    setMsg(`Очередь: ${queue.length} учеников. По одному, без пачки.`);
     setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
     let n = 0;
     try {
@@ -2214,7 +2220,7 @@ export function AdminCrmSettings() {
                         <button
                           type="button"
                           className={cn(BTN_LOAD, run && schoolRun && "ra-progress-run")}
-                          disabled={offline || busy}
+                          disabled={offline || (busy && run)}
                           onClick={() => void recheckPeople("students", peopleStudy)}
                         >
                           {run && schoolRun
@@ -2227,7 +2233,7 @@ export function AdminCrmSettings() {
                                 ? "Догрузить архивных"
                                 : "Догрузить текущих"}
                         </button>
-                        <button type="button" className={BTN_GHOST} disabled={offline || busy} onClick={() => void probePeople(peopleStudy)}>
+                        <button type="button" className={BTN_GHOST} disabled={offline || (busy && run)} onClick={() => void probePeople(peopleStudy)}>
                           Сверить счёт
                         </button>
                         <button
@@ -2244,7 +2250,7 @@ export function AdminCrmSettings() {
                       <PeopleFillList
                         rows={side?.people || []}
                         kind="students"
-                        busy={busy || offline}
+                        busy={offline || (fillLoading?.kind === "students" && Boolean(fillLoading.customerId))}
                         loadingCid={fillLoading?.kind === "students" ? fillLoading.customerId : undefined}
                         onLoad={(row) => void loadPerson(row, "students", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "students", peopleStudy, true)}
@@ -2285,7 +2291,7 @@ export function AdminCrmSettings() {
                         <button
                           type="button"
                           className={cn(BTN_LOAD, run && schoolRun && "ra-progress-run")}
-                          disabled={offline || busy}
+                          disabled={offline || (busy && run)}
                           onClick={() => void recheckPeople("balance", peopleStudy)}
                         >
                           {run && schoolRun ? `Очередь ${schoolRun.n}/${schoolRun.total}` : peopleStudy === "2" ? "Перепроверить архивных" : "Перепроверить текущих"}
@@ -2304,7 +2310,7 @@ export function AdminCrmSettings() {
                       <PeopleFillList
                         rows={side?.people || []}
                         kind="balance"
-                        busy={busy || offline}
+                        busy={offline || (fillLoading?.kind === "balance" && Boolean(fillLoading.customerId))}
                         loadingCid={fillLoading?.kind === "balance" ? fillLoading.customerId : undefined}
                         onLoad={(row) => void loadPerson(row, "balance", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "balance", peopleStudy, true)}

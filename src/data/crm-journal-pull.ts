@@ -597,8 +597,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   const { inboundCustomerLessons } = await import("./crm-journal-inbound");
   let lessons = 0;
   let done = false;
-  for (let round = 0; round < 6; round += 1) {
-    const res = await inboundCustomerLessons(branchId, cid, { take: 8, deep: 12, continueLater: false, full: true, force: true }).catch(() => ({
+  for (let round = 0; round < 2; round += 1) {
+    const res = await inboundCustomerLessons(branchId, cid, { take: 4, deep: 0, continueLater: false, full: true, force: true }).catch(() => ({
       count: 0,
       done: true as const,
       skipped: undefined as string | undefined,

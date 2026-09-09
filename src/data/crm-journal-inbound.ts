@@ -470,7 +470,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     let cur = wantFull ? lessonFillOf(customerSyncOf(id).lessonFill) || lessonFillStart(branches[0] || branch) : lessonFillStart(branches[0] || branch);
     let ran = 0;
     const maxRun = Number(opts?.take) > 0 ? Math.min(LESSON_INBOUND_RUN, Number(opts.take)) : wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
-    const maxPages = wantFull ? 12 : 2;
+    const maxPages = Number(opts?.take) > 0 ? Math.min(3, wantFull ? 12 : 2) : wantFull ? 12 : 2;
     const from = wantFull ? dateFrom : ruShift(LESSON_RECENT_DAYS);
     while (ran < maxRun && !cur.done) {
       const bid = cur.bid;
