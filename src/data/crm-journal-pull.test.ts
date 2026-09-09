@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { journalPeriods, journalChunks, nextPeriod, periodOfDate, spanOf, expandPeriodKeys, chunkDone } from "./crm-journal-periods.ts";
+import { journalPeriods, journalChunks, nextPeriod, periodOfDate, spanOf, expandPeriodKeys, chunkDone, groupAge, chunkOverlapsLife, lifeLabel } from "./crm-journal-periods.ts";
 
 describe("ручной журнал с Alfa", () => {
   it("кварталы с конца, полугодие и год — пачки", () => {
@@ -20,18 +20,24 @@ describe("ручной журнал с Alfa", () => {
     const half = journalChunks("half", new Date("2026-09-09T12:00:00Z"), 1);
     assert.equal(half[0].key, "2026h2");
     assert.match(half[0].label, /июл–дек 2026/);
+    assert.equal(groupAge("01.02.2026", "30.06.2026", new Date("2026-09-09")).id, "young");
+    assert.equal(groupAge("01.09.2022", "30.06.2026", new Date("2026-09-09")).id, "old");
+    assert.equal(chunkOverlapsLife({ from: "01.01.2024", to: "31.03.2024" }, "01.02.2026", "30.06.2026"), false);
+    assert.equal(chunkOverlapsLife({ from: "01.04.2026", to: "30.06.2026" }, "01.02.2026", "30.06.2026"), true);
+    assert.match(lifeLabel("01.02.2026", "30.06.2026"), /фев 2026/);
   });
 
   it("только кнопка группы и порция, фон сам не качает", () => {
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
-    assert.match(pull, /periodKey/);
-    assert.match(pull, /grain/);
-    assert.match(pull, /Выберите группу и порцию/);
-    assert.match(pull, /вся информация загружена/);
-    assert.match(pull, /parts/);
+    assert.match(pull, /kind === "life"/);
+    assert.match(pull, /journalLife/);
+    assert.match(pull, /chunkOverlapsLife/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /opts\?\.lite \|\| windowed/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
+    assert.match(ui, /Определить сроки групп/);
+    assert.match(ui, /ageLabel/);
+    assert.match(ui, /молодая/);
     assert.match(ui, /GroupFillList/);
     assert.match(ui, /I квартал|Квартал/);
     assert.match(ui, /Порция за одно нажатие/);

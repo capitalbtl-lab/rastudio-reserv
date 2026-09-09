@@ -60,18 +60,25 @@ type FillRow = {
   weight?: string;
   err?: string;
   complete?: boolean;
+  age?: string;
+  ageLabel?: string;
+  life?: string;
   parts?: FillPart[];
 };
 
 function packGrain(parts: FillPart[] | undefined, grain: Grain) {
-  const byKey = new Map((parts || []).map((p) => [p.key, p]));
-  return journalChunks(grain).map((c) => {
-    const kids = c.keys.map((k) => byKey.get(k)).filter(Boolean) as FillPart[];
-    const done = c.keys.every((k) => byKey.get(k)?.done);
-    const lessons = kids.reduce((s, p) => s + (p.lessons || 0), 0);
-    const err = kids.find((p) => p.err)?.err || "";
-    return { key: c.key, label: c.label, from: c.from, to: c.to, done, lessons, err };
-  });
+  const list = parts || [];
+  const byKey = new Map(list.map((p) => [p.key, p]));
+  const have = new Set(list.map((p) => p.key));
+  return journalChunks(grain)
+    .filter((c) => c.keys.some((k) => have.has(k)))
+    .map((c) => {
+      const kids = c.keys.map((k) => byKey.get(k)).filter(Boolean) as FillPart[];
+      const done = c.keys.filter((k) => have.has(k)).every((k) => byKey.get(k)?.done);
+      const lessons = kids.reduce((s, p) => s + (p.lessons || 0), 0);
+      const err = kids.find((p) => p.err)?.err || "";
+      return { key: c.key, label: c.label, from: c.from, to: c.to, done, lessons, err };
+    });
 }
 
 function GroupFillList({
@@ -108,21 +115,33 @@ function GroupFillList({
             <button type="button" className="w-full text-left" onClick={() => setOpen(shown ? "" : id)}>
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="font-medium">{row.name}</span>
-                {full ? (
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">вся информация загружена</span>
-                ) : doneN ? (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-900">
-                    частично · {doneN}/{total}
-                  </span>
-                ) : (
-                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">ещё не загружали</span>
-                )}
+                <span className="flex flex-wrap items-center gap-1">
+                  {row.ageLabel ? (
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[0.72rem] font-semibold",
+                        row.age === "young" ? "bg-sky-100 text-sky-900" : row.age === "old" ? "bg-zinc-200 text-zinc-800" : row.age === "mid" ? "bg-amber-100 text-amber-900" : "bg-rose-100 text-rose-900",
+                      )}
+                    >
+                      {row.ageLabel}
+                    </span>
+                  ) : null}
+                  {full ? (
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">вся информация загружена</span>
+                  ) : doneN ? (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-900">
+                      частично · {doneN}/{total}
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">ещё не загружали</span>
+                  )}
+                </span>
               </div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/10">
                 <div className={cn("h-1.5 rounded-full", full ? "bg-emerald-600" : "bg-black")} style={{ width: `${pct}%` }} />
               </div>
               <p className="mt-1 text-[0.72rem] text-muted">
-                {active ? `грузим ${chunks.find((c) => c.key === loading?.periodKey)?.label || "порцию"}…` : row.from}
+                {active ? `грузим ${chunks.find((c) => c.key === loading?.periodKey)?.label || "порцию"}…` : [row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
                 {row.lessons ? ` · ${row.lessons} зан.` : ""}
                 {row.weight ? ` · ${row.weight}` : ""}
                 {row.archived ? " · архив" : ""}
@@ -461,7 +480,7 @@ export function AdminCrmSettings() {
   }
 
   async function runJournal(opts: {
-    kind: "group" | "school" | "students" | "balance";
+    kind: "group" | "school" | "students" | "balance" | "life";
     study?: "1" | "2" | "all";
     school?: string;
     groupId?: number;
@@ -802,9 +821,17 @@ export function AdminCrmSettings() {
 
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">1. Занятия в группах</p>
-                <p className="mt-1 text-sm text-muted">Откройте группу и нажмите нужный квартал. Тяжёлую группу грузите по кварталам, лёгкую можно годом.</p>
+                <p className="mt-1 text-sm text-muted">Сначала сроки по расписанию: молодая группа — пара кварталов, старая — несколько лет. Потом грузите только эти порции.</p>
                 <ProgressBar done={p?.groups?.done || 0} total={p?.groups?.total || 0} />
-                <p className="mt-1 text-[0.72rem] text-muted">Сверху — сколько групп закрыли все {p?.groups?.periods || 24} кварталов.</p>
+                <p className="mt-1 text-[0.72rem] text-muted">Сверху — сколько групп закрыли свои кварталы, не 10 лет истории.</p>
+                <button
+                  type="button"
+                  className="mt-3 h-10 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
+                  disabled={busy || offline}
+                  onClick={() => void runJournal({ kind: "life", school: journalSchool })}
+                >
+                  {busy ? "Смотрю сроки…" : "Определить сроки групп"}
+                </button>
                 <label className="mt-3 block text-sm font-semibold">
                   Только школа
                   <select

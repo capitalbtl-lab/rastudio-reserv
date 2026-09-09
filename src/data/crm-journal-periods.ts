@@ -179,3 +179,39 @@ export function nextPeriod(done: string[], periods = journalPeriods()) {
   const have = new Set(expandPeriodKeys(done));
   return periods.find((p) => !have.has(p.key)) || null;
 }
+
+export function groupAge(from?: string, to?: string, now = new Date()) {
+  const start = parseLessonDate(from);
+  if (!start) return { id: "unknown" as const, label: "срок неизвестен" };
+  const end = parseLessonDate(to) || now;
+  const ago = (now.getTime() - start.getTime()) / (30.44 * 86400000);
+  const span = Math.max(0, (end.getTime() - start.getTime()) / (30.44 * 86400000));
+  if (ago <= 14 && span <= 16) return { id: "young" as const, label: "молодая" };
+  if (ago >= 36) return { id: "old" as const, label: "старая" };
+  return { id: "mid" as const, label: "средняя" };
+}
+
+export function chunkOverlapsLife(chunk: { from: string; to: string }, from?: string, to?: string) {
+  const a = parseLessonDate(chunk.from);
+  const b = parseLessonDate(chunk.to);
+  if (!a || !b) return true;
+  const start = parseLessonDate(from);
+  const end = parseLessonDate(to);
+  if (!start && !end) return false;
+  const s = start ? new Date(start.getTime() - 14 * 86400000) : new Date(0);
+  const e = end ? new Date(end.getTime() + 14 * 86400000) : new Date(2099, 11, 31);
+  return a <= e && b >= s;
+}
+
+export function lifeLabel(from?: string, to?: string) {
+  const a = parseLessonDate(from);
+  const b = parseLessonDate(to);
+  if (a && b) {
+    const fa = fmtMonth(a);
+    const fb = fmtMonth(b);
+    return fa === fb ? `с ${fa}` : `с ${fa} по ${fb}`;
+  }
+  if (a) return `с ${fmtMonth(a)}`;
+  if (b) return `по ${fmtMonth(b)}`;
+  return "";
+}

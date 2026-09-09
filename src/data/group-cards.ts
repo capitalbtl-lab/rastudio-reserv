@@ -32,8 +32,10 @@ export type CachedGroupCard = {
   at: string;
   /** Когда журнал группы последний раз дочитали из Alfa (даже если занятий 0). */
   journalAt?: string;
-  /** Какие полугодия уже сняли с Alfa. */
+  /** Какие кварталы уже сняли с Alfa. */
   journalFill?: { done: string[]; fail?: Record<string, string> };
+  /** Срок жизни группы: по расписанию или по первой/последней явке Alfa. */
+  journalLife?: { from: string; to: string; source: "slot" | "alfa"; at: string };
 };
 
 type Store = { at: string; items: Record<string, CachedGroupCard> };
