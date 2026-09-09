@@ -193,7 +193,7 @@ function packMember(c: Record<string, unknown>, archived: boolean): GroupMember 
   const rawParent = String(c.legal_name || "").trim();
   if (isPhoneLike(rawName) && rawName && !phones.includes(rawName)) phones.unshift(rawName);
   const study = Number(c.is_study);
-  const arch = archived || study === 2;
+  const arch = archived || study === 2 || Number(c.removed) === 1 || Number(c.removed) === 2;
   const gender = c.gender === 1 || c.gender === "1" ? "мальчик" : c.gender === 2 || c.gender === "2" ? "девочка" : "";
   const dob = String(c.dob || "");
   return {
@@ -424,7 +424,7 @@ async function pullGroupMembersCrm(
   }
   await pull({});
   if (!active.some((m) => m.status === "лид")) await pull({ is_study: 0 });
-  if (!opts?.skipArchive && !archive.length) await pull({ is_study: 2 }, true);
+  if (!opts?.skipArchive && !archive.length) await pull({ removed: 2 }, true);
   const missing = cgiIds.filter((id) => !seen.has(id));
   for (let i = 0; i < missing.length; i += 3) {
     if (i) await sleep(CRM_READ_GAP_MS);

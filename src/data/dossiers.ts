@@ -625,7 +625,7 @@ ${lines.map((l) => `— ${l}`).join("\n")}
 export function applyCrmCustomer(
   item: Record<string, unknown>,
   branchId: number,
-  _archived = false,
+  archived = false,
   teacherMap: Record<string, string> = {},
   opts: CrmWriteOpts = {},
 ) {
@@ -641,10 +641,11 @@ export function applyCrmCustomer(
   extras.paid_count = String(item.paid_count ?? extras.paid_count ?? "");
   const fromGroup = namesFromGroup(extras.groups);
   const study = Number(item.is_study);
-  extras.removed = study === 0 || study === 1 || study === 2 ? "0" : String(extras.removed || "0");
-  extras.crm_current = study === 1 ? "1" : "0";
-  extras.is_study = String(Number.isFinite(study) ? study : "");
-  const reallyArchived = study === 2;
+  const alfaRemoved = item.removed === 1 || item.removed === "1" || item.removed === 2 || item.removed === "2" || item.removed === true;
+  const reallyArchived = Boolean(archived) || alfaRemoved || study === 2;
+  extras.removed = "0";
+  extras.crm_current = reallyArchived ? "0" : study === 1 ? "1" : "0";
+  extras.is_study = reallyArchived ? "2" : String(Number.isFinite(study) ? study : "");
   const courseName = fromGroup.courses[0] || "";
   const teacherFromIds = idList(extras.teacher_ids)
     .map((n) => teacherMap[String(n)] || "")
@@ -1148,6 +1149,7 @@ export async function syncAllFromCrm(
   const teacherMap: Record<string, string> = {};
   const want = studies.length ? studies : [1];
   const leadsOnly = want.length === 1 && want[0] === 0;
+  const archiveOnly = want.length === 1 && want[0] === 2;
   if (!leadsOnly) {
     for (const branch of [1, 2, 3, 4]) {
       onProgress?.({ step: `Педагоги · филиал ${branch}`, n: 0, total: 0 });
@@ -1164,34 +1166,43 @@ export async function syncAllFromCrm(
   const leadIds = new Set<number>();
   for (const branch of [1, 2, 3, 4]) {
     for (const study of want) {
-      for (let page = 0; page < 80; page += 1) {
-        onProgress?.({
-          step: `${names[branch] || branch} · ${labels[study] || study} · стр. ${page + 1}`,
-          n,
-          total: n,
-        });
-        const data = await request<{ items?: Record<string, unknown>[]; total?: number }>(
-          `/v2api/${branch}/customer/index`,
-          { page, pageSize: 50, is_study: study, ...(study === 1 ? { removed: 0 } : {}) },
-          t,
-        ).catch(() => ({ items: [] as Record<string, unknown>[] }));
-        const items = data.items || [];
-        for (const item of items) {
-          if (Number(item.removed) === 1 || String(item.removed) === "1") continue;
-          if (Number(item.is_study) !== study) continue;
-          if (study !== 2 && Number(item.is_study) === 2) continue;
-          applyCrmCustomer(item, branch, study === 2, teacherMap, BULK);
-          const id = Number(item.id || 0);
-          if (id && study === 1) {
-            if (!currentMap.has(id)) currentMap.set(id, new Set());
-            currentMap.get(id)!.add(branch);
+      const roles = study === 2 ? [1, 0] : [study];
+      const pages = study === 2 ? 120 : 80;
+      for (const role of roles) {
+        for (let page = 0; page < pages; page += 1) {
+          onProgress?.({
+            step: `${names[branch] || branch} · ${labels[study] || study} · стр. ${page + 1}`,
+            n,
+            total: n,
+          });
+          const body =
+            study === 2
+              ? { page, pageSize: 50, is_study: role, removed: 2 }
+              : { page, pageSize: 50, is_study: role, removed: 0 };
+          const data = await request<{ items?: Record<string, unknown>[]; total?: number }>(
+            `/v2api/${branch}/customer/index`,
+            body,
+            t,
+          ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+          const items = data.items || [];
+          for (const item of items) {
+            if (study !== 2) {
+              if (Number(item.removed) === 1 || String(item.removed) === "1") continue;
+              if (Number(item.is_study) !== study) continue;
+            }
+            applyCrmCustomer(item, branch, study === 2, teacherMap, BULK);
+            const id = Number(item.id || 0);
+            if (id && study === 1) {
+              if (!currentMap.has(id)) currentMap.set(id, new Set());
+              currentMap.get(id)!.add(branch);
+            }
+            if (id && study === 0) leadIds.add(id);
+            n += 1;
           }
-          if (id && study === 0) leadIds.add(id);
-          n += 1;
+          if (n && n % 50 === 0) saveStore(loadStore());
+          await yieldLoop();
+          if (!items.length || items.length < 50) break;
         }
-        if (n && n % 50 === 0) saveStore(loadStore());
-        await yieldLoop();
-        if (!items.length || items.length < 50) break;
       }
     }
   }
@@ -1240,8 +1251,8 @@ export async function syncAllFromCrm(
   store.lastCrmSync = new Date().toISOString();
   store.items.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
   saveStore(store);
-  if (leadsOnly) {
-    onProgress?.({ step: "Лиды на сайте", n, total: n });
+  if (leadsOnly || archiveOnly) {
+    onProgress?.({ step: archiveOnly ? "Архив на сайте" : "Лиды на сайте", n, total: n });
     return { ok: true as const, count: n, purged, lastCrmSync: store.lastCrmSync, studies: want, liveTariffs: 0, withGroups: 0 };
   }
   onProgress?.({ step: "Состав групп и абонементы…", n, total: n });
@@ -1409,18 +1420,18 @@ export async function syncSliceFromCrm(opts: { branchId: number; isStudy?: numbe
   let n = 0;
   let hasMore = true;
   for (let i = 0; i < pages; i += 1) {
-    const body = opts.removed
-      ? { page, pageSize: 50, removed: 1 }
-      : { page, pageSize: 50, is_study: opts.isStudy, ...(opts.isStudy === 2 ? {} : { removed: 0 }) };
+    const body = opts.removed || opts.isStudy === 2
+      ? { page, pageSize: 50, removed: 2 }
+      : { page, pageSize: 50, is_study: opts.isStudy, removed: 0 };
     const data = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/customer/index`, body, t).catch(
       () => ({ items: [] as Record<string, unknown>[] }),
     );
     const items = data.items || [];
     for (const item of items) {
-      if (!opts.removed && (Number(item.removed) === 1 || (opts.isStudy != null && Number(item.is_study) !== Number(opts.isStudy)))) continue;
+      if (!opts.removed && opts.isStudy !== 2 && (Number(item.removed) === 1 || (opts.isStudy != null && Number(item.is_study) !== Number(opts.isStudy)))) continue;
       if (!opts.removed && opts.isStudy !== 2 && Number(item.is_study) === 2) continue;
-      if (opts.removed) applyCrmCustomer(item, branch, Number(item.is_study) !== 1, map, BULK);
-      else applyCrmCustomer(item, branch, opts.isStudy === 2, map, BULK);
+      if (opts.removed || opts.isStudy === 2) applyCrmCustomer(item, branch, true, map, BULK);
+      else applyCrmCustomer(item, branch, false, map, BULK);
       n += 1;
     }
     page += 1;
@@ -1524,18 +1535,17 @@ export async function reclassifyRolesFromCrm() {
   const currentBranches = new Map<number, Set<number>>();
   const totals = { учится: 0, лид: 0, архив: 0 };
   for (const branch of [1, 2, 3, 4]) {
-    for (const study of [1, 0, 2] as const) {
+    for (const study of [1, 0] as const) {
       for (let page = 0; page < 80; page += 1) {
         const data = await request<{ items?: Record<string, unknown>[]; total?: number }>(
           `/v2api/${branch}/customer/index`,
-          { page, pageSize: 50, is_study: study },
+          { page, pageSize: 50, is_study: study, removed: 0 },
           t,
         ).catch(() => ({ items: [] as Record<string, unknown>[], total: 0 }));
         const items = data.items || [];
         if (page === 0) {
           if (study === 1) totals.учится += Number(data.total) || items.length;
           if (study === 0) totals.лид += Number(data.total) || items.length;
-          if (study === 2) totals.архив += Number(data.total) || items.length;
         }
         for (const it of items) {
           const id = Number(it.id || 0);
@@ -1544,11 +1554,24 @@ export async function reclassifyRolesFromCrm() {
             current.add(id);
             if (!currentBranches.has(id)) currentBranches.set(id, new Set());
             currentBranches.get(id)!.add(branch);
-          } else if (study === 0) leads.add(id);
-          else archive.add(id);
+          } else leads.add(id);
         }
         if (items.length < 50) break;
       }
+    }
+    for (let page = 0; page < 120; page += 1) {
+      const data = await request<{ items?: Record<string, unknown>[]; total?: number }>(
+        `/v2api/${branch}/customer/index`,
+        { page, pageSize: 50, removed: 2 },
+        t,
+      ).catch(() => ({ items: [] as Record<string, unknown>[], total: 0 }));
+      const items = data.items || [];
+      if (page === 0) totals.архив += Number(data.total) || items.length;
+      for (const it of items) {
+        const id = Number(it.id || 0);
+        if (id) archive.add(id);
+      }
+      if (items.length < 50) break;
     }
   }
   const store = loadStore();

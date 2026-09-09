@@ -78,6 +78,14 @@ describe("карточка не ждёт Alfa", () => {
     assert.match(run, /enqueueLessonsOverlay\(true\)/);
     assert.match(run, /Читаю архив AlfaCRM/);
     assert.match(run, /syncAllFromCrm\([\s\S]*\[2\]/);
+    assert.match(run, /local.counts\[bucket\]/);
+    const dossiers = readFileSync(new URL("./dossiers.ts", import.meta.url), "utf8");
+    const at = dossiers.indexOf("export async function syncAllFromCrm");
+    const next = dossiers.indexOf("export async function syncNewLeadsFromCrm");
+    const chunkAll = dossiers.slice(at, next > at ? next : at + 9000);
+    assert.match(chunkAll, /removed: 2/);
+    assert.match(dossiers, /reallyArchived/);
+    assert.match(chunkAll, /archiveOnly/);
     const clientsUi = readFileSync(new URL("../components/admin-clients.tsx", import.meta.url), "utf8");
     assert.match(clientsUi, /void pullKind\("clientsArchive"\)/);
     assert.doesNotMatch(clientsUi, /if \(!counts.архив\) void pullKind\("clientsArchive"\)/);
@@ -89,8 +97,8 @@ describe("карточка не ждёт Alfa", () => {
     const sync = readFileSync(new URL("./crm-customer-sync.ts", import.meta.url), "utf8");
     assert.match(sync, /clearLessonsAttendStamps/);
     const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
-    const at = pay.indexOf("export async function inboundCustomerPays");
-    const chunk = pay.slice(at, at + 2800);
+    const payAt = pay.indexOf("export async function inboundCustomerPays");
+    const chunk = pay.slice(payAt, payAt + 2800);
     assert.match(chunk, /filled \? 1 : PAY_INBOUND_RUN/);
     assert.match(chunk, /!filled/);
   });

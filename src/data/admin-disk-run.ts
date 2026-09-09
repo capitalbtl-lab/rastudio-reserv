@@ -150,12 +150,13 @@ async function runPull(kind: PullKind) {
         setJob({ step: p.step || "Клиенты…", added: p.n, total: Math.max(p.n, p.total || 0) });
       }, studies);
       const { searchClientViews } = await import("./dossiers");
-      const local = searchClientViews("", 1, studies[0] === 2 ? "архив" : studies[0] === 0 ? "лид" : "учится");
+      const bucket = studies[0] === 2 ? "архив" : studies[0] === 0 ? "лид" : "учится";
+      const local = searchClientViews("", 1, bucket);
       lines.push({ ok: true, text: `${label}: обработано ${res.count}` });
       if (Number(res.purged || 0) > 0) {
         lines.push({ ok: true, text: `С сайта удалены архивные лиды: ${res.purged}` });
       }
-      lines.push({ ok: local.all > 0, text: `В базе на сайте: ${local.all}` });
+      lines.push({ ok: (local.counts[bucket] || 0) > 0, text: `В базе на сайте: ${local.counts[bucket]}` });
       if (studies[0] === 1) lines.push({ ok: true, text: `Текущих уникальных: ${local.counts.учится}` });
       if (studies[0] === 1) {
         setJob({ step: "Читаю архив AlfaCRM — иначе явка за годы не сходится…" });
@@ -163,7 +164,7 @@ async function runPull(kind: PullKind) {
           setJob({ step: p.step || "Архив…", added: p.n, total: Math.max(p.n, p.total || 0) });
         }, [2]);
         const archLocal = searchClientViews("", 1, "архив");
-        lines.push({ ok: true, text: `архив: обработано ${arch.count}, на сайте ${archLocal.all}` });
+        lines.push({ ok: true, text: `архив: обработано ${arch.count}, на сайте ${archLocal.counts.архив}` });
       }
       try {
         const q = await import("./crm-packet-queue");

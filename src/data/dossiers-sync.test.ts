@@ -15,9 +15,12 @@ describe("импорт лидов не валит кабинет", () => {
     assert.match(chunk, /const BULK|BULK/);
     assert.match(chunk, /persist: false|BULK/);
     assert.match(chunk, /applyCrmCustomer\(item, branch, study === 2, teacherMap, BULK\)/);
+    assert.match(chunk, /removed: 2/);
+    assert.match(chunk, /archiveOnly/);
+    assert.match(chunk, /const roles = study === 2 \? \[1, 0\] : \[study\]/);
     assert.match(chunk, /if \(n && n % 50 === 0\) saveStore/);
     assert.match(chunk, /await yieldLoop/);
-    const leadRet = chunk.indexOf("if (leadsOnly)");
+    const leadRet = chunk.indexOf("if (leadsOnly || archiveOnly)");
     const overlay = chunk.indexOf("overlayMembershipFromCrm");
     assert.ok(leadRet > 0, "leadsOnly early-return");
     assert.ok(overlay > leadRet, "overlay только после лидов");
