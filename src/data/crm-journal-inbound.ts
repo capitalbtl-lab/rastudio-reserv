@@ -5,7 +5,7 @@ import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
 import { journalFingerprint } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
-import { pupilNameOk, mergeLessonPupils, lessonRosterThin } from "./crm-slots-core";
+import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
 import { cardPays } from "./crm-pay";
 import { crmUnwrapIndex } from "./crm-leads-stages";
@@ -358,13 +358,6 @@ function isOneOffLesson(item: { lesson_type_id?: number; group_ids?: number[] })
   return groups.length === 0 && typeId !== 2;
 }
 
-function lessonNeedsDetails(l: GroupCalLesson) {
-  if (!(Number(l.lessonId) > 0)) return false;
-  if (Number(l.status) === 3 && lessonRosterThin(l)) return true;
-  if (Number(l.status) === 3 && !String(l.topic || l.homework || l.note || "").trim()) return true;
-  return false;
-}
-
 /** Тема, ДЗ, комментарий и явка с суммами — lesson/index по id, не весь журнал. */
 export async function enrichCalendarDetails(
   branch: number,
@@ -372,7 +365,10 @@ export async function enrichCalendarDetails(
   opts?: { token?: string; take?: number; customerId?: number },
 ) {
   const list = (calendar || []).slice();
-  const need = list.filter(lessonNeedsDetails).slice(0, Math.max(1, Math.min(24, Number(opts?.take) || 12)));
+  const need = list
+    .filter(lessonNeedsDetails)
+    .sort((a, b) => Number(lessonNeedsHomework(b)) - Number(lessonNeedsHomework(a)))
+    .slice(0, Math.max(1, Math.min(24, Number(opts?.take) || 12)));
   if (!need.length) return { calendar: list, filled: 0, changed: false };
   const { token, request } = await import("./alfacrm");
   const t = opts?.token || (await token());
@@ -401,6 +397,7 @@ export async function enrichCalendarDetails(
     if (topic) l.topic = topic;
     if (homework) l.homework = homework;
     if (note) l.note = note;
+    l.detailsAt = new Date().toISOString();
     if (cid) {
       const charge = chargeFromPupils({ pupils: l.pupils, amount: lessonWriteoffAmount(rec, cid), cttId: lessonWriteoffCtt(rec, cid) }, cid);
       if (charge.amount > 0) l.amount = charge.amount;

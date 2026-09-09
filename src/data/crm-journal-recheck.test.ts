@@ -10,6 +10,7 @@ import {
   toAlfaLessonDate,
   clampGrain,
 } from "./crm-journal-periods.ts";
+import { lessonNeedsHomework, lessonNeedsDetails } from "./crm-slots-core.ts";
 
 function completeOf(lifeFrom: string, lifeTo: string, fill: { done?: string[]; pulled?: Record<string, string>; weak?: string[] }) {
   const done = pulledPeriodKeys(fill);
@@ -88,5 +89,14 @@ describe("перепроверка журнала", () => {
     assert.equal(clampGrain("mid", "year"), "half");
     assert.equal(clampGrain("young", "year"), "year");
     assert.equal(clampGrain("old", "quarter"), "quarter");
+  });
+
+  it("кнопка ДЗ пропадает после detailsAt, даже если тема в Alfa пустая", () => {
+    const raw = { lessonId: 9, date: "01.09.2026", from: "10:00", to: "11:00", status: 3, type: "group" };
+    assert.equal(lessonNeedsHomework(raw), true);
+    assert.equal(lessonNeedsHomework({ ...raw, topic: "натюрморт" }), false);
+    assert.equal(lessonNeedsHomework({ ...raw, detailsAt: "2026-09-09T12:00:00Z" }), false);
+    assert.equal(lessonNeedsHomework({ ...raw, status: 1 }), false);
+    assert.equal(lessonNeedsDetails({ ...raw, detailsAt: "x" }), false);
   });
 });

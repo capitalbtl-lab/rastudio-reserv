@@ -52,7 +52,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Перепроверить школу|Перепроверить все группы/);
     assert.match(ui, /Найти группу/);
     assert.match(ui, /ещё нет/);
-    assert.match(ui, /детали уроков|Детали уроков/);
+    assert.match(ui, /ДЗ и комментарии/);
     assert.match(ui, /Стоп/);
     assert.match(inbound, /probeGroupLife/);
     assert.match(ui, /Определить сроки групп/);
@@ -68,9 +68,10 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /CRM_SET_TABS/);
     assert.match(ui, /История из Alfa/);
     assert.match(ui, /crm-settings-tab/);
-    assert.match(ui, /Шаг 2 · детали уроков/);
+    assert.match(ui, /Шаг 2 · ДЗ и комментарии/);
     assert.match(ui, /Загрузить явки/);
-    assert.match(ui, /Загрузить детали уроков всех кварталов/);
+    assert.match(ui, /Загрузить ДЗ и комментарии всех кварталов/);
+    assert.match(ui, /грузить нечего/);
     assert.match(ui, /перепроверен/);
     assert.match(pull, /rechecked/);
     assert.match(ui, /periodKey: part.key/);

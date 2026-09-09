@@ -2,7 +2,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { SCHOOL_ORDER } from "./crm-slots-core";
+import { SCHOOL_ORDER, lessonNeedsHomework } from "./crm-slots-core";
 import { isCampStatus } from "./group-status";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { loadCachePolicy } from "./crm-cache-policy";
@@ -228,7 +228,8 @@ export function groupFillRow(g: JournalPullGroup) {
   const recheckedSet = new Set(card?.journalFill?.rechecked || []);
   const allParts = periods.map((p) => {
     const inQ = (card?.calendar || []).filter((l) => inPeriod(l.date, p.from, p.to));
-    const needDetails = inQ.filter((l) => Number(l.status) === 3 && !String(l.topic || l.homework || l.note || "").trim()).length;
+    const needDetails = inQ.filter(lessonNeedsHomework).length;
+    const conducted = inQ.filter((l) => Number(l.status) === 3).length;
     const at = String(pulledAt[p.key] || "");
     return {
       key: p.key,
@@ -242,6 +243,7 @@ export function groupFillRow(g: JournalPullGroup) {
       err: fail[p.key] || "",
       at,
       needDetails,
+      conducted,
     };
   });
   const parts = known ? allParts.filter((p) => chunkOverlapsLife(p, clipFrom, clipTo)) : allParts.slice(0, 4);
@@ -662,16 +664,21 @@ export async function journalPull(opts: {
       for (const l of enriched.calendar) byId.set(`${l.lessonId || 0}|${l.date}|${l.from}`, l);
       saveGroupCard({ ...card, calendar: [...byId.values()], journalAt: new Date().toISOString() });
     }
-    const left = (period ? slice : card.calendar || []).filter((l) => Number(l.status) === 3 && !String(l.topic || l.homework || l.note || "").trim()).length;
-    const remain = Math.max(0, left - enriched.filled);
+    const after = loadGroupCard(hit.branchId, hit.groupId);
+    const leftNow = (period
+      ? (after?.calendar || []).filter((l) => inPeriod(l.date, period.from, period.to))
+      : after?.calendar || []
+    ).filter(lessonNeedsHomework).length;
     store.note = enriched.filled
-      ? remain
-        ? `«${hit.name}»: записали детали ${enriched.filled} ур., осталось ${remain} — нажмите ещё`
-        : `«${hit.name}»: детали ${enriched.filled} ур.`
-      : `«${hit.name}»: ${period ? `${period.label} · ` : ""}темы и ДЗ уже есть или уроков нет`;
+      ? leftNow
+        ? `«${hit.name}»: записали ДЗ ${enriched.filled} ур., осталось ${leftNow} — нажмите ещё`
+        : `«${hit.name}»: ДЗ и комментарии на месте (${enriched.filled} ур.)`
+      : leftNow
+        ? `«${hit.name}»: ${period ? `${period.label} · ` : ""}ещё ${leftNow} без темы — Alfa не ответила, нажмите ещё`
+        : `«${hit.name}»: ${period ? `${period.label} · ` : ""}ДЗ грузить нечего — проведённых без темы нет`;
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: enriched.filled, scanned: 1, more: remain > 0, periodKey, periodLabel: period?.label || "", ...journalPullState() };
+    return { ok: true as const, extra: store.note, count: enriched.filled, scanned: 1, more: leftNow > 0, periodKey, periodLabel: period?.label || "", ...journalPullState() };
   }
 
   if (kind === "group" || kind === "school") {

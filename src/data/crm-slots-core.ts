@@ -129,6 +129,8 @@ export type GroupCalLesson = {
   topic?: string;
   homework?: string;
   note?: string;
+  /** Уже спросили lesson/index: тема может быть пустой — в Alfa её нет. */
+  detailsAt?: string;
   attend?: number;
   total?: number;
   lessonId?: number;
@@ -181,6 +183,23 @@ export function lessonRosterThin(hit?: { status?: number; pupils?: LessonPupil[]
   if (pupils.some((p) => !pupilNameOk(p.name))) return true;
   if (!pupils.some((p) => Number(p.amount) > 0)) return true;
   return false;
+}
+
+/** Проведён, ещё не спрашивали Alfa, нет темы/ДЗ/комментария. */
+export function lessonNeedsHomework(l?: GroupCalLesson | null) {
+  if (!l || l.detailsAt) return false;
+  if (!(Number(l.lessonId) > 0)) return false;
+  if (Number(l.status) !== 3) return false;
+  return !String(l.topic || l.homework || l.note || "").trim();
+}
+
+/** Тема/ДЗ или тонкий состав — один запрос lesson/index. */
+export function lessonNeedsDetails(l?: GroupCalLesson | null) {
+  if (!l || l.detailsAt) return false;
+  if (!(Number(l.lessonId) > 0)) return false;
+  if (Number(l.status) !== 3) return false;
+  if (lessonNeedsHomework(l)) return true;
+  return lessonRosterThin(l);
 }
 
 /** Цвет ячейки как легенда виджета посещений Alfa (14 статусов). */

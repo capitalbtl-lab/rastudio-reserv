@@ -53,7 +53,7 @@ type MissPack = {
   items: { id?: number; name: string; extra?: string; groupId?: number; branchId?: number; school?: string; archived?: boolean }[];
 };
 
-type FillPart = { key: string; label: string; from?: string; to?: string; done?: boolean; weak?: boolean; rechecked?: boolean; lessons?: number; err?: string; at?: string; needDetails?: number };
+type FillPart = { key: string; label: string; from?: string; to?: string; done?: boolean; weak?: boolean; rechecked?: boolean; lessons?: number; err?: string; at?: string; needDetails?: number; conducted?: number };
 
 type FillRow = {
   groupId?: number;
@@ -99,9 +99,10 @@ function packGrain(parts: FillPart[] | undefined, grain: Grain) {
       const rechecked = present.length > 0 && present.every((k) => byKey.get(k)?.rechecked);
       const lessons = kids.reduce((s, p) => s + (p.lessons || 0), 0);
       const needDetails = kids.reduce((s, p) => s + (p.needDetails || 0), 0);
+      const conducted = kids.reduce((s, p) => s + (p.conducted || 0), 0);
       const at = kids.map((p) => p.at).filter(Boolean).sort().at(-1) || "";
       const err = kids.find((p) => p.err)?.err || "";
-      return { key: c.key, label: c.label, from: c.from, to: c.to, done, weak, rechecked, lessons, err, at, needDetails };
+      return { key: c.key, label: c.label, from: c.from, to: c.to, done, weak, rechecked, lessons, err, at, needDetails, conducted };
     });
 }
 
@@ -136,14 +137,14 @@ function nextWizard(chunks: FillPart[]) {
     return {
       kind: "details" as const,
       part: chunks.find((c) => (c.needDetails || 0) > 0),
-      step: "Шаг 2 · детали уроков",
-      btn: `Загрузить детали уроков всех кварталов · ${detailsLeft}`,
+      step: "Шаг 2 · ДЗ и комментарии",
+      btn: `Загрузить ДЗ и комментарии всех кварталов · ${detailsLeft}`,
     };
   }
   return {
     kind: "done" as const,
     part: chunks[0] || null,
-    step: "Все явки и детали на месте",
+    step: "Все явки и ДЗ на месте",
     btn: chunks.length ? `Перепроверить все кварталы · ${chunks.length}` : "Готово",
   };
 }
@@ -286,7 +287,7 @@ function GroupFillList({
                 <p className="mt-1 text-[0.72rem] text-muted">
                   {active
                     ? loadKind === "details"
-                      ? `сейчас детали уроков${loadLabel ? ` · ${loadLabel}` : ""}…`
+                      ? `сейчас ДЗ и комментарии${loadLabel ? ` · ${loadLabel}` : ""}…`
                       : `сейчас явки · ${loadLabel || "порция"}…`
                     : [row.life ? `срок ${row.life}` : "", row.from].filter(Boolean).join(" · ")}
                   {row.lessons ? ` · ${row.lessons} зан.` : ""}
@@ -294,7 +295,7 @@ function GroupFillList({
                   {row.archived ? " · архив" : ""}
                 </p>
               </button>
-              <p className="mt-2 text-[0.78rem] font-semibold">{active ? (loadKind === "details" ? "Сейчас · детали уроков" : `Сейчас · ${loadLabel}`) : wiz.step}</p>
+              <p className="mt-2 text-[0.78rem] font-semibold">{active ? (loadKind === "details" ? "Сейчас · ДЗ и комментарии" : `Сейчас · ${loadLabel}`) : wiz.step}</p>
               <div className="mt-1 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -308,7 +309,7 @@ function GroupFillList({
                     else onRecheckAll(row);
                   }}
                 >
-                  {active ? (loadKind === "details" ? `Загружаю детали${loadLabel ? ` · ${loadLabel}` : ""}` : `Загружаю явки · ${loadLabel}`) : wiz.btn}
+                  {active ? (loadKind === "details" ? `Загружаю ДЗ${loadLabel ? ` · ${loadLabel}` : ""}` : `Загружаю явки · ${loadLabel}`) : wiz.btn}
                 </button>
                 {active ? (
                   <button
@@ -332,7 +333,7 @@ function GroupFillList({
                       onDetails(row);
                     }}
                   >
-                    Загрузить детали уроков всех кварталов · {detailsLeft}
+                    Загрузить ДЗ и комментарии всех кварталов · {detailsLeft}
                   </button>
                 ) : wiz.kind === "details" ? (
                   <button
@@ -370,13 +371,26 @@ function GroupFillList({
                           {spinJ ? (
                             <span className="text-muted">Загружаю явки {c.label}… пакет идёт из Alfa</span>
                           ) : spinD && (c.needDetails || 0) > 0 ? (
-                            <span className="text-muted">Загружаю детали уроков · {c.label}…</span>
+                            <span className="text-muted">Загружаю ДЗ и комментарии · {c.label}…</span>
                           ) : (
                             <>
                               <CheckLine on={loaded} text={`${c.label} загружен`} />
                               <CheckLine on={verified} text={`${c.label} перепроверен`} />
                               <CheckLine on={verified} text="в этом квартале дубликатов нет" />
-                              {loaded ? <CheckLine on={detailsOk} text={detailsOk ? `детали ${c.label} загружены` : `детали ${c.label} не загружены · ${c.needDetails}`} /> : <CheckLine on={false} text={`Загрузить ${c.label}`} />}
+                              {loaded ? (
+                                <CheckLine
+                                  on={detailsOk}
+                                  text={
+                                    detailsOk
+                                      ? (c.conducted || 0) > 0
+                                        ? `ДЗ и комментарии на месте`
+                                        : `ДЗ грузить нечего — проведённых без темы нет`
+                                      : `ДЗ и комментарии не загружены · ${c.needDetails}`
+                                  }
+                                />
+                              ) : (
+                                <CheckLine on={false} text={`Загрузить ${c.label}`} />
+                              )}
                             </>
                           )}
                         </div>
@@ -425,8 +439,12 @@ function GroupFillList({
                                 onDetails(row, c);
                               }}
                             >
-                              {spinD ? "Загружаю детали…" : `Загрузить детали уроков · ${c.label} · ${c.needDetails}`}
+                              {spinD ? "Загружаю ДЗ…" : `Загрузить ДЗ и комментарии · ${c.needDetails}`}
                             </button>
+                          ) : loaded ? (
+                            <p className="text-[0.72rem] text-muted">
+                              {(c.conducted || 0) > 0 ? "Кнопки нет: ДЗ уже на месте или в Alfa пусто" : "Кнопки нет: проведённых занятий без темы нет"}
+                            </p>
                           ) : null}
                         </div>
                       </div>
@@ -1405,12 +1423,12 @@ export function AdminCrmSettings() {
                       groupId: Number(row.groupId) || 0,
                       branchId: Number(row.branchId) || 0,
                       periodKey: part?.key || "",
-                      periodLabel: part?.label || "детали",
+                      periodLabel: part?.label || "ДЗ",
                     })
                   }
                 />
                 <p className="mt-2 text-[0.72rem] text-muted">
-                  Мастер: шаг 1 — загрузить явки каждого квартала, шаг 2 — детали уроков. Карточка не уезжает. Чеклист не кнопка: явки и детали — отдельные кнопки.
+                  Мастер: шаг 1 — явки, шаг 2 — ДЗ и комментарии. Кнопка ДЗ пропадает, когда по периоду грузить нечего. Июл–дек без кнопки = проведённых без темы нет.
                 </p>
               </section>
 
