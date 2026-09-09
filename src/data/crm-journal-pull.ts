@@ -27,12 +27,27 @@ export type JournalPullGroup = {
   eDate?: string;
 };
 
+type LifeReport = {
+  at: string;
+  school: string;
+  total: number;
+  young: number;
+  mid: number;
+  old: number;
+  unknown: number;
+  youngNames: string[];
+  midNames: string[];
+  oldNames: string[];
+  unknownNames: string[];
+};
+
 type PullStore = {
   at: string;
   note: string;
   groupIdx: number;
   schoolIdx: Record<string, number>;
   studentIdx: Record<string, number>;
+  lastLife?: LifeReport | null;
 };
 
 function fileOf() {
@@ -40,7 +55,7 @@ function fileOf() {
 }
 
 function emptyStore(): PullStore {
-  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {} };
+  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null };
 }
 
 function loadStore(): PullStore {
@@ -53,6 +68,7 @@ function loadStore(): PullStore {
       groupIdx: Math.max(0, Number(raw.groupIdx) || 0),
       schoolIdx: raw.schoolIdx && typeof raw.schoolIdx === "object" ? raw.schoolIdx : {},
       studentIdx: raw.studentIdx && typeof raw.studentIdx === "object" ? raw.studentIdx : {},
+      lastLife: raw.lastLife && typeof raw.lastLife === "object" ? (raw.lastLife as LifeReport) : null,
     };
   } catch {
     return emptyStore();
@@ -350,6 +366,7 @@ export function journalPullState() {
     students: { all: all.length, live: live.length, archive: arch.length },
     linked: alfaLinkedNow(),
     progress: journalPullProgress(),
+    lastLife: store.lastLife || null,
   };
 }
 
@@ -454,6 +471,10 @@ export async function journalPull(opts: {
       return { ok: false as const, error: store.note, more: false, ...journalPullState() };
     }
     const now = new Date().toISOString();
+    const youngNames: string[] = [];
+    const midNames: string[] = [];
+    const oldNames: string[] = [];
+    const unknownNames: string[] = [];
     let young = 0;
     let mid = 0;
     let old = 0;
@@ -463,10 +484,19 @@ export async function journalPull(opts: {
       const from = String(g.bDate || cur?.bDate || "");
       const to = String(g.eDate || cur?.eDate || "");
       const age = groupAge(from, to);
-      if (age.id === "young") young += 1;
-      else if (age.id === "old") old += 1;
-      else if (age.id === "mid") mid += 1;
-      else unknown += 1;
+      if (age.id === "young") {
+        young += 1;
+        if (youngNames.length < 4) youngNames.push(g.name);
+      } else if (age.id === "old") {
+        old += 1;
+        if (oldNames.length < 4) oldNames.push(g.name);
+      } else if (age.id === "mid") {
+        mid += 1;
+        if (midNames.length < 4) midNames.push(g.name);
+      } else {
+        unknown += 1;
+        if (unknownNames.length < 4) unknownNames.push(g.name);
+      }
       const card = cur || {
         id: g.groupId,
         branchId: g.branchId,
@@ -488,10 +518,24 @@ export async function journalPull(opts: {
       };
       saveGroupCard({ ...card, journalLife: { from, to, source: "slot", at: now } });
     }
-    store.note = `Сроки ${scoped.length} групп по расписанию: молодых ${young}, средних ${mid}, старых ${old}${unknown ? `, без срока ${unknown}` : ""}. Дальше грузите только видимые кварталы.`;
+    const lastLife: LifeReport = {
+      at: now,
+      school,
+      total: scoped.length,
+      young,
+      mid,
+      old,
+      unknown,
+      youngNames,
+      midNames,
+      oldNames,
+      unknownNames,
+    };
+    store.lastLife = lastLife;
+    store.note = `Определено ${scoped.length} групп${school ? ` в «${school}»` : ""}: молодых ${young}, средних ${mid}, старых ${old}${unknown ? `, без срока ${unknown}` : ""}.`;
     store.at = now;
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: scoped.length, scanned: scoped.length, more: false, ...journalPullState() };
+    return { ok: true as const, extra: store.note, count: scoped.length, scanned: scoped.length, more: false, lastLife, ...journalPullState() };
   }
 
   if (kind === "group" || kind === "school") {

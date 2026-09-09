@@ -288,6 +288,19 @@ export function AdminCrmSettings() {
       live?: { total: number; journalDone: number; cardDone: number; missJournal?: MissPack; missCard?: MissPack };
       archive?: { total: number; journalDone: number; cardDone: number; missJournal?: MissPack; missCard?: MissPack };
     };
+    lastLife?: {
+      at?: string;
+      school?: string;
+      total: number;
+      young: number;
+      mid: number;
+      old: number;
+      unknown: number;
+      youngNames?: string[];
+      midNames?: string[];
+      oldNames?: string[];
+      unknownNames?: string[];
+    } | null;
   } | null>(null);
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
@@ -824,14 +837,47 @@ export function AdminCrmSettings() {
                 <p className="mt-1 text-sm text-muted">Сначала сроки по расписанию: молодая группа — пара кварталов, старая — несколько лет. Потом грузите только эти порции.</p>
                 <ProgressBar done={p?.groups?.done || 0} total={p?.groups?.total || 0} />
                 <p className="mt-1 text-[0.72rem] text-muted">Сверху — сколько групп закрыли свои кварталы, не 10 лет истории.</p>
-                <button
-                  type="button"
-                  className="mt-3 h-10 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
-                  disabled={busy || offline}
-                  onClick={() => void runJournal({ kind: "life", school: journalSchool })}
-                >
-                  {busy ? "Смотрю сроки…" : "Определить сроки групп"}
-                </button>
+                <div className="mt-3 flex flex-wrap items-start gap-3">
+                  <button
+                    type="button"
+                    className="h-10 shrink-0 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
+                    disabled={busy || offline}
+                    onClick={() => void runJournal({ kind: "life", school: journalSchool })}
+                  >
+                    {busy ? "Смотрю сроки…" : "Определить сроки групп"}
+                  </button>
+                  {journal?.lastLife ? (
+                    <div className="min-w-[16rem] flex-1 rounded-2xl bg-white px-4 py-3 text-sm ring-1 ring-black/10">
+                      <p className="font-semibold">
+                        Определено {journal.lastLife.total} {journal.lastLife.total === 1 ? "группа" : journal.lastLife.total < 5 ? "группы" : "групп"}
+                        {journal.lastLife.school ? ` в «${journal.lastLife.school}»` : ""}
+                      </p>
+                      <ul className="mt-2 space-y-1 text-[0.92rem]">
+                        <li>
+                          <span className="font-semibold text-sky-900">молодых {journal.lastLife.young}</span>
+                          {journal.lastLife.youngNames?.length ? <span className="text-muted"> — {journal.lastLife.youngNames.join(", ")}</span> : null}
+                        </li>
+                        <li>
+                          <span className="font-semibold text-amber-900">средних {journal.lastLife.mid}</span>
+                          {journal.lastLife.midNames?.length ? <span className="text-muted"> — {journal.lastLife.midNames.join(", ")}</span> : null}
+                        </li>
+                        <li>
+                          <span className="font-semibold text-zinc-800">старых {journal.lastLife.old}</span>
+                          {journal.lastLife.oldNames?.length ? <span className="text-muted"> — {journal.lastLife.oldNames.join(", ")}</span> : null}
+                        </li>
+                        {journal.lastLife.unknown ? (
+                          <li>
+                            <span className="font-semibold text-rose-800">без срока {journal.lastLife.unknown}</span>
+                            {journal.lastLife.unknownNames?.length ? <span className="text-muted"> — {journal.lastLife.unknownNames.join(", ")}</span> : null}
+                          </li>
+                        ) : null}
+                      </ul>
+                      <p className="mt-2 text-[0.72rem] text-muted">Дальше грузите только видимые кварталы у каждой группы.</p>
+                    </div>
+                  ) : (
+                    <p className="pt-2 text-sm text-muted">После нажатия здесь появится отчёт: сколько молодых, средних и старых.</p>
+                  )}
+                </div>
                 <label className="mt-3 block text-sm font-semibold">
                   Только школа
                   <select
