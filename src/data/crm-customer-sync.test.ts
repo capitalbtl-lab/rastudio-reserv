@@ -33,7 +33,7 @@ describe("штамп входа ученика", () => {
 });
 
 describe("карточка не ждёт Alfa", () => {
-  it("customerGet отдаёт диск, журнал — void, не await", () => {
+  it("customerGet: пустой журнал ждём, иначе диск сразу", () => {
     const src = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     const getAt = src.indexOf('data.action === "customerGet"');
     const getNext = src.indexOf("if (data.action ===", getAt + 10);
@@ -47,7 +47,9 @@ describe("карточка не ждёт Alfa", () => {
     assert.equal(/pullCustomerRegular/.test(disk), false);
     assert.equal(/inboundCustomerPays/.test(disk), false);
     assert.equal(/pullCustomerAccount/.test(disk), false);
-    assert.match(get, /void import\("\.\/crm-journal-inbound"\)/);
+    assert.match(get, /emptyCal/);
+    assert.match(get, /if \(emptyCal\) await job/);
+    assert.match(get, /else void job/);
     assert.equal(/await import\("\.\/crm-journal-inbound"\)/.test(get), false);
   });
 

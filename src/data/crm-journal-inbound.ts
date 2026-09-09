@@ -240,7 +240,14 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
   if (!alfaLinkedNow() || id <= 0) return { ok: true as const, count: 0, done: true };
   const { wantAlfaPullChannel } = await import("./crm-alfa-link");
   if (!wantAlfaPullChannel("lessons")) return { ok: true as const, count: 0, skipped: "канал" as const, done: true };
-  if (lessonFillBusy(id)) return { ok: true as const, count: 0, skipped: "busy" as const, done: false };
+  if (lessonFillBusy(id)) {
+    if (Number(opts?.take) > 0) {
+      for (let i = 0; i < 16 && lessonFillBusy(id); i += 1) {
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+    if (lessonFillBusy(id)) return { ok: true as const, count: 0, skipped: "busy" as const, done: false };
+  }
   const wantFull = Boolean(opts?.full) || !customerSyncOf(id).lessonsFull || customerLessonsNeedAttend(id);
   if (!wantFull && customerLessonsFresh(id)) return { ok: true as const, count: 0, skipped: "fresh" as const, done: true };
   markLessonFillBusy(id, true);
@@ -271,7 +278,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       for (let page = cur.page; page < maxPages; page += 1) {
         const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
           `/v2api/${bid}/lesson/index`,
-          { page, pageSize: 100, status, customer_id: id, date_from: from, date_to: dateTo, removed: 0 },
+          { page, pageSize: 100, status, customer_id: id, date_from: from, date_to: dateTo },
           t,
         ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
         const chunk = les.items || [];

@@ -1566,9 +1566,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
       let crmPush = "";
       const { alfaLinkedNow } = await import("./crm-alfa-link");
       if (alfaLinkedNow() && customerId > 0) {
-        void import("./crm-journal-inbound")
-          .then((m) => m.inboundCustomerLessons(branch, customerId, { take: 6 }))
-          .catch(() => null);
+        const { loadCustomerCalendar } = await import("./group-cards");
+        const emptyCal = !(loadCustomerCalendar(customerId) || []).length;
+        const job = import("./crm-journal-inbound").then((m) => m.inboundCustomerLessons(branch, customerId, { take: 6 }));
+        if (emptyCal) await job.catch(() => null);
+        else void job.catch(() => null);
       }
       if (d?.child?.fio || customerId === 670) {
         const { isChudnovaAlexandra } = await import("./crm-pay-test-core");

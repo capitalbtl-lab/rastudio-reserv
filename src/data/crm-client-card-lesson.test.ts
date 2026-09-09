@@ -196,6 +196,11 @@ describe("форма занятия карточки", () => {
     assert.match(api, /void pullMissingLessonCtt/);
     assert.doesNotMatch(api, /await pullMissingLessonCtt/);
     assert.match(api, /inboundCustomerLessons\(branch, customerId, \{ take: 6 \}\)/);
+    assert.match(api, /emptyCal/);
+    assert.match(api, /if \(emptyCal\) await job/);
+    assert.match(inbound, /customer_id: id, date_from: from, date_to: dateTo \}/);
+    assert.doesNotMatch(inbound, /customer_id: id, date_from: from, date_to: dateTo, removed: 0/);
+    assert.match(inbound, /Number\(opts\?\.take\) > 0/);
     assert.match(api, /data.pull/);
     assert.match(api, /pullCustomerTariffs\(branch, customerId\)/);
     assert.match(src, /pull: true/);
