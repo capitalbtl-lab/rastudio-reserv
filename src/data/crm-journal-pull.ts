@@ -88,6 +88,14 @@ type ArchivesPupilsReport = {
   missing: number[];
 };
 
+type FillHit = {
+  pulled?: Record<string, string>;
+  rechecked?: string[];
+  weak?: string[];
+  fail?: Record<string, string>;
+  life?: { from: string; to: string; source: string };
+};
+
 type PullStore = {
   at: string;
   note: string;
@@ -98,10 +106,11 @@ type PullStore = {
   lastArchives?: ArchivesReport | null;
   lastArchivesPupils?: ArchivesPupilsReport | null;
   lastStudents?: StudentsReport | null;
+  fill?: Record<string, FillHit>;
 };
 
 function emptyStore(): PullStore {
-  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null, lastArchives: null, lastArchivesPupils: null, lastStudents: null };
+  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null, lastArchives: null, lastArchivesPupils: null, lastStudents: null, fill: {} };
 }
 
 function fileOf() {
@@ -122,6 +131,7 @@ function loadStore(): PullStore {
       lastArchives: raw.lastArchives && typeof raw.lastArchives === "object" ? (raw.lastArchives as ArchivesReport) : null,
       lastArchivesPupils: raw.lastArchivesPupils && typeof raw.lastArchivesPupils === "object" ? (raw.lastArchivesPupils as ArchivesPupilsReport) : null,
       lastStudents: raw.lastStudents && typeof raw.lastStudents === "object" ? (raw.lastStudents as StudentsReport) : null,
+      fill: raw.fill && typeof raw.fill === "object" ? (raw.fill as Record<string, FillHit>) : {},
     };
   } catch {
     return emptyStore();
@@ -360,31 +370,47 @@ function ruOfDate(d: Date) {
   return `${dd}.${mm}.${d.getFullYear()}`;
 }
 
+function fillKey(branchId: number, gid: number) {
+  return `${branchId}-${gid}`;
+}
+
+function fillOf(branchId: number, gid: number): FillHit {
+  return loadStore().fill?.[fillKey(branchId, gid)] || {};
+}
+
+function patchFill(branchId: number, gid: number, patch: FillHit) {
+  const store = loadStore();
+  const k = fillKey(branchId, gid);
+  store.fill = store.fill || {};
+  store.fill[k] = { ...store.fill[k], ...patch };
+  saveStore(store);
+}
+
 function groupLife(g: JournalPullGroup) {
-  const card = loadGroupCard(g.branchId, g.groupId);
-  const from = String(card?.journalLife?.from || card?.bDate || g.bDate || "");
-  let to = String(card?.journalLife?.to || card?.eDate || g.eDate || "");
+  const fill = fillOf(g.branchId, g.groupId);
+  const from = String(fill.life?.from || g.bDate || "");
+  let to = String(fill.life?.to || g.eDate || "");
   const end = parseLessonDate(to);
   const cap = new Date();
   cap.setMonth(cap.getMonth() + 3);
   if (end && end > cap) to = ruOfDate(cap);
-  const source = card?.journalLife?.source || (from || to ? "slot" : "");
+  const source = fill.life?.source || (from || to ? "slot" : "");
   return { from, to, source };
 }
 
 export function groupFillRow(g: JournalPullGroup) {
   const periods = journalPeriods();
-  const card = loadGroupCard(g.branchId, g.groupId);
-  const done = pulledPeriodKeys(card?.journalFill);
-  const fail = card?.journalFill?.fail || {};
-  const weak = new Set(card?.journalFill?.weak || []);
+  const fill = fillOf(g.branchId, g.groupId);
+  const pulledAt = fill.pulled || {};
+  const done = pulledPeriodKeys({ done: Object.keys(pulledAt), pulled: pulledAt });
+  const fail = fill.fail || {};
+  const weak = new Set(fill.weak || []);
+  const recheckedSet = new Set(fill.rechecked || []);
   const life = groupLife(g);
   const clipFrom = life.from;
   const clipTo = life.to;
   const age = groupAge(clipFrom, clipTo);
   const known = Boolean(clipFrom || clipTo);
-  const pulledAt = card?.journalFill?.pulled || {};
-  const recheckedSet = new Set(card?.journalFill?.rechecked || []);
   const allParts = periods.map((p) => ({
     key: p.key,
     label: p.label,
@@ -632,18 +658,15 @@ export function journalPullState() {
 }
 
 function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch: { ok: boolean; err?: string; weak?: boolean; recheck?: boolean }) {
-  const card = loadGroupCard(branchId, gid);
-  if (!card) return null;
-  const pulled = { ...(card.journalFill?.pulled || {}) };
-  const done = pulledPeriodKeys({ done: card.journalFill?.done, pulled });
-  const fail = { ...(card.journalFill?.fail || {}) };
-  const weak = new Set(card.journalFill?.weak || []);
-  const rechecked = new Set(card.journalFill?.rechecked || []);
+  const prev = fillOf(branchId, gid);
+  const pulled = { ...(prev.pulled || {}) };
+  const fail = { ...(prev.fail || {}) };
+  const weak = new Set(prev.weak || []);
+  const rechecked = new Set(prev.rechecked || []);
   const at = new Date().toISOString();
   for (const key of keys) {
     if (patch.ok) {
       pulled[key] = at;
-      if (!done.includes(key)) done.push(key);
       delete fail[key];
       if (patch.weak) weak.add(key);
       else {
@@ -655,6 +678,10 @@ function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch
       weak.add(key);
     }
   }
+  patchFill(branchId, gid, { pulled, fail, weak: [...weak], rechecked: [...rechecked] });
+  const card = loadGroupCard(branchId, gid);
+  if (!card) return null;
+  const done = pulledPeriodKeys({ done: card.journalFill?.done, pulled });
   const next = { ...card, journalFill: { done: [...new Set([...done, ...Object.keys(pulled)])], fail, pulled, weak: [...weak], rechecked: [...rechecked] }, journalAt: at };
   saveGroupCard(next);
   return next;
@@ -964,9 +991,9 @@ export async function journalPull(opts: {
     let old = 0;
     let unknown = 0;
     for (const g of scoped) {
-      const cur = loadGroupCard(g.branchId, g.groupId);
-      const from = String(g.bDate || cur?.bDate || "");
-      const to = String(g.eDate || cur?.eDate || "");
+      const prev = fillOf(g.branchId, g.groupId);
+      const from = String(g.bDate || prev.life?.from || "");
+      const to = String(g.eDate || prev.life?.to || "");
       const age = groupAge(from, to);
       if (age.id === "young") {
         young += 1;
@@ -981,53 +1008,33 @@ export async function journalPull(opts: {
         unknown += 1;
         if (unknownNames.length < 4) unknownNames.push(g.name);
       }
-      const card = cur || {
-        id: g.groupId,
-        branchId: g.branchId,
-        name: g.name,
-        note: "",
-        description: "",
-        remarks: "",
-        hashtags: "",
-        makeup: "",
-        statusId: g.archived ? 3 : 1,
-        bDate: from,
-        eDate: to,
-        levelId: 0,
-        signup: "",
-        subjectId: 0,
-        subject: "",
-        calendar: [],
-        at: now,
-      };
-      saveGroupCard({ ...card, journalLife: { from, to, source: from || to ? "slot" : "", at: now } });
+      patchFill(g.branchId, g.groupId, { life: { from, to, source: prev.life?.source || (from || to ? "slot" : "") } });
     }
     const { token } = await import("./alfacrm");
     const { probeGroupLife } = await import("./crm-journal-inbound");
     const t = await token().catch(() => "");
-    const needProbe = scoped.filter((g) => loadGroupCard(g.branchId, g.groupId)?.journalLife?.source !== "alfa");
+    const needProbe = scoped.filter((g) => fillOf(g.branchId, g.groupId).life?.source !== "alfa");
     const batch = needProbe.slice(0, 4);
     let probed = 0;
     if (t) {
       for (const g of batch) {
         const hit = await probeGroupLife(g.branchId, g.groupId, { token: t }).catch(() => ({ from: "", to: "", lessons: 0, ok: false as const }));
+        const prev = fillOf(g.branchId, g.groupId);
+        const fromA = hit.from || String(prev.life?.from || g.bDate || "");
+        const toA = hit.to || String(prev.life?.to || g.eDate || "");
+        const source = hit.ok ? "alfa" : prev.life?.source || "slot";
+        patchFill(g.branchId, g.groupId, { life: { from: fromA, to: toA, source } });
         const cur = loadGroupCard(g.branchId, g.groupId);
-        if (!cur) continue;
-        const fromA = hit.from || String(cur.journalLife?.from || g.bDate || "");
-        const toA = hit.to || String(cur.journalLife?.to || g.eDate || "");
-        saveGroupCard({
-          ...cur,
-          journalLife: {
-            from: fromA,
-            to: toA,
-            source: hit.ok ? "alfa" : cur.journalLife?.source || "slot",
-            at: now,
-          },
-        });
+        if (cur) {
+          saveGroupCard({
+            ...cur,
+            journalLife: { from: fromA, to: toA, source, at: now },
+          });
+        }
         probed += 1;
       }
     }
-    const left = scoped.filter((g) => loadGroupCard(g.branchId, g.groupId)?.journalLife?.source !== "alfa").length;
+    const left = scoped.filter((g) => fillOf(g.branchId, g.groupId).life?.source !== "alfa").length;
     young = 0;
     mid = 0;
     old = 0;
