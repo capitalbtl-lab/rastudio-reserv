@@ -16,7 +16,7 @@ const LOCK = "/tmp/rastudio-deploy.lock";
 let busy = false;
 
 async function git(args) {
-  const { stdout } = await exec("git", args, { cwd: root });
+  const { stdout } = await exec("git", args, { cwd: root, timeout: 60_000 });
   return String(stdout || "").trim();
 }
 
@@ -63,7 +63,7 @@ async function tick() {
     }
     await exec("bash", [path.join(root, "scripts/beget-deploy.sh"), "--force"], {
       cwd: root,
-      env: process.env,
+      env: { ...process.env, RA_DEPLOY_REEXEC: "1", RA_DEPLOY_BG: "1" },
       timeout: 20 * 60 * 1000,
     });
   } catch (e) {
@@ -75,15 +75,6 @@ async function tick() {
       return;
     }
     console.error("[deploy]", msg);
-    try {
-      await exec("pm2", ["start", "ecosystem.config.cjs", "--only", "rastudio"], { cwd: root });
-    } catch {
-      try {
-        await exec("pm2", ["restart", "rastudio"], { cwd: root });
-      } catch {
-        /* */
-      }
-    }
   } finally {
     busy = false;
   }

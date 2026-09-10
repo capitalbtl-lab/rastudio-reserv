@@ -125,10 +125,19 @@ if [ -d "$ROOT/public/media/imported" ] && [ ! -e "$ROOT/.output/public/media/im
 fi
 
 pm2 delete rastudio >/dev/null 2>&1 || true
-pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio
+pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio >/dev/null 2>&1 || true
+sleep 2
+if ! ss -ltnp 2>/dev/null | grep -q ':3000'; then
+  echo "[deploy] pm2 не слушает 3000 — стартую node"
+  nohup env NODE_ENV=production HOST=0.0.0.0 PORT=3000 node --max-old-space-size=640 "$ROOT/.output/server/index.mjs" >/tmp/rastudio-node.log 2>&1 &
+  sleep 1
+fi
 rm -rf "$ROOT/.output.bak"
 
-pm2 restart rastudio-deploy --update-env >/dev/null 2>&1 || pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio-deploy >/dev/null 2>&1 || true
+# Вотчер не рестартуем, если уже online — иначе он убивает сам себя и крутит сборку.
+if ! pm2 describe rastudio-deploy 2>/dev/null | grep -q "status.*online"; then
+  pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio-deploy >/dev/null 2>&1 || true
+fi
 for app in rastudio-night-groups rastudio-pay-poll; do
   if ! pm2 describe "$app" >/dev/null 2>&1; then
     pm2 start "$ROOT/ecosystem.config.cjs" --only "$app"

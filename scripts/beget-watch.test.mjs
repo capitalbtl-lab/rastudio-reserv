@@ -11,6 +11,9 @@ describe("автовыкладка Beget", () => {
     assert.match(watch, /сборка уже идёт/);
     assert.match(sh, /ROOT\/\.deploy-rev/);
     assert.match(sh, /exit 0/);
-    assert.doesNotMatch(sh, /вотчер повторит/);
+    assert.match(watch, /RA_DEPLOY_BG/);
+    assert.match(sh, /status.*online/);
+    assert.doesNotMatch(sh, /pm2 restart rastudio-deploy --update-env/);
+    assert.doesNotMatch(watch, /pm2.*restart.*rastudio/);
   });
 });
