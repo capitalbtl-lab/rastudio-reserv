@@ -1588,8 +1588,27 @@ export function AdminSchedule() {
       setMsg(res.error || "АСРМ не приняла группу.");
       return;
     }
-    const extra = res as { groupId?: number; slots?: CrmSlot[]; queued?: boolean; local?: boolean; error?: string; extra?: string; flushed?: boolean; pending?: number };
+    const extra = res as { groupId?: number; slots?: CrmSlot[]; queued?: boolean; local?: boolean; error?: string; extra?: string; flushed?: boolean; pending?: number; needConfirm?: boolean; issues?: { code: string; text: string }[] };
     const gid = Number(extra.groupId || detail.groupId || 0);
+    if (extra.needConfirm) {
+      setDetail((d) =>
+        d
+          ? {
+              ...d,
+              saving: false,
+              exportAsk: {
+                mode,
+                summary: extra.extra || (extra.issues || []).map((x) => x.text).join(" "),
+                allowFull: false,
+                allowGroup: true,
+                suggestOwner: false,
+                issues: extra.issues || [],
+              },
+            }
+          : d,
+      );
+      return;
+    }
     const nextSlot = (extra.slots || []).find((s) => s.id === detail.id);
     const period = defaultPeriod(nextSlot?.bDate || detail.bDate, nextSlot?.eDate || detail.eDate);
     const warn = String(extra.error || "");

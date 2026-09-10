@@ -811,12 +811,12 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
         day: days[Number(b.day)] || slot.dayLabel || "",
         from: b.timeFrom,
         to: b.timeTo,
-        teacher: slot.teacher || "",
+        teacher: b.teacher || slot.teacher || "",
         subject: slot.subject || "",
         branch: CRM_BRANCH[slot.branchId]?.short || "",
         lessonId: b.lessonId,
         subjectId: slot.subjectId,
-        teacherId: slot.teacherId || undefined,
+        teacherId: (b.teacherIds && b.teacherIds[0]) || slot.teacherId || undefined,
         roomId: slot.roomId || undefined,
         bDate: b.bDate || slot.bDate,
         eDate: b.eDate || slot.eDate,
@@ -1765,7 +1765,20 @@ export const adminSchedule = createServerFn({ method: "POST" })
       if (!/^\d{1,2}:\d{2}$/.test(time)) return { ok: false as const, error: "Нет времени занятия." };
       const duration = Number(data.duration) || 90;
       const to = String(data.timeTo || "").slice(0, 5) || addMins(time, duration);
-      const teacherId = Number(data.teacherId) || Number(slot?.teacherId) || 0;
+      const { beatTeacherIds, teacherIdSet, teacherIdsPayload } = await import("./crm-group-teachers-core");
+      const { beatsOf } = await import("./crm-slots-core");
+      const beat = slot
+        ? beatsOf(slot).find((b) => String(b.timeFrom || "").slice(0, 5) === time) ||
+          beatsOf(slot).find((b) => beatTeacherIds(b, slot).length) ||
+          beatsOf(slot)[0]
+        : undefined;
+      const teacherIds = Array.isArray(data.teacherIds) && data.teacherIds.length
+        ? teacherIdSet(data.teacherIds)
+        : slot
+          ? beatTeacherIds(beat, slot)
+          : Number(data.teacherId) > 0
+            ? [Number(data.teacherId)]
+            : [];
       const localId = nextLocalLessonId();
       const dateIso = isoish(date);
       const useBranch = Number(slot?.branchId || lessonBranch);
@@ -1779,7 +1792,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           typeId: type.id,
           duration,
           subjectId,
-          teacherIds: teacherId ? [teacherId] : [],
+          teacherIds,
           roomId,
           groupIds: gid && lessonAllowsGroup(type.id) ? [gid] : [],
           customerIds: [customerId],
@@ -1816,7 +1829,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           customer_ids: [customerId],
           ...(roomId && !lessonOmitsRoom(type.id) ? { room_id: roomId } : {}),
           ...(gid && lessonAllowsGroup(type.id) ? { group_ids: [gid] } : {}),
-          ...(teacherId ? { teacher_ids: [teacherId] } : {}),
+          ...teacherIdsPayload(teacherIds),
           ...(data.topic ? { topic: String(data.topic) } : {}),
           note: data.note || `${type.name} с сайта rastudio.org`,
         },
@@ -3331,9 +3344,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const teacherIds = teacherIdSet(
         Array.isArray(data.teacherIds) ? data.teacherIds : found.teacherIds,
       );
-      const ownerTeacherIds = teacherIdSet(
-        Array.isArray(data.ownerTeacherIds) ? data.ownerTeacherIds : found.ownerTeacherIds?.length ? found.ownerTeacherIds : found.teacherIds,
-      );
+      const ownerTeacherIds = Array.isArray(data.ownerTeacherIds)
+        ? teacherIdSet(data.ownerTeacherIds)
+        : Array.isArray(found.ownerTeacherIds)
+          ? teacherIdSet(found.ownerTeacherIds)
+          : teacherIdSet(found.teacherIds);
       const teacherName = data.teacher != null ? String(data.teacher) : found.teacher;
       const teacherId = teacherIds[0] || (data.teacherId != null ? Number(data.teacherId) : found.teacherId) || 0;
       const groupName = String(data.groupName || found.groupName || "");
@@ -3423,6 +3438,21 @@ export const adminSchedule = createServerFn({ method: "POST" })
         if (exportMode === "skip") {
           return pack(saved, { groupId: gid, queued: false, extra: "На сайте. В АСРМ не отправляли." });
         }
+        const slotNow = hydrateGroupTeachers(saved.find((s) => s.id === found.id) || found);
+        if (!data.exportMode) {
+          const { inspectSlotExport } = await import("./crm-group-export");
+          const chk = await inspectSlotExport(slotNow);
+          if (!chk.allowFull) {
+            logAdmin(`Группа ${gid}: сверка не пустила шаблон`);
+            return pack(saved, {
+              groupId: gid,
+              queued: false,
+              needConfirm: true,
+              issues: chk.issues,
+              extra: chk.summary || "Сначала сверка. Шаблон в АСРМ не отправляли.",
+            });
+          }
+        }
         const { enqueueExport } = await import("./crm-export-queue");
         enqueueExport({
           op: "group.update",
@@ -3446,7 +3476,6 @@ export const adminSchedule = createServerFn({ method: "POST" })
             ...teacherIdsPayload(ownerTeacherIds),
           },
         });
-        const slotNow = hydrateGroupTeachers(next.find((s) => s.id === found.id) || found);
         if (exportMode === "group") {
           logAdmin(`Группа ${gid}: только карточка в очередь`);
           return await finishQueue(saved, { groupId: gid, queued: true, extra: "Только карточка группы. Шаблон и занятия не трогали." }, gid);
@@ -3940,7 +3969,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
             customers,
             pupils,
             subjectId: Number(hit?.subjectId || slot?.subjectId || data.subjectId || 0),
-            teacherIds: (hit?.teacherIds?.length ? hit.teacherIds : slot?.teacherId ? [slot.teacherId] : []).map(Number).filter((n) => n > 0),
+            teacherIds: (hit?.teacherIds?.length ? hit.teacherIds : slot?.teacherIds?.length ? slot.teacherIds : slot?.teacherId ? [slot.teacherId] : []).map(Number).filter((n) => n > 0),
             topic: String(hit?.topic || data.topic || ""),
             homework: String(hit?.homework || ""),
             note: String(hit?.note || data.note || ""),

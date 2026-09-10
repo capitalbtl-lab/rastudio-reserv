@@ -9,6 +9,7 @@ import {
   hydrateGroupTeachers,
   pickLessonTeacherIds,
   ownerOnlyTeacherIds,
+  ownerTeacherIdsOf,
   slotBeatTeacherIds,
 } from "./crm-group-teachers-core.ts";
 import { inspectGroupExport, weekdayIso } from "./crm-group-export-core.ts";
@@ -42,6 +43,10 @@ describe("наборы педагогов", () => {
     assert.deepEqual(slotBeatTeacherIds(split), [10, 11]);
     assert.deepEqual(ownerOnlyTeacherIds(split), [99]);
     assert.deepEqual(beatTeacherIds(split.beats![0], split), [10, 11]);
+    const emptyOwner = ownerTeacherIdsOf({ teacherIds: [10, 11], ownerTeacherIds: [] });
+    assert.deepEqual(emptyOwner, []);
+    assert.deepEqual(beatTeacherIds({ teacherIds: [] }, { teacherIds: [10] }), []);
+    assert.deepEqual(beatTeacherIds(undefined, { teacherIds: [10] }), [10]);
   });
 });
 

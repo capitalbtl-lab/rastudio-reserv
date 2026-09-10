@@ -49,14 +49,12 @@ export type SlotTeachers = {
 };
 
 export function beatTeacherIds(beat: BeatTeachers | undefined, slot?: SlotTeachers) {
-  const own = teacherIdSet(beat?.teacherIds);
-  if (own.length) return own;
+  if (Array.isArray(beat?.teacherIds)) return teacherIdSet(beat.teacherIds);
   return teacherIdSet(slot?.teacherIds?.length ? slot.teacherIds : slot?.teacherId);
 }
 
 export function ownerTeacherIdsOf(slot: SlotTeachers) {
-  const own = teacherIdSet(slot.ownerTeacherIds);
-  if (own.length) return own;
+  if (Array.isArray(slot.ownerTeacherIds)) return teacherIdSet(slot.ownerTeacherIds);
   return teacherIdSet(slot.teacherIds?.length ? slot.teacherIds : slot.teacherId);
 }
 
