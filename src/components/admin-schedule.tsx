@@ -1531,7 +1531,7 @@ export function AdminSchedule() {
         setDetail((d) => (d ? { ...d, saving: false, error: pack.error || "Не сверили шаблон в Alfa." } : d));
         return;
       }
-      if ((pack.issues || []).length) {
+      if ((pack.issues || []).length || pack.suggestOwner) {
         setDetail((d) =>
           d
             ? {
@@ -3906,7 +3906,9 @@ export function AdminSchedule() {
                     {detail.note ? <p className="mt-2 text-sm font-semibold text-emerald-800">{detail.note}</p> : null}
                     {detail.exportAsk ? (
                       <div className="mt-3 rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-200">
-                        <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-amber-900">Нельзя выгрузить как есть</p>
+                        <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-amber-900">
+                          {detail.exportAsk.allowFull ? "Проверьте перед выгрузкой" : "Нельзя выгрузить как есть"}
+                        </p>
                         <p className="mt-1 text-sm leading-snug text-fg">{detail.exportAsk.summary}</p>
                         {detail.exportAsk.suggestOwner ? (
                           <p className="mt-1 text-[0.8rem] text-muted">Сделать ответственными педагогов занятий? Не обязательно: у группы может быть свой руководитель.</p>

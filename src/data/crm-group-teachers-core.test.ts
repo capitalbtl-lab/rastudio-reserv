@@ -107,5 +107,8 @@ describe("экраны не берут первый id", () => {
     const sched = readFileSync(new URL("../components/admin-schedule.tsx", import.meta.url), "utf8");
     assert.match(sched, /Педагоги занятий/);
     assert.match(sched, /Ответственные педагоги/);
+    assert.match(sched, /pack\.issues \|\| \[\]\)\.length \|\| pack\.suggestOwner/);
+    const exp = readFileSync(new URL("./crm-group-export.ts", import.meta.url), "utf8");
+    assert.match(exp, /lesson\/index/);
   });
 });

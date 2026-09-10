@@ -1,5 +1,5 @@
 import { request, token } from "./alfacrm";
-import { beatsOf, type CrmSlot } from "./crm-slots-core";
+import { beatsOf, isoDateOrEmpty, type CrmSlot } from "./crm-slots-core";
 import { loadGroupCard } from "./group-cards";
 import { loadTeachers } from "./crm-teachers";
 import { teacherIdSet, beatTeacherIds, ownerTeacherIdsOf, hydrateGroupTeachers } from "./crm-group-teachers-core";
@@ -72,6 +72,9 @@ export async function inspectSlotExport(slot: CrmSlot): Promise<{
   let indexFailed = false;
   let alfaRegulars: AlfaRegularSnap[] = [];
   let alfaOwnerIds: number[] = [];
+  let calendar = (card?.calendar || [])
+    .map((c) => ({ date: isoDateOrEmpty(c.date) || c.date, from: c.from }))
+    .filter((c) => c.date);
   try {
     const t = await token();
     const branches = [...new Set([branch, ...((s as { branchIds?: number[] }).branchIds || [])])].filter(Boolean);
@@ -104,6 +107,20 @@ export async function inspectSlotExport(slot: CrmSlot): Promise<{
     ).catch(() => ({ items: [] as { id?: number; teacher_ids?: unknown }[] }));
     const hit = (g.items || []).find((x) => Number(x.id) === gid);
     alfaOwnerIds = teacherIdSet(hit?.teacher_ids);
+    if (!calendar.length) {
+      for (const status of [3, 2, 1]) {
+        const pack = await request<{ items?: Record<string, unknown>[] }>(
+          `/v2api/${branch}/lesson/index`,
+          { page: 0, pageSize: 20, group_id: gid, status },
+          t,
+        ).catch(() => ({ items: [] as Record<string, unknown>[] }));
+        for (const it of pack.items || []) {
+          const date = isoDateOrEmpty(String(it.date || it.lesson_date || ""));
+          if (date) calendar.push({ date, from: hm(String(it.time_from || it.time_from_v || "")) });
+        }
+        if (calendar.length) break;
+      }
+    }
   } catch {
     indexFailed = true;
   }
@@ -112,7 +129,7 @@ export async function inspectSlotExport(slot: CrmSlot): Promise<{
     ownerTeacherIds: ownerTeacherIdsOf(s),
     groupFrom: s.bDate,
     groupTo: s.eDate,
-    calendar: (card?.calendar || []).map((c) => ({ date: c.date, from: c.from })),
+    calendar,
     alfaRegulars: indexFailed ? null : alfaRegulars,
     alfaOwnerIds,
     branchTeacherIds: branchTeacherIds.length ? branchTeacherIds : undefined,
