@@ -990,7 +990,15 @@ function StudentPackView({
   );
 }
 
-function ProgressBar({ done, total, run }: { done: number; total: number; run?: boolean }) {
+function ProgressBar({ done, total, run, loading }: { done: number; total: number; run?: boolean; loading?: boolean }) {
+  const left = Math.max(0, total - done);
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  return (
+    <div className="mt-2">
+      <p className="font-display text-xl tabular-nums leading-none">
+        {total <= 0 ? (
+          <span className="font-semibold text-muted">{loading ? "загружаю список…" : "нет на диске"}</span>
+        ) : (
   const left = Math.max(0, total - done);
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   return (
@@ -1091,6 +1099,7 @@ export function AdminCrmSettings() {
     } | null;
     lastStudents?: { at?: string; study?: string; who?: string; n?: number; total?: number; rows?: StudentHit[] } | null;
   } | null>(null);
+  const [journalLoading, setJournalLoading] = useState(true);
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
   const [crmTab, setCrmTab] = useState<CrmSetTab>("history");
@@ -1208,6 +1217,7 @@ export function AdminCrmSettings() {
     void loadAuto();
     void loadCache();
     void loadActors();
+    void loadJournal();
   }, []);
 
   async function loadAuto() {
@@ -1351,6 +1361,7 @@ export function AdminCrmSettings() {
   }
 
   async function loadJournal() {
+    setJournalLoading(true);
     try {
       const res = (await adminSchedule({
         data: { token: token(), action: "journalPull" } as never,
@@ -1359,6 +1370,8 @@ export function AdminCrmSettings() {
       else setMsg("Список учеников не пришёл.");
     } catch {
       setMsg("Список учеников не пришёл. Обновите вкладку.");
+    } finally {
+      setJournalLoading(false);
     }
   }
 
@@ -2002,10 +2015,16 @@ export function AdminCrmSettings() {
               {journal?.note ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
               {!journal ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" className={BTN_LOAD} disabled={offline} onClick={() => void loadJournal()}>
-                    Показать список с диска
-                  </button>
-                  <span className="text-sm text-muted">Само при открытии не грузим — иначе сайт зависает.</span>
+                  {journalLoading ? (
+                    <p className="text-sm text-muted">Загружаю список с диска…</p>
+                  ) : (
+                    <>
+                      <button type="button" className={BTN_LOAD} disabled={offline} onClick={() => void loadJournal()}>
+                        Показать список с диска
+                      </button>
+                      <span className="text-sm text-muted">Не пришло — нажмите ещё раз.</span>
+                    </>
+                  )}
                 </div>
               ) : null}
               <div ref={histTabsRef} className="flex flex-wrap gap-1">
@@ -2025,7 +2044,7 @@ export function AdminCrmSettings() {
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Занятия в группах</p>
                 <p className="mt-1 text-sm text-muted">Сначала подгрузите архивные группы — баланс ученика часто сидит в старых составах. Потом сроки и порции журнала.</p>
-                <ProgressBar done={schoolDone} total={schoolRows.length} run={Boolean(schoolRun || fillLoading)} />
+                <ProgressBar done={schoolDone} total={schoolRows.length} run={Boolean(schoolRun || fillLoading)} loading={journalLoading && !journal} />
                 <p className="mt-1 text-[0.72rem] text-muted">
                   {journalSchool ? `Школа «${journalSchool}»: загрузка завершена ${schoolDone} из ${schoolRows.length}` : "Все школы. Выберите школу — счётчик только по ней"}
                   {schoolNeed ? ` · требуют загрузки ${schoolNeed}` : ""}.
@@ -2291,7 +2310,7 @@ export function AdminCrmSettings() {
                   const allIn = total > 0 && done >= total;
                   return (
                     <>
-                      <ProgressBar done={done} total={total} run={run} />
+                      <ProgressBar done={done} total={total} run={run} loading={journalLoading && !journal} />
                       <p className="mt-1 h-5 truncate text-sm text-muted">{run ? `Сейчас ${fillLoading?.label || ""}` : schoolRun?.cur && fillLoading?.kind === "students" ? `Сейчас ${schoolRun.cur}` : "\u00a0"}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <button
@@ -2362,7 +2381,7 @@ export function AdminCrmSettings() {
                   const run = fillLoading?.kind === "balance";
                   return (
                     <>
-                      <ProgressBar done={done} total={total} run={run} />
+                      <ProgressBar done={done} total={total} run={run} loading={journalLoading && !journal} />
                       <p className="mt-1 h-5 truncate text-sm text-muted">{run ? `Сейчас ${fillLoading?.label || ""}` : "\u00a0"}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <button
