@@ -14,7 +14,7 @@ import { customerSyncOf, stampCustomerSync } from "./crm-customer-sync";
 import { isPayJournalComplete } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 
-export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives";
+export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils";
 export type JournalPullStudy = "1" | "2" | "all";
 
 export type JournalPullGroup = {
@@ -73,6 +73,21 @@ type ArchivesReport = {
   names: string[];
 };
 
+type ArchivesPupilsReport = {
+  at: string;
+  study: string;
+  clients: number;
+  uniqueIds: number;
+  live: number;
+  need: number;
+  already: number;
+  added: number;
+  left: number;
+  more: boolean;
+  names: string[];
+  missing: number[];
+};
+
 type PullStore = {
   at: string;
   note: string;
@@ -81,11 +96,12 @@ type PullStore = {
   studentIdx: Record<string, number>;
   lastLife?: LifeReport | null;
   lastArchives?: ArchivesReport | null;
+  lastArchivesPupils?: ArchivesPupilsReport | null;
   lastStudents?: StudentsReport | null;
 };
 
 function emptyStore(): PullStore {
-  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null, lastArchives: null, lastStudents: null };
+  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null, lastArchives: null, lastArchivesPupils: null, lastStudents: null };
 }
 
 function fileOf() {
@@ -104,6 +120,7 @@ function loadStore(): PullStore {
       studentIdx: raw.studentIdx && typeof raw.studentIdx === "object" ? raw.studentIdx : {},
       lastLife: raw.lastLife && typeof raw.lastLife === "object" ? (raw.lastLife as LifeReport) : null,
       lastArchives: raw.lastArchives && typeof raw.lastArchives === "object" ? (raw.lastArchives as ArchivesReport) : null,
+      lastArchivesPupils: raw.lastArchivesPupils && typeof raw.lastArchivesPupils === "object" ? (raw.lastArchivesPupils as ArchivesPupilsReport) : null,
       lastStudents: raw.lastStudents && typeof raw.lastStudents === "object" ? (raw.lastStudents as StudentsReport) : null,
     };
   } catch {
@@ -162,6 +179,57 @@ function schoolOfArchive(subjectId: number) {
   if (hit?.school) return hit.school;
   const live = listAdminSlots().find((s) => Number(s.subjectId) === subjectId && s.school);
   return String(live?.school || "").trim() || "Прочее";
+}
+
+function pupilLinkCountMap(study: JournalPullStudy) {
+  const map = new Map<string, number>();
+  for (const p of rankedStudentIds(study)) {
+    const d = findDossier({ crmId: p.cid });
+    for (const g of d?.groupLinks || []) {
+      const gid = Number(g.id) || 0;
+      const bid = Number(g.branchId || p.branchId) || 1;
+      if (!gid) continue;
+      const k = `${bid}:${gid}`;
+      map.set(k, (map.get(k) || 0) + 1);
+    }
+  }
+  return map;
+}
+
+function pupilArchivePlan(study: "1" | "2") {
+  const people = rankedStudentIds(study);
+  const liveKeys = new Set(journalPullGroups().filter((g) => !g.archived).map((g) => `${g.branchId}:${g.groupId}`));
+  const bagKeys = new Set(loadJournalArchiveGroups().map((g) => `${g.branchId}:${g.groupId}`));
+  const unique = new Map<string, { groupId: number; branchId: number; n: number }>();
+  for (const p of people) {
+    const d = findDossier({ crmId: p.cid });
+    for (const g of d?.groupLinks || []) {
+      const gid = Number(g.id) || 0;
+      const bid = Number(g.branchId || p.branchId) || 1;
+      if (!gid) continue;
+      const k = `${bid}:${gid}`;
+      const cur = unique.get(k) || { groupId: gid, branchId: bid, n: 0 };
+      cur.n += 1;
+      unique.set(k, cur);
+    }
+  }
+  let live = 0;
+  const need: { groupId: number; branchId: number; n: number }[] = [];
+  for (const row of unique.values()) {
+    if (liveKeys.has(`${row.branchId}:${row.groupId}`)) live += 1;
+    else need.push(row);
+  }
+  need.sort((a, b) => b.n - a.n || a.groupId - b.groupId);
+  const already = need.filter((x) => bagKeys.has(`${x.branchId}:${x.groupId}`));
+  const pending = need.filter((x) => !bagKeys.has(`${x.branchId}:${x.groupId}`));
+  return {
+    clients: people.length,
+    uniqueIds: unique.size,
+    live,
+    need: need.length,
+    already: already.length,
+    pending,
+  };
 }
 
 function schoolOf(s: { school?: string }) {
@@ -388,9 +456,18 @@ export function groupFillRow(g: JournalPullGroup) {
 
 export function journalPullProgress() {
   const groups = journalPullGroups();
-  const periods = journalPeriods();
-  const rows = groups.map(groupFillRow);
-  rows.sort((a, b) => a.name.localeCompare(b.name, "ru") || (a.groupId || 0) - (b.groupId || 0));
+  const nMap = pupilLinkCountMap("1");
+  const rows = groups.map((g) => {
+    const row = groupFillRow(g);
+    const pupilN = nMap.get(`${g.branchId}:${g.groupId}`) || 0;
+    const extra = g.archived && pupilN ? [row.extra, `с карточек учеников ${pupilN}`].filter(Boolean).join(" · ") : row.extra;
+    return { ...row, pupilN, extra };
+  });
+  rows.sort((a, b) => {
+    if (Boolean(a.archived) !== Boolean(b.archived)) return Number(a.archived) - Number(b.archived);
+    if (a.archived) return (b.pupilN || 0) - (a.pupilN || 0) || a.name.localeCompare(b.name, "ru") || (a.groupId || 0) - (b.groupId || 0);
+    return a.name.localeCompare(b.name, "ru") || (a.groupId || 0) - (b.groupId || 0);
+  });
   const complete = rows.filter((r) => r.complete).length;
   const groupsMiss = rows.filter((r) => r.done < r.total).map((r) => ({
     groupId: r.groupId,
@@ -528,6 +605,7 @@ export function journalPullState() {
     progress: journalPullProgress(),
     lastLife: store.lastLife || null,
     lastArchives: store.lastArchives || null,
+    lastArchivesPupils: store.lastArchivesPupils || null,
     lastStudents: store.lastStudents || null,
   };
 }
@@ -740,6 +818,112 @@ export async function journalPull(opts: {
     store.at = bag.at;
     saveStore(store);
     return { ok: true as const, extra: store.note, count: added.length, scanned: added.length, more, lastArchives, ...journalPullState() };
+  }
+
+  if (kind === "archivesPupils") {
+    const who: "1" | "2" = study === "2" ? "2" : "1";
+    const plan = pupilArchivePlan(who);
+    const lastArchivesPupils = (partial: Partial<ArchivesPupilsReport>, note: string) => {
+      const row: ArchivesPupilsReport = {
+        at: new Date().toISOString(),
+        study: who,
+        clients: plan.clients,
+        uniqueIds: plan.uniqueIds,
+        live: plan.live,
+        need: plan.need,
+        already: plan.already,
+        added: 0,
+        left: plan.pending.length,
+        more: plan.pending.length > 0,
+        names: [],
+        missing: [],
+        ...partial,
+      };
+      store.lastArchivesPupils = row;
+      store.note = note;
+      store.at = row.at;
+      saveStore(store);
+      return { ok: true as const, extra: note, count: row.added, scanned: row.added, more: row.more, lastArchivesPupils: row, ...journalPullState() };
+    };
+    if (!plan.need) {
+      return lastArchivesPupils({ more: false, left: 0 }, "Новых архивных групп по карточкам нет.");
+    }
+    const batch = plan.pending.slice(0, 10);
+    if (!batch.length) {
+      return lastArchivesPupils({ more: false, left: 0 }, `Уже в архивном списке ${plan.already}. Новых по карточкам нет.`);
+    }
+    const { token, request } = await import("./alfacrm");
+    const { crmUnwrapIndex } = await import("./crm-leads-stages");
+    const t = await token().catch(() => "");
+    if (!t) {
+      store.note = "Нет входа в AlfaCRM.";
+      store.at = new Date().toISOString();
+      saveStore(store);
+      return { ok: false as const, error: store.note, more: false, ...journalPullState() };
+    }
+    const bag = loadArchiveBag();
+    const seen = new Set(bag.items.map((g) => `${g.branchId}:${g.groupId}`));
+    const added: JournalPullGroup[] = [];
+    const missing: number[] = [];
+    for (const hit of batch) {
+      const json = await request<unknown>(
+        `/v2api/${hit.branchId}/group/index`,
+        { page: 0, pageSize: 1, id: hit.groupId },
+        t,
+      ).catch(() => null);
+      const pack = crmUnwrapIndex(json);
+      const raw = pack.items.find((x) => Number(x.id) === hit.groupId) || pack.items[0];
+      const k = `${hit.branchId}:${hit.groupId}`;
+      if (!raw || seen.has(k)) {
+        if (!raw) missing.push(hit.groupId);
+        continue;
+      }
+      seen.add(k);
+      added.push({
+        groupId: hit.groupId,
+        branchId: hit.branchId,
+        name: String(raw.name || `группа ${hit.groupId}`),
+        school: schoolOfArchive(Number(raw.subject_id) || 0),
+        taken: Number(raw.quantity || raw.cnt || raw.customers_count || hit.n || 0) || hit.n,
+        archived: true,
+        bDate: String(raw.b_date || raw.bDate || ""),
+        eDate: String(raw.e_date || raw.eDate || ""),
+      });
+    }
+    bag.items = bag.items.concat(added);
+    bag.at = new Date().toISOString();
+    saveArchiveBag(bag);
+    const left = Math.max(0, plan.pending.length - batch.length);
+    const report: ArchivesPupilsReport = {
+      at: bag.at,
+      study: who,
+      clients: plan.clients,
+      uniqueIds: plan.uniqueIds,
+      live: plan.live,
+      need: plan.need,
+      already: plan.already,
+      added: added.length,
+      left,
+      more: left > 0,
+      names: added.slice(0, 4).map((g) => g.name),
+      missing,
+    };
+    store.lastArchivesPupils = report;
+    store.note = [
+      `Клиентов ${plan.clients}`,
+      `уникальных групп на карточках ${plan.uniqueIds}`,
+      `уже в живых ${plan.live}`,
+      `уйдёт в архив ${plan.need}`,
+      `уже в списке архивных ${plan.already}`,
+      added.length ? `+${added.length} с Alfa` : "с Alfa новых нет",
+      missing.length ? `не нашли: ${missing.slice(0, 8).join(", ")}` : "",
+      left ? `ещё ${left}, нажмите снова` : "",
+    ]
+      .filter(Boolean)
+      .join(". ");
+    store.at = bag.at;
+    saveStore(store);
+    return { ok: true as const, extra: store.note, count: added.length, scanned: batch.length, more: left > 0, lastArchivesPupils: report, ...journalPullState() };
   }
 
   if (kind === "life") {

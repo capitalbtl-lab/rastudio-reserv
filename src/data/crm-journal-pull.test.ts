@@ -68,6 +68,14 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /probeGroupLife/);
     assert.match(ui, /Определить сроки групп/);
     assert.match(ui, /Загрузить архивные группы/);
+    assert.match(ui, /Архив групп учеников/);
+    assert.match(ui, /lastArchivesPupils/);
+    assert.match(ui, /все архивы филиала, не только ученики/);
+    assert.match(pull, /kind === "archivesPupils"/);
+    assert.match(pull, /pupilArchivePlan/);
+    assert.match(pull, /pending\.slice\(0, 10\)/);
+    assert.match(pull, /groupLinks/);
+    assert.doesNotMatch(pull, /enqueueExport/);
     assert.match(ui, /lastArchives/);
     assert.match(ui, /lastLife/);
     assert.match(ui, /Определено/);
@@ -104,7 +112,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /lessonsRecheckAt/);
     assert.match(pull, /customerId/);
     assert.match(pull, /lastStudents/);
-    assert.match(ui, /Личный журнал по номеру ученика/);
+    assert.match(ui, /Догрузить текущих/);
     assert.match(pull, /child\?\.fio/);
     assert.match(pull, /groupsOfStudent/);
     assert.doesNotMatch(ui, /BTN_LOAD_SM, "min-w-0 flex-1"/);

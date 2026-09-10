@@ -149,6 +149,7 @@ type FillRow = {
   life?: string;
   source?: string;
   parts?: FillPart[];
+  pupilN?: number;
 };
 
 function ruLessons(n: number) {
@@ -417,6 +418,9 @@ function GroupFillList({
                 <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
                     {row.archived ? (
                       <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[0.72rem] font-semibold text-zinc-800">архив</span>
+                    ) : null}
+                    {row.archived && row.pupilN ? (
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[0.72rem] font-semibold text-violet-900">с карточек учеников · {row.pupilN}</span>
                     ) : null}
                     {row.ageLabel ? (
                       <span
@@ -1071,6 +1075,20 @@ export function AdminCrmSettings() {
       left?: number;
     } | null;
     lastArchives?: { at?: string; added: number; total: number; branch: string; more: boolean; names?: string[] } | null;
+    lastArchivesPupils?: {
+      at?: string;
+      study?: string;
+      clients: number;
+      uniqueIds: number;
+      live: number;
+      need: number;
+      already: number;
+      added: number;
+      left: number;
+      more: boolean;
+      names?: string[];
+      missing?: number[];
+    } | null;
     lastStudents?: { at?: string; study?: string; who?: string; n?: number; total?: number; rows?: StudentHit[] } | null;
   } | null>(null);
   const [journalSchool, setJournalSchool] = useState("");
@@ -1345,7 +1363,7 @@ export function AdminCrmSettings() {
   }
 
   async function runJournal(opts: {
-    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives";
+    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils";
     study?: "1" | "2" | "all";
     school?: string;
     groupId?: number;
@@ -1360,7 +1378,7 @@ export function AdminCrmSettings() {
     setBusy(true);
     if (opts.kind === "group" || opts.kind === "details") {
       setFillLoading({ groupId: opts.groupId || 0, branchId: opts.branchId || 0, periodKey: opts.periodKey || "", label: opts.periodLabel || "", kind: opts.kind });
-    } else if (opts.kind === "life" || opts.kind === "archives") {
+    } else if (opts.kind === "life" || opts.kind === "archives" || opts.kind === "archivesPupils") {
       setFillLoading({ kind: opts.kind });
     } else if ((opts.kind === "students" || opts.kind === "balance") && !holdFill.current) {
       setFillLoading({ kind: opts.kind, label: opts.study === "2" ? "архивные" : "текущие" });
@@ -2005,9 +2023,27 @@ export function AdminCrmSettings() {
                 <div className="mt-3 flex flex-wrap items-start gap-3">
                   <button
                     type="button"
+                    className={cn(BTN_LOAD, fillLoading?.kind === "archivesPupils" && "ra-progress-run")}
+                    disabled={busy || offline}
+                    onClick={() => {
+                      setGroupArchived(true);
+                      void runJournal({ kind: "archivesPupils", study: peopleStudy === "2" ? "2" : "1" });
+                    }}
+                  >
+                    {fillLoading?.kind === "archivesPupils"
+                      ? "Смотрю группы учеников…"
+                      : journal?.lastArchivesPupils?.more
+                        ? `Ещё архив учеников · осталось ${journal.lastArchivesPupils.left}`
+                        : "Архив групп учеников"}
+                  </button>
+                  <button
+                    type="button"
                     className={cn(BTN_LOAD, fillLoading?.kind === "archives" && "ra-progress-run")}
                     disabled={busy || offline}
-                    onClick={() => void runJournal({ kind: "archives" })}
+                    onClick={() => {
+                      if (!window.confirm("Это все архивы филиала, не только ученики. Продолжить?")) return;
+                      void runJournal({ kind: "archives" });
+                    }}
                   >
                     {fillLoading?.kind === "archives"
                       ? "Читаю архив Alfa…"
@@ -2025,6 +2061,37 @@ export function AdminCrmSettings() {
                   >
                     {fillLoading?.kind === "life" ? "Смотрю сроки…" : schoolNeedLife ? `Уточнить ещё ${schoolNeedLife}` : "Определить сроки групп"}
                   </button>
+                <p className="mt-1 text-[0.72rem] text-muted">
+                  «Архив групп учеников» — только id с карточек текущих (или архивных клиентов, если открыта та вкладка). groupLinks может быть без групп 2019 года.
+                </p>
+                {journal?.lastArchivesPupils ? (
+                    <div className="min-w-[16rem] flex-1 rounded-2xl bg-white px-4 py-3 text-sm ring-1 ring-black/10">
+                      <p className="font-semibold">
+                        {journal.lastArchivesPupils.need
+                          ? `В архив по карточкам ${journal.lastArchivesPupils.need}`
+                          : "Новых архивных групп по карточкам нет"}
+                      </p>
+                      <ul className="mt-2 space-y-0.5 text-[0.92rem]">
+                        <li>клиентов в выборке {journal.lastArchivesPupils.clients}</li>
+                        <li>уникальных groupId на карточках {journal.lastArchivesPupils.uniqueIds}</li>
+                        <li>уже в живых {journal.lastArchivesPupils.live}</li>
+                        <li>уйдёт в архив (нет в живых) {journal.lastArchivesPupils.need}</li>
+                        <li>уже в списке архивных на сайте {journal.lastArchivesPupils.already}</li>
+                        {journal.lastArchivesPupils.added ? <li>+{journal.lastArchivesPupils.added} прочитали в Alfa</li> : null}
+                      </ul>
+                      {journal.lastArchivesPupils.names?.length ? (
+                        <p className="mt-1 text-[0.72rem] text-muted">{journal.lastArchivesPupils.names.join(", ")}</p>
+                      ) : null}
+                      {journal.lastArchivesPupils.missing?.length ? (
+                        <p className="mt-1 text-[0.72rem] text-rose-800">не нашли: {journal.lastArchivesPupils.missing.slice(0, 8).join(", ")}</p>
+                      ) : null}
+                      <p className="mt-2 text-[0.72rem] text-muted">
+                        {journal.lastArchivesPupils.more
+                          ? `Ещё ${journal.lastArchivesPupils.left} — нажмите снова. Журнал кварталов не стартовал.`
+                          : "Список по карточкам закрыт. Дальше кварталы, как у живых групп."}
+                      </p>
+                    </div>
+                  ) : null}
                   {journal?.lastArchives ? (
                     <div className="min-w-[16rem] flex-1 rounded-2xl bg-white px-4 py-3 text-sm ring-1 ring-black/10">
                       <p className="font-semibold">
