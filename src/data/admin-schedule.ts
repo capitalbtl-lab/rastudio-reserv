@@ -3589,10 +3589,6 @@ export const adminSchedule = createServerFn({ method: "POST" })
             eDate: b.eDate || eDate,
             teacherIds: beatTeacherIds(b, slotNow),
           })),
-            lessonId: b.lessonId || 0,
-            bDate: b.bDate || bDate,
-            eDate: b.eDate || eDate,
-          })),
         },
       });
       logAdmin(`Группа ${found.id}: на сайте, создание в очереди Alfa`);
