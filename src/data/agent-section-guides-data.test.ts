@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 describe("база знаний: предметы и роли", () => {
   it("заводской текст содержит курс сайта, счётчики, роли и статусы", () => {
     const src = readFileSync(new URL("./agent-section-guides-data.ts", import.meta.url), "utf8");
-    assert.match(src, /GUIDE_REV = "2026-09-06-agent-window"/);
+    assert.match(src, /GUIDE_REV = DESK_REV/);
     assert.match(src, /id: "agent"/);
     assert.match(src, /function agentBody/);
     assert.match(src, /COURSE_ASK/);
@@ -76,6 +76,14 @@ describe("база знаний: предметы и роли", () => {
     assert.match(src, /уже ходим или подбираем впервые/);
     assert.match(src, /\/api\/agent\/vk\|max\|phone/);
     assert.match(src, /AGENT_PANES/);
-    assert.match(src, /resolveAskToTree/);
+    assert.match(src, /deskAdminPrompt/);
+    assert.match(src, /DESK_REV/);
+    const desk = readFileSync(new URL("./agent-admin-desk-guide.ts", import.meta.url), "utf8");
+    assert.match(desk, /НОВЫЙ КЛИЕНТ/);
+    assert.match(desk, /ДЕЙСТВУЮЩИЙ КЛИЕНТ/);
+    assert.match(desk, /СТАРЫЙ КЛИЕНТ/);
+    assert.match(desk, /не произносить/);
+    assert.match(desk, /is_study/);
+    assert.match(desk, /8 \(800\) 511-34-01/);
   });
 });

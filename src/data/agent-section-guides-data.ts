@@ -2,6 +2,7 @@ import { IDS_FOR_AGENT } from "./ids";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AGENT_PANES } from "./agent-panes";
+import { DESK_REV, deskAdminPrompt } from "./agent-admin-desk-guide";
 
 export type GuideRow = { entity: string; idField: string; link: string };
 export type GuideTab = { id: string; title: string; body: string };
@@ -23,7 +24,7 @@ export type SectionGuide = {
 };
 
 /** Меняйте при правке протокола — оверлей storage без этой строки заменяется заводским. */
-export const GUIDE_REV = "2026-09-06-agent-window";
+export const GUIDE_REV = DESK_REV;
 
 const SCHEDULE_GRAPH: GuideRow[] = [
   { entity: "Сайт", idField: "rastudio.org", link: "родители. Админка = /admin. AlfaCRM догоняет очередью, не источник ответа" },
@@ -433,7 +434,7 @@ export const FACTORY_GUIDES: SectionGuide[] = [
     title: "Роли ИИ",
     on: true,
     updatedAt: "",
-    summary: "Консультант сайта ≠ голос админки. Граница в настройках Окна.",
+    summary: "Консультант сайта ≠ голос админки. Стойка: новый / действующий / старый клиент.",
     graph: SCHEDULE_GRAPH.filter((r) => /Консультант|Голос|Сайт|Витрина|Приоритет|Статус/.test(r.entity)),
     cascade: [],
     tabs: [],
@@ -819,6 +820,8 @@ groupFlags статус/приоритет, если adminVoiceCanWrite — ди
 
 СВЯЗАННЫЕ РАЗДЕЛЫ
 Группы — статусы и приоритет. Сайт · запись — матрица витрины. Предметы / Цены / Абонементы — только ID. Клиенты — customerId.
+
+${deskAdminPrompt()}
 `;
 }
 
