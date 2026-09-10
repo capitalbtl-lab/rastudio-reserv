@@ -112,6 +112,13 @@ describe("перепроверка журнала", () => {
     assert.match(ui, /Сверить счёт/);
     assert.match(ui, /Перепроверить загруженных/);
     assert.match(ui, /PEOPLE_LOAD_GAP_MS = 3000/);
+    assert.match(ui, /kind === "students" \|\| opts.kind === "balance" \? 90000/);
+    assert.match(ui, /patchPeopleSide/);
+    assert.match(ui, /одного ученика, не пачкой/);
+    const pullLock = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
+    assert.match(pullLock, /studentPullCid/);
+    assert.match(pullLock, /уже грузим ученика/);
+    assert.match(pullLock, /skipPeople: \(kind !== "students" && kind !== "balance"\) \|\| wantedEarly > 0/);
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(api, /"union"/);
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");

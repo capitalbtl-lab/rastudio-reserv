@@ -103,6 +103,8 @@ type StudentHit = {
   pays?: number;
   done: boolean;
   ok: boolean;
+  alfa?: number;
+  short?: boolean;
 };
 
 type PeopleRow = {
@@ -640,6 +642,36 @@ function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
 function peopleNeedsRecheck(row: PeopleRow, kind: "students" | "balance") {
   if (!peopleFinished(row, kind)) return false;
   return kind === "balance" ? !row.paysRechecked : !row.rechecked;
+}
+
+function patchPeopleSide(
+  side:
+    | { people?: PeopleRow[]; journalDone?: number; cardDone?: number; total?: number }
+    | undefined,
+  hit: StudentHit,
+) {
+  if (!side?.people?.length) return side;
+  const people = side.people.map((p) => {
+    if (p.cid !== hit.cid) return p;
+    const short = Boolean(hit.short);
+    const journal = Boolean(hit.ok) && !short;
+    const disk = Number(hit.lessons) || p.lessons;
+    const alfa = hit.alfa != null ? hit.alfa : p.alfa;
+    return {
+      ...p,
+      lessons: disk,
+      alfa,
+      short,
+      journal,
+      extra: alfa != null ? `на диске ${disk} · в Alfa ${alfa}` : p.extra,
+    };
+  });
+  return {
+    ...side,
+    people,
+    journalDone: people.filter((r) => r.journal).length,
+    cardDone: people.filter((r) => r.journal && r.pays).length,
+  };
 }
 
 function ScopePills({ value, onChange, live, arch }: { value: "live" | "archive"; onChange: (v: "live" | "archive") => void; live: string; arch: string }) {
@@ -1413,7 +1445,7 @@ export function AdminCrmSettings() {
         new Promise<never>((_, rej) =>
           setTimeout(
             () => rej(new Error("Alfa не ответила за отведённое время — нажмите ещё раз.")),
-            opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "life" || opts.kind === "group" || opts.kind === "details" || opts.kind === "hydrateDisk" ? 90000 : 25000,
+            opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "life" || opts.kind === "group" || opts.kind === "details" || opts.kind === "hydrateDisk" || opts.kind === "students" || opts.kind === "balance" ? 90000 : 25000,
           ),
         ),
       ])) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit; extra?: string };
@@ -1422,7 +1454,7 @@ export function AdminCrmSettings() {
           if (!cur) return res;
           const keepLive = !(res.progress?.live?.people || []).length && (cur.progress?.live?.people || []).length;
           const keepArch = !(res.progress?.archive?.people || []).length && (cur.progress?.archive?.people || []).length;
-          return {
+          const next = {
             ...cur,
             ...res,
             progress: {
@@ -1433,6 +1465,17 @@ export function AdminCrmSettings() {
               groups: res.progress?.groups || cur.progress?.groups,
             },
           };
+          if (res.student && (opts.kind === "students" || opts.kind === "balance")) {
+            const key = opts.study === "2" ? "archive" : "live";
+            return {
+              ...next,
+              progress: {
+                ...next.progress,
+                [key]: patchPeopleSide(next.progress?.[key], res.student),
+              },
+            };
+          }
+          return next;
         });
       }
       setMsg(res?.error || res?.extra || (res?.ok ? "Пакет записан на сайт." : "Журнал не ответил."));
@@ -1543,7 +1586,11 @@ export function AdminCrmSettings() {
         const row = queue[i];
         setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
         setFillLoading({ kind, label: row.name, customerId: row.cid });
-        await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind) });
+        const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind) });
+        if (!res || res.ok === false) {
+          setMsg(res?.error || "Очередь остановили: Alfa не ответила. Нажмите ещё раз — одного ученика, не пачкой.");
+          break;
+        }
         n += 1;
         if (kind === "students" && i < queue.length - 1 && !stopSchool.current) {
           setSchoolRun({ cur: `${row.name} · пауза 3 с`, n: i + 1, total: queue.length });

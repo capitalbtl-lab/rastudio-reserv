@@ -53,6 +53,8 @@ type StudentHit = {
   pays: number;
   done: boolean;
   ok: boolean;
+  alfa?: number;
+  short?: boolean;
 };
 
 type StudentsReport = {
@@ -63,6 +65,8 @@ type StudentsReport = {
   total: number;
   rows: StudentHit[];
 };
+
+let studentPullCid = 0;
 
 type ArchivesReport = {
   at: string;
@@ -874,7 +878,8 @@ export async function journalPull(opts: {
   probe?: boolean;
 }) {
   const kind = opts.kind;
-  const snap = () => journalPullState({ skipPeople: kind !== "students" && kind !== "balance" });
+  const wantedEarly = Number(opts.customerId) || 0;
+  const snap = () => journalPullState({ skipPeople: (kind !== "students" && kind !== "balance") || wantedEarly > 0 });
   if (!alfaLinkedNow()) {
     return { ok: false as const, error: "Фон с AlfaCRM выключен.", ...journalPullState() };
   }
@@ -1331,69 +1336,92 @@ export async function journalPull(opts: {
     saveStore(store);
     return { ok: false as const, error: store.note, more: false, ...snap() };
   }
-  if (!wanted) {
-    const picked = pickSlice(people, idx, 1);
-    store.studentIdx[key] = picked.next;
+  if (studentPullCid && studentPullCid !== one.cid) {
+    return {
+      ok: false as const,
+      error: `уже грузим ученика №${studentPullCid} — подождите, не пачкой`,
+      more: false,
+      ...journalPullState({ skipPeople: true }),
+    };
   }
-  if (opts.probe) {
-    const { probeCustomerLessons } = await import("./crm-journal-inbound");
-    const disk = loadCustomerCalendar(one.cid).length;
-    const probed = await probeCustomerLessons(one.branchId, one.cid).catch(() => ({ total: 0, ok: false as const }));
-    const alfaN = probed.ok ? probed.total : 0;
-    const short = alfaN > 0 && disk < alfaN;
-    stampCustomerSync(one.cid, {
-      lessonsDisk: disk,
-      ...(probed.ok ? { lessonsAlfa: alfaN, lessonsAlfaAt: new Date().toISOString() } : {}),
-      ...(short ? { lessonsFull: false } : {}),
-    });
+  studentPullCid = one.cid;
+  try {
+    if (!wanted) {
+      const picked = pickSlice(people, idx, 1);
+      store.studentIdx[key] = picked.next;
+    }
+    if (opts.probe) {
+      const { probeCustomerLessons } = await import("./crm-journal-inbound");
+      const disk = loadCustomerCalendar(one.cid).length;
+      const probed = await probeCustomerLessons(one.branchId, one.cid).catch(() => ({ total: 0, ok: false as const }));
+      const alfaN = probed.ok ? probed.total : 0;
+      const short = alfaN > 0 && disk < alfaN;
+      stampCustomerSync(one.cid, {
+        lessonsDisk: disk,
+        ...(probed.ok ? { lessonsAlfa: alfaN, lessonsAlfaAt: new Date().toISOString() } : {}),
+        ...(short ? { lessonsFull: false } : {}),
+      });
+      const name = fioOf(one.cid);
+      store.note = probed.ok
+        ? `${name}: на диске ${disk} · в Alfa ${alfaN}${short ? " — не хватает, добрать" : disk ? " — счёт сошёлся" : ""}`
+        : `${name}: Alfa не ответила на сверку`;
+      store.at = new Date().toISOString();
+      saveStore(store);
+      return {
+        ok: probed.ok,
+        extra: store.note,
+        count: alfaN,
+        scanned: 1,
+        more: false,
+        student: { cid: one.cid, branchId: one.branchId, name, groups: groupsOfStudent(one.cid), lessons: disk, pays: 0, done: !short, ok: probed.ok && !short, alfa: alfaN, short },
+        ...snap(),
+      };
+    }
+    const balance = kind === "balance";
+    const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck));
+    const sync = customerSyncOf(one.cid);
+    const gnames = groupsOfStudent(one.cid);
     const name = fioOf(one.cid);
-    store.note = probed.ok
-      ? `${name}: на диске ${disk} · в Alfa ${alfaN}${short ? " — не хватает, добрать" : disk ? " — счёт сошёлся" : ""}`
-      : `${name}: Alfa не ответила на сверку`;
+    const landed = Boolean(sync.lessonsFull && sync.lessonsAttend) && !row.short;
+    const who = study === "1" ? "текущие" : study === "2" ? "архив" : "ученики";
+    const hit: StudentHit = {
+      cid: one.cid,
+      branchId: one.branchId,
+      name,
+      groups: gnames,
+      lessons: row.lessons,
+      pays: row.pays,
+      done: row.done,
+      ok: landed,
+      alfa: row.alfa,
+      short: row.short,
+    };
+    const prev = store.lastStudents && store.lastStudents.study === study ? store.lastStudents.rows : [];
+    const merged = [hit, ...prev.filter((r) => r.cid !== hit.cid)].slice(0, 40);
+    store.lastStudents = {
+      at: new Date().toISOString(),
+      study,
+      who,
+      n: wanted ? prev.filter((r) => r.cid !== hit.cid).length + 1 : (Number(store.lastStudents?.n) || 0) + 1,
+      total: people.length,
+      rows: merged,
+    };
+    store.note = row.short
+      ? `${who}: ${name} · на диске ${loadCustomerCalendar(one.cid).length} · в Alfa ${row.alfa} — не хватает, добрать`
+      : landed
+      ? `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · ${row.lessons} зан.${row.alfa ? ` · Alfa ${row.alfa}` : ""}`
+      : `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · не попал в выдачу${row.done ? " (Alfa пусто)" : " (обрыв)"}`;
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: probed.ok, extra: store.note, count: alfaN, scanned: 1, more: false, ...snap() };
+    return {
+      extra: store.note,
+      count: row.lessons,
+      scanned: 1,
+      more: !wanted,
+      student: hit,
+      ...snap(),
+    };
+  } finally {
+    if (studentPullCid === one.cid) studentPullCid = 0;
   }
-  const balance = kind === "balance";
-  const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck));
-  const sync = customerSyncOf(one.cid);
-  const gnames = groupsOfStudent(one.cid);
-  const name = fioOf(one.cid);
-  const landed = Boolean(sync.lessonsFull && sync.lessonsAttend) && !row.short;
-  const who = study === "1" ? "текущие" : study === "2" ? "архив" : "ученики";
-  const hit: StudentHit = {
-    cid: one.cid,
-    branchId: one.branchId,
-    name,
-    groups: gnames,
-    lessons: row.lessons,
-    pays: row.pays,
-    done: row.done,
-    ok: landed,
-  };
-  const prev = store.lastStudents && store.lastStudents.study === study ? store.lastStudents.rows : [];
-  const merged = [hit, ...prev.filter((r) => r.cid !== hit.cid)].slice(0, 40);
-  store.lastStudents = {
-    at: new Date().toISOString(),
-    study,
-    who,
-    n: wanted ? prev.filter((r) => r.cid !== hit.cid).length + 1 : (Number(store.lastStudents?.n) || 0) + 1,
-    total: people.length,
-    rows: merged,
-  };
-  store.note = row.short
-    ? `${who}: ${name} · на диске ${loadCustomerCalendar(one.cid).length} · в Alfa ${row.alfa} — не хватает, добрать`
-    : landed
-    ? `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · ${row.lessons} зан.${row.alfa ? ` · Alfa ${row.alfa}` : ""}`
-    : `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · не попал в выдачу${row.done ? " (Alfa пусто)" : " (обрыв)"}`;
-  store.at = new Date().toISOString();
-  saveStore(store);
-  return {
-    extra: store.note,
-    count: row.lessons,
-    scanned: 1,
-    more: !wanted,
-    student: hit,
-    ...snap(),
-  };
 }
