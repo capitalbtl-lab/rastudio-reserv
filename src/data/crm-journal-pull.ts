@@ -598,22 +598,45 @@ export function journalPullState() {
   const all = rankedStudentIds("all");
   const live = rankedStudentIds("1");
   const arch = rankedStudentIds("2");
-  const emptySide = (total: number) => ({
-    total,
-    journalDone: 0,
-    cardDone: 0,
-    missJournal: packList([] as { id: number; name: string; extra: string }[]),
-    missCard: packList([] as { id: number; name: string; extra: string }[]),
-    people: [],
-  });
+  const emptySide = (study: JournalPullStudy) => {
+    const list = rankedStudentIds(study);
+    const people = list.slice(0, 800).map((p) => {
+      const sync = customerSyncOf(p.cid);
+      const journal = Boolean(sync.lessonsFull && sync.lessonsAttend);
+      const pays = isPayJournalComplete(p.cid);
+      return {
+        cid: p.cid,
+        branchId: p.branchId,
+        name: fioOf(p.cid),
+        groups: groupsOfStudent(p.cid).slice(0, 3),
+        lessons: Number(sync.lessonsAlfa) || 0,
+        alfa: Number(sync.lessonsAlfa) || undefined,
+        short: Boolean(sync.lessonsAlfaAt) && !sync.lessonsFull,
+        journal,
+        pays,
+        rechecked: Boolean(sync.lessonsRecheckAt),
+        paysRechecked: Boolean(sync.paysRecheckAt),
+        extra: groupsOfStudent(p.cid).slice(0, 2).join(", "),
+        at: sync.lessonsAt || "",
+      };
+    });
+    return {
+      total: list.length,
+      journalDone: people.filter((r) => r.journal).length,
+      cardDone: people.filter((r) => r.journal && r.pays).length,
+      missJournal: packList([] as { id: number; name: string; extra: string }[]),
+      missCard: packList([] as { id: number; name: string; extra: string }[]),
+      people,
+    };
+  };
   let progress: ReturnType<typeof journalPullProgress>;
   try {
     progress = journalPullProgress();
   } catch {
     progress = {
       groups: { total: groups.length, done: 0, periods: 0, miss: packList([]), doneList: packList([]), rows: [] },
-      live: emptySide(live.length),
-      archive: emptySide(arch.length),
+      live: emptySide("1"),
+      archive: emptySide("2"),
     };
   }
   return {
