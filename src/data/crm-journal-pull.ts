@@ -1,6 +1,6 @@
 /** Ручная догрузка журнала: группа / школа / 10 учеников. Не весь API сразу. */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { SCHOOL_ORDER, lessonNeedsHomework } from "./crm-slots-core";
 import { isCampStatus } from "./group-status";
@@ -117,11 +117,19 @@ function fileOf() {
   return join(process.cwd(), "storage", "crm-journal-pull.json");
 }
 
+let storeMem: { mtime: number; data: PullStore } | null = null;
+
 function loadStore(): PullStore {
   try {
-    if (!existsSync(fileOf())) return emptyStore();
-    const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Partial<PullStore>;
-    return {
+    const p = fileOf();
+    if (!existsSync(p)) {
+      storeMem = null;
+      return emptyStore();
+    }
+    const mtime = statSync(p).mtimeMs;
+    if (storeMem && storeMem.mtime === mtime) return storeMem.data;
+    const raw = JSON.parse(readFileSync(p, "utf8")) as Partial<PullStore>;
+    const data: PullStore = {
       at: String(raw.at || ""),
       note: String(raw.note || ""),
       groupIdx: Math.max(0, Number(raw.groupIdx) || 0),
@@ -133,7 +141,10 @@ function loadStore(): PullStore {
       lastStudents: raw.lastStudents && typeof raw.lastStudents === "object" ? (raw.lastStudents as StudentsReport) : null,
       fill: raw.fill && typeof raw.fill === "object" ? (raw.fill as Record<string, FillHit>) : {},
     };
+    storeMem = { mtime, data };
+    return data;
   } catch {
+    storeMem = null;
     return emptyStore();
   }
 }
@@ -141,6 +152,13 @@ function loadStore(): PullStore {
 function saveStore(next: PullStore) {
   mkdirSync(dirname(fileOf()), { recursive: true });
   writeFileSync(fileOf(), JSON.stringify(next, null, 0), "utf8");
+  let mtime = Date.now();
+  try {
+    mtime = statSync(fileOf()).mtimeMs;
+  } catch {
+    /* */
+  }
+  storeMem = { mtime, data: next };
   return next;
 }
 
@@ -480,7 +498,7 @@ const blankPeople = (n: number) => ({
 
 export function journalPullProgress(opts?: { skipPeople?: boolean }) {
   const groups = journalPullGroups();
-  const nMap = pupilLinkCountMap("1");
+  const nMap = opts?.skipPeople ? new Map<string, number>() : pupilLinkCountMap("1");
   const rows = groups.map((g) => {
     const row = groupFillRow(g);
     const pupilN = nMap.get(`${g.branchId}:${g.groupId}`) || 0;
