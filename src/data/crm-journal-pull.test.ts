@@ -76,7 +76,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /pending\.slice\(0, 10\)/);
     assert.match(pull, /groupLinks/);
     assert.doesNotMatch(pull, /enqueueExport/);
-    assert.match(pull, /groupFillRow\(g\)/);
+    assert.match(pull, /hit\.name/);
+    assert.match(ui, /lastArchivesPupils\?\.added/);
     assert.doesNotMatch(pull, /journalPeriods\(\)\.slice\(-4\)/);
     assert.doesNotMatch(pull, /loadCustomerCalendar\(0\)/);
     assert.doesNotMatch(pull, /loadCustomerCalendar\(p\.cid\)/);

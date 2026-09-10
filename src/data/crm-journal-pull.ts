@@ -200,7 +200,7 @@ function pupilArchivePlan(study: "1" | "2") {
   const people = rankedStudentIds(study);
   const liveKeys = new Set(journalPullGroups().filter((g) => !g.archived).map((g) => `${g.branchId}:${g.groupId}`));
   const bagKeys = new Set(loadJournalArchiveGroups().map((g) => `${g.branchId}:${g.groupId}`));
-  const unique = new Map<string, { groupId: number; branchId: number; n: number }>();
+  const unique = new Map<string, { groupId: number; branchId: number; n: number; name: string }>();
   for (const p of people) {
     const d = findDossier({ crmId: p.cid });
     for (const g of d?.groupLinks || []) {
@@ -208,13 +208,14 @@ function pupilArchivePlan(study: "1" | "2") {
       const bid = Number(g.branchId || p.branchId) || 1;
       if (!gid) continue;
       const k = `${bid}:${gid}`;
-      const cur = unique.get(k) || { groupId: gid, branchId: bid, n: 0 };
+      const cur = unique.get(k) || { groupId: gid, branchId: bid, n: 0, name: "" };
       cur.n += 1;
+      if (!cur.name) cur.name = String(g.name || "").trim();
       unique.set(k, cur);
     }
   }
   let live = 0;
-  const need: { groupId: number; branchId: number; n: number }[] = [];
+  const need: { groupId: number; branchId: number; n: number; name: string }[] = [];
   for (const row of unique.values()) {
     if (liveKeys.has(`${row.branchId}:${row.groupId}`)) live += 1;
     else need.push(row);
@@ -895,20 +896,18 @@ export async function journalPull(opts: {
       const pack = crmUnwrapIndex(json);
       const raw = pack.items.find((x) => Number(x.id) === hit.groupId) || pack.items[0];
       const k = `${hit.branchId}:${hit.groupId}`;
-      if (!raw || seen.has(k)) {
-        if (!raw) missing.push(hit.groupId);
-        continue;
-      }
+      if (seen.has(k)) continue;
       seen.add(k);
+      if (!raw) missing.push(hit.groupId);
       added.push({
         groupId: hit.groupId,
         branchId: hit.branchId,
-        name: String(raw.name || `группа ${hit.groupId}`),
-        school: schoolOfArchive(Number(raw.subject_id) || 0),
-        taken: Number(raw.quantity || raw.cnt || raw.customers_count || hit.n || 0) || hit.n,
+        name: String((raw && (raw.name as string)) || hit.name || `группа ${hit.groupId}`),
+        school: schoolOfArchive(Number(raw?.subject_id) || 0),
+        taken: Number((raw && (raw.quantity || raw.cnt || raw.customers_count)) || hit.n || 0) || hit.n,
         archived: true,
-        bDate: String(raw.b_date || raw.bDate || ""),
-        eDate: String(raw.e_date || raw.eDate || ""),
+        bDate: String((raw && (raw.b_date || raw.bDate)) || ""),
+        eDate: String((raw && (raw.e_date || raw.eDate)) || ""),
       });
     }
     bag.items = bag.items.concat(added);

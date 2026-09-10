@@ -1414,8 +1414,13 @@ export function AdminCrmSettings() {
             probe: Boolean(opts.probe),
           } as never,
         }),
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Alfa не ответила за 25 с — нажмите ещё раз.")), 25000)),
-      ])) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit };
+        new Promise<never>((_, rej) =>
+          setTimeout(
+            () => rej(new Error("Alfa не ответила за отведённое время — нажмите ещё раз.")),
+            opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "life" ? 90000 : 25000,
+          ),
+        ),
+      ])) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit; extra?: string };
       if (res) setJournal(res);
       setMsg(res?.error || res?.extra || (res?.ok ? "Пакет записан на сайт." : "Журнал не ответил."));
       return res;
@@ -2055,8 +2060,10 @@ export function AdminCrmSettings() {
                     className={cn(BTN_LOAD, fillLoading?.kind === "archivesPupils" && "ra-progress-run")}
                     disabled={busy || offline}
                     onClick={() => {
-                      setGroupArchived(true);
-                      void runJournal({ kind: "archivesPupils", study: peopleStudy === "2" ? "2" : "1" });
+                      void (async () => {
+                        const res = await runJournal({ kind: "archivesPupils", study: peopleStudy === "2" ? "2" : "1" });
+                        if (Number(res?.lastArchivesPupils?.added) > 0) setGroupArchived(true);
+                      })();
                     }}
                   >
                     {fillLoading?.kind === "archivesPupils"
