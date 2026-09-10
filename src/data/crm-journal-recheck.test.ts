@@ -129,6 +129,8 @@ describe("перепроверка журнала", () => {
     assert.match(pullLock, /уже грузим/);
     assert.match(pullLock, /row\.blocked/);
     assert.match(pullLock, /homeOnly: true/);
+    assert.match(pullLock, /if \(!recheck && first\.ok && disk >= alfa0\)/);
+    assert.match(pullLock, /probeCustomerLessons/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /waitLockStudentAlfa/);
     assert.match(inbound, /homeLite/);

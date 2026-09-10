@@ -839,26 +839,23 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   const alfa0 = first.ok ? first.total : 0;
   if (!recheck && first.ok && disk >= alfa0) {
     mark(disk, alfa0, true);
-    if (!balance) return { cid, lessons: disk, done: true, pays: 0, tariffs: 0, alfa: alfa0, short: false };
+    if (!balance) return { cid, lessons: disk, done: true, pays: 0, tariffs: 0, alfa: alfa0, short: false, blocked: false };
   } else {
-    const need = recheck || !first.ok || disk < alfa0;
-    if (need) {
-      const res = await inboundCustomerLessons(branchId, cid, {
-        take: 3,
-        deep: 0,
-        continueLater: false,
-        full: true,
-        force: true,
-        homeOnly: true,
-      }).catch(() => ({ count: 0, done: true as const, skipped: undefined as string | undefined }));
-      lessons += Number(res.count) || 0;
-      if ("skipped" in res && res.skipped === "busy") {
-        return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, blocked: true };
-      }
-      disk = loadCustomerCalendar(cid).length;
-      const probed = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
-      mark(disk, probed.ok ? probed.total : 0, probed.ok);
+    const res = await inboundCustomerLessons(branchId, cid, {
+      take: 3,
+      deep: 0,
+      continueLater: false,
+      full: true,
+      force: true,
+      homeOnly: true,
+    }).catch(() => ({ count: 0, done: true as const, skipped: undefined as string | undefined }));
+    lessons += Number(res.count) || 0;
+    if ("skipped" in res && res.skipped === "busy") {
+      return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, blocked: true };
     }
+    disk = loadCustomerCalendar(cid).length;
+    const probed = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
+    mark(disk, probed.ok ? probed.total : 0, probed.ok);
   }
   let pays = 0;
   let tariffs = 0;
