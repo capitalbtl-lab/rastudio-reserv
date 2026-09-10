@@ -3,12 +3,13 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 describe("карточки групп по файлам", () => {
-  it("запись одной группы — свой json, общий group-cards.json не читают", () => {
+  it("клик пишет свой json; ночной общий файл один раз раскладывают", () => {
     const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
     assert.match(cards, /storage", "group-cards"\)/);
     assert.match(cards, /\$\{branchId\}-\$\{gid\}\.json/);
     assert.match(cards, /cardMem/);
-    assert.doesNotMatch(cards, /group-cards\.json/);
+    assert.match(cards, /hydrateGroupCardsFromMonolith/);
+    assert.match(cards, /group-cards\.json/);
     assert.match(cards, /cardFile\(card\.branchId, card\.id\)/);
     assert.match(cards, /storage", "customer-cals"\)/);
     assert.doesNotMatch(cards, /customer-calendars\.json/);

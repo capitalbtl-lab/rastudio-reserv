@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type { GroupCalLesson } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
@@ -108,13 +108,77 @@ export function listGroupCards(): CachedGroupCard[] {
   }
 }
 
+export type HydrateFill = {
+  branchId: number;
+  groupId: number;
+  pulled?: Record<string, string>;
+  rechecked?: string[];
+  weak?: string[];
+  fail?: Record<string, string>;
+  life?: { from: string; to: string; source: string };
+};
+
+/** Один раз: ночной group-cards.json → файлы по группам. Alfa не трогает. */
+export function hydrateGroupCardsFromMonolith(): { n: number; fills: HydrateFill[]; skip?: string } {
+  const flag = join(cardsDir(), ".hydrated");
+  try {
+    if (existsSync(flag)) return { n: 0, fills: [], skip: "ok" };
+    const mega = join(process.cwd(), "storage", "group-cards.json");
+    if (!existsSync(mega)) {
+      mkdirSync(cardsDir(), { recursive: true });
+      writeFileSync(flag, new Date().toISOString(), "utf8");
+      return { n: 0, fills: [], skip: "нет общего файла" };
+    }
+    const raw = JSON.parse(readFileSync(mega, "utf8")) as { items?: Record<string, CachedGroupCard> };
+    const items = raw?.items && typeof raw.items === "object" ? Object.values(raw.items) : [];
+    mkdirSync(cardsDir(), { recursive: true });
+    let n = 0;
+    const fills: HydrateFill[] = [];
+    for (const card of items) {
+      const gid = Number(card?.id) || 0;
+      const bid = Number(card?.branchId) || 0;
+      if (!gid || !bid) continue;
+      const prev = loadGroupCard(bid, gid);
+      const nextN = (card.calendar || []).length;
+      const prevN = (prev?.calendar || []).length;
+      if (!prev || nextN > prevN) {
+        const p = cardFile(bid, gid);
+        writeFileSync(p, JSON.stringify({ ...card, id: gid, branchId: bid }), "utf8");
+        try {
+          cardMem.set(key(bid, gid), { mtime: statSync(p).mtimeMs, card: { ...card, id: gid, branchId: bid } });
+        } catch {
+          /* */
+        }
+        n += 1;
+      }
+      const fill = card.journalFill || prev?.journalFill;
+      const life = card.journalLife || prev?.journalLife;
+      if (fill || life) {
+        fills.push({
+          branchId: bid,
+          groupId: gid,
+          pulled: fill?.pulled,
+          rechecked: fill?.rechecked,
+          weak: fill?.weak,
+          fail: fill?.fail,
+          life: life ? { from: String(life.from || ""), to: String(life.to || ""), source: String(life.source || "") } : undefined,
+        });
+      }
+    }
+    writeFileSync(flag, new Date().toISOString(), "utf8");
+    return { n, fills };
+  } catch (e) {
+    return { n: 0, fills: [], skip: e instanceof Error ? e.message.slice(0, 80) : "не разобрали" };
+  }
+}
+
 export function nextLocalLessonId() {
   const used: number[] = [];
   for (const card of listGroupCards()) {
     for (const l of card.calendar || []) used.push(Number(l.lessonId) || 0);
   }
-  for (const list of Object.values(loadCustomerCals().items)) {
-    for (const l of list) used.push(Number(l.lessonId) || 0);
+  for (const cid of listCustomerCalIds()) {
+    for (const l of loadCustomerCalendar(cid)) used.push(Number(l.lessonId) || 0);
   }
   return nextLocalId(used);
 }
@@ -163,59 +227,68 @@ function mergeLessonInto(cal: GroupCalLesson[], lesson: GroupCalLesson) {
   return { list: next, item };
 }
 
-function customerCalFile() {
-  return join(process.cwd(), "storage", "customer-calendars.json");
+function calsDir() {
+  return join(process.cwd(), "storage", "customer-cals");
 }
 
-type CustCals = { at: string; items: Record<string, GroupCalLesson[]> };
+function oneCal(id: number) {
+  return join(calsDir(), `${id}.json`);
+}
 
-let custMem: CustCals | null = null;
-let custMtime = 0;
+type CalMem = { mtime: number; list: GroupCalLesson[] };
+const calMem = new Map<string, CalMem>();
 
-function loadCustomerCals(): CustCals {
+function listCustomerCalIds(): number[] {
   try {
-    const mtime = existsSync(customerCalFile()) ? statSync(customerCalFile()).mtimeMs : 0;
-    if (custMem && custMtime === mtime) return custMem;
-    const raw = JSON.parse(readFileSync(customerCalFile(), "utf8")) as CustCals;
-    if (raw && raw.items && typeof raw.items === "object") {
-      custMem = { at: String(raw.at || ""), items: raw.items };
-      custMtime = mtime;
-      return custMem;
+    if (!existsSync(calsDir())) return [];
+    const out: number[] = [];
+    for (const name of readdirSync(calsDir())) {
+      const m = /^(\d+)\.json$/.exec(name);
+      if (m) out.push(Number(m[1]));
     }
+    return out;
   } catch {
-    /* */
-  }
-  custMem = { at: "", items: {} };
-  custMtime = 0;
-  return custMem;
-}
-
-function writeCustomerCals(store: CustCals) {
-  custMem = store;
-  mkdirSync(dirname(customerCalFile()), { recursive: true });
-  writeFileSync(customerCalFile(), JSON.stringify(store, null, 0), "utf8");
-  try {
-    custMtime = statSync(customerCalFile()).mtimeMs;
-  } catch {
-    custMtime = Date.now();
+    return [];
   }
 }
 
 export function loadCustomerCalendar(customerId: number): GroupCalLesson[] {
   const id = Number(customerId) || 0;
   if (!id) return [];
-  return loadCustomerCals().items[String(id)] || [];
+  const p = oneCal(id);
+  try {
+    if (!existsSync(p)) return [];
+    const mtime = statSync(p).mtimeMs;
+    const k = String(id);
+    const hit = calMem.get(k);
+    if (hit && hit.mtime === mtime) return hit.list;
+    const raw = JSON.parse(readFileSync(p, "utf8")) as GroupCalLesson[] | { items?: GroupCalLesson[] };
+    const list = Array.isArray(raw) ? raw : Array.isArray(raw.items) ? raw.items : [];
+    calMem.set(k, { mtime, list });
+    return list;
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomerCalendarList(id: number, list: GroupCalLesson[]) {
+  mkdirSync(calsDir(), { recursive: true });
+  const p = oneCal(id);
+  writeFileSync(p, JSON.stringify(list), "utf8");
+  let mtime = Date.now();
+  try {
+    mtime = statSync(p).mtimeMs;
+  } catch {
+    /* */
+  }
+  calMem.set(String(id), { mtime, list });
 }
 
 export function upsertCustomerCalendar(customerId: number, lesson: GroupCalLesson) {
   const id = Number(customerId) || 0;
   if (!id) return [];
-  const store = loadCustomerCals();
-  const key = String(id);
-  const { list, item } = mergeLessonInto(store.items[key] || [], lesson);
-  store.items[key] = list;
-  store.at = new Date().toISOString();
-  writeCustomerCals(store);
+  const { list, item } = mergeLessonInto(loadCustomerCalendar(id), lesson);
+  saveCustomerCalendarList(id, list);
   rememberLessons([item]);
   return list;
 }
@@ -223,11 +296,8 @@ export function upsertCustomerCalendar(customerId: number, lesson: GroupCalLesso
 export function replaceCustomerCalendar(customerId: number, lessons: GroupCalLesson[]) {
   const id = Number(customerId) || 0;
   if (!id) return [];
-  const store = loadCustomerCals();
   const list = collapseLessonRows(lessons || []).slice(0, 2500);
-  store.items[String(id)] = list;
-  store.at = new Date().toISOString();
-  writeCustomerCals(store);
+  saveCustomerCalendarList(id, list);
   rememberLessons(list);
   return list;
 }
@@ -353,8 +423,8 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
     return (l.customerIds || []).some((n) => Number(n) > 0);
   });
   if (!rows.length) return 0;
-  const store = loadCustomerCals();
   let n = 0;
+  const byCid = new Map<number, GroupCalLesson[]>();
   for (const lesson of rows) {
     const cids = new Set<number>();
     for (const p of lesson.pupils || []) {
@@ -366,23 +436,25 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
       if (cid) cids.add(cid);
     }
     for (const cid of cids) {
-      const key = String(cid);
       const charge = chargeFromPupils(lesson, cid);
-      const { list } = mergeLessonInto(store.items[key] || [], {
+      const prev = byCid.get(cid) || loadCustomerCalendar(cid);
+      const { list } = mergeLessonInto(prev, {
         ...lesson,
         amount: charge.amount || undefined,
         cttId: charge.cttId || undefined,
       });
-      store.items[key] = list
-        .slice()
-        .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")))
-        .slice(-8000);
+      byCid.set(cid, list);
       n += 1;
     }
   }
-  if (n) {
-    store.at = new Date().toISOString();
-    writeCustomerCals(store);
+  for (const [cid, list] of byCid) {
+    saveCustomerCalendarList(
+      cid,
+      list
+        .slice()
+        .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")))
+        .slice(-8000),
+    );
   }
   return n;
 }
@@ -452,10 +524,8 @@ export function applyCreatedCalendarLesson(localId: number, crmId: number) {
     });
     if (changed) saveGroupCard({ ...card, calendar });
   }
-  const store = loadCustomerCals();
-  let custChanged = false;
-  const items = { ...store.items };
-  for (const [cid, list] of Object.entries(items)) {
+  for (const cid of listCustomerCalIds()) {
+    const list = loadCustomerCalendar(cid);
     let hit = false;
     const calendar = list.map((x) => {
       if (Number(x.lessonId) !== from) return x;
@@ -464,17 +534,17 @@ export function applyCreatedCalendarLesson(localId: number, crmId: number) {
       remapped.push(next);
       return next;
     });
-    if (hit) {
-      items[cid] = calendar;
-      custChanged = true;
-    }
+    if (hit) saveCustomerCalendarList(cid, calendar);
   }
-  if (custChanged) writeCustomerCals({ ...store, items, at: new Date().toISOString() });
   if (remapped.length) rememberLessons(remapped);
 }
 
 export function groupCardsExist() {
-  return existsSync(file());
+  try {
+    return existsSync(cardsDir()) && readdirSync(cardsDir()).some((n) => /^\d+-\d+\.json$/.test(n));
+  } catch {
+    return false;
+  }
 }
 
 export function groupFactsForVoice(limit = 80) {

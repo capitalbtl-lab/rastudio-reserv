@@ -45,7 +45,9 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(pull, /inferredPeriodKeys\(card\?\.calendar/);
     assert.match(pull, /opts\?\.skipPeople \? new Map/);
     assert.match(pull, /loadGroupCard\(g\.branchId, g\.groupId\)/);
-    assert.match(pull, /stamped \|\| n > 0/);
+    assert.match(pull, /hydrateDisk/);
+    assert.match(pull, /emptyPrefix/);
+    assert.match(pull, /applyHydrateFills/);
     assert.match(pull, /groupName: g\.name/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /Promise\.all/);
@@ -91,7 +93,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /periods: journalPeriods\(\)\.length/);
     const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
     assert.match(cards, /storage", "group-cards"\)/);
-    assert.doesNotMatch(cards, /group-cards\.json/);
+    assert.match(cards, /hydrateGroupCardsFromMonolith/);
+    assert.match(cards, /group-cards\.json/);
     assert.doesNotMatch(pull, /periods: periods\.length/);
     assert.match(pull, /probed\.ok \? \{ lessonsAlfa/);
     assert.match(ui, /row\.alfa != null/);

@@ -1355,6 +1355,9 @@ export function AdminCrmSettings() {
   async function loadJournal() {
     setJournalLoading(true);
     try {
+      await adminSchedule({
+        data: { token: token(), action: "journalPull", kind: "hydrateDisk" } as never,
+      }).catch(() => null);
       const res = (await adminSchedule({
         data: { token: token(), action: "journalPull" } as never,
       })) as typeof journal;
@@ -1409,7 +1412,7 @@ export function AdminCrmSettings() {
         new Promise<never>((_, rej) =>
           setTimeout(
             () => rej(new Error("Alfa не ответила за отведённое время — нажмите ещё раз.")),
-            opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "life" || opts.kind === "group" || opts.kind === "details" ? 90000 : 25000,
+            opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "life" || opts.kind === "group" || opts.kind === "details" || opts.kind === "hydrateDisk" ? 90000 : 25000,
           ),
         ),
       ])) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit; extra?: string };

@@ -9,12 +9,12 @@ import { loadCachePolicy } from "./crm-cache-policy";
 import { listAdminSlots } from "./alfacrm-schedule";
 import { loadScheduleMap } from "./schedule-map";
 import { allDossierCrmIds, findDossier, dossiersInGroup } from "./dossiers";
-import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs } from "./group-cards";
+import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
 import { customerSyncOf, stampCustomerSync } from "./crm-customer-sync";
 import { isPayJournalComplete } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 
-export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils";
+export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk";
 export type JournalPullStudy = "1" | "2" | "all";
 
 export type JournalPullGroup = {
@@ -404,6 +404,21 @@ function patchFill(branchId: number, gid: number, patch: FillHit) {
   saveStore(store);
 }
 
+function applyHydrateFills() {
+  const h = hydrateGroupCardsFromMonolith();
+  for (const x of h.fills) {
+    const prev = fillOf(x.branchId, x.groupId);
+    patchFill(x.branchId, x.groupId, {
+      ...(x.pulled ? { pulled: { ...(prev.pulled || {}), ...x.pulled } } : {}),
+      ...(x.rechecked ? { rechecked: [...new Set([...(prev.rechecked || []), ...x.rechecked])] } : {}),
+      ...(x.weak ? { weak: x.weak } : {}),
+      ...(x.fail ? { fail: { ...(prev.fail || {}), ...x.fail } } : {}),
+      ...(x.life && !prev.life ? { life: x.life } : {}),
+    });
+  }
+  return h;
+}
+
 function groupLife(g: JournalPullGroup) {
   const fill = fillOf(g.branchId, g.groupId);
   const from = String(fill.life?.from || g.bDate || "");
@@ -430,15 +445,19 @@ export function groupFillRow(g: JournalPullGroup) {
   const age = groupAge(clipFrom, clipTo);
   const known = Boolean(clipFrom || clipTo);
   const cal = loadGroupCard(g.branchId, g.groupId)?.calendar || [];
+  const firsts = cal.map((l) => parseLessonDate(l.date)).filter((d): d is Date => Boolean(d));
+  const first = firsts.length ? new Date(Math.min(...firsts.map((d) => d.getTime()))) : null;
   const allParts = periods.map((p) => {
     const n = cal.filter((l) => inPeriod(l.date, p.from, p.to)).length;
     const stamped = done.includes(p.key) && !weak.has(p.key);
+    const end = parseLessonDate(p.to);
+    const emptyPrefix = Boolean(first && end && end < first && cal.length);
     return {
       key: p.key,
       label: p.label,
       from: p.from,
       to: p.to,
-      done: stamped || n > 0,
+      done: stamped || n > 0 || emptyPrefix,
       weak: weak.has(p.key),
       rechecked: recheckedSet.has(p.key) && !weak.has(p.key),
       lessons: n,
@@ -503,6 +522,7 @@ const blankPeople = (n: number) => ({
 });
 
 export function journalPullProgress(opts?: { skipPeople?: boolean }) {
+  applyHydrateFills();
   const groups = journalPullGroups();
   const nMap = opts?.skipPeople ? new Map<string, number>() : pupilLinkCountMap("1");
   const rows = groups.map((g) => {
@@ -864,6 +884,20 @@ export async function journalPull(opts: {
   const study = (opts.study === "1" || opts.study === "2" ? opts.study : "all") as JournalPullStudy;
   const selectedGid = Number(opts.groupId) || 0;
   const selectedBid = Number(opts.branchId) || 0;
+
+  if (kind === "hydrateDisk") {
+    const h = applyHydrateFills();
+    store.note = h.skip === "ok"
+      ? "Скачанное с диска уже в списке групп."
+      : h.n
+        ? `Вернули ночную загрузку: ${h.n} групп на диск, сверка ${h.fills.length}. Alfa не трогали.`
+        : h.skip
+          ? `С диска не разложили: ${h.skip}`
+          : "Нового общего файла групп нет — справа только те, что уже сверены.";
+    store.at = new Date().toISOString();
+    saveStore(store);
+    return { ok: true as const, extra: store.note, count: h.n, scanned: h.n, more: false, ...snap() };
+  }
 
   if (kind === "archives") {
     const { token, request } = await import("./alfacrm");
