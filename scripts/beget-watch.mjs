@@ -4,6 +4,7 @@
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +12,7 @@ import { fileURLToPath } from "node:url";
 const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const INTERVAL_MS = 60_000;
+const LOCK = "/tmp/rastudio-deploy.lock";
 let busy = false;
 
 async function git(args) {
@@ -19,15 +21,32 @@ async function git(args) {
 }
 
 async function liveRev() {
+  for (const p of [path.join(root, ".output", ".deploy-rev"), path.join(root, ".deploy-rev")]) {
+    try {
+      const v = String(await readFile(p, "utf8")).trim();
+      if (v) return v;
+    } catch {
+      /* */
+    }
+  }
+  return "";
+}
+
+function lockHeld() {
   try {
-    return String(await readFile(path.join(root, ".output", ".deploy-rev"), "utf8")).trim();
+    if (!existsSync(LOCK)) return false;
+    return Date.now() - statSync(LOCK).mtimeMs < 25 * 60 * 1000;
   } catch {
-    return "";
+    return false;
   }
 }
 
 async function tick() {
   if (busy) return;
+  if (lockHeld()) {
+    console.log("[deploy] сборка уже идёт, жду");
+    return;
+  }
   busy = true;
   try {
     await git(["fetch", "origin", "main"]);
@@ -50,7 +69,12 @@ async function tick() {
   } catch (e) {
     const err = e;
     const extra = err && typeof err === "object" && "stderr" in err ? String(err.stderr || "") : "";
-    console.error("[deploy]", extra || (e instanceof Error ? e.message : e));
+    const msg = extra || (e instanceof Error ? e.message : String(e));
+    if (/сборка уже идёт/.test(msg)) {
+      console.log("[deploy] сборка уже идёт, жду");
+      return;
+    }
+    console.error("[deploy]", msg);
     try {
       await exec("pm2", ["start", "ecosystem.config.cjs", "--only", "rastudio"], { cwd: root });
     } catch {

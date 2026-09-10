@@ -19,13 +19,13 @@ git fetch origin main
 BEFORE="$(git rev-parse HEAD)"
 AFTER="$(git rev-parse origin/main)"
 STAMP_FILE="$ROOT/.output/.deploy-rev"
-LIVE="$(cat "$STAMP_FILE" 2>/dev/null || true)"
+LIVE="$(cat "$STAMP_FILE" 2>/dev/null || cat "$ROOT/.deploy-rev" 2>/dev/null || true)"
 if [ "${1:-}" != "--force" ] && [ "$BEFORE" = "$AFTER" ] && [ "$LIVE" = "$AFTER" ]; then
   echo "[deploy] уже актуально $(git rev-parse --short HEAD)"
   exit 0
 fi
 
-echo "[deploy] ${BEFORE:0:7} → ${AFTER:0:7} stamp=2026-09-09-20-09"
+echo "[deploy] ${BEFORE:0:7} → ${AFTER:0:7} stamp=$(date -u +%Y-%m-%d-%H-%M)"
 git reset --hard origin/main
 if [ "${RA_DEPLOY_REEXEC:-}" != "1" ]; then
   export RA_DEPLOY_REEXEC=1
@@ -63,8 +63,8 @@ if [ "${RA_DEPLOY_BG:-}" != "1" ]; then
     fi
     sleep 12
   done
-  echo "[deploy] сборка ещё идёт, сайт пока прежний — вотчер повторит"
-  exit 1
+  echo "[deploy] сборка ещё идёт, сайт пока прежний — вотчер не дублирует"
+  exit 0
 fi
 
 exec 9>"$LOCK"
@@ -116,6 +116,9 @@ fi
 mv "$STAGE/.output" "$ROOT/.output"
 rm -rf "$STAGE"
 
+git rev-parse HEAD > "$ROOT/.output/.deploy-rev"
+git rev-parse HEAD > "$ROOT/.deploy-rev"
+
 mkdir -p "$ROOT/.output/public/media"
 if [ -d "$ROOT/public/media/imported" ] && [ ! -e "$ROOT/.output/public/media/imported" ]; then
   ln -sfn "$ROOT/public/media/imported" "$ROOT/.output/public/media/imported"
@@ -134,5 +137,6 @@ done
 pm2 save
 
 git rev-parse HEAD > "$ROOT/.output/.deploy-rev"
+git rev-parse HEAD > "$ROOT/.deploy-rev"
 echo "[deploy] live $(git rev-parse --short HEAD)"
 node scripts/ping-indexnow.mjs || echo "[deploy] IndexNow skip"
