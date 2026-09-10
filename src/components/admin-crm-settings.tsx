@@ -999,14 +999,6 @@ function ProgressBar({ done, total, run, loading }: { done: number; total: numbe
         {total <= 0 ? (
           <span className="font-semibold text-muted">{loading ? "загружаю список…" : "нет на диске"}</span>
         ) : (
-  const left = Math.max(0, total - done);
-  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
-  return (
-    <div className="mt-2">
-      <p className="font-display text-xl tabular-nums leading-none">
-        {total <= 0 ? (
-          <span className="font-semibold text-muted">нет на диске</span>
-        ) : (
           <>
             <span className="font-semibold text-primary">{done} загрузка завершена</span>
             <span className="mx-2 text-muted">·</span>
