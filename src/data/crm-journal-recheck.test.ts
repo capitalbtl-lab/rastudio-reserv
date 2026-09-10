@@ -134,6 +134,8 @@ describe("перепроверка журнала", () => {
     assert.match(inbound, /homeLite/);
     assert.match(inbound, /maxPages = homeLite \? 1/);
     assert.match(inbound, /export async function probeCustomerLessons/);
+    assert.match(inbound, /!opts\?\.force/);
+    assert.doesNotMatch(pullLock, /error: "Фон с AlfaCRM выключен\."/);
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(api, /"union"/);
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");

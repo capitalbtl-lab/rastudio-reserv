@@ -369,7 +369,7 @@ export async function probeGroupLife(branch: number, gid: number, opts?: { token
 /** Сколько занятий у ученика в Alfa: 1–3 лёгких запроса, не весь журнал. */
 export async function probeCustomerLessons(branch: number, customerId: number, opts?: { token?: string }) {
   const id = Number(customerId) || 0;
-  if (!alfaLinkedNow() || id <= 0) return { total: 0, ok: false as const };
+  if (id <= 0) return { total: 0, ok: false as const };
   const { token, request } = await import("./alfacrm");
   const t = opts?.token || (await token());
   const bid = Number(branch) || 1;
@@ -457,7 +457,8 @@ export async function enrichCalendarDetails(
 
 export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean }) {
   const id = Number(customerId) || 0;
-  if (!alfaLinkedNow() || id <= 0) return { ok: true as const, count: 0, done: true };
+  if (id <= 0) return { ok: true as const, count: 0, done: true };
+  if (!alfaLinkedNow() && !opts?.force) return { ok: true as const, count: 0, skipped: "offline" as const, done: true };
   const { wantAlfaPullChannel } = await import("./crm-alfa-link");
   if (!wantAlfaPullChannel("lessons") && !opts?.force) return { ok: true as const, count: 0, skipped: "канал" as const, done: true };
   if (lessonFillBusy(id)) {

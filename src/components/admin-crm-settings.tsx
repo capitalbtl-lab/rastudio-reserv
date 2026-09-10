@@ -1391,16 +1391,21 @@ export function AdminCrmSettings() {
   async function loadJournal() {
     setJournalLoading(true);
     try {
-      await adminSchedule({
-        data: { token: token(), action: "journalPull", kind: "hydrateDisk" } as never,
-      }).catch(() => null);
-      const res = (await adminSchedule({
-        data: { token: token(), action: "journalPull" } as never,
-      })) as typeof journal;
-      if (res) setJournal(res);
-      else setMsg("Список учеников не пришёл.");
-    } catch {
-      setMsg("Список учеников не пришёл. Обновите вкладку.");
+      const res = (await Promise.race([
+        adminSchedule({
+          data: { token: token(), action: "journalPull" } as never,
+        }),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Список не пришёл за 20 с — нажмите ещё раз.")), 20000)),
+      ])) as typeof journal;
+      if (res) {
+        setJournal(res);
+        return res;
+      }
+      setMsg("Список учеников не пришёл.");
+      return null;
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Список учеников не пришёл. Обновите вкладку.");
+      return null;
     } finally {
       setJournalLoading(false);
     }
@@ -1518,8 +1523,12 @@ export function AdminCrmSettings() {
   async function recheckPeople(kind: "students" | "balance", study: "1" | "2") {
     if (peopleLock.current) return;
     peopleLock.current = true;
-    const pack = study === "2" ? journal?.progress?.archive?.people : journal?.progress?.live?.people;
-    const all = pack || [];
+    let snap = journal;
+    let all = (study === "2" ? snap?.progress?.archive?.people : snap?.progress?.live?.people) || [];
+    if (!all.length) {
+      snap = await loadJournal();
+      all = (study === "2" ? snap?.progress?.archive?.people : snap?.progress?.live?.people) || [];
+    }
     if (!all.length) {
       peopleLock.current = false;
       setMsg(study === "2" ? "Нет архивных учеников в списке." : "Нет текущих учеников в списке.");
@@ -2044,7 +2053,7 @@ export function AdminCrmSettings() {
           const schoolNeed = Math.max(0, schoolRows.length - schoolDone);
           const schoolNeedLife = schoolRows.filter((r) => r.source !== "alfa").length;
           return (
-            <div className={cn("space-y-3", offline && "opacity-50")}>
+            <div className="space-y-3">
               {journal?.note ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
               {!journal ? (
                 <div className="flex flex-wrap items-center gap-2">
@@ -2052,7 +2061,7 @@ export function AdminCrmSettings() {
                     <p className="text-sm text-muted">Загружаю список с диска…</p>
                   ) : (
                     <>
-                      <button type="button" className={BTN_LOAD} disabled={offline} onClick={() => void loadJournal()}>
+                      <button type="button" className={BTN_LOAD} onClick={() => void loadJournal()}>
                         Показать список с диска
                       </button>
                       <span className="text-sm text-muted">Не пришло — нажмите ещё раз.</span>
@@ -2350,12 +2359,12 @@ export function AdminCrmSettings() {
                         <button
                           type="button"
                           className={cn(BTN_RED, run && schoolRun && "ra-progress-run")}
-                          disabled={offline || busy}
+                          disabled={busy}
                           onClick={() => void recheckPeople("students", peopleStudy)}
                         >
                           {run && schoolRun ? schoolRun.cur : "Загрузить по одному"}
                         </button>
-                        <button type="button" className={BTN_GHOST} disabled={offline || (busy && run)} onClick={() => void probePeople(peopleStudy)}>
+                        <button type="button" className={BTN_GHOST} disabled={busy && run} onClick={() => void probePeople(peopleStudy)}>
                           Сверить счёт
                         </button>
                         <button
@@ -2372,7 +2381,7 @@ export function AdminCrmSettings() {
                       <PeopleFillList
                         rows={side?.people || []}
                         kind="students"
-                        busy={offline || (fillLoading?.kind === "students" && Boolean(fillLoading.customerId))}
+                        busy={fillLoading?.kind === "students" && Boolean(fillLoading.customerId)}
                         loadingCid={fillLoading?.kind === "students" ? fillLoading.customerId : undefined}
                         onLoad={(row) => void loadPerson(row, "students", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "students", peopleStudy, true)}

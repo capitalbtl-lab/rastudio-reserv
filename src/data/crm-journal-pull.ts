@@ -905,9 +905,6 @@ export async function journalPull(opts: {
   const kind = opts.kind;
   const wantedEarly = Number(opts.customerId) || 0;
   const snap = () => journalPullState({ skipPeople: (kind !== "students" && kind !== "balance") || wantedEarly > 0 });
-  if (!alfaLinkedNow()) {
-    return { ok: false as const, error: "Фон с AlfaCRM выключен.", ...journalPullState() };
-  }
   const store = loadStore();
   const groups = journalPullGroups();
   const school = String(opts.school || "").trim();
