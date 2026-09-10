@@ -103,6 +103,9 @@ const HINT = {
   yearsMoney: "Те же годы, что на шаге 1: с какого времени читать журнал вместе с кассой. «С начала · 2015» нужно жёлтым старым карточкам, иначе старые списания не к чему привязать. «7 лет» быстрее и хватает тем, кто ходит с 2019. Платежи (pay) идут своим журналом Alfa, а окно лет режет занятия, к которым вяжется списание. Выбор действует на красную кнопку и на «Загрузить кассу» в карточке. В Alfa ничего не отправляет. Если остаток на карточке кажется чужим, поставьте «с начала» и перепроверьте человека.",
   loadPay: "Догружает кассу именно этого ученика: платежи и абонементы из Alfa на наш диск. Если журнала занятий не хватает, сначала доберёт явки в том же окне лет, иначе списание не к чему привязать. В Alfa платёж не проводит и чек не создаёт. Нужна, когда слева «нет кассы», а справа ещё пусто. Дубли по номеру платежа не плодит. После успеха карточка должна уйти в «загрузка завершена». Пока грузится другой человек, эта кнопка подождёт.",
   recheckPay: "Ещё раз сверяет кассу и журнал этого человека с Alfa и дописывает новое. Старые платежи не дублирует по номеру. Ошибочные строки сами в Alfa не улетают — мы только читаем. Нажмите, если остаток на карточке кажется чужим или после оплаты в кассе Alfa. Тема и ДЗ уже скачанных уроков не затираются. Это точечная проверка, не вся очередь слева. Если после сверки цифра всё равно странная, посмотрите жёлтый бейдж «в Alfa больше» и окно лет.",
+  recheckOnePeople: "Синяя «Перепроверить по одному» идёт только по тем, кто уже справа: календарь на диске есть. Красную загрузку слева она не трогает. По одному человеку спрашивает Alfa ещё раз и дописывает новые занятия, если они появились. Старые строки не затирает и дубли по номеру урока не плодит. Между людьми пауза пять секунд, как у красной. «Стоп» прерывает после текущего. В Alfa ничего не пишет. Нужна, когда все уже в «загрузка завершена», но хочется убедиться, что ничего не пропустили. Если справа пусто — сначала красная кнопка.",
+  recheckOneGroups: "Синяя «Перепроверить по одному» проходит живые (или архивные, если открыт архив) группы, у которых явки уже на диске. Красную загрузку слева не запускает. У каждой группы ещё раз читает выбранную порцию — квартал, полугодие или год — и дописывает дырки. Между группами пауза пять секунд. «Стоп» останавливает очередь после текущей группы. В Alfa журнал не проводится и расписание не меняется. Если группа ещё слева «требует загрузки», её берёт красная кнопка, не эта. Жать, когда список справа заполнен и нужно свериться с Alfa ещё раз.",
+  recheckOneMoney: "Синяя «Перепроверить по одному» идёт по ученикам справа: у кого касса уже помечена готовой. Для каждого ещё раз читает платежи и журнал из Alfa и дописывает новое на диск. Ноль оплат — это тоже «готово», если страницы кассы кончились. Между людьми пауза пять секунд. «Стоп» прерывает очередь. В Alfa оплаты не создаёт и не удаляет. Если ученик ещё слева — его берёт красная «Загрузить по одному». Эта кнопка нужна, когда 346 уже справа, и вы хотите пройти всех и снять голубое «есть неперепроверенные».",
   tabStudents: "Первый шаг загрузки истории. Здесь качается личный календарь ученика: все его занятия из Alfa на наш диск. Сначала покажите список с диска, потом красной кнопкой идите по людям слева. Список «годы» задаёт, насколько далеко в прошлое смотреть. Жёлтая карточка значит: в Alfa занятий больше, чем у нас. Зелёная — счёт сошёлся. В Alfa ничего не пишется. Деньги и групповые явки — следующие шаги, этот экран их не трогает.",
   tabGroups: "Второй шаг. Здесь качаются явки по группам: кто был на уроке, а не личный календарь человека. Сначала красная «по одному», потом список «годы» — это размер порции: квартал, полугодие или год. Архив групп и сроки жизни курса — отдельные кнопки ниже, их лучше нажать до массовой качки. Фильтр школы сужает очередь. В Alfa журнал не проводится. Без этого шага на сайте будут люди, но без отметок в группе. Тема и ДЗ грузятся уже в карточке группы, после явок.",
   tabMoney: "Третий шаг, «деньги на карточке». Здесь к ученику дописываются платежи и абонементы из Alfa. Красная «по одному» идёт как на шаге 1, справа те же годы. Если журнала занятий ещё нет, касса сначала доберёт календарь, иначе списание не к чему привязать. В Alfa оплаты не создаются. Жёлтая карточка — в Alfa занятий больше, чем на диске. После шага на карточке ученика должен быть понятный остаток. Это не зарплата педагогов и не очередь в Alfa, а чтение кассы на сайт.",
@@ -1739,7 +1742,7 @@ export function AdminCrmSettings() {
     }
   }
 
-  async function recheckPeople(kind: "students" | "balance", study: "1" | "2") {
+  async function recheckPeople(kind: "students" | "balance", study: "1" | "2", onlyRecheck = false) {
     if (peopleLock.current) return;
     peopleLock.current = true;
     let snap = journal;
@@ -1755,17 +1758,24 @@ export function AdminCrmSettings() {
     }
     const needLoad = all.filter((r) => !peopleFinished(r, kind));
     const needRecheck = all.filter((r) => peopleNeedsRecheck(r, kind));
-    const sweep = !needLoad.length;
-    const queue = sweep ? (needRecheck.length ? needRecheck : all) : needLoad;
+    const queue = onlyRecheck
+      ? needRecheck.length
+        ? needRecheck
+        : all.filter((r) => peopleFinished(r, kind))
+      : needLoad;
     if (!queue.length) {
       peopleLock.current = false;
-      setMsg("Некого грузить.");
+      setMsg(
+        onlyRecheck
+          ? "Справа никого перепроверять. Сначала красная «Загрузить по одному»."
+          : "Слева пусто. Нажмите «Перепроверить по одному» — пройдёт тех, кто справа.",
+      );
       return;
     }
     stopSchool.current = false;
     holdFill.current = true;
     setBusy(true);
-    setMsg(`${queue[0]?.name}: грузим. Потом пауза 5 с.`);
+    setMsg(onlyRecheck ? `${queue[0]?.name}: перепроверяем. Потом пауза 5 с.` : `${queue[0]?.name}: грузим. Потом пауза 5 с.`);
     setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
     let n = 0;
     try {
@@ -1774,7 +1784,7 @@ export function AdminCrmSettings() {
         const row = queue[i];
         setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
         setFillLoading({ kind, label: row.name, customerId: row.cid });
-        const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind), dateFrom: peopleDateFrom(peopleFromId) });
+        const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: onlyRecheck || peopleFinished(row, kind), dateFrom: peopleDateFrom(peopleFromId) });
         if (!res || res.ok === false) {
           if (/уже грузим/i.test(String(res?.error || ""))) {
             setSchoolRun({ cur: `пауза 5 с · ждём «${row.name}»`, n: i + 1, total: queue.length });
@@ -1803,7 +1813,7 @@ export function AdminCrmSettings() {
       return;
     }
     if (n >= queue.length) {
-      setMsg(sweep ? `${n} перепроверили.` : `Готово · ${n} учеников. Слева пусто.`);
+      setMsg(onlyRecheck ? `${n} перепроверили.` : `Готово · ${n} учеников. Слева пусто.`);
     }
   }
 
@@ -1870,6 +1880,63 @@ export function AdminCrmSettings() {
     }
     setSchoolRun(null);
     if (stopSchool.current) setMsg("Очередь школы остановлена.");
+  }
+
+  async function recheckGroupsOne() {
+    const rows = (journal?.progress?.groups?.rows || []).filter((r) => !journalSchool || r.school === journalSchool);
+    const need = rows.filter((r) => fillNeedsRecheck(packGrain(r.parts, clampGrain(r.age, journalGrain))));
+    const done = rows.filter((r) => fillFinishedRow(r, journalGrain));
+    const queue = need.length ? need : done;
+    if (!queue.length) {
+      setMsg("Справа никого перепроверять. Сначала красная «Загрузить по одному».");
+      return;
+    }
+    stopSchool.current = false;
+    holdFill.current = true;
+    setBusy(true);
+    setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
+    let n = 0;
+    try {
+      for (let i = 0; i < queue.length; i += 1) {
+        if (stopSchool.current) break;
+        const row = queue[i];
+        const chunks = packGrain(row.parts, clampGrain(row.age, journalGrain));
+        setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
+        for (let j = 0; j < chunks.length; j += 1) {
+          if (stopSchool.current) break;
+          const part = chunks[j];
+          setFillLoading({
+            groupId: Number(row.groupId) || 0,
+            branchId: Number(row.branchId) || 0,
+            periodKey: part.key,
+            label: part.label,
+            kind: "group",
+          });
+          setSchoolRun({ cur: `${row.name} · ${part.label}`, n: i + 1, total: queue.length });
+          await runJournal({
+            kind: "group",
+            groupId: Number(row.groupId) || 0,
+            branchId: Number(row.branchId) || 0,
+            periodKey: part.key,
+            periodLabel: part.label,
+            grain: journalGrain,
+            recheck: true,
+          });
+        }
+        n += 1;
+        if (i < queue.length - 1 && !stopSchool.current) {
+          setSchoolRun({ cur: `пауза 5 с · дальше ${queue[i + 1]?.name || ""}`, n: i + 1, total: queue.length });
+          await pauseFive();
+        }
+      }
+    } finally {
+      holdFill.current = false;
+      setFillLoading(null);
+      setBusy(false);
+      setSchoolRun(null);
+    }
+    if (stopSchool.current) setMsg(`Остановили · прошло ${n} из ${queue.length}.`);
+    else if (n >= queue.length) setMsg(`${n} групп перепроверили.`);
   }
 
   async function recheckGroup(row: FillRow) {
@@ -2409,20 +2476,30 @@ export function AdminCrmSettings() {
                   HINT.loadOneGroups,
                   )}
                   <GrainSelect value={journalGrain} disabled={busy || offline} onChange={pickJournalGrain} />
-                  {schoolRun
-                    ? withHint(
-                        <button
-                          type="button"
-                          className={BTN_GHOST}
-                          onClick={() => {
-                            stopSchool.current = true;
-                          }}
-                        >
-                          Стоп
-                        </button>,
-                        HINT.stop,
-                      )
-                    : null}
+                  {withHint(
+                  <button
+                    type="button"
+                    className={cn(BTN_LOAD, schoolRun && fillLoading?.kind === "group" && "ra-progress-run")}
+                    disabled={offline || busy}
+                    onClick={() => void recheckGroupsOne()}
+                  >
+                    Перепроверить по одному
+                  </button>,
+                  HINT.recheckOneGroups,
+                  )}
+                  {withHint(
+                    <button
+                      type="button"
+                      className={BTN_GHOST}
+                      disabled={!schoolRun}
+                      onClick={() => {
+                        stopSchool.current = true;
+                      }}
+                    >
+                      Стоп
+                    </button>,
+                    HINT.stop,
+                  )}
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {withHint(
@@ -2599,6 +2676,17 @@ export function AdminCrmSettings() {
                         )}
                         <YearsSelect value={peopleFromId} disabled={busy} onChange={setPeopleFromId} />
                         {withHint(
+                        <button
+                          type="button"
+                          className={BTN_LOAD}
+                          disabled={busy}
+                          onClick={() => void recheckPeople("students", peopleStudy, true)}
+                        >
+                          Перепроверить по одному
+                        </button>,
+                        HINT.recheckOnePeople,
+                        )}
+                        {withHint(
                         <button type="button" className={BTN_GHOST} disabled={busy && run} onClick={() => void probePeople(peopleStudy)}>
                           Сверить счёт
                         </button>,
@@ -2608,7 +2696,7 @@ export function AdminCrmSettings() {
                         <button
                           type="button"
                           className={BTN_GHOST}
-                          disabled={!run}
+                          disabled={!run && !schoolRun}
                           onClick={() => {
                             stopSchool.current = true;
                           }}
@@ -2676,8 +2764,19 @@ export function AdminCrmSettings() {
                         {withHint(
                         <button
                           type="button"
+                          className={BTN_LOAD}
+                          disabled={busy}
+                          onClick={() => void recheckPeople("balance", peopleStudy, true)}
+                        >
+                          Перепроверить по одному
+                        </button>,
+                        HINT.recheckOneMoney,
+                        )}
+                        {withHint(
+                        <button
+                          type="button"
                           className={BTN_GHOST}
-                          disabled={!run}
+                          disabled={!run && !schoolRun}
                           onClick={() => {
                             stopSchool.current = true;
                           }}

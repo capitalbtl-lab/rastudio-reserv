@@ -137,7 +137,13 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Загрузить кассу/);
     assert.match(ui, /years=\{/);
     assert.match(ui, /onGrain/);
-    assert.match(ui, /hit\.paysOk != null \? Boolean\(hit\.paysOk\)/);
+    assert.match(ui, /Перепроверить по одному/);
+    assert.match(ui, /HINT\.recheckOnePeople/);
+    assert.match(ui, /HINT\.recheckOneGroups/);
+    assert.match(ui, /HINT\.recheckOneMoney/);
+    assert.match(ui, /recheckPeople\("students", peopleStudy, true\)/);
+    assert.match(ui, /recheckPeople\("balance", peopleStudy, true\)/);
+    assert.match(ui, /recheckGroupsOne/);
     assert.match(ui, /касса: ещё страницы, нажмите снова/);
     assert.match(ui, /paysMore: Boolean\(hit\.paysMore\)/);
     assert.doesNotMatch(ui, /pays: Boolean\(hit\.pays\)/);
