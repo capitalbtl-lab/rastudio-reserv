@@ -485,7 +485,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const dateFrom = ruShift(-2600);
     const dateTo = ruShift(90);
     const slots = listAdminSlots();
-    const homeLite = Boolean(opts?.homeOnly) || Number(opts?.take) > 0;
+    const homeLite = Boolean(opts?.homeOnly);
     const branches = homeLite || !wantFull ? [Number(branch) || 1] : uniqueBranches(branch);
     const prevCal = loadCustomerCalendar(id);
     const prevMap = new Map(prevCal.map((l) => [String(l.lessonId || `${l.date}|${l.from}`), l] as const));
@@ -597,8 +597,8 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const done = Boolean(cur.done) || !wantFull;
     stampCustomerSync(id, {
       lessonsAt: new Date().toISOString(),
-      lessonsFull: customerSyncOf(id).lessonsFull || done,
-      lessonsAttend: customerSyncOf(id).lessonsAttend || done,
+      lessonsFull: homeLite ? false : customerSyncOf(id).lessonsFull || done,
+      lessonsAttend: homeLite ? customerSyncOf(id).lessonsAttend : customerSyncOf(id).lessonsAttend || done,
       lessonFill: done ? undefined : cur,
     });
     if (wantFull && !done && opts?.continueLater === true) {

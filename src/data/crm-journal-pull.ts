@@ -842,12 +842,12 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     if (!balance) return { cid, lessons: disk, done: true, pays: 0, tariffs: 0, alfa: alfa0, short: false, blocked: false };
   } else {
     const res = await inboundCustomerLessons(branchId, cid, {
-      take: 3,
+      take: 8,
       deep: 0,
       continueLater: false,
       full: true,
       force: true,
-      homeOnly: true,
+      homeOnly: false,
     }).catch(() => ({ count: 0, done: true as const, skipped: undefined as string | undefined }));
     lessons += Number(res.count) || 0;
     if ("skipped" in res && res.skipped === "busy") {

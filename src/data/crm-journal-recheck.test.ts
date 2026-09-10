@@ -128,13 +128,15 @@ describe("перепроверка журнала", () => {
     assert.match(pullLock, /studentPullCid/);
     assert.match(pullLock, /уже грузим/);
     assert.match(pullLock, /row\.blocked/);
-    assert.match(pullLock, /homeOnly: true/);
+    assert.match(pullLock, /homeOnly: false/);
     assert.match(pullLock, /if \(!recheck && first\.ok && disk >= alfa0\)/);
     assert.match(pullLock, /probeCustomerLessons/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /waitLockStudentAlfa/);
     assert.match(inbound, /homeLite/);
     assert.match(inbound, /maxPages = homeLite \? 1/);
+    assert.match(inbound, /const homeLite = Boolean\(opts\?\.homeOnly\);/);
+    assert.doesNotMatch(inbound, /homeOnly\) \|\| Number\(opts\?\.take\)/);
     assert.match(inbound, /export async function probeCustomerLessons/);
     assert.match(inbound, /!opts\?\.force/);
     assert.doesNotMatch(pullLock, /error: "Фон с AlfaCRM выключен\."/);
@@ -143,7 +145,7 @@ describe("перепроверка журнала", () => {
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
     assert.match(pull, /fanOutLessonWriteoffs\(calendar\)/);
     assert.match(pull, /lessonsJournalReady\(sync\)/);
-    assert.match(pull, /homeOnly: true/);
+    assert.match(pull, /homeOnly: false/);
     assert.doesNotMatch(pull, /groupsReady/);
   });
 });
