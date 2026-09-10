@@ -43,8 +43,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /пакет оборвался|дозаписали/);
     assert.match(pull, /journalFill: \{ done:/);
     assert.doesNotMatch(pull, /inferredPeriodKeys\(card\?\.calendar/);
+    assert.match(pull, /skipPeople/);
+    assert.match(pull, /groupName: g\.name/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
-    assert.match(inbound, /hitCap/);
+    assert.match(inbound, /Promise\.all/);
+    assert.match(inbound, /opts\?\.groupName/);
     assert.match(inbound, /opts\?\.lite \|\| windowed/);
     assert.match(inbound, /date_from: ymd\(date_from\)/);
     assert.match(inbound, /date_to: ymd\(date_to\)/);

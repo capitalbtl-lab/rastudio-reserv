@@ -158,16 +158,16 @@ function withPupilNames(lesson: GroupCalLesson): GroupCalLesson {
 export async function inboundJournalGroup(
   branch: number,
   gid: number,
-  opts?: { token?: string; slots?: CrmSlot[]; hold?: Set<number>; dateFrom?: string; dateTo?: string; defer?: boolean; deep?: boolean; lite?: boolean; recheck?: boolean },
+  opts?: { token?: string; slots?: CrmSlot[]; hold?: Set<number>; dateFrom?: string; dateTo?: string; defer?: boolean; deep?: boolean; lite?: boolean; recheck?: boolean; groupName?: string },
 ) {
   if (!alfaLinkedNow() || !gid) return { ok: true as const, extra: "без Alfa", count: 0, calendar: [] as GroupCalLesson[], capped: false };
-  const slots = opts?.slots || (await import("./alfacrm-schedule")).listAdminSlots();
+  const slots = opts?.slots || (opts?.groupName ? [] : (await import("./alfacrm-schedule")).listAdminSlots());
   const slot = slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid);
   const cached = loadGroupCard(branch, gid);
   const { token, request } = await import("./alfacrm");
   const t = opts?.token || (await token());
   const ctx = {
-    groupName: String(cached?.name || slot?.groupName || `группа ${gid}`),
+    groupName: String(opts?.groupName || cached?.name || slot?.groupName || `группа ${gid}`),
     from: String(slot?.timeFrom || ""),
     to: String(slot?.timeTo || ""),
     teacher: String(slot?.teacher || ""),
@@ -219,9 +219,11 @@ export async function inboundJournalGroup(
   const windowed = Boolean(opts?.dateFrom && opts?.dateTo);
   const deepPages = Boolean(opts?.recheck);
   if (opts?.lite || windowed) {
-    await pull(3, dateFrom, dateTo, deepPages ? 8 : 4, 50);
-    await pull(1, dateFrom, dateTo, deepPages ? 3 : 1, 50);
-    await pull(2, dateFrom, dateTo, deepPages ? 3 : 1, 50);
+    await Promise.all([
+      pull(3, dateFrom, dateTo, deepPages ? 8 : 4, 50),
+      pull(1, dateFrom, dateTo, deepPages ? 3 : 1, 50),
+      pull(2, dateFrom, dateTo, deepPages ? 3 : 1, 50),
+    ]);
   } else {
     await pull(3, dateFrom, dateTo, 10, 100);
     await pull(1, dateFrom, dateTo, 8, 100);

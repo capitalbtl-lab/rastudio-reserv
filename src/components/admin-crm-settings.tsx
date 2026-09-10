@@ -1413,7 +1413,24 @@ export function AdminCrmSettings() {
           ),
         ),
       ])) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit; extra?: string };
-      if (res) setJournal(res);
+      if (res) {
+        setJournal((cur) => {
+          if (!cur) return res;
+          const keepLive = !(res.progress?.live?.people || []).length && (cur.progress?.live?.people || []).length;
+          const keepArch = !(res.progress?.archive?.people || []).length && (cur.progress?.archive?.people || []).length;
+          return {
+            ...cur,
+            ...res,
+            progress: {
+              ...cur.progress,
+              ...res.progress,
+              live: keepLive ? cur.progress?.live : res.progress?.live,
+              archive: keepArch ? cur.progress?.archive : res.progress?.archive,
+              groups: res.progress?.groups || cur.progress?.groups,
+            },
+          };
+        });
+      }
       setMsg(res?.error || res?.extra || (res?.ok ? "Пакет записан на сайт." : "Журнал не ответил."));
       return res;
     } catch (e) {
