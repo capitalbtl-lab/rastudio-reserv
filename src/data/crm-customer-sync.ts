@@ -184,6 +184,17 @@ export function tryLockStudentAlfa(customerId: number) {
   return true;
 }
 
+export async function waitLockStudentAlfa(customerId: number, ms = 20000) {
+  const id = Number(customerId) || 0;
+  if (!id) return false;
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    if (tryLockStudentAlfa(id)) return true;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return tryLockStudentAlfa(id);
+}
+
 export function unlockStudentAlfa(customerId: number) {
   if (Number(g.__raStudentAlfa) === Number(customerId)) g.__raStudentAlfa = 0;
 }

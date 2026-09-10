@@ -33,6 +33,7 @@ import {
   LESSON_RECENT_DAYS,
   customerLessonsNeedAttend,
   tryLockStudentAlfa,
+  waitLockStudentAlfa,
   unlockStudentAlfa,
 } from "./crm-customer-sync";
 
@@ -467,7 +468,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     }
     if (lessonFillBusy(id)) return { ok: true as const, count: 0, skipped: "busy" as const, done: false };
   }
-  if (!tryLockStudentAlfa(id)) {
+  if (!(await waitLockStudentAlfa(id, Number(opts?.take) > 0 ? 20000 : 0))) {
     return { ok: true as const, count: 0, skipped: "busy" as const, done: false };
   }
   const wantFull = Boolean(opts?.full) || !customerSyncOf(id).lessonsFull || customerLessonsNeedAttend(id);
@@ -483,14 +484,15 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const dateFrom = ruShift(-2600);
     const dateTo = ruShift(90);
     const slots = listAdminSlots();
-    const branches = opts?.homeOnly || !wantFull ? [Number(branch) || 1] : uniqueBranches(branch);
+    const homeLite = Boolean(opts?.homeOnly) || Number(opts?.take) > 0;
+    const branches = homeLite || !wantFull ? [Number(branch) || 1] : uniqueBranches(branch);
     const prevCal = loadCustomerCalendar(id);
     const prevMap = new Map(prevCal.map((l) => [String(l.lessonId || `${l.date}|${l.from}`), l] as const));
     const packs: { items?: Parameters<typeof packLight>[0][] }[] = [];
     let cur = wantFull ? lessonFillOf(customerSyncOf(id).lessonFill) || lessonFillStart(branches[0] || branch) : lessonFillStart(branches[0] || branch);
     let ran = 0;
-    const maxRun = Number(opts?.take) > 0 ? Math.min(LESSON_INBOUND_RUN, Number(opts.take)) : wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
-    const maxPages = Number(opts?.take) > 0 ? Math.min(3, wantFull ? 12 : 2) : wantFull ? 12 : 2;
+    const maxRun = homeLite ? LESSON_STATUSES.length : Number(opts?.take) > 0 ? Math.min(LESSON_INBOUND_RUN, Number(opts.take)) : wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
+    const maxPages = homeLite ? 1 : Number(opts?.take) > 0 ? Math.min(3, wantFull ? 12 : 2) : wantFull ? 12 : 2;
     const from = wantFull ? dateFrom : ruShift(LESSON_RECENT_DAYS);
     while (ran < maxRun && !cur.done) {
       const bid = cur.bid;

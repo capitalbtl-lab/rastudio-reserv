@@ -843,27 +843,21 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   } else {
     const need = recheck || !first.ok || disk < alfa0;
     if (need) {
-      for (let round = 0; round < 2; round += 1) {
-        const res = await inboundCustomerLessons(branchId, cid, {
-          take: 4,
-          deep: 0,
-          continueLater: false,
-          full: true,
-          force: true,
-          homeOnly: true,
-        }).catch(() => ({ count: 0, done: true as const, skipped: undefined as string | undefined }));
-        lessons += Number(res.count) || 0;
-        if ("skipped" in res && res.skipped === "busy") {
-          await new Promise((r) => setTimeout(r, 250));
-          continue;
-        }
-        disk = loadCustomerCalendar(cid).length;
-        const probed = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
-        const alfaN = probed.ok ? probed.total : 0;
-        const st = mark(disk, alfaN, probed.ok);
-        if (st.closed || res.done !== false) break;
-        if (!st.short) break;
+      const res = await inboundCustomerLessons(branchId, cid, {
+        take: 3,
+        deep: 0,
+        continueLater: false,
+        full: true,
+        force: true,
+        homeOnly: true,
+      }).catch(() => ({ count: 0, done: true as const, skipped: undefined as string | undefined }));
+      lessons += Number(res.count) || 0;
+      if ("skipped" in res && res.skipped === "busy") {
+        return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, blocked: true };
       }
+      disk = loadCustomerCalendar(cid).length;
+      const probed = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
+      mark(disk, probed.ok ? probed.total : 0, probed.ok);
     }
   }
   let pays = 0;
@@ -892,6 +886,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     tariffs,
     alfa: Number(sync.lessonsAlfa) || 0,
     short,
+    blocked: false,
   };
 }
 
@@ -1418,6 +1413,14 @@ export async function journalPull(opts: {
     }
     const balance = kind === "balance";
     const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck));
+    if (row.blocked) {
+      return {
+        ok: false as const,
+        error: `уже грузим другого ученика — подождите, не пачкой`,
+        more: false,
+        ...journalPullState({ skipPeople: true }),
+      };
+    }
     const sync = customerSyncOf(one.cid);
     const gnames = groupsOfStudent(one.cid);
     const name = fioOf(one.cid);
@@ -1453,6 +1456,7 @@ export async function journalPull(opts: {
     store.at = new Date().toISOString();
     saveStore(store);
     return {
+      ok: true as const,
       extra: store.note,
       count: row.lessons,
       scanned: 1,

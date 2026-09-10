@@ -1137,6 +1137,7 @@ export function AdminCrmSettings() {
   const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null>(null);
   const holdFill = useRef(false);
   const stopSchool = useRef(false);
+  const peopleLock = useRef(false);
   const [schoolRun, setSchoolRun] = useState<{ cur: string; n: number; total: number } | null>(null);
   const [groupArchived, setGroupArchived] = useState(false);
   const [peopleStudy, setPeopleStudy] = useState<"1" | "2">("1");
@@ -1550,7 +1551,8 @@ export function AdminCrmSettings() {
   }
 
   async function loadPerson(row: PeopleRow, kind: "students" | "balance", study: "1" | "2", recheck = false) {
-    if (!row.cid) return;
+    if (!row.cid || peopleLock.current) return;
+    peopleLock.current = true;
     holdFill.current = true;
     stopSchool.current = false;
     setFillLoading({ kind, label: row.name, customerId: row.cid });
@@ -1560,14 +1562,17 @@ export function AdminCrmSettings() {
       holdFill.current = false;
       setFillLoading(null);
       setBusy(false);
+      peopleLock.current = false;
     }
   }
 
   async function recheckPeople(kind: "students" | "balance", study: "1" | "2") {
-    if (schoolRun && fillLoading?.kind === kind) return;
+    if (peopleLock.current) return;
+    peopleLock.current = true;
     const pack = study === "2" ? journal?.progress?.archive?.people : journal?.progress?.live?.people;
     const all = pack || [];
     if (!all.length) {
+      peopleLock.current = false;
       setMsg(study === "2" ? "Нет архивных учеников в списке." : "Нет текущих учеников в списке.");
       return;
     }
@@ -1579,7 +1584,7 @@ export function AdminCrmSettings() {
     stopSchool.current = false;
     holdFill.current = true;
     setBusy(true);
-    setMsg(auto ? `Догрузка: ${queue.length} по одному, пауза 3 с.` : `${queue[0]?.name}: один ученик.`);
+    setMsg(auto ? `По одному · осталось ${queue.length} · пауза 3 с.` : `${queue[0]?.name}: один.`);
     setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
     let n = 0;
     try {
@@ -1590,12 +1595,18 @@ export function AdminCrmSettings() {
         setFillLoading({ kind, label: row.name, customerId: row.cid });
         const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind) });
         if (!res || res.ok === false) {
-          setMsg(res?.error || `Остановились на «${row.name}». Нажмите ещё раз — очередь продолжится.`);
+          if (/уже грузим/i.test(String(res?.error || ""))) {
+            const until = Date.now() + PEOPLE_LOAD_GAP_MS;
+            while (Date.now() < until && !stopSchool.current) await new Promise((r) => setTimeout(r, 200));
+            i -= 1;
+            continue;
+          }
+          setMsg(res?.error || `Остановились на «${row.name}». Нажмите ещё раз — продолжит со следующего.`);
           break;
         }
         n += 1;
         if (auto && i < queue.length - 1 && !stopSchool.current) {
-          setSchoolRun({ cur: `${row.name} · пауза 3 с`, n: i + 1, total: queue.length });
+          setSchoolRun({ cur: `пауза 3 с · дальше ${queue[i + 1]?.name || ""}`, n: i + 1, total: queue.length });
           const until = Date.now() + PEOPLE_LOAD_GAP_MS;
           while (Date.now() < until && !stopSchool.current) {
             await new Promise((r) => setTimeout(r, 200));
@@ -1607,13 +1618,14 @@ export function AdminCrmSettings() {
       setFillLoading(null);
       setBusy(false);
       setSchoolRun(null);
+      peopleLock.current = false;
     }
     if (stopSchool.current) {
       setMsg(`Остановили · прошло ${n} из ${queue.length}.`);
       return;
     }
     if (n >= queue.length) {
-      setMsg(sweep ? `${n} перепроверили.` : `Догрузка закончена · ${n} учеников. Слева пусто.`);
+      setMsg(sweep ? `${n} перепроверили.` : `Готово · ${n} учеников. Слева пусто.`);
     }
   }
 
