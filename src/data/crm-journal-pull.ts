@@ -573,7 +573,7 @@ export function journalPullProgress() {
     groups: {
       total: groups.length,
       done: complete,
-      periods: periods.length,
+      periods: journalPeriods().length,
       miss: packList(groupsMiss, 200),
       doneList: packList(groupsDone, 200),
       rows: rows.slice(0, 800),
@@ -631,7 +631,14 @@ export function journalPullState() {
     progress = journalPullProgress();
   } catch {
     progress = {
-      groups: { total: groups.length, done: 0, periods: 0, miss: packList([]), doneList: packList([]), rows: [] },
+      groups: {
+        total: groups.length,
+        done: 0,
+        periods: journalPeriods().length,
+        miss: packList([]),
+        doneList: packList([]),
+        rows: groups.map((g) => groupFillRow(g)).slice(0, 800),
+      },
       live: emptySide("1"),
       archive: emptySide("2"),
     };

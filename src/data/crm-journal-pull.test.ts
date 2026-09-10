@@ -83,7 +83,8 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(pull, /loadCustomerCalendar\(p\.cid\)/);
     assert.doesNotMatch(pull, /const byQ = new Map/);
     assert.doesNotMatch(pull, /inQ\.filter\(lessonNeedsHomework\)/);
-    assert.match(pull, /lessonsDisk/);
+    assert.match(pull, /periods: journalPeriods\(\)\.length/);
+    assert.doesNotMatch(pull, /periods: periods\.length/);
     assert.match(pull, /probed\.ok \? \{ lessonsAlfa/);
     assert.match(ui, /row\.alfa != null/);
     assert.match(ui, /Загружаю список с диска/);
