@@ -1,6 +1,6 @@
 /** Штамп входа ученика: полная история один раз, дальше только новое. */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export const CUSTOMER_SYNC_TTL_MS = 10 * 60 * 1000;
@@ -26,23 +26,37 @@ export type CustomerSyncStamp = {
 
 type Store = { at: string; byId: Record<string, CustomerSyncStamp> };
 
+let mem: Store | null = null;
+let memMtime = 0;
+
 function fileOf() {
   return join(process.cwd(), "storage", "crm-customer-sync.json");
 }
 
 function load(): Store {
   try {
-    if (!existsSync(fileOf())) return { at: "", byId: {} };
-    const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Partial<Store>;
-    return { at: String(raw.at || ""), byId: raw.byId && typeof raw.byId === "object" ? raw.byId : {} };
+    const p = fileOf();
+    if (!existsSync(p)) return mem || { at: "", byId: {} };
+    const mtime = statSync(p).mtimeMs;
+    if (mem && memMtime === mtime) return mem;
+    const raw = JSON.parse(readFileSync(p, "utf8")) as Partial<Store>;
+    mem = { at: String(raw.at || ""), byId: raw.byId && typeof raw.byId === "object" ? raw.byId : {} };
+    memMtime = mtime;
+    return mem;
   } catch {
-    return { at: "", byId: {} };
+    return mem || { at: "", byId: {} };
   }
 }
 
 function save(store: Store) {
   mkdirSync(dirname(fileOf()), { recursive: true });
   writeFileSync(fileOf(), JSON.stringify({ at: new Date().toISOString(), byId: store.byId }, null, 0), "utf8");
+  mem = store;
+  try {
+    memMtime = statSync(fileOf()).mtimeMs;
+  } catch {
+    memMtime = Date.now();
+  }
 }
 
 export function isSyncFresh(atIso?: string, now = Date.now(), ttl = CUSTOMER_SYNC_TTL_MS) {

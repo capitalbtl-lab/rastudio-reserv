@@ -455,6 +455,7 @@ export function groupFillRow(g: JournalPullGroup) {
 }
 
 export function journalPullProgress() {
+  loadCustomerCalendar(0);
   const groups = journalPullGroups();
   const nMap = pupilLinkCountMap("1");
   const rows = groups.map((g) => {
@@ -589,6 +590,24 @@ export function journalPullState() {
   const all = rankedStudentIds("all");
   const live = rankedStudentIds("1");
   const arch = rankedStudentIds("2");
+  const emptySide = (total: number) => ({
+    total,
+    journalDone: 0,
+    cardDone: 0,
+    missJournal: packList([] as { id: number; name: string; extra: string }[]),
+    missCard: packList([] as { id: number; name: string; extra: string }[]),
+    people: [],
+  });
+  let progress: ReturnType<typeof journalPullProgress>;
+  try {
+    progress = journalPullProgress();
+  } catch {
+    progress = {
+      groups: { total: groups.length, done: 0, periods: 0, miss: packList([]), doneList: packList([]), rows: [] },
+      live: emptySide(live.length),
+      archive: emptySide(arch.length),
+    };
+  }
   return {
     ok: true as const,
     at: store.at,
@@ -602,7 +621,7 @@ export function journalPullState() {
     lessonsTotal: Number(pol.lessonsTotal) || all.length,
     students: { all: all.length, live: live.length, archive: arch.length },
     linked: alfaLinkedNow(),
-    progress: journalPullProgress(),
+    progress,
     lastLife: store.lastLife || null,
     lastArchives: store.lastArchives || null,
     lastArchivesPupils: store.lastArchivesPupils || null,

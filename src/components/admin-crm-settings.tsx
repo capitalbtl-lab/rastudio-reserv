@@ -1357,8 +1357,9 @@ export function AdminCrmSettings() {
         data: { token: token(), action: "journalPull" } as never,
       })) as typeof journal;
       if (res) setJournal(res);
+      else setMsg("Список учеников не пришёл.");
     } catch {
-      /* */
+      setMsg("Список учеников не пришёл. Обновите вкладку.");
     }
   }
 
@@ -1991,6 +1992,8 @@ export function AdminCrmSettings() {
         {(() => {
           const offline = alfaMode === "offline";
           const p = journal?.progress;
+          const liveN = Number(p?.live?.total || journal?.students?.live || 0);
+          const archN = Number(p?.archive?.total || journal?.students?.archive || 0);
           const schoolRows = (p?.groups?.rows || []).filter((r) => !journalSchool || r.school === journalSchool);
           const schoolDone = schoolRows.filter((r) => fillFinishedRow(r, journalGrain)).length;
           const schoolNeed = Math.max(0, schoolRows.length - schoolDone);
@@ -1998,6 +2001,14 @@ export function AdminCrmSettings() {
           return (
             <div className={cn("space-y-3", offline && "opacity-50")}>
               {journal?.note ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
+              {!journal ? (
+                <p className="text-sm text-muted">
+                  Список учеников ещё не пришёл.{" "}
+                  <button type="button" className="font-semibold underline" onClick={() => void loadJournal()}>
+                    Загрузить снова
+                  </button>
+                </p>
+              ) : null}
               <div ref={histTabsRef} className="flex flex-wrap gap-1">
                 {HIST_TABS.map((t) => (
                   <button
@@ -2269,14 +2280,14 @@ export function AdminCrmSettings() {
                   <ScopePills
                     value={peopleStudy === "2" ? "archive" : "live"}
                     onChange={(v) => setPeopleStudy(v === "archive" ? "2" : "1")}
-                    live={`Сейчас ходят · ${p?.live?.total || 0}`}
-                    arch={`Архивные клиенты · ${p?.archive?.total || 0}`}
+                    live={`Сейчас ходят · ${liveN}`}
+                    arch={`Архивные клиенты · ${archN}`}
                   />
                 </div>
                 {(() => {
                   const side = peopleStudy === "2" ? p?.archive : p?.live;
                   const done = side?.journalDone || 0;
-                  const total = side?.total || 0;
+                  const total = side?.total || (peopleStudy === "2" ? archN : liveN) || 0;
                   const run = fillLoading?.kind === "students";
                   const allIn = total > 0 && done >= total;
                   return (
@@ -2341,14 +2352,14 @@ export function AdminCrmSettings() {
                   <ScopePills
                     value={peopleStudy === "2" ? "archive" : "live"}
                     onChange={(v) => setPeopleStudy(v === "archive" ? "2" : "1")}
-                    live={`Сейчас ходят · ${p?.live?.total || 0}`}
-                    arch={`Архивные клиенты · ${p?.archive?.total || 0}`}
+                    live={`Сейчас ходят · ${liveN}`}
+                    arch={`Архивные клиенты · ${archN}`}
                   />
                 </div>
                 {(() => {
                   const side = peopleStudy === "2" ? p?.archive : p?.live;
                   const done = side?.cardDone || 0;
-                  const total = side?.total || 0;
+                  const total = side?.total || (peopleStudy === "2" ? archN : liveN) || 0;
                   const run = fillLoading?.kind === "balance";
                   return (
                     <>

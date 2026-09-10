@@ -3060,7 +3060,11 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const { journalPull, journalPullState } = await import("./crm-journal-pull");
       const kind = String(data.kind || "");
       if (kind !== "group" && kind !== "school" && kind !== "students" && kind !== "balance" && kind !== "life" && kind !== "details" && kind !== "archives" && kind !== "archivesPupils") {
-        return journalPullState();
+        try {
+          return journalPullState();
+        } catch (e) {
+          return { ok: false as const, error: e instanceof Error ? e.message : "Список журнала не собрался.", students: { all: 0, live: 0, archive: 0 } };
+        }
       }
       const res = await journalPull({
         kind,
