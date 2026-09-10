@@ -831,7 +831,7 @@ function PeopleFillList({
           <div className="mt-2 rounded-xl bg-white px-2.5 py-2 text-[0.72rem] leading-snug ring-1 ring-black/10">
             <CheckLine on={Boolean(row.journal) && !short} text="календарь загружен" />
             <CheckLine on={Boolean(row.rechecked)} text="календарь перепроверен" />
-            <CheckLine on={Boolean(row.alfa) && !short} text={row.alfa ? `счёт: диск ${row.lessons} · Alfa ${row.alfa}` : "счёт с Alfa ещё не сверяли"} />
+            <CheckLine on={row.alfa != null && !short} text={row.alfa != null ? `счёт: диск ${row.lessons} · Alfa ${row.alfa}` : "счёт с Alfa ещё не сверяли"} />
             <CheckLine on={Boolean(row.rechecked)} text="дубликатов нет" />
             {kind === "balance" ? (
               <>

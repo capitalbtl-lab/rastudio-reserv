@@ -536,15 +536,17 @@ export function journalPullProgress() {
       const d = findDossier({ crmId: p.cid });
       const links = d?.groupLinks || [];
       const own = groups.filter((g) => links.some((l) => Number(l.id) === g.groupId && (!l.branchId || l.branchId === g.branchId)));
-      const alfaN = Number(sync.lessonsAlfa) || 0;
-      const short = Boolean(sync.lessonsAlfaAt) && !sync.lessonsFull;
+      const probed = Boolean(sync.lessonsAlfaAt);
+      const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
+      const diskN = Number(sync.lessonsDisk) || 0;
+      const short = probed && alfaN > 0 && diskN > 0 && diskN < alfaN;
       const journal = Boolean(sync.lessonsFull && sync.lessonsAttend) && !short;
       const pays = isPayJournalComplete(p.cid);
       const name = fioOf(p.cid);
       const glist = groupsOfStudent(p.cid).slice(0, 3);
       const gnames = glist.join(", ") || own.map((g) => g.name).filter(Boolean).slice(0, 3).join(", ");
       if (journal) journalDone += 1;
-      else missJ.push({ id: p.cid, name, extra: short ? `в Alfa ${alfaN}` : gnames ? gnames : own.length ? "группы ещё не сверены" : "нет полного журнала" });
+      else missJ.push({ id: p.cid, name, extra: short ? `на диске ${diskN}, в Alfa ${alfaN}` : gnames ? gnames : own.length ? "группы ещё не сверены" : "нет полного журнала" });
       if (journal && pays) cardDone += 1;
       else missC.push({ id: p.cid, name, extra: journal ? "нет кассы" : gnames || (own.length ? "группы ещё не сверены" : "нет явки") });
       peopleRows.push({
@@ -552,14 +554,14 @@ export function journalPullProgress() {
         branchId: p.branchId,
         name,
         groups: glist.length ? glist : own.map((g) => g.name).filter(Boolean).slice(0, 3),
-        lessons: alfaN,
-        alfa: alfaN || undefined,
+        lessons: diskN,
+        alfa: probed ? alfaN : undefined,
         short,
         journal,
         pays,
         rechecked: Boolean(sync.lessonsRecheckAt) && !short,
         paysRechecked: Boolean(sync.paysRecheckAt),
-        extra: short ? `в Alfa ${alfaN}` : gnames,
+        extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : gnames,
         at: sync.lessonsAt || "",
       });
     }
@@ -602,21 +604,25 @@ export function journalPullState() {
     const list = rankedStudentIds(study);
     const people = list.slice(0, 800).map((p) => {
       const sync = customerSyncOf(p.cid);
-      const journal = Boolean(sync.lessonsFull && sync.lessonsAttend);
+      const probed = Boolean(sync.lessonsAlfaAt);
+      const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
+      const diskN = Number(sync.lessonsDisk) || 0;
+      const short = probed && alfaN > 0 && diskN > 0 && diskN < alfaN;
+      const journal = Boolean(sync.lessonsFull && sync.lessonsAttend) && !short;
       const pays = isPayJournalComplete(p.cid);
       return {
         cid: p.cid,
         branchId: p.branchId,
         name: fioOf(p.cid),
         groups: groupsOfStudent(p.cid).slice(0, 3),
-        lessons: Number(sync.lessonsAlfa) || 0,
-        alfa: Number(sync.lessonsAlfa) || undefined,
-        short: Boolean(sync.lessonsAlfaAt) && !sync.lessonsFull,
+        lessons: diskN,
+        alfa: probed ? alfaN : undefined,
+        short,
         journal,
         pays,
-        rechecked: Boolean(sync.lessonsRecheckAt),
+        rechecked: Boolean(sync.lessonsRecheckAt) && !short,
         paysRechecked: Boolean(sync.paysRecheckAt),
-        extra: groupsOfStudent(p.cid).slice(0, 2).join(", "),
+        extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : groupsOfStudent(p.cid).slice(0, 2).join(", "),
         at: sync.lessonsAt || "",
       };
     });
@@ -760,8 +766,9 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   const alfaN = probed.ok ? probed.total : 0;
   const short = alfaN > 0 && disk < alfaN;
   stampCustomerSync(cid, {
-    lessonsAlfa: probed.ok ? alfaN : undefined,
-    lessonsAlfaAt: probed.ok ? at : undefined,
+    lessonsDisk: disk,
+    lessonsAt: at,
+    ...(probed.ok ? { lessonsAlfa: alfaN, lessonsAlfaAt: at } : {}),
     ...(short ? { lessonsFull: false } : {}),
     ...(balance
       ? { paysAt: at, ...(recheck && !short ? { paysRecheckAt: at, lessonsRecheckAt: at } : {}) }
@@ -1260,8 +1267,8 @@ export async function journalPull(opts: {
     const alfaN = probed.ok ? probed.total : 0;
     const short = alfaN > 0 && disk < alfaN;
     stampCustomerSync(one.cid, {
-      lessonsAlfa: probed.ok ? alfaN : undefined,
-      lessonsAlfaAt: new Date().toISOString(),
+      lessonsDisk: disk,
+      ...(probed.ok ? { lessonsAlfa: alfaN, lessonsAlfaAt: new Date().toISOString() } : {}),
       ...(short ? { lessonsFull: false } : {}),
     });
     const name = fioOf(one.cid);

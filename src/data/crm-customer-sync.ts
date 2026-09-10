@@ -22,6 +22,8 @@ export type CustomerSyncStamp = {
   /** Сколько занятий Alfa отдаёт по customer_id (сверка с диском). */
   lessonsAlfa?: number;
   lessonsAlfaAt?: string;
+  /** Сколько занятий на диске после последней загрузки/перепроверки. */
+  lessonsDisk?: number;
 };
 
 type Store = { at: string; byId: Record<string, CustomerSyncStamp> };
