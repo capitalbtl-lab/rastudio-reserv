@@ -455,7 +455,6 @@ export function groupFillRow(g: JournalPullGroup) {
 }
 
 export function journalPullProgress() {
-  loadCustomerCalendar(0);
   const groups = journalPullGroups();
   const nMap = pupilLinkCountMap("1");
   const rows = groups.map((g) => {
@@ -527,16 +526,15 @@ export function journalPullProgress() {
       const d = findDossier({ crmId: p.cid });
       const links = d?.groupLinks || [];
       const own = groups.filter((g) => links.some((l) => Number(l.id) === g.groupId && (!l.branchId || l.branchId === g.branchId)));
-      const diskN = loadCustomerCalendar(p.cid).length;
       const alfaN = Number(sync.lessonsAlfa) || 0;
-      const short = alfaN > 0 && diskN < alfaN;
+      const short = Boolean(sync.lessonsAlfaAt) && !sync.lessonsFull;
       const journal = Boolean(sync.lessonsFull && sync.lessonsAttend) && !short;
       const pays = isPayJournalComplete(p.cid);
       const name = fioOf(p.cid);
       const glist = groupsOfStudent(p.cid).slice(0, 3);
       const gnames = glist.join(", ") || own.map((g) => g.name).filter(Boolean).slice(0, 3).join(", ");
       if (journal) journalDone += 1;
-      else missJ.push({ id: p.cid, name, extra: short ? `на диске ${diskN}, в Alfa ${alfaN}` : gnames ? gnames : own.length ? "группы ещё не сверены" : "нет полного журнала" });
+      else missJ.push({ id: p.cid, name, extra: short ? `в Alfa ${alfaN}` : gnames ? gnames : own.length ? "группы ещё не сверены" : "нет полного журнала" });
       if (journal && pays) cardDone += 1;
       else missC.push({ id: p.cid, name, extra: journal ? "нет кассы" : gnames || (own.length ? "группы ещё не сверены" : "нет явки") });
       peopleRows.push({
@@ -544,14 +542,14 @@ export function journalPullProgress() {
         branchId: p.branchId,
         name,
         groups: glist.length ? glist : own.map((g) => g.name).filter(Boolean).slice(0, 3),
-        lessons: diskN,
+        lessons: alfaN,
         alfa: alfaN || undefined,
         short,
         journal,
         pays,
         rechecked: Boolean(sync.lessonsRecheckAt) && !short,
         paysRechecked: Boolean(sync.paysRecheckAt),
-        extra: short ? `на диске ${diskN} · в Alfa ${alfaN}` : gnames,
+        extra: short ? `в Alfa ${alfaN}` : gnames,
         at: sync.lessonsAt || "",
       });
     }
