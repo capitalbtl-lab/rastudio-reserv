@@ -35,8 +35,10 @@ jobs:
           script_stop: true
           command_timeout: 10m
           script: |
+            rm -f /tmp/rastudio-deploy.lock
             cd /var/www/rastudio
-            bash scripts/beget-deploy.sh --force
+            git fetch origin main && git reset --hard origin/main
+            env RA_DEPLOY_REEXEC=1 RA_DEPLOY_BG=1 bash scripts/beget-deploy.sh --force
 
   production:
     name: Vercel production

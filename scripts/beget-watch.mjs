@@ -1,5 +1,5 @@
 /**
- * На Beget: раз в минуту смотрит origin/main и выкатывает, если появился новый коммит.
+ * На Beget: сразу после пуша в origin/main выкатывает. Без минутного ожидания.
  * После первого запуска SSH больше не нужен.
  */
 import { execFile } from "node:child_process";
@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const INTERVAL_MS = 60_000;
+const INTERVAL_MS = 8_000;
 const LOCK = "/tmp/rastudio-deploy.lock";
 let busy = false;
 
@@ -84,6 +84,6 @@ async function tick() {
   }
 }
 
-console.log("[deploy] слежу за origin/main каждые 60 с");
+console.log("[deploy] слежу за origin/main каждые 8 с — пуш сразу в сборку");
 void tick();
 setInterval(() => void tick(), INTERVAL_MS);

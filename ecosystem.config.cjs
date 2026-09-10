@@ -59,7 +59,7 @@ module.exports = {
       autorestart: true,
       max_restarts: 8,
       min_uptime: 30000,
-      restart_delay: 60000,
+      restart_delay: 5000,
       env: {
         NODE_ENV: "production",
       },

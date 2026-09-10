@@ -14,7 +14,8 @@ describe("автовыкладка Beget", () => {
     assert.match(watch, /RA_DEPLOY_BG/);
     assert.match(sh, /status.*online/);
     assert.doesNotMatch(sh, /pm2 restart rastudio-deploy --update-env/);
-    assert.match(watch, /building\(\)/);
+    assert.match(watch, /INTERVAL_MS = 8_000/);
+    assert.match(watch, /каждые 8 с/);
     assert.match(watch, /return lockHeld\(\)/);
     assert.doesNotMatch(watch, /\.build-stage", "package\.json"\)/);
     assert.match(sh, /fail_cleanup/);
