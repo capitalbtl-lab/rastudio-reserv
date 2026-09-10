@@ -234,7 +234,10 @@ describe("форма занятия карточки", () => {
     assert.match(sched, /maskHm/);
     assert.match(sched, /maskRuDate/);
     assert.match(sched, /Сохранить на сайте/);
-    assert.match(sched, /Экспорт в AlfaCRM/);
+    assert.match(sched, /Экспорт в АСРМ/);
+    assert.match(sched, /Очередь на экспорт/);
+    assert.match(sched, /Экспортировать сейчас/);
+    assert.match(sched, /flush: mode === "now"/);
     const disk = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(disk, /parseDossierRegular/);

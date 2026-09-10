@@ -138,8 +138,9 @@ function finishExportJob(job: CrmExportJob, note: string) {
   saveExport(q);
 }
 
-export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: { lean?: boolean }) {
+export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: { lean?: boolean; match?: (j: CrmExportJob) => boolean }) {
   const lean = Boolean(opts?.lean);
+  const match = opts?.match;
   if (!lean) {
     if (!g.__raPayTestKick) {
       g.__raPayTestKick = true;
@@ -185,7 +186,7 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: {
       }
     }
     let q = loadExport();
-    const runnable = q.jobs.filter((j) => canRunExportJob(j) && wantAlfaPush(j.op, j.body));
+    const runnable = q.jobs.filter((j) => canRunExportJob(j) && wantAlfaPush(j.op, j.body) && (!match || match(j)));
     const preferred = preferOp ? runnable.filter((j) => j.op === preferOp) : [];
     const first = preferred[0] || runnable[0] || q.jobs.find((j) => canRunExportJob(j) && wantAlfaPush(j.op, j.body)) || q.jobs.find(canRunExportJob);
     const n = isSingleExportOp(first?.op || "group.update") ? 1 : Math.max(1, take);
@@ -488,4 +489,23 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: {
     g.__raCrmExportBusyAt = 0;
     followExport();
   }
+}
+
+export async function flushExportJobs(match: (j: CrmExportJob) => boolean, max = 16) {
+  const { alfaLinkedNow } = await import("./crm-alfa-link");
+  if (!alfaLinkedNow()) {
+    return { flushed: 0, left: loadExport().jobs.filter(match).length, error: "Фон с AlfaCRM выключен — в очередь записали, в АСРМ не ушло." };
+  }
+  let flushed = 0;
+  for (let i = 0; i < max; i += 1) {
+    const mine = loadExport().jobs.filter((j) => canRunExportJob(j) && match(j));
+    if (!mine.length) break;
+    if (g.__raCrmExportBusy) {
+      await new Promise((r) => setTimeout(r, 350));
+      continue;
+    }
+    await tickExportQueue(1, mine[0].op, { lean: true, match });
+    flushed += 1;
+  }
+  return { flushed, left: loadExport().jobs.filter(match).length };
 }

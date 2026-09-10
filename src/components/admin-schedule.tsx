@@ -347,6 +347,7 @@ type GroupDetail = {
   archive: GroupMember[];
   saving: boolean;
   error?: string;
+  note?: string;
   slot: CrmSlot;
   tariffId: number;
   tariffs: { id: number; name: string; price: number; lessonsCount: number; duration: number; fit?: boolean }[];
@@ -726,6 +727,7 @@ export function AdminSchedule() {
   const [nextPullAt, setNextPullAt] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [exportMenu, setExportMenu] = useState(false);
   const [openSchool, setOpenSchool] = useState("");
   const [openCourse, setOpenCourse] = useState("");
   const [openAll, setOpenAll] = useState(false);
@@ -1439,9 +1441,10 @@ export function AdminSchedule() {
     };
   }
 
-  async function saveDetail() {
+  async function saveDetail(mode: "queue" | "now" = "queue") {
     if (!detail) return;
-    setDetail((d) => (d ? { ...d, saving: true, error: "" } : d));
+    setExportMenu(false);
+    setDetail((d) => (d ? { ...d, saving: true, error: "", note: "" } : d));
     const slot = slotFromDetail(detail);
     const nextSlots = slots.map((s) => (s.id === slot.id ? slot : s));
     const site = await adminSchedule({ data: { token: token(), action: "save", slots: nextSlots } as never });
@@ -1475,25 +1478,37 @@ export function AdminSchedule() {
         teacher: detail.slot.teacher,
         teacherId: detail.slot.teacherId,
         teacherIds: detail.slot.teacherIds,
+        flush: mode === "now",
       } as never,
     });
     take(res as never);
     if (!res.ok) {
-      setDetail((d) => (d ? { ...d, saving: false, error: res.error || "AlfaCRM не приняла группу." } : d));
-      setMsg(res.error || "AlfaCRM не приняла группу.");
+      setDetail((d) => (d ? { ...d, saving: false, error: res.error || "АСРМ не приняла группу." } : d));
+      setMsg(res.error || "АСРМ не приняла группу.");
       return;
     }
-    const extra = res as { groupId?: number; slots?: CrmSlot[]; queued?: boolean; local?: boolean; error?: string };
+    const extra = res as { groupId?: number; slots?: CrmSlot[]; queued?: boolean; local?: boolean; error?: string; extra?: string; flushed?: boolean; pending?: number };
     const gid = Number(extra.groupId || detail.groupId || 0);
     const nextSlot = (extra.slots || []).find((s) => s.id === detail.id);
     const period = defaultPeriod(nextSlot?.bDate || detail.bDate, nextSlot?.eDate || detail.eDate);
     const warn = String(extra.error || "");
+    const note =
+      extra.extra ||
+      warn ||
+      (mode === "now"
+        ? extra.pending
+          ? `В АСРМ не ушло, в очереди ${extra.pending}.`
+          : "Отправлено в АСРМ."
+        : detail.groupId
+          ? "В очереди на экспорт в АСРМ."
+          : "Создание группы в очереди АСРМ.");
     setDetail((d) =>
       d
         ? {
             ...d,
             saving: false,
             error: warn,
+            note: warn ? "" : note,
             groupId: gid || d.groupId,
             slot: nextSlot || d.slot,
             subjectId: nextSlot?.subjectId || d.subjectId,
@@ -1504,17 +1519,7 @@ export function AdminSchedule() {
           }
         : d,
     );
-    setMsg(
-      warn
-        ? warn
-        : extra.local || extra.queued
-          ? detail.groupId
-            ? "На сайте, AlfaCRM в очереди."
-            : "На сайте, создание группы в очереди AlfaCRM."
-          : detail.groupId
-            ? "Подробности группы сохранены в AlfaCRM."
-            : `Группа создана в AlfaCRM · gid ${gid}.`,
-    );
+    setMsg(note);
   }
 
   async function saveDetailSite() {
@@ -3682,16 +3687,36 @@ export function AdminSchedule() {
                     >
                       {detail.saving ? "…" : "Сохранить на сайте"}
                     </button>
+                    <div className="relative">
                     <button
                       type="button"
                       disabled={detail.saving}
-                      title={detail.groupId ? "Экспорт в AlfaCRM" : "Создать группу в AlfaCRM"}
+                      title="Экспорт в АСРМ"
                       className="h-8 whitespace-nowrap rounded-full bg-primary px-3 text-[0.72rem] font-semibold text-white disabled:opacity-50"
-                      onClick={() => void saveDetail()}
+                      onClick={() => setExportMenu((v) => !v)}
                     >
-                      {detail.saving ? "…" : "Экспорт в AlfaCRM"}
+                      {detail.saving ? "…" : "Экспорт в АСРМ"}
                     </button>
-                    <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full bg-white text-lg leading-none text-muted ring-1 ring-black/8 hover:text-fg" onClick={() => { setPupil(null); resetAddPupil(); setNameEdit(false); setDetail(null); }} aria-label="Закрыть">
+                    {exportMenu ? (
+                      <div className={cn("absolute right-0 top-full z-50 mt-1 min-w-[13.5rem] overflow-hidden p-1", RA_POP)}>
+                        <button
+                          type="button"
+                          className="block w-full rounded-lg px-3 py-2 text-left text-[0.78rem] font-semibold hover:bg-black/[0.04]"
+                          onClick={() => void saveDetail("queue")}
+                        >
+                          Очередь на экспорт
+                        </button>
+                        <button
+                          type="button"
+                          className="block w-full rounded-lg px-3 py-2 text-left text-[0.78rem] font-semibold hover:bg-black/[0.04]"
+                          onClick={() => void saveDetail("now")}
+                        >
+                          Экспортировать сейчас
+                        </button>
+                      </div>
+                    ) : null}
+                    </div>
+                    <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full bg-white text-lg leading-none text-muted ring-1 ring-black/8 hover:text-fg" onClick={() => { setPupil(null); resetAddPupil(); setNameEdit(false); setExportMenu(false); setDetail(null); }} aria-label="Закрыть">
                       ×
                     </button>
                       </div>
@@ -3750,6 +3775,7 @@ export function AdminSchedule() {
                       {creatingSubject ? "Создаём…" : `Создать «${subjectOffer.wanted}»`}
                     </button>
                     {detail.error ? <p className="mt-2 text-sm font-semibold text-red-800">{detail.error}</p> : null}
+                    {detail.note ? <p className="mt-2 text-sm font-semibold text-emerald-800">{detail.note}</p> : null}
                   </div>
                 ) : null}
                 <div className="pretty-scroll mt-3 min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-x-none px-4 pb-5 md:px-5">
@@ -4162,8 +4188,9 @@ export function AdminSchedule() {
                       ) : null}
                       </div>
                     {detail.error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700 ring-1 ring-red-100">{detail.error}</p> : null}
+                    {detail.note ? <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 ring-1 ring-emerald-100">{detail.note}</p> : null}
                     {!detail.groupId ? (
-                      <p className="rounded-xl bg-white/80 px-3 py-2 text-sm text-muted ring-1 ring-black/5">Группа пока только на сайте. «Сохранить на сайте» пишет слот. «Экспорт в AlfaCRM» ставит группу в очередь — нужен предмет филиала. Без предмета не создаём, имя курса не подставляем.</p>
+                      <p className="rounded-xl bg-white/80 px-3 py-2 text-sm text-muted ring-1 ring-black/5">Группа пока только на сайте. «Сохранить на сайте» пишет слот. «Экспорт в АСРМ» — очередь или сразу в CRM. Без предмета не создаём, имя курса не подставляем.</p>
                     ) : null}
                     </div>
                   {showField("members") || showField("leads") || showField("archive") || addPupil ? (

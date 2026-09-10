@@ -3297,6 +3297,22 @@ export const adminSchedule = createServerFn({ method: "POST" })
         (gid ? current.find((s) => s.groupId === gid) : undefined);
       if (!found) return { ok: false as const, error: "Группа не найдена в расписании на сайте." };
       branch = Number(found.branchId) || branch;
+      const wantFlush = Boolean((data as { flush?: boolean }).flush);
+      const finishQueue = async (saved: CrmSlot[], extra: Record<string, unknown>, gidNow: number) => {
+        if (!wantFlush) return pack(saved, extra);
+        const { flushExportJobs } = await import("./crm-export-queue");
+        const r = await flushExportJobs((j) => {
+          if (Number(j.branchId) !== branch) return false;
+          if (j.op === "group.update" && Number(j.entityId) === gidNow) return true;
+          if (j.op === "group.create" && String(j.body.slotId || "") === found.id) return true;
+          if (j.op === "regular-lesson.update" || j.op === "regular-lesson.create") {
+            return Number(j.body.related_id) === gidNow || (gidNow > 0 && Number(j.entityId) === gidNow);
+          }
+          return false;
+        });
+        const note = r.error || (r.left ? `в АСРМ не ушло, в очереди ${r.left}` : "отправлено в АСРМ");
+        return pack(saved, { ...extra, flushed: true, pending: r.left, extra: note, error: r.error || (r.left ? note : "") });
+      };
       const subject = loadSubjects().find((x) => x.id === (subjectId || found.subjectId));
       const teacherIds = Array.isArray(data.teacherIds)
         ? data.teacherIds.map(Number).filter((n) => n > 0)
@@ -3469,7 +3485,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           });
         }
         logAdmin(`Группа ${gid}: на сайте, выгрузка в очередь`);
-        return pack(saved, { groupId: gid, queued: true });
+        return await finishQueue(saved, { groupId: gid, queued: true }, gid);
       }
       const saved = saveAdminSlots(patched).slots;
       const sid = Number(subjectId || found.subjectId || 0);
@@ -3514,7 +3530,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         },
       });
       logAdmin(`Группа ${found.id}: на сайте, создание в очереди Alfa`);
-      return pack(saved, { queued: true, local: true });
+      return await finishQueue(saved, { queued: true, local: true }, 0);
     }
     if (data.action === "rollback" && data.at) {
       const prev = versionSlots(data.at);

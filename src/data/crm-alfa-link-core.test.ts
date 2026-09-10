@@ -118,7 +118,8 @@ describe("режим фона с AlfaCRM", () => {
     assert.match(exp, /recoverCreatedPay/);
     assert.match(exp, /verifyCreate/);
     assert.match(exp, /instantPay/);
-    assert.match(exp, /lean: true/);
+    assert.match(exp, /flushExportJobs/);
+    assert.match(exp, /opts\?\.match/);
     const alfa = readFileSync(new URL("./alfacrm.ts", import.meta.url), "utf8");
     assert.match(alfa, /waitSharedGap/);
     assert.match(alfa, /loginFetch/);
