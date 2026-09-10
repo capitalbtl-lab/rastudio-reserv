@@ -110,7 +110,8 @@ describe("перепроверка журнала", () => {
     assert.match(ui, /holdFill/);
     assert.match(ui, /colLock/);
     assert.match(ui, /Сверить счёт/);
-    assert.match(ui, /Перепроверить всех текущих/);
+    assert.match(ui, /Перепроверить загруженных/);
+    assert.match(ui, /PEOPLE_LOAD_GAP_MS = 3000/);
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(api, /"union"/);
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");

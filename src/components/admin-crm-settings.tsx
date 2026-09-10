@@ -92,6 +92,7 @@ const HIST_TABS: { id: HistTab; label: string }[] = [
   { id: "groups", label: "Шаг 2 · Занятия в группах" },
   { id: "money", label: "Шаг 3 · Деньги на карточке" },
 ];
+const PEOPLE_LOAD_GAP_MS = 3000;
 
 type StudentHit = {
   cid: number;
@@ -1544,6 +1545,13 @@ export function AdminCrmSettings() {
         setFillLoading({ kind, label: row.name, customerId: row.cid });
         await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind) });
         n += 1;
+        if (kind === "students" && i < queue.length - 1 && !stopSchool.current) {
+          setSchoolRun({ cur: `${row.name} · пауза 3 с`, n: i + 1, total: queue.length });
+          const until = Date.now() + PEOPLE_LOAD_GAP_MS;
+          while (Date.now() < until && !stopSchool.current) {
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        }
       }
     } finally {
       holdFill.current = false;
@@ -2311,7 +2319,7 @@ export function AdminCrmSettings() {
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Календарь ученика</p>
                 <p className="mt-1 text-sm text-muted">
-                  «Всё есть» только если загружен личный журнал, не из зелёных групп. «Сверить счёт» — лёгкий запрос: сколько в Alfa и сколько на диске. Если в Alfa больше — жёлтый, «Добрать». Когда слева никого нет — синяя кнопка перепроверяет всех.
+                  «Всё есть» только если загружен личный журнал, не из зелёных групп. «Догрузить текущих» берёт учеников слева по одному, пауза 3 с. Когда левый блок пуст — кнопка «Перепроверить загруженных». «Сверить счёт» — сколько в Alfa и на диске.
                 </p>
                 <div className="mt-3">
                   <ScopePills
@@ -2341,9 +2349,7 @@ export function AdminCrmSettings() {
                           {run && schoolRun
                             ? `Очередь ${schoolRun.n}/${schoolRun.total}`
                             : allIn
-                              ? peopleStudy === "2"
-                                ? "Перепроверить всех архивных"
-                                : "Перепроверить всех текущих"
+                              ? "Перепроверить загруженных"
                               : peopleStudy === "2"
                                 ? "Догрузить архивных"
                                 : "Догрузить текущих"}
