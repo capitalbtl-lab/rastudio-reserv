@@ -375,60 +375,34 @@ export function groupFillRow(g: JournalPullGroup) {
   const periods = journalPeriods();
   const card = loadGroupCard(g.branchId, g.groupId);
   const done = pulledPeriodKeys(card?.journalFill);
-  const span = spanOf(card?.calendar);
   const fail = card?.journalFill?.fail || {};
   const weak = new Set(card?.journalFill?.weak || []);
   const life = groupLife(g);
-  const clipFrom = earlierRu(life.from, span.fromRu);
-  const clipTo = laterRu(life.to, span.toRu);
-  const age = groupAge(clipFrom || life.from, clipTo || life.to);
+  const clipFrom = life.from;
+  const clipTo = life.to;
+  const age = groupAge(clipFrom, clipTo);
   const known = Boolean(clipFrom || clipTo);
-  const byQ = new Map<string, number>();
-  for (const l of card?.calendar || []) {
-    const d = l.date;
-    for (const p of periods) {
-      if (inPeriod(d, p.from, p.to)) {
-        byQ.set(p.key, (byQ.get(p.key) || 0) + 1);
-        break;
-      }
-    }
-  }
   const pulledAt = card?.journalFill?.pulled || {};
   const recheckedSet = new Set(card?.journalFill?.rechecked || []);
-  const allParts = periods.map((p) => {
-    const inQ = (card?.calendar || []).filter((l) => inPeriod(l.date, p.from, p.to));
-    const needDetails = inQ.filter(lessonNeedsHomework).length;
-    const conducted = inQ.filter((l) => Number(l.status) === 3).length;
-    const at = String(pulledAt[p.key] || "");
-    return {
-      key: p.key,
-      label: p.label,
-      from: p.from,
-      to: p.to,
-      done: done.includes(p.key) && !weak.has(p.key),
-      weak: weak.has(p.key),
-      rechecked: recheckedSet.has(p.key) && !weak.has(p.key),
-      lessons: byQ.get(p.key) || 0,
-      err: fail[p.key] || "",
-      at,
-      needDetails,
-      conducted,
-    };
-  });
+  const allParts = periods.map((p) => ({
+    key: p.key,
+    label: p.label,
+    from: p.from,
+    to: p.to,
+    done: done.includes(p.key) && !weak.has(p.key),
+    weak: weak.has(p.key),
+    rechecked: recheckedSet.has(p.key) && !weak.has(p.key),
+    lessons: 0,
+    err: fail[p.key] || "",
+    at: String(pulledAt[p.key] || ""),
+    needDetails: 0,
+    conducted: 0,
+  }));
   const parts = known ? allParts.filter((p) => chunkOverlapsLife(p, clipFrom, clipTo)) : allParts.slice(0, 4);
   const next = parts.find((p) => !p.done);
-  const weight = span.lessons >= 120 ? "тяжёлая" : span.lessons >= 40 ? "средняя" : done.length ? "лёгкая" : "";
   const lifeTxt = lifeLabel(life.from, life.to);
   const src = life.source === "alfa" ? "по журналу Alfa" : life.source === "slot" ? "по расписанию" : "";
-  const fromLabel = !known
-    ? "срок неизвестен — сначала определите сроки"
-    : span.from
-      ? span.to && span.to !== span.from
-        ? `на сайте ${span.from}–${span.to}`
-        : `на сайте с ${span.from}`
-      : lifeTxt
-        ? `${src} ${lifeTxt}`.trim()
-        : "ещё не загружали";
+  const fromLabel = !known ? "срок неизвестен — сначала определите сроки" : lifeTxt ? `${src} ${lifeTxt}`.trim() : "ещё не загружали";
   const complete = parts.length > 0 && parts.every((p) => p.done);
   return {
     groupId: g.groupId,
@@ -436,18 +410,18 @@ export function groupFillRow(g: JournalPullGroup) {
     name: g.name,
     school: g.school,
     archived: g.archived,
-    lessons: span.lessons,
+    lessons: 0,
     done: parts.filter((p) => p.done).length,
     total: parts.length,
     next: next?.label || "",
     nextKey: next?.key || "",
     from: fromLabel,
-    weight,
+    weight: "",
     complete,
     age: age.id,
     ageLabel: age.label,
     life: lifeTxt,
-    extra: complete ? "вся информация загружена" : [age.label, lifeTxt, src, span.lessons ? `${span.lessons} зан.` : "", weight].filter(Boolean).join(" · "),
+    extra: complete ? "вся информация загружена" : [age.label, lifeTxt, src].filter(Boolean).join(" · "),
     err: next && fail[next.key] ? fail[next.key] : "",
     source: life.source,
     parts,

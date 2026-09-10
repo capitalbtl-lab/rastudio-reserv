@@ -79,6 +79,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /emptySide/);
     assert.doesNotMatch(pull, /loadCustomerCalendar\(0\)/);
     assert.doesNotMatch(pull, /loadCustomerCalendar\(p\.cid\)/);
+    assert.doesNotMatch(pull, /const byQ = new Map/);
+    assert.doesNotMatch(pull, /inQ\.filter\(lessonNeedsHomework\)/);
     assert.match(ui, /Загрузить снова/);
     assert.match(ui, /lastArchives/);
     assert.match(ui, /lastLife/);
