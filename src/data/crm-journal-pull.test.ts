@@ -59,7 +59,8 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(pull, /a\.done - b\.done/);
     assert.match(pull, /kind === "details"/);
     assert.match(pull, /clampGrain/);
-    assert.match(ui, /Перепроверить школу|Перепроверить все группы/);
+    assert.match(ui, /Загрузить по одному/);
+    assert.match(ui, /HINT\.loadOneGroups/);
     assert.match(ui, /Найти группу/);
     assert.match(ui, /Требуют загрузки данных/);
     assert.match(ui, /Загрузка данных завершена/);
@@ -106,7 +107,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /молод/);
     assert.match(ui, /GroupFillList/);
     assert.match(ui, /I квартал|Квартал/);
-    assert.match(ui, /Порция за одно нажатие/);
+    assert.match(ui, /HINT\.grain/);
+    assert.match(ui, /Год \(молодые\)/);
+    assert.match(ui, /GrainSelect/);
     assert.match(ui, /сверено/);
     assert.match(ui, /пропусков не обнаружено|дубликатов нет/);
     assert.match(ui, /HIST_TABS/);
@@ -131,7 +134,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Найти ученика/);
     assert.match(ui, /Загрузить календарь/);
     assert.match(ui, /Загрузить кассу/);
-    assert.match(ui, /Перепроверить текущих/);
+    assert.match(ui, /years=\{/);
+    assert.match(ui, /onGrain/);
     assert.match(ui, /loadPerson/);
     assert.match(pull, /people: peopleRows/);
     assert.match(pull, /lessonsRecheckAt/);
