@@ -88,9 +88,9 @@ const CRM_SET_TABS = [
 type CrmSetTab = (typeof CRM_SET_TABS)[number]["id"];
 type HistTab = "groups" | "students" | "money";
 const HIST_TABS: { id: HistTab; label: string }[] = [
-  { id: "groups", label: "Занятия в группах" },
-  { id: "students", label: "Календарь ученика" },
-  { id: "money", label: "Деньги на карточке" },
+  { id: "students", label: "Шаг 1 · Календарь ученика" },
+  { id: "groups", label: "Шаг 2 · Занятия в группах" },
+  { id: "money", label: "Шаг 3 · Деньги на карточке" },
 ];
 
 type StudentHit = {
@@ -1094,7 +1094,7 @@ export function AdminCrmSettings() {
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
   const [crmTab, setCrmTab] = useState<CrmSetTab>("history");
-  const [histTab, setHistTab] = useState<HistTab>("groups");
+  const [histTab, setHistTab] = useState<HistTab>("students");
   const crmTabsRef = useRef<HTMLDivElement>(null);
   const histTabsRef = useRef<HTMLDivElement>(null);
   const tabLockY = useRef<number | null>(null);

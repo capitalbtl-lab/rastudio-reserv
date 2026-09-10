@@ -93,8 +93,10 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /сверено/);
     assert.match(ui, /пропусков не обнаружено|дубликатов нет/);
     assert.match(ui, /HIST_TABS/);
-    assert.match(ui, /Календарь ученика/);
-    assert.match(ui, /Деньги на карточке/);
+    assert.match(ui, /Шаг 1 · Календарь ученика/);
+    assert.match(ui, /Шаг 2 · Занятия в группах/);
+    assert.match(ui, /Шаг 3 · Деньги на карточке/);
+    assert.match(ui, /useState<HistTab>\("students"\)/);
     assert.match(ui, /На странице/);
     assert.match(ui, /pageWithPinned/);
     assert.match(ui, /byFillName/);
