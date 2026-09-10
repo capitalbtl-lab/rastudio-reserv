@@ -51,6 +51,10 @@ type StudentHit = {
   groups: string[];
   lessons: number;
   pays: number;
+  paysOk?: boolean;
+  paysMore?: boolean;
+  rechecked?: boolean;
+  paysRechecked?: boolean;
   done: boolean;
   ok: boolean;
   alfa?: number;
@@ -840,7 +844,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   const alfa0 = first.ok ? first.total : 0;
   if (!recheck && first.ok && disk >= alfa0) {
     mark(disk, alfa0, true);
-    if (!balance) return { cid, lessons: disk, done: true, pays: 0, tariffs: 0, alfa: alfa0, short: false, blocked: false };
+    if (!balance) return { cid, lessons: disk, done: true, pays: 0, tariffs: 0, alfa: alfa0, short: false, blocked: false, paysOk: false, paysMore: false, rechecked: Boolean(customerSyncOf(cid).lessonsRecheckAt), paysRechecked: false };
   } else {
     const res = await inboundCustomerLessons(branchId, cid, {
       take: 8,
@@ -853,7 +857,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     }).catch(() => ({ count: 0, done: true as const, skipped: undefined as string | undefined }));
     lessons += Number(res.count) || 0;
     if ("skipped" in res && res.skipped === "busy") {
-      return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, blocked: true };
+      return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
     }
     disk = loadCustomerCalendar(cid).length;
     const probed = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
@@ -861,19 +865,21 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   }
   let pays = 0;
   let tariffs = 0;
+  let paysOk = false;
   if (balance) {
     const { token, request } = await import("./alfacrm");
     const t = await token();
-    const { inboundCustomerPays, paysOf } = await import("./crm-pay");
+    const { inboundCustomerPays, paysOf, isPayJournalComplete } = await import("./crm-pay");
     await inboundCustomerPays(request, t, branchId, cid);
     pays = paysOf(cid).length;
+    paysOk = isPayJournalComplete(cid);
     const { pullCustomerTariffs } = await import("./pupil-tariffs");
     const rows = await pullCustomerTariffs(branchId, cid).catch(() => []);
     tariffs = rows.length;
-    const sync = customerSyncOf(cid);
+    const syncNow = customerSyncOf(cid);
     const diskNow = loadCustomerCalendar(cid).length;
-    const alfaNow = Number(sync.lessonsAlfa) || 0;
-    mark(diskNow, alfaNow, Boolean(sync.lessonsAlfaAt));
+    const alfaNow = Number(syncNow.lessonsAlfa) || 0;
+    mark(diskNow, alfaNow, Boolean(syncNow.lessonsAlfaAt));
   }
   const sync = customerSyncOf(cid);
   const short = lessonsCountShort(Number(sync.lessonsDisk) || 0, Number(sync.lessonsAlfa) || 0, Boolean(sync.lessonsAlfaAt));
@@ -886,6 +892,10 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     alfa: Number(sync.lessonsAlfa) || 0,
     short,
     blocked: false,
+    paysOk,
+    paysMore: Boolean(balance && !paysOk),
+    rechecked: Boolean(sync.lessonsRecheckAt) && !short,
+    paysRechecked: Boolean(sync.paysRecheckAt),
   };
 }
 
@@ -1430,6 +1440,10 @@ export async function journalPull(opts: {
       groups: gnames,
       lessons: row.lessons,
       pays: row.pays,
+      paysOk: balance ? Boolean(row.paysOk) : undefined,
+      paysMore: Boolean(row.paysMore),
+      rechecked: Boolean(row.rechecked),
+      paysRechecked: Boolean(row.paysRechecked),
       done: row.done,
       ok: landed,
       alfa: row.alfa,
@@ -1447,8 +1461,10 @@ export async function journalPull(opts: {
     };
     store.note = row.short
       ? `${who}: ${name} · на диске ${loadCustomerCalendar(one.cid).length} · в Alfa ${row.alfa} — не хватает, добрать`
+      : row.paysMore
+      ? `${who}: ${name} · касса: ещё страницы, нажмите снова`
       : landed
-      ? `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · ${row.lessons} зан.${row.alfa ? ` · Alfa ${row.alfa}` : ""}`
+      ? `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · ${row.lessons} зан.${row.alfa ? ` · Alfa ${row.alfa}` : ""}${balance && row.paysOk ? " · касса готова" : ""}`
       : `${who}: ${name}${gnames.length ? ` · ${gnames.slice(0, 2).join(", ")}` : ""} · не попал в выдачу${row.done ? " (Alfa пусто)" : " (обрыв)"}`;
     store.at = new Date().toISOString();
     saveStore(store);

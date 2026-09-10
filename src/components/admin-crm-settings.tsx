@@ -234,6 +234,10 @@ type StudentHit = {
   groups: string[];
   lessons: number;
   pays?: number;
+  paysOk?: boolean;
+  paysMore?: boolean;
+  rechecked?: boolean;
+  paysRechecked?: boolean;
   done: boolean;
   ok: boolean;
   alfa?: number;
@@ -250,6 +254,7 @@ type PeopleRow = {
   short?: boolean;
   journal?: boolean;
   pays?: boolean;
+  paysMore?: boolean;
   rechecked?: boolean;
   paysRechecked?: boolean;
   extra?: string;
@@ -805,13 +810,25 @@ function patchPeopleSide(
     const journal = Boolean(hit.ok) && !short;
     const disk = Number(hit.lessons) || p.lessons;
     const alfa = hit.alfa != null ? hit.alfa : p.alfa;
+    const pays = hit.paysOk != null ? Boolean(hit.paysOk) : p.pays;
+    const rechecked = hit.rechecked != null ? Boolean(hit.rechecked) : p.rechecked;
+    const paysRechecked = hit.paysRechecked != null ? Boolean(hit.paysRechecked) : p.paysRechecked;
+    const extra = hit.paysMore
+      ? `касса: ещё страницы, нажмите снова · на диске ${disk}${alfa != null ? ` · в Alfa ${alfa}` : ""}`
+      : alfa != null
+        ? `на диске ${disk} · в Alfa ${alfa}`
+        : p.extra;
     return {
       ...p,
       lessons: disk,
       alfa,
       short,
       journal,
-      extra: alfa != null ? `на диске ${disk} · в Alfa ${alfa}` : p.extra,
+      pays,
+      paysMore: Boolean(hit.paysMore),
+      rechecked,
+      paysRechecked,
+      extra,
     };
   });
   return {
@@ -967,7 +984,9 @@ function PeopleFillList({
             ? `на диске ${row.lessons} · в Alfa ${row.alfa}`
             : "Календарь на месте"
         : kind === "balance"
-          ? "Шаг 1 · загрузить кассу"
+          ? row.paysMore
+            ? "касса: ещё страницы, нажмите снова"
+            : "Шаг 1 · загрузить кассу"
           : "Шаг 1 · загрузить календарь";
     const btn = full ? "Перепроверить" : kind === "balance" ? "Загрузить кассу" : short ? "Добрать" : "Загрузить календарь";
     return (
