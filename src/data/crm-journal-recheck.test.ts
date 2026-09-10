@@ -111,7 +111,9 @@ describe("перепроверка журнала", () => {
     assert.match(ui, /colLock/);
     assert.match(ui, /Сверить счёт/);
     assert.match(ui, /Перепроверить загруженных/);
-    assert.match(ui, /один ученик за нажатие/);
+    assert.match(ui, /PEOPLE_LOAD_GAP_MS = 3000/);
+    assert.match(ui, /пауза 3 с/);
+    assert.match(ui, /Грузим \$\{schoolRun.n\}\/\$\{schoolRun.total\}/);
     assert.match(ui, /patchPeopleSide/);
     assert.match(ui, /kind === "students" \|\| opts.kind === "balance" \? 90000/);
     const pullLock = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");

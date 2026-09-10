@@ -92,6 +92,7 @@ const HIST_TABS: { id: HistTab; label: string }[] = [
   { id: "groups", label: "Шаг 2 · Занятия в группах" },
   { id: "money", label: "Шаг 3 · Деньги на карточке" },
 ];
+const PEOPLE_LOAD_GAP_MS = 3000;
 
 type StudentHit = {
   cid: number;
@@ -1573,32 +1574,46 @@ export function AdminCrmSettings() {
     const needLoad = all.filter((r) => !peopleFinished(r, kind));
     const needRecheck = all.filter((r) => peopleNeedsRecheck(r, kind));
     const sweep = !needLoad.length;
-    const row = needLoad[0] || needRecheck[0] || all[0];
-    const left = Math.max(0, needLoad.length - (needLoad.length ? 1 : 0));
+    const auto = kind === "students" && !sweep && needLoad.length > 0;
+    const queue = auto ? needLoad : [needLoad[0] || needRecheck[0] || all[0]];
     stopSchool.current = false;
     holdFill.current = true;
     setBusy(true);
-    setSchoolRun({ cur: row.name, n: 1, total: 1 });
-    setFillLoading({ kind, label: row.name, customerId: row.cid });
-    setMsg(`${row.name}: один ученик, не пачка.`);
+    setMsg(auto ? `Догрузка: ${queue.length} по одному, пауза 3 с.` : `${queue[0]?.name}: один ученик.`);
+    setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
+    let n = 0;
     try {
-      const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind) });
-      if (!res || res.ok === false) {
-        setMsg(res?.error || "Alfa не ответила. Нажмите ещё раз — одного ученика.");
-        return;
+      for (let i = 0; i < queue.length; i += 1) {
+        if (stopSchool.current) break;
+        const row = queue[i];
+        setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
+        setFillLoading({ kind, label: row.name, customerId: row.cid });
+        const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind) });
+        if (!res || res.ok === false) {
+          setMsg(res?.error || `Остановились на «${row.name}». Нажмите ещё раз — очередь продолжится.`);
+          break;
+        }
+        n += 1;
+        if (auto && i < queue.length - 1 && !stopSchool.current) {
+          setSchoolRun({ cur: `${row.name} · пауза 3 с`, n: i + 1, total: queue.length });
+          const until = Date.now() + PEOPLE_LOAD_GAP_MS;
+          while (Date.now() < until && !stopSchool.current) {
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        }
       }
-      setMsg(
-        sweep
-          ? `${row.name}: перепроверили. Нажмите ещё раз — следующего.`
-          : left
-            ? `${row.name}: записали. Слева ещё ${left} — нажмите ещё раз, по одному.`
-            : `${row.name}: записали. Слева пусто — кнопка станет «Перепроверить загруженных».`,
-      );
     } finally {
       holdFill.current = false;
       setFillLoading(null);
       setBusy(false);
       setSchoolRun(null);
+    }
+    if (stopSchool.current) {
+      setMsg(`Остановили · прошло ${n} из ${queue.length}.`);
+      return;
+    }
+    if (n >= queue.length) {
+      setMsg(sweep ? `${n} перепроверили.` : `Догрузка закончена · ${n} учеников. Слева пусто.`);
     }
   }
 
@@ -2350,7 +2365,7 @@ export function AdminCrmSettings() {
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Календарь ученика</p>
                 <p className="mt-1 text-sm text-muted">
-                  «Догрузить текущих» — один ученик за нажатие. Счёт сошёлся (на диске не меньше, чем в Alfa) — сразу вправо, без обхода филиалов. Кто как Горбатюк 8=8, не держим слева. «Сверить счёт» тоже по одному.
+                  «Догрузить текущих» идёт по счётчику слева: один ученик, пауза 3 с, пока все не уйдут вправо. Стоп прерывает. Счёт сошёлся — сразу готово, без обхода филиалов. «Сверить счёт» — по одному.
                 </p>
                 <div className="mt-3">
                   <ScopePills
@@ -2378,7 +2393,7 @@ export function AdminCrmSettings() {
                           onClick={() => void recheckPeople("students", peopleStudy)}
                         >
                           {run && schoolRun
-                            ? `Грузим · ${schoolRun.cur}`
+                            ? `Грузим ${schoolRun.n}/${schoolRun.total}`
                             : allIn
                               ? "Перепроверить загруженных"
                               : peopleStudy === "2"
