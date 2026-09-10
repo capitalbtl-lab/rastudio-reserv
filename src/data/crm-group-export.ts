@@ -20,19 +20,30 @@ function hasOverrides(it: Record<string, unknown>) {
   return list.some((row) => row && (row.time_from_v || row.teacher_ids || row.day));
 }
 
-async function pageRegulars(branch: number, t: string) {
+async function pageRegulars(branch: number, t: string, gid: number) {
   const items: Record<string, unknown>[] = [];
+  let filtered = true;
   for (let page = 0; page < 30; page++) {
     const res = await request<{ items?: Record<string, unknown>[]; total?: number }>(
       `/v2api/${branch}/regular-lesson/index`,
-      { page, pageSize: 200 },
+      filtered
+        ? { page, pageSize: 50, group_id: gid, related_id: gid }
+        : { page, pageSize: 100 },
       t,
     );
     const batch = res.items || [];
-    items.push(...batch);
-    if (!batch.length || batch.length < 200) break;
+    const mine = batch.filter((it) => Number(it.related_id) === gid);
+    if (filtered && page === 0 && batch.length && !mine.length) {
+      filtered = false;
+      page = -1;
+      items.length = 0;
+      continue;
+    }
+    items.push(...mine);
+    if (!batch.length || batch.length < (filtered ? 50 : 100)) break;
     const total = Number(res.total || 0);
-    if (total && items.length >= total) break;
+    if (filtered && total && items.length >= total) break;
+    if (filtered && page >= 7) break;
   }
   return items;
 }
@@ -80,7 +91,7 @@ export async function inspectSlotExport(slot: CrmSlot): Promise<{
     const branches = [...new Set([branch, ...((s as { branchIds?: number[] }).branchIds || [])])].filter(Boolean);
     const seen = new Set<number>();
     for (const bid of branches) {
-      const items = await pageRegulars(bid, t);
+      const items = await pageRegulars(bid, t, gid);
       for (const it of items) {
         if (Number(it.related_id) !== gid) continue;
         const id = Number(it.id) || 0;

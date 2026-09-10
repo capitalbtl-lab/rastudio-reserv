@@ -110,5 +110,8 @@ describe("экраны не берут первый id", () => {
     assert.match(sched, /pack\.issues \|\| \[\]\)\.length \|\| pack\.suggestOwner/);
     const exp = readFileSync(new URL("./crm-group-export.ts", import.meta.url), "utf8");
     assert.match(exp, /lesson\/index/);
+    assert.match(exp, /group_id: gid/);
+    const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
+    assert.match(api, /exportMode !== "group"/);
   });
 });

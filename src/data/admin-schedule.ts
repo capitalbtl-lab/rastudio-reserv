@@ -3439,7 +3439,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           return pack(saved, { groupId: gid, queued: false, extra: "На сайте. В АСРМ не отправляли." });
         }
         const slotNow = hydrateGroupTeachers(saved.find((s) => s.id === found.id) || found);
-        if (!data.exportMode) {
+        if (exportMode !== "group") {
           const { inspectSlotExport } = await import("./crm-group-export");
           const chk = await inspectSlotExport(slotNow);
           if (!chk.allowFull) {
