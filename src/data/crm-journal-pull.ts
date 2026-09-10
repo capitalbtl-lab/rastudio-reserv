@@ -431,11 +431,47 @@ export function groupFillRow(g: JournalPullGroup) {
 export function journalPullProgress() {
   const groups = journalPullGroups();
   const nMap = pupilLinkCountMap("1");
+  const periods = journalPeriods().slice(-4);
   const rows = groups.map((g) => {
-    const row = groupFillRow(g);
     const pupilN = nMap.get(`${g.branchId}:${g.groupId}`) || 0;
-    const extra = g.archived && pupilN ? [row.extra, `с карточек учеников ${pupilN}`].filter(Boolean).join(" · ") : row.extra;
-    return { ...row, pupilN, extra };
+    const parts = periods.map((p) => ({
+      key: p.key,
+      label: p.label,
+      from: p.from,
+      to: p.to,
+      done: false,
+      weak: false,
+      rechecked: false,
+      lessons: 0,
+      err: "",
+      at: "",
+      needDetails: 0,
+      conducted: 0,
+    }));
+    const extra = [g.archived ? "архив" : "", pupilN ? `с карточек учеников ${pupilN}` : ""].filter(Boolean).join(" · ");
+    return {
+      groupId: g.groupId,
+      branchId: g.branchId,
+      name: g.name,
+      school: g.school,
+      archived: g.archived,
+      lessons: 0,
+      done: 0,
+      total: parts.length,
+      next: parts[0]?.label || "",
+      nextKey: parts[0]?.key || "",
+      from: "",
+      weight: "",
+      complete: false,
+      age: "",
+      ageLabel: "",
+      life: "",
+      extra,
+      err: "",
+      source: "",
+      parts,
+      pupilN,
+    };
   });
   rows.sort((a, b) => {
     if (Boolean(a.archived) !== Boolean(b.archived)) return Number(a.archived) - Number(b.archived);
