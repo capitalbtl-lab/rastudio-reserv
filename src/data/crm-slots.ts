@@ -819,6 +819,8 @@ function groupNoteOf(s: CrmSlot) {
 
 export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
   const { token, request, formatRuDob } = await import("@/data/alfacrm");
+  const { hydrateGroupTeachers, beatTeacherIds, ownerTeacherIdsOf, teacherIdsPayload } = await import("./crm-group-teachers-core");
+  const { inspectSlotExport } = await import("./crm-group-export");
   const t = await token();
   const pick = new Set(ids.map(String));
   const list = slots.filter((s) => pick.has(s.id));
@@ -867,6 +869,7 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
     }
     s.subjectId = subjectId;
     if (sub?.name) s.subject = sub.name;
+    Object.assign(s, hydrateGroupTeachers(s));
     const roster = teachersAtBranch(branch, listTeachers(next), next);
     const teachers = teacherIdsOfSlot(s, branch, roster);
     if (s.teacher && !teachers.length) {
@@ -876,6 +879,11 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
       s.teacherId = teachers[0];
       s.teacherIds = teachers;
     }
+    const ownerIds = teacherIdsOfSlot(
+      { teacherIds: ownerTeacherIdsOf(s), branchId: s.branchId },
+      branch,
+      roster,
+    );
     try {
       let groupId = Number(s.groupId) || 0;
       const wasNew = !groupId;
@@ -883,7 +891,6 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
       let endIso = isoDate(s.eDate || academicEndIso(startIso));
       s.bDate = ruFromIso(startIso);
       s.eDate = ruFromIso(endIso);
-      const teacherIds = teachers.map(Number).filter((n) => n > 0);
       const groupBody = {
         name: s.groupName || s.course,
         note: groupNoteOf(s),
@@ -898,7 +905,7 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
         custom_hashtagkursa: String(s.hashtags || ""),
         custom_workingout: String(s.makeup || ""),
         ...(s.levelId ? { level_id: s.levelId } : { level_id: null }),
-        ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+        ...teacherIdsPayload(ownerIds),
       };
       if (!groupId) {
         const created = await request(`/v2api/${branch}/group/create`, groupBody, t);
@@ -944,8 +951,24 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
       });
       const used = new Set<number>();
       const savedBeats: LessonBeat[] = [];
+      let allowRegulars = true;
+      let regularNote = "";
+      if (groupId) {
+        try {
+          const chk = await inspectSlotExport(s);
+          allowRegulars = chk.allowFull;
+          regularNote = chk.summary || "";
+        } catch {
+          allowRegulars = false;
+          regularNote = "Не сверили шаблон в Alfa.";
+        }
+      }
       for (const b of beats) {
         if (!b.timeFrom || !b.timeTo) {
+          savedBeats.push(b);
+          continue;
+        }
+        if (!allowRegulars) {
           savedBeats.push(b);
           continue;
         }
@@ -966,6 +989,7 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
         });
         const bDate = own.bDate;
         const eDate = own.eDate;
+        const beatIds = teacherIdsOfSlot({ teacherIds: beatTeacherIds(b, s), branchId: s.branchId }, branch, roster);
         const payload = {
           related_class: "Group",
           related_id: groupId,
@@ -980,7 +1004,7 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
           duration: durationMin(b.timeFrom, b.timeTo),
           b_date: bDate,
           e_date: eDate,
-          ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+          ...teacherIdsPayload(beatIds),
           ...(s.roomId ? { room_id: s.roomId } : {}),
         };
         if (lessonId) {
@@ -1016,7 +1040,7 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
             days: [b.day],
             time_from_v: b.timeFrom,
             time_to_v: b.timeTo,
-            ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+            ...teacherIdsPayload(beatIds),
             b_date: bDate,
             e_date: eDate,
           }).catch(() => null);
@@ -1037,7 +1061,13 @@ export async function pushSlotsToCrm(slots: CrmSlot[], ids: string[]) {
         s.lessonId = first.lessonId;
         s.timesPerWeek = savedBeats.length;
       }
-      results.push({ id: raw.id, ok: true, groupId, created: wasNew });
+      results.push({
+        id: raw.id,
+        ok: true,
+        groupId,
+        created: wasNew,
+        error: allowRegulars ? undefined : `Карточка выгружена. Шаблон не трогали: ${regularNote}`.slice(0, 220),
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "ошибка CRM";
       if (/филиал не доступен для преподавател/i.test(msg)) {

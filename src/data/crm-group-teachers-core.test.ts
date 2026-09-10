@@ -113,5 +113,10 @@ describe("экраны не берут первый id", () => {
     assert.match(exp, /group_id: gid/);
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(api, /exportMode !== "group"/);
+    const push = readFileSync(new URL("./crm-slots.ts", import.meta.url), "utf8");
+    assert.match(push, /inspectSlotExport/);
+    assert.match(push, /ownerTeacherIdsOf/);
+    const queue = readFileSync(new URL("./crm-export-queue.ts", import.meta.url), "utf8");
+    assert.match(queue, /шаблон не выгружен/);
   });
 });

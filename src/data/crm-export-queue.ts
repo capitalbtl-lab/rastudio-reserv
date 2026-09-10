@@ -203,6 +203,24 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: {
     }
     for (const job of batch) {
       try {
+        if (job.op === "regular-lesson.update" || job.op === "regular-lesson.create") {
+          const gid = Number(job.body.related_id || job.entityId) || 0;
+          if (gid) {
+            const { listAdminSlots } = await import("./alfacrm-schedule");
+            const all = listAdminSlots();
+            const slot =
+              all.find((x) => x.groupId === gid && (!job.branchId || x.branchId === job.branchId)) ||
+              all.find((x) => x.groupId === gid);
+            if (slot) {
+              const { inspectSlotExport } = await import("./crm-group-export");
+              const chk = await inspectSlotExport(slot);
+              if (!chk.allowFull) {
+                finishExportJob(job, `шаблон не выгружен: ${chk.summary || "сверка"}`);
+                continue;
+              }
+            }
+          }
+        }
         const { wantAlfaPipe } = await import("./crm-alfa-link");
         if (job.tries > 0 && wantAlfaPipe("verifyCreate")) {
           if (job.op === "pay.create") {

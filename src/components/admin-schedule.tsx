@@ -2596,7 +2596,7 @@ export function AdminSchedule() {
           const s = pack.slots?.find((x) => x.id === r.id || Number(x.groupId) === Number(r.groupId));
           const name = s?.groupName || r.id;
           if (r.ok && r.created) return `Создана «${name}» · gid ${r.groupId}`;
-          if (r.ok) return `Обновлена «${name}» · gid ${r.groupId || s?.groupId}`;
+          if (r.ok) return `Обновлена «${name}» · gid ${r.groupId || s?.groupId}${r.error ? ` · ${r.error}` : ""}`;
           return `Ошибка «${name}»: ${r.error || ""}`;
         });
         setDirty((d) => {
