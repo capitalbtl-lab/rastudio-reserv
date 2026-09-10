@@ -111,7 +111,7 @@ describe("перепроверка журнала", () => {
     assert.match(ui, /colLock/);
     assert.match(ui, /Сверить счёт/);
     assert.match(ui, /Перепроверить загруженных/);
-    assert.match(ui, /один ученик слева за нажатие/);
+    assert.match(ui, /один ученик за нажатие/);
     assert.match(ui, /patchPeopleSide/);
     assert.match(ui, /kind === "students" \|\| opts.kind === "balance" \? 90000/);
     const pullLock = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
@@ -127,7 +127,8 @@ describe("перепроверка журнала", () => {
     assert.match(api, /"union"/);
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
     assert.match(pull, /fanOutLessonWriteoffs\(calendar\)/);
-    assert.match(pull, /lessonsFull && sync\.lessonsAttend\) && !short/);
+    assert.match(pull, /lessonsJournalReady\(sync\)/);
+    assert.match(pull, /homeOnly: true/);
     assert.doesNotMatch(pull, /groupsReady/);
   });
 });

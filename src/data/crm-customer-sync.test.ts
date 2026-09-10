@@ -9,6 +9,8 @@ import {
   CUSTOMER_SYNC_TTL_MS,
   LESSON_INBOUND_RUN,
   LESSON_STATUSES,
+  lessonsCountShort,
+  lessonsJournalReady,
 } from "./crm-customer-sync.ts";
 
 describe("штамп входа ученика", () => {
@@ -29,6 +31,18 @@ describe("штамп входа ученика", () => {
     assert.equal(lessonFillOf({ bid: 3, statusIdx: 1, page: 4 })?.statusIdx, 1);
     assert.equal(LESSON_INBOUND_RUN, 8);
     assert.equal(LESSON_STATUSES[0], 3);
+  });
+
+  it("счёт сошёлся — готово, даже без обхода филиалов", () => {
+    assert.equal(lessonsCountShort(8, 8, true), false);
+    assert.equal(lessonsCountShort(329, 273, true), false);
+    assert.equal(lessonsCountShort(0, 71, true), true);
+    assert.equal(lessonsCountShort(5, 20, true), true);
+    assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 8, lessonsDisk: 8 }), true);
+    assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 273, lessonsDisk: 329 }), true);
+    assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 71, lessonsDisk: 0 }), false);
+    assert.equal(lessonsJournalReady({ lessonsFull: true, lessonsAttend: true, lessonsDisk: 3 }), true);
+    assert.equal(lessonsJournalReady({ lessonsDisk: 47 }), false);
   });
 });
 

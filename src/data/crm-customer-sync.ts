@@ -85,6 +85,20 @@ export function stampCustomerSync(customerId: number, patch: CustomerSyncStamp) 
   return next;
 }
 
+export function lessonsCountShort(disk: number, alfa: number, probed: boolean) {
+  return Boolean(probed) && Number(alfa) > 0 && Number(disk) < Number(alfa);
+}
+
+/** Счёт сошёлся — журнал готов. Не ждать обход всех филиалов. */
+export function lessonsJournalReady(sync: CustomerSyncStamp) {
+  const probed = Boolean(sync.lessonsAlfaAt);
+  const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
+  const diskN = Number(sync.lessonsDisk) || 0;
+  if (lessonsCountShort(diskN, alfaN, probed)) return false;
+  if (sync.lessonsFull && sync.lessonsAttend) return true;
+  return probed && diskN >= alfaN;
+}
+
 export function customerLessonsFresh(customerId: number, now = Date.now()) {
   const s = customerSyncOf(customerId);
   return Boolean(s.lessonsFull) && Boolean(s.lessonsAttend) && isSyncFresh(s.lessonsAt, now);

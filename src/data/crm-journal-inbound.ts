@@ -454,7 +454,7 @@ export async function enrichCalendarDetails(
   return { calendar: list, filled, changed: filled > 0 };
 }
 
-export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean }) {
+export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean }) {
   const id = Number(customerId) || 0;
   if (!alfaLinkedNow() || id <= 0) return { ok: true as const, count: 0, done: true };
   const { wantAlfaPullChannel } = await import("./crm-alfa-link");
@@ -483,7 +483,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const dateFrom = ruShift(-2600);
     const dateTo = ruShift(90);
     const slots = listAdminSlots();
-    const branches = wantFull ? uniqueBranches(branch) : [Number(branch) || 1];
+    const branches = opts?.homeOnly || !wantFull ? [Number(branch) || 1] : uniqueBranches(branch);
     const prevCal = loadCustomerCalendar(id);
     const prevMap = new Map(prevCal.map((l) => [String(l.lessonId || `${l.date}|${l.from}`), l] as const));
     const packs: { items?: Parameters<typeof packLight>[0][] }[] = [];

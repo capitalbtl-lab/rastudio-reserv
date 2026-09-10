@@ -1609,22 +1609,21 @@ export function AdminCrmSettings() {
       setMsg(study === "2" ? "Нет архивных учеников в списке." : "Нет текущих учеников в списке.");
       return;
     }
-    const unseen = all.filter((r) => !r.alfa);
-    const queue = (unseen.length ? unseen : all).slice(0, 20);
+    const unseen = all.filter((r) => r.alfa == null);
+    const hole = all.filter((r) => r.short);
+    const row = unseen[0] || hole[0] || all[0];
     stopSchool.current = false;
     holdFill.current = true;
-    setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
+    setSchoolRun({ cur: row.name, n: 1, total: 1 });
     let n = 0;
     let shortN = 0;
     try {
-      for (let i = 0; i < queue.length; i += 1) {
-        if (stopSchool.current) break;
-        const row = queue[i];
-        setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
+      if (!stopSchool.current) {
+        setSchoolRun({ cur: row.name, n: 1, total: 1 });
         setFillLoading({ kind: "students", label: row.name, customerId: row.cid });
         const res = await runJournal({ kind: "students", study, customerId: row.cid, branchId: row.branchId, probe: true });
-        n += 1;
-        if (/не хватает/i.test(String(res?.extra || ""))) shortN += 1;
+        n = 1;
+        if (/не хватает/i.test(String(res?.extra || ""))) shortN = 1;
       }
     } finally {
       holdFill.current = false;
@@ -1633,10 +1632,10 @@ export function AdminCrmSettings() {
       setSchoolRun(null);
     }
     if (stopSchool.current) {
-      setMsg(`Сверку остановили · прошло ${n} из ${queue.length}.`);
+      setMsg("Сверку остановили.");
       return;
     }
-    setMsg(shortN ? `Сверили ${n}: у ${shortN} в Alfa больше, чем на диске — жмите «Добрать».` : `Сверили ${n}: счёт сошёлся.`);
+    setMsg(shortN ? `${row.name}: в Alfa больше, чем на диске — жмите «Догрузить текущих».` : `${row.name}: счёт сошёлся. Нажмите ещё раз — следующего.`);
   }
 
   async function recheckSchool() {
@@ -2351,7 +2350,7 @@ export function AdminCrmSettings() {
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Календарь ученика</p>
                 <p className="mt-1 text-sm text-muted">
-                  «Догрузить текущих» — один ученик слева за нажатие, не очередь. Нажмите снова для следующего. Когда слева пусто — «Перепроверить загруженных», тоже по одному. «Сверить счёт» — сколько в Alfa и на диске.
+                  «Догрузить текущих» — один ученик за нажатие. Счёт сошёлся (на диске не меньше, чем в Alfa) — сразу вправо, без обхода филиалов. Кто как Горбатюк 8=8, не держим слева. «Сверить счёт» тоже по одному.
                 </p>
                 <div className="mt-3">
                   <ScopePills
@@ -2375,11 +2374,11 @@ export function AdminCrmSettings() {
                         <button
                           type="button"
                           className={cn(BTN_LOAD, run && schoolRun && "ra-progress-run")}
-                          disabled={offline || (busy && run)}
+                          disabled={offline || busy}
                           onClick={() => void recheckPeople("students", peopleStudy)}
                         >
                           {run && schoolRun
-                            ? `Очередь ${schoolRun.n}/${schoolRun.total}`
+                            ? `Грузим · ${schoolRun.cur}`
                             : allIn
                               ? "Перепроверить загруженных"
                               : peopleStudy === "2"

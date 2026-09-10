@@ -10,7 +10,7 @@ import { listAdminSlots } from "./alfacrm-schedule";
 import { loadScheduleMap } from "./schedule-map";
 import { allDossierCrmIds, findDossier, dossiersInGroup } from "./dossiers";
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
-import { customerSyncOf, stampCustomerSync, studentAlfaOwner } from "./crm-customer-sync";
+import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort } from "./crm-customer-sync";
 import { isPayJournalComplete } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 
@@ -601,8 +601,8 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       const probed = Boolean(sync.lessonsAlfaAt);
       const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
       const diskN = Number(sync.lessonsDisk) || 0;
-      const short = probed && alfaN > 0 && diskN > 0 && diskN < alfaN;
-      const journal = Boolean(sync.lessonsFull && sync.lessonsAttend) && !short;
+      const short = lessonsCountShort(diskN, alfaN, probed);
+      const journal = lessonsJournalReady(sync);
       const pays = isPayJournalComplete(p.cid);
       const name = fioOf(p.cid);
       const glist = groupsOfStudent(p.cid).slice(0, 3);
@@ -684,8 +684,8 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
       const probed = Boolean(sync.lessonsAlfaAt);
       const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
       const diskN = Number(sync.lessonsDisk) || 0;
-      const short = probed && alfaN > 0 && diskN > 0 && diskN < alfaN;
-      const journal = Boolean(sync.lessonsFull && sync.lessonsAttend) && !short;
+      const short = lessonsCountShort(diskN, alfaN, probed);
+      const journal = lessonsJournalReady(sync);
       const pays = isPayJournalComplete(p.cid);
       return {
         cid: p.cid,
@@ -814,23 +814,56 @@ async function pullOneGroup(
 }
 
 async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false) {
-  const { inboundCustomerLessons } = await import("./crm-journal-inbound");
+  const { inboundCustomerLessons, probeCustomerLessons } = await import("./crm-journal-inbound");
+  const atOf = () => new Date().toISOString();
+  const mark = (disk: number, alfa: number, probedOk: boolean) => {
+    const short = lessonsCountShort(disk, alfa, probedOk);
+    const closed = probedOk && !short && disk >= alfa;
+    const at = atOf();
+    stampCustomerSync(cid, {
+      lessonsDisk: disk,
+      lessonsAt: at,
+      ...(probedOk ? { lessonsAlfa: alfa, lessonsAlfaAt: at } : {}),
+      ...(short ? { lessonsFull: false } : closed ? { lessonsFull: true, lessonsAttend: true } : {}),
+      ...(balance
+        ? { paysAt: at, ...(recheck && closed ? { paysRecheckAt: at, lessonsRecheckAt: at } : {}) }
+        : recheck && closed
+          ? { lessonsRecheckAt: at }
+          : {}),
+    });
+    return { short, closed };
+  };
   let lessons = 0;
-  let done = false;
-  for (let round = 0; round < 2; round += 1) {
-    const res = await inboundCustomerLessons(branchId, cid, { take: 4, deep: 0, continueLater: false, full: true, force: true }).catch(() => ({
-      count: 0,
-      done: true as const,
-      skipped: undefined as string | undefined,
-    }));
-    lessons += Number(res.count) || 0;
-    if ("skipped" in res && res.skipped === "busy") {
-      await new Promise((r) => setTimeout(r, 250));
-      continue;
-    }
-    if (res.done !== false) {
-      done = true;
-      break;
+  let disk = loadCustomerCalendar(cid).length;
+  const first = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
+  const alfa0 = first.ok ? first.total : 0;
+  if (!recheck && first.ok && disk >= alfa0) {
+    mark(disk, alfa0, true);
+    if (!balance) return { cid, lessons: disk, done: true, pays: 0, tariffs: 0, alfa: alfa0, short: false };
+  } else {
+    const need = recheck || !first.ok || disk < alfa0;
+    if (need) {
+      for (let round = 0; round < 2; round += 1) {
+        const res = await inboundCustomerLessons(branchId, cid, {
+          take: 4,
+          deep: 0,
+          continueLater: false,
+          full: true,
+          force: true,
+          homeOnly: true,
+        }).catch(() => ({ count: 0, done: true as const, skipped: undefined as string | undefined }));
+        lessons += Number(res.count) || 0;
+        if ("skipped" in res && res.skipped === "busy") {
+          await new Promise((r) => setTimeout(r, 250));
+          continue;
+        }
+        disk = loadCustomerCalendar(cid).length;
+        const probed = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
+        const alfaN = probed.ok ? probed.total : 0;
+        const st = mark(disk, alfaN, probed.ok);
+        if (st.closed || res.done !== false) break;
+        if (!st.short) break;
+      }
     }
   }
   let pays = 0;
@@ -844,25 +877,22 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const { pullCustomerTariffs } = await import("./pupil-tariffs");
     const rows = await pullCustomerTariffs(branchId, cid).catch(() => []);
     tariffs = rows.length;
+    const sync = customerSyncOf(cid);
+    const diskNow = loadCustomerCalendar(cid).length;
+    const alfaNow = Number(sync.lessonsAlfa) || 0;
+    mark(diskNow, alfaNow, Boolean(sync.lessonsAlfaAt));
   }
-  const at = new Date().toISOString();
-  const { probeCustomerLessons } = await import("./crm-journal-inbound");
-  const disk = loadCustomerCalendar(cid).length;
-  const probed = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
-  const alfaN = probed.ok ? probed.total : 0;
-  const short = alfaN > 0 && disk < alfaN;
-  stampCustomerSync(cid, {
-    lessonsDisk: disk,
-    lessonsAt: at,
-    ...(probed.ok ? { lessonsAlfa: alfaN, lessonsAlfaAt: at } : {}),
-    ...(short ? { lessonsFull: false } : {}),
-    ...(balance
-      ? { paysAt: at, ...(recheck && !short ? { paysRecheckAt: at, lessonsRecheckAt: at } : {}) }
-      : recheck && !short
-        ? { lessonsRecheckAt: at }
-        : {}),
-  });
-  return { cid, lessons, done: done && !short, pays, tariffs, alfa: alfaN, short };
+  const sync = customerSyncOf(cid);
+  const short = lessonsCountShort(Number(sync.lessonsDisk) || 0, Number(sync.lessonsAlfa) || 0, Boolean(sync.lessonsAlfaAt));
+  return {
+    cid,
+    lessons: Number(sync.lessonsDisk) || lessons,
+    done: lessonsJournalReady(sync),
+    pays,
+    tariffs,
+    alfa: Number(sync.lessonsAlfa) || 0,
+    short,
+  };
 }
 
 export async function journalPull(opts: {
@@ -1364,11 +1394,11 @@ export async function journalPull(opts: {
       const disk = loadCustomerCalendar(one.cid).length;
       const probed = await probeCustomerLessons(one.branchId, one.cid).catch(() => ({ total: 0, ok: false as const }));
       const alfaN = probed.ok ? probed.total : 0;
-      const short = alfaN > 0 && disk < alfaN;
+      const short = lessonsCountShort(disk, alfaN, probed.ok);
       stampCustomerSync(one.cid, {
         lessonsDisk: disk,
         ...(probed.ok ? { lessonsAlfa: alfaN, lessonsAlfaAt: new Date().toISOString() } : {}),
-        ...(short ? { lessonsFull: false } : {}),
+        ...(short ? { lessonsFull: false } : probed.ok ? { lessonsFull: true, lessonsAttend: true } : {}),
       });
       const name = fioOf(one.cid);
       store.note = probed.ok
@@ -1391,7 +1421,7 @@ export async function journalPull(opts: {
     const sync = customerSyncOf(one.cid);
     const gnames = groupsOfStudent(one.cid);
     const name = fioOf(one.cid);
-    const landed = Boolean(sync.lessonsFull && sync.lessonsAttend) && !row.short;
+    const landed = lessonsJournalReady(sync);
     const who = study === "1" ? "текущие" : study === "2" ? "архив" : "ученики";
     const hit: StudentHit = {
       cid: one.cid,
