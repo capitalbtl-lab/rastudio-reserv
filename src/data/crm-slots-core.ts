@@ -17,6 +17,9 @@ export type LessonBeat = {
   /** Период этого регулярного урока. Второй урок в группе копирует первый. */
   bDate?: string;
   eDate?: string;
+  /** Педагоги этого шаблона (массив Alfa regular-lesson.teacher_ids). */
+  teacherIds?: number[];
+  teacher?: string;
 };
 
 export type CrmSlot = {
@@ -57,6 +60,9 @@ export type CrmSlot = {
   teacherId: number;
   teacherIds: number[];
   teacher: string;
+  /** Ответственные педагоги группы (Alfa group.teacher_ids). Не строка расписания. */
+  ownerTeacherIds?: number[];
+  ownerTeacher?: string;
   roomId: number;
   bDate: string;
   eDate: string;
@@ -334,10 +340,32 @@ export function validBeat(b?: LessonBeat | null): boolean {
 export function beatsOf(s: CrmSlot): LessonBeat[] {
   const raw = s.beats?.length
     ? s.beats
-    : [{ day: s.day, timeFrom: s.timeFrom, timeTo: s.timeTo, lessonId: s.lessonId, bDate: s.bDate, eDate: s.eDate }];
+    : [
+        {
+          day: s.day,
+          timeFrom: s.timeFrom,
+          timeTo: s.timeTo,
+          lessonId: s.lessonId,
+          bDate: s.bDate,
+          eDate: s.eDate,
+          teacherIds: s.teacherIds,
+          teacher: s.teacher,
+        },
+      ];
   const good = raw.filter(validBeat);
   if (good.length) return good;
-  return [{ day: Number(s.day) || 1, timeFrom: s.timeFrom || "", timeTo: s.timeTo || "", lessonId: s.lessonId || 0, bDate: s.bDate, eDate: s.eDate }];
+  return [
+    {
+      day: Number(s.day) || 1,
+      timeFrom: s.timeFrom || "",
+      timeTo: s.timeTo || "",
+      lessonId: s.lessonId || 0,
+      bDate: s.bDate,
+      eDate: s.eDate,
+      teacherIds: s.teacherIds,
+      teacher: s.teacher,
+    },
+  ];
 }
 
 const BRANCHES = [

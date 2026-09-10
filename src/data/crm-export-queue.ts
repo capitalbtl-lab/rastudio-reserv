@@ -289,6 +289,7 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: {
             note: job.body.note ? String(job.body.note) : undefined,
             topic: job.body.topic ? String(job.body.topic) : undefined,
             teacherId: Number(job.body.teacherId || (Array.isArray(job.body.teacher_ids) ? job.body.teacher_ids[0] : 0)) || undefined,
+            teacherIds: Array.isArray(job.body.teacher_ids) ? job.body.teacher_ids.map(Number).filter((n: number) => n > 0) : undefined,
             roomId: lessonOmitsRoom(kind) ? 0 : Number(job.body.roomId || job.body.room_id) || undefined,
           });
           if (!booked.ok) throw new Error(booked.error || "урок не создался");
@@ -352,10 +353,11 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: {
             const { applyCreatedGroup, applyCreatedLesson } = await import("./alfacrm-schedule");
             applyCreatedGroup(String(job.body.slotId || ""), gid, job.branchId);
             const beats = Array.isArray(job.body.beats)
-              ? (job.body.beats as { day?: number; timeFrom?: string; timeTo?: string; lessonId?: number; bDate?: string; eDate?: string }[])
+              ? (job.body.beats as { day?: number; timeFrom?: string; timeTo?: string; lessonId?: number; bDate?: string; eDate?: string; teacherIds?: number[] }[])
               : [];
             for (const b of beats) {
               if (Number(b.lessonId) || !b.timeFrom || !b.timeTo) continue;
+              const beatTeachers = Array.isArray(b.teacherIds) && b.teacherIds.length ? b.teacherIds : job.body.teacher_ids;
               const created = await request<{ model?: { id?: number }; id?: number }>(
                 `/v2api/${job.branchId}/regular-lesson/create`,
                 {
@@ -369,7 +371,7 @@ export async function tickExportQueue(take = 2, preferOp?: CrmExportOp, opts?: {
                   days: [b.day],
                   time_from_v: b.timeFrom,
                   time_to_v: b.timeTo,
-                  ...(Array.isArray(job.body.teacher_ids) ? { teacher_ids: job.body.teacher_ids } : {}),
+                  ...(Array.isArray(beatTeachers) && beatTeachers.length ? { teacher_ids: beatTeachers } : {}),
                   b_date: b.bDate || job.body.b_date,
                   e_date: b.eDate || job.body.e_date,
                 },

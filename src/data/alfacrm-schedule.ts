@@ -16,7 +16,8 @@ import { isAdminGroup, isArchivedGroup, isCampStatus, readPriority, crmPriorityO
 import { logAdmin } from "./admin-settings";
 import { loadSiteSignup } from "./site-signup";
 import { loadSiteTree, saveSiteTree } from "./site-tree";
-import { mergeTeacher, saveTeachers, pickTeacherIds, loadTeachers, type CrmTeacher } from "./crm-teachers";
+import { hydrateGroupTeachers } from "./crm-group-teachers-core";
+import { mergeTeacher, saveTeachers, loadTeachers, type CrmTeacher } from "./crm-teachers";
 import { listCgiBranch, takenByGroupFromCgi } from "./crm-membership";
 import { slotFitsAgent, agentGroupLine, scheduleChipOf } from "./agent-groups";
 import { takenOfGroup } from "./crm-group-disk";
@@ -65,6 +66,10 @@ type Lesson = {
   room_id?: number;
   b_date?: string;
   e_date?: string;
+  disabled?: number | boolean;
+  is_disabled?: number | boolean;
+  customers?: unknown[];
+  streaming?: unknown[];
 };
 type Subject = { id: number; name: string };
 type Teacher = { id: number; name?: string };
@@ -381,7 +386,7 @@ export function listAdminSlots(): CrmSlot[] {
   const at = snap?.at || 0;
   if (listed && listed.at === at && listed.slots.length) return listed.slots;
   const raw = snap?.slots?.length ? snap.slots : (snap?.sessions || []).map(slotFromSession);
-  const slots = applyScheduleMap(stampSubjects(stampTimes(raw.map(normalizeArtSlot)))).filter(isLiveSlot);
+  const slots = applyScheduleMap(stampSubjects(stampTimes(raw.map((s) => hydrateGroupTeachers(normalizeArtSlot(s)))))).filter(isLiveSlot);
   listed = { at, slots };
   return slots;
 }
@@ -402,7 +407,7 @@ export function bindSubjectsOnSite() {
 }
 
 export function saveAdminSlots(slots: CrmSlot[]) {
-  const stamped = applyScheduleMap(stampSubjects(stampTimes(slots.map((s) => normalizeArtSlot({ ...s }))))).filter(isLiveSlot);
+  const stamped = applyScheduleMap(stampSubjects(stampTimes(slots.map((s) => hydrateGroupTeachers(normalizeArtSlot({ ...s })))))).filter(isLiveSlot);
   const sessions = sessionsFromSlots(stamped);
   const seats = cache?.seats || readSnap()?.seats || new Map();
   cache = { at: Date.now(), sessions, seats, slots: stamped };
@@ -629,26 +634,34 @@ async function loadCrm(force = false, opts?: { night?: boolean; existing?: CrmSl
     if (!isLiveGroup(g)) continue;
     const branchId = Number(g.branch_ids?.[0]) || Number(fromBranch) || 1;
     const meta = BRANCH[branchId] || BRANCH[fromBranch] || BRANCH[1];
-    const groupLessons = lessonsByGid.get(g.id) || [];
+    const groupLessons = (lessonsByGid.get(g.id) || []).filter(
+      (lesson) => !(Number(lesson.disabled || lesson.is_disabled || 0) === 1),
+    );
     const first = groupLessons[0];
     const lessonSid = Number(first?.subject_id) || 0;
     const groupSid = Number(g.subject_id) || 0;
     const sid = groupSid || lessonSid || 0;
     const subjectName = (sid && subjects.get(sid)) || g.name;
-    const teach = teacherOf(pickTeacherIds(first?.teacher_ids, g.teacher_ids), teachers);
+    const owner = teacherOf(g.teacher_ids, teachers);
     const seat = seats.get(seatKey(branchId, g.id)) || seats.get(seatKey(fromBranch, g.id));
     const beats = groupLessons
-      .map((lesson) => ({
-        day: Number(lesson.day) || 1,
-        timeFrom: String(lesson.time_from_v || lesson.time_from || "").slice(0, 5),
-        timeTo: String(lesson.time_to_v || lesson.time_to || "").slice(0, 5),
-        lessonId: Number(lesson.id) || 0,
-        bDate: String(lesson.b_date || ""),
-        eDate: String(lesson.e_date || ""),
-      }))
+      .map((lesson) => {
+        const teach = teacherOf(lesson.teacher_ids, teachers);
+        return {
+          day: Number(lesson.day) || 1,
+          timeFrom: String(lesson.time_from_v || lesson.time_from || "").slice(0, 5),
+          timeTo: String(lesson.time_to_v || lesson.time_to || "").slice(0, 5),
+          lessonId: Number(lesson.id) || 0,
+          bDate: String(lesson.b_date || ""),
+          eDate: String(lesson.e_date || ""),
+          teacherIds: teach.ids,
+          teacher: teach.name,
+        };
+      })
       .filter((b) => b.lessonId || /^\d{1,2}:\d{2}$/.test(b.timeFrom))
       .sort((a, b) => a.day - b.day || a.timeFrom.localeCompare(b.timeFrom));
-    const a = beats[0] || { day: 1, timeFrom: "", timeTo: "", lessonId: 0 };
+    const a = beats[0] || { day: 1, timeFrom: "", timeTo: "", lessonId: 0, teacherIds: [] as number[], teacher: "" };
+    const beatTeach = teacherOf(a.teacherIds, teachers);
     slots.push(
       normalizeArtSlot({
         id: first ? `crm-${first.id}` : `crm-g${g.id}`,
@@ -679,9 +692,11 @@ async function loadCrm(force = false, opts?: { night?: boolean; existing?: CrmSl
         city: meta.city,
         branch: meta.branch,
         signup: signupUrl(branchId, g.id),
-        teacherId: teach.ids[0] || 0,
-        teacherIds: teach.ids,
-        teacher: teach.name,
+        teacherId: beatTeach.ids[0] || 0,
+        teacherIds: beatTeach.ids,
+        teacher: beatTeach.name,
+        ownerTeacherIds: owner.ids,
+        ownerTeacher: owner.name,
         roomId: Number(first?.room_id) || 0,
         bDate: String(g.b_date || ""),
         eDate: String(g.e_date || ""),

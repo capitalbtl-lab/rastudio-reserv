@@ -26,6 +26,7 @@ import { TabError } from "@/lib/error-component";
 import type { GroupCalLesson } from "@/data/crm-slots-core";
 import type { CrmTeacher } from "@/data/crm-teachers-core";
 import { teachersAtBranchFromSlots } from "@/data/crm-teachers-core";
+import { teacherIdSet, namesOfTeachers } from "@/data/crm-group-teachers-core";
 import { AdminClients } from "@/components/admin-clients";
 import { AdminCrmSettings } from "@/components/admin-crm-settings";
 import { AdminPublicSite } from "@/components/admin-public-site";
@@ -115,7 +116,8 @@ const CARD_FIELDS = [
   { id: "week", label: "×нед" },
   { id: "places", label: "Места" },
   { id: "branch", label: "Филиал" },
-  { id: "teacher", label: "Педагог" },
+  { id: "teacher", label: "Педагоги занятий" },
+  { id: "ownerTeacher", label: "Ответственные педагоги" },
   { id: "tariff", label: "Абонемент" },
   { id: "hashtags", label: "Хэштеги" },
   { id: "course", label: "Курс на сайте" },
@@ -328,6 +330,52 @@ function DetailsBtn({ on, onClick, busy }: { on?: boolean; onClick: () => void; 
   );
 }
 
+function TeacherMulti({
+  teachers,
+  ids,
+  onChange,
+  placeholder,
+}: {
+  teachers: { id: number; name: string }[];
+  ids: number[];
+  onChange: (ids: number[]) => void;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+  const label = teachers.filter((t) => ids.includes(t.id)).map((t) => t.name).join(", ");
+  return (
+    <div ref={box} className="relative mt-1 min-w-0">
+      <button type="button" className={cn(CARD_SEL, "mt-0 flex items-center justify-between gap-2 text-left")} onClick={() => setOpen((v) => !v)}>
+        <span className={cn("min-w-0 truncate", !label && "text-muted")}>{label || placeholder}</span>
+        <span className="shrink-0 text-muted">▾</span>
+      </button>
+      {open ? (
+        <div className={cn("absolute left-0 z-50 mt-1 max-h-48 w-full overflow-y-auto p-1", RA_POP)}>
+          {teachers.map((t) => (
+            <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-[0.78rem] hover:bg-black/[0.04]">
+              <input
+                type="checkbox"
+                checked={ids.includes(t.id)}
+                onChange={() => onChange(ids.includes(t.id) ? ids.filter((x) => x !== t.id) : [...ids, t.id])}
+              />
+              <span className="min-w-0 whitespace-normal break-words">{t.name}</span>
+            </label>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type GroupDetail = {
   id: string;
   groupId: number;
@@ -348,6 +396,14 @@ type GroupDetail = {
   saving: boolean;
   error?: string;
   note?: string;
+  exportAsk?: {
+    mode: "queue" | "now";
+    summary: string;
+    allowFull: boolean;
+    allowGroup: boolean;
+    suggestOwner: boolean;
+    issues: { code: string; text: string }[];
+  };
   slot: CrmSlot;
   tariffId: number;
   tariffs: { id: number; name: string; price: number; lessonsCount: number; duration: number; fit?: boolean }[];
@@ -1422,6 +1478,8 @@ export function AdminSchedule() {
   }
 
   function slotFromDetail(d: GroupDetail): CrmSlot {
+    const beat = shownBeat(d.slot);
+    const beatIds = teacherIdSet(beat.teacherIds?.length ? beat.teacherIds : d.slot.teacherIds);
     return {
       ...d.slot,
       subjectId: d.subjectId,
@@ -1438,13 +1496,18 @@ export function AdminSchedule() {
       levelId: d.levelId,
       signup: d.signup || d.slot.signup,
       branchId: d.branchId || d.slot.branchId,
+      teacherIds: beatIds,
+      teacherId: beatIds[0] || 0,
+      teacher: beat.teacher || d.slot.teacher,
+      ownerTeacherIds: teacherIdSet(d.slot.ownerTeacherIds),
+      ownerTeacher: d.slot.ownerTeacher || "",
     };
   }
 
-  async function saveDetail(mode: "queue" | "now" = "queue") {
+  async function saveDetail(mode: "queue" | "now" = "queue", exportMode?: "full" | "group" | "skip") {
     if (!detail) return;
     setExportMenu(false);
-    setDetail((d) => (d ? { ...d, saving: true, error: "", note: "" } : d));
+    setDetail((d) => (d ? { ...d, saving: true, error: "", note: "", exportAsk: undefined } : d));
     const slot = slotFromDetail(detail);
     const nextSlots = slots.map((s) => (s.id === slot.id ? slot : s));
     const site = await adminSchedule({ data: { token: token(), action: "save", slots: nextSlots } as never });
@@ -1452,6 +1515,42 @@ export function AdminSchedule() {
     if (!site.ok) {
       setDetail((d) => (d ? { ...d, saving: false, error: site.error || "Не сохранилось на сайте." } : d));
       return;
+    }
+    if (!exportMode) {
+      const chk = await adminSchedule({ data: { token: token(), action: "groupExportCheck", ids: [detail.id] } as never });
+      const pack = chk as {
+        ok?: boolean;
+        issues?: { code: string; text: string }[];
+        allowFull?: boolean;
+        allowGroup?: boolean;
+        suggestOwner?: boolean;
+        summary?: string;
+        error?: string;
+      };
+      if (!chk.ok) {
+        setDetail((d) => (d ? { ...d, saving: false, error: pack.error || "Не сверили шаблон в Alfa." } : d));
+        return;
+      }
+      if ((pack.issues || []).length) {
+        setDetail((d) =>
+          d
+            ? {
+                ...d,
+                saving: false,
+                exportAsk: {
+                  mode,
+                  summary: pack.summary || pack.issues!.map((x) => x.text).join(" "),
+                  allowFull: Boolean(pack.allowFull),
+                  allowGroup: pack.allowGroup !== false,
+                  suggestOwner: Boolean(pack.suggestOwner),
+                  issues: pack.issues || [],
+                },
+              }
+            : d,
+        );
+        return;
+      }
+      exportMode = "full";
     }
     const res = await adminSchedule({
       data: {
@@ -1475,9 +1574,11 @@ export function AdminSchedule() {
         priority: detail.priority,
         limit: detail.slot.limit,
         age: detail.slot.age,
-        teacher: detail.slot.teacher,
-        teacherId: detail.slot.teacherId,
-        teacherIds: detail.slot.teacherIds,
+        teacher: slot.teacher,
+        teacherId: slot.teacherId,
+        teacherIds: slot.teacherIds,
+        ownerTeacherIds: slot.ownerTeacherIds,
+        exportMode,
         flush: mode === "now",
       } as never,
     });
@@ -1558,6 +1659,10 @@ export function AdminSchedule() {
       timeFrom: String(s.timeFrom || ""),
       timeTo: String(s.timeTo || ""),
       lessonId: Number(s.lessonId) || 0,
+      teacherIds: s.teacherIds || [],
+      teacher: s.teacher || "",
+      bDate: s.bDate,
+      eDate: s.eDate,
     };
     try {
       const raw = beatsOf(s);
@@ -1593,6 +1698,32 @@ export function AdminSchedule() {
     setDetail((d) => (d && d.id === s.id ? { ...d, slot: apply(d.slot) } : d));
   }
 
+  function patchBeatTeachers(s: CrmSlot, ids: number[], names: string) {
+    const beats = beatsOf(s);
+    const i = view[s.id] || 0;
+    const next = beats.map((b, n) => (n === i ? { ...b, teacherIds: ids, teacher: names } : b));
+    const apply = (row: CrmSlot) =>
+      row.id !== s.id
+        ? row
+        : {
+            ...row,
+            beats: next,
+            teacherIds: ids,
+            teacherId: ids[0] || 0,
+            teacher: names,
+          };
+    setSlots((list) => list.map(apply));
+    setDirty((d) => new Set(d).add(s.id));
+    setDetail((d) => (d && d.id === s.id ? { ...d, slot: apply(d.slot) } : d));
+  }
+
+  function patchOwnerTeachers(s: CrmSlot, ids: number[], names: string) {
+    const apply = (row: CrmSlot) => (row.id === s.id ? { ...row, ownerTeacherIds: ids, ownerTeacher: names } : row);
+    setSlots((list) => list.map(apply));
+    setDirty((d) => new Set(d).add(s.id));
+    setDetail((d) => (d && d.id === s.id ? { ...d, slot: apply(d.slot) } : d));
+  }
+
   function addBeat(s: CrmSlot, b: LessonBeat) {
     const list = beatsOf(s);
     const first = list[view[s.id] || 0] || list[0];
@@ -1600,6 +1731,8 @@ export function AdminSchedule() {
       ...b,
       bDate: b.bDate || first?.bDate || s.bDate || "",
       eDate: b.eDate || first?.eDate || s.eDate || "",
+      teacherIds: b.teacherIds?.length ? b.teacherIds : first?.teacherIds || s.teacherIds,
+      teacher: b.teacher || first?.teacher || s.teacher,
     };
     const beats = [...beatsOf(s), beat];
     const apply = (row: CrmSlot) => (row.id === s.id ? { ...row, beats, timesPerWeek: beats.length } : row);
@@ -3503,32 +3636,8 @@ export function AdminSchedule() {
                                 >
                                   <span className="line-clamp-2 whitespace-pre-line">{branchTwoLine(s)}</span>
                                 </td>
-                                <td className="px-2 py-1.5 align-middle">
-                                  <select
-                                    value={s.teacher}
-                                    title={teachersForBranch(s.branchId).some((t) => t.name === s.teacher) ? s.teacher : `${s.teacher || "—"} · нет в филиале AlfaCRM`}
-                                    onChange={(e) => {
-                                      const name = e.target.value;
-                                      const hit = teachersForBranch(s.branchId).find((t) => t.name === name);
-                                      setSlots((list) =>
-                                        list.map((row) =>
-                                          row.id === s.id
-                                            ? { ...row, teacher: name, teacherId: hit?.id || 0, teacherIds: hit ? [hit.id] : [] }
-                                            : row,
-                                        ),
-                                      );
-                                      setDirty((d) => new Set(d).add(s.id));
-                                    }}
-                                    className="h-8 w-full rounded-md bg-surface-2 px-1 text-[0.8rem] ring-1 ring-black/8"
-                                  >
-                                    <option value="">— филиал —</option>
-                                    {teachersForBranch(s.branchId).map((t) => (
-                                      <option key={t.id} value={t.name}>{t.name}</option>
-                                    ))}
-                                    {s.teacher && !teachersForBranch(s.branchId).some((t) => t.name === s.teacher) ? (
-                                      <option value={s.teacher}>{s.teacher} · нет в филиале</option>
-                                    ) : null}
-                                  </select>
+                                <td className="px-2 py-1.5 align-middle text-[0.78rem] leading-tight" title={shownBeat(s).teacher || s.teacher || ""}>
+                                  <span className="line-clamp-2">{shownBeat(s).teacher || s.teacher || "—"}</span>
                                 </td>
                                 <td className="px-1 py-1.5 align-middle">
                                   <select
@@ -3776,6 +3885,44 @@ export function AdminSchedule() {
                     </button>
                     {detail.error ? <p className="mt-2 text-sm font-semibold text-red-800">{detail.error}</p> : null}
                     {detail.note ? <p className="mt-2 text-sm font-semibold text-emerald-800">{detail.note}</p> : null}
+                    {detail.exportAsk ? (
+                      <div className="mt-3 rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-200">
+                        <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-amber-900">Нельзя выгрузить как есть</p>
+                        <p className="mt-1 text-sm leading-snug text-fg">{detail.exportAsk.summary}</p>
+                        {detail.exportAsk.suggestOwner ? (
+                          <p className="mt-1 text-[0.8rem] text-muted">Сделать ответственными педагогов занятий? Не обязательно: у группы может быть свой руководитель.</p>
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <button type="button" className="h-8 rounded-full bg-white px-3 text-[0.72rem] font-semibold ring-1 ring-black/10" onClick={() => setDetail((d) => (d ? { ...d, exportAsk: undefined } : d))}>
+                            Не выгружать
+                          </button>
+                          {detail.exportAsk.allowGroup ? (
+                            <button type="button" className="h-8 rounded-full bg-white px-3 text-[0.72rem] font-semibold ring-1 ring-black/10" onClick={() => void saveDetail(detail.exportAsk!.mode, "group")}>
+                              Только карточку группы
+                            </button>
+                          ) : null}
+                          {detail.exportAsk.suggestOwner ? (
+                            <button
+                              type="button"
+                              className="h-8 rounded-full bg-white px-3 text-[0.72rem] font-semibold ring-1 ring-black/10"
+                              onClick={() => {
+                                const ids = teacherIdSet(shownBeat(detail.slot).teacherIds?.length ? shownBeat(detail.slot).teacherIds : detail.slot.teacherIds);
+                                const names = namesOfTeachers(ids, teachersForBranch(detail.slot.branchId));
+                                patchOwnerTeachers(detail.slot, ids, names);
+                                void saveDetail(detail.exportAsk!.mode, detail.exportAsk!.allowFull ? "full" : "group");
+                              }}
+                            >
+                              Подставить ответственных и выгрузить
+                            </button>
+                          ) : null}
+                          {detail.exportAsk.allowFull ? (
+                            <button type="button" className="h-8 rounded-full bg-primary px-3 text-[0.72rem] font-semibold text-white" onClick={() => void saveDetail(detail.exportAsk!.mode, "full")}>
+                              Выгрузить как есть
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
                 <div className="pretty-scroll mt-3 min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-x-none px-4 pb-5 md:px-5">
@@ -3857,6 +4004,20 @@ export function AdminSchedule() {
                             className="h-full min-w-0 flex-1 bg-transparent px-0.5 text-center text-[0.78rem] font-medium tabular-nums text-fg outline-none"
                           />
                         </span>
+                      </label>
+                      ) : null}
+                      {showField("teacher") ? (
+                      <label className={cn(CARD_LBL, "col-span-2 sm:col-span-1")}>
+                        Педагоги занятий
+                        <TeacherMulti
+                          teachers={teachersForBranch(detail.slot.branchId)}
+                          ids={teacherIdSet(shownBeat(detail.slot).teacherIds?.length ? shownBeat(detail.slot).teacherIds : detail.slot.teacherIds)}
+                          placeholder="— педагоги занятий —"
+                          onChange={(ids) => {
+                            const names = namesOfTeachers(ids, teachersForBranch(detail.slot.branchId));
+                            patchBeatTeachers(detail.slot, ids, names);
+                          }}
+                        />
                       </label>
                       ) : null}
                       {showField("week") ? (
@@ -3944,26 +4105,16 @@ export function AdminSchedule() {
                         />
                       </label>
                       ) : null}
-                      {showField("teacher") ? (
+                      {showField("teacher") || showField("ownerTeacher") ? (
                       <label className={CARD_LBL}>
-                        Педагог
-                        <RaSelect
-                          value={detail.slot.teacher}
-                          placeholder="— педагог —"
-                          className={CARD_SEL}
-                          menuMinWidth={280}
-                          options={[
-                            ...teachersForBranch(detail.slot.branchId).map((t) => ({ value: t.name, label: t.name })),
-                            ...(detail.slot.teacher && !teachersForBranch(detail.slot.branchId).some((t) => t.name === detail.slot.teacher)
-                              ? [{ value: detail.slot.teacher, label: `${detail.slot.teacher} · нет в филиале` }]
-                              : []),
-                          ]}
-                          onChange={(name) => {
-                            const hit = teachersForBranch(detail.slot.branchId).find((t) => t.name === name);
-                            const next = { ...detail.slot, teacher: name, teacherId: hit?.id || 0, teacherIds: hit ? [hit.id] : [] };
-                            setSlots((list) => list.map((row) => (row.id === detail.id ? next : row)));
-                            setDirty((d) => new Set(d).add(detail.id));
-                            setDetail((d) => (d ? { ...d, slot: next } : d));
+                        Ответственные педагоги
+                        <TeacherMulti
+                          teachers={teachersForBranch(detail.slot.branchId)}
+                          ids={teacherIdSet(detail.slot.ownerTeacherIds)}
+                          placeholder="— ответственные —"
+                          onChange={(ids) => {
+                            const names = namesOfTeachers(ids, teachersForBranch(detail.slot.branchId));
+                            patchOwnerTeachers(detail.slot, ids, names);
                           }}
                         />
                       </label>

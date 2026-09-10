@@ -29,7 +29,7 @@ export function AdminTeachers({ slots, teachers }: { slots: CrmSlot[]; teachers:
         <div>
           <p className="font-display text-xl">Педагоги</p>
           <p className="mt-1 max-w-2xl text-sm text-muted">
-            Ученик → филиал. Педагог → группа (teacherId). Предмет и расписание — у группы. Филиал педагога считается по его группам.
+            Расписание и филиал педагога — по слотам (все педагоги регулярки бита). Ответственные без слота в расписание не попадают.
           </p>
         </div>
         <input
@@ -88,7 +88,11 @@ export function AdminTeachers({ slots, teachers }: { slots: CrmSlot[]; teachers:
                               {" "}
                               · {CRM_BRANCH[g.branchId]?.short || g.branchId} · {g.groupId}
                               {g.subject ? ` · ${g.subject}` : ""}
-                              {g.day && g.from ? ` · ${g.day} ${g.from}${g.to ? `–${g.to}` : ""}` : ""}
+                              {g.ownerOnly
+                                ? " · руководитель, без занятий"
+                                : g.day && g.from
+                                  ? ` · ${g.day} ${g.from}${g.to ? `–${g.to}` : ""}`
+                                  : ""}
                             </span>
                           </li>
                         ))}
@@ -106,7 +110,7 @@ export function AdminTeachers({ slots, teachers }: { slots: CrmSlot[]; teachers:
         ) : null}
       </div>
       <p className="mt-3 text-[0.75rem] text-muted">
-        {rows.length} педагогов · связи: teacherId группы, subjectId группы, branchId группы, день/время слота.
+        {rows.length} педагогов · расписание по слотам регулярки, ответственные без слота отдельно.
       </p>
     </div>
   );

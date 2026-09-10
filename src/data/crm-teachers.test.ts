@@ -70,7 +70,8 @@ describe("связи в экранах", () => {
     assert.match(pane, /subjectsOfTeacher/);
     assert.doesNotMatch(pane, /from "@\/data\/crm-teachers"/);
     const alfa = readFileSync(new URL("./alfacrm-schedule.ts", import.meta.url), "utf8");
-    assert.match(alfa, /pickTeacherIds\(first\?\.teacher_ids, g.teacher_ids\)/);
+    assert.doesNotMatch(alfa, /pickTeacherIds\(first\?\.teacher_ids, g.teacher_ids\)/);
+    assert.match(alfa, /ownerTeacherIds/);
     const card = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
     assert.match(card, /teachersAtBranch\(useBranch, listTeachers\(slots\), slots\)/);
   });

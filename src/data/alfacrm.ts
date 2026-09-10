@@ -491,18 +491,28 @@ async function findByPhone(phone: string): Promise<{ branch: number; customer: C
   return null;
 }
 
-async function slotFromGid(branch: number, gid: number, t: string): Promise<Regular | null> {
+async function slotFromGid(branch: number, gid: number, t: string, time?: string): Promise<Regular | null> {
   try {
     const { listAdminSlots } = await import("./alfacrm-schedule");
+    const { beatsOf } = await import("./crm-slots-core");
+    const { beatTeacherIds } = await import("./crm-group-teachers-core");
     const local = listAdminSlots().find((s) => Number(s.groupId) === gid && Number(s.branchId) === branch)
       || listAdminSlots().find((s) => Number(s.groupId) === gid);
     if (local?.subjectId) {
+      const want = String(time || "").slice(0, 5);
+      const beats = beatsOf(local);
+      const beat =
+        (want && beats.find((b) => String(b.timeFrom || "").slice(0, 5) === want)) ||
+        beats.find((b) => beatTeacherIds(b, local).length) ||
+        beats[0];
+      const ids = beatTeacherIds(beat, local);
       return {
         related_id: gid,
         subject_id: local.subjectId,
-        time_from_v: local.timeFrom,
-        time_to_v: local.timeTo,
-        teacher_ids: local.teacherIds?.length ? local.teacherIds : local.teacherId ? [local.teacherId] : [],
+        day: beat?.day || local.day,
+        time_from_v: beat?.timeFrom || local.timeFrom,
+        time_to_v: beat?.timeTo || local.timeTo,
+        teacher_ids: ids,
         room_id: local.roomId,
       } as Regular;
     }
@@ -531,6 +541,7 @@ export async function createAlfaLesson(opts: {
   topic?: string;
   roomId?: number;
   teacherId?: number;
+  teacherIds?: number[];
 }) {
   const t = await token();
   const type = resolveLessonType(opts.type) || resolveLessonType("trial")!;
@@ -538,13 +549,17 @@ export async function createAlfaLesson(opts: {
   let date = formatRuDob(opts.date);
   let time = String(opts.time || "").replace(".", ":").slice(0, 5);
   let duration = Number(opts.duration) || 90;
-  let teacherIds: number[] = Number(opts.teacherId) > 0 ? [Number(opts.teacherId)] : [];
+  let teacherIds: number[] = Array.isArray(opts.teacherIds) && opts.teacherIds.length
+    ? opts.teacherIds.map(Number).filter((n) => n > 0)
+    : Number(opts.teacherId) > 0
+      ? [Number(opts.teacherId)]
+      : [];
   const hintGid = opts.gid && /^\d+$/.test(opts.gid) ? Number(opts.gid) : 0;
   const allowGroup = lessonAllowsGroup(type.id);
   const gid = allowGroup ? hintGid : 0;
   let roomId: number | undefined = lessonOmitsRoom(type.id) ? undefined : Number(opts.roomId) > 0 ? Number(opts.roomId) : undefined;
   if (hintGid) {
-    const slot = await slotFromGid(opts.branch, hintGid, t).catch(() => null);
+    const slot = await slotFromGid(opts.branch, hintGid, t, time).catch(() => null);
     if (slot) {
       if (!subjectId) subjectId = Number(slot.subject_id) || 0;
       if (!time) time = String(slot.time_from_v || "").slice(0, 5);

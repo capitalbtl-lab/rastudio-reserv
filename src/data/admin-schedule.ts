@@ -1189,6 +1189,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "subjectsAiApply"
           | "groupGet"
           | "groupSave"
+          | "groupExportCheck"
           | "groupFlags"
           | "lessonGet"
           | "lessonSave"
@@ -1320,6 +1321,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
         groupName?: string;
         teacher?: string;
         teacherIds?: number[];
+        ownerTeacherIds?: number[];
+        exportMode?: "full" | "group" | "skip";
         tariff?: import("./crm-tariffs").CrmTariff;
         tariffs?: import("./crm-tariffs").CrmTariff[];
         pullN?: number;
@@ -3274,6 +3277,15 @@ export const adminSchedule = createServerFn({ method: "POST" })
         ...groupTariffPack(slot),
       };
     }
+    if (data.action === "groupExportCheck") {
+      const slotId = String(data.ids?.[0] || "");
+      const current = listAdminSlots();
+      const found = slotId ? current.find((s) => s.id === slotId) : undefined;
+      if (!found) return { ok: false as const, error: "Группа не найдена в расписании на сайте." };
+      const { inspectSlotExport } = await import("./crm-group-export");
+      const chk = await inspectSlotExport(found);
+      return { ok: true as const, ...chk };
+    }
     if (data.action === "groupSave") {
       let branch = Number(data.branchId) || 1;
       let gid = Number(data.groupId) || 0;
@@ -3314,11 +3326,16 @@ export const adminSchedule = createServerFn({ method: "POST" })
         return pack(saved, { ...extra, flushed: true, pending: r.left, extra: note, error: r.error || (r.left ? note : "") });
       };
       const subject = loadSubjects().find((x) => x.id === (subjectId || found.subjectId));
-      const teacherIds = Array.isArray(data.teacherIds)
-        ? data.teacherIds.map(Number).filter((n) => n > 0)
-        : found.teacherIds || [];
+      const { teacherIdSet, teacherIdsPayload, beatTeacherIds, hydrateGroupTeachers } = await import("./crm-group-teachers-core");
+      const exportMode = (data.exportMode || "full") as "full" | "group" | "skip";
+      const teacherIds = teacherIdSet(
+        Array.isArray(data.teacherIds) ? data.teacherIds : found.teacherIds,
+      );
+      const ownerTeacherIds = teacherIdSet(
+        Array.isArray(data.ownerTeacherIds) ? data.ownerTeacherIds : found.ownerTeacherIds?.length ? found.ownerTeacherIds : found.teacherIds,
+      );
       const teacherName = data.teacher != null ? String(data.teacher) : found.teacher;
-      const teacherId = data.teacherId != null ? Number(data.teacherId) : found.teacherId;
+      const teacherId = teacherIds[0] || (data.teacherId != null ? Number(data.teacherId) : found.teacherId) || 0;
       const groupName = String(data.groupName || found.groupName || "");
       const limit = data.limit != null ? Number(data.limit) || 0 : found.limit;
       const age = data.age != null ? String(data.age) : found.age;
@@ -3332,6 +3349,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
               teacher: teacherName,
               teacherId,
               teacherIds,
+              ownerTeacherIds,
+              ownerTeacher: found.ownerTeacher,
               subjectId: subjectId || s.subjectId,
               subject: subject?.name || s.subject,
               statusId: statusId || s.statusId || 1,
@@ -3375,6 +3394,8 @@ export const adminSchedule = createServerFn({ method: "POST" })
                 teacher: teacherName,
                 teacherId,
                 teacherIds,
+                ownerTeacherIds,
+                ownerTeacher: found.ownerTeacher,
               },
         );
         const saved = saveAdminSlots(next).slots;
@@ -3399,6 +3420,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
           calendar: prev?.calendar || [],
           at: new Date().toISOString(),
         });
+        if (exportMode === "skip") {
+          return pack(saved, { groupId: gid, queued: false, extra: "На сайте. В АСРМ не отправляли." });
+        }
         const { enqueueExport } = await import("./crm-export-queue");
         enqueueExport({
           op: "group.update",
@@ -3419,13 +3443,17 @@ export const adminSchedule = createServerFn({ method: "POST" })
             ...(subjectId || found.subjectId
               ? { subject_id: subjectId || found.subjectId, subject_ids: [subjectId || found.subjectId] }
               : {}),
-            ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+            ...teacherIdsPayload(ownerTeacherIds),
           },
         });
-        const slotNow = next.find((s) => s.id === found.id) || found;
+        const slotNow = hydrateGroupTeachers(next.find((s) => s.id === found.id) || found);
+        if (exportMode === "group") {
+          logAdmin(`Группа ${gid}: только карточка в очередь`);
+          return await finishQueue(saved, { groupId: gid, queued: true, extra: "Только карточка группы. Шаблон и занятия не трогали." }, gid);
+        }
         const beatsNow = slotNow.beats?.length
           ? slotNow.beats
-          : [{ day: slotNow.day, timeFrom: slotNow.timeFrom, timeTo: slotNow.timeTo, lessonId: slotNow.lessonId, bDate: slotNow.bDate, eDate: slotNow.eDate }];
+          : [{ day: slotNow.day, timeFrom: slotNow.timeFrom, timeTo: slotNow.timeTo, lessonId: slotNow.lessonId, bDate: slotNow.bDate, eDate: slotNow.eDate, teacherIds: slotNow.teacherIds }];
         const period = inheritRegularPeriod({
           siblings: beatsNow,
           groupFrom: bDate,
@@ -3435,6 +3463,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         const sid = Number(subjectId || slotNow.subjectId || 0);
         for (const b of beatsNow) {
           if (!b.timeFrom || !b.timeTo) continue;
+          const beatIds = beatTeacherIds(b, slotNow);
           if (b.lessonId) {
             const dates = inheritRegularPeriod({
               siblings: [b],
@@ -3455,7 +3484,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
                 time_to_v: b.timeTo,
                 b_date: dates.bDate,
                 e_date: dates.eDate,
-                ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+                ...teacherIdsPayload(beatIds),
               },
             });
             continue;
@@ -3480,7 +3509,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
               time_to_v: b.timeTo,
               b_date: own.bDate,
               e_date: own.eDate,
-              ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+              ...teacherIdsPayload(beatIds),
             },
           });
         }
@@ -3488,6 +3517,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
         return await finishQueue(saved, { groupId: gid, queued: true }, gid);
       }
       const saved = saveAdminSlots(patched).slots;
+      if (exportMode === "skip") {
+        return pack(saved, { queued: false, extra: "На сайте. В АСРМ не отправляли." });
+      }
       const sid = Number(subjectId || found.subjectId || 0);
       if (!sid) {
         logAdmin(`Группа ${found.id}: на сайте, в Alfa нет subjectId`);
@@ -3515,14 +3547,19 @@ export const adminSchedule = createServerFn({ method: "POST" })
           custom_workingout: makeup,
           custom_prioritet: priority,
           ...(levelId ? { level_id: levelId } : {}),
-          ...(teacherIds.length ? { teacher_ids: teacherIds } : {}),
+          ...teacherIdsPayload(ownerTeacherIds.length ? ownerTeacherIds : teacherIds),
           beats: (slotNow.beats?.length
             ? slotNow.beats
-            : [{ day: slotNow.day, timeFrom: slotNow.timeFrom, timeTo: slotNow.timeTo, lessonId: slotNow.lessonId, bDate: slotNow.bDate, eDate: slotNow.eDate }]
+            : [{ day: slotNow.day, timeFrom: slotNow.timeFrom, timeTo: slotNow.timeTo, lessonId: slotNow.lessonId, bDate: slotNow.bDate, eDate: slotNow.eDate, teacherIds: slotNow.teacherIds }]
           ).map((b) => ({
             day: b.day,
             timeFrom: b.timeFrom,
             timeTo: b.timeTo,
+            lessonId: b.lessonId || 0,
+            bDate: b.bDate || bDate,
+            eDate: b.eDate || eDate,
+            teacherIds: beatTeacherIds(b, slotNow),
+          })),
             lessonId: b.lessonId || 0,
             bDate: b.bDate || bDate,
             eDate: b.eDate || eDate,

@@ -1,3 +1,5 @@
+import { teacherIdSet, slotBeatTeacherIds, ownerOnlyTeacherIds, ownerTeacherIdsOf, type SlotTeachers } from "./crm-group-teachers-core.ts";
+
 export type CrmTeacher = { id: number; name: string; branchIds: number[] };
 export type TeacherGroup = {
   groupId: number;
@@ -8,15 +10,13 @@ export type TeacherGroup = {
   day?: string;
   from?: string;
   to?: string;
+  ownerOnly?: boolean;
 };
 
-type SlotLike = {
+type SlotLike = SlotTeachers & {
   groupId?: number;
   groupName?: string;
   branchId?: number;
-  teacherId?: number;
-  teacherIds?: number[];
-  teacher?: string;
   subjectId?: number;
   subject?: string;
   dayLabel?: string;
@@ -24,37 +24,38 @@ type SlotLike = {
   timeTo?: string;
 };
 
-export function slotTeacherIds(s: { teacherId?: number; teacherIds?: number[] }) {
+export { teacherIdSet, slotBeatTeacherIds, ownerOnlyTeacherIds };
+
+export function slotTeacherIds(s: SlotTeachers) {
+  const beat = slotBeatTeacherIds(s);
+  if (beat.length) return beat;
   const raw = s.teacherIds?.length ? s.teacherIds : s.teacherId ? [s.teacherId] : [];
-  return [...new Set(raw.map(Number).filter(Boolean))];
+  return teacherIdSet(raw);
 }
 
-/** Урок.teacher_ids, иначе группа. Пустой массив урока не затирает группу. */
+/** Урок.teacher_ids, иначе группа. Пустой массив урока не затирает группу.
+ * Для занятия ученика используйте pickLessonTeacherIds (бит, не ответственные). */
 export function pickTeacherIds(lessonIds: unknown, groupIds: unknown) {
   const lesson = asIds(lessonIds);
   return lesson.length ? lesson : asIds(groupIds);
 }
 
 function asIds(raw: unknown) {
-  const arr = Array.isArray(raw) ? raw : raw != null && raw !== "" ? [raw] : [];
-  const out: number[] = [];
-  for (const x of arr) {
-    const n = Number(x);
-    if (n && Number.isFinite(n)) out.push(n);
-  }
-  return [...new Set(out)];
+  return teacherIdSet(raw);
 }
 
 export function teachersFromSlots(slots: SlotLike[]): CrmTeacher[] {
   const map = new Map<number, CrmTeacher>();
+  const put = (n: number, name: string, branchId: number) => {
+    const hit = map.get(n) || { id: n, name: name || String(n), branchIds: [] as number[] };
+    if (name && name !== String(n)) hit.name = name;
+    if (branchId && !hit.branchIds.includes(branchId)) hit.branchIds.push(branchId);
+    map.set(n, hit);
+  };
   for (const s of slots) {
-    for (const n of slotTeacherIds(s)) {
-      const hit = map.get(n) || { id: n, name: s.teacher || String(n), branchIds: [] as number[] };
-      if (s.teacher) hit.name = s.teacher;
-      const b = Number(s.branchId) || 0;
-      if (b && !hit.branchIds.includes(b)) hit.branchIds.push(b);
-      map.set(n, hit);
-    }
+    const b = Number(s.branchId) || 0;
+    for (const n of slotTeacherIds(s)) put(n, s.teacher || "", b);
+    for (const n of ownerTeacherIdsOf(s)) put(n, s.ownerTeacher || "", b);
   }
   return [...map.values()];
 }
@@ -97,23 +98,48 @@ export function groupsOfTeacher(teacherId: number, slots: SlotLike[]): TeacherGr
   if (!id) return [];
   const out: TeacherGroup[] = [];
   const seen = new Set<string>();
+  const DAYS = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
   for (const s of slots) {
-    if (!slotTeacherIds(s).includes(id)) continue;
     const gid = Number(s.groupId) || 0;
     const branchId = Number(s.branchId) || 0;
-    const k = `${branchId}:${gid}`;
-    if (!gid || seen.has(k)) continue;
-    seen.add(k);
-    out.push({
-      groupId: gid,
-      branchId,
-      name: s.groupName || `группа ${gid}`,
-      subjectId: Number(s.subjectId) || undefined,
-      subject: s.subject || undefined,
-      day: s.dayLabel || undefined,
-      from: s.timeFrom || undefined,
-      to: s.timeTo || undefined,
-    });
+    if (!gid) continue;
+    const beats = s.beats?.length
+      ? s.beats
+      : [{ day: undefined, timeFrom: s.timeFrom, timeTo: s.timeTo, teacherIds: s.teacherIds }];
+    for (const b of beats) {
+      const ids = teacherIdSet(b.teacherIds?.length ? b.teacherIds : s.teacherIds?.length ? s.teacherIds : s.teacherId);
+      if (!ids.includes(id)) continue;
+      const from = String(b.timeFrom || s.timeFrom || "");
+      const day = Number((b as { day?: number }).day) || 0;
+      const dayLabel = day ? DAYS[day] : s.dayLabel;
+      const k = `${branchId}:${gid}:${day}:${from}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({
+        groupId: gid,
+        branchId,
+        name: s.groupName || `группа ${gid}`,
+        subjectId: Number(s.subjectId) || undefined,
+        subject: s.subject || undefined,
+        day: dayLabel || undefined,
+        from: from || undefined,
+        to: String(b.timeTo || s.timeTo || "") || undefined,
+      });
+    }
+    if (ownerOnlyTeacherIds(s).includes(id)) {
+      const k = `${branchId}:${gid}:owner`;
+      if (!seen.has(k)) {
+        seen.add(k);
+        out.push({
+          groupId: gid,
+          branchId,
+          name: s.groupName || `группа ${gid}`,
+          subjectId: Number(s.subjectId) || undefined,
+          subject: s.subject || undefined,
+          ownerOnly: true,
+        });
+      }
+    }
   }
   return out.sort((a, b) => a.branchId - b.branchId || a.name.localeCompare(b.name, "ru"));
 }
