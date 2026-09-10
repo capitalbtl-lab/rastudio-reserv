@@ -429,33 +429,39 @@ export function groupFillRow(g: JournalPullGroup) {
   const clipTo = life.to;
   const age = groupAge(clipFrom, clipTo);
   const known = Boolean(clipFrom || clipTo);
-  const allParts = periods.map((p) => ({
-    key: p.key,
-    label: p.label,
-    from: p.from,
-    to: p.to,
-    done: done.includes(p.key) && !weak.has(p.key),
-    weak: weak.has(p.key),
-    rechecked: recheckedSet.has(p.key) && !weak.has(p.key),
-    lessons: 0,
-    err: fail[p.key] || "",
-    at: String(pulledAt[p.key] || ""),
-    needDetails: 0,
-    conducted: 0,
-  }));
+  const cal = loadGroupCard(g.branchId, g.groupId)?.calendar || [];
+  const allParts = periods.map((p) => {
+    const n = cal.filter((l) => inPeriod(l.date, p.from, p.to)).length;
+    const stamped = done.includes(p.key) && !weak.has(p.key);
+    return {
+      key: p.key,
+      label: p.label,
+      from: p.from,
+      to: p.to,
+      done: stamped || n > 0,
+      weak: weak.has(p.key),
+      rechecked: recheckedSet.has(p.key) && !weak.has(p.key),
+      lessons: n,
+      err: fail[p.key] || "",
+      at: String(pulledAt[p.key] || ""),
+      needDetails: 0,
+      conducted: 0,
+    };
+  });
   const parts = known ? allParts.filter((p) => chunkOverlapsLife(p, clipFrom, clipTo)) : allParts.slice(0, 4);
   const next = parts.find((p) => !p.done);
   const lifeTxt = lifeLabel(life.from, life.to);
   const src = life.source === "alfa" ? "по журналу Alfa" : life.source === "slot" ? "по расписанию" : "";
   const fromLabel = !known ? "срок неизвестен — сначала определите сроки" : lifeTxt ? `${src} ${lifeTxt}`.trim() : "ещё не загружали";
   const complete = parts.length > 0 && parts.every((p) => p.done);
+  const lessons = parts.reduce((s, p) => s + (Number(p.lessons) || 0), 0);
   return {
     groupId: g.groupId,
     branchId: g.branchId,
     name: g.name,
     school: g.school,
     archived: g.archived,
-    lessons: 0,
+    lessons,
     done: parts.filter((p) => p.done).length,
     total: parts.length,
     next: next?.label || "",

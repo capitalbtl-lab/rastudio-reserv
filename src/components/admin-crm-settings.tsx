@@ -606,15 +606,15 @@ function GroupFillList({
             <h4 className="font-display text-[1.05rem] text-rose-900">Требуют загрузки данных · {nNeed}</h4>
             {pager(safeNeed, pagesNeed, setPageNeed)}
           </div>
-          <p className="mt-1 text-[0.72rem] text-muted">Явки, тема, ДЗ, комментарий и таблица учеников — пока чего-то нет, группа здесь.</p>
+          <p className="mt-1 text-[0.72rem] text-muted">Ещё не жали «Загрузить явки» по всем кварталам срока. Это не пропуск в списке — их {nNeed} из {scoped.length}.</p>
           {listNeed.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listNeed.map(renderGroup)}</ul> : <p className="mt-3 text-sm text-muted">Все группы этой школы уже загружены.</p>}
         </section>
         <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
           <div className="flex flex-wrap items-center gap-2">
-            <h4 className="font-display text-[1.05rem] text-emerald-900">Загрузка данных завершена · {nDone}</h4>
+            <h4 className="font-display text-[1.05rem] text-emerald-900">Загрузка данных завершена · {nDone} из {scoped.length}</h4>
             {pager(safeDone, pagesDone, setPageDone)}
           </div>
-          <p className="mt-1 text-[0.72rem] text-muted">Каждый квартал: явки есть, тема/ДЗ/комментарий/таблица на месте, пакет не оборвался.</p>
+          <p className="mt-1 text-[0.72rem] text-muted">Все обработанные группы этой школы. Если группа справа — кварталы срока сверены, пропуска нет. Пока {nDone} из {scoped.length}.</p>
           {listDone.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listDone.map(renderGroup)}</ul> : <p className="mt-3 text-sm text-muted">Пока ни одна группа не загружена до конца.</p>}
         </section>
       </div>
