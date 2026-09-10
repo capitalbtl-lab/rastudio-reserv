@@ -53,6 +53,8 @@ const BTN_GHOST =
   "inline-flex h-10 items-center justify-center rounded-full bg-white px-4 text-sm font-semibold ring-1 ring-black/10 hover:bg-primary/5 hover:ring-primary/25";
 const BTN_GHOST_SM =
   "inline-flex h-8 items-center justify-center shrink-0 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10 hover:bg-primary/5 disabled:opacity-40";
+const BTN_RED =
+  "inline-flex h-10 items-center justify-center rounded-full bg-red-600 px-4 text-sm font-semibold text-white shadow-[var(--shadow-border)] hover:bg-red-700 disabled:opacity-50";
 
 function FillBar({ pct, run, done, warn }: { pct: number; run?: boolean; done?: boolean; warn?: boolean }) {
   const w = run ? Math.max(18, Math.min(100, pct)) : Math.max(0, Math.min(100, pct));
@@ -92,7 +94,7 @@ const HIST_TABS: { id: HistTab; label: string }[] = [
   { id: "groups", label: "Шаг 2 · Занятия в группах" },
   { id: "money", label: "Шаг 3 · Деньги на карточке" },
 ];
-const PEOPLE_LOAD_GAP_MS = 3000;
+const PEOPLE_LOAD_GAP_MS = 5000;
 
 type StudentHit = {
   cid: number;
@@ -1492,7 +1494,7 @@ export function AdminCrmSettings() {
     }
   }
 
-  async function pauseThree() {
+  async function pauseFive() {
     const until = Date.now() + PEOPLE_LOAD_GAP_MS;
     while (Date.now() < until && !stopSchool.current) await new Promise((r) => setTimeout(r, 200));
   }
@@ -1535,7 +1537,7 @@ export function AdminCrmSettings() {
     stopSchool.current = false;
     holdFill.current = true;
     setBusy(true);
-    setMsg(`${queue[0]?.name}: грузим. Потом пауза 3 с.`);
+    setMsg(`${queue[0]?.name}: грузим. Потом пауза 5 с.`);
     setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
     let n = 0;
     try {
@@ -1547,8 +1549,8 @@ export function AdminCrmSettings() {
         const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind) });
         if (!res || res.ok === false) {
           if (/уже грузим/i.test(String(res?.error || ""))) {
-            setSchoolRun({ cur: `пауза 3 с · ждём «${row.name}»`, n: i + 1, total: queue.length });
-            await pauseThree();
+            setSchoolRun({ cur: `пауза 5 с · ждём «${row.name}»`, n: i + 1, total: queue.length });
+            await pauseFive();
             i -= 1;
             continue;
           }
@@ -1557,8 +1559,8 @@ export function AdminCrmSettings() {
         }
         n += 1;
         if (i < queue.length - 1 && !stopSchool.current) {
-          setSchoolRun({ cur: `пауза 3 с · дальше ${queue[i + 1]?.name || ""}`, n: i + 1, total: queue.length });
-          await pauseThree();
+          setSchoolRun({ cur: `пауза 5 с · дальше ${queue[i + 1]?.name || ""}`, n: i + 1, total: queue.length });
+          await pauseFive();
         }
       }
     } finally {
@@ -1610,7 +1612,7 @@ export function AdminCrmSettings() {
       setMsg("Сверку остановили.");
       return;
     }
-    setMsg(shortN ? `${row.name}: в Alfa больше, чем на диске — жмите «Догрузить текущих».` : `${row.name}: счёт сошёлся. Нажмите ещё раз — следующего.`);
+    setMsg(shortN ? `${row.name}: в Alfa больше, чем на диске — жмите красную кнопку.` : `${row.name}: счёт сошёлся. Нажмите ещё раз — следующего.`);
   }
 
   async function recheckSchool() {
@@ -2325,7 +2327,7 @@ export function AdminCrmSettings() {
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Календарь ученика</p>
                 <p className="mt-1 text-sm text-muted">
-                  «Догрузить текущих»: строго по одному, пауза 3 с, пока слева не пусто. Следующий не стартует, пока этот не закрыт. Стоп прерывает. «Сверить счёт» — тоже по одному.
+                  Красная кнопка: один ученик, пауза 5 с, затем следующий. Стоп прерывает.
                 </p>
                 <div className="mt-3">
                   <ScopePills
@@ -2340,7 +2342,6 @@ export function AdminCrmSettings() {
                   const done = side?.journalDone || 0;
                   const total = side?.total || (peopleStudy === "2" ? archN : liveN) || 0;
                   const run = fillLoading?.kind === "students";
-                  const allIn = total > 0 && done >= total;
                   return (
                     <>
                       <ProgressBar done={done} total={total} run={run} loading={journalLoading && !journal} />
@@ -2348,17 +2349,11 @@ export function AdminCrmSettings() {
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          className={cn(BTN_LOAD, run && schoolRun && "ra-progress-run")}
+                          className={cn(BTN_RED, run && schoolRun && "ra-progress-run")}
                           disabled={offline || busy}
                           onClick={() => void recheckPeople("students", peopleStudy)}
                         >
-                          {run && schoolRun
-                            ? schoolRun.cur
-                            : allIn
-                              ? "Перепроверить загруженных"
-                              : peopleStudy === "2"
-                                ? "Догрузить архивных"
-                                : "Догрузить текущих"}
+                          {run && schoolRun ? schoolRun.cur : "Загрузить по одному"}
                         </button>
                         <button type="button" className={BTN_GHOST} disabled={offline || (busy && run)} onClick={() => void probePeople(peopleStudy)}>
                           Сверить счёт
