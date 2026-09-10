@@ -1409,7 +1409,7 @@ export function AdminCrmSettings() {
         new Promise<never>((_, rej) =>
           setTimeout(
             () => rej(new Error("Alfa не ответила за отведённое время — нажмите ещё раз.")),
-            opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "life" ? 90000 : 25000,
+            opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "life" || opts.kind === "group" || opts.kind === "details" ? 90000 : 25000,
           ),
         ),
       ])) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit; extra?: string };

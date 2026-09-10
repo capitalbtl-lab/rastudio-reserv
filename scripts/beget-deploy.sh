@@ -88,6 +88,14 @@ if ! flock -w 20 9; then
 fi
 
 STAGE="$ROOT/.build-stage"
+fail_cleanup() {
+  echo "[deploy] сборка упала — текущий сайт не трогал, снимаю lock"
+  rm -rf "$STAGE" || true
+  restore_media || true
+  rm -f "$LOCK" || true
+  bring_up || true
+}
+trap fail_cleanup ERR
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 git archive HEAD | tar -x -C "$STAGE"
@@ -121,6 +129,7 @@ fi
 
 restore_media
 trap - EXIT
+trap - ERR
 
 pm2 stop rastudio >/dev/null 2>&1 || true
 fuser -k 3000/tcp >/dev/null 2>&1 || true

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { GroupCalLesson } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils } from "./crm-slots-core";
@@ -38,50 +38,36 @@ export type CachedGroupCard = {
   journalLife?: { from: string; to: string; source: "slot" | "alfa"; at: string };
 };
 
-type Store = { at: string; items: Record<string, CachedGroupCard> };
+type CardMem = { mtime: number; card: CachedGroupCard };
+const cardMem = new Map<string, CardMem>();
 
-let mem: Store | null = null;
-let memMtime = 0;
+function cardsDir() {
+  return join(process.cwd(), "storage", "group-cards");
+}
 
-function file() {
-  return join(process.cwd(), "storage", "group-cards.json");
+function cardFile(branchId: number, gid: number) {
+  return join(cardsDir(), `${branchId}-${gid}.json`);
 }
 
 function key(branchId: number, gid: number) {
   return `${branchId}-${gid}`;
 }
 
-function load(): Store {
-  try {
-    const mtime = existsSync(file()) ? statSync(file()).mtimeMs : 0;
-    if (mem && memMtime === mtime) return mem;
-    const raw = JSON.parse(readFileSync(file(), "utf8")) as Store;
-    if (raw && raw.items && typeof raw.items === "object") {
-      mem = raw;
-      memMtime = mtime;
-      return mem;
-    }
-  } catch {
-    /* */
-  }
-  mem = { at: "", items: {} };
-  memMtime = 0;
-  return mem;
-}
-
-function write(store: Store) {
-  mem = store;
-  mkdirSync(dirname(file()), { recursive: true });
-  writeFileSync(file(), JSON.stringify(store, null, 0), "utf8");
-  try {
-    memMtime = statSync(file()).mtimeMs;
-  } catch {
-    memMtime = Date.now();
-  }
-}
-
 export function loadGroupCard(branchId: number, gid: number): CachedGroupCard | null {
-  return load().items[key(branchId, gid)] || null;
+  const p = cardFile(branchId, gid);
+  try {
+    if (!existsSync(p)) return null;
+    const mtime = statSync(p).mtimeMs;
+    const k = key(branchId, gid);
+    const hit = cardMem.get(k);
+    if (hit && hit.mtime === mtime) return hit.card;
+    const raw = JSON.parse(readFileSync(p, "utf8")) as CachedGroupCard;
+    if (!raw || typeof raw !== "object") return null;
+    cardMem.set(k, { mtime, card: raw });
+    return raw;
+  } catch {
+    return null;
+  }
 }
 
 export function saveGroupCard(card: CachedGroupCard) {
@@ -90,15 +76,36 @@ export function saveGroupCard(card: CachedGroupCard) {
 
 export function saveGroupCards(cards: CachedGroupCard[]) {
   if (!cards.length) return;
-  const store = load();
+  mkdirSync(cardsDir(), { recursive: true });
   const at = new Date().toISOString();
-  for (const card of cards) store.items[key(card.branchId, card.id)] = { ...card, at };
-  store.at = at;
-  write(store);
+  for (const card of cards) {
+    const next = { ...card, at };
+    const p = cardFile(card.branchId, card.id);
+    writeFileSync(p, JSON.stringify(next), "utf8");
+    let mtime = Date.now();
+    try {
+      mtime = statSync(p).mtimeMs;
+    } catch {
+      /* */
+    }
+    cardMem.set(key(card.branchId, card.id), { mtime, card: next });
+  }
 }
 
 export function listGroupCards(): CachedGroupCard[] {
-  return Object.values(load().items);
+  try {
+    if (!existsSync(cardsDir())) return [];
+    const out: CachedGroupCard[] = [];
+    for (const name of readdirSync(cardsDir())) {
+      const m = /^(\d+)-(\d+)\.json$/.exec(name);
+      if (!m) continue;
+      const card = loadGroupCard(Number(m[1]), Number(m[2]));
+      if (card) out.push(card);
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 export function nextLocalLessonId() {

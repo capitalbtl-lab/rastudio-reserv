@@ -84,6 +84,9 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(pull, /const byQ = new Map/);
     assert.doesNotMatch(pull, /inQ\.filter\(lessonNeedsHomework\)/);
     assert.match(pull, /periods: journalPeriods\(\)\.length/);
+    const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
+    assert.match(cards, /storage", "group-cards"\)/);
+    assert.doesNotMatch(cards, /group-cards\.json/);
     assert.doesNotMatch(pull, /periods: periods\.length/);
     assert.match(pull, /probed\.ok \? \{ lessonsAlfa/);
     assert.match(ui, /row\.alfa != null/);

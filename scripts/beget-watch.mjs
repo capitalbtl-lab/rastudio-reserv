@@ -42,12 +42,7 @@ function lockHeld() {
 }
 
 function building() {
-  if (lockHeld()) return true;
-  try {
-    return existsSync(path.join(root, ".build-stage", "package.json"));
-  } catch {
-    return false;
-  }
+  return lockHeld();
 }
 
 async function tick() {
