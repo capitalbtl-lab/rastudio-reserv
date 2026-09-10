@@ -229,12 +229,12 @@ export async function tickCrmQueue(take = 3, opts?: { skipJournal?: boolean }) {
     } else if (picked.kind === "lessons") {
       const { inboundCustomerLessonsChunk } = await import("./crm-journal-inbound");
       const offset = Math.max(0, picked.offset || 0);
-      res = await inboundCustomerLessonsChunk(offset, 2);
+      res = await inboundCustomerLessonsChunk(offset, 1);
       if (!res.done) {
         const nq = loadQueue();
         nq.packets = mergeCrmPacket(
           nq.packets.filter((p) => p.id !== picked.id),
-          { kind: "lessons", offset: Number(res.next) || offset + 2 },
+          { kind: "lessons", offset: Number(res.next) || offset + 1 },
         );
         nq.lastAt = new Date().toISOString();
         nq.lastNote = res.extra || "";

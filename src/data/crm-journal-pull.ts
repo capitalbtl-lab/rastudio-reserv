@@ -10,7 +10,7 @@ import { listAdminSlots } from "./alfacrm-schedule";
 import { loadScheduleMap } from "./schedule-map";
 import { allDossierCrmIds, findDossier, dossiersInGroup } from "./dossiers";
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
-import { customerSyncOf, stampCustomerSync } from "./crm-customer-sync";
+import { customerSyncOf, stampCustomerSync, studentAlfaOwner } from "./crm-customer-sync";
 import { isPayJournalComplete } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 
@@ -1340,6 +1340,15 @@ export async function journalPull(opts: {
     return {
       ok: false as const,
       error: `уже грузим ученика №${studentPullCid} — подождите, не пачкой`,
+      more: false,
+      ...journalPullState({ skipPeople: true }),
+    };
+  }
+  const other = studentAlfaOwner();
+  if (other && other !== one.cid) {
+    return {
+      ok: false as const,
+      error: `уже грузим ученика №${other} — подождите, не пачкой`,
       more: false,
       ...journalPullState({ skipPeople: true }),
     };

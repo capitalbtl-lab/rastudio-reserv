@@ -141,7 +141,7 @@ export function lessonFillAdvance(cur: LessonFillCursor, lastShort: boolean, bra
   return { bid: next, statusIdx: 0, page: 0 };
 }
 
-const g = globalThis as { __raLessonFill?: Set<number> };
+const g = globalThis as { __raLessonFill?: Set<number>; __raStudentAlfa?: number };
 
 export function lessonFillBusy(customerId: number) {
   const id = Number(customerId) || 0;
@@ -155,4 +155,21 @@ export function markLessonFillBusy(customerId: number, on: boolean) {
   if (!g.__raLessonFill) g.__raLessonFill = new Set();
   if (on) g.__raLessonFill.add(id);
   else g.__raLessonFill.delete(id);
+}
+
+export function studentAlfaOwner() {
+  return Number(g.__raStudentAlfa) || 0;
+}
+
+export function tryLockStudentAlfa(customerId: number) {
+  const id = Number(customerId) || 0;
+  if (!id) return false;
+  const cur = Number(g.__raStudentAlfa) || 0;
+  if (cur && cur !== id) return false;
+  g.__raStudentAlfa = id;
+  return true;
+}
+
+export function unlockStudentAlfa(customerId: number) {
+  if (Number(g.__raStudentAlfa) === Number(customerId)) g.__raStudentAlfa = 0;
 }

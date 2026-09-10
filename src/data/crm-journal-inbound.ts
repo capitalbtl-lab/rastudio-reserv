@@ -32,6 +32,8 @@ import {
   LESSON_INBOUND_RUN,
   LESSON_RECENT_DAYS,
   customerLessonsNeedAttend,
+  tryLockStudentAlfa,
+  unlockStudentAlfa,
 } from "./crm-customer-sync";
 
 
@@ -465,8 +467,14 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     }
     if (lessonFillBusy(id)) return { ok: true as const, count: 0, skipped: "busy" as const, done: false };
   }
+  if (!tryLockStudentAlfa(id)) {
+    return { ok: true as const, count: 0, skipped: "busy" as const, done: false };
+  }
   const wantFull = Boolean(opts?.full) || !customerSyncOf(id).lessonsFull || customerLessonsNeedAttend(id);
-  if (!wantFull && customerLessonsFresh(id)) return { ok: true as const, count: 0, skipped: "fresh" as const, done: true };
+  if (!wantFull && customerLessonsFresh(id)) {
+    unlockStudentAlfa(id);
+    return { ok: true as const, count: 0, skipped: "fresh" as const, done: true };
+  }
   markLessonFillBusy(id, true);
   try {
     const { token, request } = await import("./alfacrm");
@@ -590,7 +598,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       lessonsAttend: customerSyncOf(id).lessonsAttend || done,
       lessonFill: done ? undefined : cur,
     });
-    if (wantFull && !done && opts?.continueLater !== false) {
+    if (wantFull && !done && opts?.continueLater === true) {
       setTimeout(() => {
         void inboundCustomerLessons(branch, id).catch(() => null);
       }, 700);
@@ -598,6 +606,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     return { ok: true as const, count: pulled.length, done };
   } finally {
     markLessonFillBusy(id, false);
+    unlockStudentAlfa(id);
   }
 }
 
@@ -691,7 +700,7 @@ export async function inboundJournalChunk(offset = 0, _take = 1) {
 }
 
 /** Очередь: полная явка по текущим и архиву. Лидов не гоняем. */
-export async function inboundCustomerLessonsChunk(offset = 0, take = 2) {
+export async function inboundCustomerLessonsChunk(offset = 0, take = 1) {
   if (!alfaLinkedNow()) {
     return { ok: true as const, done: true, next: 0, total: 0, extra: "без Alfa", ids: [] as number[], live: 0 };
   }
@@ -710,7 +719,7 @@ export async function inboundCustomerLessonsChunk(offset = 0, take = 2) {
     });
   const ids = ranked.map((x) => x.cid);
   const total = ids.length;
-  const size = Math.max(1, Math.min(3, Number(take) || 2));
+  const size = 1;
   const from = Math.max(0, Number(offset) || 0);
   const slice = ids.slice(from, from + size);
   let n = 0;

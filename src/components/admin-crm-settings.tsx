@@ -92,7 +92,6 @@ const HIST_TABS: { id: HistTab; label: string }[] = [
   { id: "groups", label: "Шаг 2 · Занятия в группах" },
   { id: "money", label: "Шаг 3 · Деньги на карточке" },
 ];
-const PEOPLE_LOAD_GAP_MS = 3000;
 
 type StudentHit = {
   cid: number;
@@ -1572,49 +1571,35 @@ export function AdminCrmSettings() {
       return;
     }
     const needLoad = all.filter((r) => !peopleFinished(r, kind));
-    const queue = needLoad.length ? needLoad : all;
+    const needRecheck = all.filter((r) => peopleNeedsRecheck(r, kind));
     const sweep = !needLoad.length;
+    const row = needLoad[0] || needRecheck[0] || all[0];
+    const left = Math.max(0, needLoad.length - (needLoad.length ? 1 : 0));
     stopSchool.current = false;
     holdFill.current = true;
     setBusy(true);
-    setMsg(`Очередь: ${queue.length} учеников. По одному, без пачки.`);
-    setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
-    let n = 0;
+    setSchoolRun({ cur: row.name, n: 1, total: 1 });
+    setFillLoading({ kind, label: row.name, customerId: row.cid });
+    setMsg(`${row.name}: один ученик, не пачка.`);
     try {
-      for (let i = 0; i < queue.length; i += 1) {
-        if (stopSchool.current) break;
-        const row = queue[i];
-        setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
-        setFillLoading({ kind, label: row.name, customerId: row.cid });
-        const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind) });
-        if (!res || res.ok === false) {
-          setMsg(res?.error || "Очередь остановили: Alfa не ответила. Нажмите ещё раз — одного ученика, не пачкой.");
-          break;
-        }
-        n += 1;
-        if (kind === "students" && i < queue.length - 1 && !stopSchool.current) {
-          setSchoolRun({ cur: `${row.name} · пауза 3 с`, n: i + 1, total: queue.length });
-          const until = Date.now() + PEOPLE_LOAD_GAP_MS;
-          while (Date.now() < until && !stopSchool.current) {
-            await new Promise((r) => setTimeout(r, 200));
-          }
-        }
+      const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind) });
+      if (!res || res.ok === false) {
+        setMsg(res?.error || "Alfa не ответила. Нажмите ещё раз — одного ученика.");
+        return;
       }
+      setMsg(
+        sweep
+          ? `${row.name}: перепроверили. Нажмите ещё раз — следующего.`
+          : left
+            ? `${row.name}: записали. Слева ещё ${left} — нажмите ещё раз, по одному.`
+            : `${row.name}: записали. Слева пусто — кнопка станет «Перепроверить загруженных».`,
+      );
     } finally {
       holdFill.current = false;
       setFillLoading(null);
       setBusy(false);
       setSchoolRun(null);
     }
-    if (stopSchool.current) {
-      setMsg(`Очередь учеников остановлена · прошло ${n} из ${queue.length}.`);
-      return;
-    }
-    setMsg(
-      sweep
-        ? `Перепроверили ${n} учеников. Alfa ещё раз прошла личный журнал и дописала дырки, дублей нет.`
-        : `Догрузили ${n} учеников, у кого ещё не было журнала или в Alfa больше занятий.`,
-    );
   }
 
   async function probePeople(study: "1" | "2") {
@@ -2366,7 +2351,7 @@ export function AdminCrmSettings() {
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Календарь ученика</p>
                 <p className="mt-1 text-sm text-muted">
-                  «Всё есть» только если загружен личный журнал, не из зелёных групп. «Догрузить текущих» берёт учеников слева по одному, пауза 3 с. Когда левый блок пуст — кнопка «Перепроверить загруженных». «Сверить счёт» — сколько в Alfa и на диске.
+                  «Догрузить текущих» — один ученик слева за нажатие, не очередь. Нажмите снова для следующего. Когда слева пусто — «Перепроверить загруженных», тоже по одному. «Сверить счёт» — сколько в Alfa и на диске.
                 </p>
                 <div className="mt-3">
                   <ScopePills
