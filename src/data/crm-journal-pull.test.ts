@@ -138,6 +138,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /customerId/);
     assert.match(pull, /lastStudents/);
     assert.match(ui, /Догрузить текущих/);
+    assert.doesNotMatch(ui, /runStudentPack/);
     assert.match(pull, /child\?\.fio/);
     assert.match(pull, /groupsOfStudent/);
     assert.doesNotMatch(ui, /BTN_LOAD_SM, "min-w-0 flex-1"/);

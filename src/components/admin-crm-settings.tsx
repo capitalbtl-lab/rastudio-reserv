@@ -1492,62 +1492,9 @@ export function AdminCrmSettings() {
     }
   }
 
-  async function runStudentPack(kind: "students" | "balance", study: "1" | "2") {
-    stopSchool.current = false;
-    holdFill.current = true;
-    const total = 10;
-    const who = study === "2" ? "архивные" : "текущие";
-    setFillLoading({ kind, label: who });
-    setStudentRun({ kind, study, n: 0, total, cur: "первый в очереди", rows: [] });
-    const rows: StudentHit[] = [];
-    try {
-      for (let i = 0; i < total; i += 1) {
-        if (stopSchool.current) break;
-        setStudentRun({ kind, study, n: i + 1, total, cur: "запрос в Alfa…", rows: [...rows] });
-        const res = await runJournal({ kind, study });
-        const hit = res?.student;
-        if (hit && hit.cid) {
-          rows.push(hit);
-          setStudentRun({ kind, study, n: i + 1, total, cur: hit.name, rows: [...rows] });
-        } else {
-          rows.push({ cid: 0, branchId: 0, name: res?.error || "нет ответа Alfa", groups: [], lessons: 0, done: false, ok: false });
-          setStudentRun({ kind, study, n: i + 1, total, cur: "нет ответа", rows: [...rows] });
-        }
-      }
-    } finally {
-      holdFill.current = false;
-      setFillLoading(null);
-      setBusy(false);
-      setStudentRun({
-        kind,
-        study,
-        n: rows.length,
-        total,
-        cur: stopSchool.current ? "остановлено" : "пакет готов",
-        rows,
-      });
-    }
-  }
-
-  async function recheckStudent(row: StudentHit, kind: "students" | "balance", study: "1" | "2") {
-    if (!row.cid || busy) return;
-    holdFill.current = true;
-    setFillLoading({ kind, label: study === "2" ? "архивные" : "текущие" });
-    setStudentRun((cur) => (cur ? { ...cur, cur: row.name, n: cur.n, total: cur.total } : { kind, study, n: 1, total: 1, cur: row.name, rows: [row] }));
-    try {
-      const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId });
-      const hit = res?.student;
-      if (hit && hit.cid) {
-        setStudentRun((cur) => {
-          const rows = (cur?.rows || []).map((r) => (r.cid === hit.cid ? hit : r));
-          return { kind, study, n: cur?.n || 1, total: cur?.total || 1, cur: hit.ok ? `${hit.name} · записан` : `${hit.name} · снова пусто`, rows };
-        });
-      }
-    } finally {
-      holdFill.current = false;
-      setFillLoading(null);
-      setBusy(false);
-    }
+  async function pauseThree() {
+    const until = Date.now() + PEOPLE_LOAD_GAP_MS;
+    while (Date.now() < until && !stopSchool.current) await new Promise((r) => setTimeout(r, 200));
   }
 
   async function loadPerson(row: PeopleRow, kind: "students" | "balance", study: "1" | "2", recheck = false) {
@@ -1579,12 +1526,16 @@ export function AdminCrmSettings() {
     const needLoad = all.filter((r) => !peopleFinished(r, kind));
     const needRecheck = all.filter((r) => peopleNeedsRecheck(r, kind));
     const sweep = !needLoad.length;
-    const auto = kind === "students" && !sweep && needLoad.length > 0;
-    const queue = auto ? needLoad : [needLoad[0] || needRecheck[0] || all[0]];
+    const queue = sweep ? (needRecheck.length ? needRecheck : all) : needLoad;
+    if (!queue.length) {
+      peopleLock.current = false;
+      setMsg("Некого грузить.");
+      return;
+    }
     stopSchool.current = false;
     holdFill.current = true;
     setBusy(true);
-    setMsg(auto ? `По одному · осталось ${queue.length} · пауза 3 с.` : `${queue[0]?.name}: один.`);
+    setMsg(`По одному · ${queue.length} · пауза 3 с.`);
     setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
     let n = 0;
     try {
@@ -1596,8 +1547,8 @@ export function AdminCrmSettings() {
         const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind) });
         if (!res || res.ok === false) {
           if (/уже грузим/i.test(String(res?.error || ""))) {
-            const until = Date.now() + PEOPLE_LOAD_GAP_MS;
-            while (Date.now() < until && !stopSchool.current) await new Promise((r) => setTimeout(r, 200));
+            setSchoolRun({ cur: `пауза 3 с · ждём «${row.name}»`, n: i + 1, total: queue.length });
+            await pauseThree();
             i -= 1;
             continue;
           }
@@ -1605,12 +1556,9 @@ export function AdminCrmSettings() {
           break;
         }
         n += 1;
-        if (auto && i < queue.length - 1 && !stopSchool.current) {
+        if (i < queue.length - 1 && !stopSchool.current) {
           setSchoolRun({ cur: `пауза 3 с · дальше ${queue[i + 1]?.name || ""}`, n: i + 1, total: queue.length });
-          const until = Date.now() + PEOPLE_LOAD_GAP_MS;
-          while (Date.now() < until && !stopSchool.current) {
-            await new Promise((r) => setTimeout(r, 200));
-          }
+          await pauseThree();
         }
       }
     } finally {
@@ -2377,7 +2325,7 @@ export function AdminCrmSettings() {
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Календарь ученика</p>
                 <p className="mt-1 text-sm text-muted">
-                  «Догрузить текущих» идёт по счётчику слева: один ученик, пауза 3 с, пока все не уйдут вправо. Стоп прерывает. Счёт сошёлся — сразу готово, без обхода филиалов. «Сверить счёт» — по одному.
+                  «Догрузить текущих»: строго по одному, пауза 3 с, пока слева не пусто. Следующий не стартует, пока этот не закрыт. Стоп прерывает. «Сверить счёт» — тоже по одному.
                 </p>
                 <div className="mt-3">
                   <ScopePills

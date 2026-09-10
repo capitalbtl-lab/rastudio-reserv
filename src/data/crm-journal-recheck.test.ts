@@ -114,6 +114,10 @@ describe("перепроверка журнала", () => {
     assert.match(ui, /peopleLock/);
     assert.match(ui, /PEOPLE_LOAD_GAP_MS = 3000/);
     assert.match(ui, /пауза 3 с/);
+    assert.match(ui, /function pauseThree/);
+    assert.doesNotMatch(ui, /runStudentPack/);
+    assert.doesNotMatch(ui, /const total = 10/);
+    assert.doesNotMatch(ui, /const auto = kind === "students"/);
     assert.match(ui, /Грузим \$\{schoolRun.n\}\/\$\{schoolRun.total\}/);
     const pullLock = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
     assert.match(pullLock, /studentPullCid/);
