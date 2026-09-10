@@ -1535,7 +1535,7 @@ export function AdminCrmSettings() {
     stopSchool.current = false;
     holdFill.current = true;
     setBusy(true);
-    setMsg(`По одному · ${queue.length} · пауза 3 с.`);
+    setMsg(`${queue[0]?.name}: грузим. Потом пауза 3 с.`);
     setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
     let n = 0;
     try {
@@ -2353,7 +2353,7 @@ export function AdminCrmSettings() {
                           onClick={() => void recheckPeople("students", peopleStudy)}
                         >
                           {run && schoolRun
-                            ? `Грузим ${schoolRun.n}/${schoolRun.total}`
+                            ? schoolRun.cur
                             : allIn
                               ? "Перепроверить загруженных"
                               : peopleStudy === "2"
@@ -2421,7 +2421,7 @@ export function AdminCrmSettings() {
                           disabled={offline || (busy && run)}
                           onClick={() => void recheckPeople("balance", peopleStudy)}
                         >
-                          {run && schoolRun ? `Очередь ${schoolRun.n}/${schoolRun.total}` : peopleStudy === "2" ? "Перепроверить архивных" : "Перепроверить текущих"}
+                          {run && schoolRun ? schoolRun.cur : peopleStudy === "2" ? "Перепроверить архивных" : "Перепроверить текущих"}
                         </button>
                         <button
                           type="button"

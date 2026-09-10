@@ -118,7 +118,8 @@ describe("перепроверка журнала", () => {
     assert.doesNotMatch(ui, /runStudentPack/);
     assert.doesNotMatch(ui, /const total = 10/);
     assert.doesNotMatch(ui, /const auto = kind === "students"/);
-    assert.match(ui, /Грузим \$\{schoolRun.n\}\/\$\{schoolRun.total\}/);
+    assert.doesNotMatch(ui, /Очередь \$\{schoolRun/);
+    assert.doesNotMatch(ui, /Грузим \$\{schoolRun.n\}/);
     const pullLock = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
     assert.match(pullLock, /studentPullCid/);
     assert.match(pullLock, /уже грузим/);
