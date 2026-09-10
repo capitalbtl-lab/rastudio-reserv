@@ -1208,7 +1208,6 @@ export function AdminCrmSettings() {
     void loadAuto();
     void loadCache();
     void loadActors();
-    void loadJournal();
   }, []);
 
   async function loadAuto() {
@@ -2002,12 +2001,12 @@ export function AdminCrmSettings() {
             <div className={cn("space-y-3", offline && "opacity-50")}>
               {journal?.note ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
               {!journal ? (
-                <p className="text-sm text-muted">
-                  Список учеников ещё не пришёл.{" "}
-                  <button type="button" className="font-semibold underline" onClick={() => void loadJournal()}>
-                    Загрузить снова
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" className={BTN_LOAD} disabled={offline} onClick={() => void loadJournal()}>
+                    Показать список с диска
                   </button>
-                </p>
+                  <span className="text-sm text-muted">Само при открытии не грузим — иначе сайт зависает.</span>
+                </div>
               ) : null}
               <div ref={histTabsRef} className="flex flex-wrap gap-1">
                 {HIST_TABS.map((t) => (
