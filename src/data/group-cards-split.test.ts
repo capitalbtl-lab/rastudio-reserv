@@ -10,10 +10,14 @@ describe("карточки групп по файлам", () => {
     assert.match(cards, /cardMem/);
     assert.doesNotMatch(cards, /group-cards\.json/);
     assert.match(cards, /cardFile\(card\.branchId, card\.id\)/);
+    assert.match(cards, /storage", "customer-cals"\)/);
+    assert.doesNotMatch(cards, /customer-calendars\.json/);
+    assert.match(cards, /saveCustomerCalendarList/);
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
     assert.match(pull, /storeMem/);
     assert.match(pull, /skipPeople/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /Promise\.all/);
+    assert.match(inbound, /sliceWin/);
   });
 });

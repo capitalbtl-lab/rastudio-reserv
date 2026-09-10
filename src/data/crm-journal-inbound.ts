@@ -175,6 +175,16 @@ export async function inboundJournalGroup(
   };
   const dateFrom = opts?.dateFrom || ruShift(opts?.lite ? -400 : -2600);
   const dateTo = opts?.dateTo || ruShift(90);
+  const sliceWin = (list: GroupCalLesson[]) => {
+    if (!opts?.dateFrom || !opts?.dateTo) return list;
+    const a = parseLessonDate(opts.dateFrom);
+    const b = parseLessonDate(opts.dateTo);
+    if (!a || !b) return list;
+    return list.filter((l) => {
+      const d = parseLessonDate(l.date);
+      return Boolean(d && d >= a && d <= b);
+    });
+  };
   const byKey = new Map<string, GroupCalLesson>();
   let alfaOk = 0;
   let lastErr = "";
@@ -247,8 +257,8 @@ export async function inboundJournalGroup(
         const card0 = { ...(cached || { id: gid, branchId: branch, name: ctx.groupName, calendar: [] as GroupCalLesson[], at: "", subject: ctx.subject, subjectId: Number(slot?.subjectId || 0) }), calendar: enriched.calendar, journalAt: now, at: now };
         if (!opts?.defer) {
           saveGroupCard(card0);
-          rememberLessons(enriched.calendar);
-          fanOutLessonWriteoffs(enriched.calendar);
+          rememberLessons(sliceWin(enriched.calendar));
+          fanOutLessonWriteoffs(sliceWin(enriched.calendar));
         }
         return { ok: true as const, extra: noteOf(enriched.calendar.length, `, детали ${enriched.filled}`), count: enriched.calendar.length, calendar: enriched.calendar, card: card0, capped: hitCap };
       }
@@ -282,8 +292,8 @@ export async function inboundJournalGroup(
   };
   if (!opts?.defer) {
     saveGroupCard(card);
-    rememberLessons(calendar);
-    fanOutLessonWriteoffs(calendar);
+    rememberLessons(sliceWin(calendar));
+    fanOutLessonWriteoffs(sliceWin(calendar));
   }
   if (opts?.deep && calendar.length) {
     const enriched = await enrichCalendarDetails(branch, calendar, { token: t, take: 16 });
@@ -292,8 +302,8 @@ export async function inboundJournalGroup(
       card.journalAt = now;
       if (!opts?.defer) {
         saveGroupCard(card);
-        rememberLessons(enriched.calendar);
-        fanOutLessonWriteoffs(enriched.calendar);
+        rememberLessons(sliceWin(enriched.calendar));
+        fanOutLessonWriteoffs(sliceWin(enriched.calendar));
       }
       return { ok: true as const, extra: noteOf(enriched.calendar.length, `, детали ${enriched.filled}`), count: enriched.calendar.length, calendar: enriched.calendar, card, capped: hitCap };
     }
