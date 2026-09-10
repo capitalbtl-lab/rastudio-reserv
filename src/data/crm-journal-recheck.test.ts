@@ -113,6 +113,10 @@ describe("перепроверка журнала", () => {
     assert.match(ui, /Загрузить по одному/);
     assert.match(ui, /BTN_RED/);
     assert.match(ui, /bg-red-600/);
+    assert.match(ui, /PEOPLE_FROM_OPTS/);
+    assert.match(ui, /с начала · 2015/);
+    assert.match(ui, /Загрузить всю историю/);
+    assert.match(ui, /peopleDateFrom/);
     assert.doesNotMatch(ui, /Догрузить текущих/);
     assert.doesNotMatch(ui, /Перепроверить загруженных/);
     assert.match(ui, /peopleLock/);
@@ -136,6 +140,8 @@ describe("перепроверка журнала", () => {
     assert.match(inbound, /homeLite/);
     assert.match(inbound, /maxPages = homeLite \? 1/);
     assert.match(inbound, /const homeLite = Boolean\(opts\?\.homeOnly\);/);
+    assert.match(inbound, /opts\?\.dateFrom/);
+    assert.match(inbound, /deepHist/);
     assert.doesNotMatch(inbound, /homeOnly\) \|\| Number\(opts\?\.take\)/);
     assert.match(inbound, /export async function probeCustomerLessons/);
     assert.match(inbound, /!opts\?\.force/);
@@ -146,6 +152,7 @@ describe("перепроверка журнала", () => {
     assert.match(pull, /fanOutLessonWriteoffs\(calendar\)/);
     assert.match(pull, /lessonsJournalReady\(sync\)/);
     assert.match(pull, /homeOnly: false/);
+    assert.match(pull, /opts.dateFrom/);
     assert.doesNotMatch(pull, /groupsReady/);
   });
 });

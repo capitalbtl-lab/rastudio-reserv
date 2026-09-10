@@ -813,9 +813,10 @@ async function pullOneGroup(
   return { extra, count: n, ok, capped };
 }
 
-async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false) {
+async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "") {
   const { inboundCustomerLessons, probeCustomerLessons } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
+  const from = String(dateFrom || "").trim();
   const mark = (disk: number, alfa: number, probedOk: boolean) => {
     const short = lessonsCountShort(disk, alfa, probedOk);
     const closed = probedOk && !short && disk >= alfa;
@@ -848,6 +849,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       full: true,
       force: true,
       homeOnly: false,
+      ...(from ? { dateFrom: from } : {}),
     }).catch(() => ({ count: 0, done: true as const, skipped: undefined as string | undefined }));
     lessons += Number(res.count) || 0;
     if ("skipped" in res && res.skipped === "busy") {
@@ -898,6 +900,7 @@ export async function journalPull(opts: {
   recheck?: boolean;
   customerId?: number;
   probe?: boolean;
+  dateFrom?: string;
 }) {
   const kind = opts.kind;
   const wantedEarly = Number(opts.customerId) || 0;
@@ -1406,7 +1409,7 @@ export async function journalPull(opts: {
       };
     }
     const balance = kind === "balance";
-    const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck));
+    const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck), String(opts.dateFrom || "").trim());
     if (row.blocked) {
       return {
         ok: false as const,

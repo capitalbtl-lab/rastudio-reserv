@@ -95,6 +95,19 @@ const HIST_TABS: { id: HistTab; label: string }[] = [
   { id: "money", label: "Шаг 3 · Деньги на карточке" },
 ];
 const PEOPLE_LOAD_GAP_MS = 5000;
+const PEOPLE_FROM_OPTS = [
+  { id: "2015", label: "с начала · 2015" },
+  { id: "7", label: "7 лет" },
+  { id: "3", label: "3 года" },
+  { id: "1", label: "1 год" },
+] as const;
+function peopleDateFrom(id: string) {
+  if (id === "2015") return "2015-01-01";
+  const years = id === "1" ? 1 : id === "3" ? 3 : 7;
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - years);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 type StudentHit = {
   cid: number;
@@ -696,6 +709,7 @@ function PeopleFillList({
   loadingCid,
   onLoad,
   onRecheck,
+  onFullHistory,
   onStop,
 }: {
   rows: PeopleRow[];
@@ -704,6 +718,7 @@ function PeopleFillList({
   loadingCid?: number;
   onLoad: (row: PeopleRow) => void;
   onRecheck: (row: PeopleRow) => void;
+  onFullHistory?: (row: PeopleRow) => void;
   onStop?: () => void;
 }) {
   const [open, setOpen] = useState("");
@@ -837,7 +852,7 @@ function PeopleFillList({
           {row.alfa ? ` · в Alfa ${row.alfa}` : ""}
         </p>
         <p className="mt-2 h-5 truncate text-[0.78rem] font-semibold">{step}</p>
-        <div className="mt-1 flex h-8 items-center gap-2">
+        <div className="mt-1 flex min-h-8 flex-wrap items-center gap-2">
           <button
             type="button"
             disabled={busy && !active}
@@ -850,6 +865,19 @@ function PeopleFillList({
           >
             {btn}
           </button>
+          {short && onFullHistory ? (
+            <button
+              type="button"
+              disabled={busy && !active}
+              className={BTN_GHOST_SM}
+              onClick={(e) => {
+                e.stopPropagation();
+                onFullHistory(row);
+              }}
+            >
+              Загрузить всю историю
+            </button>
+          ) : null}
           <button
             type="button"
             disabled={!active}
@@ -1129,6 +1157,7 @@ export function AdminCrmSettings() {
   const [journalLoading, setJournalLoading] = useState(true);
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
+  const [peopleFromId, setPeopleFromId] = useState<(typeof PEOPLE_FROM_OPTS)[number]["id"]>("7");
   const [crmTab, setCrmTab] = useState<CrmSetTab>("history");
   const [histTab, setHistTab] = useState<HistTab>("students");
   const crmTabsRef = useRef<HTMLDivElement>(null);
@@ -1423,6 +1452,7 @@ export function AdminCrmSettings() {
     recheck?: boolean;
     customerId?: number;
     probe?: boolean;
+    dateFrom?: string;
   }) {
     setBusy(true);
     if (opts.kind === "group" || opts.kind === "details") {
@@ -1448,6 +1478,7 @@ export function AdminCrmSettings() {
             recheck: Boolean(opts.recheck),
             customerId: opts.customerId || 0,
             probe: Boolean(opts.probe),
+            dateFrom: opts.dateFrom || "",
           } as never,
         }),
         new Promise<never>((_, rej) =>
@@ -1504,14 +1535,18 @@ export function AdminCrmSettings() {
     while (Date.now() < until && !stopSchool.current) await new Promise((r) => setTimeout(r, 200));
   }
 
-  async function loadPerson(row: PeopleRow, kind: "students" | "balance", study: "1" | "2", recheck = false) {
-    if (!row.cid || peopleLock.current) return;
+  async function loadPerson(row: PeopleRow, kind: "students" | "balance", study: "1" | "2", recheck = false, dateFrom = "") {
+    if (!row.cid) return;
+    if (peopleLock.current) {
+      setMsg(`Уже грузим другого — «${row.name}» подождёт.`);
+      return;
+    }
     peopleLock.current = true;
     holdFill.current = true;
     stopSchool.current = false;
     setFillLoading({ kind, label: row.name, customerId: row.cid });
     try {
-      await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck });
+      await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck, dateFrom: dateFrom || peopleDateFrom(peopleFromId) });
     } finally {
       holdFill.current = false;
       setFillLoading(null);
@@ -1555,7 +1590,7 @@ export function AdminCrmSettings() {
         const row = queue[i];
         setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
         setFillLoading({ kind, label: row.name, customerId: row.cid });
-        const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind) });
+        const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: sweep || peopleFinished(row, kind), dateFrom: peopleDateFrom(peopleFromId) });
         if (!res || res.ok === false) {
           if (/уже грузим/i.test(String(res?.error || ""))) {
             setSchoolRun({ cur: `пауза 5 с · ждём «${row.name}»`, n: i + 1, total: queue.length });
@@ -1607,7 +1642,7 @@ export function AdminCrmSettings() {
       if (!stopSchool.current) {
         setSchoolRun({ cur: row.name, n: 1, total: 1 });
         setFillLoading({ kind: "students", label: row.name, customerId: row.cid });
-        const res = await runJournal({ kind: "students", study, customerId: row.cid, branchId: row.branchId, probe: true });
+        const res = await runJournal({ kind: "students", study, customerId: row.cid, branchId: row.branchId, probe: true, dateFrom: peopleDateFrom(peopleFromId) });
         n = 1;
         if (/не хватает/i.test(String(res?.extra || ""))) shortN = 1;
       }
@@ -2336,7 +2371,7 @@ export function AdminCrmSettings() {
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Календарь ученика</p>
                 <p className="mt-1 text-sm text-muted">
-                  Красная кнопка: один ученик, пауза 5 с, затем следующий. Стоп прерывает.
+                  Красная: с Alfa на диск, один ученик, пауза 5 с. Рядом — с какого года качать. Жёлтая старая карточка: «Загрузить всю историю» с 2015.
                 </p>
                 <div className="mt-3">
                   <ScopePills
@@ -2364,6 +2399,21 @@ export function AdminCrmSettings() {
                         >
                           {run && schoolRun ? schoolRun.cur : "Загрузить по одному"}
                         </button>
+                        <label className="inline-flex h-10 items-center gap-2 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10">
+                          <span className="text-muted">годы</span>
+                          <select
+                            className="bg-transparent font-semibold outline-none"
+                            value={peopleFromId}
+                            disabled={busy}
+                            onChange={(e) => setPeopleFromId(e.target.value as (typeof PEOPLE_FROM_OPTS)[number]["id"])}
+                          >
+                            {PEOPLE_FROM_OPTS.map((o) => (
+                              <option key={o.id} value={o.id}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         <button type="button" className={BTN_GHOST} disabled={busy && run} onClick={() => void probePeople(peopleStudy)}>
                           Сверить счёт
                         </button>
@@ -2385,6 +2435,7 @@ export function AdminCrmSettings() {
                         loadingCid={fillLoading?.kind === "students" ? fillLoading.customerId : undefined}
                         onLoad={(row) => void loadPerson(row, "students", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "students", peopleStudy, true)}
+                        onFullHistory={(row) => void loadPerson(row, "students", peopleStudy, true, "2015-01-01")}
                         onStop={() => {
                           stopSchool.current = true;
                         }}

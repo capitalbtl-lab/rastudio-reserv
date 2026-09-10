@@ -367,13 +367,13 @@ export async function probeGroupLife(branch: number, gid: number, opts?: { token
 }
 
 /** Сколько занятий у ученика в Alfa: 1–3 лёгких запроса, не весь журнал. */
-export async function probeCustomerLessons(branch: number, customerId: number, opts?: { token?: string }) {
+export async function probeCustomerLessons(branch: number, customerId: number, opts?: { token?: string; dateFrom?: string }) {
   const id = Number(customerId) || 0;
   if (id <= 0) return { total: 0, ok: false as const };
   const { token, request } = await import("./alfacrm");
   const t = opts?.token || (await token());
   const bid = Number(branch) || 1;
-  const dateFrom = "2015-01-01";
+  const dateFrom = ymd(opts?.dateFrom) || "2015-01-01";
   const dateTo = ymd(ruShift(90));
   async function count(status?: number) {
     const raw = await request<unknown>(
@@ -455,7 +455,7 @@ export async function enrichCalendarDetails(
   return { calendar: list, filled, changed: filled > 0 };
 }
 
-export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean }) {
+export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean; dateFrom?: string }) {
   const id = Number(customerId) || 0;
   if (id <= 0) return { ok: true as const, count: 0, done: true };
   if (!alfaLinkedNow() && !opts?.force) return { ok: true as const, count: 0, skipped: "offline" as const, done: true };
@@ -482,7 +482,8 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const { token, request } = await import("./alfacrm");
     const { listAdminSlots } = await import("./alfacrm-schedule");
     const t = await token();
-    const dateFrom = ruShift(-2600);
+    const deepHist = /^2015/.test(ymd(opts?.dateFrom) || "");
+    const dateFrom = ymd(opts?.dateFrom) || (deepHist ? "2015-01-01" : ymd(ruShift(-2600)));
     const dateTo = ruShift(90);
     const slots = listAdminSlots();
     const homeLite = Boolean(opts?.homeOnly);
@@ -493,7 +494,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     let cur = wantFull ? lessonFillOf(customerSyncOf(id).lessonFill) || lessonFillStart(branches[0] || branch) : lessonFillStart(branches[0] || branch);
     let ran = 0;
     const maxRun = homeLite ? LESSON_STATUSES.length : Number(opts?.take) > 0 ? Math.min(LESSON_INBOUND_RUN, Number(opts.take)) : wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
-    const maxPages = homeLite ? 1 : Number(opts?.take) > 0 ? Math.min(3, wantFull ? 12 : 2) : wantFull ? 12 : 2;
+    const maxPages = homeLite ? 1 : deepHist ? 12 : Number(opts?.take) > 0 ? Math.min(3, wantFull ? 12 : 2) : wantFull ? 12 : 2;
     const from = wantFull ? dateFrom : ruShift(LESSON_RECENT_DAYS);
     while (ran < maxRun && !cur.done) {
       const bid = cur.bid;

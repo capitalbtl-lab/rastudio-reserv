@@ -3093,6 +3093,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         recheck: Boolean((data as { recheck?: boolean }).recheck),
         customerId: Number((data as { customerId?: number }).customerId) || 0,
         probe: Boolean((data as { probe?: boolean }).probe),
+        dateFrom: String((data as { dateFrom?: string }).dateFrom || "").trim(),
       });
       logAdmin(`Журнал Alfa: ${res.extra || res.error || kind}`);
       return res;
