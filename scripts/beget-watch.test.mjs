@@ -14,6 +14,10 @@ describe("автовыкладка Beget", () => {
     assert.match(watch, /RA_DEPLOY_BG/);
     assert.match(sh, /status.*online/);
     assert.doesNotMatch(sh, /pm2 restart rastudio-deploy --update-env/);
-    assert.doesNotMatch(watch, /pm2.*restart.*rastudio/);
+    assert.match(watch, /building\(\)/);
+    assert.match(watch, /\.build-stage/);
+    assert.match(sh, /port_up/);
+    assert.match(sh, /3000 уже слушает/);
+    assert.match(sh, /rm -f "\$LOCK"/);
   });
 });

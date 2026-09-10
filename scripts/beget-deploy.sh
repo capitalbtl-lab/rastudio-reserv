@@ -36,14 +36,28 @@ if [ ! -d node_modules ] || ! git diff --quiet "$BEFORE" HEAD -- package-lock.js
   npm ci
 fi
 
+port_up() { ss -ltnp 2>/dev/null | grep -q ':3000'; }
+
 bring_up() {
+  if port_up; then
+    echo "[deploy] 3000 уже слушает — не трогаю"
+    return
+  fi
   if [ ! -f "$ROOT/.output/server/index.mjs" ] && [ -f "$ROOT/.output.bak/server/index.mjs" ]; then
     echo "[deploy] возвращаю предыдущую сборку"
     rm -rf "$ROOT/.output"
     mv "$ROOT/.output.bak" "$ROOT/.output"
   fi
-  if [ -f "$ROOT/.output/server/index.mjs" ]; then
-    pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio >/dev/null 2>&1 || pm2 restart rastudio --update-env >/dev/null 2>&1 || true
+  if [ ! -f "$ROOT/.output/server/index.mjs" ]; then
+    echo "[deploy] нет index.mjs"
+    return
+  fi
+  pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio >/dev/null 2>&1 || pm2 restart rastudio --update-env >/dev/null 2>&1 || true
+  sleep 2
+  if ! port_up; then
+    echo "[deploy] pm2 не слушает 3000 — стартую node"
+    nohup env NODE_ENV=production HOST=0.0.0.0 PORT=3000 node --max-old-space-size=640 "$ROOT/.output/server/index.mjs" >/tmp/rastudio-node.log 2>&1 &
+    sleep 1
   fi
 }
 
@@ -101,6 +115,7 @@ if [ ! -f "$STAGE/.output/server/index.mjs" ] || [ -z "$css" ]; then
   rm -rf "$STAGE"
   restore_media
   bring_up
+  rm -f "$LOCK"
   exit 1
 fi
 
@@ -127,7 +142,7 @@ fi
 pm2 delete rastudio >/dev/null 2>&1 || true
 pm2 start "$ROOT/ecosystem.config.cjs" --only rastudio >/dev/null 2>&1 || true
 sleep 2
-if ! ss -ltnp 2>/dev/null | grep -q ':3000'; then
+if ! port_up; then
   echo "[deploy] pm2 не слушает 3000 — стартую node"
   nohup env NODE_ENV=production HOST=0.0.0.0 PORT=3000 node --max-old-space-size=640 "$ROOT/.output/server/index.mjs" >/tmp/rastudio-node.log 2>&1 &
   sleep 1
@@ -147,5 +162,6 @@ pm2 save
 
 git rev-parse HEAD > "$ROOT/.output/.deploy-rev"
 git rev-parse HEAD > "$ROOT/.deploy-rev"
+rm -f "$LOCK"
 echo "[deploy] live $(git rev-parse --short HEAD)"
 node scripts/ping-indexnow.mjs || echo "[deploy] IndexNow skip"

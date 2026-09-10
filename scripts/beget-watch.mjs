@@ -41,9 +41,18 @@ function lockHeld() {
   }
 }
 
+function building() {
+  if (lockHeld()) return true;
+  try {
+    return existsSync(path.join(root, ".build-stage", "package.json"));
+  } catch {
+    return false;
+  }
+}
+
 async function tick() {
   if (busy) return;
-  if (lockHeld()) {
+  if (building()) {
     console.log("[deploy] сборка уже идёт, жду");
     return;
   }

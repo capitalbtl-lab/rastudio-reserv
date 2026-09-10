@@ -26,7 +26,7 @@ module.exports = {
       instances: 1,
       exec_mode: "fork",
       kill_timeout: 8000,
-      listen_timeout: 12000,
+      listen_timeout: 30000,
       max_memory_restart: "700M",
       exp_backoff_restart_delay: 2000,
       node_args: "--max-old-space-size=640",
