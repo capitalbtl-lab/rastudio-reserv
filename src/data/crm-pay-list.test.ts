@@ -193,4 +193,21 @@ describe("касса список", () => {
     assert.match(pay, /Без имени/);
     assert.match(pay, /row.customerName/);
   });
+
+  it("добор кассы не пишет extras.balance; rest 0 не ест шапку", () => {
+    const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
+    const stamp = pay.slice(pay.indexOf("async function stampPayBalances"), pay.indexOf("export async function inboundCustomerPays"));
+    assert.doesNotMatch(stamp, /upsertDossier/);
+    assert.match(pay, /complete: payCustomerFilled\(id\)/);
+    const tariffs = readFileSync(new URL("./pupil-tariffs.ts", import.meta.url), "utf8");
+    assert.match(tariffs, /export function cttRestMoney/);
+    assert.match(tariffs, /if \(Number.isFinite\(bal\) && bal !== 0\) return bal/);
+    const disk = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
+    assert.doesNotMatch(disk, /liveCtt.length \? 0 : snap/);
+    const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
+    const at = api.indexOf('data.action === "customerGet"');
+    const next = api.indexOf('data.action === "customerSave"', at + 10);
+    const chunk = api.slice(at, next > at ? next : at + 8000);
+    assert.doesNotMatch(chunk, /balance: String\(customer.balance\)/);
+  });
 });

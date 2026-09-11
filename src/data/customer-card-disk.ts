@@ -1,7 +1,7 @@
 import type { Dossier } from "./dossiers";
 import type { CustomerCard } from "./crm-cards";
 import { listAdminSlots } from "./alfacrm-schedule";
-import { collectCustomerJournal, journalGroupsOfCustomer } from "./group-cards";
+import { collectCustomerJournal, journalGroupsOfCustomer, loadCustomerCalendar } from "./group-cards";
 import { beatsOf } from "./crm-slots-core";
 import { clientCardId, CRM_BRANCH } from "./ids";
 import { listTeachers, teachersAtBranch } from "./crm-teachers";
@@ -9,8 +9,8 @@ import { loadSubjects } from "./crm-subjects";
 import { isAdminGroup } from "./group-status";
 import { clientLessonFromJournal } from "./crm-journal-core";
 import { customerBalance, cardPays, isPayJournalComplete } from "./crm-pay";
-import { writeoffSumOf } from "./crm-ledger-core";
-import { accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt } from "./crm-pay-core";
+import { writeoffSumOf, writeoffSumForCtt } from "./crm-ledger-core";
+import { accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, cttRestSum } from "./crm-pay-core";
 import { asCustomerComm, commsOf } from "./crm-comms";
 import { loadTariffs } from "./crm-tariffs";
 import { isPaidCountLabel, parseDossierCtt, withCatalogCtt } from "./pupil-tariffs";
@@ -181,6 +181,8 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   for (const les of journal) {
     calendar.push(clientLessonFromJournal(les, les.group));
   }
+  const cal = loadCustomerCalendar(customerId);
+  const woLessons = cal.length ? cal : journal;
   const cat = catalogBase();
   const catalogGroups = cat.groups.slice().sort((a, b) => Number(b.branchId === useBranch) - Number(a.branchId === useBranch) || a.name.localeCompare(b.name, "ru"));
   const catalogTariffs = loadTariffs().items;
@@ -193,12 +195,12 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
     if (name) {
       tariffs = [
         {
-          id: tariffId || Number(d.crmId) || 0,
+          id: tariffId || 0,
           tariffId: tariffId || undefined,
           name,
           rest: 0,
           lessons: 0,
-          archived: false,
+          archived: true,
           bDate: "",
           eDate: "",
           price: 0,
@@ -215,15 +217,19 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   const liveCtt = liveCttOf(tariffs);
   const lessonsPlan = journal.filter((l) => Number(l.status) !== 2).length;
   const lessonsFact = journal.filter((l) => Number(l.status) === 3).length;
-  const writeoffSum = writeoffSumOf(journal, customerId);
+  const writeoffSum = writeoffSumOf(woLessons, customerId);
   const paidTill = liveCtt.map((t) => t.eDate || "").filter(Boolean).sort().slice(-1)[0] || String(d.extras?.paid_till || "");
   const paidCount = liveCtt.reduce((n, t) => n + (Number(t.lessons) || 0), 0);
   const snap = accountSnapOf(d.extras?.balance, tariffs);
+  const liveRest = cttRestSum(liveCtt);
+  const baseRest = isPayJournalComplete(customerId)
+    ? paySumForCtt(pays, 0) - writeoffSumForCtt(woLessons, 0)
+    : (Number(snap) || 0) - liveRest;
   tariffs = [
     {
       id: 0,
       name: "Базовый счет",
-      rest: liveCtt.length ? 0 : snap,
+      rest: baseRest,
       lessons: 0,
       archived: false,
       basic: true,

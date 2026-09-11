@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, withCatalogCtt, isGenericTariffName, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, stampLiveTariff, changeListRows, batchesOfThree, keepByLiveTariff, alfaCalculationType, lessonWriteoffOf, pickLessonCtt, type PupilGroup } from "./pupil-tariffs.ts";
+import { assignable, pupilRowFromMember, uniqueLiveGroups, pickBestTariff, tariffMatchesSubject, customerTariffPayload, customerTariffCreatePath, customerTariffIndexPath, customerTariffIndexBranchPath, customerTariffUpdatePath, customerTariffDeletePath, activeCustomerTariffs, keepPupilsWithActiveTariffs, groupHasBoundPupils, indexActiveTariffsByCustomer, PLAN_GROUP_CHUNK, formatTariffNames, customerTariffLabel, withCatalogNames, withCatalogCtt, isGenericTariffName, countArchivedOnlyPupils, splitCustomerTariffs, collapsePupilsByCustomer, pupilListStats, crmGroupQuantity, countCgiByGroup, countCgiParticipants, crmIndexTotal, mergeGroupTaken, groupsBySchoolId, bySchoolId, dropoutsAfterJob, stampLiveTariff, changeListRows, batchesOfThree, keepByLiveTariff, alfaCalculationType, lessonWriteoffOf, pickLessonCtt, cttRestMoney, type PupilGroup } from "./pupil-tariffs.ts";
 import { tariffFitsSlot } from "./crm-tariffs.ts";
 import type { CrmSlot } from "./crm-slots-core.ts";
 import type { CrmTariff } from "./crm-tariffs.ts";
@@ -572,12 +572,19 @@ describe("мастер абонементов учеников", () => {
     assert.doesNotMatch(pull, /best.paid \|\| best.balance/);
     assert.match(pull, /if \(found\)/);
     const pack = src.slice(src.indexOf("export function packCardTariff"), src.indexOf("export function parseDossierCtt"));
-    assert.match(pack, /it\.balance \?\? it\.rest \?\? 0/);
+    assert.match(pack, /cttRestMoney\(it\)/);
     assert.doesNotMatch(pack, /it\.rest \?\? it\.paid/);
     assert.match(pack, /it.is_archived \|\| it.is_archive/);
     const pullTariffs = src.slice(src.indexOf("export async function pullCustomerTariffs"), src.indexOf("export async function pullCustomerAccount"));
     assert.match(pullTariffs, /is_archived: 1/);
     assert.match(pullTariffs, /quick/);
+  });
+
+  it("rest абонемента: 0 в balance не съедает rest", () => {
+    assert.equal(cttRestMoney({ balance: 0, rest: -987.5 }), -987.5);
+    assert.equal(cttRestMoney({ balance: -2125, rest: 0 }), -2125);
+    assert.equal(cttRestMoney({ balance: 2025 }), 2025);
+    assert.equal(cttRestMoney({ rest: 0, balance: 0 }), 0);
   });
 
   it("списание занятия = цена абонемента / число уроков", () => {

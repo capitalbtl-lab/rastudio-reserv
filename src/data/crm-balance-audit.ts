@@ -60,7 +60,7 @@ export async function diskAudit(cid: number, branchId: number) {
   const woCal = writeoffSumOf(cal, id);
   const woCard = writeoffSumOf(journal, id);
   const snap = d ? accountSnapOf(d.extras?.balance, parseDossierCtt(d.extras)) : Number.NaN;
-  const clients = d ? customerBalance(id, snap, woCard) : 0;
+  const clients = d ? customerBalance(id, snap, woCal) : 0;
   const ids = cal.map((l) => Number(l.lessonId) || 0).filter((n) => n > 0);
   return {
     name: String(d?.child?.fio || "").trim() || `клиент ${id}`,

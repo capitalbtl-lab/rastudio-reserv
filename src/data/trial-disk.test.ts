@@ -459,7 +459,7 @@ describe("кабинет: новый ученик диск сразу", () => {
     assert.match(card, /collectCustomerJournal/);
     assert.match(card, /clientLessonFromJournal/);
     assert.match(card, /journalGroupsOfCustomer/);
-    assert.match(card, /writeoffSumOf\(journal/);
+    assert.match(card, /writeoffSumOf\(woLessons/);
     const lessons = readFileSync(new URL("./crm-lessons.ts", import.meta.url), "utf8");
     assert.match(lessons, /journalAttend/);
     const rules = readFileSync(new URL("./crm-disk-rules.ts", import.meta.url), "utf8");

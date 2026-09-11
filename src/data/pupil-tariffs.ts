@@ -678,6 +678,20 @@ export function withCatalogCtt<T extends { name: string; tariffId?: number; subj
   });
 }
 
+export function cttRestMoney(it: Record<string, unknown>) {
+  const pick = (v: unknown) => {
+    if (v == null || v === "") return Number.NaN;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : Number.NaN;
+  };
+  const bal = pick(it.balance);
+  const rest = pick(it.rest);
+  if (Number.isFinite(bal) && bal !== 0) return bal;
+  if (Number.isFinite(rest)) return rest;
+  if (Number.isFinite(bal)) return bal;
+  return 0;
+}
+
 export function packCardTariff(it: Record<string, unknown>, catalog?: CatalogTariff[], subjects?: { id: number; name: string }[]) {
   const live = tariffRowLive(it);
   const sid = Number(it.subject_id || it.subjectId || 0) || (Array.isArray(it.subject_ids) ? Number(it.subject_ids[0] || 0) : 0);
@@ -687,7 +701,7 @@ export function packCardTariff(it: Record<string, unknown>, catalog?: CatalogTar
     id: Number(it.id) || 0,
     tariffId: Number(it.tariff_id || it.tariffId || 0) || undefined,
     name: customerTariffLabel(it, catalog),
-    rest: Number(it.balance ?? it.rest ?? 0) || 0,
+    rest: cttRestMoney(it),
     lessons: Number(it.lesson_count ?? it.lessons_count ?? it.paid_count ?? 0) || 0,
     archived: !live || flagged,
     bDate: String(it.b_date || it.bDate || ""),
@@ -710,7 +724,7 @@ export function parseDossierCtt(extras?: Record<string, string> | null) {
           id,
           tariffId: Number(it.tariffId || it.tariff_id || 0) || undefined,
           name: String(it.name || "абонемент"),
-          rest: Number(it.rest || it.balance || 0) || 0,
+          rest: cttRestMoney(it),
           lessons: Number(it.lessons || 0) || 0,
           archived: Boolean(it.archived),
           bDate: String(it.bDate || it.b_date || ""),

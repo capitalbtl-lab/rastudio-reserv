@@ -218,4 +218,22 @@ describe("шаг 4 сверка остатка", () => {
     assert.match(src, /for \(let i = 0; i < 4/);
     assert.match(src, /диск: \$\{err\}/);
   });
+
+  it("касса и открытие карточки не затирают extras.balance", () => {
+    const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
+    const stamp = pay.slice(pay.indexOf("async function stampPayBalances"), pay.indexOf("export async function inboundCustomerPays"));
+    assert.doesNotMatch(stamp, /upsertDossier/);
+    assert.doesNotMatch(stamp, /balance: String\(next\)/);
+    const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
+    const at = api.indexOf('data.action === "customerGet"');
+    const next = api.indexOf('data.action === "customerSave"', at + 10);
+    const chunk = api.slice(at, next > at ? next : at + 8000);
+    assert.doesNotMatch(chunk, /balance: String\(customer.balance\)/);
+    const disk = readFileSync(new URL("./customer-card-disk.ts", import.meta.url), "utf8");
+    assert.match(disk, /archived: true/);
+    assert.match(disk, /loadCustomerCalendar/);
+    assert.doesNotMatch(disk, /liveCtt.length \? 0 : snap/);
+    const core = readFileSync(new URL("./crm-pay-core.ts", import.meta.url), "utf8");
+    assert.doesNotMatch(core, /if \(hasCtt\) return rest;\s*if \(rest\) return rest/);
+  });
 });

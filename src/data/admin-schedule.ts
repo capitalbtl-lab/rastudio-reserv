@@ -1627,14 +1627,6 @@ export const adminSchedule = createServerFn({ method: "POST" })
         snapshotBalance(customer.balance, cttRest, rows.length > 0),
         writeoffSumOf(loadCustomerCalendar(customerId), customerId),
       );
-      const dAfter = findDossier({ crmId: customerId });
-      if (dAfter) {
-        upsertDossier({
-          crmId: customerId,
-          extras: { ...(dAfter.extras || {}), balance: String(customer.balance) },
-          source: "sync",
-        } as never);
-      }
       customer.comms = commsOf(customerId).map(asCustomerComm);
       customer.pays = cardPays(customerId);
       if (crmPush) customer.crmPush = crmPush;

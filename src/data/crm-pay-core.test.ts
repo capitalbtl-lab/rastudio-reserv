@@ -35,16 +35,18 @@ describe("журнал денег", () => {
     assert.equal(displayedBalance(fragment, "500"), 500);
     assert.equal(displayedBalance(fragment, "500", true), 6450);
     assert.equal(displayedBalance(fragment, "0"), 0);
-    assert.equal(snapshotBalance("1", 6450), 6450);
+    assert.equal(snapshotBalance("1", 6450), 1);
     assert.equal(snapshotBalance("5000", 0), 5000);
     assert.equal(snapshotBalance("", 0), 0);
     assert.equal(snapshotBalance("1"), 1);
-    assert.equal(snapshotBalance("152475", 0, true), 0);
+    assert.equal(snapshotBalance("152475", 0, true), 152475);
     assert.equal(snapshotBalance("152475", 0, false), 152475);
-    assert.equal(accountSnapOf("152475", [{ id: 5016, rest: 0, archived: false }]), 0);
+    assert.equal(accountSnapOf("152475", [{ id: 5016, rest: 0, archived: false }]), 152475);
+    assert.equal(accountSnapOf("2025", [{ id: 9185, rest: 0, archived: false }]), 2025);
     assert.equal(accountSnapOf("5000", [{ id: 1, rest: 0, archived: true }]), 5000);
     assert.equal(accountSnapOf("5000", []), 5000);
     assert.equal(liveCttOf([{ id: 0, archived: false }, { id: 5016, rest: 0, archived: false }]).length, 1);
+    assert.equal(liveCttOf([{ id: 9185, rest: 0, archived: true }]).length, 0);
     const alehinPays = [
       row({ id: 1, kind: "income", income: 4350, expenditure: 0, cttId: 5016 }),
       row({ id: 2, kind: "income", income: 3950, expenditure: 0, cttId: 4175 }),
