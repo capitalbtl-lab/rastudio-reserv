@@ -2593,7 +2593,7 @@ export function AdminCrmSettings() {
                   )}
                 </div>
                 <p className="mt-1 text-[0.72rem] text-muted">
-                  «Архив групп учеников» — id с карточек текущих и рабочего архива. Скрытых не берёт. groupLinks может быть без групп 2019 года.
+                  «Архив групп учеников» — id с карточек той выборки, что на шаге 1 (текущие или рабочий архив, не вместе). Скрытых не берёт. groupLinks может быть без групп 2019 года.
                 </p>
                 <label className="mt-3 block text-sm font-semibold">
                   <span className="inline-flex items-center gap-1">
