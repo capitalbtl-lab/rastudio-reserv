@@ -55,6 +55,13 @@ describe("форма пробного с сайта", () => {
     assert.match(src, /TrialPopup/);
   });
 
+  it("окно пробного блокирует прокрутку страницы", () => {
+    const src = readFileSync(new URL("../components/trial-popup.tsx", import.meta.url), "utf8");
+    assert.match(src, /overflow = "hidden"/);
+    assert.match(src, /onWheel/);
+    assert.match(src, /max-w-2xl/);
+  });
+
   it("на странице один филиал — поле Alfa, без второго селекта rastudio", () => {
     const src = readFileSync(new URL("../components/trial-form.tsx", import.meta.url), "utf8");
     assert.doesNotMatch(src, /TRIAL_BRANCHES/);

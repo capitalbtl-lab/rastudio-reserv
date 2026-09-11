@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { CmsSession } from "@/data/cms";
 import { sendTrial } from "@/data/trial";
 import { TRIAL_BRANCHES, trialCourseForPath } from "@/data/trial-public";
@@ -28,6 +28,19 @@ export function TrialModal({
 }) {
   const next = nextLessonDate(session);
   const seats = freePlaces(session);
+
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.overflow;
+    const prevBody = body.style.overflow;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = prevHtml;
+      body.style.overflow = prevBody;
+    };
+  }, []);
   const branchId = String(session.branchId || 2);
   const branchLabel =
     SITE_BRANCHES.find((b) => String(b.id) === branchId)?.label ||
@@ -71,9 +84,9 @@ export function TrialModal({
 
   if (mode === "trial") {
     return (
-      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-header/55 p-3 backdrop-blur-[6px] sm:p-6" onClick={onClose}>
+      <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden overscroll-none bg-header/55 p-3 backdrop-blur-[6px] sm:p-5" onClick={onClose} onWheel={(e) => e.preventDefault()}>
         <div
-          className="relative flex h-[min(46rem,94dvh)] w-full max-w-[32rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
+          className="relative flex max-h-[96dvh] w-full max-w-2xl flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -89,7 +102,7 @@ export function TrialModal({
             <h2 className="display mt-2 pr-10 text-[1.7rem] sm:text-[1.9rem]">Запись на пробное</h2>
             <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted">Первое занятие без абонемента.</p>
           </div>
-          <div className="min-h-0 flex-1 px-5 pb-5 sm:px-8 sm:pb-7">
+          <div className="h-[22rem] shrink-0 px-5 pb-5 sm:h-[24rem] sm:px-7 sm:pb-6">
             <TrialEmbed src={trialSrc} className="h-full w-full" />
           </div>
         </div>
