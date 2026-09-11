@@ -15,6 +15,7 @@ import { readBehavior, tickBehavior } from "@/data/page-behavior";
 import { parseTurns, faceOf, type Who } from "@/data/agent-turns";
 import { PageLink } from "@/components/page-link";
 import { SITE } from "@/data/site";
+import { isTrialHref, openTrialForm } from "@/data/site-signup-core";
 import { cn } from "@/lib/utils";
 import { FORK_ASK } from "@/data/agent-funnel";
 import type { PageAgent } from "@/data/page-agents-core";
@@ -62,10 +63,8 @@ function greeting(who: "oleg" | "olga", page?: PageAgent | null) {
 
 function goSitePath(path: string) {
   if (!path) return;
-  if (path === "#trial" || path.endsWith("#trial")) {
-    const el = document.getElementById("trial") || document.querySelector("#trial");
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    else window.location.assign("/#trial");
+  if (path === "#trial" || path.endsWith("#trial") || isTrialHref(path)) {
+    openTrialForm();
     return;
   }
   if (path === window.location.pathname) return;

@@ -19,7 +19,7 @@ export function TrialForm({
 
   return (
     <section
-      id={compact ? undefined : "trial"}
+      id="trial"
       className="rounded-[1.75rem] bg-surface px-5 py-8 shadow-[var(--shadow-border)] md:px-10 md:py-10"
     >
       <p className="kicker text-primary">Пробное занятие</p>

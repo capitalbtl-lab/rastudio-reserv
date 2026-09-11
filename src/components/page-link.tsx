@@ -1,5 +1,6 @@
 import { forwardRef, type CSSProperties, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
+import { isTrialHref, openTrialForm } from "@/data/site-signup-core";
 
 type Props = {
   to: string;
@@ -18,6 +19,24 @@ export const PageLink = forwardRef<HTMLAnchorElement, Props>(function PageLink(
   { to, className, children, onClick, style },
   ref,
 ) {
+  if (isTrialHref(to)) {
+    return (
+      <a
+        ref={ref}
+        href="#trial"
+        className={className}
+        style={style}
+        onClick={(e) => {
+          e.preventDefault();
+          onClick?.();
+          openTrialForm();
+        }}
+      >
+        {children}
+      </a>
+    );
+  }
+
   if (/^https?:\/\//i.test(to) || to.startsWith("tel:") || to.startsWith("mailto:")) {
     return (
       <a ref={ref} href={to} className={className} style={style} onClick={onClick}>

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
   SITE_SIGNUP_DEFAULT,
+  isTrialHref,
   parseTrialEmbed,
   trialFormUrl,
   trialIframeHtml,
@@ -75,5 +76,47 @@ describe("форма пробного с сайта", () => {
     const src = readFileSync(new URL("../components/trial-modal.tsx", import.meta.url), "utf8");
     assert.match(src, /Запись в группу/);
     assert.match(src, /sendTrial/);
+  });
+
+  it("ссылка пробного ловится, запись в группу — нет", () => {
+    assert.equal(isTrialHref("#trial"), true);
+    assert.equal(isTrialHref("/art-studio#trial"), true);
+    assert.equal(
+      isTrialHref(
+        "https://studiyarazvivaysya.s20.online/common/2/form/draw?id=20&lead_source_id=2",
+      ),
+      true,
+    );
+    assert.equal(isTrialHref("https://studiyarazvivaysya.s20.online/common/2/lead/create?gid=528"), false);
+    assert.equal(isTrialHref("/schedule"), false);
+  });
+
+  it("все кнопки пробного открывают окно, не вкладку Alfa", () => {
+    const files = [
+      "../components/group-ctas.tsx",
+      "../components/convert.tsx",
+      "../components/trial-form.tsx",
+      "../components/site-header.tsx",
+      "../components/cms-blocks.tsx",
+      "../components/site-shell.tsx",
+      "../components/page-link.tsx",
+      "../components/schedule-finder.tsx",
+      "../components/agent-chat.tsx",
+    ];
+    for (const file of files) {
+      const src = readFileSync(new URL(file, import.meta.url), "utf8");
+      if (file.includes("group-ctas") || file.includes("convert") || file.includes("trial-form")) {
+        assert.match(src, /openTrialForm/, file);
+      }
+      if (file.includes("site-header") || file.includes("cms-blocks") || file.includes("site-shell")) {
+        assert.match(src, /#trial/, file);
+      }
+      if (file.includes("page-link") || file.includes("schedule-finder") || file.includes("agent-chat")) {
+        assert.match(src, /isTrialHref|openTrialForm/, file);
+      }
+    }
+    const popup = readFileSync(new URL("../components/trial-popup.tsx", import.meta.url), "utf8");
+    assert.match(popup, /isTrialHref/);
+    assert.match(popup, /TrialEmbed/);
   });
 });

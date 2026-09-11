@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { SITE_SIGNUP_DEFAULT, trialIframeHtml, type SiteSignup } from "./site-signup-core";
 import { mergeStatusPublish } from "./group-status";
 
-export { SITE_SIGNUP_DEFAULT, trialFormUrl, trialIframeHtml, groupSignupUrl, trialUrlFor, parseTrialEmbed, openTrialForm, resolveGroupSignup, SITE_BRANCHES, type SiteSignup } from "./site-signup-core";
+export { SITE_SIGNUP_DEFAULT, trialFormUrl, trialIframeHtml, groupSignupUrl, trialUrlFor, parseTrialEmbed, openTrialForm, isTrialHref, resolveGroupSignup, SITE_BRANCHES, type SiteSignup } from "./site-signup-core";
 
 function fileOf() {
   return join(process.cwd(), "storage", "site-signup.json");

@@ -11,6 +11,7 @@ import { mediaAlt } from "@/data/media-alts-core";
 import { endMediaDrag, mediaFromDrop, moveMediaDrag } from "@/lib/media-drag";
 import { PageLink } from "@/components/page-link";
 import { Button } from "@/components/ui/button";
+import { isTrialHref, openTrialForm } from "@/data/site-signup-core";
 import { cn } from "@/lib/utils";
 
 export function HomeCanvas({
@@ -77,7 +78,17 @@ function CustomHomeBlock({ block }: { block: HomeCustomBlock }) {
           {block.ctaLabel ? (
             <div className="mt-6">
               <Button asChild size="lg">
-                {block.ctaHref?.startsWith("/") ? (
+                {isTrialHref(block.ctaHref || "#trial") ? (
+                  <a
+                    href="#trial"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openTrialForm();
+                    }}
+                  >
+                    {block.ctaLabel}
+                  </a>
+                ) : block.ctaHref?.startsWith("/") ? (
                   <PageLink to={block.ctaHref}>{block.ctaLabel}</PageLink>
                 ) : (
                   <a href={block.ctaHref || "#trial"}>{block.ctaLabel}</a>

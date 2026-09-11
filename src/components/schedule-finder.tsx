@@ -5,6 +5,7 @@ import { ArrowUpRight } from "lucide-react";
 import type { CmsSession } from "@/data/cms";
 import { AGE_BANDS, type AgeBandId } from "@/data/ages";
 import { PageLink } from "@/components/page-link";
+import { isTrialHref, openTrialForm } from "@/data/site-signup-core";
 import { cn } from "@/lib/utils";
 import {
   WEEKDAYS,
@@ -247,7 +248,15 @@ export function ScheduleFinder({ sessions }: { sessions: CmsSession[] }) {
                             {` · ${meta.city}, ${meta.short}`}
                           </span>
                         </span>
-                        {slot.session.signup?.startsWith("http") ? (
+                        {isTrialHref(slot.session.signup || "") ? (
+                          <button
+                            type="button"
+                            onClick={() => openTrialForm(slot.session.branchId)}
+                            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-fg px-3 text-xs font-semibold text-bg hover:bg-primary"
+                          >
+                            Запись
+                          </button>
+                        ) : slot.session.signup?.startsWith("http") ? (
                           <a
                             href={slot.session.signup}
                             target="_blank"

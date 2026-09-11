@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { TrialEmbed } from "@/components/trial-embed";
 import { loadPublicTrialSignup } from "@/data/site-signup-fn";
-import { SITE_SIGNUP_DEFAULT, trialUrlFor, type SiteSignup } from "@/data/site-signup-core";
+import { SITE_SIGNUP_DEFAULT, isTrialHref, trialUrlFor, type SiteSignup } from "@/data/site-signup-core";
 
 export function TrialPopup() {
   const [open, setOpen] = useState(false);
@@ -31,9 +31,9 @@ export function TrialPopup() {
       const a = (e.target as HTMLElement | null)?.closest?.("a");
       if (!a) return;
       const href = a.getAttribute("href") || "";
-      if (!(href === "#trial" || /#trial$/.test(href) || href.includes("#trial"))) return;
-      if (signup.trialOn === false) return;
+      if (!isTrialHref(href)) return;
       e.preventDefault();
+      e.stopPropagation();
       show(2);
     }
     function onHash() {

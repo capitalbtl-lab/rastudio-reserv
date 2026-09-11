@@ -96,6 +96,14 @@ export function trialUrlFor(signup: SiteSignup, branchId?: number) {
   return withAlfaFormCss(normalizeTrialHref(parseTrialEmbed(raw)));
 }
 
+export function isTrialHref(href: string) {
+  const s = String(href || "").trim();
+  if (!s) return false;
+  if (s === "#trial" || s.includes("#trial")) return true;
+  if (/s20\.online/i.test(s) && /\/form\/draw/i.test(s)) return true;
+  return false;
+}
+
 export function openTrialForm(branchId?: number) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("ra-open-trial", { detail: { branchId: Number(branchId) || 2 } }));
