@@ -2848,7 +2848,7 @@ export function AdminCrmSettings() {
                 {peopleStudy === "2" ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {catalogOptsBar()}
-                    <div className="flex flex-nowrap items-center gap-2">
+                    <div className="flex min-w-0 w-full flex-nowrap items-center gap-2">
                     {withHint(
                       <button
                         type="button"
@@ -2884,8 +2884,8 @@ export function AdminCrmSettings() {
                       </button>,
                       HINT.stop,
                     )}
+                    {journal?.note ? <p className="min-w-0 flex-1 truncate rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
                     </div>
-                    {journal?.note ? <p className="w-full rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
                         На диске {journal.lastArchivePolicy.disk} · ФИО {journal.lastArchivePolicy.fioOk} · без dob {journal.lastArchivePolicy.noDob} · 18+ {journal.lastArchivePolicy.adult} · пересечение {journal.lastArchivePolicy.intersect} · в наборе {journal.lastArchivePolicy.working} · скрыто {journal.lastArchivePolicy.hidden}
@@ -2984,7 +2984,7 @@ export function AdminCrmSettings() {
                 {peopleStudy === "2" ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {catalogOptsBar()}
-                    <div className="flex flex-nowrap items-center gap-2">
+                    <div className="flex min-w-0 w-full flex-nowrap items-center gap-2">
                     {withHint(
                       <button
                         type="button"
@@ -3020,8 +3020,8 @@ export function AdminCrmSettings() {
                       </button>,
                       HINT.stop,
                     )}
+                    {journal?.note ? <p className="min-w-0 flex-1 truncate rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
                     </div>
-                    {journal?.note ? <p className="w-full rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
                         На диске {journal.lastArchivePolicy.disk} · ФИО {journal.lastArchivePolicy.fioOk} · без dob {journal.lastArchivePolicy.noDob} · 18+ {journal.lastArchivePolicy.adult} · пересечение {journal.lastArchivePolicy.intersect} · в наборе {journal.lastArchivePolicy.working} · скрыто {journal.lastArchivePolicy.hidden}
