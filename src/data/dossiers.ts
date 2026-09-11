@@ -1351,6 +1351,7 @@ export async function syncAllFromCrm(
 const CATALOG_BRANCHES = [1, 2, 3, 4];
 const CATALOG_ROLES = [1, 0];
 const CATALOG_PAGE = 50;
+const CATALOG_MAX_PAGES = 120;
 const CATALOG_BRANCH_NAME: Record<number, string> = { 1: "Гражданская", 2: "ЦМИТ", 3: "Луховицы", 4: "Лето" };
 
 export type ArchiveCatalogRejected = { id: number; name: string };
@@ -1422,9 +1423,9 @@ function loadCatalogCursor(): CatalogCursor {
     return {
       at: String(raw.at || ""),
       busyAt: String(raw.busyAt || ""),
-      bi: Math.max(0, Number(raw.bi) || 0),
-      ri: Math.max(0, Number(raw.ri) || 0),
-      page: Math.max(0, Number(raw.page) || 0),
+      bi: Math.min(CATALOG_BRANCHES.length - 1, Math.max(0, Number(raw.bi) || 0)),
+      ri: Math.min(CATALOG_ROLES.length - 1, Math.max(0, Number(raw.ri) || 0)),
+      page: Math.min(CATALOG_MAX_PAGES, Math.max(0, Number(raw.page) || 0)),
       idx: Math.max(0, Number(raw.idx) || 0),
       teachers: raw.teachers && typeof raw.teachers === "object" ? raw.teachers : {},
       teachersReady: Boolean(raw.teachersReady),
@@ -1534,6 +1535,10 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean }) {
       cur.teachersReady = true;
     }
     for (let n = 0; n < 80 && !wrote && !cur.done; n += 1) {
+      if (cur.page >= CATALOG_MAX_PAGES) {
+        bumpCatalogPage(cur, true);
+        continue;
+      }
       const branch = CATALOG_BRANCHES[cur.bi] || 0;
       const role = CATALOG_ROLES[cur.ri] ?? 1;
       const key = `${branch}:${role}:${cur.page}`;

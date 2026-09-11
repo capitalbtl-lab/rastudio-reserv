@@ -215,7 +215,7 @@ describe("рабочий архив", () => {
     assert.match(ui, /Загрузить архив клиентов из Alfa/);
     assert.doesNotMatch(ui, /Обновить справочник архива/);
     assert.match(views, /syncArchiveCatalogTick/);
-    assert.match(views, /pagesFetched >= 1/);
+    assert.match(views, /CATALOG_MAX_PAGES/);
     assert.match(views, /уже грузим/);
     assert.match(views, /persist: true/);
     assert.match(views, /exist\.status === "учится"/);
