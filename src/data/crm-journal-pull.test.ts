@@ -88,6 +88,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /kind === "archiveCatalog"/);
     assert.match(pull, /syncArchiveCatalogTick/);
     assert.match(pull, /reset: Boolean\(opts\.probe\)/);
+    assert.match(pull, /\.\.\.snap\(\), ok: true as const, extra: store\.note, more: res\.more/);
     assert.doesNotMatch(pull, /syncAllFromCrm\(undefined, \[2\]\)/);
     assert.match(ui, /Посчитать отбор/);
     assert.match(pull, /function pupilArchivePlan\(study: "1" \| "2"\)/);

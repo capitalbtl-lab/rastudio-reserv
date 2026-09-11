@@ -1485,8 +1485,24 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean }) {
   if (catalogBusy(cur)) {
     return { ok: false as const, error: "уже грузим", more: !cur.done, report: null as ArchiveCatalogReport | null, note: "уже грузим" };
   }
-  const stale = cur.at && Date.now() - Date.parse(cur.at) > 24 * 60 * 60 * 1000;
-  if (opts?.reset || cur.done || stale) {
+  if (cur.done && !opts?.reset) {
+    const report: ArchiveCatalogReport = {
+      at: cur.at || new Date().toISOString(),
+      more: false,
+      branch: "",
+      page: cur.page + 1,
+      step: "конец обхода",
+      wrote: false,
+      cid: 0,
+      name: "конец",
+      sessionWrote: cur.sessionWrote,
+      sessionSkip: cur.sessionSkip,
+      rejected: cur.rejected.slice(0, 20),
+      disk: archiveDiskCount(),
+    };
+    return { ok: true as const, error: "", more: false, report, note: "Обход закончен. Нажмите кнопку ещё раз — начнём сначала. Рабочий набор не меняли." };
+  }
+  if (opts?.reset) {
     const keepTeachers = cur.teachersReady ? cur.teachers : {};
     cur = emptyCatalogCursor();
     if (Object.keys(keepTeachers).length) {
@@ -1561,6 +1577,11 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean }) {
       if (!archiveCatalogNamesOk(child, parent)) {
         cur.sessionSkip += 1;
         if (cur.rejected.length < 20) cur.rejected.push({ id, name: (rawName || parent || "—").slice(0, 80) });
+        continue;
+      }
+      const exist = findDossier({ crmId: id });
+      if (exist && (String(exist.extras?.is_study) === "1" || exist.status === "учится")) {
+        cur.sessionSkip += 1;
         continue;
       }
       applyCrmCustomer(item, branch, true, cur.teachers, { persist: true, quiet: true });

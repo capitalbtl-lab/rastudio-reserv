@@ -1845,9 +1845,14 @@ export function AdminCrmSettings() {
     }
   }
 
+  function catalogHasMore() {
+    const at = Date.parse(String(journal?.lastArchiveCatalog?.at || ""));
+    return Boolean(journal?.lastArchiveCatalog?.more) && Boolean(at && Date.now() - at < 24 * 60 * 60 * 1000);
+  }
+
   async function pullArchiveCatalog() {
     if (peopleLock.current) return;
-    const more = Boolean(journal?.lastArchiveCatalog?.more);
+    const more = catalogHasMore();
     if (!more) {
       if (
         !window.confirm(
@@ -2781,7 +2786,7 @@ export function AdminCrmSettings() {
                       >
                         {fillLoading?.kind === "archiveCatalog"
                           ? fillLoading.label || "карточка…"
-                          : journal?.lastArchiveCatalog?.more
+                          : catalogHasMore()
                             ? `Ещё · ${journal.lastArchiveCatalog.branch || journal.lastArchiveCatalog.step || "архив"}`
                             : "Загрузить архив клиентов из Alfa"}
                       </button>,
@@ -2917,7 +2922,7 @@ export function AdminCrmSettings() {
                       >
                         {fillLoading?.kind === "archiveCatalog"
                           ? fillLoading.label || "карточка…"
-                          : journal?.lastArchiveCatalog?.more
+                          : catalogHasMore()
                             ? `Ещё · ${journal.lastArchiveCatalog.branch || journal.lastArchiveCatalog.step || "архив"}`
                             : "Загрузить архив клиентов из Alfa"}
                       </button>,

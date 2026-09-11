@@ -997,7 +997,7 @@ export async function journalPull(opts: {
     store.note = res.note;
     store.at = res.report.at;
     saveStore(store);
-    return { ok: true as const, extra: store.note, more: res.more, count: res.report.wrote ? 1 : 0, scanned: 1, lastArchiveCatalog: res.report, ...snap() };
+    return { ...snap(), ok: true as const, extra: store.note, more: res.more, count: res.report.wrote ? 1 : 0, scanned: 1, lastArchiveCatalog: res.report };
   }
 
   if (kind === "archiveAdd") {
