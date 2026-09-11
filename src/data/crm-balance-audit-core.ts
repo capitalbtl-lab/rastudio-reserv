@@ -64,7 +64,8 @@ export function classifyAudit(p: {
     !codes.includes("ctt") &&
     !codes.includes("lessons") &&
     !codes.includes("pays") &&
-    !codes.includes("snap")
+    !codes.includes("snap") &&
+    !codes.includes("src")
   ) {
     codes.push("formula");
   }

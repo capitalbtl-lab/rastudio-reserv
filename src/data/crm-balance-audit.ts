@@ -157,13 +157,21 @@ export async function auditOne(cid: number, branchId: number) {
     const probed = await probeCustomerLessons(shown.branch, id).catch(() => ({ total: 0, ok: false as const }));
     lessonsAlfa = probed.ok ? probed.total : first.lessonsDisk;
     if (probed.ok && probed.total > first.lessonsDisk) {
-      await inboundCustomerLessons(shown.branch, id, { force: true, dateFrom: "2015-01-01" }).catch(() => null);
-      repaired = true;
+      const { loadCustomerCalendar } = await import("./group-cards");
+      for (let i = 0; i < 4; i += 1) {
+        const r = await inboundCustomerLessons(shown.branch, id, { force: true, dateFrom: "2015-01-01" }).catch(() => ({ done: false }));
+        repaired = true;
+        if (r && "done" in r && r.done) break;
+        if (loadCustomerCalendar(id).length >= probed.total) break;
+      }
     }
     if (!first.paysComplete || first.cash < shown.alfa - 1) {
-      const { inboundCustomerPays } = await import("./crm-pay");
-      await inboundCustomerPays(shown.request, shown.token, shown.branch, id).catch(() => null);
-      repaired = true;
+      const { inboundCustomerPays, isPayJournalComplete } = await import("./crm-pay");
+      for (let i = 0; i < 4; i += 1) {
+        await inboundCustomerPays(shown.request, shown.token, shown.branch, id).catch(() => null);
+        repaired = true;
+        if (isPayJournalComplete(id)) break;
+      }
     }
   }
   const after = await diskAudit(id, branch);
