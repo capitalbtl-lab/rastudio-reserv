@@ -6,6 +6,7 @@ import {
   lessonFillStart,
   lessonFillAdvance,
   lessonFillOf,
+  lessonFillForWindow,
   CUSTOMER_SYNC_TTL_MS,
   LESSON_INBOUND_RUN,
   LESSON_STATUSES,
@@ -31,6 +32,11 @@ describe("штамп входа ученика", () => {
     assert.equal(lessonFillOf({ bid: 3, statusIdx: 1, page: 4 })?.statusIdx, 1);
     assert.equal(LESSON_INBOUND_RUN, 8);
     assert.equal(LESSON_STATUSES[0], 3);
+    const mid = { bid: 1, statusIdx: 1, page: 2, from: "2019-09-11" };
+    assert.deepEqual(lessonFillForWindow(mid, "2019-09-11", 1), mid);
+    assert.deepEqual(lessonFillForWindow(mid, "2015-01-01", 2), { bid: 2, statusIdx: 0, page: 0, from: "2015-01-01" });
+    assert.equal(lessonFillAdvance({ ...mid }, false, [1]).from, "2019-09-11");
+    assert.equal(lessonFillOf({ bid: 1, statusIdx: 0, page: 1, from: "2015-01-01" })?.from, "2015-01-01");
   });
 
   it("счёт сошёлся — готово, даже без обхода филиалов", () => {
@@ -74,6 +80,7 @@ describe("карточка не ждёт Alfa", () => {
     assert.match(inbound, /mergeLocalCalendar/);
     assert.match(inbound, /"union"/);
     assert.match(inbound, /customerLessonsFresh/);
+    assert.match(inbound, /lessonFillForWindow/);
     assert.match(inbound, /lessonFillAdvance/);
     assert.match(inbound, /packLessonPupils/);
     assert.match(inbound, /uniqueBranches/);

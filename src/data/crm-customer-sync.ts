@@ -8,7 +8,7 @@ export const LESSON_INBOUND_RUN = 8;
 export const LESSON_STATUSES = [3, 1, 2] as const;
 export const LESSON_RECENT_DAYS = -21;
 
-export type LessonFillCursor = { bid: number; statusIdx: number; page: number; done?: boolean };
+export type LessonFillCursor = { bid: number; statusIdx: number; page: number; done?: boolean; from?: string };
 
 export type CustomerSyncStamp = {
   lessonsAt?: string;
@@ -126,33 +126,45 @@ export function clearLessonsAttendStamps() {
   return n;
 }
 
-export function lessonFillStart(branch: number): LessonFillCursor {
-  return { bid: Number(branch) || 1, statusIdx: 0, page: 0 };
+export function lessonFillStart(branch: number, from?: string): LessonFillCursor {
+  return { bid: Number(branch) || 1, statusIdx: 0, page: 0, ...(from ? { from } : {}) };
 }
 
 export function lessonFillOf(raw?: unknown): LessonFillCursor | undefined {
   if (!raw || typeof raw !== "object") return undefined;
-  const o = raw as { bid?: unknown; statusIdx?: unknown; page?: unknown; done?: unknown };
+  const o = raw as { bid?: unknown; statusIdx?: unknown; page?: unknown; done?: unknown; from?: unknown };
   const bid = Number(o.bid) || 0;
   if (!bid) return undefined;
+  const from = String(o.from || "").trim();
   return {
     bid,
     statusIdx: Math.max(0, Math.min(LESSON_STATUSES.length - 1, Number(o.statusIdx) || 0)),
     page: Math.max(0, Number(o.page) || 0),
     done: Boolean(o.done) || undefined,
+    ...(from ? { from } : {}),
   };
+}
+
+/** Если окно ушло в прошлое (7 лет → 2015) — курсор с нуля, иначе продолжаем. */
+export function lessonFillForWindow(cur: LessonFillCursor | undefined, askedFrom: string, startBid: number): LessonFillCursor {
+  const from = String(askedFrom || "").trim();
+  if (!cur) return lessonFillStart(startBid, from);
+  const prev = String(cur.from || "");
+  if (from && (!prev || from < prev)) return lessonFillStart(startBid, from);
+  return { ...cur, from: prev || from || undefined };
 }
 
 /** Короткая страница — следующий статус, потом филиал. После последнего — done. */
 export function lessonFillAdvance(cur: LessonFillCursor, lastShort: boolean, branches: number[]): LessonFillCursor {
-  if (cur.done) return { bid: cur.bid, statusIdx: cur.statusIdx, page: cur.page, done: true };
-  if (!lastShort) return { bid: cur.bid, statusIdx: cur.statusIdx, page: cur.page + 1 };
-  if (cur.statusIdx < LESSON_STATUSES.length - 1) return { bid: cur.bid, statusIdx: cur.statusIdx + 1, page: 0 };
+  const from = cur.from ? { from: cur.from } : {};
+  if (cur.done) return { bid: cur.bid, statusIdx: cur.statusIdx, page: cur.page, done: true, ...from };
+  if (!lastShort) return { bid: cur.bid, statusIdx: cur.statusIdx, page: cur.page + 1, ...from };
+  if (cur.statusIdx < LESSON_STATUSES.length - 1) return { bid: cur.bid, statusIdx: cur.statusIdx + 1, page: 0, ...from };
   const ids = branches.map(Number).filter((n) => n);
   const i = ids.indexOf(Number(cur.bid) || 0);
   const next = i >= 0 ? ids[i + 1] : undefined;
-  if (!next) return { bid: cur.bid, statusIdx: cur.statusIdx, page: cur.page, done: true };
-  return { bid: next, statusIdx: 0, page: 0 };
+  if (!next) return { bid: cur.bid, statusIdx: cur.statusIdx, page: cur.page, done: true, ...from };
+  return { bid: next, statusIdx: 0, page: 0, ...from };
 }
 
 const g = globalThis as { __raLessonFill?: Set<number>; __raStudentAlfa?: number };

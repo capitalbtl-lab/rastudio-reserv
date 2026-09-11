@@ -27,6 +27,7 @@ import {
   lessonFillOf,
   lessonFillAdvance,
   lessonFillBusy,
+  lessonFillForWindow,
   markLessonFillBusy,
   LESSON_STATUSES,
   LESSON_INBOUND_RUN,
@@ -491,7 +492,9 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const prevCal = loadCustomerCalendar(id);
     const prevMap = new Map(prevCal.map((l) => [String(l.lessonId || `${l.date}|${l.from}`), l] as const));
     const packs: { items?: Parameters<typeof packLight>[0][] }[] = [];
-    let cur = wantFull ? lessonFillOf(customerSyncOf(id).lessonFill) || lessonFillStart(branches[0] || branch) : lessonFillStart(branches[0] || branch);
+    let cur = wantFull
+      ? lessonFillForWindow(lessonFillOf(customerSyncOf(id).lessonFill), dateFrom, branches[0] || branch)
+      : lessonFillStart(branches[0] || branch, dateFrom);
     let ran = 0;
     const maxRun = homeLite ? LESSON_STATUSES.length : Number(opts?.take) > 0 ? Math.min(LESSON_INBOUND_RUN, Number(opts.take)) : wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
     const maxPages = homeLite ? 1 : deepHist ? 12 : Number(opts?.take) > 0 ? Math.min(3, wantFull ? 12 : 2) : wantFull ? 12 : 2;
