@@ -37,6 +37,7 @@ export type JournalJobFill = {
 };
 
 export type JournalJob = {
+  id: string;
   running: boolean;
   stop: boolean;
   mode: JournalJobMode | "";
@@ -54,6 +55,7 @@ export type JournalJob = {
   catalogFirst: boolean;
   items: JournalJobItem[];
   idx: number;
+  waits: number;
   cur: string;
   n: number;
   total: number;
@@ -65,6 +67,7 @@ export type JournalJob = {
 
 export function emptyJournalJob(): JournalJob {
   return {
+    id: "",
     running: false,
     stop: false,
     mode: "",
@@ -82,6 +85,7 @@ export function emptyJournalJob(): JournalJob {
     catalogFirst: false,
     items: [],
     idx: 0,
+    waits: 0,
     cur: "",
     n: 0,
     total: 0,
@@ -115,6 +119,7 @@ export function saveJournalJob(job: JournalJob) {
 export function journalJobSnapshot() {
   const j = loadJournalJob();
   return {
+    id: j.id,
     running: j.running,
     stop: j.stop,
     mode: j.mode,
@@ -154,17 +159,33 @@ export function peopleJobQueue(people: PeopleJobRow[], kind: "students" | "balan
   return needLoad;
 }
 
+export function mergeJobPatch(cur: JournalJob, extra: Partial<JournalJob>) {
+  if (extra.id && cur.id && extra.id !== cur.id) return cur;
+  return {
+    ...cur,
+    ...extra,
+    id: cur.id || extra.id || "",
+    stop: Boolean(cur.stop || extra.stop),
+    items: Array.isArray(extra.items) ? extra.items : cur.items,
+    fill: extra.fill === undefined ? cur.fill : extra.fill,
+  };
+}
+
+export const JOB_WAIT_CAP = 8;
+
 export function shouldRetryCash(
   kind: string,
   recheck: boolean,
   res: { ok?: boolean; error?: string; extra?: string; student?: { paysMore?: boolean; paysOk?: boolean } } | null,
 ) {
-  if (kind !== "balance" || recheck) {
-    if (!res || res.ok === false) return /уже грузим|нет ответа|нет входа|429|502|ответила/i.test(String(res?.error || res?.extra || ""));
-    return false;
+  const err = String(res?.error || res?.extra || "");
+  const busy = /уже грузим|нет входа|429|502|нет ответа/i.test(err);
+  if (kind === "balance" && !recheck) {
+    if (!res || res.ok === false) return true;
+    return Boolean(res.student?.paysMore) || res.student?.paysOk === false || /не ответила|ещё страницы/i.test(err);
   }
-  if (!res || res.ok === false) return true;
-  return Boolean(res.student?.paysMore) || res.student?.paysOk === false || /не ответила|ещё страницы/i.test(String(res.extra || res.error || ""));
+  if (!res || res.ok === false) return busy;
+  return false;
 }
 
 export function jobGapMs(mode: JournalJobMode | "") {

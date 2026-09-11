@@ -6,9 +6,11 @@ import {
   emptyJournalJob,
   jobGapMs,
   loadJournalJob,
+  mergeJobPatch,
   peopleJobQueue,
   saveJournalJob,
   shouldRetryCash,
+  JOB_WAIT_CAP,
   type JournalJob,
   type JournalJobItem,
   type JournalJobMode,
@@ -25,6 +27,8 @@ export {
   peopleJobFinished,
   shouldRetryCash,
   jobGapMs,
+  mergeJobPatch,
+  JOB_WAIT_CAP,
 } from "./crm-journal-job-core";
 
 const g = globalThis as { __raJournalJobTick?: boolean };
@@ -33,15 +37,17 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function patch(job: JournalJob, extra: Partial<JournalJob>) {
-  const next = { ...job, ...extra, lastAt: nowIso() };
+function patch(extra: Partial<JournalJob>) {
+  const cur = loadJournalJob();
+  const next = { ...mergeJobPatch(cur, extra), lastAt: nowIso() };
   return saveJournalJob(next);
 }
 
-async function sleepGap(ms: number) {
+async function sleepGap(ms: number, id = "") {
   const until = Date.now() + ms;
   while (Date.now() < until) {
-    if (loadJournalJob().stop) return;
+    const j = loadJournalJob();
+    if (j.stop || (id && j.id !== id)) return;
     await new Promise((r) => setTimeout(r, 200));
   }
 }
@@ -53,7 +59,6 @@ function packGrain(parts: { key: string; label: string; from: string; to: string
   return journalChunks(grain)
     .filter((c) => c.keys.some((k) => have.has(k)))
     .map((c) => {
-      const kids = c.keys.map((k) => byKey.get(k)).filter(Boolean) as typeof list;
       const present = c.keys.filter((k) => have.has(k));
       const done = present.every((k) => byKey.get(k)?.done);
       const weak = present.some((k) => byKey.get(k)?.weak);
@@ -100,6 +105,8 @@ export type StartJournalJobOpts = {
   filter?: string;
   probe?: boolean;
   name?: string;
+  periodKey?: string;
+  periodLabel?: string;
 };
 
 function emptyMsg(mode: JournalJobMode, recheck: boolean) {
@@ -160,6 +167,9 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
     if (mode === "group-one") {
       const hit = groups.find((g) => g.groupId === Number(opts.groupId) && (!opts.branchId || g.branchId === Number(opts.branchId))) || groups.find((g) => g.groupId === Number(opts.groupId));
       if (!hit) return [];
+      if (opts.periodKey) {
+        return [{ groupId: hit.groupId, branchId: hit.branchId, name: hit.name, periodKey: opts.periodKey, periodLabel: opts.periodLabel || opts.periodKey }];
+      }
       const row = groupFillRow(hit);
       const chunks = packGrain(row.parts || [], clampGrain(row.age, grain));
       return chunks.map((c) => ({ groupId: hit.groupId, branchId: hit.branchId, name: hit.name, periodKey: c.key, periodLabel: c.label }));
@@ -176,16 +186,20 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
 
 export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   const cur = loadJournalJob();
-  if (cur.running && !cur.stop) return cur;
+  if (cur.running && !cur.stop) {
+    if (!g.__raJournalJobTick) void tickJob();
+    return cur;
+  }
   const mode = opts.mode;
   const kind =
     opts.kind ||
-    (mode === "audit" ? "audit" : mode === "catalog" ? "archiveCatalog" : mode === "groups" || mode === "groups-recheck" || mode === "group-one" ? "group" : mode === "people" || mode === "people-recheck" || mode === "person" || mode === "probe" ? String(opts.kind || "students") : "students");
-  const recheck = Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || mode === "group-one";
+    (mode === "audit" ? "audit" : mode === "catalog" ? "archiveCatalog" : mode === "groups" || mode === "groups-recheck" || mode === "group-one" ? "group" : String(opts.kind || "students"));
+  const recheck = Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || (mode === "group-one" && !opts.periodKey);
   const items = buildItems({ ...opts, kind, recheck });
   if (!items.length && mode !== "catalog") {
     return saveJournalJob({
       ...emptyJournalJob(),
+      id: `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       mode,
       kind,
       study: opts.study === "2" ? "2" : "1",
@@ -196,6 +210,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   const first = items[0];
   const job: JournalJob = {
     ...emptyJournalJob(),
+    id: `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     running: true,
     stop: false,
     mode,
@@ -213,6 +228,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     catalogFirst: mode === "catalog",
     items,
     idx: 0,
+    waits: 0,
     cur: first?.name || "",
     n: 0,
     total: mode === "catalog" ? 0 : items.length,
@@ -229,10 +245,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
 export function stopJournalJob() {
   const j = loadJournalJob();
   if (!j.running) return j;
-  j.stop = true;
-  j.msg = j.msg || "Останавливаем после текущего…";
-  saveJournalJob(j);
-  return j;
+  return patch({ id: j.id, stop: true, msg: j.msg || "Останавливаем после текущего…" });
 }
 
 export function resumeJournalJob() {
@@ -252,6 +265,7 @@ function fillOf(mode: JournalJobMode | "", kind: string, item?: JournalJobItem |
 }
 
 async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; msg?: string }> {
+  const id = job.id;
   const mode = job.mode;
   if (mode === "catalog") {
     const res = await journalPull({
@@ -259,31 +273,34 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       probe: job.catalogFirst,
       school: job.school || job.filter,
     });
+    if (loadJournalJob().id !== id) return { done: true, gap: 0 };
     const cat = res.lastArchiveCatalog as { name?: string; step?: string; more?: boolean } | undefined;
     const label = cat?.name && cat.name !== "пропуск" ? cat.name : cat?.step || "архив";
     const n = job.n + (res.ok ? 1 : 0);
     if (!res.ok) {
-      if (/уже грузим|нет ответа|нет входа/i.test(String(res.error || ""))) {
-        patch(job, { cur: "пауза 5 с · Alfa", n, fill: { kind: "archiveCatalog", label: "пауза 5 с · Alfa" }, msg: String(res.error || res.extra || "") });
+      const waits = (loadJournalJob().waits || 0) + 1;
+      if (/уже грузим|нет ответа|нет входа|429|502/i.test(String(res.error || "")) && waits <= JOB_WAIT_CAP) {
+        patch({ id, waits, cur: "пауза 5 с · Alfa", fill: { kind: "archiveCatalog", label: "пауза 5 с · Alfa" }, msg: String(res.error || res.extra || "") });
         return { done: false, gap: 5000 };
       }
-      patch(job, { running: false, n, cur: "", fill: null, msg: String(res.error || "Архив клиентов не ответил.") });
+      patch({ id, running: false, n, cur: "", fill: null, waits: 0, msg: String(res.error || "Архив клиентов не ответил.") });
       return { done: true, gap: 0, msg: String(res.error || "") };
     }
-    patch(loadJournalJob(), {
+    patch({
+      id,
       catalogFirst: false,
       n,
       total: n,
+      waits: 0,
       cur: label,
       fill: { kind: "archiveCatalog", label },
       msg: String(res.extra || ""),
     });
     if (!res.more) {
-      const j = loadJournalJob();
-      patch(j, { running: false, cur: "", fill: null, msg: j.msg });
+      patch({ id, running: false, cur: "", fill: null, msg: loadJournalJob().msg });
       return { done: true, gap: 0 };
     }
-    patch(loadJournalJob(), { cur: `пауза 1 с · ${label}`, fill: { kind: "archiveCatalog", label: `пауза 1 с · ${label}` } });
+    patch({ id, cur: `пауза 1 с · ${label}`, fill: { kind: "archiveCatalog", label: `пауза 1 с · ${label}` } });
     return { done: false, gap: jobGapMs("catalog") };
   }
 
@@ -297,16 +314,16 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       const row = groupFillRow(g);
       const part = nextGroupPart(row.parts || [], job.grain, row.age);
       if (!part) {
-        patch(job, { idx: job.idx + 1, n: job.n + 1 });
+        patch({ id, idx: job.idx + 1, n: job.n + 1, waits: 0 });
         return { done: false, gap: 0 };
       }
       item = { ...item, periodKey: part.key, periodLabel: part.label };
     }
   }
   const pullKind = mode === "audit" ? "audit" : mode === "groups" || mode === "groups-recheck" || mode === "group-one" ? "group" : job.kind === "balance" ? "balance" : "students";
-  const curLabel =
-    pullKind === "group" && item.periodLabel ? `${item.name} · ${item.periodLabel}` : item.name;
-  patch(job, {
+  const curLabel = pullKind === "group" && item.periodLabel ? `${item.name} · ${item.periodLabel}` : item.name;
+  patch({
+    id,
     cur: curLabel,
     fill: fillOf(mode, job.kind, item),
     msg: job.recheck ? `${item.name}: перепроверяем. Потом пауза 5 с.` : `${item.name}: грузим. Потом пауза 5 с.`,
@@ -319,28 +336,35 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     groupId: Number(item.groupId) || 0,
     periodKey: item.periodKey || "",
     grain: job.grain,
-    recheck: job.recheck || mode === "people-recheck" || mode === "groups-recheck" || mode === "group-one",
+    recheck: job.recheck || mode === "people-recheck" || mode === "groups-recheck" || (mode === "group-one" && !item.periodKey),
     dateFrom: job.dateFrom,
     probe: mode === "probe",
   });
   const live = loadJournalJob();
+  if (live.id !== id) return { done: true, gap: 0 };
   if (live.stop) return { done: true, gap: 0, msg: `Остановили · прошло ${live.n} из ${live.total}.` };
   const retry = shouldRetryCash(pullKind, live.recheck, res);
-  if (retry && pullKind === "balance" && !live.recheck) {
-    patch(live, {
-      cur: `касса · ещё «${item.name}»`,
-      fill: { kind: "balance", label: item.name, customerId: item.cid },
+  if (retry) {
+    const waits = (live.waits || 0) + 1;
+    if (waits > JOB_WAIT_CAP) {
+      const msg = `Alfa не отвечает на «${item.name}». Остановились.`;
+      patch({ id, running: false, cur: "", fill: null, waits, msg });
+      return { done: true, gap: 0, msg };
+    }
+    const cur = pullKind === "balance" && !live.recheck ? `касса · ещё «${item.name}»` : `пауза 5 с · ещё «${item.name}»`;
+    patch({
+      id,
+      waits,
+      cur,
+      fill: fillOf(mode, job.kind, item),
       msg: String(res.extra || res.error || `«${item.name}»: касса не дочитана.`),
     });
-    return { done: false, gap: jobGapMs("people") };
+    return { done: false, gap: jobGapMs(mode === "audit" ? "audit" : "people") };
   }
   if (!res.ok) {
-    if (retry || /уже грузим|429|502|ответила|нет ответа/i.test(String(res.error || ""))) {
-      patch(live, { cur: `пауза 5 с · ещё «${item.name}»`, msg: String(res.error || res.extra || `«${item.name}»: Alfa не ответила, нажмите снова`) });
-      return { done: false, gap: jobGapMs("people") };
-    }
-    patch(live, { running: false, cur: "", fill: null, msg: res.error || `Остановились на «${item.name}». Нажмите ещё раз — продолжит со следующего.` });
-    return { done: true, gap: 0, msg: live.msg };
+    const msg = res.error || `Остановились на «${item.name}». Нажмите ещё раз — продолжит со следующего.`;
+    patch({ id, running: false, cur: "", fill: null, msg });
+    return { done: true, gap: 0, msg };
   }
   const n = live.n + 1;
   const idx = live.idx + 1;
@@ -348,15 +372,18 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   const nextName = more ? live.items[idx]?.name || "" : "";
   const gap = more ? jobGapMs(mode) : 0;
   const pauseCur = more ? (mode === "audit" ? `пауза 1 с · дальше ${nextName}` : `пауза 5 с · дальше ${nextName}`) : "";
-  patch(live, {
+  const finished = { ...live, n };
+  patch({
+    id,
     n,
     idx,
+    waits: 0,
     cur: pauseCur || "",
     fill: more ? live.fill : null,
-    msg: more ? pauseCur : doneMsg({ ...live, n }),
+    msg: more ? pauseCur : doneMsg(finished),
     running: more,
   });
-  return { done: !more, gap, msg: more ? "" : doneMsg({ ...live, n }) };
+  return { done: !more, gap, msg: more ? "" : doneMsg(finished) };
 }
 
 function doneMsg(job: JournalJob) {
@@ -367,7 +394,7 @@ function doneMsg(job: JournalJob) {
   if (job.mode === "groups") return `Готово · ${job.n} групп. Слева пусто, если порции закрылись.`;
   if (job.mode === "group-one") return job.stop ? "Очередь группы остановлена." : "Группа перепроверена.";
   if (job.mode === "audit") return `Сверили ${job.n} текущих.`;
-  if (job.mode === "probe") return `${job.items[0]?.name || ""}: счёт.`;
+  if (job.mode === "probe") return job.msg || `${job.items[0]?.name || ""}: счёт.`;
   if (job.mode === "person") return job.msg || "Пакет записан на сайт.";
   return `Готово · ${job.n}.`;
 }
@@ -375,29 +402,34 @@ function doneMsg(job: JournalJob) {
 async function tickJob() {
   if (g.__raJournalJobTick) return;
   g.__raJournalJobTick = true;
+  let id = "";
   try {
     while (true) {
       const j = loadJournalJob();
+      if (id && j.id !== id) break;
+      id = j.id;
       if (!j.running || j.stop) break;
       const step = await runStep(j);
       const now = loadJournalJob();
+      if (now.id !== id) break;
       if (now.stop) {
-        patch(now, { running: false, cur: "", fill: null, msg: `Остановили · прошло ${now.n} из ${now.total}.` });
+        patch({ id, running: false, cur: "", fill: null, msg: `Остановили · прошло ${now.n} из ${now.total}.` });
         break;
       }
       if (step.done) {
         const end = loadJournalJob();
-        if (end.running) patch(end, { running: false, cur: "", fill: null, msg: step.msg || end.msg });
+        if (end.id === id && end.running) patch({ id, running: false, cur: "", fill: null, msg: step.msg || end.msg });
         break;
       }
-      if (step.gap) await sleepGap(step.gap);
+      if (step.gap) await sleepGap(step.gap, id);
     }
   } catch (e) {
     const now = loadJournalJob();
-    patch(now, { running: false, cur: "", fill: null, msg: e instanceof Error ? e.message : "Сбой фоновой загрузки." });
+    if (now.id === id || !id) patch({ id: now.id || id, running: false, cur: "", fill: null, msg: e instanceof Error ? e.message : "Сбой фоновой загрузки." });
   } finally {
     g.__raJournalJobTick = false;
     const end = loadJournalJob();
-    if (end.stop && end.running) patch(end, { running: false, cur: "", fill: null, msg: `Остановили · прошло ${end.n} из ${end.total}.` });
+    if (end.id === id && end.stop && end.running) patch({ id, running: false, cur: "", fill: null, msg: `Остановили · прошло ${end.n} из ${end.total}.` });
+    else if (end.running && !end.stop) void tickJob();
   }
 }

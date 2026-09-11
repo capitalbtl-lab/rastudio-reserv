@@ -16,7 +16,7 @@ import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlap
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot } from "./crm-journal-job-core";
 
-export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop";
+export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus";
 export type JournalPullStudy = "1" | "2" | "all";
 
 export type JournalPullGroup = {
@@ -801,6 +801,24 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
   };
 }
 
+function journalJobView(job = journalJobSnapshot()) {
+  const store = loadStore();
+  let groupRow = null as ReturnType<typeof groupFillRow> | null;
+  if (job.fill?.groupId) {
+    const g = journalPullGroups().find((x) => x.groupId === job.fill?.groupId && (!job.fill.branchId || x.branchId === job.fill.branchId));
+    if (g) groupRow = groupFillRow(g);
+  }
+  return {
+    ok: true as const,
+    extra: job.msg,
+    job,
+    lastStudents: store.lastStudents || null,
+    lastAudit: store.lastAudit || null,
+    lastArchiveCatalog: store.lastArchiveCatalog || null,
+    groupRow,
+  };
+}
+
 function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch: { ok: boolean; err?: string; weak?: boolean; recheck?: boolean }) {
   const prev = fillOf(branchId, gid);
   const pulled = { ...(prev.pulled || {}) };
@@ -969,31 +987,38 @@ export async function journalPull(opts: {
   take?: number;
   name?: string;
   peopleKind?: "students" | "balance";
+  periodLabel?: string;
 }) {
   const kind = opts.kind;
-  if (kind === "jobStart" || kind === "jobStop") {
+  if (kind === "jobStart" || kind === "jobStop" || kind === "jobStatus") {
     const { startJournalJob, stopJournalJob, resumeJournalJob } = await import("./crm-journal-job");
-    resumeJournalJob();
-    const job =
-      kind === "jobStop"
-        ? stopJournalJob()
-        : startJournalJob({
-            mode: (opts.jobMode || "people") as import("./crm-journal-job-core").JournalJobMode,
-            kind: opts.peopleKind || (opts.jobMode === "audit" ? "audit" : opts.jobMode === "catalog" ? "archiveCatalog" : "students"),
-            study: opts.study === "1" || opts.study === "2" ? opts.study : "1",
-            recheck: Boolean(opts.recheck),
-            dateFrom: opts.dateFrom || "",
-            grain: opts.grain,
-            school: opts.school || "",
-            groupId: opts.groupId,
-            branchId: opts.branchId,
-            customerId: opts.customerId,
-            take: opts.take,
-            filter: opts.school || "",
-            probe: Boolean(opts.probe),
-            name: opts.name,
-          });
-    return { ok: true as const, extra: job.msg, job, ...journalPullState({ skipPeople: true }) };
+    if (kind === "jobStatus") {
+      resumeJournalJob();
+      return journalJobView();
+    }
+    if (kind === "jobStop") {
+      stopJournalJob();
+      return journalJobView();
+    }
+    startJournalJob({
+      mode: (opts.jobMode || "people") as import("./crm-journal-job-core").JournalJobMode,
+      kind: opts.peopleKind || (opts.jobMode === "audit" ? "audit" : opts.jobMode === "catalog" ? "archiveCatalog" : "students"),
+      study: opts.study === "1" || opts.study === "2" ? opts.study : "1",
+      recheck: Boolean(opts.recheck),
+      dateFrom: opts.dateFrom || "",
+      grain: opts.grain,
+      school: opts.school || "",
+      groupId: opts.groupId,
+      branchId: opts.branchId,
+      customerId: opts.customerId,
+      take: opts.take,
+      filter: opts.school || "",
+      probe: Boolean(opts.probe),
+      name: opts.name,
+      periodKey: opts.periodKey,
+      periodLabel: String(opts.periodLabel || ""),
+    });
+    return journalJobView();
   }
   const wantedEarly = Number(opts.customerId) || 0;
   const peopleKinds: JournalPullKind[] = ["students", "balance", "archiveCatalog", "archiveCount", "archiveAdd", "audit"];

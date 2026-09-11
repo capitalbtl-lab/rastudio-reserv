@@ -861,6 +861,51 @@ function patchPeopleSide(
   };
 }
 
+function applyJobStatus<T extends {
+  progress?: {
+    live?: { people?: PeopleRow[]; journalDone?: number; cardDone?: number; total?: number };
+    archive?: { people?: PeopleRow[]; journalDone?: number; cardDone?: number; total?: number };
+    groups?: { rows?: FillRow[]; [k: string]: unknown };
+  };
+  lastStudents?: { study?: string; rows?: StudentHit[] } | null;
+  lastAudit?: unknown;
+  lastArchiveCatalog?: unknown;
+  job?: unknown;
+}>(cur: T | null, res: T & { groupRow?: FillRow | null }): T {
+  const hit = res.lastStudents?.rows?.[0];
+  const studyKey = res.lastStudents?.study === "2" ? "archive" : "live";
+  const base = cur || res;
+  const keepLive = !(res.progress?.live?.people || []).length && (base.progress?.live?.people || []).length;
+  const keepArch = !(res.progress?.archive?.people || []).length && (base.progress?.archive?.people || []).length;
+  let progress = {
+    ...base.progress,
+    ...res.progress,
+    live: keepLive ? base.progress?.live : res.progress?.live,
+    archive: keepArch ? base.progress?.archive : res.progress?.archive,
+    groups: res.progress?.groups || base.progress?.groups,
+  };
+  if (hit) {
+    progress = {
+      ...progress,
+      [studyKey]: patchPeopleSide(progress[studyKey], hit),
+    };
+  }
+  const row = res.groupRow;
+  if (row && progress.groups && Array.isArray(progress.groups.rows)) {
+    const rows = progress.groups.rows.map((r) => (r.groupId === row.groupId && (!row.branchId || r.branchId === row.branchId) ? { ...r, ...row } : r));
+    progress = { ...progress, groups: { ...progress.groups, rows } };
+  }
+  return {
+    ...base,
+    ...res,
+    progress,
+    lastStudents: res.lastStudents ?? base.lastStudents,
+    lastAudit: res.lastAudit ?? base.lastAudit,
+    lastArchiveCatalog: res.lastArchiveCatalog ?? base.lastArchiveCatalog,
+    job: res.job ?? base.job,
+  };
+}
+
 function ScopePills({
   value,
   onChange,
@@ -1727,13 +1772,16 @@ export function AdminCrmSettings() {
         if (!on) break;
         try {
           const res = (await adminSchedule({
-            data: { token: token(), action: "journalPull" } as never,
-          })) as typeof journal;
+            data: { token: token(), action: "journalPull", kind: "jobStatus" } as never,
+          })) as typeof journal & { groupRow?: FillRow | null };
           if (!on) break;
           if (res) {
-            setJournal((cur) => (cur ? { ...cur, ...res, progress: { ...cur.progress, ...res.progress, live: res.progress?.live || cur.progress?.live, archive: res.progress?.archive || cur.progress?.archive, groups: res.progress?.groups || cur.progress?.groups } } : res));
+            setJournal((cur) => applyJobStatus(cur, res as NonNullable<typeof journal> & { groupRow?: FillRow | null }));
             paintJob(res.job);
-            if (!res.job?.running) break;
+            if (!res.job?.running) {
+              void loadJournal();
+              break;
+            }
           }
         } catch {
           /* фон на сервере, экран догонит */
@@ -1911,7 +1959,7 @@ export function AdminCrmSettings() {
   }
 
   async function runJournal(opts: {
-    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop";
+    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus";
     study?: "1" | "2" | "all";
     school?: string;
     groupId?: number;
@@ -1957,6 +2005,7 @@ export function AdminCrmSettings() {
             take: opts.take || 0,
             name: opts.name || "",
             peopleKind: opts.peopleKind || (opts.kind === "balance" ? "balance" : "students"),
+            periodLabel: opts.periodLabel || "",
           } as never,
         }),
         new Promise<never>((_, rej) =>
@@ -2052,6 +2101,8 @@ export function AdminCrmSettings() {
     take?: number;
     name?: string;
     probe?: boolean;
+    periodKey?: string;
+    periodLabel?: string;
   }) {
     if (peopleLock.current && !journal?.job?.running) return;
     holdFill.current = true;
@@ -2073,8 +2124,17 @@ export function AdminCrmSettings() {
       take: opts.take,
       name: opts.name,
       probe: opts.probe,
+      periodKey: opts.periodKey,
+      periodLabel: opts.periodLabel,
     });
-    paintJob((res as { job?: Parameters<typeof paintJob>[0] })?.job);
+    const job = (res as { job?: Parameters<typeof paintJob>[0] })?.job;
+    if (job) paintJob(job);
+    else {
+      holdFill.current = false;
+      peopleLock.current = false;
+      setBusy(false);
+      setFillLoading(null);
+    }
     return res;
   }
 
@@ -2858,24 +2918,26 @@ export function AdminCrmSettings() {
                   archived={groupArchived}
                   onGrain={pickJournalGrain}
                   onLoad={(row, part, recheck) =>
-                    void runJournal({
-                      kind: "group",
+                    void startHistJob({
+                      jobMode: "group-one",
+                      grain: journalGrain,
                       groupId: Number(row.groupId) || 0,
                       branchId: Number(row.branchId) || 0,
+                      name: row.name,
                       periodKey: part.key,
                       periodLabel: part.label,
-                      grain: journalGrain,
                       recheck,
                     })
                   }
                   onRecheck={(row, part) =>
-                    void runJournal({
-                      kind: "group",
+                    void startHistJob({
+                      jobMode: "group-one",
+                      grain: journalGrain,
                       groupId: Number(row.groupId) || 0,
                       branchId: Number(row.branchId) || 0,
+                      name: row.name,
                       periodKey: part.key,
                       periodLabel: part.label,
-                      grain: journalGrain,
                       recheck: true,
                     })
                   }

@@ -231,5 +231,12 @@ describe("ручной журнал с Alfa", () => {
     assert.match(api, /periodKey/);
     assert.match(api, /kind !== "archives"/);
     assert.match(api, /customerId/);
+    assert.match(api, /jobStatus/);
+    assert.match(api, /periodLabel/);
+    assert.match(pull, /kind === "jobStatus"/);
+    assert.match(pull, /function journalJobView/);
+    assert.match(pull, /groupRow/);
+    assert.match(ui, /kind: "jobStatus"/);
+    assert.match(ui, /function applyJobStatus/);
   });
 });

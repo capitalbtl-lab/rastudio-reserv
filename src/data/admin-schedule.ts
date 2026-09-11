@@ -3067,7 +3067,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
     if (data.action === "journalPull") {
       const { journalPull, journalPullState } = await import("./crm-journal-pull");
       const kind = String(data.kind || "");
-      if (kind !== "group" && kind !== "school" && kind !== "students" && kind !== "balance" && kind !== "life" && kind !== "details" && kind !== "archives" && kind !== "archivesPupils" && kind !== "hydrateDisk" && kind !== "archiveCount" && kind !== "archiveCatalog" && kind !== "archiveAdd" && kind !== "audit" && kind !== "jobStart" && kind !== "jobStop") {
+      if (kind !== "group" && kind !== "school" && kind !== "students" && kind !== "balance" && kind !== "life" && kind !== "details" && kind !== "archives" && kind !== "archivesPupils" && kind !== "hydrateDisk" && kind !== "archiveCount" && kind !== "archiveCatalog" && kind !== "archiveAdd" && kind !== "audit" && kind !== "jobStart" && kind !== "jobStop" && kind !== "jobStatus") {
         try {
           const { resumeJournalJob } = await import("./crm-journal-job");
           resumeJournalJob();
@@ -3092,8 +3092,9 @@ export const adminSchedule = createServerFn({ method: "POST" })
         take: Number((data as { take?: number }).take) || 0,
         name: String((data as { name?: string }).name || ""),
         peopleKind: (data as { peopleKind?: string }).peopleKind === "balance" ? "balance" : "students",
+        periodLabel: String((data as { periodLabel?: string }).periodLabel || ""),
       });
-      logAdmin(`Журнал Alfa: ${res.extra || res.error || kind}`);
+      if (kind !== "jobStatus") logAdmin(`Журнал Alfa: ${res.extra || res.error || kind}`);
       return res;
     }
     if (data.action === "voiceAsk") {
