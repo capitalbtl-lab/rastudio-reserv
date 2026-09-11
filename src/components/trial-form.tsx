@@ -19,8 +19,11 @@ export function TrialForm({
   void courseId;
 
   return (
-    <section id={compact ? undefined : "trial"} className="overflow-hidden rounded-[1.75rem] bg-surface px-5 py-8 shadow-[var(--shadow-border)] md:px-10 md:py-11">
-      <div className={`grid gap-8 ${compact ? "" : "lg:grid-cols-[1fr_26rem] lg:items-start lg:gap-12"}`}>
+    <section
+      id={compact ? undefined : "trial"}
+      className="overflow-hidden rounded-[1.75rem] bg-surface px-5 py-8 shadow-[var(--shadow-border)] md:px-10 md:py-11"
+    >
+      <div className="grid gap-8 lg:grid-cols-[minmax(15rem,1fr)_26rem] lg:items-start lg:gap-12">
         <div>
           <p className="kicker text-primary">Пробное занятие</p>
           <h2 className="display mt-3 max-w-md text-3xl md:text-4xl">Приведите ребёнка на первое занятие</h2>
@@ -32,7 +35,7 @@ export function TrialForm({
             .
           </p>
         </div>
-        <div className="h-[48rem] w-full max-w-[26rem]">
+        <div className="h-[36.5rem] w-full max-w-[26rem] lg:justify-self-end">
           <TrialEmbed src={src} className="h-full w-full" />
         </div>
       </div>
