@@ -10,7 +10,7 @@ export const SITE = {
   telegram: "https://t.me/rastudiolife",
   cabinet: "https://studiyarazvivaysya.s20.online/",
   trialForm:
-    "https://studiyarazvivaysya.s20.online/common/2/form/draw?id=20&lead_source_id=2&baseColor=205EDC&borderRadius=12&css=https%3A%2F%2Fwww.rastudio.org%2Ftrial-form.css",
+    "https://studiyarazvivaysya.s20.online/common/2/form/draw?id=20&lead_source_id=2&baseColor=205EDC&borderRadius=8&css=%2F%2Fcdn.alfacrm.pro%2Flead-form%2Fform.css",
   maxBot: "https://max.ru/id502210556271_bot",
   camp: "http://www.racamp.ru",
   vk: "https://vk.ru/rastudio",

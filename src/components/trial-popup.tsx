@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SITE } from "@/data/site";
 import { TrialEmbed } from "@/components/trial-embed";
 import { loadPublicTrialSignup } from "@/data/site-signup-fn";
 import { SITE_SIGNUP_DEFAULT, trialUrlFor, type SiteSignup } from "@/data/site-signup-core";
@@ -70,35 +69,23 @@ export function TrialPopup() {
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden overscroll-none bg-header/55 p-2 backdrop-blur-[6px] sm:p-3"
+      className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden overscroll-none bg-header/55 p-3 backdrop-blur-[6px]"
       onClick={() => setOpen(false)}
       onWheel={(e) => e.preventDefault()}
     >
       <div
-        className="relative flex h-[min(38rem,calc(100svh-0.75rem))] w-full max-w-[28rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
+        className="relative h-[min(42rem,90svh)] w-full max-w-[26rem] overflow-hidden rounded-2xl bg-white shadow-[var(--shadow-border-hover)]"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           aria-label="Закрыть"
           onClick={() => setOpen(false)}
-          className="absolute right-2.5 top-2.5 z-10 grid size-8 place-items-center rounded-full bg-bg text-lg leading-none text-muted hover:bg-surface-2 hover:text-fg"
+          className="absolute right-2 top-2 z-10 grid size-8 place-items-center rounded-full bg-white/90 text-lg leading-none text-muted shadow hover:text-fg"
         >
           ×
         </button>
-        <div className="shrink-0 px-5 pb-1 pt-3.5 sm:px-6">
-          <p className="kicker text-primary">Студия «Развивайся»</p>
-          <h2 className="display mt-0.5 pr-8 text-[1.3rem]">Запись на пробное</h2>
-          <p className="mt-0.5 text-[0.78rem] text-muted">
-            Без абонемента.{" "}
-            <a className="font-semibold text-fg" href={SITE.phoneHref}>
-              {SITE.phone}
-            </a>
-          </p>
-        </div>
-        <div className="min-h-0 flex-1 px-5 pb-3 sm:px-6">
-          <TrialEmbed src={src} className="h-full w-full" />
-        </div>
+        <TrialEmbed src={src} className="h-full w-full" />
       </div>
     </div>
   );

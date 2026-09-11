@@ -7,7 +7,7 @@ import {
   trialFormUrl,
   trialIframeHtml,
   trialUrlFor,
-  withSiteTrialCss,
+  withAlfaFormCss,
 } from "./site-signup-core.ts";
 
 describe("форма пробного с сайта", () => {
@@ -36,12 +36,14 @@ describe("форма пробного с сайта", () => {
     assert.match(parseTrialEmbed(raw), /id=8/);
   });
 
-  it("подставляет CSS rastudio, даже если в админке старый cdn Alfa", () => {
-    const src = withSiteTrialCss(
-      "https://studiyarazvivaysya.s20.online/common/2/form/draw?id=20&lead_source_id=2&css=//cdn.alfacrm.pro/lead-form/form.css",
+  it("форма Alfa со своим css, не rastudio", () => {
+    const src = withAlfaFormCss(
+      "https://studiyarazvivaysya.s20.online/common/2/form/draw?id=20&lead_source_id=2&css=https://www.rastudio.org/trial-form.css",
     );
-    assert.match(src, /rastudio\.org%2Ftrial-form\.css|rastudio\.org\/trial-form\.css/);
-    assert.match(trialFormUrl(), /trial-form\.css/);
+    assert.match(src, /cdn\.alfacrm\.pro%2Flead-form%2Fform\.css|cdn\.alfacrm\.pro\/lead-form\/form\.css/);
+    assert.match(trialFormUrl(), /cdn\.alfacrm\.pro/);
+    assert.doesNotMatch(trialFormUrl(), /trial-form\.css/);
+    assert.match(trialFormUrl(), /borderRadius=8/);
   });
 
   it("кнопка пробного открывает окно сайта, не вкладку Alfa", () => {
@@ -59,15 +61,14 @@ describe("форма пробного с сайта", () => {
     const src = readFileSync(new URL("../components/trial-popup.tsx", import.meta.url), "utf8");
     assert.match(src, /overflow = "hidden"/);
     assert.match(src, /onWheel/);
-    assert.match(src, /100svh/);
+    assert.match(src, /TrialEmbed/);
   });
 
-  it("на странице курсов форма справа, без узкой колонки со скроллом", () => {
+  it("на странице нет широкой формы — только кнопка во всплывающее", () => {
     const src = readFileSync(new URL("../components/trial-form.tsx", import.meta.url), "utf8");
-    assert.match(src, /lg:grid-cols-\[minmax\(15rem,1fr\)_26rem\]/);
-    assert.match(src, /36\.5rem/);
-    assert.doesNotMatch(src, /h-\[48rem\]/);
-    assert.doesNotMatch(src, /TRIAL_BRANCHES/);
+    assert.match(src, /openTrialForm/);
+    assert.doesNotMatch(src, /TrialEmbed/);
+    assert.doesNotMatch(src, /lg:grid-cols/);
   });
 
   it("запись в группу остаётся формой rastudio", () => {
