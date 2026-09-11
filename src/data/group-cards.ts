@@ -5,7 +5,7 @@ import { pupilNameOk, mergeLessonPupils } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { nextLocalId } from "./crm-local-id";
 import { mergeJournalInbound, collapseLessonRows } from "./crm-inbound-core";
-import { journalForCustomer, calendarLessonForCard } from "./crm-journal-core";
+import { journalForCustomer, calendarLessonForCard, lessonBranchOf } from "./crm-journal-core";
 import { chargeFromPupils } from "./crm-ledger-core";
 import { findDossier } from "./dossiers";
 import { cardPays } from "./crm-pay";
@@ -362,17 +362,19 @@ export function collectCustomerJournal(
   const seen = new Set<string>();
   const id = Number(customerId) || 0;
   const allGroups = journalGroupsOfCustomer(id, groups);
-  const push = (les: GroupCalLesson, groupName?: string, fromOwn = false) => {
+  const push = (les: GroupCalLesson, groupName?: string, fromOwn = false, groupBranch = 0) => {
     const ids = (les.customerIds || []).map(Number);
     const pupil = (les.pupils || []).some((p) => Number(p.customerId) === id);
     if (id && ids.length && !ids.includes(id) && !pupil) return;
     if (id && !ids.length && !pupil && !fromOwn) return;
     const charge = id ? chargeFromPupils(les, id) : { amount: Number(les.amount) || 0, cttId: Number(les.cttId) || 0 };
+    const bid = lessonBranchOf(les, allGroups, groupBranch);
     const row: GroupCalLesson = withPupilFio({
       ...les,
       group: les.group || groupName || "",
       amount: charge.amount || les.amount,
       cttId: charge.cttId || les.cttId,
+      ...(bid ? { branchId: bid } : {}),
     });
     if (groups.length && !fromOwn && !calendarLessonForCard(row, allGroups, id)) return;
     const key = String(row.lessonId || `${row.date}|${row.from}|${row.type}|${row.group}`);
@@ -399,6 +401,7 @@ export function collectCustomerJournal(
       if (!prev.teacher && row.teacher) prev.teacher = row.teacher;
       if (!prev.subject && row.subject) prev.subject = row.subject;
       if (!prev.group && row.group) prev.group = row.group;
+      if (!prev.branchId && row.branchId) prev.branchId = row.branchId;
       return;
     }
     seen.add(key);
@@ -407,10 +410,10 @@ export function collectCustomerJournal(
   for (const les of loadCustomerCalendar(customerId)) push(les, undefined, true);
   for (const g of allGroups) {
     const gcard = loadGroupCard(g.branchId, g.id);
-    for (const les of journalForCustomer(gcard?.calendar || [], customerId)) push(les, g.name);
+    for (const les of journalForCustomer(gcard?.calendar || [], customerId)) push(les, g.name, false, g.branchId);
     for (const les of gcard?.calendar || []) {
-      if ((les.pupils || []).some((p) => Number(p.customerId) === id)) push(les, g.name, true);
-      else if ((les.customerIds || []).map(Number).includes(id)) push(les, g.name, true);
+      if ((les.pupils || []).some((p) => Number(p.customerId) === id)) push(les, g.name, true, g.branchId);
+      else if ((les.customerIds || []).map(Number).includes(id)) push(les, g.name, true, g.branchId);
     }
   }
   return out.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")));

@@ -42,7 +42,7 @@ import { addMinsHm, DUR_OPTS } from "@/data/crm-lesson-time";
 import { CASH_PAGE_SIZES, cashPageSlice, payAccountLabel } from "@/data/crm-pay-core";
 import { ledgerMoney, writeoffSumForCtt } from "@/data/crm-ledger-core";
 import { regularBelongsToGroups } from "@/data/crm-regular-core";
-import { calendarLessonForCard } from "@/data/crm-journal-core";
+import { calendarLessonForCard, lessonBranchOf, tallyPaysByBranch, tallyLessonsByBranch, formatPayTally, formatLessonTally } from "@/data/crm-journal-core";
 
 function money(n?: number) {
   return `${Number(n || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`;
@@ -432,6 +432,7 @@ export function CrmClientCard({
   const [payMethod, setPayMethod] = useState("");
   const [payEditId, setPayEditId] = useState(0);
   const [payBranch, setPayBranch] = useState(0);
+  const [woBranch, setWoBranch] = useState(0);
   const [cashSize, setCashSize] = useState<(typeof CASH_PAGE_SIZES)[number]>(3);
   const [cashPage, setCashPage] = useState(0);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -525,6 +526,7 @@ export function CrmClientCard({
   }, [card.calendar, card.regular, card.groups, card.id]);
   const writeOffs = useMemo(() => {
     const today = todayYmd();
+    const groups = card.groups || [];
     return (card.calendar || [])
       .filter((l) => {
         const st = Number(l.status);
@@ -533,9 +535,27 @@ export function CrmClientCard({
         const ymd = toYmd(String(l.date || ""));
         return Boolean(ymd && ymd < today);
       })
+      .map((l) => ({ ...l, branchId: lessonBranchOf(l, groups, card.branchId) || l.branchId }))
       .slice()
       .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.from).localeCompare(String(a.from)));
-  }, [card.calendar]);
+  }, [card.calendar, card.groups, card.branchId]);
+  const shownWriteOffs = useMemo(
+    () => (!woBranch ? writeOffs : writeOffs.filter((l) => Number(l.branchId) === woBranch)),
+    [writeOffs, woBranch],
+  );
+  const payTally = useMemo(() => tallyPaysByBranch(card.pays || [], card.branchId), [card.pays, card.branchId]);
+  const lessonTally = useMemo(
+    () =>
+      tallyLessonsByBranch(
+        (card.calendar || []).map((l) => ({
+          status: l.status,
+          branchId: lessonBranchOf(l, card.groups || [], card.branchId),
+        })),
+        card.branchId,
+      ),
+    [card.calendar, card.groups, card.branchId],
+  );
+  const woTally = useMemo(() => tallyLessonsByBranch(writeOffs, card.branchId), [writeOffs, card.branchId]);
   const catalog: LessonCatalog = card.catalog || { subjects: [], teachers: [], rooms: [], tariffs: [], groups: [] };
   const tariffOffers: TariffOffer[] = catalog.tariffs || [];
   const groupOffers: GroupOffer[] = groupChoices?.length ? groupChoices : catalog.groups || [];
@@ -892,13 +912,35 @@ export function CrmClientCard({
                   onMouseDown={(e) => e.stopPropagation()}
                 >
                   <p className="font-display text-[1.05rem]">Списания занятий</p>
-                  <p className="mt-0.5 text-[0.68rem] text-muted">Проведённые и предыдущие. Отменённые не списывают.</p>
-                  {writeOffs.length ? (
+                  <p className="mt-0.5 text-[0.68rem] text-muted">Проведённые и предыдущие. Отменённые не списывают. По филиалам, как в Alfa.</p>
+                  {woTally.length > 1 ? (
+                    <div className="mt-1.5 flex flex-wrap gap-1" data-op="writeoff-branch">
+                      <button
+                        type="button"
+                        className={cn("h-6 rounded-full px-2 text-[0.62rem] font-semibold ring-1 ring-black/10", !woBranch ? "bg-black/10 text-fg" : "text-muted")}
+                        onClick={() => setWoBranch(0)}
+                      >
+                        все
+                      </button>
+                      {woTally.map((b) => (
+                        <button
+                          key={b.id}
+                          type="button"
+                          className={cn("h-6 rounded-full px-2 text-[0.62rem] font-semibold ring-1 ring-black/10", woBranch === b.id ? "bg-black/10 text-fg" : "text-muted")}
+                          onClick={() => setWoBranch(b.id)}
+                        >
+                          {b.short} {b.fact || b.plan}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {shownWriteOffs.length ? (
                     <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto text-[0.75rem]">
-                      {writeOffs.slice(0, 40).map((l) => (
+                      {shownWriteOffs.slice(0, 40).map((l) => (
                         <li key={`${l.id}-${l.date}-${l.from}`} className="flex justify-between gap-2 border-t border-black/6 py-1.5 first:border-t-0">
                           <span className="min-w-0 truncate">
                             {l.date} {l.from || ""} · {l.type || "занятие"}
+                            {l.branchId ? ` · ${CRM_BRANCH[l.branchId]?.short || ""}` : ""}
                             {l.group ? ` · ${l.group}` : ""}
                             {` · ${cttName(l.cttId)}`}
                           </span>
@@ -947,6 +989,27 @@ export function CrmClientCard({
                       </span>
                     ) : null}
                   </div>
+                  {payTally.length > 1 ? (
+                    <div className="mb-1.5 flex flex-wrap gap-1" data-op="pay-branch">
+                      <button
+                        type="button"
+                        className={cn("h-6 rounded-full px-2 text-[0.62rem] font-semibold ring-1 ring-black/10", !payBranch ? "bg-black/10 text-fg" : "text-muted")}
+                        onClick={() => { setPayBranch(0); setCashPage(0); }}
+                      >
+                        все
+                      </button>
+                      {payTally.map((b) => (
+                        <button
+                          key={b.id}
+                          type="button"
+                          className={cn("h-6 rounded-full px-2 text-[0.62rem] font-semibold ring-1 ring-black/10", payBranch === b.id ? "bg-black/10 text-fg" : "text-muted")}
+                          onClick={() => { setPayBranch(b.id); setCashPage(0); }}
+                        >
+                          {b.n} шт {b.short}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                   {journalPays.length ? (
                     <ul className="space-y-1.5">
                       {cashView.items.map((p) => {
@@ -956,6 +1019,7 @@ export function CrmClientCard({
                             <div className="flex items-baseline justify-between gap-2">
                               <span className="min-w-0 truncate text-[0.75rem] text-muted">
                                 {p.documentDate || "—"} · {payKindName(p.kind)}
+                                {p.branchId ? ` · ${CRM_BRANCH[p.branchId]?.short || ""}` : ""}
                                 {p.note ? ` · ${p.note}` : ""}
                               </span>
                               <span className={cn("shrink-0 text-[0.82rem] font-semibold tabular-nums", sum < 0 ? "text-rose-600" : "")}>
@@ -1168,23 +1232,19 @@ export function CrmClientCard({
           </div>
   );
 
-  const payN = (card.pays || []).length;
   const planN = Number(card.lessonsPlan) || 0;
   const factN = Number(card.lessonsFact) || 0;
-  const restLine = [
-    `${card.lessonsLeft || 0} ур.`,
-    payN ? `${payN} шт` : "нет платежей",
-    planN || factN ? `п ${planN} / ф ${factN}` : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const payLine = formatPayTally(payTally);
+  const lessonLine = formatLessonTally(lessonTally) || (planN || factN ? `п ${planN} / ф ${factN}` : "");
   const balanceBox = (
           <div className={cn("shrink-0", compact ? "" : "text-right")} data-op="account-rest">
             <div className={cn("flex items-baseline gap-2", compact ? "" : "justify-end")}>
               <p className={cn("font-semibold uppercase tracking-wider text-muted", compact ? "text-[0.55rem]" : "text-[0.62rem]")}>Общий остаток</p>
               <p className={cn("font-display leading-none tabular-nums tracking-tight", compact ? "text-[1.35rem]" : "text-[1.85rem]", Number(card.balance) ? "" : "text-rose-700")}>{money(card.balance)}</p>
             </div>
-            <p className={cn("mt-0.5 text-muted", compact ? "text-[0.6rem]" : "text-[0.68rem]")}>{restLine}</p>
+            <p className={cn("mt-0.5 text-muted", compact ? "text-[0.6rem]" : "text-[0.68rem]")}>{`${card.lessonsLeft || 0} ур.`}</p>
+            <p className={cn("text-muted", compact ? "text-[0.6rem]" : "text-[0.68rem]")} data-op="pay-tally">Платежи {payLine}</p>
+            {lessonLine ? <p className={cn("text-muted", compact ? "text-[0.6rem]" : "text-[0.68rem]")} data-op="lesson-tally">Уроки {lessonLine}</p> : null}
           </div>
   );
 

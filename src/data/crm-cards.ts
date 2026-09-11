@@ -50,6 +50,7 @@ export type ClientLesson = {
   attend?: number;
   total?: number;
   pupils?: { customerId: number; name?: string; attend?: boolean; amount?: number; cttId?: number }[];
+  branchId?: number;
 };
 
 export type ClientTariff = {

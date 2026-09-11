@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   stampJournal,
   journalAttend,
@@ -9,6 +10,11 @@ import {
   clientLessonFromJournal,
   calendarLessonForCard,
   isCustomerTrialLesson,
+  lessonBranchOf,
+  tallyPaysByBranch,
+  tallyLessonsByBranch,
+  formatPayTally,
+  formatLessonTally,
 } from "./crm-journal-core.ts";
 
 describe("журнал уроков", () => {
@@ -94,5 +100,34 @@ describe("журнал уроков", () => {
     assert.equal(stamped.attend, 1);
     assert.equal(stamped.total, 2);
     assert.deepEqual(stamped.customerIds, [1, 2]);
+  });
+
+  it("Архиреева: платежи и уроки по филиалам, 0/0 не рисуем", () => {
+    const pays = [
+      ...Array.from({ length: 9 }, (_, i) => ({ branchId: 2, id: i + 1 })),
+      { branchId: 4, id: 10 },
+    ];
+    const payRows = tallyPaysByBranch(pays, 2);
+    assert.equal(formatPayTally(payRows), "9 шт ЦМИТ, 1 шт Лето");
+    const lessons = [
+      ...Array.from({ length: 23 }, () => ({ status: 3, branchId: 2 })),
+      ...Array.from({ length: 17 }, () => ({ status: 1, branchId: 2 })),
+      { status: 2, branchId: 4 },
+    ];
+    const lessonRows = tallyLessonsByBranch(lessons, 2);
+    assert.equal(formatLessonTally(lessonRows), "п 40 / ф 23 ЦМИТ");
+    assert.equal(lessonRows.some((r) => r.id === 4), false);
+    const groups = [
+      { id: 588, branchId: 2, name: "Художественная школа 2025 (3 группа)" },
+      { id: 560, branchId: 4, name: "Арт-Экспедиция" },
+    ];
+    assert.equal(lessonBranchOf({ groupIds: [588] }, groups, 1), 2);
+    assert.equal(lessonBranchOf({ group: "Арт-Экспедиция" }, groups, 1), 4);
+    assert.equal(lessonBranchOf({ branchId: 4, groupIds: [588] }, groups, 1), 4);
+    const row = clientLessonFromJournal({ date: "2026-09-01", lessonId: 5, branchId: 4, status: 3 }, "Лето");
+    assert.equal(row.branchId, 4);
+    const ids = readFileSync(new URL("./ids.ts", import.meta.url), "utf8");
+    assert.match(ids, /short: "ЦМИТ"/);
+    assert.match(ids, /short: "Лето"/);
   });
 });

@@ -144,6 +144,7 @@ export type GroupCalLesson = {
   amount?: number;
   cttId?: number;
   pupils?: LessonPupil[];
+  branchId?: number;
 };
 
 export type SlotVersion = { at: string; reason: string; count: number; slots: CrmSlot[] };

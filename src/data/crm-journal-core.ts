@@ -30,6 +30,7 @@ export type JournalLesson = {
   cttId?: number;
   groupIds?: number[];
   pupils?: { customerId: number; name?: string; attend?: boolean; amount?: number; cttId?: number }[];
+  branchId?: number;
 };
 
 export function journalIds(lesson: { customerIds?: number[] }) {
@@ -122,5 +123,77 @@ export function clientLessonFromJournal(lesson: JournalLesson, groupName?: strin
     attend: Number(lesson.attend || 0) || undefined,
     total: Number(lesson.total || 0) || undefined,
     pupils: lesson.pupils?.length ? lesson.pupils : undefined,
+    branchId: Number(lesson.branchId) || undefined,
   };
+}
+
+/** Филиал урока: свой, иначе группа карточки, иначе запасной. */
+export function lessonBranchOf(
+  lesson: { branchId?: number; groupIds?: number[]; group?: string },
+  groups: { id?: number; branchId?: number; name?: string }[],
+  fallback = 0,
+) {
+  const own = Number(lesson.branchId) || 0;
+  if (own) return own;
+  for (const gid of (lesson.groupIds || []).map(Number)) {
+    const g = groups.find((x) => Number(x.id) === gid);
+    const bid = Number(g?.branchId) || 0;
+    if (bid) return bid;
+  }
+  const name = String(lesson.group || "").trim();
+  if (name) {
+    const g = groups.find((x) => String(x.name || "").trim() === name);
+    const bid = Number(g?.branchId) || 0;
+    if (bid) return bid;
+  }
+  return Number(fallback) || 0;
+}
+
+function branchShort(id: number) {
+  if (id === 1) return "Гражданская";
+  if (id === 2) return "ЦМИТ";
+  if (id === 3) return "Луховицы";
+  if (id === 4) return "Лето";
+  return `филиал ${id}`;
+}
+
+export function tallyPaysByBranch(pays: { branchId?: number }[], fallback = 0) {
+  const map = new Map<number, number>();
+  for (const p of pays || []) {
+    const bid = Number(p.branchId) || fallback || 0;
+    if (!bid) continue;
+    map.set(bid, (map.get(bid) || 0) + 1);
+  }
+  return [...map.entries()]
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => a[0] - b[0])
+    .map(([id, n]) => ({ id, n, short: branchShort(id) }));
+}
+
+export function tallyLessonsByBranch(lessons: { status?: number; branchId?: number }[], fallback = 0) {
+  const map = new Map<number, { plan: number; fact: number }>();
+  for (const l of lessons || []) {
+    const st = Number(l.status);
+    if (st === 2) continue;
+    const bid = Number(l.branchId) || fallback || 0;
+    if (!bid) continue;
+    const cur = map.get(bid) || { plan: 0, fact: 0 };
+    cur.plan += 1;
+    if (st === 3) cur.fact += 1;
+    map.set(bid, cur);
+  }
+  return [...map.entries()]
+    .filter(([, v]) => v.plan > 0 || v.fact > 0)
+    .sort((a, b) => a[0] - b[0])
+    .map(([id, v]) => ({ id, plan: v.plan, fact: v.fact, short: branchShort(id) }));
+}
+
+export function formatPayTally(rows: { n: number; short: string }[]) {
+  if (!rows.length) return "нет платежей";
+  return rows.map((r) => `${r.n} шт ${r.short}`).join(", ");
+}
+
+export function formatLessonTally(rows: { plan: number; fact: number; short: string }[]) {
+  if (!rows.length) return "";
+  return rows.map((r) => `п ${r.plan} / ф ${r.fact} ${r.short}`).join(", ");
 }

@@ -67,7 +67,12 @@ describe("форма занятия карточки", () => {
     assert.match(src, /alfaDateShort/);
     assert.match(src, /Базовый счет/);
     assert.match(src, /Общий остаток/);
-    assert.match(src, /restLine/);
+    assert.match(src, /data-op="pay-tally"/);
+    assert.match(src, /data-op="lesson-tally"/);
+    assert.match(src, /data-op="pay-branch"/);
+    assert.match(src, /data-op="writeoff-branch"/);
+    assert.match(src, /formatPayTally/);
+    assert.match(src, /tallyPaysByBranch/);
     assert.match(src, /data-op="basic-account"/);
     assert.match(src, /платежей на этот счёт/);
     assert.match(src, /Счета и абонементы/);
