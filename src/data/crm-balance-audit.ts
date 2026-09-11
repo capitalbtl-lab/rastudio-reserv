@@ -186,8 +186,9 @@ export async function auditOne(cid: number, branchId: number) {
           if (probed.ok && loadCustomerCalendar(id).length >= probed.total) break;
         }
       }
-      if (!first.paysComplete || first.cash < shown.alfa - 1) {
-        const { inboundCustomerPays, payCustomerFilled } = await import("./crm-pay");
+      if (!first.paysComplete || !moneyClose(first.cash, shown.alfa)) {
+        const { inboundCustomerPays, payCustomerFilled, markPayJournalIncomplete } = await import("./crm-pay");
+        markPayJournalIncomplete(id);
         for (let i = 0; i < 4; i += 1) {
           await inboundCustomerPays(shown.request, shown.token, shown.branch, id).catch(() => null);
           repaired = true;

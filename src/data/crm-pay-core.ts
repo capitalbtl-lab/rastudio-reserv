@@ -99,10 +99,21 @@ export function payKindOf(raw?: string | null): PayKind {
 }
 
 /** Alfa PayType: 1 доход, 6 корректировка (форма pay/update). Сумма корректировки в income, может быть < 0. */
+export function payNum(v: unknown) {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const s = String(v ?? "")
+    .trim()
+    .replace(/\s/g, "")
+    .replace(",", ".");
+  if (!s) return 0;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function kindFromAlfaPay(item: Record<string, unknown>): PayKind {
   const typeId = Number(item.pay_type_id || item.payTypeId || item.type_id || 0) || 0;
-  const income = Number(item.income || 0) || 0;
-  const expenditure = Number(item.expenditure || 0) || 0;
+  const income = payNum(item.income);
+  const expenditure = payNum(item.expenditure);
   const itemId = Number(item.pay_item_id || item.payItemId) || 0;
   if (typeId === 6 || itemId === 7 || income < 0) return "correct";
   if (typeId === 2 || Number(item.commodity_id || item.commodityId)) return "product";
@@ -128,7 +139,7 @@ export function payEffect(kind: PayKind, sum: number, prev: number) {
 export function rowDelta(row: Pick<PayRow, "kind" | "income" | "expenditure" | "deleted">) {
   if (row.deleted) return 0;
   if (row.kind === "product") return 0;
-  return Number(row.income || 0) - Number(row.expenditure || 0);
+  return payNum(row.income) - payNum(row.expenditure);
 }
 
 export function balanceOf(rows: PayRow[]) {

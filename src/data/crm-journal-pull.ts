@@ -913,9 +913,10 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   if (balance) {
     const { token, request } = await import("./alfacrm");
     const t = await token();
-    const { inboundCustomerPays, paysOf, payCustomerFilled } = await import("./crm-pay");
+    const { inboundCustomerPays, paysOf, payCustomerFilled, markPayJournalIncomplete } = await import("./crm-pay");
     try {
-      await inboundCustomerPays(request, t, branchId, cid);
+      if (recheck) markPayJournalIncomplete(cid);
+      await inboundCustomerPays(request, t, branchId, cid, { force: recheck });
     } catch (e) {
       payFail = e instanceof Error && e.message ? e.message : "Alfa не ответила, нажмите снова";
     }

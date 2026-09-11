@@ -209,7 +209,9 @@ describe("шаг 4 сверка остатка", () => {
     assert.doesNotMatch(src, /applyCrmCustomer/);
     assert.match(src, /inboundCustomerLessons/);
     assert.match(src, /inboundCustomerPays/);
-    assert.match(src, /markPayJournalIncomplete/);
+    assert.match(src, /markPayJournalIncomplete\(id\)/);
+    assert.match(src, /!moneyClose\(first.cash, shown.alfa\)/);
+    assert.doesNotMatch(src, /first.cash < shown.alfa - 1/);
     assert.match(src, /paysRecheckAt: ""/);
     assert.match(src, /stampCustomerSync/);
     assert.match(src, /payCustomerFilled/);

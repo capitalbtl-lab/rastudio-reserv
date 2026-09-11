@@ -19,6 +19,7 @@ import {
   alfaPayIndexDate,
   kindFromAlfaPay,
   snapshotBalance,
+  payNum,
   paySumForCtt,
   payCountForCtt,
   cttIdOfPay,
@@ -550,8 +551,8 @@ export function replaceCustomerPays(customerId: number, rows: PayRow[]) {
 
 export function packPay(item: Record<string, unknown>, customerId: number, branchId: number): PayRow | null {
   const id = Number(item.id || 0) || 0;
-  const income = Number(item.income || 0) || 0;
-  const expenditure = Number(item.expenditure || 0) || 0;
+  const income = payNum(item.income);
+  const expenditure = payNum(item.expenditure);
   if (!id && !income && !expenditure) return null;
   const cid = payCustomerIdOf(item, customerId);
   const kind = kindFromAlfaPay(item);
@@ -661,31 +662,30 @@ export async function inboundCustomerPays(
   token: string,
   branchId: number,
   customerId: number,
+  opts?: { force?: boolean },
 ) {
   if (pendingExportIds(["pay.create"]).has(customerId)) return paysOf(customerId);
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
+  if (opts?.force) markPayJournalIncomplete(customerId);
   const store = load();
-  const filled = (store.complete || []).includes(customerId);
-  const branches = filled ? [Number(branchId) || 1] : uniqueBranches(branchId);
+  const branches = uniqueBranches(branchId);
   const raw: Record<string, unknown>[] = [];
   let bidIdx = 0;
   let page = 0;
-  if (!filled) {
-    const cur = store.payFill?.[String(customerId)];
-    if (cur) {
-      const i = branches.indexOf(cur.bid);
-      bidIdx = i >= 0 ? i : 0;
-      page = Number(cur.page) || 0;
-    }
+  const cur = store.payFill?.[String(customerId)];
+  if (cur && !opts?.force) {
+    const i = branches.indexOf(cur.bid);
+    bidIdx = i >= 0 ? i : 0;
+    page = Number(cur.page) || 0;
   }
   let ran = 0;
-  let done = filled;
+  let done = false;
   let lastShort = false;
   let failed = false;
-  const maxRun = filled ? 1 : PAY_INBOUND_RUN;
+  const maxRun = PAY_INBOUND_RUN;
   outer: for (let b = bidIdx; b < branches.length; b += 1) {
     const bid = branches[b];
-    let p = filled ? 0 : b === bidIdx ? page : 0;
+    let p = b === bidIdx ? page : 0;
     for (;;) {
       if (ran >= maxRun) {
         done = false;
@@ -699,7 +699,20 @@ export async function inboundCustomerPays(
         raw.push(...pack.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
         ran += 1;
         lastShort = pack.items.length < PAY_INBOUND_PAGE;
-        if (filled || lastShort) break;
+        if (lastShort) {
+          try {
+            const corr = await request(
+              `/v2api/${bid}/pay/index`,
+              { page: 0, pageSize: PAY_INBOUND_PAGE, customer_id: customerId, pay_type_id: 6 },
+              token,
+            );
+            const pack6 = crmUnwrapIndex(corr);
+            raw.push(...pack6.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
+          } catch {
+            /* корректировки филиала — не валим весь прогон */
+          }
+          break;
+        }
         p += 1;
       } catch {
         failed = true;
@@ -709,9 +722,9 @@ export async function inboundCustomerPays(
         break outer;
       }
     }
-    if (!failed && b === branches.length - 1) done = filled || lastShort;
+    if (!failed && b === branches.length - 1 && lastShort) done = true;
   }
-  if (done && !filled && !failed) markPayJournalComplete(customerId);
+  if (done && !failed) markPayJournalComplete(customerId);
   const known: number[] = [];
   try {
     const { findDossier } = await import("./dossiers");
@@ -722,7 +735,7 @@ export async function inboundCustomerPays(
     /* диск абонементов необязателен */
   }
   const unlabeled = raw.some((it) => !payCttIdOf(it));
-  if (!filled && unlabeled && known.length) {
+  if (unlabeled && known.length) {
     for (const ctt of [...new Set(known)]) {
       for (let p = 0; p < 6; p += 1) {
         try {

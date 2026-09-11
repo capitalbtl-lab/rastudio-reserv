@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, snapshotBalance, accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, payCustomerNameOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, payPollLookbackDates, PAY_POLL_MAX_PER_HOUR, matchAlfaPayId, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, snapshotBalance, accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, payCustomerNameOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, payPollLookbackDates, PAY_POLL_MAX_PER_HOUR, matchAlfaPayId, payNum, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -20,6 +20,14 @@ describe("журнал денег", () => {
     assert.deepEqual(payEffect("product", 500, 1000), { income: 500, expenditure: 0, next: 1000 });
     assert.deepEqual(payEffect("correct", 2500, 1000), { income: 1500, expenditure: 0, next: 2500 });
     assert.deepEqual(payEffect("correct", 400, 1000), { income: 0, expenditure: 600, next: 400 });
+    const anisichkin = [
+      row({ id: 18392, kind: "income", income: 29900, expenditure: 0 }),
+      row({ id: 19226, kind: "income", income: 28405, expenditure: 0 }),
+      row({ id: 19396, kind: "income", income: 3000, expenditure: 0 }),
+      row({ id: 19558, kind: "correct", income: -28405, expenditure: 0 }),
+    ];
+    assert.equal(balanceOf(anisichkin), 32900);
+    assert.equal(balanceOf([row({ id: 19690, kind: "income", income: 4050, expenditure: 0 })]), 4050);
   });
 
   it("остаток с диска, без строк — снимок карточки", () => {
@@ -165,6 +173,10 @@ describe("журнал денег", () => {
     assert.equal(kindFromAlfaPay({ commodity_id: 9, income: 200 }), "product");
     assert.equal(kindFromAlfaPay({ note: "Корректировка остатка", income: 1 }), "correct");
     assert.equal(kindFromAlfaPay({ expenditure: 80 }), "refund");
+    assert.equal(payNum(-28405), -28405);
+    assert.equal(payNum("-28 405,00"), -28405);
+    assert.equal(payNum("4050"), 4050);
+    assert.equal(payNum(""), 0);
     assert.equal(payCustomerIdOf({ customer: { id: 44 } }), 44);
     assert.equal(alfaPayDate("2026-09-07"), "07.09.2026");
     assert.equal(alfaPayDate("07.09.2026"), "07.09.2026");
