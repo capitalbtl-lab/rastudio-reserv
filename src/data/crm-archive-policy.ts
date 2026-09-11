@@ -384,15 +384,16 @@ export function archivePersonFrom(d: {
   groupLinks?: { id: number; branchId?: number }[];
 }): ArchivePerson {
   const ex = d.extras || {};
+  const study = Number(ex.is_study);
   return {
     cid: Number(d.crmId) || 0,
-    study: Number(ex.is_study),
+    study,
     status: d.status,
     removed: String(ex.removed || ""),
     fio: String(d.child?.fio || ""),
     dob: String(d.child?.dob || ""),
     age: d.age,
-    groupLinks: linksFromExtras(ex, d.groupLinks),
+    groupLinks: study === 1 || study === 2 ? linksFromExtras(ex, d.groupLinks) : d.groupLinks,
   };
 }
 

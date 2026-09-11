@@ -393,22 +393,34 @@ function groupsFromItem(item: Record<string, unknown>, branchId: number, active 
       subjectId,
     });
   }
-  const ids = Array.isArray(item.group_ids) ? item.group_ids : [];
-  for (const x of ids) {
-    const id = Number(x);
-    if (!id) continue;
-    const k = `${branchId}:${id}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push({
-      id,
-      name: `группа ${id}`,
-      branchId,
-      school: "",
-      active,
-    });
+  let gids: unknown = item.group_ids;
+  if (typeof gids === "string") gids = parseJsonish(gids);
+  if (Array.isArray(gids)) {
+    for (const x of gids) {
+      const id = Number(x);
+      if (!id) continue;
+      const k = `${branchId}:${id}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({
+        id,
+        name: `группа ${id}`,
+        branchId,
+        school: "",
+        active,
+      });
+    }
   }
   return out;
+}
+
+function groupLinkName(prev?: string, next?: string) {
+  const a = String(prev || "").trim();
+  const b = String(next || "").trim();
+  if (!b) return a;
+  if (!a) return b;
+  if (/^группа\s+\d+$/i.test(b) && !/^группа\s+\d+$/i.test(a)) return a;
+  return b;
 }
 
 function idList(raw?: string) {
@@ -495,7 +507,7 @@ export function upsertDossier(patch: {
       for (const g of incoming) {
         if (!g?.id) continue;
         const i = list.findIndex((x) => x.id === g.id && x.branchId === g.branchId);
-        if (i >= 0) list[i] = { ...list[i], ...g };
+        if (i >= 0) list[i] = { ...list[i], ...g, name: groupLinkName(list[i].name, g.name) };
         else list.push(g);
       }
       return list;

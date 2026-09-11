@@ -131,6 +131,16 @@ describe("рабочий архив", () => {
     assert.equal(policy.working.includes(77), true);
   });
 
+  it("лид не разбирает extras.groups", () => {
+    const lead = archivePersonFrom({
+      crmId: 3,
+      extras: { is_study: "0", groups: "not-json" },
+      child: { fio: "Лид" },
+    });
+    assert.equal(lead.study, 0);
+    assert.equal(lead.groupLinks, undefined);
+  });
+
   it("выбывший не открывает набор, пока не считали", () => {
     const next = addArchiveWorkingMany([8], "left", empty);
     assert.equal(next.ready, false);
@@ -181,7 +191,8 @@ describe("рабочий архив", () => {
     assert.match(views, /isArchiveWorking|archiveWorkingSet/);
     assert.match(views, /groupLinks: hint/);
     assert.match(views, /groupsFromItem\(item, branchId, !reallyArchived\)/);
-    assert.match(views, /crmListMem/);
+    assert.match(views, /groupLinkName/);
+    assert.match(views, /typeof gids === "string"/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /Посчитать отбор/);
     assert.match(ui, /Обновить справочник архива/);

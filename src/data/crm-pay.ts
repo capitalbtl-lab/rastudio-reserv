@@ -201,10 +201,20 @@ export function cardPays(customerId: number) {
     }));
 }
 
+let completeMem: { arr: number[] | undefined; set: Set<number> } | null = null;
+
+function completeSetOf(store: { complete?: number[] }) {
+  const arr = store.complete;
+  if (completeMem && completeMem.arr === arr) return completeMem.set;
+  const set = new Set(arr || []);
+  completeMem = { arr, set };
+  return set;
+}
+
 export function customerBalance(customerId: number, fallback?: number | string, writeoffSum = 0) {
   const id = Number(customerId) || 0;
   const rows = paysOf(id);
-  const complete = Boolean(id && (load().complete || []).includes(id));
+  const complete = Boolean(id && completeSetOf(load()).has(id));
   const opened = rows.some((x) => String(x.note || "") === OPENING_NOTE);
   const paySum = displayedBalance(rows, undefined, true);
   const snap = fallback == null || fallback === "" ? Number.NaN : Number(fallback);
@@ -215,7 +225,7 @@ export function isPayJournalComplete(customerId: number) {
   const store = load();
   if (store.poll?.fill?.done) return true;
   const id = Number(customerId) || 0;
-  return Boolean(id && (store.complete || []).includes(id));
+  return Boolean(id && completeSetOf(store).has(id));
 }
 
 export function markPayJournalComplete(customerId: number) {
