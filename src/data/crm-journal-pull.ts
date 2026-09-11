@@ -13,8 +13,9 @@ import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteof
 import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort } from "./crm-customer-sync";
 import { isPayJournalComplete } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
+import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 
-export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk";
+export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd";
 export type JournalPullStudy = "1" | "2" | "all";
 
 export type JournalPullGroup = {
@@ -114,11 +115,12 @@ type PullStore = {
   lastArchives?: ArchivesReport | null;
   lastArchivesPupils?: ArchivesPupilsReport | null;
   lastStudents?: StudentsReport | null;
+  lastArchivePolicy?: ArchiveCountReport | null;
   fill?: Record<string, FillHit>;
 };
 
 function emptyStore(): PullStore {
-  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null, lastArchives: null, lastArchivesPupils: null, lastStudents: null, fill: {} };
+  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null, lastArchives: null, lastArchivesPupils: null, lastStudents: null, lastArchivePolicy: null, fill: {} };
 }
 
 function fileOf() {
@@ -147,6 +149,7 @@ function loadStore(): PullStore {
       lastArchives: raw.lastArchives && typeof raw.lastArchives === "object" ? (raw.lastArchives as ArchivesReport) : null,
       lastArchivesPupils: raw.lastArchivesPupils && typeof raw.lastArchivesPupils === "object" ? (raw.lastArchivesPupils as ArchivesPupilsReport) : null,
       lastStudents: raw.lastStudents && typeof raw.lastStudents === "object" ? (raw.lastStudents as StudentsReport) : null,
+      lastArchivePolicy: raw.lastArchivePolicy && typeof raw.lastArchivePolicy === "object" ? (raw.lastArchivePolicy as ArchiveCountReport) : null,
       fill: raw.fill && typeof raw.fill === "object" ? (raw.fill as Record<string, FillHit>) : {},
     };
     storeMem = { mtime, data };
@@ -233,7 +236,12 @@ function pupilLinkCountMap(study: JournalPullStudy) {
 }
 
 function pupilArchivePlan(study: "1" | "2") {
-  const people = rankedStudentIds(study);
+  const seen = new Set<number>();
+  const people = [...rankedStudentIds("1"), ...rankedStudentIds("2")].filter((p) => {
+    if (seen.has(p.cid)) return false;
+    seen.add(p.cid);
+    return true;
+  });
   const liveKeys = new Set(journalPullGroups().filter((g) => !g.archived).map((g) => `${g.branchId}:${g.groupId}`));
   const bagKeys = new Set(loadJournalArchiveGroups().map((g) => `${g.branchId}:${g.groupId}`));
   const unique = new Map<string, { groupId: number; branchId: number; n: number; name: string }>();
@@ -358,6 +366,21 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
     if (study === "2") return x.study === 2;
     return x.study === 1 || x.study === 2;
   });
+  const scoped = Boolean(group && group.groupId);
+  if (!scoped && (study === "2" || study === "all")) {
+    const allow = archiveWorkingSet();
+    const keep = filtered.filter((x) => {
+      if (x.study !== 2) return true;
+      if (!allow) return false;
+      return allow.has(x.cid);
+    });
+    keep.sort((a, b) => {
+      const ra = a.study === 1 ? 0 : 1;
+      const rb = b.study === 1 ? 0 : 1;
+      return ra - rb || a.cid - b.cid;
+    });
+    return keep;
+  }
   filtered.sort((a, b) => {
     const ra = a.study === 1 ? 0 : 1;
     const rb = b.study === 1 ? 0 : 1;
@@ -631,14 +654,18 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
         at: sync.lessonsAt || "",
       });
     }
-    peopleRows.sort((a, b) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid);
+    peopleRows.sort((a, b) => {
+      const ao = archiveFioOk(a.name) ? 0 : 1;
+      const bo = archiveFioOk(b.name) ? 0 : 1;
+      return ao - bo || a.name.localeCompare(b.name, "ru") || a.cid - b.cid;
+    });
     return {
       total: people.length,
       journalDone,
       cardDone,
       missJournal: packList(missJ),
       missCard: packList(missC),
-      people: peopleRows.slice(0, 800),
+      people: study === "2" ? peopleRows : peopleRows.slice(0, 800),
     };
   }
 
@@ -683,7 +710,8 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
   const arch = rankedStudentIds("2");
   const emptySide = (study: JournalPullStudy) => {
     const list = rankedStudentIds(study);
-    const people = list.slice(0, 800).map((p) => {
+    const cap = study === "2" ? list.length : 800;
+    const people = list.slice(0, cap).map((p) => {
       const sync = customerSyncOf(p.cid);
       const probed = Boolean(sync.lessonsAlfaAt);
       const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
@@ -751,6 +779,7 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
     lastArchives: store.lastArchives || null,
     lastArchivesPupils: store.lastArchivesPupils || null,
     lastStudents: store.lastStudents || null,
+    lastArchivePolicy: store.lastArchivePolicy || null,
   };
 }
 
@@ -934,6 +963,44 @@ export async function journalPull(opts: {
     store.at = new Date().toISOString();
     saveStore(store);
     return { ok: true as const, extra: store.note, count: h.n, scanned: h.n, more: false, ...snap() };
+  }
+
+  if (kind === "archiveCount") {
+    const { archivePeopleFromDisk } = await import("./dossiers");
+    const items = archivePeopleFromDisk();
+    const extra = extraGroupKeys(loadJournalArchiveGroups().map((g) => ({ groupId: g.groupId, branchId: g.branchId })));
+    const { policy, report } = recountArchivePolicy(items, extra, loadArchivePolicy());
+    saveArchivePolicy(policy);
+    store.lastArchivePolicy = report;
+    store.note = formatArchiveCountNote(report);
+    store.at = report.at;
+    saveStore(store);
+    return { ok: true as const, extra: store.note, count: report.working, scanned: report.disk, more: false, lastArchivePolicy: report, ...journalPullState() };
+  }
+
+  if (kind === "archiveCatalog") {
+    const { syncAllFromCrm, archiveDiskCount } = await import("./dossiers");
+    const res = await syncAllFromCrm(undefined, [2]);
+    const disk = archiveDiskCount();
+    store.note = `Справочник архива: обработано ${res.count}, на диске архивных карточек ${disk}. Рабочий набор не меняли — нажмите «Посчитать отбор».`;
+    store.at = new Date().toISOString();
+    saveStore(store);
+    return { ok: true as const, extra: store.note, count: res.count, scanned: res.count, more: false, ...snap() };
+  }
+
+  if (kind === "archiveAdd") {
+    const cid = Number(opts.customerId) || 0;
+    if (!cid) {
+      store.note = "Нет номера ученика.";
+      store.at = new Date().toISOString();
+      saveStore(store);
+      return { ok: false as const, error: store.note, more: false, ...snap() };
+    }
+    addArchiveWorking(cid, "manual");
+    store.note = `Клиент ${cid} в рабочем архиве.`;
+    store.at = new Date().toISOString();
+    saveStore(store);
+    return { ok: true as const, extra: store.note, count: 1, scanned: 1, more: false, ...journalPullState() };
   }
 
   if (kind === "archives") {

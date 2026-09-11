@@ -110,7 +110,9 @@ const HINT = {
   tabGroups: "Второй шаг. Здесь качаются явки по группам: кто был на уроке, а не личный календарь человека. Сначала красная «по одному», потом список «годы» — это размер порции: квартал, полугодие или год. Архив групп и сроки жизни курса — отдельные кнопки ниже, их лучше нажать до массовой качки. Фильтр школы сужает очередь. В Alfa журнал не проводится. Без этого шага на сайте будут люди, но без отметок в группе. Тема и ДЗ грузятся уже в карточке группы, после явок.",
   tabMoney: "Третий шаг, «деньги на карточке». Здесь к ученику дописываются платежи и абонементы из Alfa. Красная «по одному» идёт как на шаге 1, справа те же годы. Если журнала занятий ещё нет, касса сначала доберёт календарь, иначе списание не к чему привязать. В Alfa оплаты не создаются. Жёлтая карточка — в Alfa занятий больше, чем на диске. После шага на карточке ученика должен быть понятный остаток. Это не зарплата педагогов и не очередь в Alfa, а чтение кассы на сайт.",
   scopeLive: "Показывает тех, кто сейчас ходит: статус «обучается» в Alfa. Красная очередь и сверка идут только по этому списку, архивных не трогают. Цифра на кнопке — сколько таких людей в выборке. Переключение само ничего не качает и в Alfa не пишет. Если нужен бывший ученик, соседняя кнопка «Архивные клиенты». Можно спокойно прыгать туда-сюда, списки уже на диске. Для кассы и календаря это один и тот же переключатель.",
-  scopeArch: "Показывает архивных клиентов, кто уже не ходит. Их календарь и касса всё равно нужны: старый остаток, справки, возвраты. Красная очередь идёт только по архиву, текущих не трогает. В Alfa статус человека не меняет и не восстанавливает в группу. Если список пустой, сначала «Показать список с диска», потом при необходимости архив групп. Переключение само ничего не качает. Жёлтые карточки здесь чаще, потому что история длиннее — берите «с начала · 2015».",
+  scopeArch: "Показывает рабочий архив — бывшие ученики, которых отобрали кнопкой «Посчитать отбор». Красная очередь идёт только по этому набору, скрытый мусор (голые телефоны, ошибочные звонки) сюда не попадает. В Alfa статус не меняет. Если список пустой, сначала «Показать список с диска», потом «Посчитать отбор»: правило строится с диска, без Alfa. Скрытые ищутся в разделе Клиенты по телефону. Жёлтые карточки здесь чаще — берите «с начала · 2015».",
+  archCount: "Считает рабочий архив только с диска, в Alfa не ходит и ничего там не пишет. Берёт группы текущих учеников и ищет в архиве тех, кто в тех же группах числился, с нормальным ФИО, не 18+ (если есть дата рождения). Голые телефоны и ошибочные звонки остаются скрытыми на диске, но не в списке. Уже попавшие в набор повторным нажатием не выкидываются. После отчёта красная «по одному» идёт только по рабочим. Если на диске архивных карточек нет — сначала «Обновить справочник архива из Alfa».",
+  archCatalog: "Читает из Alfa всех is_study=2 и кладёт карточки в справочник на диск. Это не рабочий набор: после загрузки список слева сам не заполнится, нужно «Посчитать отбор». Журнал, явки и касса не стартуют. В Alfa ничего не пишет и не удаляет. Программа спрашивает подтверждение, потому что это все архивы филиалов, не только ваши ученики. Уже лежащие 2865 карточек просто обновятся, дублей по номеру не будет. Жать, когда в Alfa появились новые архивные, которых ещё нет на сайте.",
   scopeLiveGroups: "Показывает живые группы, которые идут по расписанию сейчас. Красная «по одному» и счётчики считают только их. Архивные группы на этом виде скрыты, их явки сами не качаются. Переключение в Alfa ничего не пишет. Если нужна старая группа для баланса, нажмите «Архивные группы». Школа выше по-прежнему фильтрует этот список. Это вид, а не загрузка.",
   scopeArchGroups: "Показывает архивные группы, которых уже нет в живом расписании. Их явки нужны, чтобы на карточке ученика сошёлся старый баланс. Список появляется после кнопок «Архив групп учеников» или «Загрузить архивные группы». Красная очередь на этом виде идёт по архиву. В Alfa группу не восстанавливает. Если список пустой — сначала подтяните архив, потом грузите кварталы как у живых.",
 } as const;
@@ -1340,6 +1342,17 @@ export function AdminCrmSettings() {
       missing?: number[];
     } | null;
     lastStudents?: { at?: string; study?: string; who?: string; n?: number; total?: number; rows?: StudentHit[] } | null;
+    lastArchivePolicy?: {
+      at?: string;
+      disk: number;
+      fioOk: number;
+      noDob: number;
+      adult: number;
+      intersect: number;
+      working: number;
+      hidden: number;
+      kept?: number;
+    } | null;
   } | null>(null);
   const [journalLoading, setJournalLoading] = useState(true);
   const [journalSchool, setJournalSchool] = useState("");
@@ -1628,7 +1641,7 @@ export function AdminCrmSettings() {
   }
 
   async function runJournal(opts: {
-    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils";
+    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "archiveCount" | "archiveCatalog" | "archiveAdd";
     study?: "1" | "2" | "all";
     school?: string;
     groupId?: number;
@@ -1644,7 +1657,7 @@ export function AdminCrmSettings() {
     setBusy(true);
     if (opts.kind === "group" || opts.kind === "details") {
       setFillLoading({ groupId: opts.groupId || 0, branchId: opts.branchId || 0, periodKey: opts.periodKey || "", label: opts.periodLabel || "", kind: opts.kind });
-    } else if (opts.kind === "life" || opts.kind === "archives" || opts.kind === "archivesPupils") {
+    } else if (opts.kind === "life" || opts.kind === "archives" || opts.kind === "archivesPupils" || opts.kind === "archiveCount" || opts.kind === "archiveCatalog" || opts.kind === "archiveAdd") {
       setFillLoading({ kind: opts.kind });
     } else if ((opts.kind === "students" || opts.kind === "balance") && !holdFill.current) {
       setFillLoading({ kind: opts.kind, label: opts.study === "2" ? "архивные" : "текущие" });
@@ -1671,7 +1684,7 @@ export function AdminCrmSettings() {
         new Promise<never>((_, rej) =>
           setTimeout(
             () => rej(new Error("Alfa не ответила за отведённое время — нажмите ещё раз.")),
-            opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "life" || opts.kind === "group" || opts.kind === "details" || opts.kind === "hydrateDisk" || opts.kind === "students" || opts.kind === "balance" ? 90000 : 25000,
+            opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "archiveCount" || opts.kind === "archiveCatalog" || opts.kind === "archiveAdd" || opts.kind === "life" || opts.kind === "group" || opts.kind === "details" || opts.kind === "hydrateDisk" || opts.kind === "students" || opts.kind === "balance" ? 90000 : 25000,
           ),
         ),
       ])) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit; extra?: string };
@@ -2653,6 +2666,42 @@ export function AdminCrmSettings() {
                     hintArch={HINT.scopeArch}
                   />
                 </div>
+                {peopleStudy === "2" ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {withHint(
+                      <button
+                        type="button"
+                        className={cn(BTN_LOAD, fillLoading?.kind === "archiveCount" && "ra-progress-run")}
+                        disabled={busy}
+                        onClick={() => void runJournal({ kind: "archiveCount" })}
+                      >
+                        {fillLoading?.kind === "archiveCount" ? "Считаю отбор…" : "Посчитать отбор"}
+                      </button>,
+                      HINT.archCount,
+                    )}
+                    {withHint(
+                      <button
+                        type="button"
+                        className={cn(BTN_LOAD, fillLoading?.kind === "archiveCatalog" && "ra-progress-run")}
+                        disabled={busy || offline}
+                        onClick={() => {
+                          if (!window.confirm("Это все архивные клиенты филиалов Alfa, не рабочий набор. Журнал не стартует. Продолжить?")) return;
+                          void runJournal({ kind: "archiveCatalog" });
+                        }}
+                      >
+                        {fillLoading?.kind === "archiveCatalog" ? "Читаю справочник Alfa…" : "Обновить справочник архива из Alfa"}
+                      </button>,
+                      HINT.archCatalog,
+                    )}
+                    {journal?.lastArchivePolicy ? (
+                      <p className="w-full text-[0.78rem] text-muted">
+                        На диске {journal.lastArchivePolicy.disk} · ФИО {journal.lastArchivePolicy.fioOk} · без dob {journal.lastArchivePolicy.noDob} · 18+ {journal.lastArchivePolicy.adult} · пересечение {journal.lastArchivePolicy.intersect} · в наборе {journal.lastArchivePolicy.working} · скрыто {journal.lastArchivePolicy.hidden}
+                      </p>
+                    ) : (
+                      <p className="w-full text-[0.78rem] text-muted">Пока не считали: слева пусто, даже если на диске тысячи архивных карточек.</p>
+                    )}
+                  </div>
+                ) : null}
                 {(() => {
                   const side = peopleStudy === "2" ? p?.archive : p?.live;
                   const done = side?.journalDone || 0;

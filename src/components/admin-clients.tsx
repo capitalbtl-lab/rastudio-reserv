@@ -308,6 +308,9 @@ export function AdminClients({
   const [rows, setRows] = useState<ClientRow[]>(() => clientsSnap?.items || []);
   const [total, setTotal] = useState(() => clientsSnap?.total || 0);
   const [counts, setCounts] = useState(() => clientsSnap?.counts || { все: 0, учится: 0, лид: 0, архив: 0 });
+  const [archiveInfo, setArchiveInfo] = useState({ disk: 0, working: 0, hidden: 0, ready: false });
+  const [showHiddenArchive, setShowHiddenArchive] = useState(false);
+  const showHiddenRef = useRef(false);
   const [branchCounts, setBranchCounts] = useState<Record<number, number>>(() => clientsSnap?.branchCounts || { 1: 0, 2: 0, 3: 0, 4: 0 });
   const [busy, setBusy] = useState(() => !clientsSnap?.items.length);
   const [card, setCard] = useState<CustomerCard | null>(null);
@@ -441,6 +444,7 @@ export function AdminClients({
         branchId: nextBranch,
         ageBand: nextAge,
         take: Math.max(240, capRef.current + 120, String(nextQ || "").trim() ? 400 : 0),
+        archiveAll: nextStatus === "архив" && showHiddenRef.current,
       }), 2, 20000)) as {
         ok?: boolean;
         items?: ClientRow[];
@@ -450,12 +454,14 @@ export function AdminClients({
         lastCrmSync?: string;
         all?: number;
         error?: string;
+        archive?: { disk: number; working: number; hidden: number; ready: boolean };
       };
       if (res.ok && Array.isArray(res.items)) {
         setRows(res.items);
         rowsRef.current = res.items;
         setTotal(Number(res.total) || res.items.length);
         if (res.counts) setCounts(res.counts);
+        if (res.archive) setArchiveInfo(res.archive);
         if (res.branchCounts) setBranchCounts(res.branchCounts);
         if (res.lastCrmSync) setSynced(res.lastCrmSync);
         clientsSnap = {
@@ -1358,15 +1364,7 @@ export function AdminClients({
             >
               Загрузить «Лидов»
             </button>
-            <button
-              type="button"
-              className="inline-flex h-10 items-center rounded-full px-3 text-[0.8rem] font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
-              title="Загрузить из Alfa архив (is_study=2) и показать в списке. Только на диск сайта."
-              disabled={busy || pull.open}
-              onClick={() => void pullKind("clientsArchive")}
-            >
-              Загрузить «Архив»{counts.архив ? ` ${counts.архив}` : ""}
-            </button>
+            <span className="px-2 text-[0.72rem] text-muted">Набор архива — Настройка CRM → История из Alfa</span>
         </div>
         {hint ? <p className="mt-2 rounded-xl bg-primary/10 px-3 py-1.5 text-sm font-medium text-fg">{hint}</p> : null}
 
@@ -1496,7 +1494,28 @@ export function AdminClients({
           {synced ? <span className="hidden text-[0.68rem] text-muted xl:inline">на сайте · {agoRu(synced)}</span> : null}
         </div>
         {status === "архив" && !counts.архив ? (
-          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Архив на сайте пуст. Нажмите «Загрузить „Архив“».</p>
+          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            {archiveInfo.ready
+              ? `Рабочий архив пуст. На диске ${archiveInfo.disk} скрытых. Набор — Настройка CRM → История из Alfa → «Посчитать отбор».`
+              : `На диске ${archiveInfo.disk || "архивные карточки"}. Рабочий набор не считали — Настройка CRM → История из Alfa → шаг 1 → «Посчитать отбор».`}
+          </p>
+        ) : null}
+        {status === "архив" && archiveInfo.hidden ? (
+          <p className="mt-2 text-[0.78rem] text-muted">
+            Ещё {archiveInfo.hidden} скрыты, ищутся по телефону и номеру.{" "}
+            <button
+              type="button"
+              className="underline decoration-dotted"
+              onClick={() => {
+                const next = !showHiddenRef.current;
+                showHiddenRef.current = next;
+                setShowHiddenArchive(next);
+                void load(q, "архив", branch, age);
+              }}
+            >
+              {showHiddenArchive ? "Скрыть лишних" : "Показать скрытых"}
+            </button>
+          </p>
         ) : null}
         {status === "лид" && !counts.лид ? (
           <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950">Лидов на сайте нет. Нажмите «Загрузить „Лидов“».</p>
@@ -1688,6 +1707,24 @@ export function AdminClients({
                     >
                       {statusLabel(r.status)}
                     </span>
+                    {r.archiveHidden && crmId ? (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[0.62rem] font-semibold text-sky-900"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void (async () => {
+                            await adminSchedule({
+                              data: { token: token(), action: "journalPull", kind: "archiveAdd", customerId: crmId } as never,
+                            });
+                            await load(q, status, branch, age);
+                          })();
+                        }}
+                      >
+                        в набор
+                      </span>
+                    ) : null}
                   </span>
                   <span className="mt-0.5 block truncate text-[0.72rem] text-muted">
                     {[
@@ -1721,7 +1758,7 @@ export function AdminClients({
           ) : null}
           {view === "дети" && !busy && !shown.length ? (
             <p className="rounded-[1.2rem] bg-white px-4 py-10 text-center text-sm text-muted ring-1 ring-black/6">
-              {status === "архив" ? "В этой выборке архива нет." : status === "лид" ? "В этой выборке лидов нет." : "В этой выборке никого нет. Смените фильтр или нажмите «Загрузить „Клиентов“»."}
+              {status === "архив" ? "В рабочем архиве никого нет. Сначала «Посчитать отбор» в Истории из Alfa." : status === "лид" ? "В этой выборке лидов нет." : "В этой выборке никого нет. Смените фильтр или нажмите «Загрузить „Клиентов“»."}
             </p>
           ) : null}
         </div>

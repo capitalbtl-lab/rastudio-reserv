@@ -173,6 +173,7 @@ export type ClientRow = {
   note?: string;
   updatedAt?: string;
   hasLiveTariff?: boolean;
+  archiveHidden?: boolean;
 };
 
 export type LessonCatalogItem = { id: number; name: string; branchId?: number };

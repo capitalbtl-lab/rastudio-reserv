@@ -80,6 +80,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /lastArchivesPupils/);
     assert.match(ui, /все архивы филиала, не только ученики/);
     assert.match(pull, /kind === "archivesPupils"/);
+    assert.match(pull, /kind === "archiveCount"/);
+    assert.match(pull, /kind === "archiveCatalog"/);
+    assert.match(ui, /Посчитать отбор/);
     assert.match(pull, /pupilArchivePlan/);
     assert.match(pull, /pending\.slice\(0, 10\)/);
     assert.match(pull, /groupLinks/);
@@ -150,7 +153,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /paysMore: Boolean\(balance && !paysOk\)/);
     assert.match(pull, /isPayJournalComplete\(cid\)/);
     assert.match(pull, /paysOk: balance \? Boolean\(row\.paysOk\)/);
-    assert.match(pull, /people: peopleRows/);
+    assert.match(pull, /people: study === "2" \? peopleRows/);
     assert.match(pull, /lessonsRecheckAt/);
     assert.match(pull, /customerId/);
     assert.match(pull, /lastStudents/);

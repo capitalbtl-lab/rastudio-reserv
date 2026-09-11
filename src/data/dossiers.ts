@@ -12,6 +12,7 @@ import type { DossiersReq } from "./dossiers-fn";
 import { logAdmin } from "./admin-settings";
 import { customerPullCandidate, personRole } from "./crm-person-role";
 import { groupLinkHits, takenMapFromLinks, overlayCgiNeeded } from "./crm-group-disk";
+import { archivePersonFrom, archiveWorkingSet, dropArchiveWorking, addArchiveWorking, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, type ArchivePerson } from "./crm-archive-policy";
 
 export type PersonName = {
   fio: string;
@@ -653,7 +654,7 @@ export function applyCrmCustomer(
   const teachers = uniq([...fromGroup.teachers, ...teacherFromIds]);
   const hint = groupsFromItem(item, branchId);
   const school = hint.map((g) => g.school).find(Boolean) || (hint[0]?.subjectId ? schoolLabelOfSubject(hint[0].subjectId) : "");
-  return upsertDossier({
+  const next = upsertDossier({
     crmId: id,
     branchId,
     phone: phones[0] || "",
@@ -678,6 +679,8 @@ export function applyCrmCustomer(
     persist: opts.persist,
     quiet: opts.quiet,
   });
+  if (opts.persist !== false && !reallyArchived && study === 1) dropArchiveWorking(id);
+  return next;
 }
 
 export function liveTariffIdsFromStore() {
@@ -694,6 +697,14 @@ export function allDossierCrmIds(): number[] {
     if (id > 0) seen.add(id);
   }
   return [...seen];
+}
+
+export function archivePeopleFromDisk(): ArchivePerson[] {
+  return loadStore().items.map(archivePersonFrom).filter((p) => p.cid > 0);
+}
+
+export function archiveDiskCount() {
+  return loadStore().items.filter((d) => Number(d.extras?.is_study) === 2 && String(d.status || "") !== "удалён").length;
 }
 
 export function stampDossierLiveTariff(ids: number[], live: boolean) {
@@ -1251,6 +1262,7 @@ export async function syncAllFromCrm(
   store.lastCrmSync = new Date().toISOString();
   store.items.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
   saveStore(store);
+  reconcileArchiveRoles(archivePeopleFromDisk());
   if (leadsOnly || archiveOnly) {
     onProgress?.({ step: archiveOnly ? "Архив на сайте" : "Лиды на сайте", n, total: n });
     return { ok: true as const, count: n, purged, lastCrmSync: store.lastCrmSync, studies: want, liveTariffs: 0, withGroups: 0 };
@@ -1576,10 +1588,12 @@ export async function reclassifyRolesFromCrm() {
   }
   const store = loadStore();
   let marked = 0;
+  const left: number[] = [];
   for (const d of store.items) {
     const id = Number(d.crmId || 0);
     if (!id) continue;
     d.extras = d.extras || {};
+    const was = String(d.status || "");
     if (current.has(id)) {
       d.extras.is_study = "1";
       d.extras.removed = "0";
@@ -1595,6 +1609,7 @@ export async function reclassifyRolesFromCrm() {
       d.extras.removed = "0";
       d.status = "лид";
     } else if (archive.has(id)) {
+      if (was === "учится") left.push(id);
       d.extras.is_study = "2";
       d.extras.removed = "0";
       d.status = "архив";
@@ -1606,6 +1621,8 @@ export async function reclassifyRolesFromCrm() {
   }
   store.lastCrmSync = new Date().toISOString();
   saveStore(store);
+  reconcileArchiveRoles(archivePeopleFromDisk());
+  for (const id of left) addArchiveWorking(id, "left");
   const views = searchClientViews("", 1, "учится");
   return {
     ok: true as const,
@@ -1708,6 +1725,7 @@ export function toClientListRow(d: ClientView) {
     leadStatusId: d.leadStatusId,
     note: d.note,
     hasLiveTariff: d.hasLiveTariff,
+    archiveHidden: d.status === "архив" && !isArchiveWorking(Number(d.crmId) || 0),
   };
 }
 
@@ -1758,7 +1776,7 @@ export function groupRoster(branchId: number, groupId: number) {
   return { active, archive };
 }
 
-export function searchClientViews(q = "", limit = 2500, status = "", branchId = 0, ageBand = "") {
+export function searchClientViews(q = "", limit = 2500, status = "", branchId = 0, ageBand = "", archiveAll = false) {
   const store = loadStore();
   const needle = String(q || "")
     .toLowerCase()
@@ -1772,13 +1790,26 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
   const branchCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
   const hidden = (d: ClientView) => d.status === "удалён";
   const chipStatus = !want || want === "все" ? "" : want;
+  const policy = loadArchivePolicy();
+  const working = archiveWorkingSet(policy);
+  const inWorking = (d: ClientView) => {
+    const id = Number(d.crmId) || 0;
+    if (!id || d.status !== "архив") return false;
+    if (!working) return false;
+    return working.has(id);
+  };
+  let archiveDisk = 0;
   for (const d of views) {
     if (hidden(d)) continue;
     counts.все += 1;
     if (d.status === "учится") counts.учится += 1;
     else if (d.status === "лид") counts.лид += 1;
-    else if (d.status === "архив") counts.архив += 1;
+    else if (d.status === "архив") {
+      archiveDisk += 1;
+      if (inWorking(d)) counts.архив += 1;
+    }
     if (chipStatus && d.status !== chipStatus) continue;
+    if (chipStatus === "архив" && d.status === "архив" && !archiveAll && !needle && !inWorking(d)) continue;
     const b = Number(d.branchId) || 0;
     if (branchCounts[b] != null) branchCounts[b] += 1;
   }
@@ -1786,7 +1817,10 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
     if (d.status === "удалён") return false;
     if (!needle) {
       if (d.status === "архив" && want !== "архив") return false;
-      if (want && want !== "все") {
+      if (want === "архив") {
+        if (d.status !== "архив") return false;
+        if (!archiveAll && !inWorking(d)) return false;
+      } else if (want && want !== "все") {
         if (d.status !== want) return false;
       } else if (!want) {
         if (d.status !== "учится") return false;
@@ -1809,6 +1843,13 @@ export function searchClientViews(q = "", limit = 2500, status = "", branchId = 
     counts,
     branchCounts,
     lastCrmSync: store.lastCrmSync || "",
+    archive: {
+      disk: archiveDisk,
+      working: counts.архив,
+      hidden: Math.max(0, archiveDisk - counts.архив),
+      ready: Boolean(policy.ready),
+      at: policy.at || "",
+    },
   };
 }
 

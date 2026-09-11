@@ -84,16 +84,13 @@ describe("карточка не ждёт Alfa", () => {
     assert.match(inbound, /pull\(1, dateFrom, dateTo, 8, 100\)/);
     assert.match(inbound, /lesson_id: l.lessonId/);
     assert.match(inbound, /mergeLessonPupils/);
-    assert.match(inbound, /study !== 0/);
+    assert.match(inbound, /overlayAllowsCustomer/);
     const queue = readFileSync(new URL("./crm-packet-queue.ts", import.meta.url), "utf8");
     assert.match(queue, /kind: "lessons"/);
     assert.match(queue, /enqueueLessonsOverlay/);
     assert.match(queue, /clearLessonsAttendStamps/);
     assert.match(queue, /inboundCustomerLessonsChunk/);
     const run = readFileSync(new URL("./admin-disk-run.ts", import.meta.url), "utf8");
-    assert.match(run, /enqueueLessonsOverlay\(true\)/);
-    assert.match(run, /Читаю архив AlfaCRM/);
-    assert.match(run, /syncAllFromCrm\([\s\S]*\[2\]/);
     assert.match(run, /local.counts\[bucket\]/);
     const dossiers = readFileSync(new URL("./dossiers.ts", import.meta.url), "utf8");
     const at = dossiers.indexOf("export async function syncAllFromCrm");
@@ -103,8 +100,9 @@ describe("карточка не ждёт Alfa", () => {
     assert.match(dossiers, /reallyArchived/);
     assert.match(chunkAll, /archiveOnly/);
     const clientsUi = readFileSync(new URL("../components/admin-clients.tsx", import.meta.url), "utf8");
-    assert.match(clientsUi, /void pullKind\("clientsArchive"\)/);
+    assert.doesNotMatch(clientsUi, /void pullKind\("clientsArchive"\)/);
     assert.doesNotMatch(clientsUi, /if \(!counts.архив\) void pullKind\("clientsArchive"\)/);
+    assert.match(clientsUi, /История из Alfa/);
     assert.match(clientsUi, /\["архив", "Архив", counts.архив\]/);
     const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
     assert.match(cards, /slice\(0, 2500\)/);

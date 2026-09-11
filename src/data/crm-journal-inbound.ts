@@ -709,13 +709,15 @@ export async function inboundCustomerLessonsChunk(offset = 0, take = 1) {
     return { ok: true as const, done: true, next: 0, total: 0, extra: "без Alfa", ids: [] as number[], live: 0 };
   }
   const { allDossierCrmIds } = await import("./dossiers");
+  const { overlayAllowsCustomer, loadArchivePolicy } = await import("./crm-archive-policy");
+  const pol = loadArchivePolicy();
   const ranked = allDossierCrmIds()
     .map((cid) => {
       const d = findDossier({ crmId: cid });
       const study = Number(d?.extras?.is_study);
       return { cid, study: Number.isFinite(study) ? study : -1 };
     })
-    .filter((x) => x.study !== 0)
+    .filter((x) => overlayAllowsCustomer(x.study, x.cid, pol))
     .sort((a, b) => {
       const ra = a.study === 1 ? 0 : a.study === 2 ? 1 : 2;
       const rb = b.study === 1 ? 0 : b.study === 2 ? 1 : 2;

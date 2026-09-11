@@ -159,21 +159,11 @@ async function runPull(kind: PullKind) {
       lines.push({ ok: (local.counts[bucket] || 0) > 0, text: `В базе на сайте: ${local.counts[bucket]}` });
       if (studies[0] === 1) lines.push({ ok: true, text: `Текущих уникальных: ${local.counts.учится}` });
       if (studies[0] === 1) {
-        setJob({ step: "Читаю архив AlfaCRM — иначе явка за годы не сходится…" });
-        const arch = await syncAllFromCrm((p) => {
-          setJob({ step: p.step || "Архив…", added: p.n, total: Math.max(p.n, p.total || 0) });
-        }, [2]);
-        const archLocal = searchClientViews("", 1, "архив");
-        lines.push({ ok: true, text: `архив: обработано ${arch.count}, на сайте ${archLocal.counts.архив}` });
+        lines.push({ ok: true, text: "Архив этой кнопкой не качается. Набор архива — История из Alfa." });
       }
-      try {
-        const q = await import("./crm-packet-queue");
-        q.enqueueJournalOverlay(true);
-        q.enqueueLessonsOverlay(true);
-        void q.tickCrmQueue(2);
-        lines.push({ ok: true, text: "В очередь: журнал групп и явка по всем карточкам за весь период." });
-      } catch {
-        /* очередь не обязательна для самой загрузки списка */
+      if (studies[0] === 2) {
+        const { archiveDiskCount } = await import("./dossiers");
+        lines.push({ ok: true, text: `Справочник архива на диске: ${archiveDiskCount()}. Рабочий набор не меняли.` });
       }
       setJob({ done: true, running: false, total: local.all || res.count, added: res.count, lines, step: "" });
       logAdmin(`Клиенты из AlfaCRM (${label}): ${res.count}`);
@@ -273,7 +263,8 @@ export async function handleAdminDisk(data: DiskReq) {
       const branchId = Number(data.branchId) || 0;
       const ageBand = String(data.ageBand || "");
       const take = Math.min(2500, Math.max(80, Number(data.take) || (q ? 400 : 240)));
-      const res = searchClientViews(q, take, status, branchId, ageBand);
+      const archiveAll = Boolean((data as { archiveAll?: boolean }).archiveAll);
+      const res = searchClientViews(q, take, status, branchId, ageBand, archiveAll);
       return { ok: true as const, ...res, items: res.items.map(toClientListRow) };
     }
     if (kind === "prices") {
