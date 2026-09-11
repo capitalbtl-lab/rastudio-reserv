@@ -1389,7 +1389,35 @@ function catalogItemDob(item: Record<string, unknown>) {
   return String(item.dob || item.b_date || item.born || "");
 }
 
-function catalogNeedsHydrate(item: Record<string, unknown>, branch: number, f: ArchiveCatalogFilter) {
+async function catalogAttachCgi(item: Record<string, unknown>, branch: number, id: number, t: string) {
+  if (groupsFromItem(item, branch, false).length) return item;
+  const tries: [string, Record<string, unknown>][] = [
+    [`/v2api/${branch}/cgi/index?customer_id=${id}`, { customer_id: id }],
+    [`/v2api/${branch}/cgi/customer`, { customer_id: id }],
+  ];
+  for (const [path, body] of tries) {
+    const json = await request<{ items?: Record<string, unknown>[] }>(path, { page: 0, pageSize: 20, ...body }, t).catch(
+      () => ({ items: [] as Record<string, unknown>[] }),
+    );
+    const gids: number[] = [];
+    const seen = new Set<number>();
+    for (const row of json.items || []) {
+      const rec = row as { group_id?: number; groupId?: number; group?: { id?: number }; customer_id?: number };
+      if (rec.customer_id && Number(rec.customer_id) !== id) continue;
+      const gid = Number(rec.group_id || rec.groupId || rec.group?.id || 0);
+      if (!gid || seen.has(gid)) continue;
+      seen.add(gid);
+      gids.push(gid);
+    }
+    if (gids.length) {
+      return {
+        ...item,
+        group_ids: gids,
+        groups: gids.map((gid) => ({ id: gid, group_id: gid, branch_id: branch })),
+      };
+    }
+  }
+  return item;
   if ((f.ageFrom != null || f.ageTo != null) && !catalogItemDob(item) && !Number(item.age)) return true;
   if (f.groups && !groupsFromItem(item, branch, false).length) return true;
   return false;
@@ -1668,11 +1696,14 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean; filter?: 
       let item = peek;
       if (catalogNeedsHydrate(item, branch, filter)) {
         if (hydrated) break;
-        const one = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/customer/index`, { page: 0, pageSize: 1, id }, t).catch(
-          () => ({ items: [] as Record<string, unknown>[] }),
-        );
-        const full = (one.items || []).find((x) => Number(x.id) === id);
-        if (full) item = full;
+        if ((filter.ageFrom != null || filter.ageTo != null) && !catalogItemDob(item) && !Number(item.age)) {
+          const one = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/customer/index`, { page: 0, pageSize: 1, id }, t).catch(
+            () => ({ items: [] as Record<string, unknown>[] }),
+          );
+          const full = (one.items || []).find((x) => Number(x.id) === id);
+          if (full) item = full;
+        }
+        if (filter.groups) item = await catalogAttachCgi(item, branch, id, t);
         hydrated = true;
       }
       cur.idx += 1;
