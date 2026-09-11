@@ -142,7 +142,12 @@ function loadStore(): PullStore {
     const raw = JSON.parse(readFileSync(p, "utf8")) as Partial<PullStore>;
     const data: PullStore = {
       at: String(raw.at || ""),
-      note: String(raw.note || ""),
+      note: String(raw.note || "")
+        .replace(/\s*·\s*на диске архивных\s+\d+\.?\s*/gi, " ")
+        .replace(/\s*Кто записан\s*[—–-]\s*слева\.?/gi, "")
+        .replace(/\s{2,}/g, " ")
+        .replace(/\s*·\s*$/g, "")
+        .trim(),
       groupIdx: Math.max(0, Number(raw.groupIdx) || 0),
       schoolIdx: raw.schoolIdx && typeof raw.schoolIdx === "object" ? raw.schoolIdx : {},
       studentIdx: raw.studentIdx && typeof raw.studentIdx === "object" ? raw.studentIdx : {},
@@ -996,7 +1001,12 @@ export async function journalPull(opts: {
       return { ...snap(), ok: false as const, error: res.error || store.note, more: Boolean(res.more), extra: store.note, lastArchiveCatalog: store.lastArchiveCatalog || null };
     }
     store.lastArchiveCatalog = res.report;
-    store.note = res.note;
+    store.note = String(res.note || "")
+      .replace(/\s*·\s*на диске архивных\s+\d+\.?\s*/gi, " ")
+      .replace(/\s*Кто записан\s*[—–-]\s*слева\.?/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .replace(/\s*·\s*$/g, "")
+      .trim();
     store.at = res.report.at;
     saveStore(store);
     return { ...snap(), ok: true as const, extra: store.note, more: res.more, count: res.report.wrote ? 1 : 0, scanned: 1, lastArchiveCatalog: res.report };

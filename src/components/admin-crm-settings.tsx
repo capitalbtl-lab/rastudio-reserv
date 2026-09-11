@@ -1861,6 +1861,15 @@ export function AdminCrmSettings() {
     return Boolean(journal?.lastArchiveCatalog?.more) && Boolean(at && Date.now() - at < 24 * 60 * 60 * 1000);
   }
 
+  function catalogProgressNote(raw?: string) {
+    return String(raw || "")
+      .replace(/\s*·\s*на диске архивных\s+\d+\.?\s*/gi, " ")
+      .replace(/\s*Кто записан\s*[—–-]\s*слева\.?/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .replace(/\s*·\s*$/g, "")
+      .trim();
+  }
+
   function catalogFilterJson() {
     const ageFrom = Number(archAgeFrom);
     const ageTo = Number(archAgeTo);
@@ -2884,7 +2893,7 @@ export function AdminCrmSettings() {
                       </button>,
                       HINT.stop,
                     )}
-                    {journal?.note ? <p className="min-w-0 flex-1 truncate rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
+                    {journal?.note ? <p className="min-w-0 flex-1 truncate rounded-xl bg-black/5 px-3 py-2 text-sm">{catalogProgressNote(journal.note)}</p> : null}
                     </div>
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
@@ -3020,7 +3029,7 @@ export function AdminCrmSettings() {
                       </button>,
                       HINT.stop,
                     )}
-                    {journal?.note ? <p className="min-w-0 flex-1 truncate rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
+                    {journal?.note ? <p className="min-w-0 flex-1 truncate rounded-xl bg-black/5 px-3 py-2 text-sm">{catalogProgressNote(journal.note)}</p> : null}
                     </div>
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
