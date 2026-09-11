@@ -121,12 +121,32 @@ describe("рабочий архив", () => {
     assert.equal(next.working.includes(8), false);
   });
 
+  it("нет на диске — не держим в working", () => {
+    const first = recountArchivePolicy(
+      [
+        p({ cid: 1, study: 1, groupLinks: [{ id: 9, branchId: 2 }] }),
+        p({ cid: 50, fio: "Бывший", groupLinks: [{ id: 9, branchId: 2 }] }),
+      ],
+      new Set(),
+      empty,
+    );
+    assert.equal(first.policy.working.includes(50), true);
+    const second = recountArchivePolicy(
+      [p({ cid: 1, study: 1, groupLinks: [{ id: 9, branchId: 2 }] })],
+      new Set(),
+      first.policy,
+    );
+    assert.equal(second.policy.working.includes(50), false);
+    assert.equal(second.policy.reasons["50"], undefined);
+  });
+
   it("снимок и кнопки: архив не режется 800, overlay не с текущих", () => {
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
     assert.match(pull, /study === "2" \? peopleRows : peopleRows\.slice\(0, 800\)/);
     assert.match(pull, /kind === "archiveCount"/);
     assert.match(pull, /kind === "archiveCatalog"/);
-    assert.match(pull, /if \(!scoped && !school && study === "2"\)/);
+    assert.match(pull, /listDossierCrm\(\)/);
+    assert.match(pull, /study === "2"\) return x.study === 2 && \(scoped \|\| Boolean\(allow && allow.has\(x.cid\)\)\)/);
     assert.match(pull, /В рабочий архив можно добавить только архивного/);
     assert.doesNotMatch(pull, /enqueueExport\(/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");

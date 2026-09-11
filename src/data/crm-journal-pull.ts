@@ -8,7 +8,7 @@ import { alfaLinkedNow } from "./crm-alfa-link";
 import { loadCachePolicy } from "./crm-cache-policy";
 import { listAdminSlots } from "./alfacrm-schedule";
 import { loadScheduleMap } from "./schedule-map";
-import { allDossierCrmIds, findDossier, dossiersInGroup } from "./dossiers";
+import { listDossierCrm, findDossier, dossiersInGroup } from "./dossiers";
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
 import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort } from "./crm-customer-sync";
 import { isPayJournalComplete } from "./crm-pay";
@@ -341,60 +341,49 @@ export function journalPullSchools() {
 
 function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; branchId: number }, school?: string) {
   const scoped = Boolean(group && group.groupId);
-  if (!scoped && !school && study === "2") {
-    const allow = archiveWorkingSet();
-    if (!allow || !allow.size) return [];
-    const out: { cid: number; study: number; branchId: number }[] = [];
-    for (const cid of allow) {
-      const d = findDossier({ crmId: cid });
-      const st = Number(d?.extras?.is_study);
-      if (st !== 2) continue;
-      if (String(d?.status || "") === "удалён" || String(d?.extras?.removed || "") === "1") continue;
-      out.push({ cid, study: 2, branchId: Number(d?.branchId || 1) || 1 });
-    }
-    out.sort((a, b) => a.cid - b.cid);
-    return out;
-  }
-  let pool: number[] = [];
+  let pool: { cid: number; study: number; branchId: number; status: string; removed: string }[] = [];
   if (group && group.groupId) {
-    pool = dossiersInGroup(group.branchId, group.groupId).map((d) => Number(d.crmId) || 0).filter(Boolean);
+    pool = dossiersInGroup(group.branchId, group.groupId).map((d) => {
+      const st = Number(d?.extras?.is_study);
+      return {
+        cid: Number(d.crmId) || 0,
+        study: Number.isFinite(st) ? st : -1,
+        branchId: Number(d?.branchId || group.branchId || 1) || 1,
+        status: String(d?.status || ""),
+        removed: String(d?.extras?.removed || ""),
+      };
+    }).filter((x) => x.cid);
   } else if (school) {
     const seen = new Set<number>();
     for (const g of journalPullGroups().filter((x) => x.school === school)) {
       for (const d of dossiersInGroup(g.branchId, g.groupId)) {
-        const id = Number(d.crmId) || 0;
-        if (id) seen.add(id);
+        const cid = Number(d.crmId) || 0;
+        if (!cid || seen.has(cid)) continue;
+        seen.add(cid);
+        const st = Number(d.extras?.is_study);
+        pool.push({
+          cid,
+          study: Number.isFinite(st) ? st : -1,
+          branchId: Number(d.branchId || g.branchId || 1) || 1,
+          status: String(d.status || ""),
+          removed: String(d.extras?.removed || ""),
+        });
       }
     }
-    pool = [...seen];
   } else {
-    pool = allDossierCrmIds();
+    pool = listDossierCrm();
   }
-  const rows = pool.map((cid) => {
-    const d = findDossier({ crmId: cid });
-    const st = Number(d?.extras?.is_study);
-    return { cid, study: Number.isFinite(st) ? st : -1, branchId: Number(d?.branchId || 1) || 1 };
-  });
-  const filtered = rows.filter((x) => {
+  const allow = !scoped ? archiveWorkingSet() : null;
+  const filtered = pool.filter((x) => {
+    if (!x.cid) return false;
+    if (x.status === "удалён" || x.removed === "1") return false;
     if (x.study === 0) return false;
     if (study === "1") return x.study === 1;
-    if (study === "2") return x.study === 2;
-    return x.study === 1 || x.study === 2;
+    if (study === "2") return x.study === 2 && (scoped || Boolean(allow && allow.has(x.cid)));
+    if (x.study === 1) return true;
+    if (x.study === 2) return scoped || Boolean(allow && allow.has(x.cid));
+    return false;
   });
-  if (!scoped && (study === "2" || study === "all")) {
-    const allow = archiveWorkingSet();
-    const keep = filtered.filter((x) => {
-      if (x.study !== 2) return true;
-      if (!allow) return false;
-      return allow.has(x.cid);
-    });
-    keep.sort((a, b) => {
-      const ra = a.study === 1 ? 0 : 1;
-      const rb = b.study === 1 ? 0 : 1;
-      return ra - rb || a.cid - b.cid;
-    });
-    return keep;
-  }
   filtered.sort((a, b) => {
     const ra = a.study === 1 ? 0 : 1;
     const rb = b.study === 1 ? 0 : 1;
@@ -719,9 +708,6 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
   const pol = loadCachePolicy();
   const groups = journalPullGroups();
   const schools = journalPullSchools();
-  const all = rankedStudentIds("all");
-  const live = rankedStudentIds("1");
-  const arch = rankedStudentIds("2");
   const emptySide = (study: JournalPullStudy) => {
     const list = rankedStudentIds(study);
     const cap = study === "2" ? list.length : 800;
@@ -785,8 +771,8 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
     journalNext: Number(pol.journalNext) || 0,
     journalTotal: Number(pol.journalTotal) || groups.length,
     lessonsNext: Number(pol.lessonsNext) || 0,
-    lessonsTotal: Number(pol.lessonsTotal) || all.length,
-    students: { all: all.length, live: live.length, archive: arch.length },
+    lessonsTotal: Number(pol.lessonsTotal) || progress.live.total + progress.archive.total,
+    students: { all: progress.live.total + progress.archive.total, live: progress.live.total, archive: progress.archive.total },
     linked: alfaLinkedNow(),
     progress,
     lastLife: store.lastLife || null,

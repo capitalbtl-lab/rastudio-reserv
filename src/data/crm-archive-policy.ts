@@ -142,7 +142,7 @@ export function archiveAgeYears(dob?: string, age?: number) {
     mo = Number(iso[2]);
     da = Number(iso[3]);
   }
-  if (!y || y < 1920 || y > 2026) return undefined;
+  if (!y || y < 1920 || y > new Date().getFullYear() + 1) return undefined;
   const born = new Date(y, mo - 1, da || 1);
   const now = new Date();
   let years = now.getFullYear() - born.getFullYear();
@@ -230,7 +230,8 @@ export function recountArchivePolicy(
   for (const cid of keep) {
     const row = byCid.get(cid);
     if (!row) {
-      next.add(cid);
+      manual.delete(cid);
+      delete reasons[String(cid)];
       continue;
     }
     if (row.study === 1 || row.study === 0 || archiveRemoved(row) || row.status === "лид" || row.status === "учится") {
@@ -253,6 +254,9 @@ export function recountArchivePolicy(
       next.add(p.cid);
       if (!reasons[String(p.cid)]) reasons[String(p.cid)] = "intersect";
     }
+  }
+  for (const k of Object.keys(reasons)) {
+    if (!next.has(Number(k))) delete reasons[k];
   }
   const working = [...next].sort((a, b) => a - b);
   const policy: ArchivePolicy = {

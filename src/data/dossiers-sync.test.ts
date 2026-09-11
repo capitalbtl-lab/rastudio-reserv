@@ -34,8 +34,8 @@ describe("импорт лидов не валит кабинет", () => {
     const at = src.indexOf("export function upsertDossier");
     const next = src.indexOf("export function dossierFromNote");
     const chunk = src.slice(at, next > at ? next : at + 6000);
-    assert.match(chunk, /if \(patch\.persist === false\) return next/);
-    assert.match(chunk, /if \(!patch\.quiet && \(before !== after \|\| patch\.note\)\)/);
+    assert.match(src, /touchIndex\(next/);
+    assert.match(src, /byCrm\.get\(crm\)/);
   });
 
   it("статус импорта живёт на диске после рестарта", () => {

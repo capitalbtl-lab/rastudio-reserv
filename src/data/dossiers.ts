@@ -65,10 +65,11 @@ export type Dossier = {
 
 type Store = { items: Dossier[]; lastCrmSync?: string; nextCrmSync?: string; lastLeadSync?: string };
 type CrmWriteOpts = { persist?: boolean; quiet?: boolean };
+type StoreCache = { mtime: number; store: Store; byCrm: Map<number, Dossier>; byId: Map<string, Dossier> };
 
 const MAX = 8000;
 const BULK: CrmWriteOpts = { persist: false, quiet: true };
-let cachedStore: { mtime: number; store: Store } | null = null;
+let cachedStore: StoreCache | null = null;
 let viewsMemo: { items: Dossier[]; views: unknown[] } | null = null;
 
 function fileOf() {
@@ -77,6 +78,34 @@ function fileOf() {
   const abs = "/var/www/rastudio/storage/dossiers.json";
   if (existsSync(abs)) return abs;
   return local;
+}
+
+function indexMaps(items: Dossier[]) {
+  const byCrm = new Map<number, Dossier>();
+  const byId = new Map<string, Dossier>();
+  for (const d of items) {
+    if (d?.id) byId.set(d.id, d);
+    const id = Number(d?.crmId) || 0;
+    if (id) byCrm.set(id, d);
+  }
+  return { byCrm, byId };
+}
+
+function rememberStore(mtime: number, store: Store) {
+  cachedStore = { mtime, store, ...indexMaps(store.items) };
+}
+
+function touchIndex(next: Dossier, drop?: Dossier[]) {
+  if (!cachedStore) return;
+  cachedStore.byId.set(next.id, next);
+  const nid = Number(next.crmId) || 0;
+  if (nid) cachedStore.byCrm.set(nid, next);
+  for (const old of drop || []) {
+    if (!old || old.id === next.id) continue;
+    cachedStore.byId.delete(old.id);
+    const oid = Number(old.crmId) || 0;
+    if (oid && oid !== nid) cachedStore.byCrm.delete(oid);
+  }
 }
 
 function loadStore(): Store {
@@ -93,7 +122,7 @@ function loadStore(): Store {
         nextCrmSync: raw.nextCrmSync,
         lastLeadSync: raw.lastLeadSync,
       };
-      if (store.items.length) cachedStore = { mtime, store };
+      if (store.items.length) rememberStore(mtime, store);
       return store.items.length ? store : cachedStore?.store || store;
     } catch {
       if (cachedStore) return cachedStore.store;
@@ -115,9 +144,9 @@ function saveStore(store: Store) {
   writeFileSync(tmp, JSON.stringify(packed, null, 0), "utf8");
   renameSync(tmp, target);
   try {
-    cachedStore = { mtime: statSync(target).mtimeMs, store: packed };
+    rememberStore(statSync(target).mtimeMs, packed);
   } catch {
-    cachedStore = { mtime: Date.now(), store: packed };
+    rememberStore(Date.now(), packed);
   }
   viewsMemo = null;
 }
@@ -499,8 +528,10 @@ export function upsertDossier(patch: {
   const rest = store.items.filter((d) => d.id !== cur!.id && d.id !== next.id);
   if (byPhone && byCrm && byPhone.id !== byCrm.id) {
     store.items = [next, ...rest.filter((d) => d.id !== byPhone.id && d.id !== byCrm.id)];
+    touchIndex(next, [byPhone, byCrm, cur]);
   } else {
     store.items = [next, ...rest];
+    touchIndex(next, [cur]);
   }
   if (patch.persist === false) return next;
   store.items.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
@@ -549,6 +580,16 @@ export function findDossier(opts: { crmId?: number; phone?: string; id?: string 
   const store = loadStore();
   const digits = digitsPhone(opts.phone);
   const crm = Number(opts.crmId) || 0;
+  if (cachedStore && cachedStore.store === store) {
+    if (opts.id) {
+      const byId = cachedStore.byId.get(opts.id);
+      if (byId) return byId;
+    }
+    if (crm) {
+      const byCrm = cachedStore.byCrm.get(crm);
+      if (byCrm) return byCrm;
+    }
+  }
   return (
     store.items.find((d) => (opts.id && d.id === opts.id) || (crm && Number(d.crmId) === crm) || (digits && d.phoneDigits === digits)) ||
     null
@@ -697,6 +738,23 @@ export function allDossierCrmIds(): number[] {
     if (id > 0) seen.add(id);
   }
   return [...seen];
+}
+
+export function listDossierCrm() {
+  const out: { cid: number; study: number; branchId: number; status: string; removed: string }[] = [];
+  for (const d of loadStore().items) {
+    const cid = Number(d.crmId) || 0;
+    if (!cid) continue;
+    const st = Number(d.extras?.is_study);
+    out.push({
+      cid,
+      study: Number.isFinite(st) ? st : -1,
+      branchId: Number(d.branchId || 1) || 1,
+      status: String(d.status || ""),
+      removed: String(d.extras?.removed || ""),
+    });
+  }
+  return out;
 }
 
 export function archivePeopleFromDisk(): ArchivePerson[] {
