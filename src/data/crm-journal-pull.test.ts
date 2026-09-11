@@ -81,7 +81,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Загрузить архив клиентов из Alfa/);
     assert.doesNotMatch(ui, /Обновить справочник архива из Alfa/);
     assert.match(ui, /function pullArchiveCatalog/);
-    assert.match(ui, /По одной карточке, пауза 5 с/);
+    assert.match(ui, /пауза 1 с/);
+    assert.doesNotMatch(ui, /По одной карточке, пауза 5 с/);
     assert.match(ui, /все архивы филиала, не только ученики/);
     assert.match(pull, /kind === "archivesPupils"/);
     assert.match(pull, /kind === "archiveCount"/);
@@ -146,6 +147,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /CATALOG_GAP_MS = 1000/);
     assert.match(ui, /pauseCatalog/);
     assert.match(ui, /PEOPLE_LOAD_GAP_MS = 5000/);
+    assert.match(ui, /Шаг 1 · Календарь ученика/);
     assert.match(ui, /Шаг 2 · Занятия в группах/);
     assert.match(ui, /Шаг 3 · Деньги на карточке/);
     assert.match(ui, /useState<HistTab>\("students"\)/);
