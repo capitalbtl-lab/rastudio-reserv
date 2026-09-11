@@ -86,7 +86,7 @@ export function TrialModal({
     return (
       <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden overscroll-none bg-header/55 p-2 backdrop-blur-[6px] sm:p-3" onClick={onClose} onWheel={(e) => e.preventDefault()}>
         <div
-          className="relative flex w-full max-w-[28rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
+          className="relative flex h-[min(38rem,calc(100svh-0.75rem))] w-full max-w-[28rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -97,12 +97,12 @@ export function TrialModal({
           >
             ×
           </button>
-          <div className="shrink-0 px-5 pb-1.5 pt-4 sm:px-6">
+          <div className="shrink-0 px-5 pb-1 pt-3.5 sm:px-6">
             <p className="kicker text-primary">Студия «Развивайся»</p>
-            <h2 className="display mt-1 pr-10 text-[1.45rem]">Запись на пробное</h2>
-            <p className="mt-1 text-[0.82rem] text-muted">Первое занятие без абонемента.</p>
+            <h2 className="display mt-0.5 pr-8 text-[1.3rem]">Запись на пробное</h2>
+            <p className="mt-0.5 text-[0.78rem] text-muted">Первое занятие без абонемента.</p>
           </div>
-          <div className="h-[36.5rem] px-5 pb-5 sm:px-6">
+          <div className="min-h-0 flex-1 px-5 pb-3 sm:px-6">
             <TrialEmbed src={trialSrc} className="h-full w-full" />
           </div>
         </div>

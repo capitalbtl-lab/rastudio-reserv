@@ -1,6 +1,6 @@
 import { DEFAULT_STATUS_PUBLISH, type StatusPublish } from "./group-status.ts";
 export const ALFA_HOST = "https://studiyarazvivaysya.s20.online";
-const TRIAL_CSS = encodeURIComponent("https://www.rastudio.org/trial-form.css?v=7");
+const TRIAL_CSS = encodeURIComponent("https://www.rastudio.org/trial-form.css?v=8");
 
 export const SITE_BRANCHES = [
   { id: 2, key: "cmit", label: "ЦМИТ · Октябрьской революции, 340" },

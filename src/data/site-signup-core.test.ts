@@ -59,7 +59,7 @@ describe("форма пробного с сайта", () => {
     const src = readFileSync(new URL("../components/trial-popup.tsx", import.meta.url), "utf8");
     assert.match(src, /overflow = "hidden"/);
     assert.match(src, /onWheel/);
-    assert.match(src, /36\.5rem/);
+    assert.match(src, /100svh/);
   });
 
   it("на странице курсов форма справа, без узкой колонки со скроллом", () => {
