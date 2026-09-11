@@ -1576,6 +1576,17 @@ export function AdminCrmSettings() {
         extra?: string;
       }[];
     } | null;
+    job?: {
+      running?: boolean;
+      stop?: boolean;
+      mode?: string;
+      kind?: string;
+      cur?: string;
+      n?: number;
+      total?: number;
+      msg?: string;
+      fill?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null;
+    };
   } | null>(null);
   const [journalLoading, setJournalLoading] = useState(true);
   const [journalSchool, setJournalSchool] = useState("");
@@ -1704,6 +1715,36 @@ export function AdminCrmSettings() {
     void loadActors();
     void loadJournal();
   }, []);
+
+  const jobRunning = Boolean(journal?.job?.running);
+  useEffect(() => {
+    if (!jobRunning) return;
+    let on = true;
+    paintJob(journal?.job || null);
+    const loop = async () => {
+      while (on) {
+        await new Promise((r) => setTimeout(r, 1500));
+        if (!on) break;
+        try {
+          const res = (await adminSchedule({
+            data: { token: token(), action: "journalPull" } as never,
+          })) as typeof journal;
+          if (!on) break;
+          if (res) {
+            setJournal((cur) => (cur ? { ...cur, ...res, progress: { ...cur.progress, ...res.progress, live: res.progress?.live || cur.progress?.live, archive: res.progress?.archive || cur.progress?.archive, groups: res.progress?.groups || cur.progress?.groups } } : res));
+            paintJob(res.job);
+            if (!res.job?.running) break;
+          }
+        } catch {
+          /* фон на сервере, экран догонит */
+        }
+      }
+    };
+    void loop();
+    return () => {
+      on = false;
+    };
+  }, [jobRunning]);
 
   async function loadAuto() {
     try {
@@ -1856,6 +1897,7 @@ export function AdminCrmSettings() {
       ])) as typeof journal;
       if (res) {
         setJournal(res);
+        paintJob(res.job);
         return res;
       }
       setMsg("Список учеников не пришёл.");
@@ -1869,7 +1911,7 @@ export function AdminCrmSettings() {
   }
 
   async function runJournal(opts: {
-    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit";
+    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop";
     study?: "1" | "2" | "all";
     school?: string;
     groupId?: number;
@@ -1881,6 +1923,10 @@ export function AdminCrmSettings() {
     customerId?: number;
     probe?: boolean;
     dateFrom?: string;
+    jobMode?: string;
+    take?: number;
+    name?: string;
+    peopleKind?: "students" | "balance";
   }) {
     setBusy(true);
     if (opts.kind === "group" || opts.kind === "details") {
@@ -1907,6 +1953,10 @@ export function AdminCrmSettings() {
             customerId: opts.customerId || 0,
             probe: Boolean(opts.probe),
             dateFrom: opts.dateFrom || "",
+            jobMode: opts.jobMode || "",
+            take: opts.take || 0,
+            name: opts.name || "",
+            peopleKind: opts.peopleKind || (opts.kind === "balance" ? "balance" : "students"),
           } as never,
         }),
         new Promise<never>((_, rej) =>
@@ -1968,115 +2018,93 @@ export function AdminCrmSettings() {
     while (Date.now() < until && !stopSchool.current) await new Promise((r) => setTimeout(r, 200));
   }
 
-  async function loadPerson(row: PeopleRow, kind: "students" | "balance", study: "1" | "2", recheck = false, dateFrom = "") {
-    if (!row.cid) return;
-    if (peopleLock.current) {
-      setMsg(`Уже грузим другого — «${row.name}» подождёт.`);
+  function paintJob(job?: { running?: boolean; cur?: string; n?: number; total?: number; msg?: string; kind?: string; fill?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null } | null) {
+    if (!job) return;
+    if (job.running) {
+      holdFill.current = true;
+      peopleLock.current = true;
+      stopSchool.current = false;
+      setBusy(true);
+      setSchoolRun({ cur: job.cur || "", n: job.n || 0, total: job.total || 0 });
+      setFillLoading(job.fill || (job.cur ? { kind: job.kind || job.fill?.kind, label: job.cur, customerId: job.fill?.customerId } : null));
+      if (job.msg) setMsg(job.msg);
       return;
     }
-    peopleLock.current = true;
+    holdFill.current = false;
+    peopleLock.current = false;
+    setBusy(false);
+    setSchoolRun(null);
+    setFillLoading(null);
+    if (job.msg) setMsg(job.msg);
+  }
+
+  async function startHistJob(opts: {
+    jobMode: string;
+    peopleKind?: "students" | "balance";
+    study?: "1" | "2";
+    recheck?: boolean;
+    dateFrom?: string;
+    grain?: Grain;
+    school?: string;
+    groupId?: number;
+    branchId?: number;
+    customerId?: number;
+    take?: number;
+    name?: string;
+    probe?: boolean;
+  }) {
+    if (peopleLock.current && !journal?.job?.running) return;
     holdFill.current = true;
+    peopleLock.current = true;
     stopSchool.current = false;
-    setFillLoading({ kind, label: row.name, customerId: row.cid });
-    try {
-      await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck, dateFrom: dateFrom || peopleDateFrom(peopleFromId) });
-    } finally {
-      holdFill.current = false;
-      setFillLoading(null);
-      setBusy(false);
-      peopleLock.current = false;
-    }
+    setBusy(true);
+    const res = await runJournal({
+      kind: "jobStart",
+      jobMode: opts.jobMode,
+      peopleKind: opts.peopleKind,
+      study: opts.study,
+      recheck: opts.recheck,
+      dateFrom: opts.dateFrom,
+      grain: opts.grain,
+      school: opts.school,
+      groupId: opts.groupId,
+      branchId: opts.branchId,
+      customerId: opts.customerId,
+      take: opts.take,
+      name: opts.name,
+      probe: opts.probe,
+    });
+    paintJob((res as { job?: Parameters<typeof paintJob>[0] })?.job);
+    return res;
+  }
+
+  function requestStop() {
+    stopSchool.current = true;
+    void runJournal({ kind: "jobStop" }).then((res) => paintJob((res as { job?: Parameters<typeof paintJob>[0] })?.job));
+  }
+
+  async function loadPerson(row: PeopleRow, kind: "students" | "balance", study: "1" | "2", recheck = false, dateFrom = "") {
+    if (!row.cid) return;
+    await startHistJob({
+      jobMode: "person",
+      peopleKind: kind,
+      study,
+      recheck,
+      dateFrom: dateFrom || peopleDateFrom(peopleFromId),
+      customerId: row.cid,
+      branchId: row.branchId,
+      name: row.name,
+    });
   }
 
   async function recheckPeople(kind: "students" | "balance", study: "1" | "2", onlyRecheck = false) {
-    if (peopleLock.current) return;
-    peopleLock.current = true;
-    let snap = journal;
-    let all = (study === "2" ? snap?.progress?.archive?.people : snap?.progress?.live?.people) || [];
-    if (!all.length) {
-      snap = await loadJournal();
-      all = (study === "2" ? snap?.progress?.archive?.people : snap?.progress?.live?.people) || [];
-    }
-    if (!all.length) {
-      peopleLock.current = false;
-      setMsg(study === "2" ? "Нет архивных учеников в списке." : "Нет текущих учеников в списке.");
-      return;
-    }
-    const needLoad = all.filter((r) => !peopleFinished(r, kind));
-    const needRecheck = all.filter((r) => peopleNeedsRecheck(r, kind));
-    const queue = onlyRecheck
-      ? needRecheck.length
-        ? needRecheck
-        : all.filter((r) => peopleFinished(r, kind))
-      : needLoad;
-    if (!queue.length) {
-      peopleLock.current = false;
-      setMsg(
-        onlyRecheck
-          ? "Справа никого перепроверять. Сначала красная «Загрузить по одному»."
-          : "Слева пусто. Нажмите «Перепроверить по одному» — пройдёт тех, кто справа.",
-      );
-      return;
-    }
-    stopSchool.current = false;
-    holdFill.current = true;
-    setBusy(true);
-    setMsg(onlyRecheck ? `${queue[0]?.name}: перепроверяем. Потом пауза 5 с.` : `${queue[0]?.name}: грузим. Потом пауза 5 с.`);
-    setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
-    let n = 0;
-    try {
-      for (let i = 0; i < queue.length; i += 1) {
-        if (stopSchool.current) break;
-        const row = queue[i];
-        setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
-        setFillLoading({ kind, label: row.name, customerId: row.cid });
-        const res = await runJournal({ kind, study, customerId: row.cid, branchId: row.branchId, recheck: onlyRecheck || peopleFinished(row, kind), dateFrom: peopleDateFrom(peopleFromId) });
-        const cashLeft =
-          kind === "balance" &&
-          !onlyRecheck &&
-          (Boolean(res?.student?.paysMore) ||
-            res?.student?.paysOk === false ||
-            !res ||
-            res.ok === false ||
-            /не ответила|ещё страницы/i.test(String(res?.extra || res?.error || "")));
-        if (!res || res.ok === false) {
-          if (/уже грузим/i.test(String(res?.error || "")) || cashLeft) {
-            setSchoolRun({ cur: `пауза 5 с · ещё «${row.name}»`, n: i + 1, total: queue.length });
-            setMsg(String(res?.error || res?.extra || `«${row.name}»: Alfa не ответила, нажмите снова`));
-            await pauseFive();
-            i -= 1;
-            continue;
-          }
-          setMsg(res?.error || `Остановились на «${row.name}». Нажмите ещё раз — продолжит со следующего.`);
-          break;
-        }
-        if (cashLeft) {
-          setSchoolRun({ cur: `касса · ещё «${row.name}»`, n: i + 1, total: queue.length });
-          setMsg(String(res?.extra || `«${row.name}»: касса не дочитана.`));
-          await pauseFive();
-          i -= 1;
-          continue;
-        }
-        n += 1;
-        if (i < queue.length - 1 && !stopSchool.current) {
-          setSchoolRun({ cur: `пауза 5 с · дальше ${queue[i + 1]?.name || ""}`, n: i + 1, total: queue.length });
-          await pauseFive();
-        }
-      }
-    } finally {
-      holdFill.current = false;
-      setFillLoading(null);
-      setBusy(false);
-      setSchoolRun(null);
-      peopleLock.current = false;
-    }
-    if (stopSchool.current) {
-      setMsg(`Остановили · прошло ${n} из ${queue.length}.`);
-      return;
-    }
-    if (n >= queue.length) {
-      setMsg(onlyRecheck ? `${n} перепроверили.` : `Готово · ${n} учеников. Слева пусто.`);
-    }
+    await startHistJob({
+      jobMode: onlyRecheck ? "people-recheck" : "people",
+      peopleKind: kind,
+      study,
+      recheck: onlyRecheck,
+      dateFrom: peopleDateFrom(peopleFromId),
+    });
   }
 
   function catalogHasMore() {
@@ -2157,7 +2185,7 @@ export function AdminCrmSettings() {
   }
 
   async function pullArchiveCatalog() {
-    if (peopleLock.current) return;
+    if (peopleLock.current && !journal?.job?.running) return;
     const more = catalogHasMore();
     const fromN = Number(archAgeFrom);
     const toN = Number(archAgeTo);
@@ -2173,310 +2201,42 @@ export function AdminCrmSettings() {
       )
         return;
     }
-    peopleLock.current = true;
-    holdFill.current = true;
-    stopSchool.current = false;
-    setBusy(true);
-    setFillLoading({ kind: "archiveCatalog", label: more ? journal?.lastArchiveCatalog?.step || "архив" : "архив клиентов" });
-    let n = 0;
-    try {
-      let first = !more;
-      for (;;) {
-        if (stopSchool.current) break;
-        const res = await runJournal({ kind: "archiveCatalog", probe: first, school: catalogFilterJson() });
-        first = false;
-        const cat = (res as { lastArchiveCatalog?: { name?: string; step?: string; more?: boolean; cid?: number } } | null)?.lastArchiveCatalog;
-        if (cat?.name || cat?.step) setFillLoading({ kind: "archiveCatalog", label: cat.name && cat.name !== "пропуск" ? cat.name : cat.step || "архив" });
-        if (!res || res.ok === false) {
-          if (/уже грузим|нет ответа|нет входа/i.test(String(res?.error || ""))) {
-            setFillLoading({ kind: "archiveCatalog", label: "пауза 5 с · Alfa" });
-            await pauseFive();
-            continue;
-          }
-          break;
-        }
-        n += 1;
-        if (!res.more) break;
-        if (stopSchool.current) break;
-        setFillLoading({ kind: "archiveCatalog", label: `пауза 1 с · ${cat?.name || cat?.step || "дальше"}` });
-        await pauseCatalog();
-      }
-    } finally {
-      holdFill.current = false;
-      setFillLoading(null);
-      setBusy(false);
-      peopleLock.current = false;
-    }
-    if (stopSchool.current) setMsg(`Остановили архив клиентов · прошло ${n}.`);
+    await startHistJob({ jobMode: "catalog", school: catalogFilterJson(), probe: !more });
   }
 
   async function pullAudit(opts?: { take?: number; customerId?: number; branchId?: number; name?: string }) {
-    if (peopleLock.current) return;
-    const oneId = Number(opts?.customerId) || 0;
-    peopleLock.current = true;
-    let snap = journal;
-    let all = snap?.progress?.live?.people || [];
-    if (!all.length) {
-      snap = await loadJournal();
-      all = snap?.progress?.live?.people || [];
-    }
-    if (!all.length && !oneId) {
-      peopleLock.current = false;
-      setMsg("Нет текущих учеников на диске.");
-      return;
-    }
-    let queue = oneId
-      ? [{ cid: oneId, branchId: Number(opts?.branchId) || 1, name: opts?.name || `№${oneId}`, groups: [] as string[], lessons: 0 }]
-      : [...all];
-    const take = Number(opts?.take) || 0;
-    if (!oneId && take > 0 && queue.length > take) {
-      for (let i = queue.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1));
-        const t = queue[i];
-        queue[i] = queue[j];
-        queue[j] = t;
-      }
-      queue = queue.slice(0, take);
-    }
-    stopSchool.current = false;
-    holdFill.current = true;
-    setBusy(true);
-    setMsg(`${queue[0]?.name}: сверяем. Потом пауза 1 с.`);
-    setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
-    let n = 0;
-    let waits = 0;
-    try {
-      for (let i = 0; i < queue.length; i += 1) {
-        if (stopSchool.current) break;
-        const row = queue[i];
-        setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
-        setFillLoading({ kind: "audit", label: row.name, customerId: row.cid });
-        const res = await runJournal({ kind: "audit", study: "1", customerId: row.cid, branchId: row.branchId });
-        if (!res || res.ok === false) {
-          if (!res || /уже сверяем|уже грузим|429|502|ответила|нет ответа/i.test(String(res?.error || ""))) {
-            waits += 1;
-            if (waits > 8) {
-              setMsg(`Alfa не отвечает на «${row.name}». Остановились.`);
-              break;
-            }
-            setSchoolRun({ cur: `пауза 5 с · ждём «${row.name}»`, n: i + 1, total: queue.length });
-            await pauseFive();
-            i -= 1;
-            continue;
-          }
-          setMsg(res?.error || `Остановились на «${row.name}».`);
-          break;
-        }
-        waits = 0;
-        n += 1;
-        if (i < queue.length - 1 && !stopSchool.current) {
-          setSchoolRun({ cur: `пауза 1 с · дальше ${queue[i + 1]?.name || ""}`, n: i + 1, total: queue.length });
-          await pauseCatalog();
-        }
-      }
-    } finally {
-      holdFill.current = false;
-      setFillLoading(null);
-      setBusy(false);
-      setSchoolRun(null);
-      peopleLock.current = false;
-    }
-    if (stopSchool.current) {
-      setMsg(`Остановили сверку · прошло ${n} из ${queue.length}.`);
-      return;
-    }
-    if (n >= queue.length) setMsg(`Сверили ${n} текущих.`);
+    await startHistJob({
+      jobMode: "audit",
+      study: "1",
+      customerId: opts?.customerId,
+      branchId: opts?.branchId,
+      take: opts?.take,
+      name: opts?.name,
+    });
   }
 
   async function probePeople(study: "1" | "2") {
-    const pack = study === "2" ? journal?.progress?.archive?.people : journal?.progress?.live?.people;
-    const all = pack || [];
-    if (!all.length) {
-      setMsg(study === "2" ? "Нет архивных учеников в списке." : "Нет текущих учеников в списке.");
-      return;
-    }
-    const unseen = all.filter((r) => r.alfa == null);
-    const hole = all.filter((r) => r.short);
-    const row = unseen[0] || hole[0] || all[0];
-    stopSchool.current = false;
-    holdFill.current = true;
-    setSchoolRun({ cur: row.name, n: 1, total: 1 });
-    let n = 0;
-    let shortN = 0;
-    try {
-      if (!stopSchool.current) {
-        setSchoolRun({ cur: row.name, n: 1, total: 1 });
-        setFillLoading({ kind: "students", label: row.name, customerId: row.cid });
-        const res = await runJournal({ kind: "students", study, customerId: row.cid, branchId: row.branchId, probe: true, dateFrom: peopleDateFrom(peopleFromId) });
-        n = 1;
-        if (/не хватает/i.test(String(res?.extra || ""))) shortN = 1;
-      }
-    } finally {
-      holdFill.current = false;
-      setFillLoading(null);
-      setBusy(false);
-      setSchoolRun(null);
-    }
-    if (stopSchool.current) {
-      setMsg("Сверку остановили.");
-      return;
-    }
-    setMsg(shortN ? `${row.name}: в Alfa больше, чем на диске — жмите красную кнопку.` : `${row.name}: счёт сошёлся. Нажмите ещё раз — следующего.`);
+    await startHistJob({ jobMode: "probe", peopleKind: "students", study });
   }
 
   async function recheckSchool() {
-    const rows = (journal?.progress?.groups?.rows || []).filter((r) => !journalSchool || r.school === journalSchool);
-    const queue = rows.filter((r) => !fillFinishedRow(r, journalGrain) || (r.parts || []).some((p) => p.weak));
-    if (!queue.length) {
-      setMsg("Слева пусто. Нажмите «Перепроверить по одному» — пройдёт тех, кто справа.");
-      return;
-    }
-    stopSchool.current = false;
     holdFill.current = true;
-    setBusy(true);
-    setMsg(`${queue[0]?.name}: грузим. Потом пауза 5 с.`);
-    setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
-    let n = 0;
-    try {
-      for (let i = 0; i < queue.length; i += 1) {
-        if (stopSchool.current) break;
-        const row = queue[i];
-        const part = nextRecheckPart(row, journalGrain);
-        if (!part) continue;
-        setSchoolRun({ cur: `${row.name} · ${part.label}`, n: i + 1, total: queue.length });
-        setFillLoading({
-          groupId: Number(row.groupId) || 0,
-          branchId: Number(row.branchId) || 0,
-          periodKey: part.key,
-          label: part.label,
-          kind: "group",
-        });
-        await runJournal({
-          kind: "group",
-          groupId: Number(row.groupId) || 0,
-          branchId: Number(row.branchId) || 0,
-          periodKey: part.key,
-          periodLabel: part.label,
-          grain: journalGrain,
-        });
-        n += 1;
-        if (i < queue.length - 1 && !stopSchool.current) {
-          setSchoolRun({ cur: `пауза 5 с · дальше ${queue[i + 1]?.name || ""}`, n: i + 1, total: queue.length });
-          await pauseFive();
-        }
-      }
-    } finally {
-      holdFill.current = false;
-      setFillLoading(null);
-      setBusy(false);
-      setSchoolRun(null);
-    }
-    if (stopSchool.current) {
-      setMsg(`Остановили · прошло ${n} из ${queue.length}.`);
-      return;
-    }
-    if (n >= queue.length) setMsg(`Готово · ${n} групп. Слева пусто, если порции закрылись.`);
+    await startHistJob({ jobMode: "groups", grain: journalGrain, school: journalSchool });
   }
 
   async function recheckGroupsOne() {
-    const rows = (journal?.progress?.groups?.rows || []).filter((r) => !journalSchool || r.school === journalSchool);
-    const need = rows.filter((r) => fillNeedsRecheck(packGrain(r.parts, clampGrain(r.age, journalGrain))));
-    const done = rows.filter((r) => fillFinishedRow(r, journalGrain));
-    const queue = need.length ? need : done;
-    if (!queue.length) {
-      setMsg("Справа никого перепроверять. Сначала красная «Загрузить по одному».");
-      return;
-    }
-    stopSchool.current = false;
-    holdFill.current = true;
-    setBusy(true);
-    setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
-    let n = 0;
-    try {
-      for (let i = 0; i < queue.length; i += 1) {
-        if (stopSchool.current) break;
-        const row = queue[i];
-        const part = nextRecheckPart(row, journalGrain);
-        if (!part) continue;
-        setFillLoading({
-          groupId: Number(row.groupId) || 0,
-          branchId: Number(row.branchId) || 0,
-          periodKey: part.key,
-          label: part.label,
-          kind: "group",
-        });
-        setSchoolRun({ cur: `${row.name} · ${part.label}`, n: i + 1, total: queue.length });
-        await runJournal({
-          kind: "group",
-          groupId: Number(row.groupId) || 0,
-          branchId: Number(row.branchId) || 0,
-          periodKey: part.key,
-          periodLabel: part.label,
-          grain: journalGrain,
-          recheck: true,
-        });
-        n += 1;
-        if (i < queue.length - 1 && !stopSchool.current) {
-          setSchoolRun({ cur: `пауза 5 с · дальше ${queue[i + 1]?.name || ""}`, n: i + 1, total: queue.length });
-          await pauseFive();
-        }
-      }
-    } finally {
-      holdFill.current = false;
-      setFillLoading(null);
-      setBusy(false);
-      setSchoolRun(null);
-    }
-    if (stopSchool.current) setMsg(`Остановили · прошло ${n} из ${queue.length}.`);
-    else if (n >= queue.length) setMsg(`${n} групп перепроверили.`);
+    await startHistJob({ jobMode: "groups-recheck", grain: journalGrain, school: journalSchool, recheck: true });
   }
 
   async function recheckGroup(row: FillRow) {
-    const chunks = packGrain(row.parts, clampGrain(row.age, journalGrain));
-    if (!chunks.length) {
-      setMsg("Нет кварталов у этой группы.");
-      return;
-    }
-    stopSchool.current = false;
-    holdFill.current = true;
-    setFillLoading({ groupId: Number(row.groupId) || 0, branchId: Number(row.branchId) || 0, kind: "group", label: chunks[0]?.label || "" });
-    try {
-      for (let i = 0; i < chunks.length; i += 1) {
-        if (stopSchool.current) break;
-        const part = chunks[i];
-        setFillLoading({
-          groupId: Number(row.groupId) || 0,
-          branchId: Number(row.branchId) || 0,
-          periodKey: part.key,
-          label: part.label,
-          kind: "group",
-        });
-        await runJournal({
-          kind: "group",
-          groupId: Number(row.groupId) || 0,
-          branchId: Number(row.branchId) || 0,
-          periodKey: part.key,
-          periodLabel: part.label,
-          grain: journalGrain,
-          recheck: true,
-        });
-        if (i < chunks.length - 1 && !stopSchool.current) {
-          setFillLoading({
-            groupId: Number(row.groupId) || 0,
-            branchId: Number(row.branchId) || 0,
-            periodKey: chunks[i + 1]?.key || part.key,
-            label: `пауза 5 с · ${chunks[i + 1]?.label || ""}`,
-            kind: "group",
-          });
-          await pauseFive();
-        }
-      }
-    } finally {
-      holdFill.current = false;
-      setFillLoading(null);
-      setBusy(false);
-    }
-    if (stopSchool.current) setMsg("Очередь группы остановлена.");
+    await startHistJob({
+      jobMode: "group-one",
+      grain: journalGrain,
+      groupId: Number(row.groupId) || 0,
+      branchId: Number(row.branchId) || 0,
+      name: row.name,
+      recheck: true,
+    });
   }
 
   async function loadStages() {
@@ -2995,7 +2755,7 @@ export function AdminCrmSettings() {
                       className={BTN_GHOST}
                       disabled={!schoolRun}
                       onClick={() => {
-                        stopSchool.current = true;
+                        requestStop();
                       }}
                     >
                       Стоп
@@ -3121,7 +2881,7 @@ export function AdminCrmSettings() {
                   }
                   onRecheckAll={(row) => void recheckGroup(row)}
                   onStop={() => {
-                    stopSchool.current = true;
+                    requestStop();
                   }}
                   onDetails={(row, part) =>
                     void runJournal({
@@ -3187,7 +2947,7 @@ export function AdminCrmSettings() {
                         className={cn(BTN_GHOST, "shrink-0")}
                         disabled={fillLoading?.kind !== "archiveCatalog"}
                         onClick={() => {
-                          stopSchool.current = true;
+                          requestStop();
                         }}
                       >
                         Стоп
@@ -3250,7 +3010,7 @@ export function AdminCrmSettings() {
                           className={BTN_GHOST}
                           disabled={!run && !schoolRun}
                           onClick={() => {
-                            stopSchool.current = true;
+                            requestStop();
                           }}
                         >
                           Стоп
@@ -3268,7 +3028,7 @@ export function AdminCrmSettings() {
                         onRecheck={(row) => void loadPerson(row, "students", peopleStudy, true)}
                         onFullHistory={(row) => void loadPerson(row, "students", peopleStudy, true, "2015-01-01")}
                         onStop={() => {
-                          stopSchool.current = true;
+                          requestStop();
                         }}
                       />
                     </>
@@ -3323,7 +3083,7 @@ export function AdminCrmSettings() {
                         className={cn(BTN_GHOST, "shrink-0")}
                         disabled={fillLoading?.kind !== "archiveCatalog"}
                         onClick={() => {
-                          stopSchool.current = true;
+                          requestStop();
                         }}
                       >
                         Стоп
@@ -3380,7 +3140,7 @@ export function AdminCrmSettings() {
                           className={BTN_GHOST}
                           disabled={!run && !schoolRun}
                           onClick={() => {
-                            stopSchool.current = true;
+                            requestStop();
                           }}
                         >
                           Стоп
@@ -3398,7 +3158,7 @@ export function AdminCrmSettings() {
                         onRecheck={(row) => void loadPerson(row, "balance", peopleStudy, true)}
                         onFullHistory={(row) => void loadPerson(row, "balance", peopleStudy, true, "2015-01-01")}
                         onStop={() => {
-                          stopSchool.current = true;
+                          requestStop();
                         }}
                       />
                     </>
@@ -3471,7 +3231,7 @@ export function AdminCrmSettings() {
                             className={cn(BTN_GHOST, "shrink-0")}
                             disabled={!run && !schoolRun}
                             onClick={() => {
-                              stopSchool.current = true;
+                              requestStop();
                             }}
                           >
                             Стоп

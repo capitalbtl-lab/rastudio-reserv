@@ -3067,8 +3067,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
     if (data.action === "journalPull") {
       const { journalPull, journalPullState } = await import("./crm-journal-pull");
       const kind = String(data.kind || "");
-      if (kind !== "group" && kind !== "school" && kind !== "students" && kind !== "balance" && kind !== "life" && kind !== "details" && kind !== "archives" && kind !== "archivesPupils" && kind !== "hydrateDisk" && kind !== "archiveCount" && kind !== "archiveCatalog" && kind !== "archiveAdd" && kind !== "audit") {
+      if (kind !== "group" && kind !== "school" && kind !== "students" && kind !== "balance" && kind !== "life" && kind !== "details" && kind !== "archives" && kind !== "archivesPupils" && kind !== "hydrateDisk" && kind !== "archiveCount" && kind !== "archiveCatalog" && kind !== "archiveAdd" && kind !== "audit" && kind !== "jobStart" && kind !== "jobStop") {
         try {
+          const { resumeJournalJob } = await import("./crm-journal-job");
+          resumeJournalJob();
           return journalPullState();
         } catch (e) {
           return { ok: false as const, error: e instanceof Error ? e.message : "Список журнала не собрался.", students: { all: 0, live: 0, archive: 0 } };
@@ -3086,6 +3088,10 @@ export const adminSchedule = createServerFn({ method: "POST" })
         customerId: Number((data as { customerId?: number }).customerId) || 0,
         probe: Boolean((data as { probe?: boolean }).probe),
         dateFrom: String((data as { dateFrom?: string }).dateFrom || "").trim(),
+        jobMode: String((data as { jobMode?: string }).jobMode || ""),
+        take: Number((data as { take?: number }).take) || 0,
+        name: String((data as { name?: string }).name || ""),
+        peopleKind: (data as { peopleKind?: string }).peopleKind === "balance" ? "balance" : "students",
       });
       logAdmin(`Журнал Alfa: ${res.extra || res.error || kind}`);
       return res;

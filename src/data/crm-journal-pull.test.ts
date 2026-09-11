@@ -32,6 +32,7 @@ describe("ручной журнал с Alfa", () => {
 
   it("только кнопка группы и порция, фон сам не качает", () => {
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
+    const job = readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8");
     assert.match(pull, /kind === "archives"/);
     assert.match(pull, /crm-journal-archive-groups\.json/);
     assert.match(pull, /loadJournalArchiveGroups/);
@@ -136,14 +137,14 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /fillFinishedRow/);
     assert.match(ui, /async function recheckSchool/);
     const schoolAt = ui.indexOf("async function recheckSchool");
-    const schoolFn = ui.slice(schoolAt, schoolAt + 2200);
-    assert.match(schoolFn, /pauseFive/);
+    const schoolFn = ui.slice(schoolAt, ui.indexOf("async function recheckGroupsOne"));
     assert.match(schoolFn, /holdFill\.current = true/);
     assert.doesNotMatch(schoolFn, /recheck: true/);
+    assert.match(schoolFn, /jobMode: "groups"/);
     assert.match(ui, /const unverified = chunks.find\(\(c\) => !c.rechecked\)/);
     const oneAt = ui.indexOf("async function recheckGroupsOne");
-    const oneFn = ui.slice(oneAt, oneAt + 1800);
-    assert.match(oneFn, /nextRecheckPart\(row, journalGrain\)/);
+    const oneFn = ui.slice(oneAt, oneAt + 400);
+    assert.match(oneFn, /jobMode: "groups-recheck"/);
     assert.doesNotMatch(oneFn, /for \(let j = 0/);
     assert.match(ui, /CATALOG_GAP_MS = 1000/);
     assert.match(ui, /pauseCatalog/);
@@ -166,6 +167,7 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(audit, /applyCrmCustomer/);
     const sched = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(sched, /kind !== "audit"/);
+    assert.match(sched, /jobStart/);
     assert.match(ui, /useState<HistTab>\("students"\)/);
     assert.match(ui, /На странице/);
     assert.match(ui, /pageWithPinned/);
@@ -205,8 +207,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /customerId/);
     assert.match(pull, /lastStudents/);
     assert.match(ui, /Загрузить по одному/);
-    assert.match(ui, /cashLeft/);
-    assert.match(ui, /касса · ещё/);
+    assert.match(job, /касса · ещё/);
+    assert.match(ui, /startHistJob/);
     assert.doesNotMatch(ui, /runStudentPack/);
     assert.match(pull, /child\?\.fio/);
     assert.match(pull, /groupsOfStudent/);

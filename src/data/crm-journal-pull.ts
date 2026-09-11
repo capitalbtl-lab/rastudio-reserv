@@ -14,8 +14,9 @@ import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalRead
 import { payCustomerFilled } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
+import { journalJobSnapshot } from "./crm-journal-job-core";
 
-export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit";
+export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop";
 export type JournalPullStudy = "1" | "2" | "all";
 
 export type JournalPullGroup = {
@@ -715,47 +716,49 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
   };
 }
 
+export function journalPeopleSide(study: JournalPullStudy) {
+  const list = rankedStudentIds(study);
+  const cap = study === "2" ? list.length : 800;
+  const people = list.slice(0, cap).map((p) => {
+    const sync = customerSyncOf(p.cid);
+    const probed = Boolean(sync.lessonsAlfaAt);
+    const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
+    const diskN = Number(sync.lessonsDisk) || 0;
+    const short = lessonsCountShort(diskN, alfaN, probed);
+    const journal = lessonsJournalReady(sync);
+    const pays = payCustomerFilled(p.cid);
+    return {
+      cid: p.cid,
+      branchId: p.branchId,
+      name: fioOf(p.cid),
+      groups: groupsOfStudent(p.cid).slice(0, 3),
+      lessons: diskN,
+      alfa: probed ? alfaN : undefined,
+      short,
+      journal,
+      pays,
+      rechecked: Boolean(sync.lessonsRecheckAt) && !short,
+      paysRechecked: Boolean(sync.paysRecheckAt),
+      extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : groupsOfStudent(p.cid).slice(0, 2).join(", "),
+      at: sync.lessonsAt || "",
+    };
+  });
+  return {
+    total: list.length,
+    journalDone: people.filter((r) => r.journal).length,
+    cardDone: people.filter((r) => r.journal && r.pays).length,
+    missJournal: packList([] as { id: number; name: string; extra: string }[]),
+    missCard: packList([] as { id: number; name: string; extra: string }[]),
+    people,
+  };
+}
+
 export function journalPullState(opts?: { skipPeople?: boolean }) {
   const store = loadStore();
   const pol = loadCachePolicy();
   const groups = journalPullGroups();
   const schools = journalPullSchools();
-  const emptySide = (study: JournalPullStudy) => {
-    const list = rankedStudentIds(study);
-    const cap = study === "2" ? list.length : 800;
-    const people = list.slice(0, cap).map((p) => {
-      const sync = customerSyncOf(p.cid);
-      const probed = Boolean(sync.lessonsAlfaAt);
-      const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
-      const diskN = Number(sync.lessonsDisk) || 0;
-      const short = lessonsCountShort(diskN, alfaN, probed);
-      const journal = lessonsJournalReady(sync);
-      const pays = payCustomerFilled(p.cid);
-      return {
-        cid: p.cid,
-        branchId: p.branchId,
-        name: fioOf(p.cid),
-        groups: groupsOfStudent(p.cid).slice(0, 3),
-        lessons: diskN,
-        alfa: probed ? alfaN : undefined,
-        short,
-        journal,
-        pays,
-        rechecked: Boolean(sync.lessonsRecheckAt) && !short,
-        paysRechecked: Boolean(sync.paysRecheckAt),
-        extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : groupsOfStudent(p.cid).slice(0, 2).join(", "),
-        at: sync.lessonsAt || "",
-      };
-    });
-    return {
-      total: list.length,
-      journalDone: people.filter((r) => r.journal).length,
-      cardDone: people.filter((r) => r.journal && r.pays).length,
-      missJournal: packList([] as { id: number; name: string; extra: string }[]),
-      missCard: packList([] as { id: number; name: string; extra: string }[]),
-      people,
-    };
-  };
+  const emptySide = (study: JournalPullStudy) => journalPeopleSide(study);
   let progress: ReturnType<typeof journalPullProgress>;
   try {
     progress = journalPullProgress({ skipPeople: Boolean(opts?.skipPeople) });
@@ -794,6 +797,7 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
     lastArchivePolicy: store.lastArchivePolicy || null,
     lastArchiveCatalog: store.lastArchiveCatalog || null,
     lastAudit: store.lastAudit || null,
+    job: journalJobSnapshot(),
   };
 }
 
@@ -961,8 +965,36 @@ export async function journalPull(opts: {
   customerId?: number;
   probe?: boolean;
   dateFrom?: string;
+  jobMode?: string;
+  take?: number;
+  name?: string;
+  peopleKind?: "students" | "balance";
 }) {
   const kind = opts.kind;
+  if (kind === "jobStart" || kind === "jobStop") {
+    const { startJournalJob, stopJournalJob, resumeJournalJob } = await import("./crm-journal-job");
+    resumeJournalJob();
+    const job =
+      kind === "jobStop"
+        ? stopJournalJob()
+        : startJournalJob({
+            mode: (opts.jobMode || "people") as import("./crm-journal-job-core").JournalJobMode,
+            kind: opts.peopleKind || (opts.jobMode === "audit" ? "audit" : opts.jobMode === "catalog" ? "archiveCatalog" : "students"),
+            study: opts.study === "1" || opts.study === "2" ? opts.study : "1",
+            recheck: Boolean(opts.recheck),
+            dateFrom: opts.dateFrom || "",
+            grain: opts.grain,
+            school: opts.school || "",
+            groupId: opts.groupId,
+            branchId: opts.branchId,
+            customerId: opts.customerId,
+            take: opts.take,
+            filter: opts.school || "",
+            probe: Boolean(opts.probe),
+            name: opts.name,
+          });
+    return { ok: true as const, extra: job.msg, job, ...journalPullState({ skipPeople: true }) };
+  }
   const wantedEarly = Number(opts.customerId) || 0;
   const peopleKinds: JournalPullKind[] = ["students", "balance", "archiveCatalog", "archiveCount", "archiveAdd", "audit"];
   const needPeople = peopleKinds.includes(kind);
