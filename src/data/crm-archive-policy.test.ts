@@ -219,6 +219,7 @@ describe("рабочий архив", () => {
     assert.match(views, /уже грузим/);
     assert.match(views, /persist: true/);
     assert.match(views, /exist\.status === "учится"/);
+    assert.doesNotMatch(views, /byPhone && Number\(byPhone\.crmId\) !== id/);
     assert.match(views, /byCrmOnly: true/);
     assert.match(views, /patch\.byCrmOnly/);
     assert.match(views, /cur\.done && !opts\?\.reset/);
