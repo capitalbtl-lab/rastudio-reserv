@@ -158,6 +158,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /HINT\.auditAll/);
     assert.match(pull, /kind === "audit"/);
     assert.match(pull, /auditOne/);
+    assert.match(pull, /fallback = wanted/);
     assert.doesNotMatch(pull, /extras\.balance = String\(shown/);
     const audit = readFileSync(new URL("./crm-balance-audit.ts", import.meta.url), "utf8");
     assert.doesNotMatch(audit, /enqueueExport/);

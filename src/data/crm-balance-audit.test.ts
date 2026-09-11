@@ -60,6 +60,25 @@ describe("шаг 4 сверка остатка", () => {
     assert.equal(auditOnRight(codes), false);
   });
 
+  it("0/0 без журнала и кассы не совпало", () => {
+    const codes = classifyAudit({
+      alfaOk: true,
+      clients: 0,
+      alfa: 0,
+      cash: 0,
+      paysComplete: false,
+      lessonsDisk: 0,
+      lessonsAlfa: 0,
+      woCard: 0,
+      woCal: 0,
+      liveCtt: false,
+      repaired: false,
+    });
+    assert.ok(codes.includes("snap"));
+    assert.equal(codes.includes("ok"), false);
+    assert.equal(auditOnRight(codes), false);
+  });
+
   it("src при разных списаниях журнала и календаря", () => {
     const codes = classifyAudit({
       alfaOk: true,
@@ -85,6 +104,7 @@ describe("шаг 4 сверка остатка", () => {
     assert.doesNotMatch(src, /applyCrmCustomer/);
     assert.match(src, /inboundCustomerLessons/);
     assert.match(src, /inboundCustomerPays/);
-    assert.match(src, /cardFromDossier/);
+    assert.match(src, /markPayJournalIncomplete/);
+    assert.match(src, /stampCustomerSync/);
   });
 });

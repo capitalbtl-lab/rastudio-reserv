@@ -111,7 +111,7 @@ async function alfaShow(branch: number, cid: number) {
     for (const it of crmUnwrapIndex(json).items) {
       if (!tariffRowLive(it)) continue;
       live += 1;
-      rest += Number(it.rest ?? it.balance ?? 0) || 0;
+      rest += Number(it.balance ?? it.rest ?? 0) || 0;
     }
   } catch {
     /* rest 0 */
@@ -181,6 +181,18 @@ export async function auditOne(cid: number, branchId: number) {
     badStatus: after.badStatus,
     dupLessons: after.dupLessons,
   });
+  if (codes.includes("lessons")) {
+    const { stampCustomerSync } = await import("./crm-customer-sync");
+    stampCustomerSync(id, {
+      lessonsFull: false,
+      lessonsDisk: after.lessonsDisk,
+      ...(shown.ok ? { lessonsAlfa, lessonsAlfaAt: new Date().toISOString() } : {}),
+    });
+  }
+  if (codes.includes("pays") || codes.includes("snap")) {
+    const { markPayJournalIncomplete } = await import("./crm-pay");
+    markPayJournalIncomplete(id);
+  }
   const extra = shown.ok
     ? `Клиенты ${rub(after.clients)} · Alfa ${rub(shown.alfa)} · касса ${rub(after.cash)} · ${codes.join(", ")}`
     : "нет ответа Alfa";
@@ -206,7 +218,6 @@ export function mergeAudit(prev: AuditReport | null | undefined, hit: AuditHit, 
   const fail = rows.filter((r) => r.codes.includes("нет ответа")).length;
   const show = rows.filter((r) => r.codes.some((c) => SHOW_CODES.includes(c)) && !auditOnRight(r.codes)).length;
   const hole = rows.filter((r) => r.codes.some((c) => HOLE_CODES.includes(c)) && !auditOnRight(r.codes)).length;
-  const mass = SHOW_CODES.map((c) => ({ c, n: rows.filter((r) => r.codes.includes(c)).length })).filter((x) => x.n >= 10);
   return {
     at: hit.at,
     idx,

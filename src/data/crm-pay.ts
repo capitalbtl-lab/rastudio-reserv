@@ -240,6 +240,17 @@ export function markPayJournalComplete(customerId: number) {
   save(store);
 }
 
+export function markPayJournalIncomplete(customerId: number) {
+  const id = Number(customerId) || 0;
+  if (!id) return;
+  const store = load();
+  const set = new Set(store.complete || []);
+  if (!set.has(id)) return;
+  set.delete(id);
+  store.complete = [...set];
+  save(store);
+}
+
 export type CashListOpts = {
   branchId?: number;
   kind?: string;

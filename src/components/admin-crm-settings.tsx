@@ -2228,6 +2228,7 @@ export function AdminCrmSettings() {
     setMsg(`${queue[0]?.name}: сверяем. Потом пауза 1 с.`);
     setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
     let n = 0;
+    let waits = 0;
     try {
       for (let i = 0; i < queue.length; i += 1) {
         if (stopSchool.current) break;
@@ -2236,7 +2237,12 @@ export function AdminCrmSettings() {
         setFillLoading({ kind: "audit", label: row.name, customerId: row.cid });
         const res = await runJournal({ kind: "audit", study: "1", customerId: row.cid, branchId: row.branchId });
         if (!res || res.ok === false) {
-          if (/уже сверяем|уже грузим|429|502/i.test(String(res?.error || ""))) {
+          if (!res || /уже сверяем|уже грузим|429|502|ответила|нет ответа/i.test(String(res?.error || ""))) {
+            waits += 1;
+            if (waits > 8) {
+              setMsg(`Alfa не отвечает на «${row.name}». Остановились.`);
+              break;
+            }
             setSchoolRun({ cur: `пауза 5 с · ждём «${row.name}»`, n: i + 1, total: queue.length });
             await pauseFive();
             i -= 1;
@@ -2245,6 +2251,7 @@ export function AdminCrmSettings() {
           setMsg(res?.error || `Остановились на «${row.name}».`);
           break;
         }
+        waits = 0;
         n += 1;
         if (i < queue.length - 1 && !stopSchool.current) {
           setSchoolRun({ cur: `пауза 1 с · дальше ${queue[i + 1]?.name || ""}`, n: i + 1, total: queue.length });

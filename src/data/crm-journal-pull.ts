@@ -1042,8 +1042,11 @@ export async function journalPull(opts: {
     const people = rankedStudentIds("1");
     const wanted = Number(opts.customerId) || 0;
     const fromList = wanted ? people.find((p) => p.cid === wanted) : null;
+    const fallback = wanted
+      ? { cid: wanted, branchId: Number(opts.branchId) || 1, study: 1 as const }
+      : null;
     const idx = Number(store.lastAudit?.idx) || 0;
-    const one = fromList || pickSlice(people, idx, 1).slice[0];
+    const one = fromList || fallback || pickSlice(people, idx, 1).slice[0];
     if (!one) {
       store.note = "Нет текущих учеников на диске.";
       store.at = new Date().toISOString();
@@ -1066,7 +1069,7 @@ export async function journalPull(opts: {
       const report = mergeAudit(store.lastAudit, hit, nextIdx);
       store.lastAudit = report;
       const bug = auditShowBugNote(report);
-      store.note = `${report.ok + report.hole + report.show + report.fail} / ${people.length} · ${hit.name} · ${hit.extra}${bug ? ` · ${bug}` : ""}`;
+      store.note = `${hit.name} · ${hit.extra}${bug ? ` · ${bug}` : ""}`;
       store.at = hit.at;
       saveStore(store);
       return {
@@ -1078,6 +1081,18 @@ export async function journalPull(opts: {
         lastAudit: report,
         student: { cid: hit.cid, branchId: hit.branchId, name: hit.name, groups: groupsOfStudent(hit.cid), lessons: 0, pays: 0, done: auditOnRight(hit.codes), ok: auditOnRight(hit.codes) },
         ...snap(),
+      };
+    } catch (e) {
+      const err = e instanceof Error ? e.message : "Alfa не ответила";
+      store.note = `${fioOf(one.cid)} · нет ответа · ${err}`;
+      store.at = new Date().toISOString();
+      saveStore(store);
+      return {
+        ok: false as const,
+        error: /429|502/i.test(err) ? err : `нет ответа · ${err}`,
+        more: true,
+        lastAudit: store.lastAudit || null,
+        ...journalPullState({ skipPeople: true }),
       };
     } finally {
       studentPullCid = 0;

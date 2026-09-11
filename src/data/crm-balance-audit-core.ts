@@ -46,6 +46,11 @@ export function classifyAudit(p: {
   if (p.badStatus) codes.push("status");
   if (Math.abs(p.woCard - p.woCal) > 1) codes.push("src");
   if (moneyClose(p.clients, p.alfa)) {
+    const empty = (Number(p.clients) || 0) === 0 && !p.paysComplete && p.lessonsDisk === 0 && !p.liveCtt;
+    if (empty) {
+      codes.push("snap");
+      return [...new Set(codes)];
+    }
     if (!codes.includes("src") && !codes.includes("status")) return codes.length ? ["ok", ...codes] : ["ok"];
     return ["ok", ...codes];
   }
