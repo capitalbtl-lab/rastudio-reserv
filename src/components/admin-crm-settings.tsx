@@ -2855,9 +2855,9 @@ export function AdminCrmSettings() {
                   />
                 </div>
                 {peopleStudy === "2" ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {catalogOptsBar()}
-                    <div className="flex min-w-0 w-full flex-nowrap items-center gap-2">
+                  <>
+                    <div className="mt-6">{catalogOptsBar()}</div>
+                    <div className="mt-6 flex min-w-0 w-full flex-nowrap items-center gap-2">
                     {withHint(
                       <button
                         type="button"
@@ -2893,7 +2893,7 @@ export function AdminCrmSettings() {
                       </button>,
                       HINT.stop,
                     )}
-                    {journal?.note ? <p className="min-w-0 flex-1 truncate rounded-xl bg-black/5 px-3 py-2 text-sm">{catalogProgressNote(journal.note)}</p> : null}
+                    {journal?.note ? <p className="flex h-10 min-w-0 flex-1 items-center truncate rounded-full bg-black/5 px-4 text-sm">{catalogProgressNote(journal.note)}</p> : null}
                     </div>
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
@@ -2902,7 +2902,7 @@ export function AdminCrmSettings() {
                     ) : (
                       <p className="w-full text-[0.78rem] text-muted">Пока не считали: слева пусто, даже если на диске тысячи архивных карточек.</p>
                     )}
-                  </div>
+                  </>
                 ) : null}
                 {(() => {
                   const side = peopleStudy === "2" ? p?.archive : p?.live;
@@ -2991,9 +2991,9 @@ export function AdminCrmSettings() {
                   />
                 </div>
                 {peopleStudy === "2" ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {catalogOptsBar()}
-                    <div className="flex min-w-0 w-full flex-nowrap items-center gap-2">
+                  <>
+                    <div className="mt-6">{catalogOptsBar()}</div>
+                    <div className="mt-6 flex min-w-0 w-full flex-nowrap items-center gap-2">
                     {withHint(
                       <button
                         type="button"
@@ -3029,7 +3029,7 @@ export function AdminCrmSettings() {
                       </button>,
                       HINT.stop,
                     )}
-                    {journal?.note ? <p className="min-w-0 flex-1 truncate rounded-xl bg-black/5 px-3 py-2 text-sm">{catalogProgressNote(journal.note)}</p> : null}
+                    {journal?.note ? <p className="flex h-10 min-w-0 flex-1 items-center truncate rounded-full bg-black/5 px-4 text-sm">{catalogProgressNote(journal.note)}</p> : null}
                     </div>
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
@@ -3038,7 +3038,7 @@ export function AdminCrmSettings() {
                     ) : (
                       <p className="w-full text-[0.78rem] text-muted">Пока не считали: слева пусто, даже если на диске тысячи архивных карточек.</p>
                     )}
-                  </div>
+                  </>
                 ) : null}
                 {(() => {
                   const side = peopleStudy === "2" ? p?.archive : p?.live;
