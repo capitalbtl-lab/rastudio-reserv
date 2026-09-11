@@ -142,35 +142,63 @@ export async function auditOne(cid: number, branchId: number) {
       } satisfies AuditHit,
     };
   }
-  const first = await diskAudit(id, branch);
+  let first: Awaited<ReturnType<typeof diskAudit>>;
+  try {
+    first = await diskAudit(id, branch);
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "диск";
+    return {
+      hit: {
+        cid: id,
+        branchId: branch,
+        name: `клиент ${id}`,
+        clients: 0,
+        alfa: 0,
+        cash: 0,
+        codes: ["нет ответа"] as AuditCode[],
+        repaired: false,
+        at: new Date().toISOString(),
+        extra: `диск: ${err}`,
+      } satisfies AuditHit,
+    };
+  }
   const shown = await alfaShow(branch, id);
   let repaired = false;
   let lessonsAlfa = first.lessonsDisk;
   const empty = (Number(first.clients) || 0) === 0 && !first.paysComplete && first.lessonsDisk === 0 && !first.liveCtt && !shown.liveCtt;
   const needRepair = shown.ok && (!moneyClose(first.clients, shown.alfa) || !first.paysComplete || empty);
   if (needRepair) {
-    const { probeCustomerLessons, inboundCustomerLessons } = await import("./crm-journal-inbound");
-    const probed = await probeCustomerLessons(shown.branch, id).catch(() => ({ total: 0, ok: false as const }));
-    lessonsAlfa = probed.ok ? probed.total : first.lessonsDisk;
-    if (probed.ok && probed.total > first.lessonsDisk) {
-      const { loadCustomerCalendar } = await import("./group-cards");
-      for (let i = 0; i < 4; i += 1) {
-        const r = await inboundCustomerLessons(shown.branch, id, { force: true, dateFrom: "2015-01-01" }).catch(() => ({ done: false }));
-        repaired = true;
-        if (r && "done" in r && r.done) break;
-        if (loadCustomerCalendar(id).length >= probed.total) break;
+    try {
+      const { probeCustomerLessons, inboundCustomerLessons } = await import("./crm-journal-inbound");
+      const probed = await probeCustomerLessons(shown.branch, id).catch(() => ({ total: 0, ok: false as const }));
+      lessonsAlfa = probed.ok ? probed.total : first.lessonsDisk;
+      if (probed.ok && probed.total > first.lessonsDisk) {
+        const { loadCustomerCalendar } = await import("./group-cards");
+        for (let i = 0; i < 4; i += 1) {
+          const r = await inboundCustomerLessons(shown.branch, id, { force: true, dateFrom: "2015-01-01" }).catch(() => ({ done: false }));
+          repaired = true;
+          if (r && "done" in r && r.done) break;
+          if (loadCustomerCalendar(id).length >= probed.total) break;
+        }
       }
-    }
-    if (!first.paysComplete || first.cash < shown.alfa - 1) {
-      const { inboundCustomerPays, payIdComplete } = await import("./crm-pay");
-      for (let i = 0; i < 4; i += 1) {
-        await inboundCustomerPays(shown.request, shown.token, shown.branch, id).catch(() => null);
-        repaired = true;
-        if (payIdComplete(id)) break;
+      if (!first.paysComplete || first.cash < shown.alfa - 1) {
+        const { inboundCustomerPays, payIdComplete } = await import("./crm-pay");
+        for (let i = 0; i < 4; i += 1) {
+          await inboundCustomerPays(shown.request, shown.token, shown.branch, id).catch(() => null);
+          repaired = true;
+          if (payIdComplete(id)) break;
+        }
       }
+    } catch {
+      /* дыру пометим по диску, очередь не останавливаем */
     }
   }
-  const after = await diskAudit(id, branch);
+  let after = first;
+  try {
+    after = await diskAudit(id, branch);
+  } catch {
+    after = first;
+  }
   const codes = classifyAudit({
     alfaOk: shown.ok,
     clients: after.clients,
