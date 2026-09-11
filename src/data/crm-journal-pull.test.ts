@@ -143,7 +143,9 @@ describe("ручной журнал с Alfa", () => {
     const oneFn = ui.slice(oneAt, oneAt + 1800);
     assert.match(oneFn, /nextRecheckPart\(row, journalGrain\)/);
     assert.doesNotMatch(oneFn, /for \(let j = 0/);
-    assert.match(ui, /Шаг 1 · Календарь ученика/);
+    assert.match(ui, /CATALOG_GAP_MS = 1000/);
+    assert.match(ui, /pauseCatalog/);
+    assert.match(ui, /PEOPLE_LOAD_GAP_MS = 5000/);
     assert.match(ui, /Шаг 2 · Занятия в группах/);
     assert.match(ui, /Шаг 3 · Деньги на карточке/);
     assert.match(ui, /useState<HistTab>\("students"\)/);
