@@ -301,7 +301,7 @@ function CinematicPage({
         ) : null}
       </div>
       {trialSession && (signMode === "trial" ? signup.trialOn : signup.groupOn) ? (
-        <TrialModal session={trialSession} path={path} mode={signMode} onClose={() => setTrialId("")} />
+        <TrialModal session={trialSession} path={path} mode={signMode} signup={signup} onClose={() => setTrialId("")} />
       ) : null}
     </article>
   );

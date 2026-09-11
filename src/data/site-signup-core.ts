@@ -9,9 +9,14 @@ export const SITE_BRANCHES = [
   { id: 4, key: "leto", label: "Летние программы" },
 ] as const;
 
-/** Форма 20 живёт в компании 2. Филиал 1/3/4 с /common/N/ форму не открывают. */
 export function trialFormUrl(_branchId?: number) {
   return `${ALFA_HOST}/common/2/form/draw?id=20&lead_source_id=2&baseColor=205EDC&borderRadius=8&css=${TRIAL_CSS}`;
+}
+
+export function trialIframeHtml(src?: string) {
+  const href = (src || trialFormUrl()).replace(/"/g, "");
+  const attr = href.replace(/&/g, "&");
+  return `<iframe src="${attr}" width="100%" height="100%" frameborder="0"></iframe>`;
 }
 
 export function groupSignupUrl(branchId: number, gid: number | string) {
@@ -22,12 +27,10 @@ export function groupSignupUrl(branchId: number, gid: number | string) {
 }
 
 export type SiteSignup = {
-  /** Кнопки записи на сайте. Выкл — на сайте нет кнопок, только админка. */
   trialOn: boolean;
   groupOn: boolean;
-  /** Ссылка формы пробного по филиалу (id 1–4). Пусто = шаблон trialFormUrl. */
+  /** iframe или URL формы пробного по филиалу. Запись в группу не использует. */
   trialByBranch: Record<string, string>;
-  /** По каждому status_id CRM: витрина / пробное / запись в группу. */
   statusPublish: Record<string, StatusPublish>;
 };
 
@@ -35,15 +38,34 @@ export const SITE_SIGNUP_DEFAULT: SiteSignup = {
   trialOn: true,
   groupOn: true,
   trialByBranch: {
-    "1": trialFormUrl(1),
-    "2": trialFormUrl(2),
-    "3": trialFormUrl(3),
-    "4": trialFormUrl(4),
+    "1": trialIframeHtml(),
+    "2": trialIframeHtml(),
+    "3": trialIframeHtml(),
+    "4": trialIframeHtml(),
   },
   statusPublish: { ...DEFAULT_STATUS_PUBLISH },
 };
 
-/** Сток id=20 с /common/1|3|4/ — та же форма, компания 2. Чужой id не трогаем. */
+export function decodeTrialAttr(raw: string) {
+  return String(raw || "")
+    .replace(/&/g, "&")
+    .replace(/"/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/</g, "<")
+    .replace(/>/g, ">")
+    .trim();
+}
+
+/** src из iframe или голый URL. */
+export function parseTrialEmbed(raw: string) {
+  const s = String(raw || "").trim();
+  if (!s) return trialFormUrl();
+  const tag = s.match(/<iframe\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i);
+  const href = decodeTrialAttr(tag ? tag[1] : s);
+  const url = href.match(/https?:\/\/[^\s"'<>]+/i);
+  return url ? url[0] : trialFormUrl();
+}
+
 export function normalizeTrialHref(href: string) {
   const s = String(href || "").trim();
   if (!s) return trialFormUrl();
@@ -52,8 +74,13 @@ export function normalizeTrialHref(href: string) {
 
 export function trialUrlFor(signup: SiteSignup, branchId?: number) {
   const id = String(Number(branchId) || 2);
-  const raw = String(signup.trialByBranch?.[id] || "").trim() || trialFormUrl(Number(id));
-  return normalizeTrialHref(raw);
+  const raw = String(signup.trialByBranch?.[id] || "").trim() || trialIframeHtml();
+  return normalizeTrialHref(parseTrialEmbed(raw));
+}
+
+export function openTrialForm(branchId?: number) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("ra-open-trial", { detail: { branchId: Number(branchId) || 2 } }));
 }
 
 export function resolveGroupSignup(opts: { signup?: string; branchId?: number; groupId?: number }) {

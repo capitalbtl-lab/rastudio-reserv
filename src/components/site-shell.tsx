@@ -10,6 +10,7 @@ import { organizationJsonLd } from "@/data/seo";
 import { JsonLd } from "@/components/json-ld";
 import { tickBehavior } from "@/data/page-behavior";
 import { TabError } from "@/lib/error-component";
+import { TrialPopup } from "@/components/trial-popup";
 
 function AgentChatLazy() {
   const [Chat, setChat] = useState<ComponentType | null>(null);
@@ -86,6 +87,9 @@ export function SiteShell({ children, bare }: { children: ReactNode; bare?: bool
           </div>
         </div>
       )}
+      <TabError quiet>
+        <TrialPopup />
+      </TabError>
       <TabError quiet>
         <AgentChatLazy />
       </TabError>

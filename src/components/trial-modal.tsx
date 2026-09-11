@@ -4,7 +4,8 @@ import { useState, type FormEvent } from "react";
 import type { CmsSession } from "@/data/cms";
 import { sendTrial } from "@/data/trial";
 import { TRIAL_BRANCHES, trialCourseForPath } from "@/data/trial-public";
-import { SITE_BRANCHES } from "@/data/site-signup-core";
+import { SITE_BRANCHES, SITE_SIGNUP_DEFAULT, trialUrlFor, type SiteSignup } from "@/data/site-signup-core";
+import { TrialEmbed } from "@/components/trial-embed";
 import { freePlaces, formatTrialDate, isoDate, nextLessonDate, tidyGroupName, whenShort } from "@/lib/trial-slot";
 import { Button } from "@/components/ui/button";
 
@@ -16,11 +17,13 @@ export function TrialModal({
   session,
   path = "",
   mode = "trial",
+  signup = SITE_SIGNUP_DEFAULT,
   onClose,
 }: {
   session: CmsSession;
   path?: string;
   mode?: "trial" | "group";
+  signup?: SiteSignup;
   onClose: () => void;
 }) {
   const next = nextLessonDate(session);
@@ -33,6 +36,7 @@ export function TrialModal({
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const trialSrc = trialUrlFor(signup, Number(branchId) || 2);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -65,6 +69,35 @@ export function TrialModal({
     }
   }
 
+  if (mode === "trial") {
+    return (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-2 sm:p-4" onClick={onClose}>
+        <div
+          className="relative flex h-[min(44rem,92dvh)] w-full max-w-2xl flex-col overflow-hidden rounded-[1.25rem] bg-surface shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            aria-label="Закрыть"
+            onClick={onClose}
+            className="absolute right-2.5 top-2.5 z-10 grid h-8 w-8 place-items-center rounded-full text-lg leading-none text-muted hover:bg-black/5 hover:text-fg"
+          >
+            ×
+          </button>
+          <div className="shrink-0 px-4 pb-2 pt-3.5 sm:px-5">
+            <p className="kicker pr-8 text-primary">Пробное занятие</p>
+            <h2 className="display mt-0.5 pr-8 text-xl sm:text-[1.35rem]">Запись на пробное</h2>
+          </div>
+          <div className="min-h-0 flex-1 px-2 pb-2 sm:px-3 sm:pb-3">
+            <div className="h-full overflow-hidden rounded-[10px] bg-bg">
+              <TrialEmbed src={trialSrc} className="h-full w-full" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden bg-black/40 p-2 sm:p-4"
@@ -82,10 +115,8 @@ export function TrialModal({
         >
           ×
         </button>
-        <p className="kicker pr-8 text-primary">{mode === "group" ? "Группа" : "Пробное занятие"}</p>
-        <h2 className="display mt-0.5 pr-8 text-xl sm:text-[1.35rem]">
-          {mode === "group" ? "Запись в группу" : "Запись на пробное"}
-        </h2>
+        <p className="kicker pr-8 text-primary">Группа</p>
+        <h2 className="display mt-0.5 pr-8 text-xl sm:text-[1.35rem]">Запись в группу</h2>
         <div className="mt-2.5 rounded-[10px] bg-bg px-3 py-2 text-[0.82rem] leading-snug">
           <p className="font-semibold">{tidyGroupName(session.group)}</p>
           <p className="mt-0.5 text-muted">
@@ -130,7 +161,7 @@ export function TrialModal({
             <input type="hidden" name="branch" value={branchId} />
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
             <Button type="submit" className="mt-1 h-10 w-full" disabled={pending}>
-              {pending ? "Отправляем…" : mode === "group" ? "Записать в группу" : "Отправить заявку"}
+              {pending ? "Отправляем…" : "Записать в группу"}
             </Button>
           </form>
         )}

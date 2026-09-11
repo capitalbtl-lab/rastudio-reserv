@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { adminSchedule } from "@/data/admin-schedule";
 import { cn } from "@/lib/utils";
-import { SITE_BRANCHES, SITE_SIGNUP_DEFAULT, trialFormUrl, type SiteSignup } from "@/data/site-signup-core";
+import { SITE_BRANCHES, SITE_SIGNUP_DEFAULT, trialIframeHtml, type SiteSignup } from "@/data/site-signup-core";
 import { GROUP_STATUSES, mergeStatusPublish, type StatusPublish } from "@/data/group-status";
 
 function token() {
@@ -94,7 +94,7 @@ export function AdminPublicSite() {
       <section className="rounded-2xl bg-white p-4 ring-1 ring-black/8">
         <h3 className="font-semibold">Кнопки записи на сайте</h3>
         <p className="mt-1 text-sm text-muted">
-          «Запись на пробное» открывает ссылку формы Alfa из поля филиала (id=20, источник 2). «Запись в группу» — окно сайта. Витрина: statusId + priority ≥ 1 + courseId. Приоритет 0 прячет группу.
+          Вставьте iframe формы Alfa — он откроется во всех кнопках и окнах «Запись на пробное» и в блоке формы на сайте. Запись в группу это не трогает: своё окно rastudio. Витрина групп: statusId + priority ≥ 1 + courseId.
         </p>
         <div className="mt-3 flex flex-wrap gap-3">
           <label className="flex items-center gap-2 text-sm">
@@ -118,9 +118,9 @@ export function AdminPublicSite() {
           {SITE_BRANCHES.map((b) => (
             <label key={b.id} className="block text-sm">
               <span className="text-[0.72rem] font-semibold uppercase tracking-wider text-muted">Форма пробного · {b.label}</span>
-              <input
-                className="mt-1 h-10 w-full rounded-xl bg-bg px-3 text-xs ring-1 ring-black/8"
-                placeholder={trialFormUrl(b.id)}
+              <textarea
+                className="mt-1 min-h-[6.5rem] w-full rounded-xl bg-bg px-3 py-2 font-mono text-[0.7rem] leading-snug ring-1 ring-black/8"
+                placeholder={trialIframeHtml()}
                 value={signup.trialByBranch[String(b.id)] || ""}
                 onChange={(e) =>
                   setSignup((s) => ({ ...s, trialByBranch: { ...s.trialByBranch, [String(b.id)]: e.target.value } }))

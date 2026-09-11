@@ -1,7 +1,7 @@
 "use client";
 
 import type { CmsSession } from "@/data/cms";
-import { trialUrlFor, type SiteSignup } from "@/data/site-signup-core";
+import { openTrialForm, type SiteSignup } from "@/data/site-signup-core";
 import { slotPublicGroup, slotPublicTrial } from "@/data/group-status";
 import { cn } from "@/lib/utils";
 
@@ -30,21 +30,21 @@ export function GroupCtas({
   const showTrial = signup.trialOn && slotPublicTrial(hint, signup.statusPublish);
   const showGroup = Boolean(signup.groupOn && slotPublicGroup(hint, signup.statusPublish) && (session.groupId || session.signup) && onGroup);
   if (!showTrial && !showGroup) return null;
-  const trialHref = trialUrlFor(signup, Number(session.branchId) || 2);
   const btn =
     "inline-flex h-9 min-w-[9.5rem] items-center justify-center rounded-full px-3 text-center text-[0.72rem] font-semibold leading-tight";
   return (
     <span className={cn("flex shrink-0 flex-col gap-1.5", className)}>
       {showTrial ? (
-        <a
-          href={trialHref}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
           className={cn(btn, "bg-primary text-white hover:opacity-90")}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            openTrialForm(session.branchId);
+          }}
         >
           Запись на пробное
-        </a>
+        </button>
       ) : null}
       {showGroup ? (
         <button
