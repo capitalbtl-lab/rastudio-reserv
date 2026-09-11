@@ -18,15 +18,16 @@ body,
   padding: 0 !important;
   background: #ffffff !important;
   color: #12141a !important;
-  overflow: visible !important;
-  height: auto !important;
+  overflow: hidden !important;
+  height: 100% !important;
 }
 
-.alfa-form-wrapper,
-.alfa-form,
-.alfa-form-content-wrapper,
-.alfa-form-input-container {
-  overflow: visible !important;
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#lead-form::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 .alfa-form-wrapper {
@@ -43,7 +44,7 @@ body,
   width: 100% !important;
   max-width: 100% !important;
   background: #ffffff !important;
-  padding: 0 0 12rem !important;
+  padding: 0 0 4px !important;
   box-shadow: none !important;
   border-radius: 0 !important;
 }
@@ -128,9 +129,6 @@ button.alfa-form-button {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  position: sticky !important;
-  bottom: 0 !important;
-  z-index: 30 !important;
   height: 48px !important;
   min-height: 48px !important;
   width: 100% !important;
@@ -144,7 +142,7 @@ button.alfa-form-button {
   font-weight: 600 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
-  box-shadow: 0 -8px 16px #ffffff !important;
+  box-shadow: none !important;
   cursor: pointer !important;
 }
 

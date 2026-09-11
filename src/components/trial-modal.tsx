@@ -86,7 +86,7 @@ export function TrialModal({
     return (
       <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden overscroll-none bg-header/55 p-2 backdrop-blur-[6px] sm:p-3" onClick={onClose} onWheel={(e) => e.preventDefault()}>
         <div
-          className="relative flex h-[min(56rem,96dvh)] w-full max-w-[28rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
+          className="relative flex w-full max-w-[28rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -102,7 +102,7 @@ export function TrialModal({
             <h2 className="display mt-1 pr-10 text-[1.45rem]">Запись на пробное</h2>
             <p className="mt-1 text-[0.82rem] text-muted">Первое занятие без абонемента.</p>
           </div>
-          <div className="min-h-0 flex-1 px-5 pb-4 sm:px-6">
+          <div className="h-[36.5rem] px-5 pb-5 sm:px-6">
             <TrialEmbed src={trialSrc} className="h-full w-full" />
           </div>
         </div>
