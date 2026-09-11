@@ -2756,7 +2756,6 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.loadOnePeople,
                         )}
-                        <YearsSelect value={peopleFromId} disabled={busy} onChange={setPeopleFromId} />
                         {withHint(
                         <button
                           type="button"
@@ -2768,6 +2767,7 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.recheckOnePeople,
                         )}
+                        <YearsSelect value={peopleFromId} disabled={busy} onChange={setPeopleFromId} />
                         {withHint(
                         <button type="button" className={BTN_GHOST} disabled={busy && run} onClick={() => void probePeople(peopleStudy)}>
                           Сверить счёт
@@ -2878,7 +2878,6 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.loadOneMoney,
                         )}
-                        <YearsSelect value={peopleFromId} disabled={busy} onChange={setPeopleFromId} hint={HINT.yearsMoney} />
                         {withHint(
                         <button
                           type="button"
@@ -2890,6 +2889,7 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.recheckOneMoney,
                         )}
+                        <YearsSelect value={peopleFromId} disabled={busy} onChange={setPeopleFromId} hint={HINT.yearsMoney} />
                         {withHint(
                         <button
                           type="button"
