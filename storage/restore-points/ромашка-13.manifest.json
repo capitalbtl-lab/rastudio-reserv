@@ -1,0 +1,25 @@
+{
+  "id": "romashka-13",
+  "name": "Ромашка-13",
+  "rev": 13,
+  "at": "2026-09-11T04:10:00Z",
+  "git": "caa59ca50be3a83d040d216d08dc664ad95f921a",
+  "branch": "restore/romashka-13",
+  "tag": "romashka-13",
+  "files": 1361,
+  "bytes": 732787367,
+  "sha256": "4229d53e007732b259f6255d5a3480be3f872e0f29168bd89bb2cc16d41477dc",
+  "archive": "storage/backups/ромашка-13-full.tar.gz",
+  "srcArchive": "storage/backups/ромашка-13-src.tar.gz",
+  "srcSha256": "b3c895f25876f8dfada4d97e1a758652f7fbcb2b752c25b11048c11985647183",
+  "storage": [
+    "storage/restore-points/ромашка-13.json",
+    "storage/restore-points/ромашка-13.md",
+    "storage/restore-points/ромашка-13.manifest.json",
+    "storage/restore-points/ромашка-13.sha256",
+    "storage/backups/ромашка-13-src.tar.gz",
+    "storage/backups/ромашка-13-full.tar.gz",
+    "storage/backups/ромашка-13.md",
+    "storage/backups/ромашка-13.sha256"
+  ]
+}

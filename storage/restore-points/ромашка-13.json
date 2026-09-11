@@ -1,0 +1,40 @@
+{
+  "id": "romashka-13",
+  "name": "Ромашка-13",
+  "rev": 13,
+  "at": "2026-09-11T04:10:00Z",
+  "git": "caa59ca50be3a83d040d216d08dc664ad95f921a",
+  "parent": {
+    "id": "romashka-12",
+    "tag": "ramashka-12-pre-tz",
+    "git": "8957d0d683759a75ac1acbaafe4d96c3c9ada20b"
+  },
+  "branch": "restore/romashka-13",
+  "tag": "romashka-13",
+  "note": "История из Alfa шаги 1–3, загрузка по одному пауза 5 с, перепроверка по одному, архив групп учеников, автодеплой. До ТЗ центра связи этапы 1–8.",
+  "src": {
+    "archive": "storage/backups/ромашка-13-src.tar.gz",
+    "files": 490,
+    "bytes": 2088678,
+    "sha256": "b3c895f25876f8dfada4d97e1a758652f7fbcb2b752c25b11048c11985647183"
+  },
+  "full": {
+    "archive": "storage/backups/ромашка-13-full.tar.gz",
+    "files": 1361,
+    "bytes": 732787367,
+    "sha256": "4229d53e007732b259f6255d5a3480be3f872e0f29168bd89bb2cc16d41477dc"
+  },
+  "excludes": [
+    "node_modules",
+    ".output",
+    ".git",
+    ".build-stage",
+    "storage/backups/*.tar.gz"
+  ],
+  "restore": {
+    "git": "git checkout romashka-13",
+    "branch": "git checkout restore/romashka-13",
+    "src": "tar -xzf storage/backups/ромашка-13-src.tar.gz",
+    "archive": "tar -xzf storage/backups/ромашка-13-full.tar.gz"
+  }
+}
