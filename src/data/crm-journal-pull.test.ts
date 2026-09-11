@@ -116,7 +116,13 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /md:grid-cols-2 xl:grid-cols-3/);
     assert.match(ui, /сверено/);
     assert.match(ui, /пропусков не обнаружено|дубликатов нет/);
-    assert.match(ui, /HIST_TABS/);
+    assert.match(ui, /fillFinishedRow/);
+    assert.match(ui, /async function recheckSchool/);
+    const schoolAt = ui.indexOf("async function recheckSchool");
+    const schoolFn = ui.slice(schoolAt, schoolAt + 2200);
+    assert.match(schoolFn, /pauseFive/);
+    assert.match(schoolFn, /holdFill\.current = true/);
+    assert.doesNotMatch(schoolFn, /recheck: true/);
     assert.match(ui, /Шаг 1 · Календарь ученика/);
     assert.match(ui, /Шаг 2 · Занятия в группах/);
     assert.match(ui, /Шаг 3 · Деньги на карточке/);

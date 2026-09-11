@@ -150,7 +150,8 @@ export function lessonFillForWindow(cur: LessonFillCursor | undefined, askedFrom
   const from = String(askedFrom || "").trim();
   if (!cur) return lessonFillStart(startBid, from);
   const prev = String(cur.from || "");
-  if (from && (!prev || from < prev)) return lessonFillStart(startBid, from);
+  if (from && prev && from < prev) return lessonFillStart(startBid, from);
+  if (from && !prev && /^2015/.test(from)) return lessonFillStart(startBid, from);
   return { ...cur, from: prev || from || undefined };
 }
 

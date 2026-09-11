@@ -35,6 +35,10 @@ describe("штамп входа ученика", () => {
     const mid = { bid: 1, statusIdx: 1, page: 2, from: "2019-09-11" };
     assert.deepEqual(lessonFillForWindow(mid, "2019-09-11", 1), mid);
     assert.deepEqual(lessonFillForWindow(mid, "2015-01-01", 2), { bid: 2, statusIdx: 0, page: 0, from: "2015-01-01" });
+    const old = { bid: 1, statusIdx: 1, page: 2 };
+    assert.equal(lessonFillForWindow(old, "2019-09-11", 1).page, 2);
+    assert.equal(lessonFillForWindow(old, "2019-09-11", 1).from, "2019-09-11");
+    assert.deepEqual(lessonFillForWindow(old, "2015-01-01", 2), { bid: 2, statusIdx: 0, page: 0, from: "2015-01-01" });
     assert.equal(lessonFillAdvance({ ...mid }, false, [1]).from, "2019-09-11");
     assert.equal(lessonFillOf({ bid: 1, statusIdx: 0, page: 1, from: "2015-01-01" })?.from, "2015-01-01");
   });

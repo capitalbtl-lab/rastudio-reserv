@@ -1868,31 +1868,56 @@ export function AdminCrmSettings() {
 
   async function recheckSchool() {
     const rows = (journal?.progress?.groups?.rows || []).filter((r) => !journalSchool || r.school === journalSchool);
-    const queue = rows.filter((r) => !r.complete || (r.parts || []).some((p) => p.weak));
+    const queue = rows.filter((r) => !fillFinishedRow(r, journalGrain) || (r.parts || []).some((p) => p.weak));
     if (!queue.length) {
-      setMsg("В этом фильтре все группы сверены.");
+      setMsg("Слева пусто. Нажмите «Перепроверить по одному» — пройдёт тех, кто справа.");
       return;
     }
     stopSchool.current = false;
+    holdFill.current = true;
+    setBusy(true);
+    setMsg(`${queue[0]?.name}: грузим. Потом пауза 5 с.`);
     setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
-    for (let i = 0; i < queue.length; i += 1) {
-      if (stopSchool.current) break;
-      const row = queue[i];
-      const part = nextRecheckPart(row, journalGrain);
-      setSchoolRun({ cur: `${row.name}${part ? ` · ${part.label}` : ""}`, n: i + 1, total: queue.length });
-      if (!part) continue;
-      await runJournal({
-        kind: "group",
-        groupId: Number(row.groupId) || 0,
-        branchId: Number(row.branchId) || 0,
-        periodKey: part.key,
-        periodLabel: part.label,
-        grain: journalGrain,
-        recheck: true,
-      });
+    let n = 0;
+    try {
+      for (let i = 0; i < queue.length; i += 1) {
+        if (stopSchool.current) break;
+        const row = queue[i];
+        const part = nextRecheckPart(row, journalGrain);
+        if (!part) continue;
+        setSchoolRun({ cur: `${row.name} · ${part.label}`, n: i + 1, total: queue.length });
+        setFillLoading({
+          groupId: Number(row.groupId) || 0,
+          branchId: Number(row.branchId) || 0,
+          periodKey: part.key,
+          label: part.label,
+          kind: "group",
+        });
+        await runJournal({
+          kind: "group",
+          groupId: Number(row.groupId) || 0,
+          branchId: Number(row.branchId) || 0,
+          periodKey: part.key,
+          periodLabel: part.label,
+          grain: journalGrain,
+        });
+        n += 1;
+        if (i < queue.length - 1 && !stopSchool.current) {
+          setSchoolRun({ cur: `пауза 5 с · дальше ${queue[i + 1]?.name || ""}`, n: i + 1, total: queue.length });
+          await pauseFive();
+        }
+      }
+    } finally {
+      holdFill.current = false;
+      setFillLoading(null);
+      setBusy(false);
+      setSchoolRun(null);
     }
-    setSchoolRun(null);
-    if (stopSchool.current) setMsg("Очередь школы остановлена.");
+    if (stopSchool.current) {
+      setMsg(`Остановили · прошло ${n} из ${queue.length}.`);
+      return;
+    }
+    if (n >= queue.length) setMsg(`Готово · ${n} групп. Слева пусто, если порции закрылись.`);
   }
 
   async function recheckGroupsOne() {
