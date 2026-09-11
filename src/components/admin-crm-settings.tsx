@@ -2067,12 +2067,12 @@ export function AdminCrmSettings() {
     while (Date.now() < until && !stopSchool.current) await new Promise((r) => setTimeout(r, 200));
   }
 
-  function paintJob(job?: { running?: boolean; cur?: string; n?: number; total?: number; msg?: string; kind?: string; fill?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null } | null) {
+  function paintJob(job?: { running?: boolean; stop?: boolean; cur?: string; n?: number; total?: number; msg?: string; kind?: string; fill?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null } | null) {
     if (!job) return;
     if (job.running) {
       holdFill.current = true;
       peopleLock.current = true;
-      stopSchool.current = false;
+      if (!job.stop) stopSchool.current = false;
       setBusy(true);
       setSchoolRun({ cur: job.cur || "", n: job.n || 0, total: job.total || 0 });
       setFillLoading(job.fill || (job.cur ? { kind: job.kind || job.fill?.kind, label: job.cur, customerId: job.fill?.customerId } : null));
@@ -2128,13 +2128,25 @@ export function AdminCrmSettings() {
       periodLabel: opts.periodLabel,
     });
     const job = (res as { job?: Parameters<typeof paintJob>[0] })?.job;
-    if (job) paintJob(job);
-    else {
-      holdFill.current = false;
-      peopleLock.current = false;
-      setBusy(false);
-      setFillLoading(null);
+    if (job) {
+      paintJob(job);
+      return res;
     }
+    try {
+      const st = (await adminSchedule({
+        data: { token: token(), action: "journalPull", kind: "jobStatus" } as never,
+      })) as { job?: Parameters<typeof paintJob>[0] };
+      if (st?.job?.running) {
+        paintJob(st.job);
+        return st as typeof res;
+      }
+    } catch {
+      /* старт мог не ответить, фон уже идёт */
+    }
+    holdFill.current = false;
+    peopleLock.current = false;
+    setBusy(false);
+    setFillLoading(null);
     return res;
   }
 

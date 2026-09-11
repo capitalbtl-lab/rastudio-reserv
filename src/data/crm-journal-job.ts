@@ -272,6 +272,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       kind: "archiveCatalog",
       probe: job.catalogFirst,
       school: job.school || job.filter,
+      lite: true,
     });
     if (loadJournalJob().id !== id) return { done: true, gap: 0 };
     const cat = res.lastArchiveCatalog as { name?: string; step?: string; more?: boolean } | undefined;
@@ -339,6 +340,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     recheck: job.recheck || mode === "people-recheck" || mode === "groups-recheck" || (mode === "group-one" && !item.periodKey),
     dateFrom: job.dateFrom,
     probe: mode === "probe",
+    lite: true,
   });
   const live = loadJournalJob();
   if (live.id !== id) return { done: true, gap: 0 };

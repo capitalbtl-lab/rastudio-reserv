@@ -78,12 +78,15 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /sleepGap\(step.gap, id\)/);
     assert.match(job, /касса · ещё/);
     assert.match(job, /пауза 5 с/);
+    assert.match(job, /lite: true/);
     assert.match(job, /if \(id && j.id !== id\) break/);
     assert.doesNotMatch(job, /enqueueExport/);
     assert.doesNotMatch(core, /enqueueExport/);
+    assert.match(core, /renameSync/);
     assert.match(pull, /kind === "jobStart"/);
     assert.match(pull, /kind === "jobStatus"/);
     assert.match(pull, /function journalJobView/);
+    assert.match(pull, /function litePullState/);
     assert.match(pull, /job: journalJobSnapshot/);
     assert.match(api, /kind !== "jobStart"/);
     assert.match(api, /kind !== "jobStatus"/);
@@ -112,6 +115,7 @@ describe("фон истории из Alfa", () => {
     assert.match(ui, /jobMode: "audit"/);
     assert.match(ui, /onLoad=\{\(row, part, recheck\) =>\s*void startHistJob/);
     assert.doesNotMatch(ui, /onLoad=\{\(row, part, recheck\) =>\s*void runJournal/);
+    assert.match(ui, /st\?\.job\?\.running/);
     assert.doesNotMatch(ui, /for \(let i = 0; i < queue.length/);
   });
 });

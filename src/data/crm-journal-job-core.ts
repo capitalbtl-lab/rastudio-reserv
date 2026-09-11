@@ -1,6 +1,6 @@
 /** Состояние фоновой «Истории из Alfa»: диск, без Alfa. */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export const PEOPLE_JOB_GAP_MS = 5000;
@@ -112,7 +112,10 @@ export function loadJournalJob(): JournalJob {
 
 export function saveJournalJob(job: JournalJob) {
   mkdirSync(dirname(fileOf()), { recursive: true });
-  writeFileSync(fileOf(), JSON.stringify(job), "utf8");
+  const dest = fileOf();
+  const tmp = `${dest}.tmp`;
+  writeFileSync(tmp, JSON.stringify(job), "utf8");
+  renameSync(tmp, dest);
   return job;
 }
 

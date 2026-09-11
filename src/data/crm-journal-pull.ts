@@ -819,6 +819,22 @@ function journalJobView(job = journalJobSnapshot()) {
   };
 }
 
+function litePullState() {
+  const store = loadStore();
+  return {
+    at: store.at,
+    note: store.note,
+    lastLife: store.lastLife || null,
+    lastArchives: store.lastArchives || null,
+    lastArchivesPupils: store.lastArchivesPupils || null,
+    lastStudents: store.lastStudents || null,
+    lastArchivePolicy: store.lastArchivePolicy || null,
+    lastArchiveCatalog: store.lastArchiveCatalog || null,
+    lastAudit: store.lastAudit || null,
+    job: journalJobSnapshot(),
+  };
+}
+
 function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch: { ok: boolean; err?: string; weak?: boolean; recheck?: boolean }) {
   const prev = fillOf(branchId, gid);
   const pulled = { ...(prev.pulled || {}) };
@@ -988,6 +1004,7 @@ export async function journalPull(opts: {
   name?: string;
   peopleKind?: "students" | "balance";
   periodLabel?: string;
+  lite?: boolean;
 }) {
   const kind = opts.kind;
   if (kind === "jobStart" || kind === "jobStop" || kind === "jobStatus") {
@@ -1023,7 +1040,12 @@ export async function journalPull(opts: {
   const wantedEarly = Number(opts.customerId) || 0;
   const peopleKinds: JournalPullKind[] = ["students", "balance", "archiveCatalog", "archiveCount", "archiveAdd", "audit"];
   const needPeople = peopleKinds.includes(kind);
-  const snap = () => journalPullState({ skipPeople: !needPeople || (wantedEarly > 0 && (kind === "students" || kind === "balance" || kind === "audit")) });
+  const lite =
+    Boolean(opts.lite) ||
+    kind === "archiveCatalog" ||
+    (wantedEarly > 0 && (kind === "students" || kind === "balance" || kind === "audit")) ||
+    (kind === "group" && Number(opts.groupId) > 0);
+  const snap = () => (lite ? { ok: true as const, ...litePullState() } : journalPullState({ skipPeople: !needPeople || (wantedEarly > 0 && (kind === "students" || kind === "balance" || kind === "audit")) }));
   const store = loadStore();
   const groups = journalPullGroups();
   const school = String(opts.school || "").trim();
@@ -1122,7 +1144,7 @@ export async function journalPull(opts: {
         ok: false as const,
         error: `уже сверяем №${studentPullCid} — подождите, не пачкой`,
         more: true,
-        ...journalPullState({ skipPeople: true }),
+        ...litePullState(),
       };
     }
     studentPullCid = one.cid;
@@ -1156,7 +1178,7 @@ export async function journalPull(opts: {
         error: /429|502/i.test(err) ? err : `нет ответа · ${err}`,
         more: true,
         lastAudit: store.lastAudit || null,
-        ...journalPullState({ skipPeople: true }),
+        ...litePullState(),
       };
     } finally {
       studentPullCid = 0;
@@ -1600,7 +1622,7 @@ export async function journalPull(opts: {
       ok: false as const,
       error: `уже грузим ученика №${studentPullCid} — подождите, не пачкой`,
       more: false,
-      ...journalPullState({ skipPeople: true }),
+      ...litePullState(),
     };
   }
   const other = studentAlfaOwner();
@@ -1609,7 +1631,7 @@ export async function journalPull(opts: {
       ok: false as const,
       error: `уже грузим ученика №${other} — подождите, не пачкой`,
       more: false,
-      ...journalPullState({ skipPeople: true }),
+      ...litePullState(),
     };
   }
   studentPullCid = one.cid;
@@ -1652,7 +1674,7 @@ export async function journalPull(opts: {
         ok: false as const,
         error: `уже грузим другого ученика — подождите, не пачкой`,
         more: false,
-        ...journalPullState({ skipPeople: true }),
+        ...litePullState(),
       };
     }
     const sync = customerSyncOf(one.cid);
