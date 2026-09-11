@@ -15,7 +15,7 @@ import { isPayJournalComplete } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 
-export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd";
+export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit";
 export type JournalPullStudy = "1" | "2" | "all";
 
 export type JournalPullGroup = {
@@ -117,11 +117,12 @@ type PullStore = {
   lastStudents?: StudentsReport | null;
   lastArchivePolicy?: ArchiveCountReport | null;
   lastArchiveCatalog?: import("./dossiers").ArchiveCatalogReport | null;
+  lastAudit?: import("./crm-balance-audit").AuditReport | null;
   fill?: Record<string, FillHit>;
 };
 
 function emptyStore(): PullStore {
-  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null, lastArchives: null, lastArchivesPupils: null, lastStudents: null, lastArchivePolicy: null, lastArchiveCatalog: null, fill: {} };
+  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null, lastArchives: null, lastArchivesPupils: null, lastStudents: null, lastArchivePolicy: null, lastArchiveCatalog: null, lastAudit: null, fill: {} };
 }
 
 function fileOf() {
@@ -157,6 +158,7 @@ function loadStore(): PullStore {
       lastStudents: raw.lastStudents && typeof raw.lastStudents === "object" ? (raw.lastStudents as StudentsReport) : null,
       lastArchivePolicy: raw.lastArchivePolicy && typeof raw.lastArchivePolicy === "object" ? (raw.lastArchivePolicy as ArchiveCountReport) : null,
       lastArchiveCatalog: raw.lastArchiveCatalog && typeof raw.lastArchiveCatalog === "object" ? (raw.lastArchiveCatalog as PullStore["lastArchiveCatalog"]) : null,
+      lastAudit: raw.lastAudit && typeof raw.lastAudit === "object" ? (raw.lastAudit as PullStore["lastAudit"]) : null,
       fill: raw.fill && typeof raw.fill === "object" ? (raw.fill as Record<string, FillHit>) : {},
     };
     storeMem = { mtime, data };
@@ -791,6 +793,7 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
     lastStudents: store.lastStudents || null,
     lastArchivePolicy: store.lastArchivePolicy || null,
     lastArchiveCatalog: store.lastArchiveCatalog || null,
+    lastAudit: store.lastAudit || null,
   };
 }
 
@@ -954,9 +957,9 @@ export async function journalPull(opts: {
 }) {
   const kind = opts.kind;
   const wantedEarly = Number(opts.customerId) || 0;
-  const peopleKinds: JournalPullKind[] = ["students", "balance", "archiveCatalog", "archiveCount", "archiveAdd"];
+  const peopleKinds: JournalPullKind[] = ["students", "balance", "archiveCatalog", "archiveCount", "archiveAdd", "audit"];
   const needPeople = peopleKinds.includes(kind);
-  const snap = () => journalPullState({ skipPeople: !needPeople || (wantedEarly > 0 && (kind === "students" || kind === "balance")) });
+  const snap = () => journalPullState({ skipPeople: !needPeople || (wantedEarly > 0 && (kind === "students" || kind === "balance" || kind === "audit")) });
   const store = loadStore();
   const groups = journalPullGroups();
   const school = String(opts.school || "").trim();
@@ -1033,6 +1036,52 @@ export async function journalPull(opts: {
     store.at = new Date().toISOString();
     saveStore(store);
     return { ok: true as const, extra: store.note, count: 1, scanned: 1, more: false, ...snap() };
+  }
+
+  if (kind === "audit") {
+    const people = rankedStudentIds("1");
+    const wanted = Number(opts.customerId) || 0;
+    const fromList = wanted ? people.find((p) => p.cid === wanted) : null;
+    const idx = Number(store.lastAudit?.idx) || 0;
+    const one = fromList || pickSlice(people, idx, 1).slice[0];
+    if (!one) {
+      store.note = "Нет текущих учеников на диске.";
+      store.at = new Date().toISOString();
+      saveStore(store);
+      return { ok: false as const, error: store.note, more: false, ...snap() };
+    }
+    if (studentPullCid && studentPullCid !== one.cid) {
+      return {
+        ok: false as const,
+        error: `уже сверяем №${studentPullCid} — подождите, не пачкой`,
+        more: false,
+        ...journalPullState({ skipPeople: true }),
+      };
+    }
+    studentPullCid = one.cid;
+    try {
+      const { auditOne, mergeAudit, auditShowBugNote, auditOnRight } = await import("./crm-balance-audit");
+      const { hit } = await auditOne(one.cid, one.branchId);
+      const nextIdx = wanted ? idx : pickSlice(people, idx, 1).next;
+      const report = mergeAudit(store.lastAudit, hit, nextIdx);
+      store.lastAudit = report;
+      const bug = auditShowBugNote(report);
+      store.note = `${report.ok + report.hole + report.show + report.fail} / ${people.length} · ${hit.name} · ${hit.extra}${bug ? ` · ${bug}` : ""}`;
+      store.at = hit.at;
+      saveStore(store);
+      return {
+        ok: true as const,
+        extra: store.note,
+        count: auditOnRight(hit.codes) ? 1 : 0,
+        scanned: 1,
+        more: !wanted,
+        lastAudit: report,
+        student: { cid: hit.cid, branchId: hit.branchId, name: hit.name, groups: groupsOfStudent(hit.cid), lessons: 0, pays: 0, done: auditOnRight(hit.codes), ok: auditOnRight(hit.codes) },
+        ...snap(),
+      };
+    } finally {
+      studentPullCid = 0;
+    }
   }
 
   if (kind === "archives") {

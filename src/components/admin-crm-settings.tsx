@@ -109,6 +109,10 @@ const HINT = {
   tabStudents: "Первый шаг загрузки истории. Здесь качается личный календарь ученика: все его занятия из Alfa на наш диск. Сначала покажите список с диска, потом красной кнопкой идите по людям слева. Список «годы» задаёт, насколько далеко в прошлое смотреть. Жёлтая карточка значит: в Alfa занятий больше, чем у нас. Зелёная — счёт сошёлся. В Alfa ничего не пишется. Деньги и групповые явки — следующие шаги, этот экран их не трогает.",
   tabGroups: "Второй шаг. Здесь качаются явки по группам: кто был на уроке, а не личный календарь человека. Сначала красная «по одному», потом список «годы» — это размер порции: квартал, полугодие или год. Архив групп и сроки жизни курса — отдельные кнопки ниже, их лучше нажать до массовой качки. Фильтр школы сужает очередь. В Alfa журнал не проводится. Без этого шага на сайте будут люди, но без отметок в группе. Тема и ДЗ грузятся уже в карточке группы, после явок.",
   tabMoney: "Третий шаг, «деньги на карточке». Здесь к ученику дописываются платежи и абонементы из Alfa. Красная «по одному» идёт как на шаге 1, справа те же годы. Если журнала занятий ещё нет, касса сначала доберёт календарь, иначе списание не к чему привязать. В Alfa оплаты не создаются. Жёлтая карточка — в Alfa занятий больше, чем на диске. После шага на карточке ученика должен быть понятный остаток. Это не зарплата педагогов и не очередь в Alfa, а чтение кассы на сайт.",
+  tabAudit: "Четвёртый шаг — сверка остатка. Берёт всех, кто сейчас учится, по одному, пауза 1 секунда. Для каждого читает Alfa (абонемент или customer.balance), считает число в «Клиентах» и кассу оплаты минус проведённые. Если цифры разошлись — добирает журнал или кассу только этого человека и считает снова. В Alfa ничего не пишет и не подставляет чужую цифру в файл. Совпало — карточка справа. Не совпало — слева с причиной: мало явок, мало оплат, раздельный абонемент, ошибка показа. «Сверить 10» — проба, не замена полного прогона.",
+  auditAll: "Красная кнопка проходит всех текущих учеников с диска, статус «учится». Архивных и лидов нет. Между людьми пауза одна секунда, в Alfa один запрос в полёте. Сначала сравнивает число на карточке «Клиенты» с тем, что показывает Alfa. Если не сошлось — догружает явки или оплаты только этого номера и считает ещё раз. Цифру из Alfa в кассу не записывает. Стоп прерывает после текущего. Прогресс в серой строке справа: имя, Клиенты, Alfa, касса, код. Если у десяти и больше одна ошибка показа — это баг раздела «Клиенты», не дыра Иванова.",
+  auditTen: "Проба: десять случайных текущих, не весь список. Тот же такт, что у «Сверить всех»: чтение Alfa, сравнение, при расхождении добор только этого id. Нужна, чтобы быстро увидеть, сходится ли показ, не гоняя 345 человек. В Alfa не пишет. Если слева после пробы жёлтые с кодом ctt или formula — скорее формула карточки, а не дырявый журнал. Полный прогон — соседняя красная кнопка. Повтор можно жать, выборка каждый раз новая.",
+  auditRecheck: "Ещё раз сверяет только этого ученика с Alfa. Читает карточку и абонементы, при расхождении добирает его журнал или кассу. Чужих не трогает, зелёные шаги 1 и 3 у остальных не сбрасывает. В Alfa ничего не сохраняет. Нужна, если человек слева с причиной или вы только что правили его кассу. После совпадения карточка уйдёт вправо. Если снова ctt или formula — это показ в «Клиентах», не его личная дыра.",
   scopeLive: "Показывает тех, кто сейчас ходит: статус «обучается» в Alfa. Красная очередь и сверка идут только по этому списку, архивных не трогают. Цифра на кнопке — сколько таких людей в выборке. Переключение само ничего не качает и в Alfa не пишет. Если нужен бывший ученик, соседняя кнопка «Архивные клиенты». Можно спокойно прыгать туда-сюда, списки уже на диске. Для кассы и календаря это один и тот же переключатель.",
   scopeArch: "Показывает рабочий архив — бывшие ученики после «Посчитать отбор». Красная очередь только по этому набору, голые телефоны сюда не попадают. Если слева пусто — нажмите «Посчитать отбор»: правило с диска, Alfa не трогает. Скрытые ищутся в Клиентах по телефону. Жёлтые карточки чаще — берите «с начала · 2015».",
   archCount: "Считает рабочий архив только с диска, в Alfa не ходит и ничего там не пишет. Берёт группы текущих учеников и ищет в архиве тех, кто в тех же группах числился, с нормальным ФИО, не 18+ (если есть дата рождения). Голые телефоны и ошибочные звонки остаются скрытыми на диске, но не в списке. Уже попавшие в набор повторным нажатием не выкидываются. После отчёта красная «по одному» идёт только по рабочим. Если на диске архивных карточек нет — сначала «Загрузить архив клиентов из Alfa».",
@@ -149,11 +153,12 @@ const CRM_SET_TABS = [
   { id: "branches", label: "Филиалы" },
 ] as const;
 type CrmSetTab = (typeof CRM_SET_TABS)[number]["id"];
-type HistTab = "groups" | "students" | "money";
+type HistTab = "groups" | "students" | "money" | "audit";
 const HIST_TABS: { id: HistTab; label: string }[] = [
   { id: "students", label: "Шаг 1 · Календарь ученика" },
   { id: "groups", label: "Шаг 2 · Занятия в группах" },
   { id: "money", label: "Шаг 3 · Деньги на карточке" },
+  { id: "audit", label: "Шаг 4 · Сверка остатка" },
 ];
 const PEOPLE_LOAD_GAP_MS = 5000;
 const CATALOG_GAP_MS = 1000;
@@ -805,6 +810,15 @@ function peopleNeedsRecheck(row: PeopleRow, kind: "students" | "balance") {
   return kind === "balance" ? !row.paysRechecked : !row.rechecked;
 }
 
+function auditRight(codes?: string[]) {
+  if (!codes?.includes("ok")) return false;
+  return !codes.some((c) => c !== "ok" && c !== "dup" && c !== "snap" && c !== "branch");
+}
+
+function rubAudit(n?: number) {
+  return `${Math.round(Number(n) || 0)} ₽`;
+}
+
 function patchPeopleSide(
   side:
     | { people?: PeopleRow[]; journalDone?: number; cardDone?: number; total?: number }
@@ -1138,6 +1152,178 @@ function PeopleFillList({
   );
 }
 
+type AuditUiRow = {
+  cid: number;
+  branchId: number;
+  name: string;
+  groups: string[];
+  clients?: number;
+  alfaMoney?: number;
+  cash?: number;
+  codes?: string[];
+  extra?: string;
+  at?: string;
+  seen?: boolean;
+};
+
+function AuditFillList({
+  rows,
+  busy,
+  loadingCid,
+  onRecheck,
+}: {
+  rows: AuditUiRow[];
+  busy?: boolean;
+  loadingCid?: number;
+  onRecheck: (row: AuditUiRow) => void;
+}) {
+  const [open, setOpen] = useState("");
+  const [query, setQuery] = useState("");
+  const [pageSize, setPageSize] = useState(20);
+  const [pageNeed, setPageNeed] = useState(0);
+  const [pageDone, setPageDone] = useState(0);
+  const q = query.trim().toLowerCase();
+  const scoped = rows.filter((r) => {
+    if (!q) return true;
+    return r.name.toLowerCase().includes(q) || String(r.cid).includes(q) || (r.groups || []).some((g) => g.toLowerCase().includes(q));
+  });
+  const isPinned = (r: AuditUiRow) => String(r.cid) === open || r.cid === loadingCid;
+  const doneOf = (r: AuditUiRow) => Boolean(r.seen && auditRight(r.codes));
+  const needRows = scoped.filter((r) => !doneOf(r)).slice().sort((a, b) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid);
+  const doneRows = scoped.filter((r) => doneOf(r)).slice().sort((a, b) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid);
+  const nNeed = needRows.length;
+  const nDone = doneRows.length;
+  const pagesNeed = Math.max(1, Math.ceil(nNeed / pageSize) || 1);
+  const pagesDone = Math.max(1, Math.ceil(nDone / pageSize) || 1);
+  const safeNeed = Math.min(pageNeed, pagesNeed - 1);
+  const safeDone = Math.min(pageDone, pagesDone - 1);
+  const listNeed = pageWithPinned(needRows, safeNeed, pageSize, isPinned);
+  const listDone = pageWithPinned(doneRows, safeDone, pageSize, isPinned);
+  useEffect(() => {
+    setPageNeed(0);
+    setPageDone(0);
+  }, [q, pageSize]);
+  function pickPageSize(n: number) {
+    setPageSize(n);
+    setPageNeed(0);
+    setPageDone(0);
+  }
+  function pager(page: number, pages: number, onPage: (n: number) => void) {
+    if (pages <= 1) return null;
+    return (
+      <span className="ml-auto flex flex-wrap items-center gap-1">
+        <button type="button" className="h-8 rounded-full bg-white px-3 font-semibold ring-1 ring-black/10 disabled:opacity-40" disabled={page <= 0} onClick={() => onPage(page - 1)}>
+          Назад
+        </button>
+        {Array.from({ length: pages }, (_, i) => i).map((i) => (
+          <button key={i} type="button" className={cn("h-8 min-w-8 rounded-full px-2 font-semibold", i === page ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => onPage(i)}>
+            {i + 1}
+          </button>
+        ))}
+        <button type="button" className="h-8 rounded-full bg-white px-3 font-semibold ring-1 ring-black/10 disabled:opacity-40" disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>
+          Дальше
+        </button>
+      </span>
+    );
+  }
+  function renderPerson(row: AuditUiRow) {
+    const id = String(row.cid);
+    const full = doneOf(row);
+    const active = loadingCid === row.cid;
+    const shown = open === id;
+    const codes = (row.codes || []).join(" · ");
+    return (
+      <li key={id} className={cn("rounded-2xl p-3 ring-1", !row.seen ? "bg-white ring-black/8" : full ? "bg-white ring-emerald-300" : "bg-amber-50 ring-amber-400")}>
+        <div className="flex items-center gap-2">
+          <button type="button" className="min-w-0 flex-1 truncate text-left font-medium" onClick={() => setOpen((cur) => (cur === id ? "" : id))} title={row.name}>
+            {row.name}
+          </button>
+          <span className="shrink-0 rounded-full bg-black/10 px-2 py-0.5 text-[0.72rem] font-semibold tabular-nums">№{row.cid}</span>
+          <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+            {!row.seen ? (
+              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">не сверяли</span>
+            ) : full ? (
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">совпало</span>
+            ) : (
+              <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950">{codes || "не совпало"}</span>
+            )}
+          </span>
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg font-semibold leading-none ring-1 ring-black/20 hover:bg-black/5"
+            aria-expanded={shown}
+            aria-label={shown ? "свернуть" : "развернуть"}
+            onClick={() => setOpen((cur) => (cur === id ? "" : id))}
+          >
+            {shown ? "−" : "+"}
+          </button>
+        </div>
+        <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
+          {row.seen ? `Клиенты ${rubAudit(row.clients)} · Alfa ${rubAudit(row.alfaMoney)} · касса ${rubAudit(row.cash)}` : "ещё не сверяли"}
+        </p>
+        {shown ? (
+          <div className="mt-2">
+            <p className="text-[0.78rem] font-semibold">{row.extra || codes || "\u00a0"}</p>
+            <p className="mt-1 text-[0.72rem] text-muted">{(row.groups || []).slice(0, 3).join(" · ") || "групп на карточке нет"}</p>
+            <div className="mt-2 flex min-h-8 flex-wrap items-center gap-2">
+              {withHint(
+                <button
+                  type="button"
+                  disabled={busy && !active}
+                  className={cn(BTN_LOAD_SM, "min-w-[12.5rem] w-fit shrink-0 px-4", active && "ra-progress-run")}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRecheck(row);
+                  }}
+                >
+                  Перепроверить
+                </button>,
+                HINT.auditRecheck,
+              )}
+            </div>
+          </div>
+        ) : null}
+      </li>
+    );
+  }
+  return (
+    <div className="mt-3">
+      <input
+        className="h-9 w-full rounded-full bg-white px-3 text-sm ring-1 ring-black/10"
+        placeholder="Найти ученика…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-[0.78rem]">
+        <span className="text-muted">На странице</span>
+        {([10, 20, 30, 100] as const).map((n) => (
+          <button key={n} type="button" className={cn("h-8 rounded-full px-3 font-semibold", pageSize === n ? "bg-black text-white" : "bg-white ring-1 ring-black/10")} onClick={() => pickPageSize(n)}>
+            {n}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 grid items-start gap-3 lg:grid-cols-2">
+        <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-rose-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="font-display text-[1.05rem] text-rose-900">Не совпало · {nNeed}</h4>
+            {pager(safeNeed, pagesNeed, setPageNeed)}
+          </div>
+          <p className="mt-1 text-[0.72rem] text-muted">Не сверяли и те, у кого Клиенты ≠ Alfa. Справа только совпало.</p>
+          {listNeed.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listNeed.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Слева пусто — все сверенные совпали.</p>}
+        </section>
+        <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="font-display text-[1.05rem] text-emerald-900">Совпало · {nDone}</h4>
+            {pager(safeDone, pagesDone, setPageDone)}
+          </div>
+          <p className="mt-1 text-[0.72rem] text-muted">Клиенты = Alfa ±1 ₽. Касса может отличаться при раздельном абонементе — тогда код на карточке, не зелёный.</p>
+          {listDone.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listDone.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Пока никого не сверяли — справа пусто.</p>}
+        </section>
+      </div>
+    </div>
+  );
+}
+
 function MissList({
   pack,
   empty,
@@ -1368,6 +1554,27 @@ export function AdminCrmSettings() {
       sessionWrote?: number;
       sessionSkip?: number;
       disk?: number;
+    } | null;
+    lastAudit?: {
+      at?: string;
+      idx?: number;
+      scanned: number;
+      ok: number;
+      hole: number;
+      show: number;
+      fail: number;
+      rows: {
+        cid: number;
+        branchId: number;
+        name: string;
+        clients: number;
+        alfa: number;
+        cash: number;
+        codes: string[];
+        repaired?: boolean;
+        at?: string;
+        extra?: string;
+      }[];
     } | null;
   } | null>(null);
   const [journalLoading, setJournalLoading] = useState(true);
@@ -1662,7 +1869,7 @@ export function AdminCrmSettings() {
   }
 
   async function runJournal(opts: {
-    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "archiveCount" | "archiveCatalog" | "archiveAdd";
+    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit";
     study?: "1" | "2" | "all";
     school?: string;
     groupId?: number;
@@ -1680,7 +1887,7 @@ export function AdminCrmSettings() {
       setFillLoading({ groupId: opts.groupId || 0, branchId: opts.branchId || 0, periodKey: opts.periodKey || "", label: opts.periodLabel || "", kind: opts.kind });
     } else if (opts.kind === "life" || opts.kind === "archives" || opts.kind === "archivesPupils" || opts.kind === "archiveCount" || opts.kind === "archiveCatalog" || opts.kind === "archiveAdd") {
       setFillLoading({ kind: opts.kind });
-    } else if ((opts.kind === "students" || opts.kind === "balance") && !holdFill.current) {
+    } else if ((opts.kind === "students" || opts.kind === "balance" || opts.kind === "audit") && !holdFill.current) {
       setFillLoading({ kind: opts.kind, label: opts.study === "2" ? "архивные" : "текущие" });
     }
     try {
@@ -1705,7 +1912,7 @@ export function AdminCrmSettings() {
         new Promise<never>((_, rej) =>
           setTimeout(
             () => rej(new Error("Alfa не ответила за отведённое время — нажмите ещё раз.")),
-            opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "archiveCount" || opts.kind === "archiveCatalog" || opts.kind === "archiveAdd" || opts.kind === "life" || opts.kind === "group" || opts.kind === "details" || opts.kind === "hydrateDisk" || opts.kind === "students" || opts.kind === "balance" ? 90000 : 25000,
+            opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "archiveCount" || opts.kind === "archiveCatalog" || opts.kind === "archiveAdd" || opts.kind === "life" || opts.kind === "group" || opts.kind === "details" || opts.kind === "hydrateDisk" || opts.kind === "students" || opts.kind === "balance" || opts.kind === "audit" ? 90000 : 25000,
           ),
         ),
       ])) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit; extra?: string; more?: boolean };
@@ -1985,6 +2192,77 @@ export function AdminCrmSettings() {
       peopleLock.current = false;
     }
     if (stopSchool.current) setMsg(`Остановили архив клиентов · прошло ${n}.`);
+  }
+
+  async function pullAudit(opts?: { take?: number; customerId?: number; branchId?: number; name?: string }) {
+    if (peopleLock.current) return;
+    const oneId = Number(opts?.customerId) || 0;
+    peopleLock.current = true;
+    let snap = journal;
+    let all = snap?.progress?.live?.people || [];
+    if (!all.length) {
+      snap = await loadJournal();
+      all = snap?.progress?.live?.people || [];
+    }
+    if (!all.length && !oneId) {
+      peopleLock.current = false;
+      setMsg("Нет текущих учеников на диске.");
+      return;
+    }
+    let queue = oneId
+      ? [{ cid: oneId, branchId: Number(opts?.branchId) || 1, name: opts?.name || `№${oneId}`, groups: [] as string[], lessons: 0 }]
+      : [...all];
+    const take = Number(opts?.take) || 0;
+    if (!oneId && take > 0 && queue.length > take) {
+      for (let i = queue.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = queue[i];
+        queue[i] = queue[j];
+        queue[j] = t;
+      }
+      queue = queue.slice(0, take);
+    }
+    stopSchool.current = false;
+    holdFill.current = true;
+    setBusy(true);
+    setMsg(`${queue[0]?.name}: сверяем. Потом пауза 1 с.`);
+    setSchoolRun({ cur: queue[0]?.name || "", n: 0, total: queue.length });
+    let n = 0;
+    try {
+      for (let i = 0; i < queue.length; i += 1) {
+        if (stopSchool.current) break;
+        const row = queue[i];
+        setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
+        setFillLoading({ kind: "audit", label: row.name, customerId: row.cid });
+        const res = await runJournal({ kind: "audit", study: "1", customerId: row.cid, branchId: row.branchId });
+        if (!res || res.ok === false) {
+          if (/уже сверяем|уже грузим|429|502/i.test(String(res?.error || ""))) {
+            setSchoolRun({ cur: `пауза 5 с · ждём «${row.name}»`, n: i + 1, total: queue.length });
+            await pauseFive();
+            i -= 1;
+            continue;
+          }
+          setMsg(res?.error || `Остановились на «${row.name}».`);
+          break;
+        }
+        n += 1;
+        if (i < queue.length - 1 && !stopSchool.current) {
+          setSchoolRun({ cur: `пауза 1 с · дальше ${queue[i + 1]?.name || ""}`, n: i + 1, total: queue.length });
+          await pauseCatalog();
+        }
+      }
+    } finally {
+      holdFill.current = false;
+      setFillLoading(null);
+      setBusy(false);
+      setSchoolRun(null);
+      peopleLock.current = false;
+    }
+    if (stopSchool.current) {
+      setMsg(`Остановили сверку · прошло ${n} из ${queue.length}.`);
+      return;
+    }
+    if (n >= queue.length) setMsg(`Сверили ${n} текущих.`);
   }
 
   async function probePeople(study: "1" | "2") {
@@ -2541,7 +2819,7 @@ export function AdminCrmSettings() {
           const schoolNeedLife = schoolRows.filter((r) => r.source !== "alfa").length;
           return (
             <div className="space-y-3">
-              {journal?.note && peopleStudy !== "2" ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
+              {journal?.note && peopleStudy !== "2" && histTab !== "audit" ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
               {!journal ? (
                 <div className="flex flex-wrap items-center gap-2">
                   {journalLoading ? (
@@ -2569,7 +2847,7 @@ export function AdminCrmSettings() {
                     >
                       {t.label}
                     </button>
-                    <HintI text={t.id === "students" ? HINT.tabStudents : t.id === "groups" ? HINT.tabGroups : HINT.tabMoney} />
+                    <HintI text={t.id === "students" ? HINT.tabStudents : t.id === "groups" ? HINT.tabGroups : t.id === "audit" ? HINT.tabAudit : HINT.tabMoney} />
                   </span>
                 ))}
               </div>
@@ -3099,6 +3377,95 @@ export function AdminCrmSettings() {
                         onStop={() => {
                           stopSchool.current = true;
                         }}
+                      />
+                    </>
+                  );
+                })()}
+              </section>
+              ) : null}
+
+              {histTab === "audit" ? (
+              <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
+                <p className="font-display text-[1.15rem]">Сверка остатка с Alfa</p>
+                <p className="mt-1 text-sm text-muted">Все текущие ученики. Клиенты / Alfa / касса. Дыру добираем у этого id. Цифру Alfa в файл не ставим.</p>
+                {(() => {
+                  const live = p?.live;
+                  const hits = journal?.lastAudit?.rows || [];
+                  const by = new Map(hits.map((h) => [h.cid, h]));
+                  const rows: AuditUiRow[] = (live?.people || []).map((r) => {
+                    const h = by.get(r.cid);
+                    return {
+                      cid: r.cid,
+                      branchId: r.branchId,
+                      name: r.name,
+                      groups: r.groups || [],
+                      clients: h?.clients,
+                      alfaMoney: h?.alfa,
+                      cash: h?.cash,
+                      codes: h?.codes,
+                      extra: h?.extra,
+                      at: h?.at,
+                      seen: Boolean(h),
+                    };
+                  });
+                  const run = fillLoading?.kind === "audit";
+                  const scanned = journal?.lastAudit?.scanned || 0;
+                  const okN = journal?.lastAudit?.ok || 0;
+                  const holeN = journal?.lastAudit?.hole || 0;
+                  const showN = journal?.lastAudit?.show || 0;
+                  const total = live?.total || liveN || rows.length;
+                  return (
+                    <>
+                      <p className="mt-3 text-sm">
+                        текущих {total} · сверено {scanned} · совпало {okN} · дыра {holeN} · ошибка показа {showN}
+                      </p>
+                      <div className="mt-3 flex min-w-0 w-full flex-nowrap items-center gap-2">
+                        {withHint(
+                          <button
+                            type="button"
+                            className={cn(BTN_RED, "min-w-[14rem] shrink-0", run && "ra-progress-run")}
+                            disabled={busy || offline}
+                            onClick={() => void pullAudit()}
+                          >
+                            Сверить всех текущих
+                          </button>,
+                          HINT.auditAll,
+                        )}
+                        {withHint(
+                          <button
+                            type="button"
+                            className={cn(BTN_LOAD, "min-w-[9.5rem] shrink-0")}
+                            disabled={busy || offline}
+                            onClick={() => void pullAudit({ take: 10 })}
+                          >
+                            Сверить 10
+                          </button>,
+                          HINT.auditTen,
+                        )}
+                        {withHint(
+                          <button
+                            type="button"
+                            className={cn(BTN_GHOST, "shrink-0")}
+                            disabled={!run && !schoolRun}
+                            onClick={() => {
+                              stopSchool.current = true;
+                            }}
+                          >
+                            Стоп
+                          </button>,
+                          HINT.stop,
+                        )}
+                        {journal?.note && histTab === "audit" ? (
+                          <p className="flex h-10 min-w-0 flex-1 items-center truncate rounded-full bg-black/5 px-4 text-sm">{journal.note}</p>
+                        ) : (
+                          <p className="flex h-10 min-w-0 flex-1 items-center truncate px-4 text-sm text-muted">{run ? `Сейчас ${fillLoading?.label || ""}` : "\u00a0"}</p>
+                        )}
+                      </div>
+                      <AuditFillList
+                        rows={rows}
+                        busy={offline || run}
+                        loadingCid={run ? fillLoading?.customerId : undefined}
+                        onRecheck={(row) => void pullAudit({ customerId: row.cid, branchId: row.branchId, name: row.name })}
                       />
                     </>
                   );

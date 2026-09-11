@@ -3075,7 +3075,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
     if (data.action === "journalPull") {
       const { journalPull, journalPullState } = await import("./crm-journal-pull");
       const kind = String(data.kind || "");
-      if (kind !== "group" && kind !== "school" && kind !== "students" && kind !== "balance" && kind !== "life" && kind !== "details" && kind !== "archives" && kind !== "archivesPupils" && kind !== "hydrateDisk" && kind !== "archiveCount" && kind !== "archiveCatalog" && kind !== "archiveAdd") {
+      if (kind !== "group" && kind !== "school" && kind !== "students" && kind !== "balance" && kind !== "life" && kind !== "details" && kind !== "archives" && kind !== "archivesPupils" && kind !== "hydrateDisk" && kind !== "archiveCount" && kind !== "archiveCatalog" && kind !== "archiveAdd" && kind !== "audit") {
         try {
           return journalPullState();
         } catch (e) {
