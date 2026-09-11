@@ -64,7 +64,7 @@ export type Dossier = {
 };
 
 type Store = { items: Dossier[]; lastCrmSync?: string; nextCrmSync?: string; lastLeadSync?: string };
-type CrmWriteOpts = { persist?: boolean; quiet?: boolean };
+type CrmWriteOpts = { persist?: boolean; quiet?: boolean; byCrmOnly?: boolean };
 type StoreCache = { mtime: number; store: Store; byCrm: Map<number, Dossier>; byId: Map<string, Dossier> };
 
 const MAX = 8000;
@@ -459,6 +459,7 @@ export function upsertDossier(patch: {
   crmWins?: boolean;
   persist?: boolean;
   quiet?: boolean;
+  byCrmOnly?: boolean;
 }) {
   const crm = patch.source === "alfacrm" || Boolean(patch.crmWins);
   const digits = digitsPhone(patch.phone);
@@ -466,7 +467,11 @@ export function upsertDossier(patch: {
   const byCrm = patch.crmId
     ? store.items.find((d) => Number(d.crmId) === Number(patch.crmId))
     : undefined;
-  const byPhone = digits ? store.items.find((d) => d.phoneDigits === digits || d.phones.some((p) => digitsPhone(p) === digits)) : undefined;
+  const byPhone = patch.byCrmOnly
+    ? undefined
+    : digits
+      ? store.items.find((d) => d.phoneDigits === digits || d.phones.some((p) => digitsPhone(p) === digits))
+      : undefined;
   let cur = byCrm || byPhone;
   const id = cur?.id || (patch.crmId ? `crm-${patch.crmId}` : digits ? `tel-${digits}` : `tmp-${Date.now().toString(36)}`);
   if (!cur) cur = emptyDossier({ id });
@@ -734,6 +739,7 @@ export function applyCrmCustomer(
     note: opts.quiet ? undefined : `CRM ${id}: ${childName || rawName || ""}`,
     persist: opts.persist,
     quiet: opts.quiet,
+    byCrmOnly: opts.byCrmOnly,
   });
   if (opts.persist !== false && !reallyArchived && study === 1) dropArchiveWorking(id);
   return next;
@@ -1596,7 +1602,7 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean }) {
         cur.sessionSkip += 1;
         continue;
       }
-      applyCrmCustomer(item, branch, true, cur.teachers, { persist: true, quiet: true });
+      applyCrmCustomer(item, branch, true, cur.teachers, { persist: true, quiet: true, byCrmOnly: true });
       wrote = true;
       cid = id;
       name = archiveLiveName(child) || archiveLiveName(parent) || child || parent;
