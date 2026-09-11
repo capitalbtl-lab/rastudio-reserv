@@ -124,6 +124,43 @@ export function archiveFioOk(fio?: string) {
   return s;
 }
 
+const JUNK_NAME_TOKENS = new Set([
+  "тест",
+  "test",
+  "testing",
+  "qwerty",
+  "asdf",
+  "xxx",
+  "foo",
+  "temp",
+  "проба",
+  "тестовый",
+  "testuser",
+]);
+
+function foldNameToken(s: string) {
+  return s.toLowerCase().replace(/ё/g, "е");
+}
+
+/** Живое ФИО: не телефон, не число, не «тест». «Тестова» проходит. */
+export function archiveLiveName(fio?: string) {
+  const s = archiveFioOk(fio);
+  if (!s) return "";
+  const compact = s.replace(/\s+/g, "");
+  if (/^\d+$/.test(compact)) return "";
+  if (!/[a-zа-яё]/i.test(s)) return "";
+  const tokens = foldNameToken(s)
+    .split(/[^a-zа-яё0-9]+/i)
+    .filter(Boolean);
+  if (!tokens.length) return "";
+  if (tokens.some((t) => JUNK_NAME_TOKENS.has(t))) return "";
+  return s;
+}
+
+export function archiveCatalogNamesOk(child?: string, parent?: string) {
+  return Boolean(archiveLiveName(child) || archiveLiveName(parent));
+}
+
 export function archiveAgeYears(dob?: string, age?: number) {
   if (Number.isFinite(age) && (age as number) >= 0 && (age as number) < 120) return Math.floor(age as number);
   const t = String(dob || "").trim();

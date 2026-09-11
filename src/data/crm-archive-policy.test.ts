@@ -4,6 +4,8 @@ import { describe, it } from "node:test";
 import {
   archiveEligible,
   archiveFioOk,
+  archiveLiveName,
+  archiveCatalogNamesOk,
   archiveAgeYears,
   archiveIntersects,
   archiveRemoved,
@@ -57,6 +59,21 @@ describe("рабочий архив", () => {
     assert.equal(archiveFioOk("клиент 5842"), "");
     assert.equal(archiveFioOk("+79891234567"), "");
     assert.ok(archiveFioOk("Рыбаков Николай Павлович"));
+  });
+
+  it("ворота справочника: не телефон, не число, не тест; Тестова проходит", () => {
+    assert.equal(archiveLiveName("+79891234567"), "");
+    assert.equal(archiveLiveName("89153656376"), "");
+    assert.equal(archiveLiveName("670"), "");
+    assert.equal(archiveLiveName("тест"), "");
+    assert.equal(archiveLiveName("Test"), "");
+    assert.equal(archiveLiveName("тестовый"), "");
+    assert.equal(archiveLiveName("клиент 5842"), "");
+    assert.ok(archiveLiveName("Тестова Анна"));
+    assert.ok(archiveLiveName("Рыбаков Николай Павлович"));
+    assert.equal(archiveCatalogNamesOk("тест", ""), false);
+    assert.equal(archiveCatalogNamesOk("8915", "Иванова Мария"), true);
+    assert.equal(archiveCatalogNamesOk("", ""), false);
   });
 
   it("18+ с dob отсекается, без dob — нет", () => {
@@ -195,7 +212,12 @@ describe("рабочий архив", () => {
     assert.match(views, /typeof gids === "string"/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /Посчитать отбор/);
-    assert.match(ui, /Обновить справочник архива/);
+    assert.match(ui, /Загрузить архив клиентов из Alfa/);
+    assert.doesNotMatch(ui, /Обновить справочник архива/);
+    assert.match(views, /syncArchiveCatalogTick/);
+    assert.match(views, /pagesFetched >= 1/);
+    assert.match(views, /уже грузим/);
+    assert.match(views, /persist: true/);
     assert.ok((ui.match(/kind: "archiveCount"/g) || []).length >= 2);
   });
 });

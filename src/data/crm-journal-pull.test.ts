@@ -78,10 +78,17 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Загрузить архивные группы/);
     assert.match(ui, /Архив групп учеников/);
     assert.match(ui, /lastArchivesPupils/);
+    assert.match(ui, /Загрузить архив клиентов из Alfa/);
+    assert.doesNotMatch(ui, /Обновить справочник архива из Alfa/);
+    assert.match(ui, /function pullArchiveCatalog/);
+    assert.match(ui, /По одной карточке, пауза 5 с/);
     assert.match(ui, /все архивы филиала, не только ученики/);
     assert.match(pull, /kind === "archivesPupils"/);
     assert.match(pull, /kind === "archiveCount"/);
     assert.match(pull, /kind === "archiveCatalog"/);
+    assert.match(pull, /syncArchiveCatalogTick/);
+    assert.match(pull, /reset: Boolean\(opts\.probe\)/);
+    assert.doesNotMatch(pull, /syncAllFromCrm\(undefined, \[2\]\)/);
     assert.match(ui, /Посчитать отбор/);
     assert.match(pull, /function pupilArchivePlan\(study: "1" \| "2"\)/);
     assert.match(pull, /rankedStudentIds\(study\)/);

@@ -12,7 +12,7 @@ import type { DossiersReq } from "./dossiers-fn";
 import { logAdmin } from "./admin-settings";
 import { customerPullCandidate, personRole } from "./crm-person-role";
 import { groupLinkHits, takenMapFromLinks, overlayCgiNeeded } from "./crm-group-disk";
-import { archivePersonFrom, archiveWorkingSet, dropArchiveWorking, addArchiveWorkingMany, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, type ArchivePerson } from "./crm-archive-policy";
+import { archivePersonFrom, archiveWorkingSet, dropArchiveWorking, addArchiveWorkingMany, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, archiveCatalogNamesOk, archiveLiveName, type ArchivePerson } from "./crm-archive-policy";
 
 export type PersonName = {
   fio: string;
@@ -1346,6 +1346,249 @@ export async function syncAllFromCrm(
   onProgress?.({ step: "Состав групп и абонементы…", n, total: n });
   const overlay = await overlayMembershipFromCrm().catch(() => ({ live: 0, withGroups: 0, scanned: 0, ids: [] as number[] }));
   return { ok: true as const, count: n, purged, lastCrmSync: store.lastCrmSync, studies: want, liveTariffs: overlay.live, withGroups: overlay.withGroups };
+}
+
+const CATALOG_BRANCHES = [1, 2, 3, 4];
+const CATALOG_ROLES = [1, 0];
+const CATALOG_PAGE = 50;
+const CATALOG_BRANCH_NAME: Record<number, string> = { 1: "Гражданская", 2: "ЦМИТ", 3: "Луховицы", 4: "Лето" };
+
+export type ArchiveCatalogRejected = { id: number; name: string };
+export type ArchiveCatalogReport = {
+  at: string;
+  more: boolean;
+  branch: string;
+  page: number;
+  step: string;
+  wrote: boolean;
+  cid: number;
+  name: string;
+  sessionWrote: number;
+  sessionSkip: number;
+  rejected: ArchiveCatalogRejected[];
+  disk: number;
+};
+
+type CatalogCursor = {
+  at: string;
+  busyAt?: string;
+  bi: number;
+  ri: number;
+  page: number;
+  idx: number;
+  teachers: Record<string, string>;
+  teachersReady?: boolean;
+  sessionWrote: number;
+  sessionSkip: number;
+  rejected: ArchiveCatalogRejected[];
+  done: boolean;
+};
+
+type CatalogPageCache = { key: string; items: Record<string, unknown>[] };
+
+let catalogPageMem: CatalogPageCache | null = null;
+
+function catalogCursorFile() {
+  return join(process.cwd(), "storage", "crm-archive-catalog.json");
+}
+
+function emptyCatalogCursor(): CatalogCursor {
+  return {
+    at: "",
+    bi: 0,
+    ri: 0,
+    page: 0,
+    idx: 0,
+    teachers: {},
+    teachersReady: false,
+    sessionWrote: 0,
+    sessionSkip: 0,
+    rejected: [],
+    done: false,
+  };
+}
+
+function loadCatalogCursor(): CatalogCursor {
+  try {
+    const p = catalogCursorFile();
+    if (!existsSync(p)) return emptyCatalogCursor();
+    const raw = JSON.parse(readFileSync(p, "utf8")) as Partial<CatalogCursor>;
+    const rejected = Array.isArray(raw.rejected)
+      ? raw.rejected
+          .map((x) => ({ id: Number(x?.id) || 0, name: String(x?.name || "").slice(0, 80) }))
+          .filter((x) => x.id > 0)
+          .slice(0, 20)
+      : [];
+    return {
+      at: String(raw.at || ""),
+      busyAt: String(raw.busyAt || ""),
+      bi: Math.max(0, Number(raw.bi) || 0),
+      ri: Math.max(0, Number(raw.ri) || 0),
+      page: Math.max(0, Number(raw.page) || 0),
+      idx: Math.max(0, Number(raw.idx) || 0),
+      teachers: raw.teachers && typeof raw.teachers === "object" ? raw.teachers : {},
+      teachersReady: Boolean(raw.teachersReady),
+      sessionWrote: Math.max(0, Number(raw.sessionWrote) || 0),
+      sessionSkip: Math.max(0, Number(raw.sessionSkip) || 0),
+      rejected,
+      done: Boolean(raw.done),
+    };
+  } catch {
+    return emptyCatalogCursor();
+  }
+}
+
+function saveCatalogCursor(next: CatalogCursor) {
+  mkdirSync(dirname(catalogCursorFile()), { recursive: true });
+  writeFileSync(catalogCursorFile(), JSON.stringify(next, null, 0), "utf8");
+}
+
+function catalogBusy(cur: CatalogCursor) {
+  const t = Date.parse(String(cur.busyAt || ""));
+  return Boolean(t && Date.now() - t < 90_000);
+}
+
+function bumpCatalogPage(cur: CatalogCursor, short: boolean) {
+  cur.idx = 0;
+  catalogPageMem = null;
+  if (short) {
+    cur.page = 0;
+    cur.ri += 1;
+    if (cur.ri >= CATALOG_ROLES.length) {
+      cur.ri = 0;
+      cur.bi += 1;
+      if (cur.bi >= CATALOG_BRANCHES.length) cur.done = true;
+    }
+  } else {
+    cur.page += 1;
+  }
+}
+
+function catalogStep(cur: CatalogCursor) {
+  if (cur.done) return "конец обхода";
+  const b = CATALOG_BRANCHES[cur.bi] || 0;
+  return `${CATALOG_BRANCH_NAME[b] || b} · стр. ${cur.page + 1}`;
+}
+
+function catalogNote(rep: ArchiveCatalogReport) {
+  const who = rep.wrote ? `№${rep.cid} ${rep.name}` : rep.name || "пропуск";
+  const samples = (rep.rejected || [])
+    .slice(0, 20)
+    .map((x) => `${x.id} ${x.name}`)
+    .join("; ");
+  const tail = samples ? ` Отсев: ${samples}.` : "";
+  return `${rep.step} · ${who} · записано за сессию ${rep.sessionWrote} · без ФИО ${rep.sessionSkip} · на диске архивных ${rep.disk}. Рабочий набор не меняли — нажмите «Посчитать отбор».${tail}`;
+}
+
+export async function syncArchiveCatalogTick(opts?: { reset?: boolean }) {
+  let cur = loadCatalogCursor();
+  if (catalogBusy(cur)) {
+    return { ok: false as const, error: "уже грузим", more: !cur.done, report: null as ArchiveCatalogReport | null, note: "уже грузим" };
+  }
+  const stale = cur.at && Date.now() - Date.parse(cur.at) > 24 * 60 * 60 * 1000;
+  if (opts?.reset || cur.done || stale) {
+    const keepTeachers = cur.teachersReady ? cur.teachers : {};
+    cur = emptyCatalogCursor();
+    if (Object.keys(keepTeachers).length) {
+      cur.teachers = keepTeachers;
+      cur.teachersReady = true;
+    }
+    catalogPageMem = null;
+  }
+  cur.busyAt = new Date().toISOString();
+  saveCatalogCursor(cur);
+  const t = await alfaToken().catch(() => "");
+  if (!t) {
+    cur.busyAt = "";
+    saveCatalogCursor(cur);
+    return { ok: false as const, error: "Нет входа в AlfaCRM.", more: !cur.done, report: null, note: "Нет входа в AlfaCRM." };
+  }
+  let wrote = false;
+  let cid = 0;
+  let name = "";
+  let pagesFetched = 0;
+  try {
+    if (!cur.teachersReady) {
+      for (const branch of CATALOG_BRANCHES) {
+        const tr = await request<{ items?: { id?: number; name?: string }[] }>(`/v2api/${branch}/teacher/index`, { page: 0, pageSize: 200 }, t).catch(
+          () => ({ items: [] as { id?: number; name?: string }[] }),
+        );
+        for (const p of tr.items || []) if (p.id && p.name) cur.teachers[String(p.id)] = p.name;
+      }
+      cur.teachersReady = true;
+    }
+    for (let n = 0; n < 80 && !wrote && !cur.done; n += 1) {
+      const branch = CATALOG_BRANCHES[cur.bi] || 0;
+      const role = CATALOG_ROLES[cur.ri] ?? 1;
+      const key = `${branch}:${role}:${cur.page}`;
+      if (!catalogPageMem || catalogPageMem.key !== key) {
+        if (pagesFetched >= 1) break;
+        const data = await request<{ items?: Record<string, unknown>[] }>(
+          `/v2api/${branch}/customer/index`,
+          { page: cur.page, pageSize: CATALOG_PAGE, is_study: role, removed: 2 },
+          t,
+        ).catch(() => ({ items: null as Record<string, unknown>[] | null }));
+        if (!data.items) {
+          cur.busyAt = "";
+          saveCatalogCursor(cur);
+          return {
+            ok: false as const,
+            error: `${CATALOG_BRANCH_NAME[branch] || branch}: нет ответа.`,
+            more: true,
+            report: null,
+            note: `${CATALOG_BRANCH_NAME[branch] || branch}: нет ответа.`,
+          };
+        }
+        pagesFetched += 1;
+        catalogPageMem = { key, items: data.items };
+      }
+      const items = catalogPageMem.items;
+      if (cur.idx >= items.length) {
+        bumpCatalogPage(cur, items.length < CATALOG_PAGE);
+        continue;
+      }
+      const item = items[cur.idx] || {};
+      cur.idx += 1;
+      const id = Number(item.id) || 0;
+      const rem = item.removed;
+      if (!id || rem === 1 || rem === "1" || rem === true) {
+        cur.sessionSkip += 1;
+        continue;
+      }
+      const rawName = String(item.name || "").trim();
+      const child = isPhoneLike(rawName) ? "" : rawName;
+      const parent = String(item.legal_name || "");
+      if (!archiveCatalogNamesOk(child, parent)) {
+        cur.sessionSkip += 1;
+        if (cur.rejected.length < 20) cur.rejected.push({ id, name: (rawName || parent || "—").slice(0, 80) });
+        continue;
+      }
+      applyCrmCustomer(item, branch, true, cur.teachers, { persist: true, quiet: true });
+      wrote = true;
+      cid = id;
+      name = archiveLiveName(child) || archiveLiveName(parent) || child || parent;
+      cur.sessionWrote += 1;
+    }
+  } finally {
+    cur.at = new Date().toISOString();
+    cur.busyAt = "";
+    saveCatalogCursor(cur);
+  }
+  const report: ArchiveCatalogReport = {
+    at: cur.at,
+    more: !cur.done,
+    branch: CATALOG_BRANCH_NAME[CATALOG_BRANCHES[cur.bi] || 0] || "",
+    page: cur.page + 1,
+    step: catalogStep(cur),
+    wrote,
+    cid,
+    name: wrote ? name : pagesFetched ? "пропуск" : name || "пропуск",
+    sessionWrote: cur.sessionWrote,
+    sessionSkip: cur.sessionSkip,
+    rejected: cur.rejected.slice(0, 20),
+    disk: archiveDiskCount(),
+  };
+  return { ok: true as const, error: "", more: report.more, report, note: catalogNote(report) };
 }
 
 let leadTickBusy = false;

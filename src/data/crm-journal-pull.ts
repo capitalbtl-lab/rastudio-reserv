@@ -116,11 +116,12 @@ type PullStore = {
   lastArchivesPupils?: ArchivesPupilsReport | null;
   lastStudents?: StudentsReport | null;
   lastArchivePolicy?: ArchiveCountReport | null;
+  lastArchiveCatalog?: import("./dossiers").ArchiveCatalogReport | null;
   fill?: Record<string, FillHit>;
 };
 
 function emptyStore(): PullStore {
-  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null, lastArchives: null, lastArchivesPupils: null, lastStudents: null, lastArchivePolicy: null, fill: {} };
+  return { at: "", note: "", groupIdx: 0, schoolIdx: {}, studentIdx: {}, lastLife: null, lastArchives: null, lastArchivesPupils: null, lastStudents: null, lastArchivePolicy: null, lastArchiveCatalog: null, fill: {} };
 }
 
 function fileOf() {
@@ -150,6 +151,7 @@ function loadStore(): PullStore {
       lastArchivesPupils: raw.lastArchivesPupils && typeof raw.lastArchivesPupils === "object" ? (raw.lastArchivesPupils as ArchivesPupilsReport) : null,
       lastStudents: raw.lastStudents && typeof raw.lastStudents === "object" ? (raw.lastStudents as StudentsReport) : null,
       lastArchivePolicy: raw.lastArchivePolicy && typeof raw.lastArchivePolicy === "object" ? (raw.lastArchivePolicy as ArchiveCountReport) : null,
+      lastArchiveCatalog: raw.lastArchiveCatalog && typeof raw.lastArchiveCatalog === "object" ? (raw.lastArchiveCatalog as PullStore["lastArchiveCatalog"]) : null,
       fill: raw.fill && typeof raw.fill === "object" ? (raw.fill as Record<string, FillHit>) : {},
     };
     storeMem = { mtime, data };
@@ -783,6 +785,7 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
     lastArchivesPupils: store.lastArchivesPupils || null,
     lastStudents: store.lastStudents || null,
     lastArchivePolicy: store.lastArchivePolicy || null,
+    lastArchiveCatalog: store.lastArchiveCatalog || null,
   };
 }
 
@@ -982,13 +985,19 @@ export async function journalPull(opts: {
   }
 
   if (kind === "archiveCatalog") {
-    const { syncAllFromCrm, archiveDiskCount } = await import("./dossiers");
-    const res = await syncAllFromCrm(undefined, [2]);
-    const disk = archiveDiskCount();
-    store.note = `Справочник архива: обработано ${res.count}, на диске архивных карточек ${disk}. Рабочий набор не меняли — нажмите «Посчитать отбор».`;
-    store.at = new Date().toISOString();
+    const { syncArchiveCatalogTick } = await import("./dossiers");
+    const res = await syncArchiveCatalogTick({ reset: Boolean(opts.probe) });
+    if (!res.ok) {
+      store.note = res.note || res.error || "Справочник не ответил.";
+      store.at = new Date().toISOString();
+      saveStore(store);
+      return { ok: false as const, error: res.error || store.note, more: Boolean(res.more), extra: store.note, lastArchiveCatalog: store.lastArchiveCatalog || null, ...snap() };
+    }
+    store.lastArchiveCatalog = res.report;
+    store.note = res.note;
+    store.at = res.report.at;
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: res.count, scanned: res.count, more: false, ...snap() };
+    return { ok: true as const, extra: store.note, more: res.more, count: res.report.wrote ? 1 : 0, scanned: 1, lastArchiveCatalog: res.report, ...snap() };
   }
 
   if (kind === "archiveAdd") {
