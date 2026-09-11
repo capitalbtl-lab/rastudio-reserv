@@ -382,6 +382,8 @@ function nextRecheckPart(row: FillRow, grain: Grain) {
   const chunks = packGrain(row.parts, clampGrain(row.age, grain));
   const hole = chunks.find((c) => !c.done || c.weak);
   if (hole) return hole;
+  const unverified = chunks.find((c) => !c.rechecked);
+  if (unverified) return unverified;
   return [...chunks].sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")))[0] || chunks[0] || null;
 }
 
@@ -1938,29 +1940,25 @@ export function AdminCrmSettings() {
       for (let i = 0; i < queue.length; i += 1) {
         if (stopSchool.current) break;
         const row = queue[i];
-        const chunks = packGrain(row.parts, clampGrain(row.age, journalGrain));
-        setSchoolRun({ cur: row.name, n: i + 1, total: queue.length });
-        for (let j = 0; j < chunks.length; j += 1) {
-          if (stopSchool.current) break;
-          const part = chunks[j];
-          setFillLoading({
-            groupId: Number(row.groupId) || 0,
-            branchId: Number(row.branchId) || 0,
-            periodKey: part.key,
-            label: part.label,
-            kind: "group",
-          });
-          setSchoolRun({ cur: `${row.name} · ${part.label}`, n: i + 1, total: queue.length });
-          await runJournal({
-            kind: "group",
-            groupId: Number(row.groupId) || 0,
-            branchId: Number(row.branchId) || 0,
-            periodKey: part.key,
-            periodLabel: part.label,
-            grain: journalGrain,
-            recheck: true,
-          });
-        }
+        const part = nextRecheckPart(row, journalGrain);
+        if (!part) continue;
+        setFillLoading({
+          groupId: Number(row.groupId) || 0,
+          branchId: Number(row.branchId) || 0,
+          periodKey: part.key,
+          label: part.label,
+          kind: "group",
+        });
+        setSchoolRun({ cur: `${row.name} · ${part.label}`, n: i + 1, total: queue.length });
+        await runJournal({
+          kind: "group",
+          groupId: Number(row.groupId) || 0,
+          branchId: Number(row.branchId) || 0,
+          periodKey: part.key,
+          periodLabel: part.label,
+          grain: journalGrain,
+          recheck: true,
+        });
         n += 1;
         if (i < queue.length - 1 && !stopSchool.current) {
           setSchoolRun({ cur: `пауза 5 с · дальше ${queue[i + 1]?.name || ""}`, n: i + 1, total: queue.length });
@@ -2006,6 +2004,16 @@ export function AdminCrmSettings() {
           grain: journalGrain,
           recheck: true,
         });
+        if (i < chunks.length - 1 && !stopSchool.current) {
+          setFillLoading({
+            groupId: Number(row.groupId) || 0,
+            branchId: Number(row.branchId) || 0,
+            periodKey: chunks[i + 1]?.key || part.key,
+            label: `пауза 5 с · ${chunks[i + 1]?.label || ""}`,
+            kind: "group",
+          });
+          await pauseFive();
+        }
       }
     } finally {
       holdFill.current = false;

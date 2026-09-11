@@ -126,6 +126,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(schoolFn, /pauseFive/);
     assert.match(schoolFn, /holdFill\.current = true/);
     assert.doesNotMatch(schoolFn, /recheck: true/);
+    assert.match(ui, /const unverified = chunks.find\(\(c\) => !c.rechecked\)/);
+    const oneAt = ui.indexOf("async function recheckGroupsOne");
+    const oneFn = ui.slice(oneAt, oneAt + 1800);
+    assert.match(oneFn, /nextRecheckPart\(row, journalGrain\)/);
+    assert.doesNotMatch(oneFn, /for \(let j = 0/);
     assert.match(ui, /Шаг 1 · Календарь ученика/);
     assert.match(ui, /Шаг 2 · Занятия в группах/);
     assert.match(ui, /Шаг 3 · Деньги на карточке/);
