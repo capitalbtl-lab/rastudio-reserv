@@ -2532,7 +2532,7 @@ export function AdminCrmSettings() {
           const schoolNeedLife = schoolRows.filter((r) => r.source !== "alfa").length;
           return (
             <div className="space-y-3">
-              {journal?.note ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
+              {journal?.note && peopleStudy !== "2" ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
               {!journal ? (
                 <div className="flex flex-wrap items-center gap-2">
                   {journalLoading ? (
@@ -2885,6 +2885,7 @@ export function AdminCrmSettings() {
                       HINT.stop,
                     )}
                     </div>
+                    {journal?.note ? <p className="w-full rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
                         На диске {journal.lastArchivePolicy.disk} · ФИО {journal.lastArchivePolicy.fioOk} · без dob {journal.lastArchivePolicy.noDob} · 18+ {journal.lastArchivePolicy.adult} · пересечение {journal.lastArchivePolicy.intersect} · в наборе {journal.lastArchivePolicy.working} · скрыто {journal.lastArchivePolicy.hidden}
@@ -3020,6 +3021,7 @@ export function AdminCrmSettings() {
                       HINT.stop,
                     )}
                     </div>
+                    {journal?.note ? <p className="w-full rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
                         На диске {journal.lastArchivePolicy.disk} · ФИО {journal.lastArchivePolicy.fioOk} · без dob {journal.lastArchivePolicy.noDob} · 18+ {journal.lastArchivePolicy.adult} · пересечение {journal.lastArchivePolicy.intersect} · в наборе {journal.lastArchivePolicy.working} · скрыто {journal.lastArchivePolicy.hidden}
