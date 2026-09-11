@@ -52,6 +52,27 @@ describe("шаг 4 сверка остатка", () => {
     assert.equal(auditOnRight(codes), true);
   });
 
+  it("снимок 0 = шапка 0 при неполной кассе 2000 — не совпало", () => {
+    const codes = classifyAudit({
+      alfaOk: true,
+      clients: 0,
+      alfa: 0,
+      cash: 2000,
+      paysComplete: false,
+      lessonsDisk: 40,
+      lessonsAlfa: 40,
+      woCard: 1000,
+      woCal: 1000,
+      liveCtt: true,
+      repaired: false,
+      badStatus: true,
+    });
+    assert.equal(codes.includes("ok"), false);
+    assert.ok(codes.includes("snap"));
+    assert.ok(codes.includes("lessons"));
+    assert.equal(auditOnRight(codes), false);
+  });
+
   it("касса = шапка, Клиенты нет — formula, не pays", () => {
     const codes = classifyAudit({
       alfaOk: true,

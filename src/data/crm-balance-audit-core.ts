@@ -62,6 +62,12 @@ export function classifyAudit(p: {
       codes.push("snap");
       return [...new Set(codes)];
     }
+    if (!p.paysComplete && !moneyClose(p.cash, p.alfa)) {
+      codes.push("snap");
+      if (p.cash > p.alfa + 1) codes.push("lessons");
+      if (p.cash < p.alfa - 1) codes.push("pays");
+      return [...new Set(codes)];
+    }
     if (!codes.includes("src") && !codes.includes("status")) return codes.length ? ["ok", ...codes] : ["ok"];
     return ["ok", ...codes];
   }

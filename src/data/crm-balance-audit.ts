@@ -34,7 +34,7 @@ export type AuditReport = {
 };
 
 const SHOW_CODES: AuditCode[] = ["ctt", "formula", "src"];
-const HOLE_CODES: AuditCode[] = ["lessons", "pays", "snap", "status"];
+const HOLE_CODES: AuditCode[] = ["lessons", "pays", "snap"];
 
 export function emptyAudit(): AuditReport {
   return { at: "", idx: 0, scanned: 0, ok: 0, hole: 0, show: 0, fail: 0, rows: [] };
@@ -108,7 +108,7 @@ async function alfaShow(branch: number, cid: number) {
     for (const it of crmUnwrapIndex(json).items) {
       if (!tariffRowLive(it)) continue;
       live += 1;
-      rest += Number(it.balance ?? it.rest ?? 0) || 0;
+      rest += Number.isFinite(Number(it.balance ?? it.rest ?? 0)) ? Number(it.balance ?? it.rest ?? 0) : 0;
     }
   } catch {
     /* rest 0 */
