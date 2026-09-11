@@ -71,6 +71,7 @@ const MAX = 8000;
 const BULK: CrmWriteOpts = { persist: false, quiet: true };
 let cachedStore: StoreCache | null = null;
 let viewsMemo: { items: Dossier[]; views: unknown[] } | null = null;
+let crmListMem: { items: Dossier[]; rows: { cid: number; study: number; branchId: number; status: string; removed: string }[] } | null = null;
 
 function fileOf() {
   const local = join(process.cwd(), "storage", "dossiers.json");
@@ -149,6 +150,7 @@ function saveStore(store: Store) {
     rememberStore(Date.now(), packed);
   }
   viewsMemo = null;
+  crmListMem = null;
 }
 
 function yieldLoop() {
@@ -714,6 +716,7 @@ export function applyCrmCustomer(
     tariff: paid || undefined,
     status: statusFromCrm(item, reallyArchived),
     extras,
+    groupLinks: hint,
     source: "alfacrm",
     crmWins: true,
     note: opts.quiet ? undefined : `CRM ${id}: ${childName || rawName || ""}`,
@@ -741,8 +744,10 @@ export function allDossierCrmIds(): number[] {
 }
 
 export function listDossierCrm() {
+  const items = loadStore().items;
+  if (crmListMem && crmListMem.items === items) return crmListMem.rows;
   const out: { cid: number; study: number; branchId: number; status: string; removed: string }[] = [];
-  for (const d of loadStore().items) {
+  for (const d of items) {
     const cid = Number(d.crmId) || 0;
     if (!cid) continue;
     const st = Number(d.extras?.is_study);
@@ -754,6 +759,7 @@ export function listDossierCrm() {
       removed: String(d.extras?.removed || ""),
     });
   }
+  crmListMem = { items, rows: out };
   return out;
 }
 

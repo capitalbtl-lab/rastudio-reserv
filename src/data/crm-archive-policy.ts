@@ -392,8 +392,47 @@ export function archivePersonFrom(d: {
     fio: String(d.child?.fio || ""),
     dob: String(d.child?.dob || ""),
     age: d.age,
-    groupLinks: d.groupLinks,
+    groupLinks: linksFromExtras(ex, d.groupLinks),
   };
+}
+
+function linksFromExtras(ex: Record<string, string>, fallback?: { id: number; branchId?: number }[]) {
+  const out: { id: number; branchId?: number }[] = [];
+  const seen = new Set<string>();
+  const add = (id: number, bid?: number) => {
+    const gid = Number(id) || 0;
+    if (!gid) return;
+    const b = Number(bid) || 0;
+    const k = `${b}:${gid}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({ id: gid, branchId: b || undefined });
+  };
+  for (const g of fallback || []) add(g.id, g.branchId);
+  const rawGroups = String(ex.groups || "").trim();
+  if (rawGroups && rawGroups !== "null") {
+    try {
+      const parsed = JSON.parse(rawGroups) as unknown;
+      const list = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" ? Object.values(parsed as Record<string, unknown>) : [];
+      for (const one of list) {
+        if (!one || typeof one !== "object") continue;
+        const rec = one as { id?: number; group_id?: number; branch_id?: number };
+        add(Number(rec.id || rec.group_id || 0), Number(rec.branch_id || 0));
+      }
+    } catch {
+      /* */
+    }
+  }
+  const rawIds = String(ex.group_ids || "").trim();
+  if (rawIds && rawIds !== "null") {
+    try {
+      const parsed = JSON.parse(rawIds) as unknown;
+      if (Array.isArray(parsed)) for (const x of parsed) add(Number(x), 0);
+    } catch {
+      for (const x of rawIds.split(/[,;\s]+/)) add(Number(x), 0);
+    }
+  }
+  return out;
 }
 
 export function formatArchiveCountNote(r: ArchiveCountReport) {

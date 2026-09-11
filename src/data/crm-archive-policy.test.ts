@@ -11,6 +11,7 @@ import {
   overlayAllowsCustomer,
   addArchiveWorkingMany,
   recountArchivePolicy,
+  archivePersonFrom,
   type ArchivePerson,
   type ArchivePolicy,
 } from "./crm-archive-policy.ts";
@@ -115,6 +116,21 @@ describe("рабочий архив", () => {
     assert.equal(overlayAllowsCustomer(2, 6, ready), false);
   });
 
+  it("пересечение читает group_ids из extras, если groupLinks пустые", () => {
+    const live = p({ cid: 1, study: 1, fio: "Живой", groupLinks: [{ id: 585, branchId: 2 }] });
+    const fromExtras = archivePersonFrom({
+      crmId: 77,
+      status: "архив",
+      extras: { is_study: "2", group_ids: "[585]", groups: '[{"id":585,"branch_id":2}]' },
+      child: { fio: "Горбатюк Илья" },
+      groupLinks: [],
+    });
+    const keys = liveGroupKeys([live, fromExtras]);
+    assert.equal(archiveIntersects(fromExtras, keys), true);
+    const { policy } = recountArchivePolicy([live, fromExtras], new Set(), empty);
+    assert.equal(policy.working.includes(77), true);
+  });
+
   it("выбывший не открывает набор, пока не считали", () => {
     const next = addArchiveWorkingMany([8], "left", empty);
     assert.equal(next.ready, false);
@@ -156,11 +172,14 @@ describe("рабочий архив", () => {
     const clientsUi = readFileSync(new URL("../components/admin-clients.tsx", import.meta.url), "utf8");
     assert.doesNotMatch(clientsUi, /void pullKind\("clientsArchive"\)/);
     assert.match(clientsUi, /История из Alfa/);
-    const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
-    assert.match(ui, /Посчитать отбор/);
-    assert.match(ui, /Обновить справочник архива/);
     const views = readFileSync(new URL("./dossiers.ts", import.meta.url), "utf8");
     assert.match(views, /counts\.архив/);
     assert.match(views, /isArchiveWorking|archiveWorkingSet/);
+    assert.match(views, /groupLinks: hint/);
+    assert.match(views, /crmListMem/);
+    const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
+    assert.match(ui, /Посчитать отбор/);
+    assert.match(ui, /Обновить справочник архива/);
+    assert.ok((ui.match(/kind: "archiveCount"/g) || []).length >= 2);
   });
 });
