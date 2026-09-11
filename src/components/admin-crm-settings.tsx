@@ -112,7 +112,7 @@ const HINT = {
   scopeLive: "Показывает тех, кто сейчас ходит: статус «обучается» в Alfa. Красная очередь и сверка идут только по этому списку, архивных не трогают. Цифра на кнопке — сколько таких людей в выборке. Переключение само ничего не качает и в Alfa не пишет. Если нужен бывший ученик, соседняя кнопка «Архивные клиенты». Можно спокойно прыгать туда-сюда, списки уже на диске. Для кассы и календаря это один и тот же переключатель.",
   scopeArch: "Показывает рабочий архив — бывшие ученики после «Посчитать отбор». Красная очередь только по этому набору, голые телефоны сюда не попадают. Если слева пусто — нажмите «Посчитать отбор»: правило с диска, Alfa не трогает. Скрытые ищутся в Клиентах по телефону. Жёлтые карточки чаще — берите «с начала · 2015».",
   archCount: "Считает рабочий архив только с диска, в Alfa не ходит и ничего там не пишет. Берёт группы текущих учеников и ищет в архиве тех, кто в тех же группах числился, с нормальным ФИО, не 18+ (если есть дата рождения). Голые телефоны и ошибочные звонки остаются скрытыми на диске, но не в списке. Уже попавшие в набор повторным нажатием не выкидываются. После отчёта красная «по одному» идёт только по рабочим. Если на диске архивных карточек нет — сначала «Загрузить архив клиентов из Alfa».",
-  archCatalog: "Как красная на календаре: одна архивная карточка клиента из Alfa, потом пауза 5 секунд. Без живого ФИО ребёнка или заказчика (телефон, число, «тест») не пишет. «Тестова» проходит. Старые карточки не удаляет. Стоп — после текущей, курсор помнит место. Слева 17 изменятся только после «Посчитать отбор». Журнал и касса не стартуют. В Alfa не пишет. Каждую неделю «на всякий случай» не надо — когда в Alfa появились новые.",
+  archCatalog: "На виду три фильтра: возраст от–до, только с ФИО, были группы. Пустые — пишем всех архивных с живым именем. Телефон, число и «тест» не пишем никогда. Одна карточка, пауза 5 с, Стоп после текущей. Слева 17 изменятся только после «Посчитать отбор». «Группы» — поле на карточке Alfa, не журнал уроков. В Alfa не пишет.",
   scopeLiveGroups: "Показывает живые группы, которые идут по расписанию сейчас. Красная «по одному» и счётчики считают только их. Архивные группы на этом виде скрыты, их явки сами не качаются. Переключение в Alfa ничего не пишет. Если нужна старая группа для баланса, нажмите «Архивные группы». Школа выше по-прежнему фильтрует этот список. Это вид, а не загрузка.",
   scopeArchGroups: "Показывает архивные группы, которых уже нет в живом расписании. Их явки нужны, чтобы на карточке ученика сошёлся старый баланс. Список появляется после кнопок «Архив групп учеников» или «Загрузить архивные группы». Красная очередь на этом виде идёт по архиву. В Alfa группу не восстанавливает. Если список пустой — сначала подтяните архив, потом грузите кварталы как у живых.",
 } as const;
@@ -1373,6 +1373,11 @@ export function AdminCrmSettings() {
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
   const [peopleFromId, setPeopleFromId] = useState<(typeof PEOPLE_FROM_OPTS)[number]["id"]>("7");
+  const [archAgeFrom, setArchAgeFrom] = useState("");
+  const [archAgeTo, setArchAgeTo] = useState("");
+  const [archNoDob, setArchNoDob] = useState(false);
+  const [archNeedFio, setArchNeedFio] = useState(false);
+  const [archNeedGroups, setArchNeedGroups] = useState(false);
   const [crmTab, setCrmTab] = useState<CrmSetTab>("history");
   const [histTab, setHistTab] = useState<HistTab>("students");
   const crmTabsRef = useRef<HTMLDivElement>(null);
@@ -1850,9 +1855,60 @@ export function AdminCrmSettings() {
     return Boolean(journal?.lastArchiveCatalog?.more) && Boolean(at && Date.now() - at < 24 * 60 * 60 * 1000);
   }
 
+  function catalogFilterJson() {
+    const ageFrom = Number(archAgeFrom);
+    const ageTo = Number(archAgeTo);
+    return JSON.stringify({
+      ageFrom: archAgeFrom !== "" && Number.isFinite(ageFrom) ? ageFrom : undefined,
+      ageTo: archAgeTo !== "" && Number.isFinite(ageTo) ? ageTo : undefined,
+      noDob: archNoDob,
+      fio: archNeedFio,
+      groups: archNeedGroups,
+    });
+  }
+
+  function catalogOptsBar() {
+    const box = "flex items-center gap-1.5 text-[0.82rem] text-ink";
+    const inp = "h-8 w-14 rounded-lg border border-black/15 bg-white px-1.5 text-center text-sm";
+    return (
+      <div className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2">
+        <p className="text-[0.78rem] font-medium text-ink">Кого писать на диск</p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <label className={box}>
+            возраст от
+            <input className={inp} inputMode="numeric" value={archAgeFrom} onChange={(e) => setArchAgeFrom(e.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="—" />
+          </label>
+          <label className={box}>
+            до
+            <input className={inp} inputMode="numeric" value={archAgeTo} onChange={(e) => setArchAgeTo(e.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="—" />
+          </label>
+          <label className={box}>
+            <input type="checkbox" className="size-3.5 accent-ink" checked={archNoDob} onChange={(e) => setArchNoDob(e.target.checked)} />
+            без даты тоже
+          </label>
+          <label className={box}>
+            <input type="checkbox" className="size-3.5 accent-ink" checked={archNeedFio} onChange={(e) => setArchNeedFio(e.target.checked)} />
+            только с ФИО
+          </label>
+          <label className={box}>
+            <input type="checkbox" className="size-3.5 accent-ink" checked={archNeedGroups} onChange={(e) => setArchNeedGroups(e.target.checked)} />
+            были группы
+          </label>
+        </div>
+        <p className="mt-1.5 text-[0.72rem] leading-snug text-muted">Телефон, число и «тест» не пишем всегда. Пустые поля — без возрастного отсева. Слева 17 не изменятся.</p>
+      </div>
+    );
+  }
+
   async function pullArchiveCatalog() {
     if (peopleLock.current) return;
     const more = catalogHasMore();
+    const fromN = Number(archAgeFrom);
+    const toN = Number(archAgeTo);
+    if (archAgeFrom !== "" && archAgeTo !== "" && Number.isFinite(fromN) && Number.isFinite(toN) && fromN > toN) {
+      setMsg("Возраст «от» больше, чем «до».");
+      return;
+    }
     if (!more) {
       if (
         !window.confirm(
@@ -1871,7 +1927,7 @@ export function AdminCrmSettings() {
       let first = !more;
       for (;;) {
         if (stopSchool.current) break;
-        const res = await runJournal({ kind: "archiveCatalog", probe: first });
+        const res = await runJournal({ kind: "archiveCatalog", probe: first, school: catalogFilterJson() });
         first = false;
         const cat = (res as { lastArchiveCatalog?: { name?: string; step?: string; more?: boolean; cid?: number } } | null)?.lastArchiveCatalog;
         if (cat?.name || cat?.step) setFillLoading({ kind: "archiveCatalog", label: cat.name && cat.name !== "пропуск" ? cat.name : cat.step || "архив" });
@@ -2766,6 +2822,7 @@ export function AdminCrmSettings() {
                 </div>
                 {peopleStudy === "2" ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {catalogOptsBar()}
                     {withHint(
                       <button
                         type="button"
@@ -2902,6 +2959,7 @@ export function AdminCrmSettings() {
                 </div>
                 {peopleStudy === "2" ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {catalogOptsBar()}
                     {withHint(
                       <button
                         type="button"

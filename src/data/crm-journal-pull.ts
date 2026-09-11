@@ -986,7 +986,7 @@ export async function journalPull(opts: {
 
   if (kind === "archiveCatalog") {
     const { syncArchiveCatalogTick } = await import("./dossiers");
-    const res = await syncArchiveCatalogTick({ reset: Boolean(opts.probe) });
+    const res = await syncArchiveCatalogTick({ reset: Boolean(opts.probe), filter: opts.school });
     if (!res.ok) {
       store.note = res.note || res.error || "Справочник не ответил.";
       store.at = new Date().toISOString();

@@ -87,7 +87,10 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /kind === "archiveCount"/);
     assert.match(pull, /kind === "archiveCatalog"/);
     assert.match(pull, /syncArchiveCatalogTick/);
-    assert.match(pull, /reset: Boolean\(opts\.probe\)/);
+    assert.match(pull, /reset: Boolean\(opts\.probe\), filter: opts\.school/);
+    assert.match(ui, /Кого писать на диск/);
+    assert.match(ui, /были группы/);
+    assert.match(ui, /только с ФИО/);
     assert.match(pull, /\.\.\.snap\(\), ok: true as const, extra: store\.note, more: res\.more/);
     assert.match(pull, /\.\.\.snap\(\), ok: false as const, error: res\.error/);
     assert.doesNotMatch(pull, /syncAllFromCrm\(undefined, \[2\]\)/);

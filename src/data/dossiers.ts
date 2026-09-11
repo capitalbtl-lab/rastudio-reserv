@@ -12,7 +12,7 @@ import type { DossiersReq } from "./dossiers-fn";
 import { logAdmin } from "./admin-settings";
 import { customerPullCandidate, personRole } from "./crm-person-role";
 import { groupLinkHits, takenMapFromLinks, overlayCgiNeeded } from "./crm-group-disk";
-import { archivePersonFrom, archiveWorkingSet, dropArchiveWorking, addArchiveWorkingMany, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, archiveCatalogNamesOk, archiveLiveName, type ArchivePerson } from "./crm-archive-policy";
+import { archivePersonFrom, archiveWorkingSet, dropArchiveWorking, addArchiveWorkingMany, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, archiveCatalogNamesOk, archiveLiveName, archiveFioOk, archiveAgeYears, type ArchivePerson } from "./crm-archive-policy";
 
 export type PersonName = {
   fio: string;
@@ -1360,7 +1360,46 @@ const CATALOG_PAGE = 50;
 const CATALOG_MAX_PAGES = 120;
 const CATALOG_BRANCH_NAME: Record<number, string> = { 1: "Гражданская", 2: "ЦМИТ", 3: "Луховицы", 4: "Лето" };
 
-export type ArchiveCatalogRejected = { id: number; name: string };
+export type ArchiveCatalogFilter = {
+  ageFrom?: number;
+  ageTo?: number;
+  noDob?: boolean;
+  fio?: boolean;
+  groups?: boolean;
+};
+
+function parseCatalogFilter(raw?: string): ArchiveCatalogFilter {
+  try {
+    const o = raw ? (JSON.parse(raw) as ArchiveCatalogFilter) : {};
+    const ageFrom = Number(o.ageFrom);
+    const ageTo = Number(o.ageTo);
+    return {
+      ageFrom: Number.isFinite(ageFrom) && ageFrom >= 0 ? Math.floor(ageFrom) : undefined,
+      ageTo: Number.isFinite(ageTo) && ageTo >= 0 ? Math.floor(ageTo) : undefined,
+      noDob: Boolean(o.noDob),
+      fio: Boolean(o.fio),
+      groups: Boolean(o.groups),
+    };
+  } catch {
+    return {};
+  }
+}
+
+function catalogItemDob(item: Record<string, unknown>) {
+  return String(item.dob || item.b_date || item.born || "");
+}
+
+function catalogFilterBlocks(item: Record<string, unknown>, branch: number, child: string, parent: string, f: ArchiveCatalogFilter): string {
+  if (f.fio && !archiveFioOk(child) && !archiveFioOk(parent)) return "fio";
+  if (f.groups && !groupsFromItem(item, branch, false).length) return "groups";
+  if (f.ageFrom != null || f.ageTo != null) {
+    const years = archiveAgeYears(catalogItemDob(item), Number(item.age));
+    if (years == null) return f.noDob ? "" : "age";
+    if (f.ageFrom != null && years < f.ageFrom) return "age";
+    if (f.ageTo != null && years > f.ageTo) return "age";
+  }
+  return "";
+}
 export type ArchiveCatalogReport = {
   at: string;
   more: boolean;
@@ -1487,7 +1526,7 @@ function catalogNote(rep: ArchiveCatalogReport) {
   return `${rep.step} · ${who} · записано за сессию ${rep.sessionWrote} · без ФИО ${rep.sessionSkip} · на диске архивных ${rep.disk}. Рабочий набор не меняли — нажмите «Посчитать отбор».${tail}`;
 }
 
-export async function syncArchiveCatalogTick(opts?: { reset?: boolean }) {
+export async function syncArchiveCatalogTick(opts?: { reset?: boolean; filter?: ArchiveCatalogFilter | string }) {
   let cur = loadCatalogCursor();
   if (catalogBusy(cur)) {
     return { ok: false as const, error: "уже грузим", more: !cur.done, report: null as ArchiveCatalogReport | null, note: "уже грузим" };
@@ -1530,6 +1569,12 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean }) {
   let cid = 0;
   let name = "";
   let pagesFetched = 0;
+  const filter = typeof opts?.filter === "string" ? parseCatalogFilter(opts.filter) : opts?.filter || {};
+  if (filter.ageFrom != null && filter.ageTo != null && filter.ageFrom > filter.ageTo) {
+    cur.busyAt = "";
+    saveCatalogCursor(cur);
+    return { ok: false as const, error: "Возраст «от» больше, чем «до».", more: !cur.done, report: null, note: "Возраст «от» больше, чем «до»." };
+  }
   try {
     if (!cur.teachersReady) {
       for (const branch of CATALOG_BRANCHES) {
@@ -1588,6 +1633,11 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean }) {
       if (!archiveCatalogNamesOk(child, parent)) {
         cur.sessionSkip += 1;
         if (cur.rejected.length < 20) cur.rejected.push({ id, name: (rawName || parent || "—").slice(0, 80) });
+        continue;
+      }
+      const blocked = catalogFilterBlocks(item, branch, child, parent, filter);
+      if (blocked) {
+        cur.sessionSkip += 1;
         continue;
       }
       const exist = findDossier({ crmId: id });

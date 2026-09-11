@@ -76,6 +76,12 @@ describe("рабочий архив", () => {
     assert.equal(archiveCatalogNamesOk("", ""), false);
   });
 
+  it("фильтр справочника: возраст и пустые группы", async () => {
+    const { archiveAgeYears } = await import("./crm-archive-policy.ts");
+    assert.ok((archiveAgeYears("01.01.2016") || 0) >= 7);
+    assert.ok((archiveAgeYears("01.01.2016") || 0) <= 16);
+  });
+
   it("18+ с dob отсекается, без dob — нет", () => {
     assert.ok((archiveAgeYears("01.01.2000") || 0) >= 18);
     assert.equal(archiveAgeYears(""), undefined);
@@ -220,7 +226,8 @@ describe("рабочий архив", () => {
     assert.match(views, /persist: true/);
     assert.match(views, /exist\.status === "учится"/);
     assert.doesNotMatch(views, /byPhone && Number\(byPhone\.crmId\) !== id/);
-    assert.match(views, /byCrmOnly: true/);
+    assert.match(views, /catalogFilterBlocks/);
+    assert.match(views, /parseCatalogFilter/);
     assert.match(views, /patch\.byCrmOnly/);
     assert.match(views, /cur\.done && !opts\?\.reset/);
     assert.ok((ui.match(/kind: "archiveCount"/g) || []).length >= 2);
