@@ -1589,6 +1589,13 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean }) {
         cur.sessionSkip += 1;
         continue;
       }
+      const phones = asList(item.phone);
+      const tel = phones[0] || (isPhoneLike(rawName) ? rawName : "");
+      const byPhone = tel ? findDossier({ phone: tel }) : null;
+      if (byPhone && Number(byPhone.crmId) !== id && (String(byPhone.extras?.is_study) === "1" || byPhone.status === "учится")) {
+        cur.sessionSkip += 1;
+        continue;
+      }
       applyCrmCustomer(item, branch, true, cur.teachers, { persist: true, quiet: true });
       wrote = true;
       cid = id;

@@ -219,6 +219,7 @@ describe("рабочий архив", () => {
     assert.match(views, /уже грузим/);
     assert.match(views, /persist: true/);
     assert.match(views, /exist\.status === "учится"/);
+    assert.match(views, /byPhone && Number\(byPhone\.crmId\) !== id/);
     assert.match(views, /cur\.done && !opts\?\.reset/);
     assert.ok((ui.match(/kind: "archiveCount"/g) || []).length >= 2);
   });
