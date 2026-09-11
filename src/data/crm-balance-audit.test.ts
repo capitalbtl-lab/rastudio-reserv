@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { classifyAudit, auditOnRight, moneyClose } from "./crm-balance-audit-core.ts";
+import { classifyAudit, auditOnRight, moneyClose, alfaHeaderOf } from "./crm-balance-audit-core.ts";
 
 describe("шаг 4 сверка остатка", () => {
   it("совпало ±1 — ok справа", () => {
@@ -22,6 +22,54 @@ describe("шаг 4 сверка остатка", () => {
     assert.equal(auditOnRight(codes), true);
     assert.equal(moneyClose(100, 101), true);
     assert.equal(moneyClose(100, 102), false);
+  });
+
+  it("шапка Alfa = customer.balance, не rest абонемента", () => {
+    assert.equal(alfaHeaderOf({ balance: 2025 }, 0, 1), 2025);
+    assert.equal(alfaHeaderOf({ balance: -2125 }, 0, 2), -2125);
+    assert.equal(alfaHeaderOf({ balance: 0 }, 8000, 1), 0);
+    assert.equal(alfaHeaderOf({ balance: "-987.5" }, 0, 1), -987.5);
+    assert.equal(alfaHeaderOf({}, -987, 1), -987);
+  });
+
+  it("ok и status — справа: будущий урок с ценой не дыра", () => {
+    const codes = classifyAudit({
+      alfaOk: true,
+      clients: -987,
+      alfa: -987,
+      cash: -987,
+      paysComplete: true,
+      lessonsDisk: 31,
+      lessonsAlfa: 31,
+      woCard: 5000,
+      woCal: 5000,
+      liveCtt: true,
+      repaired: false,
+      badStatus: true,
+    });
+    assert.ok(codes.includes("ok"));
+    assert.ok(codes.includes("status"));
+    assert.equal(auditOnRight(codes), true);
+  });
+
+  it("касса = шапка, Клиенты нет — formula, не pays", () => {
+    const codes = classifyAudit({
+      alfaOk: true,
+      clients: 0,
+      alfa: 2025,
+      cash: 2025,
+      paysComplete: true,
+      lessonsDisk: 11,
+      lessonsAlfa: 11,
+      woCard: 0,
+      woCal: 0,
+      liveCtt: true,
+      repaired: false,
+    });
+    assert.ok(codes.includes("formula"));
+    assert.equal(codes.includes("pays"), false);
+    assert.equal(codes.includes("lessons"), false);
+    assert.equal(auditOnRight(codes), false);
   });
 
   it("нет ответа Alfa не совпало", () => {
@@ -142,8 +190,10 @@ describe("шаг 4 сверка остатка", () => {
     assert.match(src, /inboundCustomerPays/);
     assert.match(src, /markPayJournalIncomplete/);
     assert.match(src, /stampCustomerSync/);
-    assert.match(src, /payIdComplete/);
+    assert.match(src, /payCustomerFilled/);
+    assert.match(src, /alfaHeaderOf/);
     assert.doesNotMatch(src, /isPayJournalComplete/);
+    assert.doesNotMatch(src, /live \? rest/);
     assert.match(src, /for \(let i = 0; i < 4/);
     assert.match(src, /диск: \$\{err\}/);
   });

@@ -20,7 +20,18 @@ export function moneyClose(a: number, b: number) {
 
 export function auditOnRight(codes: AuditCode[]) {
   if (!codes.includes("ok")) return false;
-  return !codes.some((c) => c !== "ok" && c !== "dup" && c !== "branch");
+  return !codes.some((c) => c !== "ok" && c !== "dup" && c !== "branch" && c !== "status");
+}
+
+/** Шапка карточки Alfa = customer.balance. Rest абонемента — не эталон. */
+export function alfaHeaderOf(customer: Record<string, unknown> | null | undefined, cttRest = 0, liveCount = 0) {
+  if (!customer) return 0;
+  const raw = customer.balance;
+  if (raw != null && raw !== "") {
+    const n = Number(raw);
+    if (Number.isFinite(n)) return n;
+  }
+  return liveCount > 0 ? Number(cttRest) || 0 : 0;
 }
 
 export function classifyAudit(p: {
@@ -55,8 +66,7 @@ export function classifyAudit(p: {
     return ["ok", ...codes];
   }
   if (!p.paysComplete) codes.push("snap");
-  if (p.cash > p.alfa + 1 && (p.lessonsDisk < p.lessonsAlfa || p.lessonsAlfa === 0)) codes.push("lessons");
-  else if (p.cash > p.alfa + 1) codes.push("lessons");
+  if (p.cash > p.alfa + 1) codes.push("lessons");
   if (p.cash < p.alfa - 1) codes.push("pays");
   if (p.liveCtt && moneyClose(p.clients, p.cash) && !moneyClose(p.alfa, p.cash)) codes.push("ctt");
   if (

@@ -218,6 +218,12 @@ export function payIdComplete(customerId: number) {
   return paysOf(id).some((x) => !x.deleted && String(x.note || "") === OPENING_NOTE);
 }
 
+/** Касса дочитана этим id (complete[]). Строка «остаток на диске» сюда не входит. */
+export function payCustomerFilled(customerId: number) {
+  const id = Number(customerId) || 0;
+  return Boolean(id && completeSetOf(load()).has(id));
+}
+
 export function customerBalance(customerId: number, fallback?: number | string, writeoffSum = 0) {
   const id = Number(customerId) || 0;
   const rows = paysOf(id);

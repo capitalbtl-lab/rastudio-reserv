@@ -3,10 +3,10 @@
 import { writeoffSumOf, uniqueBranches } from "./crm-ledger-core";
 import { balanceOf, liveCttOf } from "./crm-pay-core";
 import { tariffRowLive } from "./crm-tariff-row";
-import { classifyAudit, moneyClose, auditOnRight, type AuditCode } from "./crm-balance-audit-core";
+import { classifyAudit, moneyClose, auditOnRight, alfaHeaderOf, type AuditCode } from "./crm-balance-audit-core";
 
 export type { AuditCode } from "./crm-balance-audit-core";
-export { classifyAudit, moneyClose, auditOnRight } from "./crm-balance-audit-core";
+export { classifyAudit, moneyClose, auditOnRight, alfaHeaderOf } from "./crm-balance-audit-core";
 
 export type AuditHit = {
   cid: number;
@@ -15,6 +15,7 @@ export type AuditHit = {
   clients: number;
   alfa: number;
   cash: number;
+  cttRest?: number;
   codes: AuditCode[];
   repaired: boolean;
   at: string;
@@ -46,7 +47,7 @@ function rub(n: number) {
 export async function diskAudit(cid: number, branchId: number) {
   const { findDossier } = await import("./dossiers");
   const { collectCustomerJournal, loadCustomerCalendar } = await import("./group-cards");
-  const { paysOf, payIdComplete, customerBalance } = await import("./crm-pay");
+  const { paysOf, payCustomerFilled, customerBalance } = await import("./crm-pay");
   const { accountSnapOf } = await import("./crm-pay-core");
   const { parseDossierCtt } = await import("./pupil-tariffs");
   const id = Number(cid) || 0;
@@ -67,7 +68,7 @@ export async function diskAudit(cid: number, branchId: number) {
     cash: paySum - woCal,
     woCal,
     woCard,
-    paysComplete: payIdComplete(id),
+    paysComplete: payCustomerFilled(id),
     lessonsDisk: cal.length,
     liveCtt: liveCttOf(parseDossierCtt(d?.extras)).length > 0,
     dupLessons: ids.length !== new Set(ids).size,
@@ -99,7 +100,7 @@ async function alfaShow(branch: number, cid: number) {
       continue;
     }
   }
-  if (!found) return { ok: false as const, alfa: 0, liveCtt: false, branch: used, switched, token: t, request };
+  if (!found) return { ok: false as const, alfa: 0, cttRest: 0, liveCtt: false, branch: used, switched, token: t, request };
   let rest = 0;
   let live = 0;
   try {
@@ -114,7 +115,8 @@ async function alfaShow(branch: number, cid: number) {
   }
   return {
     ok: true as const,
-    alfa: live ? rest : Number(found.balance ?? 0) || 0,
+    alfa: alfaHeaderOf(found, rest, live),
+    cttRest: rest,
     liveCtt: live > 0,
     branch: used,
     switched,
@@ -166,27 +168,30 @@ export async function auditOne(cid: number, branchId: number) {
   let repaired = false;
   let lessonsAlfa = first.lessonsDisk;
   const empty = (Number(first.clients) || 0) === 0 && !first.paysComplete && first.lessonsDisk === 0 && !first.liveCtt && !shown.liveCtt;
-  const needRepair = shown.ok && (!moneyClose(first.clients, shown.alfa) || !first.paysComplete || empty);
+  const needRepair =
+    shown.ok &&
+    (!moneyClose(first.clients, shown.alfa) || !moneyClose(first.cash, shown.alfa) || !first.paysComplete || empty);
   if (needRepair) {
     try {
       const { probeCustomerLessons, inboundCustomerLessons } = await import("./crm-journal-inbound");
       const probed = await probeCustomerLessons(shown.branch, id).catch(() => ({ total: 0, ok: false as const }));
       lessonsAlfa = probed.ok ? probed.total : first.lessonsDisk;
-      if (probed.ok && probed.total > first.lessonsDisk) {
+      const holeLessons = first.cash > shown.alfa + 1 || (probed.ok && probed.total > first.lessonsDisk);
+      if (holeLessons) {
         const { loadCustomerCalendar } = await import("./group-cards");
         for (let i = 0; i < 4; i += 1) {
           const r = await inboundCustomerLessons(shown.branch, id, { force: true, dateFrom: "2015-01-01" }).catch(() => ({ done: false }));
           repaired = true;
           if (r && "done" in r && r.done) break;
-          if (loadCustomerCalendar(id).length >= probed.total) break;
+          if (probed.ok && loadCustomerCalendar(id).length >= probed.total) break;
         }
       }
       if (!first.paysComplete || first.cash < shown.alfa - 1) {
-        const { inboundCustomerPays, payIdComplete } = await import("./crm-pay");
+        const { inboundCustomerPays, payCustomerFilled } = await import("./crm-pay");
         for (let i = 0; i < 4; i += 1) {
           await inboundCustomerPays(shown.request, shown.token, shown.branch, id).catch(() => null);
           repaired = true;
-          if (payIdComplete(id)) break;
+          if (payCustomerFilled(id)) break;
         }
       }
     } catch {
@@ -228,7 +233,7 @@ export async function auditOne(cid: number, branchId: number) {
     markPayJournalIncomplete(id);
   }
   const extra = shown.ok
-    ? `Клиенты ${rub(after.clients)} · Alfa ${rub(shown.alfa)} · касса ${rub(after.cash)} · ${codes.join(", ")}`
+    ? `Клиенты ${rub(after.clients)} · Alfa ${rub(shown.alfa)} · касса ${rub(after.cash)} · абонемент ${rub(shown.cttRest || 0)} · ${codes.join(", ")}`
     : "нет ответа Alfa";
   return {
     hit: {
@@ -238,6 +243,7 @@ export async function auditOne(cid: number, branchId: number) {
       clients: after.clients,
       alfa: shown.ok ? shown.alfa : 0,
       cash: after.cash,
+      cttRest: shown.ok ? shown.cttRest : 0,
       codes,
       repaired,
       at: new Date().toISOString(),
