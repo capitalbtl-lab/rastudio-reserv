@@ -75,7 +75,7 @@ export function TrialPopup() {
       onWheel={(e) => e.preventDefault()}
     >
       <div
-        className="relative flex max-h-[96dvh] w-full max-w-2xl flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
+        className="relative flex max-h-[96dvh] w-full max-w-[28rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -96,7 +96,7 @@ export function TrialPopup() {
             </a>
           </p>
         </div>
-        <div className="h-[34rem] shrink-0 px-5 pb-5 sm:h-[26rem] sm:px-7 sm:pb-6">
+        <div className="h-[40rem] max-h-[calc(96dvh-8rem)] shrink-0 px-6 pb-6">
           <TrialEmbed src={src} className="h-full w-full" />
         </div>
       </div>

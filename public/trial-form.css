@@ -8,6 +8,7 @@ body,
 .alfa-form * {
   font-family: Manrope, "Segoe UI", ui-sans-serif, system-ui, sans-serif !important;
   -webkit-font-smoothing: antialiased;
+  box-sizing: border-box !important;
 }
 
 html,
@@ -17,7 +18,6 @@ body,
   padding: 0 !important;
   background: #ffffff !important;
   color: #12141a !important;
-  overflow: hidden !important;
 }
 
 .alfa-form-wrapper {
@@ -29,12 +29,12 @@ body,
 }
 
 .alfa-form {
-  margin: 0 auto !important;
+  margin: 0 !important;
   float: none !important;
   width: 100% !important;
   max-width: 100% !important;
   background: #ffffff !important;
-  padding: 0 !important;
+  padding: 0 0 8px !important;
   box-shadow: none !important;
   border-radius: 0 !important;
 }
@@ -50,19 +50,21 @@ body,
 .alfa-form-content-wrapper,
 .alfa-form form,
 #lead-form form {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 0.7rem 1rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.85rem !important;
   width: 100% !important;
 }
 
 .alfa-form-input-container {
-  min-width: 0 !important;
-  font-size: 0.68rem !important;
+  display: block !important;
+  width: 100% !important;
+  font-size: 0.7rem !important;
   font-weight: 600 !important;
-  letter-spacing: 0.06em !important;
+  letter-spacing: 0.04em !important;
   text-transform: uppercase !important;
   color: #5e6470 !important;
+  white-space: nowrap !important;
 }
 
 .alfa-form-input-container input,
@@ -73,29 +75,30 @@ body,
 .alfa-form select {
   display: block !important;
   width: 100% !important;
-  height: 40px !important;
-  margin-top: 5px !important;
+  max-width: 100% !important;
+  height: 44px !important;
+  margin-top: 6px !important;
   border: 0 !important;
   border-radius: 12px !important;
   background: #f5f6f8 !important;
   box-shadow: 0 0 0 1px rgba(18, 20, 26, 0.06) !important;
-  padding: 0 12px !important;
-  font-size: 0.9rem !important;
+  padding: 0 14px !important;
+  font-size: 0.95rem !important;
   font-weight: 500 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
+  white-space: nowrap !important;
   color: #12141a !important;
   font-family: Manrope, "Segoe UI", sans-serif !important;
 }
 
 .alfa-form-input-container textarea,
 .alfa-form textarea {
-  height: auto !important;
-  min-height: 72px !important;
-  padding-top: 10px !important;
-  padding-bottom: 10px !important;
+  height: 88px !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
   resize: none !important;
-  grid-column: 1 / -1 !important;
+  white-space: pre-wrap !important;
 }
 
 .alfa-form-input-container input:focus,
@@ -115,16 +118,17 @@ button.alfa-form-button {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  grid-column: 1 / -1 !important;
-  height: 44px !important;
+  flex-shrink: 0 !important;
+  height: 48px !important;
+  min-height: 48px !important;
   width: 100% !important;
-  margin-top: 4px !important;
+  margin-top: 0.35rem !important;
   border: 0 !important;
   border-radius: 999px !important;
   background: #205edc !important;
   color: #ffffff !important;
   font-family: Manrope, "Segoe UI", sans-serif !important;
-  font-size: 0.92rem !important;
+  font-size: 0.95rem !important;
   font-weight: 600 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
@@ -139,16 +143,10 @@ button.alfa-form-button {
 
 .alfa-form-error-container,
 .alfa-form-error-block {
-  grid-column: 1 / -1 !important;
   color: #c62828 !important;
-  font-size: 0.78rem !important;
+  font-size: 0.8rem !important;
   font-weight: 500 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
-}
-
-@media (max-width: 520px) {
-  .alfa-form-content-wrapper {
-    grid-template-columns: 1fr !important;
-  }
+  white-space: normal !important;
 }
