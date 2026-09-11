@@ -162,11 +162,11 @@ export async function auditOne(cid: number, branchId: number) {
       }
     }
     if (!first.paysComplete || first.cash < shown.alfa - 1) {
-      const { inboundCustomerPays, isPayJournalComplete } = await import("./crm-pay");
+      const { inboundCustomerPays, payIdComplete } = await import("./crm-pay");
       for (let i = 0; i < 4; i += 1) {
         await inboundCustomerPays(shown.request, shown.token, shown.branch, id).catch(() => null);
         repaired = true;
-        if (isPayJournalComplete(id)) break;
+        if (payIdComplete(id)) break;
       }
     }
   }

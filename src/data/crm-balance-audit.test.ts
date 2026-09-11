@@ -143,6 +143,7 @@ describe("шаг 4 сверка остатка", () => {
     assert.match(src, /markPayJournalIncomplete/);
     assert.match(src, /stampCustomerSync/);
     assert.match(src, /payIdComplete/);
+    assert.doesNotMatch(src, /isPayJournalComplete/);
     assert.match(src, /for \(let i = 0; i < 4/);
     assert.doesNotMatch(src, /cardFromDossier/);
   });
