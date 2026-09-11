@@ -26,6 +26,10 @@ import {
   accountSnapOf,
   liveCttOf,
   cttRestSum,
+  markRefundOfGoods,
+  remainderClose,
+  alfaPayTypeIdOf,
+  isGoodsArticle,
   OPENING_NOTE,
   isOpeningRow,
   PAY_POLL_MAX_PER_HOUR,
@@ -48,7 +52,7 @@ import {
 } from "./crm-pay-core";
 import { pendingExportIds } from "./crm-export-queue";
 import { logAdmin } from "./admin-settings";
-import { ledgerMoney, uniqueBranches, payCttIdOf } from "./crm-ledger-core";
+import { ledgerMoney, uniqueBranches, payCttIdOf, writeoffSumOf } from "./crm-ledger-core";
 import { displayPersonName, isPhoneLike } from "./client-display";
 
 export type { PayKind, PayRow };
@@ -168,6 +172,9 @@ function extrasOf(row: Partial<PayRow>): Partial<PayRow> {
   if (payer) out.payerName = payer.slice(0, 2000);
   const customerName = String(row.customerName || "").trim();
   if (customerName) out.customerName = customerName.slice(0, 200);
+  const payTypeId = Number(row.payTypeId) || 0;
+  if (payTypeId) out.payTypeId = payTypeId;
+  if (row.refundOfGoods) out.refundOfGoods = true;
   if (row.deleted) out.deleted = true;
   return out;
 }
@@ -556,6 +563,7 @@ export function packPay(item: Record<string, unknown>, customerId: number, branc
   if (!id && !income && !expenditure) return null;
   const cid = payCustomerIdOf(item, customerId);
   const kind = kindFromAlfaPay(item);
+  const typeId = alfaPayTypeIdOf(item);
   return {
     id: id || 0,
     customerId: cid,
@@ -577,6 +585,8 @@ export function packPay(item: Record<string, unknown>, customerId: number, branc
       payMethod: String(item.pay_method || item.payMethod || ""),
       payerName: String(item.payer_name || item.payerName || ""),
       customerName: payCustomerNameOf(item),
+      payTypeId: typeId,
+      refundOfGoods: kind === "refund" && isGoodsArticle(item),
     }),
   };
 }
@@ -648,7 +658,7 @@ function mergePulledPays(pulled: PayRow[], hold: Iterable<number>) {
     byCid.set(cid, list);
   }
   for (const [cid, rows] of byCid) {
-    replaceCustomerPays(cid, mergePayInbound(rows, paysOf(cid), hold));
+    replaceCustomerPays(cid, markRefundOfGoods(mergePayInbound(rows, paysOf(cid), hold)));
   }
   return [...byCid.keys()];
 }
@@ -700,16 +710,18 @@ export async function inboundCustomerPays(
         ran += 1;
         lastShort = pack.items.length < PAY_INBOUND_PAGE;
         if (lastShort) {
-          try {
-            const corr = await request(
-              `/v2api/${bid}/pay/index`,
-              { page: 0, pageSize: PAY_INBOUND_PAGE, customer_id: customerId, pay_type_id: 6 },
-              token,
-            );
-            const pack6 = crmUnwrapIndex(corr);
-            raw.push(...pack6.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
-          } catch {
-            /* корректировки филиала — не валим весь прогон */
+          for (const typeId of [5, 6, 9]) {
+            try {
+              const extra = await request(
+                `/v2api/${bid}/pay/index`,
+                { page: 0, pageSize: PAY_INBOUND_PAGE, customer_id: customerId, pay_type_id: typeId },
+                token,
+              );
+              const packT = crmUnwrapIndex(extra);
+              raw.push(...packT.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
+            } catch {
+              /* типы филиала — не валим весь прогон */
+            }
           }
           break;
         }
@@ -724,7 +736,6 @@ export async function inboundCustomerPays(
     }
     if (!failed && b === branches.length - 1 && lastShort) done = true;
   }
-  if (done && !failed) markPayJournalComplete(customerId);
   const known: number[] = [];
   try {
     const { findDossier } = await import("./dossiers");
@@ -761,10 +772,35 @@ export async function inboundCustomerPays(
   }
   const pulled = raw.map((it) => packPay(it, customerId, branchId)).filter((x): x is PayRow => Boolean(x));
   const hold = holdPayIds();
-  const merged = mergePayInbound(pulled, paysOf(customerId), hold);
+  const merged = markRefundOfGoods(mergePayInbound(pulled, paysOf(customerId), hold));
   replaceCustomerPays(customerId, merged);
   await stampPayCustomerNames(pulled).catch(() => null);
   if (failed) throw new Error("Alfa не ответила, нажмите снова");
+  if (done) {
+    try {
+      const { loadCustomerCalendar } = await import("./group-cards");
+      const { alfaHeaderOf } = await import("./crm-balance-audit-core");
+      const live = merged.filter((x) => !x.deleted);
+      const cash = balanceOf(live) - writeoffSumOf(loadCustomerCalendar(customerId), customerId);
+      let header = Number.NaN;
+      for (const bid of uniqueBranches(branchId)) {
+        try {
+          const json = await request(`/v2api/${bid}/customer/index`, { page: 0, pageSize: 10, id: customerId }, token);
+          const hit = crmUnwrapIndex(json).items.find((x) => Number(x.id) === customerId);
+          if (hit) {
+            header = alfaHeaderOf(hit, 0, 0);
+            break;
+          }
+        } catch {
+          continue;
+        }
+      }
+      if (Number.isFinite(header) && remainderClose(cash, header, live.length > 0)) markPayJournalComplete(customerId);
+      else markPayJournalIncomplete(customerId);
+    } catch {
+      markPayJournalIncomplete(customerId);
+    }
+  }
   return merged;
 }
 
@@ -854,7 +890,9 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
         ...(await pullPages(branchId, {}, windowPages)),
         ...(await pullPages(branchId, { pay_type_id: 2 }, 2)),
         ...(await pullPages(branchId, { pay_type_id: 3 }, 2)),
+        ...(await pullPages(branchId, { pay_type_id: 5 }, 2)),
         ...(await pullPages(branchId, { pay_type_id: 6 }, 2)),
+        ...(await pullPages(branchId, { pay_type_id: 9 }, 2)),
       ];
       const seen = new Set<number>();
       const unique: Record<string, unknown>[] = [];

@@ -90,6 +90,8 @@ export type PayRow = {
   payerName?: string;
   customerName?: string;
   deleted?: boolean;
+  payTypeId?: number;
+  refundOfGoods?: boolean;
 };
 
 export type PayPollStamp = { lastId: number; lastDate: string };
@@ -98,7 +100,6 @@ export function payKindOf(raw?: string | null): PayKind {
   return PAY_KINDS.some((k) => k.id === raw) ? (raw as PayKind) : "income";
 }
 
-/** Alfa PayType: 1 доход, 6 корректировка (форма pay/update). Сумма корректировки в income, может быть < 0. */
 export function payNum(v: unknown) {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   const s = String(v ?? "")
@@ -110,18 +111,33 @@ export function payNum(v: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Alfa PayType: 1 доход, 9 товар (старый 2), 5 возврат (старый 3), 6 корректировка. Тип, не комментарий. */
+export function alfaPayTypeIdOf(item: Record<string, unknown>) {
+  return Number(item.pay_type_id || item.payTypeId || item.type_id || 0) || 0;
+}
+
+export function isGoodsArticle(item: Record<string, unknown>) {
+  if (Number(item.commodity_id || item.commodityId)) return true;
+  const name = String(item.pay_item || item.pay_item_name || item.item_name || item.article || item.category || "").toLowerCase();
+  return /физическ/.test(name) && /товар/.test(name);
+}
+
 export function kindFromAlfaPay(item: Record<string, unknown>): PayKind {
-  const typeId = Number(item.pay_type_id || item.payTypeId || item.type_id || 0) || 0;
-  const income = payNum(item.income);
-  const expenditure = payNum(item.expenditure);
+  const typeId = alfaPayTypeIdOf(item);
+  if (typeId === 1) return "income";
+  if (typeId === 9 || typeId === 2) return "product";
+  if (typeId === 5 || typeId === 3) return "refund";
+  if (typeId === 6) return "correct";
   const itemId = Number(item.pay_item_id || item.payItemId) || 0;
-  if (typeId === 6 || itemId === 7 || income < 0) return "correct";
-  if (typeId === 2 || Number(item.commodity_id || item.commodityId)) return "product";
-  if (typeId === 3 || typeId === 5) return "refund";
-  const label = String(item.pay_type || item.type_name || item.note || "").toLowerCase();
+  const income = payNum(item.income);
+  if (itemId === 7 || income < 0) return "correct";
+  if (Number(item.commodity_id || item.commodityId)) return "product";
+  const label = String(item.pay_type || item.type_name || "").toLowerCase();
   if (/коррект/.test(label)) return "correct";
   if (/товар|продаж/.test(label)) return "product";
-  if (/возврат/.test(label) || (expenditure && !income)) return "refund";
+  if (/возврат/.test(label)) return "refund";
+  const expenditure = payNum(item.expenditure);
+  if (expenditure && !income) return "refund";
   return "income";
 }
 
@@ -136,10 +152,60 @@ export function payEffect(kind: PayKind, sum: number, prev: number) {
   return { income: n, expenditure: 0, next: prev + n };
 }
 
-export function rowDelta(row: Pick<PayRow, "kind" | "income" | "expenditure" | "deleted">) {
+export function rowDelta(row: Pick<PayRow, "kind" | "income" | "expenditure" | "deleted" | "refundOfGoods">) {
   if (row.deleted) return 0;
   if (row.kind === "product") return 0;
+  if (row.kind === "refund" && row.refundOfGoods) return 0;
   return payNum(row.income) - payNum(row.expenditure);
+}
+
+export function refundAbs(row: Pick<PayRow, "income" | "expenditure">) {
+  return Math.abs(payNum(row.expenditure) || payNum(row.income));
+}
+
+export function goodsNetOf(rows: PayRow[]) {
+  let n = 0;
+  for (const r of rows) {
+    if (r.deleted) continue;
+    if (r.kind === "product") n += payNum(r.income);
+    if (r.kind === "refund" && r.refundOfGoods) n -= refundAbs(r);
+  }
+  return n;
+}
+
+export function refundGoodsSumOf(rows: PayRow[]) {
+  let n = 0;
+  for (const r of rows) {
+    if (r.deleted || r.kind !== "refund" || !r.refundOfGoods) continue;
+    n += refundAbs(r);
+  }
+  return n;
+}
+
+export function corrLooksGoods(row: Pick<PayRow, "kind" | "note">) {
+  if (row.kind !== "correct") return false;
+  const t = String(row.note || "").toLowerCase();
+  return /физическ/.test(t) && /товар/.test(t);
+}
+
+/** Возврат товара: статья, тот же item, или тип 9 на ту же |сумму|. Не слово «робот». */
+export function markRefundOfGoods(rows: PayRow[]): PayRow[] {
+  const live = rows.filter((r) => !r.deleted);
+  const products = live.filter((r) => r.kind === "product");
+  return rows.map((r) => {
+    if (r.deleted || r.kind !== "refund") return r;
+    const abs = refundAbs(r);
+    const byItem = Boolean(r.payItemId) && products.some((p) => Number(p.payItemId) === Number(r.payItemId));
+    const bySum = products.some((p) => Math.abs(payNum(p.income) - abs) <= 1);
+    return { ...r, refundOfGoods: Boolean(r.refundOfGoods || byItem || bySum) };
+  });
+}
+
+export function remainderClose(cash: number, alfa: number, hasRows: boolean) {
+  const a = Number(cash) || 0;
+  const b = Number(alfa) || 0;
+  if (!hasRows && Math.abs(a) <= 1 && Math.abs(b) <= 1) return false;
+  return Math.abs(a - b) <= 1;
 }
 
 export function balanceOf(rows: PayRow[]) {
@@ -190,14 +256,15 @@ export function accountSnapOf(extraBalance?: number | string | null, tariffs?: {
 }
 
 /** Сумма строк кассы на счёт: 0 — базовый, иначе cttId абонемента. */
-export function paySumForCtt(rows: { kind?: string; income?: number; expenditure?: number; deleted?: boolean; cttId?: number | null }[], cttId: number) {
+export function paySumForCtt(rows: { kind?: string; income?: number; expenditure?: number; deleted?: boolean; cttId?: number | null; refundOfGoods?: boolean }[], cttId: number) {
   const want = cttIdOfPay(cttId);
   let n = 0;
   for (const r of rows) {
     if (r.deleted) continue;
     if (cttIdOfPay(r.cttId) !== want) continue;
     if (r.kind === "product") continue;
-    n += Number(r.income || 0) - Number(r.expenditure || 0);
+    if (r.kind === "refund" && r.refundOfGoods) continue;
+    n += payNum(r.income) - payNum(r.expenditure);
   }
   return n;
 }
@@ -252,6 +319,8 @@ export function mergePayInbound(pulled: PayRow[], prev: PayRow[] | undefined, ho
       payMethod: String(p.payMethod || cur?.payMethod || "") || undefined,
       payerName: String(p.payerName || cur?.payerName || "") || undefined,
       customerName: String(p.customerName || cur?.customerName || "") || undefined,
+      payTypeId: Number(p.payTypeId || cur?.payTypeId) || undefined,
+      refundOfGoods: Boolean(p.refundOfGoods || cur?.refundOfGoods) || undefined,
       deleted: Boolean(cur?.deleted || p.deleted) || undefined,
     });
   }

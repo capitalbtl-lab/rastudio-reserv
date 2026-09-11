@@ -11,6 +11,12 @@ export type AuditCode =
   | "status"
   | "dup"
   | "branch"
+  | "goods"
+  | "refund-goods"
+  | "corr"
+  | "corr-goods"
+  | "wo"
+  | "wo0"
   | "unknown"
   | "нет ответа";
 
@@ -20,7 +26,7 @@ export function moneyClose(a: number, b: number) {
 
 export function auditOnRight(codes: AuditCode[]) {
   if (!codes.includes("ok")) return false;
-  return !codes.some((c) => c !== "ok" && c !== "dup" && c !== "branch" && c !== "status");
+  return !codes.some((c) => c !== "ok" && c !== "dup" && c !== "branch" && c !== "status" && c !== "corr-goods" && c !== "wo0");
 }
 
 /** Шапка карточки Alfa = customer.balance. Rest абонемента — не эталон. */
@@ -49,13 +55,23 @@ export function classifyAudit(p: {
   switchedBranch?: boolean;
   badStatus?: boolean;
   dupLessons?: boolean;
+  goodsNet?: number;
+  refundGoodsSum?: number;
+  corrLooksGoods?: boolean;
+  corrMissing?: boolean;
+  woZeroOk?: boolean;
 }): AuditCode[] {
   if (!p.alfaOk) return ["нет ответа"];
   const codes: AuditCode[] = [];
   if (p.switchedBranch) codes.push("branch");
   if (p.dupLessons) codes.push("dup");
   if (p.badStatus) codes.push("status");
+  if (p.corrLooksGoods) codes.push("corr-goods");
+  if (p.woZeroOk) codes.push("wo0");
+  if (p.corrMissing) codes.push("corr");
   if (Math.abs(p.woCard - p.woCal) > 1) codes.push("src");
+  const goodsNet = Number(p.goodsNet) || 0;
+  const refundGoods = Number(p.refundGoodsSum) || 0;
   if (moneyClose(p.clients, p.alfa)) {
     const empty = (Number(p.clients) || 0) === 0 && !p.paysComplete && p.lessonsDisk === 0 && !p.liveCtt;
     if (empty) {
@@ -64,16 +80,28 @@ export function classifyAudit(p: {
     }
     if (!p.paysComplete && !moneyClose(p.cash, p.alfa)) {
       codes.push("snap");
-      if (p.cash > p.alfa + 1) codes.push("lessons");
+      if (goodsNet && moneyClose(p.cash - goodsNet, p.alfa)) codes.push("goods");
+      else if (refundGoods && moneyClose(p.cash + refundGoods, p.alfa)) codes.push("refund-goods");
+      else if (p.cash > p.alfa + 1) {
+        codes.push("lessons");
+        codes.push("wo");
+      }
       if (p.cash < p.alfa - 1) codes.push("pays");
       return [...new Set(codes)];
     }
-    if (!codes.includes("src") && !codes.includes("status")) return codes.length ? ["ok", ...codes] : ["ok"];
+    if (!codes.includes("src") && !codes.includes("status") && !codes.includes("corr")) return codes.length ? ["ok", ...codes] : ["ok"];
     return ["ok", ...codes];
   }
   if (!p.paysComplete) codes.push("snap");
-  if (p.cash > p.alfa + 1) codes.push("lessons");
-  if (p.cash < p.alfa - 1) codes.push("pays");
+  if (goodsNet && moneyClose(p.cash - goodsNet, p.alfa)) codes.push("goods");
+  else if (refundGoods && moneyClose(p.cash + refundGoods, p.alfa)) codes.push("refund-goods");
+  else {
+    if (p.cash > p.alfa + 1) {
+      codes.push("lessons");
+      codes.push("wo");
+    }
+    if (p.cash < p.alfa - 1) codes.push("pays");
+  }
   if (p.liveCtt && moneyClose(p.clients, p.cash) && !moneyClose(p.alfa, p.cash)) codes.push("ctt");
   if (
     p.paysComplete &&
@@ -81,7 +109,10 @@ export function classifyAudit(p: {
     !codes.includes("lessons") &&
     !codes.includes("pays") &&
     !codes.includes("snap") &&
-    !codes.includes("src")
+    !codes.includes("src") &&
+    !codes.includes("goods") &&
+    !codes.includes("refund-goods") &&
+    !codes.includes("corr")
   ) {
     codes.push("formula");
   }

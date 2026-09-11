@@ -48,7 +48,7 @@ export async function diskAudit(cid: number, branchId: number) {
   const { findDossier } = await import("./dossiers");
   const { collectCustomerJournal, loadCustomerCalendar } = await import("./group-cards");
   const { paysOf, payCustomerFilled, customerBalance } = await import("./crm-pay");
-  const { accountSnapOf } = await import("./crm-pay-core");
+  const { accountSnapOf, goodsNetOf, refundGoodsSumOf, corrLooksGoods } = await import("./crm-pay-core");
   const { parseDossierCtt } = await import("./pupil-tariffs");
   const id = Number(cid) || 0;
   const branch = Number(branchId) || 1;
@@ -56,7 +56,8 @@ export async function diskAudit(cid: number, branchId: number) {
   const groups = (d?.groupLinks || []).map((g) => ({ id: Number(g.id) || 0, branchId: Number(g.branchId || branch) || branch, name: String(g.name || "") }));
   const cal = loadCustomerCalendar(id);
   const journal = collectCustomerJournal(id, groups);
-  const paySum = balanceOf(paysOf(id).filter((x) => !x.deleted));
+  const payRows = paysOf(id).filter((x) => !x.deleted);
+  const paySum = balanceOf(payRows);
   const woCal = writeoffSumOf(cal, id);
   const woCard = writeoffSumOf(journal, id);
   const snap = d ? accountSnapOf(d.extras?.balance, parseDossierCtt(d.extras)) : Number.NaN;
@@ -73,6 +74,9 @@ export async function diskAudit(cid: number, branchId: number) {
     liveCtt: liveCttOf(parseDossierCtt(d?.extras)).length > 0,
     dupLessons: ids.length !== new Set(ids).size,
     badStatus: cal.some((l) => Number(l.status) !== 3 && (Number(l.amount) || 0) > 0),
+    goodsNet: goodsNetOf(payRows),
+    refundGoodsSum: refundGoodsSumOf(payRows),
+    corrLooksGoods: payRows.some((r) => corrLooksGoods(r)),
   };
 }
 
@@ -220,6 +224,9 @@ export async function auditOne(cid: number, branchId: number) {
     switchedBranch: shown.switched,
     badStatus: after.badStatus,
     dupLessons: after.dupLessons,
+    goodsNet: after.goodsNet,
+    refundGoodsSum: after.refundGoodsSum,
+    corrLooksGoods: after.corrLooksGoods,
   });
   if (codes.includes("lessons")) {
     const { stampCustomerSync } = await import("./crm-customer-sync");

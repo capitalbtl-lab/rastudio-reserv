@@ -239,4 +239,61 @@ describe("шаг 4 сверка остатка", () => {
     const core = readFileSync(new URL("./crm-pay-core.ts", import.meta.url), "utf8");
     assert.doesNotMatch(core, /if \(hasCtt\) return rest;\s*if \(rest\) return rest/);
   });
+
+  it("товар в кассе, шапка без него — goods; корректировка с текстом не режет ₽", () => {
+    const goods = classifyAudit({
+      alfaOk: true,
+      clients: 2000,
+      alfa: 0,
+      cash: 2000,
+      paysComplete: true,
+      lessonsDisk: 1,
+      lessonsAlfa: 1,
+      woCard: 0,
+      woCal: 0,
+      liveCtt: false,
+      repaired: false,
+      goodsNet: 2000,
+    });
+    assert.ok(goods.includes("goods"));
+    assert.equal(goods.includes("ok"), false);
+    const corrFlag = classifyAudit({
+      alfaOk: true,
+      clients: 47504,
+      alfa: 47504,
+      cash: 47504,
+      paysComplete: true,
+      lessonsDisk: 10,
+      lessonsAlfa: 10,
+      woCard: 4900,
+      woCal: 4900,
+      liveCtt: false,
+      repaired: false,
+      corrLooksGoods: true,
+    });
+    assert.ok(corrFlag.includes("ok"));
+    assert.ok(corrFlag.includes("corr-goods"));
+    assert.equal(auditOnRight(corrFlag), true);
+    const refundGoods = classifyAudit({
+      alfaOk: true,
+      clients: -2000,
+      alfa: 0,
+      cash: -2000,
+      paysComplete: true,
+      lessonsDisk: 1,
+      lessonsAlfa: 1,
+      woCard: 0,
+      woCal: 0,
+      liveCtt: false,
+      repaired: false,
+      refundGoodsSum: 2000,
+    });
+    assert.ok(refundGoods.includes("refund-goods"));
+    const src = readFileSync(new URL("./crm-balance-audit.ts", import.meta.url), "utf8");
+    assert.match(src, /goodsNetOf/);
+    const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
+    assert.match(pay, /remainderClose/);
+    const inbound = pay.slice(pay.indexOf("export async function inboundCustomerPays"), pay.indexOf("export type PayPollResult"));
+    assert.doesNotMatch(inbound, /enqueueExport/);
+  });
 });

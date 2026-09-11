@@ -88,7 +88,11 @@ describe("касса список", () => {
     assert.match(pay, /payPollLookbackDates/);
     assert.match(pay, /pay_type_id: 2/);
     assert.match(pay, /pay_type_id: 3/);
+    assert.match(pay, /pay_type_id: 5/);
     assert.match(pay, /pay_type_id: 6/);
+    assert.match(pay, /pay_type_id: 9/);
+    assert.match(pay, /markRefundOfGoods/);
+    assert.match(pay, /remainderClose/);
     assert.match(pay, /flushLocalPaysToAlfa/);
     assert.match(pay, /localPaysPending/);
     assert.match(pay, /isOpeningRow/);
@@ -163,7 +167,8 @@ describe("касса список", () => {
     assert.match(pay, /page: fill.page, pageSize: PAY_INBOUND_PAGE/);
     assert.match(pay, /cashTakeOf/);
     assert.match(pay, /if \(failed\) throw new Error/);
-    assert.match(pay, /done && !failed/);
+    assert.match(pay, /if \(done\)/);
+    assert.match(pay, /remainderClose/);
     assert.doesNotMatch(pay, /done && !filled && !failed/);
     assert.match(pay, /delete store.payFill\[String\(id\)\]/);
     assert.match(pay, /payCttIdOf/);

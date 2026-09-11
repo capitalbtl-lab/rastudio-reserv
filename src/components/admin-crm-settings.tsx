@@ -812,7 +812,7 @@ function peopleNeedsRecheck(row: PeopleRow, kind: "students" | "balance") {
 
 function auditRight(codes?: string[]) {
   if (!codes?.includes("ok")) return false;
-  return !codes.some((c) => c !== "ok" && c !== "dup" && c !== "snap" && c !== "branch");
+  return !codes.some((c) => c !== "ok" && c !== "dup" && c !== "snap" && c !== "branch" && c !== "status" && c !== "corr-goods" && c !== "wo0");
 }
 
 function rubAudit(n?: number) {
@@ -1008,7 +1008,7 @@ function PeopleFillList({
         : kind === "balance"
           ? row.paysMore
             ? "касса: ещё страницы, нажмите снова"
-            : "Шаг 1 · загрузить кассу"
+            : "Загрузить кассу"
           : "Шаг 1 · загрузить календарь";
     const btn = full ? "Перепроверить" : kind === "balance" ? "Загрузить кассу" : short ? "Добрать" : "Загрузить календарь";
     return (

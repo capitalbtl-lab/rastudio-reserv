@@ -126,7 +126,8 @@ describe("карточка не ждёт Alfa", () => {
     const chunk = pay.slice(payAt, payAt + 3200);
     assert.match(chunk, /uniqueBranches\(branchId\)/);
     assert.match(chunk, /PAY_INBOUND_RUN/);
-    assert.match(chunk, /pay_type_id: 6/);
+    assert.match(chunk, /pay_type_id: typeId/);
+    assert.match(chunk, /\[5, 6, 9\]/);
     assert.match(chunk, /b === branches.length - 1 && lastShort/);
     assert.doesNotMatch(chunk, /filled \? 1 : PAY_INBOUND_RUN/);
     assert.doesNotMatch(chunk, /filled \? \[Number\(branchId\)/);

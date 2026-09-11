@@ -8,7 +8,7 @@ import { listTeachers, teachersAtBranch } from "./crm-teachers";
 import { loadSubjects } from "./crm-subjects";
 import { isAdminGroup } from "./group-status";
 import { clientLessonFromJournal } from "./crm-journal-core";
-import { customerBalance, cardPays, isPayJournalComplete, payCustomerFilled } from "./crm-pay";
+import { customerBalance, cardPays, payCustomerFilled } from "./crm-pay";
 import { writeoffSumOf, writeoffSumForCtt } from "./crm-ledger-core";
 import { accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, cttRestSum } from "./crm-pay-core";
 import { asCustomerComm, commsOf } from "./crm-comms";
@@ -266,7 +266,7 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
     tariffs,
     comms: commsOf(customerId).map(asCustomerComm),
     pays,
-    paysComplete: isPayJournalComplete(customerId),
+    paysComplete: payCustomerFilled(customerId),
     balance: customerBalance(customerId, snap, writeoffSum),
     catalog: {
       subjects: cat.subjects,
