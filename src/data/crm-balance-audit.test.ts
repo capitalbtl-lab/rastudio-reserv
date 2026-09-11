@@ -60,6 +60,24 @@ describe("шаг 4 сверка остатка", () => {
     assert.equal(auditOnRight(codes), false);
   });
 
+  it("formula без ремонта: касса полная, Клиенты ≠ Alfa, не ctt", () => {
+    const codes = classifyAudit({
+      alfaOk: true,
+      clients: 400,
+      alfa: 500,
+      cash: 500,
+      paysComplete: true,
+      lessonsDisk: 8,
+      lessonsAlfa: 8,
+      woCard: 100,
+      woCal: 100,
+      liveCtt: false,
+      repaired: false,
+    });
+    assert.ok(codes.includes("formula"));
+    assert.equal(auditOnRight(codes), false);
+  });
+
   it("0/0 без журнала и кассы не совпало", () => {
     const codes = classifyAudit({
       alfaOk: true,
@@ -106,5 +124,6 @@ describe("шаг 4 сверка остатка", () => {
     assert.match(src, /inboundCustomerPays/);
     assert.match(src, /markPayJournalIncomplete/);
     assert.match(src, /stampCustomerSync/);
+    assert.match(src, /needRepair/);
   });
 });

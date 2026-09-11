@@ -150,7 +150,9 @@ export async function auditOne(cid: number, branchId: number) {
   const shown = await alfaShow(branch, id);
   let repaired = false;
   let lessonsAlfa = first.lessonsDisk;
-  if (shown.ok && !moneyClose(first.clients, shown.alfa)) {
+  const empty = (Number(first.clients) || 0) === 0 && !first.paysComplete && first.lessonsDisk === 0 && !first.liveCtt && !shown.liveCtt;
+  const needRepair = shown.ok && (!moneyClose(first.clients, shown.alfa) || !first.paysComplete || empty);
+  if (needRepair) {
     const { probeCustomerLessons, inboundCustomerLessons } = await import("./crm-journal-inbound");
     const probed = await probeCustomerLessons(shown.branch, id).catch(() => ({ total: 0, ok: false as const }));
     lessonsAlfa = probed.ok ? probed.total : first.lessonsDisk;

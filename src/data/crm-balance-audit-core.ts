@@ -20,7 +20,7 @@ export function moneyClose(a: number, b: number) {
 
 export function auditOnRight(codes: AuditCode[]) {
   if (!codes.includes("ok")) return false;
-  return !codes.some((c) => c !== "ok" && c !== "dup" && c !== "snap" && c !== "branch");
+  return !codes.some((c) => c !== "ok" && c !== "dup" && c !== "branch");
 }
 
 export function classifyAudit(p: {
@@ -60,7 +60,6 @@ export function classifyAudit(p: {
   if (p.cash < p.alfa - 1) codes.push("pays");
   if (p.liveCtt && moneyClose(p.clients, p.cash) && !moneyClose(p.alfa, p.cash)) codes.push("ctt");
   if (
-    p.repaired &&
     p.paysComplete &&
     !codes.includes("ctt") &&
     !codes.includes("lessons") &&
