@@ -231,6 +231,8 @@ export async function auditOne(cid: number, branchId: number) {
   if (codes.includes("pays") || codes.includes("snap")) {
     const { markPayJournalIncomplete } = await import("./crm-pay");
     markPayJournalIncomplete(id);
+    const { stampCustomerSync } = await import("./crm-customer-sync");
+    stampCustomerSync(id, { paysRecheckAt: "" });
   }
   const extra = shown.ok
     ? `Клиенты ${rub(after.clients)} · Alfa ${rub(shown.alfa)} · касса ${rub(after.cash)} · абонемент ${rub(shown.cttRest || 0)} · ${codes.join(", ")}`

@@ -210,6 +210,7 @@ describe("шаг 4 сверка остатка", () => {
     assert.match(src, /inboundCustomerLessons/);
     assert.match(src, /inboundCustomerPays/);
     assert.match(src, /markPayJournalIncomplete/);
+    assert.match(src, /paysRecheckAt: ""/);
     assert.match(src, /stampCustomerSync/);
     assert.match(src, /payCustomerFilled/);
     assert.match(src, /alfaHeaderOf/);

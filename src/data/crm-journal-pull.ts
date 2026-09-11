@@ -11,7 +11,7 @@ import { loadScheduleMap } from "./schedule-map";
 import { listDossierCrm, findDossier, dossiersInGroup } from "./dossiers";
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
 import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort } from "./crm-customer-sync";
-import { isPayJournalComplete } from "./crm-pay";
+import { payCustomerFilled } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 
@@ -645,7 +645,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       const diskN = Number(sync.lessonsDisk) || 0;
       const short = lessonsCountShort(diskN, alfaN, probed);
       const journal = lessonsJournalReady(sync);
-      const pays = isPayJournalComplete(p.cid);
+      const pays = payCustomerFilled(p.cid);
       const name = fioOf(p.cid);
       const glist = groupsOfStudent(p.cid).slice(0, 3);
       const gnames = glist.join(", ") || own.map((g) => g.name).filter(Boolean).slice(0, 3).join(", ");
@@ -730,7 +730,7 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
       const diskN = Number(sync.lessonsDisk) || 0;
       const short = lessonsCountShort(diskN, alfaN, probed);
       const journal = lessonsJournalReady(sync);
-      const pays = isPayJournalComplete(p.cid);
+      const pays = payCustomerFilled(p.cid);
       return {
         cid: p.cid,
         branchId: p.branchId,
@@ -909,13 +909,18 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   let pays = 0;
   let tariffs = 0;
   let paysOk = false;
+  let payFail = "";
   if (balance) {
     const { token, request } = await import("./alfacrm");
     const t = await token();
-    const { inboundCustomerPays, paysOf, isPayJournalComplete } = await import("./crm-pay");
-    await inboundCustomerPays(request, t, branchId, cid);
+    const { inboundCustomerPays, paysOf, payCustomerFilled } = await import("./crm-pay");
+    try {
+      await inboundCustomerPays(request, t, branchId, cid);
+    } catch (e) {
+      payFail = e instanceof Error && e.message ? e.message : "Alfa не ответила, нажмите снова";
+    }
     pays = paysOf(cid).length;
-    paysOk = isPayJournalComplete(cid);
+    paysOk = !payFail && payCustomerFilled(cid);
     const { pullCustomerTariffs } = await import("./pupil-tariffs");
     const rows = await pullCustomerTariffs(branchId, cid).catch(() => []);
     tariffs = rows.length;
@@ -937,6 +942,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     blocked: false,
     paysOk,
     paysMore: Boolean(balance && !paysOk),
+    payFail,
     rechecked: Boolean(sync.lessonsRecheckAt) && !short,
     paysRechecked: Boolean(sync.paysRecheckAt),
   };
@@ -1622,7 +1628,9 @@ export async function journalPull(opts: {
       total: people.length,
       rows: merged,
     };
-    store.note = row.short
+    store.note = row.payFail
+      ? `${who}: ${name} · Alfa не ответила, нажмите снова`
+      : row.short
       ? `${who}: ${name} · на диске ${loadCustomerCalendar(one.cid).length} · в Alfa ${row.alfa} — не хватает, добрать`
       : row.paysMore
       ? `${who}: ${name} · касса: ещё страницы, нажмите снова`

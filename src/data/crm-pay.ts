@@ -256,9 +256,9 @@ export function markPayJournalIncomplete(customerId: number) {
   if (!id) return;
   const store = load();
   const set = new Set(store.complete || []);
-  if (!set.has(id)) return;
   set.delete(id);
   store.complete = [...set];
+  if (store.payFill) delete store.payFill[String(id)];
   save(store);
 }
 
@@ -681,6 +681,7 @@ export async function inboundCustomerPays(
   let ran = 0;
   let done = filled;
   let lastShort = false;
+  let failed = false;
   const maxRun = filled ? 1 : PAY_INBOUND_RUN;
   outer: for (let b = bidIdx; b < branches.length; b += 1) {
     const bid = branches[b];
@@ -701,13 +702,16 @@ export async function inboundCustomerPays(
         if (filled || lastShort) break;
         p += 1;
       } catch {
-        lastShort = true;
-        break;
+        failed = true;
+        done = false;
+        store.payFill = { ...(store.payFill || {}), [String(customerId)]: { bid, page: p } };
+        save(store);
+        break outer;
       }
     }
-    if (b === branches.length - 1) done = filled || lastShort;
+    if (!failed && b === branches.length - 1) done = filled || lastShort;
   }
-  if (done && !filled) markPayJournalComplete(customerId);
+  if (done && !filled && !failed) markPayJournalComplete(customerId);
   const known: number[] = [];
   try {
     const { findDossier } = await import("./dossiers");
@@ -747,6 +751,7 @@ export async function inboundCustomerPays(
   const merged = mergePayInbound(pulled, paysOf(customerId), hold);
   replaceCustomerPays(customerId, merged);
   await stampPayCustomerNames(pulled).catch(() => null);
+  if (failed) throw new Error("Alfa не ответила, нажмите снова");
   return merged;
 }
 

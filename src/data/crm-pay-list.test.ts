@@ -162,7 +162,9 @@ describe("касса список", () => {
     assert.match(pay, /payFillAdvance/);
     assert.match(pay, /page: fill.page, pageSize: PAY_INBOUND_PAGE/);
     assert.match(pay, /cashTakeOf/);
-    assert.match(pay, /PAY_STORE_CAP/);
+    assert.match(pay, /if \(failed\) throw new Error/);
+    assert.match(pay, /done && !filled && !failed/);
+    assert.match(pay, /delete store.payFill\[String\(id\)\]/);
     assert.match(pay, /payCttIdOf/);
     assert.match(pay, /ctt_id: ctt/);
     assert.match(pay, /parseDossierCtt/);

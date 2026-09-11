@@ -194,10 +194,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /recheckPeople\("balance", peopleStudy, true\)/);
     assert.match(ui, /recheckGroupsOne/);
     assert.match(ui, /касса: ещё страницы, нажмите снова/);
+    assert.match(pull, /Alfa не ответила, нажмите снова/);
     assert.match(ui, /paysMore: Boolean\(hit\.paysMore\)/);
     assert.doesNotMatch(ui, /pays: Boolean\(hit\.pays\)/);
     assert.match(pull, /paysMore: Boolean\(balance && !paysOk\)/);
-    assert.match(pull, /isPayJournalComplete\(cid\)/);
+    assert.match(pull, /payCustomerFilled\(cid\)/);
     assert.match(pull, /paysOk: balance \? Boolean\(row\.paysOk\)/);
     assert.match(pull, /people: study === "2" \? peopleRows/);
     assert.match(pull, /lessonsRecheckAt/);
