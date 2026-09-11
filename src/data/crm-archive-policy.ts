@@ -6,7 +6,7 @@ import { isPhoneLike } from "./client-display.ts";
 import { pupilNameOk } from "./crm-slots-core.ts";
 
 export type ArchivePolicyFilters = { fio: boolean; notAdult: boolean; intersectLive: boolean };
-export type ArchiveReason = "intersect" | "manual" | "left";
+export type ArchiveReason = "intersect" | "manual" | "left" | "catalog";
 
 export type ArchivePolicy = {
   at: string;
@@ -363,7 +363,7 @@ export function addArchiveWorkingMany(cids: number[], reason: ArchiveReason, pol
   const ids = [...new Set((cids || []).map(Number).filter((n) => n > 0))];
   const prev = pol || loadArchivePolicy();
   if (!ids.length) return prev;
-  if (!prev.ready && reason !== "manual") return prev;
+  if (!prev.ready && reason !== "manual" && reason !== "catalog") return prev;
   const working = new Set(prev.working);
   const manual = new Set(prev.manual);
   const reasons = { ...prev.reasons };

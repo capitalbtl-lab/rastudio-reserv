@@ -170,6 +170,12 @@ describe("рабочий архив", () => {
     assert.equal(next.working.includes(8), false);
   });
 
+  it("загрузка справочника сразу кладёт в рабочий набор", () => {
+    const next = addArchiveWorkingMany([9], "catalog", empty);
+    assert.equal(next.ready, true);
+    assert.equal(next.working.includes(9), true);
+  });
+
   it("нет на диске — не держим в working", () => {
     const first = recountArchivePolicy(
       [
@@ -226,7 +232,7 @@ describe("рабочий архив", () => {
     assert.match(views, /persist: true/);
     assert.match(views, /exist\.status === "учится"/);
     assert.doesNotMatch(views, /byPhone && Number\(byPhone\.crmId\) !== id/);
-    assert.match(views, /catalogFilterBlocks/);
+    assert.match(views, /addArchiveWorkingMany\(\[id\], "catalog"\)/);
     assert.match(views, /parseCatalogFilter/);
     assert.match(views, /patch\.byCrmOnly/);
     assert.match(views, /cur\.done && !opts\?\.reset/);

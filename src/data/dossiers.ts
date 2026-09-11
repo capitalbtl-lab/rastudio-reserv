@@ -1646,6 +1646,7 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean; filter?: 
         continue;
       }
       applyCrmCustomer(item, branch, true, cur.teachers, { persist: true, quiet: true, byCrmOnly: true });
+      addArchiveWorkingMany([id], "catalog");
       wrote = true;
       cid = id;
       name = archiveLiveName(child) || archiveLiveName(parent) || child || parent;
