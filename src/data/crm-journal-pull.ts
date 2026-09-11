@@ -236,12 +236,7 @@ function pupilLinkCountMap(study: JournalPullStudy) {
 }
 
 function pupilArchivePlan(study: "1" | "2") {
-  const seen = new Set<number>();
-  const people = [...rankedStudentIds("1"), ...rankedStudentIds("2")].filter((p) => {
-    if (seen.has(p.cid)) return false;
-    seen.add(p.cid);
-    return true;
-  });
+  const people = rankedStudentIds(study);
   const liveKeys = new Set(journalPullGroups().filter((g) => !g.archived).map((g) => `${g.branchId}:${g.groupId}`));
   const bagKeys = new Set(loadJournalArchiveGroups().map((g) => `${g.branchId}:${g.groupId}`));
   const unique = new Map<string, { groupId: number; branchId: number; n: number; name: string }>();

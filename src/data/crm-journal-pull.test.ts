@@ -83,7 +83,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /kind === "archiveCount"/);
     assert.match(pull, /kind === "archiveCatalog"/);
     assert.match(ui, /Посчитать отбор/);
-    assert.match(pull, /pupilArchivePlan/);
+    assert.match(pull, /function pupilArchivePlan\(study: "1" \| "2"\)/);
+    assert.match(pull, /rankedStudentIds\(study\)/);
+    assert.doesNotMatch(pull, /\[\.\.\.rankedStudentIds\("1"\), \.\.\.rankedStudentIds\("2"\)\]/);
     assert.match(pull, /pending\.slice\(0, 10\)/);
     assert.match(pull, /groupLinks/);
     assert.doesNotMatch(pull, /enqueueExport/);
