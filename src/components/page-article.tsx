@@ -106,7 +106,7 @@ export function PageArticle({
     return (
       <>
         {seo}
-        <ProgrammingCoursePage page={page} course={cmsCourse} schedule={schedule} courses={courses} teachers={teachers} />
+        <ProgrammingCoursePage page={page} course={cmsCourse} schedule={schedule} courses={courses} teachers={teachers} signup={signup} />
       </>
     );
   }
@@ -114,7 +114,7 @@ export function PageArticle({
     return (
       <>
         {seo}
-        <MasterClassPage page={page} master={cmsMaster} />
+        <MasterClassPage page={page} master={cmsMaster} signup={signup} />
       </>
     );
   }
@@ -122,21 +122,21 @@ export function PageArticle({
     return (
       <>
         {seo}
-        <TeamPage page={page} teachers={teachers} />
+        <TeamPage page={page} teachers={teachers} signup={signup} />
       </>
     );
   if (page.kind === "catalog")
     return (
       <>
         {seo}
-        <CatalogPage page={page} courses={courses} />
+        <CatalogPage page={page} courses={courses} signup={signup} />
       </>
     );
   if (page.kind === "contacts")
     return (
       <>
         {seo}
-        <ContactsPage page={page} />
+        <ContactsPage page={page} signup={signup} />
       </>
     );
   if (page.kind === "master-list") {
@@ -144,9 +144,9 @@ export function PageArticle({
       <>
         {seo}
         {cmsMasters.length ? (
-          <MasterListPageCms page={page} masters={cmsMasters} />
+          <MasterListPageCms page={page} masters={cmsMasters} signup={signup} />
         ) : (
-          <MasterListPage page={page} masters={masters} />
+          <MasterListPage page={page} masters={masters} signup={signup} />
         )}
       </>
     );
@@ -165,7 +165,7 @@ export function PageArticle({
   return (
     <>
       {seo}
-      <PlainPage page={page} schedule={schedule} courses={courses} />
+      <PlainPage page={page} schedule={schedule} courses={courses} signup={signup} />
     </>
   );
 }
@@ -296,7 +296,7 @@ function CinematicPage({
         </div>
         {!schedule.length && signup.trialOn ? (
           <div className="mt-16">
-            <TrialForm compact courseId={trialCourseForPath(page.pathDecoded || page.path)} />
+            <TrialForm compact courseId={trialCourseForPath(page.pathDecoded || page.path)} signup={signup} />
           </div>
         ) : null}
       </div>
@@ -311,10 +311,12 @@ function PlainPage({
   page,
   schedule,
   courses = [],
+  signup = SITE_SIGNUP_DEFAULT,
 }: {
   page: SitePage;
   schedule: CmsSession[];
   courses?: CourseCard[];
+  signup?: SiteSignup;
 }) {
   const body = page.paragraphs;
   const path = page.pathDecoded || page.path;
@@ -350,14 +352,14 @@ function PlainPage({
         ) : null}
         <Related page={page} courses={courses} />
         <div className="mt-16">
-          <TrialForm compact />
+          <TrialForm compact signup={signup} />
         </div>
       </div>
     </article>
   );
 }
 
-function TeamPage({ page, teachers }: { page: SitePage; teachers: TeacherCard[] }) {
+function TeamPage({ page, teachers, signup = SITE_SIGNUP_DEFAULT }: { page: SitePage; teachers: TeacherCard[]; signup?: SiteSignup }) {
   const photos = teachers.slice(0, 6).map((t) => ({
     src: t.photo,
     alt: t.alt || t.name,
@@ -397,14 +399,14 @@ function TeamPage({ page, teachers }: { page: SitePage; teachers: TeacherCard[] 
           ))}
         </div>
         <div className="mt-16">
-          <TrialForm compact />
+          <TrialForm compact signup={signup} />
         </div>
       </div>
     </article>
   );
 }
 
-function CatalogPage({ page, courses }: { page: SitePage; courses: CourseCard[] }) {
+function CatalogPage({ page, courses, signup = SITE_SIGNUP_DEFAULT }: { page: SitePage; courses: CourseCard[]; signup?: SiteSignup }) {
   const search = useSearch({ strict: false }) as { age?: string; city?: string };
   const [q, setQ] = useState("");
   const [group, setGroup] = useState<(typeof COURSE_GROUPS)[number]["id"]>("all");
@@ -537,14 +539,14 @@ function CatalogPage({ page, courses }: { page: SitePage; courses: CourseCard[] 
         <p className="mt-10 text-sm text-muted">По этому запросу курсов нет — попробуйте другое слово.</p>
       ) : null}
       <div className="mt-16">
-        <TrialForm compact />
+        <TrialForm compact signup={signup} />
       </div>
       </div>
     </article>
   );
 }
 
-function ContactsPage({ page }: { page: SitePage }) {
+function ContactsPage({ page, signup = SITE_SIGNUP_DEFAULT }: { page: SitePage; signup?: SiteSignup }) {
   return (
     <article>
       <CoursePageHero
@@ -585,14 +587,14 @@ function ContactsPage({ page }: { page: SitePage }) {
         ))}
       </div>
       <div className="mt-16">
-        <TrialForm />
+        <TrialForm signup={signup} />
       </div>
       </div>
     </article>
   );
 }
 
-function MasterListPage({ page, masters }: { page: SitePage; masters: MasterCard[] }) {
+function MasterListPage({ page, masters, signup = SITE_SIGNUP_DEFAULT }: { page: SitePage; masters: MasterCard[]; signup?: SiteSignup }) {
   return (
     <article>
       <CoursePageHero
@@ -616,7 +618,7 @@ function MasterListPage({ page, masters }: { page: SitePage; masters: MasterCard
       </div>
       <Gallery page={page} />
       <div className="mt-16">
-        <TrialForm compact />
+        <TrialForm compact signup={signup} />
       </div>
       </div>
     </article>

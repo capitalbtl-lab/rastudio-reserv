@@ -17,6 +17,7 @@ import { EditText } from "@/components/home-read";
 import { loadPublicEdits } from "@/data/load-site-page";
 import { hydrateEdits, pageEdit, type EditsStore } from "@/data/edits-core";
 import type { HomeLayoutDoc } from "@/data/home-layout-core";
+import type { SiteSignup } from "@/data/site-signup-core";
 import { priceShort } from "@/data/prices-core";
 import { ageBadge, courseNameOnly } from "@/data/ages";
 import { cn } from "@/lib/utils";
@@ -87,7 +88,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const data = Route.useLoaderData() as { edits?: EditsStore; layout?: HomeLayoutDoc };
+  const data = Route.useLoaderData() as { edits?: EditsStore; layout?: HomeLayoutDoc; signup?: SiteSignup };
   if (data?.edits) hydrateEdits(data.edits);
   const hero = pageEdit("/");
   return (
@@ -422,7 +423,7 @@ function Home() {
 
       <HomeSlot id="trial">
       <section id="trial" className="page-wrap py-12 md:py-16">
-        <TrialForm />
+        <TrialForm signup={data?.signup} />
       </section>
       </HomeSlot>
       </HomeCanvas>

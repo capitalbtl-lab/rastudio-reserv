@@ -8,7 +8,7 @@ import { reviewsForPath, YANDEX_RATING } from "@/data/reviews";
 import { branchMeta, nextSlots } from "@/lib/schedule";
 import { freePlaces, formatTrialDate, nextLessonDate, tidyGroupName, whenShort } from "@/lib/trial-slot";
 import { GroupCtas } from "@/components/group-ctas";
-import { SITE_SIGNUP_DEFAULT, type SiteSignup } from "@/data/site-signup-core";
+import { SITE_SIGNUP_DEFAULT, trialUrlFor, type SiteSignup } from "@/data/site-signup-core";
 import { CoursePrice } from "@/components/course-price";
 import { cn } from "@/lib/utils";
 
@@ -69,11 +69,9 @@ export function ConvertBand({
                     </span>
                     {signup.trialOn ? (
                     <a
-                      href="#trial"
-                      onClick={() => {
-                        window.dispatchEvent(new CustomEvent("ra-pick-group", { detail: slot.session.id }));
-                        onTrial?.(slot.session.id);
-                      }}
+                      href={trialUrlFor(signup, Number(slot.session.branchId) || 2)}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="shrink-0 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white"
                     >
                       Запись на пробное
@@ -87,7 +85,9 @@ export function ConvertBand({
         ) : (
           <div className="border-t border-border/70 px-5 py-3 md:px-6">
             <a
-              href="#trial"
+              href={trialUrlFor(signup, 2)}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-fg/65 transition-colors hover:border-fg/25 hover:text-fg"
             >
               Записаться на пробное
@@ -191,7 +191,7 @@ export function ConvertAside({
       ) : null}
       {group ? (
         <GroupCtas
-          className="mt-4 w-full [&_button]:w-full"
+          className="mt-4 w-full [&_a]:w-full [&_button]:w-full"
           session={group}
           signup={signup}
           onTrial={() => onTrial?.(group.id)}

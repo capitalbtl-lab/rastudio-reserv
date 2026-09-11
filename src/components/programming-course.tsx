@@ -5,6 +5,7 @@ import { SITE } from "@/data/site";
 import { PageLink } from "@/components/page-link";
 import { TrialForm } from "@/components/trial-form";
 import { trialCourseForPath } from "@/data/trial-public";
+import { SITE_SIGNUP_DEFAULT, type SiteSignup } from "@/data/site-signup-core";
 import {
   BulletList,
   CmsImg,
@@ -32,9 +33,10 @@ type Props = {
   schedule: CmsSession[];
   courses?: CourseCard[];
   teachers?: TeacherCard[];
+  signup?: SiteSignup;
 };
 
-export function ProgrammingCoursePage({ page, course, schedule, courses = [], teachers = [] }: Props) {
+export function ProgrammingCoursePage({ page, course, schedule, courses = [], teachers = [], signup = SITE_SIGNUP_DEFAULT }: Props) {
   const accent = course.accent || "#205EDC";
   const images = [];
   const seen = new Set<string>();
@@ -72,7 +74,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
         facts={courseOfferFacts(course.pathDecoded || course.path || page.path, course.age)}
         path={course.pathDecoded || course.path || page.path}
       />
-      <ConvertBand path={course.pathDecoded || course.path || page.path} sessions={schedule} />
+      <ConvertBand path={course.pathDecoded || course.path || page.path} sessions={schedule} signup={signup} />
       {page.videos?.length ? (
         <section className="page-wrap pt-10">
           <p className="kicker">Видео курса</p>
@@ -239,7 +241,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
 
         <PageReviews path={course.pathDecoded || course.path || page.path} />
 
-        <ScheduleBlock sessions={schedule} scope="course" />
+        <ScheduleBlock sessions={schedule} scope="course" signup={signup} />
 
         <p className="text-sm text-muted">
           Вопросы по программе:{" "}
@@ -256,7 +258,7 @@ export function ProgrammingCoursePage({ page, course, schedule, courses = [], te
           courses={courses}
         />
         <div className="mt-12">
-          <TrialForm courseId={trialCourseForPath(page.pathDecoded || page.path)} />
+          <TrialForm courseId={trialCourseForPath(page.pathDecoded || page.path)} signup={signup} />
         </div>
       </section>
     </article>

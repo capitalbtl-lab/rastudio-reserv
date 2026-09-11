@@ -1,5 +1,6 @@
-import { DEFAULT_STATUS_PUBLISH, type StatusPublish } from "./group-status";
+import { DEFAULT_STATUS_PUBLISH, type StatusPublish } from "./group-status.ts";
 export const ALFA_HOST = "https://studiyarazvivaysya.s20.online";
+const TRIAL_CSS = encodeURIComponent("//cdn.alfacrm.pro/lead-form/form.css");
 
 export const SITE_BRANCHES = [
   { id: 2, key: "cmit", label: "ЦМИТ · Октябрьской революции, 340" },
@@ -8,10 +9,9 @@ export const SITE_BRANCHES = [
   { id: 4, key: "leto", label: "Летние программы" },
 ] as const;
 
-export function trialFormUrl(branchId: number) {
-  const b = Number(branchId) || 2;
-  const css = encodeURIComponent("//cdn.alfacrm.pro/lead-form/form.css");
-  return `${ALFA_HOST}/common/${b}/form/draw?id=20&lead_source_id=2&baseColor=205EDC&borderRadius=8&css=${css}`;
+/** Форма 20 живёт в компании 2. Филиал 1/3/4 с /common/N/ форму не открывают. */
+export function trialFormUrl(_branchId?: number) {
+  return `${ALFA_HOST}/common/2/form/draw?id=20&lead_source_id=2&baseColor=205EDC&borderRadius=8&css=${TRIAL_CSS}`;
 }
 
 export function groupSignupUrl(branchId: number, gid: number | string) {
@@ -43,9 +43,17 @@ export const SITE_SIGNUP_DEFAULT: SiteSignup = {
   statusPublish: { ...DEFAULT_STATUS_PUBLISH },
 };
 
+/** Сток id=20 с /common/1|3|4/ — та же форма, компания 2. Чужой id не трогаем. */
+export function normalizeTrialHref(href: string) {
+  const s = String(href || "").trim();
+  if (!s) return trialFormUrl();
+  return s.replace(/\/common\/[134]\/form\/draw\?id=20(?=&|$)/, "/common/2/form/draw?id=20");
+}
+
 export function trialUrlFor(signup: SiteSignup, branchId?: number) {
   const id = String(Number(branchId) || 2);
-  return String(signup.trialByBranch?.[id] || "").trim() || trialFormUrl(Number(id));
+  const raw = String(signup.trialByBranch?.[id] || "").trim() || trialFormUrl(Number(id));
+  return normalizeTrialHref(raw);
 }
 
 export function resolveGroupSignup(opts: { signup?: string; branchId?: number; groupId?: number }) {

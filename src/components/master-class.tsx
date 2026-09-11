@@ -5,8 +5,9 @@ import { PageLink } from "@/components/page-link";
 import { TrialForm } from "@/components/trial-form";
 import { CmsImg, Kicker, ProseBlocks, CoursePageHero } from "@/components/cms-blocks";
 import { cn } from "@/lib/utils";
+import { SITE_SIGNUP_DEFAULT, type SiteSignup } from "@/data/site-signup-core";
 
-export function MasterClassPage({ page, master }: { page: SitePage; master: CmsMaster }) {
+export function MasterClassPage({ page, master, signup = SITE_SIGNUP_DEFAULT }: { page: SitePage; master: CmsMaster; signup?: SiteSignup }) {
   const hero = master.image || page.images[0];
   const sections = [
     { title: "Подробнее о занятии", text: master.long },
@@ -69,7 +70,7 @@ export function MasterClassPage({ page, master }: { page: SitePage; master: CmsM
         ) : null}
 
         <div className="mt-16">
-          <TrialForm compact />
+          <TrialForm compact signup={signup} />
         </div>
       </div>
     </article>
@@ -86,7 +87,7 @@ function Meta({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function MasterListPageCms({ page, masters }: { page: SitePage; masters: CmsMaster[] }) {
+export function MasterListPageCms({ page, masters, signup = SITE_SIGNUP_DEFAULT }: { page: SitePage; masters: CmsMaster[]; signup?: SiteSignup }) {
   const directions = useMemo(() => {
     const set = new Set<string>();
     masters.forEach((m) => m.directions.forEach((d) => set.add(d)));
@@ -183,7 +184,7 @@ export function MasterListPageCms({ page, masters }: { page: SitePage; masters: 
         <p className="mt-10 text-sm text-muted">По этому запросу мастер-классов нет.</p>
       ) : null}
       <div className="mt-16">
-        <TrialForm compact />
+        <TrialForm compact signup={signup} />
       </div>
       </div>
     </article>
