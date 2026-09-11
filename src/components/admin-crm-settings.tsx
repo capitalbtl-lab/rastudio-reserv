@@ -1872,7 +1872,7 @@ export function AdminCrmSettings() {
       cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold transition-colors", on ? "bg-black text-white" : "bg-white ring-1 ring-black/10 hover:bg-black/5");
     const bits = [
       archAgeFrom || archAgeTo ? `${archAgeFrom || "…"}–${archAgeTo || "…"} лет` : "",
-      archNoDob ? "без даты" : "",
+      archNoDob ? "без д/р" : "",
       archNeedFio ? "ФИО" : "",
       archNeedGroups ? "группы" : "",
     ].filter(Boolean);
@@ -1904,7 +1904,7 @@ export function AdminCrmSettings() {
             />
           </span>
           <button type="button" className={chip(archNoDob)} onClick={() => setArchNoDob((v) => !v)}>
-            без даты тоже
+            без д/р
           </button>
           <button type="button" className={chip(archNeedFio)} onClick={() => setArchNeedFio((v) => !v)}>
             только с ФИО
