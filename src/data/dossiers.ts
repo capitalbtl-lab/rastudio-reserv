@@ -1608,7 +1608,7 @@ function catalogNote(rep: ArchiveCatalogReport) {
   ]
     .filter(Boolean)
     .join(" · ");
-  return `${rep.step} · ${who} · ${why} · на диске архивных ${rep.disk}. Кто записан — слева.`;
+  return `${rep.step} · ${who} · ${why}`;
 }
 
 export async function syncArchiveCatalogTick(opts?: { reset?: boolean; filter?: ArchiveCatalogFilter | string }) {
