@@ -991,7 +991,7 @@ export async function journalPull(opts: {
       store.note = res.note || res.error || "Справочник не ответил.";
       store.at = new Date().toISOString();
       saveStore(store);
-      return { ok: false as const, error: res.error || store.note, more: Boolean(res.more), extra: store.note, lastArchiveCatalog: store.lastArchiveCatalog || null, ...snap() };
+      return { ...snap(), ok: false as const, error: res.error || store.note, more: Boolean(res.more), extra: store.note, lastArchiveCatalog: store.lastArchiveCatalog || null };
     }
     store.lastArchiveCatalog = res.report;
     store.note = res.note;
