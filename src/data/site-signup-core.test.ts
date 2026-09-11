@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
   SITE_SIGNUP_DEFAULT,
+  groupCardSignup,
   isTrialHref,
   parseTrialEmbed,
   trialFormUrl,
@@ -50,7 +51,7 @@ describe("форма пробного с сайта", () => {
   it("кнопка пробного открывает окно сайта, не вкладку Alfa", () => {
     const src = readFileSync(new URL("../components/group-ctas.tsx", import.meta.url), "utf8");
     assert.match(src, /openTrialForm/);
-    assert.doesNotMatch(src, /target="_blank"/);
+    assert.match(src, /groupCardSignup/);
   });
 
   it("оболочка сайта вешает TrialPopup", () => {
@@ -72,10 +73,20 @@ describe("форма пробного с сайта", () => {
     assert.doesNotMatch(src, /lg:grid-cols/);
   });
 
-  it("запись в группу остаётся формой rastudio", () => {
-    const src = readFileSync(new URL("../components/trial-modal.tsx", import.meta.url), "utf8");
-    assert.match(src, /Запись в группу/);
-    assert.match(src, /sendTrial/);
+  it("запись в группу — ссылка с карточки группы", () => {
+    assert.equal(
+      groupCardSignup({ branchId: 1, groupId: 454 }),
+      "https://studiyarazvivaysya.s20.online/common/1/lead/create?gid=454",
+    );
+    assert.equal(
+      groupCardSignup({ signup: "https://studiyarazvivaysya.s20.online/common/2/lead/create?gid=528", groupId: 1, branchId: 1 }),
+      "https://studiyarazvivaysya.s20.online/common/2/lead/create?gid=528",
+    );
+    assert.equal(groupCardSignup({}), "");
+    const src = readFileSync(new URL("../components/group-ctas.tsx", import.meta.url), "utf8");
+    assert.match(src, /groupCardSignup/);
+    assert.match(src, /target="_blank"/);
+    assert.doesNotMatch(src, /onGroup\?\(\)/);
   });
 
   it("ссылка пробного ловится, запись в группу — нет", () => {

@@ -94,7 +94,7 @@ export function AdminPublicSite() {
       <section className="rounded-2xl bg-white p-4 ring-1 ring-black/8">
         <h3 className="font-semibold">Кнопки записи на сайте</h3>
         <p className="mt-1 text-sm text-muted">
-          Вставьте iframe формы Alfa — он откроется во всех кнопках и окнах «Запись на пробное» и в блоке формы на сайте. Запись в группу это не трогает: своё окно rastudio. Витрина групп: statusId + priority ≥ 1 + courseId.
+          Вставьте iframe формы Alfa — он откроется во всех кнопках и окнах «Запись на пробное». «Запись в группу» открывает ссылку с карточки группы (lead/create?gid=). Витрина групп: statusId + priority ≥ 1 + courseId.
         </p>
         <div className="mt-3 flex flex-wrap gap-3">
           <label className="flex items-center gap-2 text-sm">

@@ -20,10 +20,17 @@ export function trialIframeHtml(src?: string) {
 }
 
 export function groupSignupUrl(branchId: number, gid: number | string) {
-  const b = Number(branchId) || 2;
+  const b = Number(branchId) || 1;
   const g = Number(gid) || 0;
   if (!g) return "";
   return `${ALFA_HOST}/common/${b}/lead/create?gid=${g}`;
+}
+
+/** Та же ссылка, что поле «Запись» на карточке группы. */
+export function groupCardSignup(s: { signup?: string; groupId?: number; branchId?: number }) {
+  const raw = String(s.signup || "").trim();
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return groupSignupUrl(Number(s.branchId) || 1, Number(s.groupId) || 0);
 }
 
 export type SiteSignup = {
@@ -110,7 +117,5 @@ export function openTrialForm(branchId?: number) {
 }
 
 export function resolveGroupSignup(opts: { signup?: string; branchId?: number; groupId?: number }) {
-  const raw = String(opts.signup || "").trim();
-  if (/^https?:\/\//i.test(raw)) return raw;
-  return groupSignupUrl(Number(opts.branchId) || 0, Number(opts.groupId) || 0);
+  return groupCardSignup(opts);
 }

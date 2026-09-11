@@ -5,7 +5,7 @@ import { ArrowUpRight } from "lucide-react";
 import type { CmsSession } from "@/data/cms";
 import { AGE_BANDS, type AgeBandId } from "@/data/ages";
 import { PageLink } from "@/components/page-link";
-import { isTrialHref, openTrialForm } from "@/data/site-signup-core";
+import { groupCardSignup, isTrialHref, openTrialForm } from "@/data/site-signup-core";
 import { cn } from "@/lib/utils";
 import {
   WEEKDAYS,
@@ -223,6 +223,7 @@ export function ScheduleFinder({ sessions }: { sessions: CmsSession[] }) {
                 {group.items.map((slot) => {
                   const meta = branchMeta(slot.session);
                   const href = courseHref(slot.session);
+                  const groupHref = groupCardSignup(slot.session);
                   return (
                     <li key={slot.id} className="border-t border-border/60 first:border-t-0">
                       <div className="flex items-center gap-3 px-3.5 py-3 md:gap-5 md:px-4">
@@ -248,17 +249,9 @@ export function ScheduleFinder({ sessions }: { sessions: CmsSession[] }) {
                             {` · ${meta.city}, ${meta.short}`}
                           </span>
                         </span>
-                        {isTrialHref(slot.session.signup || "") ? (
-                          <button
-                            type="button"
-                            onClick={() => openTrialForm(slot.session.branchId)}
-                            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-fg px-3 text-xs font-semibold text-bg hover:bg-primary"
-                          >
-                            Запись
-                          </button>
-                        ) : slot.session.signup?.startsWith("http") ? (
+                        {groupHref ? (
                           <a
-                            href={slot.session.signup}
+                            href={groupHref}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-fg px-3 text-xs font-semibold text-bg hover:bg-primary"
@@ -266,6 +259,14 @@ export function ScheduleFinder({ sessions }: { sessions: CmsSession[] }) {
                             Запись
                             <ArrowUpRight className="size-3.5" strokeWidth={2.2} />
                           </a>
+                        ) : isTrialHref(slot.session.signup || "") ? (
+                          <button
+                            type="button"
+                            onClick={() => openTrialForm(slot.session.branchId)}
+                            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-fg px-3 text-xs font-semibold text-bg hover:bg-primary"
+                          >
+                            Запись
+                          </button>
                         ) : href ? (
                           <PageLink
                             to={`${href}#trial`}
