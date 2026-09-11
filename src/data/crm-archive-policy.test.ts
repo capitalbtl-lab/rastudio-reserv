@@ -233,6 +233,7 @@ describe("рабочий архив", () => {
     assert.match(views, /exist\.status === "учится"/);
     assert.doesNotMatch(views, /byPhone && Number\(byPhone\.crmId\) !== id/);
     assert.match(views, /addArchiveWorkingMany\(\[id\], "catalog"\)/);
+    assert.match(views, /catalogNeedsHydrate/);
     assert.match(views, /parseCatalogFilter/);
     assert.match(views, /patch\.byCrmOnly/);
     assert.match(views, /cur\.done && !opts\?\.reset/);

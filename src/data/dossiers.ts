@@ -1389,6 +1389,12 @@ function catalogItemDob(item: Record<string, unknown>) {
   return String(item.dob || item.b_date || item.born || "");
 }
 
+function catalogNeedsHydrate(item: Record<string, unknown>, branch: number, f: ArchiveCatalogFilter) {
+  if ((f.ageFrom != null || f.ageTo != null) && !catalogItemDob(item) && !Number(item.age)) return true;
+  if (f.groups && !groupsFromItem(item, branch, false).length) return true;
+  return false;
+}
+
 function catalogFilterBlocks(item: Record<string, unknown>, branch: number, child: string, parent: string, f: ArchiveCatalogFilter): string {
   if (f.fio && !archiveFioOk(child) && !archiveFioOk(parent)) return "fio";
   if (f.groups && !groupsFromItem(item, branch, false).length) return "groups";
@@ -1411,6 +1417,9 @@ export type ArchiveCatalogReport = {
   name: string;
   sessionWrote: number;
   sessionSkip: number;
+  skipAge?: number;
+  skipGroups?: number;
+  skipName?: number;
   rejected: ArchiveCatalogRejected[];
   disk: number;
 };
@@ -1426,6 +1435,9 @@ type CatalogCursor = {
   teachersReady?: boolean;
   sessionWrote: number;
   sessionSkip: number;
+  skipAge: number;
+  skipGroups: number;
+  skipName: number;
   rejected: ArchiveCatalogRejected[];
   done: boolean;
 };
@@ -1449,6 +1461,9 @@ function emptyCatalogCursor(): CatalogCursor {
     teachersReady: false,
     sessionWrote: 0,
     sessionSkip: 0,
+    skipAge: 0,
+    skipGroups: 0,
+    skipName: 0,
     rejected: [],
     done: false,
   };
@@ -1476,6 +1491,9 @@ function loadCatalogCursor(): CatalogCursor {
       teachersReady: Boolean(raw.teachersReady),
       sessionWrote: Math.max(0, Number(raw.sessionWrote) || 0),
       sessionSkip: Math.max(0, Number(raw.sessionSkip) || 0),
+      skipAge: Math.max(0, Number(raw.skipAge) || 0),
+      skipGroups: Math.max(0, Number(raw.skipGroups) || 0),
+      skipName: Math.max(0, Number(raw.skipName) || 0),
       rejected,
       done: Boolean(raw.done),
     };
@@ -1518,12 +1536,15 @@ function catalogStep(cur: CatalogCursor) {
 
 function catalogNote(rep: ArchiveCatalogReport) {
   const who = rep.wrote ? `№${rep.cid} ${rep.name}` : rep.name || "пропуск";
-  const samples = (rep.rejected || [])
-    .slice(0, 20)
-    .map((x) => `${x.id} ${x.name}`)
-    .join("; ");
-  const tail = samples ? ` Отсев: ${samples}.` : "";
-  return `${rep.step} · ${who} · записано за сессию ${rep.sessionWrote} · без ФИО ${rep.sessionSkip} · на диске архивных ${rep.disk}. Рабочий набор не меняли — нажмите «Посчитать отбор».${tail}`;
+  const why = [
+    rep.sessionWrote ? `записано ${rep.sessionWrote}` : "записано 0",
+    rep.skipName ? `без имени ${rep.skipName}` : "",
+    rep.skipAge ? `возраст ${rep.skipAge}` : "",
+    rep.skipGroups ? `нет групп ${rep.skipGroups}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return `${rep.step} · ${who} · ${why} · на диске архивных ${rep.disk}. Кто записан — слева.`;
 }
 
 export async function syncArchiveCatalogTick(opts?: { reset?: boolean; filter?: ArchiveCatalogFilter | string }) {
@@ -1569,6 +1590,7 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean; filter?: 
   let cid = 0;
   let name = "";
   let pagesFetched = 0;
+  let hydrated = false;
   const filter = typeof opts?.filter === "string" ? parseCatalogFilter(opts.filter) : opts?.filter || {};
   if (filter.ageFrom != null && filter.ageTo != null && filter.ageFrom > filter.ageTo) {
     cur.busyAt = "";
@@ -1619,30 +1641,49 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean; filter?: 
         bumpCatalogPage(cur, items.length < CATALOG_PAGE);
         continue;
       }
-      const item = items[cur.idx] || {};
-      cur.idx += 1;
-      const id = Number(item.id) || 0;
-      const rem = item.removed;
+      const peek = items[cur.idx] || {};
+      const id = Number(peek.id) || 0;
+      const rem = peek.removed;
       if (!id || rem === 1 || rem === "1" || rem === true) {
+        cur.idx += 1;
         cur.sessionSkip += 1;
         continue;
       }
-      const rawName = String(item.name || "").trim();
+      const rawName = String(peek.name || "").trim();
       const child = isPhoneLike(rawName) ? "" : rawName;
-      const parent = String(item.legal_name || "");
+      const parent = String(peek.legal_name || "");
       if (!archiveCatalogNamesOk(child, parent)) {
+        cur.idx += 1;
         cur.sessionSkip += 1;
+        cur.skipName += 1;
         if (cur.rejected.length < 20) cur.rejected.push({ id, name: (rawName || parent || "—").slice(0, 80) });
-        continue;
-      }
-      const blocked = catalogFilterBlocks(item, branch, child, parent, filter);
-      if (blocked) {
-        cur.sessionSkip += 1;
         continue;
       }
       const exist = findDossier({ crmId: id });
       if (exist && (String(exist.extras?.is_study) === "1" || exist.status === "учится")) {
+        cur.idx += 1;
         cur.sessionSkip += 1;
+        continue;
+      }
+      let item = peek;
+      if (catalogNeedsHydrate(item, branch, filter)) {
+        if (hydrated) break;
+        const one = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/customer/index`, { page: 0, pageSize: 1, id }, t).catch(
+          () => ({ items: [] as Record<string, unknown>[] }),
+        );
+        const full = (one.items || []).find((x) => Number(x.id) === id);
+        if (full) item = full;
+        hydrated = true;
+      }
+      cur.idx += 1;
+      const blocked = catalogFilterBlocks(item, branch, child, parent, filter);
+      if (blocked) {
+        cur.sessionSkip += 1;
+        if (blocked === "age") cur.skipAge += 1;
+        else if (blocked === "groups") cur.skipGroups += 1;
+        else cur.skipName += 1;
+        name = blocked === "age" ? "пропуск · возраст" : blocked === "groups" ? "пропуск · нет групп" : "пропуск · имя";
+        if (hydrated) break;
         continue;
       }
       applyCrmCustomer(item, branch, true, cur.teachers, { persist: true, quiet: true, byCrmOnly: true });
@@ -1668,6 +1709,9 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean; filter?: 
     name: wrote ? name : pagesFetched ? "пропуск" : name || "пропуск",
     sessionWrote: cur.sessionWrote,
     sessionSkip: cur.sessionSkip,
+    skipAge: cur.skipAge,
+    skipGroups: cur.skipGroups,
+    skipName: cur.skipName,
     rejected: cur.rejected.slice(0, 20),
     disk: archiveDiskCount(),
   };
