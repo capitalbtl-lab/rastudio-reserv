@@ -47,10 +47,13 @@ body,
   display: none !important;
 }
 
-.alfa-form-content-wrapper {
+.alfa-form-content-wrapper,
+.alfa-form form,
+#lead-form form {
   display: grid !important;
   grid-template-columns: 1fr 1fr !important;
-  gap: 0.55rem 0.85rem !important;
+  gap: 0.7rem 1rem !important;
+  width: 100% !important;
 }
 
 .alfa-form-input-container {

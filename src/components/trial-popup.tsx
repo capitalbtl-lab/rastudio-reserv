@@ -96,7 +96,7 @@ export function TrialPopup() {
             </a>
           </p>
         </div>
-        <div className="h-[22rem] shrink-0 px-5 pb-5 sm:h-[24rem] sm:px-7 sm:pb-6">
+        <div className="h-[34rem] shrink-0 px-5 pb-5 sm:h-[26rem] sm:px-7 sm:pb-6">
           <TrialEmbed src={src} className="h-full w-full" />
         </div>
       </div>

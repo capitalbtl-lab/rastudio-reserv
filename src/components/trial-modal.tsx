@@ -102,7 +102,7 @@ export function TrialModal({
             <h2 className="display mt-2 pr-10 text-[1.7rem] sm:text-[1.9rem]">Запись на пробное</h2>
             <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted">Первое занятие без абонемента.</p>
           </div>
-          <div className="h-[22rem] shrink-0 px-5 pb-5 sm:h-[24rem] sm:px-7 sm:pb-6">
+          <div className="h-[34rem] shrink-0 px-5 pb-5 sm:h-[26rem] sm:px-7 sm:pb-6">
             <TrialEmbed src={trialSrc} className="h-full w-full" />
           </div>
         </div>

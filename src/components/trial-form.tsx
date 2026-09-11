@@ -19,9 +19,9 @@ export function TrialForm({
   void courseId;
 
   return (
-    <section id={compact ? undefined : "trial"} className="overflow-hidden rounded-[1.75rem] bg-surface px-5 py-8 shadow-[var(--shadow-border)] md:px-10 md:py-11">
-      <div className={`grid gap-8 ${compact ? "" : "lg:grid-cols-[0.85fr_1.15fr] lg:items-start"}`}>
-        <div>
+    <section id={compact ? undefined : "trial"} className="overflow-hidden rounded-[1.75rem] bg-surface px-5 py-8 shadow-[var(--shadow-border)] md:px-10 md:py-10">
+      <div className={`grid gap-6 ${compact ? "" : "lg:grid-cols-[minmax(15rem,0.78fr)_1.22fr] lg:items-start lg:gap-10"}`}>
+        <div className="lg:pt-1">
           <p className="kicker text-primary">Пробное занятие</p>
           <h2 className="display mt-3 max-w-md text-3xl md:text-4xl">Приведите ребёнка на первое занятие</h2>
           <p className="mt-4 max-w-md text-[0.98rem] leading-relaxed text-muted">
@@ -32,7 +32,7 @@ export function TrialForm({
             .
           </p>
         </div>
-        <div className="h-[26rem] overflow-hidden">
+        <div className="h-[38rem] sm:h-[26rem]">
           <TrialEmbed src={src} className="h-full w-full" />
         </div>
       </div>
