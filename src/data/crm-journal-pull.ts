@@ -951,7 +951,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   if (balance) {
     const { token, request } = await import("./alfacrm");
     const t = await token();
-    const { inboundCustomerPays, paysOf, payCustomerFilled, markPayJournalIncomplete } = await import("./crm-pay");
+    const { inboundCustomerPays, paysOf, payCustomerFilled, markPayJournalIncomplete, payFillPending } = await import("./crm-pay");
     try {
       if (recheck) markPayJournalIncomplete(cid);
       await inboundCustomerPays(request, t, branchId, cid, { force: recheck });
@@ -980,7 +980,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     short,
     blocked: false,
     paysOk,
-    paysMore: Boolean(balance && !paysOk),
+    paysMore: Boolean(balance && (Boolean(payFail) || payFillPending(cid))),
     payFail,
     rechecked: Boolean(sync.lessonsRecheckAt) && !short,
     paysRechecked: Boolean(sync.paysRecheckAt),

@@ -226,6 +226,13 @@ export function payIdComplete(customerId: number) {
   return paysOf(id).some((x) => !x.deleted && String(x.note || "") === OPENING_NOTE);
 }
 
+export function payFillPending(customerId: number) {
+  const id = Number(customerId) || 0;
+  if (!id) return false;
+  const cur = load().payFill?.[String(id)];
+  return Boolean(cur && (Number(cur.bid) || 0) > 0);
+}
+
 /** Касса дочитана этим id (complete[]). Строка «остаток на диске» сюда не входит. */
 export function payCustomerFilled(customerId: number) {
   const id = Number(customerId) || 0;
@@ -746,7 +753,7 @@ export async function inboundCustomerPays(
     /* диск абонементов необязателен */
   }
   const unlabeled = raw.some((it) => !payCttIdOf(it));
-  if (unlabeled && known.length) {
+  if (done && unlabeled && known.length) {
     for (const ctt of [...new Set(known)]) {
       for (let p = 0; p < 6; p += 1) {
         try {
@@ -777,6 +784,7 @@ export async function inboundCustomerPays(
   await stampPayCustomerNames(pulled).catch(() => null);
   if (failed) throw new Error("Alfa не ответила, нажмите снова");
   if (done) {
+    markPayJournalComplete(customerId);
     try {
       const { loadCustomerCalendar } = await import("./group-cards");
       const { alfaHeaderOf } = await import("./crm-balance-audit-core");
@@ -795,10 +803,9 @@ export async function inboundCustomerPays(
           continue;
         }
       }
-      if (Number.isFinite(header) && remainderClose(cash, header, live.length > 0)) markPayJournalComplete(customerId);
-      else markPayJournalIncomplete(customerId);
+      remainderClose(cash, Number.isFinite(header) ? header : 0, live.length > 0);
     } catch {
-      markPayJournalIncomplete(customerId);
+      /* шаг 4 сверка шапки; шаг 3 уже закрыл страницы кассы */
     }
   }
   return merged;

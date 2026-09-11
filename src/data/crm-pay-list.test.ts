@@ -169,7 +169,13 @@ describe("касса список", () => {
     assert.match(pay, /if \(failed\) throw new Error/);
     assert.match(pay, /if \(done\)/);
     assert.match(pay, /remainderClose/);
+    assert.match(pay, /export function payFillPending/);
     assert.doesNotMatch(pay, /done && !filled && !failed/);
+    const inbound = pay.slice(pay.indexOf("export async function inboundCustomerPays"), pay.indexOf("export type PayPollResult"));
+    const doneBlock = inbound.slice(inbound.indexOf("if (done)"));
+    assert.match(doneBlock, /markPayJournalComplete\(customerId\)/);
+    assert.doesNotMatch(doneBlock, /markPayJournalIncomplete/);
+    assert.match(inbound, /done && unlabeled && known.length/);
     assert.match(pay, /delete store.payFill\[String\(id\)\]/);
     assert.match(pay, /payCttIdOf/);
     assert.match(pay, /ctt_id: ctt/);

@@ -31,6 +31,7 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryCash("balance", false, { ok: true, student: { paysMore: true } }), true);
     assert.equal(shouldRetryCash("balance", false, { ok: true, extra: "ещё страницы" }), true);
     assert.equal(shouldRetryCash("balance", false, { ok: false, error: "Alfa не ответила, нажмите снова" }), true);
+    assert.equal(shouldRetryCash("balance", false, { ok: true, student: { paysOk: false, paysMore: false } }), false);
     assert.equal(shouldRetryCash("balance", true, { ok: true, student: { paysOk: true } }), false);
     assert.equal(shouldRetryCash("students", false, { ok: true }), false);
     assert.equal(shouldRetryCash("students", false, { ok: false, error: "Alfa не ответила, нажмите снова" }), false);
@@ -77,6 +78,8 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /await sleepGap/);
     assert.match(job, /sleepGap\(step.gap, id\)/);
     assert.match(job, /касса · ещё/);
+    assert.match(job, /берём следующего/);
+    assert.match(job, /busy && waits > JOB_WAIT_CAP/);
     assert.match(job, /пауза 5 с/);
     assert.match(job, /lite: true/);
     assert.match(job, /if \(id && j.id !== id\) break/);

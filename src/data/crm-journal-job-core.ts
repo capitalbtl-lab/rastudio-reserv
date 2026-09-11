@@ -184,8 +184,8 @@ export function shouldRetryCash(
   const err = String(res?.error || res?.extra || "");
   const busy = /уже грузим|нет входа|429|502|нет ответа/i.test(err);
   if (kind === "balance" && !recheck) {
-    if (!res || res.ok === false) return true;
-    return Boolean(res.student?.paysMore) || res.student?.paysOk === false || /не ответила|ещё страницы/i.test(err);
+    if (!res || res.ok === false) return busy || /не ответила|ещё страницы/i.test(err);
+    return Boolean(res.student?.paysMore) || /ещё страницы/i.test(err);
   }
   if (!res || res.ok === false) return busy;
   return false;

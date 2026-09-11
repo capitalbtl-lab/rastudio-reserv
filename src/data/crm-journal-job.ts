@@ -347,13 +347,29 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   if (live.stop) return { done: true, gap: 0, msg: `Остановили · прошло ${live.n} из ${live.total}.` };
   const retry = shouldRetryCash(pullKind, live.recheck, res);
   if (retry) {
-    const waits = (live.waits || 0) + 1;
-    if (waits > JOB_WAIT_CAP) {
-      const msg = `Alfa не отвечает на «${item.name}». Остановились.`;
-      patch({ id, running: false, cur: "", fill: null, waits, msg });
-      return { done: true, gap: 0, msg };
+    const err = String(res.extra || res.error || "");
+    const busy = /уже грузим|нет входа|429|502|нет ответа/i.test(err);
+    const waits = (live.waits || 0) + (busy ? 1 : 0);
+    if (busy && waits > JOB_WAIT_CAP) {
+      const idx = live.idx + 1;
+      const more = idx < live.items.length;
+      const nextName = more ? live.items[idx]?.name || "" : "";
+      const msg = more
+        ? `«${item.name}»: Alfa не отвечает, берём следующего.`
+        : `Alfa не отвечает на «${item.name}». Остановились.`;
+      patch({
+        id,
+        idx,
+        n: live.n,
+        waits: 0,
+        running: more,
+        cur: more ? `пауза 5 с · дальше ${nextName}` : "",
+        fill: more ? fillOf(mode, job.kind, live.items[idx]) : null,
+        msg,
+      });
+      return { done: !more, gap: more ? jobGapMs(mode === "audit" ? "audit" : "people") : 0, msg: more ? "" : msg };
     }
-    const cur = pullKind === "balance" && !live.recheck ? `касса · ещё «${item.name}»` : `пауза 5 с · ещё «${item.name}»`;
+    const cur = pullKind === "balance" && !live.recheck && !busy ? `касса · ещё «${item.name}»` : `пауза 5 с · ещё «${item.name}»`;
     patch({
       id,
       waits,
