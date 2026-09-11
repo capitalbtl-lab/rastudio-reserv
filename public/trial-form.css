@@ -18,6 +18,15 @@ body,
   padding: 0 !important;
   background: #ffffff !important;
   color: #12141a !important;
+  overflow: visible !important;
+  height: auto !important;
+}
+
+.alfa-form-wrapper,
+.alfa-form,
+.alfa-form-content-wrapper,
+.alfa-form-input-container {
+  overflow: visible !important;
 }
 
 .alfa-form-wrapper {
@@ -34,7 +43,7 @@ body,
   width: 100% !important;
   max-width: 100% !important;
   background: #ffffff !important;
-  padding: 0 0 8px !important;
+  padding: 0 0 12rem !important;
   box-shadow: none !important;
   border-radius: 0 !important;
 }
@@ -52,19 +61,22 @@ body,
 #lead-form form {
   display: flex !important;
   flex-direction: column !important;
-  gap: 0.85rem !important;
+  gap: 0.7rem !important;
   width: 100% !important;
+  overflow: visible !important;
 }
 
 .alfa-form-input-container {
   display: block !important;
   width: 100% !important;
-  font-size: 0.7rem !important;
+  font-size: 0.68rem !important;
   font-weight: 600 !important;
   letter-spacing: 0.04em !important;
   text-transform: uppercase !important;
   color: #5e6470 !important;
   white-space: nowrap !important;
+  position: relative !important;
+  z-index: 1 !important;
 }
 
 .alfa-form-input-container input,
@@ -76,29 +88,27 @@ body,
   display: block !important;
   width: 100% !important;
   max-width: 100% !important;
-  height: 44px !important;
-  margin-top: 6px !important;
+  height: 42px !important;
+  margin-top: 5px !important;
   border: 0 !important;
   border-radius: 12px !important;
   background: #f5f6f8 !important;
   box-shadow: 0 0 0 1px rgba(18, 20, 26, 0.06) !important;
   padding: 0 14px !important;
-  font-size: 0.95rem !important;
+  font-size: 0.92rem !important;
   font-weight: 500 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
-  white-space: nowrap !important;
   color: #12141a !important;
   font-family: Manrope, "Segoe UI", sans-serif !important;
 }
 
 .alfa-form-input-container textarea,
 .alfa-form textarea {
-  height: 88px !important;
-  padding-top: 12px !important;
-  padding-bottom: 12px !important;
+  height: 80px !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
   resize: none !important;
-  white-space: pre-wrap !important;
 }
 
 .alfa-form-input-container input:focus,
@@ -118,11 +128,13 @@ button.alfa-form-button {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  flex-shrink: 0 !important;
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 30 !important;
   height: 48px !important;
   min-height: 48px !important;
   width: 100% !important;
-  margin-top: 0.35rem !important;
+  margin-top: 0.4rem !important;
   border: 0 !important;
   border-radius: 999px !important;
   background: #205edc !important;
@@ -132,7 +144,7 @@ button.alfa-form-button {
   font-weight: 600 !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
-  box-shadow: none !important;
+  box-shadow: 0 -8px 16px #ffffff !important;
   cursor: pointer !important;
 }
 

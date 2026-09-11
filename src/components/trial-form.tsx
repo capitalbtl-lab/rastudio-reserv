@@ -32,7 +32,7 @@ export function TrialForm({
             .
           </p>
         </div>
-        <div className="h-[42rem] w-full max-w-[26rem]">
+        <div className="h-[48rem] w-full max-w-[26rem]">
           <TrialEmbed src={src} className="h-full w-full" />
         </div>
       </div>

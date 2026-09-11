@@ -84,25 +84,25 @@ export function TrialModal({
 
   if (mode === "trial") {
     return (
-      <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden overscroll-none bg-header/55 p-3 backdrop-blur-[6px] sm:p-5" onClick={onClose} onWheel={(e) => e.preventDefault()}>
+      <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden overscroll-none bg-header/55 p-2 backdrop-blur-[6px] sm:p-3" onClick={onClose} onWheel={(e) => e.preventDefault()}>
         <div
-          className="relative flex max-h-[96dvh] w-full max-w-[28rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
+          className="relative flex h-[min(56rem,96dvh)] w-full max-w-[28rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
           onClick={(e) => e.stopPropagation()}
         >
           <button
             type="button"
             aria-label="Закрыть"
             onClick={onClose}
-            className="absolute right-3 top-3 z-10 grid size-10 place-items-center rounded-full bg-bg text-xl leading-none text-muted hover:bg-surface-2 hover:text-fg"
+            className="absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-bg text-xl leading-none text-muted hover:bg-surface-2 hover:text-fg"
           >
             ×
           </button>
-          <div className="shrink-0 px-6 pb-3 pt-6 sm:px-8 sm:pt-7">
+          <div className="shrink-0 px-5 pb-1.5 pt-4 sm:px-6">
             <p className="kicker text-primary">Студия «Развивайся»</p>
-            <h2 className="display mt-2 pr-10 text-[1.7rem] sm:text-[1.9rem]">Запись на пробное</h2>
-            <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted">Первое занятие без абонемента.</p>
+            <h2 className="display mt-1 pr-10 text-[1.45rem]">Запись на пробное</h2>
+            <p className="mt-1 text-[0.82rem] text-muted">Первое занятие без абонемента.</p>
           </div>
-          <div className="h-[40rem] max-h-[calc(96dvh-8rem)] shrink-0 px-6 pb-6">
+          <div className="min-h-0 flex-1 px-5 pb-4 sm:px-6">
             <TrialEmbed src={trialSrc} className="h-full w-full" />
           </div>
         </div>

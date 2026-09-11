@@ -59,7 +59,7 @@ describe("форма пробного с сайта", () => {
     const src = readFileSync(new URL("../components/trial-popup.tsx", import.meta.url), "utf8");
     assert.match(src, /overflow = "hidden"/);
     assert.match(src, /onWheel/);
-    assert.match(src, /max-w-\[28rem\]/);
+    assert.match(src, /96dvh/);
   });
 
   it("на странице один филиал — поле Alfa, без второго селекта rastudio", () => {
