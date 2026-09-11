@@ -1,0 +1,138 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Onest:wght@500;600;700&display=swap");
+
+html,
+body,
+#lead-form,
+.alfa-form-wrapper,
+.alfa-form,
+.alfa-form * {
+  font-family: Manrope, "Segoe UI", ui-sans-serif, system-ui, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+html,
+body,
+#lead-form {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #ffffff !important;
+  color: #12141a !important;
+}
+
+.alfa-form-wrapper {
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+.alfa-form {
+  margin: 0 auto !important;
+  float: none !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  background: #ffffff !important;
+  padding: 0 2px 8px !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.alfa-form-logo-container,
+.alfa-form-logo-img,
+.alfa-form-link,
+.alfa-form-foreground,
+.alfa-form-titles-wrapper {
+  display: none !important;
+}
+
+.alfa-form-content-wrapper {
+  row-gap: 0.85rem !important;
+}
+
+.alfa-form-input-container {
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: #5e6470 !important;
+}
+
+.alfa-form-input-container input,
+.alfa-form-input-container textarea,
+.alfa-form-input-container select,
+.alfa-form input,
+.alfa-form textarea,
+.alfa-form select {
+  display: block !important;
+  width: 100% !important;
+  height: 44px !important;
+  margin-top: 6px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: #f5f6f8 !important;
+  box-shadow: 0 0 0 1px rgba(18, 20, 26, 0.06) !important;
+  padding: 0 14px !important;
+  font-size: 0.95rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: #12141a !important;
+  font-family: Manrope, "Segoe UI", sans-serif !important;
+}
+
+.alfa-form-input-container textarea,
+.alfa-form textarea {
+  height: auto !important;
+  min-height: 88px !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+  resize: vertical !important;
+}
+
+.alfa-form-input-container input:focus,
+.alfa-form-input-container textarea:focus,
+.alfa-form-input-container select:focus,
+.alfa-form input:focus,
+.alfa-form textarea:focus,
+.alfa-form select:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(32, 94, 220, 0.35) !important;
+  background: #ffffff !important;
+}
+
+.alfa-form-button,
+.alfa-form button,
+button.alfa-form-button {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 48px !important;
+  width: 100% !important;
+  margin-top: 8px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #205edc !important;
+  color: #ffffff !important;
+  font-family: Manrope, "Segoe UI", sans-serif !important;
+  font-size: 0.95rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+}
+
+.alfa-form-button:hover,
+.alfa-form button:hover {
+  background: #184bb3 !important;
+}
+
+.alfa-form-error-container,
+.alfa-form-error-block {
+  color: #c62828 !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}

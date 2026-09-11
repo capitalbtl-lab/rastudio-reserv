@@ -71,27 +71,26 @@ export function TrialModal({
 
   if (mode === "trial") {
     return (
-      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-2 sm:p-4" onClick={onClose}>
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-header/55 p-3 backdrop-blur-[6px] sm:p-6" onClick={onClose}>
         <div
-          className="relative flex h-[min(44rem,92dvh)] w-full max-w-2xl flex-col overflow-hidden rounded-[1.25rem] bg-surface shadow-2xl"
+          className="relative flex h-[min(40rem,92dvh)] w-full max-w-[32rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
           onClick={(e) => e.stopPropagation()}
         >
           <button
             type="button"
             aria-label="Закрыть"
             onClick={onClose}
-            className="absolute right-2.5 top-2.5 z-10 grid h-8 w-8 place-items-center rounded-full text-lg leading-none text-muted hover:bg-black/5 hover:text-fg"
+            className="absolute right-3 top-3 z-10 grid size-10 place-items-center rounded-full bg-bg text-xl leading-none text-muted hover:bg-surface-2 hover:text-fg"
           >
             ×
           </button>
-          <div className="shrink-0 px-4 pb-2 pt-3.5 sm:px-5">
-            <p className="kicker pr-8 text-primary">Пробное занятие</p>
-            <h2 className="display mt-0.5 pr-8 text-xl sm:text-[1.35rem]">Запись на пробное</h2>
+          <div className="shrink-0 px-6 pb-3 pt-6 sm:px-8 sm:pt-7">
+            <p className="kicker text-primary">Студия «Развивайся»</p>
+            <h2 className="display mt-2 pr-10 text-[1.7rem] sm:text-[1.9rem]">Запись на пробное</h2>
+            <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted">Первое занятие без абонемента.</p>
           </div>
-          <div className="min-h-0 flex-1 px-2 pb-2 sm:px-3 sm:pb-3">
-            <div className="h-full overflow-hidden rounded-[10px] bg-bg">
-              <TrialEmbed src={trialSrc} className="h-full w-full" />
-            </div>
+          <div className="min-h-0 flex-1 px-5 pb-5 sm:px-8 sm:pb-7">
+            <TrialEmbed src={trialSrc} className="h-full w-full" />
           </div>
         </div>
       </div>

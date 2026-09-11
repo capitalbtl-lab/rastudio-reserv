@@ -7,6 +7,7 @@ import {
   trialFormUrl,
   trialIframeHtml,
   trialUrlFor,
+  withSiteTrialCss,
 } from "./site-signup-core.ts";
 
 describe("форма пробного с сайта", () => {
@@ -35,10 +36,12 @@ describe("форма пробного с сайта", () => {
     assert.match(parseTrialEmbed(raw), /id=8/);
   });
 
-  it("шаблон iframe для админки", () => {
-    assert.match(trialIframeHtml(), /<iframe /);
-    assert.match(trialIframeHtml(), /frameborder="0"/);
-    assert.match(trialIframeHtml(), /width="100%"/);
+  it("подставляет CSS rastudio, даже если в админке старый cdn Alfa", () => {
+    const src = withSiteTrialCss(
+      "https://studiyarazvivaysya.s20.online/common/2/form/draw?id=20&lead_source_id=2&css=//cdn.alfacrm.pro/lead-form/form.css",
+    );
+    assert.match(src, /rastudio\.org%2Ftrial-form\.css|rastudio\.org\/trial-form\.css/);
+    assert.match(trialFormUrl(), /trial-form\.css/);
   });
 
   it("кнопка пробного открывает окно сайта, не вкладку Alfa", () => {

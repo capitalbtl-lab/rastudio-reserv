@@ -1,6 +1,6 @@
 import { DEFAULT_STATUS_PUBLISH, type StatusPublish } from "./group-status.ts";
 export const ALFA_HOST = "https://studiyarazvivaysya.s20.online";
-const TRIAL_CSS = encodeURIComponent("//cdn.alfacrm.pro/lead-form/form.css");
+const TRIAL_CSS = encodeURIComponent("https://www.rastudio.org/trial-form.css");
 
 export const SITE_BRANCHES = [
   { id: 2, key: "cmit", label: "ЦМИТ · Октябрьской революции, 340" },
@@ -10,7 +10,7 @@ export const SITE_BRANCHES = [
 ] as const;
 
 export function trialFormUrl(_branchId?: number) {
-  return `${ALFA_HOST}/common/2/form/draw?id=20&lead_source_id=2&baseColor=205EDC&borderRadius=8&css=${TRIAL_CSS}`;
+  return `${ALFA_HOST}/common/2/form/draw?id=20&lead_source_id=2&baseColor=205EDC&borderRadius=12&css=${TRIAL_CSS}`;
 }
 
 export function trialIframeHtml(src?: string) {
@@ -47,12 +47,17 @@ export const SITE_SIGNUP_DEFAULT: SiteSignup = {
 };
 
 export function decodeTrialAttr(raw: string) {
+  const amp = String.fromCharCode(38);
+  const map: Record<string, string> = {
+    amp: amp,
+    quot: '"',
+    lt: "<",
+    gt: ">",
+    "#39": "'",
+    apos: "'",
+  };
   return String(raw || "")
-    .replace(/&/g, "&")
-    .replace(/"/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
+    .replace(/&(#39|amp|quot|lt|gt|apos);/gi, (_, name: string) => map[name.toLowerCase()] || map[name] || `${amp}${name};`)
     .trim();
 }
 
@@ -72,10 +77,22 @@ export function normalizeTrialHref(href: string) {
   return s.replace(/\/common\/[134]\/form\/draw\?id=20(?=&|$)/, "/common/2/form/draw?id=20");
 }
 
+export function withSiteTrialCss(href: string) {
+  const s = String(href || "").trim() || trialFormUrl();
+  const css = TRIAL_CSS;
+  let next = s.replace(/([?&]css=)[^&]*/i, `$1${css}`);
+  if (!/[?&]css=/i.test(next)) next += `${next.includes("?") ? "&" : "?"}css=${css}`;
+  next = /[?&]borderRadius=/i.test(next)
+    ? next.replace(/([?&]borderRadius=)[^&]*/i, "$112")
+    : `${next}&borderRadius=12`;
+  if (!/[?&]baseColor=/i.test(next)) next += "&baseColor=205EDC";
+  return next;
+}
+
 export function trialUrlFor(signup: SiteSignup, branchId?: number) {
   const id = String(Number(branchId) || 2);
   const raw = String(signup.trialByBranch?.[id] || "").trim() || trialIframeHtml();
-  return normalizeTrialHref(parseTrialEmbed(raw));
+  return withSiteTrialCss(normalizeTrialHref(parseTrialEmbed(raw)));
 }
 
 export function openTrialForm(branchId?: number) {
