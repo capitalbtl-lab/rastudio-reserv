@@ -1868,34 +1868,52 @@ export function AdminCrmSettings() {
   }
 
   function catalogOptsBar() {
-    const box = "flex items-center gap-1.5 text-[0.82rem] text-ink";
-    const inp = "h-8 w-14 rounded-lg border border-black/15 bg-white px-1.5 text-center text-sm";
+    const chip = (on: boolean) =>
+      cn("h-8 rounded-full px-3 text-[0.78rem] font-semibold transition-colors", on ? "bg-black text-white" : "bg-white ring-1 ring-black/10 hover:bg-black/5");
+    const bits = [
+      archAgeFrom || archAgeTo ? `${archAgeFrom || "…"}–${archAgeTo || "…"} лет` : "",
+      archNoDob ? "без даты" : "",
+      archNeedFio ? "ФИО" : "",
+      archNeedGroups ? "группы" : "",
+    ].filter(Boolean);
     return (
-      <div className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-2">
-        <p className="text-[0.78rem] font-medium text-ink">Кого писать на диск</p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <label className={box}>
-            возраст от
-            <input className={inp} inputMode="numeric" value={archAgeFrom} onChange={(e) => setArchAgeFrom(e.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="—" />
-          </label>
-          <label className={box}>
-            до
-            <input className={inp} inputMode="numeric" value={archAgeTo} onChange={(e) => setArchAgeTo(e.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="—" />
-          </label>
-          <label className={box}>
-            <input type="checkbox" className="size-3.5 accent-ink" checked={archNoDob} onChange={(e) => setArchNoDob(e.target.checked)} />
-            без даты тоже
-          </label>
-          <label className={box}>
-            <input type="checkbox" className="size-3.5 accent-ink" checked={archNeedFio} onChange={(e) => setArchNeedFio(e.target.checked)} />
-            только с ФИО
-          </label>
-          <label className={box}>
-            <input type="checkbox" className="size-3.5 accent-ink" checked={archNeedGroups} onChange={(e) => setArchNeedGroups(e.target.checked)} />
-            были группы
-          </label>
+      <div className="w-full rounded-2xl bg-surface-2 px-3.5 py-3 ring-1 ring-black/10">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <p className="font-display text-[1.02rem] leading-none text-ink">Кого писать на диск</p>
+          <p className="text-[0.72rem] text-muted">{bits.length ? bits.join(" · ") : "все с живым именем"}</p>
         </div>
-        <p className="mt-1.5 text-[0.72rem] leading-snug text-muted">Телефон, число и «тест» не пишем всегда. Пустые поля — без возрастного отсева. Слева 17 не изменятся.</p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-white px-2.5 ring-1 ring-black/10">
+            <span className="text-[0.72rem] text-muted">возраст</span>
+            <input
+              className="h-6 w-8 bg-transparent text-center text-[0.82rem] font-semibold outline-none placeholder:text-muted/60"
+              inputMode="numeric"
+              value={archAgeFrom}
+              onChange={(e) => setArchAgeFrom(e.target.value.replace(/\D/g, "").slice(0, 2))}
+              placeholder="от"
+              aria-label="Возраст от"
+            />
+            <span className="text-muted/50">–</span>
+            <input
+              className="h-6 w-8 bg-transparent text-center text-[0.82rem] font-semibold outline-none placeholder:text-muted/60"
+              inputMode="numeric"
+              value={archAgeTo}
+              onChange={(e) => setArchAgeTo(e.target.value.replace(/\D/g, "").slice(0, 2))}
+              placeholder="до"
+              aria-label="Возраст до"
+            />
+          </span>
+          <button type="button" className={chip(archNoDob)} onClick={() => setArchNoDob((v) => !v)}>
+            без даты тоже
+          </button>
+          <button type="button" className={chip(archNeedFio)} onClick={() => setArchNeedFio((v) => !v)}>
+            только с ФИО
+          </button>
+          <button type="button" className={chip(archNeedGroups)} onClick={() => setArchNeedGroups((v) => !v)}>
+            были группы
+          </button>
+        </div>
+        <p className="mt-2 text-[0.72rem] leading-snug text-muted">Телефон и «тест» не пишем. Слева 17 — после «Посчитать отбор».</p>
       </div>
     );
   }
