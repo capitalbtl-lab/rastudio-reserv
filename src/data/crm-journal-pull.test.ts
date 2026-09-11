@@ -87,7 +87,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /kind === "archivesPupils"/);
     assert.match(pull, /kind === "archiveCount"/);
     assert.match(pull, /kind === "archiveCatalog"/);
-    assert.match(pull, /needPeople/);
+    assert.match(pull, /peopleKinds/);
     assert.match(pull, /syncArchiveCatalogTick/);
     assert.match(pull, /reset: Boolean\(opts\.probe\), filter: opts\.school/);
     assert.match(ui, /Кого писать на диск/);
