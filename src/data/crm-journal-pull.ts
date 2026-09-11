@@ -961,7 +961,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     pays = paysOf(cid).length;
     paysOk = !payFail && payCustomerFilled(cid);
     const { pullCustomerTariffs } = await import("./pupil-tariffs");
-    const rows = await pullCustomerTariffs(branchId, cid).catch(() => []);
+    const rows = await pullCustomerTariffs(branchId, cid, { quick: true }).catch(() => []);
     tariffs = rows.length;
     const syncNow = customerSyncOf(cid);
     const diskNow = loadCustomerCalendar(cid).length;

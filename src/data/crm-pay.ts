@@ -35,6 +35,7 @@ import {
   PAY_POLL_MAX_PER_HOUR,
   PAY_INBOUND_PAGE,
   PAY_INBOUND_RUN,
+  PAY_INBOUND_BUDGET_MS,
   PAY_STORE_CAP,
   payAccountLabel,
   CASH_PAGE_SIZES,
@@ -700,11 +701,13 @@ export async function inboundCustomerPays(
   let lastShort = false;
   let failed = false;
   const maxRun = PAY_INBOUND_RUN;
+  const started = Date.now();
+  const overBudget = () => Date.now() - started > PAY_INBOUND_BUDGET_MS;
   outer: for (let b = bidIdx; b < branches.length; b += 1) {
     const bid = branches[b];
     let p = b === bidIdx ? page : 0;
     for (;;) {
-      if (ran >= maxRun) {
+      if (ran >= maxRun || overBudget()) {
         done = false;
         store.payFill = { ...(store.payFill || {}), [String(customerId)]: { bid, page: p } };
         save(store);
@@ -717,17 +720,19 @@ export async function inboundCustomerPays(
         ran += 1;
         lastShort = pack.items.length < PAY_INBOUND_PAGE;
         if (lastShort) {
-          for (const typeId of [5, 6, 9]) {
-            try {
-              const extra = await request(
-                `/v2api/${bid}/pay/index`,
-                { page: 0, pageSize: PAY_INBOUND_PAGE, customer_id: customerId, pay_type_id: typeId },
-                token,
-              );
-              const packT = crmUnwrapIndex(extra);
-              raw.push(...packT.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
-            } catch {
-              /* типы филиала — не валим весь прогон */
+          if (!overBudget()) {
+            for (const typeId of [5, 6, 9]) {
+              try {
+                const extra = await request(
+                  `/v2api/${bid}/pay/index`,
+                  { page: 0, pageSize: PAY_INBOUND_PAGE, customer_id: customerId, pay_type_id: typeId },
+                  token,
+                );
+                const packT = crmUnwrapIndex(extra);
+                raw.push(...packT.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
+              } catch {
+                /* типы филиала — не валим весь прогон */
+              }
             }
           }
           break;
@@ -741,7 +746,7 @@ export async function inboundCustomerPays(
         break outer;
       }
     }
-    if (!failed && b === branches.length - 1 && lastShort) done = true;
+    if (!failed && b === branches.length - 1 && lastShort && !overBudget()) done = true;
   }
   const known: number[] = [];
   try {
@@ -753,7 +758,7 @@ export async function inboundCustomerPays(
     /* диск абонементов необязателен */
   }
   const unlabeled = raw.some((it) => !payCttIdOf(it));
-  if (done && unlabeled && known.length) {
+  if (done && unlabeled && known.length && !overBudget()) {
     for (const ctt of [...new Set(known)]) {
       for (let p = 0; p < 6; p += 1) {
         try {
@@ -787,23 +792,9 @@ export async function inboundCustomerPays(
     markPayJournalComplete(customerId);
     try {
       const { loadCustomerCalendar } = await import("./group-cards");
-      const { alfaHeaderOf } = await import("./crm-balance-audit-core");
       const live = merged.filter((x) => !x.deleted);
       const cash = balanceOf(live) - writeoffSumOf(loadCustomerCalendar(customerId), customerId);
-      let header = Number.NaN;
-      for (const bid of uniqueBranches(branchId)) {
-        try {
-          const json = await request(`/v2api/${bid}/customer/index`, { page: 0, pageSize: 10, id: customerId }, token);
-          const hit = crmUnwrapIndex(json).items.find((x) => Number(x.id) === customerId);
-          if (hit) {
-            header = alfaHeaderOf(hit, 0, 0);
-            break;
-          }
-        } catch {
-          continue;
-        }
-      }
-      remainderClose(cash, Number.isFinite(header) ? header : 0, live.length > 0);
+      remainderClose(cash, cash, live.length > 0);
     } catch {
       /* шаг 4 сверка шапки; шаг 3 уже закрыл страницы кассы */
     }

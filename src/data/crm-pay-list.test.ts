@@ -161,6 +161,7 @@ describe("касса список", () => {
     assert.match(tab, /клиент\\s\+\\d\+/);
     assert.equal(/kind:\s*["']pays["']/.test(tab), false);
     assert.match(pay, /PAY_INBOUND_RUN/);
+    assert.match(pay, /PAY_INBOUND_BUDGET_MS/);
     assert.match(pay, /payFill/);
     assert.match(pay, /isPayJournalComplete/);
     assert.match(pay, /payFillAdvance/);

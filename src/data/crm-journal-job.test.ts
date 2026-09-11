@@ -78,6 +78,7 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /await sleepGap/);
     assert.match(job, /sleepGap\(step.gap, id\)/);
     assert.match(job, /касса · ещё/);
+    assert.match(job, /касса · \$\{item.name\}/);
     assert.match(job, /берём следующего/);
     assert.match(job, /busy && waits > JOB_WAIT_CAP/);
     assert.match(job, /пауза 5 с/);

@@ -322,7 +322,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     }
   }
   const pullKind = mode === "audit" ? "audit" : mode === "groups" || mode === "groups-recheck" || mode === "group-one" ? "group" : job.kind === "balance" ? "balance" : "students";
-  const curLabel = pullKind === "group" && item.periodLabel ? `${item.name} · ${item.periodLabel}` : item.name;
+  const curLabel = pullKind === "group" && item.periodLabel ? `${item.name} · ${item.periodLabel}` : pullKind === "balance" ? `касса · ${item.name}` : item.name;
   patch({
     id,
     cur: curLabel,

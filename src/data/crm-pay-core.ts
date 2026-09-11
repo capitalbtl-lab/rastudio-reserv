@@ -17,6 +17,7 @@ export const PAY_POLL_LOOKBACK_DAYS = 3;
 export const CASH_PAGE_SIZES = [3, 50, 100, 500] as const;
 export const PAY_INBOUND_PAGE = 50;
 export const PAY_INBOUND_RUN = 4;
+export const PAY_INBOUND_BUDGET_MS = 20000;
 export const PAY_STORE_CAP = 40000;
 export const PAY_FILL_BRANCHES = [1, 2, 3, 4] as const;
 
