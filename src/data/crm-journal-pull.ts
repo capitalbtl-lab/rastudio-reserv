@@ -482,7 +482,15 @@ export function groupFillRow(g: JournalPullGroup) {
   const firsts = cal.map((l) => parseLessonDate(l.date)).filter((d): d is Date => Boolean(d));
   const first = firsts.length ? new Date(Math.min(...firsts.map((d) => d.getTime()))) : null;
   const allParts = periods.map((p) => {
-    const n = cal.filter((l) => inPeriod(l.date, p.from, p.to)).length;
+    let n = 0;
+    let needDetails = 0;
+    let conducted = 0;
+    for (const l of cal) {
+      if (!inPeriod(l.date, p.from, p.to)) continue;
+      n += 1;
+      if (Number(l.status) === 3) conducted += 1;
+      if (lessonNeedsHomework(l)) needDetails += 1;
+    }
     const stamped = done.includes(p.key) && !weak.has(p.key);
     const end = parseLessonDate(p.to);
     const emptyPrefix = Boolean(first && end && end < first && cal.length);
@@ -497,8 +505,8 @@ export function groupFillRow(g: JournalPullGroup) {
       lessons: n,
       err: fail[p.key] || "",
       at: String(pulledAt[p.key] || ""),
-      needDetails: 0,
-      conducted: 0,
+      needDetails,
+      conducted,
     };
   });
   const parts = known ? allParts.filter((p) => chunkOverlapsLife(p, clipFrom, clipTo)) : allParts.slice(0, 4);

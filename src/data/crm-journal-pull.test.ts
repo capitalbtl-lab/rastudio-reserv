@@ -93,7 +93,8 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(pull, /loadCustomerCalendar\(0\)/);
     assert.doesNotMatch(pull, /loadCustomerCalendar\(p\.cid\)/);
     assert.doesNotMatch(pull, /const byQ = new Map/);
-    assert.doesNotMatch(pull, /inQ\.filter\(lessonNeedsHomework\)/);
+    assert.match(pull, /if \(lessonNeedsHomework\(l\)\) needDetails \+= 1/);
+    assert.match(ui, /chunks.every\(\(c\) => c.done && !c.weak\)/);
     assert.match(pull, /periods: journalPeriods\(\)\.length/);
     const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
     assert.match(cards, /storage", "group-cards"\)/);

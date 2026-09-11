@@ -363,7 +363,7 @@ function DetailsFields({ on, extra }: { on: boolean; extra?: string }) {
 }
 
 function fillFinished(chunks: FillPart[]) {
-  return chunks.length > 0 && chunks.every((c) => c.done && !c.weak && !(c.needDetails || 0));
+  return chunks.length > 0 && chunks.every((c) => c.done && !c.weak);
 }
 
 function fillRechecked(chunks: FillPart[]) {
