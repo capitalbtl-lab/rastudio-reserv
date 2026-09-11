@@ -45,25 +45,21 @@ function rub(n: number) {
 
 export async function diskAudit(cid: number, branchId: number) {
   const { findDossier } = await import("./dossiers");
-  const { cardFromDossier } = await import("./customer-card-disk");
   const { collectCustomerJournal, loadCustomerCalendar } = await import("./group-cards");
-  const { paysOf, isPayJournalComplete } = await import("./crm-pay");
+  const { paysOf, payIdComplete, customerBalance } = await import("./crm-pay");
+  const { accountSnapOf } = await import("./crm-pay-core");
   const { parseDossierCtt } = await import("./pupil-tariffs");
   const id = Number(cid) || 0;
   const branch = Number(branchId) || 1;
   const d = findDossier({ crmId: id });
   const groups = (d?.groupLinks || []).map((g) => ({ id: Number(g.id) || 0, branchId: Number(g.branchId || branch) || branch, name: String(g.name || "") }));
-  let clients = 0;
-  try {
-    clients = d ? Number(cardFromDossier(d, branch).balance) || 0 : 0;
-  } catch {
-    clients = 0;
-  }
   const cal = loadCustomerCalendar(id);
   const journal = collectCustomerJournal(id, groups);
   const paySum = balanceOf(paysOf(id).filter((x) => !x.deleted));
   const woCal = writeoffSumOf(cal, id);
   const woCard = writeoffSumOf(journal, id);
+  const snap = d ? accountSnapOf(d.extras?.balance, parseDossierCtt(d.extras)) : Number.NaN;
+  const clients = d ? customerBalance(id, snap, woCard) : 0;
   const ids = cal.map((l) => Number(l.lessonId) || 0).filter((n) => n > 0);
   return {
     name: String(d?.child?.fio || "").trim() || `клиент ${id}`,
@@ -71,7 +67,7 @@ export async function diskAudit(cid: number, branchId: number) {
     cash: paySum - woCal,
     woCal,
     woCard,
-    paysComplete: isPayJournalComplete(id),
+    paysComplete: payIdComplete(id),
     lessonsDisk: cal.length,
     liveCtt: liveCttOf(parseDossierCtt(d?.extras)).length > 0,
     dupLessons: ids.length !== new Set(ids).size,

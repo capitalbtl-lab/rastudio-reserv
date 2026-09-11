@@ -1057,7 +1057,7 @@ export async function journalPull(opts: {
       return {
         ok: false as const,
         error: `уже сверяем №${studentPullCid} — подождите, не пачкой`,
-        more: false,
+        more: true,
         ...journalPullState({ skipPeople: true }),
       };
     }

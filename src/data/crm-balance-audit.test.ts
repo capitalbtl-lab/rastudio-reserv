@@ -142,7 +142,8 @@ describe("шаг 4 сверка остатка", () => {
     assert.match(src, /inboundCustomerPays/);
     assert.match(src, /markPayJournalIncomplete/);
     assert.match(src, /stampCustomerSync/);
-    assert.match(src, /isPayJournalComplete\(id\)/);
+    assert.match(src, /payIdComplete/);
     assert.match(src, /for \(let i = 0; i < 4/);
+    assert.doesNotMatch(src, /cardFromDossier/);
   });
 });

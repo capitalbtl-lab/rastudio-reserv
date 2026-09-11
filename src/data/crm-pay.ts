@@ -211,14 +211,19 @@ function completeSetOf(store: { complete?: number[] }) {
   return set;
 }
 
+export function payIdComplete(customerId: number) {
+  const id = Number(customerId) || 0;
+  if (!id) return false;
+  if (completeSetOf(load()).has(id)) return true;
+  return paysOf(id).some((x) => !x.deleted && String(x.note || "") === OPENING_NOTE);
+}
+
 export function customerBalance(customerId: number, fallback?: number | string, writeoffSum = 0) {
   const id = Number(customerId) || 0;
   const rows = paysOf(id);
-  const complete = Boolean(id && completeSetOf(load()).has(id));
-  const opened = rows.some((x) => String(x.note || "") === OPENING_NOTE);
   const paySum = displayedBalance(rows, undefined, true);
   const snap = fallback == null || fallback === "" ? Number.NaN : Number(fallback);
-  return ledgerMoney({ paySum, writeoffSum, snap, complete: opened || complete });
+  return ledgerMoney({ paySum, writeoffSum, snap, complete: payIdComplete(id) });
 }
 
 export function isPayJournalComplete(customerId: number) {
