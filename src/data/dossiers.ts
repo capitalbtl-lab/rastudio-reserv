@@ -367,7 +367,7 @@ function namesFromGroup(raw?: string) {
 }
 
 /** groupId из JSON групп CRM. Имя — подпись. */
-function groupsFromItem(item: Record<string, unknown>, branchId: number): GroupLink[] {
+function groupsFromItem(item: Record<string, unknown>, branchId: number, active = true): GroupLink[] {
   let raw: unknown = item.groups;
   if (typeof raw === "string") raw = parseJsonish(raw);
   const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw as Record<string, unknown>) : [];
@@ -389,7 +389,7 @@ function groupsFromItem(item: Record<string, unknown>, branchId: number): GroupL
       name,
       branchId: bid,
       school: subjectId ? schoolLabelOfSubject(subjectId) : "",
-      active: true,
+      active,
       subjectId,
     });
   }
@@ -405,7 +405,7 @@ function groupsFromItem(item: Record<string, unknown>, branchId: number): GroupL
       name: `группа ${id}`,
       branchId,
       school: "",
-      active: true,
+      active,
     });
   }
   return out;
@@ -695,7 +695,7 @@ export function applyCrmCustomer(
     .map((n) => teacherMap[String(n)] || "")
     .filter(Boolean);
   const teachers = uniq([...fromGroup.teachers, ...teacherFromIds]);
-  const hint = groupsFromItem(item, branchId);
+  const hint = groupsFromItem(item, branchId, !reallyArchived);
   const school = hint.map((g) => g.school).find(Boolean) || (hint[0]?.subjectId ? schoolLabelOfSubject(hint[0].subjectId) : "");
   const next = upsertDossier({
     crmId: id,

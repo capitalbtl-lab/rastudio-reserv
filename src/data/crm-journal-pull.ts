@@ -1008,7 +1008,7 @@ export async function journalPull(opts: {
     store.note = `${String(d.child?.fio || "").trim() || `клиент ${cid}`} в рабочем архиве.`;
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: 1, scanned: 1, more: false, ...journalPullState() };
+    return { ok: true as const, extra: store.note, count: 1, scanned: 1, more: false, ...snap() };
   }
 
   if (kind === "archives") {

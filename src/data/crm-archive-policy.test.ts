@@ -163,7 +163,11 @@ describe("рабочий архив", () => {
     assert.match(pull, /kind === "archiveCatalog"/);
     assert.match(pull, /listDossierCrm\(\)/);
     assert.match(pull, /study === "2"\) return x.study === 2 && \(scoped \|\| Boolean\(allow && allow.has\(x.cid\)\)\)/);
-    assert.match(pull, /В рабочий архив можно добавить только архивного/);
+    const addAt = pull.indexOf('kind === "archiveAdd"');
+    const addNext = pull.indexOf('kind === "archives"', addAt + 1);
+    const addChunk = pull.slice(addAt, addNext > addAt ? addNext : addAt + 1800);
+    assert.match(addChunk, /\.\.\.snap\(\)/);
+    assert.equal(/journalPullState\(\)/.test(addChunk), false);
     assert.doesNotMatch(pull, /enqueueExport\(/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /overlayAllowsCustomer/);
@@ -176,6 +180,7 @@ describe("рабочий архив", () => {
     assert.match(views, /counts\.архив/);
     assert.match(views, /isArchiveWorking|archiveWorkingSet/);
     assert.match(views, /groupLinks: hint/);
+    assert.match(views, /groupsFromItem\(item, branchId, !reallyArchived\)/);
     assert.match(views, /crmListMem/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /Посчитать отбор/);
