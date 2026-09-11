@@ -9,7 +9,8 @@ export function TrialEmbed({ src, title = "Запись на пробное", cl
       width="100%"
       height="100%"
       frameBorder={0}
-      className={className}
+      scrolling="no"
+      className={`overflow-hidden ${className}`.trim()}
     />
   );
 }

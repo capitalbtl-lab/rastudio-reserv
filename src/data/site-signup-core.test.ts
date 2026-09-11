@@ -55,6 +55,13 @@ describe("форма пробного с сайта", () => {
     assert.match(src, /TrialPopup/);
   });
 
+  it("на странице один филиал — поле Alfa, без второго селекта rastudio", () => {
+    const src = readFileSync(new URL("../components/trial-form.tsx", import.meta.url), "utf8");
+    assert.doesNotMatch(src, /TRIAL_BRANCHES/);
+    assert.doesNotMatch(src, /ФИЛИАЛ|Филиал/);
+    assert.match(src, /TrialEmbed/);
+  });
+
   it("запись в группу остаётся формой rastudio", () => {
     const src = readFileSync(new URL("../components/trial-modal.tsx", import.meta.url), "utf8");
     assert.match(src, /Запись в группу/);

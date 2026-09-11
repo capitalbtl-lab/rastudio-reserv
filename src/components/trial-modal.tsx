@@ -73,7 +73,7 @@ export function TrialModal({
     return (
       <div className="fixed inset-0 z-[80] flex items-center justify-center bg-header/55 p-3 backdrop-blur-[6px] sm:p-6" onClick={onClose}>
         <div
-          className="relative flex h-[min(40rem,92dvh)] w-full max-w-[32rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
+          className="relative flex h-[min(46rem,94dvh)] w-full max-w-[32rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
           onClick={(e) => e.stopPropagation()}
         >
           <button

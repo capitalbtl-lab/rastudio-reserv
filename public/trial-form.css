@@ -17,6 +17,8 @@ body,
   padding: 0 !important;
   background: #ffffff !important;
   color: #12141a !important;
+  overflow: hidden !important;
+  height: auto !important;
 }
 
 .alfa-form-wrapper {
@@ -47,7 +49,7 @@ body,
 }
 
 .alfa-form-content-wrapper {
-  row-gap: 0.85rem !important;
+  row-gap: 0.7rem !important;
 }
 
 .alfa-form-input-container {

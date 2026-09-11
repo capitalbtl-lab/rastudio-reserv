@@ -60,7 +60,7 @@ export function TrialPopup() {
       onClick={() => setOpen(false)}
     >
       <div
-        className="relative flex h-[min(40rem,92dvh)] w-full max-w-[32rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
+        className="relative flex h-[min(46rem,94dvh)] w-full max-w-[32rem] flex-col overflow-hidden rounded-[1.75rem] bg-surface shadow-[var(--shadow-border-hover)]"
         onClick={(e) => e.stopPropagation()}
       >
         <button
