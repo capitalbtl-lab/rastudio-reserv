@@ -112,7 +112,7 @@ const HINT = {
   scopeLive: "Показывает тех, кто сейчас ходит: статус «обучается» в Alfa. Красная очередь и сверка идут только по этому списку, архивных не трогают. Цифра на кнопке — сколько таких людей в выборке. Переключение само ничего не качает и в Alfa не пишет. Если нужен бывший ученик, соседняя кнопка «Архивные клиенты». Можно спокойно прыгать туда-сюда, списки уже на диске. Для кассы и календаря это один и тот же переключатель.",
   scopeArch: "Показывает рабочий архив — бывшие ученики после «Посчитать отбор». Красная очередь только по этому набору, голые телефоны сюда не попадают. Если слева пусто — нажмите «Посчитать отбор»: правило с диска, Alfa не трогает. Скрытые ищутся в Клиентах по телефону. Жёлтые карточки чаще — берите «с начала · 2015».",
   archCount: "Считает рабочий архив только с диска, в Alfa не ходит и ничего там не пишет. Берёт группы текущих учеников и ищет в архиве тех, кто в тех же группах числился, с нормальным ФИО, не 18+ (если есть дата рождения). Голые телефоны и ошибочные звонки остаются скрытыми на диске, но не в списке. Уже попавшие в набор повторным нажатием не выкидываются. После отчёта красная «по одному» идёт только по рабочим. Если на диске архивных карточек нет — сначала «Загрузить архив клиентов из Alfa».",
-  archCatalog: "Справочник архива качается быстрее шагов 1–3: одна карточка, пауза 1 секунда, в полёте один запрос в Alfa. Календарь, явки и касса этой кнопкой не грузятся — они как были, по одному и 5 с. Фильтры на виду. Телефон и «тест» не пишем. Кто записался — сразу слева. При сбое Alfa ждёт 5 с и повторяет. Стоп после текущей. В Alfa не пишет.",
+  archCatalog: "Название кнопки не меняется. Продолжение с Гражданской и пауза — в серой строке сверху, не на кнопке. Справочник быстрее шагов 1–3: одна карточка, пауза 1 секунда, в полёте один запрос в Alfa. Календарь и касса этой кнопкой не грузятся. Фильтры на виду. Телефон и «тест» не пишем. Кто записался — сразу слева. При сбое Alfa ждёт 5 с и повторяет. Стоп после текущей. В Alfa не пишет.",
   scopeLiveGroups: "Показывает живые группы, которые идут по расписанию сейчас. Красная «по одному» и счётчики считают только их. Архивные группы на этом виде скрыты, их явки сами не качаются. Переключение в Alfa ничего не пишет. Если нужна старая группа для баланса, нажмите «Архивные группы». Школа выше по-прежнему фильтрует этот список. Это вид, а не загрузка.",
   scopeArchGroups: "Показывает архивные группы, которых уже нет в живом расписании. Их явки нужны, чтобы на карточке ученика сошёлся старый баланс. Список появляется после кнопок «Архив групп учеников» или «Загрузить архивные группы». Красная очередь на этом виде идёт по архиву. В Alfa группу не восстанавливает. Если список пустой — сначала подтяните архив, потом грузите кварталы как у живых.",
 } as const;
@@ -2848,10 +2848,11 @@ export function AdminCrmSettings() {
                 {peopleStudy === "2" ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {catalogOptsBar()}
+                    <div className="flex flex-nowrap items-center gap-2">
                     {withHint(
                       <button
                         type="button"
-                        className={cn(BTN_LOAD, fillLoading?.kind === "archiveCount" && "ra-progress-run")}
+                        className={cn(BTN_LOAD, "min-w-[9.5rem] shrink-0", fillLoading?.kind === "archiveCount" && "ra-progress-run")}
                         disabled={busy}
                         onClick={() => void runJournal({ kind: "archiveCount" })}
                       >
@@ -2862,22 +2863,18 @@ export function AdminCrmSettings() {
                     {withHint(
                       <button
                         type="button"
-                        className={cn(BTN_LOAD, fillLoading?.kind === "archiveCatalog" && "ra-progress-run")}
+                        className={cn(BTN_LOAD, "min-w-[17.5rem] shrink-0", fillLoading?.kind === "archiveCatalog" && "ra-progress-run")}
                         disabled={busy || offline}
                         onClick={() => void pullArchiveCatalog()}
                       >
-                        {fillLoading?.kind === "archiveCatalog"
-                          ? fillLoading.label || "карточка…"
-                          : catalogHasMore()
-                            ? `Ещё · ${journal.lastArchiveCatalog.branch || journal.lastArchiveCatalog.step || "архив"}`
-                            : "Загрузить архив клиентов из Alfa"}
+                        Загрузить архив клиентов из Alfa
                       </button>,
                       HINT.archCatalog,
                     )}
                     {withHint(
                       <button
                         type="button"
-                        className={BTN_GHOST}
+                        className={cn(BTN_GHOST, "shrink-0")}
                         disabled={fillLoading?.kind !== "archiveCatalog"}
                         onClick={() => {
                           stopSchool.current = true;
@@ -2887,6 +2884,7 @@ export function AdminCrmSettings() {
                       </button>,
                       HINT.stop,
                     )}
+                    </div>
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
                         На диске {journal.lastArchivePolicy.disk} · ФИО {journal.lastArchivePolicy.fioOk} · без dob {journal.lastArchivePolicy.noDob} · 18+ {journal.lastArchivePolicy.adult} · пересечение {journal.lastArchivePolicy.intersect} · в наборе {journal.lastArchivePolicy.working} · скрыто {journal.lastArchivePolicy.hidden}
@@ -2985,10 +2983,11 @@ export function AdminCrmSettings() {
                 {peopleStudy === "2" ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {catalogOptsBar()}
+                    <div className="flex flex-nowrap items-center gap-2">
                     {withHint(
                       <button
                         type="button"
-                        className={cn(BTN_LOAD, fillLoading?.kind === "archiveCount" && "ra-progress-run")}
+                        className={cn(BTN_LOAD, "min-w-[9.5rem] shrink-0", fillLoading?.kind === "archiveCount" && "ra-progress-run")}
                         disabled={busy}
                         onClick={() => void runJournal({ kind: "archiveCount" })}
                       >
@@ -2999,22 +2998,18 @@ export function AdminCrmSettings() {
                     {withHint(
                       <button
                         type="button"
-                        className={cn(BTN_LOAD, fillLoading?.kind === "archiveCatalog" && "ra-progress-run")}
+                        className={cn(BTN_LOAD, "min-w-[17.5rem] shrink-0", fillLoading?.kind === "archiveCatalog" && "ra-progress-run")}
                         disabled={busy || offline}
                         onClick={() => void pullArchiveCatalog()}
                       >
-                        {fillLoading?.kind === "archiveCatalog"
-                          ? fillLoading.label || "карточка…"
-                          : catalogHasMore()
-                            ? `Ещё · ${journal.lastArchiveCatalog.branch || journal.lastArchiveCatalog.step || "архив"}`
-                            : "Загрузить архив клиентов из Alfa"}
+                        Загрузить архив клиентов из Alfa
                       </button>,
                       HINT.archCatalog,
                     )}
                     {withHint(
                       <button
                         type="button"
-                        className={BTN_GHOST}
+                        className={cn(BTN_GHOST, "shrink-0")}
                         disabled={fillLoading?.kind !== "archiveCatalog"}
                         onClick={() => {
                           stopSchool.current = true;
@@ -3024,6 +3019,7 @@ export function AdminCrmSettings() {
                       </button>,
                       HINT.stop,
                     )}
+                    </div>
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
                         На диске {journal.lastArchivePolicy.disk} · ФИО {journal.lastArchivePolicy.fioOk} · без dob {journal.lastArchivePolicy.noDob} · 18+ {journal.lastArchivePolicy.adult} · пересечение {journal.lastArchivePolicy.intersect} · в наборе {journal.lastArchivePolicy.working} · скрыто {journal.lastArchivePolicy.hidden}
