@@ -1,6 +1,6 @@
 /** Рабочий архив клиентов. Файл политики, не dossier.extras — синхронизация extras перетирает. */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { isPhoneLike } from "./client-display.ts";
 import { pupilNameOk } from "./crm-slots-core.ts";
@@ -43,6 +43,8 @@ export type ArchiveCountReport = {
 
 export const DEFAULT_ARCHIVE_FILTERS: ArchivePolicyFilters = { fio: true, notAdult: true, intersectLive: true };
 
+let policyMem: { mtime: number; data: ArchivePolicy } | null = null;
+
 function emptyPolicy(): ArchivePolicy {
   return { at: "", ready: false, filters: { ...DEFAULT_ARCHIVE_FILTERS }, working: [], manual: [], reasons: {} };
 }
@@ -53,8 +55,14 @@ export function archivePolicyFile() {
 
 export function loadArchivePolicy(): ArchivePolicy {
   try {
-    if (!existsSync(archivePolicyFile())) return emptyPolicy();
-    const raw = JSON.parse(readFileSync(archivePolicyFile(), "utf8")) as Partial<ArchivePolicy>;
+    const p = archivePolicyFile();
+    if (!existsSync(p)) {
+      policyMem = null;
+      return emptyPolicy();
+    }
+    const mtime = statSync(p).mtimeMs;
+    if (policyMem && policyMem.mtime === mtime) return policyMem.data;
+    const raw = JSON.parse(readFileSync(p, "utf8")) as Partial<ArchivePolicy>;
     const working = Array.isArray(raw.working) ? raw.working.map(Number).filter((n) => n > 0) : [];
     const manual = Array.isArray(raw.manual) ? raw.manual.map(Number).filter((n) => n > 0) : [];
     const reasons: Record<string, ArchiveReason> = {};
@@ -64,7 +72,7 @@ export function loadArchivePolicy(): ArchivePolicy {
       }
     }
     const f = raw.filters && typeof raw.filters === "object" ? raw.filters : {};
-    return {
+    const data: ArchivePolicy = {
       at: String(raw.at || ""),
       ready: Boolean(raw.ready),
       filters: {
@@ -76,7 +84,10 @@ export function loadArchivePolicy(): ArchivePolicy {
       manual: [...new Set(manual)],
       reasons,
     };
+    policyMem = { mtime, data };
+    return data;
   } catch {
+    policyMem = null;
     return emptyPolicy();
   }
 }
@@ -96,6 +107,13 @@ export function saveArchivePolicy(next: ArchivePolicy): ArchivePolicy {
   };
   mkdirSync(dirname(archivePolicyFile()), { recursive: true });
   writeFileSync(archivePolicyFile(), JSON.stringify(clean, null, 0), "utf8");
+  let mtime = Date.now();
+  try {
+    mtime = statSync(archivePolicyFile()).mtimeMs;
+  } catch {
+    /* */
+  }
+  policyMem = { mtime, data: clean };
   return clean;
 }
 
@@ -198,6 +216,8 @@ export function recountArchivePolicy(
 ): { policy: ArchivePolicy; report: ArchiveCountReport } {
   const keys = new Set(extraKeys);
   for (const k of liveGroupKeys(people)) keys.add(k);
+  const byCid = new Map<number, ArchivePerson>();
+  for (const p of people) if (p.cid) byCid.set(p.cid, p);
   const keep = new Set<number>([...prev.working, ...prev.manual]);
   const manual = new Set<number>(prev.manual);
   const reasons: Record<string, ArchiveReason> = { ...prev.reasons };
@@ -208,7 +228,7 @@ export function recountArchivePolicy(
   let intersect = 0;
   const next = new Set<number>();
   for (const cid of keep) {
-    const row = people.find((p) => p.cid === cid);
+    const row = byCid.get(cid);
     if (!row) {
       next.add(cid);
       continue;
@@ -266,15 +286,15 @@ export function archiveWorkingSet(pol?: ArchivePolicy): Set<number> | null {
 }
 
 export function isArchiveWorking(cid: number, pol?: ArchivePolicy) {
-  const set = archiveWorkingSet(pol);
-  if (!set) return false;
-  return set.has(Number(cid) || 0);
+  const p = pol || loadArchivePolicy();
+  if (!p.ready) return false;
+  const id = Number(cid) || 0;
+  return id > 0 && p.working.includes(id);
 }
 
 export function overlayAllowsCustomer(study: number, cid: number, pol?: ArchivePolicy) {
   if (study === 1) return true;
-  if (study === 0 || !Number.isFinite(study)) return false;
-  if (study !== 2) return false;
+  if (study === 0 || !Number.isFinite(study) || study !== 2) return false;
   return isArchiveWorking(cid, pol);
 }
 
@@ -295,17 +315,28 @@ export function dropArchiveWorking(cid: number, pol?: ArchivePolicy) {
 }
 
 export function addArchiveWorking(cid: number, reason: ArchiveReason, pol?: ArchivePolicy) {
-  const id = Number(cid) || 0;
-  if (!id) return pol || loadArchivePolicy();
+  return addArchiveWorkingMany([cid], reason, pol);
+}
+
+export function addArchiveWorkingMany(cids: number[], reason: ArchiveReason, pol?: ArchivePolicy) {
+  const ids = [...new Set((cids || []).map(Number).filter((n) => n > 0))];
   const prev = pol || loadArchivePolicy();
-  const working = prev.working.includes(id) ? prev.working : [...prev.working, id];
-  const manual = reason === "manual" && !prev.manual.includes(id) ? [...prev.manual, id] : prev.manual;
+  if (!ids.length) return prev;
+  if (!prev.ready && reason !== "manual") return prev;
+  const working = new Set(prev.working);
+  const manual = new Set(prev.manual);
+  const reasons = { ...prev.reasons };
+  for (const id of ids) {
+    working.add(id);
+    if (reason === "manual") manual.add(id);
+    if (!reasons[String(id)]) reasons[String(id)] = reason;
+  }
   return saveArchivePolicy({
     ...prev,
     ready: true,
-    working,
-    manual,
-    reasons: { ...prev.reasons, [String(id)]: reason },
+    working: [...working],
+    manual: [...manual],
+    reasons,
     at: new Date().toISOString(),
   });
 }

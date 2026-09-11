@@ -340,6 +340,21 @@ export function journalPullSchools() {
 }
 
 function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; branchId: number }, school?: string) {
+  const scoped = Boolean(group && group.groupId);
+  if (!scoped && !school && study === "2") {
+    const allow = archiveWorkingSet();
+    if (!allow || !allow.size) return [];
+    const out: { cid: number; study: number; branchId: number }[] = [];
+    for (const cid of allow) {
+      const d = findDossier({ crmId: cid });
+      const st = Number(d?.extras?.is_study);
+      if (st !== 2) continue;
+      if (String(d?.status || "") === "удалён" || String(d?.extras?.removed || "") === "1") continue;
+      out.push({ cid, study: 2, branchId: Number(d?.branchId || 1) || 1 });
+    }
+    out.sort((a, b) => a.cid - b.cid);
+    return out;
+  }
   let pool: number[] = [];
   if (group && group.groupId) {
     pool = dossiersInGroup(group.branchId, group.groupId).map((d) => Number(d.crmId) || 0).filter(Boolean);
@@ -366,7 +381,6 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
     if (study === "2") return x.study === 2;
     return x.study === 1 || x.study === 2;
   });
-  const scoped = Boolean(group && group.groupId);
   if (!scoped && (study === "2" || study === "all")) {
     const allow = archiveWorkingSet();
     const keep = filtered.filter((x) => {
@@ -990,14 +1004,22 @@ export async function journalPull(opts: {
 
   if (kind === "archiveAdd") {
     const cid = Number(opts.customerId) || 0;
-    if (!cid) {
+    const d = cid ? findDossier({ crmId: cid }) : null;
+    const study = Number(d?.extras?.is_study);
+    if (!cid || !d) {
       store.note = "Нет номера ученика.";
       store.at = new Date().toISOString();
       saveStore(store);
       return { ok: false as const, error: store.note, more: false, ...snap() };
     }
+    if (study !== 2 || String(d.status || "") === "удалён" || String(d.extras?.removed || "") === "1") {
+      store.note = "В рабочий архив можно добавить только архивного клиента.";
+      store.at = new Date().toISOString();
+      saveStore(store);
+      return { ok: false as const, error: store.note, more: false, ...snap() };
+    }
     addArchiveWorking(cid, "manual");
-    store.note = `Клиент ${cid} в рабочем архиве.`;
+    store.note = `${String(d.child?.fio || "").trim() || `клиент ${cid}`} в рабочем архиве.`;
     store.at = new Date().toISOString();
     saveStore(store);
     return { ok: true as const, extra: store.note, count: 1, scanned: 1, more: false, ...journalPullState() };

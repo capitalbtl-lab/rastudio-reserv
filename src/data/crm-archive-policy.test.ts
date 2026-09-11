@@ -9,6 +9,7 @@ import {
   archiveRemoved,
   liveGroupKeys,
   overlayAllowsCustomer,
+  addArchiveWorkingMany,
   recountArchivePolicy,
   type ArchivePerson,
   type ArchivePolicy,
@@ -114,11 +115,19 @@ describe("рабочий архив", () => {
     assert.equal(overlayAllowsCustomer(2, 6, ready), false);
   });
 
+  it("выбывший не открывает набор, пока не считали", () => {
+    const next = addArchiveWorkingMany([8], "left", empty);
+    assert.equal(next.ready, false);
+    assert.equal(next.working.includes(8), false);
+  });
+
   it("снимок и кнопки: архив не режется 800, overlay не с текущих", () => {
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
     assert.match(pull, /study === "2" \? peopleRows : peopleRows\.slice\(0, 800\)/);
     assert.match(pull, /kind === "archiveCount"/);
     assert.match(pull, /kind === "archiveCatalog"/);
+    assert.match(pull, /if \(!scoped && !school && study === "2"\)/);
+    assert.match(pull, /В рабочий архив можно добавить только архивного/);
     assert.doesNotMatch(pull, /enqueueExport\(/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /overlayAllowsCustomer/);

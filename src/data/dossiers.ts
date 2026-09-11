@@ -12,7 +12,7 @@ import type { DossiersReq } from "./dossiers-fn";
 import { logAdmin } from "./admin-settings";
 import { customerPullCandidate, personRole } from "./crm-person-role";
 import { groupLinkHits, takenMapFromLinks, overlayCgiNeeded } from "./crm-group-disk";
-import { archivePersonFrom, archiveWorkingSet, dropArchiveWorking, addArchiveWorking, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, type ArchivePerson } from "./crm-archive-policy";
+import { archivePersonFrom, archiveWorkingSet, dropArchiveWorking, addArchiveWorkingMany, isArchiveWorking, loadArchivePolicy, reconcileArchiveRoles, type ArchivePerson } from "./crm-archive-policy";
 
 export type PersonName = {
   fio: string;
@@ -1622,7 +1622,7 @@ export async function reclassifyRolesFromCrm() {
   store.lastCrmSync = new Date().toISOString();
   saveStore(store);
   reconcileArchiveRoles(archivePeopleFromDisk());
-  for (const id of left) addArchiveWorking(id, "left");
+  if (left.length) addArchiveWorkingMany(left, "left");
   const views = searchClientViews("", 1, "учится");
   return {
     ok: true as const,
