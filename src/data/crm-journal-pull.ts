@@ -949,7 +949,8 @@ export async function journalPull(opts: {
 }) {
   const kind = opts.kind;
   const wantedEarly = Number(opts.customerId) || 0;
-  const snap = () => journalPullState({ skipPeople: (kind !== "students" && kind !== "balance") || wantedEarly > 0 });
+  const needPeople = kind === "students" || kind === "balance" || kind === "archiveCatalog" || kind === "archiveCount" || kind === "archiveAdd";
+  const snap = () => journalPullState({ skipPeople: !needPeople || (wantedEarly > 0 && (kind === "students" || kind === "balance")) });
   const store = loadStore();
   const groups = journalPullGroups();
   const school = String(opts.school || "").trim();

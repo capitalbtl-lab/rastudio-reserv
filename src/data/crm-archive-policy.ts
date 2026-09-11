@@ -68,7 +68,7 @@ export function loadArchivePolicy(): ArchivePolicy {
     const reasons: Record<string, ArchiveReason> = {};
     if (raw.reasons && typeof raw.reasons === "object") {
       for (const [k, v] of Object.entries(raw.reasons)) {
-        if (v === "intersect" || v === "manual" || v === "left") reasons[k] = v;
+        if (v === "intersect" || v === "manual" || v === "left" || v === "catalog") reasons[k] = v;
       }
     }
     const f = raw.filters && typeof raw.filters === "object" ? raw.filters : {};
