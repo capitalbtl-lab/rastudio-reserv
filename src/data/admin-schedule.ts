@@ -882,9 +882,9 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
       calculationType: t.calculationType,
     }));
   const liveCtt = tariffs.filter((x) => !x.archived && Number(x.id) > 0);
-  const liveCttRest = liveCtt.reduce((n, x) => n + (Number(x.rest) || 0), 0);
   const liveCttLessons = liveCtt.reduce((n, x) => n + (Number(x.lessons) || 0), 0);
   const liveCttE = liveCtt.map((x) => x.eDate || "").filter(Boolean).sort().slice(-1)[0] || "";
+  const headerBal = Number(c.balance);
   return {
     id: customerId,
     cardId: clientCardId(customerId),
@@ -905,7 +905,7 @@ async function loadCustomerCard(request: typeof import("./alfacrm").request, t: 
     note: String(c.note || "").trim(),
     paidTill: String(c.paid_till || liveCttE || ""),
     teacher: String(c.teacher_name || "").trim(),
-    balance: liveCtt.length ? liveCttRest : Number(c.balance ?? 0) || 0,
+    balance: Number.isFinite(headerBal) ? headerBal : 0,
     lessonsLeft: Number(c.paid_count ?? 0) || liveCttLessons,
     url: `https://studiyarazvivaysya.s20.online/company/${useBranch}/customer/view?id=${customerId}`,
     schools: dossier?.schools || [],

@@ -8,7 +8,7 @@ import { listTeachers, teachersAtBranch } from "./crm-teachers";
 import { loadSubjects } from "./crm-subjects";
 import { isAdminGroup } from "./group-status";
 import { clientLessonFromJournal } from "./crm-journal-core";
-import { customerBalance, cardPays, isPayJournalComplete } from "./crm-pay";
+import { customerBalance, cardPays, isPayJournalComplete, payCustomerFilled } from "./crm-pay";
 import { writeoffSumOf, writeoffSumForCtt } from "./crm-ledger-core";
 import { accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, cttRestSum } from "./crm-pay-core";
 import { asCustomerComm, commsOf } from "./crm-comms";
@@ -222,9 +222,9 @@ export function cardFromDossier(d: Dossier, branch: number): CustomerCard {
   const paidCount = liveCtt.reduce((n, t) => n + (Number(t.lessons) || 0), 0);
   const snap = accountSnapOf(d.extras?.balance, tariffs);
   const liveRest = cttRestSum(liveCtt);
-  const baseRest = isPayJournalComplete(customerId)
+  const baseRest = payCustomerFilled(customerId)
     ? paySumForCtt(pays, 0) - writeoffSumForCtt(woLessons, 0)
-    : (Number(snap) || 0) - liveRest;
+    : (Number.isFinite(Number(snap)) ? Number(snap) : 0) - liveRest;
   tariffs = [
     {
       id: 0,

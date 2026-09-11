@@ -209,5 +209,11 @@ describe("касса список", () => {
     const next = api.indexOf('data.action === "customerSave"', at + 10);
     const chunk = api.slice(at, next > at ? next : at + 8000);
     assert.doesNotMatch(chunk, /balance: String\(customer.balance\)/);
+    const loadAt = api.indexOf("async function loadCustomerCard");
+    const loadEnd = api.indexOf("\nfunction hm(", loadAt);
+    const loaded = api.slice(loadAt, loadEnd > loadAt ? loadEnd : loadAt + 9000);
+    assert.doesNotMatch(loaded, /liveCtt.length \? liveCttRest/);
+    assert.match(loaded, /Number.isFinite\(headerBal\) \? headerBal : 0/);
+    assert.match(disk, /payCustomerFilled\(customerId\)/);
   });
 });
