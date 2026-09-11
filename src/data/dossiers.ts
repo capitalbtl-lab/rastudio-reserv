@@ -1418,14 +1418,50 @@ async function catalogAttachCgi(item: Record<string, unknown>, branch: number, i
     }
   }
   return item;
+}
+
+function catalogNeedsHydrate(item: Record<string, unknown>, branch: number, f: ArchiveCatalogFilter) {
   if ((f.ageFrom != null || f.ageTo != null) && !catalogItemDob(item) && !Number(item.age)) return true;
   if (f.groups && !groupsFromItem(item, branch, false).length) return true;
   return false;
 }
 
-function catalogFilterBlocks(item: Record<string, unknown>, branch: number, child: string, parent: string, f: ArchiveCatalogFilter): string {
+function catalogMergeDiskGroups(item: Record<string, unknown>, exist: { groupLinks?: { id?: number; branchId?: number }[] } | null | undefined, branch: number) {
+  const links = exist?.groupLinks || [];
+  if (!links.length || groupsFromItem(item, branch, false).length) return item;
+  const gids = links.map((l) => Number(l.id) || 0).filter((n) => n > 0);
+  if (!gids.length) return item;
+  return {
+    ...item,
+    group_ids: gids,
+    groups: links.map((l) => ({ id: Number(l.id), group_id: Number(l.id), branch_id: Number(l.branchId || branch) })),
+  };
+}
+
+async function catalogLessonHadGroups(branch: number, id: number, t: string) {
+  const json = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branch}/lesson/index`, { customer_id: id, page: 0, pageSize: 20 }, t).catch(
+    () => ({ items: [] as Record<string, unknown>[] }),
+  );
+  for (const row of json.items || []) {
+    const rec = row as { lesson_type?: number; type?: number; group_id?: number; group_ids?: unknown };
+    const type = Number(rec.lesson_type ?? rec.type);
+    if (type === 2) return true;
+    if (Number(rec.group_id) > 0) return true;
+    if (Array.isArray(rec.group_ids) && rec.group_ids.some((x) => Number(x) > 0)) return true;
+  }
+  return false;
+}
+
+function catalogFilterBlocks(
+  item: Record<string, unknown>,
+  branch: number,
+  child: string,
+  parent: string,
+  f: ArchiveCatalogFilter,
+  hadGroups = false,
+): string {
   if (f.fio && !archiveFioOk(child) && !archiveFioOk(parent)) return "fio";
-  if (f.groups && !groupsFromItem(item, branch, false).length) return "groups";
+  if (f.groups && !groupsFromItem(item, branch, false).length && !hadGroups) return "groups";
   if (f.ageFrom != null || f.ageTo != null) {
     const years = archiveAgeYears(catalogItemDob(item), Number(item.age));
     if (years == null) return f.noDob ? "" : "age";
@@ -1693,7 +1729,8 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean; filter?: 
         cur.sessionSkip += 1;
         continue;
       }
-      let item = peek;
+      let item = catalogMergeDiskGroups(peek, exist, branch);
+      let hadGroups = groupsFromItem(item, branch, false).length > 0;
       if (catalogNeedsHydrate(item, branch, filter)) {
         if (hydrated) break;
         if ((filter.ageFrom != null || filter.ageTo != null) && !catalogItemDob(item) && !Number(item.age)) {
@@ -1701,13 +1738,17 @@ export async function syncArchiveCatalogTick(opts?: { reset?: boolean; filter?: 
             () => ({ items: [] as Record<string, unknown>[] }),
           );
           const full = (one.items || []).find((x) => Number(x.id) === id);
-          if (full) item = full;
+          if (full) item = catalogMergeDiskGroups(full, exist, branch);
         }
-        if (filter.groups) item = await catalogAttachCgi(item, branch, id, t);
+        if (filter.groups && !groupsFromItem(item, branch, false).length) {
+          item = await catalogAttachCgi(item, branch, id, t);
+          hadGroups = groupsFromItem(item, branch, false).length > 0;
+          if (!hadGroups) hadGroups = await catalogLessonHadGroups(branch, id, t);
+        }
         hydrated = true;
       }
       cur.idx += 1;
-      const blocked = catalogFilterBlocks(item, branch, child, parent, filter);
+      const blocked = catalogFilterBlocks(item, branch, child, parent, filter, hadGroups);
       if (blocked) {
         cur.sessionSkip += 1;
         if (blocked === "age") cur.skipAge += 1;
