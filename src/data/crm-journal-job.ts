@@ -11,6 +11,10 @@ import {
   peopleJobQueue,
   saveJournalJob,
   shouldRetryCash,
+  tryHistoryTickLock,
+  touchHistoryTickLock,
+  releaseHistoryTickLock,
+  historyWorkerSilent,
   JOB_WAIT_CAP,
   type JournalJob,
   type JournalJobItem,
@@ -328,18 +332,21 @@ function kickHistoryTick() {
 }
 
 function resumeJournalJobFromDisk() {
-  if (!isHistoryWorker()) return;
   const j = loadJournalJob();
   if (!j.running || j.stop) return;
+  if (!isHistoryWorker() && !historyWorkerSilent(j)) return;
   const age = Date.now() - Date.parse(j.lastAt || j.startedAt || "");
   if (g.__raJournalJobTick && Number.isFinite(age) && age > STALE_LOCK_MS) g.__raJournalJobTick = false;
   void tickJob();
 }
 
 export function resumeJournalJob() {
-  if (!isHistoryWorker()) return loadJournalJob();
-  startJournalJobWatch();
-  resumeJournalJobFromDisk();
+  if (isHistoryWorker()) {
+    startJournalJobWatch();
+    resumeJournalJobFromDisk();
+    return loadJournalJob();
+  }
+  if (historyWorkerSilent()) resumeJournalJobFromDisk();
   return loadJournalJob();
 }
 
@@ -573,12 +580,14 @@ function doneMsg(job: JournalJob) {
 }
 
 async function tickJob() {
-  if (!isHistoryWorker()) return;
   if (g.__raJournalJobTick) return;
+  if (!isHistoryWorker() && !historyWorkerSilent()) return;
+  if (!tryHistoryTickLock()) return;
   g.__raJournalJobTick = true;
   let id = "";
   try {
     while (true) {
+      touchHistoryTickLock();
       const j = loadJournalJob();
       if (id && j.id !== id) break;
       id = j.id;
@@ -602,8 +611,9 @@ async function tickJob() {
     if (now.id === id || !id) patch({ id: now.id || id, running: false, cur: "", fill: null, msg: e instanceof Error ? e.message : "Сбой фоновой загрузки." });
   } finally {
     g.__raJournalJobTick = false;
+    releaseHistoryTickLock();
     const end = loadJournalJob();
     if (end.id === id && end.stop && end.running) patch({ id, running: false, cur: "", fill: null, msg: `Остановили · прошло ${end.n} из ${end.total}.` });
-    else if (end.running && !end.stop) void tickJob();
+    else if (end.running && !end.stop && isHistoryWorker()) void tickJob();
   }
 }

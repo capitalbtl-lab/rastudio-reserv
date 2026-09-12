@@ -1,6 +1,6 @@
 /** Состояние фоновой «Истории из Alfa»: диск, без Alfa. */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 /** Закон «История из Alfa»: только по одному, пауза 5 с. Пакетом нельзя. */
@@ -146,6 +146,58 @@ export function saveJournalJob(job: JournalJob) {
   return job;
 }
 
+const TICK_LOCK = () => join(process.cwd(), "storage", "crm-history-tick.lock");
+export const HISTORY_WORKER_SILENT_MS = 12_000;
+
+export function historyWorkerSilent(job = loadJournalJob(), ms = HISTORY_WORKER_SILENT_MS) {
+  if (!job.running) return false;
+  const age = Date.now() - Date.parse(job.lastAt || job.startedAt || "");
+  return !Number.isFinite(age) || age > ms;
+}
+
+export function tryHistoryTickLock() {
+  const dest = TICK_LOCK();
+  mkdirSync(dirname(dest), { recursive: true });
+  try {
+    if (existsSync(dest)) {
+      const raw = JSON.parse(readFileSync(dest, "utf8")) as { pid?: number; at?: string };
+      const pid = Number(raw.pid) || 0;
+      const age = Date.now() - Date.parse(String(raw.at || ""));
+      if (pid && pid !== process.pid) {
+        try {
+          process.kill(pid, 0);
+          if (Number.isFinite(age) && age < 90_000) return false;
+        } catch {
+          /* процесс умер */
+        }
+      }
+    }
+  } catch {
+    /* */
+  }
+  writeFileSync(dest, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }), "utf8");
+  return true;
+}
+
+export function touchHistoryTickLock() {
+  try {
+    writeFileSync(TICK_LOCK(), JSON.stringify({ pid: process.pid, at: new Date().toISOString() }), "utf8");
+  } catch {
+    /* */
+  }
+}
+
+export function releaseHistoryTickLock() {
+  try {
+    const dest = TICK_LOCK();
+    if (!existsSync(dest)) return;
+    const raw = JSON.parse(readFileSync(dest, "utf8")) as { pid?: number };
+    if (Number(raw.pid) === process.pid) unlinkSync(dest);
+  } catch {
+    /* */
+  }
+}
+
 export function journalJobSnapshot() {
   const j = loadJournalJob();
   const curItem = j.items[j.idx];
@@ -169,6 +221,7 @@ export function journalJobSnapshot() {
     waits: j.waits,
     itemsN: j.items.length,
     next: nextItem?.name || (curItem && curItem.name !== j.cur ? curItem.name : ""),
+    workerSilent: historyWorkerSilent(j),
   };
 }
 

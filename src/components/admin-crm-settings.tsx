@@ -144,6 +144,7 @@ type ServerJob = {
   msg?: string;
   waits?: number;
   next?: string;
+  workerSilent?: boolean;
   fill?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null;
 };
 
@@ -166,6 +167,7 @@ function ServerJobStrip({ job }: { job?: ServerJob | null }) {
         {waits ? ` · Alfa не отвечает, пауза ${waits}/8` : ""}
         {run && next && !cur.includes(next) ? ` · дальше ${next}` : ""}
         {job.stop ? " · останавливаем после текущего" : ""}
+        {run && job.workerSilent ? " · процесс истории молчит, подхватываем" : ""}
       </p>
       <FillBar pct={pct} run={run} done={!run && total > 0 && n >= total} />
     </div>

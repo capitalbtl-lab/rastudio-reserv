@@ -12,9 +12,15 @@ import {
   PEOPLE_JOB_GAP_MS,
   CATALOG_JOB_GAP_MS,
   JOB_WAIT_CAP,
+  historyWorkerSilent,
 } from "./crm-journal-job-core.ts";
 
 describe("фон истории из Alfa", () => {
+  it("воркер молчит, если lastAt старше 12 с", () => {
+    assert.equal(historyWorkerSilent({ ...emptyJournalJob(), running: false, lastAt: new Date(0).toISOString() }), false);
+    assert.equal(historyWorkerSilent({ ...emptyJournalJob(), running: true, lastAt: new Date().toISOString() }), false);
+    assert.equal(historyWorkerSilent({ ...emptyJournalJob(), running: true, lastAt: new Date(Date.now() - 60_000).toISOString() }), true);
+  });
   it("очередь учеников: слева неготовые, справа перепроверка", () => {
     const people = [
       { cid: 1, branchId: 2, name: "А", journal: false, pays: false },
@@ -120,9 +126,15 @@ describe("фон истории из Alfa", () => {
     assert.doesNotMatch(api, /resumeJournalJob/);
     assert.doesNotMatch(pack, /startJournalJobWatch/);
     assert.doesNotMatch(pack, /resumeJournalJob/);
-    assert.doesNotMatch(pull, /resumeJournalJob/);
+    assert.match(pull, /resumeJournalJob\(\)/);
+    assert.match(core, /tryHistoryTickLock/);
+    assert.match(core, /historyWorkerSilent/);
+    assert.match(core, /workerSilent: historyWorkerSilent/);
+    assert.match(job, /if \(!isHistoryWorker\(\) && !historyWorkerSilent/);
+    assert.match(ui, /процесс истории молчит/);
     assert.match(worker, /RA_HISTORY_WORKER = "1"/);
     assert.match(worker, /runHistoryWorker/);
+    assert.match(worker, /history-worker/);
     assert.match(eco, /name: "rastudio-history"/);
     assert.match(eco, /RA_HISTORY_WORKER: "1"/);
     assert.match(deploy, /pm2 restart rastudio-history/);
