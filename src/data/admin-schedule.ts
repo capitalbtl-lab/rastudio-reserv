@@ -3093,19 +3093,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         name: String((data as { name?: string }).name || ""),
         peopleKind: (data as { peopleKind?: string }).peopleKind === "balance" ? "balance" : "students",
         periodLabel: String((data as { periodLabel?: string }).periodLabel || ""),
-        jobItems: Array.isArray((data as { jobItems?: unknown }).jobItems)
-          ? ((data as { jobItems: { cid?: number; branchId?: number; name?: string; groupId?: number; periodKey?: string; periodLabel?: string }[] }).jobItems)
-              .map((r) => ({
-                cid: Number(r?.cid) || 0,
-                branchId: Number(r?.branchId) || 1,
-                name: String(r?.name || ""),
-                groupId: Number(r?.groupId) || 0,
-                periodKey: String(r?.periodKey || ""),
-                periodLabel: String(r?.periodLabel || ""),
-              }))
-              .filter((r) => r.cid || r.groupId)
-              .slice(0, 800)
-          : [],
+        jobItems: (await import("./crm-journal-job-core")).parseJobItems((data as { jobItems?: unknown }).jobItems),
         archived: Boolean((data as { archived?: boolean }).archived),
       });
       if (kind !== "jobStatus") logAdmin(`Журнал Alfa: ${res.extra || res.error || kind}`);

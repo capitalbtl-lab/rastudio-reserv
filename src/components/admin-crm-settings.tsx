@@ -1958,8 +1958,9 @@ export function AdminCrmSettings() {
       if (res) {
         setJournal((cur) => {
           if (!cur) return res;
-          const keepLive = !(res.progress?.live?.people || []).length && (cur.progress?.live?.people || []).length;
-          const keepArch = !(res.progress?.archive?.people || []).length && (cur.progress?.archive?.people || []).length;
+          const jobLive = Boolean(res.job?.running || cur.job?.running || holdFill.current);
+          const keepLive = jobLive || (!(res.progress?.live?.people || []).length && (cur.progress?.live?.people || []).length);
+          const keepArch = jobLive || (!(res.progress?.archive?.people || []).length && (cur.progress?.archive?.people || []).length);
           return {
             ...cur,
             ...res,
@@ -1970,9 +1971,10 @@ export function AdminCrmSettings() {
               archive: keepArch ? cur.progress?.archive : res.progress?.archive,
               groups: res.progress?.groups || cur.progress?.groups,
             },
+            job: holdFill.current && cur.job?.running && !res.job?.running ? cur.job : res.job || cur.job,
           };
         });
-        paintJob(res.job);
+        paintJob(res.job, "load");
         return res;
       }
       setMsg("Список учеников не пришёл.");
@@ -2100,8 +2102,9 @@ export function AdminCrmSettings() {
     while (Date.now() < until && !stopSchool.current) await new Promise((r) => setTimeout(r, 200));
   }
 
-  function paintJob(job?: { running?: boolean; stop?: boolean; cur?: string; n?: number; total?: number; msg?: string; kind?: string; fill?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null } | null) {
+  function paintJob(job?: { running?: boolean; stop?: boolean; cur?: string; n?: number; total?: number; msg?: string; kind?: string; mode?: string; fill?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null } | null, src?: "poll" | "load") {
     if (!job) return;
+    if (src === "load" && holdFill.current && !job.running) return;
     if (job.running) {
       holdFill.current = true;
       peopleLock.current = true;
@@ -2140,8 +2143,9 @@ export function AdminCrmSettings() {
     archived?: boolean;
   }) {
     if (journal?.job?.running) {
+      paintJob(journal.job);
       setMsg(journal.job.cur ? `Уже идёт: ${journal.job.cur}. Стоп — потом другая кнопка.` : "Уже идёт загрузка. Стоп — потом другая кнопка.");
-      return;
+      return { job: journal.job };
     }
     holdFill.current = true;
     peopleLock.current = true;
@@ -2228,7 +2232,11 @@ export function AdminCrmSettings() {
       );
       return;
     }
-    await startHistJob({
+    holdFill.current = true;
+    setBusy(true);
+    setSchoolRun({ cur: queue[0].name, n: 0, total: queue.length });
+    setFillLoading({ kind, label: queue[0].name, customerId: queue[0].cid });
+    const res = await startHistJob({
       jobMode: onlyRecheck ? "people-recheck" : "people",
       peopleKind: kind,
       study,
@@ -2236,6 +2244,10 @@ export function AdminCrmSettings() {
       dateFrom: peopleDateFrom(peopleFromId),
       jobItems: queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name })),
     });
+    const job = (res as { job?: { running?: boolean; msg?: string; total?: number } } | null)?.job;
+    if (job && !job.running && queue.length) {
+      setMsg(job.msg || `Очередь с экрана: ${queue.length}. Нажмите ещё раз.`);
+    }
   }
 
   function catalogHasMore() {
@@ -3115,20 +3127,21 @@ export function AdminCrmSettings() {
                   const side = peopleStudy === "2" ? p?.archive : p?.live;
                   const done = side?.journalDone || 0;
                   const total = side?.total || (peopleStudy === "2" ? archN : liveN) || 0;
-                  const run = fillLoading?.kind === "students";
+                  const run = Boolean(fillLoading?.kind === "students" || (journal?.job?.running && journal.job.kind === "students"));
+                  const cur = schoolRun?.cur || fillLoading?.label || journal?.job?.cur || "";
                   return (
                     <>
                       <ProgressBar done={done} total={total} run={run} loading={journalLoading && !journal} />
-                      <p className="mt-1 h-5 truncate text-sm text-muted">{run ? `Сейчас ${fillLoading?.label || ""}` : schoolRun?.cur && fillLoading?.kind === "students" ? `Сейчас ${schoolRun.cur}` : "\u00a0"}</p>
+                      <p className="mt-1 h-5 truncate text-sm text-muted">{run ? `Сейчас ${cur}` : "\u00a0"}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         {withHint(
                         <button
                           type="button"
-                          className={cn(BTN_RED, run && schoolRun && "ra-progress-run")}
+                          className={cn(BTN_RED, run && "ra-progress-run")}
                           disabled={busy}
                           onClick={() => void recheckPeople("students", peopleStudy)}
                         >
-                          {run && schoolRun ? schoolRun.cur : "Загрузить по одному"}
+                          {run && cur ? cur : "Загрузить по одному"}
                         </button>,
                         HINT.loadOnePeople,
                         )}
@@ -3251,20 +3264,21 @@ export function AdminCrmSettings() {
                   const side = peopleStudy === "2" ? p?.archive : p?.live;
                   const done = side?.cardDone || 0;
                   const total = side?.total || (peopleStudy === "2" ? archN : liveN) || 0;
-                  const run = fillLoading?.kind === "balance";
+                  const run = Boolean(fillLoading?.kind === "balance" || (journal?.job?.running && journal.job.kind === "balance"));
+                  const cur = schoolRun?.cur || fillLoading?.label || journal?.job?.cur || "";
                   return (
                     <>
                       <ProgressBar done={done} total={total} run={run} loading={journalLoading && !journal} />
-                      <p className="mt-1 h-5 truncate text-sm text-muted">{run ? `Сейчас ${fillLoading?.label || ""}` : "\u00a0"}</p>
+                      <p className="mt-1 h-5 truncate text-sm text-muted">{run ? `Сейчас ${cur}` : "\u00a0"}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         {withHint(
                         <button
                           type="button"
-                          className={cn(BTN_RED, run && schoolRun && "ra-progress-run")}
+                          className={cn(BTN_RED, run && "ra-progress-run")}
                           disabled={busy}
                           onClick={() => void recheckPeople("balance", peopleStudy)}
                         >
-                          {run && schoolRun ? schoolRun.cur : "Загрузить по одному"}
+                          {run && cur ? cur : "Загрузить по одному"}
                         </button>,
                         HINT.loadOneMoney,
                         )}

@@ -33,6 +33,26 @@ export type JournalJobItem = {
   periodLabel?: string;
 };
 
+/** Очередь с экрана: массив или объект с индексами — иначе шаг 3 «слетает». */
+export function parseJobItems(raw: unknown): JournalJobItem[] {
+  const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw as Record<string, unknown>) : [];
+  return list
+    .map((row) => {
+      const r = row && typeof row === "object" ? (row as Record<string, unknown>) : {};
+      const cid = Number(r.cid) || 0;
+      const groupId = Number(r.groupId) || 0;
+      return {
+        cid,
+        branchId: Number(r.branchId) || 1,
+        groupId,
+        name: String(r.name || ""),
+        periodKey: String(r.periodKey || ""),
+        periodLabel: String(r.periodLabel || ""),
+      };
+    })
+    .filter((r) => r.cid || r.groupId);
+}
+
 export type JournalJobFill = {
   groupId?: number;
   branchId?: number;

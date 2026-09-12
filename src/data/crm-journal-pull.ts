@@ -14,7 +14,7 @@ import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalRead
 import { payCustomerFilled } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
-import { journalJobSnapshot } from "./crm-journal-job-core";
+import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -1048,7 +1048,7 @@ export async function journalPull(opts: {
       name: opts.name,
       periodKey: opts.periodKey,
       periodLabel: String(opts.periodLabel || ""),
-      items: opts.jobItems,
+      items: parseJobItems(opts.jobItems),
       archived: Boolean(opts.archived),
     });
     return journalJobView();

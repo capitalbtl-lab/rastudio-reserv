@@ -7,6 +7,7 @@ import {
   shouldRetryCash,
   jobGapMs,
   mergeJobPatch,
+  parseJobItems,
   emptyJournalJob,
   PEOPLE_JOB_GAP_MS,
   CATALOG_JOB_GAP_MS,
@@ -27,6 +28,13 @@ describe("фон истории из Alfa", () => {
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: true, short: true }, "balance"), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false }, "balance"), false);
     assert.equal(peopleJobFinished(people[3], "students"), false);
+  });
+
+  it("очередь с экрана читается и как массив, и как объект с индексами", () => {
+    assert.deepEqual(parseJobItems([{ cid: 670, branchId: 2, name: "Чуднова" }]).map((x) => x.cid), [670]);
+    assert.deepEqual(parseJobItems({ 0: { cid: 8037, name: "Анисичкин" }, 1: { cid: 34, name: "Антонов" } }).map((x) => x.cid), [8037, 34]);
+    assert.equal(parseJobItems(null).length, 0);
+    assert.equal(parseJobItems(undefined).length, 0);
   });
 
   it("касса не закрыта — тот же id, пауза 5 с; явки не крутят «не ответила»", () => {
@@ -144,7 +152,14 @@ describe("фон истории из Alfa", () => {
     assert.match(ui, /jobItems: opts.jobItems/);
     assert.match(ui, /opts.kind === "jobStart"/);
     assert.match(job, /given.length && mode !== "audit"/);
-    assert.match(pull, /items: opts.jobItems/);
+    assert.match(pull, /parseJobItems\(opts.jobItems\)/);
+    assert.match(api, /parseJobItems/);
+    assert.match(ui, /paintJob\(res.job, "load"\)/);
+    assert.match(ui, /jobLive/);
+    assert.match(ui, /src === "load" && holdFill.current && !job.running/);
+    assert.match(ui, /setSchoolRun\(\{ cur: queue\[0\].name/);
+    assert.match(ui, /journal\.job\.kind === "balance"/);
+    assert.doesNotMatch(ui, /run && schoolRun \? schoolRun.cur : "Загрузить по одному"/);
     assert.doesNotMatch(ui, /for \(let i = 0; i < queue.length/);
     assert.doesNotMatch(job, /queue.slice\(0, take\)/);
     assert.match(job, /loopPullKind/);

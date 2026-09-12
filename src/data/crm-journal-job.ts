@@ -28,6 +28,7 @@ export {
   shouldRetryCash,
   jobGapMs,
   mergeJobPatch,
+  parseJobItems,
   JOB_WAIT_CAP,
 } from "./crm-journal-job-core";
 
