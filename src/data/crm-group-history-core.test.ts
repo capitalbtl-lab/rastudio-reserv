@@ -48,15 +48,20 @@ describe("история группы", () => {
     assert.ok(events.some((e) => e.kind === "lesson" && e.lessonId === 9000 && e.title === "Занятие в плане"));
     assert.ok(events.some((e) => e.kind === "member" && e.customerId === 670 && e.title === "Вошёл в группу"));
     assert.ok(events.some((e) => e.kind === "member" && e.customerId === 9623 && e.title === "Вышел из группы"));
-    assert.ok(events.some((e) => e.kind === "group" && /statusId 2/.test(e.detail)));
+    assert.ok(events.some((e) => e.kind === "group" && /statusId 2|статус группы 406: 2/.test(e.detail)));
+    const card = events.find((e) => e.title === "Карточка на диске");
+    assert.ok(card && /card:group:1:406/.test(card.detail) && card.detail.length > 120);
+    const done = events.find((e) => e.lessonId === 9001);
+    assert.match(done?.detail || "", /провед/);
+    assert.match(done?.detail || "", /аудитория 28/);
+    assert.match(done?.detail || "", /не выносим/);
+    const left = events.find((e) => e.customerId === 9623);
+    assert.match(left?.detail || "", /вышел из живого состава/);
+    assert.match(left?.detail || "", /дата входа и выхода на диске не записана/i);
     const blob = JSON.stringify(events);
     assert.doesNotMatch(blob, /customerIds/);
-    assert.doesNotMatch(blob, /pupils/);
+    assert.doesNotMatch(blob, /"pupils"/);
     assert.doesNotMatch(blob, /743/);
-    assert.equal(
-      events.find((e) => e.lessonId === 9001)?.detail.includes("аудитория 28"),
-      true,
-    );
     assert.equal(events[0].kind === "lesson" || events[0].at >= "2026-09-11", true);
     const counts = historyKindCounts(events);
     assert.equal(counts.lesson, 2);
@@ -73,7 +78,7 @@ describe("история группы", () => {
       }),
     );
     assert.ok(events.some((e) => e.title === "Лид в группе" && e.customerId === 10));
-    assert.ok(events.some((e) => e.title === "Порция журнала" && e.detail.includes("2026q3")));
+    assert.ok(events.some((e) => e.title === "Порция журнала" && /III квартал 2026/.test(e.detail) && e.detail.includes("2026q3")));
     assert.equal(historyKindCounts(events).lesson, 0);
   });
 
@@ -99,6 +104,7 @@ describe("история группы", () => {
     assert.match(ui, /История/);
     assert.match(ui, /AdminGroupHistory/);
     assert.match(pane, /data-op="group-history"/);
+    assert.match(pane, /data-op="group-history-event"/);
     assert.match(pane, /Вошёл в группу|Вышел из группы|customerId/);
     const at = admin.indexOf('data.action === "groupHistory"');
     const chunk = admin.slice(at, at + 500);

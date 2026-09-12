@@ -53,7 +53,7 @@ export function AdminGroupHistory({
   return (
     <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/45 p-3" onClick={onClose} data-op="group-history">
       <article
-        className={cn("flex max-h-[min(92vh,40rem)] w-full max-w-[36rem] flex-col overflow-hidden", RA_POP)}
+        className={cn("flex max-h-[min(92vh,44rem)] w-full max-w-[42rem] flex-col overflow-hidden", RA_POP)}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="shrink-0 border-b border-black/[0.06] px-4 py-3">
@@ -91,14 +91,14 @@ export function AdminGroupHistory({
           ) : error ? (
             <p className="text-sm text-red-600">{error}</p>
           ) : shown.length ? (
-            <ol className="space-y-1.5">
+            <ol className="space-y-2">
               {shown.map((e) => (
-                <li key={e.id} className="rounded-xl bg-[#f6f8fb] px-3 py-2 ring-1 ring-black/5">
+                <li key={e.id} className="rounded-xl bg-[#f6f8fb] px-3 py-2.5 ring-1 ring-black/5" data-op="group-history-event">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className={cn("rounded-full px-2 py-0.5 text-[0.65rem] font-semibold", kindTone(e.kind, e.title))}>{e.title}</span>
                     <span className="text-[0.68rem] text-muted">{ruHistoryWhen(e.at)}</span>
                   </div>
-                  <p className="mt-1 text-[0.78rem] leading-snug text-fg">{e.detail}</p>
+                  <p className="mt-1.5 text-[0.8rem] leading-relaxed text-fg">{e.detail}</p>
                   {e.customerId && onOpenClient ? (
                     <button
                       type="button"
