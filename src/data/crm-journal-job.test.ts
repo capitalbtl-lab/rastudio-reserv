@@ -85,6 +85,7 @@ describe("фон истории из Alfa", () => {
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     const pack = readFileSync(new URL("./crm-packet-queue.ts", import.meta.url), "utf8");
+    const load = readFileSync(new URL("./crm-history-load.ts", import.meta.url), "utf8");
     assert.match(job, /export function startJournalJob/);
     assert.match(job, /export function stopJournalJob/);
     assert.match(job, /export function startJournalJobWatch/);
@@ -95,6 +96,13 @@ describe("фон истории из Alfa", () => {
     assert.match(api, /startJournalJobWatch/);
     assert.match(pack, /startJournalJobWatch/);
     assert.match(ui, /вкладку можно закрыть/);
+    assert.match(job, /historyLoadOne/);
+    assert.match(job, /mode === "count"/);
+    assert.match(load, /export async function historyLoadOne/);
+    assert.match(load, /lite: true/);
+    assert.match(ui, /jobMode: "count"/);
+    assert.doesNotMatch(ui, /runJournal\(\{ kind: "archiveCount" \}\)/);
+    assert.doesNotMatch(job, /journalPull\(/);
     assert.match(job, /await sleepGap/);
     assert.match(job, /sleepGap\(step.gap, id\)/);
     assert.match(job, /касса · ещё/);
@@ -102,7 +110,7 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /берём следующего/);
     assert.match(job, /busy && waits > JOB_WAIT_CAP/);
     assert.match(job, /пауза 5 с/);
-    assert.match(job, /lite: true/);
+    assert.match(load, /lite: true/);
     assert.match(job, /if \(id && j.id !== id\) break/);
     assert.doesNotMatch(job, /enqueueExport/);
     assert.doesNotMatch(core, /enqueueExport/);

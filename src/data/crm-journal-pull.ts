@@ -950,8 +950,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const t = await token();
     const { inboundCustomerPays, paysOf, payCustomerFilled, markPayJournalIncomplete, payFillPending } = await import("./crm-pay");
     try {
-      if (recheck) markPayJournalIncomplete(cid);
-      await inboundCustomerPays(request, t, branchId, cid, { force: recheck });
+      if (recheck || !payCustomerFilled(cid)) markPayJournalIncomplete(cid);
+      await inboundCustomerPays(request, t, branchId, cid, { force: recheck || !payCustomerFilled(cid) });
     } catch (e) {
       payFail = e instanceof Error && e.message ? e.message : "Alfa не ответила, нажмите снова";
     }
@@ -1031,6 +1031,8 @@ export async function journalPull(opts: {
                   ? "archivesPupils"
                   : opts.jobMode === "details"
                     ? "details"
+                  : opts.jobMode === "count"
+                    ? "archiveCount"
                   : opts.jobMode === "groups" || opts.jobMode === "groups-recheck" || opts.jobMode === "group-one"
                     ? "group"
                     : opts.peopleKind || "students",
@@ -1637,7 +1639,9 @@ export async function journalPull(opts: {
     saveStore(store);
     return { ok: false as const, error: store.note, more: false, ...snap() };
   }
-  if (studentPullCid && studentPullCid !== one.cid) {
+  if (wanted) {
+    studentPullCid = wanted;
+  } else if (studentPullCid && studentPullCid !== one.cid) {
     return {
       ok: false as const,
       error: `уже грузим ученика №${studentPullCid} — подождите, не пачкой`,
@@ -1646,7 +1650,7 @@ export async function journalPull(opts: {
     };
   }
   const other = studentAlfaOwner();
-  if (other && other !== one.cid) {
+  if (other && other !== one.cid && !wanted) {
     return {
       ok: false as const,
       error: `уже грузим ученика №${other} — подождите, не пачкой`,

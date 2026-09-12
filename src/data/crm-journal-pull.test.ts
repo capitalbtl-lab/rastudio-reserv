@@ -205,6 +205,7 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(ui, /pays: Boolean\(hit\.pays\)/);
     assert.match(pull, /paysMore: Boolean\(balance && \(Boolean\(payFail\) \|\| payFillPending\(cid\)\)\)/);
     assert.match(pull, /payCustomerFilled\(cid\)/);
+    assert.match(pull, /force: recheck \|\| !payCustomerFilled\(cid\)/);
     assert.match(pull, /paysOk: balance \? Boolean\(row\.paysOk\)/);
     assert.match(pull, /people: study === "2" \? peopleRows/);
     assert.match(pull, /lessonsRecheckAt/);

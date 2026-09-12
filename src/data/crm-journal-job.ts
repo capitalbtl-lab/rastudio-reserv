@@ -1,6 +1,7 @@
 /** Фон «Истории из Alfa»: один шаг, пауза, следующий. Вкладка только смотрит. В Alfa не пишет. */
 
-import { journalPull, journalPullGroups, groupFillRow, journalPeopleSide } from "./crm-journal-pull";
+import { journalPullGroups, groupFillRow, journalPeopleSide } from "./crm-journal-pull";
+import { historyLoadOne, historyPullKind } from "./crm-history-load";
 import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods";
 import {
   emptyJournalJob,
@@ -129,6 +130,7 @@ function emptyMsg(mode: JournalJobMode, recheck: boolean) {
   if (mode === "archivesPupils") return "Новых архивных групп по карточкам нет.";
   if (mode === "probe") return "Нет текущих учеников в списке.";
   if (mode === "details") return "ДЗ грузить нечего.";
+  if (mode === "count") return "Некого считать.";
   return "грузить нечего";
 }
 
@@ -139,6 +141,7 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
     if (!cid) return [];
     return [{ cid, branchId: Number(opts.branchId) || 1, name: opts.name || `№${cid}` }];
   }
+  if (mode === "count") return [{ name: "отбор архива" }];
   if (mode === "people" || mode === "people-recheck" || mode === "probe" || mode === "audit") {
     const given = (opts.items || [])
       .map((r) => ({ cid: Number(r.cid) || 0, branchId: Number(r.branchId) || 1, name: String(r.name || "") }))
@@ -246,6 +249,8 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
               ? "archivesPupils"
               : mode === "details"
                 ? "details"
+              : mode === "count"
+                ? "archiveCount"
               : mode === "groups" || mode === "groups-recheck" || mode === "group-one"
                 ? "group"
                 : opts.kind || "students";
@@ -328,6 +333,7 @@ export function resumeJournalJob() {
 function fillOf(mode: JournalJobMode | "", kind: string, item?: JournalJobItem | null) {
   if (!item) return null;
   if (mode === "catalog") return { kind: "archiveCatalog", label: item.name };
+  if (mode === "count") return { kind: "archiveCount", label: item.name };
   if (mode === "life") return { kind: "life", label: item.name };
   if (mode === "archives") return { kind: "archives", label: item.name };
   if (mode === "archivesPupils") return { kind: "archivesPupils", label: item.name };
@@ -370,14 +376,21 @@ function loopLabel(
 async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; msg?: string }> {
   const id = job.id;
   const mode = job.mode;
+  if (mode === "count") {
+    patch({ id, cur: "считаю отбор", fill: { kind: "archiveCount", label: "считаю отбор" } });
+    const res = await historyLoadOne({ kind: "archiveCount", school: job.school || job.filter });
+    if (loadJournalJob().id !== id) return { done: true, gap: 0 };
+    const msg = String(res.extra || res.error || "Отбор посчитан.");
+    patch({ id, running: false, n: 1, total: 1, cur: "", fill: null, msg });
+    return { done: true, gap: 0, msg };
+  }
   const loopKind = loopPullKind(mode);
   if (loopKind) {
-    const res = await journalPull({
+    const res = await historyLoadOne({
       kind: loopKind,
       probe: job.catalogFirst && loopKind === "archiveCatalog",
       school: job.school || job.filter,
       study: job.study,
-      lite: true,
     });
     if (loadJournalJob().id !== id) return { done: true, gap: 0 };
     const label = loopLabel(loopKind, res);
@@ -425,16 +438,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       item = { ...item, periodKey: part.key, periodLabel: part.label };
     }
   }
-  const pullKind =
-    mode === "audit"
-      ? "audit"
-      : mode === "details"
-        ? "details"
-        : mode === "groups" || mode === "groups-recheck" || mode === "group-one"
-          ? "group"
-          : job.kind === "balance"
-            ? "balance"
-            : "students";
+  const pullKind = historyPullKind(mode, job.kind);
   const curLabel =
     (pullKind === "group" || pullKind === "details") && item.periodLabel
       ? `${item.name} · ${item.periodLabel}`
@@ -447,8 +451,8 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     fill: fillOf(mode, job.kind, item),
     msg: job.recheck ? `${item.name}: перепроверяем. Потом пауза 5 с.` : `${item.name}: грузим. Потом пауза 5 с.`,
   });
-  const res = await journalPull({
-    kind: pullKind as "students" | "balance" | "group" | "audit" | "details",
+  const res = await historyLoadOne({
+    kind: pullKind,
     study: job.study,
     customerId: Number(item.cid) || 0,
     branchId: Number(item.branchId) || job.branchId,
@@ -458,7 +462,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     recheck: job.recheck || mode === "people-recheck" || mode === "groups-recheck" || (mode === "group-one" && !item.periodKey),
     dateFrom: job.dateFrom,
     probe: mode === "probe",
-    lite: true,
+    school: job.school || job.filter,
   });
   const live = loadJournalJob();
   if (live.id !== id) return { done: true, gap: 0 };

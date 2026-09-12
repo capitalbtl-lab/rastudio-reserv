@@ -690,7 +690,7 @@ export async function inboundCustomerPays(
   customerId: number,
   opts?: { force?: boolean },
 ) {
-  if (pendingExportIds(["pay.create"]).has(customerId)) return paysOf(customerId);
+  if (pendingExportIds(["pay.create"]).has(customerId) && !opts?.force && payCustomerFilled(customerId)) return paysOf(customerId);
   const { crmUnwrapIndex } = await import("./crm-leads-stages");
   if (opts?.force) markPayJournalIncomplete(customerId);
   const store = load();
@@ -699,8 +699,9 @@ export async function inboundCustomerPays(
   let bidIdx = 0;
   let page = 0;
   const cur = store.payFill?.[String(customerId)];
-  if (cur && !opts?.force) {
-    if (cur.done) return paysOf(customerId);
+  const filled = payCustomerFilled(customerId);
+  if (cur && !opts?.force && cur.done && filled) return paysOf(customerId);
+  if (cur && !opts?.force && !cur.done) {
     const i = branches.indexOf(cur.bid);
     bidIdx = i >= 0 ? i : 0;
     page = Number(cur.page) || 0;

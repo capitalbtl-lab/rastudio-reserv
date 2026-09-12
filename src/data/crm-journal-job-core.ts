@@ -22,7 +22,8 @@ export type JournalJobMode =
   | "life"
   | "archives"
   | "archivesPupils"
-  | "details";
+  | "details"
+  | "count";
 
 export type JournalJobItem = {
   cid?: number;

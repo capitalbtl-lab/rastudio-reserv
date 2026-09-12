@@ -3082,7 +3082,7 @@ export function AdminCrmSettings() {
                         type="button"
                         className={cn(BTN_LOAD, "min-w-[9.5rem] shrink-0", fillLoading?.kind === "archiveCount" && "ra-progress-run")}
                         disabled={busy}
-                        onClick={() => void runJournal({ kind: "archiveCount" })}
+                        onClick={() => void startHistJob({ jobMode: "count" })}
                       >
                         {fillLoading?.kind === "archiveCount" ? "Считаю отбор…" : "Посчитать отбор"}
                       </button>,
@@ -3219,7 +3219,7 @@ export function AdminCrmSettings() {
                         type="button"
                         className={cn(BTN_LOAD, "min-w-[9.5rem] shrink-0", fillLoading?.kind === "archiveCount" && "ra-progress-run")}
                         disabled={busy}
-                        onClick={() => void runJournal({ kind: "archiveCount" })}
+                        onClick={() => void startHistJob({ jobMode: "count" })}
                       >
                         {fillLoading?.kind === "archiveCount" ? "Считаю отбор…" : "Посчитать отбор"}
                       </button>,
