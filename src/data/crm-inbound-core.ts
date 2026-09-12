@@ -19,32 +19,58 @@ export function pendingEntityIds(
   return hold;
 }
 
-function slotKey(x: { date?: string; from?: string }) {
-  return `${x.date || ""}|${x.from || ""}`;
+function slotGroup(x: { group?: string; groupIds?: number[] }) {
+  const gid = Number(x.groupIds?.[0]) || 0;
+  return gid ? String(gid) : String(x.group || "");
 }
 
-function lessonKey(x: { lessonId?: number; date?: string; from?: string }) {
+function slotKey(x: { date?: string; from?: string; group?: string; groupIds?: number[] }) {
+  return `${x.date || ""}|${x.from || ""}|${slotGroup(x)}`;
+}
+
+function sameSlot<T extends { date?: string; from?: string; group?: string; groupIds?: number[] }>(a: T, b: T) {
+  if (String(a.date || "") !== String(b.date || "")) return false;
+  if (String(a.from || "") !== String(b.from || "")) return false;
+  const ga = slotGroup(a);
+  const gb = slotGroup(b);
+  if (!ga || !gb) return true;
+  return ga === gb;
+}
+
+function lessonKey(x: { lessonId?: number; date?: string; from?: string; group?: string; groupIds?: number[] }) {
   const lid = Number(x.lessonId) || 0;
   return lid ? `id:${lid}` : `d:${slotKey(x)}`;
 }
 
-function foldLesson<T extends { lessonId?: number; date?: string; from?: string; amount?: number }>(old: T, row: T): T {
+function idsOf(row: { customerIds?: number[] } | undefined) {
+  return Array.isArray(row?.customerIds) && row.customerIds.length ? row.customerIds : undefined;
+}
+
+function gidsOf(row: { groupIds?: number[] } | undefined) {
+  return Array.isArray(row?.groupIds) && row.groupIds.length ? row.groupIds : undefined;
+}
+
+function foldLesson<T extends { lessonId?: number; date?: string; from?: string; amount?: number; topic?: string; homework?: string; note?: string; customerIds?: number[]; groupIds?: number[]; group?: string }>(
+  old: T,
+  row: T,
+): T {
   const lid = Number(row.lessonId) || Number(old.lessonId) || 0;
-  const rec = row as T & { topic?: string; homework?: string; note?: string };
-  const prev = old as T & { topic?: string; homework?: string; note?: string };
   return {
     ...old,
     ...row,
     lessonId: lid || old.lessonId,
     amount: Number(row.amount) > 0 ? row.amount : old.amount,
-    topic: String(rec.topic || "").trim() || prev.topic,
-    homework: String(rec.homework || "").trim() || prev.homework,
-    note: String(rec.note || "").trim() || prev.note,
+    topic: String(row.topic || "").trim() || old.topic,
+    homework: String(row.homework || "").trim() || old.homework,
+    note: String(row.note || "").trim() || old.note,
+    customerIds: idsOf(row) || idsOf(old),
+    groupIds: gidsOf(row) || gidsOf(old),
+    group: String(row.group || "").trim() || old.group,
   };
 }
 
 /** Один урок — одна строка: номер занятия важнее пары дата+время. Два разных номера не склеиваем. */
-export function collapseLessonRows<T extends { lessonId?: number; date?: string; from?: string; amount?: number }>(list: T[]): T[] {
+export function collapseLessonRows<T extends { lessonId?: number; date?: string; from?: string; amount?: number; group?: string; groupIds?: number[] }>(list: T[]): T[] {
   const byId = new Map<number, T>();
   const noId: T[] = [];
   for (const row of list || []) {
@@ -58,8 +84,7 @@ export function collapseLessonRows<T extends { lessonId?: number; date?: string;
   }
   const bySlot = new Map<string, T>();
   for (const row of noId) {
-    const s = slotKey(row);
-    const host = [...byId.values()].find((x) => slotKey(x) === s);
+    const host = [...byId.values()].find((x) => sameSlot(x, row));
     if (host) {
       const lid = Number(host.lessonId) || 0;
       if (lid) byId.set(lid, foldLesson(row, host));
@@ -69,6 +94,7 @@ export function collapseLessonRows<T extends { lessonId?: number; date?: string;
       bySlot.set(`${bySlot.size}|empty`, row);
       continue;
     }
+    const s = slotKey(row);
     const prev = bySlot.get(s);
     bySlot.set(s, prev ? foldLesson(prev, row) : row);
   }
@@ -76,6 +102,7 @@ export function collapseLessonRows<T extends { lessonId?: number; date?: string;
     (a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")),
   );
 }
+
 
 function held(x: { lessonId?: number }, hold: Set<number>) {
   const lid = Number(x.lessonId) || 0;
@@ -97,7 +124,7 @@ export function mergeJournalInbound<T extends { lessonId?: number; date?: string
       const k = lessonKey(p);
       const cur = map.get(k);
       if (cur && held(cur, hold)) continue;
-      map.set(k, p);
+      map.set(k, cur ? (foldLesson(cur as never, p as never) as T) : p);
     }
     return collapseLessonRows(
       [...map.values()].sort(

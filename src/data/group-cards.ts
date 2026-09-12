@@ -263,7 +263,7 @@ export function loadCustomerCalendar(customerId: number): GroupCalLesson[] {
     const hit = calMem.get(k);
     if (hit && hit.mtime === mtime) return hit.list;
     const raw = JSON.parse(readFileSync(p, "utf8")) as GroupCalLesson[] | { items?: GroupCalLesson[] };
-    const list = Array.isArray(raw) ? raw : Array.isArray(raw.items) ? raw.items : [];
+    const list = collapseLessonRows(Array.isArray(raw) ? raw : Array.isArray(raw.items) ? raw.items : []);
     calMem.set(k, { mtime, list });
     return list;
   } catch {
@@ -274,14 +274,15 @@ export function loadCustomerCalendar(customerId: number): GroupCalLesson[] {
 function saveCustomerCalendarList(id: number, list: GroupCalLesson[]) {
   mkdirSync(calsDir(), { recursive: true });
   const p = oneCal(id);
-  writeFileSync(p, JSON.stringify(list), "utf8");
+  const collapsed = collapseLessonRows(list || []).slice(0, 2500);
+  writeFileSync(p, JSON.stringify(collapsed), "utf8");
   let mtime = Date.now();
   try {
     mtime = statSync(p).mtimeMs;
   } catch {
     /* */
   }
-  calMem.set(String(id), { mtime, list });
+  calMem.set(String(id), { mtime, list: collapsed });
 }
 
 export function upsertCustomerCalendar(customerId: number, lesson: GroupCalLesson) {

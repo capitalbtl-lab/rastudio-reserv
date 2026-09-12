@@ -5,6 +5,7 @@ import {
   balanceOf,
   displayedBalance,
   mergePayInbound,
+  collapsePayRows,
   nextPayStamp,
   payAfterStamp,
   payEffect,
@@ -128,15 +129,17 @@ function load(): Store {
   }
 }
 
-function save(store: Store) {
+function save(store: Store, opts?: { keepAll?: boolean }) {
   mem = store;
   index(store);
   mkdirSync(dirname(fileOf()), { recursive: true });
   const poll = store.poll || emptyPoll();
   poll.hits = payPollHitsInWindow(poll.hits).slice(-24);
+  const rawItems = store.items || [];
+  const items = opts?.keepAll || rawItems.length <= PAY_STORE_CAP ? rawItems : rawItems.slice(-PAY_STORE_CAP);
   writeFileSync(
     fileOf(),
-    JSON.stringify({ at: new Date().toISOString(), items: store.items.slice(-PAY_STORE_CAP), poll, complete: (store.complete || []).slice(-4000), payFill: store.payFill || {} }, null, 0),
+    JSON.stringify({ at: new Date().toISOString(), items, poll, complete: (store.complete || []).slice(-4000), payFill: store.payFill || {} }, null, 0),
     "utf8",
   );
   try {
@@ -257,10 +260,8 @@ export function customerBalance(customerId: number, fallback?: number | string, 
 }
 
 export function isPayJournalComplete(customerId: number) {
-  const store = load();
-  if (store.poll?.fill?.done) return true;
   const id = Number(customerId) || 0;
-  return Boolean(id && completeSetOf(store).has(id));
+  return Boolean(id && completeSetOf(load()).has(id));
 }
 
 export function markPayJournalComplete(customerId: number) {
@@ -562,14 +563,15 @@ export function deletePay(payId: number) {
   return { ok: true as const, local: isLocalId(id) || id < 0 };
 }
 
-export function replaceCustomerPays(customerId: number, rows: PayRow[]) {
+export function replaceCustomerPays(customerId: number, rows: PayRow[], opts?: { keepAll?: boolean }) {
   const id = Number(customerId) || 0;
+  const collapsed = collapsePayRows(rows);
   const prev = paysOf(id);
   const print = (list: PayRow[]) => list.map((x) => `${x.id}|${x.income}|${x.expenditure}|${x.documentDate}|${x.cttId || 0}|${x.deleted ? 1 : 0}`).join(";");
-  if (print(prev) === print(rows)) return;
+  if (print(prev) === print(collapsed)) return;
   const store = load();
-  store.items = [...store.items.filter((x) => Number(x.customerId) !== id), ...rows];
-  save(store);
+  store.items = [...store.items.filter((x) => Number(x.customerId) !== id), ...collapsed];
+  save(store, { keepAll: Boolean(opts?.keepAll) });
 }
 
 export function packPay(item: Record<string, unknown>, customerId: number, branchId: number): PayRow | null {
@@ -700,7 +702,7 @@ export async function inboundCustomerPays(
   let page = 0;
   const cur = store.payFill?.[String(customerId)];
   const filled = payCustomerFilled(customerId);
-  if (cur && !opts?.force && cur.done && filled) return paysOf(customerId);
+  if (!opts?.force && filled) return paysOf(customerId);
   if (cur && !opts?.force && !cur.done) {
     const i = branches.indexOf(cur.bid);
     bidIdx = i >= 0 ? i : 0;
@@ -805,10 +807,11 @@ export async function inboundCustomerPays(
   const pulled = raw.map((it) => packPay(it, customerId, branchId)).filter((x): x is PayRow => Boolean(x));
   const hold = holdPayIds();
   const merged = markRefundOfGoods(mergePayInbound(pulled, paysOf(customerId), hold));
-  replaceCustomerPays(customerId, merged);
+  replaceCustomerPays(customerId, merged, { keepAll: true });
   await stampPayCustomerNames(pulled).catch(() => null);
   if (failed) throw new Error("Alfa не ответила, нажмите снова");
   if (done) {
+    let headerOk = false;
     try {
       const { crmUnwrapIndex } = await import("./crm-leads-stages");
       const { alfaHeaderOf } = await import("./crm-balance-audit-core");
@@ -817,15 +820,22 @@ export async function inboundCustomerPays(
       const hit = crmUnwrapIndex(json).items.find((x) => Number(x.id) === customerId);
       const live = merged.filter((x) => !x.deleted);
       const cash = balanceOf(live) - writeoffSumOf(loadCustomerCalendar(customerId), customerId);
-      if (!hit) markPayJournalComplete(customerId);
-      else if (remainderClose(cash, alfaHeaderOf(hit, 0, 0), live.length > 0)) markPayJournalComplete(customerId);
-      else {
+      if (hit && remainderClose(cash, alfaHeaderOf(hit, 0, 0), live.length > 0)) {
+        markPayJournalComplete(customerId);
+        headerOk = true;
+      } else if (hit) {
         const next = load();
         next.payFill = { ...(next.payFill || {}), [String(customerId)]: { bid: Number(fillBid) || branches[0], page: Number(fillPage) || 0, done: true } };
-        save(next);
+        save(next, { keepAll: true });
+        headerOk = true;
       }
     } catch {
-      markPayJournalComplete(customerId);
+      /* шапки нет — не complete */
+    }
+    if (!headerOk) {
+      const next = load();
+      next.payFill = { ...(next.payFill || {}), [String(customerId)]: { bid: Number(fillBid) || branches[0], page: Number(fillPage) || 0 } };
+      save(next, { keepAll: true });
     }
   }
   return merged;

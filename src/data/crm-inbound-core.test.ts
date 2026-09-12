@@ -82,6 +82,29 @@ describe("вход из Alfa", () => {
     assert.equal(merged[0]?.amount, 350);
     assert.equal((merged[0] as { topic?: string }).topic, "роботы");
   });
+
+  it("два урока без номера в разных группах на одно время — две строки", () => {
+    const merged = mergeJournalInbound(
+      [
+        { date: "01.09.2026", from: "10:00", status: 3, groupIds: [10], amount: 350 },
+        { date: "01.09.2026", from: "10:00", status: 3, groupIds: [20], amount: 400 },
+      ],
+      [],
+      [],
+      "union",
+    );
+    assert.equal(merged.length, 2);
+  });
+
+  it("пустой состав Alfa не затирает учеников на диске", () => {
+    const merged = mergeJournalInbound(
+      [{ lessonId: 50, date: "01.09.2026", from: "10:00", status: 3, customerIds: [] }],
+      [{ lessonId: 50, date: "01.09.2026", from: "10:00", status: 3, customerIds: [7, 8] }],
+      [],
+      "union",
+    );
+    assert.deepEqual(merged[0]?.customerIds, [7, 8]);
+  });
 });
 
 describe("ночной diff групп", () => {

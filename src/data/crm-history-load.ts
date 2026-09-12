@@ -16,6 +16,11 @@ export type HistoryLoadSpec = {
   school?: string;
 };
 
+/** Пропуск кассы: только кто уже в complete[]. fill.done сам по себе не skip. */
+export function historyCashSkip(filled: boolean, force: boolean) {
+  return Boolean(filled) && !force;
+}
+
 /** Один объект за вызов. Касса слева всегда читает Alfa, даже если раньше «сканировали». */
 export async function historyLoadOne(spec: HistoryLoadSpec) {
   const kind = spec.kind;

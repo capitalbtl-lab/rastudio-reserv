@@ -78,6 +78,21 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobGapMs("audit"), 5000);
   });
 
+  it("касса слева: fill.done не skip, complete без force — skip", () => {
+    const skip = (filled: boolean, force: boolean) => Boolean(filled) && !force;
+    assert.equal(skip(false, false), false);
+    assert.equal(skip(false, true), false);
+    assert.equal(skip(true, false), true);
+    assert.equal(skip(true, true), false);
+    const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
+    const load = readFileSync(new URL("./crm-history-load.ts", import.meta.url), "utf8");
+    assert.match(pay, /if \(!opts\?\.force && filled\) return paysOf/);
+    assert.doesNotMatch(pay, /if \(!hit\) markPayJournalComplete/);
+    assert.match(pay, /keepAll: true/);
+    assert.match(load, /export function historyCashSkip/);
+    assert.match(load, /jobKind === "balance"\) return "balance"/);
+  });
+
   it("сервер крутит цикл, вкладка только старт/стоп/прогресс", () => {
     const job = readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8");
     const core = readFileSync(new URL("./crm-journal-job-core.ts", import.meta.url), "utf8");

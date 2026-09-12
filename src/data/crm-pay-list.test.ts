@@ -179,8 +179,11 @@ describe("касса список", () => {
     assert.match(doneBlock, /done: true/);
     assert.doesNotMatch(doneBlock, /remainderClose\(cash, cash/);
     assert.doesNotMatch(doneBlock, /markPayJournalIncomplete/);
-    assert.match(inbound, /cur\.done && filled/);
+    assert.match(inbound, /!opts\?\.force && filled/);
     assert.doesNotMatch(inbound, /if \(cur\.done\) return paysOf/);
+    assert.doesNotMatch(inbound, /if \(!hit\) markPayJournalComplete/);
+    assert.match(inbound, /шапки нет/);
+    assert.doesNotMatch(inbound, /catch \{\s*markPayJournalComplete/);
     assert.match(pay, /if \(!cur \|\| cur.done\) return false/);
     assert.match(inbound, /done && unlabeled && known.length/);
     assert.match(pay, /delete store.payFill\[String\(id\)\]/);

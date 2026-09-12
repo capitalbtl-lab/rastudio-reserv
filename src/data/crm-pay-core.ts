@@ -288,7 +288,43 @@ export function isOpeningRow(row: Pick<PayRow, "note">) {
 
 function payKey(x: Pick<PayRow, "id" | "at" | "income" | "expenditure">) {
   const lid = Number(x.id) || 0;
-  return lid ? `id:${lid}` : `t:${x.at}|${x.income}|${x.expenditure}`;
+  return lid > 0 ? `id:${lid}` : `t:${x.at}|${x.income}|${x.expenditure}`;
+}
+
+function foldPay(prev: PayRow, next: PayRow): PayRow {
+  return {
+    ...prev,
+    ...next,
+    cttId: Number(next.cttId || prev.cttId) || undefined,
+    tariffId: Number(next.tariffId || prev.tariffId) || undefined,
+    payItemId: Number(next.payItemId || prev.payItemId) || undefined,
+    payAccountId: Number(next.payAccountId || prev.payAccountId) || undefined,
+    locationId: Number(next.locationId || prev.locationId) || undefined,
+    managerId: Number(next.managerId || prev.managerId) || undefined,
+    groupId: Number(next.groupId || prev.groupId) || undefined,
+    payMethod: String(next.payMethod || prev.payMethod || "") || undefined,
+    payerName: String(next.payerName || prev.payerName || "") || undefined,
+    customerName: String(next.customerName || prev.customerName || "") || undefined,
+    payTypeId: Number(next.payTypeId || prev.payTypeId) || undefined,
+    refundOfGoods: Boolean(next.refundOfGoods || prev.refundOfGoods) || undefined,
+    deleted: Boolean(prev.deleted || next.deleted) || undefined,
+  };
+}
+
+/** Один номер Alfa — одна строка. Повторная загрузка не плодит платежи. */
+export function collapsePayRows(rows: PayRow[]): PayRow[] {
+  const byId = new Map<number, PayRow>();
+  const rest: PayRow[] = [];
+  for (const r of rows || []) {
+    const id = Number(r.id) || 0;
+    if (id > 0) {
+      const prev = byId.get(id);
+      byId.set(id, prev ? foldPay(prev, r) : r);
+      continue;
+    }
+    rest.push(r);
+  }
+  return [...byId.values(), ...rest];
 }
 
 /** Очередь create/delete старше входа. Удалённые с диска Alfa не воскрешает. */
@@ -307,25 +343,11 @@ export function mergePayInbound(pulled: PayRow[], prev: PayRow[] | undefined, ho
     const k = payKey(p);
     const cur = map.get(k);
     if (cur && (Number(cur.id) < 0 || hold.has(Number(cur.id)) || cur.deleted)) continue;
-    map.set(k, {
-      ...(cur || {}),
-      ...p,
-      cttId: Number(p.cttId || cur?.cttId) || undefined,
-      tariffId: Number(p.tariffId || cur?.tariffId) || undefined,
-      payItemId: Number(p.payItemId || cur?.payItemId) || undefined,
-      payAccountId: Number(p.payAccountId || cur?.payAccountId) || undefined,
-      locationId: Number(p.locationId || cur?.locationId) || undefined,
-      managerId: Number(p.managerId || cur?.managerId) || undefined,
-      groupId: Number(p.groupId || cur?.groupId) || undefined,
-      payMethod: String(p.payMethod || cur?.payMethod || "") || undefined,
-      payerName: String(p.payerName || cur?.payerName || "") || undefined,
-      customerName: String(p.customerName || cur?.customerName || "") || undefined,
-      payTypeId: Number(p.payTypeId || cur?.payTypeId) || undefined,
-      refundOfGoods: Boolean(p.refundOfGoods || cur?.refundOfGoods) || undefined,
-      deleted: Boolean(cur?.deleted || p.deleted) || undefined,
-    });
+    map.set(k, cur ? foldPay(cur, p) : p);
   }
-  return [...map.values()].sort((a, b) => String(a.documentDate).localeCompare(String(b.documentDate)) || String(a.at).localeCompare(String(b.at)));
+  return collapsePayRows(
+    [...map.values()].sort((a, b) => String(a.documentDate).localeCompare(String(b.documentDate)) || String(a.at).localeCompare(String(b.at))),
+  );
 }
 
 export function ruDateIso(raw: string) {

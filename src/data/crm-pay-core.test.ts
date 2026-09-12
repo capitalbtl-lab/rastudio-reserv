@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, snapshotBalance, accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, mergePayInbound, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, payCustomerNameOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, payPollLookbackDates, PAY_POLL_MAX_PER_HOUR, matchAlfaPayId, payNum, markRefundOfGoods, remainderClose, rowDelta, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, snapshotBalance, accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, mergePayInbound, collapsePayRows, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, payCustomerNameOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, payPollLookbackDates, PAY_POLL_MAX_PER_HOUR, matchAlfaPayId, payNum, markRefundOfGoods, remainderClose, rowDelta, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -115,6 +115,19 @@ describe("журнал денег", () => {
     assert.equal(merged.some((x) => x.id === -808), false);
     assert.equal(merged.some((x) => x.id === -1), false);
     assert.equal(merged.some((x) => x.id === 19767), true);
+  });
+
+  it("два платежа с одним номером Alfa — одна строка", () => {
+    const merged = mergePayInbound(
+      [
+        row({ id: 88, kind: "income", income: 100, expenditure: 0 }),
+        row({ id: 88, kind: "income", income: 100, expenditure: 0, customerName: "Чуднова" }),
+      ],
+      [row({ id: 88, kind: "income", income: 100, expenditure: 0 })],
+    );
+    assert.equal(merged.filter((x) => x.id === 88).length, 1);
+    assert.equal(merged.find((x) => x.id === 88)?.customerName, "Чуднова");
+    assert.equal(collapsePayRows([row({ id: 9, kind: "income", income: 1, expenditure: 0 }), row({ id: 9, kind: "income", income: 1, expenditure: 0 })]).length, 1);
   });
 
   it("deleted не двигает остаток", () => {
