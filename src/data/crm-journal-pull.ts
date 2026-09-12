@@ -344,47 +344,100 @@ export function journalPullSchools() {
     .map((name) => ({ name, groups: map.get(name) || 0 }));
 }
 
+function liveAttendeeCids() {
+  const seen = new Set<number>();
+  for (const g of journalPullGroups()) {
+    if (g.archived) continue;
+    for (const d of dossiersInGroup(g.branchId, g.groupId)) {
+      const cid = Number(d.crmId) || 0;
+      if (!cid || seen.has(cid)) continue;
+      const hit = (d.groupLinks || []).some((l) => {
+        if (Number(l.id) !== g.groupId) return false;
+        if (l.active === false) return false;
+        if (l.branchId && Number(l.branchId) !== g.branchId) return false;
+        return true;
+      });
+      if (!hit) continue;
+      const st = Number(d.extras?.is_study);
+      if (String(d.status || "") === "удалён" || String(d.extras?.removed || "") === "1") continue;
+      if (st === 0 || String(d.status || "") === "лид") continue;
+      seen.add(cid);
+    }
+  }
+  return seen;
+}
+
+function uniqueByCid<T extends { cid: number }>(list: T[]) {
+  const seen = new Set<number>();
+  const out: T[] = [];
+  for (const x of list) {
+    if (!x.cid || seen.has(x.cid)) continue;
+    seen.add(x.cid);
+    out.push(x);
+  }
+  return out;
+}
+
+function rowFromDossier(
+  d: { crmId?: number; extras?: Record<string, string>; branchId?: number; status?: string },
+  branchId: number,
+) {
+  const st = Number(d?.extras?.is_study);
+  return {
+    cid: Number(d.crmId) || 0,
+    study: Number.isFinite(st) ? st : -1,
+    branchId: Number(d?.branchId || branchId || 1) || 1,
+    status: String(d?.status || ""),
+    removed: String(d?.extras?.removed || ""),
+  };
+}
+
 function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; branchId: number }, school?: string) {
   const scoped = Boolean(group && group.groupId);
   let pool: { cid: number; study: number; branchId: number; status: string; removed: string }[] = [];
   if (group && group.groupId) {
-    pool = dossiersInGroup(group.branchId, group.groupId).map((d) => {
-      const st = Number(d?.extras?.is_study);
-      return {
-        cid: Number(d.crmId) || 0,
-        study: Number.isFinite(st) ? st : -1,
-        branchId: Number(d?.branchId || group.branchId || 1) || 1,
-        status: String(d?.status || ""),
-        removed: String(d?.extras?.removed || ""),
-      };
-    }).filter((x) => x.cid);
+    pool = dossiersInGroup(group.branchId, group.groupId).map((d) => rowFromDossier(d, group.branchId)).filter((x) => x.cid);
+  } else if (study === "1") {
+    const seen = new Set<number>();
+    for (const g of journalPullGroups().filter((x) => !x.archived && (!school || x.school === school))) {
+      for (const d of dossiersInGroup(g.branchId, g.groupId)) {
+        const row = rowFromDossier(d, g.branchId);
+        if (!row.cid || seen.has(row.cid)) continue;
+        const hit = (d.groupLinks || []).some((l) => {
+          if (Number(l.id) !== g.groupId) return false;
+          if (l.active === false) return false;
+          if (l.branchId && Number(l.branchId) !== g.branchId) return false;
+          return true;
+        });
+        if (!hit) continue;
+        seen.add(row.cid);
+        pool.push(row);
+      }
+    }
   } else if (school) {
     const seen = new Set<number>();
     for (const g of journalPullGroups().filter((x) => x.school === school)) {
       for (const d of dossiersInGroup(g.branchId, g.groupId)) {
-        const cid = Number(d.crmId) || 0;
-        if (!cid || seen.has(cid)) continue;
-        seen.add(cid);
-        const st = Number(d.extras?.is_study);
-        pool.push({
-          cid,
-          study: Number.isFinite(st) ? st : -1,
-          branchId: Number(d.branchId || g.branchId || 1) || 1,
-          status: String(d.status || ""),
-          removed: String(d.extras?.removed || ""),
-        });
+        const row = rowFromDossier(d, g.branchId);
+        if (!row.cid || seen.has(row.cid)) continue;
+        seen.add(row.cid);
+        pool.push(row);
       }
     }
   } else {
     pool = listDossierCrm();
   }
   const allow = !scoped ? archiveWorkingSet() : null;
+  const live = !scoped && study === "2" ? liveAttendeeCids() : null;
   const filtered = pool.filter((x) => {
     if (!x.cid) return false;
     if (x.status === "удалён" || x.removed === "1") return false;
-    if (x.study === 0) return false;
-    if (study === "1") return x.study === 1;
-    if (study === "2") return x.study === 2 && (scoped || Boolean(allow && allow.has(x.cid)));
+    if (x.study === 0 || x.status === "лид") return false;
+    if (study === "1") return true;
+    if (study === "2") {
+      if (live && live.has(x.cid)) return false;
+      return x.study === 2 && (scoped || Boolean(allow && allow.has(x.cid)));
+    }
     if (x.study === 1) return true;
     if (x.study === 2) return scoped || Boolean(allow && allow.has(x.cid));
     return false;
@@ -394,8 +447,9 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
     const rb = b.study === 1 ? 0 : 1;
     return ra - rb || a.cid - b.cid;
   });
-  return filtered;
+  return uniqueByCid(filtered);
 }
+
 
 function pickSlice<T>(list: T[], idx: number, take: number) {
   const start = list.length ? idx % list.length : 0;
@@ -681,7 +735,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       cardDone,
       missJournal: packList(missJ),
       missCard: packList(missC),
-      people: study === "2" ? peopleRows : peopleRows.slice(0, 800),
+      people: peopleRows,
     };
   }
 
@@ -718,8 +772,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
 
 export function journalPeopleSide(study: JournalPullStudy) {
   const list = rankedStudentIds(study);
-  const cap = study === "2" ? list.length : 800;
-  const people = list.slice(0, cap).map((p) => {
+  const people = list.map((p) => {
     const sync = customerSyncOf(p.cid);
     const probed = Boolean(sync.lessonsAlfaAt);
     const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;

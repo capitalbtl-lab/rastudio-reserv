@@ -208,7 +208,13 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /payCustomerFilled\(cid\)/);
     assert.match(pull, /force: recheck \|\| !payCustomerFilled\(cid\)/);
     assert.match(pull, /paysOk: balance \? Boolean\(row\.paysOk\)/);
-    assert.match(pull, /people: study === "2" \? peopleRows/);
+    assert.match(pull, /function liveAttendeeCids/);
+    assert.match(pull, /uniqueByCid/);
+    assert.match(pull, /l\.active === false/);
+    assert.match(pull, /people: peopleRows/);
+    assert.doesNotMatch(pull, /peopleRows\.slice\(0, 800\)/);
+    assert.doesNotMatch(pull, /const cap = study === "2"/);
+    assert.match(pull, /if \(study === "1"\) return true/);
     assert.match(pull, /lessonsRecheckAt/);
     assert.match(pull, /customerId/);
     assert.match(pull, /lastStudents/);

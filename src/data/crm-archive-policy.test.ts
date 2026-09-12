@@ -197,11 +197,13 @@ describe("рабочий архив", () => {
 
   it("снимок и кнопки: архив не режется 800, overlay не с текущих", () => {
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
-    assert.match(pull, /study === "2" \? peopleRows : peopleRows\.slice\(0, 800\)/);
+    assert.match(pull, /people: peopleRows/);
+    assert.doesNotMatch(pull, /peopleRows\.slice\(0, 800\)/);
     assert.match(pull, /kind === "archiveCount"/);
     assert.match(pull, /kind === "archiveCatalog"/);
     assert.match(pull, /listDossierCrm\(\)/);
-    assert.match(pull, /study === "2"\) return x.study === 2 && \(scoped \|\| Boolean\(allow && allow.has\(x.cid\)\)\)/);
+    assert.match(pull, /live && live.has\(x.cid\)/);
+    assert.match(pull, /x.study === 2 && \(scoped \|\| Boolean\(allow && allow.has\(x.cid\)\)\)/);
     const addAt = pull.indexOf('kind === "archiveAdd"');
     const addNext = pull.indexOf('kind === "archives"', addAt + 1);
     const addChunk = pull.slice(addAt, addNext > addAt ? addNext : addAt + 1800);
