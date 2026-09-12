@@ -32,6 +32,7 @@ import { AdminCrmSettings } from "@/components/admin-crm-settings";
 import { AdminPublicSite } from "@/components/admin-public-site";
 import { AdminTeachers } from "@/components/admin-teachers";
 import { AdminCash } from "@/components/admin-cash";
+import { AdminGroupHistory } from "@/components/admin-group-history";
 import { CrmClientCard, type CardAction } from "@/components/crm-client-card";
 import { CrmGroupMembers } from "@/components/crm-group-card";
 import { RaSelect } from "@/components/ra-select";
@@ -40,6 +41,7 @@ import { clientCardId, groupCardId, CRM_BRANCH, groupAssignKey } from "@/data/id
 import { displayPersonName } from "@/data/client-display";
 import { GROUP_STATUSES, GROUP_PRIORITY, readPriority } from "@/data/group-status";
 import { bulkPreviewFromPrompt } from "@/data/schedule-bulk";
+import type { GroupHistoryEvent } from "@/data/crm-group-history-core";
 
 type SiteTree = {
   schools: { id: string; label: string; href: string }[];
@@ -862,6 +864,13 @@ export function AdminSchedule() {
   const [memberBusy, setMemberBusy] = useState(0);
   const [cardFields, setCardFields] = useState<Record<string, boolean>>(readCardFields);
   const [nameEdit, setNameEdit] = useState(false);
+  const [groupHistory, setGroupHistory] = useState<{
+    open: boolean;
+    loading: boolean;
+    error: string;
+    events: GroupHistoryEvent[];
+    name: string;
+  } | null>(null);
   const [subjects, setSubjects] = useState<CrmSubject[]>([]);
   const [creatingSubject, setCreatingSubject] = useState(false);
   const [levels, setLevels] = useState<{ id: number; name: string }[]>(SEED_LEVELS);
@@ -1333,6 +1342,30 @@ export function AdminSchedule() {
     } catch {
       /* ignore */
     }
+  }
+
+  async function openGroupHistory() {
+    if (!detail) return;
+    const branchId = detail.branchId;
+    const groupId = detail.groupId;
+    setGroupHistory({ open: true, loading: true, error: "", events: [], name: detail.slot.groupName || `группа ${groupId}` });
+    const res = await adminSchedule({
+      data: { token: token(), action: "groupHistory", groupId, branchId } as never,
+    });
+    if (!res.ok) {
+      setGroupHistory((h) =>
+        h ? { ...h, loading: false, error: ("error" in res && res.error) || "История не открылась." } : h,
+      );
+      return;
+    }
+    const pack = res as { events?: GroupHistoryEvent[]; name?: string };
+    setGroupHistory({
+      open: true,
+      loading: false,
+      error: "",
+      events: Array.isArray(pack.events) ? pack.events : [],
+      name: pack.name || detail.slot.groupName || `группа ${groupId}`,
+    });
   }
 
   function applyMembers(slotId: string, active: GroupMember[], archive: GroupMember[]) {
@@ -3755,6 +3788,7 @@ export function AdminSchedule() {
                 setPupil(null);
                 resetAddPupil();
                 setNameEdit(false);
+                setGroupHistory(null);
                 setDetail(null);
               }}
             >
@@ -3844,7 +3878,7 @@ export function AdminSchedule() {
                       </div>
                     ) : null}
                     </div>
-                    <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full bg-white text-lg leading-none text-muted ring-1 ring-black/8 hover:text-fg" onClick={() => { setPupil(null); resetAddPupil(); setNameEdit(false); setExportMenu(false); setDetail(null); }} aria-label="Закрыть">
+                    <button type="button" className="grid size-8 shrink-0 place-items-center rounded-full bg-white text-lg leading-none text-muted ring-1 ring-black/8 hover:text-fg" onClick={() => { setPupil(null); resetAddPupil(); setNameEdit(false); setExportMenu(false); setGroupHistory(null); setDetail(null); }} aria-label="Закрыть">
                       ×
                     </button>
                       </div>
@@ -3861,6 +3895,13 @@ export function AdminSchedule() {
                       </button>
                       <div className="pointer-events-none invisible absolute right-0 top-full z-[40] pt-1 opacity-0 transition group-hover/gear:pointer-events-auto group-hover/gear:visible group-hover/gear:opacity-100 group-focus-within/gear:pointer-events-auto group-focus-within/gear:visible group-focus-within/gear:opacity-100">
                         <div className={cn("w-[min(15.5rem,calc(100vw-2.5rem))] p-2", RA_POP)}>
+                          <button
+                            type="button"
+                            className="mb-1 w-full rounded-md px-1.5 py-1.5 text-left text-[0.78rem] font-semibold text-fg hover:bg-black/[0.04]"
+                            onClick={() => void openGroupHistory()}
+                          >
+                            История
+                          </button>
                           <p className="px-1.5 pb-1 text-[0.65rem] font-semibold uppercase tracking-wider text-muted">Поля карточки</p>
                           <div className="pretty-scroll max-h-64 overflow-y-auto">
                             {CARD_FIELDS.map((f) => (
@@ -4498,6 +4539,24 @@ export function AdminSchedule() {
               }}
             />
             </TabError>,
+            document.body,
+          )
+        : null}
+      {groupHistory?.open && detail && typeof document !== "undefined"
+        ? createPortal(
+            <AdminGroupHistory
+              groupId={detail.groupId}
+              branchId={detail.branchId}
+              name={groupHistory.name}
+              loading={groupHistory.loading}
+              error={groupHistory.error}
+              events={groupHistory.events}
+              onClose={() => setGroupHistory(null)}
+              onOpenClient={(id) => {
+                setGroupHistory(null);
+                void openPupilById(id, detail.branchId);
+              }}
+            />,
             document.body,
           )
         : null}

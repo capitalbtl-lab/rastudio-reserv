@@ -1189,6 +1189,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
           | "subjectsAiApply"
           | "groupGet"
           | "groupSave"
+          | "groupHistory"
           | "groupExportCheck"
           | "groupFlags"
           | "lessonGet"
@@ -4330,6 +4331,13 @@ export const adminSchedule = createServerFn({ method: "POST" })
       }
       logAdmin(`Группа ${gid}: флаги на сайте, выгрузка в очередь`);
       return { ok: true as const, queued: true, slots };
+    }
+    if (data.action === "groupHistory") {
+      const branch = Number(data.branchId) || 1;
+      const gid = Number(data.groupId) || 0;
+      if (!gid) return { ok: false as const, error: "Нет номера группы." };
+      const { loadGroupHistory } = await import("./crm-group-history");
+      return { ok: true as const, ...loadGroupHistory(branch, gid) };
     }
     return { ok: false as const, error: "Неизвестное действие." };
   });
