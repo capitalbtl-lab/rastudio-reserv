@@ -251,11 +251,13 @@ export function peopleJobQueue(people: PeopleJobRow[], kind: "students" | "balan
 
 export function mergeJobPatch(cur: JournalJob, extra: Partial<JournalJob>) {
   if (extra.id && cur.id && extra.id !== cur.id) return cur;
+  const stop = Boolean(cur.stop || extra.stop);
   return {
     ...cur,
     ...extra,
     id: cur.id || extra.id || "",
-    stop: Boolean(cur.stop || extra.stop),
+    stop,
+    running: stop ? false : extra.running === undefined ? cur.running : extra.running,
     items: Array.isArray(extra.items) ? extra.items : cur.items,
     fill: extra.fill === undefined ? cur.fill : extra.fill,
   };
@@ -269,7 +271,7 @@ export function shouldRetryCash(
   res: { ok?: boolean; error?: string; extra?: string; student?: { paysMore?: boolean; paysOk?: boolean } } | null,
 ) {
   const err = String(res?.error || res?.extra || "");
-  const busy = /уже грузим|нет входа|429|502|нет ответа/i.test(err);
+  const busy = /already грузим|уже грузим|нет входа|429|502|нет ответа/i.test(err);
   if (kind === "balance" && !recheck) {
     if (res?.student?.paysOk) return false;
     if (!res || res.ok === false) return busy || /не ответила|ещё страницы/i.test(err);
