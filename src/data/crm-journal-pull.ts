@@ -344,20 +344,14 @@ export function journalPullSchools() {
     .map((name) => ({ name, groups: map.get(name) || 0 }));
 }
 
-/** Как в Alfa: учится, а не «завершил / без статуса / пропустил 3». */
-const ALFA_STUDYING_STATUS = new Set([1, 4, 5, 7, 8, 10]);
-
-function cidAlfaStudying(cid: number) {
-  const d = findDossier({ crmId: cid });
-  const sid = Number(d?.extras?.study_status_id || 0);
-  return ALFA_STUDYING_STATUS.has(sid);
+/** Живые группы админки: слот на сайте и номер группы из Alfa. Не лагерь, не архив. */
+function liveAdminGroups(school?: string) {
+  return journalPullGroups().filter((x) => !x.archived && (!school || x.school === school));
 }
 
 function liveAttendeeCids(school?: string) {
   const seen = new Set<number>();
-  for (const g of journalPullGroups()) {
-    if (g.archived) continue;
-    if (school && g.school !== school) continue;
+  for (const g of liveAdminGroups(school)) {
     for (const d of dossiersInGroup(g.branchId, g.groupId)) {
       const cid = Number(d.crmId) || 0;
       if (!cid || seen.has(cid)) continue;
@@ -402,21 +396,12 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
     pool = dossiersInGroup(group.branchId, group.groupId).map((d) => rowFromDossier(d, group.branchId)).filter((x) => x.cid);
   } else if (study === "1") {
     const seen = new Set<number>();
-    for (const g of journalPullGroups().filter((x) => !x.archived && (!school || x.school === school))) {
+    for (const g of liveAdminGroups(school)) {
       for (const d of dossiersInGroup(g.branchId, g.groupId)) {
         const row = rowFromDossier(d, g.branchId);
         if (!row.cid || seen.has(row.cid)) continue;
         seen.add(row.cid);
         pool.push(row);
-      }
-    }
-    if (!school) {
-      for (const x of listDossierCrm()) {
-        if (!x.cid || seen.has(x.cid)) continue;
-        if (x.study !== 1 && x.status !== "учится") continue;
-        if (!cidAlfaStudying(x.cid)) continue;
-        seen.add(x.cid);
-        pool.push(x);
       }
     }
   } else if (school) {
