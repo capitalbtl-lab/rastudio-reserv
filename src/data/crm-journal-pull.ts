@@ -1027,7 +1027,7 @@ async function pullOneGroup(
 async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "") {
   const { inboundCustomerLessons, probeCustomerLessons } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
-  const from = String(dateFrom || "").trim();
+  const from = String(dateFrom || "").trim() || "2015-01-01";
   const mark = (disk: number, alfa: number, probedOk: boolean) => {
     const short = lessonsCountShort(disk, alfa, probedOk);
     const extra = lessonsCountExtra(disk, alfa, probedOk);

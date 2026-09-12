@@ -121,6 +121,7 @@ describe("перепроверка журнала", () => {
     assert.match(ui, /bg-red-600/);
     assert.match(ui, /PEOPLE_FROM_OPTS/);
     assert.match(ui, /с начала · 2015/);
+    assert.match(ui, /useState.*\("2015"\)/);
     assert.match(ui, /Загрузить всю историю/);
     assert.match(ui, /peopleDateFrom/);
     assert.doesNotMatch(ui, /Догрузить текущих/);

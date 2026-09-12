@@ -335,7 +335,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     kind,
     study: opts.study === "2" ? "2" : "1",
     recheck,
-    dateFrom: String(opts.dateFrom || ""),
+    dateFrom: String(opts.dateFrom || "").trim() || "2015-01-01",
     grain: opts.grain === "half" || opts.grain === "year" ? opts.grain : "quarter",
     school: String(opts.school || opts.filter || ""),
     groupId: Number(opts.groupId) || Number(first?.groupId) || 0,

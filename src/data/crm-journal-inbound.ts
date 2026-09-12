@@ -484,7 +484,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const { listAdminSlots } = await import("./alfacrm-schedule");
     const t = await token();
     const deepHist = /^2015/.test(ymd(opts?.dateFrom) || "");
-    const dateFrom = ymd(opts?.dateFrom) || (deepHist ? "2015-01-01" : ymd(ruShift(-2600)));
+    const dateFrom = ymd(opts?.dateFrom) || "2015-01-01";
     const dateTo = ruShift(90);
     const slots = listAdminSlots();
     const homeLite = Boolean(opts?.homeOnly);
