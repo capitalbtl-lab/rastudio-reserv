@@ -11,7 +11,7 @@ import { loadScheduleMap } from "./schedule-map";
 import { listDossierCrm, findDossier, dossiersInGroup } from "./dossiers";
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
 import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort } from "./crm-customer-sync";
-import { payCustomerFilled } from "./crm-pay";
+import { payCustomerFilled, payFillPending } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
@@ -948,7 +948,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   if (balance) {
     const { token, request } = await import("./alfacrm");
     const t = await token();
-    const { inboundCustomerPays, paysOf, payCustomerFilled, markPayJournalIncomplete, payFillPending } = await import("./crm-pay");
+    const { inboundCustomerPays, paysOf, payCustomerFilled, markPayJournalIncomplete } = await import("./crm-pay");
     try {
       if (recheck || !payCustomerFilled(cid)) markPayJournalIncomplete(cid);
       await inboundCustomerPays(request, t, branchId, cid, { force: recheck || !payCustomerFilled(cid) });
