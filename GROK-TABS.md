@@ -150,7 +150,10 @@ agent-client-desk, agent-identify, каналы, обучение, гайды.
 ### Код сейчас (перепроверка)
 
 - `lessonsCountExtra` + `lessonsJournalReady`: диск > Alfa — не готово. Жёлтая «на диске больше · есть дубли».
-- Синяя перепроверка: `inboundCustomerLessons({ prune: true })` копит `lessonsSeenIds`, по `done` снимает лишнее (`pruneCalendarToAlfaIds`). Свои `lessonId<0` и очередь hold не трогает.
+- Синяя перепроверка: `inboundCustomerLessons({ prune: true })` копит `lessonsSeenIds`, **снимает только если `wantFull` и курсор `done`** (`canPruneCalendarFill`). Свои `lessonId<0` и очередь hold не трогает. `resetSeen` сбрасывает курсор и seen.
+- `probeCustomerLessons` считает филиалы 1–4, как вход журнала.
+- Шаг 5: `full: true`, 2015, prune только на extra. Не 21 день.
+- Воркер: `RECHECK_STALL_MS` 30 с, потолок `JOB_WAIT_CAP`. Стоп не оживёт. 429 — пауза 120 с. Окно по умолчанию 2015.
 - `fanOutLessonWriteoffs`: без номера в личный календарь не пишет; чужой номер на тот же слот не добавляет.
 - Шаг 5: если остаток врёт и диск > Alfa — prune, не докачка.
 - Воркер: `RECHECK_STALL_MS` 30 с, `shouldResumeStalledJob` только синяя. Стоп не оживёт. 429 — пауза 120 с. `HISTORY_WORKER_SILENT_MS` = 30 с.

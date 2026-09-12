@@ -18,6 +18,7 @@ import {
   stoppedJobMsg,
   shouldResumeStalledJob,
   jobRetryGapMs,
+  RECHECK_STALL_MS,
   JOB_WAIT_CAP,
   type JournalJob,
   type JournalJobItem,
@@ -626,7 +627,37 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     return { done: false, gap: live.recheck ? jobRetryGapMs(err) : jobGapMs(mode === "audit" ? "audit" : "people") };
   }
   if (!res.ok) {
-    const msg = res.error || `Остановились на «${item.name}». Нажмите ещё раз — продолжит со следующего.`;
+    const waits = (live.waits || 0) + 1;
+    if (live.recheck && waits <= JOB_WAIT_CAP) {
+      patch({
+        id,
+        waits,
+        cur: `пауза 30 с · ещё «${item.name}»`,
+        fill: fillOf(mode, job.kind, item),
+        msg: `«${item.name}»: сбой · через 30 с с того же.`,
+      });
+      return { done: false, gap: RECHECK_STALL_MS };
+    }
+    if (live.recheck) {
+      const idx = live.idx + 1;
+      const more = idx < live.items.length;
+      const nextName = more ? live.items[idx]?.name || "" : "";
+      const msg = more
+        ? `«${item.name}»: Alfa не отвечает, берём следующего.`
+        : `Alfa не отвечает на «${item.name}». Остановились.`;
+      patch({
+        id,
+        idx,
+        n: live.n,
+        waits: 0,
+        running: more,
+        cur: more ? `пауза 5 с · дальше ${nextName}` : "",
+        fill: more ? fillOf(mode, job.kind, live.items[idx]) : null,
+        msg,
+      });
+      return { done: !more, gap: more ? jobGapMs(mode) : 0, msg: more ? "" : msg };
+    }
+    const msg = res.error || `Остановились на «${item.name}». Нажмите ещё раз — продолжит с того же.`;
     patch({ id, running: false, cur: "", fill: null, msg });
     return { done: true, gap: 0, msg };
   }

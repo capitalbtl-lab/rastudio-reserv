@@ -8,6 +8,7 @@ import {
   canFanOutToCalendar,
   countAlfaLessonRows,
   mergeSeenLessonIds,
+  canPruneCalendarFill,
   nightGroupDiff,
   nightOnSiteReason,
   nightLockBusy,
@@ -127,6 +128,10 @@ describe("вход из Alfa", () => {
     assert.equal(canFanOutToCalendar([{ lessonId: 10, date: "01.09.2026", from: "10:00" }], { lessonId: 0, date: "01.09.2026", from: "10:00" }), false);
     assert.equal(canFanOutToCalendar([{ lessonId: 10, date: "01.09.2026", from: "10:00" }], { lessonId: 99, date: "01.09.2026", from: "10:00" }), false);
     assert.equal(canFanOutToCalendar([{ lessonId: 10, date: "01.09.2026", from: "10:00" }], { lessonId: 10, date: "01.09.2026", from: "10:00" }), true);
+    assert.equal(canPruneCalendarFill({ prune: true, wantFull: true, fillDone: true }), true);
+    assert.equal(canPruneCalendarFill({ prune: true, wantFull: false, fillDone: true }), false);
+    assert.equal(canPruneCalendarFill({ prune: true, wantFull: true, fillDone: false }), false);
+    assert.equal(canPruneCalendarFill({ prune: false, wantFull: true, fillDone: true }), false);
   });
 });
 

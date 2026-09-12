@@ -172,6 +172,7 @@ export function shouldResumeStalledJob(job = loadJournalJob(), now = Date.now())
   const total = Number(job.total) || job.items.length || 0;
   const n = Number(job.n) || 0;
   if (total > 0 && n >= total) return false;
+  if ((Number(job.waits) || 0) > JOB_WAIT_CAP) return false;
   if (/готово/i.test(String(job.msg || "")) && n >= total) return false;
   if (job.running) return true;
   return total > 0 && n < total;

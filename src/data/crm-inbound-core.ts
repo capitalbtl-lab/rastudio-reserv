@@ -104,6 +104,10 @@ export function collapseLessonRows<T extends { lessonId?: number; date?: string;
 }
 
 
+export function canPruneCalendarFill(opts: { prune?: boolean; wantFull?: boolean; fillDone?: boolean }) {
+  return Boolean(opts.prune) && Boolean(opts.wantFull) && Boolean(opts.fillDone);
+}
+
 function held(x: { lessonId?: number }, hold: Set<number>) {
   const lid = Number(x.lessonId) || 0;
   return lid < 0 || hold.has(lid);

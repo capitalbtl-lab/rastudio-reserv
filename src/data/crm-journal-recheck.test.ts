@@ -151,9 +151,15 @@ describe("перепроверка журнала", () => {
     assert.match(inbound, /deepHist/);
     assert.doesNotMatch(inbound, /homeOnly\) \|\| Number\(opts\?\.take\)/);
     assert.match(inbound, /export async function probeCustomerLessons/);
-    assert.match(inbound, /pruneCalendarToAlfaIds/);
-    assert.match(inbound, /opts\?\.prune/);
+    assert.match(inbound, /canPruneCalendarFill/);
+    assert.match(inbound, /resetSeen/);
+    assert.match(inbound, /lessonFillStart\(branches\[0\]/);
+    assert.match(inbound, /const dateFrom = ymd\(opts\?\.dateFrom\) \|\| "2015-01-01"/);
+    assert.match(inbound, /const deepHist = \/\^2015\/\.test\(dateFrom\)/);
+    assert.match(inbound, /Boolean\(opts\?\.prune\)/);
+    assert.match(inbound, /uniqueBranches\(bid0\)/);
     assert.match(pullLock, /prune: recheck/);
+    assert.match(pullLock, /done: false as const/);
     assert.match(cards, /canFanOutToCalendar/);
     assert.match(inbound, /!opts\?\.force/);
     assert.doesNotMatch(pullLock, /error: "Фон с AlfaCRM выключен\."/);

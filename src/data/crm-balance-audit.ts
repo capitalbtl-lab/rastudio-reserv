@@ -186,12 +186,18 @@ export async function auditOne(cid: number, branchId: number) {
         const { loadCustomerCalendar } = await import("./group-cards");
         const { countAlfaLessonRows } = await import("./crm-inbound-core");
         for (let i = 0; i < 4; i += 1) {
-          const r = await inboundCustomerLessons(shown.branch, id, { force: true, prune: extraLessons, resetSeen: extraLessons && i === 0, dateFrom: "2015-01-01" }).catch(() => ({ done: false }));
+          const r = await inboundCustomerLessons(shown.branch, id, {
+            force: true,
+            full: true,
+            take: 8,
+            prune: extraLessons,
+            resetSeen: extraLessons && i === 0,
+            dateFrom: "2015-01-01",
+          }).catch(() => ({ done: false }));
           repaired = true;
           if (r && "done" in r && r.done) break;
           const diskN = countAlfaLessonRows(loadCustomerCalendar(id));
-          if (probed.ok && extraLessons && diskN <= probed.total) break;
-          if (probed.ok && !extraLessons && diskN >= probed.total) break;
+          if (!extraLessons && probed.ok && diskN >= probed.total) break;
         }
       }
       if (!first.paysComplete || !moneyClose(first.cash, shown.alfa)) {

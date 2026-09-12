@@ -1081,7 +1081,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         prune: recheck,
         resetSeen: recheck && i === 0,
         ...(from ? { dateFrom: from } : {}),
-      }).catch(() => ({ count: 0, done: true as const, skipped: undefined as string | undefined }));
+      }).catch(() => ({ count: 0, done: false as const, skipped: undefined as string | undefined }));
       lessons += Number(res.count) || 0;
       if ("skipped" in res && res.skipped === "busy") {
         return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
