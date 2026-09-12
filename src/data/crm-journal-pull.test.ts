@@ -90,6 +90,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /plan.pending.slice\(0, 1\)/);
     assert.match(pull, /needProbe.slice\(0, 1\)/);
     assert.match(pull, /kind === "archiveCount"/);
+    assert.match(pull, /lastArchivePolicy: report, \.\.\.litePullState\(\)/);
     assert.match(pull, /kind === "archiveCatalog"/);
     assert.match(pull, /peopleKinds/);
     assert.match(pull, /syncArchiveCatalogTick/);

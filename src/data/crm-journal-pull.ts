@@ -1097,7 +1097,7 @@ export async function journalPull(opts: {
     store.note = formatArchiveCountNote(report);
     store.at = report.at;
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: report.working, scanned: report.disk, more: false, lastArchivePolicy: report, ...journalPullState() };
+    return { ok: true as const, extra: store.note, count: report.working, scanned: report.disk, more: false, lastArchivePolicy: report, ...litePullState() };
   }
 
   if (kind === "archiveCatalog") {

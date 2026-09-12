@@ -32,7 +32,9 @@ export {
   JOB_WAIT_CAP,
 } from "./crm-journal-job-core";
 
-const g = globalThis as { __raJournalJobTick?: boolean };
+const g = globalThis as { __raJournalJobTick?: boolean; __raJournalWatch?: ReturnType<typeof setInterval> };
+
+const STALE_LOCK_MS = 180_000;
 
 function nowIso() {
   return new Date().toISOString();
@@ -291,6 +293,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     lastAt: nowIso(),
   };
   saveJournalJob(job);
+  startJournalJobWatch();
   void tickJob();
   return job;
 }
@@ -301,10 +304,25 @@ export function stopJournalJob() {
   return patch({ id: j.id, stop: true, msg: j.msg || "Останавливаем после текущего…" });
 }
 
-export function resumeJournalJob() {
+export function startJournalJobWatch() {
+  if (process.env.NODE_ENV === "test") return;
+  if (g.__raJournalWatch) return;
+  g.__raJournalWatch = setInterval(() => resumeJournalJobFromDisk(), 3000);
+  setTimeout(() => resumeJournalJobFromDisk(), 400);
+}
+
+function resumeJournalJobFromDisk() {
   const j = loadJournalJob();
-  if (j.running && !j.stop) void tickJob();
-  return j;
+  if (!j.running || j.stop) return;
+  const age = Date.now() - Date.parse(j.lastAt || j.startedAt || "");
+  if (g.__raJournalJobTick && Number.isFinite(age) && age > STALE_LOCK_MS) g.__raJournalJobTick = false;
+  void tickJob();
+}
+
+export function resumeJournalJob() {
+  startJournalJobWatch();
+  resumeJournalJobFromDisk();
+  return loadJournalJob();
 }
 
 function fillOf(mode: JournalJobMode | "", kind: string, item?: JournalJobItem | null) {

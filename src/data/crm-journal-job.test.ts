@@ -84,9 +84,17 @@ describe("фон истории из Alfa", () => {
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
+    const pack = readFileSync(new URL("./crm-packet-queue.ts", import.meta.url), "utf8");
     assert.match(job, /export function startJournalJob/);
     assert.match(job, /export function stopJournalJob/);
-    assert.match(job, /void tickJob/);
+    assert.match(job, /export function startJournalJobWatch/);
+    assert.match(job, /resumeJournalJobFromDisk/);
+    assert.match(job, /setInterval/);
+    assert.match(job, /STALE_LOCK_MS/);
+    assert.match(job, /NODE_ENV === "test"/);
+    assert.match(api, /startJournalJobWatch/);
+    assert.match(pack, /startJournalJobWatch/);
+    assert.match(ui, /вкладку можно закрыть/);
     assert.match(job, /await sleepGap/);
     assert.match(job, /sleepGap\(step.gap, id\)/);
     assert.match(job, /касса · ещё/);

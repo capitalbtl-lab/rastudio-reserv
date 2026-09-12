@@ -1413,6 +1413,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
     }
     if (data.action === "get") {
       void import("./crm-packet-queue").then((m) => m.startAlfaIdleTick()).catch(() => null);
+      void import("./crm-journal-job").then((m) => m.startJournalJobWatch()).catch(() => null);
       const cached = g.__raGetPack;
       if (cached && Date.now() - cached.at < 2500) return cached.body as never;
       let slots = listAdminSlots();
