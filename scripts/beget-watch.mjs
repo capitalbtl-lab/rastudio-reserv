@@ -35,7 +35,7 @@ async function liveRev() {
 function lockHeld() {
   try {
     if (!existsSync(LOCK)) return false;
-    return Date.now() - statSync(LOCK).mtimeMs < 25 * 60 * 1000;
+    return Date.now() - statSync(LOCK).mtimeMs < 45 * 60 * 1000;
   } catch {
     return false;
   }
@@ -68,7 +68,7 @@ async function tick() {
     await exec("bash", [path.join(root, "scripts/beget-deploy.sh"), "--force"], {
       cwd: root,
       env: { ...process.env, RA_DEPLOY_REEXEC: "1", RA_DEPLOY_BG: "1" },
-      timeout: 20 * 60 * 1000,
+      timeout: 45 * 60 * 1000,
     });
   } catch (e) {
     const err = e;

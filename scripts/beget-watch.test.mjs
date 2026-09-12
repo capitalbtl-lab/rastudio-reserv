@@ -21,5 +21,11 @@ describe("автовыкладка Beget", () => {
     assert.match(sh, /fail_cleanup/);
     assert.match(sh, /3000 уже слушает/);
     assert.match(sh, /rm -f "\$LOCK"/);
+    assert.match(sh, /RA_DEPLOY_INNER/);
+    assert.match(sh, /сборка отвязана/);
+    assert.match(sh, /keep_lock_fresh/);
+    assert.match(sh, /2700/);
+    assert.match(watch, /45 \* 60 \* 1000/);
+    assert.doesNotMatch(watch, /timeout: 20 \* 60 \* 1000/);
   });
 });

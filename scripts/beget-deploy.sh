@@ -9,7 +9,8 @@ cd "$ROOT"
 LOCK=/tmp/rastudio-deploy.lock
 if [ -f "$LOCK" ]; then
   age=$(( $(date +%s) - $(stat -c %Y "$LOCK" 2>/dev/null || echo 0) ))
-  if [ "$age" -gt 1500 ]; then
+  # Сборка на 1 ГБ занимает ~20–25 мин. Старый порог 1500с снимал lock на середине vite.
+  if [ "$age" -gt 2700 ]; then
     echo "[deploy] снимаю зависший lock (${age}s)"
     rm -f "$LOCK"
   fi
@@ -64,12 +65,19 @@ bring_up() {
 # Если прошлый прогон остановил сайт — поднять сразу, не ждать сборки.
 bring_up
 
-# Вотчер ждёт этот процесс. Сборку отвязываем (setsid), сами ждём метку — иначе git уже новый, а сайт старый.
-if [ "${RA_DEPLOY_BG:-}" != "1" ]; then
+# Вотчер (даже старый в памяти) передаёт RA_DEPLOY_BG=1 и убивает этот процесс
+# через 20 минут. Vite на 1 ГБ не укладывается. Сборку всегда отвязываем
+# (setsid + RA_DEPLOY_INNER=1), чтобы таймаут вотчера не рвал vite.
+if [ "${RA_DEPLOY_INNER:-}" != "1" ]; then
   echo "[deploy] сборка в фоне, текущий сайт не гасим"
-  setsid env RA_DEPLOY_REEXEC=1 RA_DEPLOY_BG=1 bash "$ROOT/scripts/beget-deploy.sh" --force </dev/null >>/tmp/rastudio-deploy.bg.log 2>&1 &
+  touch "$LOCK"
+  setsid env RA_DEPLOY_REEXEC=1 RA_DEPLOY_INNER=1 RA_DEPLOY_BG=1 bash "$ROOT/scripts/beget-deploy.sh" --force </dev/null >>/tmp/rastudio-deploy.bg.log 2>&1 &
+  if [ "${RA_DEPLOY_BG:-}" = "1" ]; then
+    echo "[deploy] сборка отвязана, вотчер не ждёт vite"
+    exit 0
+  fi
   want="$(git rev-parse HEAD)"
-  for _ in $(seq 1 70); do
+  for _ in $(seq 1 180); do
     live="$(cat "$ROOT/.output/.deploy-rev" 2>/dev/null || true)"
     if [ "$live" = "$want" ]; then
       echo "[deploy] сайт $(git rev-parse --short HEAD)"
@@ -87,9 +95,21 @@ if ! flock -w 20 9; then
   exit 0
 fi
 
+# Пока идёт vite, обновляем mtime lock — иначе вотчер через 25 мин решит, что зависло.
+KEEP_LOCK_PID=""
+keep_lock_fresh() {
+  while kill -0 $$ 2>/dev/null; do
+    sleep 60
+    touch "$LOCK" 2>/dev/null || true
+  done
+}
+keep_lock_fresh &
+KEEP_LOCK_PID=$!
+
 STAGE="$ROOT/.build-stage"
 fail_cleanup() {
   echo "[deploy] сборка упала — текущий сайт не трогал, снимаю lock"
+  if [ -n "${KEEP_LOCK_PID:-}" ]; then kill "$KEEP_LOCK_PID" 2>/dev/null || true; fi
   rm -rf "$STAGE" || true
   restore_media || true
   rm -f "$LOCK" || true
@@ -123,6 +143,7 @@ if [ ! -f "$STAGE/.output/server/index.mjs" ] || [ -z "$css" ]; then
   rm -rf "$STAGE"
   restore_media
   bring_up
+  if [ -n "${KEEP_LOCK_PID:-}" ]; then kill "$KEEP_LOCK_PID" 2>/dev/null || true; fi
   rm -f "$LOCK"
   exit 1
 fi
@@ -172,6 +193,7 @@ pm2 save
 
 git rev-parse HEAD > "$ROOT/.output/.deploy-rev"
 git rev-parse HEAD > "$ROOT/.deploy-rev"
+if [ -n "${KEEP_LOCK_PID:-}" ]; then kill "$KEEP_LOCK_PID" 2>/dev/null || true; fi
 rm -f "$LOCK"
 echo "[deploy] live $(git rev-parse --short HEAD)"
 node scripts/ping-indexnow.mjs || echo "[deploy] IndexNow skip"
