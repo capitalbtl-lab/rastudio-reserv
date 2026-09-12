@@ -140,7 +140,8 @@ describe("перепроверка журнала", () => {
     assert.match(pullLock, /уже грузим/);
     assert.match(pullLock, /row\.blocked/);
     assert.match(pullLock, /homeOnly: false/);
-    assert.match(pullLock, /if \(!recheck && first\.ok && disk >= alfa0\)/);
+    assert.match(pullLock, /if \(!recheck\) \{/);
+    assert.match(pullLock, /first\.ok && disk >= alfa0/);
     assert.match(pullLock, /probeCustomerLessons/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /waitLockStudentAlfa/);
@@ -157,9 +158,12 @@ describe("перепроверка журнала", () => {
     assert.match(inbound, /aborted/);
     assert.match(inbound, /canCloseLessonCensus/);
     assert.match(inbound, /uniquePositiveIds/);
+    assert.match(pullLock, /if \(!recheck\) \{/);
+    assert.match(pullLock, /probeCustomerLessons\(branchId, cid, \{ dateFrom: from \}\)/);
     assert.match(pullLock, /censusCustomerLessonIds/);
     assert.match(pullLock, /applyCustomerLessonCensus/);
     assert.match(pullLock, /prune: false/);
+    assert.match(pullLock, /lessonsAlfaAt: ""/);
     assert.match(cards, /canFanOutToCalendar/);
     assert.match(inbound, /!opts\?\.force/);
     assert.doesNotMatch(pullLock, /error: "Фон с AlfaCRM выключен\."/);

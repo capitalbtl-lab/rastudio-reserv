@@ -1036,7 +1036,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     stampCustomerSync(cid, {
       lessonsDisk: disk,
       lessonsAt: at,
-      ...(probedOk ? { lessonsAlfa: alfa, lessonsAlfaAt: at } : {}),
+      ...(probedOk ? { lessonsAlfa: alfa, lessonsAlfaAt: at } : { lessonsAlfaAt: "" }),
       ...(short || extra ? { lessonsFull: false } : closed ? { lessonsFull: true, lessonsAttend: true } : {}),
       ...(balance
         ? { paysAt: at, ...(recheck && closed ? { paysRecheckAt: at, lessonsRecheckAt: at } : {}) }
@@ -1048,27 +1048,49 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   };
   let lessons = 0;
   let disk = countAlfaLessonRows(loadCustomerCalendar(cid));
-  const first = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
-  const alfa0 = first.ok ? first.total : 0;
-  if (!recheck && first.ok && disk >= alfa0) {
-    mark(disk, alfa0, true);
-    const extra0 = lessonsCountExtra(disk, alfa0, true);
-    if (!balance)
-      return {
-        cid,
-        lessons: disk,
-        done: !extra0,
-        pays: 0,
-        tariffs: 0,
-        alfa: alfa0,
-        short: false,
-        dups: extra0,
-        blocked: false,
-        paysOk: false,
-        paysMore: false,
-        rechecked: Boolean(customerSyncOf(cid).lessonsRecheckAt) && !extra0,
-        paysRechecked: false,
-      };
+  if (!recheck) {
+    const first = await probeCustomerLessons(branchId, cid, { dateFrom: from }).catch(() => ({ total: 0, ok: false as const }));
+    const alfa0 = first.ok ? first.total : 0;
+    if (first.ok && disk >= alfa0) {
+      mark(disk, alfa0, true);
+      if (!balance)
+        return {
+          cid,
+          lessons: disk,
+          done: !lessonsCountExtra(disk, alfa0, true),
+          pays: 0,
+          tariffs: 0,
+          alfa: alfa0,
+          short: false,
+          dups: lessonsCountExtra(disk, alfa0, true),
+          blocked: false,
+          paysOk: false,
+          paysMore: false,
+          rechecked: Boolean(customerSyncOf(cid).lessonsRecheckAt) && !lessonsCountExtra(disk, alfa0, true),
+          paysRechecked: false,
+        };
+    } else {
+      for (let i = 0; i < 6; i += 1) {
+        const res = await inboundCustomerLessons(branchId, cid, {
+          take: 8,
+          deep: 0,
+          continueLater: false,
+          full: true,
+          force: true,
+          homeOnly: false,
+          prune: false,
+          ...(from ? { dateFrom: from } : {}),
+        }).catch(() => ({ count: 0, done: false as const, skipped: undefined as string | undefined }));
+        lessons += Number(res.count) || 0;
+        if ("skipped" in res && res.skipped === "busy") {
+          return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
+        }
+        disk = countAlfaLessonRows(loadCustomerCalendar(cid));
+        if (res.done) break;
+      }
+      const probed = await probeCustomerLessons(branchId, cid, { dateFrom: from }).catch(() => ({ total: 0, ok: false as const }));
+      mark(disk, probed.ok ? probed.total : 0, probed.ok);
+    }
   } else {
     for (let i = 0; i < 6; i += 1) {
       const res = await inboundCustomerLessons(branchId, cid, {
@@ -1079,32 +1101,26 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         force: true,
         homeOnly: false,
         prune: false,
-        resetSeen: recheck && i === 0,
+        resetSeen: i === 0,
         ...(from ? { dateFrom: from } : {}),
       }).catch(() => ({ count: 0, done: false as const, skipped: undefined as string | undefined }));
       lessons += Number(res.count) || 0;
       if ("skipped" in res && res.skipped === "busy") {
-        return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
+        return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: 0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
       }
       disk = countAlfaLessonRows(loadCustomerCalendar(cid));
-      if (!recheck || res.done) break;
+      if (res.done) break;
     }
-    if (recheck) {
-      const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: from }).catch(() => ({ ids: [] as number[], ok: false as const }));
-      if (census.ok) {
-        const applied = applyCustomerLessonCensus(cid, census.ids, true);
-        disk = applied.disk;
-        mark(applied.disk, applied.alfa, true);
-      } else {
-        disk = countAlfaLessonRows(loadCustomerCalendar(cid));
-        mark(disk, 0, false);
-      }
+    const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: from }).catch(() => ({ ids: [] as number[], ok: false as const }));
+    if (census.ok) {
+      const applied = applyCustomerLessonCensus(cid, census.ids, true);
+      disk = applied.disk;
+      mark(applied.disk, applied.alfa, true);
     } else {
-      const probed = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
-      const syncPull = customerSyncOf(cid);
-      const alfaN = probed.ok ? probed.total : 0;
-      mark(disk, alfaN, probed.ok);
+      disk = countAlfaLessonRows(loadCustomerCalendar(cid));
+      mark(disk, 0, false);
     }
+  }
   let pays = 0;
   let tariffs = 0;
   let paysOk = false;
