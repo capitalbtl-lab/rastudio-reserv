@@ -915,12 +915,22 @@ function patchPeopleSide(
   };
 }
 
+function mergePeopleSide<T extends { total?: number; people?: PeopleRow[] }>(cur?: T, res?: T): T | undefined {
+  if (!res && !cur) return res;
+  const resPeople = res?.people || [];
+  const curPeople = cur?.people || [];
+  const people = resPeople.length ? resPeople : curPeople;
+  const total = Number(res?.total) > 0 ? Number(res.total) : people.length || Number(cur?.total) || 0;
+  return { ...(cur as T), ...(res as T), people, total };
+}
+
 function applyJobStatus<T extends {
   progress?: {
     live?: { people?: PeopleRow[]; journalDone?: number; cardDone?: number; total?: number };
     archive?: { people?: PeopleRow[]; journalDone?: number; cardDone?: number; total?: number };
     groups?: { rows?: FillRow[]; [k: string]: unknown };
   };
+  students?: { live?: number; archive?: number; all?: number };
   lastStudents?: { study?: string; rows?: StudentHit[] } | null;
   lastAudit?: unknown;
   lastArchiveCatalog?: unknown;
@@ -932,13 +942,11 @@ function applyJobStatus<T extends {
   const hit = res.lastStudents?.rows?.[0];
   const studyKey = res.lastStudents?.study === "2" ? "archive" : "live";
   const base = cur || res;
-  const keepLive = !(res.progress?.live?.people || []).length && (base.progress?.live?.people || []).length;
-  const keepArch = !(res.progress?.archive?.people || []).length && (base.progress?.archive?.people || []).length;
   let progress = {
     ...base.progress,
     ...res.progress,
-    live: keepLive ? base.progress?.live : res.progress?.live,
-    archive: keepArch ? base.progress?.archive : res.progress?.archive,
+    live: mergePeopleSide(base.progress?.live, res.progress?.live),
+    archive: mergePeopleSide(base.progress?.archive, res.progress?.archive),
     groups: res.progress?.groups || base.progress?.groups,
   };
   if (hit) {
@@ -2010,16 +2018,18 @@ export function AdminCrmSettings() {
         setJournal((cur) => {
           if (!cur) return res;
           const jobLive = Boolean(res.job?.running || cur.job?.running || holdFill.current);
-          const keepLive = jobLive || (!(res.progress?.live?.people || []).length && (cur.progress?.live?.people || []).length);
-          const keepArch = jobLive || (!(res.progress?.archive?.people || []).length && (cur.progress?.archive?.people || []).length);
           return {
             ...cur,
             ...res,
             progress: {
               ...cur.progress,
               ...res.progress,
-              live: keepLive ? cur.progress?.live : res.progress?.live,
-              archive: keepArch ? cur.progress?.archive : res.progress?.archive,
+              live: jobLive || !(res.progress?.live?.people || []).length
+                ? mergePeopleSide(cur.progress?.live, res.progress?.live)
+                : res.progress?.live,
+              archive: jobLive || !(res.progress?.archive?.people || []).length
+                ? mergePeopleSide(cur.progress?.archive, res.progress?.archive)
+                : res.progress?.archive,
               groups: res.progress?.groups || cur.progress?.groups,
             },
             job: holdFill.current && cur.job?.running && !res.job?.running ? cur.job : res.job || cur.job,
@@ -2104,16 +2114,14 @@ export function AdminCrmSettings() {
       if (res) {
         setJournal((cur) => {
           if (!cur) return res;
-          const keepLive = !(res.progress?.live?.people || []).length && (cur.progress?.live?.people || []).length;
-          const keepArch = !(res.progress?.archive?.people || []).length && (cur.progress?.archive?.people || []).length;
           const next = {
             ...cur,
             ...res,
             progress: {
               ...cur.progress,
               ...res.progress,
-              live: keepLive ? cur.progress?.live : res.progress?.live,
-              archive: keepArch ? cur.progress?.archive : res.progress?.archive,
+              live: mergePeopleSide(cur.progress?.live, res.progress?.live),
+              archive: mergePeopleSide(cur.progress?.archive, res.progress?.archive),
               groups: res.progress?.groups || cur.progress?.groups,
             },
           };
@@ -2832,7 +2840,7 @@ export function AdminCrmSettings() {
         {(() => {
           const offline = alfaMode === "offline";
           const p = journal?.progress;
-          const liveN = Number(p?.live?.total || journal?.students?.live || 0);
+          const liveN = Number(journal?.students?.live || p?.live?.total || 0);
           const archN = Number(p?.archive?.total || journal?.students?.archive || 0);
           const schoolRows = (p?.groups?.rows || []).filter((r) => !journalSchool || r.school === journalSchool);
           const schoolDone = schoolRows.filter((r) => fillFinishedRow(r, journalGrain)).length;

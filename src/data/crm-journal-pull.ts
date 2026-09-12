@@ -8,7 +8,7 @@ import { alfaLinkedNow } from "./crm-alfa-link";
 import { loadCachePolicy } from "./crm-cache-policy";
 import { listAdminSlots } from "./alfacrm-schedule";
 import { loadScheduleMap } from "./schedule-map";
-import { listDossierCrm, findDossier, dossiersInGroup } from "./dossiers";
+import { listDossierCrm, findDossier, dossiersInGroup, overlayAdminGroups } from "./dossiers";
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
 import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort } from "./crm-customer-sync";
 import { payCustomerFilled, payFillPending } from "./crm-pay";
@@ -344,9 +344,17 @@ export function journalPullSchools() {
     .map((name) => ({ name, groups: map.get(name) || 0 }));
 }
 
-/** Живые группы админки: слот на сайте и номер группы из Alfa. Не лагерь, не архив. */
+/** Группы админки с номером Alfa. Школа — как в сетке журнала. */
 function liveAdminGroups(school?: string) {
-  return journalPullGroups().filter((x) => !x.archived && (!school || x.school === school));
+  if (school) return journalPullGroups().filter((x) => !x.archived && x.school === school);
+  return overlayAdminGroups().map((g) => ({
+    groupId: g.groupId,
+    branchId: g.branchId,
+    name: g.name,
+    school: "",
+    taken: Number(g.taken) || 0,
+    archived: false,
+  }));
 }
 
 function liveAttendeeCids(school?: string) {
@@ -731,6 +739,8 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
   }
 
   if (opts?.skipPeople) {
+    const liveN = rankedStudentIds("1").length;
+    const archN = rankedStudentIds("2").length;
     return {
       groups: {
         total: groups.length,
@@ -740,8 +750,8 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
         doneList: packList(groupsDone, 200),
         rows: rows.slice(0, 800),
       },
-      live: blankPeople(0),
-      archive: blankPeople(0),
+      live: { ...blankPeople(liveN), total: liveN },
+      archive: { ...blankPeople(archN), total: archN },
     };
   }
 
@@ -862,6 +872,8 @@ function journalJobView(job = journalJobSnapshot()) {
 
 function litePullState() {
   const store = loadStore();
+  const live = rankedStudentIds("1").length;
+  const archive = rankedStudentIds("2").length;
   return {
     at: store.at,
     note: store.note,
@@ -873,6 +885,7 @@ function litePullState() {
     lastArchiveCatalog: store.lastArchiveCatalog || null,
     lastAudit: store.lastAudit || null,
     job: journalJobSnapshot(),
+    students: { all: live + archive, live, archive },
   };
 }
 

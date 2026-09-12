@@ -210,9 +210,14 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /paysOk: balance \? Boolean\(row\.paysOk\)/);
     assert.match(pull, /function liveAttendeeCids/);
     assert.match(pull, /function liveAdminGroups/);
+    assert.match(pull, /overlayAdminGroups/);
     assert.match(pull, /uniqueByCid/);
     assert.doesNotMatch(pull, /cidAlfaStudying/);
     assert.doesNotMatch(pull, /ALFA_STUDYING_STATUS/);
+    assert.match(pull, /blankPeople\(liveN\)/);
+    assert.match(pull, /students: \{ all: live \+ archive, live, archive \}/);
+    assert.match(ui, /function mergePeopleSide/);
+    assert.doesNotMatch(ui, /keepLive \? cur\.progress\?\.live/);
     assert.match(pull, /people: peopleRows/);
     assert.doesNotMatch(pull, /peopleRows\.slice\(0, 800\)/);
     assert.doesNotMatch(pull, /const cap = study === "2"/);
