@@ -88,6 +88,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /все архивы филиала, не только ученики/);
     assert.match(pull, /kind === "archivesPupils"/);
     assert.match(pull, /plan.pending.slice\(0, 1\)/);
+    assert.match(pull, /needProbe.slice\(0, 1\)/);
     assert.match(pull, /kind === "archiveCount"/);
     assert.match(pull, /kind === "archiveCatalog"/);
     assert.match(pull, /peopleKinds/);

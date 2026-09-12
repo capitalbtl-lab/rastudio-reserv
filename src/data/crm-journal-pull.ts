@@ -802,7 +802,6 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
 }
 
 function journalJobView(job = journalJobSnapshot()) {
-  const store = loadStore();
   let groupRow = null as ReturnType<typeof groupFillRow> | null;
   if (job.fill?.groupId) {
     const g = journalPullGroups().find((x) => x.groupId === job.fill?.groupId && (!job.fill.branchId || x.branchId === job.fill.branchId));
@@ -811,10 +810,8 @@ function journalJobView(job = journalJobSnapshot()) {
   return {
     ok: true as const,
     extra: job.msg,
+    ...litePullState(),
     job,
-    lastStudents: store.lastStudents || null,
-    lastAudit: store.lastAudit || null,
-    lastArchiveCatalog: store.lastArchiveCatalog || null,
     groupRow,
   };
 }
@@ -1020,7 +1017,20 @@ export async function journalPull(opts: {
     }
     startJournalJob({
       mode: (opts.jobMode || "people") as import("./crm-journal-job-core").JournalJobMode,
-      kind: opts.peopleKind || (opts.jobMode === "audit" ? "audit" : opts.jobMode === "catalog" ? "archiveCatalog" : "students"),
+      kind:
+        opts.jobMode === "audit"
+          ? "audit"
+          : opts.jobMode === "catalog"
+            ? "archiveCatalog"
+            : opts.jobMode === "life"
+              ? "life"
+              : opts.jobMode === "archives"
+                ? "archives"
+                : opts.jobMode === "archivesPupils"
+                  ? "archivesPupils"
+                  : opts.jobMode === "groups" || opts.jobMode === "groups-recheck" || opts.jobMode === "group-one"
+                    ? "group"
+                    : opts.peopleKind || "students",
       study: opts.study === "1" || opts.study === "2" ? opts.study : "1",
       recheck: Boolean(opts.recheck),
       dateFrom: opts.dateFrom || "",
@@ -1045,6 +1055,9 @@ export async function journalPull(opts: {
   const lite =
     Boolean(opts.lite) ||
     kind === "archiveCatalog" ||
+    kind === "life" ||
+    kind === "archives" ||
+    kind === "archivesPupils" ||
     (wantedEarly > 0 && (kind === "students" || kind === "balance" || kind === "audit")) ||
     (kind === "group" && Number(opts.groupId) > 0);
   const snap = () => (lite ? { ok: true as const, ...litePullState() } : journalPullState({ skipPeople: !needPeople || (wantedEarly > 0 && (kind === "students" || kind === "balance" || kind === "audit")) }));
@@ -1253,9 +1266,9 @@ export async function journalPull(opts: {
     };
     store.lastArchives = lastArchives;
     store.note = added.length
-      ? `Архив «${branchName}»: +${added.length}. На диске ${bag.items.length} архивных групп${more ? ". Нажмите ещё — следующий пакет." : "."}`
+      ? `Архив «${branchName}»: +${added.length}. На диске ${bag.items.length} архивных групп${more ? ". Дальше следующий филиал, пауза 5 с." : "."}`
       : more
-        ? `В «${branchName}» новых архивных нет. На диске ${bag.items.length}. Нажмите ещё — следующий филиал.`
+        ? `В «${branchName}» новых архивных нет. На диске ${bag.items.length}. Дальше следующий филиал, пауза 5 с.`
         : `Архивных групп на диске ${bag.items.length}. Все 4 филиала просмотрены.`;
     store.at = bag.at;
     saveStore(store);
@@ -1357,7 +1370,7 @@ export async function journalPull(opts: {
       `уже в списке архивных ${plan.already}`,
       added.length ? `+${added.length} с Alfa` : "с Alfa новых нет",
       missing.length ? `не нашли: ${missing.slice(0, 8).join(", ")}` : "",
-      left ? `ещё ${left}, нажмите снова` : "",
+      left ? `ещё ${left}, пауза 5 с` : "",
     ]
       .filter(Boolean)
       .join(". ");
@@ -1407,7 +1420,7 @@ export async function journalPull(opts: {
     const { probeGroupLife } = await import("./crm-journal-inbound");
     const t = await token().catch(() => "");
     const needProbe = scoped.filter((g) => fillOf(g.branchId, g.groupId).life?.source !== "alfa");
-    const batch = needProbe.slice(0, 4);
+    const batch = needProbe.slice(0, 1);
     let probed = 0;
     if (t) {
       for (const g of batch) {
@@ -1469,7 +1482,7 @@ export async function journalPull(opts: {
       left,
     };
     store.lastLife = lastLife;
-    store.note = `Определено ${scoped.length} групп${school ? ` в «${school}»` : ""}: молодых ${young}, средних ${mid}, старых ${old}${unknown ? `, без срока ${unknown}` : ""}. Срок из Alfa уточнили у ${probed}${left ? `, осталось ${left} — нажмите ещё` : ""}.`;
+    store.note = `Определено ${scoped.length} групп${school ? ` в «${school}»` : ""}: молодых ${young}, средних ${mid}, старых ${old}${unknown ? `, без срока ${unknown}` : ""}. Срок из Alfa уточнили у ${probed}${left ? `, осталось ${left}` : ""}.`;
     store.at = now;
     saveStore(store);
     return { ok: true as const, extra: store.note, count: scoped.length, scanned: scoped.length, more: left > 0, lastLife, ...snap() };

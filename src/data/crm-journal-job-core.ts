@@ -18,7 +18,10 @@ export type JournalJobMode =
   | "catalog"
   | "audit"
   | "probe"
-  | "person";
+  | "person"
+  | "life"
+  | "archives"
+  | "archivesPupils";
 
 export type JournalJobItem = {
   cid?: number;

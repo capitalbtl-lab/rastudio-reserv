@@ -120,6 +120,9 @@ describe("фон истории из Alfa", () => {
     assert.match(ui, /jobMode: "groups"/);
     assert.match(ui, /jobMode: "catalog"/);
     assert.match(ui, /jobMode: "audit"/);
+    assert.match(ui, /jobMode: "life"/);
+    assert.match(ui, /jobMode: "archives"/);
+    assert.match(ui, /jobMode: "archivesPupils"/);
     assert.match(ui, /onLoad=\{\(row, part, recheck\) =>\s*void startHistJob/);
     assert.doesNotMatch(ui, /onLoad=\{\(row, part, recheck\) =>\s*void runJournal/);
     assert.match(ui, /st\?\.job\?\.running/);
@@ -134,5 +137,8 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /given.length && mode !== "audit"/);
     assert.match(pull, /items: opts.jobItems/);
     assert.doesNotMatch(ui, /for \(let i = 0; i < queue.length/);
+    assert.doesNotMatch(job, /queue.slice\(0, take\)/);
+    assert.match(job, /loopPullKind/);
+    assert.match(pull, /needProbe.slice\(0, 1\)/);
   });
 });

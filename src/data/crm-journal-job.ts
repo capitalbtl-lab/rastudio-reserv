@@ -120,6 +120,9 @@ function emptyMsg(mode: JournalJobMode, recheck: boolean) {
   if (mode === "groups-recheck") return "Справа никого перепроверять. Сначала красная «Загрузить по одному».";
   if (mode === "audit") return "Нет текущих учеников на диске.";
   if (mode === "catalog") return "Архив клиентов: некого писать.";
+  if (mode === "life") return "Сначала загрузите группы.";
+  if (mode === "archives") return "Архивных групп нет.";
+  if (mode === "archivesPupils") return "Новых архивных групп по карточкам нет.";
   if (mode === "probe") return "Нет текущих учеников в списке.";
   return "грузить нечего";
 }
@@ -142,18 +145,8 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
     const kind = opts.kind === "balance" ? "balance" : "students";
     if (mode === "audit") {
       let queue = [...people];
-      const take = Number(opts.take) || 0;
       const one = Number(opts.customerId) || 0;
       if (one) queue = queue.filter((r) => r.cid === one);
-      if (!one && take > 0 && queue.length > take) {
-        for (let i = queue.length - 1; i > 0; i -= 1) {
-          const j = Math.floor(Math.random() * (i + 1));
-          const t = queue[i];
-          queue[i] = queue[j];
-          queue[j] = t;
-        }
-        queue = queue.slice(0, take);
-      }
       return queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
     }
     if (mode === "probe") {
@@ -186,7 +179,16 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
     return queue.map((r) => ({ groupId: r.groupId, branchId: r.branchId, name: r.name }));
   }
   if (mode === "catalog") return [{ name: "архив клиентов" }];
+  if (mode === "life") return [{ name: "сроки групп" }];
+  if (mode === "archives") return [{ name: "архивные группы" }];
+  if (mode === "archivesPupils") return [{ name: "архив групп учеников" }];
   return [];
+}
+
+function loopPullKind(mode: JournalJobMode | ""): "archiveCatalog" | "life" | "archives" | "archivesPupils" | "" {
+  if (mode === "catalog") return "archiveCatalog";
+  if (mode === "life" || mode === "archives" || mode === "archivesPupils") return mode;
+  return "";
 }
 
 export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
@@ -197,11 +199,22 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   }
   const mode = opts.mode;
   const kind =
-    opts.kind ||
-    (mode === "audit" ? "audit" : mode === "catalog" ? "archiveCatalog" : mode === "groups" || mode === "groups-recheck" || mode === "group-one" ? "group" : String(opts.kind || "students"));
+    mode === "audit"
+      ? "audit"
+      : mode === "catalog"
+        ? "archiveCatalog"
+        : mode === "life"
+          ? "life"
+          : mode === "archives"
+            ? "archives"
+            : mode === "archivesPupils"
+              ? "archivesPupils"
+              : mode === "groups" || mode === "groups-recheck" || mode === "group-one"
+                ? "group"
+                : opts.kind || "students";
   const recheck = Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || (mode === "group-one" && !opts.periodKey);
   const items = buildItems({ ...opts, kind, recheck });
-  if (!items.length && mode !== "catalog") {
+  if (!items.length && !loopPullKind(mode)) {
     return saveJournalJob({
       ...emptyJournalJob(),
       id: `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -236,7 +249,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     waits: 0,
     cur: first?.name || "",
     n: 0,
-    total: mode === "catalog" ? 0 : items.length,
+    total: loopPullKind(mode) ? 0 : items.length,
     msg: mode === "people-recheck" || (mode === "people" && recheck) ? `${first?.name}: перепроверяем. Потом пауза 5 с.` : mode === "audit" ? `${first?.name}: сверяем. Потом пауза 5 с.` : `${first?.name}: грузим. Потом пауза 5 с.`,
     fill: fillOf(mode, kind, first),
     startedAt: nowIso(),
@@ -262,6 +275,9 @@ export function resumeJournalJob() {
 function fillOf(mode: JournalJobMode | "", kind: string, item?: JournalJobItem | null) {
   if (!item) return null;
   if (mode === "catalog") return { kind: "archiveCatalog", label: item.name };
+  if (mode === "life") return { kind: "life", label: item.name };
+  if (mode === "archives") return { kind: "archives", label: item.name };
+  if (mode === "archivesPupils") return { kind: "archivesPupils", label: item.name };
   if (mode === "audit") return { kind: "audit", label: item.name, customerId: item.cid };
   if (mode === "groups" || mode === "groups-recheck" || mode === "group-one") {
     return { kind: "group", groupId: item.groupId, branchId: item.branchId, periodKey: item.periodKey, label: item.periodLabel || item.name };
@@ -269,27 +285,54 @@ function fillOf(mode: JournalJobMode | "", kind: string, item?: JournalJobItem |
   return { kind: kind === "balance" ? "balance" : "students", label: item.name, customerId: item.cid };
 }
 
+function loopLabel(
+  pullKind: "archiveCatalog" | "life" | "archives" | "archivesPupils",
+  res: {
+    extra?: string;
+    lastArchiveCatalog?: { name?: string; step?: string } | undefined;
+    lastLife?: { left?: number } | undefined;
+    lastArchives?: { branch?: string } | undefined;
+    lastArchivesPupils?: { left?: number } | undefined;
+  },
+) {
+  if (pullKind === "archiveCatalog") {
+    const cat = res.lastArchiveCatalog;
+    return cat?.name && cat.name !== "пропуск" ? cat.name : cat?.step || "архив";
+  }
+  if (pullKind === "life") {
+    const left = Number(res.lastLife?.left) || 0;
+    return left ? `сроки · ещё ${left}` : "сроки групп";
+  }
+  if (pullKind === "archives") {
+    const branch = res.lastArchives?.branch;
+    return branch ? `архив «${branch}»` : "архивные группы";
+  }
+  const left = Number(res.lastArchivesPupils?.left) || 0;
+  return left ? `архив учеников · ещё ${left}` : "архив групп учеников";
+}
+
 async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; msg?: string }> {
   const id = job.id;
   const mode = job.mode;
-  if (mode === "catalog") {
+  const loopKind = loopPullKind(mode);
+  if (loopKind) {
     const res = await journalPull({
-      kind: "archiveCatalog",
-      probe: job.catalogFirst,
+      kind: loopKind,
+      probe: job.catalogFirst && loopKind === "archiveCatalog",
       school: job.school || job.filter,
+      study: job.study,
       lite: true,
     });
     if (loadJournalJob().id !== id) return { done: true, gap: 0 };
-    const cat = res.lastArchiveCatalog as { name?: string; step?: string; more?: boolean } | undefined;
-    const label = cat?.name && cat.name !== "пропуск" ? cat.name : cat?.step || "архив";
+    const label = loopLabel(loopKind, res);
     const n = job.n + (res.ok ? 1 : 0);
     if (!res.ok) {
       const waits = (loadJournalJob().waits || 0) + 1;
       if (/уже грузим|нет ответа|нет входа|429|502/i.test(String(res.error || "")) && waits <= JOB_WAIT_CAP) {
-        patch({ id, waits, cur: "пауза 5 с · Alfa", fill: { kind: "archiveCatalog", label: "пауза 5 с · Alfa" }, msg: String(res.error || res.extra || "") });
-        return { done: false, gap: 5000 };
+        patch({ id, waits, cur: "пауза 5 с · Alfa", fill: { kind: loopKind, label: "пауза 5 с · Alfa" }, msg: String(res.error || res.extra || "") });
+        return { done: false, gap: jobGapMs(mode) };
       }
-      patch({ id, running: false, n, cur: "", fill: null, waits: 0, msg: String(res.error || "Архив клиентов не ответил.") });
+      patch({ id, running: false, n, cur: "", fill: null, waits: 0, msg: String(res.error || "Alfa не ответила.") });
       return { done: true, gap: 0, msg: String(res.error || "") };
     }
     patch({
@@ -299,15 +342,15 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       total: n,
       waits: 0,
       cur: label,
-      fill: { kind: "archiveCatalog", label },
+      fill: { kind: loopKind, label },
       msg: String(res.extra || ""),
     });
     if (!res.more) {
       patch({ id, running: false, cur: "", fill: null, msg: loadJournalJob().msg });
       return { done: true, gap: 0 };
     }
-    patch({ id, cur: `пауза 5 с · ${label}`, fill: { kind: "archiveCatalog", label: `пауза 5 с · ${label}` } });
-    return { done: false, gap: jobGapMs("catalog") };
+    patch({ id, cur: `пауза 5 с · ${label}`, fill: { kind: loopKind, label: `пауза 5 с · ${label}` } });
+    return { done: false, gap: jobGapMs(mode) };
   }
 
   if (job.idx >= job.items.length) {
@@ -418,7 +461,10 @@ function doneMsg(job: JournalJob) {
   if (job.mode === "group-one") return job.stop ? "Очередь группы остановлена." : "Группа перепроверена.";
   if (job.mode === "audit") return `Сверили ${job.n} текущих.`;
   if (job.mode === "probe") return job.msg || `${job.items[0]?.name || ""}: счёт.`;
-  if (job.mode === "person") return job.msg || "Пакет записан на сайт.";
+  if (job.mode === "person") return job.msg || "Записали на сайт.";
+  if (job.mode === "life") return job.msg || "Сроки групп уточнены.";
+  if (job.mode === "archives") return job.msg || "Архивные группы на диске.";
+  if (job.mode === "archivesPupils") return job.msg || "Архив групп учеников закрыт.";
   return `Готово · ${job.n}.`;
 }
 

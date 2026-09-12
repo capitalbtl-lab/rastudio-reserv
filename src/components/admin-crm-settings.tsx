@@ -93,9 +93,9 @@ const HINT = {
   recheckCal: "Ещё раз спрашивает Alfa по этому ученику и дописывает новое на диск. Старые строки не затирает: тема, домашнее задание и сумма списания остаются, если из Alfa пришло пусто. Нужна, если после первой загрузки появились занятия или вы не уверены в счёте. Сравнение идёт по номеру урока, поэтому две одинаковые строки не размножаются. В Alfa ничего не сохраняет. Если карточка уже зелёная, это безопасная проверка, а не повторная полная качка с нуля. Можно жать точечно, не гоняя всю очередь слева.",
   loadOneGroups: "Красная кнопка идёт по группам слева по одной, как «по одному» у учеников. Берёт выбранную порцию справа — квартал, полугодие или год — и читает явки из Alfa на диск. Следующая группа не стартует, пока эта порция не закрылась. Стоп прерывает очередь после текущей группы. В Alfa расписание, журнал и оценки не меняются. Архивные группы сначала подтяните отдельной кнопкой, иначе старый баланс по ним не увидите. Если школа выбрана в фильтре ниже, очередь идёт только по ней. Это шаг 2: групповые явки, не личный календарь и не касса.",
   grain: "Это размер порции журнала группы, подписанный «годы», чтобы ряд кнопок совпадал с шагом 1. «Квартал» — самый безопасный: одно нажатие не закрывает всю историю сразу. «Полугодие» больше и быстрее. «Год» имеет смысл только у молодых групп, которым несколько месяцев. У старых английский на полгода не надо грузить с 2018 года — срок группы режет лишнее. Это не «с 2015», а нарезка журнала группы. Выбор действует на красную кнопку сверху и на кнопки порции в карточке группы. В Alfa ничего не отправляет.",
-  archPupils: "Смотрит карточки учеников той выборки, что на шаге 1: «Сейчас ходят» или рабочий архив — в одном прогоне не смешивает. Собирает номера групп, где они числились. Живые группы из этого списка отбрасывает. Остальные — архив для старого остатка. Закон раздела: за клик одна группа, не пачка. Журнал кварталов сам не стартует. В Alfa ничего не создаёт. Если отчёт пишет «ещё осталось» — нажмите снова.",
-  archAll: "Тянет из Alfa все архивные группы филиала, не только тех, кто есть среди ваших учеников. Поэтому программа спрашивает подтверждение. Живое расписание не трогает. Журнал явок сам не качает — появляется только список групп. Дальше каждую архивную группу грузите красной «по одному» или по кварталу в карточке. В Alfa ничего не пишет. Если нужен только архив ваших людей, кнопка «Архив групп учеников» безопаснее и уже. Нажмите ещё раз, если в отчёте «ещё филиал».",
-  life: "Спрашивает Alfa, с какого и по какое число у группы реально был журнал. Чтобы не грузить английский за десять лет, если курс шёл полгода. Найденный срок пишется на карточку группы на диске. В Alfa шаблон группы не меняет. Если срок не нашли, группа остаётся «без срока» — тогда грузите видимые кварталы руками. Можно нажать ещё, пока в отчёте есть «осталось». После сроков красная кнопка берёт только overlapping порции. Это подготовка, не загрузка явок.",
+  archPupils: "Смотрит карточки учеников той выборки, что на шаге 1: «Сейчас ходят» или рабочий архив — в одном прогоне не смешивает. Собирает номера групп, где они числились. Живые группы из этого списка отбрасывает. Остальные — архив для старого остатка. Закон раздела: только по одной группе, пауза 5 секунд, пакетом нельзя. Очередь сама идёт, «Стоп» после текущей. Журнал кварталов сам не стартует. В Alfa ничего не создаёт.",
+  archAll: "Тянет из Alfa архивные группы филиала, не только тех, кто есть среди ваших учеников. Поэтому программа спрашивает подтверждение. Живое расписание не трогает. Журнал явок сам не качает — появляется только список групп. Закон раздела: один филиал, пауза 5 секунд, пакетом нельзя. «Стоп» после текущего филиала. Дальше каждую архивную группу грузите красной «по одному» или по кварталу в карточке. В Alfa ничего не пишет. Если нужен только архив ваших людей, кнопка «Архив групп учеников» безопаснее и уже.",
+  life: "Спрашивает Alfa, с какого и по какое число у группы реально был журнал. Чтобы не грузить английский за десять лет, если курс шёл полгода. Найденный срок пишется на карточку группы на диске. В Alfa шаблон группы не меняет. Закон раздела: одна группа, пауза 5 секунд, пакетом нельзя. «Стоп» после текущей. Если срок не нашли, группа остаётся «без срока» — тогда грузите видимые кварталы руками. После сроков красная кнопка берёт только overlapping порции. Это подготовка, не загрузка явок.",
   school: "Фильтр списка: видны группы одной школы или сразу все. Счётчик «загрузка завершена» считается только по видимым. Красная «по одному» тоже идёт по этому списку, а не по скрытым. Сами данные кнопка не качает и в Alfa не ходит. Если школа не выбрана, очередь по всем группам — это дольше. Смените школу, когда закончили одну, чтобы не смешивать робототехнику с английским. На уже скачанные явки фильтр не влияет.",
   loadAttend: "Читает явки этой порции группы из Alfa на диск: кто был, кто пропуск, кто опоздал. Чужие кварталы не затирает. Если пакет оборвался, карточка квартала жёлтая — нажмите ещё раз, допишет. В Alfa журнал не проводит, не отменяет и оценки не ставит. После зелёных явок можно отдельно взять тему, домашнее задание и комментарий. Без явок детали грузить нельзя: не к чему их привязать. Одна порция — один безопасный шаг, вся история группы сразу не улетает.",
   loadDetails: "После зелёных явок добирает по урокам тему, домашнее задание, комментарий педагога и таблицу учеников. Это не явки и не касса. Alfa только читается, ничего не проводится. Если темы в Alfa нет, кнопка всё равно помечает «смотрели», чтобы не крутить вечно. Чужие кварталы не трогает. Жать имеет смысл, когда явки уже зелёные, иначе будет «Сначала явки». На сайт это нужно, чтобы в карточке группы были не только галочки присутствия.",
@@ -876,6 +876,9 @@ function applyJobStatus<T extends {
   lastStudents?: { study?: string; rows?: StudentHit[] } | null;
   lastAudit?: unknown;
   lastArchiveCatalog?: unknown;
+  lastLife?: unknown;
+  lastArchives?: unknown;
+  lastArchivesPupils?: unknown;
   job?: unknown;
 }>(cur: T | null, res: T & { groupRow?: FillRow | null }): T {
   const hit = res.lastStudents?.rows?.[0];
@@ -908,6 +911,9 @@ function applyJobStatus<T extends {
     lastStudents: res.lastStudents ?? base.lastStudents,
     lastAudit: res.lastAudit ?? base.lastAudit,
     lastArchiveCatalog: res.lastArchiveCatalog ?? base.lastArchiveCatalog,
+    lastLife: res.lastLife ?? base.lastLife,
+    lastArchives: res.lastArchives ?? base.lastArchives,
+    lastArchivesPupils: res.lastArchivesPupils ?? base.lastArchivesPupils,
     job: res.job ?? base.job,
   };
 }
@@ -2069,7 +2075,7 @@ export function AdminCrmSettings() {
           return next;
         });
       }
-      setMsg(res?.error || res?.extra || (res?.ok ? "Пакет записан на сайт." : "Журнал не ответил."));
+      setMsg(res?.error || res?.extra || (res?.ok ? "Записали на сайт." : "Журнал не ответил."));
       return res;
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Журнал не ответил.");
@@ -2322,13 +2328,12 @@ export function AdminCrmSettings() {
     await startHistJob({ jobMode: "catalog", school: catalogFilterJson(), probe: !more });
   }
 
-  async function pullAudit(opts?: { take?: number; customerId?: number; branchId?: number; name?: string }) {
+  async function pullAudit(opts?: { customerId?: number; branchId?: number; name?: string }) {
     await startHistJob({
       jobMode: "audit",
       study: "1",
       customerId: opts?.customerId,
       branchId: opts?.branchId,
-      take: opts?.take,
       name: opts?.name,
     });
   }
@@ -2776,7 +2781,7 @@ export function AdminCrmSettings() {
                         <li>уже в живых {journal.lastArchivesPupils.live}</li>
                         <li>уйдёт в архив (нет в живых) {journal.lastArchivesPupils.need}</li>
                         <li>уже в списке архивных на сайте {journal.lastArchivesPupils.already}</li>
-                        {journal.lastArchivesPupils.added ? <li>+{journal.lastArchivesPupils.added} прочитали в Alfa</li> : null}
+                        {journal.lastArchivesPupils?.added ? <li>+{journal.lastArchivesPupils.added} прочитали в Alfa</li> : null}
                       </ul>
                       {journal.lastArchivesPupils.names?.length ? (
                         <p className="mt-1 break-words text-[0.78rem] text-muted">{journal.lastArchivesPupils.names.join(", ")}</p>
@@ -2786,7 +2791,7 @@ export function AdminCrmSettings() {
                       ) : null}
                       <p className="mt-2 text-[0.72rem] text-muted">
                         {journal.lastArchivesPupils.more
-                          ? `Ещё ${journal.lastArchivesPupils.left} — нажмите снова. Журнал кварталов не стартовал.`
+                          ? `Ещё ${journal.lastArchivesPupils.left} — очередь по одной, пауза 5 с. Журнал кварталов не стартовал.`
                           : "Список по карточкам закрыт. Дальше кварталы, как у живых групп."}
                       </p>
                     </div>
@@ -2803,7 +2808,7 @@ export function AdminCrmSettings() {
                         <p className="mt-1 break-words text-[0.78rem] text-muted">{journal.lastArchives.names.join(", ")}</p>
                       ) : null}
                       <p className="mt-2 text-[0.72rem] text-muted">
-                        {journal.lastArchives.more ? "Нажмите ещё — следующий филиал." : "Четыре филиала просмотрены. Дальше — сроки и явки, как у живых."}
+                        {journal.lastArchives.more ? "Дальше следующий филиал, пауза 5 с." : "Четыре филиала просмотрены. Дальше — сроки и явки, как у живых."}
                       </p>
                     </div>
                   ) : null}
@@ -2835,7 +2840,7 @@ export function AdminCrmSettings() {
                       </ul>
                       <p className="mt-2 text-[0.72rem] text-muted">
                         {journal.lastLife.probed
-                          ? `Срок из Alfa уточнили у ${journal.lastLife.probed}${journal.lastLife.left ? `, осталось ${journal.lastLife.left} — нажмите ещё` : ""}.`
+                          ? `Срок из Alfa уточнили у ${journal.lastLife.probed}${journal.lastLife.left ? `, осталось ${journal.lastLife.left}` : ""}.`
                           : "Дальше грузите только видимые кварталы у каждой группы."}
                       </p>
                     </div>
@@ -2888,10 +2893,8 @@ export function AdminCrmSettings() {
                     className={cn(BTN_LOAD, fillLoading?.kind === "archivesPupils" && "ra-progress-run")}
                     disabled={busy || offline}
                     onClick={() => {
-                      void (async () => {
-                        const res = await runJournal({ kind: "archivesPupils", study: peopleStudy === "2" ? "2" : "1" });
-                        if (Number(res?.lastArchivesPupils?.added) > 0) setGroupArchived(true);
-                      })();
+                      setGroupArchived(true);
+                      void startHistJob({ jobMode: "archivesPupils", study: peopleStudy === "2" ? "2" : "1" });
                     }}
                   >
                     {fillLoading?.kind === "archivesPupils"
@@ -2909,7 +2912,7 @@ export function AdminCrmSettings() {
                     disabled={busy || offline}
                     onClick={() => {
                       if (!window.confirm("Это все архивы филиала, не только ученики. Продолжить?")) return;
-                      void runJournal({ kind: "archives" });
+                      void startHistJob({ jobMode: "archives" });
                     }}
                   >
                     {fillLoading?.kind === "archives"
@@ -2927,7 +2930,7 @@ export function AdminCrmSettings() {
                     type="button"
                     className={cn(BTN_LOAD, fillLoading?.kind === "life" && "ra-progress-run")}
                     disabled={busy || offline}
-                    onClick={() => void runJournal({ kind: "life", school: journalSchool })}
+                    onClick={() => void startHistJob({ jobMode: "life", school: journalSchool })}
                   >
                     {fillLoading?.kind === "life" ? "Смотрю сроки…" : schoolNeedLife ? `Уточнить ещё ${schoolNeedLife}` : "Определить сроки групп"}
                   </button>,
