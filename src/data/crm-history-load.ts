@@ -17,13 +17,25 @@ export type HistoryLoadSpec = {
   name?: string;
 };
 
+export type HistoryLoadResult = {
+  ok?: boolean;
+  extra?: string;
+  error?: string;
+  more?: boolean;
+  lastArchiveCatalog?: { name?: string; step?: string };
+  lastLife?: { left?: number };
+  lastArchives?: { branch?: string };
+  lastArchivesPupils?: { left?: number };
+  student?: { paysMore?: boolean; paysOk?: boolean };
+};
+
 /** Пропуск кассы: только кто уже в complete[]. fill.done сам по себе не skip. */
 export function historyCashSkip(filled: boolean, force: boolean) {
   return Boolean(filled) && !force;
 }
 
 /** Один объект за вызов. Касса слева всегда читает Alfa, даже если раньше «сканировали». */
-export async function historyLoadOne(spec: HistoryLoadSpec) {
+export async function historyLoadOne(spec: HistoryLoadSpec): Promise<HistoryLoadResult> {
   const kind = spec.kind;
   return journalPull({
     kind,
@@ -39,7 +51,7 @@ export async function historyLoadOne(spec: HistoryLoadSpec) {
     school: spec.school,
     name: spec.name,
     lite: true,
-  });
+  }) as Promise<HistoryLoadResult>;
 }
 
 export function historyPullKind(mode: string, jobKind: string): JournalPullKind {

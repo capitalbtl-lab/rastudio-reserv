@@ -1206,7 +1206,7 @@ export async function journalPull(opts: {
     store.note = `Кто активный: ${pol.leads ? "лиды в группах · " : ""}${pol.archiveInLive ? "архив в живой группе · " : "без архива в живых · "}занятия ${pol.attendDays ? `за ${pol.attendDays} дн.` : "не фильтровать"}.`;
     store.at = new Date().toISOString();
     saveStore(store);
-    return { ok: true as const, extra: store.note, rosterPolicy: pol, more: false, ...litePullState() };
+    return { ok: true as const, extra: store.note, more: false, ...litePullState(), rosterPolicy: pol };
   }
 
   if (kind === "roster") {
