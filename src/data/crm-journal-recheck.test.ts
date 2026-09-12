@@ -110,7 +110,8 @@ describe("перепроверка журнала", () => {
     assert.match(ui, /holdFill/);
     assert.match(ui, /colLock/);
     assert.match(ui, /Сверить счёт/);
-    assert.match(ui, /function HintI/);
+    assert.match(ui, /hit\.dups != null/);
+    assert.match(ui, /Number\(row.lessons\) === Number\(row.alfa\)/);
     assert.match(ui, /Загрузить всю историю/);
     assert.match(ui, /PEOPLE_FROM_OPTS/);
     assert.match(ui, /YearsSelect/);

@@ -5,6 +5,7 @@ import {
   peopleJobQueue,
   peopleJobFinished,
   shouldRetryCash,
+  shouldRetryOpenRecheck,
   jobGapMs,
   mergeJobPatch,
   parseJobItems,
@@ -79,6 +80,14 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryCash("students", false, { ok: false, error: "уже грузим другого ученика" }), true);
     assert.equal(shouldRetryCash("students", false, { ok: false, error: "502" }), true);
     assert.equal(shouldRetryCash("group", false, { ok: false, error: "Alfa не ответила, нажмите снова" }), false);
+    assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: false } }), true);
+    assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: true } }), false);
+    assert.equal(shouldRetryOpenRecheck(false, "students", { ok: true, student: { rechecked: false } }), false);
+    assert.equal(shouldRetryOpenRecheck(true, "balance", { ok: true, student: { rechecked: true, paysRechecked: false } }), true);
+    assert.equal(shouldRetryOpenRecheck(true, "group", { ok: true, student: { rechecked: false } }), false);
+    const jobSrc = readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8");
+    assert.match(jobSrc, /openRetry/);
+    assert.match(jobSrc, /перепись не закрыта, ещё этот/);
     assert.equal(JOB_WAIT_CAP, 8);
   });
 
@@ -187,7 +196,7 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /касса · ещё/);
     assert.match(job, /касса · \$\{item.name\}/);
     assert.match(job, /берём следующего/);
-    assert.match(job, /busy && waits > JOB_WAIT_CAP/);
+    assert.match(job, /\(busy \|\| openRetry\) && waits > JOB_WAIT_CAP/);
     assert.match(job, /пауза 5 с/);
     assert.match(load, /lite: true/);
     assert.match(job, /if \(id && j.id !== id\) break/);

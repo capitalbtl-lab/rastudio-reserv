@@ -319,6 +319,21 @@ export function shouldRetryCash(
   return false;
 }
 
+/** Синяя: человек не закрыт — не брать следующего. Красная этим не пользуется. */
+export function shouldRetryOpenRecheck(
+  recheck: boolean,
+  kind: string,
+  res: { ok?: boolean; student?: { rechecked?: boolean; paysRechecked?: boolean } } | null,
+) {
+  if (!recheck) return false;
+  if (kind !== "students" && kind !== "balance") return false;
+  if (!res?.ok) return false;
+  const s = res.student;
+  if (!s) return false;
+  if (kind === "balance") return !s.paysRechecked;
+  return !s.rechecked;
+}
+
 export function jobGapMs(_mode?: JournalJobMode | "") {
   return JOURNAL_ONE_GAP_MS;
 }

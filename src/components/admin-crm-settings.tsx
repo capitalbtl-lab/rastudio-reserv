@@ -895,6 +895,9 @@ function patchPeopleSide(
     const journal = Boolean(hit.ok) && !short;
     const disk = Number(hit.lessons) || p.lessons;
     const alfa = hit.alfa != null ? hit.alfa : p.alfa;
+    let dups = hit.dups != null ? Boolean(hit.dups) : Boolean(p.dups);
+    if (!short && alfa != null && Number(disk) === Number(alfa)) dups = false;
+    if (short) dups = false;
     const pays = hit.paysOk != null ? Boolean(hit.paysOk) : p.pays;
     const rechecked = hit.rechecked != null ? Boolean(hit.rechecked) : p.rechecked;
     const paysRechecked = hit.paysRechecked != null ? Boolean(hit.paysRechecked) : p.paysRechecked;
@@ -908,6 +911,7 @@ function patchPeopleSide(
       lessons: disk,
       alfa,
       short,
+      dups,
       journal,
       pays,
       paysMore: Boolean(hit.paysMore),
@@ -1114,7 +1118,8 @@ function PeopleFillList({
     const full = peopleFinished(row, kind);
     const needsRecheck = peopleNeedsRecheck(row, kind);
     const short = Boolean(row.short);
-    const dups = Boolean(row.dups);
+    const equal = row.alfa != null && Number(row.lessons) === Number(row.alfa) && !short;
+    const dups = Boolean(row.dups) && !equal;
     const active = loadingCid === row.cid;
     const shown = open === id;
     const pct = full && !dups ? 100 : short || dups || row.lessons ? 50 : 0;
