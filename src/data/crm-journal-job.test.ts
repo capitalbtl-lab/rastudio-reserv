@@ -13,14 +13,34 @@ import {
   CATALOG_JOB_GAP_MS,
   JOB_WAIT_CAP,
   historyWorkerSilent,
+  shouldResumeStalledJob,
+  jobRetryGapMs,
+  RECHECK_STALL_MS,
   stoppedJobMsg,
 } from "./crm-journal-job-core.ts";
 
 describe("фон истории из Alfa", () => {
-  it("воркер молчит, если lastAt старше 12 с", () => {
+  it("воркер молчит, если lastAt старше 30 с", () => {
     assert.equal(historyWorkerSilent({ ...emptyJournalJob(), running: false, lastAt: new Date(0).toISOString() }), false);
     assert.equal(historyWorkerSilent({ ...emptyJournalJob(), running: true, lastAt: new Date().toISOString() }), false);
     assert.equal(historyWorkerSilent({ ...emptyJournalJob(), running: true, lastAt: new Date(Date.now() - 60_000).toISOString() }), true);
+    const stalled = {
+      ...emptyJournalJob(),
+      id: "r1",
+      recheck: true,
+      running: false,
+      stop: false,
+      n: 0,
+      total: 75,
+      lastAt: new Date(Date.now() - RECHECK_STALL_MS - 1000).toISOString(),
+    };
+    assert.equal(shouldResumeStalledJob(stalled), true);
+    assert.equal(shouldResumeStalledJob({ ...stalled, stop: true }), false);
+    assert.equal(shouldResumeStalledJob({ ...stalled, recheck: false, mode: "people" }), false);
+    assert.equal(shouldResumeStalledJob({ ...stalled, n: 75 }), false);
+    assert.equal(shouldResumeStalledJob({ ...stalled, lastAt: new Date().toISOString() }), false);
+    assert.equal(jobRetryGapMs("429 Too Many Requests"), 120_000);
+    assert.equal(jobRetryGapMs("ок"), 5000);
   });
   it("очередь учеников: слева неготовые, справа перепроверка", () => {
     const people = [
@@ -31,6 +51,7 @@ describe("фон истории из Alfa", () => {
     ];
     assert.deepEqual(peopleJobQueue(people, "students", false).map((x) => x.cid), [1, 4]);
     assert.deepEqual(peopleJobQueue(people, "students", true).map((x) => x.cid), [3]);
+    assert.deepEqual(peopleJobQueue([{ ...people[1], dups: true }], "students", true).map((x) => x.cid), [2]);
     assert.equal(peopleJobFinished(people[1], "balance"), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: true, short: true }, "balance"), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false }, "balance"), false);
@@ -130,6 +151,8 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /kickHistoryTick/);
     assert.match(job, /if \(!isHistoryWorker\(\)\) return/);
     assert.match(job, /resumeJournalJobFromDisk/);
+    assert.match(job, /resumeStalledRecheck/);
+    assert.match(core, /shouldResumeStalledJob/);
     assert.match(job, /setInterval/);
     assert.match(job, /STALE_LOCK_MS/);
     assert.match(job, /NODE_ENV === "test"/);

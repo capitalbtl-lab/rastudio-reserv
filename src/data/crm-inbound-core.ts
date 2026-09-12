@@ -109,6 +109,55 @@ function held(x: { lessonId?: number }, hold: Set<number>) {
   return lid < 0 || hold.has(lid);
 }
 
+export function pruneCalendarToAlfaIds<T extends { lessonId?: number }>(
+  disk: T[],
+  alfaIds: Iterable<number>,
+  holdIds: Iterable<number> = [],
+): T[] {
+  const keep = new Set<number>();
+  for (const n of alfaIds) {
+    const id = Number(n) || 0;
+    if (id > 0) keep.add(id);
+  }
+  const hold = new Set([...holdIds].map(Number).filter((n) => n));
+  return (disk || []).filter((x) => {
+    const lid = Number(x.lessonId) || 0;
+    if (lid < 0 || hold.has(lid)) return true;
+    if (!lid) return false;
+    return keep.has(lid);
+  });
+}
+
+export function canFanOutToCalendar<T extends { lessonId?: number; date?: string; from?: string }>(prev: T[] | undefined, lesson: T) {
+  const lid = Number(lesson.lessonId) || 0;
+  if (!lid) return false;
+  for (const x of prev || []) {
+    const xid = Number(x.lessonId) || 0;
+    if (xid > 0 && xid !== lid && sameSlot(x, lesson)) return false;
+  }
+  return true;
+}
+
+export function countAlfaLessonRows<T extends { lessonId?: number }>(list: T[] | undefined) {
+  let n = 0;
+  for (const x of list || []) if (Number(x.lessonId) > 0) n += 1;
+  return n;
+}
+
+export function mergeSeenLessonIds(prev: number[] | undefined, pulled: { lessonId?: number }[]) {
+  const set = new Set<number>();
+  for (const n of prev || []) {
+    const id = Number(n) || 0;
+    if (id > 0) set.add(id);
+  }
+  for (const row of pulled || []) {
+    const id = Number(row.lessonId) || 0;
+    if (id > 0) set.add(id);
+  }
+  return [...set];
+}
+
+
 export function mergeJournalInbound<T extends { lessonId?: number; date?: string; from?: string }>(
   pulled: T[],
   prev: T[] | undefined,

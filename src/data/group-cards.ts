@@ -4,7 +4,7 @@ import type { GroupCalLesson } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { nextLocalId } from "./crm-local-id";
-import { mergeJournalInbound, collapseLessonRows } from "./crm-inbound-core";
+import { mergeJournalInbound, collapseLessonRows, canFanOutToCalendar } from "./crm-inbound-core";
 import { journalForCustomer, calendarLessonForCard, lessonBranchOf } from "./crm-journal-core";
 import { chargeFromPupils } from "./crm-ledger-core";
 import { findDossier } from "./dossiers";
@@ -423,6 +423,7 @@ export function collectCustomerJournal(
 /** Явка ученика с занятия — в его журнал на диске. Любой статус: план, пропуск, проведено. */
 export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
   const rows = (lessons || []).filter((l) => {
+    if (!(Number(l.lessonId) > 0)) return false;
     if ((l.pupils || []).length) return true;
     return (l.customerIds || []).some((n) => Number(n) > 0);
   });
@@ -442,6 +443,7 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
     for (const cid of cids) {
       const charge = chargeFromPupils(lesson, cid);
       const prev = byCid.get(cid) || loadCustomerCalendar(cid);
+      if (!canFanOutToCalendar(prev, lesson)) continue;
       const { list } = mergeLessonInto(prev, {
         ...lesson,
         amount: charge.amount || undefined,

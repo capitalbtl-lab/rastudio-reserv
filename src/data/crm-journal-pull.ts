@@ -10,12 +10,13 @@ import { listAdminSlots } from "./alfacrm-schedule";
 import { loadScheduleMap } from "./schedule-map";
 import { listDossierCrm, findDossier, dossiersInGroup, overlayAdminGroups } from "./dossiers";
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
-import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort } from "./crm-customer-sync";
+import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort, lessonsCountExtra } from "./crm-customer-sync";
 import { payCustomerFilled, payFillPending } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
+import { countAlfaLessonRows } from "./crm-inbound-core";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -62,6 +63,7 @@ type StudentHit = {
   ok: boolean;
   alfa?: number;
   short?: boolean;
+  dups?: boolean;
 };
 
 type StudentsReport = {
@@ -736,6 +738,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       lessons: number;
       alfa?: number;
       short?: boolean;
+      dups?: boolean;
       journal: boolean;
       pays: boolean;
       rechecked: boolean;
@@ -754,7 +757,8 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
       const diskN = Number(sync.lessonsDisk) || 0;
       const short = lessonsCountShort(diskN, alfaN, probed);
-      const journal = lessonsJournalReady(sync);
+      const dups = lessonsCountExtra(diskN, alfaN, probed);
+      const journal = !short && (lessonsJournalReady(sync) || diskN > 0 || Boolean(sync.lessonsFull));
       const pays = payCustomerFilled(p.cid);
       const name = fioOf(p.cid);
       const glist = groupsOfStudent(p.cid).slice(0, 3);
@@ -771,9 +775,10 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
         lessons: diskN,
         alfa: probed ? alfaN : undefined,
         short,
+        dups,
         journal,
         pays,
-        rechecked: Boolean(sync.lessonsRecheckAt) && !short,
+        rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
         paysRechecked: Boolean(sync.paysRecheckAt),
         extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : gnames,
         at: sync.lessonsAt || "",
@@ -835,7 +840,8 @@ export function journalPeopleSide(study: JournalPullStudy) {
     const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
     const diskN = Number(sync.lessonsDisk) || 0;
     const short = lessonsCountShort(diskN, alfaN, probed);
-    const journal = lessonsJournalReady(sync);
+    const dups = lessonsCountExtra(diskN, alfaN, probed);
+    const journal = !short && (lessonsJournalReady(sync) || diskN > 0 || Boolean(sync.lessonsFull));
     const pays = payCustomerFilled(p.cid);
     return {
       cid: p.cid,
@@ -845,9 +851,10 @@ export function journalPeopleSide(study: JournalPullStudy) {
       lessons: diskN,
       alfa: probed ? alfaN : undefined,
       short,
+      dups,
       journal,
       pays,
-      rechecked: Boolean(sync.lessonsRecheckAt) && !short,
+      rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
       paysRechecked: Boolean(sync.paysRecheckAt),
       extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : groupsOfStudent(p.cid).slice(0, 2).join(", "),
       at: sync.lessonsAt || "",
@@ -1023,45 +1030,69 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   const from = String(dateFrom || "").trim();
   const mark = (disk: number, alfa: number, probedOk: boolean) => {
     const short = lessonsCountShort(disk, alfa, probedOk);
-    const closed = probedOk && !short && disk >= alfa;
+    const extra = lessonsCountExtra(disk, alfa, probedOk);
+    const closed = probedOk && !short && !extra;
     const at = atOf();
     stampCustomerSync(cid, {
       lessonsDisk: disk,
       lessonsAt: at,
       ...(probedOk ? { lessonsAlfa: alfa, lessonsAlfaAt: at } : {}),
-      ...(short ? { lessonsFull: false } : closed ? { lessonsFull: true, lessonsAttend: true } : {}),
+      ...(short || extra ? { lessonsFull: false } : closed ? { lessonsFull: true, lessonsAttend: true } : {}),
       ...(balance
         ? { paysAt: at, ...(recheck && closed ? { paysRecheckAt: at, lessonsRecheckAt: at } : {}) }
         : recheck && closed
           ? { lessonsRecheckAt: at }
           : {}),
     });
-    return { short, closed };
+    return { short, extra, closed };
   };
   let lessons = 0;
-  let disk = loadCustomerCalendar(cid).length;
+  let disk = countAlfaLessonRows(loadCustomerCalendar(cid));
   const first = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
   const alfa0 = first.ok ? first.total : 0;
   if (!recheck && first.ok && disk >= alfa0) {
     mark(disk, alfa0, true);
-    if (!balance) return { cid, lessons: disk, done: true, pays: 0, tariffs: 0, alfa: alfa0, short: false, blocked: false, paysOk: false, paysMore: false, rechecked: Boolean(customerSyncOf(cid).lessonsRecheckAt), paysRechecked: false };
+    const extra0 = lessonsCountExtra(disk, alfa0, true);
+    if (!balance)
+      return {
+        cid,
+        lessons: disk,
+        done: !extra0,
+        pays: 0,
+        tariffs: 0,
+        alfa: alfa0,
+        short: false,
+        dups: extra0,
+        blocked: false,
+        paysOk: false,
+        paysMore: false,
+        rechecked: Boolean(customerSyncOf(cid).lessonsRecheckAt) && !extra0,
+        paysRechecked: false,
+      };
   } else {
-    const res = await inboundCustomerLessons(branchId, cid, {
-      take: 8,
-      deep: 0,
-      continueLater: false,
-      full: true,
-      force: true,
-      homeOnly: false,
-      ...(from ? { dateFrom: from } : {}),
-    }).catch(() => ({ count: 0, done: true as const, skipped: undefined as string | undefined }));
-    lessons += Number(res.count) || 0;
-    if ("skipped" in res && res.skipped === "busy") {
-      return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
+    for (let i = 0; i < 6; i += 1) {
+      const res = await inboundCustomerLessons(branchId, cid, {
+        take: 8,
+        deep: 0,
+        continueLater: false,
+        full: true,
+        force: true,
+        homeOnly: false,
+        prune: recheck,
+        resetSeen: recheck && i === 0,
+        ...(from ? { dateFrom: from } : {}),
+      }).catch(() => ({ count: 0, done: true as const, skipped: undefined as string | undefined }));
+      lessons += Number(res.count) || 0;
+      if ("skipped" in res && res.skipped === "busy") {
+        return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
+      }
+      disk = countAlfaLessonRows(loadCustomerCalendar(cid));
+      if (!recheck || res.done) break;
     }
-    disk = loadCustomerCalendar(cid).length;
     const probed = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
-    mark(disk, probed.ok ? probed.total : 0, probed.ok);
+    const syncPull = customerSyncOf(cid);
+    const alfaN = recheck && Number(syncPull.lessonsAlfa) > 0 ? Number(syncPull.lessonsAlfa) : probed.ok ? probed.total : 0;
+    mark(disk, alfaN, recheck ? Boolean(syncPull.lessonsAlfaAt) || probed.ok : probed.ok);
   }
   let pays = 0;
   let tariffs = 0;
@@ -1083,25 +1114,30 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const rows = await pullCustomerTariffs(branchId, cid, { quick: true }).catch(() => []);
     tariffs = rows.length;
     const syncNow = customerSyncOf(cid);
-    const diskNow = loadCustomerCalendar(cid).length;
+    const diskNow = countAlfaLessonRows(loadCustomerCalendar(cid));
     const alfaNow = Number(syncNow.lessonsAlfa) || 0;
     mark(diskNow, alfaNow, Boolean(syncNow.lessonsAlfaAt));
   }
   const sync = customerSyncOf(cid);
-  const short = lessonsCountShort(Number(sync.lessonsDisk) || 0, Number(sync.lessonsAlfa) || 0, Boolean(sync.lessonsAlfaAt));
+  const diskN = Number(sync.lessonsDisk) || lessons;
+  const alfaN = Number(sync.lessonsAlfa) || 0;
+  const probed = Boolean(sync.lessonsAlfaAt);
+  const short = lessonsCountShort(diskN, alfaN, probed);
+  const dups = lessonsCountExtra(diskN, alfaN, probed);
   return {
     cid,
-    lessons: Number(sync.lessonsDisk) || lessons,
+    lessons: diskN,
     done: lessonsJournalReady(sync),
     pays,
     tariffs,
-    alfa: Number(sync.lessonsAlfa) || 0,
+    alfa: alfaN,
     short,
+    dups,
     blocked: false,
     paysOk,
     paysMore: Boolean(balance && (Boolean(payFail) || payFillPending(cid))),
     payFail,
-    rechecked: Boolean(sync.lessonsRecheckAt) && !short,
+    rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
     paysRechecked: Boolean(sync.paysRecheckAt),
   };
 }
@@ -1835,18 +1871,19 @@ export async function journalPull(opts: {
     }
     if (opts.probe) {
       const { probeCustomerLessons } = await import("./crm-journal-inbound");
-      const disk = loadCustomerCalendar(one.cid).length;
+      const disk = countAlfaLessonRows(loadCustomerCalendar(one.cid));
       const probed = await probeCustomerLessons(one.branchId, one.cid).catch(() => ({ total: 0, ok: false as const }));
       const alfaN = probed.ok ? probed.total : 0;
       const short = lessonsCountShort(disk, alfaN, probed.ok);
+      const dups = lessonsCountExtra(disk, alfaN, probed.ok);
       stampCustomerSync(one.cid, {
         lessonsDisk: disk,
         ...(probed.ok ? { lessonsAlfa: alfaN, lessonsAlfaAt: new Date().toISOString() } : {}),
-        ...(short ? { lessonsFull: false } : probed.ok ? { lessonsFull: true, lessonsAttend: true } : {}),
+        ...(short || dups ? { lessonsFull: false } : probed.ok ? { lessonsFull: true, lessonsAttend: true } : {}),
       });
       const name = fioOf(one.cid);
       store.note = probed.ok
-        ? `${name}: на диске ${disk} · в Alfa ${alfaN}${short ? " — не хватает, добрать" : disk ? " — счёт сошёлся" : ""}`
+        ? `${name}: на диске ${disk} · в Alfa ${alfaN}${short ? " — не хватает, добрать" : dups ? " — дубли, снять" : disk ? " — счёт сошёлся" : ""}`
         : `${name}: Alfa не ответила на сверку`;
       store.at = new Date().toISOString();
       saveStore(store);
@@ -1856,7 +1893,7 @@ export async function journalPull(opts: {
         count: alfaN,
         scanned: 1,
         more: false,
-        student: { cid: one.cid, branchId: one.branchId, name, groups: groupsOfStudent(one.cid), lessons: disk, pays: 0, done: !short, ok: probed.ok && !short, alfa: alfaN, short },
+        student: { cid: one.cid, branchId: one.branchId, name, groups: groupsOfStudent(one.cid), lessons: disk, pays: 0, done: !short && !dups, ok: probed.ok && !short && !dups, alfa: alfaN, short, dups },
         ...snap(),
       };
     }
@@ -1890,6 +1927,7 @@ export async function journalPull(opts: {
       ok: landed,
       alfa: row.alfa,
       short: row.short,
+      dups: row.dups,
     };
     const prev = store.lastStudents && store.lastStudents.study === study ? store.lastStudents.rows : [];
     const merged = [hit, ...prev.filter((r) => r.cid !== hit.cid)].slice(0, 40);
@@ -1904,7 +1942,9 @@ export async function journalPull(opts: {
     store.note = row.payFail
       ? `${who}: ${name} · Alfa не ответила, нажмите снова`
       : row.short
-      ? `${who}: ${name} · на диске ${loadCustomerCalendar(one.cid).length} · в Alfa ${row.alfa} — не хватает, добрать`
+      ? `${who}: ${name} · на диске ${countAlfaLessonRows(loadCustomerCalendar(one.cid))} · в Alfa ${row.alfa} — не хватает, добрать`
+      : row.dups
+      ? `${who}: ${name} · на диске ${countAlfaLessonRows(loadCustomerCalendar(one.cid))} · в Alfa ${row.alfa} — дубли, снять`
       : row.paysMore
       ? `${who}: ${name} · касса: ещё страницы, нажмите снова`
       : landed

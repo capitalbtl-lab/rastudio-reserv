@@ -4,6 +4,10 @@ import {
   inboundTake,
   pendingEntityIds,
   mergeJournalInbound,
+  pruneCalendarToAlfaIds,
+  canFanOutToCalendar,
+  countAlfaLessonRows,
+  mergeSeenLessonIds,
   nightGroupDiff,
   nightOnSiteReason,
   nightLockBusy,
@@ -104,6 +108,25 @@ describe("вход из Alfa", () => {
       "union",
     );
     assert.deepEqual(merged[0]?.customerIds, [7, 8]);
+  });
+
+  it("перепроверка снимает лишние номера, свои и очередь оставляет", () => {
+    const disk = [
+      { lessonId: 10, date: "01.09.2026", from: "10:00" },
+      { lessonId: 99, date: "02.09.2026", from: "10:00" },
+      { lessonId: -4, date: "03.09.2026", from: "10:00" },
+      { date: "04.09.2026", from: "10:00" },
+      { lessonId: 11, date: "05.09.2026", from: "11:00" },
+    ];
+    const next = pruneCalendarToAlfaIds(disk, [10, 11], [11]);
+    assert.equal(countAlfaLessonRows(next), 2);
+    assert.equal(next.some((x) => x.lessonId === 99), false);
+    assert.equal(next.some((x) => x.lessonId === -4), true);
+    assert.equal(next.some((x) => !x.lessonId), false);
+    assert.deepEqual(mergeSeenLessonIds([10], [{ lessonId: 11 }, { lessonId: 10 }]), [10, 11]);
+    assert.equal(canFanOutToCalendar([{ lessonId: 10, date: "01.09.2026", from: "10:00" }], { lessonId: 0, date: "01.09.2026", from: "10:00" }), false);
+    assert.equal(canFanOutToCalendar([{ lessonId: 10, date: "01.09.2026", from: "10:00" }], { lessonId: 99, date: "01.09.2026", from: "10:00" }), false);
+    assert.equal(canFanOutToCalendar([{ lessonId: 10, date: "01.09.2026", from: "10:00" }], { lessonId: 10, date: "01.09.2026", from: "10:00" }), true);
   });
 });
 

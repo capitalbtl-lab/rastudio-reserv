@@ -150,6 +150,10 @@ describe("перепроверка журнала", () => {
     assert.match(inbound, /deepHist/);
     assert.doesNotMatch(inbound, /homeOnly\) \|\| Number\(opts\?\.take\)/);
     assert.match(inbound, /export async function probeCustomerLessons/);
+    assert.match(inbound, /pruneCalendarToAlfaIds/);
+    assert.match(inbound, /opts\?\.prune/);
+    assert.match(pullLock, /prune: recheck/);
+    assert.match(cards, /canFanOutToCalendar/);
     assert.match(inbound, /!opts\?\.force/);
     assert.doesNotMatch(pullLock, /error: "Фон с AlfaCRM выключен\."/);
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");

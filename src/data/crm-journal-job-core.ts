@@ -149,12 +149,32 @@ export function saveJournalJob(job: JournalJob) {
 }
 
 const TICK_LOCK = () => join(process.cwd(), "storage", "crm-history-tick.lock");
-export const HISTORY_WORKER_SILENT_MS = 12_000;
+export const HISTORY_WORKER_SILENT_MS = 30_000;
+export const RECHECK_STALL_MS = 30_000;
+export const RECHECK_429_GAP_MS = 120_000;
 
 export function historyWorkerSilent(job = loadJournalJob(), ms = HISTORY_WORKER_SILENT_MS) {
   if (!job.running) return false;
   const age = Date.now() - Date.parse(job.lastAt || job.startedAt || "");
   return !Number.isFinite(age) || age > ms;
+}
+
+export function jobRetryGapMs(err?: string) {
+  if (/429/i.test(String(err || ""))) return RECHECK_429_GAP_MS;
+  return JOURNAL_ONE_GAP_MS;
+}
+
+export function shouldResumeStalledJob(job = loadJournalJob(), now = Date.now()) {
+  if (job.stop || !job.id) return false;
+  if (!job.recheck && !/-recheck$/.test(String(job.mode || "")) && job.mode !== "people-recheck") return false;
+  const age = now - Date.parse(job.lastAt || job.startedAt || "");
+  if (!Number.isFinite(age) || age < RECHECK_STALL_MS) return false;
+  const total = Number(job.total) || job.items.length || 0;
+  const n = Number(job.n) || 0;
+  if (total > 0 && n >= total) return false;
+  if (/готово/i.test(String(job.msg || "")) && n >= total) return false;
+  if (job.running) return true;
+  return total > 0 && n < total;
 }
 
 export function tryHistoryTickLock() {
@@ -238,6 +258,7 @@ export type PeopleJobRow = {
   journal: boolean;
   pays: boolean;
   short?: boolean;
+  dups?: boolean;
   rechecked?: boolean;
   paysRechecked?: boolean;
 };
@@ -250,7 +271,7 @@ export function peopleJobFinished(row: PeopleJobRow, kind: "students" | "balance
 
 export function peopleJobQueue(people: PeopleJobRow[], kind: "students" | "balance", recheck: boolean) {
   const needLoad = people.filter((r) => !peopleJobFinished(r, kind));
-  const needRecheck = people.filter((r) => peopleJobFinished(r, kind) && (kind === "balance" ? !r.paysRechecked : !r.rechecked));
+  const needRecheck = people.filter((r) => peopleJobFinished(r, kind) && (r.dups || (kind === "balance" ? !r.paysRechecked : !r.rechecked)));
   if (recheck) return needRecheck.length ? needRecheck : people.filter((r) => peopleJobFinished(r, kind));
   return needLoad;
 }

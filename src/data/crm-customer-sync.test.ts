@@ -11,6 +11,7 @@ import {
   LESSON_INBOUND_RUN,
   LESSON_STATUSES,
   lessonsCountShort,
+  lessonsCountExtra,
   lessonsJournalReady,
 } from "./crm-customer-sync.ts";
 
@@ -46,10 +47,14 @@ describe("штамп входа ученика", () => {
   it("счёт сошёлся — готово, даже без обхода филиалов", () => {
     assert.equal(lessonsCountShort(8, 8, true), false);
     assert.equal(lessonsCountShort(329, 273, true), false);
+    assert.equal(lessonsCountExtra(329, 273, true), true);
+    assert.equal(lessonsCountExtra(47, 47, true), false);
+    assert.equal(lessonsCountExtra(84, 47, true), true);
     assert.equal(lessonsCountShort(0, 71, true), true);
     assert.equal(lessonsCountShort(5, 20, true), true);
     assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 8, lessonsDisk: 8 }), true);
-    assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 273, lessonsDisk: 329 }), true);
+    assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 273, lessonsDisk: 329 }), false);
+    assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 47, lessonsDisk: 84, lessonsFull: true, lessonsAttend: true }), false);
     assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 71, lessonsDisk: 0 }), false);
     assert.equal(lessonsJournalReady({ lessonsFull: true, lessonsAttend: true, lessonsDisk: 3 }), true);
     assert.equal(lessonsJournalReady({ lessonsDisk: 47 }), false);

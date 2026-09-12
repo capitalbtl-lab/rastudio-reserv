@@ -16,6 +16,8 @@ import {
   releaseHistoryTickLock,
   historyWorkerSilent,
   stoppedJobMsg,
+  shouldResumeStalledJob,
+  jobRetryGapMs,
   JOB_WAIT_CAP,
   type JournalJob,
   type JournalJobItem,
@@ -197,7 +199,7 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
     }
     if (mode === "probe") {
       const unseen = people.filter((r) => (r as { alfa?: number }).alfa == null);
-      const hole = people.filter((r) => r.short);
+      const hole = people.filter((r) => r.short || r.dups);
       const seen = new Set(unseen.map((r) => r.cid));
       const queue = [...unseen, ...hole.filter((r) => !seen.has(r.cid))];
       return queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
@@ -375,8 +377,24 @@ export function startJournalJobWatch() {
   if (process.env.NODE_ENV === "test") return;
   if (!isHistoryWorker()) return;
   if (g.__raJournalWatch) return;
-  g.__raJournalWatch = setInterval(() => resumeJournalJobFromDisk(), 1000);
-  setTimeout(() => resumeJournalJobFromDisk(), 200);
+  g.__raJournalWatch = setInterval(() => {
+    resumeJournalJobFromDisk();
+    resumeStalledRecheck();
+  }, 1000);
+  setTimeout(() => {
+    resumeJournalJobFromDisk();
+    resumeStalledRecheck();
+  }, 200);
+}
+
+function resumeStalledRecheck() {
+  const j = loadJournalJob();
+  if (!shouldResumeStalledJob(j)) return;
+  if (j.stop) return;
+  if (!j.running) {
+    saveJournalJob({ ...j, running: true, lastAt: nowIso(), msg: j.msg || "Продолжаем с того же." });
+  }
+  void tickJob();
 }
 
 function kickHistoryTick() {
@@ -605,7 +623,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       fill: fillOf(mode, job.kind, item),
       msg: String(res.extra || res.error || `«${item.name}»: касса не дочитана.`),
     });
-    return { done: false, gap: jobGapMs(mode === "audit" ? "audit" : "people") };
+    return { done: false, gap: live.recheck ? jobRetryGapMs(err) : jobGapMs(mode === "audit" ? "audit" : "people") };
   }
   if (!res.ok) {
     const msg = res.error || `Остановились на «${item.name}». Нажмите ещё раз — продолжит со следующего.`;

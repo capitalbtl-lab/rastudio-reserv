@@ -24,6 +24,8 @@ export type CustomerSyncStamp = {
   lessonsAlfaAt?: string;
   /** Сколько занятий на диске после последней загрузки/перепроверки. */
   lessonsDisk?: number;
+  /** Номера уроков, которые видели в Alfa за этот проход перепроверки. */
+  lessonsSeenIds?: number[];
 };
 
 type Store = { at: string; byId: Record<string, CustomerSyncStamp> };
@@ -90,14 +92,19 @@ export function lessonsCountShort(disk: number, alfa: number, probed: boolean) {
   return Boolean(probed) && Number(alfa) > 0 && Number(disk) < Number(alfa);
 }
 
-/** Счёт сошёлся — журнал готов. Не ждать обход всех филиалов. */
+export function lessonsCountExtra(disk: number, alfa: number, probed: boolean) {
+  return Boolean(probed) && Number(disk) > Number(alfa);
+}
+
+/** Счёт сошёлся — журнал готов. Диск больше Alfa — не готово. */
 export function lessonsJournalReady(sync: CustomerSyncStamp) {
   const probed = Boolean(sync.lessonsAlfaAt);
   const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
   const diskN = Number(sync.lessonsDisk) || 0;
   if (lessonsCountShort(diskN, alfaN, probed)) return false;
-  if (sync.lessonsFull && sync.lessonsAttend) return true;
-  return probed && diskN >= alfaN;
+  if (lessonsCountExtra(diskN, alfaN, probed)) return false;
+  if (sync.lessonsFull && sync.lessonsAttend) return !probed || diskN === alfaN;
+  return probed && diskN === alfaN;
 }
 
 export function customerLessonsFresh(customerId: number, now = Date.now()) {

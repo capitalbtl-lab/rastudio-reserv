@@ -3,7 +3,7 @@ import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
-import { journalFingerprint } from "./crm-inbound-core";
+import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonRows } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
@@ -456,7 +456,7 @@ export async function enrichCalendarDetails(
   return { calendar: list, filled, changed: filled > 0 };
 }
 
-export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean; dateFrom?: string }) {
+export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean; dateFrom?: string; prune?: boolean; resetSeen?: boolean }) {
   const id = Number(customerId) || 0;
   if (id <= 0) return { ok: true as const, count: 0, done: true };
   if (!alfaLinkedNow() && !opts?.force) return { ok: true as const, count: 0, skipped: "offline" as const, done: true };
@@ -596,14 +596,22 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       if (named.pupils) l.pupils = named.pupils;
     }
     const hold = pendingExportIds(["lesson.update", "lesson.create"]);
-    const next = mergeLocalCalendar(pulled, prevCal, hold, "union");
-    replaceCustomerCalendar(id, next);
     const done = Boolean(cur.done) || !wantFull;
+    let next = mergeLocalCalendar(pulled, prevCal, hold, "union");
+    const prune = Boolean(opts?.prune);
+    if (prune) {
+      const seen = mergeSeenLessonIds(opts?.resetSeen ? [] : customerSyncOf(id).lessonsSeenIds, pulled);
+      stampCustomerSync(id, { lessonsSeenIds: seen });
+      if (done) next = pruneCalendarToAlfaIds(next, seen, hold);
+    }
+    replaceCustomerCalendar(id, next);
     stampCustomerSync(id, {
       lessonsAt: new Date().toISOString(),
       lessonsFull: homeLite ? false : customerSyncOf(id).lessonsFull || done,
       lessonsAttend: homeLite ? customerSyncOf(id).lessonsAttend : customerSyncOf(id).lessonsAttend || done,
       lessonFill: done ? undefined : cur,
+      lessonsDisk: countAlfaLessonRows(next),
+      ...(prune && done ? { lessonsAlfa: mergeSeenLessonIds(customerSyncOf(id).lessonsSeenIds, []).length, lessonsAlfaAt: new Date().toISOString() } : {}),
     });
     if (wantFull && !done && opts?.continueLater === true) {
       setTimeout(() => {

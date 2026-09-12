@@ -180,14 +180,18 @@ export async function auditOne(cid: number, branchId: number) {
       const { probeCustomerLessons, inboundCustomerLessons } = await import("./crm-journal-inbound");
       const probed = await probeCustomerLessons(shown.branch, id).catch(() => ({ total: 0, ok: false as const }));
       lessonsAlfa = probed.ok ? probed.total : first.lessonsDisk;
+      const extraLessons = probed.ok && first.lessonsDisk > probed.total;
       const holeLessons = first.cash > shown.alfa + 1 || (probed.ok && probed.total > first.lessonsDisk);
-      if (holeLessons) {
+      if (extraLessons || holeLessons) {
         const { loadCustomerCalendar } = await import("./group-cards");
+        const { countAlfaLessonRows } = await import("./crm-inbound-core");
         for (let i = 0; i < 4; i += 1) {
-          const r = await inboundCustomerLessons(shown.branch, id, { force: true, dateFrom: "2015-01-01" }).catch(() => ({ done: false }));
+          const r = await inboundCustomerLessons(shown.branch, id, { force: true, prune: extraLessons, resetSeen: extraLessons && i === 0, dateFrom: "2015-01-01" }).catch(() => ({ done: false }));
           repaired = true;
           if (r && "done" in r && r.done) break;
-          if (probed.ok && loadCustomerCalendar(id).length >= probed.total) break;
+          const diskN = countAlfaLessonRows(loadCustomerCalendar(id));
+          if (probed.ok && extraLessons && diskN <= probed.total) break;
+          if (probed.ok && !extraLessons && diskN >= probed.total) break;
         }
       }
       if (!first.paysComplete || !moneyClose(first.cash, shown.alfa)) {
