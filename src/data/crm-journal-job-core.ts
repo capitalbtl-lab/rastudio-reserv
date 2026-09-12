@@ -23,7 +23,9 @@ export type JournalJobMode =
   | "archives"
   | "archivesPupils"
   | "details"
-  | "count";
+  | "count"
+  | "roster"
+  | "roster-recheck";
 
 export type JournalJobItem = {
   cid?: number;

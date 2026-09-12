@@ -15,8 +15,9 @@ import { payCustomerFilled, payFillPending } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
+import { loadRosterPolicy } from "./crm-roster";
 
-export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus";
+export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy";
 export type JournalPullStudy = "1" | "2" | "all";
 
 export type JournalPullGroup = {
@@ -104,6 +105,7 @@ type FillHit = {
   weak?: string[];
   fail?: Record<string, string>;
   life?: { from: string; to: string; source: string };
+  roster?: string;
 };
 
 type PullStore = {
@@ -345,7 +347,7 @@ export function journalPullSchools() {
 }
 
 /** Живые группы всех филиалов 1–4: админка + сетка. Смены 7–9 не входят. */
-function liveAdminGroups(school?: string) {
+export function liveAdminGroups(school?: string) {
   if (school) return journalPullGroups().filter((x) => !x.archived && x.school === school);
   const seen = new Set<string>();
   const out: JournalPullGroup[] = [];
@@ -399,6 +401,32 @@ function rowFromDossier(
   };
 }
 
+function attendedSince(cid: number, days: number) {
+  if (!days) return true;
+  const cal = loadCustomerCalendar(cid) || [];
+  if (!cal.length) return true;
+  let max = 0;
+  for (const l of cal) {
+    const d = parseLessonDate(l.date);
+    if (d) max = Math.max(max, d.getTime());
+  }
+  if (!max) return true;
+  return Date.now() - max <= days * 86400000;
+}
+
+function linkHitsLiveGroup(
+  links: { id: number; branchId?: number; active?: boolean }[] | undefined,
+  g: { groupId: number; branchId: number },
+  stamped: boolean,
+) {
+  return (links || []).some((l) => {
+    if (Number(l.id) !== g.groupId) return false;
+    if (l.branchId && Number(l.branchId) !== g.branchId) return false;
+    if (stamped && l.active === false) return false;
+    return true;
+  });
+}
+
 function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; branchId: number }, school?: string) {
   const scoped = Boolean(group && group.groupId);
   let pool: { cid: number; study: number; branchId: number; status: string; removed: string }[] = [];
@@ -407,9 +435,12 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
   } else if (study === "1") {
     const groups = liveAdminGroups(school);
     const gids = new Set(groups.map((g) => g.groupId));
+    const stamped = new Set(groups.filter((g) => Boolean(fillOf(g.branchId, g.groupId).roster)).map((g) => `${g.branchId}:${g.groupId}`));
     const seen = new Set<number>();
     for (const g of groups) {
+      const needActive = stamped.has(`${g.branchId}:${g.groupId}`);
       for (const d of dossiersInGroup(g.branchId, g.groupId)) {
+        if (!linkHitsLiveGroup(d.groupLinks, g, needActive)) continue;
         const row = rowFromDossier(d, g.branchId);
         if (!row.cid || seen.has(row.cid)) continue;
         seen.add(row.cid);
@@ -420,9 +451,13 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
       for (const x of listDossierCrm()) {
         if (!x.cid || seen.has(x.cid)) continue;
         if (x.status === "удалён" || x.removed === "1") continue;
-        if (x.study === 0 || x.status === "лид") continue;
         const d = findDossier({ crmId: x.cid });
-        const hit = (d?.groupLinks || []).some((l) => gids.has(Number(l.id)));
+        const hit = (d?.groupLinks || []).some((l) => {
+          if (!gids.has(Number(l.id))) return false;
+          const key = `${Number(l.branchId || x.branchId) || 0}:${Number(l.id)}`;
+          if (stamped.has(key) && l.active === false) return false;
+          return true;
+        });
         if (!hit) continue;
         seen.add(x.cid);
         pool.push(x);
@@ -443,11 +478,17 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
   }
   const allow = !scoped ? archiveWorkingSet() : null;
   const live = !scoped && study === "2" ? liveAttendeeCids() : null;
+  const pol = study === "1" ? loadRosterPolicy() : null;
   const filtered = pool.filter((x) => {
     if (!x.cid) return false;
     if (x.status === "удалён" || x.removed === "1") return false;
-    if (x.study === 0 || x.status === "лид") return false;
-    if (study === "1") return true;
+    const lead = x.study === 0 || x.status === "лид";
+    if (lead) return Boolean(study === "1" && pol?.leads);
+    if (study === "1") {
+      if (x.study === 2 && !pol?.archiveInLive) return false;
+      if (pol?.attendDays && !attendedSince(x.cid, pol.attendDays)) return false;
+      return true;
+    }
     if (study === "2") {
       if (live && live.has(x.cid)) return false;
       return x.study === 2 && (scoped || Boolean(allow && allow.has(x.cid)));
@@ -463,8 +504,6 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
   });
   return uniqueByCid(filtered);
 }
-
-
 
 function pickSlice<T>(list: T[], idx: number, take: number) {
   const start = list.length ? idx % list.length : 0;
@@ -607,6 +646,7 @@ export function groupFillRow(g: JournalPullGroup) {
     age: age.id,
     ageLabel: age.label,
     life: lifeTxt,
+    roster: String(fill.roster || ""),
     extra: complete ? "вся информация загружена" : [age.label, lifeTxt, src].filter(Boolean).join(" · "),
     err: next && fail[next.key] ? fail[next.key] : "",
     source: life.source,
@@ -868,13 +908,20 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
     lastArchiveCatalog: store.lastArchiveCatalog || null,
     lastAudit: store.lastAudit || null,
     job: journalJobSnapshot(),
+    rosterPolicy: loadRosterPolicy(),
   };
 }
 
 function journalJobView(job = journalJobSnapshot()) {
   let groupRow = null as ReturnType<typeof groupFillRow> | null;
   if (job.fill?.groupId) {
-    const g = journalPullGroups().find((x) => x.groupId === job.fill?.groupId && (!job.fill.branchId || x.branchId === job.fill.branchId));
+    const gid = Number(job.fill.groupId) || 0;
+    const bid = Number(job.fill.branchId) || 0;
+    const g =
+      liveAdminGroups().find((x) => x.groupId === gid && (!bid || x.branchId === bid)) ||
+      journalPullGroups().find((x) => x.groupId === gid && (!bid || x.branchId === bid)) ||
+      liveAdminGroups().find((x) => x.groupId === gid) ||
+      journalPullGroups().find((x) => x.groupId === gid);
     if (g) groupRow = groupFillRow(g);
   }
   return {
@@ -902,6 +949,8 @@ function litePullState() {
     lastAudit: store.lastAudit || null,
     job: journalJobSnapshot(),
     students: { all: live + archive, live, archive },
+    schools: journalPullSchools(),
+    rosterPolicy: loadRosterPolicy(),
   };
 }
 
@@ -1108,6 +1157,8 @@ export async function journalPull(opts: {
                     ? "archiveCount"
                   : opts.jobMode === "groups" || opts.jobMode === "groups-recheck" || opts.jobMode === "group-one"
                     ? "group"
+                    : opts.jobMode === "roster" || opts.jobMode === "roster-recheck"
+                      ? "roster"
                     : opts.peopleKind || "students",
       study: opts.study === "1" || opts.study === "2" ? opts.study : "1",
       recheck: Boolean(opts.recheck),
@@ -1137,6 +1188,7 @@ export async function journalPull(opts: {
     kind === "life" ||
     kind === "archives" ||
     kind === "archivesPupils" ||
+    kind === "roster" ||
     (wantedEarly > 0 && (kind === "students" || kind === "balance" || kind === "audit")) ||
     (kind === "group" && Number(opts.groupId) > 0) ||
     (kind === "details" && Number(opts.groupId) > 0);
@@ -1147,6 +1199,50 @@ export async function journalPull(opts: {
   const study = (opts.study === "1" || opts.study === "2" ? opts.study : "all") as JournalPullStudy;
   const selectedGid = Number(opts.groupId) || 0;
   const selectedBid = Number(opts.branchId) || 0;
+
+  if (kind === "rosterPolicy") {
+    const { saveRosterPolicy, parseRosterFilter } = await import("./crm-roster");
+    const pol = saveRosterPolicy(parseRosterFilter(String(opts.name || "")));
+    store.note = `Кто активный: ${pol.leads ? "лиды в группах · " : ""}${pol.archiveInLive ? "архив в живой группе · " : "без архива в живых · "}занятия ${pol.attendDays ? `за ${pol.attendDays} дн.` : "не фильтровать"}.`;
+    store.at = new Date().toISOString();
+    saveStore(store);
+    return { ok: true as const, extra: store.note, rosterPolicy: pol, more: false, ...litePullState() };
+  }
+
+  if (kind === "roster") {
+    const { pullGroupRoster } = await import("./crm-roster");
+    const gid = selectedGid;
+    const bid = selectedBid || 1;
+    const hit =
+      liveAdminGroups().find((g) => g.groupId === gid && g.branchId === bid) ||
+      journalPullGroups().find((g) => g.groupId === gid && g.branchId === bid) ||
+      liveAdminGroups().find((g) => g.groupId === gid) ||
+      journalPullGroups().find((g) => g.groupId === gid);
+    const useBid = Number(hit?.branchId) || bid;
+    const res = await pullGroupRoster({
+      groupId: gid,
+      branchId: useBid,
+      name: opts.name || hit?.name || `группа ${gid}`,
+      force: Boolean(opts.recheck),
+    });
+    if (res.ok) {
+      const prev = fillOf(useBid, gid);
+      patchFill(useBid, gid, { roster: new Date().toISOString(), ...(opts.recheck ? { rechecked: [...new Set([...(prev.rechecked || []), "roster"])] } : {}) });
+    }
+    const next = loadStore();
+    next.note = res.extra || res.error || "";
+    next.at = new Date().toISOString();
+    saveStore(next);
+    return {
+      ok: res.ok,
+      extra: next.note,
+      error: res.ok ? "" : res.error,
+      count: res.disk,
+      scanned: res.cgi,
+      more: false,
+      ...litePullState(),
+    };
+  }
 
   if (kind === "hydrateDisk") {
     const h = applyHydrateFills();

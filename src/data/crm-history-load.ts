@@ -14,6 +14,7 @@ export type HistoryLoadSpec = {
   dateFrom?: string;
   probe?: boolean;
   school?: string;
+  name?: string;
 };
 
 /** Пропуск кассы: только кто уже в complete[]. fill.done сам по себе не skip. */
@@ -36,6 +37,7 @@ export async function historyLoadOne(spec: HistoryLoadSpec) {
     dateFrom: spec.dateFrom,
     probe: Boolean(spec.probe),
     school: spec.school,
+    name: spec.name,
     lite: true,
   });
 }
@@ -49,6 +51,7 @@ export function historyPullKind(mode: string, jobKind: string): JournalPullKind 
   if (mode === "archives") return "archives";
   if (mode === "archivesPupils") return "archivesPupils";
   if (mode === "groups" || mode === "groups-recheck" || mode === "group-one") return "group";
+  if (mode === "roster" || mode === "roster-recheck") return "roster";
   if (jobKind === "balance") return "balance";
   return "students";
 }

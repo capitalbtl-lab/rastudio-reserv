@@ -1,6 +1,6 @@
 /** Фон «Истории из Alfa»: один шаг, пауза, следующий. Вкладка только смотрит. В Alfa не пишет. */
 
-import { journalPullGroups, groupFillRow, journalPeopleSide } from "./crm-journal-pull";
+import { journalPullGroups, groupFillRow, journalPeopleSide, liveAdminGroups } from "./crm-journal-pull";
 import { historyLoadOne, historyPullKind } from "./crm-history-load";
 import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods";
 import {
@@ -167,6 +167,8 @@ function emptyMsg(mode: JournalJobMode, recheck: boolean) {
   if (mode === "probe") return "Нет текущих учеников в списке.";
   if (mode === "details") return "ДЗ грузить нечего.";
   if (mode === "count") return "Некого считать.";
+  if (mode === "roster") return "Слева пусто. Состав групп уже на диске. «Перепроверить» — сверка cgi.";
+  if (mode === "roster-recheck") return "Справа нечего перепроверять. Сначала красная «Загрузить по одному».";
   return "грузить нечего";
 }
 
@@ -256,6 +258,22 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
   if (mode === "life") return [{ name: "сроки групп" }];
   if (mode === "archives") return [{ name: "архивные группы" }];
   if (mode === "archivesPupils") return [{ name: "архив групп учеников" }];
+  if (mode === "roster" || mode === "roster-recheck") {
+    const school = String(opts.school || "");
+    const wantArch = Boolean(opts.archived);
+    const groups = wantArch
+      ? journalPullGroups().filter((g) => g.archived && (!school || g.school === school))
+      : liveAdminGroups(school);
+    const given = (opts.items || [])
+      .map((r) => ({ groupId: Number(r.groupId) || 0, branchId: Number(r.branchId) || 0, name: String(r.name || "") }))
+      .filter((r) => r.groupId);
+    if (given.length) return given;
+    const rows = groups.map((g) => groupFillRow(g));
+    const need = rows.filter((r) => (mode === "roster-recheck" ? Boolean(r.roster) : !r.roster));
+    const done = rows.filter((r) => Boolean(r.roster));
+    const queue = mode === "roster-recheck" ? (need.length ? need : done) : need;
+    return queue.map((r) => ({ groupId: r.groupId, branchId: r.branchId, name: r.name }));
+  }
   return [];
 }
 
@@ -289,8 +307,10 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
                 ? "archiveCount"
               : mode === "groups" || mode === "groups-recheck" || mode === "group-one"
                 ? "group"
+              : mode === "roster" || mode === "roster-recheck"
+                ? "roster"
                 : opts.kind || "students";
-  const recheck = Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || (mode === "group-one" && !opts.periodKey);
+  const recheck = Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck" || (mode === "group-one" && !opts.periodKey);
   const items = buildItems({ ...opts, kind, recheck });
   if (!items.length && !loopPullKind(mode)) {
     return saveJournalJob({
@@ -411,6 +431,9 @@ function fillOf(mode: JournalJobMode | "", kind: string, item?: JournalJobItem |
   }
   if (mode === "groups" || mode === "groups-recheck" || mode === "group-one") {
     return { kind: "group", groupId: item.groupId, branchId: item.branchId, periodKey: item.periodKey, label: item.periodLabel || item.name };
+  }
+  if (mode === "roster" || mode === "roster-recheck") {
+    return { kind: "roster", groupId: item.groupId, branchId: item.branchId, label: item.name };
   }
   return { kind: kind === "balance" ? "balance" : "students", label: item.name, customerId: item.cid };
 }
@@ -538,10 +561,11 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       groupId: Number(item.groupId) || 0,
       periodKey: item.periodKey || "",
       grain: job.grain,
-      recheck: job.recheck || mode === "people-recheck" || mode === "groups-recheck" || (mode === "group-one" && !item.periodKey),
+      recheck: job.recheck || mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck" || (mode === "group-one" && !item.periodKey),
       dateFrom: job.dateFrom,
       probe: mode === "probe",
       school: job.school || job.filter,
+      name: item.name,
     }),
   );
   if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
@@ -632,6 +656,8 @@ function doneMsg(job: JournalJob) {
   if (job.mode === "life") return job.msg || "Сроки групп уточнены.";
   if (job.mode === "archives") return job.msg || "Архивные группы на диске.";
   if (job.mode === "archivesPupils") return job.msg || "Архив групп учеников закрыт.";
+  if (job.mode === "roster") return `Готово · ${job.n} групп. Состав с cgi на диске.`;
+  if (job.mode === "roster-recheck") return `${job.n} групп перепроверили состав.`;
   return `Готово · ${job.n}.`;
 }
 

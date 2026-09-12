@@ -91,6 +91,8 @@ describe("фон истории из Alfa", () => {
     assert.equal(jobGapMs("groups"), 5000);
     assert.equal(jobGapMs("catalog"), 5000);
     assert.equal(jobGapMs("audit"), 5000);
+    assert.equal(jobGapMs("roster"), 5000);
+    assert.equal(jobGapMs("roster-recheck"), 5000);
   });
 
   it("касса слева: fill.done не skip, complete без force — skip", () => {
@@ -218,6 +220,8 @@ describe("фон истории из Alfa", () => {
     assert.match(ui, /jobMode: "archives"/);
     assert.match(ui, /jobMode: "archivesPupils"/);
     assert.match(ui, /jobMode: "details"/);
+    assert.match(ui, /jobMode: "roster"/);
+    assert.match(ui, /jobMode: "roster-recheck"/);
     assert.match(ui, /onLoad=\{\(row, part, recheck\) =>\s*void startHistJob/);
     assert.doesNotMatch(ui, /onLoad=\{\(row, part, recheck\) =>\s*void runJournal/);
     assert.match(ui, /st\?\.job\?\.running/);
@@ -231,6 +235,8 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /wantArch \? Boolean\(g\.archived\)/);
     assert.match(job, /Кто слева — ещё жёлтые/);
     assert.match(job, /mode === "details"/);
+    assert.match(job, /mode === "roster"/);
+    assert.match(job, /liveAdminGroups\(school\)/);
     assert.match(job, /пауза 5 с · ещё ДЗ/);
     assert.match(ui, /function peopleQueue/);
     assert.match(ui, /jobItems: queue.map/);

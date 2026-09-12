@@ -84,6 +84,9 @@ function withHint(node: ReactNode, text: string) {
 
 const HINT = {
   disk: "Эта кнопка не ходит в AlfaCRM и ничего там не меняет. Она только открывает то, что уже лежит у нас на сервере: списки учеников и групп. Если после нажатия список пустой, подождите пару секунд и нажмите ещё раз — ответ иногда приходит не с первого раза. Пока список не появился, красную «Загрузить по одному» лучше не жать: программе некого ставить в очередь. Это безопасный первый шаг любого сеанса загрузки истории. Данные родителей и детей в Alfa не затрагиваются. Если список уже на экране, повторно жать не нужно.",
+  roster: "Красная кнопка читает состав одной группы из Alfa (cgi) и пишет людей на наш диск. По одной группе, пауза 5 секунд. Если человека ещё не было в карточках — создаёт карточку. Кто выбыл из группы, помечается как неактивный в этой группе, карточка не удаляется. Журнал, касса и ДЗ не качаются. В Alfa ничего не создаёт и не меняет. Это основа шагов 2–5: «Сейчас ходят» считается по этому составу.",
+  rosterRecheck: "Ещё раз спрашивает cgi этой группы и дописывает новых, снимает выбывших. Нужна, если состав в Alfa изменился. Пауза 5 с между группами. В Alfa не пишет.",
+  rosterWho: "Кто считается активным после состава. По умолчанию — люди в живых группах админки. Галка «лиды» добавляет пробных в этих группах (в сверку денег они не едут, пока не станут клиентами). «Архив в живой группе» оставляет тех, кто ходит, хотя карточка архивная. «Был на занятии» сужает набор, если журнал уже на диске; пустой журнал не прячет человека.",
   loadOnePeople: "Красная кнопка идёт по ученикам слева сверху вниз, строго по одному. Сначала спрашивает Alfa, сколько занятий в журнале человека. Если на нашем диске уже столько же — качку пропускает и переносит карточку вправо, в «загрузка завершена». Если в Alfa занятий больше — дописывает недостающие на диск и не создаёт дубли по номеру урока. Между людьми пауза пять секунд, чтобы Alfa не отшила пачкой запросов. Насколько далеко в прошлое смотреть, задаёт список «годы» справа от кнопки. «Стоп» прерывает очередь после текущего человека. В Alfa ничего не записывается и не удаляется — это только чтение журнала на сайт. Жёлтой карточке «в Alfa больше» часто нужно окно «с начала · 2015» или отдельная кнопка «Загрузить всю историю».",
   years: "Список «годы» говорит программе, с какой давности читать журнал ученика. «С начала · 2015» берёт всю историю, как сверка счёта в Alfa, и нужно старым карточкам. «7 лет» — примерно с 2019: быстрее, но 2016–2018 годы не попадут. «3 года» и «1 год» ещё короче и годятся, если человек ходит недавно. Выбор действует на красную «по одному» и на «Добрать» у ученика. На уже лежащие на диске занятия не влияет: старое не стирается. В Alfa ничего не отправляет. Если жёлтая карточка не догружается — поставьте «с начала · 2015» и нажмите ещё раз.",
   probe: "«Сверить счёт» идёт по тем, у кого ещё нет цифры Alfa или карточка жёлтая «в Alfa больше». По одному человеку, пауза 5 секунд. Один лёгкий запрос: сколько занятий с 2015 года. Потом сравнивает с диском. Если цифры разные — карточка жёлтая. Если сошлись — уйдёт вправо. В Alfa ничего не пишет. Если список пустой, сначала «Показать список с диска». Стоп прерывает очередь после текущего.",
@@ -91,7 +94,7 @@ const HINT = {
   fullHist: "Эта кнопка только на жёлтой старой карточке, когда в Alfa занятий больше, чем у нас. Она качает журнал с 1 января 2015 года, а не за последние семь лет. Нужна, если человек ходил в 2016–2018, а обычная качка этого не видит. Пишет только на наш диск, дубли по номеру занятия не создаёт. В Alfa не отправляет и оплаты не трогает. Если за один раз счёт не сошёлся, нажмите ещё раз — продолжит с того же человека. Пока грузится другой ученик, кнопка подождёт.",
   loadCal: "Загружает личный календарь именно этого ученика из Alfa на диск. Сначала сверка, сколько занятий в Alfa, потом добор недостающих. Окно лет — как в списке «годы» наверху экрана. Если карточка жёлтая и человек старый, лучше «Загрузить всю историю»: она берёт с 2015. В Alfa ничего не пишет, не проводит урок и не ставит оценку. Пока идёт другой ученик, эта кнопка не стартует вторую качку параллельно. После успеха карточка должна позеленеть и уйти вправо.",
   recheckCal: "Ещё раз спрашивает Alfa по этому ученику и дописывает новое на диск. Старые строки не затирает: тема, домашнее задание и сумма списания остаются, если из Alfa пришло пусто. Нужна, если после первой загрузки появились занятия или вы не уверены в счёте. Сравнение идёт по номеру урока, поэтому две одинаковые строки не размножаются. В Alfa ничего не сохраняет. Если карточка уже зелёная, это безопасная проверка, а не повторная полная качка с нуля. Можно жать точечно, не гоняя всю очередь слева.",
-  loadOneGroups: "Красная кнопка идёт по группам слева по одной, как «по одному» у учеников. Только та колонка, что открыта: «Сейчас идут» или «Архивные». Берёт выбранную порцию — квартал, полугодие или год — и читает явки из Alfa на диск. Следующая группа не стартует, пока эта порция не закрылась. Стоп прерывает очередь после текущей. В Alfa расписание не меняется. Если школа выбрана в фильтре, очередь только по ней. Это шаг 2: групповые явки, не личный календарь и не касса.",
+  loadOneGroups: "Красная кнопка идёт по группам слева по одной, как «по одному» у учеников. Только та колонка, что открыта: «Сейчас идут» или «Архивные». Берёт выбранную порцию — квартал, полугодие или год — и читает явки из Alfa на диск. Следующая группа не стартует, пока эта порция не закрылась. Стоп прерывает очередь после текущей. В Alfa расписание не меняется. Если школа выбрана в фильтре, очередь только по ней. Это шаг 3: групповые явки, не личный календарь и не касса.",
   grain: "Это размер порции журнала группы, подписанный «годы», чтобы ряд кнопок совпадал с шагом 1. «Квартал» — самый безопасный: одно нажатие не закрывает всю историю сразу. «Полугодие» больше и быстрее. «Год» имеет смысл только у молодых групп, которым несколько месяцев. У старых английский на полгода не надо грузить с 2018 года — срок группы режет лишнее. Это не «с 2015», а нарезка журнала группы. Выбор действует на красную кнопку сверху и на кнопки порции в карточке группы. В Alfa ничего не отправляет.",
   archPupils: "Смотрит карточки учеников той выборки, что на шаге 1: «Сейчас ходят» или рабочий архив — в одном прогоне не смешивает. Собирает номера групп, где они числились. Живые группы из этого списка отбрасывает. Остальные — архив для старого остатка. Закон раздела: только по одной группе, пауза 5 секунд, пакетом нельзя. Очередь сама идёт, «Стоп» после текущей. Журнал кварталов сам не стартует. В Alfa ничего не создаёт.",
   archAll: "Тянет из Alfa архивные группы филиала, не только тех, кто есть среди ваших учеников. Поэтому программа спрашивает подтверждение. Живое расписание не трогает. Журнал явок сам не качает — появляется только список групп. Закон раздела: один филиал, пауза 5 секунд, пакетом нельзя. «Стоп» после текущего филиала. Дальше каждую архивную группу грузите красной «по одному» или по кварталу в карточке. В Alfa ничего не пишет. Если нужен только архив ваших людей, кнопка «Архив групп учеников» безопаснее и уже.",
@@ -106,13 +109,14 @@ const HINT = {
   recheckOnePeople: "Синяя «Перепроверить по одному» идёт только по тем, кто уже справа: календарь на диске есть. Красную загрузку слева она не трогает. По одному человеку спрашивает Alfa ещё раз и дописывает новые занятия, если они появились. Старые строки не затирает и дубли по номеру урока не плодит. Между людьми пауза пять секунд, как у красной. «Стоп» прерывает после текущего. В Alfa ничего не пишет. Нужна, когда все уже в «загрузка завершена», но хочется убедиться, что ничего не пропустили. Если справа пусто — сначала красная кнопка.",
   recheckOneGroups: "Синяя «Перепроверить по одному» проходит живые (или архивные, если открыт архив) группы, у которых явки уже на диске. Красную загрузку слева не запускает. У каждой группы ещё раз читает выбранную порцию — квартал, полугодие или год — и дописывает дырки. Между группами пауза пять секунд. «Стоп» останавливает очередь после текущей группы. В Alfa журнал не проводится и расписание не меняется. Если группа ещё слева «требует загрузки», её берёт красная кнопка, не эта. Жать, когда список справа заполнен и нужно свериться с Alfa ещё раз.",
   recheckOneMoney: "Синяя «Перепроверить по одному» идёт по ученикам справа: у кого касса уже помечена готовой. Для каждого ещё раз читает платежи и журнал из Alfa и дописывает новое на диск. Ноль оплат — это тоже «готово», если страницы кассы кончились. Между людьми пауза пять секунд. «Стоп» прерывает очередь. В Alfa оплаты не создаёт и не удаляет. Если ученик ещё слева — его берёт красная «Загрузить по одному». Красная не переходит к следующему, пока касса этого человека не дочитана (ещё страницы или Alfa не ответила — пауза 5 с и тот же id). Эта кнопка нужна, когда 346 уже справа, и вы хотите пройти всех и снять голубое «есть неперепроверенные».",
-  tabStudents: "Первый шаг загрузки истории. Здесь качается личный календарь ученика: все его занятия из Alfa на наш диск. Сначала покажите список с диска, потом красной кнопкой идите по людям слева. Список «годы» задаёт, насколько далеко в прошлое смотреть. Жёлтая карточка значит: в Alfa занятий больше, чем у нас. Зелёная — счёт сошёлся. В Alfa ничего не пишется. Деньги и групповые явки — следующие шаги, этот экран их не трогает.",
-  tabGroups: "Второй шаг. Здесь качаются явки по группам: кто был на уроке, а не личный календарь человека. Сначала красная «по одному», потом список «годы» — это размер порции: квартал, полугодие или год. Архив групп и сроки жизни курса — отдельные кнопки ниже, их лучше нажать до массовой качки. Фильтр школы сужает очередь. В Alfa журнал не проводится. Без этого шага на сайте будут люди, но без отметок в группе. Тема и ДЗ грузятся уже в карточке группы, после явок.",
-  tabMoney: "Третий шаг, «деньги на карточке». Здесь к ученику дописываются платежи и абонементы из Alfa. Красная «по одному» идёт как на шаге 1, справа те же годы. Если журнала занятий ещё нет, касса сначала доберёт календарь, иначе списание не к чему привязать. В Alfa оплаты не создаются. Жёлтая карточка — в Alfa занятий больше, чем на диске. После шага на карточке ученика должен быть понятный остаток. Это не зарплата педагогов и не очередь в Alfa, а чтение кассы на сайт.",
-  tabAudit: "Четвёртый шаг — сверка остатка. Закон раздела: только по одному, пауза 5 секунд, пакетом нельзя. Берёт всех, кто сейчас учится. Для каждого читает из Alfa общий остаток с шапки карточки, считает число в «Клиентах» и кассу. Если цифры разошлись — добирает журнал или кассу только этого человека. В Alfa ничего не пишет. Совпало — справа. Не совпало — слева с причиной.",
+  tabRoster: "Первый шаг — состав групп. Красная кнопка читает cgi одной группы из Alfa и пишет людей на наш диск. Если карточки не было — создаёт. Кто выбыл, в этой группе становится неактивным, карточка остаётся. Журнал, касса и ДЗ не качаются. В Alfa ничего не создаёт и не меняет. После состава цифра «Сейчас ходят» считается по этим людям. Архив — вторая таблетка на тех же шагах, не отдельный мастер.",
+  tabStudents: "Второй шаг загрузки истории. Здесь качается личный календарь ученика: все его занятия из Alfa на наш диск. Сначала покажите список с диска, потом красной кнопкой идите по людям слева. Список «годы» задаёт, насколько далеко в прошлое смотреть. Жёлтая карточка значит: в Alfa занятий больше, чем у нас. Зелёная — счёт сошёлся. В Alfa ничего не пишется. Деньги и групповые явки — следующие шаги, этот экран их не трогает. Состав групп — шаг 1.",
+  tabGroups: "Третий шаг. Здесь качаются явки по группам: кто был на уроке, а не личный календарь человека. Сначала красная «по одному», потом список «годы» — это размер порции: квартал, полугодие или год. Архив групп и сроки жизни курса — отдельные кнопки ниже, их лучше нажать до массовой качки. Фильтр школы сужает очередь. В Alfa журнал не проводится. Без этого шага на сайте будут люди, но без отметок в группе. Тема и ДЗ грузятся уже в карточке группы, после явок.",
+  tabMoney: "Четвёртый шаг, «деньги на карточке». Здесь к ученику дописываются платежи и абонементы из Alfa. Красная «по одному» идёт как на шаге 2, справа те же годы. Если журнала занятий ещё нет, касса сначала доберёт календарь, иначе списание не к чему привязать. В Alfa оплаты не создаются. Жёлтая карточка — в Alfa занятий больше, чем на диске. После шага на карточке ученика должен быть понятный остаток. Это не зарплата педагогов и не очередь в Alfa, а чтение кассы на сайт.",
+  tabAudit: "Пятый шаг — сверка остатка. Закон раздела: только по одному, пауза 5 секунд, пакетом нельзя. Берёт тех, кто сейчас ходит по составу шага 1. Для каждого читает из Alfa общий остаток с шапки карточки, считает число в «Клиентах» и кассу. Если цифры разошлись — добирает журнал или кассу только этого человека. В Alfa ничего не пишет. Совпало — справа. Не совпало — слева с причиной.",
   auditAll: "Красная кнопка проходит всех текущих по одному. Между людьми пауза пять секунд, в Alfa один запрос в полёте. Сравнивает число на карточке «Клиенты» с общим остатком шапки Alfa. Если не сошлось — догружает явки или оплаты только этого номера. Цифру из Alfa в кассу не записывает. Стоп прерывает после текущего.",
   auditRecheck: "Ещё раз сверяет только этого ученика с общим остатком шапки Alfa. Читает карточку, при расхождении добирает его журнал или кассу. Чужих не трогает, зелёные шаги 1 и 3 у остальных не сбрасывает. В Alfa ничего не сохраняет. Нужна, если человек слева с причиной или вы только что правили его кассу. После совпадения карточка уйдёт вправо, даже если есть непроведённые уроки с ценой. Если снова formula — это показ в «Клиентах», не его личная дыра.",
-  scopeLive: "Показывает тех, кто сейчас ходит: статус «обучается» в Alfa. Красная очередь и сверка идут только по этому списку, архивных не трогают. Цифра на кнопке — сколько таких людей в выборке. Переключение само ничего не качает и в Alfa не пишет. Если нужен бывший ученик, соседняя кнопка «Архивные клиенты». Можно спокойно прыгать туда-сюда, списки уже на диске. Для кассы и календаря это один и тот же переключатель.",
+  scopeLive: "Показывает тех, кто сейчас ходит: люди в живых группах админки после состава шага 1. Не все is_study=1 из Alfa. Красная очередь и сверка идут только по этому списку, архивных не трогают. Цифра на кнопке — сколько таких людей в выборке. Переключение само ничего не качает и в Alfa не пишет. Если нужен бывший ученик, соседняя кнопка «Архивные клиенты». Можно спокойно прыгать туда-сюда, списки уже на диске. Для кассы и календаря это один и тот же переключатель.",
   scopeArch: "Показывает рабочий архив — бывшие ученики после «Посчитать отбор». Красная очередь только по этому набору, голые телефоны сюда не попадают. Если слева пусто — нажмите «Посчитать отбор»: правило с диска, Alfa не трогает. Скрытые ищутся в Клиентах по телефону. Жёлтые карточки чаще — берите «с начала · 2015».",
   archCount: "Считает рабочий архив только с диска, в Alfa не ходит и ничего там не пишет. Берёт группы текущих учеников и ищет в архиве тех, кто в тех же группах числился, с нормальным ФИО, не 18+ (если есть дата рождения). Голые телефоны и ошибочные звонки остаются скрытыми на диске, но не в списке. Уже попавшие в набор повторным нажатием не выкидываются. После отчёта красная «по одному» идёт только по рабочим. Если на диске архивных карточек нет — сначала «Загрузить архив клиентов из Alfa».",
   archCatalog: "Название кнопки не меняется. Закон раздела: одна карточка, пауза 5 секунд. Календарь и касса этой кнопкой не грузятся. Фильтры на виду. Телефон и «тест» не пишем. Кто записался — сразу слева. При сбое Alfa ждёт 5 с и повторяет. Стоп после текущей. В Alfa не пишет.",
@@ -200,12 +204,13 @@ const CRM_SET_TABS = [
   { id: "branches", label: "Филиалы" },
 ] as const;
 type CrmSetTab = (typeof CRM_SET_TABS)[number]["id"];
-type HistTab = "groups" | "students" | "money" | "audit";
+type HistTab = "roster" | "groups" | "students" | "money" | "audit";
 const HIST_TABS: { id: HistTab; label: string }[] = [
-  { id: "students", label: "Шаг 1 · Календарь ученика" },
-  { id: "groups", label: "Шаг 2 · Занятия в группах" },
-  { id: "money", label: "Шаг 3 · Деньги на карточке" },
-  { id: "audit", label: "Шаг 4 · Сверка остатка" },
+  { id: "roster", label: "Шаг 1 · Группы и состав" },
+  { id: "students", label: "Шаг 2 · Календарь ученика" },
+  { id: "groups", label: "Шаг 3 · Занятия в группах" },
+  { id: "money", label: "Шаг 4 · Деньги на карточке" },
+  { id: "audit", label: "Шаг 5 · Сверка остатка" },
 ];
 const PEOPLE_LOAD_GAP_MS = 5000;
 const CATALOG_GAP_MS = 5000;
@@ -349,6 +354,7 @@ type FillRow = {
   source?: string;
   parts?: FillPart[];
   pupilN?: number;
+  roster?: string;
 };
 
 function ruLessons(n: number) {
@@ -1689,6 +1695,7 @@ export function AdminCrmSettings() {
         extra?: string;
       }[];
     } | null;
+    rosterPolicy?: { leads?: boolean; archiveInLive?: boolean; attendDays?: number };
     job?: {
       running?: boolean;
       stop?: boolean;
@@ -1711,7 +1718,7 @@ export function AdminCrmSettings() {
   const [archNeedFio, setArchNeedFio] = useState(false);
   const [archNeedGroups, setArchNeedGroups] = useState(false);
   const [crmTab, setCrmTab] = useState<CrmSetTab>("history");
-  const [histTab, setHistTab] = useState<HistTab>("students");
+  const [histTab, setHistTab] = useState<HistTab>("roster");
   const crmTabsRef = useRef<HTMLDivElement>(null);
   const histTabsRef = useRef<HTMLDivElement>(null);
   const tabLockY = useRef<number | null>(null);
@@ -1725,6 +1732,9 @@ export function AdminCrmSettings() {
   const [schoolRun, setSchoolRun] = useState<{ cur: string; n: number; total: number; waits?: number } | null>(null);
   const [groupArchived, setGroupArchived] = useState(false);
   const [peopleStudy, setPeopleStudy] = useState<"1" | "2">("1");
+  const [rosterLeads, setRosterLeads] = useState(false);
+  const [rosterArchLive, setRosterArchLive] = useState(true);
+  const [rosterDays, setRosterDays] = useState(0);
   const [studentRun, setStudentRun] = useState<{
     kind: "students" | "balance";
     study: "1" | "2";
@@ -1743,7 +1753,7 @@ export function AdminCrmSettings() {
       if (s) setJournalSchool(s);
       if (g === "quarter" || g === "half" || g === "year") setJournalGrain(g);
       if (CRM_SET_TABS.some((x) => x.id === t)) setCrmTab(t as CrmSetTab);
-      if (h === "groups" || h === "students" || h === "money" || h === "audit") setHistTab(h);
+      if (h === "roster" || h === "groups" || h === "students" || h === "money" || h === "audit") setHistTab(h);
     } catch {
       /* */
     }
@@ -2005,6 +2015,14 @@ export function AdminCrmSettings() {
     }
   }
 
+  function applyRosterPolicy(pol?: { leads?: boolean; archiveInLive?: boolean; attendDays?: number }) {
+    if (!pol) return;
+    setRosterLeads(Boolean(pol.leads));
+    setRosterArchLive(pol.archiveInLive !== false);
+    const days = Number(pol.attendDays) || 0;
+    setRosterDays(days === 15 || days === 30 || days === 150 ? days : 0);
+  }
+
   async function loadJournal() {
     setJournalLoading(true);
     try {
@@ -2015,6 +2033,7 @@ export function AdminCrmSettings() {
         new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Список не пришёл за 20 с — нажмите ещё раз.")), 20000)),
       ])) as typeof journal;
       if (res) {
+        applyRosterPolicy(res.rosterPolicy);
         setJournal((cur) => {
           if (!cur) return res;
           const jobLive = Boolean(res.job?.running || cur.job?.running || holdFill.current);
@@ -2049,7 +2068,7 @@ export function AdminCrmSettings() {
   }
 
   async function runJournal(opts: {
-    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus";
+    kind: "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy";
     study?: "1" | "2" | "all";
     school?: string;
     groupId?: number;
@@ -2107,11 +2126,12 @@ export function AdminCrmSettings() {
             () => rej(new Error("Alfa не ответила за отведённое время — нажмите ещё раз.")),
             opts.kind === "jobStart" ||
             opts.kind === "jobStop" ||
-            opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "archiveCount" || opts.kind === "archiveCatalog" || opts.kind === "archiveAdd" || opts.kind === "life" || opts.kind === "group" || opts.kind === "details" || opts.kind === "hydrateDisk" || opts.kind === "students" || opts.kind === "balance" || opts.kind === "audit" ? 90000 : 25000,
+            opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "archiveCount" || opts.kind === "archiveCatalog" || opts.kind === "archiveAdd" || opts.kind === "life" || opts.kind === "group" || opts.kind === "details" || opts.kind === "hydrateDisk" || opts.kind === "students" || opts.kind === "balance" || opts.kind === "audit" || opts.kind === "roster" || opts.kind === "rosterPolicy" ? 90000 : 25000,
           ),
         ),
-      ])) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit; extra?: string; more?: boolean };
+      ])) as typeof journal & { ok?: boolean; periodLabel?: string; periodKey?: string; student?: StudentHit; extra?: string; more?: boolean; rosterPolicy?: { leads?: boolean; archiveInLive?: boolean; attendDays?: number } };
       if (res) {
+        applyRosterPolicy(res.rosterPolicy);
         setJournal((cur) => {
           if (!cur) return res;
           const next = {
@@ -2472,6 +2492,21 @@ export function AdminCrmSettings() {
 
   async function recheckGroupsOne() {
     await startHistJob({ jobMode: "groups-recheck", grain: journalGrain, school: journalSchool, recheck: true, archived: groupArchived });
+  }
+
+  async function saveRosterWho() {
+    await runJournal({
+      kind: "rosterPolicy",
+      name: `leads=${rosterLeads ? 1 : 0}&arch=${rosterArchLive ? 1 : 0}&days=${rosterDays}`,
+    });
+  }
+
+  async function loadRosterOne() {
+    await startHistJob({ jobMode: "roster", school: journalSchool, archived: groupArchived, study: peopleStudy });
+  }
+
+  async function recheckRosterOne() {
+    await startHistJob({ jobMode: "roster-recheck", school: journalSchool, archived: groupArchived, recheck: true, study: peopleStudy });
   }
 
   async function recheckGroup(row: FillRow) {
@@ -2876,16 +2911,167 @@ export function AdminCrmSettings() {
                     >
                       {t.label}
                     </button>
-                    <HintI text={t.id === "students" ? HINT.tabStudents : t.id === "groups" ? HINT.tabGroups : t.id === "audit" ? HINT.tabAudit : HINT.tabMoney} />
+                    <HintI text={t.id === "roster" ? HINT.tabRoster : t.id === "students" ? HINT.tabStudents : t.id === "groups" ? HINT.tabGroups : t.id === "audit" ? HINT.tabAudit : HINT.tabMoney} />
                   </span>
                 ))}
               </div>
               <ServerJobStrip job={journal?.job as ServerJob | undefined} />
 
+              {histTab === "roster" ? (
+              <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
+                <p className="font-display text-[1.15rem]">Группы и состав</p>
+                <p className="mt-1 text-sm text-muted">Основа для календаря и кассы. Одна группа, пауза 5 с. В Alfa не пишем.</p>
+                {(() => {
+                  const rows = (p?.groups?.rows || []).filter((r) => (groupArchived ? r.archived : !r.archived) && (!journalSchool || r.school === journalSchool));
+                  const need = rows.filter((r) => !r.roster);
+                  const done = rows.filter((r) => Boolean(r.roster));
+                  const run = Boolean(journal?.job?.running && (journal.job.mode === "roster" || journal.job.mode === "roster-recheck"));
+                  const liveGroupN = (p?.groups?.rows || []).filter((r) => !r.archived).length;
+                  const archGroupN = (p?.groups?.rows || []).filter((r) => r.archived).length;
+                  return (
+                    <>
+                      <ProgressBar done={done.length} total={rows.length} run={run} loading={journalLoading && !journal} />
+                      <p className="mt-1 text-[0.72rem] text-muted">
+                        Состав прочитан {done.length} из {rows.length}
+                        {need.length ? ` · требуют загрузки ${need.length}` : ""}. Сейчас ходят · {liveN}.
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <ScopePills
+                          value={groupArchived ? "archive" : "live"}
+                          onChange={(v) => setGroupArchived(v === "archive")}
+                          live={`Живые группы · ${liveGroupN}`}
+                          arch={`Архивные группы · ${archGroupN}`}
+                          hintLive={HINT.scopeLiveGroups}
+                          hintArch={HINT.scopeArchGroups}
+                        />
+                      </div>
+                      <label className="mt-3 block text-sm font-semibold">
+                        <span className="inline-flex items-center gap-1">
+                          Только школа
+                          <HintI text={HINT.school} />
+                        </span>
+                        <select
+                          className="mt-1 h-9 w-full max-w-sm rounded-full bg-white px-3 text-sm font-medium ring-1 ring-black/8"
+                          value={journalSchool}
+                          disabled={busy}
+                          onChange={(e) => pickJournalSchool(e.target.value)}
+                        >
+                          <option value="">Все школы</option>
+                          {(journal?.schools || []).map((s) => (
+                            <option key={s.name} value={s.name}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.82rem]">
+                        {withHint(
+                          <label className="flex items-center gap-1.5">
+                            <input type="checkbox" checked={rosterLeads} onChange={(e) => setRosterLeads(e.target.checked)} />
+                            лиды в этих группах
+                          </label>,
+                          HINT.rosterWho,
+                        )}
+                        {withHint(
+                          <label className="flex items-center gap-1.5">
+                            <input type="checkbox" checked={rosterArchLive} onChange={(e) => setRosterArchLive(e.target.checked)} />
+                            архив в живой группе
+                          </label>,
+                          HINT.rosterWho,
+                        )}
+                        {withHint(
+                          <label className="flex items-center gap-1.5">
+                            был на занятии
+                            <select
+                              className="h-8 rounded-full bg-white px-2 text-[0.78rem] ring-1 ring-black/10"
+                              value={rosterDays}
+                              onChange={(e) => setRosterDays(Number(e.target.value) || 0)}
+                            >
+                              <option value={0}>не фильтровать</option>
+                              <option value={15}>15 дней</option>
+                              <option value={30}>30 дней</option>
+                              <option value={150}>150 дней</option>
+                            </select>
+                          </label>,
+                          HINT.rosterWho,
+                        )}
+                        <button type="button" className={BTN_GHOST} disabled={busy} onClick={() => void saveRosterWho()}>
+                          Запомнить
+                        </button>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {withHint(
+                          <button type="button" className={BTN_LOAD} disabled={busy && run} onClick={() => void loadRosterOne()}>
+                            Загрузить по одному
+                          </button>,
+                          HINT.roster,
+                        )}
+                        {withHint(
+                          <button type="button" className={BTN_GHOST} disabled={busy && run} onClick={() => void recheckRosterOne()}>
+                            Перепроверить
+                          </button>,
+                          HINT.rosterRecheck,
+                        )}
+                        {withHint(
+                          <button type="button" className={BTN_GHOST} disabled={!run} onClick={() => void runJournal({ kind: "jobStop" })}>
+                            Стоп
+                          </button>,
+                          HINT.stop,
+                        )}
+                      </div>
+                      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                        <div>
+                          <p className="font-semibold text-rose-800">Требуют загрузки состава · {need.length}</p>
+                          <ul className="mt-2 space-y-1 text-sm">
+                            {need.slice(0, 100).map((r) => (
+                              <li key={`${r.branchId}-${r.groupId}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 ring-1 ring-black/8">
+                                <span className="min-w-0">
+                                  {r.name} <span className="text-muted">№{r.groupId}</span>
+                                  {r.school ? <span className="text-muted"> · {r.school}</span> : null}
+                                </span>
+                                <button
+                                  type="button"
+                                  className={BTN_LOAD_SM}
+                                  disabled={busy}
+                                  onClick={() => void startHistJob({ jobMode: "roster", groupId: r.groupId, branchId: r.branchId, name: r.name, jobItems: [{ groupId: r.groupId, branchId: r.branchId, name: r.name }] })}
+                                >
+                                  Состав
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-emerald-800">Состав прочитан · {done.length}</p>
+                          <ul className="mt-2 space-y-1 text-sm">
+                            {done.slice(0, 100).map((r) => (
+                              <li key={`${r.branchId}-${r.groupId}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 ring-1 ring-black/8">
+                                <span className="min-w-0">
+                                  {r.name} <span className="text-muted">№{r.groupId}</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  className={BTN_GHOST}
+                                  disabled={busy}
+                                  onClick={() => void startHistJob({ jobMode: "roster-recheck", recheck: true, groupId: r.groupId, branchId: r.branchId, name: r.name, jobItems: [{ groupId: r.groupId, branchId: r.branchId, name: r.name }] })}
+                                >
+                                  Перепроверить
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </section>
+              ) : null}
+
               {histTab === "groups" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Занятия в группах</p>
-                <p className="mt-1 text-sm text-muted">Как шаг 1: сначала красная «по одному», потом годы. Архив и сроки — отдельные кнопки ниже.</p>
+                <p className="mt-1 text-sm text-muted">Как шаг 3: сначала красная «по одному», потом годы. Архив и сроки — отдельные кнопки ниже.</p>
                 <ProgressBar done={schoolDone} total={schoolRows.length} run={Boolean(schoolRun || fillLoading)} loading={journalLoading && !journal} />
                 <p className="mt-1 text-[0.72rem] text-muted">
                   {journalSchool ? `Школа «${journalSchool}»: загрузка завершена ${schoolDone} из ${schoolRows.length}` : "Все школы. Выберите школу — счётчик только по ней"}
@@ -3290,7 +3476,7 @@ export function AdminCrmSettings() {
               {histTab === "money" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
                 <p className="font-display text-[1.15rem]">Деньги на карточке</p>
-                <p className="mt-1 text-sm text-muted">Как шаг 1: красная «по одному», потом годы. Касса с диска, сверка с Alfa, в Alfa не пишет.</p>
+                <p className="mt-1 text-sm text-muted">Как шаг 2: красная «по одному», потом годы. Касса с диска, сверка с Alfa, в Alfa не пишет.</p>
                 <div className="mt-3">
                   <ScopePills
                     value={peopleStudy === "2" ? "archive" : "live"}
