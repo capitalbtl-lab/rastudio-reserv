@@ -237,8 +237,8 @@ export async function auditOne(cid: number, branchId: number) {
     });
   }
   if (codes.includes("pays") || codes.includes("snap")) {
-    const { markPayJournalIncomplete } = await import("./crm-pay");
-    markPayJournalIncomplete(id);
+    const { markPayJournalIncomplete, payFillScanned } = await import("./crm-pay");
+    if (!payFillScanned(id)) markPayJournalIncomplete(id);
     const { stampCustomerSync } = await import("./crm-customer-sync");
     stampCustomerSync(id, { paysRecheckAt: "" });
   }

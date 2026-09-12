@@ -175,7 +175,12 @@ describe("касса список", () => {
     const inbound = pay.slice(pay.indexOf("export async function inboundCustomerPays"), pay.indexOf("export type PayPollResult"));
     const doneBlock = inbound.slice(inbound.indexOf("if (done)"));
     assert.match(doneBlock, /markPayJournalComplete\(customerId\)/);
+    assert.match(doneBlock, /remainderClose\(cash, alfaHeaderOf/);
+    assert.match(doneBlock, /done: true/);
+    assert.doesNotMatch(doneBlock, /remainderClose\(cash, cash/);
     assert.doesNotMatch(doneBlock, /markPayJournalIncomplete/);
+    assert.match(inbound, /if \(cur\.done\) return paysOf/);
+    assert.match(pay, /if \(!cur \|\| cur.done\) return false/);
     assert.match(inbound, /done && unlabeled && known.length/);
     assert.match(pay, /delete store.payFill\[String\(id\)\]/);
     assert.match(pay, /payCttIdOf/);

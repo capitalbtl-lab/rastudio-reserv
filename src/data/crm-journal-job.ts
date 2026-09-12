@@ -108,6 +108,7 @@ export type StartJournalJobOpts = {
   periodKey?: string;
   periodLabel?: string;
   items?: JournalJobItem[];
+  archived?: boolean;
 };
 
 function emptyMsg(mode: JournalJobMode, recheck: boolean) {
@@ -124,6 +125,7 @@ function emptyMsg(mode: JournalJobMode, recheck: boolean) {
   if (mode === "archives") return "Архивных групп нет.";
   if (mode === "archivesPupils") return "Новых архивных групп по карточкам нет.";
   if (mode === "probe") return "Нет текущих учеников в списке.";
+  if (mode === "details") return "ДЗ грузить нечего.";
   return "грузить нечего";
 }
 
@@ -152,18 +154,48 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
     if (mode === "probe") {
       const unseen = people.filter((r) => (r as { alfa?: number }).alfa == null);
       const hole = people.filter((r) => r.short);
-      const row = unseen[0] || hole[0] || people[0];
-      return row ? [{ cid: row.cid, branchId: row.branchId, name: row.name }] : [];
+      const seen = new Set(unseen.map((r) => r.cid));
+      const queue = [...unseen, ...hole.filter((r) => !seen.has(r.cid))];
+      return queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
     }
     const queue = peopleJobQueue(people, kind, mode === "people-recheck" || Boolean(opts.recheck));
     return queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
   }
+  if (mode === "details") {
+    const groups = journalPullGroups();
+    const hit =
+      groups.find((g) => g.groupId === Number(opts.groupId) && (!opts.branchId || g.branchId === Number(opts.branchId))) ||
+      groups.find((g) => g.groupId === Number(opts.groupId));
+    if (!hit) return [];
+    if (opts.periodKey) {
+      return [{ groupId: hit.groupId, branchId: hit.branchId, name: hit.name, periodKey: opts.periodKey, periodLabel: opts.periodLabel || opts.periodKey }];
+    }
+    const row = groupFillRow(hit);
+    return (row.parts || [])
+      .filter((p) => (Number(p.needDetails) || 0) > 0)
+      .map((p) => ({ groupId: hit.groupId, branchId: hit.branchId, name: hit.name, periodKey: p.key, periodLabel: p.label }));
+  }
   if (mode === "groups" || mode === "groups-recheck" || mode === "group-one") {
     const grain = (opts.grain || "quarter") as Grain;
     const school = String(opts.school || "");
-    const groups = journalPullGroups().filter((g) => !school || g.school === school);
+    const wantArch = Boolean(opts.archived);
+    const groups = journalPullGroups().filter((g) => {
+      if (school && g.school !== school) return false;
+      return wantArch ? Boolean(g.archived) : !g.archived;
+    });
+    const givenG = (opts.items || [])
+      .map((r) => ({
+        groupId: Number(r.groupId) || 0,
+        branchId: Number(r.branchId) || 0,
+        name: String(r.name || ""),
+        periodKey: r.periodKey,
+        periodLabel: r.periodLabel,
+      }))
+      .filter((r) => r.groupId);
+    if (givenG.length && mode !== "group-one") return givenG;
     if (mode === "group-one") {
-      const hit = groups.find((g) => g.groupId === Number(opts.groupId) && (!opts.branchId || g.branchId === Number(opts.branchId))) || groups.find((g) => g.groupId === Number(opts.groupId));
+      const all = journalPullGroups();
+      const hit = all.find((g) => g.groupId === Number(opts.groupId) && (!opts.branchId || g.branchId === Number(opts.branchId))) || all.find((g) => g.groupId === Number(opts.groupId));
       if (!hit) return [];
       if (opts.periodKey) {
         return [{ groupId: hit.groupId, branchId: hit.branchId, name: hit.name, periodKey: opts.periodKey, periodLabel: opts.periodLabel || opts.periodKey }];
@@ -209,6 +241,8 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
             ? "archives"
             : mode === "archivesPupils"
               ? "archivesPupils"
+              : mode === "details"
+                ? "details"
               : mode === "groups" || mode === "groups-recheck" || mode === "group-one"
                 ? "group"
                 : opts.kind || "students";
@@ -279,6 +313,9 @@ function fillOf(mode: JournalJobMode | "", kind: string, item?: JournalJobItem |
   if (mode === "archives") return { kind: "archives", label: item.name };
   if (mode === "archivesPupils") return { kind: "archivesPupils", label: item.name };
   if (mode === "audit") return { kind: "audit", label: item.name, customerId: item.cid };
+  if (mode === "details") {
+    return { kind: "details", groupId: item.groupId, branchId: item.branchId, periodKey: item.periodKey, label: item.periodLabel || item.name };
+  }
   if (mode === "groups" || mode === "groups-recheck" || mode === "group-one") {
     return { kind: "group", groupId: item.groupId, branchId: item.branchId, periodKey: item.periodKey, label: item.periodLabel || item.name };
   }
@@ -369,8 +406,22 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       item = { ...item, periodKey: part.key, periodLabel: part.label };
     }
   }
-  const pullKind = mode === "audit" ? "audit" : mode === "groups" || mode === "groups-recheck" || mode === "group-one" ? "group" : job.kind === "balance" ? "balance" : "students";
-  const curLabel = pullKind === "group" && item.periodLabel ? `${item.name} · ${item.periodLabel}` : pullKind === "balance" ? `касса · ${item.name}` : item.name;
+  const pullKind =
+    mode === "audit"
+      ? "audit"
+      : mode === "details"
+        ? "details"
+        : mode === "groups" || mode === "groups-recheck" || mode === "group-one"
+          ? "group"
+          : job.kind === "balance"
+            ? "balance"
+            : "students";
+  const curLabel =
+    (pullKind === "group" || pullKind === "details") && item.periodLabel
+      ? `${item.name} · ${item.periodLabel}`
+      : pullKind === "balance"
+        ? `касса · ${item.name}`
+        : item.name;
   patch({
     id,
     cur: curLabel,
@@ -378,7 +429,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     msg: job.recheck ? `${item.name}: перепроверяем. Потом пауза 5 с.` : `${item.name}: грузим. Потом пауза 5 с.`,
   });
   const res = await journalPull({
-    kind: pullKind as "students" | "balance" | "group" | "audit",
+    kind: pullKind as "students" | "balance" | "group" | "audit" | "details",
     study: job.study,
     customerId: Number(item.cid) || 0,
     branchId: Number(item.branchId) || job.branchId,
@@ -432,6 +483,16 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     patch({ id, running: false, cur: "", fill: null, msg });
     return { done: true, gap: 0, msg };
   }
+  if (mode === "details" && res.more) {
+    patch({
+      id,
+      waits: 0,
+      cur: `пауза 5 с · ещё ДЗ «${item.name}»`,
+      fill: fillOf(mode, job.kind, item),
+      msg: String(res.extra || `«${item.name}»: ДЗ не дочитано.`),
+    });
+    return { done: false, gap: jobGapMs(mode) };
+  }
   const n = live.n + 1;
   const idx = live.idx + 1;
   const more = idx < live.items.length;
@@ -455,10 +516,11 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
 function doneMsg(job: JournalJob) {
   if (job.stop) return `Остановили · прошло ${job.n} из ${job.total}.`;
   if (job.mode === "people-recheck" || (job.mode === "people" && job.recheck)) return `${job.n} перепроверили.`;
-  if (job.mode === "people") return `Готово · ${job.n} учеников. Слева пусто.`;
+  if (job.mode === "people") return `Готово · ${job.n} учеников. Кто слева — ещё жёлтые или без кассы.`;
   if (job.mode === "groups-recheck") return `${job.n} групп перепроверили.`;
-  if (job.mode === "groups") return `Готово · ${job.n} групп. Слева пусто, если порции закрылись.`;
-  if (job.mode === "group-one") return job.stop ? "Очередь группы остановлена." : "Группа перепроверена.";
+  if (job.mode === "groups") return `Готово · ${job.n} порций. Кто слева — ещё не все кварталы.`;
+  if (job.mode === "group-one") return job.recheck ? "Группа перепроверена." : "Порция группы записана.";
+  if (job.mode === "details") return `${job.n} порций ДЗ.`;
   if (job.mode === "audit") return `Сверили ${job.n} текущих.`;
   if (job.mode === "probe") return job.msg || `${job.items[0]?.name || ""}: счёт.`;
   if (job.mode === "person") return job.msg || "Записали на сайт.";

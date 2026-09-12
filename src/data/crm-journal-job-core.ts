@@ -21,7 +21,8 @@ export type JournalJobMode =
   | "person"
   | "life"
   | "archives"
-  | "archivesPupils";
+  | "archivesPupils"
+  | "details";
 
 export type JournalJobItem = {
   cid?: number;
@@ -191,7 +192,7 @@ export function shouldRetryCash(
   if (kind === "balance" && !recheck) {
     if (res?.student?.paysOk) return false;
     if (!res || res.ok === false) return busy || /не ответила|ещё страницы/i.test(err);
-    return Boolean(res.student?.paysMore) || res.student?.paysOk === false || /ещё страницы/i.test(err);
+    return Boolean(res.student?.paysMore) || /ещё страницы/i.test(err);
   }
   if (!res || res.ok === false) return busy;
   return false;

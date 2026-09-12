@@ -977,7 +977,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     short,
     blocked: false,
     paysOk,
-    paysMore: Boolean(balance && (Boolean(payFail) || payFillPending(cid) || !paysOk)),
+    paysMore: Boolean(balance && (Boolean(payFail) || payFillPending(cid))),
     payFail,
     rechecked: Boolean(sync.lessonsRecheckAt) && !short,
     paysRechecked: Boolean(sync.paysRecheckAt),
@@ -1002,7 +1002,8 @@ export async function journalPull(opts: {
   peopleKind?: "students" | "balance";
   periodLabel?: string;
   lite?: boolean;
-  jobItems?: { cid?: number; branchId?: number; name?: string }[];
+  jobItems?: { cid?: number; branchId?: number; name?: string; groupId?: number; periodKey?: string; periodLabel?: string }[];
+  archived?: boolean;
 }) {
   const kind = opts.kind;
   if (kind === "jobStart" || kind === "jobStop" || kind === "jobStatus") {
@@ -1028,6 +1029,8 @@ export async function journalPull(opts: {
                 ? "archives"
                 : opts.jobMode === "archivesPupils"
                   ? "archivesPupils"
+                  : opts.jobMode === "details"
+                    ? "details"
                   : opts.jobMode === "groups" || opts.jobMode === "groups-recheck" || opts.jobMode === "group-one"
                     ? "group"
                     : opts.peopleKind || "students",
@@ -1046,6 +1049,7 @@ export async function journalPull(opts: {
       periodKey: opts.periodKey,
       periodLabel: String(opts.periodLabel || ""),
       items: opts.jobItems,
+      archived: Boolean(opts.archived),
     });
     return journalJobView();
   }
@@ -1059,7 +1063,8 @@ export async function journalPull(opts: {
     kind === "archives" ||
     kind === "archivesPupils" ||
     (wantedEarly > 0 && (kind === "students" || kind === "balance" || kind === "audit")) ||
-    (kind === "group" && Number(opts.groupId) > 0);
+    (kind === "group" && Number(opts.groupId) > 0) ||
+    (kind === "details" && Number(opts.groupId) > 0);
   const snap = () => (lite ? { ok: true as const, ...litePullState() } : journalPullState({ skipPeople: !needPeople || (wantedEarly > 0 && (kind === "students" || kind === "balance" || kind === "audit")) }));
   const store = loadStore();
   const groups = journalPullGroups();

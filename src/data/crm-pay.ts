@@ -231,7 +231,15 @@ export function payFillPending(customerId: number) {
   const id = Number(customerId) || 0;
   if (!id) return false;
   const cur = load().payFill?.[String(id)];
-  return Boolean(cur && (Number(cur.bid) || 0) > 0);
+  if (!cur || cur.done) return false;
+  return (Number(cur.bid) || 0) > 0;
+}
+
+/** Страницы кассы уже дочитали, шапка Alfa не сошлась — не крутить заново. */
+export function payFillScanned(customerId: number) {
+  const id = Number(customerId) || 0;
+  if (!id) return false;
+  return Boolean(load().payFill?.[String(id)]?.done);
 }
 
 /** Касса дочитана этим id (complete[]). Строка «остаток на диске» сюда не входит. */
@@ -692,6 +700,7 @@ export async function inboundCustomerPays(
   let page = 0;
   const cur = store.payFill?.[String(customerId)];
   if (cur && !opts?.force) {
+    if (cur.done) return paysOf(customerId);
     const i = branches.indexOf(cur.bid);
     bidIdx = i >= 0 ? i : 0;
     page = Number(cur.page) || 0;
@@ -799,14 +808,23 @@ export async function inboundCustomerPays(
   await stampPayCustomerNames(pulled).catch(() => null);
   if (failed) throw new Error("Alfa не ответила, нажмите снова");
   if (done) {
-    markPayJournalComplete(customerId);
     try {
+      const { crmUnwrapIndex } = await import("./crm-leads-stages");
+      const { alfaHeaderOf } = await import("./crm-balance-audit-core");
       const { loadCustomerCalendar } = await import("./group-cards");
+      const json = await request(`/v2api/${branchId}/customer/index`, { page: 0, pageSize: 10, id: customerId }, token);
+      const hit = crmUnwrapIndex(json).items.find((x) => Number(x.id) === customerId);
       const live = merged.filter((x) => !x.deleted);
       const cash = balanceOf(live) - writeoffSumOf(loadCustomerCalendar(customerId), customerId);
-      remainderClose(cash, cash, live.length > 0);
+      if (!hit) markPayJournalComplete(customerId);
+      else if (remainderClose(cash, alfaHeaderOf(hit, 0, 0), live.length > 0)) markPayJournalComplete(customerId);
+      else {
+        const next = load();
+        next.payFill = { ...(next.payFill || {}), [String(customerId)]: { bid: Number(fillBid) || branches[0], page: Number(fillPage) || 0, done: true } };
+        save(next);
+      }
     } catch {
-      /* шаг 4 сверка шапки; шаг 3 уже закрыл страницы кассы */
+      markPayJournalComplete(customerId);
     }
   }
   return merged;
