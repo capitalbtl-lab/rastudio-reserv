@@ -211,6 +211,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /function liveAttendeeCids/);
     assert.match(pull, /function liveAdminGroups/);
     assert.match(pull, /overlayAdminGroups/);
+    assert.match(pull, /for \(const g of journalPullGroups\(\)\) if \(!g\.archived\) push\(g\)/);
+    assert.match(pull, /gids.has\(Number\(l.id\)\)/);
     assert.match(pull, /uniqueByCid/);
     assert.doesNotMatch(pull, /cidAlfaStudying/);
     assert.doesNotMatch(pull, /ALFA_STUDYING_STATUS/);

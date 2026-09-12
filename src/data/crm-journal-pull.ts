@@ -344,32 +344,34 @@ export function journalPullSchools() {
     .map((name) => ({ name, groups: map.get(name) || 0 }));
 }
 
-/** Группы админки с номером Alfa. Школа — как в сетке журнала. */
+/** Живые группы всех филиалов 1–4: админка + сетка. Смены 7–9 не входят. */
 function liveAdminGroups(school?: string) {
   if (school) return journalPullGroups().filter((x) => !x.archived && x.school === school);
-  return overlayAdminGroups().map((g) => ({
-    groupId: g.groupId,
-    branchId: g.branchId,
-    name: g.name,
-    school: "",
-    taken: Number(g.taken) || 0,
-    archived: false,
-  }));
+  const seen = new Set<string>();
+  const out: JournalPullGroup[] = [];
+  const push = (g: { groupId: number; branchId: number; name?: string; school?: string; taken?: number; archived?: boolean }) => {
+    const gid = Number(g.groupId) || 0;
+    const bid = Number(g.branchId) || 0;
+    if (!gid || !bid || g.archived) return;
+    const k = `${bid}:${gid}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({
+      groupId: gid,
+      branchId: bid,
+      name: String(g.name || `группа ${gid}`),
+      school: String(g.school || ""),
+      taken: Number(g.taken) || 0,
+      archived: false,
+    });
+  };
+  for (const g of overlayAdminGroups()) push(g);
+  for (const g of journalPullGroups()) if (!g.archived) push(g);
+  return out;
 }
 
 function liveAttendeeCids(school?: string) {
-  const seen = new Set<number>();
-  for (const g of liveAdminGroups(school)) {
-    for (const d of dossiersInGroup(g.branchId, g.groupId)) {
-      const cid = Number(d.crmId) || 0;
-      if (!cid || seen.has(cid)) continue;
-      const st = Number(d.extras?.is_study);
-      if (String(d.status || "") === "удалён" || String(d.extras?.removed || "") === "1") continue;
-      if (st === 0 || String(d.status || "") === "лид") continue;
-      seen.add(cid);
-    }
-  }
-  return seen;
+  return new Set(rankedStudentIds("1", undefined, school).map((x) => x.cid));
 }
 
 function uniqueByCid<T extends { cid: number }>(list: T[]) {
@@ -403,13 +405,27 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
   if (group && group.groupId) {
     pool = dossiersInGroup(group.branchId, group.groupId).map((d) => rowFromDossier(d, group.branchId)).filter((x) => x.cid);
   } else if (study === "1") {
+    const groups = liveAdminGroups(school);
+    const gids = new Set(groups.map((g) => g.groupId));
     const seen = new Set<number>();
-    for (const g of liveAdminGroups(school)) {
+    for (const g of groups) {
       for (const d of dossiersInGroup(g.branchId, g.groupId)) {
         const row = rowFromDossier(d, g.branchId);
         if (!row.cid || seen.has(row.cid)) continue;
         seen.add(row.cid);
         pool.push(row);
+      }
+    }
+    if (!school) {
+      for (const x of listDossierCrm()) {
+        if (!x.cid || seen.has(x.cid)) continue;
+        if (x.status === "удалён" || x.removed === "1") continue;
+        if (x.study === 0 || x.status === "лид") continue;
+        const d = findDossier({ crmId: x.cid });
+        const hit = (d?.groupLinks || []).some((l) => gids.has(Number(l.id)));
+        if (!hit) continue;
+        seen.add(x.cid);
+        pool.push(x);
       }
     }
   } else if (school) {
