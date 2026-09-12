@@ -24,6 +24,8 @@ describe("фон истории из Alfa", () => {
     assert.deepEqual(peopleJobQueue(people, "students", false).map((x) => x.cid), [1, 4]);
     assert.deepEqual(peopleJobQueue(people, "students", true).map((x) => x.cid), [3]);
     assert.equal(peopleJobFinished(people[1], "balance"), true);
+    assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: true, short: true }, "balance"), true);
+    assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false }, "balance"), false);
     assert.equal(peopleJobFinished(people[3], "students"), false);
   });
 
@@ -31,7 +33,8 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryCash("balance", false, { ok: true, student: { paysMore: true } }), true);
     assert.equal(shouldRetryCash("balance", false, { ok: true, extra: "ещё страницы" }), true);
     assert.equal(shouldRetryCash("balance", false, { ok: false, error: "Alfa не ответила, нажмите снова" }), true);
-    assert.equal(shouldRetryCash("balance", false, { ok: true, student: { paysOk: false, paysMore: false } }), false);
+    assert.equal(shouldRetryCash("balance", false, { ok: true, student: { paysOk: false, paysMore: false } }), true);
+    assert.equal(shouldRetryCash("balance", false, { ok: true, student: { paysOk: true, paysMore: false } }), false);
     assert.equal(shouldRetryCash("balance", true, { ok: true, student: { paysOk: true } }), false);
     assert.equal(shouldRetryCash("students", false, { ok: true }), false);
     assert.equal(shouldRetryCash("students", false, { ok: false, error: "Alfa не ответила, нажмите снова" }), false);
@@ -120,6 +123,10 @@ describe("фон истории из Alfa", () => {
     assert.match(ui, /onLoad=\{\(row, part, recheck\) =>\s*void startHistJob/);
     assert.doesNotMatch(ui, /onLoad=\{\(row, part, recheck\) =>\s*void runJournal/);
     assert.match(ui, /st\?\.job\?\.running/);
+    assert.match(core, /if \(kind === "balance"\) return Boolean\(row.pays\)/);
+    assert.match(core, /res.student\?\.paysOk === false/);
+    assert.match(ui, /if \(kind === "balance"\) return Boolean\(row.pays\)/);
+    assert.match(ui, /if \(journal\?\.job\?\.running\) return;/);
     assert.doesNotMatch(ui, /for \(let i = 0; i < queue.length/);
   });
 });

@@ -800,8 +800,8 @@ function byPeopleName(a: PeopleRow, b: PeopleRow) {
 }
 
 function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
+  if (kind === "balance") return Boolean(row.pays);
   if (row.short) return false;
-  if (kind === "balance") return Boolean(row.journal && row.pays);
   return Boolean(row.journal);
 }
 
@@ -857,7 +857,7 @@ function patchPeopleSide(
     ...side,
     people,
     journalDone: people.filter((r) => r.journal).length,
-    cardDone: people.filter((r) => r.journal && r.pays).length,
+    cardDone: people.filter((r) => r.pays).length,
   };
 }
 
@@ -2104,7 +2104,7 @@ export function AdminCrmSettings() {
     periodKey?: string;
     periodLabel?: string;
   }) {
-    if (peopleLock.current && !journal?.job?.running) return;
+    if (journal?.job?.running) return;
     holdFill.current = true;
     peopleLock.current = true;
     stopSchool.current = false;

@@ -700,12 +700,16 @@ export async function inboundCustomerPays(
   let done = false;
   let lastShort = false;
   let failed = false;
+  let fillBid = branches[bidIdx] || branches[0];
+  let fillPage = page;
   const maxRun = PAY_INBOUND_RUN;
   const started = Date.now();
   const overBudget = () => Date.now() - started > PAY_INBOUND_BUDGET_MS;
   outer: for (let b = bidIdx; b < branches.length; b += 1) {
     const bid = branches[b];
     let p = b === bidIdx ? page : 0;
+    fillBid = bid;
+    fillPage = p;
     for (;;) {
       if (ran >= maxRun || overBudget()) {
         done = false;
@@ -719,6 +723,8 @@ export async function inboundCustomerPays(
         raw.push(...pack.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
         ran += 1;
         lastShort = pack.items.length < PAY_INBOUND_PAGE;
+        fillBid = bid;
+        fillPage = p;
         if (lastShort) {
           if (!overBudget()) {
             for (const typeId of [5, 6, 9]) {
@@ -746,7 +752,11 @@ export async function inboundCustomerPays(
         break outer;
       }
     }
-    if (!failed && b === branches.length - 1 && lastShort && !overBudget()) done = true;
+    if (!failed && b === branches.length - 1 && lastShort) done = true;
+  }
+  if (!failed && !done) {
+    store.payFill = { ...(store.payFill || {}), [String(customerId)]: { bid: fillBid, page: fillPage } };
+    save(store);
   }
   const known: number[] = [];
   try {

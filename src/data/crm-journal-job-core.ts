@@ -150,8 +150,8 @@ export type PeopleJobRow = {
 };
 
 export function peopleJobFinished(row: PeopleJobRow, kind: "students" | "balance") {
+  if (kind === "balance") return Boolean(row.pays);
   if (row.short) return false;
-  if (kind === "balance") return Boolean(row.journal && row.pays);
   return Boolean(row.journal);
 }
 
@@ -184,8 +184,9 @@ export function shouldRetryCash(
   const err = String(res?.error || res?.extra || "");
   const busy = /уже грузим|нет входа|429|502|нет ответа/i.test(err);
   if (kind === "balance" && !recheck) {
+    if (res?.student?.paysOk) return false;
     if (!res || res.ok === false) return busy || /не ответила|ещё страницы/i.test(err);
-    return Boolean(res.student?.paysMore) || /ещё страницы/i.test(err);
+    return Boolean(res.student?.paysMore) || res.student?.paysOk === false || /ещё страницы/i.test(err);
   }
   if (!res || res.ok === false) return busy;
   return false;

@@ -652,7 +652,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       const gnames = glist.join(", ") || own.map((g) => g.name).filter(Boolean).slice(0, 3).join(", ");
       if (journal) journalDone += 1;
       else missJ.push({ id: p.cid, name, extra: short ? `на диске ${diskN}, в Alfa ${alfaN}` : gnames ? gnames : own.length ? "группы ещё не сверены" : "нет полного журнала" });
-      if (journal && pays) cardDone += 1;
+      if (pays) cardDone += 1;
       else missC.push({ id: p.cid, name, extra: journal ? "нет кассы" : gnames || (own.length ? "группы ещё не сверены" : "нет явки") });
       peopleRows.push({
         cid: p.cid,
@@ -746,7 +746,7 @@ export function journalPeopleSide(study: JournalPullStudy) {
   return {
     total: list.length,
     journalDone: people.filter((r) => r.journal).length,
-    cardDone: people.filter((r) => r.journal && r.pays).length,
+    cardDone: people.filter((r) => r.pays).length,
     missJournal: packList([] as { id: number; name: string; extra: string }[]),
     missCard: packList([] as { id: number; name: string; extra: string }[]),
     people,
@@ -980,7 +980,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     short,
     blocked: false,
     paysOk,
-    paysMore: Boolean(balance && (Boolean(payFail) || payFillPending(cid))),
+    paysMore: Boolean(balance && (Boolean(payFail) || payFillPending(cid) || !paysOk)),
     payFail,
     rechecked: Boolean(sync.lessonsRecheckAt) && !short,
     paysRechecked: Boolean(sync.paysRecheckAt),
