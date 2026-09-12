@@ -9,6 +9,8 @@ import {
   countAlfaLessonRows,
   mergeSeenLessonIds,
   canPruneCalendarFill,
+  uniquePositiveIds,
+  canCloseLessonCensus,
   nightGroupDiff,
   nightOnSiteReason,
   nightLockBusy,
@@ -132,6 +134,10 @@ describe("вход из Alfa", () => {
     assert.equal(canPruneCalendarFill({ prune: true, wantFull: false, fillDone: true }), false);
     assert.equal(canPruneCalendarFill({ prune: true, wantFull: true, fillDone: false }), false);
     assert.equal(canPruneCalendarFill({ prune: false, wantFull: true, fillDone: true }), false);
+    assert.deepEqual(uniquePositiveIds([10, 10, 0, -4, 11]), [10, 11]);
+    assert.equal(canCloseLessonCensus({ live: true, aborted: false }), true);
+    assert.equal(canCloseLessonCensus({ live: true, aborted: true }), false);
+    assert.equal(canCloseLessonCensus({ live: false, aborted: false }), false);
   });
 });
 

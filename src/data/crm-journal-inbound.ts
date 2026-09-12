@@ -3,7 +3,7 @@ import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
-import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonRows, canPruneCalendarFill } from "./crm-inbound-core";
+import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
@@ -367,43 +367,87 @@ export async function probeGroupLife(branch: number, gid: number, opts?: { token
   return { from, to, lessons, ok: true as const };
 }
 
-/** Сколько занятий у ученика в Alfa: 1–3 лёгких запроса, не весь журнал. */
-export async function probeCustomerLessons(branch: number, customerId: number, opts?: { token?: string; dateFrom?: string }) {
+function pauseMs(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+type LessonIndexItem = Parameters<typeof packLight>[0];
+
+async function pullLessonPage(
+  bid: number,
+  body: Record<string, unknown>,
+  t: string,
+  tries = 3,
+): Promise<{ ok: true; items: LessonIndexItem[]; total: number } | { ok: false }> {
+  const { request } = await import("./alfacrm");
+  for (let i = 0; i < tries; i += 1) {
+    try {
+      const raw = await request<unknown>(`/v2api/${bid}/lesson/index`, body, t);
+      const pack = crmUnwrapIndex(raw);
+      return { ok: true as const, items: (pack.items || []) as LessonIndexItem[], total: Number(pack.total) || 0 };
+    } catch {
+      if (i + 1 >= tries) return { ok: false as const };
+      await pauseMs(800 * (i + 1));
+    }
+  }
+  return { ok: false as const };
+}
+
+/** Сколько занятий у ученика в Alfa: перепись уникальных номеров. Пустой catch ≠ конец. */
+export async function censusCustomerLessonIds(branch: number, customerId: number, opts?: { dateFrom?: string; token?: string }) {
   const id = Number(customerId) || 0;
-  if (id <= 0) return { total: 0, ok: false as const };
-  const { token, request } = await import("./alfacrm");
+  if (id <= 0) return { ids: [] as number[], ok: false as const, pages: 0 };
+  const { token } = await import("./alfacrm");
   const t = opts?.token || (await token());
-  const bid0 = Number(branch) || 1;
   const dateFrom = ymd(opts?.dateFrom) || "2015-01-01";
   const dateTo = ymd(ruShift(90));
-  const branches = uniqueBranches(bid0);
-  async function count(bid: number, status?: number) {
-    const raw = await request<unknown>(
-      `/v2api/${bid}/lesson/index`,
-      { page: 0, pageSize: 1, customer_id: id, date_from: dateFrom, date_to: dateTo, ...(status ? { status } : {}) },
-      t,
-    );
-    const pack = crmUnwrapIndex(raw);
-    return Number(pack.total) || pack.items.length || 0;
-  }
-  try {
-    let total = 0;
-    let ok = false;
-    for (const bid of branches) {
-      try {
-        const all = await count(bid);
-        const n = all > 0 ? all : (await count(bid, 3)) + (await count(bid, 1)) + (await count(bid, 2));
-        total += n;
-        ok = true;
-      } catch {
-        /* филиал без ответа — остальные считаем */
+  const branches = uniqueBranches(branch);
+  const ids = new Set<number>();
+  let pages = 0;
+  for (const bid of branches) {
+    for (const status of LESSON_STATUSES) {
+      for (let page = 0; page < 12; page += 1) {
+        const live = await pullLessonPage(
+          bid,
+          { page, pageSize: 100, status, customer_id: id, date_from: dateFrom, date_to: dateTo },
+          t,
+        );
+        pages += 1;
+        if (!live.ok) return { ids: uniquePositiveIds(ids), ok: false as const, pages };
+        for (const item of live.items) {
+          const lid = Number((item as { id?: number }).id) || 0;
+          if (lid > 0) ids.add(lid);
+        }
+        if (live.items.length < 100) break;
       }
     }
-    if (!ok) return { total: 0, ok: false as const };
-    return { total, ok: true as const };
-  } catch {
-    return { total: 0, ok: false as const };
   }
+  return { ids: uniquePositiveIds(ids), ok: canCloseLessonCensus({ live: true, aborted: false }), pages };
+}
+
+export function applyCustomerLessonCensus(customerId: number, ids: number[], closed: boolean) {
+  const id = Number(customerId) || 0;
+  const prev = loadCustomerCalendar(id);
+  const before = countAlfaLessonRows(prev);
+  if (!closed) return { ok: false as const, disk: before, alfa: 0, pruned: 0 };
+  const hold = pendingExportIds(["lesson.update", "lesson.create"]);
+  const uniq = uniquePositiveIds(ids);
+  const next = pruneCalendarToAlfaIds(prev, uniq, hold);
+  replaceCustomerCalendar(id, next);
+  const disk = countAlfaLessonRows(next);
+  stampCustomerSync(id, {
+    lessonsSeenIds: uniq,
+    lessonsAlfa: uniq.length,
+    lessonsAlfaAt: new Date().toISOString(),
+    lessonsDisk: disk,
+  });
+  return { ok: true as const, disk, alfa: uniq.length, pruned: Math.max(0, before - disk) };
+}
+
+export async function probeCustomerLessons(branch: number, customerId: number, opts?: { token?: string; dateFrom?: string }) {
+  const census = await censusCustomerLessonIds(branch, customerId, opts);
+  if (!census.ok) return { total: 0, ok: false as const, ids: census.ids };
+  return { total: census.ids.length, ok: true as const, ids: census.ids };
 }
 
 function isOneOffLesson(item: { lesson_type_id?: number; group_ids?: number[] }) {
@@ -513,7 +557,8 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const maxRun = homeLite ? LESSON_STATUSES.length : Number(opts?.take) > 0 ? Math.min(LESSON_INBOUND_RUN, Number(opts.take)) : wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
     const maxPages = homeLite ? 1 : deepHist ? 12 : Number(opts?.take) > 0 ? Math.min(3, wantFull ? 12 : 2) : wantFull ? 12 : 2;
     const from = wantFull ? dateFrom : ruShift(LESSON_RECENT_DAYS);
-    while (ran < maxRun && !cur.done) {
+    let aborted = false;
+    while (ran < maxRun && !cur.done && !aborted) {
       const bid = cur.bid;
       const status = LESSON_STATUSES[cur.statusIdx] || 1;
       if (!branches.includes(bid)) {
@@ -522,19 +567,23 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       }
       let progressed = false;
       for (let page = cur.page; page < maxPages; page += 1) {
-        const les = await request<{ items?: Parameters<typeof packLight>[0][] }>(
-          `/v2api/${bid}/lesson/index`,
+        const live = await pullLessonPage(
+          bid,
           { page, pageSize: 100, status, customer_id: id, date_from: ymd(from), date_to: ymd(dateTo) },
           t,
-        ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
-        const chunk = les.items || [];
-        if (chunk.length) packs.push(les);
+        );
         ran += 1;
+        if (!live.ok) {
+          aborted = true;
+          break;
+        }
+        if (live.items.length) packs.push({ items: live.items });
         progressed = true;
-        const lastShort = chunk.length < 100;
+        const lastShort = live.items.length < 100;
         cur = lastShort ? lessonFillAdvance({ ...cur, page }, true, branches) : { bid, statusIdx: cur.statusIdx, page: page + 1 };
         if (ran >= maxRun || cur.done || lastShort) break;
       }
+      if (aborted) break;
       if (!progressed && !cur.done) cur = lessonFillAdvance(cur, true, branches);
     }
     const pulled: GroupCalLesson[] = [];
@@ -610,30 +659,26 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       if (named.pupils) l.pupils = named.pupils;
     }
     const hold = pendingExportIds(["lesson.update", "lesson.create"]);
-    const fillDone = Boolean(cur.done);
-    const done = fillDone || !wantFull;
-    const allowPrune = canPruneCalendarFill({ prune, wantFull, fillDone });
+    const fillDone = Boolean(cur.done) && !aborted;
     let next = mergeLocalCalendar(pulled, prevCal, hold, "union");
     if (prune) {
       const seen = mergeSeenLessonIds(resetSeen ? [] : customerSyncOf(id).lessonsSeenIds, pulled);
       stampCustomerSync(id, { lessonsSeenIds: seen });
-      if (allowPrune) next = pruneCalendarToAlfaIds(next, seen, hold);
     }
     replaceCustomerCalendar(id, next);
     stampCustomerSync(id, {
       lessonsAt: new Date().toISOString(),
-      lessonsFull: homeLite ? false : customerSyncOf(id).lessonsFull || done,
-      lessonsAttend: homeLite ? customerSyncOf(id).lessonsAttend : customerSyncOf(id).lessonsAttend || done,
-      lessonFill: done ? undefined : cur,
+      lessonsFull: homeLite ? false : customerSyncOf(id).lessonsFull || fillDone || !wantFull,
+      lessonsAttend: homeLite ? customerSyncOf(id).lessonsAttend : customerSyncOf(id).lessonsAttend || fillDone || !wantFull,
+      lessonFill: fillDone || !wantFull ? undefined : cur,
       lessonsDisk: countAlfaLessonRows(next),
-      ...(allowPrune ? { lessonsAlfa: mergeSeenLessonIds(customerSyncOf(id).lessonsSeenIds, []).length, lessonsAlfaAt: new Date().toISOString() } : {}),
     });
     if (wantFull && !fillDone && opts?.continueLater === true) {
       setTimeout(() => {
         void inboundCustomerLessons(branch, id, { full: true, force: opts?.force, prune, dateFrom, homeOnly: opts?.homeOnly }).catch(() => null);
       }, 700);
     }
-    return { ok: true as const, count: pulled.length, done: fillDone || !wantFull };
+    return { ok: true as const, count: pulled.length, done: fillDone || !wantFull, aborted };
   } finally {
     markLessonFillBusy(id, false);
     unlockStudentAlfa(id);

@@ -177,7 +177,7 @@ export async function auditOne(cid: number, branchId: number) {
     (!moneyClose(first.clients, shown.alfa) || !moneyClose(first.cash, shown.alfa) || !first.paysComplete || empty);
   if (needRepair) {
     try {
-      const { probeCustomerLessons, inboundCustomerLessons } = await import("./crm-journal-inbound");
+      const { probeCustomerLessons, inboundCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus } = await import("./crm-journal-inbound");
       const probed = await probeCustomerLessons(shown.branch, id).catch(() => ({ total: 0, ok: false as const }));
       lessonsAlfa = probed.ok ? probed.total : first.lessonsDisk;
       const extraLessons = probed.ok && first.lessonsDisk > probed.total;
@@ -190,7 +190,7 @@ export async function auditOne(cid: number, branchId: number) {
             force: true,
             full: true,
             take: 8,
-            prune: extraLessons,
+            prune: false,
             resetSeen: extraLessons && i === 0,
             dateFrom: "2015-01-01",
           }).catch(() => ({ done: false }));
@@ -198,6 +198,10 @@ export async function auditOne(cid: number, branchId: number) {
           if (r && "done" in r && r.done) break;
           const diskN = countAlfaLessonRows(loadCustomerCalendar(id));
           if (!extraLessons && probed.ok && diskN >= probed.total) break;
+        }
+        if (extraLessons) {
+          const census = await censusCustomerLessonIds(shown.branch, id, { dateFrom: "2015-01-01" }).catch(() => ({ ids: [] as number[], ok: false as const }));
+          if (census.ok) applyCustomerLessonCensus(id, census.ids, true);
         }
       }
       if (!first.paysComplete || !moneyClose(first.cash, shown.alfa)) {

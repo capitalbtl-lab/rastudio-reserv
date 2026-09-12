@@ -104,6 +104,20 @@ export function collapseLessonRows<T extends { lessonId?: number; date?: string;
 }
 
 
+export function uniquePositiveIds(ids: Iterable<number | { lessonId?: number; id?: number }>): number[] {
+  const keep = new Set<number>();
+  for (const raw of ids) {
+    const n = typeof raw === "object" ? Number(raw?.lessonId || raw?.id) || 0 : Number(raw) || 0;
+    if (n > 0) keep.add(n);
+  }
+  return [...keep];
+}
+
+/** Перепись закрыта только живыми ответами. Пустой catch — не готово, снимать нельзя. */
+export function canCloseLessonCensus(opts: { live?: boolean; aborted?: boolean }) {
+  return Boolean(opts.live) && !opts.aborted;
+}
+
 export function canPruneCalendarFill(opts: { prune?: boolean; wantFull?: boolean; fillDone?: boolean }) {
   return Boolean(opts.prune) && Boolean(opts.wantFull) && Boolean(opts.fillDone);
 }

@@ -1025,7 +1025,7 @@ async function pullOneGroup(
 }
 
 async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "") {
-  const { inboundCustomerLessons, probeCustomerLessons } = await import("./crm-journal-inbound");
+  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
   const mark = (disk: number, alfa: number, probedOk: boolean) => {
@@ -1078,7 +1078,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         full: true,
         force: true,
         homeOnly: false,
-        prune: recheck,
+        prune: false,
         resetSeen: recheck && i === 0,
         ...(from ? { dateFrom: from } : {}),
       }).catch(() => ({ count: 0, done: false as const, skipped: undefined as string | undefined }));
@@ -1089,11 +1089,22 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       disk = countAlfaLessonRows(loadCustomerCalendar(cid));
       if (!recheck || res.done) break;
     }
-    const probed = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
-    const syncPull = customerSyncOf(cid);
-    const alfaN = recheck && Number(syncPull.lessonsAlfa) > 0 ? Number(syncPull.lessonsAlfa) : probed.ok ? probed.total : 0;
-    mark(disk, alfaN, recheck ? Boolean(syncPull.lessonsAlfaAt) || probed.ok : probed.ok);
-  }
+    if (recheck) {
+      const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: from }).catch(() => ({ ids: [] as number[], ok: false as const }));
+      if (census.ok) {
+        const applied = applyCustomerLessonCensus(cid, census.ids, true);
+        disk = applied.disk;
+        mark(applied.disk, applied.alfa, true);
+      } else {
+        disk = countAlfaLessonRows(loadCustomerCalendar(cid));
+        mark(disk, 0, false);
+      }
+    } else {
+      const probed = await probeCustomerLessons(branchId, cid).catch(() => ({ total: 0, ok: false as const }));
+      const syncPull = customerSyncOf(cid);
+      const alfaN = probed.ok ? probed.total : 0;
+      mark(disk, alfaN, probed.ok);
+    }
   let pays = 0;
   let tariffs = 0;
   let paysOk = false;
