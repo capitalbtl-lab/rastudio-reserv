@@ -344,20 +344,23 @@ export function journalPullSchools() {
     .map((name) => ({ name, groups: map.get(name) || 0 }));
 }
 
-function liveAttendeeCids() {
+/** Как в Alfa: учится, а не «завершил / без статуса / пропустил 3». */
+const ALFA_STUDYING_STATUS = new Set([1, 4, 5, 7, 8, 10]);
+
+function cidAlfaStudying(cid: number) {
+  const d = findDossier({ crmId: cid });
+  const sid = Number(d?.extras?.study_status_id || 0);
+  return ALFA_STUDYING_STATUS.has(sid);
+}
+
+function liveAttendeeCids(school?: string) {
   const seen = new Set<number>();
   for (const g of journalPullGroups()) {
     if (g.archived) continue;
+    if (school && g.school !== school) continue;
     for (const d of dossiersInGroup(g.branchId, g.groupId)) {
       const cid = Number(d.crmId) || 0;
       if (!cid || seen.has(cid)) continue;
-      const hit = (d.groupLinks || []).some((l) => {
-        if (Number(l.id) !== g.groupId) return false;
-        if (l.active === false) return false;
-        if (l.branchId && Number(l.branchId) !== g.branchId) return false;
-        return true;
-      });
-      if (!hit) continue;
       const st = Number(d.extras?.is_study);
       if (String(d.status || "") === "удалён" || String(d.extras?.removed || "") === "1") continue;
       if (st === 0 || String(d.status || "") === "лид") continue;
@@ -403,15 +406,17 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
       for (const d of dossiersInGroup(g.branchId, g.groupId)) {
         const row = rowFromDossier(d, g.branchId);
         if (!row.cid || seen.has(row.cid)) continue;
-        const hit = (d.groupLinks || []).some((l) => {
-          if (Number(l.id) !== g.groupId) return false;
-          if (l.active === false) return false;
-          if (l.branchId && Number(l.branchId) !== g.branchId) return false;
-          return true;
-        });
-        if (!hit) continue;
         seen.add(row.cid);
         pool.push(row);
+      }
+    }
+    if (!school) {
+      for (const x of listDossierCrm()) {
+        if (!x.cid || seen.has(x.cid)) continue;
+        if (x.study !== 1 && x.status !== "учится") continue;
+        if (!cidAlfaStudying(x.cid)) continue;
+        seen.add(x.cid);
+        pool.push(x);
       }
     }
   } else if (school) {
@@ -449,6 +454,7 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
   });
   return uniqueByCid(filtered);
 }
+
 
 
 function pickSlice<T>(list: T[], idx: number, take: number) {
