@@ -59,14 +59,14 @@ describe("фон истории из Alfa", () => {
     assert.equal(fillClear.fill, null);
   });
 
-  it("пауза 5 с у явок и кассы, 1 с у архива и сверки", () => {
+  it("закон истории: только по одному, пауза 5 с", () => {
     assert.equal(PEOPLE_JOB_GAP_MS, 5000);
+    assert.equal(CATALOG_JOB_GAP_MS, 5000);
     assert.equal(jobGapMs("people"), 5000);
     assert.equal(jobGapMs("people-recheck"), 5000);
     assert.equal(jobGapMs("groups"), 5000);
-    assert.equal(CATALOG_JOB_GAP_MS, 1000);
-    assert.equal(jobGapMs("catalog"), 1000);
-    assert.equal(jobGapMs("audit"), 1000);
+    assert.equal(jobGapMs("catalog"), 5000);
+    assert.equal(jobGapMs("audit"), 5000);
   });
 
   it("сервер крутит цикл, вкладка только старт/стоп/прогресс", () => {

@@ -82,10 +82,12 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Загрузить архив клиентов из Alfa/);
     assert.doesNotMatch(ui, /Обновить справочник архива из Alfa/);
     assert.match(ui, /function pullArchiveCatalog/);
-    assert.match(ui, /пауза 1 с/);
+    assert.match(ui, /пауза 5 с/);
+    assert.doesNotMatch(ui, /Сверить 10/);
     assert.doesNotMatch(ui, /По одной карточке, пауза 5 с/);
     assert.match(ui, /все архивы филиала, не только ученики/);
     assert.match(pull, /kind === "archivesPupils"/);
+    assert.match(pull, /plan.pending.slice\(0, 1\)/);
     assert.match(pull, /kind === "archiveCount"/);
     assert.match(pull, /kind === "archiveCatalog"/);
     assert.match(pull, /peopleKinds/);
@@ -101,7 +103,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /function pupilArchivePlan\(study: "1" \| "2"\)/);
     assert.match(pull, /rankedStudentIds\(study\)/);
     assert.doesNotMatch(pull, /\[\.\.\.rankedStudentIds\("1"\), \.\.\.rankedStudentIds\("2"\)\]/);
-    assert.match(pull, /pending\.slice\(0, 10\)/);
+    assert.match(pull, /pending\.slice\(0, 1\)/);
     assert.match(pull, /groupLinks/);
     assert.doesNotMatch(pull, /enqueueExport/);
     assert.match(pull, /hit\.name/);
@@ -146,7 +148,7 @@ describe("ручной журнал с Alfa", () => {
     const oneFn = ui.slice(oneAt, oneAt + 400);
     assert.match(oneFn, /jobMode: "groups-recheck"/);
     assert.doesNotMatch(oneFn, /for \(let j = 0/);
-    assert.match(ui, /CATALOG_GAP_MS = 1000/);
+    assert.match(ui, /CATALOG_GAP_MS = 5000/);
     assert.match(ui, /pauseCatalog/);
     assert.match(ui, /PEOPLE_LOAD_GAP_MS = 5000/);
     assert.match(ui, /Шаг 1 · Календарь ученика/);
@@ -154,7 +156,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Шаг 3 · Деньги на карточке/);
     assert.match(ui, /Шаг 4 · Сверка остатка/);
     assert.match(ui, /Сверить всех текущих/);
-    assert.match(ui, /Сверить 10/);
+    assert.doesNotMatch(ui, /Сверить 10/);
     assert.match(ui, /function pullAudit/);
     assert.match(ui, /HINT\.auditAll/);
     assert.match(pull, /kind === "audit"/);

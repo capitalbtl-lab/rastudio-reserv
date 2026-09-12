@@ -237,7 +237,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     cur: first?.name || "",
     n: 0,
     total: mode === "catalog" ? 0 : items.length,
-    msg: mode === "people-recheck" || (mode === "people" && recheck) ? `${first?.name}: перепроверяем. Потом пауза 5 с.` : mode === "audit" ? `${first?.name}: сверяем. Потом пауза 1 с.` : `${first?.name}: грузим. Потом пауза 5 с.`,
+    msg: mode === "people-recheck" || (mode === "people" && recheck) ? `${first?.name}: перепроверяем. Потом пауза 5 с.` : mode === "audit" ? `${first?.name}: сверяем. Потом пауза 5 с.` : `${first?.name}: грузим. Потом пауза 5 с.`,
     fill: fillOf(mode, kind, first),
     startedAt: nowIso(),
     lastAt: nowIso(),
@@ -306,7 +306,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       patch({ id, running: false, cur: "", fill: null, msg: loadJournalJob().msg });
       return { done: true, gap: 0 };
     }
-    patch({ id, cur: `пауза 1 с · ${label}`, fill: { kind: "archiveCatalog", label: `пауза 1 с · ${label}` } });
+    patch({ id, cur: `пауза 5 с · ${label}`, fill: { kind: "archiveCatalog", label: `пауза 5 с · ${label}` } });
     return { done: false, gap: jobGapMs("catalog") };
   }
 
@@ -394,7 +394,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   const more = idx < live.items.length;
   const nextName = more ? live.items[idx]?.name || "" : "";
   const gap = more ? jobGapMs(mode) : 0;
-  const pauseCur = more ? (mode === "audit" ? `пауза 1 с · дальше ${nextName}` : `пауза 5 с · дальше ${nextName}`) : "";
+  const pauseCur = more ? `пауза 5 с · дальше ${nextName}` : "";
   const finished = { ...live, n };
   patch({
     id,

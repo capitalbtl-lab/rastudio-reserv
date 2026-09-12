@@ -1,4 +1,4 @@
-/** Ручная догрузка журнала: группа / школа / 10 учеников. Не весь API сразу. */
+/** Ручная догрузка журнала. Закон: по одному, пауза 5 с, пакетом нельзя. */
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -1290,7 +1290,7 @@ export async function journalPull(opts: {
     if (!plan.need) {
       return lastArchivesPupils({ more: false, left: 0 }, "Новых архивных групп по карточкам нет.");
     }
-    const batch = plan.pending.slice(0, 10);
+    const batch = plan.pending.slice(0, 1);
     if (!batch.length) {
       return lastArchivesPupils({ more: false, left: 0 }, `Уже в архивном списке ${plan.already}. Новых по карточкам нет.`);
     }

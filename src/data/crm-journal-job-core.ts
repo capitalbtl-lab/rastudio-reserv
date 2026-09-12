@@ -3,9 +3,11 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-export const PEOPLE_JOB_GAP_MS = 5000;
-export const CATALOG_JOB_GAP_MS = 1000;
-export const AUDIT_JOB_GAP_MS = 1000;
+/** Закон «История из Alfa»: только по одному, пауза 5 с. Пакетом нельзя. */
+export const JOURNAL_ONE_GAP_MS = 5000;
+export const PEOPLE_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
+export const CATALOG_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
+export const AUDIT_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
 
 export type JournalJobMode =
   | "people"
@@ -192,7 +194,6 @@ export function shouldRetryCash(
   return false;
 }
 
-export function jobGapMs(mode: JournalJobMode | "") {
-  if (mode === "catalog" || mode === "audit") return mode === "catalog" ? CATALOG_JOB_GAP_MS : AUDIT_JOB_GAP_MS;
-  return PEOPLE_JOB_GAP_MS;
+export function jobGapMs(_mode?: JournalJobMode | "") {
+  return JOURNAL_ONE_GAP_MS;
 }
