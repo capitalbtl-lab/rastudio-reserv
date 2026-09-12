@@ -1,0 +1,29 @@
+{
+  "id": "romashka-14",
+  "name": "Ромашка-14",
+  "rev": 14,
+  "at": "2026-09-12T14:11:00Z",
+  "git": "cf1ff553d1f57002665640fb5b40923659457458",
+  "branch": "restore/romashka-14-live",
+  "tag": "romashka-14",
+  "originalTagGit": "3d2a6029c80b4ea15999f82d99afcf29c8c54a12",
+  "files": 1388,
+  "bytes": 732838803,
+  "sha256": "ecb06fda9bbe672c4f210e482d460b89e6c3273fe5d9c5e4c74ebf31ee5a20a3",
+  "archive": "storage/backups/ромашка-14-full.tar.gz",
+  "srcArchive": "storage/backups/ромашка-14-src.tar.gz",
+  "srcSha256": "1f1d9a3807a55edd80dd2b7f8ff113aca46590dd9f54c39b7b89cba4f8644466",
+  "tagSrcArchive": "storage/backups/ромашка-14-tag-src.tar.gz",
+  "tagSrcSha256": "211b729baa7e317d9439b9528a7a0042568b71515d438cebe9866c60cc20af50",
+  "storage": [
+    "storage/restore-points/ромашка-14.json",
+    "storage/restore-points/ромашка-14.md",
+    "storage/restore-points/ромашка-14.manifest.json",
+    "storage/restore-points/ромашка-14.sha256",
+    "storage/backups/ромашка-14-src.tar.gz",
+    "storage/backups/ромашка-14-full.tar.gz",
+    "storage/backups/ромашка-14-tag-src.tar.gz",
+    "storage/backups/ромашка-14.md",
+    "storage/backups/ромашка-14.sha256"
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "id": "romashka-14",
+  "name": "Ромашка-14",
+  "rev": 14,
+  "at": "2026-09-12T14:11:00Z",
+  "git": "cf1ff553d1f57002665640fb5b40923659457458",
+  "parent": {
+    "id": "romashka-13",
+    "tag": "romashka-13",
+    "git": "5030208a7d7f8e83a2aec97b4c4599e7597529d5"
+  },
+  "originalFreeze": {
+    "tag": "romashka-14",
+    "branch": "restore/romashka-14",
+    "git": "3d2a6029c80b4ea15999f82d99afcf29c8c54a12",
+    "at": "2026-09-11T19:28:27Z",
+    "note": "Первый снимок шага 4. Не сдвинут."
+  },
+  "branch": "restore/romashka-14-live",
+  "tag": "romashka-14",
+  "note": "Полный бэкап живой Ромашки-14 до переписи загрузчика История из Alfa. Код = main на 12.09.2026 12:38 UTC. В Alfa не пишет. Формы сайта не входили в снимок. Диск CRM на Beget в git не лежит.",
+  "src": {
+    "archive": "storage/backups/ромашка-14-src.tar.gz",
+    "files": 581,
+    "bytes": 9754854,
+    "sha256": "1f1d9a3807a55edd80dd2b7f8ff113aca46590dd9f54c39b7b89cba4f8644466"
+  },
+  "full": {
+    "archive": "storage/backups/ромашка-14-full.tar.gz",
+    "files": 1388,
+    "bytes": 732838803,
+    "sha256": "ecb06fda9bbe672c4f210e482d460b89e6c3273fe5d9c5e4c74ebf31ee5a20a3"
+  },
+  "tagSrc": {
+    "archive": "storage/backups/ромашка-14-tag-src.tar.gz",
+    "files": 506,
+    "bytes": 2083843,
+    "sha256": "211b729baa7e317d9439b9528a7a0042568b71515d438cebe9866c60cc20af50",
+    "git": "3d2a6029c80b4ea15999f82d99afcf29c8c54a12"
+  },
+  "excludes": [
+    "node_modules",
+    ".output",
+    ".git",
+    ".build-stage",
+    "storage/backups/*.tar.gz"
+  ],
+  "notIncluded": [
+    "storage CRM-диск на Beget (ученики, касса, журнал — gitignore)",
+    "секреты .env",
+    "node_modules / .output"
+  ],
+  "restore": {
+    "git": "git checkout restore/romashka-14-live",
+    "original": "git checkout romashka-14",
+    "src": "tar -xzf storage/backups/ромашка-14-src.tar.gz",
+    "archive": "tar -xzf storage/backups/ромашка-14-full.tar.gz"
+  }
+}
