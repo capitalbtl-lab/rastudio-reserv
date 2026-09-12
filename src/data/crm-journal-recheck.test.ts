@@ -109,6 +109,8 @@ describe("перепроверка журнала", () => {
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /holdFill/);
     assert.match(ui, /colLock/);
+    assert.match(ui, /function orderActiveQueue/);
+    assert.match(ui, /cur.concat\(queued, rest\)/);
     assert.match(ui, /Сверить счёт/);
     assert.match(ui, /hit\.dups != null/);
     assert.match(ui, /Number\(row.lessons\) === Number\(row.alfa\)/);

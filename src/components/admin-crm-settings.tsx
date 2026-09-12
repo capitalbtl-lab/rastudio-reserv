@@ -491,6 +491,21 @@ function pageWithPinned<T>(list: T[], page: number, size: number, isPin: (row: T
   return extra.length ? extra.concat(slice) : slice;
 }
 
+/** Сейчас обрабатываем — вверх. Под ним очередь. Остальные ниже, по имени. */
+function orderActiveQueue<T>(list: T[], isCurrent: (r: T) => boolean, inQueue: (r: T) => boolean, tie: (a: T, b: T) => number) {
+  const cur: T[] = [];
+  const queued: T[] = [];
+  const rest: T[] = [];
+  for (const r of list) {
+    if (isCurrent(r)) cur.push(r);
+    else if (inQueue(r)) queued.push(r);
+    else rest.push(r);
+  }
+  queued.sort(tie);
+  rest.sort(tie);
+  return cur.concat(queued, rest);
+}
+
 function GroupFillList({
   rows,
   school,
@@ -549,8 +564,18 @@ function GroupFillList({
     colLock.current[id] = now;
     return now;
   };
-  const needRows = scoped.filter((r) => !finishedOf(r)).slice().sort(byFillName);
-  const doneRows = scoped.filter((r) => finishedOf(r)).slice().sort(byFillName);
+  const needRows = orderActiveQueue(
+    scoped.filter((r) => !finishedOf(r)),
+    (r) => Boolean(loading && loading.groupId === r.groupId && loading.branchId === r.branchId),
+    () => true,
+    byFillName,
+  );
+  const doneRows = orderActiveQueue(
+    scoped.filter((r) => finishedOf(r)),
+    (r) => Boolean(loading && loading.groupId === r.groupId && loading.branchId === r.branchId),
+    (r) => fillNeedsRecheck(packGrain(r.parts, clampGrain(r.age, grain))),
+    byFillName,
+  );
   const nNeed = needRows.length;
   const nDone = doneRows.length;
   const pagesNeed = Math.max(1, Math.ceil(nNeed / pageSize) || 1);
@@ -563,6 +588,10 @@ function GroupFillList({
     setPageNeed(0);
     setPageDone(0);
   }, [q, school, pageSize, archived]);
+  useEffect(() => {
+    setPageNeed(0);
+    setPageDone(0);
+  }, [loading?.groupId, loading?.branchId, loading?.periodKey]);
   useEffect(() => {
     try {
       const n = Number(localStorage.getItem("crm-journal-page") || 20);
@@ -1063,8 +1092,18 @@ function PeopleFillList({
     colLock.current[id] = now;
     return now;
   };
-  const needRows = scoped.filter((r) => !finishedOf(r)).slice().sort(byPeopleName);
-  const doneRows = scoped.filter((r) => finishedOf(r)).slice().sort(byPeopleName);
+  const needRows = orderActiveQueue(
+    scoped.filter((r) => !finishedOf(r)),
+    (r) => r.cid === loadingCid,
+    () => true,
+    byPeopleName,
+  );
+  const doneRows = orderActiveQueue(
+    scoped.filter((r) => finishedOf(r)),
+    (r) => r.cid === loadingCid,
+    (r) => peopleNeedsRecheck(r, kind),
+    byPeopleName,
+  );
   const nNeed = needRows.length;
   const nDone = doneRows.length;
   const pagesNeed = Math.max(1, Math.ceil(nNeed / pageSize) || 1);
@@ -1077,6 +1116,10 @@ function PeopleFillList({
     setPageNeed(0);
     setPageDone(0);
   }, [q, pageSize, kind]);
+  useEffect(() => {
+    setPageNeed(0);
+    setPageDone(0);
+  }, [loadingCid]);
   useEffect(() => {
     try {
       const n = Number(localStorage.getItem("crm-journal-page") || 20);
@@ -1321,8 +1364,18 @@ function AuditFillList({
   });
   const isPinned = (r: AuditUiRow) => String(r.cid) === open || r.cid === loadingCid;
   const doneOf = (r: AuditUiRow) => Boolean(r.seen && auditRight(r.codes));
-  const needRows = scoped.filter((r) => !doneOf(r)).slice().sort((a, b) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid);
-  const doneRows = scoped.filter((r) => doneOf(r)).slice().sort((a, b) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid);
+  const needRows = orderActiveQueue(
+    scoped.filter((r) => !doneOf(r)),
+    (r) => r.cid === loadingCid,
+    () => true,
+    (a, b) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid,
+  );
+  const doneRows = orderActiveQueue(
+    scoped.filter((r) => doneOf(r)),
+    (r) => r.cid === loadingCid,
+    () => false,
+    (a, b) => a.name.localeCompare(b.name, "ru") || a.cid - b.cid,
+  );
   const nNeed = needRows.length;
   const nDone = doneRows.length;
   const pagesNeed = Math.max(1, Math.ceil(nNeed / pageSize) || 1);
@@ -1335,6 +1388,10 @@ function AuditFillList({
     setPageNeed(0);
     setPageDone(0);
   }, [q, pageSize]);
+  useEffect(() => {
+    setPageNeed(0);
+    setPageDone(0);
+  }, [loadingCid]);
   function pickPageSize(n: number) {
     setPageSize(n);
     setPageNeed(0);
