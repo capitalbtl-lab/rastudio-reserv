@@ -148,6 +148,8 @@ export function saveJournalJob(job: JournalJob) {
 
 export function journalJobSnapshot() {
   const j = loadJournalJob();
+  const curItem = j.items[j.idx];
+  const nextItem = j.items[j.idx + 1];
   return {
     id: j.id,
     running: j.running,
@@ -155,6 +157,7 @@ export function journalJobSnapshot() {
     mode: j.mode,
     kind: j.kind,
     study: j.study,
+    recheck: j.recheck,
     cur: j.cur,
     n: j.n,
     total: j.total,
@@ -162,6 +165,10 @@ export function journalJobSnapshot() {
     fill: j.fill,
     startedAt: j.startedAt,
     lastAt: j.lastAt,
+    idx: j.idx,
+    waits: j.waits,
+    itemsN: j.items.length,
+    next: nextItem?.name || (curItem && curItem.name !== j.cur ? curItem.name : ""),
   };
 }
 

@@ -132,6 +132,46 @@ function FillBar({ pct, run, done, warn }: { pct: number; run?: boolean; done?: 
   );
 }
 
+type ServerJob = {
+  id?: string;
+  running?: boolean;
+  stop?: boolean;
+  mode?: string;
+  kind?: string;
+  cur?: string;
+  n?: number;
+  total?: number;
+  msg?: string;
+  waits?: number;
+  next?: string;
+  fill?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null;
+};
+
+function ServerJobStrip({ job }: { job?: ServerJob | null }) {
+  if (!job) return null;
+  const run = Boolean(job.running);
+  const n = Number(job.n) || 0;
+  const total = Number(job.total) || 0;
+  const waits = Number(job.waits) || 0;
+  const cur = String(job.cur || "").trim();
+  const msg = String(job.msg || "").trim();
+  if (!run && !cur && !msg) return null;
+  const pct = total > 0 ? Math.min(100, Math.round((n / Math.max(total, 1)) * 100)) : run ? 12 : 0;
+  const next = String(job.next || "").trim();
+  return (
+    <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-black/10">
+      <p className="truncate text-sm font-semibold">{run ? `На сервере: ${cur || "работаем"}` : msg || "Сервер свободен"}</p>
+      <p className="mt-0.5 truncate text-[0.78rem] text-muted">
+        {total ? `${n} из ${total}` : n ? `прошло ${n}` : run ? "очередь с диска" : ""}
+        {waits ? ` · Alfa не отвечает, пауза ${waits}/8` : ""}
+        {run && next && !cur.includes(next) ? ` · дальше ${next}` : ""}
+        {job.stop ? " · останавливаем после текущего" : ""}
+      </p>
+      <FillBar pct={pct} run={run} done={!run && total > 0 && n >= total} />
+    </div>
+  );
+}
+
 function Card({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
     <section className="rounded-[1.2rem] bg-white p-4 ring-1 ring-black/8 md:p-5">
@@ -1663,9 +1703,10 @@ export function AdminCrmSettings() {
   const [openMiss, setOpenMiss] = useState<"g" | "j1" | "j2" | "c1" | "c2" | "">("");
   const [fillLoading, setFillLoading] = useState<{ groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null>(null);
   const holdFill = useRef(false);
+  const startedJobId = useRef("");
   const stopSchool = useRef(false);
   const peopleLock = useRef(false);
-  const [schoolRun, setSchoolRun] = useState<{ cur: string; n: number; total: number } | null>(null);
+  const [schoolRun, setSchoolRun] = useState<{ cur: string; n: number; total: number; waits?: number } | null>(null);
   const [groupArchived, setGroupArchived] = useState(false);
   const [peopleStudy, setPeopleStudy] = useState<"1" | "2">("1");
   const [studentRun, setStudentRun] = useState<{
@@ -1773,38 +1814,33 @@ export function AdminCrmSettings() {
     void loadJournal();
   }, []);
 
-  const jobRunning = Boolean(journal?.job?.running);
   useEffect(() => {
-    if (!jobRunning) return;
+    if (crmTab !== "history") return;
     let on = true;
-    paintJob(journal?.job || null);
-    const loop = async () => {
-      while (on) {
-        await new Promise((r) => setTimeout(r, 1500));
-        if (!on) break;
-        try {
-          const res = (await adminSchedule({
-            data: { token: token(), action: "journalPull", kind: "jobStatus" } as never,
-          })) as typeof journal & { groupRow?: FillRow | null };
-          if (!on) break;
-          if (res) {
-            setJournal((cur) => applyJobStatus(cur, res as NonNullable<typeof journal> & { groupRow?: FillRow | null }));
-            paintJob(res.job);
-            if (!res.job?.running) {
-              void loadJournal();
-              break;
-            }
-          }
-        } catch {
-          /* фон на сервере, экран догонит */
-        }
+    let wasRun = Boolean(journal?.job?.running);
+    const tick = async () => {
+      if (!on) return;
+      try {
+        const res = (await adminSchedule({
+          data: { token: token(), action: "journalPull", kind: "jobStatus" } as never,
+        })) as typeof journal & { groupRow?: FillRow | null };
+        if (!on || !res) return;
+        setJournal((cur) => applyJobStatus(cur, res as NonNullable<typeof journal> & { groupRow?: FillRow | null }));
+        paintJob(res.job as ServerJob | undefined, "poll");
+        const live = Boolean(res.job?.running);
+        if (wasRun && !live) void loadJournal();
+        wasRun = live;
+      } catch {
+        /* фон на сервере, экран догонит следующим тактом */
       }
     };
-    void loop();
+    void tick();
+    const t = setInterval(() => void tick(), 1200);
     return () => {
       on = false;
+      clearInterval(t);
     };
-  }, [jobRunning]);
+  }, [crmTab]);
 
   async function loadAuto() {
     try {
@@ -2102,19 +2138,23 @@ export function AdminCrmSettings() {
     while (Date.now() < until && !stopSchool.current) await new Promise((r) => setTimeout(r, 200));
   }
 
-  function paintJob(job?: { running?: boolean; stop?: boolean; cur?: string; n?: number; total?: number; msg?: string; kind?: string; mode?: string; fill?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null } | null, src?: "poll" | "load") {
+  function paintJob(job?: ServerJob | null, src?: "poll" | "load") {
     if (!job) return;
-    if (src === "load" && holdFill.current && !job.running) return;
     if (job.running) {
+      startedJobId.current = job.id || startedJobId.current || "live";
       holdFill.current = true;
       peopleLock.current = true;
       if (!job.stop) stopSchool.current = false;
       setBusy(true);
-      setSchoolRun({ cur: job.cur || "", n: job.n || 0, total: job.total || 0 });
+      setSchoolRun({ cur: job.cur || "", n: job.n || 0, total: job.total || 0, waits: job.waits || 0 });
       setFillLoading(job.fill || (job.cur ? { kind: job.kind || job.fill?.kind, label: job.cur, customerId: job.fill?.customerId } : null));
       if (job.msg) setMsg(job.msg);
       return;
     }
+    if (holdFill.current && startedJobId.current === "pending" && src === "poll") return;
+    if (holdFill.current && startedJobId.current && startedJobId.current !== "pending" && job.id && job.id !== startedJobId.current && src === "poll") return;
+    if (src === "load" && holdFill.current && startedJobId.current === "pending") return;
+    startedJobId.current = "";
     holdFill.current = false;
     peopleLock.current = false;
     setBusy(false);
@@ -2148,6 +2188,7 @@ export function AdminCrmSettings() {
       return { job: journal.job };
     }
     holdFill.current = true;
+    startedJobId.current = "pending";
     peopleLock.current = true;
     stopSchool.current = false;
     setBusy(true);
@@ -2177,6 +2218,7 @@ export function AdminCrmSettings() {
       return res;
     }
     if (job) {
+      startedJobId.current = "";
       holdFill.current = false;
       peopleLock.current = false;
       setBusy(false);
@@ -2790,6 +2832,7 @@ export function AdminCrmSettings() {
                   </span>
                 ))}
               </div>
+              <ServerJobStrip job={journal?.job as ServerJob | undefined} />
 
               {histTab === "groups" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">

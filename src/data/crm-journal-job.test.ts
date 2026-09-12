@@ -140,7 +140,13 @@ describe("фон истории из Alfa", () => {
     assert.match(api, /if \(kind !== "jobStatus"\) logAdmin/);
     assert.match(ui, /kind: "jobStart"/);
     assert.match(ui, /kind: "jobStatus"/);
-    assert.match(ui, /function applyJobStatus/);
+    assert.match(ui, /function ServerJobStrip/);
+    assert.match(ui, /На сервере:/);
+    assert.match(ui, /setInterval\(\(\) => void tick\(\), 1200\)/);
+    assert.match(ui, /crmTab !== "history"/);
+    assert.match(ui, /startedJobId/);
+    assert.match(core, /itemsN: j.items.length/);
+    assert.match(core, /next: nextItem/);
     assert.match(ui, /function requestStop/);
     assert.match(ui, /function startHistJob/);
     assert.match(ui, /periodKey: opts.periodKey/);
@@ -187,7 +193,7 @@ describe("фон истории из Alfa", () => {
     assert.match(api, /parseJobItems/);
     assert.match(ui, /paintJob\(res.job, "load"\)/);
     assert.match(ui, /jobLive/);
-    assert.match(ui, /src === "load" && holdFill.current && !job.running/);
+    assert.match(ui, /startedJobId.current === "pending" && src === "poll"/);
     assert.match(ui, /setSchoolRun\(\{ cur: queue\[0\].name/);
     assert.match(ui, /journal\.job\.kind === "balance"/);
     assert.doesNotMatch(ui, /run && schoolRun \? schoolRun.cur : "Загрузить по одному"/);
