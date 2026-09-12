@@ -364,14 +364,12 @@ export function startAlfaIdleTick() {
     void idleAlfaTick();
   }, 20_000);
   setTimeout(() => void idleAlfaTick(), 8000);
-  void import("./crm-journal-job").then((m) => m.startJournalJobWatch()).catch(() => null);
 }
 
 async function idleAlfaTick() {
   if (!alfaLinkedNow()) return;
   if (g.__raCrmQueueBusy || g.__raNightGroups) return;
   kickBackground();
-  void import("./crm-journal-job").then((m) => m.resumeJournalJob()).catch(() => null);
   const q = loadQueue();
   if (!q.packets.length) {
     void import("./crm-export-queue").then((m) => m.tickExportQueue(1, undefined, { lean: true })).catch(() => null);

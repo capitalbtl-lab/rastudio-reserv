@@ -1007,9 +1007,8 @@ export async function journalPull(opts: {
 }) {
   const kind = opts.kind;
   if (kind === "jobStart" || kind === "jobStop" || kind === "jobStatus") {
-    const { startJournalJob, stopJournalJob, resumeJournalJob } = await import("./crm-journal-job");
+    const { startJournalJob, stopJournalJob } = await import("./crm-journal-job");
     if (kind === "jobStatus") {
-      resumeJournalJob();
       return journalJobView();
     }
     if (kind === "jobStop") {

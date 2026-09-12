@@ -1413,7 +1413,6 @@ export const adminSchedule = createServerFn({ method: "POST" })
     }
     if (data.action === "get") {
       void import("./crm-packet-queue").then((m) => m.startAlfaIdleTick()).catch(() => null);
-      void import("./crm-journal-job").then((m) => m.startJournalJobWatch()).catch(() => null);
       const cached = g.__raGetPack;
       if (cached && Date.now() - cached.at < 2500) return cached.body as never;
       let slots = listAdminSlots();
@@ -3070,8 +3069,6 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const kind = String(data.kind || "");
       if (kind !== "group" && kind !== "school" && kind !== "students" && kind !== "balance" && kind !== "life" && kind !== "details" && kind !== "archives" && kind !== "archivesPupils" && kind !== "hydrateDisk" && kind !== "archiveCount" && kind !== "archiveCatalog" && kind !== "archiveAdd" && kind !== "audit" && kind !== "jobStart" && kind !== "jobStop" && kind !== "jobStatus") {
         try {
-          const { resumeJournalJob } = await import("./crm-journal-job");
-          resumeJournalJob();
           return journalPullState();
         } catch (e) {
           return { ok: false as const, error: e instanceof Error ? e.message : "Список журнала не собрался.", students: { all: 0, live: 0, archive: 0 } };

@@ -37,6 +37,11 @@ const g = globalThis as { __raJournalJobTick?: boolean; __raJournalWatch?: Retur
 
 const STALE_LOCK_MS = 180_000;
 
+/** Только процесс rastudio-history крутит очередь. Сайт пишет файл и читает статус. */
+export function isHistoryWorker() {
+  return process.env.RA_HISTORY_WORKER === "1";
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -232,7 +237,7 @@ function loopPullKind(mode: JournalJobMode | ""): "archiveCatalog" | "life" | "a
 export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   const cur = loadJournalJob();
   if (cur.running && !cur.stop) {
-    if (!g.__raJournalJobTick) void tickJob();
+    kickHistoryTick();
     return cur;
   }
   const mode = opts.mode;
@@ -298,8 +303,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     lastAt: nowIso(),
   };
   saveJournalJob(job);
-  startJournalJobWatch();
-  void tickJob();
+  kickHistoryTick();
   return job;
 }
 
@@ -311,12 +315,20 @@ export function stopJournalJob() {
 
 export function startJournalJobWatch() {
   if (process.env.NODE_ENV === "test") return;
+  if (!isHistoryWorker()) return;
   if (g.__raJournalWatch) return;
-  g.__raJournalWatch = setInterval(() => resumeJournalJobFromDisk(), 3000);
-  setTimeout(() => resumeJournalJobFromDisk(), 400);
+  g.__raJournalWatch = setInterval(() => resumeJournalJobFromDisk(), 1000);
+  setTimeout(() => resumeJournalJobFromDisk(), 200);
+}
+
+function kickHistoryTick() {
+  if (!isHistoryWorker()) return;
+  startJournalJobWatch();
+  if (!g.__raJournalJobTick) void tickJob();
 }
 
 function resumeJournalJobFromDisk() {
+  if (!isHistoryWorker()) return;
   const j = loadJournalJob();
   if (!j.running || j.stop) return;
   const age = Date.now() - Date.parse(j.lastAt || j.startedAt || "");
@@ -325,9 +337,16 @@ function resumeJournalJobFromDisk() {
 }
 
 export function resumeJournalJob() {
+  if (!isHistoryWorker()) return loadJournalJob();
   startJournalJobWatch();
   resumeJournalJobFromDisk();
   return loadJournalJob();
+}
+
+export async function runHistoryWorker() {
+  process.env.RA_HISTORY_WORKER = "1";
+  startJournalJobWatch();
+  await new Promise(() => {});
 }
 
 function fillOf(mode: JournalJobMode | "", kind: string, item?: JournalJobItem | null) {
@@ -554,6 +573,7 @@ function doneMsg(job: JournalJob) {
 }
 
 async function tickJob() {
+  if (!isHistoryWorker()) return;
   if (g.__raJournalJobTick) return;
   g.__raJournalJobTick = true;
   let id = "";
