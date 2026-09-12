@@ -271,7 +271,7 @@ export function shouldRetryCash(
   res: { ok?: boolean; error?: string; extra?: string; student?: { paysMore?: boolean; paysOk?: boolean } } | null,
 ) {
   const err = String(res?.error || res?.extra || "");
-  const busy = /already грузим|уже грузим|нет входа|429|502|нет ответа/i.test(err);
+  const busy = /уже грузим|нет входа|429|502|нет ответа/i.test(err);
   if (kind === "balance" && !recheck) {
     if (res?.student?.paysOk) return false;
     if (!res || res.ok === false) return busy || /не ответила|ещё страницы/i.test(err);

@@ -63,6 +63,7 @@ describe("фон истории из Alfa", () => {
     const a = { ...emptyJournalJob(), id: "a", stop: true, running: true, n: 3, fill: { kind: "students", label: "Иванов", customerId: 1 } };
     const keepStop = mergeJobPatch(a, { id: "a", running: true, stop: false, n: 4 });
     assert.equal(keepStop.stop, true);
+    assert.equal(keepStop.running, false);
     assert.equal(keepStop.n, 4);
     const other = mergeJobPatch(a, { id: "b", running: false, n: 0, msg: "чужой" });
     assert.equal(other.id, "a");
@@ -177,6 +178,13 @@ describe("фон истории из Alfa", () => {
     assert.match(core, /itemsN: j.items.length/);
     assert.match(core, /next: nextItem/);
     assert.match(ui, /function requestStop/);
+    assert.match(ui, /setSchoolRun\(null\)/);
+    assert.match(job, /running: false/);
+    assert.match(job, /Остановили · прошло/);
+    assert.match(job, /awaitWhileJob/);
+    assert.match(job, /stopped: true/);
+    assert.match(ui, /stopSchool.current && src === "poll"/);
+    assert.match(ui, /job.running\) && !job.stop/);
     assert.match(ui, /function startHistJob/);
     assert.match(ui, /periodKey: opts.periodKey/);
     assert.match(ui, /periodLabel: opts.periodLabel/);
@@ -205,7 +213,7 @@ describe("фон истории из Alfa", () => {
     assert.match(core, /if \(kind === "balance"\) return Boolean\(row.pays\)/);
     assert.doesNotMatch(core, /res.student\?\.paysOk === false/);
     assert.match(ui, /if \(kind === "balance"\) return Boolean\(row.pays\)/);
-    assert.match(ui, /if \(journal\?\.job\?\.running\)/);
+    assert.match(ui, /if \(journal\?\.job\?\.running && !journal.job.stop && !stopSchool.current\)/);
     assert.match(ui, /Уже идёт/);
     assert.match(ui, /h === "audit"/);
     assert.match(ui, /archived: groupArchived/);

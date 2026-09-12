@@ -150,7 +150,7 @@ type ServerJob = {
 
 function ServerJobStrip({ job }: { job?: ServerJob | null }) {
   if (!job) return null;
-  const run = Boolean(job.running);
+  const run = Boolean(job.running) && !job.stop;
   const n = Number(job.n) || 0;
   const total = Number(job.total) || 0;
   const waits = Number(job.waits) || 0;
@@ -1819,7 +1819,7 @@ export function AdminCrmSettings() {
   useEffect(() => {
     if (crmTab !== "history") return;
     let on = true;
-    let wasRun = Boolean(journal?.job?.running);
+    let wasRun = Boolean(journal?.job?.running) && !journal?.job?.stop;
     const tick = async () => {
       if (!on) return;
       try {
@@ -1827,9 +1827,16 @@ export function AdminCrmSettings() {
           data: { token: token(), action: "journalPull", kind: "jobStatus" } as never,
         })) as typeof journal & { groupRow?: FillRow | null };
         if (!on || !res) return;
-        setJournal((cur) => applyJobStatus(cur, res as NonNullable<typeof journal> & { groupRow?: FillRow | null }));
-        paintJob(res.job as ServerJob | undefined, "poll");
-        const live = Boolean(res.job?.running);
+        const incoming = res.job as ServerJob | undefined;
+        setJournal((cur) => {
+          const next = applyJobStatus(cur, res as NonNullable<typeof journal> & { groupRow?: FillRow | null });
+          if (stopSchool.current && incoming?.running && !incoming.stop) {
+            return { ...next, job: { ...(next.job as ServerJob | undefined), running: false, stop: true, cur: "", fill: null, msg: incoming.msg || "Останавливаем…" } };
+          }
+          return next;
+        });
+        paintJob(incoming, "poll");
+        const live = Boolean(res.job?.running) && !res.job?.stop;
         if (wasRun && !live) void loadJournal();
         wasRun = live;
       } catch {
@@ -2142,11 +2149,13 @@ export function AdminCrmSettings() {
 
   function paintJob(job?: ServerJob | null, src?: "poll" | "load") {
     if (!job) return;
-    if (job.running) {
+    const running = Boolean(job.running) && !job.stop;
+    if (stopSchool.current && src === "poll" && running) return;
+    if (running) {
       startedJobId.current = job.id || startedJobId.current || "live";
       holdFill.current = true;
       peopleLock.current = true;
-      if (!job.stop) stopSchool.current = false;
+      stopSchool.current = false;
       setBusy(true);
       setSchoolRun({ cur: job.cur || "", n: job.n || 0, total: job.total || 0, waits: job.waits || 0 });
       setFillLoading(job.fill || (job.cur ? { kind: job.kind || job.fill?.kind, label: job.cur, customerId: job.fill?.customerId } : null));
@@ -2184,7 +2193,7 @@ export function AdminCrmSettings() {
     jobItems?: { cid?: number; branchId?: number; name?: string; groupId?: number; periodKey?: string; periodLabel?: string }[];
     archived?: boolean;
   }) {
-    if (journal?.job?.running) {
+    if (journal?.job?.running && !journal.job.stop && !stopSchool.current) {
       paintJob(journal.job);
       setMsg(journal.job.cur ? `Уже идёт: ${journal.job.cur}. Стоп — потом другая кнопка.` : "Уже идёт загрузка. Стоп — потом другая кнопка.");
       return { job: journal.job };
@@ -2248,6 +2257,28 @@ export function AdminCrmSettings() {
 
   function requestStop() {
     stopSchool.current = true;
+    holdFill.current = false;
+    peopleLock.current = false;
+    startedJobId.current = "";
+    setBusy(false);
+    setSchoolRun(null);
+    setFillLoading(null);
+    setMsg("Останавливаем…");
+    setJournal((cur) =>
+      cur
+        ? {
+            ...cur,
+            job: {
+              ...(cur.job as ServerJob | undefined),
+              running: false,
+              stop: true,
+              cur: "",
+              fill: null,
+              msg: "Останавливаем…",
+            },
+          }
+        : cur,
+    );
     void runJournal({ kind: "jobStop" }).then((res) => paintJob((res as { job?: Parameters<typeof paintJob>[0] })?.job));
   }
 
@@ -3172,7 +3203,7 @@ export function AdminCrmSettings() {
                   const side = peopleStudy === "2" ? p?.archive : p?.live;
                   const done = side?.journalDone || 0;
                   const total = side?.total || (peopleStudy === "2" ? archN : liveN) || 0;
-                  const run = Boolean(fillLoading?.kind === "students" || (journal?.job?.running && journal.job.kind === "students"));
+                  const run = Boolean(fillLoading?.kind === "students" || (journal?.job?.running && !journal.job.stop && journal.job.kind === "students"));
                   const cur = schoolRun?.cur || fillLoading?.label || journal?.job?.cur || "";
                   return (
                     <>
@@ -3309,7 +3340,7 @@ export function AdminCrmSettings() {
                   const side = peopleStudy === "2" ? p?.archive : p?.live;
                   const done = side?.cardDone || 0;
                   const total = side?.total || (peopleStudy === "2" ? archN : liveN) || 0;
-                  const run = Boolean(fillLoading?.kind === "balance" || (journal?.job?.running && journal.job.kind === "balance"));
+                  const run = Boolean(fillLoading?.kind === "balance" || (journal?.job?.running && !journal.job.stop && journal.job.kind === "balance"));
                   const cur = schoolRun?.cur || fillLoading?.label || journal?.job?.cur || "";
                   return (
                     <>

@@ -65,6 +65,32 @@ async function sleepGap(ms: number, id = "") {
   }
 }
 
+/** Стоп не ждёт ответ Alfa: шаг бросает ожидание, запрос догорает вхолостую. */
+async function awaitWhileJob<T>(id: string, task: Promise<T>): Promise<{ stopped: true } | { value: T }> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(iv);
+      fn();
+    };
+    const iv = setInterval(() => {
+      const j = loadJournalJob();
+      if (j.stop || (id && j.id !== id)) finish(() => resolve({ stopped: true }));
+    }, 250);
+    task.then(
+      (value) => finish(() => resolve({ value })),
+      (err) => finish(() => reject(err)),
+    );
+  });
+}
+
+function stoppedMsg(job?: JournalJob) {
+  const j = job || loadJournalJob();
+  return `Остановили · прошло ${Number(j.n) || 0} из ${Number(j.total) || Number(j.n) || 0}.`;
+}
+
 function packGrain(parts: { key: string; label: string; from: string; to: string; done: boolean; weak?: boolean; rechecked?: boolean; lessons?: number; needDetails?: number; conducted?: number; at?: string; err?: string }[], grain: Grain) {
   const list = parts || [];
   const byKey = new Map(list.map((p) => [p.key, p]));
@@ -313,8 +339,15 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
 
 export function stopJournalJob() {
   const j = loadJournalJob();
-  if (!j.running) return j;
-  return patch({ id: j.id, stop: true, msg: j.msg || "Останавливаем после текущего…" });
+  return saveJournalJob({
+    ...j,
+    stop: true,
+    running: false,
+    cur: "",
+    fill: null,
+    lastAt: nowIso(),
+    msg: stoppedMsg(j),
+  });
 }
 
 export function startJournalJobWatch() {
@@ -402,9 +435,12 @@ function loopLabel(
 async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; msg?: string }> {
   const id = job.id;
   const mode = job.mode;
+  if (loadJournalJob().stop) return { done: true, gap: 0, msg: stoppedMsg() };
   if (mode === "count") {
     patch({ id, cur: "считаю отбор", fill: { kind: "archiveCount", label: "считаю отбор" } });
-    const res = await historyLoadOne({ kind: "archiveCount", school: job.school || job.filter });
+    const got = await awaitWhileJob(id, historyLoadOne({ kind: "archiveCount", school: job.school || job.filter }));
+    if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
+    const res = got.value;
     if (loadJournalJob().id !== id) return { done: true, gap: 0 };
     const msg = String(res.extra || res.error || "Отбор посчитан.");
     patch({ id, running: false, n: 1, total: 1, cur: "", fill: null, msg });
@@ -412,12 +448,17 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   }
   const loopKind = loopPullKind(mode);
   if (loopKind) {
-    const res = await historyLoadOne({
-      kind: loopKind,
-      probe: job.catalogFirst && loopKind === "archiveCatalog",
-      school: job.school || job.filter,
-      study: job.study,
-    });
+    const got = await awaitWhileJob(
+      id,
+      historyLoadOne({
+        kind: loopKind,
+        probe: job.catalogFirst && loopKind === "archiveCatalog",
+        school: job.school || job.filter,
+        study: job.study,
+      }),
+    );
+    if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
+    const res = got.value;
     if (loadJournalJob().id !== id) return { done: true, gap: 0 };
     const label = loopLabel(loopKind, res);
     const n = job.n + (res.ok ? 1 : 0);
@@ -477,19 +518,25 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     fill: fillOf(mode, job.kind, item),
     msg: job.recheck ? `${item.name}: перепроверяем. Потом пауза 5 с.` : `${item.name}: грузим. Потом пауза 5 с.`,
   });
-  const res = await historyLoadOne({
-    kind: pullKind,
-    study: job.study,
-    customerId: Number(item.cid) || 0,
-    branchId: Number(item.branchId) || job.branchId,
-    groupId: Number(item.groupId) || 0,
-    periodKey: item.periodKey || "",
-    grain: job.grain,
-    recheck: job.recheck || mode === "people-recheck" || mode === "groups-recheck" || (mode === "group-one" && !item.periodKey),
-    dateFrom: job.dateFrom,
-    probe: mode === "probe",
-    school: job.school || job.filter,
-  });
+  if (loadJournalJob().stop) return { done: true, gap: 0, msg: stoppedMsg() };
+  const got = await awaitWhileJob(
+    id,
+    historyLoadOne({
+      kind: pullKind,
+      study: job.study,
+      customerId: Number(item.cid) || 0,
+      branchId: Number(item.branchId) || job.branchId,
+      groupId: Number(item.groupId) || 0,
+      periodKey: item.periodKey || "",
+      grain: job.grain,
+      recheck: job.recheck || mode === "people-recheck" || mode === "groups-recheck" || (mode === "group-one" && !item.periodKey),
+      dateFrom: job.dateFrom,
+      probe: mode === "probe",
+      school: job.school || job.filter,
+    }),
+  );
+  if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };
+  const res = got.value;
   const live = loadJournalJob();
   if (live.id !== id) return { done: true, gap: 0 };
   if (live.stop) return { done: true, gap: 0, msg: `Остановили · прошло ${live.n} из ${live.total}.` };
