@@ -148,15 +148,22 @@ type ServerJob = {
   fill?: { groupId?: number; branchId?: number; periodKey?: string; label?: string; kind?: string; customerId?: number } | null;
 };
 
+function stoppedLine(job: { n?: number; total?: number }) {
+  const n = Number(job.n) || 0;
+  const total = Number(job.total) || n;
+  return `Остановили · прошло ${n} из ${total}.`;
+}
+
 function ServerJobStrip({ job }: { job?: ServerJob | null }) {
   if (!job) return null;
-  const run = Boolean(job.running) && !job.stop;
+  const stopped = Boolean(job.stop);
+  const run = Boolean(job.running) && !stopped;
   const n = Number(job.n) || 0;
   const total = Number(job.total) || 0;
   const waits = Number(job.waits) || 0;
   const cur = String(job.cur || "").trim();
-  const msg = String(job.msg || "").trim();
-  if (!run && !cur && !msg) return null;
+  const msg = stopped ? stoppedLine(job) : String(job.msg || "").trim();
+  if (!run && !stopped && !cur && !msg) return null;
   const pct = total > 0 ? Math.min(100, Math.round((n / Math.max(total, 1)) * 100)) : run ? 12 : 0;
   const next = String(job.next || "").trim();
   return (
@@ -164,12 +171,11 @@ function ServerJobStrip({ job }: { job?: ServerJob | null }) {
       <p className="truncate text-sm font-semibold">{run ? `На сервере: ${cur || "работаем"}` : msg || "Сервер свободен"}</p>
       <p className="mt-0.5 truncate text-[0.78rem] text-muted">
         {total ? `${n} из ${total}` : n ? `прошло ${n}` : run ? "очередь с диска" : ""}
-        {waits ? ` · Alfa не отвечает, пауза ${waits}/8` : ""}
+        {run && waits ? ` · Alfa не отвечает, пауза ${waits}/8` : ""}
         {run && next && !cur.includes(next) ? ` · дальше ${next}` : ""}
-        {job.stop ? " · останавливаем после текущего" : ""}
         {run && job.workerSilent ? " · процесс истории молчит, подхватываем" : ""}
       </p>
-      <FillBar pct={pct} run={run} done={!run && total > 0 && n >= total} />
+      {run ? <FillBar pct={pct} run={run} done={false} /> : null}
     </div>
   );
 }
@@ -2171,7 +2177,8 @@ export function AdminCrmSettings() {
     setBusy(false);
     setSchoolRun(null);
     setFillLoading(null);
-    if (job.msg) setMsg(job.msg);
+    if (job.stop) setMsg(stoppedLine(job));
+    else if (job.msg) setMsg(job.msg);
   }
 
   async function startHistJob(opts: {

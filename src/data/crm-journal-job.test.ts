@@ -13,6 +13,7 @@ import {
   CATALOG_JOB_GAP_MS,
   JOB_WAIT_CAP,
   historyWorkerSilent,
+  stoppedJobMsg,
 } from "./crm-journal-job-core.ts";
 
 describe("фон истории из Alfa", () => {
@@ -65,12 +66,19 @@ describe("фон истории из Alfa", () => {
     assert.equal(keepStop.stop, true);
     assert.equal(keepStop.running, false);
     assert.equal(keepStop.n, 4);
+    assert.match(keepStop.msg, /Остановили · прошло 4/);
+    assert.equal(stoppedJobMsg(0, 75), "Остановили · прошло 0 из 75.");
     const other = mergeJobPatch(a, { id: "b", running: false, n: 0, msg: "чужой" });
     assert.equal(other.id, "a");
     assert.equal(other.n, 3);
     assert.equal(other.msg, "");
     const fillKeep = mergeJobPatch(a, { id: "a", n: 5 });
-    assert.equal(fillKeep.fill?.label, "Иванов");
+    assert.equal(fillKeep.fill, null);
+    assert.equal(fillKeep.cur, "");
+    assert.match(fillKeep.msg, /Остановили · прошло 5/);
+    const live = mergeJobPatch({ ...emptyJournalJob(), id: "c", stop: false, running: true, cur: "Иванов", msg: "грузим" }, { id: "c", n: 1 });
+    assert.equal(live.cur, "Иванов");
+    assert.equal(live.msg, "грузим");
     const fillClear = mergeJobPatch(a, { id: "a", fill: null });
     assert.equal(fillClear.fill, null);
   });
@@ -130,7 +138,7 @@ describe("фон истории из Alfa", () => {
     assert.match(pull, /resumeJournalJob\(\)/);
     assert.match(core, /tryHistoryTickLock/);
     assert.match(core, /historyWorkerSilent/);
-    assert.match(core, /workerSilent: historyWorkerSilent/);
+    assert.match(core, /workerSilent: stop \? false : historyWorkerSilent/);
     assert.match(job, /if \(!isHistoryWorker\(\) && !historyWorkerSilent/);
     assert.match(ui, /процесс истории молчит/);
     assert.match(worker, /RA_HISTORY_WORKER = "1"/);
@@ -175,8 +183,11 @@ describe("фон истории из Alfa", () => {
     assert.match(ui, /setInterval\(\(\) => void tick\(\), 1200\)/);
     assert.match(ui, /crmTab !== "history"/);
     assert.match(ui, /startedJobId/);
-    assert.match(core, /itemsN: j.items.length/);
-    assert.match(core, /next: nextItem/);
+    assert.match(core, /stoppedJobMsg/);
+    assert.match(core, /msg: stop \? stoppedJobMsg/);
+    assert.match(ui, /function stoppedLine/);
+    assert.doesNotMatch(ui, /останавливаем после текущего/);
+    assert.match(job, /historyWorkerSilent\(j, 2500\)/);
     assert.match(ui, /function requestStop/);
     assert.match(ui, /setSchoolRun\(null\)/);
     assert.match(job, /running: false/);

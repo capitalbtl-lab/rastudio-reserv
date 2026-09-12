@@ -15,6 +15,7 @@ import {
   touchHistoryTickLock,
   releaseHistoryTickLock,
   historyWorkerSilent,
+  stoppedJobMsg,
   JOB_WAIT_CAP,
   type JournalJob,
   type JournalJobItem,
@@ -88,7 +89,7 @@ async function awaitWhileJob<T>(id: string, task: Promise<T>): Promise<{ stopped
 
 function stoppedMsg(job?: JournalJob) {
   const j = job || loadJournalJob();
-  return `Остановили · прошло ${Number(j.n) || 0} из ${Number(j.total) || Number(j.n) || 0}.`;
+  return stoppedJobMsg(Number(j.n) || 0, Number(j.total) || 0);
 }
 
 function packGrain(parts: { key: string; label: string; from: string; to: string; done: boolean; weak?: boolean; rechecked?: boolean; lessons?: number; needDetails?: number; conducted?: number; at?: string; err?: string }[], grain: Grain) {
@@ -359,9 +360,17 @@ export function startJournalJobWatch() {
 }
 
 function kickHistoryTick() {
-  if (!isHistoryWorker()) return;
-  startJournalJobWatch();
-  if (!g.__raJournalJobTick) void tickJob();
+  if (process.env.NODE_ENV === "test") return;
+  if (isHistoryWorker()) {
+    startJournalJobWatch();
+    if (!g.__raJournalJobTick) void tickJob();
+    return;
+  }
+  setTimeout(() => {
+    const j = loadJournalJob();
+    if (!j.running || j.stop) return;
+    if (historyWorkerSilent(j, 2500)) resumeJournalJobFromDisk();
+  }, 3000);
 }
 
 function resumeJournalJobFromDisk() {

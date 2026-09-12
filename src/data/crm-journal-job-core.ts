@@ -202,26 +202,30 @@ export function journalJobSnapshot() {
   const j = loadJournalJob();
   const curItem = j.items[j.idx];
   const nextItem = j.items[j.idx + 1];
+  const stop = Boolean(j.stop);
+  const n = Number(j.n) || 0;
+  const total = Number(j.total) || 0;
+  const nextName = nextItem?.name || (curItem && curItem.name !== j.cur ? curItem.name : "") || "";
   return {
     id: j.id,
-    running: j.running,
-    stop: j.stop,
+    running: stop ? false : Boolean(j.running),
+    stop,
     mode: j.mode,
     kind: j.kind,
     study: j.study,
     recheck: j.recheck,
-    cur: j.cur,
+    cur: stop ? "" : j.cur,
     n: j.n,
     total: j.total,
-    msg: j.msg,
-    fill: j.fill,
+    msg: stop ? stoppedJobMsg(n, total) : j.msg,
+    fill: stop ? null : j.fill,
     startedAt: j.startedAt,
     lastAt: j.lastAt,
     idx: j.idx,
     waits: j.waits,
     itemsN: j.items.length,
-    next: nextItem?.name || (curItem && curItem.name !== j.cur ? curItem.name : ""),
-    workerSilent: historyWorkerSilent(j),
+    next: stop ? "" : nextName,
+    workerSilent: stop ? false : historyWorkerSilent(j),
   };
 }
 
@@ -249,9 +253,17 @@ export function peopleJobQueue(people: PeopleJobRow[], kind: "students" | "balan
   return needLoad;
 }
 
+export function stoppedJobMsg(n: number, total: number) {
+  const nn = Number(n) || 0;
+  const tt = Number(total) || nn;
+  return `Остановили · прошло ${nn} из ${tt}.`;
+}
+
 export function mergeJobPatch(cur: JournalJob, extra: Partial<JournalJob>) {
   if (extra.id && cur.id && extra.id !== cur.id) return cur;
   const stop = Boolean(cur.stop || extra.stop);
+  const n = extra.n === undefined ? cur.n : extra.n;
+  const total = extra.total === undefined ? cur.total : extra.total;
   return {
     ...cur,
     ...extra,
@@ -259,7 +271,9 @@ export function mergeJobPatch(cur: JournalJob, extra: Partial<JournalJob>) {
     stop,
     running: stop ? false : extra.running === undefined ? cur.running : extra.running,
     items: Array.isArray(extra.items) ? extra.items : cur.items,
-    fill: extra.fill === undefined ? cur.fill : extra.fill,
+    fill: stop ? null : extra.fill === undefined ? cur.fill : extra.fill,
+    cur: stop ? "" : extra.cur === undefined ? cur.cur : extra.cur,
+    msg: stop ? stoppedJobMsg(Number(n) || 0, Number(total) || 0) : extra.msg === undefined ? cur.msg : extra.msg,
   };
 }
 
