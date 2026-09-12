@@ -127,6 +127,12 @@ describe("фон истории из Alfa", () => {
     assert.match(core, /res.student\?\.paysOk === false/);
     assert.match(ui, /if \(kind === "balance"\) return Boolean\(row.pays\)/);
     assert.match(ui, /if \(journal\?\.job\?\.running\) return;/);
+    assert.match(ui, /function peopleQueue/);
+    assert.match(ui, /jobItems: queue.map/);
+    assert.match(ui, /jobItems: opts.jobItems/);
+    assert.match(ui, /opts.kind === "jobStart"/);
+    assert.match(job, /given.length && mode !== "audit"/);
+    assert.match(pull, /items: opts.jobItems/);
     assert.doesNotMatch(ui, /for \(let i = 0; i < queue.length/);
   });
 });

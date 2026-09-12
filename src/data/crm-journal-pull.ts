@@ -1005,6 +1005,7 @@ export async function journalPull(opts: {
   peopleKind?: "students" | "balance";
   periodLabel?: string;
   lite?: boolean;
+  jobItems?: { cid?: number; branchId?: number; name?: string }[];
 }) {
   const kind = opts.kind;
   if (kind === "jobStart" || kind === "jobStop" || kind === "jobStatus") {
@@ -1034,6 +1035,7 @@ export async function journalPull(opts: {
       name: opts.name,
       periodKey: opts.periodKey,
       periodLabel: String(opts.periodLabel || ""),
+      items: opts.jobItems,
     });
     return journalJobView();
   }

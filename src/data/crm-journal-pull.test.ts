@@ -233,6 +233,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(api, /customerId/);
     assert.match(api, /jobStatus/);
     assert.match(api, /periodLabel/);
+    assert.match(api, /jobItems/);
     assert.match(pull, /kind === "jobStatus"/);
     assert.match(pull, /function journalJobView/);
     assert.match(pull, /function litePullState/);

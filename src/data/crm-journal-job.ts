@@ -107,6 +107,7 @@ export type StartJournalJobOpts = {
   name?: string;
   periodKey?: string;
   periodLabel?: string;
+  items?: JournalJobItem[];
 };
 
 function emptyMsg(mode: JournalJobMode, recheck: boolean) {
@@ -131,6 +132,10 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
     return [{ cid, branchId: Number(opts.branchId) || 1, name: opts.name || `№${cid}` }];
   }
   if (mode === "people" || mode === "people-recheck" || mode === "probe" || mode === "audit") {
+    const given = (opts.items || [])
+      .map((r) => ({ cid: Number(r.cid) || 0, branchId: Number(r.branchId) || 1, name: String(r.name || "") }))
+      .filter((r) => r.cid);
+    if (given.length && mode !== "audit") return given;
     const study = opts.study === "2" ? "2" : "1";
     const side = journalPeopleSide(study);
     const people = (side.people || []) as PeopleJobRow[];

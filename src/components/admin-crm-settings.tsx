@@ -805,6 +805,13 @@ function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
   return Boolean(row.journal);
 }
 
+function peopleQueue(rows: PeopleRow[], kind: "students" | "balance", recheck: boolean) {
+  const needLoad = rows.filter((r) => !peopleFinished(r, kind));
+  const needRecheck = rows.filter((r) => peopleFinished(r, kind) && (kind === "balance" ? !r.paysRechecked : !r.rechecked));
+  if (recheck) return needRecheck.length ? needRecheck : rows.filter((r) => peopleFinished(r, kind));
+  return needLoad;
+}
+
 function peopleNeedsRecheck(row: PeopleRow, kind: "students" | "balance") {
   if (!peopleFinished(row, kind)) return false;
   return kind === "balance" ? !row.paysRechecked : !row.rechecked;
@@ -1944,7 +1951,22 @@ export function AdminCrmSettings() {
         new Promise<never>((_, rej) => setTimeout(() => rej(new Error("Список не пришёл за 20 с — нажмите ещё раз.")), 20000)),
       ])) as typeof journal;
       if (res) {
-        setJournal(res);
+        setJournal((cur) => {
+          if (!cur) return res;
+          const keepLive = !(res.progress?.live?.people || []).length && (cur.progress?.live?.people || []).length;
+          const keepArch = !(res.progress?.archive?.people || []).length && (cur.progress?.archive?.people || []).length;
+          return {
+            ...cur,
+            ...res,
+            progress: {
+              ...cur.progress,
+              ...res.progress,
+              live: keepLive ? cur.progress?.live : res.progress?.live,
+              archive: keepArch ? cur.progress?.archive : res.progress?.archive,
+              groups: res.progress?.groups || cur.progress?.groups,
+            },
+          };
+        });
         paintJob(res.job);
         return res;
       }
@@ -1975,6 +1997,7 @@ export function AdminCrmSettings() {
     take?: number;
     name?: string;
     peopleKind?: "students" | "balance";
+    jobItems?: { cid: number; branchId: number; name: string }[];
   }) {
     setBusy(true);
     if (opts.kind === "group" || opts.kind === "details") {
@@ -2006,11 +2029,14 @@ export function AdminCrmSettings() {
             name: opts.name || "",
             peopleKind: opts.peopleKind || (opts.kind === "balance" ? "balance" : "students"),
             periodLabel: opts.periodLabel || "",
+            jobItems: opts.jobItems || [],
           } as never,
         }),
         new Promise<never>((_, rej) =>
           setTimeout(
             () => rej(new Error("Alfa не ответила за отведённое время — нажмите ещё раз.")),
+            opts.kind === "jobStart" ||
+            opts.kind === "jobStop" ||
             opts.kind === "archivesPupils" || opts.kind === "archives" || opts.kind === "archiveCount" || opts.kind === "archiveCatalog" || opts.kind === "archiveAdd" || opts.kind === "life" || opts.kind === "group" || opts.kind === "details" || opts.kind === "hydrateDisk" || opts.kind === "students" || opts.kind === "balance" || opts.kind === "audit" ? 90000 : 25000,
           ),
         ),
@@ -2103,6 +2129,7 @@ export function AdminCrmSettings() {
     probe?: boolean;
     periodKey?: string;
     periodLabel?: string;
+    jobItems?: { cid: number; branchId: number; name: string }[];
   }) {
     if (journal?.job?.running) return;
     holdFill.current = true;
@@ -2126,10 +2153,19 @@ export function AdminCrmSettings() {
       probe: opts.probe,
       periodKey: opts.periodKey,
       periodLabel: opts.periodLabel,
+      jobItems: opts.jobItems,
     });
     const job = (res as { job?: Parameters<typeof paintJob>[0] })?.job;
-    if (job) {
+    if (job?.running) {
       paintJob(job);
+      return res;
+    }
+    if (job) {
+      holdFill.current = false;
+      peopleLock.current = false;
+      setBusy(false);
+      setFillLoading(null);
+      if (job.msg) setMsg(job.msg);
       return res;
     }
     try {
@@ -2170,12 +2206,23 @@ export function AdminCrmSettings() {
   }
 
   async function recheckPeople(kind: "students" | "balance", study: "1" | "2", onlyRecheck = false) {
+    const side = study === "2" ? journal?.progress?.archive : journal?.progress?.live;
+    const queue = peopleQueue(side?.people || [], kind, onlyRecheck);
+    if (!queue.length) {
+      setMsg(
+        onlyRecheck
+          ? "Справа никого перепроверять. Сначала красная «Загрузить по одному»."
+          : "Слева пусто. Нажмите «Перепроверить по одному» — пройдёт тех, кто справа.",
+      );
+      return;
+    }
     await startHistJob({
       jobMode: onlyRecheck ? "people-recheck" : "people",
       peopleKind: kind,
       study,
       recheck: onlyRecheck,
       dateFrom: peopleDateFrom(peopleFromId),
+      jobItems: queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name })),
     });
   }
 
