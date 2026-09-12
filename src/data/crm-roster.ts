@@ -2,7 +2,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { alfaToken, pagedIndex, request } from "./alfacrm";
+import { token as alfaToken, pagedIndex, request } from "./alfacrm";
 import { cgiCustomerId, cgiRecordLive } from "./crm-membership";
 import { applyCrmCustomer, dossiersInGroup, findDossier, upsertDossier } from "./dossiers";
 import { CRM_READ_GAP_MS } from "./pupil-tariffs";

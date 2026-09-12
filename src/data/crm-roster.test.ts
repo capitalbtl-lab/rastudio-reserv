@@ -20,6 +20,7 @@ describe("шаг 1: группы и состав", () => {
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     const sched = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     const load = readFileSync(new URL("./crm-history-load.ts", import.meta.url), "utf8");
+    assert.match(src, /import \{ token as alfaToken, pagedIndex, request \} from "\.\/alfacrm"/);
     assert.match(src, /cgi\/index\?group_id=/);
     assert.match(src, /customer\/index/);
     assert.match(src, /applyCrmCustomer/);
