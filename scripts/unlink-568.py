@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Разово: группа 568 / филиал 2 — снять group_ids с сирот с 12.09.2026. Регулярку и 55050 не трогать."""
-import json, time, urllib.request
+import json, time, urllib.error, urllib.request
 
-BRANCH, GROUP, SKIP, PAGE = 2, 568, 55050, 200
-DATES = ["12.09.2026", "2026-09-12"]
+BRANCH, GROUP, SKIP, PAGE = 2, 568, 55050, 50
 
 def env():
     out = {}
@@ -22,8 +21,13 @@ def post(host, path, body, token=""):
     req = urllib.request.Request(
         host + path, data=json.dumps(body).encode(), headers=h, method="POST"
     )
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.load(r)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8", "replace")[:400]
+        print("HTTP", e.code, path, body, raw)
+        raise
 
 def items_of(d):
     raw = d.get("items") if isinstance(d, dict) else []
@@ -31,24 +35,43 @@ def items_of(d):
         raw = list(raw.values())
     return [x for x in (raw or []) if isinstance(x, dict)]
 
+def index_bodies():
+    return [
+        {"group_id": GROUP, "status": 1, "date_from": "12.09.2026", "date_to": "31.12.2026", "page": 0, "pageSize": PAGE},
+        {"group_id": GROUP, "status": 1, "date_from": "12.09.2026", "page": 0, "pageSize": PAGE},
+        {"group_id": GROUP, "status": 1, "date_from": "12.09.2026", "page": 0},
+        {"group_id": GROUP, "date_from": "12.09.2026", "date_to": "31.12.2026", "page": 0, "pageSize": PAGE},
+        {"group_id": GROUP, "status": 1, "date_from": "2026-09-12", "date_to": "2026-12-31", "page": 0, "pageSize": PAGE},
+    ]
+
+def pull(host, token):
+    last = None
+    for body0 in index_bodies():
+        found, page, body = [], 0, dict(body0)
+        try:
+            while True:
+                body["page"] = page
+                pack = items_of(post(host, f"/v2api/{BRANCH}/lesson/index", body, token))
+                print(f"index page={page} n={len(pack)} body={body}")
+                found.extend(pack)
+                if len(pack) < PAGE:
+                    break
+                page += 1
+            return found, body
+        except urllib.error.HTTPError as e:
+            last = e
+            print("вариант не подошёл, следующий")
+            continue
+    raise last or RuntimeError("lesson/index пусто и 400")
+
 def main():
     e = env()
     host = (e.get("ALFACRM_HOST") or "https://studiyarazvivaysya.s20.online").rstrip("/")
     token = post(host, "/v2api/auth/login", {"email": e.get("ALFACRM_EMAIL") or "", "api_key": e.get("ALFACRM_API_KEY") or ""}).get("token") or ""
-    found, used = [], ""
-    for date_from in DATES:
-        found, page = [], 0
-        while True:
-            pack = items_of(post(host, f"/v2api/{BRANCH}/lesson/index", {"group_id": GROUP, "status": 1, "date_from": date_from, "page": page, "pageSize": PAGE}, token))
-            print(f"index page={page} date={date_from} n={len(pack)}")
-            found.extend(pack)
-            if len(pack) < PAGE:
-                break
-            page += 1
-        used = date_from
-        if found:
-            break
-    print(f"найдено {len(found)} date={used}")
+    if not token:
+        raise SystemExit("нет токена Alfa")
+    found, used = pull(host, token)
+    print(f"найдено {len(found)} filter={used}")
     to_upd, skipped, seen = [], [], set()
     for it in found:
         lid = int(it.get("id") or 0)
@@ -67,7 +90,7 @@ def main():
         elif rid_n > 0:
             skipped.append((lid, f"regular_id {rid_n} {date}"))
         else:
-            print(f"разовый {lid} {date}")
+            print(f"разовый {lid} {date} status={st}")
             to_upd.append(lid)
     print(f"к обновлению {len(to_upd)}: {to_upd}")
     ok, fail = [], []
