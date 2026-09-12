@@ -267,6 +267,7 @@ export type PeopleJobRow = {
 export function peopleJobFinished(row: PeopleJobRow, kind: "students" | "balance") {
   if (kind === "balance") return Boolean(row.pays);
   if (row.short) return false;
+  if (row.dups) return true;
   return Boolean(row.journal);
 }
 

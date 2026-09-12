@@ -886,6 +886,7 @@ function byPeopleName(a: PeopleRow, b: PeopleRow) {
 function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
   if (kind === "balance") return Boolean(row.pays);
   if (row.short) return false;
+  if (row.dups) return true;
   return Boolean(row.journal);
 }
 
@@ -921,8 +922,8 @@ function patchPeopleSide(
   const people = side.people.map((p) => {
     if (p.cid !== hit.cid) return p;
     const short = Boolean(hit.short);
-    const journal = Boolean(hit.ok) && !short;
     const disk = Number(hit.lessons) || p.lessons;
+    const journal = !short && (Boolean(hit.ok) || disk > 0 || Boolean(p.journal));
     const alfa = hit.alfa != null ? hit.alfa : p.alfa;
     let dups = hit.dups != null ? Boolean(hit.dups) : Boolean(p.dups);
     if (!short && alfa != null && Number(disk) === Number(alfa)) dups = false;

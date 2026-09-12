@@ -113,6 +113,7 @@ describe("перепроверка журнала", () => {
     assert.match(ui, /cur.concat\(queued, rest\)/);
     assert.match(ui, /Сверить счёт/);
     assert.match(ui, /hit\.dups != null/);
+    assert.match(ui, /disk > 0 \|\| Boolean\(p\.journal\)/);
     assert.match(ui, /Number\(row.lessons\) === Number\(row.alfa\)/);
     assert.match(ui, /Загрузить всю историю/);
     assert.match(ui, /PEOPLE_FROM_OPTS/);

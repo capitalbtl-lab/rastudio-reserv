@@ -58,6 +58,7 @@ describe("фон истории из Alfa", () => {
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: true, short: true }, "balance"), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false }, "balance"), false);
     assert.equal(peopleJobFinished(people[3], "students"), false);
+    assert.equal(peopleJobFinished({ cid: 6, branchId: 2, name: "Е", journal: false, pays: false, dups: true }, "students"), true);
   });
 
   it("очередь с экрана читается и как массив, и как объект с индексами", () => {
