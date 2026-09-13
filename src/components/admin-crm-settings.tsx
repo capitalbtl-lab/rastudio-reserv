@@ -96,6 +96,7 @@ const HINT = {
   stop: "Стоп останавливает текущую очередь. Текущий человек или группа допишет свой запрос, а следующий уже не стартует. Уже записанное на диск не откатывается — это не «отмена», а пауза. После стопа красную можно нажать снова: пойдёт со следующих, кто ещё слева. Если кнопка серая, сейчас никто не грузится. В Alfa ничего не удаляет и не сохраняет. Можно спокойно отойти и продолжить позже.",
   fullHist: "Эта кнопка только на жёлтой старой карточке, когда в Alfa занятий больше, чем у нас. Она качает журнал с 1 января 2015 года, а не за последние семь лет. Нужна, если человек ходил в 2016–2018, а обычная качка этого не видит. Пишет только на наш диск, дубли по номеру занятия не создаёт. В Alfa не отправляет и оплаты не трогает. Если за один раз счёт не сошёлся, нажмите ещё раз — продолжит с того же человека. Пока грузится другой ученик, кнопка подождёт.",
   loadCal: "Загружает личный календарь именно этого ученика из Alfa на диск. Сначала сверка, сколько занятий в Alfa, потом добор недостающих. Окно лет — как в списке «годы» наверху экрана. Если карточка жёлтая и человек старый, лучше «Загрузить всю историю»: она берёт с 2015. В Alfa ничего не пишет, не проводит урок и не ставит оценку. Пока идёт другой ученик, эта кнопка не стартует вторую качку параллельно. После успеха карточка должна позеленеть и уйти вправо.",
+  hole: "Галка слева только у тех, у кого в Alfa больше, чем на диске. Это не «Добрать»: журнал не закроется, счёт не сойдётся. Человека пускаем вправо с жёлтым «Одобрен». Снять отметку только вручную. Пакетом нельзя. У кого счёт сошёлся, галки нет.",
   loadOneGroups: "Красная кнопка идёт по группам слева по одной, как «по одному» у учеников. Только та колонка, что открыта: «Сейчас идут» или «Архивные». Берёт выбранную порцию — квартал, полугодие или год — и читает явки из Alfa на диск. Следующая группа не стартует, пока эта порция не закрылась. Стоп прерывает очередь после текущей. В Alfa расписание не меняется. Если школа выбрана в фильтре, очередь только по ней. Это шаг 3: групповые явки, не личный календарь и не касса.",
   grain: "Это размер порции журнала группы, подписанный «годы», чтобы ряд кнопок совпадал с шагом 1. «Квартал» — самый безопасный: одно нажатие не закрывает всю историю сразу. «Полугодие» больше и быстрее. «Год» имеет смысл только у молодых групп, которым несколько месяцев. У старых английский на полгода не надо грузить с 2018 года — срок группы режет лишнее. Это не «с 2015», а нарезка журнала группы. Выбор действует на красную кнопку сверху и на кнопки порции в карточке группы. В Alfa ничего не отправляет.",
   archPupils: "Смотрит карточки учеников той выборки, что на шаге 1: «Сейчас ходят» или рабочий архив — в одном прогоне не смешивает. Собирает номера групп, где они числились. Живые группы из этого списка отбрасывает. Остальные — архив для старого остатка. Закон раздела: только по одной группе, пауза 5 секунд, пакетом нельзя. Очередь сама идёт, «Стоп» после текущей. Журнал кварталов сам не стартует. В Alfa ничего не создаёт.",
@@ -307,6 +308,7 @@ type StudentHit = {
   alfa?: number;
   short?: boolean;
   dups?: boolean;
+  holeApproved?: boolean;
 };
 
 type PeopleRow = {
@@ -318,6 +320,7 @@ type PeopleRow = {
   alfa?: number;
   short?: boolean;
   dups?: boolean;
+  holeApproved?: boolean;
   journal?: boolean;
   pays?: boolean;
   paysMore?: boolean;
@@ -886,6 +889,7 @@ function byPeopleName(a: PeopleRow, b: PeopleRow) {
 
 function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
   if (kind === "balance") return Boolean(row.pays);
+  if (row.short && row.holeApproved) return true;
   if (row.short) return false;
   if (row.dups) return true;
   return Boolean(row.journal);
@@ -893,15 +897,45 @@ function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
 
 function peopleQueue(rows: PeopleRow[], kind: "students" | "balance", recheck: boolean) {
   const needLoad = rows.filter((r) => !peopleFinished(r, kind));
-  const needRecheck = rows.filter((r) => peopleFinished(r, kind) && (r.dups || (kind === "balance" ? !r.paysRechecked : !r.rechecked)));
+  const needRecheck = rows.filter((r) => {
+    if (!peopleFinished(r, kind)) return false;
+    if (kind === "students" && r.short && r.holeApproved) return true;
+    return r.dups || (kind === "balance" ? !r.paysRechecked : !r.rechecked);
+  });
   if (recheck) return needRecheck.length ? needRecheck : rows.filter((r) => peopleFinished(r, kind));
   return needLoad;
 }
 
 function peopleNeedsRecheck(row: PeopleRow, kind: "students" | "balance") {
+  if (kind === "students" && row.short && row.holeApproved) return false;
   if (!peopleFinished(row, kind)) return false;
   if (row.dups) return true;
   return kind === "balance" ? !row.paysRechecked : !row.rechecked;
+}
+
+function peopleHoleOk(row: PeopleRow) {
+  return Boolean(row.short && row.holeApproved);
+}
+
+function confirmHole(row: PeopleRow, on: boolean) {
+  const alfa = row.alfa;
+  const line = alfa != null ? peopleLessonsLine({ disk: Number(row.lessons) || 0, alfa }).line : `на диске ${row.lessons}`;
+  const ask = on
+    ? `${line}\nжурнал не закроется, снять только вручную.`
+    : `${line}\nснять отметку? карточка вернётся в «требуют».`;
+  return window.confirm(ask);
+}
+
+function patchHoleApproved(
+  side:
+    | { people?: PeopleRow[]; journalDone?: number; cardDone?: number; total?: number }
+    | undefined,
+  cid: number,
+  holeApproved: boolean,
+) {
+  if (!side?.people?.length) return side;
+  const people = side.people.map((p) => (p.cid === cid ? { ...p, holeApproved } : p));
+  return { ...side, people };
 }
 
 function auditRight(codes?: string[]) {
@@ -943,6 +977,7 @@ function patchPeopleSide(
       alfa,
       short,
       dups,
+      holeApproved: hit.holeApproved != null ? Boolean(hit.holeApproved) : p.holeApproved,
       journal,
       pays,
       paysMore: Boolean(hit.paysMore),
@@ -1059,6 +1094,7 @@ function PeopleFillList({
   onLoad,
   onRecheck,
   onFullHistory,
+  onHole,
   onStop,
   years,
 }: {
@@ -1069,6 +1105,7 @@ function PeopleFillList({
   onLoad: (row: PeopleRow) => void;
   onRecheck: (row: PeopleRow) => void;
   onFullHistory?: (row: PeopleRow) => void;
+  onHole?: (row: PeopleRow, on: boolean) => void;
   onStop?: () => void;
   years?: ReactNode;
 }) {
@@ -1110,6 +1147,8 @@ function PeopleFillList({
   );
   const nNeed = needRows.length;
   const nDone = doneRows.length;
+  const nApproved = kind === "students" ? doneRows.filter((r) => peopleHoleOk(r)).length : 0;
+  const nComplete = nDone - nApproved;
   const pagesNeed = Math.max(1, Math.ceil(nNeed / pageSize) || 1);
   const pagesDone = Math.max(1, Math.ceil(nDone / pageSize) || 1);
   const safeNeed = Math.min(pageNeed, pagesNeed - 1);
@@ -1181,11 +1220,13 @@ function PeopleFillList({
     const full = peopleFinished(row, kind);
     const needsRecheck = peopleNeedsRecheck(row, kind);
     const short = Boolean(row.short);
+    const approved = kind === "students" && peopleHoleOk(row);
+    const canHole = kind === "students" && short && !row.holeApproved && Boolean(onHole);
     const equal = row.alfa != null && Number(row.lessons) === Number(row.alfa) && !short;
     const dups = Boolean(row.dups) && !equal;
     const active = loadingCid === row.cid;
     const shown = open === id;
-    const pct = full && !dups ? 100 : short || dups || row.lessons ? 50 : 0;
+    const pct = full && !dups && !approved ? 100 : short || dups || approved || row.lessons ? 50 : 0;
     if (row.alfa != null && Number.isFinite(Number(row.alfa))) alfaKeep.current[row.cid] = keepAlfa(alfaKeep.current[row.cid], row.alfa) as number;
     const alfaShown = alfaKeep.current[row.cid] ?? row.alfa;
     const packSt = packMemo.current[row.cid];
@@ -1220,14 +1261,36 @@ function PeopleFillList({
           : "Шаг 1 · загрузить календарь";
     const btn = full || dups ? "Перепроверить" : kind === "balance" ? "Загрузить кассу" : short ? "Добрать" : "Загрузить календарь";
     return (
-      <li key={id} className={cn("rounded-2xl p-3 ring-1", short || dups ? "bg-amber-50 ring-amber-400" : needsRecheck ? "bg-sky-50 ring-sky-400" : full ? "bg-white ring-emerald-300" : active ? "bg-white ring-primary" : "bg-white ring-black/8")}>
+      <li key={id} className={cn("rounded-2xl p-3 ring-1", approved || short || dups ? "bg-amber-50 ring-amber-400" : needsRecheck ? "bg-sky-50 ring-sky-400" : full ? "bg-white ring-emerald-300" : active ? "bg-white ring-primary" : "bg-white ring-black/8")}>
         <div className="flex items-center gap-2">
+          {canHole ? (
+            withHint(
+              <input
+                type="checkbox"
+                className="h-4 w-4 shrink-0 accent-amber-600"
+                checked={false}
+                aria-label="одобрить дырку"
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  e.target.checked = false;
+                  if (!confirmHole(row, true)) return;
+                  onHole?.(row, true);
+                }}
+              />,
+              HINT.hole,
+            )
+          ) : null}
           <button type="button" className="min-w-0 flex-1 truncate text-left font-medium" onClick={() => setOpen((cur) => (cur === id ? "" : id))} title={row.name}>
             {row.name}
           </button>
           <span className="shrink-0 rounded-full bg-black/10 px-2 py-0.5 text-[0.72rem] font-semibold tabular-nums">№{row.cid}</span>
           <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-            {dups ? (
+            {approved ? (
+              <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950" title="Журнал не сошёлся. Допущен к следующим шагам. Снять отметку вручную.">
+                Одобрен
+              </span>
+            ) : dups ? (
               <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950">на диске больше · есть дубли</span>
             ) : full ? (
               needsRecheck ? (
@@ -1251,7 +1314,7 @@ function PeopleFillList({
             {shown ? "−" : "+"}
           </button>
         </div>
-        <FillBar pct={pct} run={active} done={full && !needsRecheck && !dups} warn={needsRecheck || short || dups} />
+        <FillBar pct={pct} run={active} done={full && !needsRecheck && !dups && !approved} warn={needsRecheck || short || dups || approved} />
         <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
           {(row.groups || []).slice(0, 2).join(" · ") || "групп на карточке нет"}
           {!nums && row.lessons ? ` · на диске ${row.lessons}` : ""}
@@ -1299,6 +1362,23 @@ function PeopleFillList({
                   Загрузить всю историю
                 </button>,
                 HINT.fullHist,
+              )
+            : null}
+          {approved && onHole
+            ? withHint(
+                <button
+                  type="button"
+                  disabled={busy && !active}
+                  className={BTN_GHOST_SM}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!confirmHole(row, false)) return;
+                    onHole(row, false);
+                  }}
+                >
+                  Снять отметку
+                </button>,
+                HINT.hole,
               )
             : null}
           {withHint(
@@ -1356,12 +1436,15 @@ function PeopleFillList({
             <h4 className="font-display text-[1.05rem] text-rose-900">Требуют загрузки данных · {nNeed}</h4>
             {pager(safeNeed, pagesNeed, setPageNeed)}
           </div>
-          <p className="mt-1 text-[0.72rem] text-muted">{kind === "balance" ? "Касса и журнал — пока чего-то нет, ученик здесь." : "Личный календарь ещё неполный — ученик здесь."}</p>
+          <p className="mt-1 text-[0.72rem] text-muted">{kind === "balance" ? "Касса и журнал — пока чего-то нет, ученик здесь." : "Личный календарь ещё неполный — ученик здесь. Галка «одобрить» — не «Добрать», журнал не закроется."}</p>
           {listNeed.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listNeed.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Все ученики этого списка уже загружены.</p>}
         </section>
         <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
           <div className="flex flex-wrap items-center gap-2">
-            <h4 className="font-display text-[1.05rem] text-emerald-900">Загрузка данных завершена · {nDone}</h4>
+            <h4 className="font-display text-[1.05rem] text-emerald-900">Загрузка данных завершена · {nComplete}</h4>
+            {kind === "students" && nApproved ? (
+              <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950">Одобрен · {nApproved}</span>
+            ) : null}
             {pager(safeDone, pagesDone, setPageDone)}
           </div>
           <p className="mt-1 text-[0.72rem] text-muted">{kind === "balance" ? "Касса на месте. Перепроверить — сверка с Alfa." : "Календарь на месте. Перепроверить — сверка с Alfa."}</p>
@@ -2444,6 +2527,39 @@ export function AdminCrmSettings() {
       branchId: row.branchId,
       name: row.name,
     });
+  }
+
+  async function holeMark(row: PeopleRow, on: boolean) {
+    if (!row.cid) return;
+    try {
+      const res = (await adminSchedule({
+        data: {
+          token: token(),
+          action: "journalPull",
+          kind: on ? "holeApprove" : "holeApproveClear",
+          customerId: row.cid,
+        } as never,
+      })) as { ok?: boolean; extra?: string; error?: string; student?: { holeApproved?: boolean; short?: boolean } };
+      if (res?.ok === false) {
+        setMsg(res.error || res.extra || "Не записали отметку");
+        return;
+      }
+      const approved = Boolean(res?.student?.holeApproved);
+      const key = peopleStudy === "2" ? "archive" : "live";
+      setJournal((cur) => {
+        if (!cur) return cur;
+        return {
+          ...cur,
+          progress: {
+            ...cur.progress,
+            [key]: patchHoleApproved(cur.progress?.[key], row.cid, approved),
+          },
+        };
+      });
+      if (res?.extra) setMsg(res.extra);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Не записали отметку");
+    }
   }
 
   async function recheckPeople(kind: "students" | "balance", study: "1" | "2", onlyRecheck = false) {
@@ -3578,6 +3694,7 @@ export function AdminCrmSettings() {
                         onLoad={(row) => void loadPerson(row, "students", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "students", peopleStudy, true)}
                         onFullHistory={(row) => void loadPerson(row, "students", peopleStudy, true, "2015-01-01")}
+                        onHole={(row, on) => void holeMark(row, on)}
                         onStop={() => {
                           requestStop();
                         }}
