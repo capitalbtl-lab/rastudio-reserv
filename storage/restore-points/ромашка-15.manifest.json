@@ -1,0 +1,24 @@
+{
+  "id": "romashka-15",
+  "name": "Ромашка-15",
+  "rev": 15,
+  "at": "2026-09-13T00:17:00Z",
+  "git": "064d26c90f56c74c501a4856dec3876735046c97",
+  "branch": "restore/romashka-15",
+  "tag": "romashka-15",
+  "files": 492,
+  "bytes": 1741287,
+  "sha256": "7721d541cde72bb04722e83935b10fca50730daf2a259f29cda49426b8df41fb",
+  "archive": "storage/backups/ромашка-15-src.tar.gz",
+  "srcArchive": "storage/backups/ромашка-15-src.tar.gz",
+  "srcSha256": "7721d541cde72bb04722e83935b10fca50730daf2a259f29cda49426b8df41fb",
+  "storage": [
+    "storage/restore-points/ромашка-15.json",
+    "storage/restore-points/ромашка-15.md",
+    "storage/restore-points/ромашка-15.manifest.json",
+    "storage/restore-points/ромашка-15.sha256",
+    "storage/backups/ромашка-15-src.tar.gz",
+    "storage/backups/ромашка-15.md",
+    "storage/backups/ромашка-15.sha256"
+  ]
+}
