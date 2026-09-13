@@ -284,6 +284,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /closed \? \{ lessonsFull: true, lessonsAttend: true \} : \{ lessonsFull: false \}/);
     assert.match(inbound, /keepAlfaProbe\(keep, uniq\.length, true\)/);
     assert.doesNotMatch(inbound, /lessonsAlfa: uniq\.length/);
+    assert.doesNotMatch(inbound, /ids\.length && !ids\.includes\(id\) && !packLessonPupils/);
+    assert.match(inbound, /droppedNoDate/);
+    assert.match(inbound, /customer_ids: uniquePositiveIds\(\[\.\.\.ids, id\]\)/);
     function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
       const k = Number(keep) || 0;
       const a = Number(alfa) || 0;

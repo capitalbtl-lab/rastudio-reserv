@@ -588,16 +588,16 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       if (aborted) break;
       if (!progressed && !cur.done) cur = lessonFillAdvance(cur, true, branches);
     }
+    const droppedNoDate: number[] = [];
     const pulled: GroupCalLesson[] = [];
     for (const les of packs) {
       for (const item of les.items || []) {
         const rec = item as Record<string, unknown>;
         const ids = lessonCustomerIds(rec);
-        if (ids.length && !ids.includes(id) && !packLessonPupils(rec).some((p) => p.customerId === id)) continue;
         const gid = Number((item.group_ids || [])[0] || 0);
         const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
         const packed = packLight(
-          { ...item, date: ymd(item.date), customer_ids: ids.length ? ids : [id] },
+          { ...item, date: ymd(item.date), customer_ids: uniquePositiveIds([...ids, id]) },
           {
             groupName: slot?.groupName || String(item.lesson_type_name || "занятие"),
             from: hm(item.time_from) || "",
@@ -607,7 +607,11 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
           },
           id,
         );
-        if (!packed) continue;
+        if (!packed) {
+          const lid = Number(item.id || 0);
+          if (lid > 0) droppedNoDate.push(lid);
+          continue;
+        }
         packed.date = ymd(packed.date);
         if (!packed.customerIds?.length) packed.customerIds = [id];
         const prev = prevMap.get(String(packed.lessonId || `${packed.date}|${packed.from}`));
@@ -680,7 +684,10 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         void inboundCustomerLessons(branch, id, { full: true, force: opts?.force, prune, dateFrom, homeOnly: opts?.homeOnly }).catch(() => null);
       }, 700);
     }
-    return { ok: true as const, count: pulled.length, done: fillDone || !wantFull, aborted };
+    if (droppedNoDate.length) {
+      console.warn(`inbound lessons cid=${id} dropped no-date: ${droppedNoDate.slice(0, 40).join(",")}`);
+    }
+    return { ok: true as const, count: pulled.length, done: fillDone || !wantFull, aborted, dropped: droppedNoDate };
   } finally {
     markLessonFillBusy(id, false);
     unlockStudentAlfa(id);
