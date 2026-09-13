@@ -1,6 +1,6 @@
 /** Штамп входа ученика: полная история один раз, дальше только новое. */
 
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export const CUSTOMER_SYNC_TTL_MS = 10 * 60 * 1000;
@@ -183,7 +183,8 @@ export function lessonFillAdvance(cur: LessonFillCursor, lastShort: boolean, bra
   return { bid: next, statusIdx: 0, page: 0, ...from };
 }
 
-const g = globalThis as { __raLessonFill?: Set<number>; __raStudentAlfa?: number };
+const g = globalThis as { __raLessonFill?: Set<number>; __raStudentAlfa?: number; __raStudentAlfaSet?: Set<number> };
+const STUDENT_LOCK_STALE_MS = 10 * 60 * 1000;
 
 export function lessonFillBusy(customerId: number) {
   const id = Number(customerId) || 0;
@@ -199,6 +200,40 @@ export function markLessonFillBusy(customerId: number, on: boolean) {
   else g.__raLessonFill.delete(id);
 }
 
+function studentLockFile(id: number) {
+  return join(process.cwd(), "storage", "locks", `crm-student-${id}.lock`);
+}
+
+function pidAlive(pid: number) {
+  if (!(pid > 0)) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function fileHoldsStudent(id: number) {
+  const dest = studentLockFile(id);
+  try {
+    if (!existsSync(dest)) return false;
+    const raw = JSON.parse(readFileSync(dest, "utf8")) as { pid?: number; at?: string };
+    const pid = Number(raw.pid) || 0;
+    const age = Date.now() - Date.parse(String(raw.at || ""));
+    if (!Number.isFinite(age) || age > STUDENT_LOCK_STALE_MS) return false;
+    if (pid === process.pid) return true;
+    return pidAlive(pid);
+  } catch {
+    return false;
+  }
+}
+
+export function ownsStudentAlfa(customerId: number) {
+  const id = Number(customerId) || 0;
+  return Boolean(id && g.__raStudentAlfaSet?.has(id));
+}
+
 export function studentAlfaOwner() {
   return Number(g.__raStudentAlfa) || 0;
 }
@@ -206,8 +241,19 @@ export function studentAlfaOwner() {
 export function tryLockStudentAlfa(customerId: number) {
   const id = Number(customerId) || 0;
   if (!id) return false;
-  const cur = Number(g.__raStudentAlfa) || 0;
-  if (cur && cur !== id) return false;
+  if (ownsStudentAlfa(id)) return true;
+  if (fileHoldsStudent(id) && !ownsStudentAlfa(id)) {
+    try {
+      const raw = JSON.parse(readFileSync(studentLockFile(id), "utf8")) as { pid?: number };
+      if (Number(raw.pid) !== process.pid) return false;
+    } catch {
+      return false;
+    }
+  }
+  mkdirSync(dirname(studentLockFile(id)), { recursive: true });
+  writeFileSync(studentLockFile(id), JSON.stringify({ pid: process.pid, cid: id, at: new Date().toISOString() }), "utf8");
+  if (!g.__raStudentAlfaSet) g.__raStudentAlfaSet = new Set();
+  g.__raStudentAlfaSet.add(id);
   g.__raStudentAlfa = id;
   return true;
 }
@@ -224,5 +270,19 @@ export async function waitLockStudentAlfa(customerId: number, ms = 20000) {
 }
 
 export function unlockStudentAlfa(customerId: number) {
-  if (Number(g.__raStudentAlfa) === Number(customerId)) g.__raStudentAlfa = 0;
+  const id = Number(customerId) || 0;
+  if (!id || !ownsStudentAlfa(id)) return;
+  g.__raStudentAlfaSet?.delete(id);
+  if (Number(g.__raStudentAlfa) === id) {
+    const next = g.__raStudentAlfaSet?.values().next();
+    g.__raStudentAlfa = Number(next?.value) || 0;
+  }
+  try {
+    const dest = studentLockFile(id);
+    if (!existsSync(dest)) return;
+    const raw = JSON.parse(readFileSync(dest, "utf8")) as { pid?: number };
+    if (Number(raw.pid) === process.pid) unlinkSync(dest);
+  } catch {
+    /* */
+  }
 }

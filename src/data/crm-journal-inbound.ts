@@ -36,7 +36,7 @@ import {
   tryLockStudentAlfa,
   waitLockStudentAlfa,
   unlockStudentAlfa,
-  studentAlfaOwner,
+  ownsStudentAlfa,
   lessonsCountShort,
 } from "./crm-customer-sync";
 
@@ -456,7 +456,7 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
   const prev = loadCustomerCalendar(id);
   const before = countAlfaLessonRows(prev);
   if (!closed) return { ok: false as const, disk: before, alfa: 0, pruned: 0 };
-  const held = studentAlfaOwner() === id;
+  const held = ownsStudentAlfa(id);
   if (!held && !tryLockStudentAlfa(id)) return { ok: false as const, disk: before, alfa: 0, pruned: 0 };
   try {
   const hold = pendingExportIds(["lesson.update", "lesson.create"]);
@@ -570,6 +570,10 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
   }
   if (!(await waitLockStudentAlfa(id, Number(opts?.take) > 0 ? 20000 : 0))) {
     return { ok: true as const, count: 0, skipped: "busy" as const, done: false };
+  }
+  if (skipHoleInbound(id, opts?.force)) {
+    unlockStudentAlfa(id);
+    return { ok: true as const, count: 0, skipped: "hole" as const, done: true };
   }
   const wantFull = Boolean(opts?.full) || Boolean(opts?.prune) || !customerSyncOf(id).lessonsFull || customerLessonsNeedAttend(id);
   if (!wantFull && customerLessonsFresh(id)) {
@@ -763,7 +767,7 @@ export async function inboundMissingCustomerLessons(
   const want = uniquePositiveIds(lessonIds).slice(0, Math.max(1, Math.min(50, Number(opts?.take) || 50)));
   if (id <= 0 || !want.length) return { ok: true as const, count: 0, dropped: [] as number[] };
   if (skipHoleInbound(id, opts?.force)) return { ok: true as const, count: 0, skipped: "hole" as const, dropped: want };
-  const held = studentAlfaOwner() === id;
+  const held = ownsStudentAlfa(id);
   if (!held && !(await waitLockStudentAlfa(id, Number(opts?.take) > 0 ? 20000 : 0))) {
     return { ok: true as const, count: 0, skipped: "busy" as const, dropped: want };
   }

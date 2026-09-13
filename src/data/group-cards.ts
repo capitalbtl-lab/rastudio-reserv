@@ -9,7 +9,7 @@ import { journalForCustomer, calendarLessonForCard, lessonBranchOf } from "./crm
 import { chargeFromPupils } from "./crm-ledger-core";
 import { findDossier } from "./dossiers";
 import { cardPays } from "./crm-pay";
-import { tryLockStudentAlfa, unlockStudentAlfa, studentAlfaOwner } from "./crm-customer-sync";
+import { tryLockStudentAlfa, unlockStudentAlfa, ownsStudentAlfa } from "./crm-customer-sync";
 
 export type CachedGroupCard = {
   id: number;
@@ -450,7 +450,7 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
   }
   let n = 0;
   for (const [cid, extra] of add) {
-    const held = studentAlfaOwner() === cid;
+    const held = ownsStudentAlfa(cid);
     if (!held && !tryLockStudentAlfa(cid)) continue;
     try {
       let prev = loadCustomerCalendar(cid);

@@ -13,6 +13,10 @@ import {
   lessonsCountShort,
   lessonsCountExtra,
   lessonsJournalReady,
+  tryLockStudentAlfa,
+  unlockStudentAlfa,
+  ownsStudentAlfa,
+  studentAlfaOwner,
 } from "./crm-customer-sync.ts";
 
 describe("штамп входа ученика", () => {
@@ -80,6 +84,24 @@ describe("штамп входа ученика", () => {
     assert.doesNotMatch(hole, /inboundCustomerLessons/);
     assert.doesNotMatch(hole, /probeCustomerLessons/);
     assert.match(hole, /stampCustomerSync\(cid, \{ journalHoleApprovedAt:/);
+  });
+
+  it("замок ученика: два cid сразу, файл, свой pid не блокирует", () => {
+    const sync = readFileSync(new URL("./crm-customer-sync.ts", import.meta.url), "utf8");
+    assert.match(sync, /crm-student-\$\{id\}\.lock/);
+    assert.match(sync, /export function ownsStudentAlfa/);
+    assert.equal(tryLockStudentAlfa(900001), true);
+    assert.equal(tryLockStudentAlfa(900002), true);
+    assert.equal(ownsStudentAlfa(900001), true);
+    assert.equal(ownsStudentAlfa(900002), true);
+    unlockStudentAlfa(900001);
+    assert.equal(ownsStudentAlfa(900001), false);
+    assert.equal(ownsStudentAlfa(900002), true);
+    assert.equal(tryLockStudentAlfa(900001), true);
+    unlockStudentAlfa(900001);
+    unlockStudentAlfa(900002);
+    assert.equal(ownsStudentAlfa(900001), false);
+    assert.equal(ownsStudentAlfa(900002), false);
   });
 });
 
