@@ -709,6 +709,84 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
 }
 
 
+/** Номера с переписи, которых нет на диске: один index по id, не повтор страниц. */
+export async function inboundMissingCustomerLessons(
+  branch: number,
+  customerId: number,
+  lessonIds: number[],
+  opts?: { force?: boolean; take?: number },
+) {
+  const id = Number(customerId) || 0;
+  const want = uniquePositiveIds(lessonIds).slice(0, Math.max(1, Math.min(50, Number(opts?.take) || 50)));
+  if (id <= 0 || !want.length) return { ok: true as const, count: 0, dropped: [] as number[] };
+  if (!alfaLinkedNow() && !opts?.force) return { ok: true as const, count: 0, skipped: "offline" as const, dropped: want };
+  const { token } = await import("./alfacrm");
+  const t = await token();
+  const { listAdminSlots } = await import("./alfacrm-schedule");
+  const slots = listAdminSlots();
+  const branches = uniqueBranches(branch);
+  const prevCal = loadCustomerCalendar(id);
+  const prevMap = new Map(prevCal.map((l) => [String(l.lessonId || `${l.date}|${l.from}`), l] as const));
+  const pulled: GroupCalLesson[] = [];
+  const dropped: number[] = [];
+  for (const lid of want) {
+    let item: Parameters<typeof packLight>[0] | undefined;
+    for (const bid of branches) {
+      const live = await pullLessonPage(bid, { page: 0, pageSize: 5, id: lid, lesson_id: lid, customer_id: id }, t);
+      if (!live.ok) continue;
+      const hit = live.items.find((x) => Number(x.id) === lid);
+      if (hit) {
+        item = hit;
+        break;
+      }
+    }
+    if (!item) {
+      dropped.push(lid);
+      continue;
+    }
+    const gid = Number((item.group_ids || [])[0] || 0);
+    const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
+    const packed = packLight(
+      { ...item, date: ymd(item.date), customer_ids: uniquePositiveIds([...(lessonCustomerIds(item as Record<string, unknown>)), id]) },
+      {
+        groupName: slot?.groupName || String(item.lesson_type_name || "занятие"),
+        from: hm(item.time_from) || "",
+        to: hm(item.time_to) || "",
+        teacher: slot?.teacher || "",
+        subject: slot?.subject || "",
+      },
+      id,
+    );
+    if (!packed) {
+      dropped.push(lid);
+      continue;
+    }
+    packed.date = ymd(packed.date);
+    if (!packed.customerIds?.length) packed.customerIds = [id];
+    const prev = prevMap.get(String(packed.lessonId || `${packed.date}|${packed.from}`));
+    if (prev) {
+      if (!(Number(packed.amount) > 0) && Number(prev.amount) > 0) packed.amount = prev.amount;
+      if (!(Number(packed.cttId) > 0) && Number(prev.cttId) > 0) packed.cttId = prev.cttId;
+      const merged = mergeLessonPupils(prev.pupils, packed.pupils);
+      if (merged?.length) packed.pupils = merged;
+    }
+    pulled.push(withPupilNames(packed));
+  }
+  if (pulled.length) {
+    const hold = pendingExportIds(["lesson.update", "lesson.create"]);
+    const next = mergeLocalCalendar(pulled, prevCal, hold, "union");
+    replaceCustomerCalendar(id, next);
+    stampCustomerSync(id, {
+      lessonsAt: new Date().toISOString(),
+      lessonsDisk: countAlfaLessonRows(next),
+      lessonsFull: false,
+    });
+  }
+  if (dropped.length) console.warn(`inbound missing cid=${id} dropped: ${dropped.slice(0, 40).join(",")}`);
+  if (pulled.length) console.warn(`inbound missing cid=${id} seated ${pulled.length} of ${want.length}`);
+  return { ok: true as const, count: pulled.length, dropped };
+}
+
 export async function inboundJournalChunk(offset = 0, _take = 1) {
   if (!alfaLinkedNow()) {
     return { ok: true as const, done: true, next: 0, total: 0, extra: "без Alfa", ids: [] as number[], live: 0, fromCache: true };

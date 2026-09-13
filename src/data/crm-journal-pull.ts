@@ -1027,7 +1027,7 @@ async function pullOneGroup(
 export { keepAlfaProbe };
 
 async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "") {
-  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus } = await import("./crm-journal-inbound");
+  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingCustomerLessons } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
   const mark = (disk: number, alfa: number, probedOk: boolean) => {
@@ -1097,7 +1097,14 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         if (res.done && !lessonsCountShort(disk, alfaGate, true)) break;
         if ("walked" in res && res.walked && lessonsCountShort(disk, alfaGate, true)) break;
       }
-      const probed = await probeCustomerLessons(branchId, cid, { dateFrom: from }).catch(() => ({ total: 0, ok: false as const }));
+      const probed = await probeCustomerLessons(branchId, cid, { dateFrom: from }).catch(() => ({ total: 0, ok: false as const, ids: [] as number[] }));
+      const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+      const missing = (probed.ok ? probed.ids || [] : []).filter((n) => !have.has(n));
+      if (missing.length) {
+        const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0 }));
+        lessons += Number(gap.count) || 0;
+        disk = countAlfaLessonRows(loadCustomerCalendar(cid));
+      }
       mark(disk, probed.ok ? probed.total : 0, probed.ok);
     }
   } else {
