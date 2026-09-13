@@ -1266,29 +1266,31 @@ function PeopleFillList({
     return (
       <li key={id} className={cn("rounded-2xl p-3 ring-1", approved || short || dups ? "bg-amber-50 ring-amber-400" : needsRecheck ? "bg-sky-50 ring-sky-400" : full ? "bg-white ring-emerald-300" : active ? "bg-white ring-primary" : "bg-white ring-black/8")}>
         <div className="flex items-center gap-2">
-          {canHole ? (
-            withHint(
-              <input
-                type="checkbox"
-                className="h-4 w-4 shrink-0 accent-amber-600"
-                checked={approved}
-                aria-label={approved ? "дырка принята" : "одобрить дырку"}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  const on = e.target.checked;
-                  e.target.checked = approved;
-                  if (!confirmHole(row, on)) return;
-                  onHole?.(row, on);
-                }}
-              />,
-              HINT.hole,
-            )
-          ) : null}
           <button type="button" className="min-w-0 flex-1 truncate text-left font-medium" onClick={() => setOpen((cur) => (cur === id ? "" : id))} title={row.name}>
             {row.name}
           </button>
-          <span className="shrink-0 rounded-full bg-black/10 px-2 py-0.5 text-[0.72rem] font-semibold tabular-nums">№{row.cid}</span>
+          <span className="flex shrink-0 items-center gap-1.5">
+            {canHole
+              ? withHint(
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 shrink-0 accent-amber-600"
+                    checked={approved}
+                    aria-label={approved ? "дырка принята" : "одобрить дырку"}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      const on = e.target.checked;
+                      e.target.checked = approved;
+                      if (!confirmHole(row, on)) return;
+                      onHole?.(row, on);
+                    }}
+                  />,
+                  HINT.hole,
+                )
+              : null}
+            <span className="rounded-full bg-black/10 px-2 py-0.5 text-[0.72rem] font-semibold tabular-nums">№{row.cid}</span>
+          </span>
           <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
             {approved ? (
               <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950" title="Журнал не сошёлся. Допущен к следующим шагам. Снять отметку вручную.">
