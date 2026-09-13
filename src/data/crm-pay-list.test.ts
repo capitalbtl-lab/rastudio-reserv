@@ -93,6 +93,7 @@ describe("касса список", () => {
     assert.match(pay, /pay_type_id: 9/);
     assert.match(pay, /markRefundOfGoods/);
     assert.match(pay, /remainderClose/);
+    assert.doesNotMatch(pay, /p >= 40/);
     assert.match(pay, /flushLocalPaysToAlfa/);
     assert.match(pay, /localPaysPending/);
     assert.match(pay, /isOpeningRow/);

@@ -318,6 +318,14 @@ export function mergeJobPatch(cur: JournalJob, extra: Partial<JournalJob>) {
 
 export const JOB_WAIT_CAP = 8;
 
+export function rotateUnfinished(items: JournalJobItem[], idx: number) {
+  const list = items.slice();
+  if (idx < 0 || idx >= list.length || list.length < 2) return { items: list, idx: Math.max(0, Math.min(idx, Math.max(0, list.length - 1))) };
+  const cur = list.splice(idx, 1)[0];
+  if (cur) list.push(cur);
+  return { items: list, idx: idx >= list.length ? 0 : idx };
+}
+
 export function shouldRetryCash(
   kind: string,
   recheck: boolean,
@@ -327,8 +335,8 @@ export function shouldRetryCash(
   const busy = /уже грузим|нет входа|429|502|нет ответа/i.test(err);
   if (kind === "balance" && !recheck) {
     if (res?.student?.paysOk) return false;
-    if (!res || res.ok === false) return busy || /не ответила|ещё страницы/i.test(err);
-    return Boolean(res.student?.paysMore) || /ещё страницы/i.test(err);
+    if (!res || res.ok === false) return busy || /не ответила/i.test(err);
+    return false;
   }
   if (!res || res.ok === false) return busy;
   return false;

@@ -758,7 +758,6 @@ export async function inboundCustomerPays(
         lastShort = pack.items.length < PAY_INBOUND_PAGE;
         const mine = pack.items.filter((it) => payCustomerIdOf(it, 0) === customerId).length;
         if (!mine && pack.items.length) lastShort = true;
-        if (p >= 40) lastShort = true;
         fillBid = bid;
         fillPage = p;
         if (lastShort) {

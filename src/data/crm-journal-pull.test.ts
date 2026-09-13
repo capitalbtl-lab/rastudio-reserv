@@ -223,6 +223,7 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(pull, /force: recheck && payCustomerFilled\(cid\)/);
     assert.match(pull, /d\?\.child\?\.fio \|\| d\?\.parent\?\.fio/);
     assert.doesNotMatch(ui, /function cashLoadedText/);
+    assert.match(pull, /const scanDone = !payFail && !payFillPending\(cid\)/);
     assert.match(pull, /paysRecheckAt: payAt/);
     assert.doesNotMatch(pull, /mark\(diskNow/);
     assert.match(pull, /function liveAttendeeCids/);

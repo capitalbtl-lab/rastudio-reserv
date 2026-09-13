@@ -10,6 +10,7 @@ import {
   mergeJobPatch,
   peopleJobQueue,
   peopleNeedCashLoad,
+  rotateUnfinished,
   saveJournalJob,
   shouldRetryCash,
   shouldRetryOpenRecheck,
@@ -605,6 +606,26 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   const live = loadJournalJob();
   if (live.id !== id) return { done: true, gap: 0 };
   if (live.stop) return { done: true, gap: 0, msg: `Остановили · прошло ${live.n} из ${live.total}.` };
+  const moreCash = pullKind === "balance" && !live.recheck && Boolean(res.student?.paysMore);
+  if (moreCash) {
+    const rot = rotateUnfinished(live.items, live.idx);
+    const next = rot.items[rot.idx];
+    const same = rot.items.length < 2 || (next && next.cid === item.cid && next.branchId === item.branchId);
+    patch({
+      id,
+      items: rot.items,
+      idx: rot.idx,
+      waits: 0,
+      n: live.n,
+      running: true,
+      cur: same ? `касса · ещё «${item.name}»` : `пауза 5 с · дальше ${next?.name || ""}`,
+      fill: fillOf(mode, job.kind, next || item),
+      msg: same
+        ? String(res.extra || res.error || `«${item.name}»: касса не дочитана.`)
+        : `«${item.name}»: пачка кассы, дальше ${next?.name || ""}.`,
+    });
+    return { done: false, gap: jobGapMs("people") };
+  }
   const cashRetry = shouldRetryCash(pullKind, live.recheck, res);
   const openRetry = shouldRetryOpenRecheck(live.recheck, pullKind, res);
   const shortRetry = shouldRetryShortPeople(mode, live.recheck, pullKind, res);
@@ -612,17 +633,6 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   if (retry) {
     const err = String(res.extra || res.error || "");
     const busy = /уже грузим|нет входа|429|502|нет ответа/i.test(err);
-    const cashPages = pullKind === "balance" && !live.recheck && Boolean(res.student?.paysMore) && !busy;
-    if (cashPages) {
-      patch({
-        id,
-        waits: 0,
-        cur: `касса · ещё «${item.name}»`,
-        fill: fillOf(mode, job.kind, item),
-        msg: String(res.extra || res.error || `«${item.name}»: касса не дочитана.`),
-      });
-      return { done: false, gap: jobGapMs("people") };
-    }
     const waits = (live.waits || 0) + 1;
     if (waits > JOB_WAIT_CAP) {
       const idx = live.idx + 1;

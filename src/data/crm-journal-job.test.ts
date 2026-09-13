@@ -6,6 +6,7 @@ import {
   peopleNeedCashLoad,
   peopleJobFinished,
   shouldRetryCash,
+  rotateUnfinished,
   shouldRetryOpenRecheck,
   shouldRetryShortPeople,
   jobGapMs,
@@ -98,13 +99,23 @@ describe("фон истории из Alfa", () => {
     assert.equal(parseJobItems(undefined).length, 0);
   });
 
-  it("касса не закрыта — тот же id, пауза 5 с; явки не крутят «не ответила»", () => {
-    assert.equal(shouldRetryCash("balance", false, { ok: true, student: { paysMore: true } }), true);
-    assert.equal(shouldRetryCash("balance", false, { ok: true, extra: "ещё страницы" }), true);
+  it("касса: пачка не держит cid, ошибка Alfa — тот же", () => {
+    assert.equal(shouldRetryCash("balance", false, { ok: true, student: { paysMore: true } }), false);
+    assert.equal(shouldRetryCash("balance", false, { ok: true, extra: "ещё страницы" }), false);
     assert.equal(shouldRetryCash("balance", false, { ok: false, error: "Alfa не ответила, нажмите снова" }), true);
     assert.equal(shouldRetryCash("balance", false, { ok: true, student: { paysOk: false, paysMore: false } }), false);
-    assert.equal(shouldRetryCash("balance", false, { ok: true, student: { paysOk: false, paysMore: true } }), true);
+    assert.equal(shouldRetryCash("balance", false, { ok: true, student: { paysOk: false, paysMore: true } }), false);
     assert.equal(shouldRetryCash("balance", false, { ok: true, student: { paysOk: true, paysMore: false } }), false);
+    const rot = rotateUnfinished(
+      [
+        { cid: 5795, branchId: 1, name: "Крюкова" },
+        { cid: 1, branchId: 1, name: "Следующий" },
+      ],
+      0,
+    );
+    assert.equal(rot.items[0]?.cid, 1);
+    assert.equal(rot.items[1]?.cid, 5795);
+    assert.equal(rot.idx, 0);
     assert.equal(shouldRetryCash("balance", true, { ok: true, student: { paysOk: true } }), false);
     assert.equal(shouldRetryCash("students", false, { ok: true }), false);
     assert.equal(shouldRetryCash("students", false, { ok: false, error: "Alfa не ответила, нажмите снова" }), false);

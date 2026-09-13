@@ -1233,10 +1233,13 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       tariffs = rows.length;
     }
     const payAt = new Date().toISOString();
-    stampCustomerSync(cid, {
-      paysAt: payAt,
-      ...(recheck && !payFail ? { paysRecheckAt: payAt } : {}),
-    });
+    const scanDone = !payFail && !payFillPending(cid);
+    if (scanDone) {
+      stampCustomerSync(cid, {
+        paysAt: payAt,
+        ...(recheck ? { paysRecheckAt: payAt } : {}),
+      });
+    }
   }
   const sync = customerSyncOf(cid);
   const diskN = Number(sync.lessonsDisk) || lessons;
