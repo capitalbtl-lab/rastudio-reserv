@@ -303,6 +303,9 @@ type StudentHit = {
   pays?: number;
   paysOk?: boolean;
   paysMore?: boolean;
+  paysScanned?: boolean;
+  paysEmpty?: boolean;
+  cashRows?: number;
   rechecked?: boolean;
   paysRechecked?: boolean;
   done: boolean;
@@ -997,23 +1000,6 @@ function patchPeopleSide(
       paysScanned,
       paysEmpty,
       cashRows,
-      paysMore: Boolean(hit.paysMore),
-    const paysRechecked = hit.paysRechecked != null ? Boolean(hit.paysRechecked) : p.paysRechecked;
-    const extra = hit.paysMore
-      ? `касса: ещё страницы, нажмите снова · ${alfa != null ? peopleLessonsLine({ disk, alfa }).line : `на диске ${disk}`}`
-      : alfa != null
-        ? peopleLessonsLine({ disk, alfa }).line
-        : p.extra;
-    return {
-      ...p,
-      lessons: disk,
-      alfa,
-      short,
-      dups,
-      holeApproved: hit.holeApproved != null ? Boolean(hit.holeApproved) : p.holeApproved,
-      journal,
-      pays,
-      paysScanned,
       paysMore: Boolean(hit.paysMore),
       rechecked,
       paysRechecked,
