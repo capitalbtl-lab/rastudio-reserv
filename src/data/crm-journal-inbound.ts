@@ -455,6 +455,29 @@ function lessonIdsOnStudentGroups(cid: number) {
   return [...ids];
 }
 
+/** Жёлтая «с нуля»: календарь с диска, счёт Alfa не трогать, в s20 не ходить. */
+export function resetStudentLessonDisk(customerId: number) {
+  const id = Number(customerId) || 0;
+  if (!id) return { ok: false as const, disk: 0, alfa: 0 };
+  const prev = loadCustomerCalendar(id);
+  const hold = pendingExportIds(["lesson.update", "lesson.create"]);
+  const next = pruneCalendarToAlfaIds(prev, [], hold, [], "");
+  replaceCustomerCalendar(id, next);
+  const disk = countAlfaLessonUniq(next);
+  const keep = customerSyncOf(id);
+  stampCustomerSync(id, {
+    lessonsDisk: disk,
+    lessonsFull: false,
+    lessonsAttend: false,
+    lessonsSeenIds: [],
+    lessonsRecheckAt: "",
+    lessonFill: undefined,
+    lessonsAt: new Date().toISOString(),
+  });
+  const alfa = Number(keep.lessonsAlfa) || 0;
+  return { ok: true as const, disk, alfa };
+}
+
 export function applyCustomerLessonCensus(customerId: number, ids: number[], closed: boolean, keepBefore = "") {
   const id = Number(customerId) || 0;
   if (!closed) return { ok: false as const, disk: countAlfaLessonUniq(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };

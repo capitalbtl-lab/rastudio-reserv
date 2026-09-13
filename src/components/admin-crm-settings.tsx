@@ -95,6 +95,7 @@ const HINT = {
   recheckOnePeople: "Синяя «Перепроверить по одному» — журнал, потом перепись номеров. Дубли с диска только после закрытого контроля. Стоп не оживает. 30 с без движения — с того же человека. В Alfa не пишет. Красная эту чистку не делает.",
   stop: "Стоп останавливает текущую очередь. Текущий человек или группа допишет свой запрос, а следующий уже не стартует. Уже записанное на диск не откатывается — это не «отмена», а пауза. После стопа красную можно нажать снова: пойдёт со следующих, кто ещё слева. Если кнопка серая, сейчас никто не грузится. В Alfa ничего не удаляет и не сохраняет. Можно спокойно отойти и продолжить позже.",
   fullHist: "Эта кнопка только на жёлтой старой карточке, когда в Alfa занятий больше, чем у нас. Это та же красная качка, что «Добрать», но всегда с 1 января 2015, не перепись и не снятие лишних id. Нужна, если человек ходил в 2016–2018, а обычная качка этого не видит. Пишет только на наш диск, дубли по номеру занятия не создаёт. В Alfa не отправляет и оплаты не трогает. Если за один раз счёт не сошёлся, нажмите ещё раз — продолжит с того же человека. Пока грузится другой ученик, кнопка подождёт.",
+  resetHist: "Только жёлтая. Стирает занятия этого ученика с нашего диска и сразу качает с 2015. Счёт Alfa не обнуляет. Свои неотправленные уроки и очередь на Alfa не трогает. Группу и кассу не трогает. В Alfa ничего не пишет. Нужна, если диск засорён и «Добрать» крутит +0. После сброса карточка остаётся слева, пока диск не догонит Alfa.",
   loadCal: "Загружает личный календарь именно этого ученика из Alfa на диск. Сначала сверка, сколько занятий в Alfa, потом добор недостающих. Окно лет — как в списке «годы» наверху экрана. Если карточка жёлтая и человек старый, лучше «Загрузить всю историю»: она берёт с 2015. В Alfa ничего не пишет, не проводит урок и не ставит оценку. Пока идёт другой ученик, эта кнопка не стартует вторую качку параллельно. После успеха карточка должна позеленеть и уйти вправо.",
   hole: "Галка слева только у тех, у кого в Alfa больше, чем на диске. Это не «Добрать»: журнал не закроется, счёт может не сойтись. Человека пускаем вправо с жёлтым «Одобрен». Снять отметку только вручную. Пакетом нельзя. У кого счёт сошёлся, галки нет.",
   loadOneGroups: "Красная кнопка идёт по группам слева по одной, как «по одному» у учеников. Только та колонка, что открыта: «Сейчас идут» или «Архивные». Берёт выбранную порцию — квартал, полугодие или год — и читает явки из Alfa на диск. Следующая группа не стартует, пока эта порция не закрылась. Стоп прерывает очередь после текущей. В Alfa расписание не меняется. Если школа выбрана в фильтре, очередь только по ней. Это шаг 3: групповые явки, не личный календарь и не касса.",
@@ -1094,6 +1095,7 @@ function PeopleFillList({
   onLoad,
   onRecheck,
   onFullHistory,
+  onResetHistory,
   onHole,
   onStop,
   years,
@@ -1105,6 +1107,7 @@ function PeopleFillList({
   onLoad: (row: PeopleRow) => void;
   onRecheck: (row: PeopleRow) => void;
   onFullHistory?: (row: PeopleRow) => void;
+  onResetHistory?: (row: PeopleRow) => void;
   onHole?: (row: PeopleRow, on: boolean) => void;
   onStop?: () => void;
   years?: ReactNode;
@@ -1363,6 +1366,23 @@ function PeopleFillList({
                   Загрузить всю историю
                 </button>,
                 HINT.fullHist,
+              )
+            : null}
+          {short && kind === "students" && onResetHistory
+            ? withHint(
+                <button
+                  type="button"
+                  disabled={busy && !active}
+                  className={BTN_GHOST_SM}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!confirm(`№${row.cid}: стереть занятия с диска и качать с 2015?\nСчёт Alfa (${row.alfa ?? "—"}) не сбросим.`)) return;
+                    onResetHistory(row);
+                  }}
+                >
+                  С нуля
+                </button>,
+                HINT.resetHist,
               )
             : null}
           {approved && onHole
@@ -2530,6 +2550,49 @@ export function AdminCrmSettings() {
     });
   }
 
+  async function resetPersonHistory(row: PeopleRow) {
+    if (!row.cid) return;
+    try {
+      const res = (await adminSchedule({
+        data: {
+          token: token(),
+          action: "journalPull",
+          kind: "lessonsReset",
+          customerId: row.cid,
+        } as never,
+      })) as { ok?: boolean; extra?: string; error?: string; student?: { lessons?: number; alfa?: number; short?: boolean } };
+      if (res?.ok === false) {
+        setMsg(res.error || res.extra || "Не сбросили диск");
+        return;
+      }
+      if (res?.extra) setMsg(res.extra);
+      const key = peopleStudy === "2" ? "archive" : "live";
+      setJournal((cur) => {
+        if (!cur) return cur;
+        const side = cur.progress?.[key];
+        if (!side) return cur;
+        return {
+          ...cur,
+          progress: {
+            ...cur.progress,
+            [key]: {
+              ...side,
+              people: (side.people || []).map((p) =>
+                p.cid === row.cid
+                  ? { ...p, lessons: Number(res?.student?.lessons) || 0, short: true, journal: false, dups: false }
+                  : p,
+              ),
+            },
+          },
+        };
+      });
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Не сбросили диск");
+      return;
+    }
+    await loadPerson(row, "students", peopleStudy, false, "2015-01-01");
+  }
+
   async function holeMark(row: PeopleRow, on: boolean) {
     if (!row.cid) return;
     try {
@@ -3695,6 +3758,7 @@ export function AdminCrmSettings() {
                         onLoad={(row) => void loadPerson(row, "students", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "students", peopleStudy, true)}
                         onFullHistory={(row) => void loadPerson(row, "students", peopleStudy, false, "2015-01-01")}
+                        onResetHistory={(row) => void resetPersonHistory(row)}
                         onHole={(row, on) => void holeMark(row, on)}
                         onStop={() => {
                           requestStop();

@@ -18,7 +18,7 @@ import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
 import { countAlfaLessonUniq, keepAlfaProbe } from "./crm-inbound-core";
 
-export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear";
+export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset";
 export type JournalPullStudy = "1" | "2" | "all";
 
 export type JournalPullGroup = {
@@ -1309,6 +1309,31 @@ export async function journalPull(opts: {
       extra: holeApproved ? `№${cid}: дырка принята` : `№${cid}: штамп снят`,
       more: false,
       student: { cid, holeApproved, short, alfa: probed ? Number(sync.lessonsAlfa) || 0 : undefined },
+      ...litePullState(),
+    };
+  }
+  if (kind === "lessonsReset") {
+    const cid = Number(opts.customerId) || 0;
+    if (!cid) return { ok: false as const, error: "нет customerId", more: false, ...litePullState() };
+    const { resetStudentLessonDisk } = await import("./crm-journal-inbound");
+    const hit = resetStudentLessonDisk(cid);
+    const sync = customerSyncOf(cid);
+    const probed = Boolean(sync.lessonsAlfaAt);
+    const alfa = probed ? Number(sync.lessonsAlfa) || 0 : 0;
+    const short = lessonsCountShort(hit.disk, alfa, probed);
+    return {
+      ok: hit.ok,
+      extra: `№${cid}: диск ${hit.disk} · Alfa ${alfa} · качаем с нуля`,
+      more: false,
+      student: {
+        cid,
+        lessons: hit.disk,
+        alfa,
+        short,
+        dups: false,
+        done: false,
+        holeApproved: Boolean(sync.journalHoleApprovedAt),
+      },
       ...litePullState(),
     };
   }

@@ -76,8 +76,10 @@ describe("штамп входа ученика", () => {
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
     assert.match(sync, /journalHoleApprovedAt\?: string/);
     assert.match(sync, /if \(patch.journalHoleApprovedAt === ""\) delete next.journalHoleApprovedAt/);
-    assert.match(pull, /"holeApprove" \| "holeApproveClear"/);
+    assert.match(sync, /if \(patch.lessonsRecheckAt === ""\) delete next.lessonsRecheckAt/);
+    assert.match(pull, /"holeApprove" \| "holeApproveClear" \| "lessonsReset"/);
     assert.match(pull, /kind === "holeApprove" \|\| kind === "holeApproveClear"/);
+    assert.match(pull, /kind === "lessonsReset"/);
     assert.match(pull, /journalHoleApprovedAt: on \? new Date\(\)\.toISOString\(\) : ""/);
     assert.match(pull, /holeApproved: Boolean\(sync.journalHoleApprovedAt\)/);
     const markAt = pull.indexOf("const mark = ");
@@ -91,6 +93,26 @@ describe("штамп входа ученика", () => {
     assert.doesNotMatch(hole, /inboundCustomerLessons/);
     assert.doesNotMatch(hole, /probeCustomerLessons/);
     assert.match(hole, /stampCustomerSync\(cid, \{ journalHoleApprovedAt:/);
+  });
+
+  it("сброс диска жёлтой: Alfa не трогать, счёт keep, курсор снять", () => {
+    const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
+    const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
+    const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
+    const fnAt = inbound.indexOf("export function resetStudentLessonDisk");
+    const fn = inbound.slice(fnAt, fnAt + 900);
+    assert.match(fn, /pruneCalendarToAlfaIds\(prev, \[\], hold, \[\], ""\)/);
+    assert.match(fn, /lessonsFull: false/);
+    assert.match(fn, /lessonsRecheckAt: ""/);
+    assert.doesNotMatch(fn, /lessonsAlfa:/);
+    assert.doesNotMatch(fn, /token\(|request\(|v2api/);
+    const resetAt = pull.indexOf('kind === "lessonsReset"');
+    const reset = pull.slice(resetAt, resetAt + 1200);
+    assert.match(reset, /resetStudentLessonDisk\(cid\)/);
+    assert.doesNotMatch(reset, /pullOneStudent/);
+    assert.match(ui, /kind: "lessonsReset"/);
+    assert.match(ui, /С нуля/);
+    assert.match(ui, /loadPerson\(row, "students", peopleStudy, false, "2015-01-01"\)/);
   });
 
   it("замок ученика: два cid сразу, файл, свой pid не блокирует", () => {

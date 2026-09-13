@@ -86,6 +86,7 @@ export function stampCustomerSync(customerId: number, patch: CustomerSyncStamp) 
   const next: CustomerSyncStamp = { ...prev, ...patch };
   if (patch.lessonFill === undefined && "lessonFill" in patch) delete next.lessonFill;
   if (patch.paysRecheckAt === "") delete next.paysRecheckAt;
+  if (patch.lessonsRecheckAt === "") delete next.lessonsRecheckAt;
   if (patch.journalHoleApprovedAt === "") delete next.journalHoleApprovedAt;
   if (patch.lessonsAlfaAt === "") {
     delete next.lessonsAlfaAt;

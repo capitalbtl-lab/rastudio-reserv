@@ -42,6 +42,7 @@ describe("шаг 1: группы и состав", () => {
     assert.match(load, /name: spec.name/);
     assert.match(sched, /kind !== "roster"/);
     assert.match(sched, /kind !== "holeApproveClear"/);
+    assert.match(sched, /kind !== "lessonsReset"/);
     assert.match(ui, /Шаг 1 · Группы и состав/);
     assert.match(ui, /jobMode: "roster"/);
     assert.match(ui, /Требуют загрузки состава/);

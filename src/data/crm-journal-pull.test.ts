@@ -176,6 +176,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(sched, /kind !== "audit"/);
     assert.match(sched, /kind !== "roster"/);
     assert.match(sched, /kind !== "holeApproveClear"/);
+    assert.match(sched, /kind !== "lessonsReset"/);
     assert.match(sched, /jobStart/);
     assert.match(ui, /useState<HistTab>\("roster"\)/);
     assert.match(ui, /На странице/);
