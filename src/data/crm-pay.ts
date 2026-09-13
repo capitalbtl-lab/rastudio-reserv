@@ -702,7 +702,7 @@ export async function inboundCustomerPays(
   let page = 0;
   const cur = store.payFill?.[String(customerId)];
   const filled = payCustomerFilled(customerId);
-  if (!opts?.force && filled) return paysOf(customerId);
+  if (!opts?.force && (filled || payFillScanned(customerId))) return paysOf(customerId);
   if (cur && !opts?.force && !cur.done) {
     const i = branches.indexOf(cur.bid);
     bidIdx = i >= 0 ? i : 0;
@@ -726,7 +726,7 @@ export async function inboundCustomerPays(
       if (ran >= maxRun || overBudget()) {
         done = false;
         store.payFill = { ...(store.payFill || {}), [String(customerId)]: { bid, page: p } };
-        save(store);
+        save(store, { keepAll: true });
         break outer;
       }
       try {
@@ -735,6 +735,9 @@ export async function inboundCustomerPays(
         raw.push(...pack.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
         ran += 1;
         lastShort = pack.items.length < PAY_INBOUND_PAGE;
+        const mine = pack.items.filter((it) => payCustomerIdOf(it, 0) === customerId).length;
+        if (!mine && pack.items.length) lastShort = true;
+        if (p >= 40) lastShort = true;
         fillBid = bid;
         fillPage = p;
         if (lastShort) {
@@ -760,15 +763,11 @@ export async function inboundCustomerPays(
         failed = true;
         done = false;
         store.payFill = { ...(store.payFill || {}), [String(customerId)]: { bid, page: p } };
-        save(store);
+        save(store, { keepAll: true });
         break outer;
       }
     }
     if (!failed && b === branches.length - 1 && lastShort) done = true;
-  }
-  if (!failed && !done) {
-    store.payFill = { ...(store.payFill || {}), [String(customerId)]: { bid: fillBid, page: fillPage } };
-    save(store);
   }
   const known: number[] = [];
   try {
@@ -804,7 +803,13 @@ export async function inboundCustomerPays(
       }
     }
   }
-  const pulled = raw.map((it) => packPay(it, customerId, branchId)).filter((x): x is PayRow => Boolean(x));
+  const pulled = raw
+    .map((it) => {
+      const explicit = payCustomerIdOf(it, 0);
+      if (explicit && explicit !== customerId) return null;
+      return packPay(it, customerId, branchId);
+    })
+    .filter((x): x is PayRow => Boolean(x) && Number(x.customerId) === customerId);
   const hold = holdPayIds();
   const merged = markRefundOfGoods(mergePayInbound(pulled, paysOf(customerId), hold));
   replaceCustomerPays(customerId, merged, { keepAll: true });
@@ -834,7 +839,7 @@ export async function inboundCustomerPays(
     }
     if (!headerOk) {
       const next = load();
-      next.payFill = { ...(next.payFill || {}), [String(customerId)]: { bid: Number(fillBid) || branches[0], page: Number(fillPage) || 0 } };
+      next.payFill = { ...(next.payFill || {}), [String(customerId)]: { bid: Number(fillBid) || branches[0], page: Number(fillPage) || 0, done: true } };
       save(next, { keepAll: true });
     }
   }

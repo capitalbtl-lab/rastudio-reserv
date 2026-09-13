@@ -60,6 +60,7 @@ describe("фон истории из Alfa", () => {
     assert.equal(peopleJobFinished(people[1], "balance"), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: true, short: true }, "balance"), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false }, "balance"), false);
+    assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false, paysScanned: true }, "balance"), true);
     assert.equal(peopleJobFinished(people[3], "students"), false);
     assert.equal(peopleJobFinished({ cid: 6, branchId: 2, name: "Е", journal: false, pays: false, dups: true }, "students"), true);
     assert.equal(peopleJobFinished({ cid: 2124, branchId: 1, name: "Г", journal: false, pays: false, short: true, holeApproved: true }, "students"), true);
@@ -150,14 +151,16 @@ describe("фон истории из Alfa", () => {
   });
 
   it("касса слева: fill.done не skip, complete без force — skip", () => {
-    const skip = (filled: boolean, force: boolean) => Boolean(filled) && !force;
+    const skip = (filled: boolean, force: boolean, scanned = false) => Boolean(!force && (filled || scanned));
     assert.equal(skip(false, false), false);
     assert.equal(skip(false, true), false);
     assert.equal(skip(true, false), true);
     assert.equal(skip(true, true), false);
+    assert.equal(skip(false, false, true), true);
+    assert.equal(skip(false, true, true), false);
     const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
     const load = readFileSync(new URL("./crm-history-load.ts", import.meta.url), "utf8");
-    assert.match(pay, /if \(!opts\?\.force && filled\) return paysOf/);
+    assert.match(pay, /if \(!opts\?\.force && \(filled \|\| payFillScanned\(customerId\)\)\) return paysOf/);
     assert.doesNotMatch(pay, /if \(!hit\) markPayJournalComplete/);
     assert.match(pay, /keepAll: true/);
     assert.match(load, /export function historyCashSkip/);
@@ -220,7 +223,9 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /касса · ещё/);
     assert.match(job, /касса · \$\{item.name\}/);
     assert.match(job, /берём следующего/);
-    assert.match(job, /const waits = \(live.waits \|\| 0\) \+ 1/);
+    assert.match(job, /cashPages/);
+    assert.match(job, /сбой · ещё этот/);
+    assert.doesNotMatch(job, /Остановились на «\$\{item\.name\}»\. Нажмите ещё раз/);
     assert.match(job, /if \(waits > JOB_WAIT_CAP\)/);
     assert.match(core, /export function shouldRetryShortPeople/);
     assert.match(job, /не хватает, ещё этот/);
@@ -285,9 +290,9 @@ describe("фон истории из Alfa", () => {
     assert.match(ui, /onLoad=\{\(row, part, recheck\) =>\s*void startHistJob/);
     assert.doesNotMatch(ui, /onLoad=\{\(row, part, recheck\) =>\s*void runJournal/);
     assert.match(ui, /st\?\.job\?\.running/);
-    assert.match(core, /if \(kind === "balance"\) return Boolean\(row.pays\)/);
+    assert.match(core, /if \(kind === "balance"\) return Boolean\(row.pays \|\| row.paysScanned\)/);
     assert.doesNotMatch(core, /res.student\?\.paysOk === false/);
-    assert.match(ui, /if \(kind === "balance"\) return Boolean\(row.pays\)/);
+    assert.match(ui, /if \(kind === "balance"\) return Boolean\(row.pays \|\| row.paysScanned\)/);
     assert.match(ui, /if \(journal\?\.job\?\.running && !journal.job.stop && !stopSchool.current\)/);
     assert.match(ui, /Уже идёт/);
     assert.match(ui, /h === "audit"/);

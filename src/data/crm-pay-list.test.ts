@@ -179,7 +179,10 @@ describe("касса список", () => {
     assert.match(doneBlock, /done: true/);
     assert.doesNotMatch(doneBlock, /remainderClose\(cash, cash/);
     assert.doesNotMatch(doneBlock, /markPayJournalIncomplete/);
-    assert.match(inbound, /!opts\?\.force && filled/);
+    assert.match(inbound, /payCustomerIdOf\(it, 0\) === customerId/);
+    assert.doesNotMatch(inbound, /if \(!failed && !done\) \{/);
+    assert.match(inbound, /save\(store, \{ keepAll: true \}\)/);
+    assert.match(inbound, /explicit && explicit !== customerId/);
     assert.doesNotMatch(inbound, /if \(cur\.done\) return paysOf/);
     assert.doesNotMatch(inbound, /if \(!hit\) markPayJournalComplete/);
     assert.match(inbound, /шапки нет/);

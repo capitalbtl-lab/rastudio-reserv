@@ -11,7 +11,7 @@ import { loadScheduleMap } from "./schedule-map";
 import { listDossierCrm, findDossier, dossiersInGroup, overlayAdminGroups } from "./dossiers";
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
 import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort, lessonsCountExtra, waitLockStudentAlfa, unlockStudentAlfa } from "./crm-customer-sync";
-import { payCustomerFilled, payFillPending } from "./crm-pay";
+import { payCustomerFilled, payFillPending, payFillScanned } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
@@ -57,6 +57,7 @@ type StudentHit = {
   pays: number;
   paysOk?: boolean;
   paysMore?: boolean;
+  paysScanned?: boolean;
   rechecked?: boolean;
   paysRechecked?: boolean;
   done: boolean;
@@ -768,12 +769,13 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       const dups = lessonsCountExtra(diskN, alfaN, probed);
       const journal = lessonsJournalReady(sync);
       const pays = payCustomerFilled(p.cid);
+      const paysScanned = payFillScanned(p.cid);
       const name = fioOf(p.cid);
       const glist = groupsOfStudent(p.cid).slice(0, 3);
       const gnames = glist.join(", ") || own.map((g) => g.name).filter(Boolean).slice(0, 3).join(", ");
       if (journal) journalDone += 1;
       else missJ.push({ id: p.cid, name, extra: short ? `на диске ${diskN}, в Alfa ${alfaN}` : gnames ? gnames : own.length ? "группы ещё не сверены" : "нет полного журнала" });
-      if (pays) cardDone += 1;
+      if (pays || paysScanned) cardDone += 1;
       else missC.push({ id: p.cid, name, extra: journal ? "нет кассы" : gnames || (own.length ? "группы ещё не сверены" : "нет явки") });
       peopleRows.push({
         cid: p.cid,
@@ -787,6 +789,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
         dups,
         journal,
         pays,
+        paysScanned,
         rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
         paysRechecked: Boolean(sync.paysRecheckAt),
         extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : gnames,
@@ -866,6 +869,7 @@ export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: 
       dups,
       journal,
       pays,
+      paysScanned: payFillScanned(p.cid),
       rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
       paysRechecked: Boolean(sync.paysRecheckAt),
       extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : groupsOfStudent(p.cid).slice(0, 2).join(", "),
@@ -1188,16 +1192,18 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const t = await token();
     const { inboundCustomerPays, paysOf, payCustomerFilled, markPayJournalIncomplete } = await import("./crm-pay");
     try {
-      if (recheck && payCustomerFilled(cid)) markPayJournalIncomplete(cid);
-      await inboundCustomerPays(request, t, branchId, cid, { force: recheck && payCustomerFilled(cid) });
+      if (recheck) markPayJournalIncomplete(cid);
+      await inboundCustomerPays(request, t, branchId, cid, { force: Boolean(recheck) });
     } catch (e) {
       payFail = e instanceof Error && e.message ? e.message : "Alfa не ответила, нажмите снова";
     }
     pays = paysOf(cid).length;
     paysOk = !payFail && payCustomerFilled(cid);
-    const { pullCustomerTariffs } = await import("./pupil-tariffs");
-    const rows = await pullCustomerTariffs(branchId, cid, { quick: true }).catch(() => []);
-    tariffs = rows.length;
+    if (!payFillPending(cid)) {
+      const { pullCustomerTariffs } = await import("./pupil-tariffs");
+      const rows = await pullCustomerTariffs(branchId, cid, { quick: true }).catch(() => []);
+      tariffs = rows.length;
+    }
     const syncNow = customerSyncOf(cid);
     const diskNow = countAlfaLessonUniq(loadCustomerCalendar(cid));
     const alfaNow = Number(syncNow.lessonsAlfa) || 0;
@@ -1221,6 +1227,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     blocked: false,
     paysOk,
     paysMore: Boolean(balance && (Boolean(payFail) || payFillPending(cid))),
+    paysScanned: Boolean(balance && payFillScanned(cid)),
     payFail,
     rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
     paysRechecked: Boolean(sync.paysRecheckAt),
@@ -2068,6 +2075,7 @@ export async function journalPull(opts: {
       pays: row.pays,
       paysOk: balance ? Boolean(row.paysOk) : undefined,
       paysMore: Boolean(row.paysMore),
+      paysScanned: Boolean(row.paysScanned),
       rechecked: Boolean(row.rechecked),
       paysRechecked: Boolean(row.paysRechecked),
       done: row.done,

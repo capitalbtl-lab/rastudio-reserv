@@ -326,6 +326,7 @@ type PeopleRow = {
   journal?: boolean;
   pays?: boolean;
   paysMore?: boolean;
+  paysScanned?: boolean;
   rechecked?: boolean;
   paysRechecked?: boolean;
   extra?: string;
@@ -890,7 +891,7 @@ function byPeopleName(a: PeopleRow, b: PeopleRow) {
 }
 
 function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
-  if (kind === "balance") return Boolean(row.pays);
+  if (kind === "balance") return Boolean(row.pays || row.paysScanned);
   if (row.short && row.holeApproved) return true;
   if (row.short) return false;
   if (row.dups) return true;
@@ -966,6 +967,7 @@ function patchPeopleSide(
     if (!short && alfa != null && Number(disk) === Number(alfa)) dups = false;
     if (short) dups = false;
     const pays = hit.paysOk != null ? Boolean(hit.paysOk) : p.pays;
+    const paysScanned = hit.paysScanned != null ? Boolean(hit.paysScanned) : p.paysScanned;
     const rechecked = hit.rechecked != null ? Boolean(hit.rechecked) : p.rechecked;
     const paysRechecked = hit.paysRechecked != null ? Boolean(hit.paysRechecked) : p.paysRechecked;
     const extra = hit.paysMore
@@ -982,6 +984,7 @@ function patchPeopleSide(
       holeApproved: hit.holeApproved != null ? Boolean(hit.holeApproved) : p.holeApproved,
       journal,
       pays,
+      paysScanned,
       paysMore: Boolean(hit.paysMore),
       rechecked,
       paysRechecked,
@@ -992,7 +995,7 @@ function patchPeopleSide(
     ...side,
     people,
     journalDone: people.filter((r) => r.journal).length,
-    cardDone: people.filter((r) => r.pays).length,
+    cardDone: people.filter((r) => r.pays || r.paysScanned).length,
   };
 }
 
