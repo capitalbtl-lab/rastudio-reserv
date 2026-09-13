@@ -10,7 +10,7 @@ import { listAdminSlots } from "./alfacrm-schedule";
 import { loadScheduleMap } from "./schedule-map";
 import { listDossierCrm, findDossier, dossiersInGroup, overlayAdminGroups } from "./dossiers";
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
-import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort, lessonsCountExtra } from "./crm-customer-sync";
+import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort, lessonsCountExtra, waitLockStudentAlfa, unlockStudentAlfa } from "./crm-customer-sync";
 import { payCustomerFilled, payFillPending } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
@@ -1117,6 +1117,10 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       mark(disk, probed.ok ? probed.total : 0, probed.ok);
     }
   } else {
+    if (!(await waitLockStudentAlfa(cid, 20000))) {
+      return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: 0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
+    }
+    try {
     const census = await censusCustomerLessonIds(branchId, cid).catch(() => ({ ids: [] as number[], ok: false as const }));
     disk = countAlfaLessonRows(loadCustomerCalendar(cid));
     const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
@@ -1138,6 +1142,9 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         }
       }
       mark(disk, alfaN, true);
+    }
+    } finally {
+      unlockStudentAlfa(cid);
     }
   }
   let pays = 0;
@@ -1941,9 +1948,10 @@ export async function journalPull(opts: {
       const keep = Number(customerSyncOf(one.cid).lessonsAlfa) || 0;
       const alfaRaw = probed.ok ? probed.total : 0;
       const held = keepAlfaProbe(keep, alfaRaw, probed.ok);
+      const holeApproved = Boolean(customerSyncOf(one.cid).journalHoleApprovedAt);
       const short = lessonsCountShort(disk, held.alfa, held.probed);
       const dups = lessonsCountExtra(disk, held.alfa, held.probed);
-      const closed = Boolean(probed.ok && held.write && !short && !dups);
+      const closed = Boolean(probed.ok && held.write && !short && !dups && !holeApproved);
       stampCustomerSync(one.cid, {
         lessonsDisk: disk,
         ...(held.write ? { lessonsAlfa: held.alfa, lessonsAlfaAt: new Date().toISOString() } : {}),

@@ -538,7 +538,7 @@ export async function enrichCalendarDetails(
   return { calendar: list, filled, changed: filled > 0 };
 }
 
-function skipHoleInbound(id: number, force?: boolean) {
+export function skipHoleInbound(id: number, force?: boolean) {
   if (force) return false;
   const s = customerSyncOf(id);
   if (!s.journalHoleApprovedAt) return false;
@@ -754,6 +754,7 @@ export async function inboundMissingCustomerLessons(
   const id = Number(customerId) || 0;
   const want = uniquePositiveIds(lessonIds).slice(0, Math.max(1, Math.min(50, Number(opts?.take) || 50)));
   if (id <= 0 || !want.length) return { ok: true as const, count: 0, dropped: [] as number[] };
+  if (skipHoleInbound(id, opts?.force)) return { ok: true as const, count: 0, skipped: "hole" as const, dropped: want };
   if (!alfaLinkedNow() && !opts?.force) return { ok: true as const, count: 0, skipped: "offline" as const, dropped: want };
   const { token } = await import("./alfacrm");
   const t = await token();

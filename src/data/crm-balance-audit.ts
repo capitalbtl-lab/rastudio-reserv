@@ -177,14 +177,16 @@ export async function auditOne(cid: number, branchId: number) {
     (!moneyClose(first.clients, shown.alfa) || !moneyClose(first.cash, shown.alfa) || !first.paysComplete || empty);
   if (needRepair) {
     try {
-      const { probeCustomerLessons, inboundCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus } = await import("./crm-journal-inbound");
+      const { probeCustomerLessons, inboundCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, skipHoleInbound } = await import("./crm-journal-inbound");
       const probed = await probeCustomerLessons(shown.branch, id).catch(() => ({ total: 0, ok: false as const }));
       lessonsAlfa = probed.ok ? probed.total : first.lessonsDisk;
       const extraLessons = probed.ok && first.lessonsDisk > probed.total;
       const holeLessons = first.cash > shown.alfa + 1 || (probed.ok && probed.total > first.lessonsDisk);
-      if (extraLessons || holeLessons) {
+      const holeSkip = skipHoleInbound(id);
+      if (extraLessons || (holeLessons && !holeSkip)) {
         const { loadCustomerCalendar } = await import("./group-cards");
         const { countAlfaLessonRows } = await import("./crm-inbound-core");
+        if (!holeSkip) {
         for (let i = 0; i < 4; i += 1) {
           const r = await inboundCustomerLessons(shown.branch, id, {
             force: true,
@@ -198,6 +200,7 @@ export async function auditOne(cid: number, branchId: number) {
           if (r && "done" in r && r.done) break;
           const diskN = countAlfaLessonRows(loadCustomerCalendar(id));
           if (!extraLessons && probed.ok && diskN >= probed.total) break;
+        }
         }
         if (extraLessons) {
           const census = await censusCustomerLessonIds(shown.branch, id, { dateFrom: "2015-01-01" }).catch(() => ({ ids: [] as number[], ok: false as const }));

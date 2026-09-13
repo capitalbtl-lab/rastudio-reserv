@@ -207,6 +207,7 @@ describe("шаг 4 сверка остатка", () => {
     assert.doesNotMatch(src, /customer\.update/);
     assert.doesNotMatch(src, /extras:\s*\{[^}]*balance:\s*String\(shown/);
     assert.doesNotMatch(src, /applyCrmCustomer/);
+    assert.match(src, /skipHoleInbound/);
     assert.match(src, /inboundCustomerLessons/);
     assert.match(src, /full: true/);
     assert.match(src, /applyCustomerLessonCensus/);
