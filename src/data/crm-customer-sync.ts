@@ -1,6 +1,6 @@
 /** Штамп входа ученика: полная история один раз, дальше только новое. */
 
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export const CUSTOMER_SYNC_TTL_MS = 10 * 60 * 1000;
