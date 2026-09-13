@@ -441,7 +441,10 @@ function lessonIdsOnStudentGroups(cid: number) {
     const card = bid ? loadGroupCard(bid, gid) : null;
     for (const les of card?.calendar || []) {
       const lid = Number(les.lessonId) || 0;
-      if (lid > 0) ids.add(lid);
+      if (!(lid > 0)) continue;
+      const inPupils = (les.pupils || []).some((p) => Number(p.customerId) === cid);
+      const inIds = (les.customerIds || []).map(Number).includes(cid);
+      if (inPupils || inIds) ids.add(lid);
     }
   }
   return [...ids];
@@ -535,9 +538,17 @@ export async function enrichCalendarDetails(
   return { calendar: list, filled, changed: filled > 0 };
 }
 
+function skipHoleInbound(id: number, force?: boolean) {
+  if (force) return false;
+  const s = customerSyncOf(id);
+  if (!s.journalHoleApprovedAt) return false;
+  return lessonsCountShort(Number(s.lessonsDisk) || 0, Number(s.lessonsAlfa) || 0, Boolean(s.lessonsAlfaAt));
+}
+
 export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean; dateFrom?: string; prune?: boolean; resetSeen?: boolean }) {
   const id = Number(customerId) || 0;
   if (id <= 0) return { ok: true as const, count: 0, done: true };
+  if (skipHoleInbound(id, opts?.force)) return { ok: true as const, count: 0, skipped: "hole" as const, done: true };
   if (!alfaLinkedNow() && !opts?.force) return { ok: true as const, count: 0, skipped: "offline" as const, done: true };
   const { wantAlfaPullChannel } = await import("./crm-alfa-link");
   if (!wantAlfaPullChannel("lessons") && !opts?.force) return { ok: true as const, count: 0, skipped: "канал" as const, done: true };
@@ -923,10 +934,7 @@ export async function inboundCustomerLessonsChunk(offset = 0, take = 1) {
   for (const cid of slice) {
     const d = findDossier({ crmId: cid });
     const branch = Number(d?.branchId || 1) || 1;
-    const sync = customerSyncOf(cid);
-    const diskN = Number(sync.lessonsDisk) || 0;
-    const alfaN = Number(sync.lessonsAlfa) || 0;
-    if (sync.journalHoleApprovedAt && lessonsCountShort(diskN, alfaN, Boolean(sync.lessonsAlfaAt))) continue;
+    if (skipHoleInbound(cid)) continue;
     for (let round = 0; round < 6; round += 1) {
       const res = await inboundCustomerLessons(branch, cid, { continueLater: false }).catch(() => ({
         ok: true as const,

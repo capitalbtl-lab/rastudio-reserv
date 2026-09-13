@@ -324,7 +324,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /short && !holeApproved/);
     assert.match(rec, /inboundMissingCustomerLessons/);
     assert.match(pull, /!short && !extra && !holeApproved/);
-    assert.match(inbound, /journalHoleApprovedAt && lessonsCountShort/);
+    assert.match(rec, /censusCustomerLessonIds\(branchId, cid\)/);
+    assert.doesNotMatch(rec, /censusCustomerLessonIds\(branchId, cid, \{ dateFrom/);
+    assert.match(inbound, /skipped: "hole"/);
+    assert.match(inbound, /skipHoleInbound/);
+    assert.match(inbound, /inPupils \|\| inIds/);
     assert.match(inbound, /if \(page === pageCap - 1\) aborted = true/);
     assert.match(inbound, /lessonIdsOnStudentGroups/);
     assert.match(inbound, /pruneCalendarToAlfaIds\(prev, uniq, hold, groupKeep\)/);

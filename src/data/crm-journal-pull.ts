@@ -1117,7 +1117,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       mark(disk, probed.ok ? probed.total : 0, probed.ok);
     }
   } else {
-    const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: from }).catch(() => ({ ids: [] as number[], ok: false as const }));
+    const census = await censusCustomerLessonIds(branchId, cid).catch(() => ({ ids: [] as number[], ok: false as const }));
     disk = countAlfaLessonRows(loadCustomerCalendar(cid));
     const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
     if (!census.ok) {
