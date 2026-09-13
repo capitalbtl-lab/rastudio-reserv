@@ -891,7 +891,7 @@ function byPeopleName(a: PeopleRow, b: PeopleRow) {
 }
 
 function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
-  if (kind === "balance") return Boolean(row.pays || row.paysScanned);
+  if (kind === "balance") return Boolean(row.pays);
   if (row.short && row.holeApproved) return true;
   if (row.short) return false;
   if (row.dups) return true;
@@ -995,7 +995,7 @@ function patchPeopleSide(
     ...side,
     people,
     journalDone: people.filter((r) => r.journal).length,
-    cardDone: people.filter((r) => r.pays || r.paysScanned).length,
+    cardDone: people.filter((r) => r.pays).length,
   };
 }
 
