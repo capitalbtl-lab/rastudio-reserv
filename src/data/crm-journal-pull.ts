@@ -1136,8 +1136,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       disk = applied.disk;
       const alfaN = applied.alfa;
       const short = lessonsCountShort(disk, alfaN, true);
+      const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
       if (short && !holeApproved) {
-        const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
         const missing = census.ids.filter((n) => !have.has(n));
         if (missing.length) {
           const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0 }));
@@ -1145,8 +1145,17 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           seated += Number(gap.count) || 0;
           disk = countAlfaLessonRows(loadCustomerCalendar(cid));
         }
+      } else if (windowFrom && !holeApproved) {
+        const extraIds = [...have].filter((n) => !census.ids.includes(n));
+        if (extraIds.length) {
+          const gap = await inboundMissingCustomerLessons(branchId, cid, extraIds, { force: true, take: 50 }).catch(() => ({ count: 0 }));
+          lessons += Number(gap.count) || 0;
+          seated += Number(gap.count) || 0;
+          disk = countAlfaLessonRows(loadCustomerCalendar(cid));
+        }
       }
-      mark(disk, alfaN, true);
+      const bump = Number(seated) || 0;
+      mark(disk, windowFrom && bump ? Math.max(alfaN, alfaN + bump) : alfaN, true);
       }
     }
     } finally {

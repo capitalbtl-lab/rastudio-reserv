@@ -324,6 +324,8 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(rec, /if \(extra\)/);
     assert.doesNotMatch(rec, /inboundCustomerLessons\(/);
     assert.match(rec, /short && !holeApproved/);
+    assert.match(rec, /windowFrom && !holeApproved/);
+    assert.match(rec, /extraIds/);
     assert.match(rec, /inboundMissingCustomerLessons/);
     assert.match(pull, /!short && !extra && !holeApproved/);
     assert.match(rec, /censusCustomerLessonIds\(branchId, cid, windowFrom \? \{ dateFrom: windowFrom \} : \{\}/);
