@@ -19,6 +19,8 @@ export type CustomerSyncStamp = {
   paysAt?: string;
   lessonsRecheckAt?: string;
   paysRecheckAt?: string;
+  /** Дырка журнала принята человеком. Проба/Добрать/синяя не ставят и не снимают. */
+  journalHoleApprovedAt?: string;
   /** Сколько занятий Alfa отдаёт по customer_id (сверка с диском). */
   lessonsAlfa?: number;
   lessonsAlfaAt?: string;
@@ -83,6 +85,7 @@ export function stampCustomerSync(customerId: number, patch: CustomerSyncStamp) 
   const next: CustomerSyncStamp = { ...prev, ...patch };
   if (patch.lessonFill === undefined && "lessonFill" in patch) delete next.lessonFill;
   if (patch.paysRecheckAt === "") delete next.paysRecheckAt;
+  if (patch.journalHoleApprovedAt === "") delete next.journalHoleApprovedAt;
   if (patch.lessonsAlfaAt === "") {
     delete next.lessonsAlfaAt;
     delete next.lessonsAlfa;

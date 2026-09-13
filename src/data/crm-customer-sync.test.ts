@@ -59,6 +59,28 @@ describe("штамп входа ученика", () => {
     assert.equal(lessonsJournalReady({ lessonsFull: true, lessonsAttend: true, lessonsDisk: 3 }), true);
     assert.equal(lessonsJournalReady({ lessonsDisk: 47 }), false);
   });
+
+  it("штамп дырки: ключ ISO, пустая строка снимает, проба не пишет", () => {
+    const sync = readFileSync(new URL("./crm-customer-sync.ts", import.meta.url), "utf8");
+    const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
+    assert.match(sync, /journalHoleApprovedAt\?: string/);
+    assert.match(sync, /if \(patch.journalHoleApprovedAt === ""\) delete next.journalHoleApprovedAt/);
+    assert.match(pull, /"holeApprove" \| "holeApproveClear"/);
+    assert.match(pull, /kind === "holeApprove" \|\| kind === "holeApproveClear"/);
+    assert.match(pull, /journalHoleApprovedAt: on \? new Date\(\)\.toISOString\(\) : ""/);
+    assert.match(pull, /holeApproved: Boolean\(sync.journalHoleApprovedAt\)/);
+    const markAt = pull.indexOf("const mark = ");
+    const markEnd = pull.indexOf("return { short, extra, closed }", markAt);
+    const mark = pull.slice(markAt, markEnd > markAt ? markEnd : markAt + 800);
+    assert.doesNotMatch(mark, /journalHoleApprovedAt/);
+    const holeAt = pull.indexOf('kind === "holeApprove"');
+    const holeEnd = pull.indexOf("const wantedEarly", holeAt);
+    const hole = pull.slice(holeAt, holeEnd > holeAt ? holeEnd : holeAt + 900);
+    assert.doesNotMatch(hole, /pullOneStudent/);
+    assert.doesNotMatch(hole, /inboundCustomerLessons/);
+    assert.doesNotMatch(hole, /probeCustomerLessons/);
+    assert.match(hole, /stampCustomerSync\(cid, \{ journalHoleApprovedAt:/);
+  });
 });
 
 describe("карточка не ждёт Alfa", () => {

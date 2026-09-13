@@ -18,7 +18,7 @@ import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
 import { countAlfaLessonRows, keepAlfaProbe } from "./crm-inbound-core";
 
-export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy";
+export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear";
 export type JournalPullStudy = "1" | "2" | "all";
 
 export type JournalPullGroup = {
@@ -65,6 +65,7 @@ type StudentHit = {
   short?: boolean;
   dups?: boolean;
   seated?: number;
+  holeApproved?: boolean;
 };
 
 type StudentsReport = {
@@ -671,6 +672,7 @@ const blankPeople = (n: number) => ({
     lessons: number;
     alfa?: number;
     short?: boolean;
+    holeApproved?: boolean;
     journal: boolean;
     pays: boolean;
     rechecked: boolean;
@@ -739,6 +741,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       lessons: number;
       alfa?: number;
       short?: boolean;
+      holeApproved?: boolean;
       dups?: boolean;
       journal: boolean;
       pays: boolean;
@@ -776,6 +779,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
         lessons: diskN,
         alfa: probed ? alfaN : undefined,
         short,
+        holeApproved: Boolean(sync.journalHoleApprovedAt),
         dups,
         journal,
         pays,
@@ -852,6 +856,7 @@ export function journalPeopleSide(study: JournalPullStudy) {
       lessons: diskN,
       alfa: probed ? alfaN : undefined,
       short,
+      holeApproved: Boolean(sync.journalHoleApprovedAt),
       dups,
       journal,
       pays,
@@ -1261,6 +1266,23 @@ export async function journalPull(opts: {
       archived: Boolean(opts.archived),
     });
     return journalJobView();
+  }
+  if (kind === "holeApprove" || kind === "holeApproveClear") {
+    const cid = Number(opts.customerId) || 0;
+    if (!cid) return { ok: false as const, error: "нет customerId", more: false, ...litePullState() };
+    const on = kind === "holeApprove";
+    stampCustomerSync(cid, { journalHoleApprovedAt: on ? new Date().toISOString() : "" });
+    const sync = customerSyncOf(cid);
+    const holeApproved = Boolean(sync.journalHoleApprovedAt);
+    const probed = Boolean(sync.lessonsAlfaAt);
+    const short = lessonsCountShort(Number(sync.lessonsDisk) || 0, probed ? Number(sync.lessonsAlfa) || 0 : 0, probed);
+    return {
+      ok: true as const,
+      extra: holeApproved ? `№${cid}: дырка принята` : `№${cid}: штамп снят`,
+      more: false,
+      student: { cid, holeApproved, short, alfa: probed ? Number(sync.lessonsAlfa) || 0 : undefined },
+      ...litePullState(),
+    };
   }
   const wantedEarly = Number(opts.customerId) || 0;
   const peopleKinds: JournalPullKind[] = ["students", "balance", "archiveCatalog", "archiveCount", "archiveAdd", "audit"];
@@ -1943,7 +1965,7 @@ export async function journalPull(opts: {
         count: held.alfa,
         scanned: 1,
         more: false,
-        student: { cid: one.cid, branchId: one.branchId, name, groups: groupsOfStudent(one.cid), lessons: disk, pays: 0, done: closed, ok: closed, alfa: held.alfa, short, dups },
+        student: { cid: one.cid, branchId: one.branchId, name, groups: groupsOfStudent(one.cid), lessons: disk, pays: 0, done: closed, ok: closed, alfa: held.alfa, short, dups, holeApproved: Boolean(customerSyncOf(one.cid).journalHoleApprovedAt) },
         ...snap(),
       };
     }
@@ -1979,6 +2001,7 @@ export async function journalPull(opts: {
       short: row.short,
       dups: row.dups,
       seated: Number(row.seated) || 0,
+      holeApproved: Boolean(customerSyncOf(one.cid).journalHoleApprovedAt),
     };
     const prev = store.lastStudents && store.lastStudents.study === study ? store.lastStudents.rows : [];
     const merged = [hit, ...prev.filter((r) => r.cid !== hit.cid)].slice(0, 40);
