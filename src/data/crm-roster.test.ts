@@ -49,7 +49,8 @@ describe("шаг 1: группы и состав", () => {
     assert.match(sched, /kind !== "lessonsReset"/);
     assert.match(ui, /Шаг 1 · Группы и состав/);
     assert.match(ui, /jobMode: "roster"/);
-    assert.match(ui, /Требуют загрузки состава/);
+    assert.match(ui, /Люди без группы/);
+    assert.match(ui, /HINT\.ungrouped/);
     assert.match(ui, /loadRosterOne/);
     assert.match(ui, /HINT\.tabRoster/);
     assert.doesNotMatch(ui, /enqueueExport/);

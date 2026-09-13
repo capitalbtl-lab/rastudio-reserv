@@ -108,6 +108,10 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /rankedStudentIds\(study\)/);
     assert.match(pull, /if \(lead\) return study === "1"/);
     assert.match(pull, /skipLeads/);
+    assert.match(pull, /export function peopleWithoutLiveGroup/);
+    assert.match(pull, /x\.study !== 1\) continue/);
+    assert.match(pull, /ungrouped/);
+    assert.doesNotMatch(pull, /else if \(school\) \{/);
     assert.doesNotMatch(pull, /if \(lead\) return Boolean\(study === "1" && pol\?\.leads\)/);
     assert.doesNotMatch(pull, /\[\.\.\.rankedStudentIds\("1"\), \.\.\.rankedStudentIds\("2"\)\]/);
     assert.match(pull, /pending\.slice\(0, 1\)/);

@@ -88,6 +88,7 @@ const HINT = {
   roster: "Красная кнопка читает состав одной группы из Alfa (cgi) и пишет людей на наш диск. По одной группе, пауза 5 секунд. Если человека ещё не было в карточках — создаёт карточку. Кто выбыл из группы, помечается как неактивный в этой группе, карточка не удаляется. Журнал, касса и ДЗ не качаются. В Alfa ничего не создаёт и не меняет. Это основа шагов 2–5: «Сейчас ходят» считается по этому составу.",
   rosterRecheck: "Ещё раз спрашивает cgi этой группы и дописывает новых, снимает выбывших. Нужна, если состав в Alfa изменился. Пауза 5 с между группами. В Alfa не пишет.",
   rosterWho: "Кто считается активным после состава. В живых группах на шаг 2 едут и ученики, и лиды — календарь один. Галка «лиды» на состав: если снять, шаг 1 их не подчёркивает, шаг 2 всё равно качает журнал по cgi. «Архив в живой группе» оставляет тех, кто ходит, хотя карточка архивная. «Был на занятии» сужает набор, если журнал уже на диске. Касса и сверка лидов не берут, пока is_study не станет 1.",
+  ungrouped: "Клиенты Alfa без живой группы: не «сейчас ходят» и не архив. Красная качает только их календарь, по одному, пауза 5 с. Состав cgi не спрашивает — группы нет. Не выдумывает groupId. В Alfa не пишет.",
   loadOnePeople: "Красная кнопка идёт по ученикам слева сверху вниз, строго по одному. Сначала спрашивает Alfa, сколько занятий в журнале человека. Если на нашем диске уже столько же — качку пропускает и переносит карточку вправо, в «загрузка завершена». Если в Alfa занятий больше — дописывает недостающие на диск и не создаёт дубли по номеру урока. Между людьми пауза пять секунд, чтобы Alfa не отшила пачкой запросов. Насколько далеко в прошлое смотреть, задаёт список «годы» справа от кнопки. «Стоп» прерывает очередь после текущего человека. В Alfa ничего не записывается и не удаляется — это только чтение журнала на сайт. Жёлтой карточке «в Alfa больше» часто нужно окно «с начала · 2015» или отдельная кнопка «Загрузить всю историю».",
   years: "По умолчанию «С начала · 2015» — вся история, как сверка счёта. «7 лет», «3 года» и «1 год» короче, только если человек ходит недавно. Действует на красную, «Добрать» и синюю, пока счёт ещё не сходился. Уже зелёным (или диск ≥ Alfa) синяя смотрит ~месяц, не 2015. В Alfa ничего не отправляет.",
   probe: "«Сверить счёт» идёт по одному человеку, пауза 5 с. Перепись уникальных номеров занятий по филиалам 1–4 с 2015. Не сумма total. Пустой ответ Alfa не считает журнал пустым и ничего не снимает. Цифры разные — жёлтая. Сошлись — вправо. В Alfa не пишет.",
@@ -1009,6 +1010,7 @@ function applyJobStatus<T extends {
     live?: { people?: PeopleRow[]; journalDone?: number; cardDone?: number; total?: number };
     archive?: { people?: PeopleRow[]; journalDone?: number; cardDone?: number; total?: number };
     groups?: { rows?: FillRow[]; [k: string]: unknown };
+    ungrouped?: { total?: number; items?: { cid?: number; branchId?: number; name?: string }[]; more?: number };
   };
   students?: { live?: number; archive?: number; all?: number };
   lastStudents?: { study?: string; rows?: StudentHit[] } | null;
@@ -1028,6 +1030,7 @@ function applyJobStatus<T extends {
     live: mergePeopleSide(base.progress?.live, res.progress?.live),
     archive: mergePeopleSide(base.progress?.archive, res.progress?.archive),
     groups: res.progress?.groups || base.progress?.groups,
+    ungrouped: res.progress?.ungrouped || base.progress?.ungrouped,
   };
   if (hit) {
     progress = {
@@ -1842,6 +1845,7 @@ export function AdminCrmSettings() {
       groups?: { total: number; done: number; periods?: number; miss?: MissPack; doneList?: MissPack; rows?: FillRow[] };
       live?: { total: number; journalDone: number; cardDone: number; missJournal?: MissPack; missCard?: MissPack; people?: PeopleRow[] };
       archive?: { total: number; journalDone: number; cardDone: number; missJournal?: MissPack; missCard?: MissPack; people?: PeopleRow[] };
+      ungrouped?: { total?: number; items?: { cid?: number; branchId?: number; name?: string }[]; more?: number };
     };
     lastLife?: {
       at?: string;
@@ -3370,6 +3374,49 @@ export function AdminCrmSettings() {
                           </ul>
                         </div>
                       </div>
+                      {(() => {
+                        const ug = p?.ungrouped;
+                        const n = Number(ug?.total) || 0;
+                        const items = ug?.items || [];
+                        return (
+                          <div className="mt-4 rounded-2xl bg-white px-3 py-3 ring-1 ring-black/8">
+                            <p className="font-semibold">Люди без группы · {n}</p>
+                            <p className="mt-1 text-[0.78rem] text-muted">Клиенты Alfa без живого cgi. Не архив. Не смешиваем с «сейчас ходят».</p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              {withHint(
+                                <button
+                                  type="button"
+                                  className={BTN_LOAD}
+                                  disabled={busy || !n}
+                                  onClick={() =>
+                                    void startHistJob({
+                                      jobMode: "people",
+                                      study: "1",
+                                      peopleKind: "students",
+                                      dateFrom: "2015-01-01",
+                                      name: "Люди без группы",
+                                      jobItems: items.map((x) => ({ cid: x.cid, branchId: x.branchId, name: x.name })),
+                                    })
+                                  }
+                                >
+                                  Календарь
+                                </button>,
+                                HINT.ungrouped,
+                              )}
+                            </div>
+                            {n ? (
+                              <ul className="mt-2 max-h-40 space-y-1 overflow-auto text-sm">
+                                {items.slice(0, 40).map((x) => (
+                                  <li key={x.cid}>
+                                    {x.name} <span className="text-muted">№{x.cid}</span>
+                                  </li>
+                                ))}
+                                {n > 40 ? <li className="text-muted">ещё {n - 40}</li> : null}
+                              </ul>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
                     </>
                   );
                 })()}

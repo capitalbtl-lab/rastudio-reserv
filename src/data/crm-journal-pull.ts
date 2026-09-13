@@ -467,16 +467,6 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
         pool.push(x);
       }
     }
-  } else if (school) {
-    const seen = new Set<number>();
-    for (const g of journalPullGroups().filter((x) => x.school === school)) {
-      for (const d of dossiersInGroup(g.branchId, g.groupId)) {
-        const row = rowFromDossier(d, g.branchId);
-        if (!row.cid || seen.has(row.cid)) continue;
-        seen.add(row.cid);
-        pool.push(row);
-      }
-    }
   } else {
     pool = listDossierCrm();
   }
@@ -527,6 +517,20 @@ function fioOf(cid: number) {
 function groupsOfStudent(cid: number) {
   const d = findDossier({ crmId: cid });
   return (d?.groupLinks || []).map((g) => String(g.name || "").trim()).filter(Boolean);
+}
+
+/** Клиенты Alfa без живого cgi. Не архив, не лид, не «сейчас ходят». */
+export function peopleWithoutLiveGroup() {
+  const live = new Set(rankedStudentIds("1").map((x) => x.cid));
+  const out: { cid: number; branchId: number; name: string }[] = [];
+  for (const x of listDossierCrm()) {
+    if (!x.cid || live.has(x.cid)) continue;
+    if (x.status === "удалён" || x.removed === "1") continue;
+    if (x.study === 0 || x.status === "лид") continue;
+    if (x.study !== 1) continue;
+    out.push({ cid: x.cid, branchId: x.branchId || 1, name: fioOf(x.cid) });
+  }
+  return uniqueByCid(out);
 }
 
 function packList<T>(rows: T[], cap = MISS_CAP) {
@@ -804,6 +808,8 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
     };
   }
 
+  const ug = peopleWithoutLiveGroup();
+  const ungrouped = { total: ug.length, items: ug, more: 0 };
   if (opts?.skipPeople) {
     const liveN = rankedStudentIds("1").length;
     const archN = rankedStudentIds("2").length;
@@ -818,11 +824,9 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       },
       live: { ...blankPeople(liveN), total: liveN },
       archive: { ...blankPeople(archN), total: archN },
+      ungrouped,
     };
   }
-
-  const live = studentSide("1");
-  const arch = studentSide("2");
   return {
     groups: {
       total: groups.length,
@@ -832,8 +836,9 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       doneList: packList(groupsDone, 200),
       rows: rows.slice(0, 800),
     },
-    live,
-    archive: arch,
+    live: studentSide("1"),
+    archive: studentSide("2"),
+    ungrouped,
   };
 }
 
@@ -898,6 +903,7 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
       },
       live: emptySide("1"),
       archive: emptySide("2"),
+      ungrouped: packList([] as { cid: number; branchId: number; name: string }[]),
     };
   }
   return {
