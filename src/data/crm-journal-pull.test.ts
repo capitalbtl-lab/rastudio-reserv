@@ -296,6 +296,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /export async function inboundMissingCustomerLessons/);
     assert.match(pull, /inboundMissingCustomerLessons/);
     assert.match(pull, /missing\.length/);
+    assert.match(pull, /lessonsSeenIds/);
+    const missAt = inbound.indexOf("export async function inboundMissingCustomerLessons");
+    const miss = inbound.slice(missAt, missAt + 2200);
+    assert.match(miss, /id: lid, lesson_id: lid \}/);
+    assert.doesNotMatch(miss, /customer_id: id/);
     function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
       const k = Number(keep) || 0;
       const a = Number(alfa) || 0;
@@ -316,7 +321,7 @@ describe("ручной журнал с Alfa", () => {
     const oneAt = pull.indexOf("async function pullOneStudent");
     const oneEnd = pull.indexOf("export async function journalPull", oneAt);
     const one = pull.slice(oneAt, oneEnd > oneAt ? oneEnd : oneAt + 9000);
-    const recAt = one.indexOf("const census = await censusCustomerLessonIds");
+    const recAt = one.indexOf("const windowFrom = recheckCensusDateFrom");
     const rec = one.slice(recAt);
     assert.match(one, /waitLockStudentAlfa\(cid, 20000\)/);
     assert.match(rec, /unlockStudentAlfa\(cid\)/);

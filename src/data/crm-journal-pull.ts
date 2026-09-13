@@ -1086,6 +1086,22 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           paysRechecked: false,
         };
     } else {
+      const have0 = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+      let missing = (customerSyncOf(cid).lessonsSeenIds || []).filter((n) => !have0.has(n));
+      if (lessonsCountShort(disk, alfaGate, true) && !missing.length) {
+        const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: from }).catch(() => ({ ids: [] as number[], ok: false as const }));
+        if (census.ok) {
+          stampCustomerSync(cid, { lessonsSeenIds: census.ids });
+          missing = census.ids.filter((n) => !have0.has(n));
+        }
+      }
+      if (missing.length) {
+        const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0 }));
+        lessons += Number(gap.count) || 0;
+        seated += Number(gap.count) || 0;
+        disk = countAlfaLessonRows(loadCustomerCalendar(cid));
+      }
+      if (lessonsCountShort(disk, alfaGate, true)) {
       for (let i = 0; i < 6; i += 1) {
         const res = await inboundCustomerLessons(branchId, cid, {
           take: 8,
@@ -1105,16 +1121,18 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         if (res.done && !lessonsCountShort(disk, alfaGate, true)) break;
         if ("walked" in res && res.walked && lessonsCountShort(disk, alfaGate, true)) break;
       }
-      const probed = await probeCustomerLessons(branchId, cid, { dateFrom: from }).catch(() => ({ total: 0, ok: false as const, ids: [] as number[] }));
-      const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
-      const missing = (probed.ok ? probed.ids || [] : []).filter((n) => !have.has(n));
-      if (missing.length) {
-        const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0 }));
-        lessons += Number(gap.count) || 0;
-        seated += Number(gap.count) || 0;
-        disk = countAlfaLessonRows(loadCustomerCalendar(cid));
       }
-      mark(disk, probed.ok ? probed.total : 0, probed.ok);
+      if (lessonsCountShort(disk, alfaGate, true) && missing.length) {
+        const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+        const rest = missing.filter((n) => !have.has(n));
+        if (rest.length) {
+          const gap = await inboundMissingCustomerLessons(branchId, cid, rest, { force: true, take: 50 }).catch(() => ({ count: 0 }));
+          lessons += Number(gap.count) || 0;
+          seated += Number(gap.count) || 0;
+          disk = countAlfaLessonRows(loadCustomerCalendar(cid));
+        }
+      }
+      mark(disk, alfaGate, true);
     }
   } else {
     if (!(await waitLockStudentAlfa(cid, 20000))) {

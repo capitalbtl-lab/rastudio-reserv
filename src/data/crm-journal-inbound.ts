@@ -794,7 +794,7 @@ export async function inboundMissingCustomerLessons(
   for (const lid of want) {
     let item: Parameters<typeof packLight>[0] | undefined;
     for (const bid of branches) {
-      const live = await pullLessonPage(bid, { page: 0, pageSize: 5, id: lid, lesson_id: lid, customer_id: id }, t);
+      const live = await pullLessonPage(bid, { page: 0, pageSize: 5, id: lid, lesson_id: lid }, t);
       if (!live.ok) continue;
       const hit = live.items.find((x) => Number(x.id) === lid);
       if (hit) {
