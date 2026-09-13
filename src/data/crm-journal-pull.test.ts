@@ -273,12 +273,17 @@ describe("ручной журнал с Alfa", () => {
 
   it("проба не стирает известный счёт Alfa и не закрывает дырку", () => {
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
-    assert.match(pull, /export function keepAlfaProbe/);
-    assert.match(pull, /if \(!probedOk\) return \{ write: false, alfa: k, probed: k > 0 \}/);
-    assert.match(pull, /if \(k > 0 && a < k\) return \{ write: false, alfa: k, probed: true \}/);
+    const core = readFileSync(new URL("./crm-inbound-core.ts", import.meta.url), "utf8");
+    const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
+    assert.match(core, /export function keepAlfaProbe/);
+    assert.match(core, /if \(!probedOk\) return \{ write: false, alfa: k, probed: k > 0 \}/);
+    assert.match(core, /if \(k > 0 && a < k\) return \{ write: false, alfa: k, probed: true \}/);
+    assert.match(pull, /keepAlfaProbe/);
     assert.match(pull, /first\.ok && !weak && disk >= alfaGate && !extra0/);
     assert.doesNotMatch(pull, /lessonsAlfaAt: ""/);
     assert.match(pull, /closed \? \{ lessonsFull: true, lessonsAttend: true \} : \{ lessonsFull: false \}/);
+    assert.match(inbound, /keepAlfaProbe\(keep, uniq\.length, true\)/);
+    assert.doesNotMatch(inbound, /lessonsAlfa: uniq\.length/);
     function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
       const k = Number(keep) || 0;
       const a = Number(alfa) || 0;

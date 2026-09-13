@@ -16,7 +16,7 @@ import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlap
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
-import { countAlfaLessonRows } from "./crm-inbound-core";
+import { countAlfaLessonRows, keepAlfaProbe } from "./crm-inbound-core";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -1024,14 +1024,7 @@ async function pullOneGroup(
   return { extra, count: n, ok, capped };
 }
 
-/** Сорванная/слабая проба не затирает известный счёт Alfa и не закрывает cid. */
-export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
-  const k = Number(keep) || 0;
-  const a = Number(alfa) || 0;
-  if (!probedOk) return { write: false, alfa: k, probed: k > 0 };
-  if (k > 0 && a < k) return { write: false, alfa: k, probed: true };
-  return { write: true, alfa: a, probed: true };
-}
+export { keepAlfaProbe };
 
 async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "") {
   const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus } = await import("./crm-journal-inbound");

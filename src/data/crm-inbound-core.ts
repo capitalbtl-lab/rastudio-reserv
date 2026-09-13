@@ -4,6 +4,15 @@ export function inboundTake(opts: { pending?: boolean }) {
   return opts.pending ? ("skip" as const) : ("alfa" as const);
 }
 
+/** Сорванная/слабая проба не затирает известный счёт Alfa и не закрывает cid. */
+export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
+  const k = Number(keep) || 0;
+  const a = Number(alfa) || 0;
+  if (!probedOk) return { write: false, alfa: k, probed: k > 0 };
+  if (k > 0 && a < k) return { write: false, alfa: k, probed: true };
+  return { write: true, alfa: a, probed: true };
+}
+
 export function pendingEntityIds(
   jobs: { op: string; entityId?: number; body?: { localId?: number } }[],
   ops?: string[],
