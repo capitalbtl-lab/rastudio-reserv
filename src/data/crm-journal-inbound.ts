@@ -590,7 +590,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         if (ran >= maxRun || cur.done || lastShort) break;
       }
       if (aborted) break;
-      if (!progressed && !cur.done && cur.page < maxPages) cur = lessonFillAdvance(cur, true, branches);
+      if (!progressed && !cur.done) cur = lessonFillAdvance(cur, true, branches);
     }
     const droppedNoDate: number[] = [];
     const pulled: GroupCalLesson[] = [];
@@ -677,13 +677,15 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     replaceCustomerCalendar(id, next);
     const diskNow = countAlfaLessonRows(next);
     const keep = Number(customerSyncOf(id).lessonsAlfa) || 0;
-    if (keep > 0 && diskNow < keep && cur.done && !aborted) {
+    const walked = Boolean(cur.done) && !aborted;
+    const fillDone = inboundFillClosed(diskNow, keep, walked, aborted);
+    if (!fillDone && walked && keep > diskNow) {
       cur = lessonFillStart(branches[0] || branch, dateFrom);
     }
-    const fillDone = inboundFillClosed(diskNow, keep, Boolean(cur.done), aborted);
+    const wasFull = Boolean(customerSyncOf(id).lessonsFull);
     stampCustomerSync(id, {
       lessonsAt: new Date().toISOString(),
-      lessonsFull: homeLite ? false : fillDone,
+      lessonsFull: homeLite ? false : wantFull ? fillDone : wasFull,
       lessonsAttend: homeLite ? customerSyncOf(id).lessonsAttend : customerSyncOf(id).lessonsAttend || fillDone,
       lessonFill: fillDone || !wantFull ? undefined : cur,
       lessonsDisk: diskNow,
@@ -697,9 +699,9 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       console.warn(`inbound lessons cid=${id} dropped no-date: ${droppedNoDate.slice(0, 40).join(",")}`);
     }
     if (!fillDone && keep > diskNow) {
-      console.warn(`inbound lessons cid=${id} short disk=${diskNow} alfa=${keep} cursorDone=${Boolean(cur.done)} pulled=${pulled.length}`);
+      console.warn(`inbound lessons cid=${id} short disk=${diskNow} alfa=${keep} walked=${walked} pulled=${pulled.length}`);
     }
-    return { ok: true as const, count: pulled.length, done: fillDone || !wantFull, aborted, dropped: droppedNoDate };
+    return { ok: true as const, count: pulled.length, done: fillDone || !wantFull, aborted, dropped: droppedNoDate, walked };
   } finally {
     markLessonFillBusy(id, false);
     unlockStudentAlfa(id);

@@ -1095,6 +1095,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         }
         disk = countAlfaLessonRows(loadCustomerCalendar(cid));
         if (res.done && !lessonsCountShort(disk, alfaGate, true)) break;
+        if ("walked" in res && res.walked && lessonsCountShort(disk, alfaGate, true)) break;
       }
       const probed = await probeCustomerLessons(branchId, cid, { dateFrom: from }).catch(() => ({ total: 0, ok: false as const }));
       mark(disk, probed.ok ? probed.total : 0, probed.ok);

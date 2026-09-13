@@ -290,6 +290,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(core, /export function inboundFillClosed/);
     assert.match(inbound, /inboundFillClosed/);
     assert.match(pull, /res\.done && !lessonsCountShort\(disk, alfaGate, true\)/);
+    assert.match(pull, /res\.walked && lessonsCountShort\(disk, alfaGate, true\)/);
+    assert.match(inbound, /wantFull \? fillDone : wasFull/);
     function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
       const k = Number(keep) || 0;
       const a = Number(alfa) || 0;
