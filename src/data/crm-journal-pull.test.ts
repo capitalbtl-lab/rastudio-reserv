@@ -122,7 +122,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(cards, /hydrateGroupCardsFromMonolith/);
     assert.match(cards, /group-cards\.json/);
     assert.doesNotMatch(pull, /periods: periods\.length/);
-    assert.match(pull, /probed\.ok \? \{ lessonsAlfa/);
+    assert.match(pull, /held\.write \? \{ lessonsAlfa: held\.alfa, lessonsAlfaAt/);
     assert.match(ui, /row\.alfa != null/);
     assert.match(ui, /Загружаю список с диска/);
     assert.match(ui, /lastArchives/);
@@ -269,5 +269,27 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /groupRow/);
     assert.match(ui, /kind: "jobStatus"/);
     assert.match(ui, /function applyJobStatus/);
+  });
+
+  it("проба не стирает известный счёт Alfa и не закрывает дырку", () => {
+    const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
+    assert.match(pull, /export function keepAlfaProbe/);
+    assert.match(pull, /if \(!probedOk\) return \{ write: false, alfa: k, probed: k > 0 \}/);
+    assert.match(pull, /if \(k > 0 && a < k\) return \{ write: false, alfa: k, probed: true \}/);
+    assert.match(pull, /first\.ok && !weak && disk >= alfaGate && !extra0/);
+    assert.doesNotMatch(pull, /lessonsAlfaAt: ""/);
+    assert.match(pull, /closed \? \{ lessonsFull: true, lessonsAttend: true \} : \{ lessonsFull: false \}/);
+    function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
+      const k = Number(keep) || 0;
+      const a = Number(alfa) || 0;
+      if (!probedOk) return { write: false, alfa: k, probed: k > 0 };
+      if (k > 0 && a < k) return { write: false, alfa: k, probed: true };
+      return { write: true, alfa: a, probed: true };
+    }
+    assert.deepEqual(keepAlfaProbe(286, 0, false), { write: false, alfa: 286, probed: true });
+    assert.deepEqual(keepAlfaProbe(286, 200, true), { write: false, alfa: 286, probed: true });
+    assert.deepEqual(keepAlfaProbe(286, 286, true), { write: true, alfa: 286, probed: true });
+    assert.deepEqual(keepAlfaProbe(0, 50, true), { write: true, alfa: 50, probed: true });
+    assert.deepEqual(keepAlfaProbe(0, 0, false), { write: false, alfa: 0, probed: false });
   });
 });

@@ -1024,20 +1024,29 @@ async function pullOneGroup(
   return { extra, count: n, ok, capped };
 }
 
-async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "") {
+/** Сорванная/слабая проба не затирает известный счёт Alfa и не закрывает cid. */
+export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
+  const k = Number(keep) || 0;
+  const a = Number(alfa) || 0;
+  if (!probedOk) return { write: false, alfa: k, probed: k > 0 };
+  if (k > 0 && a < k) return { write: false, alfa: k, probed: true };
+  return { write: true, alfa: a, probed: true };
+}
   const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
   const mark = (disk: number, alfa: number, probedOk: boolean) => {
-    const short = lessonsCountShort(disk, alfa, probedOk);
-    const extra = lessonsCountExtra(disk, alfa, probedOk);
-    const closed = probedOk && !short && !extra;
+    const keep = Number(customerSyncOf(cid).lessonsAlfa) || 0;
+    const held = keepAlfaProbe(keep, alfa, probedOk);
+    const short = lessonsCountShort(disk, held.alfa, held.probed);
+    const extra = lessonsCountExtra(disk, held.alfa, held.probed);
+    const closed = Boolean(probedOk && held.write && !short && !extra);
     const at = atOf();
     stampCustomerSync(cid, {
       lessonsDisk: disk,
       lessonsAt: at,
-      ...(probedOk ? { lessonsAlfa: alfa, lessonsAlfaAt: at } : { lessonsAlfaAt: "" }),
-      ...(short || extra ? { lessonsFull: false } : closed ? { lessonsFull: true, lessonsAttend: true } : {}),
+      ...(held.write ? { lessonsAlfa: held.alfa, lessonsAlfaAt: at } : {}),
+      ...(closed ? { lessonsFull: true, lessonsAttend: true } : { lessonsFull: false }),
       ...(balance
         ? { paysAt: at, ...(recheck && closed ? { paysRecheckAt: at, lessonsRecheckAt: at } : {}) }
         : recheck && closed
@@ -1050,23 +1059,27 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   let disk = countAlfaLessonRows(loadCustomerCalendar(cid));
   if (!recheck) {
     const first = await probeCustomerLessons(branchId, cid, { dateFrom: from }).catch(() => ({ total: 0, ok: false as const }));
+    const alfaKeep = Number(customerSyncOf(cid).lessonsAlfa) || 0;
     const alfa0 = first.ok ? first.total : 0;
-    if (first.ok && disk >= alfa0) {
-      mark(disk, alfa0, true);
+    const alfaGate = Math.max(alfa0, alfaKeep);
+    const weak = Boolean(first.ok && alfaKeep > 0 && alfa0 < alfaKeep);
+    const extra0 = lessonsCountExtra(disk, alfaGate, first.ok || alfaKeep > 0);
+    if (first.ok && !weak && disk >= alfaGate && !extra0) {
+      const hit = mark(disk, alfa0, true);
       if (!balance)
         return {
           cid,
           lessons: disk,
-          done: !lessonsCountExtra(disk, alfa0, true),
+          done: hit.closed,
           pays: 0,
           tariffs: 0,
-          alfa: alfa0,
-          short: false,
-          dups: lessonsCountExtra(disk, alfa0, true),
+          alfa: Number(customerSyncOf(cid).lessonsAlfa) || alfa0,
+          short: hit.short,
+          dups: hit.extra,
           blocked: false,
           paysOk: false,
           paysMore: false,
-          rechecked: Boolean(customerSyncOf(cid).lessonsRecheckAt) && !lessonsCountExtra(disk, alfa0, true),
+          rechecked: Boolean(customerSyncOf(cid).lessonsRecheckAt) && hit.closed,
           paysRechecked: false,
         };
     } else {
@@ -1900,27 +1913,30 @@ export async function journalPull(opts: {
       const { probeCustomerLessons } = await import("./crm-journal-inbound");
       const disk = countAlfaLessonRows(loadCustomerCalendar(one.cid));
       const probed = await probeCustomerLessons(one.branchId, one.cid).catch(() => ({ total: 0, ok: false as const }));
-      const alfaN = probed.ok ? probed.total : 0;
-      const short = lessonsCountShort(disk, alfaN, probed.ok);
-      const dups = lessonsCountExtra(disk, alfaN, probed.ok);
+      const keep = Number(customerSyncOf(one.cid).lessonsAlfa) || 0;
+      const alfaRaw = probed.ok ? probed.total : 0;
+      const held = keepAlfaProbe(keep, alfaRaw, probed.ok);
+      const short = lessonsCountShort(disk, held.alfa, held.probed);
+      const dups = lessonsCountExtra(disk, held.alfa, held.probed);
+      const closed = Boolean(probed.ok && held.write && !short && !dups);
       stampCustomerSync(one.cid, {
         lessonsDisk: disk,
-        ...(probed.ok ? { lessonsAlfa: alfaN, lessonsAlfaAt: new Date().toISOString() } : {}),
-        ...(short || dups ? { lessonsFull: false } : probed.ok ? { lessonsFull: true, lessonsAttend: true } : {}),
+        ...(held.write ? { lessonsAlfa: held.alfa, lessonsAlfaAt: new Date().toISOString() } : {}),
+        ...(closed ? { lessonsFull: true, lessonsAttend: true } : { lessonsFull: false }),
       });
       const name = fioOf(one.cid);
       store.note = probed.ok
-        ? `${name}: на диске ${disk} · в Alfa ${alfaN}${short ? " — не хватает, добрать" : dups ? " — дубли, снять" : disk ? " — счёт сошёлся" : ""}`
+        ? `${name}: на диске ${disk} · в Alfa ${held.alfa}${short ? " — не хватает, добрать" : dups ? " — дубли, снять" : disk ? " — счёт сошёлся" : ""}`
         : `${name}: Alfa не ответила на сверку`;
       store.at = new Date().toISOString();
       saveStore(store);
       return {
         ok: probed.ok,
         extra: store.note,
-        count: alfaN,
+        count: held.alfa,
         scanned: 1,
         more: false,
-        student: { cid: one.cid, branchId: one.branchId, name, groups: groupsOfStudent(one.cid), lessons: disk, pays: 0, done: !short && !dups, ok: probed.ok && !short && !dups, alfa: alfaN, short, dups },
+        student: { cid: one.cid, branchId: one.branchId, name, groups: groupsOfStudent(one.cid), lessons: disk, pays: 0, done: closed, ok: closed, alfa: held.alfa, short, dups },
         ...snap(),
       };
     }
