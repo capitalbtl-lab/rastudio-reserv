@@ -1221,7 +1221,7 @@ function PeopleFillList({
     const needsRecheck = peopleNeedsRecheck(row, kind);
     const short = Boolean(row.short);
     const approved = kind === "students" && peopleHoleOk(row);
-    const canHole = kind === "students" && short && !row.holeApproved && Boolean(onHole);
+    const canHole = kind === "students" && short && Boolean(onHole);
     const equal = row.alfa != null && Number(row.lessons) === Number(row.alfa) && !short;
     const dups = Boolean(row.dups) && !equal;
     const active = loadingCid === row.cid;
@@ -1268,14 +1268,15 @@ function PeopleFillList({
               <input
                 type="checkbox"
                 className="h-4 w-4 shrink-0 accent-amber-600"
-                checked={false}
-                aria-label="одобрить дырку"
+                checked={approved}
+                aria-label={approved ? "дырка принята" : "одобрить дырку"}
                 onClick={(e) => e.stopPropagation()}
                 onChange={(e) => {
                   e.stopPropagation();
-                  e.target.checked = false;
-                  if (!confirmHole(row, true)) return;
-                  onHole?.(row, true);
+                  const on = e.target.checked;
+                  e.target.checked = approved;
+                  if (!confirmHole(row, on)) return;
+                  onHole?.(row, on);
                 }}
               />,
               HINT.hole,
