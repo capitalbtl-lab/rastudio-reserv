@@ -791,15 +791,26 @@ export async function inboundMissingCustomerLessons(
   const prevMap = new Map(prevCal.map((l) => [String(l.lessonId || `${l.date}|${l.from}`), l] as const));
   const pulled: GroupCalLesson[] = [];
   const dropped: number[] = [];
-  for (const lid of want) {
+  const bodiesFor = (lid: number) =>
+    [
+      { page: 0, pageSize: 5, id: lid },
+      { page: 0, pageSize: 5, lesson_id: lid },
+      { page: 0, pageSize: 5, id: lid, lesson_id: lid },
+    ] as Record<string, unknown>[];
+  console.warn(`inbound missing cid=${id} want ${want.length}`);
+  for (let i = 0; i < want.length; i += 1) {
+    const lid = want[i];
+    if (i) await pauseMs(200);
     let item: Parameters<typeof packLight>[0] | undefined;
-    for (const bid of branches) {
-      const live = await pullLessonPage(bid, { page: 0, pageSize: 5, id: lid, lesson_id: lid }, t);
-      if (!live.ok) continue;
-      const hit = live.items.find((x) => Number(x.id) === lid);
-      if (hit) {
-        item = hit;
-        break;
+    outer: for (const bid of branches) {
+      for (const body of bodiesFor(lid)) {
+        const live = await pullLessonPage(bid, body, t, 2);
+        if (!live.ok) continue;
+        const hit = live.items.find((x) => Number(x.id) === lid);
+        if (hit) {
+          item = hit;
+          break outer;
+        }
       }
     }
     if (!item) {
@@ -808,22 +819,35 @@ export async function inboundMissingCustomerLessons(
     }
     const gid = Number((item.group_ids || [])[0] || 0);
     const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
-    const packed = packLight(
-      { ...item, date: ymd(item.date), customer_ids: uniquePositiveIds([...(lessonCustomerIds(item as Record<string, unknown>)), id]) },
-      {
-        groupName: slot?.groupName || String(item.lesson_type_name || "занятие"),
-        from: hm(item.time_from) || "",
-        to: hm(item.time_to) || "",
-        teacher: slot?.teacher || "",
-        subject: slot?.subject || "",
-      },
+    const ctx = {
+      groupName: slot?.groupName || String(item.lesson_type_name || "занятие"),
+      from: hm(item.time_from) || "",
+      to: hm(item.time_to) || "",
+      teacher: slot?.teacher || "",
+      subject: slot?.subject || "",
+    };
+    const day = ymd(item.date) || ymd(item.time_from) || "2015-01-01";
+    let packed = packLight(
+      { ...item, date: day, customer_ids: uniquePositiveIds([...(lessonCustomerIds(item as Record<string, unknown>)), id]) },
+      ctx,
       id,
     );
     if (!packed) {
-      dropped.push(lid);
-      continue;
+      packed = {
+        date: day,
+        from: ctx.from || "00:00",
+        to: ctx.to,
+        status: Number(item.status || 0),
+        type: ctx.groupName,
+        group: ctx.groupName,
+        teacher: ctx.teacher,
+        subject: ctx.subject,
+        lessonId: lid,
+        customerIds: [id],
+        groupIds: (item.group_ids || []).map(Number).filter((n) => n > 0),
+      };
     }
-    packed.date = ymd(packed.date);
+    packed.date = ymd(packed.date) || day;
     if (!packed.customerIds?.length) packed.customerIds = [id];
     const prev = prevMap.get(String(packed.lessonId || `${packed.date}|${packed.from}`));
     if (prev) {
