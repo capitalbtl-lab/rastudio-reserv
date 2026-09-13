@@ -1094,7 +1094,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
         }
         disk = countAlfaLessonRows(loadCustomerCalendar(cid));
-        if (res.done) break;
+        if (res.done && !lessonsCountShort(disk, alfaGate, true)) break;
       }
       const probed = await probeCustomerLessons(branchId, cid, { dateFrom: from }).catch(() => ({ total: 0, ok: false as const }));
       mark(disk, probed.ok ? probed.total : 0, probed.ok);

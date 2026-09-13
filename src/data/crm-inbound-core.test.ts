@@ -16,6 +16,8 @@ import {
   nightLockBusy,
   groupProlonged,
   mergeInboundSiteFields,
+  inboundFillClosed,
+  keepAlfaProbe,
 } from "./crm-inbound-core.ts";
 import { slotActiveToday, slotOnPublicSchedule, mergeStatusPublish } from "./group-status.ts";
 
@@ -138,6 +140,12 @@ describe("вход из Alfa", () => {
     assert.equal(canCloseLessonCensus({ live: true, aborted: false }), true);
     assert.equal(canCloseLessonCensus({ live: true, aborted: true }), false);
     assert.equal(canCloseLessonCensus({ live: false, aborted: false }), false);
+    assert.equal(inboundFillClosed(602, 771, true, false), false);
+    assert.equal(inboundFillClosed(771, 771, true, false), true);
+    assert.equal(inboundFillClosed(771, 771, true, true), false);
+    assert.equal(inboundFillClosed(338, 339, true, false), false);
+    assert.equal(inboundFillClosed(0, 0, true, false), true);
+    assert.equal(keepAlfaProbe(286, 254, true).write, false);
   });
 });
 

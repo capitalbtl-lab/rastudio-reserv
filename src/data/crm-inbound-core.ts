@@ -13,6 +13,15 @@ export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
   return { write: true, alfa: a, probed: true };
 }
 
+/** Курсор качки не закрывает cid, пока диск < известной Alfa. */
+export function inboundFillClosed(disk: number, alfaKeep: number, cursorDone: boolean, aborted: boolean) {
+  if (aborted) return false;
+  const keep = Number(alfaKeep) || 0;
+  const n = Number(disk) || 0;
+  if (keep > 0 && n < keep) return false;
+  return Boolean(cursorDone);
+}
+
 export function pendingEntityIds(
   jobs: { op: string; entityId?: number; body?: { localId?: number } }[],
   ops?: string[],

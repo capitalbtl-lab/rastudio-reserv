@@ -287,6 +287,9 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(inbound, /ids\.length && !ids\.includes\(id\) && !packLessonPupils/);
     assert.match(inbound, /droppedNoDate/);
     assert.match(inbound, /customer_ids: uniquePositiveIds\(\[\.\.\.ids, id\]\)/);
+    assert.match(core, /export function inboundFillClosed/);
+    assert.match(inbound, /inboundFillClosed/);
+    assert.match(pull, /res\.done && !lessonsCountShort\(disk, alfaGate, true\)/);
     function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
       const k = Number(keep) || 0;
       const a = Number(alfa) || 0;

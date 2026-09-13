@@ -3,7 +3,7 @@ import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
-import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, keepAlfaProbe } from "./crm-inbound-core";
+import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, keepAlfaProbe, inboundFillClosed } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
@@ -555,6 +555,10 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       : wantFull
         ? lessonFillForWindow(lessonFillOf(customerSyncOf(id).lessonFill), dateFrom, branches[0] || branch)
         : lessonFillStart(branches[0] || branch, dateFrom);
+    const keep0 = Number(customerSyncOf(id).lessonsAlfa) || 0;
+    if (keep0 > 0 && countAlfaLessonRows(prevCal) < keep0 && cur.done) {
+      cur = lessonFillStart(branches[0] || branch, dateFrom);
+    }
     let ran = 0;
     const maxRun = homeLite ? LESSON_STATUSES.length : Number(opts?.take) > 0 ? Math.min(LESSON_INBOUND_RUN, Number(opts.take)) : wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
     const maxPages = homeLite ? 1 : deepHist ? 12 : Number(opts?.take) > 0 ? Math.min(3, wantFull ? 12 : 2) : wantFull ? 12 : 2;
@@ -586,7 +590,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         if (ran >= maxRun || cur.done || lastShort) break;
       }
       if (aborted) break;
-      if (!progressed && !cur.done) cur = lessonFillAdvance(cur, true, branches);
+      if (!progressed && !cur.done && cur.page < maxPages) cur = lessonFillAdvance(cur, true, branches);
     }
     const droppedNoDate: number[] = [];
     const pulled: GroupCalLesson[] = [];
@@ -665,19 +669,24 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       if (named.pupils) l.pupils = named.pupils;
     }
     const hold = pendingExportIds(["lesson.update", "lesson.create"]);
-    const fillDone = Boolean(cur.done) && !aborted;
     let next = mergeLocalCalendar(pulled, prevCal, hold, "union");
     if (prune) {
       const seen = mergeSeenLessonIds(resetSeen ? [] : customerSyncOf(id).lessonsSeenIds, pulled);
       stampCustomerSync(id, { lessonsSeenIds: seen });
     }
     replaceCustomerCalendar(id, next);
+    const diskNow = countAlfaLessonRows(next);
+    const keep = Number(customerSyncOf(id).lessonsAlfa) || 0;
+    if (keep > 0 && diskNow < keep && cur.done && !aborted) {
+      cur = lessonFillStart(branches[0] || branch, dateFrom);
+    }
+    const fillDone = inboundFillClosed(diskNow, keep, Boolean(cur.done), aborted);
     stampCustomerSync(id, {
       lessonsAt: new Date().toISOString(),
-      lessonsFull: homeLite ? false : customerSyncOf(id).lessonsFull || fillDone || !wantFull,
-      lessonsAttend: homeLite ? customerSyncOf(id).lessonsAttend : customerSyncOf(id).lessonsAttend || fillDone || !wantFull,
+      lessonsFull: homeLite ? false : fillDone,
+      lessonsAttend: homeLite ? customerSyncOf(id).lessonsAttend : customerSyncOf(id).lessonsAttend || fillDone,
       lessonFill: fillDone || !wantFull ? undefined : cur,
-      lessonsDisk: countAlfaLessonRows(next),
+      lessonsDisk: diskNow,
     });
     if (wantFull && !fillDone && opts?.continueLater === true) {
       setTimeout(() => {
@@ -686,6 +695,9 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     }
     if (droppedNoDate.length) {
       console.warn(`inbound lessons cid=${id} dropped no-date: ${droppedNoDate.slice(0, 40).join(",")}`);
+    }
+    if (!fillDone && keep > diskNow) {
+      console.warn(`inbound lessons cid=${id} short disk=${diskNow} alfa=${keep} cursorDone=${Boolean(cur.done)} pulled=${pulled.length}`);
     }
     return { ok: true as const, count: pulled.length, done: fillDone || !wantFull, aborted, dropped: droppedNoDate };
   } finally {
