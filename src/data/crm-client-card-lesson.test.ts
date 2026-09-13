@@ -174,7 +174,7 @@ describe("форма занятия карточки", () => {
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(inbound, /packLessonPupils/);
     assert.match(inbound, /fanOutLessonWriteoffs/);
-    assert.match(inbound, /ruShift\(-2600\)/);
+    assert.match(inbound, /sliceWin/);
     const api = readFileSync(new URL("./admin-schedule.ts", import.meta.url), "utf8");
     assert.match(api, /packLessonPupils/);
     assert.match(api, /fanOutLessonWriteoffs/);

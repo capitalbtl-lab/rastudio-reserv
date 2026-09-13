@@ -1128,6 +1128,9 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       mark(disk, 0, false);
     } else {
       const applied = applyCustomerLessonCensus(cid, census.ids, true);
+      if (!applied.ok) {
+        mark(disk, 0, false);
+      } else {
       disk = applied.disk;
       const alfaN = applied.alfa;
       const short = lessonsCountShort(disk, alfaN, true);
@@ -1142,6 +1145,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         }
       }
       mark(disk, alfaN, true);
+      }
     }
     } finally {
       unlockStudentAlfa(cid);

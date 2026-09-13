@@ -36,6 +36,7 @@ import {
   tryLockStudentAlfa,
   waitLockStudentAlfa,
   unlockStudentAlfa,
+  studentAlfaOwner,
   lessonsCountShort,
 } from "./crm-customer-sync";
 
@@ -455,6 +456,9 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
   const prev = loadCustomerCalendar(id);
   const before = countAlfaLessonRows(prev);
   if (!closed) return { ok: false as const, disk: before, alfa: 0, pruned: 0 };
+  const held = studentAlfaOwner() === id;
+  if (!held && !tryLockStudentAlfa(id)) return { ok: false as const, disk: before, alfa: 0, pruned: 0 };
+  try {
   const hold = pendingExportIds(["lesson.update", "lesson.create"]);
   const uniq = uniquePositiveIds(ids);
   const groupKeep = lessonIdsOnStudentGroups(id);
@@ -471,6 +475,9 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
     ...(holeApproved || disk !== alfa ? { lessonsFull: false } : {}),
   });
   return { ok: true as const, disk, alfa, pruned: Math.max(0, before - disk) };
+  } finally {
+    if (!held) unlockStudentAlfa(id);
+  }
 }
 
 export async function probeCustomerLessons(branch: number, customerId: number, opts?: { token?: string; dateFrom?: string }) {
@@ -542,7 +549,8 @@ export function skipHoleInbound(id: number, force?: boolean) {
   if (force) return false;
   const s = customerSyncOf(id);
   if (!s.journalHoleApprovedAt) return false;
-  return lessonsCountShort(Number(s.lessonsDisk) || 0, Number(s.lessonsAlfa) || 0, Boolean(s.lessonsAlfaAt));
+  const disk = countAlfaLessonRows(loadCustomerCalendar(id)) || Number(s.lessonsDisk) || 0;
+  return lessonsCountShort(disk, Number(s.lessonsAlfa) || 0, Boolean(s.lessonsAlfaAt));
 }
 
 export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean; dateFrom?: string; prune?: boolean; resetSeen?: boolean }) {
@@ -755,6 +763,11 @@ export async function inboundMissingCustomerLessons(
   const want = uniquePositiveIds(lessonIds).slice(0, Math.max(1, Math.min(50, Number(opts?.take) || 50)));
   if (id <= 0 || !want.length) return { ok: true as const, count: 0, dropped: [] as number[] };
   if (skipHoleInbound(id, opts?.force)) return { ok: true as const, count: 0, skipped: "hole" as const, dropped: want };
+  const held = studentAlfaOwner() === id;
+  if (!held && !(await waitLockStudentAlfa(id, Number(opts?.take) > 0 ? 20000 : 0))) {
+    return { ok: true as const, count: 0, skipped: "busy" as const, dropped: want };
+  }
+  try {
   if (!alfaLinkedNow() && !opts?.force) return { ok: true as const, count: 0, skipped: "offline" as const, dropped: want };
   const { token } = await import("./alfacrm");
   const t = await token();
@@ -821,6 +834,9 @@ export async function inboundMissingCustomerLessons(
   if (dropped.length) console.warn(`inbound missing cid=${id} dropped: ${dropped.slice(0, 40).join(",")}`);
   if (pulled.length) console.warn(`inbound missing cid=${id} seated ${pulled.length} of ${want.length}`);
   return { ok: true as const, count: pulled.length, dropped };
+  } finally {
+    if (!held) unlockStudentAlfa(id);
+  }
 }
 
 export async function inboundJournalChunk(offset = 0, _take = 1) {

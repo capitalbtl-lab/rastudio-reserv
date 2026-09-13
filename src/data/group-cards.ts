@@ -9,6 +9,7 @@ import { journalForCustomer, calendarLessonForCard, lessonBranchOf } from "./crm
 import { chargeFromPupils } from "./crm-ledger-core";
 import { findDossier } from "./dossiers";
 import { cardPays } from "./crm-pay";
+import { tryLockStudentAlfa, unlockStudentAlfa, studentAlfaOwner } from "./crm-customer-sync";
 
 export type CachedGroupCard = {
   id: number;
@@ -428,8 +429,7 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
     return (l.customerIds || []).some((n) => Number(n) > 0);
   });
   if (!rows.length) return 0;
-  let n = 0;
-  const byCid = new Map<number, GroupCalLesson[]>();
+  const add = new Map<number, GroupCalLesson[]>();
   for (const lesson of rows) {
     const cids = new Set<number>();
     for (const p of lesson.pupils || []) {
@@ -442,25 +442,33 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
     }
     for (const cid of cids) {
       const charge = chargeFromPupils(lesson, cid);
-      const prev = byCid.get(cid) || loadCustomerCalendar(cid);
-      if (!canFanOutToCalendar(prev, lesson)) continue;
-      const { list } = mergeLessonInto(prev, {
-        ...lesson,
-        amount: charge.amount || undefined,
-        cttId: charge.cttId || undefined,
-      });
-      byCid.set(cid, list);
-      n += 1;
+      const packed = { ...lesson, amount: charge.amount || undefined, cttId: charge.cttId || undefined };
+      const list = add.get(cid) || [];
+      list.push(packed);
+      add.set(cid, list);
     }
   }
-  for (const [cid, list] of byCid) {
-    saveCustomerCalendarList(
-      cid,
-      list
-        .slice()
-        .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")))
-        .slice(-8000),
-    );
+  let n = 0;
+  for (const [cid, extra] of add) {
+    const held = studentAlfaOwner() === cid;
+    if (!held && !tryLockStudentAlfa(cid)) continue;
+    try {
+      let prev = loadCustomerCalendar(cid);
+      for (const lesson of extra) {
+        if (!canFanOutToCalendar(prev, lesson)) continue;
+        prev = mergeLessonInto(prev, lesson).list;
+        n += 1;
+      }
+      saveCustomerCalendarList(
+        cid,
+        prev
+          .slice()
+          .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")))
+          .slice(-8000),
+      );
+    } finally {
+      if (!held) unlockStudentAlfa(cid);
+    }
   }
   return n;
 }
