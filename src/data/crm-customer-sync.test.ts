@@ -87,7 +87,7 @@ describe("штамп входа ученика", () => {
     const mark = pull.slice(markAt, markEnd > markAt ? markEnd : markAt + 800);
     assert.doesNotMatch(mark, /journalHoleApprovedAt:/);
     const holeAt = pull.indexOf('kind === "holeApprove"');
-    const holeEnd = pull.indexOf("const wantedEarly", holeAt);
+    const holeEnd = pull.indexOf('kind === "lessonsReset"', holeAt);
     const hole = pull.slice(holeAt, holeEnd > holeAt ? holeEnd : holeAt + 900);
     assert.doesNotMatch(hole, /pullOneStudent/);
     assert.doesNotMatch(hole, /inboundCustomerLessons/);
@@ -104,11 +104,12 @@ describe("штамп входа ученика", () => {
     assert.match(fn, /pruneCalendarToAlfaIds\(prev, \[\], hold, \[\], ""\)/);
     assert.match(fn, /lessonsFull: false/);
     assert.match(fn, /lessonsRecheckAt: ""/);
-    assert.doesNotMatch(fn, /lessonsAlfa:/);
+    assert.match(fn, /lessonsAlfaAt: ""/);
     assert.doesNotMatch(fn, /token\(|request\(|v2api/);
     const resetAt = pull.indexOf('kind === "lessonsReset"');
-    const reset = pull.slice(resetAt, resetAt + 1200);
+    const reset = pull.slice(resetAt, resetAt + 1600);
     assert.match(reset, /resetStudentLessonDisk\(cid\)/);
+    assert.match(reset, /probeCustomerLessons\(bid, cid/);
     assert.doesNotMatch(reset, /pullOneStudent/);
     assert.match(ui, /kind: "lessonsReset"/);
     assert.match(ui, /С нуля/);

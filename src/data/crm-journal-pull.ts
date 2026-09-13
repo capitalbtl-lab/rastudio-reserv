@@ -1314,21 +1314,34 @@ export async function journalPull(opts: {
   }
   if (kind === "lessonsReset") {
     const cid = Number(opts.customerId) || 0;
+    const bid = Number(opts.branchId) || 1;
     if (!cid) return { ok: false as const, error: "нет customerId", more: false, ...litePullState() };
-    const { resetStudentLessonDisk } = await import("./crm-journal-inbound");
+    const { resetStudentLessonDisk, probeCustomerLessons } = await import("./crm-journal-inbound");
     const hit = resetStudentLessonDisk(cid);
+    const first = await probeCustomerLessons(bid, cid, { dateFrom: "2015-01-01" }).catch(() => ({ ok: false as const, total: 0, ids: [] as number[] }));
+    if (first.ok) {
+      stampCustomerSync(cid, {
+        lessonsAlfa: first.total,
+        lessonsAlfaAt: new Date().toISOString(),
+        lessonsSeenIds: first.ids || [],
+        lessonsFull: false,
+        lessonsDisk: hit.disk,
+      });
+    }
     const sync = customerSyncOf(cid);
     const probed = Boolean(sync.lessonsAlfaAt);
     const alfa = probed ? Number(sync.lessonsAlfa) || 0 : 0;
     const short = lessonsCountShort(hit.disk, alfa, probed);
     return {
       ok: hit.ok,
-      extra: `№${cid}: диск ${hit.disk} · Alfa ${alfa} · качаем с нуля`,
+      extra: first.ok
+        ? `№${cid}: диск ${hit.disk} · Alfa ${alfa} · качаем с нуля`
+        : `№${cid}: диск сброшен, Alfa не ответила · качаем с нуля`,
       more: false,
       student: {
         cid,
         lessons: hit.disk,
-        alfa,
+        alfa: probed ? alfa : undefined,
         short,
         dups: false,
         done: false,
