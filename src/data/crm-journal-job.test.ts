@@ -185,6 +185,7 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /if \(!isHistoryWorker\(\) && !historyWorkerSilent/);
     assert.match(ui, /процесс истории молчит/);
     assert.match(worker, /RA_HISTORY_WORKER = "1"/);
+    assert.match(worker, /ts-ext-hook\.mjs/);
     assert.match(worker, /runHistoryWorker/);
     assert.match(worker, /history-worker/);
     assert.match(eco, /name: "rastudio-history"/);

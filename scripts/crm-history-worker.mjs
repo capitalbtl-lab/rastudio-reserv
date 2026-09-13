@@ -3,6 +3,9 @@
  * Фон «Истории из Alfa»: очередь на диске, по одному, пауза 5 с.
  * Сайт только Старт/Стоп/статус. F5 и закрытие вкладки не трогают прогон.
  */
+import { register } from "node:module";
+
+register(new URL("./ts-ext-hook.mjs", import.meta.url));
 process.env.RA_HISTORY_WORKER = "1";
 for (;;) {
   try {

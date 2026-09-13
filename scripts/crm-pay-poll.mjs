@@ -3,7 +3,10 @@
  * Автоопрос кассы Alfa каждые 15 минут: все типы за последние 3 дня (доход, продажи, возвраты, корректировки).
  * Сверяет изменения и пересчитывает остаток ученика. История старше окна — кнопка «Обновить кассу».
  */
-import { pollPaysFromAlfa } from "../src/data/crm-pay.ts";
+import { register } from "node:module";
+
+register(new URL("./ts-ext-hook.mjs", import.meta.url));
+const { pollPaysFromAlfa } = await import("../src/data/crm-pay.ts");
 
 const res = await pollPaysFromAlfa({ via: "auto" });
 console.log(JSON.stringify(res));
