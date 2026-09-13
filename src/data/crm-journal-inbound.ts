@@ -465,7 +465,7 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
   const before = countAlfaLessonUniq(prev);
   const hold = pendingExportIds(["lesson.update", "lesson.create"]);
   const uniq = uniquePositiveIds(ids);
-  const groupKeep = lessonIdsOnStudentGroups(id);
+  const groupKeep = keepBefore ? lessonIdsOnStudentGroups(id) : [];
   const next = pruneCalendarToAlfaIds(prev, uniq, hold, groupKeep, keepBefore);
   replaceCustomerCalendar(id, next);
   const disk = countAlfaLessonUniq(next);

@@ -338,8 +338,8 @@ export function shouldRetryOpenRecheck(
   const s = res.student;
   if (!s) return false;
   if (s.holeApproved) return false;
-  if (s.dups) return false;
   if (kind === "balance") return !s.paysRechecked;
+  if (s.dups) return true;
   return !s.rechecked;
 }
 

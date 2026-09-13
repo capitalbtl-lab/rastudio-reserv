@@ -353,6 +353,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /if \(lid > 0\) ids.add\(lid\)/);
     assert.match(inbound, /if \(page === pageCap - 1\) aborted = true/);
     assert.match(inbound, /lessonIdsOnStudentGroups/);
+    assert.match(inbound, /const groupKeep = keepBefore \? lessonIdsOnStudentGroups\(id\) : \[\]/);
     assert.match(inbound, /pruneCalendarToAlfaIds\(prev, uniq, hold, groupKeep, keepBefore\)/);
     assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true, !keepBefore\)/);
     assert.match(inbound, /heldAlfa.write \? \{ lessonsAlfa: heldAlfa.alfa, lessonsAlfaAt/);
