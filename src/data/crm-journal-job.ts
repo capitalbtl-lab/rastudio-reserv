@@ -1,8 +1,8 @@
 /** Фон «Истории из Alfa»: один шаг, пауза, следующий. Вкладка только смотрит. В Alfa не пишет. */
 
-import { journalPullGroups, groupFillRow, journalPeopleSide, liveAdminGroups } from "./crm-journal-pull";
-import { historyLoadOne, historyPullKind } from "./crm-history-load";
-import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods";
+import { journalPullGroups, groupFillRow, journalPeopleSide, liveAdminGroups } from "./crm-journal-pull.ts";
+import { historyLoadOne, historyPullKind } from "./crm-history-load.ts";
+import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods.ts";
 import {
   emptyJournalJob,
   jobGapMs,
@@ -26,7 +26,7 @@ import {
   type JournalJobItem,
   type JournalJobMode,
   type PeopleJobRow,
-} from "./crm-journal-job-core";
+} from "./crm-journal-job-core.ts";
 
 export {
   journalJobSnapshot,
@@ -41,7 +41,7 @@ export {
   mergeJobPatch,
   parseJobItems,
   JOB_WAIT_CAP,
-} from "./crm-journal-job-core";
+} from "./crm-journal-job-core.ts";
 
 const g = globalThis as { __raJournalJobTick?: boolean; __raJournalWatch?: ReturnType<typeof setInterval> };
 

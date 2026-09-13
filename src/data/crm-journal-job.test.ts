@@ -189,7 +189,7 @@ describe("фон истории из Alfa", () => {
     assert.match(worker, /runHistoryWorker/);
     assert.match(worker, /history-worker/);
     assert.match(eco, /name: "rastudio-history"/);
-    assert.match(eco, /RA_HISTORY_WORKER: "1"/);
+    assert.match(eco, /ts-ext-register\.mjs/);
     assert.match(deploy, /pm2 restart rastudio-history/);
     assert.match(ui, /F5 ничего не сбрасывает/);
     assert.match(ui, /вкладку можно закрыть|страницу можно закрыть/);
