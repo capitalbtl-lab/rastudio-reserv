@@ -1123,13 +1123,10 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     if (!census.ok) {
       mark(disk, 0, false);
     } else {
-      const alfaN = census.ids.length;
-      const extra = lessonsCountExtra(disk, alfaN, true);
+      const applied = applyCustomerLessonCensus(cid, census.ids, true);
+      disk = applied.disk;
+      const alfaN = applied.alfa;
       const short = lessonsCountShort(disk, alfaN, true);
-      if (extra) {
-        const applied = applyCustomerLessonCensus(cid, census.ids, true);
-        disk = applied.disk;
-      }
       if (short && !holeApproved) {
         const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
         const missing = census.ids.filter((n) => !have.has(n));

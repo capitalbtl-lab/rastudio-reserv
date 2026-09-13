@@ -318,7 +318,8 @@ describe("ручной журнал с Alfa", () => {
     const one = pull.slice(oneAt, oneEnd > oneAt ? oneEnd : oneAt + 9000);
     const recAt = one.indexOf("const census = await censusCustomerLessonIds");
     const rec = one.slice(recAt);
-    assert.match(rec, /censusCustomerLessonIds/);
+    assert.match(rec, /applyCustomerLessonCensus\(cid, census\.ids, true\)/);
+    assert.doesNotMatch(rec, /if \(extra\)/);
     assert.doesNotMatch(rec, /inboundCustomerLessons\(/);
     assert.match(rec, /short && !holeApproved/);
     assert.match(rec, /inboundMissingCustomerLessons/);
