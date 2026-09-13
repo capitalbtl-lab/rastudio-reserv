@@ -442,10 +442,7 @@ function lessonIdsOnStudentGroups(cid: number) {
     const card = bid ? loadGroupCard(bid, gid) : null;
     for (const les of card?.calendar || []) {
       const lid = Number(les.lessonId) || 0;
-      if (!(lid > 0)) continue;
-      const inPupils = (les.pupils || []).some((p) => Number(p.customerId) === cid);
-      const inIds = (les.customerIds || []).map(Number).includes(cid);
-      if (inPupils || inIds) ids.add(lid);
+      if (lid > 0) ids.add(lid);
     }
   }
   return [...ids];

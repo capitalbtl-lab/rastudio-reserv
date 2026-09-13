@@ -335,7 +335,7 @@ describe("ручной журнал с Alfa", () => {
     const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
     assert.match(cards, /ownsStudentAlfa\(cid\)/);
     assert.match(cards, /if \(!held\) unlockStudentAlfa\(cid\)/);
-    assert.match(inbound, /inPupils \|\| inIds/);
+    assert.match(inbound, /if \(lid > 0\) ids.add\(lid\)/);
     assert.match(inbound, /if \(page === pageCap - 1\) aborted = true/);
     assert.match(inbound, /lessonIdsOnStudentGroups/);
     assert.match(inbound, /pruneCalendarToAlfaIds\(prev, uniq, hold, groupKeep\)/);
