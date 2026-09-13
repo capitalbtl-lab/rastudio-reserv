@@ -13,6 +13,7 @@ import {
   lessonsCountShort,
   lessonsCountExtra,
   lessonsJournalReady,
+  wasLessonGreen,
   tryLockStudentAlfa,
   unlockStudentAlfa,
   ownsStudentAlfa,
@@ -62,6 +63,11 @@ describe("штамп входа ученика", () => {
     assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 71, lessonsDisk: 0 }), false);
     assert.equal(lessonsJournalReady({ lessonsFull: true, lessonsAttend: true, lessonsDisk: 3 }), true);
     assert.equal(lessonsJournalReady({ lessonsDisk: 47 }), false);
+    assert.equal(wasLessonGreen({ lessonsRecheckAt: "x" }), true);
+    assert.equal(wasLessonGreen({ lessonsFull: true }), true);
+    assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 491 }), true);
+    assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 495 }), false);
+    assert.equal(wasLessonGreen({}), false);
   });
 
   it("штамп дырки: ключ ISO, пустая строка снимает, проба не пишет", () => {

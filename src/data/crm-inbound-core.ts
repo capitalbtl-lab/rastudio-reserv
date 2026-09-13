@@ -145,11 +145,20 @@ function held(x: { lessonId?: number }, hold: Set<number>) {
   return lid < 0 || hold.has(lid);
 }
 
-export function pruneCalendarToAlfaIds<T extends { lessonId?: number }>(
+function lessonDay(raw?: string) {
+  const s = String(raw || "").trim();
+  const ru = s.match(/^(\d{1,2})\.(\d{2})\.(\d{4})/);
+  if (ru) return `${ru[3]}-${ru[2]}-${String(ru[1]).padStart(2, "0")}`;
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return iso ? iso[1] : "";
+}
+
+export function pruneCalendarToAlfaIds<T extends { lessonId?: number; date?: string }>(
   disk: T[],
   alfaIds: Iterable<number>,
   holdIds: Iterable<number> = [],
   extraKeep: Iterable<number> = [],
+  keepBefore = "",
 ): T[] {
   const keep = new Set<number>();
   for (const n of alfaIds) {
@@ -161,9 +170,11 @@ export function pruneCalendarToAlfaIds<T extends { lessonId?: number }>(
     if (id > 0) keep.add(id);
   }
   const hold = new Set([...holdIds].map(Number).filter((n) => n));
+  const from = lessonDay(keepBefore);
   return (disk || []).filter((x) => {
     const lid = Number(x.lessonId) || 0;
     if (lid < 0 || hold.has(lid)) return true;
+    if (from && lessonDay(x.date) && lessonDay(x.date) < from) return true;
     if (!lid) return false;
     return keep.has(lid);
   });

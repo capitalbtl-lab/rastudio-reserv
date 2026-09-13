@@ -1033,7 +1033,7 @@ async function pullOneGroup(
 export { keepAlfaProbe };
 
 async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "") {
-  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingCustomerLessons } = await import("./crm-journal-inbound");
+  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingCustomerLessons, recheckCensusDateFrom } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
   const mark = (disk: number, alfa: number, probedOk: boolean) => {
@@ -1121,13 +1121,15 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: 0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
     }
     try {
-    const census = await censusCustomerLessonIds(branchId, cid).catch(() => ({ ids: [] as number[], ok: false as const }));
+    const sync0 = customerSyncOf(cid);
+    const windowFrom = recheckCensusDateFrom(sync0);
+    const census = await censusCustomerLessonIds(branchId, cid, windowFrom ? { dateFrom: windowFrom } : {}).catch(() => ({ ids: [] as number[], ok: false as const }));
     disk = countAlfaLessonRows(loadCustomerCalendar(cid));
     const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
     if (!census.ok) {
       mark(disk, 0, false);
     } else {
-      const applied = applyCustomerLessonCensus(cid, census.ids, true);
+      const applied = applyCustomerLessonCensus(cid, census.ids, true, windowFrom);
       if (!applied.ok) {
         mark(disk, 0, false);
       } else {

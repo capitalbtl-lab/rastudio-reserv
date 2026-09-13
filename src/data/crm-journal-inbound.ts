@@ -38,6 +38,7 @@ import {
   unlockStudentAlfa,
   ownsStudentAlfa,
   lessonsCountShort,
+  wasLessonGreen,
 } from "./crm-customer-sync";
 
 
@@ -54,6 +55,11 @@ function ruShift(days: number) {
 
 function ymd(raw?: string) {
   return toAlfaLessonDate(raw);
+}
+
+export function recheckCensusDateFrom(sync: Parameters<typeof wasLessonGreen>[0]) {
+  if (!wasLessonGreen(sync)) return "";
+  return ymd(ruShift(-32));
 }
 
 function ruOf(d: Date) {
@@ -448,7 +454,39 @@ function lessonIdsOnStudentGroups(cid: number) {
   return [...ids];
 }
 
-export function applyCustomerLessonCensus(customerId: number, ids: number[], closed: boolean) {
+export function applyCustomerLessonCensus(customerId: number, ids: number[], closed: boolean, keepBefore = "") {
+  const id = Number(customerId) || 0;
+  if (!closed) return { ok: false as const, disk: countAlfaLessonRows(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
+  const held = ownsStudentAlfa(id);
+  if (!held && !tryLockStudentAlfa(id)) return { ok: false as const, disk: countAlfaLessonRows(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
+  try {
+  const prev = loadCustomerCalendar(id);
+  const before = countAlfaLessonRows(prev);
+  const hold = pendingExportIds(["lesson.update", "lesson.create"]);
+  const uniq = uniquePositiveIds(ids);
+  const groupKeep = lessonIdsOnStudentGroups(id);
+  const next = pruneCalendarToAlfaIds(prev, uniq, hold, groupKeep, keepBefore);
+  replaceCustomerCalendar(id, next);
+  const disk = countAlfaLessonRows(next);
+  const keepAlfa = Number(customerSyncOf(id).lessonsAlfa) || 0;
+  const alfa = keepBefore ? keepAlfa || uniq.length : uniq.length;
+  const holeApproved = Boolean(customerSyncOf(id).journalHoleApprovedAt);
+  stampCustomerSync(id, {
+    lessonsDisk: disk,
+    ...(keepBefore
+      ? {}
+      : {
+          lessonsSeenIds: uniq,
+          lessonsAlfa: alfa,
+          lessonsAlfaAt: new Date().toISOString(),
+        }),
+    ...(holeApproved || (keepBefore ? disk !== keepAlfa : disk !== alfa) ? { lessonsFull: false } : {}),
+  });
+  return { ok: true as const, disk, alfa, pruned: Math.max(0, before - disk) };
+  } finally {
+    if (!held) unlockStudentAlfa(id);
+  }
+}
   const id = Number(customerId) || 0;
   if (!closed) return { ok: false as const, disk: countAlfaLessonRows(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
   const held = ownsStudentAlfa(id);

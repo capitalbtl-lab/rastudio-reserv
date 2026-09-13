@@ -326,8 +326,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /short && !holeApproved/);
     assert.match(rec, /inboundMissingCustomerLessons/);
     assert.match(pull, /!short && !extra && !holeApproved/);
-    assert.match(rec, /censusCustomerLessonIds\(branchId, cid\)/);
-    assert.doesNotMatch(rec, /censusCustomerLessonIds\(branchId, cid, \{ dateFrom/);
+    assert.match(rec, /censusCustomerLessonIds\(branchId, cid, windowFrom \? \{ dateFrom: windowFrom \} : \{\}/);
+    assert.match(rec, /applyCustomerLessonCensus\(cid, census.ids, true, windowFrom\)/);
+    assert.match(one, /recheckCensusDateFrom/);
     assert.match(inbound, /skipped: "hole"/);
     assert.match(inbound, /skipHoleInbound/);
     assert.match(inbound, /loadCustomerCalendar\(id\)/);
@@ -338,7 +339,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /if \(lid > 0\) ids.add\(lid\)/);
     assert.match(inbound, /if \(page === pageCap - 1\) aborted = true/);
     assert.match(inbound, /lessonIdsOnStudentGroups/);
-    assert.match(inbound, /pruneCalendarToAlfaIds\(prev, uniq, hold, groupKeep\)/);
+    assert.match(inbound, /pruneCalendarToAlfaIds\(prev, uniq, hold, groupKeep, keepBefore\)/);
     assert.match(inbound, /holeApproved \|\| disk !== alfa/);
   });
 });

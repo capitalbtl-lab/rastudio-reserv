@@ -114,6 +114,15 @@ export function lessonsJournalReady(sync: CustomerSyncStamp) {
   return probed && diskN === alfaN;
 }
 
+/** Уже сходился — синяя не крутит 2015, только окно. */
+export function wasLessonGreen(sync: CustomerSyncStamp) {
+  if (sync.lessonsRecheckAt) return true;
+  if (sync.lessonsFull) return true;
+  const alfa = Number(sync.lessonsAlfa) || 0;
+  const disk = Number(sync.lessonsDisk) || 0;
+  return Boolean(sync.lessonsAlfaAt) && alfa > 0 && disk === alfa;
+}
+
 export function customerLessonsFresh(customerId: number, now = Date.now()) {
   const s = customerSyncOf(customerId);
   return Boolean(s.lessonsFull) && Boolean(s.lessonsAttend) && isSyncFresh(s.lessonsAt, now);

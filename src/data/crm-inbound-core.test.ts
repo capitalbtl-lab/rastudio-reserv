@@ -131,6 +131,20 @@ describe("вход из Alfa", () => {
     const kept = pruneCalendarToAlfaIds(disk, [10, 11], [], [99]);
     assert.equal(kept.some((x) => x.lessonId === 99), true);
     assert.equal(countAlfaLessonRows(kept), 3);
+    const old = pruneCalendarToAlfaIds(
+      [
+        { lessonId: 1, date: "2025-01-10" },
+        { lessonId: 2, date: "2026-09-12" },
+        { lessonId: 3, date: "13.09.2026" },
+      ],
+      [3],
+      [],
+      [],
+      "2026-08-12",
+    );
+    assert.equal(old.some((x) => x.lessonId === 1), true);
+    assert.equal(old.some((x) => x.lessonId === 2), false);
+    assert.equal(old.some((x) => x.lessonId === 3), true);
     assert.deepEqual(mergeSeenLessonIds([10], [{ lessonId: 11 }, { lessonId: 10 }]), [10, 11]);
     assert.equal(canFanOutToCalendar([{ lessonId: 10, date: "01.09.2026", from: "10:00" }], { lessonId: 0, date: "01.09.2026", from: "10:00" }), false);
     assert.equal(canFanOutToCalendar([{ lessonId: 10, date: "01.09.2026", from: "10:00" }], { lessonId: 99, date: "01.09.2026", from: "10:00" }), false);
