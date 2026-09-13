@@ -38,7 +38,9 @@ describe("фон истории из Alfa", () => {
     };
     assert.equal(shouldResumeStalledJob(stalled), true);
     assert.equal(shouldResumeStalledJob({ ...stalled, stop: true }), false);
-    assert.equal(shouldResumeStalledJob({ ...stalled, recheck: false, mode: "people" }), false);
+    assert.equal(shouldResumeStalledJob({ ...stalled, recheck: false, mode: "people" }), true);
+    assert.equal(shouldResumeStalledJob({ ...stalled, recheck: false, mode: "roster" }), true);
+    assert.equal(shouldResumeStalledJob({ ...stalled, recheck: false, mode: "groups" }), true);
     assert.equal(shouldResumeStalledJob({ ...stalled, n: 75 }), false);
     assert.equal(shouldResumeStalledJob({ ...stalled, waits: 9 }), false);
     assert.equal(shouldResumeStalledJob({ ...stalled, lastAt: new Date().toISOString() }), false);

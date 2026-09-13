@@ -166,7 +166,6 @@ export function jobRetryGapMs(err?: string) {
 
 export function shouldResumeStalledJob(job = loadJournalJob(), now = Date.now()) {
   if (job.stop || !job.id) return false;
-  if (!job.recheck && !/-recheck$/.test(String(job.mode || "")) && job.mode !== "people-recheck") return false;
   const age = now - Date.parse(job.lastAt || job.startedAt || "");
   if (!Number.isFinite(age) || age < RECHECK_STALL_MS) return false;
   const total = Number(job.total) || job.items.length || 0;
