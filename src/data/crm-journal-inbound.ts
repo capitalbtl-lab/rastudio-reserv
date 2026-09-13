@@ -487,33 +487,6 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
     if (!held) unlockStudentAlfa(id);
   }
 }
-  const id = Number(customerId) || 0;
-  if (!closed) return { ok: false as const, disk: countAlfaLessonRows(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
-  const held = ownsStudentAlfa(id);
-  if (!held && !tryLockStudentAlfa(id)) return { ok: false as const, disk: countAlfaLessonRows(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
-  try {
-  const prev = loadCustomerCalendar(id);
-  const before = countAlfaLessonRows(prev);
-  const hold = pendingExportIds(["lesson.update", "lesson.create"]);
-  const uniq = uniquePositiveIds(ids);
-  const groupKeep = lessonIdsOnStudentGroups(id);
-  const next = pruneCalendarToAlfaIds(prev, uniq, hold, groupKeep);
-  replaceCustomerCalendar(id, next);
-  const disk = countAlfaLessonRows(next);
-  const alfa = uniq.length;
-  const holeApproved = Boolean(customerSyncOf(id).journalHoleApprovedAt);
-  stampCustomerSync(id, {
-    lessonsSeenIds: uniq,
-    lessonsDisk: disk,
-    lessonsAlfa: alfa,
-    lessonsAlfaAt: new Date().toISOString(),
-    ...(holeApproved || disk !== alfa ? { lessonsFull: false } : {}),
-  });
-  return { ok: true as const, disk, alfa, pruned: Math.max(0, before - disk) };
-  } finally {
-    if (!held) unlockStudentAlfa(id);
-  }
-}
 
 export async function probeCustomerLessons(branch: number, customerId: number, opts?: { token?: string; dateFrom?: string }) {
   const census = await censusCustomerLessonIds(branch, customerId, opts);

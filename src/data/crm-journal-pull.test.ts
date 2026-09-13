@@ -283,7 +283,7 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(pull, /lessonsAlfaAt: ""/);
     assert.match(pull, /closed \? \{ lessonsFull: true, lessonsAttend: true \} : \{ lessonsFull: false \}/);
     assert.match(inbound, /lessonsAlfa: alfa/);
-    assert.match(inbound, /const alfa = uniq\.length/);
+    assert.match(inbound, /const alfa = keepBefore \? keepAlfa \|\| uniq\.length : uniq\.length/);
     assert.doesNotMatch(inbound, /keepAlfaProbe/);
     assert.doesNotMatch(inbound, /lessonsAlfa: uniq\.length/);
     assert.doesNotMatch(inbound, /ids\.length && !ids\.includes\(id\) && !packLessonPupils/);
@@ -340,6 +340,6 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /if \(page === pageCap - 1\) aborted = true/);
     assert.match(inbound, /lessonIdsOnStudentGroups/);
     assert.match(inbound, /pruneCalendarToAlfaIds\(prev, uniq, hold, groupKeep, keepBefore\)/);
-    assert.match(inbound, /holeApproved \|\| disk !== alfa/);
+    assert.match(inbound, /holeApproved \|\| \(keepBefore \? disk !== keepAlfa : disk !== alfa\)/);
   });
 });
