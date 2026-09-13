@@ -601,8 +601,8 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   if (retry) {
     const err = String(res.extra || res.error || "");
     const busy = /уже грузим|нет входа|429|502|нет ответа/i.test(err);
-    const waits = (live.waits || 0) + (busy || openRetry || shortRetry ? 1 : 0);
-    if ((busy || openRetry || shortRetry) && waits > JOB_WAIT_CAP) {
+    const waits = (live.waits || 0) + 1;
+    if (waits > JOB_WAIT_CAP) {
       const idx = live.idx + 1;
       const more = idx < live.items.length;
       const nextName = more ? live.items[idx]?.name || "" : "";

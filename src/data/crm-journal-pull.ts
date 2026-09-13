@@ -1188,8 +1188,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const t = await token();
     const { inboundCustomerPays, paysOf, payCustomerFilled, markPayJournalIncomplete } = await import("./crm-pay");
     try {
-      if (recheck || !payCustomerFilled(cid)) markPayJournalIncomplete(cid);
-      await inboundCustomerPays(request, t, branchId, cid, { force: recheck || !payCustomerFilled(cid) });
+      if (recheck && payCustomerFilled(cid)) markPayJournalIncomplete(cid);
+      await inboundCustomerPays(request, t, branchId, cid, { force: recheck && payCustomerFilled(cid) });
     } catch (e) {
       payFail = e instanceof Error && e.message ? e.message : "Alfa не ответила, нажмите снова";
     }

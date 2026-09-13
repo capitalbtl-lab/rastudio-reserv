@@ -219,7 +219,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /import \{ payCustomerFilled, payFillPending \} from "\.\/crm-pay"/);
     assert.match(pull, /paysMore: Boolean\(balance && \(Boolean\(payFail\) \|\| payFillPending\(cid\)\)\)/);
     assert.match(pull, /payCustomerFilled\(cid\)/);
-    assert.match(pull, /force: recheck \|\| !payCustomerFilled\(cid\)/);
+    assert.match(pull, /force: recheck && payCustomerFilled\(cid\)/);
+    assert.doesNotMatch(pull, /force: recheck \|\| !payCustomerFilled\(cid\)/);
     assert.match(pull, /paysOk: balance \? Boolean\(row\.paysOk\)/);
     assert.match(pull, /function liveAttendeeCids/);
     assert.match(pull, /function liveAdminGroups/);

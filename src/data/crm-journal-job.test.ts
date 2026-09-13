@@ -220,7 +220,8 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /касса · ещё/);
     assert.match(job, /касса · \$\{item.name\}/);
     assert.match(job, /берём следующего/);
-    assert.match(job, /\(busy \|\| openRetry \|\| shortRetry\) && waits > JOB_WAIT_CAP/);
+    assert.match(job, /const waits = \(live.waits \|\| 0\) \+ 1/);
+    assert.match(job, /if \(waits > JOB_WAIT_CAP\)/);
     assert.match(core, /export function shouldRetryShortPeople/);
     assert.match(job, /не хватает, ещё этот/);
     assert.match(job, /пауза 5 с/);
