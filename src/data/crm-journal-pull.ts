@@ -1041,7 +1041,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const held = keepAlfaProbe(keep, alfa, probedOk);
     const short = lessonsCountShort(disk, held.alfa, held.probed);
     const extra = lessonsCountExtra(disk, held.alfa, held.probed);
-    const closed = Boolean(probedOk && held.write && !short && !extra);
+    const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
+    const closed = Boolean(probedOk && held.write && !short && !extra && !holeApproved);
     const at = atOf();
     stampCustomerSync(cid, {
       lessonsDisk: disk,
@@ -1116,33 +1117,30 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       mark(disk, probed.ok ? probed.total : 0, probed.ok);
     }
   } else {
-    for (let i = 0; i < 6; i += 1) {
-      const res = await inboundCustomerLessons(branchId, cid, {
-        take: 8,
-        deep: 0,
-        continueLater: false,
-        full: true,
-        force: true,
-        homeOnly: false,
-        prune: false,
-        resetSeen: i === 0,
-        ...(from ? { dateFrom: from } : {}),
-      }).catch(() => ({ count: 0, done: false as const, skipped: undefined as string | undefined }));
-      lessons += Number(res.count) || 0;
-      if ("skipped" in res && res.skipped === "busy") {
-        return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: 0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
-      }
-      disk = countAlfaLessonRows(loadCustomerCalendar(cid));
-      if (res.done) break;
-    }
     const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: from }).catch(() => ({ ids: [] as number[], ok: false as const }));
-    if (census.ok) {
-      const applied = applyCustomerLessonCensus(cid, census.ids, true);
-      disk = applied.disk;
-      mark(applied.disk, applied.alfa, true);
-    } else {
-      disk = countAlfaLessonRows(loadCustomerCalendar(cid));
+    disk = countAlfaLessonRows(loadCustomerCalendar(cid));
+    const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
+    if (!census.ok) {
       mark(disk, 0, false);
+    } else {
+      const alfaN = census.ids.length;
+      const extra = lessonsCountExtra(disk, alfaN, true);
+      const short = lessonsCountShort(disk, alfaN, true);
+      if (extra) {
+        const applied = applyCustomerLessonCensus(cid, census.ids, true);
+        disk = applied.disk;
+      }
+      if (short && !holeApproved) {
+        const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+        const missing = census.ids.filter((n) => !have.has(n));
+        if (missing.length) {
+          const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0 }));
+          lessons += Number(gap.count) || 0;
+          seated += Number(gap.count) || 0;
+          disk = countAlfaLessonRows(loadCustomerCalendar(cid));
+        }
+      }
+      mark(disk, alfaN, true);
     }
   }
   let pays = 0;
@@ -1191,6 +1189,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
     paysRechecked: Boolean(sync.paysRecheckAt),
     seated,
+    holeApproved: Boolean(sync.journalHoleApprovedAt),
   };
 }
 

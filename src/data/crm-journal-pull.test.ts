@@ -309,4 +309,24 @@ describe("ручной журнал с Alfa", () => {
     assert.deepEqual(keepAlfaProbe(0, 50, true), { write: true, alfa: 50, probed: true });
     assert.deepEqual(keepAlfaProbe(0, 0, false), { write: false, alfa: 0, probed: false });
   });
+
+  it("3b: синяя без inbound с 2015, Фон skip галки, обрезанная перепись не закрыта", () => {
+    const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
+    const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
+    const oneAt = pull.indexOf("async function pullOneStudent");
+    const oneEnd = pull.indexOf("export async function journalPull", oneAt);
+    const one = pull.slice(oneAt, oneEnd > oneAt ? oneEnd : oneAt + 9000);
+    const recAt = one.indexOf("const census = await censusCustomerLessonIds");
+    const rec = one.slice(recAt);
+    assert.match(rec, /censusCustomerLessonIds/);
+    assert.doesNotMatch(rec, /inboundCustomerLessons\(/);
+    assert.match(rec, /short && !holeApproved/);
+    assert.match(rec, /inboundMissingCustomerLessons/);
+    assert.match(pull, /!short && !extra && !holeApproved/);
+    assert.match(inbound, /journalHoleApprovedAt && lessonsCountShort/);
+    assert.match(inbound, /if \(page === pageCap - 1\) aborted = true/);
+    assert.match(inbound, /lessonIdsOnStudentGroups/);
+    assert.match(inbound, /pruneCalendarToAlfaIds\(prev, uniq, hold, groupKeep\)/);
+    assert.match(inbound, /holeApproved \|\| disk !== alfa/);
+  });
 });

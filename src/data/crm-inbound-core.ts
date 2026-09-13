@@ -149,9 +149,14 @@ export function pruneCalendarToAlfaIds<T extends { lessonId?: number }>(
   disk: T[],
   alfaIds: Iterable<number>,
   holdIds: Iterable<number> = [],
+  extraKeep: Iterable<number> = [],
 ): T[] {
   const keep = new Set<number>();
   for (const n of alfaIds) {
+    const id = Number(n) || 0;
+    if (id > 0) keep.add(id);
+  }
+  for (const n of extraKeep) {
     const id = Number(n) || 0;
     if (id > 0) keep.add(id);
   }

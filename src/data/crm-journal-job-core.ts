@@ -262,10 +262,12 @@ export type PeopleJobRow = {
   dups?: boolean;
   rechecked?: boolean;
   paysRechecked?: boolean;
+  holeApproved?: boolean;
 };
 
 export function peopleJobFinished(row: PeopleJobRow, kind: "students" | "balance") {
   if (kind === "balance") return Boolean(row.pays);
+  if (row.short && row.holeApproved) return true;
   if (row.short) return false;
   if (row.dups) return true;
   return Boolean(row.journal);
@@ -273,8 +275,12 @@ export function peopleJobFinished(row: PeopleJobRow, kind: "students" | "balance
 
 export function peopleJobQueue(people: PeopleJobRow[], kind: "students" | "balance", recheck: boolean) {
   const needLoad = people.filter((r) => !peopleJobFinished(r, kind));
-  const needRecheck = people.filter((r) => peopleJobFinished(r, kind) && (r.dups || (kind === "balance" ? !r.paysRechecked : !r.rechecked)));
-  if (recheck) return needRecheck.length ? needRecheck : people.filter((r) => peopleJobFinished(r, kind));
+  const needRecheck = people.filter((r) => {
+    if (!peopleJobFinished(r, kind)) return false;
+    if (kind === "students" && r.short && r.holeApproved) return false;
+    return r.dups || (kind === "balance" ? !r.paysRechecked : !r.rechecked);
+  });
+  if (recheck) return needRecheck.length ? needRecheck : people.filter((r) => peopleJobFinished(r, kind) && !(kind === "students" && r.short && r.holeApproved));
   return needLoad;
 }
 
@@ -324,13 +330,14 @@ export function shouldRetryCash(
 export function shouldRetryOpenRecheck(
   recheck: boolean,
   kind: string,
-  res: { ok?: boolean; student?: { rechecked?: boolean; paysRechecked?: boolean } } | null,
+  res: { ok?: boolean; student?: { rechecked?: boolean; paysRechecked?: boolean; holeApproved?: boolean } } | null,
 ) {
   if (!recheck) return false;
   if (kind !== "students" && kind !== "balance") return false;
   if (!res?.ok) return false;
   const s = res.student;
   if (!s) return false;
+  if (s.holeApproved) return false;
   if (kind === "balance") return !s.paysRechecked;
   return !s.rechecked;
 }
@@ -340,12 +347,13 @@ export function shouldRetryShortPeople(
   mode: string,
   recheck: boolean,
   kind: string,
-  res: { ok?: boolean; student?: { short?: boolean; seated?: number } } | null,
+  res: { ok?: boolean; student?: { short?: boolean; seated?: number; holeApproved?: boolean } } | null,
 ) {
   if (recheck) return false;
   if (mode !== "people" && mode !== "person") return false;
   if (kind !== "students") return false;
   if (!res?.ok) return false;
+  if (res.student?.holeApproved) return false;
   if (!res.student?.short) return false;
   return (Number(res.student.seated) || 0) > 0;
 }

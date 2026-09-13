@@ -36,6 +36,7 @@ import {
   tryLockStudentAlfa,
   waitLockStudentAlfa,
   unlockStudentAlfa,
+  lessonsCountShort,
 } from "./crm-customer-sync";
 
 
@@ -393,7 +394,7 @@ async function pullLessonPage(
   return { ok: false as const };
 }
 
-/** Сколько занятий у ученика в Alfa: перепись уникальных номеров. Пустой catch ≠ конец. */
+/** Сколько занятий у ученика в Alfa: перепись уникальных номеров. Пустой catch ≠ конец. Полная страница на потолке — не закрыта. */
 export async function censusCustomerLessonIds(branch: number, customerId: number, opts?: { dateFrom?: string; token?: string }) {
   const id = Number(customerId) || 0;
   if (id <= 0) return { ids: [] as number[], ok: false as const, pages: 0 };
@@ -404,12 +405,15 @@ export async function censusCustomerLessonIds(branch: number, customerId: number
   const branches = uniqueBranches(branch);
   const ids = new Set<number>();
   let pages = 0;
+  let aborted = false;
+  const pageSize = 100;
+  const pageCap = 12;
   for (const bid of branches) {
     for (const status of LESSON_STATUSES) {
-      for (let page = 0; page < 12; page += 1) {
+      for (let page = 0; page < pageCap; page += 1) {
         const live = await pullLessonPage(
           bid,
-          { page, pageSize: 100, status, customer_id: id, date_from: dateFrom, date_to: dateTo },
+          { page, pageSize, status, customer_id: id, date_from: dateFrom, date_to: dateTo },
           t,
         );
         pages += 1;
@@ -418,11 +422,29 @@ export async function censusCustomerLessonIds(branch: number, customerId: number
           const lid = Number((item as { id?: number }).id) || 0;
           if (lid > 0) ids.add(lid);
         }
-        if (live.items.length < 100) break;
+        if (live.items.length < pageSize) break;
+        if (page === pageCap - 1) aborted = true;
       }
     }
   }
-  return { ids: uniquePositiveIds(ids), ok: canCloseLessonCensus({ live: true, aborted: false }), pages };
+  return { ids: uniquePositiveIds(ids), ok: canCloseLessonCensus({ live: true, aborted }), pages };
+}
+
+function lessonIdsOnStudentGroups(cid: number) {
+  const d = findDossier({ crmId: cid });
+  const links = d?.groupLinks || [];
+  const ids = new Set<number>();
+  for (const link of links) {
+    const gid = Number((link as { id?: number }).id) || 0;
+    if (!gid) continue;
+    const bid = Number((link as { branchId?: number }).branchId) || Number(d?.branchId) || 0;
+    const card = bid ? loadGroupCard(bid, gid) : null;
+    for (const les of card?.calendar || []) {
+      const lid = Number(les.lessonId) || 0;
+      if (lid > 0) ids.add(lid);
+    }
+  }
+  return [...ids];
 }
 
 export function applyCustomerLessonCensus(customerId: number, ids: number[], closed: boolean) {
@@ -432,16 +454,18 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
   if (!closed) return { ok: false as const, disk: before, alfa: 0, pruned: 0 };
   const hold = pendingExportIds(["lesson.update", "lesson.create"]);
   const uniq = uniquePositiveIds(ids);
-  const next = pruneCalendarToAlfaIds(prev, uniq, hold);
+  const groupKeep = lessonIdsOnStudentGroups(id);
+  const next = pruneCalendarToAlfaIds(prev, uniq, hold, groupKeep);
   replaceCustomerCalendar(id, next);
   const disk = countAlfaLessonRows(next);
   const alfa = uniq.length;
+  const holeApproved = Boolean(customerSyncOf(id).journalHoleApprovedAt);
   stampCustomerSync(id, {
     lessonsSeenIds: uniq,
     lessonsDisk: disk,
     lessonsAlfa: alfa,
     lessonsAlfaAt: new Date().toISOString(),
-    ...(disk === alfa ? {} : { lessonsFull: false }),
+    ...(holeApproved || disk !== alfa ? { lessonsFull: false } : {}),
   });
   return { ok: true as const, disk, alfa, pruned: Math.max(0, before - disk) };
 }
@@ -899,6 +923,10 @@ export async function inboundCustomerLessonsChunk(offset = 0, take = 1) {
   for (const cid of slice) {
     const d = findDossier({ crmId: cid });
     const branch = Number(d?.branchId || 1) || 1;
+    const sync = customerSyncOf(cid);
+    const diskN = Number(sync.lessonsDisk) || 0;
+    const alfaN = Number(sync.lessonsAlfa) || 0;
+    if (sync.journalHoleApprovedAt && lessonsCountShort(diskN, alfaN, Boolean(sync.lessonsAlfaAt))) continue;
     for (let round = 0; round < 6; round += 1) {
       const res = await inboundCustomerLessons(branch, cid, { continueLater: false }).catch(() => ({
         ok: true as const,

@@ -128,6 +128,9 @@ describe("вход из Alfa", () => {
     assert.equal(next.some((x) => x.lessonId === 99), false);
     assert.equal(next.some((x) => x.lessonId === -4), true);
     assert.equal(next.some((x) => !x.lessonId), false);
+    const kept = pruneCalendarToAlfaIds(disk, [10, 11], [], [99]);
+    assert.equal(kept.some((x) => x.lessonId === 99), true);
+    assert.equal(countAlfaLessonRows(kept), 3);
     assert.deepEqual(mergeSeenLessonIds([10], [{ lessonId: 11 }, { lessonId: 10 }]), [10, 11]);
     assert.equal(canFanOutToCalendar([{ lessonId: 10, date: "01.09.2026", from: "10:00" }], { lessonId: 0, date: "01.09.2026", from: "10:00" }), false);
     assert.equal(canFanOutToCalendar([{ lessonId: 10, date: "01.09.2026", from: "10:00" }], { lessonId: 99, date: "01.09.2026", from: "10:00" }), false);

@@ -72,7 +72,7 @@ describe("штамп входа ученика", () => {
     const markAt = pull.indexOf("const mark = ");
     const markEnd = pull.indexOf("return { short, extra, closed }", markAt);
     const mark = pull.slice(markAt, markEnd > markAt ? markEnd : markAt + 800);
-    assert.doesNotMatch(mark, /journalHoleApprovedAt/);
+    assert.doesNotMatch(mark, /journalHoleApprovedAt:/);
     const holeAt = pull.indexOf('kind === "holeApprove"');
     const holeEnd = pull.indexOf("const wantedEarly", holeAt);
     const hole = pull.slice(holeAt, holeEnd > holeAt ? holeEnd : holeAt + 900);
