@@ -11,6 +11,7 @@ import { CACHE_KIND_META, type CacheKind, type CachePolicy } from "@/data/crm-ca
 import { exportOpLabel, type CrmExportOp } from "@/data/crm-export-queue-core";
 import { ALFA_LINK_MODES, ALFA_PULL_CH, ALFA_PUSH_CH, ALFA_PIPE_CH, ALFA_SYNC_DEFAULT, type AlfaLinkMode, type AlfaPullCh, type AlfaPushCh, type AlfaPipeCh } from "@/data/crm-alfa-link-core";
 import { journalChunks, clampGrain, type Grain } from "@/data/crm-journal-periods";
+import { keepAlfa, peopleLessonsLine, PEOPLE_PACK } from "@/data/crm-people-line";
 
 function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
   let n = from?.parentElement || null;
@@ -174,8 +175,8 @@ function ServerJobStrip({ job }: { job?: ServerJob | null }) {
     <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-black/10">
       <p className="truncate text-sm font-semibold">{run ? `На сервере: ${cur || "работаем"}` : msg || "Сервер свободен"}</p>
       <p className="mt-0.5 truncate text-[0.78rem] text-muted">
-        {total ? `${n} из ${total}` : n ? `прошло ${n}` : run ? "очередь с диска" : ""}
-        {run && waits ? ` · Alfa не отвечает, пауза ${waits}/8` : ""}
+        {total ? `${n}/${total}` : n ? `прошло ${n}` : run ? "очередь с диска" : ""}
+        {run && waits ? ` · пауза ${waits}/8` : ""}
         {run && next && !cur.includes(next) ? ` · дальше ${next}` : ""}
         {run && job.workerSilent ? " · процесс истории молчит, подхватываем" : ""}
       </p>
@@ -924,7 +925,7 @@ function patchPeopleSide(
     const short = Boolean(hit.short);
     const disk = Number(hit.lessons) || p.lessons;
     const journal = !short && (Boolean(hit.ok) || disk > 0 || Boolean(p.journal));
-    const alfa = hit.alfa != null ? hit.alfa : p.alfa;
+    const alfa = hit.alfa != null ? keepAlfa(p.alfa, hit.alfa) : p.alfa;
     let dups = hit.dups != null ? Boolean(hit.dups) : Boolean(p.dups);
     if (!short && alfa != null && Number(disk) === Number(alfa)) dups = false;
     if (short) dups = false;
@@ -932,9 +933,9 @@ function patchPeopleSide(
     const rechecked = hit.rechecked != null ? Boolean(hit.rechecked) : p.rechecked;
     const paysRechecked = hit.paysRechecked != null ? Boolean(hit.paysRechecked) : p.paysRechecked;
     const extra = hit.paysMore
-      ? `касса: ещё страницы, нажмите снова · на диске ${disk}${alfa != null ? ` · в Alfa ${alfa}` : ""}`
+      ? `касса: ещё страницы, нажмите снова · ${alfa != null ? peopleLessonsLine({ disk, alfa }).line : `на диске ${disk}`}`
       : alfa != null
-        ? `на диске ${disk} · в Alfa ${alfa}`
+        ? peopleLessonsLine({ disk, alfa }).line
         : p.extra;
     return {
       ...p,
@@ -1078,6 +1079,8 @@ function PeopleFillList({
   const [pageDone, setPageDone] = useState(0);
   const q = query.trim().toLowerCase();
   const colLock = useRef<Record<string, boolean>>({});
+  const packMemo = useRef<Record<number, { before: number; plus?: number; active?: boolean }>>({});
+  const alfaKeep = useRef<Record<number, number>>({});
   const scoped = rows.filter((r) => {
     if (!q) return true;
     return r.name.toLowerCase().includes(q) || String(r.cid).includes(q) || (r.groups || []).some((g) => g.toLowerCase().includes(q));
@@ -1129,6 +1132,22 @@ function PeopleFillList({
       /* */
     }
   }, []);
+  useEffect(() => {
+    if (loadingCid) {
+      const row = rows.find((r) => r.cid === loadingCid);
+      const disk = Number(row?.lessons) || 0;
+      const cur = packMemo.current[loadingCid];
+      if (!cur || !cur.active) {
+        packMemo.current[loadingCid] = { before: disk, active: true };
+      } else {
+        cur.plus = Math.max(0, disk - cur.before);
+      }
+    } else {
+      for (const st of Object.values(packMemo.current)) {
+        if (st.active) st.active = false;
+      }
+    }
+  }, [loadingCid, rows]);
   function pickPageSize(n: number) {
     setPageSize(n);
     setPageNeed(0);
@@ -1167,18 +1186,33 @@ function PeopleFillList({
     const active = loadingCid === row.cid;
     const shown = open === id;
     const pct = full && !dups ? 100 : short || dups || row.lessons ? 50 : 0;
+    if (row.alfa != null && Number.isFinite(Number(row.alfa))) alfaKeep.current[row.cid] = keepAlfa(alfaKeep.current[row.cid], row.alfa) as number;
+    const alfaShown = alfaKeep.current[row.cid] ?? row.alfa;
+    const packSt = packMemo.current[row.cid];
+    const plus = packSt?.active ? Math.max(0, (Number(row.lessons) || 0) - packSt.before) : packSt && packSt.plus != null ? packSt.plus : undefined;
+    const nums =
+      kind === "students" && alfaShown != null
+        ? peopleLessonsLine({ disk: Number(row.lessons) || 0, alfa: alfaShown, pack: PEOPLE_PACK, plus, at: row.at, running: active })
+        : null;
+    const numsHint = dups ? "дубли, снять" : nums?.hint || "";
     const step = active
       ? `загрузка · ${row.name}`
       : short
-        ? `на диске ${row.lessons} · в Alfa ${row.alfa} — добрать`
+        ? nums
+          ? numsHint || "добрать"
+          : `на диске ${row.lessons} · в Alfa ${row.alfa} — добрать`
         : dups
-        ? `на диске ${row.lessons} · в Alfa ${row.alfa} — дубли, снять`
+        ? nums
+          ? numsHint
+          : `на диске ${row.lessons} · в Alfa ${row.alfa} — дубли, снять`
         : full
         ? kind === "balance"
           ? "Касса и журнал на месте"
-          : row.alfa
-            ? `на диске ${row.lessons} · в Alfa ${row.alfa}`
-            : "Календарь на месте"
+          : nums
+            ? nums.hint || "Календарь на месте"
+            : row.alfa
+              ? `на диске ${row.lessons} · в Alfa ${row.alfa}`
+              : "Календарь на месте"
         : kind === "balance"
           ? row.paysMore
             ? "касса: ещё страницы, нажмите снова"
@@ -1220,10 +1254,20 @@ function PeopleFillList({
         <FillBar pct={pct} run={active} done={full && !needsRecheck && !dups} warn={needsRecheck || short || dups} />
         <p className="mt-1 h-4 truncate text-[0.72rem] text-muted">
           {(row.groups || []).slice(0, 2).join(" · ") || "групп на карточке нет"}
-          {row.lessons ? ` · на диске ${row.lessons}` : ""}
-          {row.alfa ? ` · в Alfa ${row.alfa}` : ""}
+          {!nums && row.lessons ? ` · на диске ${row.lessons}` : ""}
+          {!nums && row.alfa ? ` · в Alfa ${row.alfa}` : ""}
         </p>
-        <p className="mt-2 h-5 truncate text-[0.78rem] font-semibold">{step}</p>
+        {nums ? (
+          <>
+            <p className="mt-2 text-[0.78rem] font-semibold tabular-nums leading-snug">
+              {active ? `загрузка · ` : ""}
+              {nums.line}
+              {numsHint ? ` · ${numsHint}` : ""}
+            </p>
+          </>
+        ) : (
+          <p className="mt-2 h-5 truncate text-[0.78rem] font-semibold">{step}</p>
+        )}
         <div className="mt-1 flex min-h-8 flex-wrap items-center gap-2">
           {withHint(
           <button
@@ -1276,7 +1320,7 @@ function PeopleFillList({
           <div className="mt-2 rounded-xl bg-white px-2.5 py-2 text-[0.72rem] leading-snug ring-1 ring-black/10">
             <CheckLine on={Boolean(row.journal) && !short} text="календарь загружен" />
             <CheckLine on={Boolean(row.rechecked) && !dups} text="календарь перепроверен" />
-            <CheckLine on={row.alfa != null && !short && !dups} text={row.alfa != null ? `счёт: диск ${row.lessons} · Alfa ${row.alfa}` : "счёт с Alfa ещё не сверяли"} />
+            <CheckLine on={row.alfa != null && !short && !dups} text={nums ? nums.line : row.alfa != null ? `счёт: диск ${row.lessons} · Alfa ${row.alfa}` : "счёт с Alfa ещё не сверяли"} />
             <CheckLine on={Boolean(row.rechecked) && !dups && !short} text="дубликатов нет" />
             {kind === "balance" ? (
               <>
