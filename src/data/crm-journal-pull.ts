@@ -762,7 +762,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       const diskN = Number(sync.lessonsDisk) || 0;
       const short = lessonsCountShort(diskN, alfaN, probed);
       const dups = lessonsCountExtra(diskN, alfaN, probed);
-      const journal = !short && (lessonsJournalReady(sync) || diskN > 0 || Boolean(sync.lessonsFull));
+      const journal = lessonsJournalReady(sync);
       const pays = payCustomerFilled(p.cid);
       const name = fioOf(p.cid);
       const glist = groupsOfStudent(p.cid).slice(0, 3);
@@ -846,7 +846,7 @@ export function journalPeopleSide(study: JournalPullStudy) {
     const diskN = Number(sync.lessonsDisk) || 0;
     const short = lessonsCountShort(diskN, alfaN, probed);
     const dups = lessonsCountExtra(diskN, alfaN, probed);
-    const journal = !short && (lessonsJournalReady(sync) || diskN > 0 || Boolean(sync.lessonsFull));
+    const journal = lessonsJournalReady(sync);
     const pays = payCustomerFilled(p.cid);
     return {
       cid: p.cid,
@@ -1132,7 +1132,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           disk = countAlfaLessonRows(loadCustomerCalendar(cid));
         }
       }
-      mark(disk, alfaGate, true);
+      mark(disk, alfaGate, first.ok);
     }
   } else {
     if (!(await waitLockStudentAlfa(cid, 20000))) {
@@ -1141,7 +1141,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     try {
     const sync0 = customerSyncOf(cid);
     const windowFrom = recheckCensusDateFrom(sync0);
-    const census = await censusCustomerLessonIds(branchId, cid, windowFrom ? { dateFrom: windowFrom } : {}).catch(() => ({ ids: [] as number[], ok: false as const }));
+    const censusFrom = windowFrom || from;
+    const census = await censusCustomerLessonIds(branchId, cid, censusFrom ? { dateFrom: censusFrom } : {}).catch(() => ({ ids: [] as number[], ok: false as const }));
     disk = countAlfaLessonRows(loadCustomerCalendar(cid));
     const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
     if (!census.ok) {

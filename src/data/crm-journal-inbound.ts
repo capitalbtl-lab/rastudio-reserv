@@ -3,7 +3,7 @@ import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
-import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed } from "./crm-inbound-core";
+import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
@@ -469,7 +469,8 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
   replaceCustomerCalendar(id, next);
   const disk = countAlfaLessonRows(next);
   const keepAlfa = Number(customerSyncOf(id).lessonsAlfa) || 0;
-  const alfa = keepBefore ? keepAlfa || uniq.length : uniq.length;
+  const heldAlfa = keepAlfaProbe(keepAlfa, uniq.length, true);
+  const alfa = keepBefore ? keepAlfa || uniq.length : heldAlfa.alfa;
   const holeApproved = Boolean(customerSyncOf(id).journalHoleApprovedAt);
   stampCustomerSync(id, {
     lessonsDisk: disk,
@@ -477,8 +478,7 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
       ? {}
       : {
           lessonsSeenIds: uniq,
-          lessonsAlfa: alfa,
-          lessonsAlfaAt: new Date().toISOString(),
+          ...(heldAlfa.write ? { lessonsAlfa: heldAlfa.alfa, lessonsAlfaAt: new Date().toISOString() } : {}),
         }),
     ...(holeApproved || (keepBefore ? disk !== keepAlfa : disk !== alfa) ? { lessonsFull: false } : {}),
   });

@@ -66,7 +66,8 @@ describe("штамп входа ученика", () => {
     assert.equal(wasLessonGreen({ lessonsRecheckAt: "x" }), true);
     assert.equal(wasLessonGreen({ lessonsFull: true }), true);
     assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 491 }), true);
-    assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 495 }), false);
+    assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 495 }), true);
+    assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 400 }), false);
     assert.equal(wasLessonGreen({}), false);
   });
 

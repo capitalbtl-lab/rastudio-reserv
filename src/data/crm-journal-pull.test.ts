@@ -282,9 +282,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /first\.ok && !weak && disk >= alfaGate && !extra0/);
     assert.doesNotMatch(pull, /lessonsAlfaAt: ""/);
     assert.match(pull, /closed \? \{ lessonsFull: true, lessonsAttend: true \} : \{ lessonsFull: false \}/);
-    assert.match(inbound, /lessonsAlfa: alfa/);
-    assert.match(inbound, /const alfa = keepBefore \? keepAlfa \|\| uniq\.length : uniq\.length/);
-    assert.doesNotMatch(inbound, /keepAlfaProbe/);
+    assert.match(inbound, /heldAlfa.write \? \{ lessonsAlfa: heldAlfa.alfa/);
+    assert.match(inbound, /const alfa = keepBefore \? keepAlfa \|\| uniq\.length : heldAlfa.alfa/);
+    assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true\)/);
     assert.doesNotMatch(inbound, /lessonsAlfa: uniq\.length/);
     assert.doesNotMatch(inbound, /ids\.length && !ids\.includes\(id\) && !packLessonPupils/);
     assert.match(inbound, /droppedNoDate/);
@@ -334,9 +334,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /extraIds/);
     assert.match(rec, /inboundMissingCustomerLessons/);
     assert.match(pull, /!short && !extra && !holeApproved/);
-    assert.match(rec, /censusCustomerLessonIds\(branchId, cid, windowFrom \? \{ dateFrom: windowFrom \} : \{\}/);
+    assert.match(rec, /censusFrom \? \{ dateFrom: censusFrom \} : \{\}/);
     assert.match(rec, /applyCustomerLessonCensus\(cid, census.ids, true, windowFrom\)/);
     assert.match(one, /recheckCensusDateFrom/);
+    assert.match(one, /mark\(disk, alfaGate, first\.ok\)/);
+    assert.doesNotMatch(one, /mark\(disk, alfaGate, true\)/);
     assert.match(inbound, /skipped: "hole"/);
     assert.match(inbound, /skipHoleInbound/);
     assert.match(inbound, /loadCustomerCalendar\(id\)/);
@@ -348,6 +350,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /if \(page === pageCap - 1\) aborted = true/);
     assert.match(inbound, /lessonIdsOnStudentGroups/);
     assert.match(inbound, /pruneCalendarToAlfaIds\(prev, uniq, hold, groupKeep, keepBefore\)/);
+    assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true\)/);
+    assert.match(inbound, /heldAlfa.write \? \{ lessonsAlfa: heldAlfa.alfa, lessonsAlfaAt/);
     assert.match(inbound, /holeApproved \|\| \(keepBefore \? disk !== keepAlfa : disk !== alfa\)/);
   });
 });

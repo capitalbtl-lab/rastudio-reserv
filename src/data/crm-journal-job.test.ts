@@ -296,6 +296,11 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /liveAdminGroups\(school\)/);
     assert.match(job, /пауза 5 с · ещё ДЗ/);
     assert.match(ui, /function peopleQueue/);
+    assert.match(ui, /if \(kind === "students" && r.short && r.holeApproved\) return false/);
+    assert.doesNotMatch(ui, /r.short && r.holeApproved\) return true/);
+    assert.match(ui, /loadPerson\(row, "students", peopleStudy, false, "2015-01-01"\)/);
+    assert.match(pull, /const journal = lessonsJournalReady\(sync\)/);
+    assert.doesNotMatch(pull, /diskN > 0 \|\| Boolean\(sync.lessonsFull\)/);
     assert.match(ui, /jobItems: queue.map/);
     assert.match(ui, /jobItems: opts.jobItems/);
     assert.match(ui, /opts.kind === "jobStart"/);
