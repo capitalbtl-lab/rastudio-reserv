@@ -12,6 +12,8 @@ import { listDossierCrm, findDossier, dossiersInGroup, overlayAdminGroups } from
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
 import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort, lessonsCountExtra, waitLockStudentAlfa, unlockStudentAlfa } from "./crm-customer-sync";
 import { payCustomerFilled, payFillPending, payFillScanned, payFillEmpty, clearPayFill, paysOf } from "./crm-pay";
+import { balanceOf } from "./crm-pay-core";
+import { writeoffSumOf } from "./crm-ledger-core";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
@@ -777,7 +779,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       const gnames = glist.join(", ") || own.map((g) => g.name).filter(Boolean).slice(0, 3).join(", ");
       if (journal) journalDone += 1;
       else missJ.push({ id: p.cid, name, extra: short ? `на диске ${diskN}, в Alfa ${alfaN}` : gnames ? gnames : own.length ? "группы ещё не сверены" : "нет полного журнала" });
-      if (pays) cardDone += 1;
+      if (pays || paysScanned) cardDone += 1;
       else missC.push({ id: p.cid, name, extra: journal ? "нет кассы" : gnames || (own.length ? "группы ещё не сверены" : "нет явки") });
       peopleRows.push({
         cid: p.cid,
@@ -794,6 +796,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
         paysScanned,
         paysEmpty: payFillEmpty(p.cid),
         cashRows: paysOf(p.cid).filter((x) => !x.deleted).length,
+        ...cashCardOf(p.cid),
         rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
         paysRechecked: Boolean(sync.paysRecheckAt),
         extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : gnames,
@@ -849,6 +852,16 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
   };
 }
 
+function cashCardOf(cid: number) {
+  const live = paysOf(cid).filter((x) => !x.deleted);
+  const cashPaySum = balanceOf(live);
+  const cashWriteoff = writeoffSumOf(loadCustomerCalendar(cid), cid);
+  const cashRemain = cashPaySum - cashWriteoff;
+  const raw = Number(findDossier({ crmId: cid })?.extras?.balance);
+  const cashHeader = Number.isFinite(raw) ? raw : null;
+  return { cashPaySum, cashWriteoff, cashRemain, cashHeader };
+}
+
 export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: boolean }) {
   let list = rankedStudentIds(study);
   if (opts?.skipLeads) list = list.filter((p) => p.study !== 0 && p.status !== "лид");
@@ -876,6 +889,7 @@ export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: 
       paysScanned: payFillScanned(p.cid),
       paysEmpty: payFillEmpty(p.cid),
       cashRows: paysOf(p.cid).filter((x) => !x.deleted).length,
+      ...cashCardOf(p.cid),
       rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
       paysRechecked: Boolean(sync.paysRecheckAt),
       extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : groupsOfStudent(p.cid).slice(0, 2).join(", "),
@@ -885,7 +899,7 @@ export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: 
   return {
     total: list.length,
     journalDone: people.filter((r) => r.journal).length,
-    cardDone: people.filter((r) => r.pays).length,
+    cardDone: people.filter((r) => r.pays || r.paysScanned).length,
     missJournal: packList([] as { id: number; name: string; extra: string }[]),
     missCard: packList([] as { id: number; name: string; extra: string }[]),
     people,

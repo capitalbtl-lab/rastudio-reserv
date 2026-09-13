@@ -332,6 +332,10 @@ type PeopleRow = {
   paysScanned?: boolean;
   paysEmpty?: boolean;
   cashRows?: number;
+  cashPaySum?: number;
+  cashWriteoff?: number;
+  cashRemain?: number;
+  cashHeader?: number | null;
   rechecked?: boolean;
   paysRechecked?: boolean;
   extra?: string;
@@ -895,6 +899,16 @@ function byPeopleName(a: PeopleRow, b: PeopleRow) {
   return a.name.localeCompare(b.name, "ru") || a.cid - b.cid;
 }
 
+function cashLoadedText(row: PeopleRow) {
+  if (row.cashRemain == null && row.cashPaySum == null) return "шаг 5 · остаток = шапка Alfa ±1 ₽";
+  const pay = Math.round(Number(row.cashPaySum) || 0);
+  const wo = Math.round(Number(row.cashWriteoff) || 0);
+  const remain = Math.round(Number(row.cashRemain) || 0);
+  const n = Number(row.lessons) || 0;
+  const alfa = row.cashHeader != null && Number.isFinite(Number(row.cashHeader)) ? ` · Alfa ${Math.round(Number(row.cashHeader))} ₽` : "";
+  return `шаг 5 · ${pay} ₽ − списания ${wo} ₽ (${n} ур.) = ${remain} ₽${alfa} ±1`;
+}
+
 function peopleNeedCashLoad(row: PeopleRow) {
   if (row.pays) return false;
   if (row.paysScanned && ((Number(row.cashRows) || 0) > 0 || row.paysEmpty)) return false;
@@ -902,7 +916,7 @@ function peopleNeedCashLoad(row: PeopleRow) {
 }
 
 function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
-  if (kind === "balance") return Boolean(row.pays);
+  if (kind === "balance") return Boolean(row.paysScanned || row.pays);
   if (row.short && row.holeApproved) return true;
   if (row.short) return false;
   if (row.dups) return true;
@@ -1010,7 +1024,7 @@ function patchPeopleSide(
     ...side,
     people,
     journalDone: people.filter((r) => r.journal).length,
-    cardDone: people.filter((r) => r.pays).length,
+    cardDone: people.filter((r) => r.pays || r.paysScanned).length,
   };
 }
 
@@ -1451,7 +1465,8 @@ function PeopleFillList({
             <CheckLine on={Boolean(row.rechecked) && !dups && !short} text="дубликатов нет" />
             {kind === "balance" ? (
               <>
-                <CheckLine on={Boolean(row.pays)} text="касса загружена" />
+                <CheckLine on={Boolean(row.paysScanned || row.pays)} text="касса загружена" />
+                <CheckLine on={Boolean(row.pays)} text={cashLoadedText(row)} />
                 <CheckLine on={Boolean(row.paysRechecked)} text="касса перепроверена" />
               </>
             ) : null}

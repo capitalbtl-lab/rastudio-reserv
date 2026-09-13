@@ -61,7 +61,7 @@ describe("фон истории из Alfa", () => {
     assert.equal(peopleJobFinished(people[1], "balance"), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: true, short: true }, "balance"), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false }, "balance"), false);
-    assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false, paysScanned: true }, "balance"), false);
+    assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false, paysScanned: true }, "balance"), true);
     assert.equal(peopleNeedCashLoad({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false }), true);
     assert.equal(peopleNeedCashLoad({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false, paysScanned: true, cashRows: 0 }), true);
     assert.equal(peopleNeedCashLoad({ cid: 5, branchId: 2, name: "Д", journal: false, pays: false, paysScanned: true, paysEmpty: true, cashRows: 0 }), false);
@@ -310,7 +310,7 @@ describe("фон истории из Alfa", () => {
     assert.match(core, /function peopleNeedCashLoad/);
     assert.match(ui, /function peopleNeedCashLoad/);
     assert.doesNotMatch(core, /res.student\?\.paysOk === false/);
-    assert.match(ui, /if \(kind === "balance"\) return Boolean\(row.pays\)/);
+    assert.match(ui, /if \(kind === "balance"\) return Boolean\(row.paysScanned \|\| row.pays\)/);
     assert.match(ui, /if \(journal\?\.job\?\.running && !journal.job.stop && !stopSchool.current\)/);
     assert.match(ui, /Уже идёт/);
     assert.match(ui, /h === "audit"/);
