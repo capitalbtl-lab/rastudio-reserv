@@ -899,16 +899,6 @@ function byPeopleName(a: PeopleRow, b: PeopleRow) {
   return a.name.localeCompare(b.name, "ru") || a.cid - b.cid;
 }
 
-function cashLoadedText(row: PeopleRow) {
-  if (row.cashRemain == null && row.cashPaySum == null) return "шаг 5 · остаток = шапка Alfa ±1 ₽";
-  const pay = Math.round(Number(row.cashPaySum) || 0);
-  const wo = Math.round(Number(row.cashWriteoff) || 0);
-  const remain = Math.round(Number(row.cashRemain) || 0);
-  const n = Number(row.lessons) || 0;
-  const alfa = row.cashHeader != null && Number.isFinite(Number(row.cashHeader)) ? ` · Alfa ${Math.round(Number(row.cashHeader))} ₽` : "";
-  return `шаг 5 · ${pay} ₽ − списания ${wo} ₽ (${n} ур.) = ${remain} ₽${alfa} ±1`;
-}
-
 function peopleNeedCashLoad(row: PeopleRow) {
   if (row.pays) return false;
   if (row.paysScanned && ((Number(row.cashRows) || 0) > 0 || row.paysEmpty)) return false;
@@ -1466,7 +1456,6 @@ function PeopleFillList({
             {kind === "balance" ? (
               <>
                 <CheckLine on={Boolean(row.paysScanned || row.pays)} text="касса загружена" />
-                <CheckLine on={Boolean(row.pays)} text={cashLoadedText(row)} />
                 <CheckLine on={Boolean(row.paysRechecked)} text="касса перепроверена" />
               </>
             ) : null}

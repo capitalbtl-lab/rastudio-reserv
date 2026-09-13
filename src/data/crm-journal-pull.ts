@@ -2,7 +2,7 @@
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { SCHOOL_ORDER, lessonNeedsHomework } from "./crm-slots-core";
+import { SCHOOL_ORDER, lessonNeedsHomework, pupilNameOk } from "./crm-slots-core";
 import { isCampStatus } from "./group-status";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { loadCachePolicy } from "./crm-cache-policy";
@@ -516,7 +516,13 @@ const MISS_CAP = 40;
 
 function fioOf(cid: number) {
   const d = findDossier({ crmId: cid });
-  return String(d?.child?.fio || "").trim() || `клиент ${cid}`;
+  const fromDossier = String(d?.child?.fio || d?.parent?.fio || "").trim();
+  if (fromDossier && !/^клиент\s+\d+$/i.test(fromDossier)) return fromDossier;
+  for (const row of paysOf(cid)) {
+    const pay = pupilNameOk((row as { customerName?: string }).customerName);
+    if (pay) return pay;
+  }
+  return `клиент ${cid}`;
 }
 
 function groupsOfStudent(cid: number) {
