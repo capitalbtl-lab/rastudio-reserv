@@ -331,7 +331,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /skipped: "hole"/);
     assert.match(inbound, /skipHoleInbound/);
     assert.match(inbound, /loadCustomerCalendar\(id\)/);
-    assert.match(inbound, /ownsStudentAlfa\(id\)/);
+    assert.match(inbound, /const prev = loadCustomerCalendar\(id\)/);
     const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
     assert.match(cards, /ownsStudentAlfa\(cid\)/);
     assert.match(cards, /if \(!held\) unlockStudentAlfa\(cid\)/);

@@ -289,10 +289,16 @@ function saveCustomerCalendarList(id: number, list: GroupCalLesson[]) {
 export function upsertCustomerCalendar(customerId: number, lesson: GroupCalLesson) {
   const id = Number(customerId) || 0;
   if (!id) return [];
-  const { list, item } = mergeLessonInto(loadCustomerCalendar(id), lesson);
-  saveCustomerCalendarList(id, list);
-  rememberLessons([item]);
-  return list;
+  const held = ownsStudentAlfa(id);
+  const got = held || tryLockStudentAlfa(id);
+  try {
+    const { list, item } = mergeLessonInto(loadCustomerCalendar(id), lesson);
+    saveCustomerCalendarList(id, list);
+    rememberLessons([item]);
+    return list;
+  } finally {
+    if (!held && got) unlockStudentAlfa(id);
+  }
 }
 
 export function replaceCustomerCalendar(customerId: number, lessons: GroupCalLesson[]) {
@@ -539,6 +545,9 @@ export function applyCreatedCalendarLesson(localId: number, crmId: number) {
     if (changed) saveGroupCard({ ...card, calendar });
   }
   for (const cid of listCustomerCalIds()) {
+    const held = ownsStudentAlfa(cid);
+    const got = held || tryLockStudentAlfa(cid);
+    try {
     const list = loadCustomerCalendar(cid);
     let hit = false;
     const calendar = list.map((x) => {
@@ -549,6 +558,9 @@ export function applyCreatedCalendarLesson(localId: number, crmId: number) {
       return next;
     });
     if (hit) saveCustomerCalendarList(cid, calendar);
+    } finally {
+      if (!held && got) unlockStudentAlfa(cid);
+    }
   }
   if (remapped.length) rememberLessons(remapped);
 }

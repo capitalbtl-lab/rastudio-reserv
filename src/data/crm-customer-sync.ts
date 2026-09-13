@@ -222,7 +222,7 @@ function fileHoldsStudent(id: number) {
     const pid = Number(raw.pid) || 0;
     const age = Date.now() - Date.parse(String(raw.at || ""));
     if (!Number.isFinite(age) || age > STUDENT_LOCK_STALE_MS) return false;
-    if (pid === process.pid) return true;
+    if (pid === process.pid) return false;
     return pidAlive(pid);
   } catch {
     return false;
@@ -242,20 +242,32 @@ export function tryLockStudentAlfa(customerId: number) {
   const id = Number(customerId) || 0;
   if (!id) return false;
   if (ownsStudentAlfa(id)) return true;
-  if (fileHoldsStudent(id) && !ownsStudentAlfa(id)) {
+  const dest = studentLockFile(id);
+  const payload = JSON.stringify({ pid: process.pid, cid: id, at: new Date().toISOString() });
+  mkdirSync(dirname(dest), { recursive: true });
+  const take = () => {
+    writeFileSync(dest, payload, { flag: "wx" });
+    if (!g.__raStudentAlfaSet) g.__raStudentAlfaSet = new Set();
+    g.__raStudentAlfaSet.add(id);
+    g.__raStudentAlfa = id;
+    return true;
+  };
+  try {
+    return take();
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "EEXIST") return false;
+    if (fileHoldsStudent(id)) return false;
     try {
-      const raw = JSON.parse(readFileSync(studentLockFile(id), "utf8")) as { pid?: number };
-      if (Number(raw.pid) !== process.pid) return false;
+      unlinkSync(dest);
+    } catch {
+      return false;
+    }
+    try {
+      return take();
     } catch {
       return false;
     }
   }
-  mkdirSync(dirname(studentLockFile(id)), { recursive: true });
-  writeFileSync(studentLockFile(id), JSON.stringify({ pid: process.pid, cid: id, at: new Date().toISOString() }), "utf8");
-  if (!g.__raStudentAlfaSet) g.__raStudentAlfaSet = new Set();
-  g.__raStudentAlfaSet.add(id);
-  g.__raStudentAlfa = id;
-  return true;
 }
 
 export async function waitLockStudentAlfa(customerId: number, ms = 20000) {

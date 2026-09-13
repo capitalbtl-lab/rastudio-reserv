@@ -88,6 +88,7 @@ describe("штамп входа ученика", () => {
 
   it("замок ученика: два cid сразу, файл, свой pid не блокирует", () => {
     const sync = readFileSync(new URL("./crm-customer-sync.ts", import.meta.url), "utf8");
+    assert.match(sync, /flag: "wx"/);
     assert.match(sync, /crm-student-\$\{id\}\.lock/);
     assert.match(sync, /export function ownsStudentAlfa/);
     assert.equal(tryLockStudentAlfa(900001), true);

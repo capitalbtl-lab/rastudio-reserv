@@ -453,12 +453,12 @@ function lessonIdsOnStudentGroups(cid: number) {
 
 export function applyCustomerLessonCensus(customerId: number, ids: number[], closed: boolean) {
   const id = Number(customerId) || 0;
+  if (!closed) return { ok: false as const, disk: countAlfaLessonRows(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
+  const held = ownsStudentAlfa(id);
+  if (!held && !tryLockStudentAlfa(id)) return { ok: false as const, disk: countAlfaLessonRows(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
+  try {
   const prev = loadCustomerCalendar(id);
   const before = countAlfaLessonRows(prev);
-  if (!closed) return { ok: false as const, disk: before, alfa: 0, pruned: 0 };
-  const held = ownsStudentAlfa(id);
-  if (!held && !tryLockStudentAlfa(id)) return { ok: false as const, disk: before, alfa: 0, pruned: 0 };
-  try {
   const hold = pendingExportIds(["lesson.update", "lesson.create"]);
   const uniq = uniquePositiveIds(ids);
   const groupKeep = lessonIdsOnStudentGroups(id);
@@ -772,6 +772,7 @@ export async function inboundMissingCustomerLessons(
     return { ok: true as const, count: 0, skipped: "busy" as const, dropped: want };
   }
   try {
+  if (skipHoleInbound(id, opts?.force)) return { ok: true as const, count: 0, skipped: "hole" as const, dropped: want };
   if (!alfaLinkedNow() && !opts?.force) return { ok: true as const, count: 0, skipped: "offline" as const, dropped: want };
   const { token } = await import("./alfacrm");
   const t = await token();
