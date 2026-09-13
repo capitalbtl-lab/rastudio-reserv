@@ -2,6 +2,7 @@
 
 import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { bumpAlfaFromLanded } from "./crm-inbound-core.ts";
 
 export const CUSTOMER_SYNC_TTL_MS = 10 * 60 * 1000;
 export const LESSON_INBOUND_RUN = 8;
@@ -93,6 +94,36 @@ export function stampCustomerSync(customerId: number, patch: CustomerSyncStamp) 
   store.byId[String(id)] = next;
   save(store);
   return next;
+}
+
+/** Календарь с Alfa: диск всегда. Счёт += новые id; если уже перекачали (диск > keep, новых нет) — догнать диск. keep=0 не выдумывать. Журнал не закрывать. */
+export function noteAlfaLessonsLanded(customerId: number, disk: number, newIds: Iterable<number>) {
+  const id = Number(customerId) || 0;
+  if (!id) return customerSyncOf(0);
+  const fresh: number[] = [];
+  const seen = new Set<number>();
+  for (const n of newIds) {
+    const lid = Number(n) || 0;
+    if (lid > 0 && !seen.has(lid)) {
+      seen.add(lid);
+      fresh.push(lid);
+    }
+  }
+  const prev = customerSyncOf(id);
+  const keep = Number(prev.lessonsAlfa) || 0;
+  const diskN = Math.max(0, Number(disk) || 0);
+  const gap = keep > 0 ? Math.max(0, diskN - keep) : 0;
+  const add = fresh.length > 0 ? fresh.length : gap;
+  const nextAlfa = bumpAlfaFromLanded(keep, add);
+  const held = nextAlfa !== keep && keep > 0;
+  const at = new Date().toISOString();
+  const seenIds = [...new Set([...(prev.lessonsSeenIds || []).map(Number).filter((n) => n > 0), ...fresh])];
+  return stampCustomerSync(id, {
+    lessonsDisk: diskN,
+    lessonsAt: at,
+    lessonsSeenIds: seenIds,
+    ...(held ? { lessonsAlfa: nextAlfa, lessonsAlfaAt: at, lessonsFull: false } : {}),
+  });
 }
 
 export function lessonsCountShort(disk: number, alfa: number, probed: boolean) {

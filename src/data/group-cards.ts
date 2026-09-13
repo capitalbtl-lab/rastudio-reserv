@@ -4,12 +4,12 @@ import type { GroupCalLesson } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { nextLocalId } from "./crm-local-id";
-import { mergeJournalInbound, collapseLessonRows, canFanOutToCalendar } from "./crm-inbound-core";
+import { mergeJournalInbound, collapseLessonRows, canFanOutToCalendar, countAlfaLessonRows } from "./crm-inbound-core";
 import { journalForCustomer, calendarLessonForCard, lessonBranchOf } from "./crm-journal-core";
 import { chargeFromPupils } from "./crm-ledger-core";
 import { findDossier } from "./dossiers";
 import { cardPays } from "./crm-pay";
-import { tryLockStudentAlfa, unlockStudentAlfa, ownsStudentAlfa } from "./crm-customer-sync";
+import { tryLockStudentAlfa, unlockStudentAlfa, ownsStudentAlfa, noteAlfaLessonsLanded } from "./crm-customer-sync";
 
 export type CachedGroupCard = {
   id: number;
@@ -292,9 +292,13 @@ export function upsertCustomerCalendar(customerId: number, lesson: GroupCalLesso
   const held = ownsStudentAlfa(id);
   const got = held || tryLockStudentAlfa(id);
   try {
-    const { list, item } = mergeLessonInto(loadCustomerCalendar(id), lesson);
+    const prev = loadCustomerCalendar(id);
+    const before = new Set(prev.map((x) => Number(x.lessonId) || 0).filter((n) => n > 0));
+    const { list, item } = mergeLessonInto(prev, lesson);
     saveCustomerCalendarList(id, list);
     rememberLessons([item]);
+    const lid = Number(lesson.lessonId) || 0;
+    noteAlfaLessonsLanded(id, countAlfaLessonRows(list), lid > 0 && !before.has(lid) ? [lid] : []);
     return list;
   } finally {
     if (!held && got) unlockStudentAlfa(id);
@@ -460,10 +464,17 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
     if (!held && !tryLockStudentAlfa(cid)) continue;
     try {
       let prev = loadCustomerCalendar(cid);
+      const before = new Set(prev.map((x) => Number(x.lessonId) || 0).filter((n) => n > 0));
+      const added: number[] = [];
       for (const lesson of extra) {
         if (!canFanOutToCalendar(prev, lesson)) continue;
+        const lid = Number(lesson.lessonId) || 0;
         prev = mergeLessonInto(prev, lesson).list;
         n += 1;
+        if (lid > 0 && !before.has(lid)) {
+          before.add(lid);
+          added.push(lid);
+        }
       }
       saveCustomerCalendarList(
         cid,
@@ -472,6 +483,7 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
           .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")))
           .slice(-8000),
       );
+      noteAlfaLessonsLanded(cid, countAlfaLessonRows(prev), added);
     } finally {
       if (!held) unlockStudentAlfa(cid);
     }

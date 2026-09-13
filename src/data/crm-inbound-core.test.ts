@@ -18,6 +18,7 @@ import {
   mergeInboundSiteFields,
   inboundFillClosed,
   keepAlfaProbe,
+  bumpAlfaFromLanded,
 } from "./crm-inbound-core.ts";
 import { slotActiveToday, slotOnPublicSchedule, mergeStatusPublish } from "./group-status.ts";
 
@@ -163,6 +164,11 @@ describe("вход из Alfa", () => {
     assert.equal(inboundFillClosed(338, 339, true, false), false);
     assert.equal(inboundFillClosed(0, 0, true, false), true);
     assert.equal(keepAlfaProbe(286, 254, true).write, false);
+    assert.equal(bumpAlfaFromLanded(312, 2), 314);
+    assert.equal(bumpAlfaFromLanded(312, 0), 312);
+    assert.equal(bumpAlfaFromLanded(0, 2), 0);
+    assert.equal(bumpAlfaFromLanded(541, 5), 546);
+    assert.equal(bumpAlfaFromLanded(312, Math.max(0, 314 - 312)), 314);
   });
 });
 

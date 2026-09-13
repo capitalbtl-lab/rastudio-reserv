@@ -13,6 +13,14 @@ export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
   return { write: true, alfa: a, probed: true };
 }
 
+/** Админка/вход посадил новые id из Alfa — штамп растёт на них, не падает. Без пробы (keep=0) не выдумывать счёт. */
+export function bumpAlfaFromLanded(keep: number, newAlfaIds: number) {
+  const k = Number(keep) || 0;
+  const n = Math.max(0, Number(newAlfaIds) || 0);
+  if (k <= 0 || n <= 0) return k;
+  return k + n;
+}
+
 /** Курсор качки не закрывает cid, пока диск < известной Alfa. */
 export function inboundFillClosed(disk: number, alfaKeep: number, cursorDone: boolean, aborted: boolean) {
   if (aborted) return false;

@@ -23,6 +23,7 @@ import {
   customerLessonsFresh,
   customerSyncOf,
   stampCustomerSync,
+  noteAlfaLessonsLanded,
   lessonFillStart,
   lessonFillOf,
   lessonFillAdvance,
@@ -731,6 +732,12 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     }
     replaceCustomerCalendar(id, next);
     const diskNow = countAlfaLessonRows(next);
+    const before = new Set((prevCal || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+    noteAlfaLessonsLanded(
+      id,
+      diskNow,
+      pulled.map((l) => Number(l.lessonId) || 0).filter((n) => n > 0 && !before.has(n)),
+    );
     const keep = Number(customerSyncOf(id).lessonsAlfa) || 0;
     const walked = Boolean(cur.done) && !aborted;
     const fillDone = inboundFillClosed(diskNow, keep, walked, aborted);
@@ -862,9 +869,13 @@ export async function inboundMissingCustomerLessons(
     const hold = pendingExportIds(["lesson.update", "lesson.create"]);
     const next = mergeLocalCalendar(pulled, prevCal, hold, "union");
     replaceCustomerCalendar(id, next);
+    const before = new Set((prevCal || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+    noteAlfaLessonsLanded(
+      id,
+      countAlfaLessonRows(next),
+      pulled.map((l) => Number(l.lessonId) || 0).filter((n) => n > 0 && !before.has(n)),
+    );
     stampCustomerSync(id, {
-      lessonsAt: new Date().toISOString(),
-      lessonsDisk: countAlfaLessonRows(next),
       lessonsFull: false,
     });
   }

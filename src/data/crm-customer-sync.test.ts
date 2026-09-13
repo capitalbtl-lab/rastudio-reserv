@@ -108,8 +108,23 @@ describe("штамп входа ученика", () => {
     assert.equal(tryLockStudentAlfa(900001), true);
     unlockStudentAlfa(900001);
     unlockStudentAlfa(900002);
+    assert.equal(studentAlfaOwner(), 0);
     assert.equal(ownsStudentAlfa(900001), false);
     assert.equal(ownsStudentAlfa(900002), false);
+  });
+
+  it("вход с Alfa дописывает диск и поднимает устаревший счёт на новые id", () => {
+    const sync = readFileSync(new URL("./crm-customer-sync.ts", import.meta.url), "utf8");
+    const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
+    const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
+    assert.match(sync, /export function noteAlfaLessonsLanded/);
+    assert.match(sync, /bumpAlfaFromLanded\(keep, add\)/);
+    assert.match(sync, /fresh.length > 0 \? fresh.length : gap/);
+    assert.match(sync, /held \? \{ lessonsAlfa: nextAlfa, lessonsAlfaAt: at, lessonsFull: false \}/);
+    assert.match(cards, /noteAlfaLessonsLanded\(cid, countAlfaLessonRows\(prev\), added\)/);
+    assert.match(cards, /noteAlfaLessonsLanded\(id, countAlfaLessonRows\(list\)/);
+    assert.match(inbound, /noteAlfaLessonsLanded\(/);
+    assert.doesNotMatch(sync, /lessonsFull: true/);
   });
 });
 
