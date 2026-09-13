@@ -1134,21 +1134,21 @@ function PeopleFillList({
     return now;
   };
   const needRows = orderActiveQueue(
-    scoped.filter((r) => !finishedOf(r)),
+    scoped.filter((r) => !finishedOf(r) || peopleHoleOk(r)),
     (r) => r.cid === loadingCid,
     () => true,
     byPeopleName,
   );
   const doneRows = orderActiveQueue(
-    scoped.filter((r) => finishedOf(r)),
+    scoped.filter((r) => finishedOf(r) && !peopleHoleOk(r)),
     (r) => r.cid === loadingCid,
     (r) => peopleNeedsRecheck(r, kind),
     byPeopleName,
   );
   const nNeed = needRows.length;
   const nDone = doneRows.length;
-  const nApproved = kind === "students" ? doneRows.filter((r) => peopleHoleOk(r)).length : 0;
-  const nComplete = nDone - nApproved;
+  const nApproved = kind === "students" ? needRows.filter((r) => peopleHoleOk(r)).length : 0;
+  const nComplete = nDone;
   const pagesNeed = Math.max(1, Math.ceil(nNeed / pageSize) || 1);
   const pagesDone = Math.max(1, Math.ceil(nDone / pageSize) || 1);
   const safeNeed = Math.min(pageNeed, pagesNeed - 1);
@@ -1435,6 +1435,9 @@ function PeopleFillList({
         <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-rose-200">
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="font-display text-[1.05rem] text-rose-900">Требуют загрузки данных · {nNeed}</h4>
+            {kind === "students" && nApproved ? (
+              <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950">Одобрен · {nApproved}</span>
+            ) : null}
             {pager(safeNeed, pagesNeed, setPageNeed)}
           </div>
           <p className="mt-1 text-[0.72rem] text-muted">{kind === "balance" ? "Касса и журнал — пока чего-то нет, ученик здесь." : "Личный календарь ещё неполный — ученик здесь. Галка «одобрить» — не «Добрать», журнал не закроется."}</p>
@@ -1443,9 +1446,6 @@ function PeopleFillList({
         <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="font-display text-[1.05rem] text-emerald-900">Загрузка данных завершена · {nComplete}</h4>
-            {kind === "students" && nApproved ? (
-              <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950">Одобрен · {nApproved}</span>
-            ) : null}
             {pager(safeDone, pagesDone, setPageDone)}
           </div>
           <p className="mt-1 text-[0.72rem] text-muted">{kind === "balance" ? "Касса на месте. Перепроверить — сверка с Alfa." : "Календарь на месте. Перепроверить — сверка с Alfa."}</p>
