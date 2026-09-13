@@ -205,7 +205,7 @@ export function markRefundOfGoods(rows: PayRow[]): PayRow[] {
 export function remainderClose(cash: number, alfa: number, hasRows: boolean) {
   const a = Number(cash) || 0;
   const b = Number(alfa) || 0;
-  if (!hasRows && Math.abs(a) <= 1 && Math.abs(b) <= 1) return false;
+  if (!hasRows && Math.abs(a) <= 1 && Math.abs(b) <= 1) return true;
   return Math.abs(a - b) <= 1;
 }
 

@@ -70,6 +70,7 @@ export function classifyAudit(p: {
   if (p.woZeroOk) codes.push("wo0");
   if (p.corrMissing) codes.push("corr");
   if (Math.abs(p.woCard - p.woCal) > 1) codes.push("src");
+  if (Number(p.lessonsAlfa) > 0 && Number(p.lessonsDisk) !== Number(p.lessonsAlfa)) codes.push("lessons");
   const goodsNet = Number(p.goodsNet) || 0;
   const refundGoods = Number(p.refundGoodsSum) || 0;
   if (moneyClose(p.clients, p.alfa)) {
@@ -89,6 +90,11 @@ export function classifyAudit(p: {
       if (p.cash < p.alfa - 1) codes.push("pays");
       return [...new Set(codes)];
     }
+    if (p.paysComplete && !moneyClose(p.cash, p.alfa)) {
+      codes.push("pays");
+      return [...new Set(codes.filter((c) => c !== "ok"))];
+    }
+    if (codes.includes("lessons")) return [...new Set(codes.filter((c) => c !== "ok"))];
     if (!codes.includes("src") && !codes.includes("status") && !codes.includes("corr")) return codes.length ? ["ok", ...codes] : ["ok"];
     return ["ok", ...codes];
   }

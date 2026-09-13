@@ -4,11 +4,12 @@ export function inboundTake(opts: { pending?: boolean }) {
   return opts.pending ? ("skip" as const) : ("alfa" as const);
 }
 
-/** Сорванная/слабая проба не затирает известный счёт Alfa и не закрывает cid. */
-export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
+/** Сорванная/слабая проба не затирает известный счёт. Полная перепись (census) — правда Alfa, можно снизить. */
+export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean, census = false) {
   const k = Number(keep) || 0;
   const a = Number(alfa) || 0;
   if (!probedOk) return { write: false, alfa: k, probed: k > 0 };
+  if (census) return { write: true, alfa: a, probed: true };
   if (k > 0 && a < k) return { write: false, alfa: k, probed: true };
   return { write: true, alfa: a, probed: true };
 }
@@ -202,6 +203,11 @@ export function countAlfaLessonRows<T extends { lessonId?: number }>(list: T[] |
   let n = 0;
   for (const x of list || []) if (Number(x.lessonId) > 0) n += 1;
   return n;
+}
+
+/** Счёт журнала — уникальные lessonId, не строки. Дубли одной записи не extra. */
+export function countAlfaLessonUniq<T extends { lessonId?: number }>(list: T[] | undefined) {
+  return uniquePositiveIds((list || []).map((x) => Number(x.lessonId) || 0)).length;
 }
 
 export function mergeSeenLessonIds(prev: number[] | undefined, pulled: { lessonId?: number }[]) {

@@ -70,7 +70,7 @@ export async function diskAudit(cid: number, branchId: number) {
     woCal,
     woCard,
     paysComplete: payCustomerFilled(id),
-    lessonsDisk: cal.length,
+    lessonsDisk: new Set(ids).size,
     liveCtt: liveCttOf(parseDossierCtt(d?.extras)).length > 0,
     dupLessons: ids.length !== new Set(ids).size,
     badStatus: cal.some((l) => Number(l.status) !== 3 && (Number(l.amount) || 0) > 0),
@@ -170,23 +170,23 @@ export async function auditOne(cid: number, branchId: number) {
   }
   const shown = await alfaShow(branch, id);
   let repaired = false;
-  let lessonsAlfa = first.lessonsDisk;
+  let lessonsAlfa = Number((await import("./crm-customer-sync")).customerSyncOf(id).lessonsAlfa) || first.lessonsDisk;
   const empty = (Number(first.clients) || 0) === 0 && !first.paysComplete && first.lessonsDisk === 0 && !first.liveCtt && !shown.liveCtt;
-  const needRepair =
+  const moneyNeed =
     shown.ok &&
     (!moneyClose(first.clients, shown.alfa) || !moneyClose(first.cash, shown.alfa) || !first.paysComplete || empty);
-  if (needRepair) {
+  if (shown.ok) {
     try {
       const { probeCustomerLessons, inboundCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, skipHoleInbound } = await import("./crm-journal-inbound");
       const probed = await probeCustomerLessons(shown.branch, id).catch(() => ({ total: 0, ok: false as const }));
-      lessonsAlfa = probed.ok ? probed.total : first.lessonsDisk;
+      if (probed.ok) lessonsAlfa = probed.total;
       const extraLessons = probed.ok && first.lessonsDisk > probed.total;
-      const holeLessons = first.cash > shown.alfa + 1 || (probed.ok && probed.total > first.lessonsDisk);
+      const holeLessons = probed.ok && probed.total > first.lessonsDisk;
       const holeSkip = skipHoleInbound(id);
-      if (extraLessons || (holeLessons && !holeSkip)) {
+      if ((extraLessons || holeLessons) && !holeSkip) {
         const { loadCustomerCalendar } = await import("./group-cards");
-        const { countAlfaLessonRows } = await import("./crm-inbound-core");
-        if (!holeSkip) {
+        const { countAlfaLessonUniq } = await import("./crm-inbound-core");
+        if (holeLessons) {
         for (let i = 0; i < 4; i += 1) {
           const r = await inboundCustomerLessons(shown.branch, id, {
             force: true,
@@ -198,16 +198,17 @@ export async function auditOne(cid: number, branchId: number) {
           }).catch(() => ({ done: false }));
           repaired = true;
           if (r && "done" in r && r.done) break;
-          const diskN = countAlfaLessonRows(loadCustomerCalendar(id));
-          if (!extraLessons && probed.ok && diskN >= probed.total) break;
+          const diskN = countAlfaLessonUniq(loadCustomerCalendar(id));
+          if (probed.ok && diskN >= probed.total) break;
         }
         }
         if (extraLessons) {
           const census = await censusCustomerLessonIds(shown.branch, id, { dateFrom: "2015-01-01" }).catch(() => ({ ids: [] as number[], ok: false as const }));
           if (census.ok) applyCustomerLessonCensus(id, census.ids, true);
+          repaired = true;
         }
       }
-      if (!first.paysComplete || !moneyClose(first.cash, shown.alfa)) {
+      if (moneyNeed) {
         const { inboundCustomerPays, payCustomerFilled, markPayJournalIncomplete } = await import("./crm-pay");
         markPayJournalIncomplete(id);
         for (let i = 0; i < 4; i += 1) {
@@ -246,11 +247,14 @@ export async function auditOne(cid: number, branchId: number) {
     corrLooksGoods: after.corrLooksGoods,
   });
   if (codes.includes("lessons")) {
-    const { stampCustomerSync } = await import("./crm-customer-sync");
+    const { stampCustomerSync, customerSyncOf } = await import("./crm-customer-sync");
+    const { keepAlfaProbe } = await import("./crm-inbound-core");
+    const keep = Number(customerSyncOf(id).lessonsAlfa) || 0;
+    const held = keepAlfaProbe(keep, lessonsAlfa, shown.ok);
     stampCustomerSync(id, {
       lessonsFull: false,
       lessonsDisk: after.lessonsDisk,
-      ...(shown.ok ? { lessonsAlfa, lessonsAlfaAt: new Date().toISOString() } : {}),
+      ...(held.write ? { lessonsAlfa: held.alfa, lessonsAlfaAt: new Date().toISOString() } : {}),
     });
   }
   if (codes.includes("pays") || codes.includes("snap")) {

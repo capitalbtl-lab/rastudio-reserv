@@ -3,7 +3,7 @@ import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
-import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe } from "./crm-inbound-core";
+import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
@@ -457,20 +457,20 @@ function lessonIdsOnStudentGroups(cid: number) {
 
 export function applyCustomerLessonCensus(customerId: number, ids: number[], closed: boolean, keepBefore = "") {
   const id = Number(customerId) || 0;
-  if (!closed) return { ok: false as const, disk: countAlfaLessonRows(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
+  if (!closed) return { ok: false as const, disk: countAlfaLessonUniq(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
   const held = ownsStudentAlfa(id);
-  if (!held && !tryLockStudentAlfa(id)) return { ok: false as const, disk: countAlfaLessonRows(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
+  if (!held && !tryLockStudentAlfa(id)) return { ok: false as const, disk: countAlfaLessonUniq(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
   try {
   const prev = loadCustomerCalendar(id);
-  const before = countAlfaLessonRows(prev);
+  const before = countAlfaLessonUniq(prev);
   const hold = pendingExportIds(["lesson.update", "lesson.create"]);
   const uniq = uniquePositiveIds(ids);
   const groupKeep = lessonIdsOnStudentGroups(id);
   const next = pruneCalendarToAlfaIds(prev, uniq, hold, groupKeep, keepBefore);
   replaceCustomerCalendar(id, next);
-  const disk = countAlfaLessonRows(next);
+  const disk = countAlfaLessonUniq(next);
   const keepAlfa = Number(customerSyncOf(id).lessonsAlfa) || 0;
-  const heldAlfa = keepAlfaProbe(keepAlfa, uniq.length, true);
+  const heldAlfa = keepAlfaProbe(keepAlfa, uniq.length, true, !keepBefore);
   const alfa = keepBefore ? keepAlfa || uniq.length : heldAlfa.alfa;
   const holeApproved = Boolean(customerSyncOf(id).journalHoleApprovedAt);
   stampCustomerSync(id, {
@@ -558,7 +558,7 @@ export function skipHoleInbound(id: number, force?: boolean) {
   if (force) return false;
   const s = customerSyncOf(id);
   if (!s.journalHoleApprovedAt) return false;
-  const disk = countAlfaLessonRows(loadCustomerCalendar(id)) || Number(s.lessonsDisk) || 0;
+  const disk = countAlfaLessonUniq(loadCustomerCalendar(id)) || Number(s.lessonsDisk) || 0;
   return lessonsCountShort(disk, Number(s.lessonsAlfa) || 0, Boolean(s.lessonsAlfaAt));
 }
 
@@ -612,7 +612,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         ? lessonFillForWindow(lessonFillOf(customerSyncOf(id).lessonFill), dateFrom, branches[0] || branch)
         : lessonFillStart(branches[0] || branch, dateFrom);
     const keep0 = Number(customerSyncOf(id).lessonsAlfa) || 0;
-    if (keep0 > 0 && countAlfaLessonRows(prevCal) < keep0 && cur.done) {
+    if (keep0 > 0 && countAlfaLessonUniq(prevCal) < keep0 && cur.done) {
       cur = lessonFillStart(branches[0] || branch, dateFrom);
     }
     let ran = 0;
@@ -657,7 +657,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         const gid = Number((item.group_ids || [])[0] || 0);
         const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
         const packed = packLight(
-          { ...item, date: ymd(item.date), customer_ids: uniquePositiveIds([...ids, id]) },
+          { ...item, date: ymd(item.date) || ymd(item.time_from) || "2015-01-01", customer_ids: uniquePositiveIds([...ids, id]) },
           {
             groupName: slot?.groupName || String(item.lesson_type_name || "занятие"),
             from: hm(item.time_from) || "",
@@ -667,21 +667,36 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
           },
           id,
         );
-        if (!packed) {
-          const lid = Number(item.id || 0);
+        const lid = Number(item.id || 0);
+        const seated = packed || (lid > 0
+          ? {
+              date: ymd(item.date) || ymd(item.time_from) || "2015-01-01",
+              from: hm(item.time_from) || "00:00",
+              to: hm(item.time_to) || "",
+              status: Number(item.status || 0),
+              type: String(item.lesson_type_name || "занятие"),
+              group: slot?.groupName || String(item.lesson_type_name || "занятие"),
+              teacher: slot?.teacher || "",
+              subject: slot?.subject || "",
+              lessonId: lid,
+              customerIds: [id],
+              groupIds: (item.group_ids || []).map(Number).filter((n) => n > 0),
+            }
+          : null);
+        if (!seated) {
           if (lid > 0) droppedNoDate.push(lid);
           continue;
         }
-        packed.date = ymd(packed.date);
-        if (!packed.customerIds?.length) packed.customerIds = [id];
-        const prev = prevMap.get(String(packed.lessonId || `${packed.date}|${packed.from}`));
+        seated.date = ymd(seated.date) || "2015-01-01";
+        if (!seated.customerIds?.length) seated.customerIds = [id];
+        const prev = prevMap.get(String(seated.lessonId || `${seated.date}|${seated.from}`));
         if (prev) {
-          if (!(Number(packed.amount) > 0) && Number(prev.amount) > 0) packed.amount = prev.amount;
-          if (!(Number(packed.cttId) > 0) && Number(prev.cttId) > 0) packed.cttId = prev.cttId;
-          const merged = mergeLessonPupils(prev.pupils, packed.pupils);
-          if (merged?.length) packed.pupils = merged;
+          if (!(Number(seated.amount) > 0) && Number(prev.amount) > 0) seated.amount = prev.amount;
+          if (!(Number(seated.cttId) > 0) && Number(prev.cttId) > 0) seated.cttId = prev.cttId;
+          const merged = mergeLessonPupils(prev.pupils, seated.pupils);
+          if (merged?.length) seated.pupils = merged;
         }
-        pulled.push(withPupilNames(packed));
+        pulled.push(withPupilNames(seated));
       }
     }
     const detailCap = Number(opts?.deep) > 0 ? Math.min(24, Number(opts.deep)) : Number(opts?.take) > 0 ? 3 : 6;
@@ -731,7 +746,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       stampCustomerSync(id, { lessonsSeenIds: seen });
     }
     replaceCustomerCalendar(id, next);
-    const diskNow = countAlfaLessonRows(next);
+    const diskNow = countAlfaLessonUniq(next);
     const before = new Set((prevCal || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
     noteAlfaLessonsLanded(
       id,
@@ -872,7 +887,7 @@ export async function inboundMissingCustomerLessons(
     const before = new Set((prevCal || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
     noteAlfaLessonsLanded(
       id,
-      countAlfaLessonRows(next),
+      countAlfaLessonUniq(next),
       pulled.map((l) => Number(l.lessonId) || 0).filter((n) => n > 0 && !before.has(n)),
     );
     stampCustomerSync(id, {

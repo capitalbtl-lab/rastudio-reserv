@@ -27,6 +27,7 @@ describe("шаг 1: группы и состав", () => {
     assert.match(src, /groupLink: \{/);
     assert.match(src, /stampLink\(cid, bid, gid, name, true\)/);
     assert.match(src, /stampLink\(cid, bid, gid, name, false\)/);
+    assert.match(src, /if \(!d\) return;/);
     assert.doesNotMatch(src, /enqueueExport/);
     assert.doesNotMatch(src, /customer\.update/);
     assert.doesNotMatch(src, /cgi\/create/);

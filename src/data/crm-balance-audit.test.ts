@@ -22,6 +22,22 @@ describe("шаг 4 сверка остатка", () => {
     assert.equal(auditOnRight(codes), true);
     assert.equal(moneyClose(100, 101), true);
     assert.equal(moneyClose(100, 102), false);
+    const lessonHole = classifyAudit({
+      alfaOk: true,
+      clients: 350,
+      alfa: 350,
+      cash: 350,
+      paysComplete: true,
+      lessonsDisk: 10,
+      lessonsAlfa: 12,
+      woCard: 1000,
+      woCal: 1000,
+      liveCtt: false,
+      repaired: false,
+    });
+    assert.ok(lessonHole.includes("lessons"));
+    assert.equal(lessonHole.includes("ok"), false);
+    assert.equal(auditOnRight(lessonHole), false);
   });
 
   it("шапка Alfa = customer.balance, не rest абонемента", () => {
@@ -210,11 +226,12 @@ describe("шаг 4 сверка остатка", () => {
     assert.match(src, /skipHoleInbound/);
     assert.match(src, /inboundCustomerLessons/);
     assert.match(src, /full: true/);
-    assert.match(src, /applyCustomerLessonCensus/);
+    assert.match(src, /keepAlfaProbe/);
+    assert.match(src, /held.write \? \{ lessonsAlfa: held.alfa/);
     assert.match(src, /extraLessons/);
     assert.match(src, /inboundCustomerPays/);
-    assert.match(src, /if \(!payFillScanned\(id\)\) markPayJournalIncomplete\(id\)/);
-    assert.match(src, /!moneyClose\(first.cash, shown.alfa\)/);
+    assert.match(src, /moneyNeed/);
+    assert.match(src, /markPayJournalIncomplete\(id\)/);
     assert.doesNotMatch(src, /first.cash < shown.alfa - 1/);
     assert.match(src, /paysRecheckAt: ""/);
     assert.match(src, /stampCustomerSync/);

@@ -7,6 +7,7 @@ import {
   pruneCalendarToAlfaIds,
   canFanOutToCalendar,
   countAlfaLessonRows,
+  countAlfaLessonUniq,
   mergeSeenLessonIds,
   canPruneCalendarFill,
   uniquePositiveIds,
@@ -132,6 +133,8 @@ describe("вход из Alfa", () => {
     const kept = pruneCalendarToAlfaIds(disk, [10, 11], [], [99]);
     assert.equal(kept.some((x) => x.lessonId === 99), true);
     assert.equal(countAlfaLessonRows(kept), 3);
+    assert.equal(countAlfaLessonUniq([{ lessonId: 1 }, { lessonId: 1 }, { lessonId: 2 }]), 2);
+    assert.equal(countAlfaLessonRows([{ lessonId: 1 }, { lessonId: 1 }, { lessonId: 2 }]), 3);
     const old = pruneCalendarToAlfaIds(
       [
         { lessonId: 1, date: "2025-01-10" },
@@ -164,6 +167,8 @@ describe("вход из Alfa", () => {
     assert.equal(inboundFillClosed(338, 339, true, false), false);
     assert.equal(inboundFillClosed(0, 0, true, false), true);
     assert.equal(keepAlfaProbe(286, 254, true).write, false);
+    assert.equal(keepAlfaProbe(286, 254, true, true).write, true);
+    assert.equal(keepAlfaProbe(286, 254, true, true).alfa, 254);
     assert.equal(bumpAlfaFromLanded(312, 2), 314);
     assert.equal(bumpAlfaFromLanded(312, 0), 312);
     assert.equal(bumpAlfaFromLanded(0, 2), 0);

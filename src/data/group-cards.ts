@@ -4,7 +4,7 @@ import type { GroupCalLesson } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils } from "./crm-slots-core";
 import { rememberLessons } from "./crm-lessons";
 import { nextLocalId } from "./crm-local-id";
-import { mergeJournalInbound, collapseLessonRows, canFanOutToCalendar, countAlfaLessonRows } from "./crm-inbound-core";
+import { mergeJournalInbound, collapseLessonRows, canFanOutToCalendar, countAlfaLessonUniq } from "./crm-inbound-core";
 import { journalForCustomer, calendarLessonForCard, lessonBranchOf } from "./crm-journal-core";
 import { chargeFromPupils } from "./crm-ledger-core";
 import { findDossier } from "./dossiers";
@@ -298,7 +298,7 @@ export function upsertCustomerCalendar(customerId: number, lesson: GroupCalLesso
     saveCustomerCalendarList(id, list);
     rememberLessons([item]);
     const lid = Number(lesson.lessonId) || 0;
-    noteAlfaLessonsLanded(id, countAlfaLessonRows(list), lid > 0 && !before.has(lid) ? [lid] : []);
+    noteAlfaLessonsLanded(id, countAlfaLessonUniq(list), lid > 0 && !before.has(lid) ? [lid] : []);
     return list;
   } finally {
     if (!held && got) unlockStudentAlfa(id);
@@ -483,7 +483,7 @@ export function fanOutLessonWriteoffs(lessons: GroupCalLesson[]) {
           .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.from || "").localeCompare(String(b.from || "")))
           .slice(-8000),
       );
-      noteAlfaLessonsLanded(cid, countAlfaLessonRows(prev), added);
+      noteAlfaLessonsLanded(cid, countAlfaLessonUniq(prev), added);
     } finally {
       if (!held) unlockStudentAlfa(cid);
     }

@@ -145,13 +145,15 @@ export function lessonsJournalReady(sync: CustomerSyncStamp) {
   return probed && diskN === alfaN;
 }
 
-/** Уже сходился или диск ≥ Alfa — синяя не крутит 2015, только окно. */
+/** Уже сходился без extra — синяя не крутит 2015. Extra (диск > Alfa) окно не берёт. */
 export function wasLessonGreen(sync: CustomerSyncStamp) {
-  if (sync.lessonsRecheckAt) return true;
-  if (sync.lessonsFull) return true;
+  const probed = Boolean(sync.lessonsAlfaAt);
   const alfa = Number(sync.lessonsAlfa) || 0;
   const disk = Number(sync.lessonsDisk) || 0;
-  return Boolean(sync.lessonsAlfaAt) && alfa > 0 && disk >= alfa;
+  if (lessonsCountExtra(disk, alfa, probed)) return false;
+  if (sync.lessonsRecheckAt) return true;
+  if (sync.lessonsFull) return true;
+  return probed && alfa > 0 && disk === alfa;
 }
 
 export function customerLessonsFresh(customerId: number, now = Date.now()) {

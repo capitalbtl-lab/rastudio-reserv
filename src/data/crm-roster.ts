@@ -76,7 +76,8 @@ async function hydrateCustomer(branchId: number, cid: number, t: string) {
 
 function stampLink(cid: number, branchId: number, groupId: number, name: string, active: boolean) {
   const d = findDossier({ crmId: cid });
-  const prev = (d?.groupLinks || []).find((l) => Number(l.id) === groupId && (!l.branchId || Number(l.branchId) === branchId));
+  if (!d) return;
+  const prev = (d.groupLinks || []).find((l) => Number(l.id) === groupId && (!l.branchId || Number(l.branchId) === branchId));
   upsertDossier({
     crmId: cid,
     branchId,

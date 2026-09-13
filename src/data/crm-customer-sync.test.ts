@@ -66,7 +66,7 @@ describe("штамп входа ученика", () => {
     assert.equal(wasLessonGreen({ lessonsRecheckAt: "x" }), true);
     assert.equal(wasLessonGreen({ lessonsFull: true }), true);
     assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 491 }), true);
-    assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 495 }), true);
+    assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 495 }), false);
     assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 400 }), false);
     assert.equal(wasLessonGreen({}), false);
   });
@@ -121,8 +121,8 @@ describe("штамп входа ученика", () => {
     assert.match(sync, /bumpAlfaFromLanded\(keep, add\)/);
     assert.match(sync, /fresh.length > 0 \? fresh.length : gap/);
     assert.match(sync, /held \? \{ lessonsAlfa: nextAlfa, lessonsAlfaAt: at, lessonsFull: false \}/);
-    assert.match(cards, /noteAlfaLessonsLanded\(cid, countAlfaLessonRows\(prev\), added\)/);
-    assert.match(cards, /noteAlfaLessonsLanded\(id, countAlfaLessonRows\(list\)/);
+    assert.match(cards, /noteAlfaLessonsLanded\(cid, countAlfaLessonUniq\(prev\), added\)/);
+    assert.match(cards, /noteAlfaLessonsLanded\(id, countAlfaLessonUniq\(list\)/);
     assert.match(inbound, /noteAlfaLessonsLanded\(/);
     assert.doesNotMatch(sync, /lessonsFull: true/);
   });

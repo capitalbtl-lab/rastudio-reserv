@@ -276,7 +276,7 @@ describe("журнал денег", () => {
     ]);
     assert.equal(Boolean(noPair[1].refundOfGoods), false);
     assert.equal(balanceOf(noPair), 0);
-    assert.equal(remainderClose(0, 0, false), false);
+    assert.equal(remainderClose(0, 0, false), true);
     assert.equal(remainderClose(47504, 47504, true), true);
     assert.equal(remainderClose(47404, 47504, true), false);
   });

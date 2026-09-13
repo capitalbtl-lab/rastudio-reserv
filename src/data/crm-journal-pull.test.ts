@@ -48,6 +48,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /loadGroupCard\(g\.branchId, g\.groupId\)/);
     assert.match(pull, /hydrateDisk/);
     assert.match(pull, /emptyPrefix/);
+    assert.match(pull, /done: stamped \|\| emptyPrefix/);
+    assert.doesNotMatch(pull, /stamped \|\| n > 0 \|\| emptyPrefix/);
     assert.match(pull, /applyHydrateFills/);
     assert.match(pull, /groupName: g\.name/);
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
@@ -284,15 +286,15 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /closed \? \{ lessonsFull: true, lessonsAttend: true \} : \{ lessonsFull: false \}/);
     assert.match(inbound, /heldAlfa.write \? \{ lessonsAlfa: heldAlfa.alfa/);
     assert.match(inbound, /const alfa = keepBefore \? keepAlfa \|\| uniq\.length : heldAlfa.alfa/);
-    assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true\)/);
+    assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true, !keepBefore\)/);
     assert.doesNotMatch(inbound, /lessonsAlfa: uniq\.length/);
     assert.doesNotMatch(inbound, /ids\.length && !ids\.includes\(id\) && !packLessonPupils/);
     assert.match(inbound, /droppedNoDate/);
     assert.match(inbound, /customer_ids: uniquePositiveIds\(\[\.\.\.ids, id\]\)/);
     assert.match(core, /export function inboundFillClosed/);
     assert.match(inbound, /inboundFillClosed/);
-    assert.match(pull, /res\.done && !lessonsCountShort\(disk, alfaGate, true\)/);
-    assert.match(pull, /res\.walked && lessonsCountShort\(disk, alfaGate, true\)/);
+    assert.match(pull, /resetSeen: i === 0/);
+    assert.doesNotMatch(pull, /res\.walked && lessonsCountShort\(disk, alfaGate, true\)/);
     assert.match(inbound, /export async function inboundMissingCustomerLessons/);
     assert.match(pull, /inboundMissingCustomerLessons/);
     assert.match(pull, /missing\.length/);
@@ -352,7 +354,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /if \(page === pageCap - 1\) aborted = true/);
     assert.match(inbound, /lessonIdsOnStudentGroups/);
     assert.match(inbound, /pruneCalendarToAlfaIds\(prev, uniq, hold, groupKeep, keepBefore\)/);
-    assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true\)/);
+    assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true, !keepBefore\)/);
     assert.match(inbound, /heldAlfa.write \? \{ lessonsAlfa: heldAlfa.alfa, lessonsAlfaAt/);
     assert.match(inbound, /holeApproved \|\| \(keepBefore \? disk !== keepAlfa : disk !== alfa\)/);
   });

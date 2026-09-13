@@ -3826,7 +3826,7 @@ export function AdminCrmSettings() {
                         years={<YearsSelect value={peopleFromId} disabled={busy} onChange={setPeopleFromId} hint={HINT.yearsMoney} small />}
                         onLoad={(row) => void loadPerson(row, "balance", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "balance", peopleStudy, true)}
-                        onFullHistory={(row) => void loadPerson(row, "balance", peopleStudy, true, "2015-01-01")}
+                        onFullHistory={(row) => void loadPerson(row, "balance", peopleStudy, false, "2015-01-01")}
                         onStop={() => {
                           requestStop();
                         }}
