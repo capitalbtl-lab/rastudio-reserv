@@ -330,8 +330,10 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(rec, /if \(extra\)/);
     assert.doesNotMatch(rec, /inboundCustomerLessons\(/);
     assert.match(rec, /short && !holeApproved/);
-    assert.match(rec, /windowFrom && !holeApproved/);
-    assert.match(rec, /extraIds/);
+    assert.doesNotMatch(rec, /windowFrom && !holeApproved/);
+    assert.doesNotMatch(rec, /extraIds/);
+    assert.doesNotMatch(rec, /alfaN \+ bump/);
+    assert.match(rec, /mark\(disk, alfaN, true\)/);
     assert.match(rec, /inboundMissingCustomerLessons/);
     assert.match(pull, /!short && !extra && !holeApproved/);
     assert.match(rec, /censusFrom \? \{ dateFrom: censusFrom \} : \{\}/);

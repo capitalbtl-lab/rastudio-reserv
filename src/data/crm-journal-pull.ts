@@ -1164,17 +1164,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           seated += Number(gap.count) || 0;
           disk = countAlfaLessonRows(loadCustomerCalendar(cid));
         }
-      } else if (windowFrom && !holeApproved) {
-        const extraIds = [...have].filter((n) => !census.ids.includes(n));
-        if (extraIds.length) {
-          const gap = await inboundMissingCustomerLessons(branchId, cid, extraIds, { force: true, take: 50 }).catch(() => ({ count: 0 }));
-          lessons += Number(gap.count) || 0;
-          seated += Number(gap.count) || 0;
-          disk = countAlfaLessonRows(loadCustomerCalendar(cid));
-        }
       }
-      const bump = Number(seated) || 0;
-      mark(disk, windowFrom && bump ? Math.max(alfaN, alfaN + bump) : alfaN, true);
+      mark(disk, alfaN, true);
       }
     }
     } finally {
