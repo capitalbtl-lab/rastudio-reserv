@@ -282,7 +282,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /first\.ok && !weak && disk >= alfaGate && !extra0/);
     assert.doesNotMatch(pull, /lessonsAlfaAt: ""/);
     assert.match(pull, /closed \? \{ lessonsFull: true, lessonsAttend: true \} : \{ lessonsFull: false \}/);
-    assert.match(inbound, /keepAlfaProbe\(keep, uniq\.length, true\)/);
+    assert.match(inbound, /lessonsAlfa: alfa/);
+    assert.match(inbound, /const alfa = uniq\.length/);
+    assert.doesNotMatch(inbound, /keepAlfaProbe/);
     assert.doesNotMatch(inbound, /lessonsAlfa: uniq\.length/);
     assert.doesNotMatch(inbound, /ids\.length && !ids\.includes\(id\) && !packLessonPupils/);
     assert.match(inbound, /droppedNoDate/);

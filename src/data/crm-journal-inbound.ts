@@ -3,7 +3,7 @@ import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
-import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, keepAlfaProbe, inboundFillClosed } from "./crm-inbound-core";
+import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
@@ -435,15 +435,15 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
   const next = pruneCalendarToAlfaIds(prev, uniq, hold);
   replaceCustomerCalendar(id, next);
   const disk = countAlfaLessonRows(next);
-  const keep = Number(customerSyncOf(id).lessonsAlfa) || 0;
-  const held = keepAlfaProbe(keep, uniq.length, true);
+  const alfa = uniq.length;
   stampCustomerSync(id, {
     lessonsSeenIds: uniq,
     lessonsDisk: disk,
-    ...(held.write ? { lessonsAlfa: held.alfa, lessonsAlfaAt: new Date().toISOString() } : {}),
-    ...(held.write && disk === held.alfa ? {} : { lessonsFull: false }),
+    lessonsAlfa: alfa,
+    lessonsAlfaAt: new Date().toISOString(),
+    ...(disk === alfa ? {} : { lessonsFull: false }),
   });
-  return { ok: true as const, disk, alfa: held.alfa, pruned: Math.max(0, before - disk) };
+  return { ok: true as const, disk, alfa, pruned: Math.max(0, before - disk) };
 }
 
 export async function probeCustomerLessons(branch: number, customerId: number, opts?: { token?: string; dateFrom?: string }) {
