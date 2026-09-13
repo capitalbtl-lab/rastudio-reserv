@@ -221,7 +221,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /paysScanned: payFillScanned\(p.cid\)|paysScanned/);
     assert.match(pull, /force: Boolean\(recheck\)/);
     assert.doesNotMatch(pull, /force: recheck && payCustomerFilled\(cid\)/);
-    assert.match(pull, /paysEmpty: Boolean\(row.paysEmpty\)/);
+    assert.match(pull, /if \(!balance\) \{/);
+    assert.match(pull, /paysRecheckAt: payAt/);
+    assert.doesNotMatch(pull, /mark\(diskNow/);
     assert.match(pull, /function liveAttendeeCids/);
     assert.match(pull, /function liveAdminGroups/);
     assert.match(pull, /overlayAdminGroups/);

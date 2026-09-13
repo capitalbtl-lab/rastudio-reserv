@@ -1077,6 +1077,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   let lessons = 0;
   let seated = 0;
   let disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
+  if (!balance) {
   if (!recheck) {
     const first = await probeCustomerLessons(branchId, cid, { dateFrom: from }).catch(() => ({ total: 0, ok: false as const }));
     const alfaKeep = Number(customerSyncOf(cid).lessonsAlfa) || 0;
@@ -1189,6 +1190,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       unlockStudentAlfa(cid);
     }
   }
+  }
   let pays = 0;
   let tariffs = 0;
   let paysOk = false;
@@ -1210,10 +1212,11 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       const rows = await pullCustomerTariffs(branchId, cid, { quick: true }).catch(() => []);
       tariffs = rows.length;
     }
-    const syncNow = customerSyncOf(cid);
-    const diskNow = countAlfaLessonUniq(loadCustomerCalendar(cid));
-    const alfaNow = Number(syncNow.lessonsAlfa) || 0;
-    mark(diskNow, alfaNow, Boolean(syncNow.lessonsAlfaAt));
+    const payAt = new Date().toISOString();
+    stampCustomerSync(cid, {
+      paysAt: payAt,
+      ...(recheck && !payFail ? { paysRecheckAt: payAt } : {}),
+    });
   }
   const sync = customerSyncOf(cid);
   const diskN = Number(sync.lessonsDisk) || lessons;
