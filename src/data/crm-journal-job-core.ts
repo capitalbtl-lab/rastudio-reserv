@@ -335,6 +335,21 @@ export function shouldRetryOpenRecheck(
   return !s.rechecked;
 }
 
+/** Красная: дырка жива и этот шаг что-то посадил — не брать следующего. */
+export function shouldRetryShortPeople(
+  mode: string,
+  recheck: boolean,
+  kind: string,
+  res: { ok?: boolean; student?: { short?: boolean; seated?: number } } | null,
+) {
+  if (recheck) return false;
+  if (mode !== "people" && mode !== "person") return false;
+  if (kind !== "students") return false;
+  if (!res?.ok) return false;
+  if (!res.student?.short) return false;
+  return (Number(res.student.seated) || 0) > 0;
+}
+
 export function jobGapMs(_mode?: JournalJobMode | "") {
   return JOURNAL_ONE_GAP_MS;
 }

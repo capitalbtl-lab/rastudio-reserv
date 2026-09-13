@@ -6,6 +6,7 @@ import {
   peopleJobFinished,
   shouldRetryCash,
   shouldRetryOpenRecheck,
+  shouldRetryShortPeople,
   jobGapMs,
   mergeJobPatch,
   parseJobItems,
@@ -86,6 +87,12 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryOpenRecheck(false, "students", { ok: true, student: { rechecked: false } }), false);
     assert.equal(shouldRetryOpenRecheck(true, "balance", { ok: true, student: { rechecked: true, paysRechecked: false } }), true);
     assert.equal(shouldRetryOpenRecheck(true, "group", { ok: true, student: { rechecked: false } }), false);
+    assert.equal(shouldRetryShortPeople("people", false, "students", { ok: true, student: { short: true, seated: 50 } }), true);
+    assert.equal(shouldRetryShortPeople("person", false, "students", { ok: true, student: { short: true, seated: 19 } }), true);
+    assert.equal(shouldRetryShortPeople("people", false, "students", { ok: true, student: { short: true, seated: 0 } }), false);
+    assert.equal(shouldRetryShortPeople("people", true, "students", { ok: true, student: { short: true, seated: 50 } }), false);
+    assert.equal(shouldRetryShortPeople("people", false, "balance", { ok: true, student: { short: true, seated: 50 } }), false);
+    assert.equal(shouldRetryShortPeople("groups", false, "students", { ok: true, student: { short: true, seated: 50 } }), false);
     const jobSrc = readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8");
     assert.match(jobSrc, /openRetry/);
     assert.match(jobSrc, /перепись не закрыта, ещё этот/);
@@ -197,7 +204,9 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /касса · ещё/);
     assert.match(job, /касса · \$\{item.name\}/);
     assert.match(job, /берём следующего/);
-    assert.match(job, /\(busy \|\| openRetry\) && waits > JOB_WAIT_CAP/);
+    assert.match(job, /\(busy \|\| openRetry \|\| shortRetry\) && waits > JOB_WAIT_CAP/);
+    assert.match(core, /export function shouldRetryShortPeople/);
+    assert.match(job, /не хватает, ещё этот/);
     assert.match(job, /пауза 5 с/);
     assert.match(load, /lite: true/);
     assert.match(job, /if \(id && j.id !== id\) break/);

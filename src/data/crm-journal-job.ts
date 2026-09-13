@@ -12,6 +12,7 @@ import {
   saveJournalJob,
   shouldRetryCash,
   shouldRetryOpenRecheck,
+  shouldRetryShortPeople,
   tryHistoryTickLock,
   touchHistoryTickLock,
   releaseHistoryTickLock,
@@ -595,12 +596,13 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   if (live.stop) return { done: true, gap: 0, msg: `Остановили · прошло ${live.n} из ${live.total}.` };
   const cashRetry = shouldRetryCash(pullKind, live.recheck, res);
   const openRetry = shouldRetryOpenRecheck(live.recheck, pullKind, res);
-  const retry = cashRetry || openRetry;
+  const shortRetry = shouldRetryShortPeople(mode, live.recheck, pullKind, res);
+  const retry = cashRetry || openRetry || shortRetry;
   if (retry) {
     const err = String(res.extra || res.error || "");
     const busy = /уже грузим|нет входа|429|502|нет ответа/i.test(err);
-    const waits = (live.waits || 0) + (busy || openRetry ? 1 : 0);
-    if ((busy || openRetry) && waits > JOB_WAIT_CAP) {
+    const waits = (live.waits || 0) + (busy || openRetry || shortRetry ? 1 : 0);
+    if ((busy || openRetry || shortRetry) && waits > JOB_WAIT_CAP) {
       const idx = live.idx + 1;
       const more = idx < live.items.length;
       const nextName = more ? live.items[idx]?.name || "" : "";
@@ -627,7 +629,9 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       fill: fillOf(mode, job.kind, item),
       msg: openRetry
         ? `«${item.name}»: перепись не закрыта, ещё этот.`
-        : String(res.extra || res.error || `«${item.name}»: касса не дочитана.`),
+        : shortRetry
+          ? `«${item.name}»: не хватает, ещё этот.`
+          : String(res.extra || res.error || `«${item.name}»: касса не дочитана.`),
     });
     return { done: false, gap: live.recheck ? jobRetryGapMs(err) : jobGapMs(mode === "audit" ? "audit" : "people") };
   }

@@ -64,6 +64,7 @@ type StudentHit = {
   alfa?: number;
   short?: boolean;
   dups?: boolean;
+  seated?: number;
 };
 
 type StudentsReport = {
@@ -1051,6 +1052,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     return { short, extra, closed };
   };
   let lessons = 0;
+  let seated = 0;
   let disk = countAlfaLessonRows(loadCustomerCalendar(cid));
   if (!recheck) {
     const first = await probeCustomerLessons(branchId, cid, { dateFrom: from }).catch(() => ({ total: 0, ok: false as const }));
@@ -1103,6 +1105,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       if (missing.length) {
         const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0 }));
         lessons += Number(gap.count) || 0;
+        seated += Number(gap.count) || 0;
         disk = countAlfaLessonRows(loadCustomerCalendar(cid));
       }
       mark(disk, probed.ok ? probed.total : 0, probed.ok);
@@ -1182,6 +1185,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     payFail,
     rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
     paysRechecked: Boolean(sync.paysRecheckAt),
+    seated,
   };
 }
 
@@ -1974,6 +1978,7 @@ export async function journalPull(opts: {
       alfa: row.alfa,
       short: row.short,
       dups: row.dups,
+      seated: Number(row.seated) || 0,
     };
     const prev = store.lastStudents && store.lastStudents.study === study ? store.lastStudents.rows : [];
     const merged = [hit, ...prev.filter((r) => r.cid !== hit.cid)].slice(0, 40);
