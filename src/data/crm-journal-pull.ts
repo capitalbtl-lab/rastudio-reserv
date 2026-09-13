@@ -1032,6 +1032,8 @@ export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
   if (k > 0 && a < k) return { write: false, alfa: k, probed: true };
   return { write: true, alfa: a, probed: true };
 }
+
+async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "") {
   const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
