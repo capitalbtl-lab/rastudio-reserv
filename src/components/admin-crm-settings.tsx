@@ -327,6 +327,8 @@ type PeopleRow = {
   pays?: boolean;
   paysMore?: boolean;
   paysScanned?: boolean;
+  paysEmpty?: boolean;
+  cashRows?: number;
   rechecked?: boolean;
   paysRechecked?: boolean;
   extra?: string;
@@ -890,6 +892,12 @@ function byPeopleName(a: PeopleRow, b: PeopleRow) {
   return a.name.localeCompare(b.name, "ru") || a.cid - b.cid;
 }
 
+function peopleNeedCashLoad(row: PeopleRow) {
+  if (row.pays) return false;
+  if (row.paysScanned && ((Number(row.cashRows) || 0) > 0 || row.paysEmpty)) return false;
+  return true;
+}
+
 function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
   if (kind === "balance") return Boolean(row.pays);
   if (row.short && row.holeApproved) return true;
@@ -899,7 +907,7 @@ function peopleFinished(row: PeopleRow, kind: "students" | "balance") {
 }
 
 function peopleQueue(rows: PeopleRow[], kind: "students" | "balance", recheck: boolean) {
-  const needLoad = rows.filter((r) => !peopleFinished(r, kind));
+  const needLoad = rows.filter((r) => (kind === "balance" ? peopleNeedCashLoad(r) : !peopleFinished(r, kind)));
   const needRecheck = rows.filter((r) => {
     if (!peopleFinished(r, kind)) return false;
     if (kind === "students" && r.short && r.holeApproved) return false;
@@ -968,7 +976,28 @@ function patchPeopleSide(
     if (short) dups = false;
     const pays = hit.paysOk != null ? Boolean(hit.paysOk) : p.pays;
     const paysScanned = hit.paysScanned != null ? Boolean(hit.paysScanned) : p.paysScanned;
+    const paysEmpty = hit.paysEmpty != null ? Boolean(hit.paysEmpty) : p.paysEmpty;
+    const cashRows = hit.cashRows != null ? Number(hit.cashRows) || 0 : p.cashRows;
     const rechecked = hit.rechecked != null ? Boolean(hit.rechecked) : p.rechecked;
+    const paysRechecked = hit.paysRechecked != null ? Boolean(hit.paysRechecked) : p.paysRechecked;
+    const extra = hit.paysMore
+      ? `касса: ещё страницы, нажмите снова · ${alfa != null ? peopleLessonsLine({ disk, alfa }).line : `на диске ${disk}`}`
+      : alfa != null
+        ? peopleLessonsLine({ disk, alfa }).line
+        : p.extra;
+    return {
+      ...p,
+      lessons: disk,
+      alfa,
+      short,
+      dups,
+      holeApproved: hit.holeApproved != null ? Boolean(hit.holeApproved) : p.holeApproved,
+      journal,
+      pays,
+      paysScanned,
+      paysEmpty,
+      cashRows,
+      paysMore: Boolean(hit.paysMore),
     const paysRechecked = hit.paysRechecked != null ? Boolean(hit.paysRechecked) : p.paysRechecked;
     const extra = hit.paysMore
       ? `касса: ещё страницы, нажмите снова · ${alfa != null ? peopleLessonsLine({ disk, alfa }).line : `на диске ${disk}`}`
@@ -2653,7 +2682,9 @@ export function AdminCrmSettings() {
       setMsg(
         onlyRecheck
           ? "Справа никого перепроверять. Сначала красная «Загрузить по одному»."
-          : "Слева пусто. Нажмите «Перепроверить по одному» — пройдёт тех, кто справа.",
+          : kind === "balance"
+            ? "Массовая касса этих уже спрашивала Alfa. Слева — пустой ответ или шапка не сошлась. Карточка «Загрузить кассу» — ещё раз."
+            : "Слева пусто. Нажмите «Перепроверить по одному» — пройдёт тех, кто справа.",
       );
       return;
     }

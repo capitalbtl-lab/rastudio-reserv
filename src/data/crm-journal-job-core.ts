@@ -263,6 +263,8 @@ export type PeopleJobRow = {
   paysRechecked?: boolean;
   holeApproved?: boolean;
   paysScanned?: boolean;
+  paysEmpty?: boolean;
+  cashRows?: number;
 };
 
 export function peopleJobFinished(row: PeopleJobRow, kind: "students" | "balance") {
@@ -273,8 +275,14 @@ export function peopleJobFinished(row: PeopleJobRow, kind: "students" | "balance
   return Boolean(row.journal);
 }
 
+export function peopleNeedCashLoad(row: PeopleJobRow) {
+  if (row.pays) return false;
+  if (row.paysScanned && ((Number(row.cashRows) || 0) > 0 || row.paysEmpty)) return false;
+  return true;
+}
+
 export function peopleJobQueue(people: PeopleJobRow[], kind: "students" | "balance", recheck: boolean) {
-  const needLoad = people.filter((r) => !peopleJobFinished(r, kind));
+  const needLoad = people.filter((r) => (kind === "balance" ? peopleNeedCashLoad(r) : !peopleJobFinished(r, kind)));
   const needRecheck = people.filter((r) => {
     if (!peopleJobFinished(r, kind)) return false;
     if (kind === "students" && r.short && r.holeApproved) return false;

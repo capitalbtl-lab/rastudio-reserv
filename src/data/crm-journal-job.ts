@@ -9,6 +9,7 @@ import {
   loadJournalJob,
   mergeJobPatch,
   peopleJobQueue,
+  peopleNeedCashLoad,
   saveJournalJob,
   shouldRetryCash,
   shouldRetryOpenRecheck,
@@ -189,9 +190,19 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
     const given = (opts.items || [])
       .map((r) => ({ cid: Number(r.cid) || 0, branchId: Number(r.branchId) || 1, name: String(r.name || "") }))
       .filter((r) => r.cid);
-    if (given.length && mode !== "audit") return given;
     const study = opts.study === "2" ? "2" : "1";
     const kind = opts.kind === "balance" ? "balance" : "students";
+    if (given.length && mode !== "audit") {
+      if (kind === "balance" && mode === "people") {
+        const side = journalPeopleSide(study, { skipLeads: true });
+        const by = new Map((side.people || []).map((p) => [p.cid, p as PeopleJobRow]));
+        return given.filter((g) => {
+          const row = by.get(g.cid);
+          return row ? peopleNeedCashLoad(row) : true;
+        });
+      }
+      return given;
+    }
     const side = journalPeopleSide(study, { skipLeads: kind === "balance" || mode === "audit" });
     const people = (side.people || []) as PeopleJobRow[];
     if (mode === "audit") {

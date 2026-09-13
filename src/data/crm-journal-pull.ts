@@ -11,7 +11,7 @@ import { loadScheduleMap } from "./schedule-map";
 import { listDossierCrm, findDossier, dossiersInGroup, overlayAdminGroups } from "./dossiers";
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
 import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort, lessonsCountExtra, waitLockStudentAlfa, unlockStudentAlfa } from "./crm-customer-sync";
-import { payCustomerFilled, payFillPending, payFillScanned } from "./crm-pay";
+import { payCustomerFilled, payFillPending, payFillScanned, payFillEmpty, clearPayFill, paysOf } from "./crm-pay";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
@@ -58,6 +58,8 @@ type StudentHit = {
   paysOk?: boolean;
   paysMore?: boolean;
   paysScanned?: boolean;
+  paysEmpty?: boolean;
+  cashRows?: number;
   rechecked?: boolean;
   paysRechecked?: boolean;
   done: boolean;
@@ -790,6 +792,8 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
         journal,
         pays,
         paysScanned,
+        paysEmpty: payFillEmpty(p.cid),
+        cashRows: paysOf(p.cid).filter((x) => !x.deleted).length,
         rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
         paysRechecked: Boolean(sync.paysRecheckAt),
         extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : gnames,
@@ -870,6 +874,8 @@ export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: 
       journal,
       pays,
       paysScanned: payFillScanned(p.cid),
+      paysEmpty: payFillEmpty(p.cid),
+      cashRows: paysOf(p.cid).filter((x) => !x.deleted).length,
       rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
       paysRechecked: Boolean(sync.paysRecheckAt),
       extra: probed ? `на диске ${diskN} · в Alfa ${alfaN}` : groupsOfStudent(p.cid).slice(0, 2).join(", "),
@@ -1197,7 +1203,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     } catch (e) {
       payFail = e instanceof Error && e.message ? e.message : "Alfa не ответила, нажмите снова";
     }
-    pays = paysOf(cid).length;
+    pays = paysOf(cid).filter((x) => !x.deleted).length;
     paysOk = !payFail && payCustomerFilled(cid);
     if (!payFillPending(cid)) {
       const { pullCustomerTariffs } = await import("./pupil-tariffs");
@@ -1228,6 +1234,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     paysOk,
     paysMore: Boolean(balance && (Boolean(payFail) || payFillPending(cid))),
     paysScanned: Boolean(balance && payFillScanned(cid)),
+    paysEmpty: Boolean(balance && payFillEmpty(cid)),
+    cashRows: pays,
     payFail,
     rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
     paysRechecked: Boolean(sync.paysRecheckAt),
@@ -2052,6 +2060,7 @@ export async function journalPull(opts: {
       };
     }
     const balance = kind === "balance";
+    if (balance && wanted && !payCustomerFilled(wanted)) clearPayFill(wanted);
     const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck), String(opts.dateFrom || "").trim());
     if (row.blocked) {
       return {
@@ -2076,6 +2085,8 @@ export async function journalPull(opts: {
       paysOk: balance ? Boolean(row.paysOk) : undefined,
       paysMore: Boolean(row.paysMore),
       paysScanned: Boolean(row.paysScanned),
+      paysEmpty: Boolean(row.paysEmpty),
+      cashRows: Number(row.cashRows) || row.pays || 0,
       rechecked: Boolean(row.rechecked),
       paysRechecked: Boolean(row.paysRechecked),
       done: row.done,

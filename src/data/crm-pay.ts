@@ -71,7 +71,7 @@ export function cashPayLabel(row: Pick<PayRow, "customerId" | "customerName">, p
 }
 
 type PayPollState = { hits: string[]; branches: Record<string, PayPollStamp>; lastNote?: string; fill?: PayFillCursor };
-type PayFill = { bid: number; page: number };
+type PayFill = { bid: number; page: number; done?: boolean; empty?: boolean };
 type Store = { at: string; items: PayRow[]; poll?: PayPollState; complete?: number[]; payFill?: Record<string, PayFill> };
 
 let mem: Store | null = null;
@@ -243,6 +243,22 @@ export function payFillScanned(customerId: number) {
   const id = Number(customerId) || 0;
   if (!id) return false;
   return Boolean(load().payFill?.[String(id)]?.done);
+}
+
+export function payFillEmpty(customerId: number) {
+  const id = Number(customerId) || 0;
+  if (!id) return false;
+  const cur = load().payFill?.[String(id)];
+  return Boolean(cur?.done && cur.empty);
+}
+
+export function clearPayFill(customerId: number) {
+  const id = Number(customerId) || 0;
+  if (!id) return;
+  const store = load();
+  if (!store.payFill?.[String(id)]) return;
+  delete store.payFill[String(id)];
+  save(store, { keepAll: true });
 }
 
 /** Касса дочитана этим id (complete[]). Строка «остаток на диске» сюда не входит. */
@@ -702,7 +718,12 @@ export async function inboundCustomerPays(
   let page = 0;
   const cur = store.payFill?.[String(customerId)];
   const filled = payCustomerFilled(customerId);
-  if (!opts?.force && (filled || payFillScanned(customerId))) return paysOf(customerId);
+  const have = paysOf(customerId).some((x) => !x.deleted);
+  if (!opts?.force && filled) return paysOf(customerId);
+  if (!opts?.force && payFillScanned(customerId) && (have || payFillEmpty(customerId))) return paysOf(customerId);
+  if (!opts?.force && payFillScanned(customerId) && !have) {
+    delete store.payFill[String(customerId)];
+  }
   if (cur && !opts?.force && !cur.done) {
     const i = branches.indexOf(cur.bid);
     bidIdx = i >= 0 ? i : 0;
@@ -830,7 +851,7 @@ export async function inboundCustomerPays(
         headerOk = true;
       } else if (hit) {
         const next = load();
-        next.payFill = { ...(next.payFill || {}), [String(customerId)]: { bid: Number(fillBid) || branches[0], page: Number(fillPage) || 0, done: true } };
+        next.payFill = { ...(next.payFill || {}), [String(customerId)]: { bid: Number(fillBid) || branches[0], page: Number(fillPage) || 0, done: true, empty: live.length === 0 } };
         save(next, { keepAll: true });
         headerOk = true;
       }
@@ -839,7 +860,8 @@ export async function inboundCustomerPays(
     }
     if (!headerOk) {
       const next = load();
-      next.payFill = { ...(next.payFill || {}), [String(customerId)]: { bid: Number(fillBid) || branches[0], page: Number(fillPage) || 0, done: true } };
+      const liveN = merged.filter((x) => !x.deleted).length;
+      next.payFill = { ...(next.payFill || {}), [String(customerId)]: { bid: Number(fillBid) || branches[0], page: Number(fillPage) || 0, done: true, empty: liveN === 0 } };
       save(next, { keepAll: true });
     }
   }

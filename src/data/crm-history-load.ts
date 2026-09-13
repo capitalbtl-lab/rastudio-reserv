@@ -29,9 +29,9 @@ export type HistoryLoadResult = {
   student?: { paysMore?: boolean; paysOk?: boolean };
 };
 
-/** Пропуск кассы: complete или страницы уже пройдены. Синяя force — не skip. */
-export function historyCashSkip(filled: boolean, force: boolean, scanned = false) {
-  return Boolean(!force && (filled || scanned));
+/** Пропуск кассы: complete, либо страницы прошли и есть строки / пустой проход. Синяя force — не skip. */
+export function historyCashSkip(filled: boolean, force: boolean, scanned = false, hasRowsOrEmpty = false) {
+  return Boolean(!force && (filled || (scanned && hasRowsOrEmpty)));
 }
 
 /** Один объект за вызов. Касса слева всегда читает Alfa, даже если раньше «сканировали». */
