@@ -24,6 +24,10 @@ describe("шаг 1: группы и состав", () => {
     assert.match(src, /cgi\/index\?group_id=/);
     assert.match(src, /customer\/index/);
     assert.match(src, /applyCrmCustomer/);
+    assert.match(src, /crmUnwrapIndex\(json\)\.items\.find/);
+    assert.match(src, /id: cid, is_study: 0/);
+    assert.match(src, /const fio = pupilNameOk\(d\?\.child\?\.fio\)/);
+    assert.match(src, /const need = !d \|\| !fio \|\| diskLead \|\| force/);
     assert.match(src, /groupLink: \{/);
     assert.match(src, /stampLink\(cid, bid, gid, name, true\)/);
     assert.match(src, /stampLink\(cid, bid, gid, name, false\)/);

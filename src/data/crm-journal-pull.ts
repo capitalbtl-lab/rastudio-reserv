@@ -487,7 +487,7 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
     if (!x.cid) return false;
     if (x.status === "удалён" || x.removed === "1") return false;
     const lead = x.study === 0 || x.status === "лид";
-    if (lead) return Boolean(study === "1" && pol?.leads);
+    if (lead) return study === "1";
     if (study === "1") {
       if (x.study === 2 && !pol?.archiveInLive) return false;
       if (pol?.attendDays && !attendedSince(x.cid, pol.attendDays)) return false;
@@ -837,8 +837,9 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
   };
 }
 
-export function journalPeopleSide(study: JournalPullStudy) {
-  const list = rankedStudentIds(study);
+export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: boolean }) {
+  let list = rankedStudentIds(study);
+  if (opts?.skipLeads) list = list.filter((p) => p.study !== 0 && p.status !== "лид");
   const people = list.map((p) => {
     const sync = customerSyncOf(p.cid);
     const probed = Boolean(sync.lessonsAlfaAt);
@@ -1950,7 +1951,8 @@ export async function journalPull(opts: {
   }
 
   const group = selectedGid ? { groupId: selectedGid, branchId: selectedBid || 1 } : undefined;
-  const people = rankedStudentIds(study, group, group ? "" : school);
+  let people = rankedStudentIds(study, group, group ? "" : school);
+  if (kind === "balance" || kind === "audit") people = people.filter((p) => p.study !== 0 && p.status !== "лид");
   const wanted = Number(opts.customerId) || 0;
   if (!people.length && !wanted) {
     store.note = group

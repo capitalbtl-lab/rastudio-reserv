@@ -191,9 +191,9 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
       .filter((r) => r.cid);
     if (given.length && mode !== "audit") return given;
     const study = opts.study === "2" ? "2" : "1";
-    const side = journalPeopleSide(study);
-    const people = (side.people || []) as PeopleJobRow[];
     const kind = opts.kind === "balance" ? "balance" : "students";
+    const side = journalPeopleSide(study, { skipLeads: kind === "balance" || mode === "audit" });
+    const people = (side.people || []) as PeopleJobRow[];
     if (mode === "audit") {
       let queue = [...people];
       const one = Number(opts.customerId) || 0;

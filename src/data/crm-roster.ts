@@ -6,6 +6,8 @@ import { token as alfaToken, pagedIndex, request } from "./alfacrm";
 import { cgiCustomerId, cgiRecordLive } from "./crm-membership";
 import { applyCrmCustomer, dossiersInGroup, findDossier, upsertDossier } from "./dossiers";
 import { CRM_READ_GAP_MS } from "./pupil-tariffs";
+import { crmUnwrapIndex } from "./crm-leads-stages";
+import { pupilNameOk } from "./crm-slots-core";
 
 export type RosterAttendDays = 0 | 15 | 30 | 150;
 
@@ -65,13 +67,21 @@ export function parseRosterFilter(raw: string): Partial<RosterPolicy> {
 }
 
 async function hydrateCustomer(branchId: number, cid: number, t: string) {
-  const one = await request<{ items?: Record<string, unknown>[] }>(`/v2api/${branchId}/customer/index`, { page: 0, pageSize: 1, id: cid }, t).catch(
-    () => ({ items: [] as Record<string, unknown>[] }),
-  );
-  const full = (one.items || []).find((x) => Number(x.id) === cid);
-  if (!full) return false;
-  applyCrmCustomer(full, branchId, Number(full.is_study) === 2, {}, { persist: true, quiet: true, byCrmOnly: true });
-  return true;
+  const bodies: Record<string, unknown>[] = [
+    { page: 0, pageSize: 1, id: cid },
+    { page: 0, pageSize: 1, id: cid, is_study: 0 },
+    { page: 0, pageSize: 1, id: cid, is_study: 1 },
+    { page: 0, pageSize: 1, id: cid, is_study: 2 },
+  ];
+  for (let i = 0; i < bodies.length; i += 1) {
+    if (i) await new Promise((r) => setTimeout(r, CRM_READ_GAP_MS));
+    const json = await request(`/v2api/${branchId}/customer/index`, bodies[i], t).catch(() => null);
+    const full = crmUnwrapIndex(json).items.find((x) => Number(x.id) === cid);
+    if (!full) continue;
+    applyCrmCustomer(full, branchId, Number(full.is_study) === 2, {}, { persist: true, quiet: true, byCrmOnly: true });
+    return true;
+  }
+  return false;
 }
 
 function stampLink(cid: number, branchId: number, groupId: number, name: string, active: boolean) {
@@ -122,7 +132,9 @@ export async function pullGroupRoster(opts: { groupId: number; branchId: number;
   let n = 0;
   for (const cid of live) {
     const d = findDossier({ crmId: cid });
-    const need = !d || (force && !String(d.child?.fio || "").trim());
+    const fio = pupilNameOk(d?.child?.fio);
+    const diskLead = Number(d?.extras?.is_study) === 0 || String(d?.status || "") === "лид";
+    const need = !d || !fio || diskLead || force;
     if (!need) continue;
     if (n) await wait(CRM_READ_GAP_MS);
     n += 1;
