@@ -140,6 +140,9 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryOpenRecheck(true, "students", { ok: true, student: { rechecked: true } }), false);
     assert.equal(shouldRetryOpenRecheck(false, "students", { ok: true, student: { rechecked: false } }), false);
     assert.equal(shouldRetryOpenRecheck(true, "balance", { ok: true, student: { rechecked: true, paysRechecked: false } }), true);
+    assert.equal(shouldRetryOpenRecheck(true, "balance", { ok: true, student: { paysRechecked: true } }), false);
+    assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Е", journal: false, pays: true, dups: true }, "balance"), true);
+    assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Е", journal: false, pays: false, paysScanned: true, dups: true }, "balance"), true);
     assert.equal(shouldRetryOpenRecheck(true, "group", { ok: true, student: { rechecked: false } }), false);
     assert.equal(shouldRetryShortPeople("people", false, "students", { ok: true, student: { short: true, seated: 50 } }), true);
     assert.equal(shouldRetryShortPeople("person", false, "students", { ok: true, student: { short: true, seated: 19 } }), true);

@@ -1336,12 +1336,17 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   let paysOk = false;
   let payFail = "";
   if (balance) {
+    const held = recheck ? await waitLockStudentAlfa(cid, 20000) : true;
+    if (!held) {
+      return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: 0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
+    }
+    try {
     const { token, request } = await import("./alfacrm");
     const t = await token();
-    const { inboundCustomerPays, paysOf, payCustomerFilled, markPayJournalIncomplete } = await import("./crm-pay");
+    const { inboundCustomerPays, paysOf, payCustomerFilled } = await import("./crm-pay");
+    const forcePay = Boolean(recheck) && !payFillPending(cid);
     try {
-      if (recheck) markPayJournalIncomplete(cid);
-      await inboundCustomerPays(request, t, branchId, cid, { force: Boolean(recheck) });
+      await inboundCustomerPays(request, t, branchId, cid, { force: forcePay });
     } catch (e) {
       payFail = e instanceof Error && e.message ? e.message : "Alfa не ответила, нажмите снова";
     }
@@ -1359,6 +1364,9 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         paysAt: payAt,
         ...(recheck ? { paysRecheckAt: payAt } : {}),
       });
+    }
+    } finally {
+      if (recheck) unlockStudentAlfa(cid);
     }
   }
   const sync = customerSyncOf(cid);
