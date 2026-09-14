@@ -174,6 +174,7 @@ describe("вход из Alfa", () => {
     assert.equal(bumpAlfaFromLanded(0, 2), 0);
     assert.equal(bumpAlfaFromLanded(541, 5), 546);
     assert.equal(bumpAlfaFromLanded(312, Math.max(0, 314 - 312)), 314);
+    assert.equal(bumpAlfaFromLanded(259, Math.max(0, 233 - 259)), 259);
   });
 });
 

@@ -14,7 +14,7 @@ export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean, cen
   return { write: true, alfa: a, probed: true };
 }
 
-/** Админка/вход посадил новые id из Alfa — штамп растёт на них, не падает. Без пробы (keep=0) не выдумывать счёт. */
+/** Диск больше keep — Alfa добавила id после пробы. Id переписи, севшие на диск, keep не поднимают. Без пробы (keep=0) счёт не выдумывать. */
 export function bumpAlfaFromLanded(keep: number, newAlfaIds: number) {
   const k = Number(keep) || 0;
   const n = Math.max(0, Number(newAlfaIds) || 0);

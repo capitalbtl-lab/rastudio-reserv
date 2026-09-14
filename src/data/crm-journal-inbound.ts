@@ -659,13 +659,6 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         : wantFull
         ? lessonFillForWindow(lessonFillOf(customerSyncOf(id).lessonFill), dateFrom, branches[0] || branch)
         : lessonFillStart(branches[0] || branch, dateFrom);
-    const keep0 = Number(customerSyncOf(id).lessonsAlfa) || 0;
-    if (keep0 > 0 && countAlfaLessonUniq(prevCal) < keep0 && cur.done && !monthly) {
-      cur = lessonFillStart(branches[0] || branch, dateFrom);
-    }
-    if (keep0 > 0 && countAlfaLessonUniq(prevCal) < keep0 && cur.done && monthly) {
-      cur = lessonFillStartMonth(branches[0] || branch);
-    }
     let ran = 0;
     const maxRun = homeLite ? LESSON_STATUSES.length : Number(opts?.take) > 0 ? Math.min(LESSON_INBOUND_RUN, Number(opts.take)) : wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
     const maxPages = homeLite ? 1 : deepHist ? 12 : Number(opts?.take) > 0 ? Math.min(3, wantFull ? 12 : 2) : wantFull ? 12 : 2;
@@ -803,9 +796,6 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const keep = Number(customerSyncOf(id).lessonsAlfa) || 0;
     const walked = Boolean(cur.done) && !aborted;
     const fillDone = inboundFillClosed(diskNow, keep, walked, aborted);
-    if (!fillDone && walked && keep > diskNow && !monthly) {
-      cur = lessonFillStart(branches[0] || branch, dateFrom);
-    }
     const wasFull = Boolean(customerSyncOf(id).lessonsFull);
     stampCustomerSync(id, {
       lessonsAt: new Date().toISOString(),

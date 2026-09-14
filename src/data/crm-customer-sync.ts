@@ -115,8 +115,7 @@ export function noteAlfaLessonsLanded(customerId: number, disk: number, newIds: 
   const prev = customerSyncOf(id);
   const keep = Number(prev.lessonsAlfa) || 0;
   const diskN = Math.max(0, Number(disk) || 0);
-  const gap = keep > 0 ? Math.max(0, diskN - keep) : 0;
-  const add = fresh.length > 0 ? fresh.length : gap;
+  const add = keep > 0 ? Math.max(0, diskN - keep) : 0;
   const nextAlfa = bumpAlfaFromLanded(keep, add);
   const held = nextAlfa !== keep && keep > 0;
   const at = new Date().toISOString();
