@@ -146,6 +146,7 @@ function LoadGuideModal({ tab, onClose }: { tab: HistLoadTab; onClose: () => voi
               <li key={x}>{x}</li>
             ))}
             {tab === "groups" ? <li>Красная ходит порцией «Квартал / Полугодие / Год». Синяя ходит ± месяц / ± три / ± шесть от сегодня.</li> : null}
+            {tab === "money" ? <li>Грузим платежи по id. Не уроки. Не остаток — это шаг 5.</li> : null}
           </ul>
         </section>
         {g.alfa.map((a) => (
@@ -223,16 +224,16 @@ const HINT = {
   school: "Фильтр списка: видны группы одной школы или сразу все. Счётчик «загрузка завершена» считается только по видимым. Красная «по одному» тоже идёт по этому списку, а не по скрытым. Сами данные кнопка не качает и в Alfa не ходит. Если школа не выбрана, очередь по всем группам — это дольше. Смените школу, когда закончили одну, чтобы не смешивать робототехнику с английским. На уже скачанные явки фильтр не влияет.",
   loadAttend: "Читает явки этой порции группы из Alfa на диск: кто был, кто пропуск, кто опоздал. Чужие кварталы не затирает. Если пакет оборвался, карточка квартала жёлтая — нажмите ещё раз, допишет. В Alfa журнал не проводит, не отменяет и оценки не ставит. После зелёных явок можно отдельно взять тему, домашнее задание и комментарий. Без явок детали грузить нельзя: не к чему их привязать. Одна порция — один безопасный шаг, вся история группы сразу не улетает.",
   loadDetails: "После зелёных явок добирает по урокам тему, домашнее задание, комментарий педагога и таблицу учеников. Это не явки и не касса. Alfa только читается, ничего не проводится. Если темы в Alfa нет, кнопка всё равно помечает «смотрели», чтобы не крутить вечно. Чужие кварталы не трогает. Жать имеет смысл, когда явки уже зелёные, иначе будет «Сначала явки». На сайт это нужно, чтобы в карточке группы были не только галочки присутствия.",
-  loadOneMoney: "Красная кнопка ставит очередь на сервер и сразу отпускает сайт. Дальше касса идёт на диске сама: по одному человеку, пауза 5 с. Вкладку можно закрыть — прогресс не пропадёт. Направо только если остаток на диске совпал с шапкой Alfa ±1 ₽. Если страницы не дочитаны или Alfa не ответила — тот же id ещё раз. Календарь подгружает, только если его ещё нет. Окно лет режет занятия, не платежи. В Alfa оплаты не создаёт. Стоп прерывает очередь на сервере.",
-  yearsMoney: "Те же годы, что на шаге 2. По умолчанию «С начала · 2015». Короче — только если человек ходит недавно. Окно режет занятия, не платежи. В Alfa ничего не отправляет.",
-  loadPay: "Догружает кассу именно этого ученика: платежи и абонементы из Alfa на наш диск. Если журнала занятий не хватает, сначала доберёт явки в том же окне лет, иначе списание не к чему привязать. В Alfa платёж не проводит и чек не создаёт. Нужна, когда слева «нет кассы», а справа ещё пусто. Дубли по номеру платежа не плодит. После успеха карточка должна уйти в «загрузка завершена». Пока грузится другой человек, эта кнопка подождёт.",
-  recheckPay: "Ещё раз сверяет кассу и журнал этого человека с Alfa и дописывает новое. Старые платежи не дублирует по номеру. Ошибочные строки сами в Alfa не улетают — мы только читаем. Нажмите, если остаток на карточке кажется чужим или после оплаты в кассе Alfa. Тема и ДЗ уже скачанных уроков не затираются. Это точечная проверка, не вся очередь слева. Если после сверки цифра всё равно странная, посмотрите жёлтый бейдж «в Alfa больше» и окно лет.",
+  loadOneMoney: "Красная очередь слева на шаге 4: только касса, по одному, пауза 5 с. Платежи по id, все виды. Журнал не качает. Годы в этой рамке Alfa не режут. Направо, когда страницы дочитаны. Дубли по номеру не плодит. Сумма — шаг 5. В Alfa оплаты не создаёт. Стоп после текущего.",
+  yearsMoney: "Только красные кнопки шага 4 в этой рамке. По умолчанию «с начала · 2015». Alfa кассу по годам не режет. Синяя рамка этот список не читает. В Alfa ничего не отправляет.",
+  loadPay: "Красная касса этой карточки. Платежи и абонементы из Alfa на диск, по id. Журнал не качает. Годы Alfa не режут. Дубли по номеру не плодит. После дочитанных страниц карточка вправо. В Alfa платёж не проводит.",
+  recheckPay: "Синяя касса этой карточки. Ещё раз читает все страницы и все виды по id. Курсор не сбрасывает. Дубли не держат. Журнал не качает. ± кассу не режет. Сумма — шаг 5. В Alfa не пишет.",
   recheckOneGroups: "Синяя очередь справа на шаге 3. Окно — список в этой же синей рамке (± месяц / ± три / ± шесть), не «Квартал» из красной. Сверяет набор lessonId группы в окне. Новые дописывает, ушедшие в окне снимает, старше окна не трогает. Красных слева не берёт. Пауза 5 с. Стоп после текущей. В Alfa не пишет.",
-  recheckOneMoney: "Синяя «Перепроверить по одному» на шаге 4: сначала тот же пересчёт календаря (дырки/дубли), потом касса. Не зелёная, пока диск ≠ Alfa по урокам. Оплаты сжимаются по номеру платежа. Пауза 5 с. Стоп не оживает сам. Обрыв без Стоп — через 30 с с того же человека. В Alfa оплаты не создаёт.",
+  recheckOneMoney: "Синяя очередь справа на шаге 4: только касса. Все страницы, все виды по id. Без окна дат: ± кассу не режет. Курсор не сбрасывать. Вправо, когда дочитано. Дубли не держат. Сумма — шаг 5. Журнал не качает. Красных слева не берёт. Пауза 5 с. Стоп после текущего. В Alfa не пишет.",
   tabRoster: "Первый шаг — состав групп. Красная кнопка читает cgi одной группы из Alfa и пишет людей на наш диск. Если карточки не было — создаёт. Кто выбыл, в этой группе становится неактивным, карточка остаётся. Журнал, касса и ДЗ не качаются. В Alfa ничего не создаёт и не меняет. После состава цифра «Сейчас ходят» считается по этим людям. Архив — вторая таблетка на тех же шагах, не отдельный мастер.",
   tabStudents: "Второй шаг: личный календарь. Ученики и лиды из живых групп шага 1. Красная рамка — загрузка и годы. Синяя рамка — перепроверка и месяцы. Жёлтая — в Alfa есть id, которых нет на диске. В Alfa не пишется.",
   tabGroups: "Третий шаг. Здесь качаются явки по группам: кто был на уроке, а не личный календарь человека. Сначала красная «по одному», потом список «годы» — это размер порции: квартал, полугодие или год. Архив групп и сроки жизни курса — отдельные кнопки ниже, их лучше нажать до массовой качки. Фильтр школы сужает очередь. В Alfa журнал не проводится. Без этого шага на сайте будут люди, но без отметок в группе. Тема и ДЗ грузятся уже в карточке группы, после явок.",
-  tabMoney: "Четвёртый шаг, «деньги на карточке». Здесь к ученику дописываются платежи и абонементы из Alfa. Красная «по одному» идёт как на шаге 2, справа те же годы. Если журнала занятий ещё нет, касса сначала доберёт календарь, иначе списание не к чему привязать. В Alfa оплаты не создаются. Жёлтая карточка — в Alfa занятий больше, чем на диске. После шага на карточке ученика должен быть понятный остаток. Это не зарплата педагогов и не очередь в Alfa, а чтение кассы на сайт.",
+  tabMoney: "Четвёртый шаг — касса: платежи по id, не уроки, не остаток. Красная рамка — загрузка и годы. Синяя — перепроверка и ±. Годы и ± Alfa кассу не режут. Сумма vs шапка — шаг 5. В Alfa оплаты не создаёт.",
   tabAudit: "Пятый шаг — сверка остатка. Закон раздела: только по одному, пауза 5 секунд, пакетом нельзя. Берёт тех, кто сейчас ходит по составу шага 1. Для каждого читает из Alfa общий остаток с шапки карточки, считает число в «Клиентах» и кассу. Если цифры разошлись — добирает журнал или кассу только этого человека. В Alfa ничего не пишет. Совпало — справа. Не совпало — слева с причиной.",
   auditAll: "Красная кнопка проходит всех текущих по одному. Между людьми пауза пять секунд, в Alfa один запрос в полёте. Сравнивает число на карточке «Клиенты» с общим остатком шапки Alfa. Если не сошлось — догружает явки или оплаты только этого номера. Цифру из Alfa в кассу не записывает. Стоп прерывает после текущего.",
   auditRecheck: "Ещё раз сверяет только этого ученика с общим остатком шапки Alfa. Читает карточку, при расхождении добирает его журнал или кассу. Чужих не трогает, зелёные шаги 1 и 3 у остальных не сбрасывает. В Alfa ничего не сохраняет. Нужна, если человек слева с причиной или вы только что правили его кассу. После совпадения карточка уйдёт вправо, даже если есть непроведённые уроки с ценой. Если снова formula — это показ в «Клиентах», не его личная дыра.",
@@ -1430,7 +1431,7 @@ function PeopleFillList({
           : `на диске ${row.lessons} · в Alfa ${row.alfa} — дубли, снять`
         : full
         ? kind === "balance"
-          ? "Касса и журнал на месте"
+          ? "Касса на месте"
           : nums
             ? nums.hint || "Календарь на месте"
             : row.alfa
@@ -1532,7 +1533,7 @@ function PeopleFillList({
           </button>,
           full || dups ? (kind === "balance" ? HINT.recheckPay : HINT.recheckCal) : kind === "balance" ? HINT.loadPay : HINT.loadCal,
           )}
-          {kind === "students" && (full || dups) ? windowSel : years}
+          {full || dups ? windowSel : years}
           {short && onFullHistory
             ? withHint(
                 <button
@@ -1641,7 +1642,7 @@ function PeopleFillList({
             ) : null}
             {pager(safeNeed, pagesNeed, setPageNeed)}
           </div>
-          <p className="mt-1 text-[0.72rem] text-muted">{kind === "balance" ? "Касса и журнал — пока чего-то нет, ученик здесь." : "Личный календарь ещё неполный — ученик здесь. Галка «одобрить» — не «Добрать», журнал не закроется."}</p>
+          <p className="mt-1 text-[0.72rem] text-muted">{kind === "balance" ? "Кассы ещё нет — ученик здесь." : "Личный календарь ещё неполный — ученик здесь. Галка «одобрить» — не «Добрать», журнал не закроется."}</p>
           {listNeed.length ? <ul className="mt-2 space-y-2 [overflow-anchor:none]">{listNeed.map(renderPerson)}</ul> : <p className="mt-3 text-sm text-muted">Все ученики этого списка уже загружены.</p>}
         </section>
         <section className="rounded-2xl bg-white/70 p-3 ring-1 ring-emerald-200">
@@ -2115,6 +2116,8 @@ export function AdminCrmSettings() {
   const [peopleFromId, setPeopleFromId] = useState<(typeof PEOPLE_FROM_OPTS)[number]["id"]>("2015");
   const [peopleRecheckDays, setPeopleRecheckDays] = useState<32 | 92 | 182>(32);
   const [groupsRecheckDays, setGroupsRecheckDays] = useState<32 | 92 | 182>(32);
+  const [moneyRecheckDays, setMoneyRecheckDays] = useState<32 | 92 | 182>(32);
+  const [moneyFromId, setMoneyFromId] = useState<(typeof PEOPLE_FROM_OPTS)[number]["id"]>("2015");
   const [archAgeFrom, setArchAgeFrom] = useState("");
   const [archAgeTo, setArchAgeTo] = useState("");
   const [archNoDob, setArchNoDob] = useState(false);
@@ -2732,8 +2735,8 @@ export function AdminCrmSettings() {
       peopleKind: kind,
       study,
       recheck,
-      dateFrom: dateFrom || peopleDateFrom(peopleFromId),
-      recheckDays: recheck ? peopleRecheckDays : undefined,
+      dateFrom: dateFrom || peopleDateFrom(kind === "balance" ? moneyFromId : peopleFromId),
+      recheckDays: recheck ? (kind === "balance" ? moneyRecheckDays : peopleRecheckDays) : undefined,
       customerId: row.cid,
       branchId: row.branchId,
       name: row.name,
@@ -2846,8 +2849,8 @@ export function AdminCrmSettings() {
       peopleKind: kind,
       study,
       recheck: onlyRecheck,
-      dateFrom: peopleDateFrom(peopleFromId),
-      recheckDays: onlyRecheck ? peopleRecheckDays : undefined,
+      dateFrom: peopleDateFrom(kind === "balance" ? moneyFromId : peopleFromId),
+      recheckDays: onlyRecheck ? (kind === "balance" ? moneyRecheckDays : peopleRecheckDays) : undefined,
       jobItems: queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name })),
     });
     const job = (res as { job?: { running?: boolean; msg?: string; total?: number } } | null)?.job;
@@ -4159,6 +4162,7 @@ export function AdminCrmSettings() {
                       <ProgressBar done={done} total={total} run={run} loading={journalLoading && !journal} />
                       <p className="mt-1 h-5 truncate text-sm text-muted">{run ? `Сейчас ${cur}` : "\u00a0"}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <BtnCluster tone="red">
                         {withHint(
                         <button
                           type="button"
@@ -4170,6 +4174,9 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.loadOneMoney,
                         )}
+                        <YearsSelect value={moneyFromId} disabled={busy} onChange={setMoneyFromId} hint={HINT.yearsMoney} />
+                        </BtnCluster>
+                        <BtnCluster tone="sky">
                         {withHint(
                         <button
                           type="button"
@@ -4181,7 +4188,8 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.recheckOneMoney,
                         )}
-                        <YearsSelect value={peopleFromId} disabled={busy} onChange={setPeopleFromId} hint={HINT.yearsMoney} />
+                        <RecheckDaysSelect value={moneyRecheckDays} disabled={busy} onChange={setMoneyRecheckDays} />
+                        </BtnCluster>
                         {withHint(
                         <button
                           type="button"
@@ -4201,10 +4209,10 @@ export function AdminCrmSettings() {
                         kind="balance"
                         busy={offline || (fillLoading?.kind === "balance" && Boolean(fillLoading.customerId))}
                         loadingCid={fillLoading?.kind === "balance" ? fillLoading.customerId : undefined}
-                        years={<YearsSelect value={peopleFromId} disabled={busy} onChange={setPeopleFromId} hint={HINT.yearsMoney} small />}
+                        years={<YearsSelect value={moneyFromId} disabled={busy} onChange={setMoneyFromId} hint={HINT.yearsMoney} small />}
+                        windowSel={<RecheckDaysSelect value={moneyRecheckDays} disabled={busy} onChange={setMoneyRecheckDays} small />}
                         onLoad={(row) => void loadPerson(row, "balance", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "balance", peopleStudy, true)}
-                        onFullHistory={(row) => void loadPerson(row, "balance", peopleStudy, false, "2015-01-01")}
                         onStop={() => {
                           requestStop();
                         }}
