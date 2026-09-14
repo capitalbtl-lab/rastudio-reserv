@@ -167,13 +167,16 @@ export function lessonsStampExtra(sync: CustomerSyncStamp) {
   return lessonsCountExtra(diskN, alfaN, true);
 }
 
-/** Счёт сошёлся — журнал готов. Диск больше Alfa — не готово. Дырка по id важнее равенства чисел. */
+/** Журнал готов по множествам id. Длина без hole/extra — запас, если переписи ещё нет. */
 export function lessonsJournalReady(sync: CustomerSyncStamp) {
   const probed = Boolean(sync.lessonsAlfaAt);
   const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
   const diskN = Number(sync.lessonsDisk) || 0;
   if (lessonsStampShort(sync)) return false;
   if (lessonsStampExtra(sync)) return false;
+  if (sync.lessonsHoleN != null && sync.lessonsExtraN != null) {
+    return Boolean(probed || (sync.lessonsFull && sync.lessonsAttend));
+  }
   if (sync.lessonsFull && sync.lessonsAttend) return !probed || diskN === alfaN;
   return probed && diskN === alfaN;
 }

@@ -94,6 +94,7 @@ describe("штамп входа ученика", () => {
     assert.equal(lessonsStampExtra({ lessonsAlfaAt: "x", lessonsAlfa: 2, lessonsDisk: 2, lessonsSeenIds: [1, 2], lessonsExtraN: 1 }), true);
     assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 2, lessonsDisk: 2, lessonsHoleN: 1 }), false);
     assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 2, lessonsDisk: 2, lessonsSeenIds: [1, 2], lessonsHoleN: 0, lessonsExtraN: 0 }), true);
+    assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 2, lessonsDisk: 3, lessonsSeenIds: [1, 2], lessonsHoleN: 0, lessonsExtraN: 0 }), true);
     assert.deepEqual(stampLessonSetGap({ lessonsSeenIds: [1, 2] }, [1, 3], []), { lessonsHoleN: 1, lessonsExtraN: 1 });
     assert.deepEqual(stampLessonSetGap({ lessonsSeenIds: [1, 2] }, [1, 2, 9], [9]), { lessonsHoleN: 0, lessonsExtraN: 0 });
   });

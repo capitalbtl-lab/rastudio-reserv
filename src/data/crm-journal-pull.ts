@@ -1170,7 +1170,14 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const alfaGate = Math.max(alfa0, alfaKeep);
     const weak = Boolean(first.ok && alfaKeep > 0 && alfa0 < alfaKeep);
     const extra0 = lessonsCountExtra(disk, alfaGate, first.ok || alfaKeep > 0);
-    if (first.ok && !weak && disk >= alfaGate && !extra0) {
+    const haveNow = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
+    const gap0 = stampLessonSetGap(
+      { ...customerSyncOf(cid), ...(first.ok ? { lessonsAlfa: alfaGate, lessonsAlfaAt: customerSyncOf(cid).lessonsAlfaAt || "x" } : {}) },
+      haveNow,
+      studentProtectLessonIds(cid),
+    );
+    const setsClosed = !(Number(gap0.lessonsHoleN) || 0) && !(Number(gap0.lessonsExtraN) || 0);
+    if (first.ok && !weak && disk >= alfaGate && !extra0 && setsClosed) {
       const hit = mark(disk, alfa0, true);
       if (!balance)
         return {

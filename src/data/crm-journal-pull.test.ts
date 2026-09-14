@@ -72,6 +72,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /pagesComplete/);
     assert.match(pull, /journalIdsReady/);
     assert.match(pull, /if \(slow && lessonsCountShort/);
+    assert.match(pull, /setsClosed/);
     assert.match(pull, /recheckCensusWindow\(sync0, recheckDays\)/);
     assert.match(pull, /!\/\^w\\d\+\$\/\.test\(key\)/);
     assert.doesNotMatch(pull, /alfaTotal > 0 && n < alfaTotal/);
