@@ -995,11 +995,18 @@ export async function inboundMissingCustomerLessons(
     const next = mergeLocalCalendar(pulled, prevCal, hold, "union");
     replaceCustomerCalendar(id, next);
     const before = new Set((prevCal || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
-    noteAlfaLessonsLanded(
-      id,
-      countAlfaLessonUniq(next),
-      pulled.map((l) => Number(l.lessonId) || 0).filter((n) => n > 0 && !before.has(n)),
-    );
+    const haveNow = new Set((loadCustomerCalendar(id) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+    const landed = pulled.map((l) => Number(l.lessonId) || 0).filter((n) => n > 0 && haveNow.has(n) && !before.has(n));
+    noteAlfaLessonsLanded(id, countAlfaLessonUniq(next), landed);
+    const skippedHold = pulled
+      .map((l) => Number(l.lessonId) || 0)
+      .filter((n) => n > 0 && !haveNow.has(n));
+    if (skippedHold.length) console.warn(`inbound missing cid=${id} hold-skip: ${skippedHold.slice(0, 20).join(",")}`);
+    pulled.length = 0;
+    for (const lid of landed) {
+      const row = next.find((l) => Number(l.lessonId) === lid);
+      if (row) pulled.push(row);
+    }
   }
   const seen0 = uniquePositiveIds(customerSyncOf(id).lessonsSeenIds || []);
   const dropSet = new Set(dropped);
@@ -1036,13 +1043,14 @@ export async function inboundMissingUntilSeated(
     if (opts?.resetAt != null && String(customerSyncOf(customerId).lessonsResetAt || "") !== String(opts.resetAt)) {
       return { count, dropped: uniquePositiveIds(dropped), missing, skipped: "reset" as const };
     }
+    const beforeN = missing.length;
     const gap = await inboundMissingCustomerLessons(branchId, customerId, missing, { force: true, take });
     count += Number(gap.count) || 0;
     if (Array.isArray(gap.dropped)) dropped.push(...gap.dropped);
     const have = new Set((loadCustomerCalendar(customerId) || []).map((l) => Number(l.lessonId) || 0).filter((x) => x > 0));
     const dropSet = new Set(uniquePositiveIds(gap.dropped || []));
     missing = missing.filter((id) => !have.has(id) && !dropSet.has(id));
-    if (!(Number(gap.count) || 0)) break;
+    if (missing.length >= beforeN) break;
   }
   return { count, dropped: uniquePositiveIds(dropped), missing };
 }

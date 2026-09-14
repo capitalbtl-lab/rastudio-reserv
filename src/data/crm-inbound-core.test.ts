@@ -65,6 +65,17 @@ describe("вход из Alfa", () => {
     assert.equal(merged.find((x) => x.lessonId === 16)?.status, 3);
   });
 
+  it("очередь не блокирует посадку id, которого на этом календаре нет", () => {
+    const merged = mergeJournalInbound(
+      [{ lessonId: 1380, date: "2026-09-14", from: "10:00", status: 3 }],
+      [{ lessonId: 10, date: "2026-09-01", from: "10:00", status: 3 }],
+      [1380],
+      "union",
+    );
+    assert.equal(merged.some((x) => x.lessonId === 1380), true);
+    assert.equal(merged.find((x) => x.lessonId === 10)?.status, 3);
+  });
+
   it("фон: union не стирает старые занятия вне окна Alfa", () => {
     const pulled = [{ lessonId: 16, date: "2026-09-06", from: "16:00", status: 3 }];
     const prev = [

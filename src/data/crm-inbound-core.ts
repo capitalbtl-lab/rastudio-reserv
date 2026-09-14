@@ -347,9 +347,9 @@ export function mergeJournalInbound<T extends { lessonId?: number; date?: string
     const map = new Map<string, T>();
     for (const x of prev || []) map.set(lessonKey(x), x);
     for (const p of pulled) {
-      if (held(p, hold)) continue;
       const k = lessonKey(p);
       const cur = map.get(k);
+      if (held(p, hold) && cur) continue;
       if (cur && held(cur, hold)) continue;
       map.set(k, cur ? (foldLesson(cur as never, p as never) as T) : p);
     }
