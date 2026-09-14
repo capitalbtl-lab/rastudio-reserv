@@ -12,6 +12,7 @@ import { exportOpLabel, type CrmExportOp } from "@/data/crm-export-queue-core";
 import { ALFA_LINK_MODES, ALFA_PULL_CH, ALFA_PUSH_CH, ALFA_PIPE_CH, ALFA_SYNC_DEFAULT, type AlfaLinkMode, type AlfaPullCh, type AlfaPushCh, type AlfaPipeCh } from "@/data/crm-alfa-link-core";
 import { journalChunks, clampGrain, type Grain } from "@/data/crm-journal-periods";
 import { keepAlfa, peopleLessonsLine, PEOPLE_PACK } from "@/data/crm-people-line";
+import { STEP_LOAD, type HistLoadTab } from "@/data/crm-history-load-guide";
 
 function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
   let n = from?.parentElement || null;
@@ -80,6 +81,93 @@ function withHint(node: ReactNode, text: string) {
       {node}
       <HintI text={text} />
     </span>
+  );
+}
+
+function LoadGuideModal({ tab, onClose }: { tab: HistLoadTab; onClose: () => void }) {
+  const g = STEP_LOAD[tab];
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const Block = ({ title, items }: { title: string; items: string[] }) =>
+    items.length ? (
+      <section className="mt-4">
+        <h4 className="text-[0.78rem] font-bold uppercase tracking-wide text-zinc-500">{title}</h4>
+        <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[0.86rem] leading-snug">
+          {items.map((x) => (
+            <li key={x}>{x}</li>
+          ))}
+        </ul>
+      </section>
+    ) : null;
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/45 p-3 sm:items-center" onClick={onClose} role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="load-guide-title"
+        className="max-h-[min(90vh,52rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-black/10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p id="load-guide-title" className="font-display text-[1.2rem] leading-tight">
+              {g.title}
+            </p>
+            <p className="mt-1 text-[0.86rem] leading-snug text-muted">{g.goal}</p>
+          </div>
+          <button type="button" className={BTN_GHOST_SM} onClick={onClose} aria-label="Закрыть">
+            Закрыть
+          </button>
+        </div>
+        {g.alfa.map((a) => (
+          <section key={a.api} className="mt-4 rounded-xl bg-zinc-50 p-3 ring-1 ring-black/8">
+            <h4 className="text-[0.72rem] font-bold uppercase tracking-wide text-zinc-500">Из Alfa</h4>
+            <p className="mt-1 font-mono text-[0.72rem] leading-snug text-zinc-800">{a.api}</p>
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-[0.86rem] leading-snug">
+              {a.fields.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </section>
+        ))}
+        {g.disk.map((d) => (
+          <section key={d.file} className="mt-3 rounded-xl bg-emerald-50/70 p-3 ring-1 ring-emerald-200">
+            <h4 className="text-[0.72rem] font-bold uppercase tracking-wide text-emerald-800">На диск</h4>
+            <p className="mt-1 font-mono text-[0.72rem] leading-snug">{d.file}</p>
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-[0.86rem] leading-snug">
+              {d.fields.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </section>
+        ))}
+        <Block title="Кто читает" items={g.readers} />
+        <Block title="Не качаем этим шагом" items={g.skip} />
+        <Block title="Закон" items={g.law} />
+      </div>
+    </div>
+  );
+}
+
+function LoadGuideBtn({ tab, onOpen }: { tab: HistLoadTab; onOpen: (t: HistLoadTab) => void }) {
+  return (
+    <button
+      type="button"
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-[0.78rem] font-bold text-white hover:bg-zinc-700"
+      aria-label={`Что загружает ${STEP_LOAD[tab].title}`}
+      title="Что загружаем и куда"
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen(tab);
+      }}
+    >
+      i
+    </button>
   );
 }
 
@@ -1969,6 +2057,7 @@ export function AdminCrmSettings() {
   const [archNeedGroups, setArchNeedGroups] = useState(false);
   const [crmTab, setCrmTab] = useState<CrmSetTab>("history");
   const [histTab, setHistTab] = useState<HistTab>("roster");
+  const [loadGuide, setLoadGuide] = useState<HistTab | null>(null);
   const crmTabsRef = useRef<HTMLDivElement>(null);
   const histTabsRef = useRef<HTMLDivElement>(null);
   const tabLockY = useRef<number | null>(null);
@@ -3247,15 +3336,19 @@ export function AdminCrmSettings() {
                     >
                       {t.label}
                     </button>
-                    <HintI text={t.id === "roster" ? HINT.tabRoster : t.id === "students" ? HINT.tabStudents : t.id === "groups" ? HINT.tabGroups : t.id === "audit" ? HINT.tabAudit : HINT.tabMoney} />
+                    <LoadGuideBtn tab={t.id} onOpen={setLoadGuide} />
                   </span>
                 ))}
               </div>
+              {loadGuide ? <LoadGuideModal tab={loadGuide} onClose={() => setLoadGuide(null)} /> : null}
               <ServerJobStrip job={journal?.job as ServerJob | undefined} />
 
               {histTab === "roster" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <p className="font-display text-[1.15rem]">Группы и состав</p>
+                <p className="flex items-center gap-2 font-display text-[1.15rem]">
+                  Группы и состав
+                  <LoadGuideBtn tab="roster" onOpen={setLoadGuide} />
+                </p>
                 <p className="mt-1 text-sm text-muted">Основа для календаря и кассы. Одна группа, пауза 5 с. В Alfa не пишем.</p>
                 {(() => {
                   const rows = (p?.groups?.rows || []).filter((r) => (groupArchived ? r.archived : !r.archived) && (!journalSchool || r.school === journalSchool));
@@ -3449,7 +3542,10 @@ export function AdminCrmSettings() {
 
               {histTab === "groups" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <p className="font-display text-[1.15rem]">Занятия в группах</p>
+                <p className="flex items-center gap-2 font-display text-[1.15rem]">
+                  Занятия в группах
+                  <LoadGuideBtn tab="groups" onOpen={setLoadGuide} />
+                </p>
                 <p className="mt-1 text-sm text-muted">Как шаг 3: сначала красная «по одному», потом годы. Архив и сроки — отдельные кнопки ниже.</p>
                 <ProgressBar done={schoolDone} total={schoolRows.length} run={Boolean(schoolRun || fillLoading)} loading={journalLoading && !journal} />
                 <p className="mt-1 text-[0.72rem] text-muted">
@@ -3715,7 +3811,10 @@ export function AdminCrmSettings() {
 
               {histTab === "students" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <p className="font-display text-[1.15rem]">Календарь ученика</p>
+                <p className="flex items-center gap-2 font-display text-[1.15rem]">
+                  Календарь ученика
+                  <LoadGuideBtn tab="students" onOpen={setLoadGuide} />
+                </p>
                 <p className="mt-1 text-sm text-muted">
                   Красная: с Alfa на диск, один ученик, пауза 5 с. Рядом — с какого года качать. Жёлтая старая карточка: «Загрузить всю историю» с 2015.
                 </p>
@@ -3856,7 +3955,10 @@ export function AdminCrmSettings() {
 
               {histTab === "money" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <p className="font-display text-[1.15rem]">Деньги на карточке</p>
+                <p className="flex items-center gap-2 font-display text-[1.15rem]">
+                  Деньги на карточке
+                  <LoadGuideBtn tab="money" onOpen={setLoadGuide} />
+                </p>
                 <p className="mt-1 text-sm text-muted">Как шаг 2: красная «по одному», потом годы. Касса с диска, сверка с Alfa, в Alfa не пишет.</p>
                 <div className="mt-3">
                   <ScopePills
@@ -3987,7 +4089,10 @@ export function AdminCrmSettings() {
 
               {histTab === "audit" ? (
               <section className="rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
-                <p className="font-display text-[1.15rem]">Сверка остатка с Alfa</p>
+                <p className="flex items-center gap-2 font-display text-[1.15rem]">
+                  Сверка остатка с Alfa
+                  <LoadGuideBtn tab="audit" onOpen={setLoadGuide} />
+                </p>
                 <p className="mt-1 text-sm text-muted">Все текущие. Alfa = общий остаток шапки, не rest абонемента. Совпало — справа, даже с непроведёнными. Цифру Alfa в файл не ставим.</p>
                 {(() => {
                   const live = p?.live;
