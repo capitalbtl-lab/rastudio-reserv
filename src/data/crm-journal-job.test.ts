@@ -133,8 +133,11 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryShortPeople("people", false, "students", { ok: true, student: { short: true, seated: 0 } }), false);
     assert.equal(shouldRetryShortPeople("people", true, "students", { ok: true, student: { short: true, seated: 50 } }), false);
     assert.equal(shouldRetryShortPeople("people", false, "balance", { ok: true, student: { short: true, seated: 50 } }), false);
-    assert.equal(shouldRetryShortPeople("groups", false, "students", { ok: true, student: { short: true, seated: 50 } }), false);
+    assert.equal(shouldRetryShortPeople("people-slow", false, "students", { ok: true, student: { short: true, seated: 50 } }), false);
     const jobSrc = readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8");
+    assert.match(jobSrc, /people-slow/);
+    assert.match(jobSrc, /slowFill: mode === "people-slow"/);
+    assert.match(jobSrc, /медленный добор, до 10 мин/);
     assert.match(jobSrc, /openRetry/);
     assert.match(jobSrc, /перепись не закрыта, ещё этот/);
     assert.equal(JOB_WAIT_CAP, 8);

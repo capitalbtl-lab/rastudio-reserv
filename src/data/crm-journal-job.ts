@@ -159,9 +159,11 @@ export type StartJournalJobOpts = {
 };
 
 function emptyMsg(mode: JournalJobMode, recheck: boolean) {
-  if (mode === "people" || mode === "people-recheck") {
+  if (mode === "people" || mode === "people-recheck" || mode === "people-slow") {
     return recheck || mode === "people-recheck"
       ? "Справа никого перепроверять. Сначала красная «Загрузить по одному»."
+      : mode === "people-slow"
+        ? "Некого добирать. Жёлтых слева нет — либо диск догнал, либо галка."
       : "Слева пусто. Нажмите «Перепроверить по одному» — пройдёт тех, кто справа.";
   }
   if (mode === "groups") return "Слева пусто. Нажмите «Перепроверить по одному» — пройдёт тех, кто справа.";
@@ -187,7 +189,7 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
     return [{ cid, branchId: Number(opts.branchId) || 1, name: opts.name || `№${cid}` }];
   }
   if (mode === "count") return [{ name: "отбор архива" }];
-  if (mode === "people" || mode === "people-recheck" || mode === "probe" || mode === "audit") {
+  if (mode === "people" || mode === "people-recheck" || mode === "people-slow" || mode === "probe" || mode === "audit") {
     const given = (opts.items || [])
       .map((r) => ({ cid: Number(r.cid) || 0, branchId: Number(r.branchId) || 1, name: String(r.name || "") }))
       .filter((r) => r.cid);
@@ -218,6 +220,10 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
       const seen = new Set(unseen.map((r) => r.cid));
       const queue = [...unseen, ...hole.filter((r) => !seen.has(r.cid))];
       return queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
+    }
+    if (mode === "people-slow") {
+      const hole = people.filter((r) => r.short && !r.holeApproved);
+      return hole.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
     }
     const queue = peopleJobQueue(people, kind, mode === "people-recheck" || Boolean(opts.recheck));
     return queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
@@ -365,7 +371,9 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     cur: first?.name || "",
     n: 0,
     total: loopPullKind(mode) ? 0 : items.length,
-    msg: mode === "people-recheck" || (mode === "people" && recheck) ? `${first?.name}: перепроверяем. Потом пауза 5 с.` : mode === "audit" ? `${first?.name}: сверяем. Потом пауза 5 с.` : `${first?.name}: грузим. Потом пауза 5 с.`,
+    msg: mode === "people-slow"
+      ? `${first?.name}: медленный добор, до 10 мин. Курсор не сбрасываем.`
+      : mode === "people-recheck" || (mode === "people" && recheck) ? `${first?.name}: перепроверяем. Потом пауза 5 с.` : mode === "audit" ? `${first?.name}: сверяем. Потом пауза 5 с.` : `${first?.name}: грузим. Потом пауза 5 с.`,
     fill: fillOf(mode, kind, first),
     startedAt: nowIso(),
     lastAt: nowIso(),
@@ -599,6 +607,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       probe: mode === "probe",
       school: job.school || job.filter,
       name: item.name,
+      slowFill: mode === "people-slow",
     }),
   );
   if ("stopped" in got) return { done: true, gap: 0, msg: stoppedMsg() };

@@ -25,6 +25,7 @@ import {
   stampCustomerSync,
   noteAlfaLessonsLanded,
   lessonFillStart,
+  lessonFillStartMonth,
   lessonFillOf,
   lessonFillAdvance,
   lessonFillBusy,
@@ -592,7 +593,7 @@ export function skipHoleInbound(id: number, force?: boolean) {
   return lessonsCountShort(disk, Number(s.lessonsAlfa) || 0, Boolean(s.lessonsAlfaAt));
 }
 
-export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean; dateFrom?: string; prune?: boolean; resetSeen?: boolean }) {
+export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean; dateFrom?: string; prune?: boolean; resetSeen?: boolean; monthly?: boolean }) {
   const id = Number(customerId) || 0;
   if (id <= 0) return { ok: true as const, count: 0, done: true };
   if (skipHoleInbound(id, opts?.force)) return { ok: true as const, count: 0, skipped: "hole" as const, done: true };
@@ -631,19 +632,29 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const homeLite = Boolean(opts?.homeOnly);
     const prune = Boolean(opts?.prune);
     const resetSeen = Boolean(opts?.resetSeen);
+    const monthly = Boolean(opts?.monthly);
     const branches = homeLite ? [Number(branch) || 1] : wantFull ? uniqueBranches(branch) : [Number(branch) || 1];
     if (resetSeen) stampCustomerSync(id, { lessonFill: undefined, lessonsSeenIds: [] });
     const prevCal = loadCustomerCalendar(id);
     const prevMap = new Map(prevCal.map((l) => [String(l.lessonId || `${l.date}|${l.from}`), l] as const));
     const packs: { items?: Parameters<typeof packLight>[0][] }[] = [];
     let cur = resetSeen
-      ? lessonFillStart(branches[0] || branch, dateFrom)
-      : wantFull
+      ? monthly
+        ? lessonFillStartMonth(branches[0] || branch)
+        : lessonFillStart(branches[0] || branch, dateFrom)
+      : monthly
+        ? lessonFillOf(customerSyncOf(id).lessonFill)?.to
+          ? lessonFillOf(customerSyncOf(id).lessonFill)!
+          : lessonFillStartMonth(branches[0] || branch)
+        : wantFull
         ? lessonFillForWindow(lessonFillOf(customerSyncOf(id).lessonFill), dateFrom, branches[0] || branch)
         : lessonFillStart(branches[0] || branch, dateFrom);
     const keep0 = Number(customerSyncOf(id).lessonsAlfa) || 0;
-    if (keep0 > 0 && countAlfaLessonUniq(prevCal) < keep0 && cur.done) {
+    if (keep0 > 0 && countAlfaLessonUniq(prevCal) < keep0 && cur.done && !monthly) {
       cur = lessonFillStart(branches[0] || branch, dateFrom);
+    }
+    if (keep0 > 0 && countAlfaLessonUniq(prevCal) < keep0 && cur.done && monthly) {
+      cur = lessonFillStartMonth(branches[0] || branch);
     }
     let ran = 0;
     const maxRun = homeLite ? LESSON_STATUSES.length : Number(opts?.take) > 0 ? Math.min(LESSON_INBOUND_RUN, Number(opts.take)) : wantFull ? LESSON_INBOUND_RUN : LESSON_STATUSES.length;
@@ -659,24 +670,29 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       }
       let progressed = false;
       for (let page = cur.page; page < maxPages; page += 1) {
+        const winFrom = monthly ? ymd(cur.from) || ymd(from) : ymd(from);
+        const winTo = monthly ? ymd(cur.to) || ymd(dateTo) : ymd(dateTo);
         const live = await pullLessonPage(
           bid,
-          { page, pageSize: 100, status, customer_id: id, date_from: ymd(from), date_to: ymd(dateTo) },
+          { page, pageSize: 100, status, customer_id: id, date_from: winFrom, date_to: winTo },
           t,
+          monthly ? 8 : 3,
         );
         ran += 1;
         if (!live.ok) {
+          if (monthly) break;
           aborted = true;
           break;
         }
         if (live.items.length) packs.push({ items: live.items });
         progressed = true;
         const lastShort = live.items.length < 100;
-        cur = lastShort ? lessonFillAdvance({ ...cur, page }, true, branches) : { bid, statusIdx: cur.statusIdx, page: page + 1 };
+        cur = lastShort ? lessonFillAdvance({ ...cur, page }, true, branches) : { bid, statusIdx: cur.statusIdx, page: page + 1, from: cur.from, to: cur.to };
         if (ran >= maxRun || cur.done || lastShort) break;
       }
       if (aborted) break;
-      if (!progressed && !cur.done) cur = lessonFillAdvance(cur, true, branches);
+      if (monthly && !progressed && !cur.done) break;
+      if (!progressed && !cur.done && !monthly) cur = lessonFillAdvance(cur, true, branches);
     }
     const droppedNoDate: number[] = [];
     const pulled: GroupCalLesson[] = [];
@@ -788,7 +804,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const keep = Number(customerSyncOf(id).lessonsAlfa) || 0;
     const walked = Boolean(cur.done) && !aborted;
     const fillDone = inboundFillClosed(diskNow, keep, walked, aborted);
-    if (!fillDone && walked && keep > diskNow) {
+    if (!fillDone && walked && keep > diskNow && !monthly) {
       cur = lessonFillStart(branches[0] || branch, dateFrom);
     }
     const wasFull = Boolean(customerSyncOf(id).lessonsFull);
@@ -799,7 +815,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       lessonFill: fillDone || !wantFull ? undefined : cur,
       lessonsDisk: diskNow,
     });
-    if (wantFull && !fillDone && opts?.continueLater === true) {
+    if (wantFull && !fillDone && opts?.continueLater === true && !monthly) {
       setTimeout(() => {
         void inboundCustomerLessons(branch, id, { full: true, force: opts?.force, prune, dateFrom, homeOnly: opts?.homeOnly }).catch(() => null);
       }, 700);

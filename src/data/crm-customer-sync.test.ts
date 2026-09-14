@@ -7,6 +7,10 @@ import {
   lessonFillAdvance,
   lessonFillOf,
   lessonFillForWindow,
+  lessonFillStartMonth,
+  prevMonthChunk,
+  monthChunkNow,
+  LESSON_FILL_FLOOR,
   CUSTOMER_SYNC_TTL_MS,
   LESSON_INBOUND_RUN,
   LESSON_STATUSES,
@@ -47,6 +51,20 @@ describe("штамп входа ученика", () => {
     assert.deepEqual(lessonFillForWindow(old, "2015-01-01", 2), { bid: 2, statusIdx: 0, page: 0, from: "2015-01-01" });
     assert.equal(lessonFillAdvance({ ...mid }, false, [1]).from, "2019-09-11");
     assert.equal(lessonFillOf({ bid: 1, statusIdx: 0, page: 1, from: "2015-01-01" })?.from, "2015-01-01");
+    assert.equal(LESSON_FILL_FLOOR, "2015-01-01");
+    assert.deepEqual(prevMonthChunk("2026-09-01"), { from: "2026-08-01", to: "2026-08-31" });
+    assert.equal(prevMonthChunk("2015-01-01"), null);
+    const m = lessonFillStartMonth(1, new Date(2026, 8, 13));
+    assert.equal(m.from, "2026-09-01");
+    assert.equal(m.to, "2026-09-13");
+    const nextM = lessonFillAdvance({ bid: 2, statusIdx: 2, page: 0, from: "2026-09-01", to: "2026-09-13" }, true, [1, 2]);
+    assert.equal(nextM.from, "2026-08-01");
+    assert.equal(nextM.to, "2026-08-31");
+    assert.equal(nextM.bid, 1);
+    assert.equal(nextM.page, 0);
+    const keepMonth = { bid: 1, statusIdx: 1, page: 2, from: "2026-09-01", to: "2026-09-13" };
+    assert.deepEqual(lessonFillForWindow(keepMonth, "2015-01-01", 2), keepMonth);
+    assert.equal(monthChunkNow(new Date(2026, 0, 5)).from, "2026-01-01");
   });
 
   it("счёт сошёлся — готово, даже без обхода филиалов", () => {

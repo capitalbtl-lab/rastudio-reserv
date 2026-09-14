@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 
 /** Закон «История из Alfa»: только по одному, пауза 5 с. Пакетом нельзя. */
 export const JOURNAL_ONE_GAP_MS = 5000;
+export const PEOPLE_SLOW_MS = 10 * 60 * 1000;
 export const PEOPLE_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
 export const CATALOG_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
 export const AUDIT_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
@@ -12,6 +13,7 @@ export const AUDIT_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
 export type JournalJobMode =
   | "people"
   | "people-recheck"
+  | "people-slow"
   | "groups"
   | "groups-recheck"
   | "group-one"
@@ -367,11 +369,12 @@ export function shouldRetryShortPeople(
   res: { ok?: boolean; student?: { short?: boolean; seated?: number; holeApproved?: boolean } } | null,
 ) {
   if (recheck) return false;
-  if (mode !== "people" && mode !== "person") return false;
+  if (mode !== "people" && mode !== "person" && mode !== "people-slow") return false;
   if (kind !== "students") return false;
   if (!res?.ok) return false;
   if (res.student?.holeApproved) return false;
   if (!res.student?.short) return false;
+  if (mode === "people-slow") return false;
   return (Number(res.student.seated) || 0) > 0;
 }
 

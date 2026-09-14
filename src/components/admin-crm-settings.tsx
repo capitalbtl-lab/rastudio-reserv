@@ -192,6 +192,7 @@ const HINT = {
   probe: "«Сверить счёт» идёт по одному человеку, пауза 5 с. Перепись уникальных номеров занятий по филиалам 1–4 с 2015. Не сумма total. Пустой ответ Alfa не считает журнал пустым и ничего не снимает. Цифры разные — жёлтая. Сошлись — вправо. В Alfa не пишет.",
   recheckCal: "Сначала добирает журнал, потом контрольный проход только по номерам. Лишние id снимает с диска, если перепись закрыта. Пока Alfa молчит — не снимает, жёлтая остаётся. Свои уроки и очередь на Alfa не трогает. В Alfa не пишет.",
   recheckOnePeople: "Синяя «Перепроверить по одному» — журнал, потом перепись номеров. Дубли с диска только после закрытого контроля. Стоп не оживает. 30 с без движения — с того же человека. В Alfa не пишет. Красная эту чистку не делает.",
+  slowFill: "Медленный автодобор: каждый жёлтый слева до 10 минут, курсор страниц не сбрасываем, не «с нуля». Потом пауза 5 с и следующий. Пока диск не догонит Alfa или 10 минут кончатся. Кто добрался — уезжает вправо. Правых зелёных не трогает и журнал им не начинает заново. Вкладку можно закрыть — очередь на сервере. Стоп после текущего человека. В Alfa не пишет.",
   stop: "Стоп останавливает текущую очередь. Текущий человек или группа допишет свой запрос, а следующий уже не стартует. Уже записанное на диск не откатывается — это не «отмена», а пауза. После стопа красную можно нажать снова: пойдёт со следующих, кто ещё слева. Если кнопка серая, сейчас никто не грузится. В Alfa ничего не удаляет и не сохраняет. Можно спокойно отойти и продолжить позже.",
   fullHist: "Эта кнопка только на жёлтой старой карточке, когда в Alfa занятий больше, чем у нас. Это та же красная качка, что «Добрать», но всегда с 1 января 2015, не перепись и не снятие лишних id. Нужна, если человек ходил в 2016–2018, а обычная качка этого не видит. Пишет только на наш диск, дубли по номеру занятия не создаёт. В Alfa не отправляет и оплаты не трогает. Если за один раз счёт не сошёлся, нажмите ещё раз — продолжит с того же человека. Пока грузится другой ученик, кнопка подождёт.",
   resetHist: "Только жёлтая. Стирает занятия этого ученика с нашего диска, заново спрашивает счёт Alfa с 2015 и сразу качает журнал. Старое число Alfa не держим. Свои неотправленные уроки и очередь на Alfa не трогает. Группу и кассу не трогает. В Alfa ничего не пишет. Нужна, если диск засорён или счёт Alfa устарел. После сброса карточка слева, пока диск не догонит новый счёт.",
@@ -2795,6 +2796,31 @@ export function AdminCrmSettings() {
     }
   }
 
+  async function slowFillPeople(study: "1" | "2") {
+    const side = study === "2" ? journal?.progress?.archive : journal?.progress?.live;
+    const people = (side?.people || []) as PeopleRow[];
+    const queue = people.filter((r) => r.short && !peopleHoleOk(r));
+    if (!queue.length) {
+      setMsg("Некого добирать. Жёлтых слева нет.");
+      return;
+    }
+    holdFill.current = true;
+    setBusy(true);
+    setSchoolRun({ cur: queue[0].name, n: 0, total: queue.length });
+    setFillLoading({ kind: "students", label: queue[0].name, customerId: queue[0].cid });
+    const res = await startHistJob({
+      jobMode: "people-slow",
+      peopleKind: "students",
+      study,
+      dateFrom: peopleDateFrom(peopleFromId),
+      jobItems: queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name })),
+    });
+    const job = (res as { job?: { running?: boolean; msg?: string; total?: number } } | null)?.job;
+    if (job && !job.running && queue.length) {
+      setMsg(job.msg || `Очередь добора: ${queue.length}. Нажмите ещё раз.`);
+    }
+  }
+
   function catalogHasMore() {
     const at = Date.parse(String(journal?.lastArchiveCatalog?.at || ""));
     return Boolean(journal?.lastArchiveCatalog?.more) && Boolean(at && Date.now() - at < 24 * 60 * 60 * 1000);
@@ -3920,6 +3946,17 @@ export function AdminCrmSettings() {
                           Перепроверить по одному
                         </button>,
                         HINT.recheckOnePeople,
+                        )}
+                        {withHint(
+                        <button
+                          type="button"
+                          className={BTN_LOAD}
+                          disabled={busy}
+                          onClick={() => void slowFillPeople(peopleStudy)}
+                        >
+                          Медленный автодобор
+                        </button>,
+                        HINT.slowFill,
                         )}
                         <YearsSelect value={peopleFromId} disabled={busy} onChange={setPeopleFromId} />
                         {withHint(

@@ -1069,7 +1069,7 @@ async function pullOneGroup(
 
 export { keepAlfaProbe };
 
-async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "") {
+async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "", slow = false) {
   const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingCustomerLessons, recheckCensusDateFrom } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
@@ -1140,16 +1140,18 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
       }
       if (lessonsCountShort(disk, alfaGate, true)) {
-      for (let i = 0; i < 6; i += 1) {
+      const deadline = slow ? Date.now() + 10 * 60 * 1000 : 0;
+      for (let i = 0; !deadline ? i < 6 : Date.now() < deadline; i += 1) {
         const res = await inboundCustomerLessons(branchId, cid, {
           take: 8,
           deep: 0,
-          continueLater: false,
+          continueLater: Boolean(slow),
           full: true,
           force: true,
           homeOnly: false,
           prune: false,
-          resetSeen: i === 0,
+          resetSeen: false,
+          monthly: Boolean(slow),
           ...(from ? { dateFrom: from } : {}),
         }).catch(() => ({ count: 0, done: false as const, skipped: undefined as string | undefined }));
         lessons += Number(res.count) || 0;
@@ -1158,6 +1160,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         }
         disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
         if (!lessonsCountShort(disk, alfaGate, true)) break;
+        if (slow && i > 0 && !(Number(res.count) || 0) && Boolean((res as { done?: boolean }).done)) break;
       }
       }
       if (lessonsCountShort(disk, alfaGate, true) && missing.length) {
@@ -1290,6 +1293,7 @@ export async function journalPull(opts: {
   lite?: boolean;
   jobItems?: { cid?: number; branchId?: number; name?: string; groupId?: number; periodKey?: string; periodLabel?: string }[];
   archived?: boolean;
+  slowFill?: boolean;
 }) {
   const kind = opts.kind;
   if (kind === "jobStart" || kind === "jobStop" || kind === "jobStatus") {
@@ -2074,7 +2078,7 @@ export async function journalPull(opts: {
     }
     const balance = kind === "balance";
     if (balance && wanted && !payCustomerFilled(wanted)) clearPayFill(wanted);
-    const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck), String(opts.dateFrom || "").trim());
+    const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck), String(opts.dateFrom || "").trim(), Boolean(opts.slowFill));
     if (row.blocked) {
       return {
         ok: false as const,

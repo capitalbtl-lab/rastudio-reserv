@@ -63,6 +63,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /kind === "details"/);
     assert.match(pull, /clampGrain/);
     assert.match(ui, /Загрузить по одному/);
+    assert.match(ui, /Медленный автодобор/);
+    assert.match(ui, /people-slow/);
     assert.match(ui, /HINT\.loadOneGroups/);
     assert.match(ui, /Найти группу/);
     assert.match(ui, /Требуют загрузки данных/);
@@ -307,7 +309,13 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /if \(!listed && \(ids.length \|\| packLessonPupils\(rec\)\.length\)\) continue/);
     assert.match(core, /export function inboundFillClosed/);
     assert.match(inbound, /inboundFillClosed/);
-    assert.match(pull, /resetSeen: i === 0/);
+    assert.match(pull, /resetSeen: false/);
+    assert.doesNotMatch(pull, /resetSeen: i === 0/);
+    assert.match(pull, /slowFill/);
+    assert.match(pull, /10 \* 60 \* 1000/);
+    assert.match(pull, /monthly: Boolean\(slow\)/);
+    assert.match(inbound, /monthly \? 8 : 3/);
+    assert.match(inbound, /lessonFillStartMonth/);
     assert.doesNotMatch(pull, /res\.walked && lessonsCountShort\(disk, alfaGate, true\)/);
     assert.match(inbound, /export async function inboundMissingCustomerLessons/);
     assert.match(pull, /inboundMissingCustomerLessons/);

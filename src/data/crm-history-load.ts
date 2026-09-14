@@ -15,6 +15,7 @@ export type HistoryLoadSpec = {
   probe?: boolean;
   school?: string;
   name?: string;
+  slowFill?: boolean;
 };
 
 export type HistoryLoadResult = {
@@ -51,6 +52,7 @@ export async function historyLoadOne(spec: HistoryLoadSpec): Promise<HistoryLoad
     school: spec.school,
     name: spec.name,
     lite: true,
+    slowFill: Boolean(spec.slowFill),
   }) as Promise<HistoryLoadResult>;
 }
 
