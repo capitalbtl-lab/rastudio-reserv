@@ -34,7 +34,18 @@ export type CachedGroupCard = {
   /** Когда журнал группы последний раз дочитали из Alfa (даже если занятий 0). */
   journalAt?: string;
   /** Какие кварталы уже сняли с Alfa. pulled — только ручные нажатия, не вывод из календаря. rechecked — повторная сверка, дубликаты проверили. */
-  journalFill?: { done: string[]; fail?: Record<string, string>; pulled?: Record<string, string>; weak?: string[]; rechecked?: string[] };
+  journalFill?: {
+    done: string[];
+    fail?: Record<string, string>;
+    pulled?: Record<string, string>;
+    weak?: string[];
+    rechecked?: string[];
+    recheckAt?: string;
+    recheckDays?: number;
+    journalCensusN?: number;
+    journalDiskUniq?: number;
+    journalIdsChecksum?: string;
+  };
   /** Срок жизни группы: по расписанию или по первой/последней явке Alfa. */
   journalLife?: { from: string; to: string; source: "slot" | "alfa"; at: string };
 };

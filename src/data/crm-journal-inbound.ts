@@ -3,7 +3,7 @@ import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
-import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe, clampRecheckDays, lessonsSetGap, groupWindowGone } from "./crm-inbound-core";
+import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe, clampRecheckDays, lessonsSetGap, groupWindowGone, idsChecksum, journalIdsReady } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
@@ -71,9 +71,14 @@ function ymd(raw?: string) {
   return toAlfaLessonDate(raw);
 }
 
+export function recheckCensusWindow(sync: Parameters<typeof wasLessonGreen>[0], days?: unknown) {
+  if (!wasLessonGreen(sync)) return { from: "", to: "" };
+  const n = clampRecheckDays(days);
+  return { from: ymd(ruShift(-n)), to: ymd(ruShift(n)) };
+}
+
 export function recheckCensusDateFrom(sync: Parameters<typeof wasLessonGreen>[0], days?: unknown) {
-  if (!wasLessonGreen(sync)) return "";
-  return ymd(ruShift(-clampRecheckDays(days)));
+  return recheckCensusWindow(sync, days).from;
 }
 
 function ruOf(d: Date) {
@@ -200,8 +205,9 @@ export async function inboundJournalGroup(
     subject: String(cached?.subject || slot?.subject || ""),
   };
   const recheck = Boolean(opts?.recheck);
-  const dateFrom = recheck ? ruShift(-clampRecheckDays(opts?.recheckDays)) : opts?.dateFrom || ruShift(opts?.lite ? -400 : -2600);
-  const dateTo = recheck ? ruShift(90) : opts?.dateTo || ruShift(90);
+  const days = clampRecheckDays(opts?.recheckDays);
+  const dateFrom = recheck ? ruShift(-days) : opts?.dateFrom || ruShift(opts?.lite ? -400 : -2600);
+  const dateTo = recheck ? ruShift(days) : opts?.dateTo || ruShift(90);
   const winFrom = ymd(dateFrom);
   const winTo = ymd(dateTo);
   const inWin = (l: GroupCalLesson) => {
@@ -281,6 +287,19 @@ export async function inboundJournalGroup(
   const have = uniquePositiveIds(sliceWin(calendar).map((l) => Number(l.lessonId) || 0));
   const hole = lessonsSetGap(have, census, holdIds).hole;
   const gone = groupWindowGone(have, census, holdIds, pagesComplete);
+  const censusN = census.size;
+  const diskUniq = have.length;
+  const diskRows = countAlfaLessonRows(sliceWin(calendar));
+  const checksum = idsChecksum(census);
+  const ready = journalIdsReady({
+    pagesComplete,
+    holeN: hole.length,
+    extraN: gone.length,
+    diskUniq,
+    censusN,
+    diskRows,
+    allowExtra: !recheck,
+  });
   const beforeIds = new Set((cached?.calendar || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
   const seatedNew = pulled.filter((l) => {
     const id = Number(l.lessonId) || 0;
@@ -292,7 +311,7 @@ export async function inboundJournalGroup(
   const gapNote = `${hole.length ? `, дырок ${hole.length}` : ""}${gone.length ? `, ушло ${gone.length}` : ""}`;
   const samePrint = cached && journalFingerprint(calendar) === journalFingerprint(cached.calendar || []);
   const sameMoney = cached && lessonPupilsKey(calendar) === lessonPupilsKey(cached.calendar || []);
-  const gap = { hole, gone, pagesComplete, capped: !pagesComplete };
+  const gap = { hole, gone, pagesComplete, capped: !pagesComplete, censusN, diskUniq, diskRows, checksum, ready };
   if (samePrint && sameMoney && !recheck) {
     if (opts?.deep) {
       const enriched = await enrichCalendarDetails(branch, calendar, { token: t, take: 16 });
@@ -433,18 +452,18 @@ async function pullLessonPage(
 }
 
 /** Сколько занятий у ученика в Alfa: перепись уникальных номеров. Пустой catch ≠ конец. Полная страница на потолке — не закрыта. */
-export async function censusCustomerLessonIds(branch: number, customerId: number, opts?: { dateFrom?: string; token?: string }) {
+export async function censusCustomerLessonIds(branch: number, customerId: number, opts?: { dateFrom?: string; dateTo?: string; token?: string }) {
   const id = Number(customerId) || 0;
   if (id <= 0) return { ids: [] as number[], ok: false as const, pages: 0 };
   const { token } = await import("./alfacrm");
   const t = opts?.token || (await token());
   const dateFrom = ymd(opts?.dateFrom) || "2015-01-01";
-  const dateTo = ymd(ruShift(90));
+  const dateTo = ymd(opts?.dateTo) || ymd(ruShift(90));
   const branches = uniqueBranches(branch);
   const ids = new Set<number>();
   let pages = 0;
   let aborted = false;
-  const pageSize = 100;
+  const pageSize = 500;
   const pageCap = 12;
   for (const bid of branches) {
     for (const status of LESSON_STATUSES) {
@@ -522,7 +541,7 @@ export function resetStudentLessonDisk(customerId: number) {
   return { ok: true as const, disk, alfa: 0 };
 }
 
-export function applyCustomerLessonCensus(customerId: number, ids: number[], closed: boolean, keepBefore = "") {
+export function applyCustomerLessonCensus(customerId: number, ids: number[], closed: boolean, keepBefore = "", keepAfter = "") {
   const id = Number(customerId) || 0;
   if (!closed) return { ok: false as const, disk: countAlfaLessonUniq(loadCustomerCalendar(id)), alfa: 0, pruned: 0 };
   const held = ownsStudentAlfa(id);
@@ -533,7 +552,7 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
   const hold = pendingExportIds(["lesson.update", "lesson.create"]);
   const uniq = uniquePositiveIds(ids);
   const groupKeep = keepBefore ? lessonIdsOnStudentGroups(id) : [];
-  const next = pruneCalendarToAlfaIds(prev, uniq, hold, groupKeep, keepBefore);
+  const next = pruneCalendarToAlfaIds(prev, uniq, hold, groupKeep, keepBefore, keepAfter);
   replaceCustomerCalendar(id, next);
   const disk = countAlfaLessonUniq(next);
   const keepAlfa = Number(customerSyncOf(id).lessonsAlfa) || 0;
@@ -831,10 +850,12 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const fillDone = inboundFillClosed(diskNow, keep, walked, aborted);
     const wasFull = Boolean(customerSyncOf(id).lessonsFull);
     const gap = stampLessonSetGap(customerSyncOf(id), uniquePositiveIds(next.map((x) => Number(x.lessonId) || 0)), studentProtectLessonIds(id));
+    const rows = countAlfaLessonRows(next);
+    const fullOk = Boolean(fillDone && !(Number(gap.lessonsHoleN) || 0) && !(Number(gap.lessonsExtraN) || 0) && rows === diskNow);
     stampCustomerSync(id, {
       lessonsAt: new Date().toISOString(),
-      lessonsFull: homeLite ? false : wantFull ? fillDone : wasFull,
-      lessonsAttend: homeLite ? customerSyncOf(id).lessonsAttend : customerSyncOf(id).lessonsAttend || fillDone,
+      lessonsFull: homeLite ? false : wantFull ? fullOk : wasFull,
+      lessonsAttend: homeLite ? customerSyncOf(id).lessonsAttend : customerSyncOf(id).lessonsAttend || fullOk,
       lessonFill: fillDone || !wantFull ? undefined : cur,
       lessonsDisk: diskNow,
       ...gap,

@@ -26,6 +26,8 @@ import {
   windowAlfaKeep,
   lessonsSetGap,
   groupWindowGone,
+  idsChecksum,
+  journalIdsReady,
 } from "./crm-inbound-core.ts";
 import { slotActiveToday, slotOnPublicSchedule, mergeStatusPublish } from "./group-status.ts";
 
@@ -135,7 +137,7 @@ describe("вход из Alfa", () => {
     assert.equal(countAlfaLessonRows(next), 2);
     assert.equal(next.some((x) => x.lessonId === 99), false);
     assert.equal(next.some((x) => x.lessonId === -4), true);
-    assert.equal(next.some((x) => !x.lessonId), false);
+    assert.equal(next.some((x) => !x.lessonId), true);
     const kept = pruneCalendarToAlfaIds(disk, [10, 11], [], [99]);
     assert.equal(kept.some((x) => x.lessonId === 99), true);
     assert.equal(countAlfaLessonRows(kept), 3);
@@ -357,6 +359,34 @@ describe("inbound не сбрасывает курс сайта", () => {
     assert.equal(win.some((x) => x.lessonId === 1), true);
     assert.equal(win.some((x) => x.lessonId === 2), true);
     assert.equal(win.some((x) => x.lessonId === 3), true);
+    const a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    const b = [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
+    assert.equal(a.length, b.length);
+    assert.notEqual(idsChecksum(a), idsChecksum(b));
+    assert.equal(
+      journalIdsReady({ pagesComplete: true, holeN: 0, extraN: 0, diskUniq: 12, censusN: 12, diskRows: 12 }),
+      true,
+    );
+    assert.equal(
+      journalIdsReady({ pagesComplete: true, holeN: 12, extraN: 12, diskUniq: 12, censusN: 12, diskRows: 12 }),
+      false,
+    );
+    assert.equal(
+      journalIdsReady({ pagesComplete: true, holeN: 0, extraN: 0, diskUniq: 12, censusN: 12, diskRows: 13 }),
+      false,
+    );
+    assert.equal(idsChecksum([3, 1, 2]), idsChecksum([1, 2, 3]));
+    assert.equal(
+      journalIdsReady({ pagesComplete: true, holeN: 0, extraN: 0, diskUniq: 3, censusN: 3, diskRows: 3, short: true }),
+      false,
+    );
+    assert.equal(
+      journalIdsReady({ pagesComplete: false, holeN: 0, extraN: 0, diskUniq: 0, censusN: 0, diskRows: 0 }),
+      false,
+    );
+    const noId = pruneCalendarToAlfaIds([{ lessonId: 0, date: "2026-09-01" }, { lessonId: 5, date: "2026-09-01" }], [5], [], [], "2026-08-01", "2026-10-01");
+    assert.equal(noId.some((x) => !x.lessonId), true);
+    assert.equal(keepAlfaProbe(286, 250, true).write, false);
   });
 });
 

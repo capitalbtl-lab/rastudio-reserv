@@ -185,10 +185,10 @@ export function pruneCalendarToAlfaIds<T extends { lessonId?: number; date?: str
   return (disk || []).filter((x) => {
     const lid = Number(x.lessonId) || 0;
     if (lid < 0 || hold.has(lid)) return true;
+    if (!lid) return true;
     const day = lessonDay(x.date);
     if (from && day && day < from) return true;
     if (to && day && day > to) return true;
-    if (!lid) return false;
     return keep.has(lid);
   });
 }
@@ -288,6 +288,38 @@ export function countAlfaLessonRows<T extends { lessonId?: number }>(list: T[] |
 /** Счёт журнала — уникальные lessonId, не строки. Дубли одной записи не extra. */
 export function countAlfaLessonUniq<T extends { lessonId?: number }>(list: T[] | undefined) {
   return uniquePositiveIds((list || []).map((x) => Number(x.lessonId) || 0)).length;
+}
+
+/** Ярлык множества id, не ключ сущности. Расхождение всё равно разбирать по hole/extra. */
+export function idsChecksum(ids: Iterable<number>): string {
+  const list = uniquePositiveIds(ids).slice().sort((a, b) => a - b);
+  let h = 2166136261;
+  const s = list.join(",");
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+/** Готово только id + счёт. Длина без номеров и checksum без счёта — нет. */
+export function journalIdsReady(p: {
+  pagesComplete: boolean;
+  holeN: number;
+  extraN?: number;
+  diskUniq: number;
+  censusN: number;
+  diskRows: number;
+  short?: boolean;
+  allowExtra?: boolean;
+}) {
+  if (!p.pagesComplete) return false;
+  if ((Number(p.holeN) || 0) > 0) return false;
+  if (!p.allowExtra && (Number(p.extraN) || 0) > 0) return false;
+  if (Number(p.diskUniq) !== Number(p.censusN)) return false;
+  if (Number(p.diskRows) !== Number(p.diskUniq)) return false;
+  if (p.short) return false;
+  return true;
 }
 
 export function mergeSeenLessonIds(prev: number[] | undefined, pulled: { lessonId?: number }[]) {

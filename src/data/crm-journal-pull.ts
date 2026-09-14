@@ -18,7 +18,7 @@ import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlap
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
-import { countAlfaLessonUniq, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, windowNewLessonIds, windowGoneLessonIds, windowAlfaKeep } from "./crm-inbound-core";
+import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, windowNewLessonIds, windowGoneLessonIds, windowAlfaKeep, journalIdsReady } from "./crm-inbound-core";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -1004,7 +1004,16 @@ function litePullState() {
   };
 }
 
-function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch: { ok: boolean; err?: string; weak?: boolean; recheck?: boolean }) {
+function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch: {
+  ok: boolean;
+  err?: string;
+  weak?: boolean;
+  recheck?: boolean;
+  recheckDays?: number;
+  censusN?: number;
+  diskUniq?: number;
+  checksum?: string;
+}) {
   const prev = fillOf(branchId, gid);
   const pulled = { ...(prev.pulled || {}) };
   const fail = { ...(prev.fail || {}) };
@@ -1018,7 +1027,7 @@ function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch
       if (patch.weak) weak.add(key);
       else {
         weak.delete(key);
-        if (patch.recheck) rechecked.add(key);
+        if (patch.recheck && !/^w\d+$/.test(key)) rechecked.add(key);
       }
     } else if (patch.err) {
       fail[key] = patch.err;
@@ -1029,7 +1038,27 @@ function stampJournalPeriod(branchId: number, gid: number, keys: string[], patch
   const card = loadGroupCard(branchId, gid);
   if (!card) return null;
   const done = pulledPeriodKeys({ done: card.journalFill?.done, pulled });
-  const next = { ...card, journalFill: { done: [...new Set([...done, ...Object.keys(pulled)])], fail, pulled, weak: [...weak], rechecked: [...rechecked] }, journalAt: at };
+  const next = {
+    ...card,
+    journalFill: {
+      ...card.journalFill,
+      done: [...new Set([...done, ...Object.keys(pulled)])],
+      fail,
+      pulled,
+      weak: [...weak],
+      rechecked: [...rechecked],
+      ...(patch.recheck
+        ? {
+            recheckAt: at,
+            recheckDays: patch.recheckDays,
+            journalCensusN: patch.censusN,
+            journalDiskUniq: patch.diskUniq,
+            journalIdsChecksum: patch.checksum,
+          }
+        : {}),
+    },
+    journalAt: at,
+  };
   saveGroupCard(next);
   return next;
 }
@@ -1057,9 +1086,30 @@ async function pullOneGroup(
   const holeN = (res.hole || []).length;
   const goneN = (res.gone || []).length;
   const pagesComplete = res.pagesComplete !== false && !res.capped;
-  const weak = !ok || !pagesComplete || holeN > 0 || (recheck && goneN > 0);
+  const censusN = Number(res.censusN) || 0;
+  const diskUniq = Number(res.diskUniq) || uniquePositiveIds((res.calendar || []).map((l: { lessonId?: number }) => Number(l.lessonId) || 0)).length;
+  const diskRows = Number(res.diskRows) || countAlfaLessonRows(res.calendar);
+  const ready = res.ready === true || journalIdsReady({
+    pagesComplete,
+    holeN,
+    extraN: goneN,
+    diskUniq,
+    censusN,
+    diskRows,
+    allowExtra: !recheck,
+  });
+  const weak = !ok || !ready;
   const keys = period.keys?.length ? period.keys : [period.key];
-  stampJournalPeriod(g.branchId, g.groupId, keys, { ok, err: ok ? "" : String(res.extra || "Alfa не ответила"), weak, recheck });
+  stampJournalPeriod(g.branchId, g.groupId, keys, {
+    ok,
+    err: ok ? "" : String(res.extra || "Alfa не ответила"),
+    weak,
+    recheck,
+    recheckDays: days,
+    censusN,
+    diskUniq,
+    checksum: String(res.checksum || ""),
+  });
   const added = Math.max(0, n - before);
   const extra = ok
     ? !pagesComplete
@@ -1074,7 +1124,7 @@ async function pullOneGroup(
 export { keepAlfaProbe };
 
 async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "", slow = false, recheckDays = 32) {
-  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingCustomerLessons, recheckCensusDateFrom, studentProtectLessonIds } = await import("./crm-journal-inbound");
+  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingCustomerLessons, recheckCensusWindow, studentProtectLessonIds } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
   const mark = (disk: number, alfa: number, probedOk: boolean) => {
@@ -1086,7 +1136,9 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const short = lessonsStampShort({ ...preview, lessonsAlfaAt: probedOk ? preview.lessonsAlfaAt || atOf() : preview.lessonsAlfaAt });
     const extra = lessonsStampExtra({ ...preview, lessonsAlfaAt: probedOk ? preview.lessonsAlfaAt || atOf() : preview.lessonsAlfaAt });
     const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
-    const closed = Boolean(probedOk && held.write && !short && !extra && !holeApproved);
+    const rows = countAlfaLessonRows(loadCustomerCalendar(cid));
+    const uniq = countAlfaLessonUniq(loadCustomerCalendar(cid));
+    const closed = Boolean(probedOk && held.write && !short && !extra && !holeApproved && rows === uniq);
     const at = atOf();
     stampCustomerSync(cid, {
       lessonsDisk: disk,
@@ -1153,9 +1205,9 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
         disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
       }
-      if (lessonsCountShort(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0)) {
-      const deadline = slow ? Date.now() + 10 * 60 * 1000 : 0;
-      for (let i = 0; !deadline ? i < 6 : Date.now() < deadline; i += 1) {
+      if (slow && lessonsCountShort(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0)) {
+      const deadline = Date.now() + 10 * 60 * 1000;
+      for (let i = 0; Date.now() < deadline; i += 1) {
         const res = await inboundCustomerLessons(branchId, cid, {
           take: 8,
           deep: 0,
@@ -1206,9 +1258,11 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     }
     try {
     const sync0 = customerSyncOf(cid);
-    const windowFrom = recheckCensusDateFrom(sync0, recheckDays);
+    const win = recheckCensusWindow(sync0, recheckDays);
+    const windowFrom = win.from;
+    const windowTo = win.to;
     const censusFrom = windowFrom || from;
-    const census = await censusCustomerLessonIds(branchId, cid, censusFrom ? { dateFrom: censusFrom } : {}).catch(() => ({ ids: [] as number[], ok: false as const }));
+    const census = await censusCustomerLessonIds(branchId, cid, censusFrom ? { dateFrom: censusFrom, ...(windowTo ? { dateTo: windowTo } : {}) } : {}).catch(() => ({ ids: [] as number[], ok: false as const }));
     disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
     const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
     if (!census.ok) {
@@ -1216,7 +1270,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     } else {
       const haveBefore = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
       const новые = windowFrom ? windowNewLessonIds(census.ids, haveBefore) : [];
-      const applied = applyCustomerLessonCensus(cid, census.ids, true, windowFrom);
+      const applied = applyCustomerLessonCensus(cid, census.ids, true, windowFrom, windowTo);
       if (!applied.ok) {
         mark(disk, 0, false);
       } else {
