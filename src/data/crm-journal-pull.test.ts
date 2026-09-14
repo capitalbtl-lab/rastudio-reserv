@@ -65,6 +65,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Загрузить по одному/);
     assert.match(ui, /Медленный автодобор/);
     assert.match(ui, /people-slow/);
+    assert.match(ui, /peopleQueue\(people, "students", false\)/);
     assert.match(ui, /HINT\.loadOneGroups/);
     assert.match(ui, /Найти группу/);
     assert.match(ui, /Требуют загрузки данных/);

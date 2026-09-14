@@ -78,6 +78,19 @@ describe("фон истории из Alfa", () => {
     );
     assert.equal(peopleJobFinished(people[3], "students"), false);
     assert.equal(peopleJobFinished({ cid: 6, branchId: 2, name: "Е", journal: false, pays: false, dups: true }, "students"), true);
+    assert.deepEqual(
+      peopleJobQueue(
+        [
+          { cid: 699, branchId: 1, name: "розовая", journal: false, pays: false },
+          { cid: 5115, branchId: 1, name: "жёлтая", journal: false, pays: false, short: true },
+          { cid: 2124, branchId: 1, name: "справа", journal: true, pays: false },
+          { cid: 17, branchId: 1, name: "галка", journal: false, pays: false, short: true, holeApproved: true },
+        ],
+        "students",
+        false,
+      ).map((x) => x.cid),
+      [699, 5115],
+    );
     assert.equal(peopleJobFinished({ cid: 2124, branchId: 1, name: "Г", journal: false, pays: false, short: true, holeApproved: true }, "students"), true);
     assert.equal(peopleJobFinished({ cid: 2124, branchId: 1, name: "Г", journal: false, pays: false, short: true }, "students"), false);
     assert.deepEqual(
@@ -137,7 +150,8 @@ describe("фон истории из Alfa", () => {
     const jobSrc = readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8");
     assert.match(jobSrc, /people-slow/);
     assert.match(jobSrc, /slowFill: mode === "people-slow"/);
-    assert.match(jobSrc, /медленный добор, до 10 мин/);
+    assert.match(jobSrc, /mode !== "people-slow"/);
+    assert.match(jobSrc, /peopleJobQueue\(people, "students", false\)/);
     assert.match(jobSrc, /openRetry/);
     assert.match(jobSrc, /перепись не закрыта, ещё этот/);
     assert.equal(JOB_WAIT_CAP, 8);

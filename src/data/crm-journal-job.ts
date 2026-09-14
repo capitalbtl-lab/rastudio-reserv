@@ -163,7 +163,7 @@ function emptyMsg(mode: JournalJobMode, recheck: boolean) {
     return recheck || mode === "people-recheck"
       ? "Справа никого перепроверять. Сначала красная «Загрузить по одному»."
       : mode === "people-slow"
-        ? "Некого добирать. Жёлтых слева нет — либо диск догнал, либо галка."
+        ? "Некого добирать. Слева пусто — ни розовых, ни жёлтых."
       : "Слева пусто. Нажмите «Перепроверить по одному» — пройдёт тех, кто справа.";
   }
   if (mode === "groups") return "Слева пусто. Нажмите «Перепроверить по одному» — пройдёт тех, кто справа.";
@@ -195,7 +195,7 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
       .filter((r) => r.cid);
     const study = opts.study === "2" ? "2" : "1";
     const kind = opts.kind === "balance" ? "balance" : "students";
-    if (given.length && mode !== "audit") {
+    if (given.length && mode !== "audit" && mode !== "people-slow") {
       if (kind === "balance" && mode === "people") {
         const side = journalPeopleSide(study, { skipLeads: true });
         const by = new Map((side.people || []).map((p) => [p.cid, p as PeopleJobRow]));
@@ -222,8 +222,8 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
       return queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
     }
     if (mode === "people-slow") {
-      const hole = people.filter((r) => r.short && !r.holeApproved);
-      return hole.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
+      const queue = peopleJobQueue(people, "students", false);
+      return queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
     }
     const queue = peopleJobQueue(people, kind, mode === "people-recheck" || Boolean(opts.recheck));
     return queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
