@@ -124,6 +124,14 @@ function LoadGuideModal({ tab, onClose }: { tab: HistLoadTab; onClose: () => voi
             Закрыть
           </button>
         </div>
+        <section className="mt-4 rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200">
+          <h4 className="text-[0.72rem] font-bold uppercase tracking-wide text-amber-900">Простыми словами</h4>
+          <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[0.92rem] leading-snug">
+            {g.plain.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        </section>
         {g.alfa.map((a) => (
           <section key={a.api} className="mt-4 rounded-xl bg-zinc-50 p-3 ring-1 ring-black/8">
             <h4 className="text-[0.72rem] font-bold uppercase tracking-wide text-zinc-500">Из Alfa</h4>
@@ -158,7 +166,7 @@ function LoadGuideBtn({ tab, onOpen }: { tab: HistLoadTab; onOpen: (t: HistLoadT
   return (
     <button
       type="button"
-      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-[0.78rem] font-bold text-white hover:bg-zinc-700"
+      className="inline-flex h-[6px] w-[6px] shrink-0 items-center justify-center rounded-full bg-black/45 p-1.5 text-[5px] font-bold leading-none text-white box-content hover:bg-black/70"
       aria-label={`Что загружает ${STEP_LOAD[tab].title}`}
       title="Что загружаем и куда"
       onClick={(e) => {
