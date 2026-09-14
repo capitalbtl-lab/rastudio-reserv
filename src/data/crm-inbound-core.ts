@@ -189,6 +189,72 @@ export function pruneCalendarToAlfaIds<T extends { lessonId?: number; date?: str
   });
 }
 
+export type RecheckDays = 32 | 92 | 182;
+
+export function clampRecheckDays(raw: unknown): RecheckDays {
+  const n = Number(raw) || 0;
+  if (n === 92 || n === 182) return n;
+  return 32;
+}
+
+/** Id переписи окна, которых ещё нет на диске. */
+export function windowNewLessonIds(censusIds: Iterable<number>, have: Iterable<number>): number[] {
+  const onDisk = new Set([...have].map(Number).filter((n) => n > 0));
+  const out: number[] = [];
+  const seen = new Set<number>();
+  for (const n of censusIds) {
+    const id = Number(n) || 0;
+    if (id <= 0 || onDisk.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+/** Id, которые prune окна снял: были на диске, после нет. */
+export function windowGoneLessonIds(haveBefore: Iterable<number>, haveAfter: Iterable<number>): number[] {
+  const after = new Set([...haveAfter].map(Number).filter((n) => n > 0));
+  const out: number[] = [];
+  const seen = new Set<number>();
+  for (const n of haveBefore) {
+    const id = Number(n) || 0;
+    if (id <= 0 || after.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+export function windowAlfaKeep(keep: number, newN: number, goneN: number) {
+  return Math.max(0, (Number(keep) || 0) + Math.max(0, Number(newN) || 0) - Math.max(0, Number(goneN) || 0));
+}
+
+/** Дырки и лишние по lessonId. protect — hold и id с group-card. */
+export function lessonsSetGap(have: Iterable<number>, seen: Iterable<number>, protect: Iterable<number> = []) {
+  const H = new Set<number>();
+  const S = new Set<number>();
+  const P = new Set<number>();
+  for (const n of have) {
+    const id = Number(n) || 0;
+    if (id > 0) H.add(id);
+  }
+  for (const n of seen) {
+    const id = Number(n) || 0;
+    if (id > 0) S.add(id);
+  }
+  for (const n of protect) {
+    const id = Number(n) || 0;
+    if (id > 0) P.add(id);
+  }
+  const hole: number[] = [];
+  const extra: number[] = [];
+  for (const id of S) if (!H.has(id)) hole.push(id);
+  if (S.size > 0) {
+    for (const id of H) if (!S.has(id) && !P.has(id)) extra.push(id);
+  }
+  return { hole, extra, seenComplete: S.size > 0 };
+}
+
 export function canFanOutToCalendar<T extends { lessonId?: number; date?: string; from?: string }>(prev: T[] | undefined, lesson: T) {
   const lid = Number(lesson.lessonId) || 0;
   if (!lid) return false;

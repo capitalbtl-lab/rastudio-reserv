@@ -18,6 +18,9 @@ import {
   lessonsCountExtra,
   lessonsJournalReady,
   wasLessonGreen,
+  lessonsStampShort,
+  lessonsStampExtra,
+  stampLessonSetGap,
   tryLockStudentAlfa,
   unlockStudentAlfa,
   ownsStudentAlfa,
@@ -87,6 +90,12 @@ describe("штамп входа ученика", () => {
     assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 495 }), false);
     assert.equal(wasLessonGreen({ lessonsAlfaAt: "x", lessonsAlfa: 491, lessonsDisk: 400 }), false);
     assert.equal(wasLessonGreen({}), false);
+    assert.equal(lessonsStampShort({ lessonsAlfaAt: "x", lessonsAlfa: 2, lessonsDisk: 2, lessonsHoleN: 1 }), true);
+    assert.equal(lessonsStampExtra({ lessonsAlfaAt: "x", lessonsAlfa: 2, lessonsDisk: 2, lessonsSeenIds: [1, 2], lessonsExtraN: 1 }), true);
+    assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 2, lessonsDisk: 2, lessonsHoleN: 1 }), false);
+    assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 2, lessonsDisk: 2, lessonsSeenIds: [1, 2], lessonsHoleN: 0, lessonsExtraN: 0 }), true);
+    assert.deepEqual(stampLessonSetGap({ lessonsSeenIds: [1, 2] }, [1, 3], []), { lessonsHoleN: 1, lessonsExtraN: 1 });
+    assert.deepEqual(stampLessonSetGap({ lessonsSeenIds: [1, 2] }, [1, 2, 9], [9]), { lessonsHoleN: 0, lessonsExtraN: 0 });
   });
 
   it("штамп дырки: ключ ISO, пустая строка снимает, проба не пишет", () => {

@@ -143,6 +143,7 @@ export type StartJournalJobOpts = {
   study?: "1" | "2";
   recheck?: boolean;
   dateFrom?: string;
+  recheckDays?: number;
   grain?: Grain;
   school?: string;
   groupId?: number;
@@ -357,6 +358,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     study: opts.study === "2" ? "2" : "1",
     recheck,
     dateFrom: String(opts.dateFrom || "").trim() || "2015-01-01",
+    recheckDays: opts.recheckDays === 92 || opts.recheckDays === 182 ? opts.recheckDays : 32,
     grain: opts.grain === "half" || opts.grain === "year" ? opts.grain : "quarter",
     school: String(opts.school || opts.filter || ""),
     groupId: Number(opts.groupId) || Number(first?.groupId) || 0,
@@ -604,6 +606,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       grain: job.grain,
       recheck: job.recheck || mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck" || (mode === "group-one" && !item.periodKey),
       dateFrom: job.dateFrom,
+      recheckDays: job.recheckDays,
       probe: mode === "probe",
       school: job.school || job.filter,
       name: item.name,

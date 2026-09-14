@@ -3087,6 +3087,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
         customerId: Number((data as { customerId?: number }).customerId) || 0,
         probe: Boolean((data as { probe?: boolean }).probe),
         dateFrom: String((data as { dateFrom?: string }).dateFrom || "").trim(),
+        recheckDays: Number((data as { recheckDays?: number }).recheckDays) || 0,
         jobMode: String((data as { jobMode?: string }).jobMode || ""),
         take: Number((data as { take?: number }).take) || 0,
         name: String((data as { name?: string }).name || ""),

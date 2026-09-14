@@ -10,7 +10,7 @@ import { listAdminSlots } from "./alfacrm-schedule";
 import { loadScheduleMap } from "./schedule-map";
 import { listDossierCrm, findDossier, dossiersInGroup, overlayAdminGroups } from "./dossiers";
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
-import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort, lessonsCountExtra, waitLockStudentAlfa, unlockStudentAlfa } from "./crm-customer-sync";
+import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort, lessonsCountExtra, lessonsStampShort, lessonsStampExtra, stampLessonSetGap, waitLockStudentAlfa, unlockStudentAlfa } from "./crm-customer-sync";
 import { payCustomerFilled, payFillPending, payFillScanned, payFillEmpty, clearPayFill, paysOf } from "./crm-pay";
 import { balanceOf } from "./crm-pay-core";
 import { writeoffSumOf } from "./crm-ledger-core";
@@ -18,7 +18,7 @@ import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlap
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
-import { countAlfaLessonUniq, keepAlfaProbe, uniquePositiveIds } from "./crm-inbound-core";
+import { countAlfaLessonUniq, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, windowNewLessonIds, windowGoneLessonIds, windowAlfaKeep } from "./crm-inbound-core";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -775,8 +775,8 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       const probed = Boolean(sync.lessonsAlfaAt);
       const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
       const diskN = Number(sync.lessonsDisk) || 0;
-      const short = lessonsCountShort(diskN, alfaN, probed);
-      const dups = lessonsCountExtra(diskN, alfaN, probed);
+      const short = lessonsStampShort(sync);
+      const dups = lessonsStampExtra(sync);
       const journal = lessonsJournalReady(sync);
       const pays = payCustomerFilled(p.cid);
       const paysScanned = payFillScanned(p.cid);
@@ -876,8 +876,8 @@ export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: 
     const probed = Boolean(sync.lessonsAlfaAt);
     const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
     const diskN = Number(sync.lessonsDisk) || 0;
-    const short = lessonsCountShort(diskN, alfaN, probed);
-    const dups = lessonsCountExtra(diskN, alfaN, probed);
+    const short = lessonsStampShort(sync);
+    const dups = lessonsStampExtra(sync);
     const journal = lessonsJournalReady(sync);
     const pays = payCustomerFilled(p.cid);
     return {
@@ -1069,21 +1069,25 @@ async function pullOneGroup(
 
 export { keepAlfaProbe };
 
-async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "", slow = false) {
-  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingCustomerLessons, recheckCensusDateFrom } = await import("./crm-journal-inbound");
+async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "", slow = false, recheckDays = 32) {
+  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingCustomerLessons, recheckCensusDateFrom, studentProtectLessonIds } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
   const mark = (disk: number, alfa: number, probedOk: boolean) => {
     const keep = Number(customerSyncOf(cid).lessonsAlfa) || 0;
     const held = keepAlfaProbe(keep, alfa, probedOk);
-    const short = lessonsCountShort(disk, held.alfa, held.probed);
-    const extra = lessonsCountExtra(disk, held.alfa, held.probed);
+    const have = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
+    const gap = stampLessonSetGap({ ...customerSyncOf(cid), ...(held.write ? { lessonsAlfa: held.alfa } : {}) }, have, studentProtectLessonIds(cid));
+    const preview = { ...customerSyncOf(cid), lessonsDisk: disk, ...(held.write ? { lessonsAlfa: held.alfa, lessonsAlfaAt: customerSyncOf(cid).lessonsAlfaAt || "x" } : {}), ...gap };
+    const short = lessonsStampShort({ ...preview, lessonsAlfaAt: probedOk ? preview.lessonsAlfaAt || atOf() : preview.lessonsAlfaAt });
+    const extra = lessonsStampExtra({ ...preview, lessonsAlfaAt: probedOk ? preview.lessonsAlfaAt || atOf() : preview.lessonsAlfaAt });
     const holeApproved = Boolean(customerSyncOf(cid).journalHoleApprovedAt);
     const closed = Boolean(probedOk && held.write && !short && !extra && !holeApproved);
     const at = atOf();
     stampCustomerSync(cid, {
       lessonsDisk: disk,
       lessonsAt: at,
+      ...gap,
       ...(held.write ? { lessonsAlfa: held.alfa, lessonsAlfaAt: at } : {}),
       ...(closed ? { lessonsFull: true, lessonsAttend: true } : { lessonsFull: false }),
       ...(balance
@@ -1198,7 +1202,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     }
     try {
     const sync0 = customerSyncOf(cid);
-    const windowFrom = recheckCensusDateFrom(sync0);
+    const windowFrom = recheckCensusDateFrom(sync0, recheckDays);
     const censusFrom = windowFrom || from;
     const census = await censusCustomerLessonIds(branchId, cid, censusFrom ? { dateFrom: censusFrom } : {}).catch(() => ({ ids: [] as number[], ok: false as const }));
     disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
@@ -1206,11 +1210,40 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     if (!census.ok) {
       mark(disk, 0, false);
     } else {
+      const haveBefore = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
+      const новые = windowFrom ? windowNewLessonIds(census.ids, haveBefore) : [];
       const applied = applyCustomerLessonCensus(cid, census.ids, true, windowFrom);
       if (!applied.ok) {
         mark(disk, 0, false);
       } else {
       disk = applied.disk;
+      const haveAfter = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
+      const gone = windowFrom ? windowGoneLessonIds(haveBefore, haveAfter) : [];
+      const keep0 = Number(customerSyncOf(cid).lessonsAlfa) || 0;
+      let liveAlfa = windowFrom ? (holeApproved ? keep0 : windowAlfaKeep(keep0, новые.length, gone.length)) : applied.alfa;
+      if (windowFrom && !holeApproved) {
+        stampCustomerSync(cid, { lessonsAlfa: liveAlfa, lessonsAlfaAt: atOf() });
+      }
+      if (новые.length && !holeApproved) {
+        const gap = await inboundMissingCustomerLessons(branchId, cid, новые, { force: true, take: 50 }).catch(() => ({ count: 0, dropped: [] as number[] }));
+        lessons += Number(gap.count) || 0;
+        seated += Number(gap.count) || 0;
+        droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
+        disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
+        const phantom = windowNewLessonIds(gap.dropped || [], []);
+        const dropNew = новые.filter((id) => phantom.includes(id)).length;
+        if (dropNew) {
+          liveAlfa = windowAlfaKeep(keep0, новые.length - dropNew, gone.length);
+          stampCustomerSync(cid, { lessonsAlfa: liveAlfa, lessonsAlfaAt: atOf() });
+        }
+        const seatedHave = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
+        const seen0 = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
+        const seenNext = uniquePositiveIds([...seen0.filter((id) => !gone.includes(id)), ...новые.filter((id) => seatedHave.includes(id) || !phantom.includes(id))]);
+        stampCustomerSync(cid, { lessonsSeenIds: seenNext });
+      } else if (windowFrom && !holeApproved) {
+        const seen0 = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
+        stampCustomerSync(cid, { lessonsSeenIds: uniquePositiveIds([...seen0.filter((id) => !gone.includes(id)), ...новые]) });
+      } else if (!windowFrom) {
       const alfaN = applied.alfa;
       const short = lessonsCountShort(disk, alfaN, true);
       const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
@@ -1223,7 +1256,9 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
         }
       }
-      mark(disk, alfaN, true);
+      liveAlfa = Number(customerSyncOf(cid).lessonsAlfa) || alfaN;
+      }
+      mark(disk, Number(customerSyncOf(cid).lessonsAlfa) || liveAlfa, true);
       }
     }
     } finally {
@@ -1265,8 +1300,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   const diskN = Number(sync.lessonsDisk) || lessons;
   const alfaN = Number(sync.lessonsAlfa) || 0;
   const probed = Boolean(sync.lessonsAlfaAt);
-  const short = lessonsCountShort(diskN, alfaN, probed);
-  const dups = lessonsCountExtra(diskN, alfaN, probed);
+  const short = lessonsStampShort(sync);
+  const dups = lessonsStampExtra(sync);
   return {
     cid,
     lessons: diskN,
@@ -1303,6 +1338,7 @@ export async function journalPull(opts: {
   customerId?: number;
   probe?: boolean;
   dateFrom?: string;
+  recheckDays?: number;
   jobMode?: string;
   take?: number;
   name?: string;
@@ -1349,6 +1385,7 @@ export async function journalPull(opts: {
       study: opts.study === "1" || opts.study === "2" ? opts.study : "1",
       recheck: Boolean(opts.recheck),
       dateFrom: opts.dateFrom || "",
+      recheckDays: opts.recheckDays,
       grain: opts.grain,
       school: opts.school || "",
       groupId: opts.groupId,
@@ -1373,7 +1410,7 @@ export async function journalPull(opts: {
     const sync = customerSyncOf(cid);
     const holeApproved = Boolean(sync.journalHoleApprovedAt);
     const probed = Boolean(sync.lessonsAlfaAt);
-    const short = lessonsCountShort(Number(sync.lessonsDisk) || 0, probed ? Number(sync.lessonsAlfa) || 0 : 0, probed);
+    const short = lessonsStampShort(sync);
     return {
       ok: true as const,
       extra: holeApproved ? `№${cid}: дырка принята` : `№${cid}: штамп снят`,
@@ -2096,7 +2133,7 @@ export async function journalPull(opts: {
     }
     const balance = kind === "balance";
     if (balance && wanted && !payCustomerFilled(wanted)) clearPayFill(wanted);
-    const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck), String(opts.dateFrom || "").trim(), Boolean(opts.slowFill));
+    const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck), String(opts.dateFrom || "").trim(), Boolean(opts.slowFill), clampRecheckDays(opts.recheckDays));
     if (row.blocked) {
       return {
         ok: false as const,

@@ -3,7 +3,7 @@ import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
-import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe } from "./crm-inbound-core";
+import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe, clampRecheckDays } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
@@ -41,6 +41,7 @@ import {
   ownsStudentAlfa,
   lessonsCountShort,
   wasLessonGreen,
+  stampLessonSetGap,
 } from "./crm-customer-sync";
 
 function hm(raw?: string) {
@@ -70,9 +71,9 @@ function ymd(raw?: string) {
   return toAlfaLessonDate(raw);
 }
 
-export function recheckCensusDateFrom(sync: Parameters<typeof wasLessonGreen>[0]) {
+export function recheckCensusDateFrom(sync: Parameters<typeof wasLessonGreen>[0], days?: unknown) {
   if (!wasLessonGreen(sync)) return "";
-  return ymd(ruShift(-32));
+  return ymd(ruShift(-clampRecheckDays(days)));
 }
 
 function ruOf(d: Date) {
@@ -474,6 +475,11 @@ function lessonIdsOnStudentGroups(cid: number) {
   return [...ids];
 }
 
+export function studentProtectLessonIds(cid: number) {
+  const hold = pendingExportIds(["lesson.update", "lesson.create"]);
+  return uniquePositiveIds([...hold, ...lessonIdsOnStudentGroups(cid)]);
+}
+
 /** Жёлтая «С нуля»: календарь с диска. Счёт Alfa снимаем — следующая проба пишет живой. В очередь не пишет. */
 export function resetStudentLessonDisk(customerId: number) {
   const id = Number(customerId) || 0;
@@ -489,6 +495,8 @@ export function resetStudentLessonDisk(customerId: number) {
     lessonsFull: false,
     lessonsAttend: false,
     lessonsSeenIds: [],
+    lessonsHoleN: 0,
+    lessonsExtraN: 0,
     lessonsRecheckAt: "",
     lessonsAlfaAt: "",
     lessonFill: undefined,
@@ -515,8 +523,12 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
   const heldAlfa = keepAlfaProbe(keepAlfa, uniq.length, true, !keepBefore);
   const alfa = keepBefore ? keepAlfa || uniq.length : heldAlfa.alfa;
   const holeApproved = Boolean(customerSyncOf(id).journalHoleApprovedAt);
+  const gap = keepBefore
+    ? {}
+    : stampLessonSetGap({ lessonsSeenIds: uniq }, uniquePositiveIds(next.map((x) => Number(x.lessonId) || 0)), [...hold, ...groupKeep]);
   stampCustomerSync(id, {
     lessonsDisk: disk,
+    ...gap,
     ...(keepBefore
       ? {}
       : {
@@ -801,12 +813,14 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const walked = Boolean(cur.done) && !aborted;
     const fillDone = inboundFillClosed(diskNow, keep, walked, aborted);
     const wasFull = Boolean(customerSyncOf(id).lessonsFull);
+    const gap = stampLessonSetGap(customerSyncOf(id), uniquePositiveIds(next.map((x) => Number(x.lessonId) || 0)), studentProtectLessonIds(id));
     stampCustomerSync(id, {
       lessonsAt: new Date().toISOString(),
       lessonsFull: homeLite ? false : wantFull ? fillDone : wasFull,
       lessonsAttend: homeLite ? customerSyncOf(id).lessonsAttend : customerSyncOf(id).lessonsAttend || fillDone,
       lessonFill: fillDone || !wantFull ? undefined : cur,
       lessonsDisk: diskNow,
+      ...gap,
     });
     if (wantFull && !fillDone && opts?.continueLater === true && !monthly) {
       setTimeout(() => {

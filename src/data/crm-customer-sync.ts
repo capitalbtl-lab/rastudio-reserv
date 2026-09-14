@@ -2,7 +2,7 @@
 
 import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { bumpAlfaFromLanded } from "./crm-inbound-core.ts";
+import { bumpAlfaFromLanded, lessonsSetGap } from "./crm-inbound-core.ts";
 
 export const CUSTOMER_SYNC_TTL_MS = 10 * 60 * 1000;
 export const LESSON_INBOUND_RUN = 8;
@@ -31,6 +31,10 @@ export type CustomerSyncStamp = {
   lessonsDisk?: number;
   /** Номера уроков, которые видели в Alfa за этот проход перепроверки. */
   lessonsSeenIds?: number[];
+  /** Сколько id переписи нет на диске. Решение колонки — множества, не total. */
+  lessonsHoleN?: number;
+  /** Сколько id на диске нет в переписи (без hold/группы). */
+  lessonsExtraN?: number;
 };
 
 type Store = { at: string; byId: Record<string, CustomerSyncStamp> };
@@ -136,13 +140,40 @@ export function lessonsCountExtra(disk: number, alfa: number, probed: boolean) {
   return Boolean(probed) && Number(disk) > Number(alfa);
 }
 
-/** Счёт сошёлся — журнал готов. Диск больше Alfa — не готово. */
+export function stampLessonSetGap(sync: CustomerSyncStamp, have: Iterable<number>, protect: Iterable<number> = []): Pick<CustomerSyncStamp, "lessonsHoleN" | "lessonsExtraN"> {
+  const seen = sync.lessonsSeenIds || [];
+  if (!seen.length) return {};
+  const gap = lessonsSetGap(have, seen, protect);
+  return { lessonsHoleN: gap.hole.length, lessonsExtraN: gap.extra.length };
+}
+
+/** Слева: дырка по id, иначе запас по счётчику (нет seen). */
+export function lessonsStampShort(sync: CustomerSyncStamp) {
+  const probed = Boolean(sync.lessonsAlfaAt);
+  if (!probed) return false;
+  if (Number(sync.lessonsHoleN) > 0) return true;
+  const alfaN = Number(sync.lessonsAlfa) || 0;
+  const diskN = Number(sync.lessonsDisk) || 0;
+  return lessonsCountShort(diskN, alfaN, true);
+}
+
+export function lessonsStampExtra(sync: CustomerSyncStamp) {
+  const probed = Boolean(sync.lessonsAlfaAt);
+  if (!probed) return false;
+  const seenN = (sync.lessonsSeenIds || []).length;
+  if (seenN > 0 && sync.lessonsExtraN != null) return Number(sync.lessonsExtraN) > 0;
+  const alfaN = Number(sync.lessonsAlfa) || 0;
+  const diskN = Number(sync.lessonsDisk) || 0;
+  return lessonsCountExtra(diskN, alfaN, true);
+}
+
+/** Счёт сошёлся — журнал готов. Диск больше Alfa — не готово. Дырка по id важнее равенства чисел. */
 export function lessonsJournalReady(sync: CustomerSyncStamp) {
   const probed = Boolean(sync.lessonsAlfaAt);
   const alfaN = probed ? Number(sync.lessonsAlfa) || 0 : 0;
   const diskN = Number(sync.lessonsDisk) || 0;
-  if (lessonsCountShort(diskN, alfaN, probed)) return false;
-  if (lessonsCountExtra(diskN, alfaN, probed)) return false;
+  if (lessonsStampShort(sync)) return false;
+  if (lessonsStampExtra(sync)) return false;
   if (sync.lessonsFull && sync.lessonsAttend) return !probed || diskN === alfaN;
   return probed && diskN === alfaN;
 }
@@ -152,7 +183,8 @@ export function wasLessonGreen(sync: CustomerSyncStamp) {
   const probed = Boolean(sync.lessonsAlfaAt);
   const alfa = Number(sync.lessonsAlfa) || 0;
   const disk = Number(sync.lessonsDisk) || 0;
-  if (lessonsCountExtra(disk, alfa, probed)) return false;
+  if (lessonsStampExtra(sync)) return false;
+  if (lessonsStampShort(sync)) return false;
   if (sync.lessonsRecheckAt) return true;
   if (sync.lessonsFull) return true;
   return probed && alfa > 0 && disk === alfa;

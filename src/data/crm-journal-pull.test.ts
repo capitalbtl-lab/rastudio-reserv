@@ -210,6 +210,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /onGrain/);
     assert.match(ui, /Перепроверить по одному/);
     assert.match(ui, /HINT\.recheckOnePeople/);
+    assert.match(ui, /RecheckDaysSelect/);
+    assert.match(ui, /HINT\.recheckWindow/);
     assert.match(ui, /HINT\.recheckOneGroups/);
     assert.match(ui, /HINT\.recheckOneMoney/);
     assert.match(ui, /recheckPeople\("students", peopleStudy, true\)/);
@@ -365,11 +367,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /!short && !dups && !holeApproved/);
     assert.doesNotMatch(rec, /if \(extra\)/);
     assert.doesNotMatch(rec, /inboundCustomerLessons\(/);
-    assert.match(rec, /short && !holeApproved/);
-    assert.doesNotMatch(rec, /windowFrom && !holeApproved/);
-    assert.doesNotMatch(rec, /extraIds/);
-    assert.doesNotMatch(rec, /alfaN \+ bump/);
-    assert.match(rec, /mark\(disk, alfaN, true\)/);
+    assert.match(rec, /recheckCensusDateFrom\(sync0, recheckDays\)/);
+    assert.match(rec, /windowNewLessonIds/);
+    assert.match(rec, /windowAlfaKeep/);
+    assert.match(rec, /новые\.length && !holeApproved/);
+    assert.match(rec, /mark\(disk, Number\(customerSyncOf\(cid\)\.lessonsAlfa\) \|\| liveAlfa, true\)/);
     assert.match(rec, /inboundMissingCustomerLessons/);
     assert.match(pull, /!short && !extra && !holeApproved/);
     assert.match(rec, /censusFrom \? \{ dateFrom: censusFrom \} : \{\}/);

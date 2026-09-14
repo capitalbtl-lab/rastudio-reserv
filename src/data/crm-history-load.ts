@@ -12,6 +12,7 @@ export type HistoryLoadSpec = {
   grain?: "quarter" | "half" | "year";
   recheck?: boolean;
   dateFrom?: string;
+  recheckDays?: number;
   probe?: boolean;
   school?: string;
   name?: string;
@@ -48,6 +49,7 @@ export async function historyLoadOne(spec: HistoryLoadSpec): Promise<HistoryLoad
     grain: spec.grain,
     recheck: Boolean(spec.recheck),
     dateFrom: spec.dateFrom,
+    recheckDays: spec.recheckDays,
     probe: Boolean(spec.probe),
     school: spec.school,
     name: spec.name,

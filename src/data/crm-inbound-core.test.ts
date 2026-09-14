@@ -20,6 +20,11 @@ import {
   inboundFillClosed,
   keepAlfaProbe,
   bumpAlfaFromLanded,
+  clampRecheckDays,
+  windowNewLessonIds,
+  windowGoneLessonIds,
+  windowAlfaKeep,
+  lessonsSetGap,
 } from "./crm-inbound-core.ts";
 import { slotActiveToday, slotOnPublicSchedule, mergeStatusPublish } from "./group-status.ts";
 
@@ -316,6 +321,23 @@ describe("inbound не сбрасывает курс сайта", () => {
     const m = mergeInboundSiteFields(alfa114, { ...disk, courseId: "", path: "" }, { hasAssign: true });
     assert.equal(m.keepSite, true);
     assert.equal(m.schoolId, "/robototehnika-v-kolomne");
+  });
+
+  it("синяя: новые и ушедшие id, keep не из длины окна", () => {
+    assert.equal(clampRecheckDays(undefined), 32);
+    assert.equal(clampRecheckDays(92), 92);
+    assert.equal(clampRecheckDays(182), 182);
+    assert.equal(clampRecheckDays(7), 32);
+    assert.deepEqual(windowNewLessonIds([1, 2, 11], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), [11]);
+    assert.deepEqual(windowGoneLessonIds([1, 2, 3], [1, 2]), [3]);
+    assert.equal(windowAlfaKeep(10, 1, 0), 11);
+    assert.equal(windowAlfaKeep(10, 0, 1), 9);
+    assert.equal(windowAlfaKeep(10, 80, 0), 90);
+    assert.notEqual(windowAlfaKeep(10, 1, 0), 4);
+    const gap = lessonsSetGap([1, 3], [1, 2], []);
+    assert.deepEqual(gap.hole, [2]);
+    assert.deepEqual(gap.extra, [3]);
+    assert.equal(lessonsSetGap([1, 2, 9], [1, 2], [9]).extra.length, 0);
   });
 });
 

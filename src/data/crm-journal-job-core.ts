@@ -76,6 +76,7 @@ export type JournalJob = {
   study: "1" | "2";
   recheck: boolean;
   dateFrom: string;
+  recheckDays: number;
   grain: "quarter" | "half" | "year";
   school: string;
   groupId: number;
@@ -106,6 +107,7 @@ export function emptyJournalJob(): JournalJob {
     study: "1",
     recheck: false,
     dateFrom: "",
+    recheckDays: 32,
     grain: "quarter",
     school: "",
     groupId: 0,

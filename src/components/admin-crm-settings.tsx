@@ -188,10 +188,11 @@ const HINT = {
   rosterWho: "Кто считается активным после состава. В живых группах на шаг 2 едут и ученики, и лиды — календарь один. Галка «лиды» на состав: если снять, шаг 1 их не подчёркивает, шаг 2 всё равно качает журнал по cgi. «Архив в живой группе» оставляет тех, кто ходит, хотя карточка архивная. «Был на занятии» сужает набор, если журнал уже на диске. Касса и сверка лидов не берут, пока is_study не станет 1.",
   ungrouped: "Клиенты Alfa без живой группы: не «сейчас ходят» и не архив. Красная качает только их календарь, по одному, пауза 5 с. Состав cgi не спрашивает — группы нет. Не выдумывает groupId. В Alfa не пишет.",
   loadOnePeople: "Красная кнопка идёт по ученикам слева сверху вниз, строго по одному. Сначала спрашивает Alfa, сколько занятий в журнале человека. Если на нашем диске уже столько же — качку пропускает и переносит карточку вправо, в «загрузка завершена». Если в Alfa занятий больше — дописывает недостающие на диск и не создаёт дубли по номеру урока. Между людьми пауза пять секунд, чтобы Alfa не отшила пачкой запросов. Насколько далеко в прошлое смотреть, задаёт список «годы» справа от кнопки. «Стоп» прерывает очередь после текущего человека. В Alfa ничего не записывается и не удаляется — это только чтение журнала на сайт. Жёлтой карточке «в Alfa больше» часто нужно окно «с начала · 2015» или отдельная кнопка «Загрузить всю историю».",
-  years: "По умолчанию «С начала · 2015» — вся история, как сверка счёта. «7 лет», «3 года» и «1 год» короче, только если человек ходит недавно. Действует на красную, «Добрать» и синюю, пока счёт ещё не сходился. Уже зелёным (или диск ≥ Alfa) синяя смотрит ~месяц, не 2015. В Alfa ничего не отправляет.",
+  years: "По умолчанию «С начала · 2015» — вся история, как сверка счёта. «7 лет», «3 года» и «1 год» короче, только если человек ходит недавно. Действует на красную, «Добрать» и синюю, пока счёт ещё не сходился. Уже зелёным синяя смотрит список «окно»: месяц, три или шесть — не 2015. В Alfa ничего не отправляет.",
   probe: "«Сверить счёт» идёт по одному человеку, пауза 5 с. Перепись уникальных номеров занятий по филиалам 1–4 с 2015. Не сумма total. Пустой ответ Alfa не считает журнал пустым и ничего не снимает. Цифры разные — жёлтая. Сошлись — вправо. В Alfa не пишет.",
   recheckCal: "Сначала добирает журнал, потом контрольный проход только по номерам. Лишние id снимает с диска, если перепись закрыта. Пока Alfa молчит — не снимает, жёлтая остаётся. Свои уроки и очередь на Alfa не трогает. В Alfa не пишет.",
-  recheckOnePeople: "Синяя «Перепроверить по одному» — журнал, потом перепись номеров. Дубли с диска только после закрытого контроля. Стоп не оживает. 30 с без движения — с того же человека. В Alfa не пишет. Красная эту чистку не делает.",
+  recheckOnePeople: "Синяя «Перепроверить по одному» смотрит выбранное окно: месяц, три или шесть. Сравнивает номера уроков, не голую цифру. Новое разовое в окне дописывает. Удалённое в окне снимает. Старше окна не трогает. Стоп не оживает. В Alfa не пишет.",
+  recheckWindow: "Окно синей перепроверки — по дате урока, не когда нажали сохранить. Месяц: разовое 10 дней назад попадёт. Три и шесть — глубже. Дальше окна синяя не ищет: тогда красная «Добрать» или «С нуля». В Alfa не пишет.",
   slowFill: "Медленный автодобор: все слева — розовые (ещё не спрашивали счёт) и жёлтые (диск меньше Alfa). Сначала проба, потом месяцы назад до 2015, до 10 минут на человека, курсор не сбрасываем. Потом пауза 5 с и следующий. Кто добрался — вправо. С галкой и правых не берёт. Вкладку можно закрыть. Стоп после текущего. В Alfa не пишет.",
   stop: "Стоп останавливает текущую очередь. Текущий человек или группа допишет свой запрос, а следующий уже не стартует. Уже записанное на диск не откатывается — это не «отмена», а пауза. После стопа красную можно нажать снова: пойдёт со следующих, кто ещё слева. Если кнопка серая, сейчас никто не грузится. В Alfa ничего не удаляет и не сохраняет. Можно спокойно отойти и продолжить позже.",
   fullHist: "Эта кнопка только на жёлтой старой карточке, когда в Alfa занятий больше, чем у нас. Это та же красная качка, что «Добрать», но всегда с 1 января 2015, не перепись и не снятие лишних id. Нужна, если человек ходил в 2016–2018, а обычная качка этого не видит. Пишет только на наш диск, дубли по номеру занятия не создаёт. В Alfa не отправляет и оплаты не трогает. Если за один раз счёт не сошёлся, нажмите ещё раз — продолжит с того же человека. Пока грузится другой ученик, кнопка подождёт.",
@@ -361,6 +362,33 @@ function YearsSelect({
       </select>
     </label>,
     hint,
+  );
+}
+
+function RecheckDaysSelect({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: 32 | 92 | 182;
+  disabled?: boolean;
+  onChange: (n: 32 | 92 | 182) => void;
+}) {
+  return withHint(
+    <label className="inline-flex h-10 items-center gap-2 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10">
+      <span className="text-muted">окно</span>
+      <select
+        className="bg-transparent font-semibold outline-none"
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange((Number(e.target.value) === 92 || Number(e.target.value) === 182 ? Number(e.target.value) : 32) as 32 | 92 | 182)}
+      >
+        <option value={32}>месяц</option>
+        <option value={92}>три</option>
+        <option value={182}>шесть</option>
+      </select>
+    </label>,
+    HINT.recheckWindow,
   );
 }
 
@@ -2061,6 +2089,7 @@ export function AdminCrmSettings() {
   const [journalSchool, setJournalSchool] = useState("");
   const [journalGrain, setJournalGrain] = useState<Grain>("quarter");
   const [peopleFromId, setPeopleFromId] = useState<(typeof PEOPLE_FROM_OPTS)[number]["id"]>("2015");
+  const [peopleRecheckDays, setPeopleRecheckDays] = useState<32 | 92 | 182>(32);
   const [archAgeFrom, setArchAgeFrom] = useState("");
   const [archAgeTo, setArchAgeTo] = useState("");
   const [archNoDob, setArchNoDob] = useState(false);
@@ -2430,6 +2459,7 @@ export function AdminCrmSettings() {
     customerId?: number;
     probe?: boolean;
     dateFrom?: string;
+    recheckDays?: number;
     jobMode?: string;
     take?: number;
     name?: string;
@@ -2462,6 +2492,7 @@ export function AdminCrmSettings() {
             customerId: opts.customerId || 0,
             probe: Boolean(opts.probe),
             dateFrom: opts.dateFrom || "",
+            recheckDays: opts.recheckDays || 0,
             jobMode: opts.jobMode || "",
             take: opts.take || 0,
             name: opts.name || "",
@@ -2565,6 +2596,7 @@ export function AdminCrmSettings() {
     study?: "1" | "2";
     recheck?: boolean;
     dateFrom?: string;
+    recheckDays?: number;
     grain?: Grain;
     school?: string;
     groupId?: number;
@@ -2595,6 +2627,7 @@ export function AdminCrmSettings() {
       study: opts.study,
       recheck: opts.recheck,
       dateFrom: opts.dateFrom,
+      recheckDays: opts.recheckDays,
       grain: opts.grain,
       school: opts.school,
       groupId: opts.groupId,
@@ -2788,6 +2821,7 @@ export function AdminCrmSettings() {
       study,
       recheck: onlyRecheck,
       dateFrom: peopleDateFrom(peopleFromId),
+      recheckDays: onlyRecheck ? peopleRecheckDays : undefined,
       jobItems: queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name })),
     });
     const job = (res as { job?: { running?: boolean; msg?: string; total?: number } } | null)?.job;
@@ -3947,6 +3981,7 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.recheckOnePeople,
                         )}
+                        <RecheckDaysSelect value={peopleRecheckDays} disabled={busy} onChange={setPeopleRecheckDays} />
                         {withHint(
                         <button
                           type="button"
