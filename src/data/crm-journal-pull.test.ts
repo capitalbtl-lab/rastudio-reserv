@@ -308,7 +308,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /if \(received >= live.total\) break/);
     assert.match(inbound, /ymd\(item.date\) \|\| ymd\(\(item as \{ lesson_date\?: string \}\).lesson_date\)/);
     assert.doesNotMatch(inbound, /ymd\(item.date\) \|\| ymd\(item.time_from\) \|\| ymd/);
-    assert.match(inbound, /live.total > 0 \? got >= live.total : live.items.length < 100/);
+    assert.match(inbound, /live.total > 0 \? received >= live.total : live.items.length < 100/);
+    assert.doesNotMatch(inbound, /page \* 100 \+ live.items.length/);
     assert.doesNotMatch(inbound, /date: ymd\(item.date\) \|\| ymd\(item.time_from\) \|\| "2015-01-01"/);
     assert.doesNotMatch(inbound, /function lessonListedForCustomer/);
     assert.doesNotMatch(inbound, /if \(!listed && \(ids.length \|\| packLessonPupils\(rec\)\.length\)\) continue/);

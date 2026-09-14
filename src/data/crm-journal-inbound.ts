@@ -675,6 +675,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         continue;
       }
       let progressed = false;
+      let received = 0;
       const pageEnd = (Number(cur.page) || 0) + maxPages;
       for (let page = cur.page; page < pageEnd && ran < maxRun && !cur.done; page += 1) {
         const winFrom = monthly ? ymd(cur.from) || ymd(from) : ymd(from);
@@ -693,8 +694,8 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         }
         if (live.items.length) packs.push({ items: live.items });
         progressed = true;
-        const got = page * 100 + live.items.length;
-        const lastShort = !live.items.length || (live.total > 0 ? got >= live.total : live.items.length < 100);
+        received += live.items.length;
+        const lastShort = !live.items.length || (live.total > 0 ? received >= live.total : live.items.length < 100);
         cur = lastShort ? lessonFillAdvance({ ...cur, page }, true, branches) : { bid, statusIdx: cur.statusIdx, page: page + 1, from: cur.from, to: cur.to };
         if (ran >= maxRun || cur.done || lastShort) break;
       }
