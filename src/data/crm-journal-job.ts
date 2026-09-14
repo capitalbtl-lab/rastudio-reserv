@@ -11,6 +11,7 @@ import {
   peopleJobQueue,
   peopleNeedCashLoad,
   peopleRecheckAdvance,
+  peopleSlowAdvance,
   groupsRecheckAdvance,
   rotateUnfinished,
   saveJournalJob,
@@ -578,6 +579,25 @@ function fillOf(mode: JournalJobMode | "", kind: string, item?: JournalJobItem |
 
 function advanceJobWave(job: JournalJob): { done: false; gap: number } | null {
   const mode = job.mode;
+  if (mode === "people-slow") {
+    const nxt = peopleSlowAdvance(peopleRowsFor(job.study, "students"));
+    if (nxt.done || !nxt.items.length) return null;
+    const first = nxt.items[0];
+    patch({
+      id: job.id,
+      items: nxt.items,
+      idx: 0,
+      waits: 0,
+      n: job.n,
+      total: job.n + nxt.items.length,
+      running: true,
+      recheck: false,
+      cur: first?.name || "",
+      fill: fillOf(mode, job.kind, first),
+      msg: `${first?.name || ""}: медленный добор, ещё круг. Курсор не сбрасываем.`,
+    });
+    return { done: false, gap: jobGapMs(mode) };
+  }
   let nxt: ReturnType<typeof peopleRecheckAdvance> | null = null;
   if (mode === "people-recheck") {
     nxt = peopleRecheckAdvance(

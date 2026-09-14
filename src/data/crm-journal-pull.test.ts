@@ -330,7 +330,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(core, /export function keepAlfaProbe/);
     assert.match(core, /if \(!probedOk\) return \{ write: false, alfa: k, probed: k > 0 \}/);
     assert.match(core, /if \(k > 0 && a < k\) return \{ write: false, alfa: k, probed: true \}/);
-    assert.match(pull, /keepAlfaProbe/);
+    assert.match(pull, /keepAlfaProbe\(keep, alfaRaw, probed.ok, Boolean\(probed.ok\)\)/);
+    assert.match(pull, /lessonsSeenIds: ids/);
     assert.match(pull, /first\.ok && !weak && disk >= alfaGate && !extra0/);
     assert.doesNotMatch(pull, /lessonsAlfaAt: ""/);
     assert.match(pull, /closed \? \{ lessonsFull: true, lessonsAttend: true \} : \{ lessonsFull: false \}/);

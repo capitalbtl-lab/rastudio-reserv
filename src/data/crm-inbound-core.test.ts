@@ -177,11 +177,11 @@ describe("вход из Alfa", () => {
     assert.equal(keepAlfaProbe(286, 254, true).write, false);
     assert.equal(keepAlfaProbe(286, 254, true, true).write, true);
     assert.equal(keepAlfaProbe(286, 254, true, true).alfa, 254);
-    assert.equal(bumpAlfaFromLanded(312, 2), 314);
+    assert.equal(bumpAlfaFromLanded(312, 2), 312);
     assert.equal(bumpAlfaFromLanded(312, 0), 312);
     assert.equal(bumpAlfaFromLanded(0, 2), 0);
-    assert.equal(bumpAlfaFromLanded(541, 5), 546);
-    assert.equal(bumpAlfaFromLanded(312, Math.max(0, 314 - 312)), 314);
+    assert.equal(bumpAlfaFromLanded(541, 5), 541);
+    assert.equal(bumpAlfaFromLanded(312, Math.max(0, 314 - 312)), 312);
     assert.equal(bumpAlfaFromLanded(259, Math.max(0, 233 - 259)), 259);
   });
 });

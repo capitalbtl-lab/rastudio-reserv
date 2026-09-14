@@ -2188,19 +2188,23 @@ export async function journalPull(opts: {
       store.studentIdx[key] = picked.next;
     }
     if (opts.probe) {
-      const { probeCustomerLessons } = await import("./crm-journal-inbound");
+      const { probeCustomerLessons, studentProtectLessonIds } = await import("./crm-journal-inbound");
       const disk = countAlfaLessonUniq(loadCustomerCalendar(one.cid));
-      const probed = await probeCustomerLessons(one.branchId, one.cid).catch(() => ({ total: 0, ok: false as const }));
+      const probed = await probeCustomerLessons(one.branchId, one.cid).catch(() => ({ total: 0, ok: false as const, ids: [] as number[] }));
       const keep = Number(customerSyncOf(one.cid).lessonsAlfa) || 0;
       const alfaRaw = probed.ok ? probed.total : 0;
-      const held = keepAlfaProbe(keep, alfaRaw, probed.ok);
+      const held = keepAlfaProbe(keep, alfaRaw, probed.ok, Boolean(probed.ok));
       const holeApproved = Boolean(customerSyncOf(one.cid).journalHoleApprovedAt);
       const short = lessonsCountShort(disk, held.alfa, held.probed);
       const dups = lessonsCountExtra(disk, held.alfa, held.probed);
       const closed = Boolean(probed.ok && held.write && !short && !dups && !holeApproved);
+      const ids = probed.ok ? uniquePositiveIds("ids" in probed ? probed.ids || [] : []) : [];
+      const have = uniquePositiveIds(loadCustomerCalendar(one.cid).map((x) => Number(x.lessonId) || 0));
+      const gap = probed.ok ? stampLessonSetGap({ lessonsSeenIds: ids }, have, studentProtectLessonIds(one.cid)) : {};
       stampCustomerSync(one.cid, {
         lessonsDisk: disk,
         ...(held.write ? { lessonsAlfa: held.alfa, lessonsAlfaAt: new Date().toISOString() } : {}),
+        ...(probed.ok ? { lessonsSeenIds: ids, ...gap } : {}),
         ...(closed ? { lessonsFull: true, lessonsAttend: true } : { lessonsFull: false }),
       });
       const name = fioOf(one.cid);

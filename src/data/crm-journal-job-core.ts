@@ -309,6 +309,12 @@ function asPeopleItem(r: PeopleJobRow): JournalJobItem {
   return { cid: r.cid, branchId: r.branchId, name: r.name };
 }
 
+/** Медленный добор: снова слева, пока очередь не пустая. Курсор не сбрасываем. */
+export function peopleSlowAdvance(people: PeopleJobRow[]): { done: boolean; items: JournalJobItem[] } {
+  const items = peopleJobQueue(people, "students", false).map(asPeopleItem);
+  return { done: !items.length, items };
+}
+
 /** Синяя «Перепроверить по одному»: справа → жёлтые слева → снова справа те же (даже если ещё short). */
 export function peopleRecheckAdvance(
   people: PeopleJobRow[],

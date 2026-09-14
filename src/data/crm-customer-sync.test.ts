@@ -185,15 +185,13 @@ describe("штамп входа ученика", () => {
     assert.equal(ownsStudentAlfa(900002), false);
   });
 
-  it("вход с Alfa дописывает диск; keep растёт только если диск уже больше Alfa", () => {
+  it("вход с Alfa дописывает диск; счёт Alfa с диска не поднимаем", () => {
     const sync = readFileSync(new URL("./crm-customer-sync.ts", import.meta.url), "utf8");
     const cards = readFileSync(new URL("./group-cards.ts", import.meta.url), "utf8");
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(sync, /export function noteAlfaLessonsLanded/);
-    assert.match(sync, /bumpAlfaFromLanded\(keep, add\)/);
-    assert.match(sync, /add = keep > 0 \? Math.max\(0, diskN - keep\) : 0/);
-    assert.doesNotMatch(sync, /fresh.length > 0 \? fresh.length : gap/);
-    assert.match(sync, /held \? \{ lessonsAlfa: nextAlfa, lessonsAlfaAt: at, lessonsFull: false \}/);
+    assert.doesNotMatch(sync, /bumpAlfaFromLanded\(keep, add\)/);
+    assert.doesNotMatch(sync, /lessonsAlfa: nextAlfa/);
     assert.match(cards, /noteAlfaLessonsLanded\(cid, countAlfaLessonUniq\(prev\), added\)/);
     assert.match(cards, /noteAlfaLessonsLanded\(id, countAlfaLessonUniq\(list\)/);
     assert.match(inbound, /noteAlfaLessonsLanded\(/);

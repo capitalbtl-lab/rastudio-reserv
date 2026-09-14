@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   peopleJobQueue,
   peopleRecheckAdvance,
+  peopleSlowAdvance,
   groupsRecheckAdvance,
   peopleNeedCashLoad,
   peopleJobFinished,
@@ -167,7 +168,21 @@ describe("фон истории из Alfa", () => {
     assert.match(jobSrc, /peopleJobQueue\(people, "students", false\)/);
     assert.match(jobSrc, /openRetry/);
     assert.match(jobSrc, /перепись не закрыта, ещё этот/);
+    assert.match(jobSrc, /peopleSlowAdvance/);
+    assert.match(jobSrc, /ещё круг/);
     assert.equal(JOB_WAIT_CAP, 8);
+  });
+
+  it("медленный добор снова берёт слева, пока очередь не пустая", () => {
+    const left = { cid: 2, branchId: 1, name: "жёлтая", journal: false, pays: false, short: true };
+    const right = { cid: 1, branchId: 1, name: "справа", journal: true, pays: false, rechecked: true };
+    const hole = { cid: 3, branchId: 1, name: "галка", journal: false, pays: false, short: true, holeApproved: true };
+    const again = peopleSlowAdvance([left, right, hole]);
+    assert.equal(again.done, false);
+    assert.deepEqual(again.items.map((x) => x.cid), [2]);
+    const empty = peopleSlowAdvance([right, hole]);
+    assert.equal(empty.done, true);
+    assert.deepEqual(empty.items, []);
   });
 
   it("перепроверка по одному: справа, потом слева, потом те же справа", () => {

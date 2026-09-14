@@ -14,12 +14,9 @@ export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean, cen
   return { write: true, alfa: a, probed: true };
 }
 
-/** Диск больше keep — Alfa добавила id после пробы. Id переписи, севшие на диск, keep не поднимают. Без пробы (keep=0) счёт не выдумывать. */
-export function bumpAlfaFromLanded(keep: number, newAlfaIds: number) {
-  const k = Number(keep) || 0;
-  const n = Math.max(0, Number(newAlfaIds) || 0);
-  if (k <= 0 || n <= 0) return k;
-  return k + n;
+/** Посадка строк на диск не меняет счёт Alfa. Alfa пишет только полная перепись. */
+export function bumpAlfaFromLanded(keep: number, _newAlfaIds?: number) {
+  return Number(keep) || 0;
 }
 
 /** Курсор качки не закрывает cid, пока диск < известной Alfa. */
