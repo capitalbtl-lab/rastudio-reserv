@@ -364,7 +364,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /dropped: droppedN/);
     assert.doesNotMatch(pull, /res\.walked && lessonsCountShort\(disk, alfaGate, true\)/);
     assert.match(inbound, /export async function inboundMissingCustomerLessons/);
-    assert.match(pull, /inboundMissingCustomerLessons/);
+    assert.match(inbound, /export async function inboundMissingUntilSeated/);
+    assert.match(pull, /inboundMissingUntilSeated/);
+    assert.doesNotMatch(pull, /inboundMissingCustomerLessons/);
     assert.match(pull, /missing\.length/);
     assert.match(pull, /lessonsSeenIds/);
     const missAt = inbound.indexOf("export async function inboundMissingCustomerLessons");
@@ -416,7 +418,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /windowAlfaKeep/);
     assert.match(rec, /новые\.length && !holeApproved/);
     assert.match(rec, /mark\(disk, Number\(customerSyncOf\(cid\)\.lessonsAlfa\) \|\| liveAlfa, true\)/);
-    assert.match(rec, /inboundMissingCustomerLessons/);
+    assert.match(rec, /inboundMissingUntilSeated/);
     assert.match(pull, /!short && !extra && !holeApproved/);
     assert.match(rec, /dateTo: windowTo/);
     assert.match(rec, /applyCustomerLessonCensus\(cid, census.ids, true, windowFrom, windowTo\)/);

@@ -10,6 +10,7 @@ import {
   mergeJobPatch,
   peopleJobQueue,
   peopleNeedCashLoad,
+  peopleNeedProbe,
   peopleRecheckAdvance,
   peopleSlowAdvance,
   groupsRecheckAdvance,
@@ -225,10 +226,7 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
       return queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
     }
     if (mode === "probe") {
-      const unseen = people.filter((r) => (r as { alfa?: number }).alfa == null);
-      const hole = people.filter((r) => r.short || r.dups);
-      const seen = new Set(unseen.map((r) => r.cid));
-      const queue = [...unseen, ...hole.filter((r) => !seen.has(r.cid))];
+      const queue = peopleNeedProbe(people);
       return queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name }));
     }
     if (mode === "people-slow") {

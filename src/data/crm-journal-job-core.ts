@@ -305,6 +305,11 @@ export function peopleJobQueue(people: PeopleJobRow[], kind: "students" | "balan
   return needLoad;
 }
 
+/** «Сверить счёт»: все текущие, кроме галки. Зелёных тоже — иначе старый календарь Alfa не увидят. */
+export function peopleNeedProbe(people: PeopleJobRow[]) {
+  return people.filter((r) => !r.holeApproved);
+}
+
 function asPeopleItem(r: PeopleJobRow): JournalJobItem {
   return { cid: r.cid, branchId: r.branchId, name: r.name };
 }

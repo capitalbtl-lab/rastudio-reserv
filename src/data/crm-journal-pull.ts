@@ -1124,7 +1124,7 @@ async function pullOneGroup(
 export { keepAlfaProbe };
 
 async function pullOneStudent(cid: number, branchId: number, balance: boolean, recheck = false, dateFrom = "", slow = false, recheckDays = 32) {
-  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingCustomerLessons, recheckCensusWindow, studentProtectLessonIds } = await import("./crm-journal-inbound");
+  const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, recheckCensusWindow, studentProtectLessonIds } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
   const mark = (disk: number, alfa: number, probedOk: boolean, census = false) => {
@@ -1213,7 +1213,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         }
       }
       if (missing.length) {
-        const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0, dropped: [] as number[] }));
+        const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: 20 }).catch(() => ({ count: 0, dropped: [] as number[] }));
         lessons += Number(gap.count) || 0;
         seated += Number(gap.count) || 0;
         droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
@@ -1259,7 +1259,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           }
         }
         if (missing.length) {
-          const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0, dropped: [] as number[] }));
+          const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: 20 }).catch(() => ({ count: 0, dropped: [] as number[] }));
           lessons += Number(gap.count) || 0;
           seated += Number(gap.count) || 0;
           droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
@@ -1303,7 +1303,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         stampCustomerSync(cid, { lessonsAlfa: liveAlfa, lessonsAlfaAt: atOf() });
       }
       if (новые.length && !holeApproved) {
-        const gap = await inboundMissingCustomerLessons(branchId, cid, новые, { force: true, take: 50 }).catch(() => ({ count: 0, dropped: [] as number[] }));
+        const gap = await inboundMissingUntilSeated(branchId, cid, новые, { take: 50, rounds: 20 }).catch(() => ({ count: 0, dropped: [] as number[] }));
         lessons += Number(gap.count) || 0;
         seated += Number(gap.count) || 0;
         droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
@@ -1328,7 +1328,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       if (short && !holeApproved) {
         const missing = census.ids.filter((n) => !have.has(n));
         if (missing.length) {
-          const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0 }));
+          const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: 20 }).catch(() => ({ count: 0 }));
           lessons += Number(gap.count) || 0;
           seated += Number(gap.count) || 0;
           disk = countAlfaLessonUniq(loadCustomerCalendar(cid));

@@ -1015,6 +1015,30 @@ export async function inboundMissingCustomerLessons(
   }
 }
 
+/** Дырки пачками, пока садятся или список пуст. +0 при живых id — стоп, не крутить вхолостую. */
+export async function inboundMissingUntilSeated(
+  branchId: number,
+  customerId: number,
+  ids: number[],
+  opts?: { take?: number; rounds?: number },
+) {
+  const take = Math.max(1, Number(opts?.take) || 50);
+  const rounds = Math.max(1, Number(opts?.rounds) || 20);
+  let missing = uniquePositiveIds(ids);
+  let count = 0;
+  const dropped: number[] = [];
+  for (let n = 0; n < rounds && missing.length; n += 1) {
+    const gap = await inboundMissingCustomerLessons(branchId, customerId, missing, { force: true, take });
+    count += Number(gap.count) || 0;
+    if (Array.isArray(gap.dropped)) dropped.push(...gap.dropped);
+    const have = new Set((loadCustomerCalendar(customerId) || []).map((l) => Number(l.lessonId) || 0).filter((x) => x > 0));
+    const dropSet = new Set(uniquePositiveIds(gap.dropped || []));
+    missing = missing.filter((id) => !have.has(id) && !dropSet.has(id));
+    if (!(Number(gap.count) || 0)) break;
+  }
+  return { count, dropped: uniquePositiveIds(dropped), missing };
+}
+
 export async function inboundJournalChunk(offset = 0, _take = 1) {
   if (!alfaLinkedNow()) {
     return { ok: true as const, done: true, next: 0, total: 0, extra: "без Alfa", ids: [] as number[], live: 0, fromCache: true };

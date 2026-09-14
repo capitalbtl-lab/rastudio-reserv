@@ -7,6 +7,7 @@ import {
   peopleSlowAdvance,
   groupsRecheckAdvance,
   peopleNeedCashLoad,
+  peopleNeedProbe,
   peopleJobFinished,
   shouldRetryCash,
   rotateUnfinished,
@@ -183,6 +184,15 @@ describe("фон истории из Alfa", () => {
     const empty = peopleSlowAdvance([right, hole]);
     assert.equal(empty.done, true);
     assert.deepEqual(empty.items, []);
+  });
+
+  it("сверить счёт берёт зелёных, галку пропускает", () => {
+    const left = { cid: 2, branchId: 1, name: "жёлтая", journal: false, pays: false, short: true };
+    const right = { cid: 1, branchId: 1, name: "справа", journal: true, pays: false, rechecked: true };
+    const hole = { cid: 3, branchId: 1, name: "галка", journal: false, pays: false, short: true, holeApproved: true };
+    assert.deepEqual(peopleNeedProbe([left, right, hole]).map((x) => x.cid), [2, 1]);
+    const jobSrc = readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8");
+    assert.match(jobSrc, /peopleNeedProbe\(people\)/);
   });
 
   it("перепроверка по одному: справа, потом слева, потом те же справа", () => {
