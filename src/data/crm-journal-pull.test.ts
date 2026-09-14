@@ -305,9 +305,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true, !keepBefore\)/);
     assert.doesNotMatch(inbound, /lessonsAlfa: uniq\.length/);
     assert.doesNotMatch(inbound, /ids\.length && !ids\.includes\(id\) && !packLessonPupils/);
-    assert.match(inbound, /droppedNoDate/);
-    assert.match(inbound, /function lessonListedForCustomer/);
-    assert.match(inbound, /if \(!listed && \(ids.length \|\| packLessonPupils\(rec\)\.length\)\) continue/);
+    assert.match(inbound, /live.total > 0 && received >= live.total/);
+    assert.match(inbound, /ymd\(item.date\) \|\| ymd\(item.time_from\) \|\| ymd\(\(item as \{ lesson_date\?: string \}\).lesson_date\)/);
+    assert.doesNotMatch(inbound, /date: ymd\(item.date\) \|\| ymd\(item.time_from\) \|\| "2015-01-01"/);
+    assert.doesNotMatch(inbound, /function lessonListedForCustomer/);
+    assert.doesNotMatch(inbound, /if \(!listed && \(ids.length \|\| packLessonPupils\(rec\)\.length\)\) continue/);
     assert.match(core, /export function inboundFillClosed/);
     assert.match(inbound, /inboundFillClosed/);
     assert.match(pull, /resetSeen: false/);
@@ -324,9 +326,10 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /lessonsSeenIds/);
     const missAt = inbound.indexOf("export async function inboundMissingCustomerLessons");
     const miss = inbound.slice(missAt, missAt + 4200);
-    assert.match(miss, /id: lid, lesson_id: lid/);
-    assert.match(miss, /2015-01-01/);
-    assert.match(miss, /customer_id: id, id: lid/);
+    assert.match(miss, /id: lid, status/);
+    assert.match(miss, /LESSON_STATUSES/);
+    assert.doesNotMatch(miss, /lesson_id: lid/);
+    assert.doesNotMatch(miss, /2015-01-01/);
     function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
       const k = Number(keep) || 0;
       const a = Number(alfa) || 0;
@@ -365,6 +368,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /applyCustomerLessonCensus\(cid, census.ids, true, windowFrom\)/);
     assert.match(one, /recheckCensusDateFrom/);
     assert.match(one, /mark\(disk, alfaGate, first\.ok\)/);
+    assert.match(one, /censusCustomerLessonIds\(branchId, cid, \{ dateFrom: from \}\)/);
     assert.doesNotMatch(one, /mark\(disk, alfaGate, true\)/);
     assert.match(inbound, /skipped: "hole"/);
     assert.match(inbound, /skipHoleInbound/);

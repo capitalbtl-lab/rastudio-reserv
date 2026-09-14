@@ -10,6 +10,7 @@
 4. Не плодить второй мозг, вторую карту ID, вторую воронку.
 5. Чужие файлы из таблицы вкладки не трогать. Нужно общее — написать человеку.
 6. Всегда после текста пиши простыми словами.
+7. Контракт Alfa — официальный v2api, не догадки. Сначала [документация](https://alfacrm.pro/knowledge/integration/api) (оглавление: [usefull/integrations/integration/api](https://alfacrm.pro/usefull/integrations/integration/api)), схема: [v2api](https://alfacrm.pro/usefull/knowledge/rekomendacii-po-rabote-s-sistemoj/v2api-prakticheskaya-skhema-integracii). Потом код. Нет поля в index/create — не слать. `lesson/index`: `id` в JSON-теле (`{"id":1,"page":0}`), не `?id=` (query `id` — только update/delete). Без `status` Alfa ставит **3**. Фильтры — **И**. `date_from`/`date_to` урока — `YYYY-MM-DD`. Нет фильтра `lesson_id`. `pageSize` до 500. Не больше 5 запросов/с.
 
 Ядро (только вкладка A): см. `src/data/kernel.ts` (`KERNEL_FILES`).
 Не расширять список и не переименовывать ключи без этой вкладки.

@@ -53,6 +53,7 @@ describe("журнал оплат и списаний", () => {
     assert.equal(lessonWriteoffAmount(lesson, 88), 850);
     assert.equal(lessonWriteoffCtt(lesson, 88), 4412);
     assert.deepEqual(lessonCustomerIds({ details: [{ customer_id: 91, commission: 400 }] }), [91]);
+    assert.deepEqual(lessonCustomerIds({ customer_ids: [88], details: [{ customer_id: 5115 }] }).sort((a, b) => a - b), [88, 5115]);
     assert.equal(payCttIdOf({ ctt_id: 4412 }), 4412);
     assert.equal(payCttIdOf({ customer_tariff_id: 4412 }), 4412);
     assert.equal(payCttIdOf({ ctt: { id: 4412 } }), 4412);

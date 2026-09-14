@@ -36,8 +36,7 @@ function detailName(d: LessonDetail) {
 export function lessonCustomerIds(item: Record<string, unknown>): number[] {
   const raw = item.customer_ids || item.customerIds;
   const fromArr = Array.isArray(raw) ? raw.map(Number).filter((n) => n > 0) : [];
-  if (fromArr.length) return fromArr;
-  const ids = new Set<number>();
+  const ids = new Set<number>(fromArr);
   for (const d of lessonDetailsOf(item)) {
     const n = Number(d.customer_id || d.customerId || 0);
     if (n > 0) ids.add(n);

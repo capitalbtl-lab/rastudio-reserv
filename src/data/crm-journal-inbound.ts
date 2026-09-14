@@ -43,14 +43,6 @@ import {
   wasLessonGreen,
 } from "./crm-customer-sync";
 
-
-function lessonListedForCustomer(rec: Record<string, unknown>, cid: number) {
-  const id = Number(cid) || 0;
-  if (id <= 0) return false;
-  if (lessonCustomerIds(rec).includes(id)) return true;
-  return packLessonPupils(rec).some((p) => Number(p.customerId) === id);
-}
-
 function hm(raw?: string) {
   const m = String(raw || "").match(/(\d{1,2}):(\d{2})/);
   return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
@@ -426,6 +418,7 @@ export async function censusCustomerLessonIds(branch: number, customerId: number
   const pageCap = 12;
   for (const bid of branches) {
     for (const status of LESSON_STATUSES) {
+      let received = 0;
       for (let page = 0; page < pageCap; page += 1) {
         const live = await pullLessonPage(
           bid,
@@ -438,7 +431,10 @@ export async function censusCustomerLessonIds(branch: number, customerId: number
           const lid = Number((item as { id?: number }).id) || 0;
           if (lid > 0) ids.add(lid);
         }
+        received += live.items.length;
+        if (!live.items.length) break;
         if (live.items.length < pageSize) break;
+        if (live.total > 0 && received >= live.total) break;
         if (page === pageCap - 1) aborted = true;
       }
     }
@@ -686,7 +682,8 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         }
         if (live.items.length) packs.push({ items: live.items });
         progressed = true;
-        const lastShort = live.items.length < 100;
+        const got = page * 100 + live.items.length;
+        const lastShort = !live.items.length || live.items.length < 100 || (live.total > 0 && got >= live.total);
         cur = lastShort ? lessonFillAdvance({ ...cur, page }, true, branches) : { bid, statusIdx: cur.statusIdx, page: page + 1, from: cur.from, to: cur.to };
         if (ran >= maxRun || cur.done || lastShort) break;
       }
@@ -700,12 +697,16 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       for (const item of les.items || []) {
         const rec = item as Record<string, unknown>;
         const ids = lessonCustomerIds(rec);
-        const listed = lessonListedForCustomer(rec, id);
-        if (!listed && (ids.length || packLessonPupils(rec).length)) continue;
+        const lid = Number(item.id || 0);
         const gid = Number((item.group_ids || [])[0] || 0);
         const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
+        const day = ymd(item.date) || ymd(item.time_from) || ymd((item as { lesson_date?: string }).lesson_date);
+        if (!day) {
+          if (lid > 0) droppedNoDate.push(lid);
+          continue;
+        }
         const packed = packLight(
-          { ...item, date: ymd(item.date) || ymd(item.time_from) || "2015-01-01", customer_ids: uniquePositiveIds(listed ? [...ids, id] : ids.length ? ids : [id]) },
+          { ...item, date: day, customer_ids: uniquePositiveIds([...ids, id]) },
           {
             groupName: slot?.groupName || String(item.lesson_type_name || "занятие"),
             from: hm(item.time_from) || "",
@@ -715,36 +716,20 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
           },
           id,
         );
-        const lid = Number(item.id || 0);
-        const seated = packed || (lid > 0
-          ? {
-              date: ymd(item.date) || ymd(item.time_from) || "2015-01-01",
-              from: hm(item.time_from) || "00:00",
-              to: hm(item.time_to) || "",
-              status: Number(item.status || 0),
-              type: String(item.lesson_type_name || "занятие"),
-              group: slot?.groupName || String(item.lesson_type_name || "занятие"),
-              teacher: slot?.teacher || "",
-              subject: slot?.subject || "",
-              lessonId: lid,
-              customerIds: [id],
-              groupIds: (item.group_ids || []).map(Number).filter((n) => n > 0),
-            }
-          : null);
-        if (!seated) {
+        if (!packed) {
           if (lid > 0) droppedNoDate.push(lid);
           continue;
         }
-        seated.date = ymd(seated.date) || "2015-01-01";
-        if (!seated.customerIds?.length) seated.customerIds = [id];
-        const prev = prevMap.get(String(seated.lessonId || `${seated.date}|${seated.from}`));
+        packed.date = ymd(packed.date) || day;
+        if (!packed.customerIds?.length) packed.customerIds = [id];
+        const prev = prevMap.get(String(packed.lessonId || `${packed.date}|${packed.from}`));
         if (prev) {
-          if (!(Number(seated.amount) > 0) && Number(prev.amount) > 0) seated.amount = prev.amount;
-          if (!(Number(seated.cttId) > 0) && Number(prev.cttId) > 0) seated.cttId = prev.cttId;
-          const merged = mergeLessonPupils(prev.pupils, seated.pupils);
-          if (merged?.length) seated.pupils = merged;
+          if (!(Number(packed.amount) > 0) && Number(prev.amount) > 0) packed.amount = prev.amount;
+          if (!(Number(packed.cttId) > 0) && Number(prev.cttId) > 0) packed.cttId = prev.cttId;
+          const merged = mergeLessonPupils(prev.pupils, packed.pupils);
+          if (merged?.length) packed.pupils = merged;
         }
-        pulled.push(withPupilNames(seated));
+        pulled.push(withPupilNames(packed));
       }
     }
     const detailCap = Number(opts?.deep) > 0 ? Math.min(24, Number(opts.deep)) : Number(opts?.take) > 0 ? 3 : 6;
@@ -862,12 +847,7 @@ export async function inboundMissingCustomerLessons(
   const pulled: GroupCalLesson[] = [];
   const dropped: number[] = [];
   const bodiesFor = (lid: number) =>
-    [
-      { page: 0, pageSize: 5, id: lid },
-      { page: 0, pageSize: 5, lesson_id: lid },
-      { page: 0, pageSize: 5, id: lid, lesson_id: lid },
-      { page: 0, pageSize: 5, customer_id: id, id: lid },
-    ] as Record<string, unknown>[];
+    LESSON_STATUSES.map((status) => ({ page: 0, pageSize: 5, id: lid, status })) as Record<string, unknown>[];
   console.warn(`inbound missing cid=${id} want ${want.length}`);
   for (let i = 0; i < want.length; i += 1) {
     const lid = want[i];
@@ -897,26 +877,19 @@ export async function inboundMissingCustomerLessons(
       teacher: slot?.teacher || "",
       subject: slot?.subject || "",
     };
-    const day = ymd(item.date) || ymd(item.time_from) || "2015-01-01";
+    const day = ymd(item.date) || ymd(item.time_from) || ymd((item as { lesson_date?: string }).lesson_date);
+    if (!day) {
+      dropped.push(lid);
+      continue;
+    }
     let packed = packLight(
       { ...item, date: day, customer_ids: uniquePositiveIds([...(lessonCustomerIds(item as Record<string, unknown>)), id]) },
       ctx,
       id,
     );
     if (!packed) {
-      packed = {
-        date: day,
-        from: ctx.from || "00:00",
-        to: ctx.to,
-        status: Number(item.status || 0),
-        type: ctx.groupName,
-        group: ctx.groupName,
-        teacher: ctx.teacher,
-        subject: ctx.subject,
-        lessonId: lid,
-        customerIds: [id],
-        groupIds: (item.group_ids || []).map(Number).filter((n) => n > 0),
-      };
+      dropped.push(lid);
+      continue;
     }
     packed.date = ymd(packed.date) || day;
     if (!packed.customerIds?.length) packed.customerIds = [id];

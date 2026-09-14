@@ -1163,11 +1163,17 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         if (slow && i > 0 && !(Number(res.count) || 0) && Boolean((res as { done?: boolean }).done)) break;
       }
       }
-      if (lessonsCountShort(disk, alfaGate, true) && missing.length) {
+      if (lessonsCountShort(disk, alfaGate, true)) {
         const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
-        const rest = missing.filter((n) => !have.has(n));
-        if (rest.length) {
-          const gap = await inboundMissingCustomerLessons(branchId, cid, rest, { force: true, take: 50 }).catch(() => ({ count: 0 }));
+        const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: from }).catch(() => ({ ids: [] as number[], ok: false as const }));
+        if (census.ok) {
+          stampCustomerSync(cid, { lessonsSeenIds: census.ids });
+          missing = census.ids.filter((n) => !have.has(n));
+        } else {
+          missing = missing.filter((n) => !have.has(n));
+        }
+        if (missing.length) {
+          const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0 }));
           lessons += Number(gap.count) || 0;
           seated += Number(gap.count) || 0;
           disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
