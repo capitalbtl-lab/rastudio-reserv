@@ -840,6 +840,7 @@ export async function inboundMissingCustomerLessons(
       { page: 0, pageSize: 5, id: lid },
       { page: 0, pageSize: 5, lesson_id: lid },
       { page: 0, pageSize: 5, id: lid, lesson_id: lid },
+      { page: 0, pageSize: 5, customer_id: id, id: lid },
     ] as Record<string, unknown>[];
   console.warn(`inbound missing cid=${id} want ${want.length}`);
   for (let i = 0; i < want.length; i += 1) {

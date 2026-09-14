@@ -316,7 +316,7 @@ describe("ручной журнал с Alfa", () => {
     const miss = inbound.slice(missAt, missAt + 4200);
     assert.match(miss, /id: lid, lesson_id: lid/);
     assert.match(miss, /2015-01-01/);
-    assert.doesNotMatch(miss, /customer_id: id/);
+    assert.match(miss, /customer_id: id, id: lid/);
     function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
       const k = Number(keep) || 0;
       const a = Number(alfa) || 0;
