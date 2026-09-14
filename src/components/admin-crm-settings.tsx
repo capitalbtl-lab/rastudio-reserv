@@ -63,7 +63,7 @@ function HintI({ text }: { text: string }) {
     <span className="group/hi relative inline-flex shrink-0 self-center p-0.5">
       <span
         tabIndex={0}
-        className="flex h-[8px] w-[8px] cursor-help items-center justify-center rounded-full bg-black/40 text-[5px] font-bold leading-none text-white"
+        className="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-black/40 text-[11px] font-bold leading-none text-white"
         aria-label="Подсказка"
       >
         i
@@ -168,7 +168,7 @@ function LoadGuideBtn({ tab, onOpen }: { tab: HistLoadTab; onOpen: (t: HistLoadT
   return (
     <button
       type="button"
-      className="inline-flex h-3 w-3 shrink-0 items-center justify-center"
+      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-black/40 text-[11px] font-bold leading-none text-white hover:bg-black/60"
       aria-label={`Что загружает ${STEP_LOAD[tab].title}`}
       title="Что загружаем и куда"
       onClick={(e) => {
@@ -176,7 +176,7 @@ function LoadGuideBtn({ tab, onOpen }: { tab: HistLoadTab; onOpen: (t: HistLoadT
         onOpen(tab);
       }}
     >
-      <span className="block h-[5px] w-[5px] rounded-full bg-black" />
+      i
     </button>
   );
 }
