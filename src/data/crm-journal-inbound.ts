@@ -111,7 +111,7 @@ function packLight(
   ctx: { groupName: string; from: string; to: string; teacher: string; subject: string },
   customerId?: number,
 ): GroupCalLesson | null {
-  const date = ymd(item.date || item.time_from || "");
+  const date = ymd(item.date || "");
   if (!date) return null;
   const from = hm(item.time_from) || ctx.from;
   const to = hm(item.time_to) || ctx.to;
@@ -445,8 +445,11 @@ export async function censusCustomerLessonIds(branch: number, customerId: number
         }
         received += live.items.length;
         if (!live.items.length) break;
-        if (live.items.length < pageSize) break;
-        if (live.total > 0 && received >= live.total) break;
+        if (live.total > 0) {
+          if (received >= live.total) break;
+        } else if (live.items.length < pageSize) {
+          break;
+        }
         if (page === pageCap - 1) aborted = true;
       }
     }
@@ -691,7 +694,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         if (live.items.length) packs.push({ items: live.items });
         progressed = true;
         const got = page * 100 + live.items.length;
-        const lastShort = !live.items.length || live.items.length < 100 || (live.total > 0 && got >= live.total);
+        const lastShort = !live.items.length || (live.total > 0 ? got >= live.total : live.items.length < 100);
         cur = lastShort ? lessonFillAdvance({ ...cur, page }, true, branches) : { bid, statusIdx: cur.statusIdx, page: page + 1, from: cur.from, to: cur.to };
         if (ran >= maxRun || cur.done || lastShort) break;
       }
@@ -707,7 +710,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         const lid = Number(item.id || 0);
         const gid = Number((item.group_ids || [])[0] || 0);
         const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
-        const day = ymd(item.date) || ymd(item.time_from) || ymd((item as { lesson_date?: string }).lesson_date);
+        const day = ymd(item.date) || ymd((item as { lesson_date?: string }).lesson_date);
         if (!day) {
           if (lid > 0) droppedNoDate.push(lid);
           continue;
@@ -881,7 +884,7 @@ export async function inboundMissingCustomerLessons(
       teacher: slot?.teacher || "",
       subject: slot?.subject || "",
     };
-    const day = ymd(item.date) || ymd(item.time_from) || ymd((item as { lesson_date?: string }).lesson_date);
+    const day = ymd(item.date) || ymd((item as { lesson_date?: string }).lesson_date);
     if (!day) {
       dropped.push(lid);
       continue;

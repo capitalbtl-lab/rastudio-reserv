@@ -27,6 +27,9 @@ describe("перепроверка журнала", () => {
     assert.equal(toAlfaLessonDate("30.09.2026"), "2026-09-30");
     assert.equal(toAlfaLessonDate("2026-07-01"), "2026-07-01");
     assert.equal(toAlfaLessonDate("1.7.2026"), "2026-07-01");
+    assert.equal(toAlfaLessonDate("10:00"), "");
+    assert.equal(toAlfaLessonDate("10:00:00"), "");
+    assert.equal(toAlfaLessonDate("2016-09-01 10:00:00"), "2016-09-01");
   });
 
   it("робототехника: 8 кварталов, один клик не закрывает группу", () => {

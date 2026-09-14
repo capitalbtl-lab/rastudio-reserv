@@ -305,8 +305,10 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true, !keepBefore\)/);
     assert.doesNotMatch(inbound, /lessonsAlfa: uniq\.length/);
     assert.doesNotMatch(inbound, /ids\.length && !ids\.includes\(id\) && !packLessonPupils/);
-    assert.match(inbound, /live.total > 0 && received >= live.total/);
-    assert.match(inbound, /ymd\(item.date\) \|\| ymd\(item.time_from\) \|\| ymd\(\(item as \{ lesson_date\?: string \}\).lesson_date\)/);
+    assert.match(inbound, /if \(received >= live.total\) break/);
+    assert.match(inbound, /ymd\(item.date\) \|\| ymd\(\(item as \{ lesson_date\?: string \}\).lesson_date\)/);
+    assert.doesNotMatch(inbound, /ymd\(item.date\) \|\| ymd\(item.time_from\) \|\| ymd/);
+    assert.match(inbound, /live.total > 0 \? got >= live.total : live.items.length < 100/);
     assert.doesNotMatch(inbound, /date: ymd\(item.date\) \|\| ymd\(item.time_from\) \|\| "2015-01-01"/);
     assert.doesNotMatch(inbound, /function lessonListedForCustomer/);
     assert.doesNotMatch(inbound, /if \(!listed && \(ids.length \|\| packLessonPupils\(rec\)\.length\)\) continue/);
