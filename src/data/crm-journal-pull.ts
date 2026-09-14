@@ -1038,33 +1038,37 @@ async function pullOneGroup(
   g: JournalPullGroup,
   period: { key: string; from: string; to: string; label: string; keys?: string[] },
   recheck = false,
+  recheckDays?: number,
 ) {
   const beforeCard = loadGroupCard(g.branchId, g.groupId);
-  const before = (beforeCard?.calendar || []).filter((l) => inPeriod(l.date, period.from, period.to)).length;
+  const before = (beforeCard?.calendar || []).filter((l) => (recheck ? true : inPeriod(l.date, period.from, period.to))).length;
   const { inboundJournalGroup } = await import("./crm-journal-inbound");
+  const days = clampRecheckDays(recheckDays);
   const res = await inboundJournalGroup(g.branchId, g.groupId, {
     deep: false,
     lite: true,
     recheck,
-    dateFrom: period.from,
-    dateTo: period.to,
+    recheckDays: days,
+    ...(recheck ? {} : { dateFrom: period.from, dateTo: period.to }),
     groupName: g.name,
   });
   const ok = res.ok !== false;
-  const n = (res.calendar || []).filter((l) => inPeriod(l.date, period.from, period.to)).length;
-  const alfaTotal = Number((res as { alfaTotal?: number }).alfaTotal) || 0;
-  const capped = Boolean((res as { capped?: boolean }).capped) || (alfaTotal > 0 && n < alfaTotal);
+  const n = Number(res.count) || 0;
+  const holeN = (res.hole || []).length;
+  const goneN = (res.gone || []).length;
+  const pagesComplete = res.pagesComplete !== false && !res.capped;
+  const weak = !ok || !pagesComplete || holeN > 0 || (recheck && goneN > 0);
   const keys = period.keys?.length ? period.keys : [period.key];
-  stampJournalPeriod(g.branchId, g.groupId, keys, { ok, err: ok ? "" : String(res.extra || "Alfa не ответила"), weak: !ok || capped, recheck });
+  stampJournalPeriod(g.branchId, g.groupId, keys, { ok, err: ok ? "" : String(res.extra || "Alfa не ответила"), weak, recheck });
   const added = Math.max(0, n - before);
   const extra = ok
-    ? capped
-      ? `«${g.name}»: ${period.label} · ${n} зан.${alfaTotal ? ` из ${alfaTotal}` : ""}${added ? `, +${added}` : ""} · пакет оборвался, нажмите ещё раз`
+    ? !pagesComplete
+      ? `«${g.name}»: ${period.label} · ${n} зан.${holeN ? ` · дырок ${holeN}` : ""}${added ? `, +${added}` : ""} · пакет оборвался, нажмите ещё раз`
       : recheck
-        ? `перепроверка «${g.name}»: ${period.label} · было ${before}, стало ${n}${added ? `, дозаписали ${added}` : ", дырок нет"}`
-        : `«${g.name}»: ${period.label} · ${n} зан. за порцию`
+        ? `перепроверка «${g.name}»: ${period.label} · было ${before}, стало ${n}${added ? `, дозаписали ${added}` : ""}${holeN ? `, дырок ${holeN}` : ""}${goneN ? `, ушло ${goneN}` : holeN || goneN ? "" : ", дырок нет"}`
+        : `«${g.name}»: ${period.label} · ${n} зан. за порцию${holeN ? ` · дырок ${holeN}` : ""}`
     : String(res.extra || `«${g.name}»: ${period.label} — Alfa не ответила`);
-  return { extra, count: n, ok, capped };
+  return { extra, count: n, ok, capped: weak };
 }
 
 export { keepAlfaProbe };
@@ -2011,15 +2015,17 @@ export async function journalPull(opts: {
     const need = (c: (typeof chunks)[number]) => !chunkDone(c, doneKeys) || c.keys.some((k) => weakSet.has(k));
     const picked =
       (periodKey && (chunksAll.find((c) => c.key === periodKey) || journalChunks("quarter").find((c) => c.key === periodKey))) ||
-      chunks.find(need) ||
-      (recheck ? chunks[0] : null);
+      (!recheck && chunks.find(need)) ||
+      (recheck
+        ? { key: `w${clampRecheckDays(opts.recheckDays)}`, from: "", to: "", label: "окно", keys: [`w${clampRecheckDays(opts.recheckDays)}`] }
+        : null);
     if (!picked) {
       store.note = `«${hit.name}»: вся информация загружена.`;
       store.at = new Date().toISOString();
       saveStore(store);
       return { ok: true as const, extra: store.note, count: 0, scanned: 0, more: false, ...snap() };
     }
-    const res = await pullOneGroup(hit, picked, recheck || Boolean(periodKey && chunkDone(picked, doneKeys))).catch((e) => ({
+    const res = await pullOneGroup(hit, picked, recheck || Boolean(periodKey && chunkDone(picked, doneKeys)), opts.recheckDays).catch((e) => ({
       extra: `«${hit.name}»: ${e instanceof Error ? e.message : "ошибка"}`,
       count: 0,
       ok: false,

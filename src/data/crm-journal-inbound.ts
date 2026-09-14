@@ -3,7 +3,7 @@ import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
-import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe, clampRecheckDays } from "./crm-inbound-core";
+import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe, clampRecheckDays, lessonsSetGap, groupWindowGone } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
@@ -184,9 +184,9 @@ function withPupilNames(lesson: GroupCalLesson): GroupCalLesson {
 export async function inboundJournalGroup(
   branch: number,
   gid: number,
-  opts?: { token?: string; slots?: CrmSlot[]; hold?: Set<number>; dateFrom?: string; dateTo?: string; defer?: boolean; deep?: boolean; lite?: boolean; recheck?: boolean; groupName?: string },
+  opts?: { token?: string; slots?: CrmSlot[]; hold?: Set<number>; dateFrom?: string; dateTo?: string; defer?: boolean; deep?: boolean; lite?: boolean; recheck?: boolean; recheckDays?: number; groupName?: string },
 ) {
-  if (!alfaLinkedNow() || !gid) return { ok: true as const, extra: "без Alfa", count: 0, calendar: [] as GroupCalLesson[], capped: false };
+  if (!alfaLinkedNow() || !gid) return { ok: true as const, extra: "без Alfa", count: 0, calendar: [] as GroupCalLesson[], capped: false, hole: [] as number[], gone: [] as number[], pagesComplete: true };
   const slots = opts?.slots || (opts?.groupName ? [] : (await import("./alfacrm-schedule")).listAdminSlots());
   const slot = slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid);
   const cached = loadGroupCard(branch, gid);
@@ -199,35 +199,36 @@ export async function inboundJournalGroup(
     teacher: String(slot?.teacher || ""),
     subject: String(cached?.subject || slot?.subject || ""),
   };
-  const dateFrom = opts?.dateFrom || ruShift(opts?.lite ? -400 : -2600);
-  const dateTo = opts?.dateTo || ruShift(90);
-  const sliceWin = (list: GroupCalLesson[]) => {
-    if (!opts?.dateFrom || !opts?.dateTo) return list;
-    const a = parseLessonDate(opts.dateFrom);
-    const b = parseLessonDate(opts.dateTo);
-    if (!a || !b) return list;
-    return list.filter((l) => {
-      const d = parseLessonDate(l.date);
-      return Boolean(d && d >= a && d <= b);
-    });
+  const recheck = Boolean(opts?.recheck);
+  const dateFrom = recheck ? ruShift(-clampRecheckDays(opts?.recheckDays)) : opts?.dateFrom || ruShift(opts?.lite ? -400 : -2600);
+  const dateTo = recheck ? ruShift(90) : opts?.dateTo || ruShift(90);
+  const winFrom = ymd(dateFrom);
+  const winTo = ymd(dateTo);
+  const inWin = (l: GroupCalLesson) => {
+    const d = ymd(l.date);
+    return Boolean(d && winFrom && winTo && d >= winFrom && d <= winTo);
   };
+  const sliceWin = (list: GroupCalLesson[]) => (!winFrom || !winTo ? list : list.filter(inWin));
   const byKey = new Map<string, GroupCalLesson>();
+  const census = new Set<number>();
   let alfaOk = 0;
   let lastErr = "";
   let hitCap = false;
   let reported = 0;
   let loaded = 0;
-  async function pull(status: number, date_from: string, date_to: string, pages: number, pageSize: number) {
+  async function pull(status: number, date_from: string, date_to: string) {
     let got = 0;
     let total = 0;
-    for (let page = 0; page < pages; page++) {
+    let live = false;
+    for (let page = 0; page < 80; page++) {
       try {
         const raw = await request<unknown>(
           `/v2api/${branch}/lesson/index`,
-          { page, pageSize, status, group_id: gid, date_from: ymd(date_from), date_to: ymd(date_to) },
+          { page, pageSize: 100, status, group_id: gid, date_from: ymd(date_from), date_to: ymd(date_to) },
           t,
         );
         alfaOk += 1;
+        live = true;
         const pack = crmUnwrapIndex(raw);
         const chunk = (pack.items || []) as Parameters<typeof packLight>[0][];
         if (Number(pack.total) > total) total = Number(pack.total);
@@ -239,58 +240,74 @@ export async function inboundJournalGroup(
           if (!gids.length && Number(item.lesson_type_id || 0) === 2) continue;
           const packed = packLight(item, ctx);
           if (!packed) continue;
-          byKey.set(`${packed.lessonId || 0}|${packed.date}|${packed.from}`, withPupilNames(packed));
+          const lid = Number(packed.lessonId) || 0;
+          if (lid > 0) {
+            census.add(lid);
+            byKey.set(`id:${lid}`, withPupilNames(packed));
+          }
         }
-        if (chunk.length < pageSize) break;
-        if (page === pages - 1) hitCap = true;
+        const lastShort = !chunk.length || (total > 0 ? got >= total : chunk.length < 100);
+        if (lastShort) break;
+        if (page === 79) hitCap = true;
       } catch (e) {
         lastErr = e instanceof Error ? e.message.replace(/^alfacrm\s+/i, "") : "сеть";
-        if (alfaOk) hitCap = true;
+        hitCap = true;
         break;
       }
     }
+    if (!live) hitCap = true;
     if (total > 0 && got < total) hitCap = true;
     if (total > reported) reported = total;
   }
-  const windowed = Boolean(opts?.dateFrom && opts?.dateTo);
-  const deepPages = Boolean(opts?.recheck);
+  const windowed = Boolean(opts?.dateFrom && opts?.dateTo) || recheck;
   if (opts?.lite || windowed) {
-    await Promise.all([
-      pull(3, dateFrom, dateTo, deepPages ? 8 : 4, 50),
-      pull(1, dateFrom, dateTo, deepPages ? 3 : 1, 50),
-      pull(2, dateFrom, dateTo, deepPages ? 3 : 1, 50),
-    ]);
+    await Promise.all([pull(3, dateFrom, dateTo), pull(1, dateFrom, dateTo), pull(2, dateFrom, dateTo)]);
   } else {
-    await pull(3, dateFrom, dateTo, 10, 100);
-    await pull(1, dateFrom, dateTo, 8, 100);
-    await pull(2, dateFrom, dateTo, 4, 100);
+    await pull(3, dateFrom, dateTo);
+    await pull(1, dateFrom, dateTo);
+    await pull(2, dateFrom, dateTo);
   }
   if (!alfaOk) {
-    return { ok: false as const, extra: `«${ctx.groupName}»: Alfa не ответила${lastErr ? ` (${lastErr.slice(0, 80)})` : ""}`, count: 0, calendar: cached?.calendar || [], capped: true };
+    return { ok: false as const, extra: `«${ctx.groupName}»: Alfa не ответила${lastErr ? ` (${lastErr.slice(0, 80)})` : ""}`, count: 0, calendar: cached?.calendar || [], capped: true, hole: [] as number[], gone: [] as number[], pagesComplete: false };
   }
   const pulled = [...byKey.values()];
   const hold = opts?.hold || pendingExportIds(["lesson.update", "lesson.create"]);
-  const calendar = mergeLocalCalendar(pulled, cached?.calendar, hold, "union");
+  const holdIds = [...hold];
+  const pagesComplete = !hitCap;
+  let calendar = mergeLocalCalendar(pulled, cached?.calendar, hold, "union");
+  if (recheck && pagesComplete) {
+    calendar = pruneCalendarToAlfaIds(calendar, census, hold, [], winFrom, winTo);
+  }
+  const have = uniquePositiveIds(sliceWin(calendar).map((l) => Number(l.lessonId) || 0));
+  const hole = lessonsSetGap(have, census, holdIds).hole;
+  const gone = groupWindowGone(have, census, holdIds, pagesComplete);
+  const beforeIds = new Set((cached?.calendar || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+  const seatedNew = pulled.filter((l) => {
+    const id = Number(l.lessonId) || 0;
+    return id > 0 && !beforeIds.has(id);
+  });
   const now = new Date().toISOString();
   const noteOf = (n: number, suffix = "") =>
     n > 0 ? `«${ctx.groupName}»: ${n} зан.${suffix}` : `«${ctx.groupName}»: в Alfa занятий нет${suffix}`;
+  const gapNote = `${hole.length ? `, дырок ${hole.length}` : ""}${gone.length ? `, ушло ${gone.length}` : ""}`;
   const samePrint = cached && journalFingerprint(calendar) === journalFingerprint(cached.calendar || []);
   const sameMoney = cached && lessonPupilsKey(calendar) === lessonPupilsKey(cached.calendar || []);
-  if (samePrint && sameMoney) {
+  const gap = { hole, gone, pagesComplete, capped: !pagesComplete };
+  if (samePrint && sameMoney && !recheck) {
     if (opts?.deep) {
       const enriched = await enrichCalendarDetails(branch, calendar, { token: t, take: 16 });
       if (enriched.changed) {
         const card0 = { ...(cached || { id: gid, branchId: branch, name: ctx.groupName, calendar: [] as GroupCalLesson[], at: "", subject: ctx.subject, subjectId: Number(slot?.subjectId || 0) }), calendar: enriched.calendar, journalAt: now, at: now };
         if (!opts?.defer) {
           saveGroupCard(card0);
-          rememberLessons(sliceWin(enriched.calendar));
-          fanOutLessonWriteoffs(sliceWin(enriched.calendar));
+          rememberLessons(seatedNew);
+          fanOutLessonWriteoffs(seatedNew);
         }
-        return { ok: true as const, extra: noteOf(enriched.calendar.length, `, детали ${enriched.filled}`), count: enriched.calendar.length, calendar: enriched.calendar, card: card0, capped: hitCap };
+        return { ok: true as const, extra: noteOf(sliceWin(enriched.calendar).length, `, детали ${enriched.filled}${gapNote}`), count: sliceWin(enriched.calendar).length, calendar: enriched.calendar, card: card0, ...gap };
       }
     }
     if (cached) saveGroupCard({ ...cached, calendar, journalAt: now, at: cached.at || now });
-    return { ok: true as const, extra: noteOf(calendar.length, calendar.length ? ", без изменений" : ""), count: calendar.length, calendar, capped: hitCap };
+    return { ok: true as const, extra: noteOf(sliceWin(calendar).length, calendar.length ? `, без изменений${gapNote}` : gapNote), count: sliceWin(calendar).length, calendar, ...gap };
   }
   const card = {
     ...(cached || {
@@ -318,8 +335,8 @@ export async function inboundJournalGroup(
   };
   if (!opts?.defer) {
     saveGroupCard(card);
-    rememberLessons(sliceWin(calendar));
-    fanOutLessonWriteoffs(sliceWin(calendar));
+    rememberLessons(seatedNew);
+    fanOutLessonWriteoffs(seatedNew);
   }
   if (opts?.deep && calendar.length) {
     const enriched = await enrichCalendarDetails(branch, calendar, { token: t, take: 16 });
@@ -328,13 +345,13 @@ export async function inboundJournalGroup(
       card.journalAt = now;
       if (!opts?.defer) {
         saveGroupCard(card);
-        rememberLessons(sliceWin(enriched.calendar));
-        fanOutLessonWriteoffs(sliceWin(enriched.calendar));
+        rememberLessons(seatedNew);
+        fanOutLessonWriteoffs(seatedNew);
       }
-      return { ok: true as const, extra: noteOf(enriched.calendar.length, `, детали ${enriched.filled}`), count: enriched.calendar.length, calendar: enriched.calendar, card, capped: hitCap };
+      return { ok: true as const, extra: noteOf(sliceWin(enriched.calendar).length, `, детали ${enriched.filled}${gapNote}`), count: sliceWin(enriched.calendar).length, calendar: enriched.calendar, card, ...gap };
     }
   }
-  return { ok: true as const, extra: noteOf(calendar.length), count: calendar.length, calendar, card, capped: hitCap, alfaTotal: reported };
+  return { ok: true as const, extra: noteOf(sliceWin(calendar).length, gapNote), count: sliceWin(calendar).length, calendar, card, alfaTotal: reported, ...gap };
 }
 
 /** Первая и последняя явка группы в Alfa + даты карточки. 2–3 запроса, не весь журнал. */
@@ -980,12 +997,20 @@ export async function inboundJournalChunk(offset = 0, _take = 1) {
       const doneKeys = pulledPeriodKeys({ done: card.journalFill?.done, pulled });
       const fail = { ...(card.journalFill?.fail || {}) };
       const at = new Date().toISOString();
-      if (ok) {
+      const holeN = (res.hole || []).length;
+      const weakSet = new Set(card.journalFill?.weak || []);
+      if (ok && !res.capped && !holeN) {
         pulled[period.key] = at;
         if (!doneKeys.includes(period.key)) doneKeys.push(period.key);
         delete fail[period.key];
+        weakSet.delete(period.key);
+      } else if (ok) {
+        pulled[period.key] = at;
+        fail[period.key] = String(res.extra || "дырка");
+        weakSet.add(period.key);
       } else {
         fail[period.key] = String(res.extra || "Alfa не ответила");
+        weakSet.add(period.key);
       }
       saveGroupCard({
         ...card,
@@ -993,7 +1018,7 @@ export async function inboundJournalChunk(offset = 0, _take = 1) {
           done: [...new Set([...doneKeys, ...Object.keys(pulled)])],
           fail,
           pulled,
-          weak: card.journalFill?.weak,
+          weak: [...weakSet],
           rechecked: card.journalFill?.rechecked,
         },
         journalAt: at,

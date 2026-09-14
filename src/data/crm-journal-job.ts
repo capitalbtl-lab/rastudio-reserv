@@ -568,7 +568,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
     return { done: true, gap: 0, msg: doneMsg(job) };
   }
   let item = job.items[job.idx];
-  if ((mode === "groups" || mode === "groups-recheck") && item.groupId) {
+  if (mode === "groups" && item.groupId) {
     const g = journalPullGroups().find((x) => x.groupId === item.groupId && x.branchId === item.branchId) || journalPullGroups().find((x) => x.groupId === item.groupId);
     if (g) {
       const row = groupFillRow(g);

@@ -25,6 +25,7 @@ import {
   windowGoneLessonIds,
   windowAlfaKeep,
   lessonsSetGap,
+  groupWindowGone,
 } from "./crm-inbound-core.ts";
 import { slotActiveToday, slotOnPublicSchedule, mergeStatusPublish } from "./group-status.ts";
 
@@ -338,6 +339,24 @@ describe("inbound не сбрасывает курс сайта", () => {
     assert.deepEqual(gap.hole, [2]);
     assert.deepEqual(gap.extra, [3]);
     assert.equal(lessonsSetGap([1, 2, 9], [1, 2], [9]).extra.length, 0);
+    assert.deepEqual(groupWindowGone([1, 2], [], [], true), [1, 2]);
+    assert.deepEqual(groupWindowGone([1, 2], [], [], false), []);
+    assert.deepEqual(groupWindowGone([1, 2, 9], [1, 2], [9], true), []);
+    const win = pruneCalendarToAlfaIds(
+      [
+        { lessonId: 1, date: "2026-01-01" },
+        { lessonId: 2, date: "2026-09-01" },
+        { lessonId: 3, date: "2026-12-01" },
+      ],
+      [2],
+      [],
+      [],
+      "2026-08-01",
+      "2026-10-01",
+    );
+    assert.equal(win.some((x) => x.lessonId === 1), true);
+    assert.equal(win.some((x) => x.lessonId === 2), true);
+    assert.equal(win.some((x) => x.lessonId === 3), true);
   });
 });
 

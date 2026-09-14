@@ -58,6 +58,16 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /opts\?\.lite \|\| windowed/);
     assert.match(inbound, /date_from: ymd\(date_from\)/);
     assert.match(inbound, /date_to: ymd\(date_to\)/);
+    assert.match(inbound, /byKey.set\(`id:\$\{lid\}`/);
+    assert.match(inbound, /recheckDays/);
+    assert.match(inbound, /groupWindowGone/);
+    assert.match(inbound, /fanOutLessonWriteoffs\(seatedNew\)/);
+    assert.doesNotMatch(inbound, /lessonId \|\| 0\}\|\$\{packed.date\}/);
+    assert.match(pull, /pagesComplete/);
+    assert.match(pull, /holeN > 0 \|\| \(recheck && goneN > 0\)/);
+    assert.doesNotMatch(pull, /alfaTotal > 0 && n < alfaTotal/);
+    assert.match(pull, /key: `w\$\{clampRecheckDays/);
+    assert.match(job, /if \(mode === "groups" && item.groupId\)/);
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.doesNotMatch(pull, /a\.done - b\.done/);
     assert.match(pull, /kind === "details"/);

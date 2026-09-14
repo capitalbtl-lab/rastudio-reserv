@@ -217,7 +217,7 @@ describe("карточка не ждёт Alfa", () => {
     assert.match(inbound, /customerLessonsNeedAttend/);
     assert.match(inbound, /inboundCustomerLessonsChunk/);
     assert.match(inbound, /listDossierCrm/);
-    assert.match(inbound, /pull\(1, dateFrom, dateTo, 8, 100\)/);
+    assert.match(inbound, /pull\(1, dateFrom, dateTo\)/);
     assert.match(inbound, /status: Number\(l.status\) \|\| 3/);
     assert.doesNotMatch(inbound, /lesson_id: l.lessonId/);
     assert.match(inbound, /mergeLessonPupils/);

@@ -168,6 +168,7 @@ export function pruneCalendarToAlfaIds<T extends { lessonId?: number; date?: str
   holdIds: Iterable<number> = [],
   extraKeep: Iterable<number> = [],
   keepBefore = "",
+  keepAfter = "",
 ): T[] {
   const keep = new Set<number>();
   for (const n of alfaIds) {
@@ -180,10 +181,13 @@ export function pruneCalendarToAlfaIds<T extends { lessonId?: number; date?: str
   }
   const hold = new Set([...holdIds].map(Number).filter((n) => n));
   const from = lessonDay(keepBefore);
+  const to = lessonDay(keepAfter);
   return (disk || []).filter((x) => {
     const lid = Number(x.lessonId) || 0;
     if (lid < 0 || hold.has(lid)) return true;
-    if (from && lessonDay(x.date) && lessonDay(x.date) < from) return true;
+    const day = lessonDay(x.date);
+    if (from && day && day < from) return true;
+    if (to && day && day > to) return true;
     if (!lid) return false;
     return keep.has(lid);
   });
@@ -253,6 +257,16 @@ export function lessonsSetGap(have: Iterable<number>, seen: Iterable<number>, pr
     for (const id of H) if (!S.has(id) && !P.has(id)) extra.push(id);
   }
   return { hole, extra, seenComplete: S.size > 0 };
+}
+
+/** Ушедшие в окне группы. Пустой census при дочитанных страницах — все have, кроме hold. Ядро шага 2 (пустой seen) не трогаем. */
+export function groupWindowGone(have: Iterable<number>, census: Iterable<number>, hold: Iterable<number> = [], pagesComplete = false) {
+  if (!pagesComplete) return [] as number[];
+  const seen = uniquePositiveIds(census);
+  const disk = uniquePositiveIds(have);
+  const protect = uniquePositiveIds(hold);
+  if (!seen.length) return disk.filter((id) => !protect.includes(id));
+  return lessonsSetGap(disk, seen, protect).extra;
 }
 
 export function canFanOutToCalendar<T extends { lessonId?: number; date?: string; from?: string }>(prev: T[] | undefined, lesson: T) {
