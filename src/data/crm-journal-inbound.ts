@@ -776,7 +776,6 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
           if (lid > 0) droppedNoDate.push(lid);
           continue;
         }
-        if (lessonSeatForCustomer(rec, id) === "foreign") continue;
         const packed = packLight(
           { ...item, date: day, customer_ids: uniquePositiveIds([...ids, id]) },
           {
@@ -923,7 +922,7 @@ export async function inboundMissingCustomerLessons(
     if (i) await pauseMs(200);
     let packedRow: GroupCalLesson | undefined;
     let liveFail = false;
-    let foreign = false;
+    let found = false;
     outer: for (const bid of branches) {
       for (const body of bodiesFor(lid)) {
         const live = await pullLessonPage(bid, body, t, 2);
@@ -933,11 +932,11 @@ export async function inboundMissingCustomerLessons(
         }
         const hit = live.items.find((x) => Number(x.id) === lid);
         if (!hit) continue;
+        found = true;
         const rec = hit as Record<string, unknown>;
         const seat = lessonSeatForCustomer(rec, id);
         if (seat === "foreign") {
-          foreign = true;
-          continue;
+          console.warn(`inbound missing cid=${id} foreign-seat lessonId=${lid} status=${String(body.status || "")} bid=${bid}`);
         }
         const day = ymd(hit.date) || ymd((hit as { lesson_date?: string }).lesson_date);
         if (!day) {
@@ -977,7 +976,11 @@ export async function inboundMissingCustomerLessons(
       pulled.push(packedRow);
       continue;
     }
-    if (liveFail && !foreign) {
+    if (liveFail && !found) {
+      failed.push(lid);
+      continue;
+    }
+    if (found) {
       failed.push(lid);
       continue;
     }

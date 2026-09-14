@@ -375,7 +375,10 @@ describe("ручной журнал с Alfa", () => {
     assert.match(miss, /no-date lessonId/);
     assert.match(miss, /liveFail/);
     assert.match(miss, /seat === "foreign"/);
-    assert.match(miss, /if \(liveFail && !foreign\)/);
+    assert.match(miss, /foreign-seat/);
+    assert.match(miss, /if \(found\) \{\s*failed\.push\(lid\)/);
+    assert.match(miss, /if \(liveFail && !found\)/);
+    assert.doesNotMatch(miss, /foreign = true/);
     assert.doesNotMatch(inbound, /setTimeout\(\(\) => \{\s*void inboundCustomerLessons/);
     function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
       const k = Number(keep) || 0;
@@ -450,7 +453,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(one, /lessonsWindowDays: 0/);
     assert.doesNotMatch(one, /probeCustomerLessons\(branchId, cid, \{ dateFrom: from \}\)/);
     assert.match(inbound, /export function lessonSeatForCustomer/);
-    assert.match(inbound, /lessonSeatForCustomer\(rec, id\) === "foreign"/);
+    assert.match(inbound, /lessonSeatForCustomer\(rec, id\)/);
+    assert.doesNotMatch(inbound, /lessonSeatForCustomer\(rec, id\) === "foreign"\) continue/);
     const missAt = inbound.indexOf("export async function inboundMissingCustomerLessons");
     const miss = inbound.slice(missAt, missAt + 9000);
     assert.match(miss, /break outer/);
