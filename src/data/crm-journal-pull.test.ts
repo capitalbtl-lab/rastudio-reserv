@@ -318,7 +318,11 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /10 \* 60 \* 1000/);
     assert.match(pull, /monthly: Boolean\(slow\)/);
     assert.match(inbound, /monthly \? 8 : 3/);
-    assert.match(inbound, /lessonFillStartMonth/);
+    assert.match(inbound, /pageEnd = \(Number\(cur.page\) \|\| 0\) \+ maxPages/);
+    assert.doesNotMatch(inbound, /for \(let page = cur.page; page < maxPages/);
+    assert.doesNotMatch(inbound, /if \(!progressed && !cur.done && !monthly\) cur = lessonFillAdvance/);
+    assert.match(pull, /lessonsSeenIds: seen/);
+    assert.match(pull, /dropped: droppedN/);
     assert.doesNotMatch(pull, /res\.walked && lessonsCountShort\(disk, alfaGate, true\)/);
     assert.match(inbound, /export async function inboundMissingCustomerLessons/);
     assert.match(pull, /inboundMissingCustomerLessons/);

@@ -366,7 +366,7 @@ export function shouldRetryShortPeople(
   mode: string,
   recheck: boolean,
   kind: string,
-  res: { ok?: boolean; student?: { short?: boolean; seated?: number; holeApproved?: boolean } } | null,
+  res: { ok?: boolean; student?: { short?: boolean; seated?: number; dropped?: number; holeApproved?: boolean } } | null,
 ) {
   if (recheck) return false;
   if (mode !== "people" && mode !== "person" && mode !== "people-slow") return false;
@@ -375,7 +375,7 @@ export function shouldRetryShortPeople(
   if (res.student?.holeApproved) return false;
   if (!res.student?.short) return false;
   if (mode === "people-slow") return false;
-  return (Number(res.student.seated) || 0) > 0;
+  return (Number(res.student.seated) || 0) > 0 || (Number(res.student.dropped) || 0) > 0;
 }
 
 export function jobGapMs(_mode?: JournalJobMode | "") {

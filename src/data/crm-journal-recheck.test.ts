@@ -121,7 +121,7 @@ describe("перепроверка журнала", () => {
     assert.match(ui, /YearsSelect/);
     assert.match(ui, /HINT\.loadOneGroups/);
     assert.match(ui, /HINT\.loadOneMoney/);
-    assert.match(ui, /h-\[8px\] w-\[8px\]/);
+    assert.match(ui, /h-\[11px\] w-\[11px\]/);
     assert.match(ui, /BTN_RED/);
     assert.match(ui, /bg-red-600/);
     assert.match(ui, /PEOPLE_FROM_OPTS/);

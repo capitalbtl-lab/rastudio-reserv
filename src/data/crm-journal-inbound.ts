@@ -48,6 +48,18 @@ function hm(raw?: string) {
   return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
 }
 
+function lessonBidOf(l: { groupIds?: number[] }, slots: { groupId?: number; branchId?: number }[], home: number) {
+  const gid = Number((l.groupIds || [])[0] || 0);
+  if (gid) {
+    const hit =
+      slots.find((s) => Number(s.groupId) === gid && Number(s.branchId) > 0) ||
+      slots.find((s) => Number(s.groupId) === gid);
+    const b = Number(hit?.branchId || 0);
+    if (b) return b;
+  }
+  return Number(home) || 1;
+}
+
 function ruShift(days: number) {
   const d = new Date();
   d.setDate(d.getDate() + days);
@@ -545,11 +557,13 @@ export async function enrichCalendarDetails(
   const t = opts?.token || (await token());
   const home = Number(branch) || 1;
   const cid = Number(opts?.customerId) || 0;
+  const { listAdminSlots } = await import("./alfacrm-schedule");
+  const slots = listAdminSlots();
   let filled = 0;
   for (const l of need) {
     const json = await request<{ items?: Parameters<typeof packLight>[0][] }>(
-      `/v2api/${home}/lesson/index`,
-      { page: 0, pageSize: 5, id: l.lessonId, lesson_id: l.lessonId },
+      `/v2api/${lessonBidOf(l, slots, home)}/lesson/index`,
+      { page: 0, pageSize: 5, id: l.lessonId, status: Number(l.status) || 3 },
       t,
     ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
     const raw = (json.items || []).find((x) => Number(x.id) === Number(l.lessonId));
@@ -665,7 +679,8 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         continue;
       }
       let progressed = false;
-      for (let page = cur.page; page < maxPages; page += 1) {
+      const pageEnd = (Number(cur.page) || 0) + maxPages;
+      for (let page = cur.page; page < pageEnd && ran < maxRun && !cur.done; page += 1) {
         const winFrom = monthly ? ymd(cur.from) || ymd(from) : ymd(from);
         const winTo = monthly ? ymd(cur.to) || ymd(dateTo) : ymd(dateTo);
         const live = await pullLessonPage(
@@ -688,8 +703,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         if (ran >= maxRun || cur.done || lastShort) break;
       }
       if (aborted) break;
-      if (monthly && !progressed && !cur.done) break;
-      if (!progressed && !cur.done && !monthly) cur = lessonFillAdvance(cur, true, branches);
+      if (!progressed && !cur.done) break;
     }
     const droppedNoDate: number[] = [];
     const pulled: GroupCalLesson[] = [];
@@ -746,8 +760,8 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       .slice(0, detailCap);
     for (const l of thin) {
       const json = await request<{ items?: Parameters<typeof packLight>[0][] }>(
-        `/v2api/${home}/lesson/index`,
-        { page: 0, pageSize: 5, id: l.lessonId, lesson_id: l.lessonId },
+        `/v2api/${lessonBidOf(l, slots, home)}/lesson/index`,
+        { page: 0, pageSize: 5, id: l.lessonId, status: Number(l.status) || 3 },
         t,
       ).catch(() => ({ items: [] as Parameters<typeof packLight>[0][] }));
       const raw = (json.items || []).find((x) => Number(x.id) === Number(l.lessonId));

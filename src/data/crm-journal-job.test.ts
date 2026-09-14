@@ -144,6 +144,7 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryShortPeople("people", false, "students", { ok: true, student: { short: true, seated: 50 } }), true);
     assert.equal(shouldRetryShortPeople("person", false, "students", { ok: true, student: { short: true, seated: 19 } }), true);
     assert.equal(shouldRetryShortPeople("people", false, "students", { ok: true, student: { short: true, seated: 0 } }), false);
+    assert.equal(shouldRetryShortPeople("people", false, "students", { ok: true, student: { short: true, seated: 0, dropped: 36 } }), true);
     assert.equal(shouldRetryShortPeople("people", true, "students", { ok: true, student: { short: true, seated: 50 } }), false);
     assert.equal(shouldRetryShortPeople("people", false, "balance", { ok: true, student: { short: true, seated: 50 } }), false);
     assert.equal(shouldRetryShortPeople("people-slow", false, "students", { ok: true, student: { short: true, seated: 50 } }), false);

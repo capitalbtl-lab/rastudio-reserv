@@ -18,7 +18,7 @@ import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlap
 import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
-import { countAlfaLessonUniq, keepAlfaProbe } from "./crm-inbound-core";
+import { countAlfaLessonUniq, keepAlfaProbe, uniquePositiveIds } from "./crm-inbound-core";
 
 export type JournalPullKind = "group" | "school" | "students" | "balance" | "life" | "details" | "archives" | "archivesPupils" | "hydrateDisk" | "archiveCount" | "archiveCatalog" | "archiveAdd" | "audit" | "jobStart" | "jobStop" | "jobStatus" | "roster" | "rosterPolicy" | "holeApprove" | "holeApproveClear" | "lessonsReset";
 export type JournalPullStudy = "1" | "2" | "all";
@@ -1096,10 +1096,15 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   };
   let lessons = 0;
   let seated = 0;
+  let droppedN = 0;
   let disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
   if (!balance) {
   if (!recheck) {
-    const first = await probeCustomerLessons(branchId, cid, { dateFrom: from }).catch(() => ({ total: 0, ok: false as const }));
+    const first = await probeCustomerLessons(branchId, cid, { dateFrom: from }).catch(() => ({ total: 0, ok: false as const, ids: [] as number[] }));
+    if (first.ok) {
+      const seen = uniquePositiveIds(first.ids || []);
+      if (seen.length) stampCustomerSync(cid, { lessonsSeenIds: seen });
+    }
     const alfaKeep = Number(customerSyncOf(cid).lessonsAlfa) || 0;
     const alfa0 = first.ok ? first.total : 0;
     const alfaGate = Math.max(alfa0, alfaKeep);
@@ -1126,7 +1131,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     } else {
       const have0 = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
       let missing = (customerSyncOf(cid).lessonsSeenIds || []).filter((n) => !have0.has(n));
-      if (lessonsCountShort(disk, alfaGate, true) && !missing.length) {
+      if (lessonsCountShort(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0) && !missing.length && !first.ok) {
         const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: from }).catch(() => ({ ids: [] as number[], ok: false as const }));
         if (census.ok) {
           stampCustomerSync(cid, { lessonsSeenIds: census.ids });
@@ -1134,12 +1139,13 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         }
       }
       if (missing.length) {
-        const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0 }));
+        const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0, dropped: [] as number[] }));
         lessons += Number(gap.count) || 0;
         seated += Number(gap.count) || 0;
+        droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
         disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
       }
-      if (lessonsCountShort(disk, alfaGate, true)) {
+      if (lessonsCountShort(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0)) {
       const deadline = slow ? Date.now() + 10 * 60 * 1000 : 0;
       for (let i = 0; !deadline ? i < 6 : Date.now() < deadline; i += 1) {
         const res = await inboundCustomerLessons(branchId, cid, {
@@ -1159,23 +1165,28 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
         }
         disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
-        if (!lessonsCountShort(disk, alfaGate, true)) break;
+        if (!lessonsCountShort(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0)) break;
         if (slow && i > 0 && !(Number(res.count) || 0) && Boolean((res as { done?: boolean }).done)) break;
       }
       }
-      if (lessonsCountShort(disk, alfaGate, true)) {
+      if (lessonsCountShort(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0)) {
         const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
-        const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: from }).catch(() => ({ ids: [] as number[], ok: false as const }));
-        if (census.ok) {
-          stampCustomerSync(cid, { lessonsSeenIds: census.ids });
-          missing = census.ids.filter((n) => !have.has(n));
+        if (first.ok) {
+          missing = (customerSyncOf(cid).lessonsSeenIds || first.ids || []).filter((n) => !have.has(n));
         } else {
-          missing = missing.filter((n) => !have.has(n));
+          const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: from }).catch(() => ({ ids: [] as number[], ok: false as const }));
+          if (census.ok) {
+            stampCustomerSync(cid, { lessonsSeenIds: census.ids });
+            missing = census.ids.filter((n) => !have.has(n));
+          } else {
+            missing = missing.filter((n) => !have.has(n));
+          }
         }
         if (missing.length) {
-          const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0 }));
+          const gap = await inboundMissingCustomerLessons(branchId, cid, missing, { force: true, take: 50 }).catch(() => ({ count: 0, dropped: [] as number[] }));
           lessons += Number(gap.count) || 0;
           seated += Number(gap.count) || 0;
+          droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
           disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
         }
       }
@@ -1275,6 +1286,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     rechecked: Boolean(sync.lessonsRecheckAt) && !short && !dups,
     paysRechecked: Boolean(sync.paysRecheckAt),
     seated,
+    dropped: droppedN,
     holeApproved: Boolean(sync.journalHoleApprovedAt),
   };
 }
