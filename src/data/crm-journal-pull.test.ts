@@ -380,15 +380,17 @@ describe("ручной журнал с Alfa", () => {
     assert.match(miss, /if \(liveFail && !found\)/);
     assert.doesNotMatch(miss, /foreign = true/);
     assert.doesNotMatch(inbound, /setTimeout\(\(\) => \{\s*void inboundCustomerLessons/);
-    function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
+    function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean, census = false) {
       const k = Number(keep) || 0;
       const a = Number(alfa) || 0;
       if (!probedOk) return { write: false, alfa: k, probed: k > 0 };
+      if (census) return { write: true, alfa: a, probed: true };
       if (k > 0 && a < k) return { write: false, alfa: k, probed: true };
       return { write: true, alfa: a, probed: true };
     }
     assert.deepEqual(keepAlfaProbe(286, 0, false), { write: false, alfa: 286, probed: true });
     assert.deepEqual(keepAlfaProbe(286, 200, true), { write: false, alfa: 286, probed: true });
+    assert.deepEqual(keepAlfaProbe(286, 200, true, true), { write: true, alfa: 200, probed: true });
     assert.deepEqual(keepAlfaProbe(286, 286, true), { write: true, alfa: 286, probed: true });
     assert.deepEqual(keepAlfaProbe(0, 50, true), { write: true, alfa: 50, probed: true });
     assert.deepEqual(keepAlfaProbe(0, 0, false), { write: false, alfa: 0, probed: false });
@@ -417,7 +419,10 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /dateTo: windowTo/);
     assert.match(rec, /applyCustomerLessonCensus\(cid, census.ids, true, windowFrom, windowTo\)/);
     assert.match(one, /recheckCensusWindow/);
-    assert.match(one, /mark\(disk, alfaGate, first\.ok\)/);
+    assert.match(one, /mark\(disk, alfa0, true, censusOk\)/);
+    assert.match(one, /mark\(disk, alfa0, first.ok, censusOk\)/);
+    assert.match(one, /keepAlfaProbe\(keep, alfa, probedOk, census\)/);
+    assert.match(one, /censusOk = Boolean\(first.ok && range.full\)/);
     assert.match(one, /studentCensusRange/);
     assert.match(one, /dateFrom: range.from, dateTo: range.to/);
     assert.doesNotMatch(one, /censusCustomerLessonIds\(branchId, cid, \{ dateFrom: from \}\)/);
@@ -447,7 +452,8 @@ describe("ручной журнал с Alfa", () => {
     const one = pull.slice(oneAt, oneEnd > oneAt ? oneEnd : oneAt + 14000);
     assert.match(one, /studentCensusRange\(customerSyncOf\(cid\)\)/);
     assert.match(one, /dateFrom: range.from, dateTo: range.to/);
-    assert.match(one, /prevSeen = range.full \? \[\]/);
+    assert.match(one, /uniquePositiveIds\(first.ids \|\| \[\]\)/);
+    assert.doesNotMatch(one, /prevSeen = range.full \? \[\]/);
     assert.match(one, /lessonsWindowDays: range.days/);
     assert.match(one, /nextLessonWindowDays\(range.days\)/);
     assert.match(one, /lessonsWindowDays: 0/);

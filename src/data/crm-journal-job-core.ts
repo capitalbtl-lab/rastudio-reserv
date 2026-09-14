@@ -309,7 +309,7 @@ function asPeopleItem(r: PeopleJobRow): JournalJobItem {
   return { cid: r.cid, branchId: r.branchId, name: r.name };
 }
 
-/** Синяя «Перепроверить по одному»: справа → жёлтые слева → снова справа те же. */
+/** Синяя «Перепроверить по одному»: справа → жёлтые слева → снова справа те же (даже если ещё short). */
 export function peopleRecheckAdvance(
   people: PeopleJobRow[],
   kind: "students" | "balance",
@@ -322,7 +322,7 @@ export function peopleRecheckAdvance(
   if (finishedWave === "left") {
     const want = new Set(follow.map((f) => Number(f.cid) || 0).filter(Boolean));
     const items = people
-      .filter((r) => want.has(r.cid) && peopleJobFinished(r, kind) && !(kind === "students" && r.short && r.holeApproved))
+      .filter((r) => want.has(r.cid) && !(kind === "students" && r.short && r.holeApproved))
       .map(asPeopleItem);
     if (!items.length) return { done: true, wave: "right2", items: [], follow, recheck: true };
     return { done: false, wave: "right2", items, follow, recheck: true };

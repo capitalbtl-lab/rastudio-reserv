@@ -183,7 +183,10 @@ describe("фон истории из Alfa", () => {
     assert.deepEqual(afterRight.items.map((x) => x.cid), [2]);
     assert.equal(afterRight.recheck, false);
     const stillYellow = peopleRecheckAdvance([right, left, hole], "students", "left", afterRight.follow);
-    assert.equal(stillYellow.done, true);
+    assert.equal(stillYellow.wave, "right2");
+    assert.equal(stillYellow.done, false);
+    assert.deepEqual(stillYellow.items.map((x) => x.cid), [2]);
+    assert.equal(stillYellow.recheck, true);
     const loaded = { ...left, journal: true, short: false };
     const afterLeft = peopleRecheckAdvance([right, loaded, hole], "students", "left", afterRight.follow);
     assert.equal(afterLeft.wave, "right2");

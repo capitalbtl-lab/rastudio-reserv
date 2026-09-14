@@ -1127,9 +1127,9 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingCustomerLessons, recheckCensusWindow, studentProtectLessonIds } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
-  const mark = (disk: number, alfa: number, probedOk: boolean) => {
+  const mark = (disk: number, alfa: number, probedOk: boolean, census = false) => {
     const keep = Number(customerSyncOf(cid).lessonsAlfa) || 0;
-    const held = keepAlfaProbe(keep, alfa, probedOk);
+    const held = keepAlfaProbe(keep, alfa, probedOk, census);
     const have = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
     const gap = stampLessonSetGap({ ...customerSyncOf(cid), ...(held.write ? { lessonsAlfa: held.alfa } : {}) }, have, studentProtectLessonIds(cid));
     const preview = { ...customerSyncOf(cid), lessonsDisk: disk, ...(held.write ? { lessonsAlfa: held.alfa, lessonsAlfaAt: customerSyncOf(cid).lessonsAlfaAt || "x" } : {}), ...gap };
@@ -1163,14 +1163,17 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const range = studentCensusRange(customerSyncOf(cid));
     const first = await probeCustomerLessons(branchId, cid, { dateFrom: range.from, dateTo: range.to }).catch(() => ({ total: 0, ok: false as const, ids: [] as number[] }));
     if (first.ok) {
-      const prevSeen = range.full ? [] : uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
-      const seen = uniquePositiveIds([...prevSeen, ...(first.ids || [])]);
+      const prevSeen = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
+      const seen = range.full
+        ? uniquePositiveIds(first.ids || [])
+        : uniquePositiveIds([...prevSeen, ...(first.ids || [])]);
       if (seen.length) stampCustomerSync(cid, { lessonsSeenIds: seen, ...(range.full ? {} : { lessonsWindowDays: range.days }) });
     }
     const alfaKeep = Number(customerSyncOf(cid).lessonsAlfa) || 0;
     const alfa0 = first.ok ? first.total : 0;
-    const alfaGate = Math.max(alfa0, alfaKeep);
-    const weak = Boolean(first.ok && alfaKeep > 0 && alfa0 < alfaKeep);
+    const censusOk = Boolean(first.ok && range.full);
+    const alfaGate = censusOk ? alfa0 : Math.max(alfa0, alfaKeep);
+    const weak = Boolean(first.ok && !censusOk && alfaKeep > 0 && alfa0 < alfaKeep);
     const extra0 = lessonsCountExtra(disk, alfaGate, first.ok || alfaKeep > 0);
     const haveNow = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
     const gap0 = stampLessonSetGap(
@@ -1180,7 +1183,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     );
     const setsClosed = !(Number(gap0.lessonsHoleN) || 0) && !(Number(gap0.lessonsExtraN) || 0);
     if (first.ok && !weak && disk >= alfaGate && !extra0 && setsClosed) {
-      const hit = mark(disk, alfa0, true);
+      const hit = mark(disk, alfa0, true, censusOk);
       if (hit.closed) stampCustomerSync(cid, { lessonsWindowDays: 0 });
       if (!balance)
         return {
@@ -1204,7 +1207,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       if (lessonsCountShort(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0) && !missing.length && !first.ok) {
         const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: range.from, dateTo: range.to }).catch(() => ({ ids: [] as number[], ok: false as const }));
         if (census.ok) {
-          const prev = range.full ? [] : uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
+          const prev = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
           stampCustomerSync(cid, { lessonsSeenIds: uniquePositiveIds([...prev, ...census.ids]) });
           missing = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []).filter((n) => !have0.has(n));
         }
@@ -1248,7 +1251,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         } else {
           const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: range.from, dateTo: range.to }).catch(() => ({ ids: [] as number[], ok: false as const }));
           if (census.ok) {
-            const prev = range.full ? [] : uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
+            const prev = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
             stampCustomerSync(cid, { lessonsSeenIds: uniquePositiveIds([...prev, ...census.ids]) });
             missing = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []).filter((n) => !have.has(n));
           } else {
@@ -1263,7 +1266,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
         }
       }
-      const hit = mark(disk, alfaGate, first.ok);
+      const hit = mark(disk, alfa0, first.ok, censusOk);
       if (hit.closed) stampCustomerSync(cid, { lessonsWindowDays: 0 });
       else if (!range.full && (hit.short || hit.extra) && !customerSyncOf(cid).journalHoleApprovedAt) {
         stampCustomerSync(cid, { lessonsWindowDays: nextLessonWindowDays(range.days) });

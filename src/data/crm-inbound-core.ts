@@ -4,7 +4,7 @@ export function inboundTake(opts: { pending?: boolean }) {
   return opts.pending ? ("skip" as const) : ("alfa" as const);
 }
 
-/** Сорванная/слабая проба не затирает известный счёт. Полная перепись (census) — правда Alfa, можно снизить. */
+/** Сорванная проба не трогает счёт. Неполная (окно) не занижает. Полная перепись (census) — правда Alfa, можно снизить. */
 export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean, census = false) {
   const k = Number(keep) || 0;
   const a = Number(alfa) || 0;
