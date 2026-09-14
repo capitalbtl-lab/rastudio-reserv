@@ -80,6 +80,11 @@ describe("фон истории из Alfa", () => {
     );
     assert.equal(peopleJobFinished(people[3], "students"), false);
     assert.equal(peopleJobFinished({ cid: 6, branchId: 2, name: "Е", journal: false, pays: false, dups: true }, "students"), true);
+    assert.equal(peopleJobFinished({ cid: 6176, branchId: 1, name: "Баукина", journal: false, pays: false, short: true, dups: true }, "students"), false);
+    assert.deepEqual(
+      peopleJobQueue([{ cid: 6176, branchId: 1, name: "Баукина", journal: false, pays: false, short: true, dups: true }], "students", false).map((x) => x.cid),
+      [6176],
+    );
     assert.deepEqual(
       peopleJobQueue(
         [

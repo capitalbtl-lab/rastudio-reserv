@@ -11,7 +11,7 @@ import { CACHE_KIND_META, type CacheKind, type CachePolicy } from "@/data/crm-ca
 import { exportOpLabel, type CrmExportOp } from "@/data/crm-export-queue-core";
 import { ALFA_LINK_MODES, ALFA_PULL_CH, ALFA_PUSH_CH, ALFA_PIPE_CH, ALFA_SYNC_DEFAULT, type AlfaLinkMode, type AlfaPullCh, type AlfaPushCh, type AlfaPipeCh } from "@/data/crm-alfa-link-core";
 import { journalChunks, clampGrain, type Grain } from "@/data/crm-journal-periods";
-import { keepAlfa, peopleLessonsLine, PEOPLE_PACK } from "@/data/crm-people-line";
+import { keepAlfa, peopleLessonsLine, peopleStudentAction, peopleStudentBadge, peopleStudentHint, PEOPLE_PACK } from "@/data/crm-people-line";
 import { STEP_LOAD, type HistLoadTab } from "@/data/crm-history-load-guide";
 
 function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
@@ -1418,7 +1418,9 @@ function PeopleFillList({
       kind === "students" && alfaShown != null
         ? peopleLessonsLine({ disk: Number(row.lessons) || 0, alfa: alfaShown, pack: PEOPLE_PACK, plus, at: row.at, running: active })
         : null;
-    const numsHint = dups ? "дубли, снять" : nums?.hint || "";
+    const numsHint = peopleStudentHint({ short, dups, holeApproved: approved, lineHint: nums?.hint || "" });
+    const act = kind === "balance" ? (full ? "recheck" : "load") : peopleStudentAction({ short, dups, journal: Boolean(row.journal), holeApproved: approved });
+    const badge = peopleStudentBadge({ approved, short, dups, full, needsRecheck });
     const step = active
       ? `загрузка · ${row.name}`
       : short
@@ -1442,13 +1444,9 @@ function PeopleFillList({
             ? "касса: ещё страницы, нажмите снова"
             : "Загрузить кассу"
           : "Шаг 1 · загрузить календарь";
-    const btn = (kind === "balance" ? full : full || dups)
-      ? "Перепроверить"
-      : kind === "balance"
-        ? "Загрузить кассу"
-        : short
-          ? "Добрать"
-          : "Загрузить календарь";
+    const btn = kind === "balance"
+      ? full ? "Перепроверить" : "Загрузить кассу"
+      : act === "recheck" ? "Перепроверить" : act === "dobrat" ? "Добрать" : "Загрузить календарь";
     return (
       <li key={id} className={cn("rounded-2xl p-3 ring-1", approved || short || dups ? "bg-amber-50 ring-amber-400" : needsRecheck ? "bg-sky-50 ring-sky-400" : full ? "bg-white ring-emerald-300" : active ? "bg-white ring-primary" : "bg-white ring-black/8")}>
         <div className="flex items-center gap-2">
@@ -1478,20 +1476,18 @@ function PeopleFillList({
             <span className="rounded-full bg-black/10 px-2 py-0.5 text-[0.72rem] font-semibold tabular-nums">№{row.cid}</span>
           </span>
           <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-            {approved ? (
+            {badge === "approved" ? (
               <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950" title="Журнал не сошёлся. Допущен к следующим шагам. Снять отметку вручную.">
                 Одобрен
               </span>
-            ) : dups ? (
-              <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950">на диске больше · есть дубли</span>
-            ) : full ? (
-              needsRecheck ? (
-                <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[0.72rem] font-semibold text-sky-950">есть неперепроверенные данные</span>
-              ) : (
-                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">загрузка завершена</span>
-              )
-            ) : short ? (
+            ) : badge === "short" ? (
               <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950">в Alfa больше</span>
+            ) : badge === "dups" ? (
+              <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[0.72rem] font-semibold text-amber-950">на диске больше · есть дубли</span>
+            ) : badge === "recheck" ? (
+              <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[0.72rem] font-semibold text-sky-950">есть неперепроверенные данные</span>
+            ) : badge === "done" ? (
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.72rem] font-semibold text-emerald-900">загрузка завершена</span>
             ) : (
               <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.72rem] font-semibold text-rose-900">требуют загрузки</span>
             )}
@@ -1531,15 +1527,15 @@ function PeopleFillList({
             className={cn(BTN_LOAD_SM, "min-w-[12.5rem] w-fit shrink-0 px-4", active && "ra-progress-run")}
             onClick={(e) => {
               e.stopPropagation();
-              if (kind === "balance" ? full : full || dups) onRecheck(row);
+              if (kind === "balance" ? full : act === "recheck") onRecheck(row);
               else onLoad(row);
             }}
           >
             {btn}
           </button>,
-          (kind === "balance" ? full : full || dups) ? (kind === "balance" ? HINT.recheckPay : HINT.recheckCal) : kind === "balance" ? HINT.loadPay : HINT.loadCal,
+          (kind === "balance" ? full : act === "recheck") ? (kind === "balance" ? HINT.recheckPay : HINT.recheckCal) : kind === "balance" ? HINT.loadPay : HINT.loadCal,
           )}
-          {kind === "balance" ? (full ? windowSel : years) : full || dups ? windowSel : years}
+          {kind === "balance" ? (full ? windowSel : years) : act === "recheck" ? windowSel : years}
           {short && onFullHistory
             ? withHint(
                 <button

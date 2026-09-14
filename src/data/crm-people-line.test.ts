@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { keepAlfa, peopleClock, peopleLessonsLine, PEOPLE_PACK } from "./crm-people-line.ts";
+import { keepAlfa, peopleClock, peopleLessonsLine, peopleStudentAction, peopleStudentBadge, peopleStudentHint, PEOPLE_PACK } from "./crm-people-line.ts";
 
 describe("карточка шага 2: диск / Alfa · осталось · пачка · +K", () => {
   it("пачка как take качки, 8", () => {
@@ -60,6 +60,16 @@ describe("карточка шага 2: диск / Alfa · осталось · п
     assert.equal(r.packsLeft, undefined);
   });
 
+  it("short важнее dups: Баукина 364/366 — Добрать, бейдж «в Alfa больше»", () => {
+    assert.equal(peopleStudentAction({ short: true, dups: true, journal: false }), "dobrat");
+    assert.equal(peopleStudentBadge({ short: true, dups: true, full: false }), "short");
+    assert.equal(peopleStudentHint({ short: true, dups: true, lineHint: "пачка прошла · не сели · не жать ещё раз" }), "пачка прошла · не сели · не жать ещё раз");
+    assert.equal(peopleStudentHint({ short: true, dups: true }), "добрать · есть дубли");
+    assert.equal(peopleStudentAction({ short: true, dups: true, journal: false, holeApproved: true }), "recheck");
+    assert.equal(peopleStudentHint({ short: true, dups: true, holeApproved: true, lineHint: "ничего нового" }), "ничего нового");
+    assert.equal(peopleStudentBadge({ short: false, dups: true, full: true }), "dups");
+  });
+
   it("экран: строка на карточке, keep Alfa, очередь n/total, пауза без «не отвечает»", () => {
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /peopleLessonsLine/);
@@ -73,11 +83,13 @@ describe("карточка шага 2: диск / Alfa · осталось · п
     assert.match(ui, /пауза \$\{waits\}\/8/);
     assert.match(ui, /total \? `\$\{n\}\/\$\{total\}`/);
     assert.doesNotMatch(ui, /total \? `\$\{n\} из \$\{total\}`/);
-    assert.match(ui, /function peopleFinished/);
+    assert.match(ui, /peopleStudentAction/);
+    assert.match(ui, /peopleStudentBadge/);
+    assert.doesNotMatch(ui, /full \|\| dups/);
     assert.match(ui, /colLock/);
     assert.doesNotMatch(ui, /скоро/);
     const fin = ui.slice(ui.indexOf("function peopleFinished"), ui.indexOf("function peopleQueue"));
-    assert.match(fin, /if \(kind === "balance"\) return Boolean\(row\.pays\)/);
+    assert.match(fin, /if \(kind === "balance"\) return Boolean\(row\.paysScanned \|\| row\.pays\)/);
     assert.match(fin, /if \(row\.short\) return false/);
     assert.match(fin, /return Boolean\(row\.journal\)/);
   });

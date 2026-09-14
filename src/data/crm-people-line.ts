@@ -65,3 +65,35 @@ export function peopleLessonsLine(opts: {
   }
   return { line: parts.join(" · "), hint, packsLeft };
 }
+
+/** Шаг 2: дырка важнее дублей. Short → «Добрать», не окно ±месяц. */
+export type PeopleStudentAction = "dobrat" | "recheck" | "load";
+export type PeopleStudentBadge = "approved" | "short" | "dups" | "recheck" | "done" | "need";
+
+export function peopleStudentAction(opts: { short?: boolean; dups?: boolean; journal?: boolean; holeApproved?: boolean }): PeopleStudentAction {
+  if (opts.short && !opts.holeApproved) return "dobrat";
+  if (opts.dups || opts.journal || opts.holeApproved) return "recheck";
+  return "load";
+}
+
+export function peopleStudentBadge(opts: {
+  approved?: boolean;
+  short?: boolean;
+  dups?: boolean;
+  full?: boolean;
+  needsRecheck?: boolean;
+}): PeopleStudentBadge {
+  if (opts.approved) return "approved";
+  if (opts.short) return "short";
+  if (opts.dups) return "dups";
+  if (opts.full) return opts.needsRecheck ? "recheck" : "done";
+  return "need";
+}
+
+export function peopleStudentHint(opts: { short?: boolean; dups?: boolean; holeApproved?: boolean; lineHint?: string }): string {
+  const line = String(opts.lineHint || "");
+  if (opts.holeApproved) return line;
+  if (opts.short && opts.dups) return line || "добрать · есть дубли";
+  if (opts.dups) return "дубли, снять";
+  return line;
+}
