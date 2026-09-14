@@ -315,11 +315,14 @@ export function journalIdsReady(p: {
 }) {
   if (!p.pagesComplete) return false;
   if ((Number(p.holeN) || 0) > 0) return false;
-  if (!p.allowExtra && (Number(p.extraN) || 0) > 0) return false;
-  if (Number(p.diskUniq) !== Number(p.censusN)) return false;
-  if (Number(p.diskRows) !== Number(p.diskUniq)) return false;
   if (p.short) return false;
-  return true;
+  const diskUniq = Number(p.diskUniq);
+  const censusN = Number(p.censusN);
+  const diskRows = Number(p.diskRows);
+  if (diskRows !== diskUniq) return false;
+  if (p.allowExtra) return diskUniq >= censusN;
+  if ((Number(p.extraN) || 0) > 0) return false;
+  return diskUniq === censusN;
 }
 
 export function mergeSeenLessonIds(prev: number[] | undefined, pulled: { lessonId?: number }[]) {

@@ -381,7 +381,11 @@ describe("inbound не сбрасывает курс сайта", () => {
       false,
     );
     assert.equal(
-      journalIdsReady({ pagesComplete: false, holeN: 0, extraN: 0, diskUniq: 0, censusN: 0, diskRows: 0 }),
+      journalIdsReady({ pagesComplete: true, holeN: 0, extraN: 2, diskUniq: 14, censusN: 12, diskRows: 14, allowExtra: true }),
+      true,
+    );
+    assert.equal(
+      journalIdsReady({ pagesComplete: true, holeN: 0, extraN: 2, diskUniq: 14, censusN: 12, diskRows: 14 }),
       false,
     );
     const noId = pruneCalendarToAlfaIds([{ lessonId: 0, date: "2026-09-01" }, { lessonId: 5, date: "2026-09-01" }], [5], [], [], "2026-08-01", "2026-10-01");

@@ -1086,9 +1086,9 @@ async function pullOneGroup(
   const holeN = (res.hole || []).length;
   const goneN = (res.gone || []).length;
   const pagesComplete = res.pagesComplete !== false && !res.capped;
-  const censusN = Number(res.censusN) || 0;
-  const diskUniq = Number(res.diskUniq) || uniquePositiveIds((res.calendar || []).map((l: { lessonId?: number }) => Number(l.lessonId) || 0)).length;
-  const diskRows = Number(res.diskRows) || countAlfaLessonRows(res.calendar);
+  const censusN = res.censusN != null ? Number(res.censusN) : 0;
+  const diskUniq = res.diskUniq != null ? Number(res.diskUniq) : uniquePositiveIds((res.calendar || []).map((l: { lessonId?: number }) => Number(l.lessonId) || 0)).length;
+  const diskRows = res.diskRows != null ? Number(res.diskRows) : countAlfaLessonRows(res.calendar);
   const ready = res.ready === true || journalIdsReady({
     pagesComplete,
     holeN,
