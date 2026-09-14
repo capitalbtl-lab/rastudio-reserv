@@ -10,6 +10,8 @@ import {
   mergeJobPatch,
   peopleJobQueue,
   peopleNeedCashLoad,
+  peopleRecheckAdvance,
+  groupsRecheckAdvance,
   rotateUnfinished,
   saveJournalJob,
   shouldRetryCash,
@@ -28,6 +30,8 @@ import {
   type JournalJobItem,
   type JournalJobMode,
   type PeopleJobRow,
+  type RecheckWave,
+  type GroupWaveRow,
 } from "./crm-journal-job-core.ts";
 
 export {
@@ -46,8 +50,6 @@ export {
 } from "./crm-journal-job-core.ts";
 
 const g = globalThis as { __raJournalJobTick?: boolean; __raJournalWatch?: ReturnType<typeof setInterval> };
-
-const STALE_LOCK_MS = 180_000;
 
 /** Только процесс rastudio-history крутит очередь. Сайт пишет файл и читает статус. */
 export function isHistoryWorker() {
@@ -77,6 +79,7 @@ async function sleepGap(ms: number, id = "") {
 async function awaitWhileJob<T>(id: string, task: Promise<T>): Promise<{ stopped: true } | { value: T }> {
   return new Promise((resolve, reject) => {
     let settled = false;
+    let beats = 0;
     const finish = (fn: () => void) => {
       if (settled) return;
       settled = true;
@@ -86,6 +89,11 @@ async function awaitWhileJob<T>(id: string, task: Promise<T>): Promise<{ stopped
     const iv = setInterval(() => {
       const j = loadJournalJob();
       if (j.stop || (id && j.id !== id)) finish(() => resolve({ stopped: true }));
+      else {
+        touchHistoryTickLock();
+        beats += 1;
+        if (beats % 40 === 0) patch({ id });
+      }
     }, 250);
     task.then(
       (value) => finish(() => resolve({ value })),
@@ -162,13 +170,13 @@ export type StartJournalJobOpts = {
 function emptyMsg(mode: JournalJobMode, recheck: boolean) {
   if (mode === "people" || mode === "people-recheck" || mode === "people-slow") {
     return recheck || mode === "people-recheck"
-      ? "Справа никого перепроверять. Сначала красная «Загрузить по одному»."
+      ? "Некого: справа пусто и слева нет жёлтых."
       : mode === "people-slow"
         ? "Некого добирать. Слева пусто — ни розовых, ни жёлтых."
       : "Слева пусто. Нажмите «Перепроверить по одному» — пройдёт тех, кто справа.";
   }
   if (mode === "groups") return "Слева пусто. Нажмите «Перепроверить по одному» — пройдёт тех, кто справа.";
-  if (mode === "groups-recheck") return "Справа никого перепроверять. Сначала красная «Загрузить по одному».";
+  if (mode === "groups-recheck") return "Некого: справа пусто и слева нет недогруженных групп.";
   if (mode === "audit") return "Нет текущих учеников на диске.";
   if (mode === "catalog") return "Архив клиентов: некого писать.";
   if (mode === "life") return "Сначала загрузите группы.";
@@ -178,7 +186,7 @@ function emptyMsg(mode: JournalJobMode, recheck: boolean) {
   if (mode === "details") return "ДЗ грузить нечего.";
   if (mode === "count") return "Некого считать.";
   if (mode === "roster") return "Слева пусто. Состав групп уже на диске. «Перепроверить» — сверка cgi.";
-  if (mode === "roster-recheck") return "Справа нечего перепроверять. Сначала красная «Загрузить по одному».";
+  if (mode === "roster-recheck") return "Некого: состав справа пуст и слева нет групп без cgi.";
   return "грузить нечего";
 }
 
@@ -196,7 +204,7 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
       .filter((r) => r.cid);
     const study = opts.study === "2" ? "2" : "1";
     const kind = opts.kind === "balance" ? "balance" : "students";
-    if (given.length && mode !== "audit" && mode !== "people-slow") {
+    if (given.length && mode !== "audit" && mode !== "people-slow" && mode !== "people-recheck") {
       if (kind === "balance" && mode === "people") {
         const side = journalPeopleSide(study, { skipLeads: true });
         const by = new Map((side.people || []).map((p) => [p.cid, p as PeopleJobRow]));
@@ -260,7 +268,7 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
         periodLabel: r.periodLabel,
       }))
       .filter((r) => r.groupId);
-    if (givenG.length && mode !== "group-one") return givenG;
+    if (givenG.length && mode !== "group-one" && mode !== "groups-recheck") return givenG;
     if (mode === "group-one") {
       const all = journalPullGroups();
       const hit = all.find((g) => g.groupId === Number(opts.groupId) && (!opts.branchId || g.branchId === Number(opts.branchId))) || all.find((g) => g.groupId === Number(opts.groupId));
@@ -291,7 +299,7 @@ function buildItems(opts: StartJournalJobOpts): JournalJobItem[] {
     const given = (opts.items || [])
       .map((r) => ({ groupId: Number(r.groupId) || 0, branchId: Number(r.branchId) || 0, name: String(r.name || "") }))
       .filter((r) => r.groupId);
-    if (given.length) return given;
+    if (given.length && mode !== "roster-recheck") return given;
     const rows = groups.map((g) => groupFillRow(g));
     const need = rows.filter((r) => (mode === "roster-recheck" ? Boolean(r.roster) : !r.roster));
     const done = rows.filter((r) => Boolean(r.roster));
@@ -307,11 +315,67 @@ function loopPullKind(mode: JournalJobMode | ""): "archiveCatalog" | "life" | "a
   return "";
 }
 
+function peopleRowsFor(study: "1" | "2", kind: string): PeopleJobRow[] {
+  const side = journalPeopleSide(study, { skipLeads: kind === "balance" });
+  return (side.people || []) as PeopleJobRow[];
+}
+
+function groupRowsFor(opts: { school?: string; archived?: boolean; grain?: Grain }): GroupWaveRow[] {
+  const school = String(opts.school || "");
+  const wantArch = Boolean(opts.archived);
+  const grain = (opts.grain || "quarter") as Grain;
+  const groups = journalPullGroups().filter((g) => {
+    if (school && g.school !== school) return false;
+    return wantArch ? Boolean(g.archived) : !g.archived;
+  });
+  return groups.map((g) => {
+    const row = groupFillRow(g);
+    return {
+      groupId: row.groupId,
+      branchId: row.branchId,
+      name: row.name,
+      finished: fillFinished(row.parts || [], grain, row.age),
+      needRecheck: fillNeedsRecheck(row.parts || [], grain, row.age),
+      roster: Boolean(row.roster),
+    };
+  });
+}
+
+function rosterRowsFor(opts: { school?: string; archived?: boolean }): GroupWaveRow[] {
+  const school = String(opts.school || "");
+  const wantArch = Boolean(opts.archived);
+  const groups = wantArch
+    ? journalPullGroups().filter((g) => g.archived && (!school || g.school === school))
+    : liveAdminGroups(school);
+  return groups.map((g) => {
+    const row = groupFillRow(g);
+    return {
+      groupId: row.groupId,
+      branchId: row.branchId,
+      name: row.name,
+      finished: Boolean(row.roster),
+      needRecheck: Boolean(row.roster),
+      roster: Boolean(row.roster),
+    };
+  });
+}
+
+function waveStartMsg(wave: RecheckWave, name: string, recheck: boolean) {
+  if (wave === "left") return `${name}: слева жёлтые, добираем. Потом пауза 5 с.`;
+  if (wave === "right2") return `${name}: снова справа, те же после добора. Потом пауза 5 с.`;
+  return recheck ? `${name}: справа, перепроверяем. Потом пауза 5 с.` : `${name}: грузим. Потом пауза 5 с.`;
+}
+
 export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
   const cur = loadJournalJob();
   if (cur.running && !cur.stop) {
     kickHistoryTick();
     return cur;
+  }
+  if (!cur.stop && shouldResumeStalledJob(cur)) {
+    const live = cur.running ? cur : saveJournalJob({ ...cur, running: true, lastAt: nowIso(), msg: cur.msg || "Продолжаем с того же." });
+    kickHistoryTick();
+    return live;
   }
   const mode = opts.mode;
   const kind =
@@ -334,15 +398,38 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
               : mode === "roster" || mode === "roster-recheck"
                 ? "roster"
                 : opts.kind || "students";
-  const recheck = Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck" || (mode === "group-one" && !opts.periodKey);
-  const items = buildItems({ ...opts, kind, recheck });
+  const study = opts.study === "2" ? "2" : "1";
+  let recheck = Boolean(opts.recheck) || mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck" || (mode === "group-one" && !opts.periodKey);
+  let items = buildItems({ ...opts, kind, recheck });
+  let wave: RecheckWave = "";
+  let follow: JournalJobItem[] = [];
+  const archived = Boolean(opts.archived);
+  if (mode === "people-recheck") {
+    const nxt = peopleRecheckAdvance(peopleRowsFor(study, kind), kind === "balance" ? "balance" : "students", "", []);
+    items = nxt.items;
+    wave = nxt.wave;
+    follow = nxt.follow;
+    recheck = nxt.recheck;
+  } else if (mode === "groups-recheck") {
+    const nxt = groupsRecheckAdvance(groupRowsFor({ school: opts.school, archived, grain: opts.grain }), "", [], false);
+    items = nxt.items;
+    wave = nxt.wave;
+    follow = nxt.follow;
+    recheck = nxt.recheck;
+  } else if (mode === "roster-recheck") {
+    const nxt = groupsRecheckAdvance(rosterRowsFor({ school: opts.school, archived }), "", [], true);
+    items = nxt.items;
+    wave = nxt.wave;
+    follow = nxt.follow;
+    recheck = nxt.recheck;
+  }
   if (!items.length && !loopPullKind(mode)) {
     return saveJournalJob({
       ...emptyJournalJob(),
       id: `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       mode,
       kind,
-      study: opts.study === "2" ? "2" : "1",
+      study,
       msg: emptyMsg(mode, recheck),
       lastAt: nowIso(),
     });
@@ -355,7 +442,7 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     stop: false,
     mode,
     kind,
-    study: opts.study === "2" ? "2" : "1",
+    study,
     recheck,
     dateFrom: String(opts.dateFrom || "").trim() || "2015-01-01",
     recheckDays: opts.recheckDays === 92 || opts.recheckDays === 182 ? opts.recheckDays : 32,
@@ -373,12 +460,22 @@ export function startJournalJob(opts: StartJournalJobOpts): JournalJob {
     cur: first?.name || "",
     n: 0,
     total: loopPullKind(mode) ? 0 : items.length,
-    msg: mode === "people-slow"
-      ? `${first?.name}: медленный добор, до 10 мин. Курсор не сбрасываем.`
-      : mode === "people-recheck" || (mode === "people" && recheck) ? `${first?.name}: перепроверяем. Потом пауза 5 с.` : mode === "audit" ? `${first?.name}: сверяем. Потом пауза 5 с.` : `${first?.name}: грузим. Потом пауза 5 с.`,
+    msg:
+      mode === "people-slow"
+        ? `${first?.name}: медленный добор, до 10 мин. Курсор не сбрасываем.`
+        : mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck"
+          ? waveStartMsg(wave, first?.name || "", recheck)
+          : mode === "people" && recheck
+            ? `${first?.name}: перепроверяем. Потом пауза 5 с.`
+            : mode === "audit"
+              ? `${first?.name}: сверяем. Потом пауза 5 с.`
+              : `${first?.name}: грузим. Потом пауза 5 с.`,
     fill: fillOf(mode, kind, first),
     startedAt: nowIso(),
     lastAt: nowIso(),
+    wave,
+    follow,
+    archived,
   };
   saveJournalJob(job);
   kickHistoryTick();
@@ -440,8 +537,6 @@ function resumeJournalJobFromDisk() {
   const j = loadJournalJob();
   if (!j.running || j.stop) return;
   if (!isHistoryWorker() && !historyWorkerSilent(j)) return;
-  const age = Date.now() - Date.parse(j.lastAt || j.startedAt || "");
-  if (g.__raJournalJobTick && Number.isFinite(age) && age > STALE_LOCK_MS) g.__raJournalJobTick = false;
   void tickJob();
 }
 
@@ -479,6 +574,41 @@ function fillOf(mode: JournalJobMode | "", kind: string, item?: JournalJobItem |
     return { kind: "roster", groupId: item.groupId, branchId: item.branchId, label: item.name };
   }
   return { kind: kind === "balance" ? "balance" : "students", label: item.name, customerId: item.cid };
+}
+
+function advanceJobWave(job: JournalJob): { done: false; gap: number } | null {
+  const mode = job.mode;
+  let nxt: ReturnType<typeof peopleRecheckAdvance> | null = null;
+  if (mode === "people-recheck") {
+    nxt = peopleRecheckAdvance(
+      peopleRowsFor(job.study, job.kind),
+      job.kind === "balance" ? "balance" : "students",
+      job.wave,
+      job.follow,
+    );
+  } else if (mode === "groups-recheck") {
+    nxt = groupsRecheckAdvance(groupRowsFor({ school: job.school, archived: job.archived, grain: job.grain }), job.wave, job.follow, false);
+  } else if (mode === "roster-recheck") {
+    nxt = groupsRecheckAdvance(rosterRowsFor({ school: job.school, archived: job.archived }), job.wave, job.follow, true);
+  }
+  if (!nxt || nxt.done || !nxt.items.length) return null;
+  const first = nxt.items[0];
+  patch({
+    id: job.id,
+    items: nxt.items,
+    follow: nxt.follow,
+    wave: nxt.wave,
+    recheck: nxt.recheck,
+    idx: 0,
+    waits: 0,
+    n: job.n,
+    total: job.n + nxt.items.length,
+    running: true,
+    cur: first?.name || "",
+    fill: fillOf(mode, job.kind, first),
+    msg: waveStartMsg(nxt.wave, first?.name || "", nxt.recheck),
+  });
+  return { done: false, gap: jobGapMs(mode) };
 }
 
 function loopLabel(
@@ -565,6 +695,8 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   }
 
   if (job.idx >= job.items.length) {
+    const more = advanceJobWave(job);
+    if (more) return more;
     return { done: true, gap: 0, msg: doneMsg(job) };
   }
   let item = job.items[job.idx];
@@ -604,7 +736,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
       groupId: Number(item.groupId) || 0,
       periodKey: item.periodKey || "",
       grain: job.grain,
-      recheck: job.recheck || mode === "people-recheck" || mode === "groups-recheck" || mode === "roster-recheck" || (mode === "group-one" && !item.periodKey),
+      recheck: Boolean(job.recheck) || (mode === "group-one" && !item.periodKey),
       dateFrom: job.dateFrom,
       recheckDays: job.recheckDays,
       probe: mode === "probe",

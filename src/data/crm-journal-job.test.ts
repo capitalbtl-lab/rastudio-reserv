@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
   peopleJobQueue,
+  peopleRecheckAdvance,
+  groupsRecheckAdvance,
   peopleNeedCashLoad,
   peopleJobFinished,
   shouldRetryCash,
@@ -151,6 +153,8 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryShortPeople("people", true, "students", { ok: true, student: { short: true, seated: 50 } }), false);
     assert.equal(shouldRetryShortPeople("people", false, "balance", { ok: true, student: { short: true, seated: 50 } }), false);
     assert.equal(shouldRetryShortPeople("people-slow", false, "students", { ok: true, student: { short: true, seated: 50 } }), false);
+    assert.equal(shouldRetryShortPeople("people-recheck", false, "students", { ok: true, student: { short: true, seated: 8 } }), true);
+    assert.equal(shouldRetryShortPeople("people-recheck", true, "students", { ok: true, student: { short: true, seated: 8 } }), false);
     const jobSrc = readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8");
     assert.match(jobSrc, /people-slow/);
     assert.match(jobSrc, /slowFill: mode === "people-slow"/);
@@ -159,6 +163,45 @@ describe("фон истории из Alfa", () => {
     assert.match(jobSrc, /openRetry/);
     assert.match(jobSrc, /перепись не закрыта, ещё этот/);
     assert.equal(JOB_WAIT_CAP, 8);
+  });
+
+  it("перепроверка по одному: справа, потом слева, потом те же справа", () => {
+    const right = { cid: 1, branchId: 1, name: "справа", journal: true, pays: false, rechecked: false };
+    const left = { cid: 2, branchId: 1, name: "жёлтая", journal: false, pays: false, short: true };
+    const hole = { cid: 3, branchId: 1, name: "галка", journal: false, pays: false, short: true, holeApproved: true };
+    const start = peopleRecheckAdvance([right, left, hole], "students", "", []);
+    assert.equal(start.wave, "right");
+    assert.deepEqual(start.items.map((x) => x.cid), [1]);
+    assert.equal(start.recheck, true);
+    const afterRight = peopleRecheckAdvance([right, left, hole], "students", "right", []);
+    assert.equal(afterRight.wave, "left");
+    assert.deepEqual(afterRight.items.map((x) => x.cid), [2]);
+    assert.equal(afterRight.recheck, false);
+    const stillYellow = peopleRecheckAdvance([right, left, hole], "students", "left", afterRight.follow);
+    assert.equal(stillYellow.done, true);
+    const loaded = { ...left, journal: true, short: false };
+    const afterLeft = peopleRecheckAdvance([right, loaded, hole], "students", "left", afterRight.follow);
+    assert.equal(afterLeft.wave, "right2");
+    assert.deepEqual(afterLeft.items.map((x) => x.cid), [2]);
+    assert.equal(afterLeft.recheck, true);
+    const done = peopleRecheckAdvance([right, loaded, hole], "students", "right2", afterLeft.follow);
+    assert.equal(done.done, true);
+    const onlyLeft = peopleRecheckAdvance([left], "students", "", []);
+    assert.equal(onlyLeft.wave, "left");
+    assert.deepEqual(onlyLeft.items.map((x) => x.cid), [2]);
+    const cashLeft = { cid: 9, branchId: 2, name: "касса", journal: true, pays: false };
+    const cashStart = peopleRecheckAdvance([cashLeft], "balance", "", []);
+    assert.equal(cashStart.wave, "left");
+    const gRight = { groupId: 10, branchId: 1, name: "г", finished: true, needRecheck: true };
+    const gLeft = { groupId: 11, branchId: 1, name: "н", finished: false, needRecheck: false };
+    const g1 = groupsRecheckAdvance([gRight, gLeft], "", [], false);
+    assert.equal(g1.wave, "right");
+    assert.deepEqual(g1.items.map((x) => x.groupId), [10]);
+    const g2 = groupsRecheckAdvance([gRight, gLeft], "right", [], false);
+    assert.equal(g2.wave, "left");
+    assert.deepEqual(g2.items.map((x) => x.groupId), [11]);
+    const g3 = groupsRecheckAdvance([{ ...gLeft, finished: true, needRecheck: true }, gRight], "left", g2.follow, false);
+    assert.deepEqual(g3.items.map((x) => x.groupId), [11]);
   });
 
   it("патч: Стоп липкий, чужой id не затирает диск", () => {
@@ -239,7 +282,12 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /resumeStalledRecheck/);
     assert.match(core, /shouldResumeStalledJob/);
     assert.match(job, /setInterval/);
-    assert.match(job, /STALE_LOCK_MS/);
+    assert.match(core, /process.kill\(pid, 0\)/);
+    assert.doesNotMatch(core, /age < 90_000/);
+    assert.doesNotMatch(job, /STALE_LOCK_MS/);
+    assert.match(job, /beats % 40/);
+    assert.match(job, /advanceJobWave/);
+    assert.match(job, /shouldResumeStalledJob\(cur\)/);
     assert.match(job, /NODE_ENV === "test"/);
     assert.doesNotMatch(api, /startJournalJobWatch/);
     assert.doesNotMatch(api, /resumeJournalJob/);
@@ -326,7 +374,7 @@ describe("фон истории из Alfa", () => {
     const schoolFn = ui.slice(schoolAt, ui.indexOf("async function recheckGroupsOne"));
     assert.match(schoolFn, /holdFill\.current = true/);
     assert.doesNotMatch(schoolFn, /recheck: true/);
-    assert.match(ui, /"people-recheck" : "people"/);
+    assert.match(ui, /jobMode: "people-recheck"/);
     assert.match(ui, /jobMode: "groups"/);
     assert.match(ui, /jobMode: "catalog"/);
     assert.match(ui, /jobMode: "audit"/);

@@ -10,6 +10,8 @@ export const PEOPLE_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
 export const CATALOG_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
 export const AUDIT_JOB_GAP_MS = JOURNAL_ONE_GAP_MS;
 
+export type RecheckWave = "" | "right" | "left" | "right2";
+
 export type JournalJobMode =
   | "people"
   | "people-recheck"
@@ -95,6 +97,9 @@ export type JournalJob = {
   fill: JournalJobFill | null;
   startedAt: string;
   lastAt: string;
+  wave: RecheckWave;
+  follow: JournalJobItem[];
+  archived: boolean;
 };
 
 export function emptyJournalJob(): JournalJob {
@@ -126,6 +131,9 @@ export function emptyJournalJob(): JournalJob {
     fill: null,
     startedAt: "",
     lastAt: "",
+    wave: "",
+    follow: [],
+    archived: false,
   };
 }
 
@@ -137,7 +145,9 @@ export function loadJournalJob(): JournalJob {
   try {
     if (!existsSync(fileOf())) return emptyJournalJob();
     const raw = JSON.parse(readFileSync(fileOf(), "utf8")) as Partial<JournalJob>;
-    return { ...emptyJournalJob(), ...raw, items: Array.isArray(raw.items) ? raw.items : [] };
+    const follow = Array.isArray(raw.follow) ? raw.follow : [];
+    const wave: RecheckWave = raw.wave === "right" || raw.wave === "left" || raw.wave === "right2" ? raw.wave : "";
+    return { ...emptyJournalJob(), ...raw, items: Array.isArray(raw.items) ? raw.items : [], follow, wave, archived: Boolean(raw.archived) };
   } catch {
     return emptyJournalJob();
   }
@@ -188,11 +198,10 @@ export function tryHistoryTickLock() {
     if (existsSync(dest)) {
       const raw = JSON.parse(readFileSync(dest, "utf8")) as { pid?: number; at?: string };
       const pid = Number(raw.pid) || 0;
-      const age = Date.now() - Date.parse(String(raw.at || ""));
       if (pid && pid !== process.pid) {
         try {
           process.kill(pid, 0);
-          if (Number.isFinite(age) && age < 90_000) return false;
+          return false;
         } catch {
           /* процесс умер */
         }
@@ -296,6 +305,67 @@ export function peopleJobQueue(people: PeopleJobRow[], kind: "students" | "balan
   return needLoad;
 }
 
+function asPeopleItem(r: PeopleJobRow): JournalJobItem {
+  return { cid: r.cid, branchId: r.branchId, name: r.name };
+}
+
+/** Синяя «Перепроверить по одному»: справа → жёлтые слева → снова справа те же. */
+export function peopleRecheckAdvance(
+  people: PeopleJobRow[],
+  kind: "students" | "balance",
+  finishedWave: RecheckWave,
+  follow: JournalJobItem[],
+): { done: boolean; wave: RecheckWave; items: JournalJobItem[]; follow: JournalJobItem[]; recheck: boolean } {
+  if (finishedWave === "right2") {
+    return { done: true, wave: "right2", items: [], follow, recheck: true };
+  }
+  if (finishedWave === "left") {
+    const want = new Set(follow.map((f) => Number(f.cid) || 0).filter(Boolean));
+    const items = people
+      .filter((r) => want.has(r.cid) && peopleJobFinished(r, kind) && !(kind === "students" && r.short && r.holeApproved))
+      .map(asPeopleItem);
+    if (!items.length) return { done: true, wave: "right2", items: [], follow, recheck: true };
+    return { done: false, wave: "right2", items, follow, recheck: true };
+  }
+  if (finishedWave === "") {
+    const right = peopleJobQueue(people, kind, true).map(asPeopleItem);
+    if (right.length) return { done: false, wave: "right", items: right, follow: [], recheck: true };
+  }
+  const left = peopleJobQueue(people, kind, false).map(asPeopleItem);
+  if (left.length) return { done: false, wave: "left", items: left, follow: left, recheck: false };
+  return { done: true, wave: finishedWave || "right", items: [], follow: [], recheck: true };
+}
+
+export type GroupWaveRow = { groupId: number; branchId: number; name: string; finished: boolean; needRecheck: boolean; roster?: boolean };
+
+export function groupsRecheckAdvance(
+  rows: GroupWaveRow[],
+  finishedWave: RecheckWave,
+  follow: JournalJobItem[],
+  roster = false,
+): { done: boolean; wave: RecheckWave; items: JournalJobItem[]; follow: JournalJobItem[]; recheck: boolean } {
+  const toItem = (r: GroupWaveRow): JournalJobItem => ({ groupId: r.groupId, branchId: r.branchId, name: r.name });
+  const onRight = (r: GroupWaveRow) => (roster ? Boolean(r.roster) : r.finished);
+  const onLeft = (r: GroupWaveRow) => !onRight(r);
+  if (finishedWave === "right2") {
+    return { done: true, wave: "right2", items: [], follow, recheck: true };
+  }
+  if (finishedWave === "left") {
+    const want = new Set(follow.map((f) => Number(f.groupId) || 0).filter(Boolean));
+    const items = rows.filter((r) => want.has(r.groupId) && onRight(r)).map(toItem);
+    if (!items.length) return { done: true, wave: "right2", items: [], follow, recheck: true };
+    return { done: false, wave: "right2", items, follow, recheck: true };
+  }
+  if (finishedWave === "") {
+    const need = rows.filter((r) => (roster ? Boolean(r.roster) : r.needRecheck));
+    const right = (need.length ? need : rows.filter(onRight)).map(toItem);
+    if (right.length) return { done: false, wave: "right", items: right, follow: [], recheck: true };
+  }
+  const left = rows.filter(onLeft).map(toItem);
+  if (left.length) return { done: false, wave: "left", items: left, follow: left, recheck: false };
+  return { done: true, wave: finishedWave || "right", items: [], follow: [], recheck: true };
+}
+
 export function stoppedJobMsg(n: number, total: number) {
   const nn = Number(n) || 0;
   const tt = Number(total) || nn;
@@ -314,6 +384,7 @@ export function mergeJobPatch(cur: JournalJob, extra: Partial<JournalJob>) {
     stop,
     running: stop ? false : extra.running === undefined ? cur.running : extra.running,
     items: Array.isArray(extra.items) ? extra.items : cur.items,
+    follow: Array.isArray(extra.follow) ? extra.follow : cur.follow,
     fill: stop ? null : extra.fill === undefined ? cur.fill : extra.fill,
     cur: stop ? "" : extra.cur === undefined ? cur.cur : extra.cur,
     msg: stop ? stoppedJobMsg(Number(n) || 0, Number(total) || 0) : extra.msg === undefined ? cur.msg : extra.msg,
@@ -371,7 +442,7 @@ export function shouldRetryShortPeople(
   res: { ok?: boolean; student?: { short?: boolean; seated?: number; dropped?: number; holeApproved?: boolean } } | null,
 ) {
   if (recheck) return false;
-  if (mode !== "people" && mode !== "person" && mode !== "people-slow") return false;
+  if (mode !== "people" && mode !== "person" && mode !== "people-slow" && mode !== "people-recheck") return false;
   if (kind !== "students") return false;
   if (!res?.ok) return false;
   if (res.student?.holeApproved) return false;
