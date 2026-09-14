@@ -13,6 +13,8 @@ describe("карточка шага 2: диск / Alfa · осталось · п
     assert.equal(keepAlfa(339, 338), 339);
     assert.equal(keepAlfa(undefined, 286), 286);
     assert.equal(keepAlfa(286, undefined), 286);
+    assert.equal(keepAlfa(142, 0), 0);
+    assert.equal(keepAlfa(0, 142), 142);
   });
 
   it("часы штампа — Москва ЧЧ:ММ", () => {
@@ -86,6 +88,11 @@ describe("карточка шага 2: диск / Alfa · осталось · п
     assert.match(ui, /peopleStudentAction/);
     assert.match(ui, /peopleStudentBadge/);
     assert.doesNotMatch(ui, /full \|\| dups/);
+    const resetAt = ui.indexOf("async function resetPersonHistory");
+    const holeAt = ui.indexOf("async function holeMark");
+    assert.equal(resetAt > 0, true);
+    assert.doesNotMatch(ui.slice(resetAt, holeAt > resetAt ? holeAt : ui.length), /loadPerson/);
+    assert.match(ui, /Number\(row\.alfa\) === 0/);
     assert.match(ui, /colLock/);
     assert.doesNotMatch(ui, /скоро/);
     const fin = ui.slice(ui.indexOf("function peopleFinished"), ui.indexOf("function peopleQueue"));

@@ -8,6 +8,7 @@ export function keepAlfa(prev?: number, next?: number) {
   const hasPrev = prev != null && Number.isFinite(Number(prev));
   const hasNext = next != null && Number.isFinite(Number(next));
   if (!hasNext) return hasPrev ? Number(prev) : undefined;
+  if (Number(next) === 0) return 0;
   if (!hasPrev) return Number(next);
   return Math.max(Number(prev), Number(next));
 }
