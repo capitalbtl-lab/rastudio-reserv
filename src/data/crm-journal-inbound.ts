@@ -80,8 +80,7 @@ export function lessonSeatForCustomer(item: Record<string, unknown>, customerId:
   return "foreign";
 }
 
-export function recheckCensusWindow(sync: Parameters<typeof wasLessonGreen>[0], days?: unknown) {
-  if (!wasLessonGreen(sync)) return { from: "", to: "" };
+export function recheckCensusWindow(_sync: Parameters<typeof wasLessonGreen>[0], days?: unknown) {
   const n = clampRecheckDays(days);
   return { from: ymd(ruShift(-n)), to: ymd(ruShift(n)) };
 }

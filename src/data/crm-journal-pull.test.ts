@@ -410,6 +410,7 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(rec, /if \(extra\)/);
     assert.doesNotMatch(rec, /inboundCustomerLessons\(/);
     assert.match(rec, /recheckCensusWindow\(sync0, recheckDays\)/);
+    assert.doesNotMatch(inbound, /if \(!wasLessonGreen\(sync\)\) return \{ from: ""/);
     assert.match(rec, /windowNewLessonIds/);
     assert.match(rec, /windowAlfaKeep/);
     assert.match(rec, /новые\.length && !holeApproved/);

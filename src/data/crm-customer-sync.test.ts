@@ -106,10 +106,9 @@ describe("штамп входа ученика", () => {
     assert.equal(full.from, LESSON_FILL_FLOOR);
     assert.equal(full.to, "2026-12-13");
     const win = studentCensusRange({ lessonsAlfaAt: "x", lessonsAlfa: 142 }, now);
-    assert.equal(win.full, false);
-    assert.equal(win.days, 30);
-    assert.equal(win.from, "2026-08-15");
-    assert.equal(win.to, "2026-10-14");
+    assert.equal(win.full, true);
+    assert.equal(win.from, LESSON_FILL_FLOOR);
+    assert.equal(win.to, "2026-12-13");
     assert.equal(lessonWindowDaysOf({ lessonsWindowDays: 90 }), 90);
     assert.equal(nextLessonWindowDays(30), 90);
     assert.equal(nextLessonWindowDays(90), 180);

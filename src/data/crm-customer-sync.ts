@@ -184,7 +184,7 @@ export function lessonsJournalReady(sync: CustomerSyncStamp) {
   return probed && diskN === alfaN;
 }
 
-/** Уже сходился без extra — синяя не крутит 2015. Extra (диск > Alfa) окно не берёт. */
+/** Уже сходился: short/extra нет. Окно синей от этого не зависит — extra тоже ±дни. */
 export function wasLessonGreen(sync: CustomerSyncStamp) {
   const probed = Boolean(sync.lessonsAlfaAt);
   const alfa = Number(sync.lessonsAlfa) || 0;
@@ -213,13 +213,9 @@ function shiftYmd(days: number, now = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** Нет живого счёта — полный журнал. Иначе ±N дней, не 2015. */
-export function studentCensusRange(sync: CustomerSyncStamp, now = new Date()) {
-  if (!String(sync.lessonsAlfaAt || "").trim()) {
-    return { from: LESSON_FILL_FLOOR, to: shiftYmd(90, now), full: true as const, days: 0 };
-  }
-  const days = lessonWindowDaysOf(sync);
-  return { from: shiftYmd(-days, now), to: shiftYmd(days, now), full: false as const, days };
+/** Шаг 2 слева и «Добрать»: всегда полный журнал с 2015. Окно ± только синяя. */
+export function studentCensusRange(_sync: CustomerSyncStamp, now = new Date()) {
+  return { from: LESSON_FILL_FLOOR, to: shiftYmd(90, now), full: true as const, days: 0 };
 }
 
 export function customerLessonsFresh(customerId: number, now = Date.now()) {
