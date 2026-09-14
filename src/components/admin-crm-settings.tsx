@@ -1442,7 +1442,13 @@ function PeopleFillList({
             ? "касса: ещё страницы, нажмите снова"
             : "Загрузить кассу"
           : "Шаг 1 · загрузить календарь";
-    const btn = full || dups ? "Перепроверить" : kind === "balance" ? "Загрузить кассу" : short ? "Добрать" : "Загрузить календарь";
+    const btn = (kind === "balance" ? full : full || dups)
+      ? "Перепроверить"
+      : kind === "balance"
+        ? "Загрузить кассу"
+        : short
+          ? "Добрать"
+          : "Загрузить календарь";
     return (
       <li key={id} className={cn("rounded-2xl p-3 ring-1", approved || short || dups ? "bg-amber-50 ring-amber-400" : needsRecheck ? "bg-sky-50 ring-sky-400" : full ? "bg-white ring-emerald-300" : active ? "bg-white ring-primary" : "bg-white ring-black/8")}>
         <div className="flex items-center gap-2">
@@ -1525,15 +1531,15 @@ function PeopleFillList({
             className={cn(BTN_LOAD_SM, "min-w-[12.5rem] w-fit shrink-0 px-4", active && "ra-progress-run")}
             onClick={(e) => {
               e.stopPropagation();
-              if (full || dups) onRecheck(row);
+              if (kind === "balance" ? full : full || dups) onRecheck(row);
               else onLoad(row);
             }}
           >
             {btn}
           </button>,
-          full || dups ? (kind === "balance" ? HINT.recheckPay : HINT.recheckCal) : kind === "balance" ? HINT.loadPay : HINT.loadCal,
+          (kind === "balance" ? full : full || dups) ? (kind === "balance" ? HINT.recheckPay : HINT.recheckCal) : kind === "balance" ? HINT.loadPay : HINT.loadCal,
           )}
-          {full || dups ? windowSel : years}
+          {kind === "balance" ? (full ? windowSel : years) : full || dups ? windowSel : years}
           {short && onFullHistory
             ? withHint(
                 <button
