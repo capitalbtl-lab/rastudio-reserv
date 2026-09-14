@@ -95,13 +95,14 @@ describe("штамп входа ученика", () => {
     assert.match(hole, /stampCustomerSync\(cid, \{ journalHoleApprovedAt:/);
   });
 
-  it("сброс диска жёлтой: Alfa не трогать, счёт keep, курсор снять", () => {
+  it("сброс диска жёлтой: keep Alfa в 0, курсор снять, без пробы в том же клике", () => {
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     const fnAt = inbound.indexOf("export function resetStudentLessonDisk");
     const fn = inbound.slice(fnAt, fnAt + 900);
     assert.match(fn, /pruneCalendarToAlfaIds\(prev, \[\], hold, \[\], ""\)/);
+    assert.match(fn, /lessonsAlfa: 0/);
     assert.match(fn, /lessonsFull: false/);
     assert.match(fn, /lessonsRecheckAt: ""/);
     assert.match(fn, /lessonsAlfaAt: ""/);
@@ -109,7 +110,8 @@ describe("штамп входа ученика", () => {
     const resetAt = pull.indexOf('kind === "lessonsReset"');
     const reset = pull.slice(resetAt, resetAt + 1600);
     assert.match(reset, /resetStudentLessonDisk\(cid\)/);
-    assert.match(reset, /probeCustomerLessons\(bid, cid/);
+    assert.doesNotMatch(reset, /probeCustomerLessons/);
+    assert.doesNotMatch(reset, /lessonsAlfa: first/);
     assert.doesNotMatch(reset, /pullOneStudent/);
     assert.match(ui, /kind: "lessonsReset"/);
     assert.match(ui, /С нуля/);
@@ -218,14 +220,14 @@ describe("карточка не ждёт Alfa", () => {
     assert.match(sync, /clearLessonsAttendStamps/);
     const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
     const payAt = pay.indexOf("export async function inboundCustomerPays");
-    const chunk = pay.slice(payAt, payAt + 5200);
+    const chunk = pay.slice(payAt, payAt + 9000);
     assert.match(chunk, /uniqueBranches\(branchId\)/);
     assert.match(chunk, /PAY_INBOUND_RUN/);
     assert.match(chunk, /pay_type_id: typeId/);
     assert.match(chunk, /\[5, 6, 9\]/);
     assert.match(chunk, /b === branches.length - 1 && lastShort/);
     assert.doesNotMatch(chunk, /lastShort && !overBudget\(\)\) done/);
-    assert.match(chunk, /if \(!failed && !done\)/);
+    assert.match(chunk, /if \(!failed && b === branches.length - 1 && lastShort\) done = true/);
     assert.doesNotMatch(chunk, /filled \? 1 : PAY_INBOUND_RUN/);
     assert.doesNotMatch(chunk, /filled \? \[Number\(branchId\)/);
   });

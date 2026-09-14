@@ -303,7 +303,8 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(inbound, /lessonsAlfa: uniq\.length/);
     assert.doesNotMatch(inbound, /ids\.length && !ids\.includes\(id\) && !packLessonPupils/);
     assert.match(inbound, /droppedNoDate/);
-    assert.match(inbound, /customer_ids: uniquePositiveIds\(\[\.\.\.ids, id\]\)/);
+    assert.match(inbound, /function lessonListedForCustomer/);
+    assert.match(inbound, /if \(!listed && \(ids.length \|\| packLessonPupils\(rec\)\.length\)\) continue/);
     assert.match(core, /export function inboundFillClosed/);
     assert.match(inbound, /inboundFillClosed/);
     assert.match(pull, /resetSeen: i === 0/);

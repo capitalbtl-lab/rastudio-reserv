@@ -43,6 +43,13 @@ import {
 } from "./crm-customer-sync";
 
 
+function lessonListedForCustomer(rec: Record<string, unknown>, cid: number) {
+  const id = Number(cid) || 0;
+  if (id <= 0) return false;
+  if (lessonCustomerIds(rec).includes(id)) return true;
+  return packLessonPupils(rec).some((p) => Number(p.customerId) === id);
+}
+
 function hm(raw?: string) {
   const m = String(raw || "").match(/(\d{1,2}):(\d{2})/);
   return m ? `${m[1].padStart(2, "0")}:${m[2]}` : "";
@@ -466,6 +473,7 @@ export function resetStudentLessonDisk(customerId: number) {
   const disk = countAlfaLessonUniq(next);
   stampCustomerSync(id, {
     lessonsDisk: disk,
+    lessonsAlfa: 0,
     lessonsFull: false,
     lessonsAttend: false,
     lessonsSeenIds: [],
@@ -676,10 +684,12 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       for (const item of les.items || []) {
         const rec = item as Record<string, unknown>;
         const ids = lessonCustomerIds(rec);
+        const listed = lessonListedForCustomer(rec, id);
+        if (!listed && (ids.length || packLessonPupils(rec).length)) continue;
         const gid = Number((item.group_ids || [])[0] || 0);
         const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
         const packed = packLight(
-          { ...item, date: ymd(item.date) || ymd(item.time_from) || "2015-01-01", customer_ids: uniquePositiveIds([...ids, id]) },
+          { ...item, date: ymd(item.date) || ymd(item.time_from) || "2015-01-01", customer_ids: uniquePositiveIds(listed ? [...ids, id] : ids.length ? ids : [id]) },
           {
             groupName: slot?.groupName || String(item.lesson_type_name || "занятие"),
             from: hm(item.time_from) || "",

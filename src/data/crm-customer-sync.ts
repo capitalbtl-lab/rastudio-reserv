@@ -90,7 +90,7 @@ export function stampCustomerSync(customerId: number, patch: CustomerSyncStamp) 
   if (patch.journalHoleApprovedAt === "") delete next.journalHoleApprovedAt;
   if (patch.lessonsAlfaAt === "") {
     delete next.lessonsAlfaAt;
-    delete next.lessonsAlfa;
+    if (!("lessonsAlfa" in patch)) delete next.lessonsAlfa;
   }
   store.byId[String(id)] = next;
   save(store);
