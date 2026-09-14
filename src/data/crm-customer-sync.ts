@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { bumpAlfaFromLanded, lessonsSetGap } from "./crm-inbound-core.ts";
 
 export const CUSTOMER_SYNC_TTL_MS = 10 * 60 * 1000;
-export const LESSON_INBOUND_RUN = 8;
+export const LESSON_INBOUND_RUN = 7;
 export const LESSON_STATUSES = [3, 1, 2] as const;
 export const LESSON_RECENT_DAYS = -21;
 

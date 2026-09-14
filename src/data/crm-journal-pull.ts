@@ -1220,7 +1220,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       const deadline = Date.now() + 10 * 60 * 1000;
       for (let i = 0; Date.now() < deadline; i += 1) {
         const res = await inboundCustomerLessons(branchId, cid, {
-          take: 8,
+          take: 7,
           deep: 0,
           continueLater: Boolean(slow),
           full: true,

@@ -46,7 +46,7 @@ describe("штамп входа ученика", () => {
     assert.deepEqual(lessonFillAdvance({ bid: 1, statusIdx: 2, page: 0 }, true, [1, 2]), { bid: 2, statusIdx: 0, page: 0 });
     assert.equal(lessonFillAdvance({ bid: 2, statusIdx: 2, page: 1 }, true, [1, 2]).done, true);
     assert.equal(lessonFillOf({ bid: 3, statusIdx: 1, page: 4 })?.statusIdx, 1);
-    assert.equal(LESSON_INBOUND_RUN, 8);
+    assert.equal(LESSON_INBOUND_RUN, 7);
     assert.equal(LESSON_STATUSES[0], 3);
     const mid = { bid: 1, statusIdx: 1, page: 2, from: "2019-09-11" };
     assert.deepEqual(lessonFillForWindow(mid, "2019-09-11", 1), mid);

@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { keepAlfa, peopleClock, peopleLessonsLine, peopleStudentAction, peopleStudentBadge, peopleStudentHint, PEOPLE_PACK } from "./crm-people-line.ts";
 
 describe("карточка шага 2: диск / Alfa · осталось · пачка · +K", () => {
-  it("пачка как take качки, 8", () => {
-    assert.equal(PEOPLE_PACK, 8);
+  it("пачка как take качки, 7", () => {
+    assert.equal(PEOPLE_PACK, 7);
   });
 
   it("Alfa keep — меньшим не затираем", () => {
@@ -24,7 +24,7 @@ describe("карточка шага 2: диск / Alfa · осталось · п
 
   it("№17 Лушникова 602/771 +0 — дырка, без «скоро»", () => {
     const r = peopleLessonsLine({ disk: 602, alfa: 771, plus: 0, at: "2026-09-12T01:13:00.000Z" });
-    assert.equal(r.line, "602 / 771 · осталось 169 · пачка 8 · +0 · 04:13");
+    assert.equal(r.line, "602 / 771 · осталось 169 · пачка 7 · +0 · 04:13");
     assert.equal(r.hint, "пачка прошла · не сели · не жать ещё раз");
     assert.equal(r.packsLeft, undefined);
     assert.equal(/скоро/i.test(r.line + r.hint), false);
@@ -32,30 +32,30 @@ describe("карточка шага 2: диск / Alfa · осталось · п
 
   it("№5497 Ежкова 338/339 +0 — один не сел", () => {
     const r = peopleLessonsLine({ disk: 338, alfa: 339, plus: 0, at: "2026-09-12T01:02:00.000Z" });
-    assert.equal(r.line, "338 / 339 · осталось 1 · пачка 8 · +0 · 04:02");
+    assert.equal(r.line, "338 / 339 · осталось 1 · пачка 7 · +0 · 04:02");
     assert.equal(r.hint, "пачка прошла · не сели · не жать ещё раз");
     assert.equal(/скоро/i.test(r.hint), false);
   });
 
   it("№2124 Галустян 276/286 +8 — качка живая, ещё пачки", () => {
     const r = peopleLessonsLine({ disk: 276, alfa: 286, plus: 8, at: "2026-09-12T01:20:00.000Z" });
-    assert.equal(r.line, "276 / 286 · осталось 10 · пачка 8 · +8 · 04:20");
+    assert.equal(r.line, "276 / 286 · осталось 10 · пачка 7 · +8 · 04:20");
     assert.equal(r.hint, "идёт · ещё 2 пачки");
     assert.equal(r.packsLeft, 2);
   });
 
   it("без пачки в сессии плюс не пишем; при +0 во время качки не орём «не сели»", () => {
     const idle = peopleLessonsLine({ disk: 602, alfa: 771, at: "2026-09-12T01:13:00.000Z" });
-    assert.equal(idle.line, "602 / 771 · осталось 169 · пачка 8 · 04:13");
+    assert.equal(idle.line, "602 / 771 · осталось 169 · пачка 7 · 04:13");
     assert.equal(idle.hint, "");
     const run = peopleLessonsLine({ disk: 602, alfa: 771, plus: 0, running: true, at: "2026-09-12T01:13:00.000Z" });
-    assert.equal(run.line, "602 / 771 · осталось 169 · пачка 8 · +0 · 04:13");
+    assert.equal(run.line, "602 / 771 · осталось 169 · пачка 7 · +0 · 04:13");
     assert.equal(run.hint, "");
   });
 
   it("осталось 0 — ничего нового, «ещё N пачек» нет", () => {
     const r = peopleLessonsLine({ disk: 286, alfa: 286, plus: 8, at: "2026-09-12T01:20:00.000Z" });
-    assert.equal(r.line, "286 / 286 · осталось 0 · пачка 8 · +8 · 04:20");
+    assert.equal(r.line, "286 / 286 · осталось 0 · пачка 7 · +8 · 04:20");
     assert.equal(r.hint, "ничего нового");
     assert.equal(r.packsLeft, undefined);
   });
