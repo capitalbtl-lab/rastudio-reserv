@@ -543,6 +543,7 @@ export function resetStudentLessonDisk(customerId: number) {
     lessonsExtraN: 0,
     lessonsRecheckAt: "",
     lessonsAlfaAt: "",
+    lessonsResetAt: new Date().toISOString(),
     lessonFill: undefined,
     lessonsAt: new Date().toISOString(),
     lessonsWindowDays: 0,
@@ -663,7 +664,7 @@ export function skipHoleInbound(id: number, force?: boolean) {
   return lessonsCountShort(disk, Number(s.lessonsAlfa) || 0, Boolean(s.lessonsAlfaAt));
 }
 
-export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean; dateFrom?: string; dateTo?: string; prune?: boolean; resetSeen?: boolean; monthly?: boolean }) {
+export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean; dateFrom?: string; dateTo?: string; prune?: boolean; resetSeen?: boolean; monthly?: boolean; resetAt?: string }) {
   const id = Number(customerId) || 0;
   if (id <= 0) return { ok: true as const, count: 0, done: true };
   if (skipHoleInbound(id, opts?.force)) return { ok: true as const, count: 0, skipped: "hole" as const, done: true };
@@ -680,6 +681,10 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
   }
   if (!(await waitLockStudentAlfa(id, Number(opts?.take) > 0 ? 20000 : 0))) {
     return { ok: true as const, count: 0, skipped: "busy" as const, done: false };
+  }
+  if (opts?.resetAt != null && String(customerSyncOf(id).lessonsResetAt || "") !== String(opts.resetAt)) {
+    unlockStudentAlfa(id);
+    return { ok: true as const, count: 0, skipped: "reset" as const, done: true };
   }
   if (skipHoleInbound(id, opts?.force)) {
     unlockStudentAlfa(id);
@@ -1020,7 +1025,7 @@ export async function inboundMissingUntilSeated(
   branchId: number,
   customerId: number,
   ids: number[],
-  opts?: { take?: number; rounds?: number },
+  opts?: { take?: number; rounds?: number; resetAt?: string },
 ) {
   const take = Math.max(1, Number(opts?.take) || 50);
   const rounds = Math.max(1, Number(opts?.rounds) || 20);
@@ -1028,6 +1033,9 @@ export async function inboundMissingUntilSeated(
   let count = 0;
   const dropped: number[] = [];
   for (let n = 0; n < rounds && missing.length; n += 1) {
+    if (opts?.resetAt != null && String(customerSyncOf(customerId).lessonsResetAt || "") !== String(opts.resetAt)) {
+      return { count, dropped: uniquePositiveIds(dropped), missing, skipped: "reset" as const };
+    }
     const gap = await inboundMissingCustomerLessons(branchId, customerId, missing, { force: true, take });
     count += Number(gap.count) || 0;
     if (Array.isArray(gap.dropped)) dropped.push(...gap.dropped);

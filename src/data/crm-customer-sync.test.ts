@@ -153,6 +153,7 @@ describe("штамп входа ученика", () => {
     assert.match(fn, /lessonsFull: false/);
     assert.match(fn, /lessonsRecheckAt: ""/);
     assert.match(fn, /lessonsAlfaAt: ""/);
+    assert.match(fn, /lessonsResetAt:/);
     assert.doesNotMatch(fn, /token\(|request\(|v2api/);
     const resetAt = pull.indexOf('kind === "lessonsReset"');
     const reset = pull.slice(resetAt, resetAt + 1600);
@@ -163,6 +164,11 @@ describe("штамп входа ученика", () => {
     assert.match(ui, /kind: "lessonsReset"/);
     assert.match(ui, /С нуля/);
     assert.match(ui, /loadPerson\(row, "students", peopleStudy, false, "2015-01-01"\)/);
+    assert.match(pull, /abortedByReset/);
+    assert.match(pull, /scrubLastStudentRow/);
+    assert.match(pull, /resetAt: reset0/);
+    assert.match(inbound, /skipped: "reset"/);
+    assert.doesNotMatch(reset, /качаем с нуля/);
   });
 
   it("замок ученика: два cid сразу, файл, свой pid не блокирует", () => {

@@ -953,7 +953,12 @@ export function journalPullState(opts?: { skipPeople?: boolean }) {
     lastLife: store.lastLife || null,
     lastArchives: store.lastArchives || null,
     lastArchivesPupils: store.lastArchivesPupils || null,
-    lastStudents: store.lastStudents || null,
+    lastStudents: store.lastStudents
+      ? {
+          ...store.lastStudents,
+          rows: Array.isArray(store.lastStudents.rows) ? store.lastStudents.rows.map((r) => scrubLastStudentRow(r)) : store.lastStudents.rows,
+        }
+      : null,
     lastArchivePolicy: store.lastArchivePolicy || null,
     lastArchiveCatalog: store.lastArchiveCatalog || null,
     lastAudit: store.lastAudit || null,
@@ -983,17 +988,35 @@ function journalJobView(job = journalJobSnapshot()) {
   };
 }
 
+function scrubLastStudentRow<T extends { cid?: number; alfa?: number; lessons?: number; short?: boolean; done?: boolean; dups?: boolean }>(row: T): T {
+  const cid = Number(row.cid) || 0;
+  if (!cid) return row;
+  const s = customerSyncOf(cid);
+  if (!s.lessonsResetAt || s.lessonsAlfaAt) return row;
+  return {
+    ...row,
+    lessons: Number(s.lessonsDisk) || 0,
+    alfa: 0,
+    short: true,
+    done: false,
+    dups: false,
+  };
+}
+
 function litePullState() {
   const store = loadStore();
   const live = rankedStudentIds("1").length;
   const archive = rankedStudentIds("2").length;
+  const last = store.lastStudents;
   return {
     at: store.at,
     note: store.note,
     lastLife: store.lastLife || null,
     lastArchives: store.lastArchives || null,
     lastArchivesPupils: store.lastArchivesPupils || null,
-    lastStudents: store.lastStudents || null,
+    lastStudents: last
+      ? { ...last, rows: Array.isArray(last.rows) ? last.rows.map((r) => scrubLastStudentRow(r)) : last.rows }
+      : null,
     lastArchivePolicy: store.lastArchivePolicy || null,
     lastArchiveCatalog: store.lastArchiveCatalog || null,
     lastAudit: store.lastAudit || null,
@@ -1127,7 +1150,28 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   const { inboundCustomerLessons, probeCustomerLessons, censusCustomerLessonIds, applyCustomerLessonCensus, inboundMissingUntilSeated, recheckCensusWindow, studentProtectLessonIds } = await import("./crm-journal-inbound");
   const atOf = () => new Date().toISOString();
   const from = String(dateFrom || "").trim() || "2015-01-01";
+  const reset0 = String(customerSyncOf(cid).lessonsResetAt || "");
+  const abortedByReset = () => String(customerSyncOf(cid).lessonsResetAt || "") !== reset0;
+  const resetStop = () => {
+    const s = customerSyncOf(cid);
+    return {
+      cid,
+      lessons: Number(s.lessonsDisk) || 0,
+      done: false,
+      pays: 0,
+      tariffs: 0,
+      alfa: 0,
+      short: true,
+      dups: false,
+      blocked: false,
+      paysOk: false,
+      paysMore: false,
+      rechecked: false,
+      paysRechecked: false,
+    };
+  };
   const mark = (disk: number, alfa: number, probedOk: boolean, census = false) => {
+    if (abortedByReset()) return { short: true, extra: false, closed: false };
     const keep = Number(customerSyncOf(cid).lessonsAlfa) || 0;
     const held = keepAlfaProbe(keep, alfa, probedOk, census);
     const have = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
@@ -1162,6 +1206,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   if (!recheck) {
     const range = studentCensusRange(customerSyncOf(cid));
     const first = await probeCustomerLessons(branchId, cid, { dateFrom: range.from, dateTo: range.to }).catch(() => ({ total: 0, ok: false as const, ids: [] as number[] }));
+    if (abortedByReset()) return resetStop();
     if (first.ok) {
       const prevSeen = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
       const seen = range.full
@@ -1192,7 +1237,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           done: hit.closed,
           pays: 0,
           tariffs: 0,
-          alfa: Number(customerSyncOf(cid).lessonsAlfa) || alfa0,
+          alfa: abortedByReset() ? 0 : Number(customerSyncOf(cid).lessonsAlfa) || alfa0,
           short: hit.short,
           dups: hit.extra,
           blocked: false,
@@ -1213,7 +1258,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         }
       }
       if (missing.length) {
-        const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: 20 }).catch(() => ({ count: 0, dropped: [] as number[] }));
+        const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: 20, resetAt: reset0 }).catch(() => ({ count: 0, dropped: [] as number[] }));
+        if (abortedByReset() || (gap as { skipped?: string }).skipped === "reset") return resetStop();
         lessons += Number(gap.count) || 0;
         seated += Number(gap.count) || 0;
         droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
@@ -1234,7 +1280,9 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           monthly: Boolean(slow),
           dateFrom: range.from,
           dateTo: range.to,
+          resetAt: reset0,
         }).catch(() => ({ count: 0, done: false as const, skipped: undefined as string | undefined }));
+        if (abortedByReset() || res.skipped === "reset") return resetStop();
         lessons += Number(res.count) || 0;
         if ("skipped" in res && res.skipped === "busy") {
           return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
@@ -1259,7 +1307,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           }
         }
         if (missing.length) {
-          const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: 20 }).catch(() => ({ count: 0, dropped: [] as number[] }));
+          const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: 20, resetAt: reset0 }).catch(() => ({ count: 0, dropped: [] as number[] }));
+        if (abortedByReset() || (gap as { skipped?: string }).skipped === "reset") return resetStop();
           lessons += Number(gap.count) || 0;
           seated += Number(gap.count) || 0;
           droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
@@ -1303,7 +1352,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         stampCustomerSync(cid, { lessonsAlfa: liveAlfa, lessonsAlfaAt: atOf() });
       }
       if (новые.length && !holeApproved) {
-        const gap = await inboundMissingUntilSeated(branchId, cid, новые, { take: 50, rounds: 20 }).catch(() => ({ count: 0, dropped: [] as number[] }));
+        const gap = await inboundMissingUntilSeated(branchId, cid, новые, { take: 50, rounds: 20, resetAt: reset0 }).catch(() => ({ count: 0, dropped: [] as number[] }));
+        if (abortedByReset() || (gap as { skipped?: string }).skipped === "reset") return resetStop();
         lessons += Number(gap.count) || 0;
         seated += Number(gap.count) || 0;
         droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
@@ -1328,7 +1378,8 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
       if (short && !holeApproved) {
         const missing = census.ids.filter((n) => !have.has(n));
         if (missing.length) {
-          const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: 20 }).catch(() => ({ count: 0 }));
+          const gap = await inboundMissingUntilSeated(branchId, cid, missing, { take: 50, rounds: 20, resetAt: reset0 }).catch(() => ({ count: 0 }));
+          if (abortedByReset() || (gap as { skipped?: string }).skipped === "reset") return resetStop();
           lessons += Number(gap.count) || 0;
           seated += Number(gap.count) || 0;
           disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
@@ -1516,7 +1567,7 @@ export async function journalPull(opts: {
     const short = lessonsCountShort(hit.disk, alfa, probed);
     return {
       ok: hit.ok,
-      extra: `№${cid}: диск ${hit.disk} · Alfa 0 · качаем с нуля`,
+      extra: `№${cid}: диск ${hit.disk} · Alfa 0 · дальше «Добрать»`,
       more: false,
       student: {
         cid,
