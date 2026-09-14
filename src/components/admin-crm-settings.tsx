@@ -136,6 +136,7 @@ function LoadGuideModal({ tab, onClose }: { tab: HistLoadTab; onClose: () => voi
           <section key={a.api} className="mt-4 rounded-xl bg-zinc-50 p-3 ring-1 ring-black/8">
             <h4 className="text-[0.72rem] font-bold uppercase tracking-wide text-zinc-500">Из Alfa</h4>
             <p className="mt-1 font-mono text-[0.72rem] leading-snug text-zinc-800">{a.api}</p>
+            <p className="mt-1 text-[0.86rem] leading-snug">{a.apiHint}</p>
             <ul className="mt-2 list-disc space-y-1 pl-4 text-[0.86rem] leading-snug">
               {a.fields.map((x) => (
                 <li key={x}>{x}</li>
@@ -147,6 +148,7 @@ function LoadGuideModal({ tab, onClose }: { tab: HistLoadTab; onClose: () => voi
           <section key={d.file} className="mt-3 rounded-xl bg-emerald-50/70 p-3 ring-1 ring-emerald-200">
             <h4 className="text-[0.72rem] font-bold uppercase tracking-wide text-emerald-800">На диск</h4>
             <p className="mt-1 font-mono text-[0.72rem] leading-snug">{d.file}</p>
+            <p className="mt-1 text-[0.86rem] leading-snug">{d.fileHint}</p>
             <ul className="mt-2 list-disc space-y-1 pl-4 text-[0.86rem] leading-snug">
               {d.fields.map((x) => (
                 <li key={x}>{x}</li>
@@ -166,7 +168,7 @@ function LoadGuideBtn({ tab, onOpen }: { tab: HistLoadTab; onOpen: (t: HistLoadT
   return (
     <button
       type="button"
-      className="inline-flex h-[6px] w-[6px] shrink-0 items-center justify-center rounded-full bg-black/45 p-1.5 text-[5px] font-bold leading-none text-white box-content hover:bg-black/70"
+      className="inline-flex h-3 w-3 shrink-0 items-center justify-center"
       aria-label={`Что загружает ${STEP_LOAD[tab].title}`}
       title="Что загружаем и куда"
       onClick={(e) => {
@@ -174,7 +176,7 @@ function LoadGuideBtn({ tab, onOpen }: { tab: HistLoadTab; onOpen: (t: HistLoadT
         onOpen(tab);
       }}
     >
-      i
+      <span className="block h-[5px] w-[5px] rounded-full bg-black" />
     </button>
   );
 }
