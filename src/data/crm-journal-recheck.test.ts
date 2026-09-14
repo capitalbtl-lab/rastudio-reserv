@@ -168,7 +168,7 @@ describe("перепроверка журнала", () => {
     assert.match(inbound, /canCloseLessonCensus/);
     assert.match(inbound, /uniquePositiveIds/);
     assert.match(pullLock, /if \(!recheck\) \{/);
-    assert.match(pullLock, /probeCustomerLessons\(branchId, cid, \{ dateFrom: from \}\)/);
+    assert.match(pullLock, /probeCustomerLessons\(branchId, cid, \{ dateFrom: range.from, dateTo: range.to \}\)/);
     assert.match(pullLock, /censusCustomerLessonIds/);
     assert.match(pullLock, /applyCustomerLessonCensus/);
     assert.match(pullLock, /prune: false/);

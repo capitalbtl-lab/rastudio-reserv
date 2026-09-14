@@ -35,6 +35,8 @@ export type CustomerSyncStamp = {
   lessonsHoleN?: number;
   /** Сколько id на диске нет в переписи (без hold/группы). */
   lessonsExtraN?: number;
+  /** Окно пробы жёлтых, у кого уже есть счёт: 30 → 90 → 180. Нет ключа — полное 2015. */
+  lessonsWindowDays?: number;
 };
 
 type Store = { at: string; byId: Record<string, CustomerSyncStamp> };
@@ -94,6 +96,7 @@ export function stampCustomerSync(customerId: number, patch: CustomerSyncStamp) 
   if (patch.paysRecheckAt === "") delete next.paysRecheckAt;
   if (patch.lessonsRecheckAt === "") delete next.lessonsRecheckAt;
   if (patch.journalHoleApprovedAt === "") delete next.journalHoleApprovedAt;
+  if ("lessonsWindowDays" in patch && !(Number(patch.lessonsWindowDays) > 0)) delete next.lessonsWindowDays;
   if (patch.lessonsAlfaAt === "") {
     delete next.lessonsAlfaAt;
     if (!("lessonsAlfa" in patch)) delete next.lessonsAlfa;
@@ -191,6 +194,32 @@ export function wasLessonGreen(sync: CustomerSyncStamp) {
   if (sync.lessonsRecheckAt) return true;
   if (sync.lessonsFull) return true;
   return probed && alfa > 0 && disk === alfa;
+}
+
+export const LESSON_WINDOW_STEPS = [30, 90, 180] as const;
+
+export function lessonWindowDaysOf(sync: CustomerSyncStamp) {
+  const n = Number(sync.lessonsWindowDays) || 0;
+  if (n === 90 || n === 180) return n;
+  return 30;
+}
+
+export function nextLessonWindowDays(days: number) {
+  return days < 90 ? 90 : 180;
+}
+
+function shiftYmd(days: number, now = new Date()) {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Нет живого счёта — полный журнал. Иначе ±N дней, не 2015. */
+export function studentCensusRange(sync: CustomerSyncStamp, now = new Date()) {
+  if (!String(sync.lessonsAlfaAt || "").trim()) {
+    return { from: LESSON_FILL_FLOOR, to: shiftYmd(90, now), full: true as const, days: 0 };
+  }
+  const days = lessonWindowDaysOf(sync);
+  return { from: shiftYmd(-days, now), to: shiftYmd(days, now), full: false as const, days };
 }
 
 export function customerLessonsFresh(customerId: number, now = Date.now()) {

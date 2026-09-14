@@ -71,6 +71,15 @@ function ymd(raw?: string) {
   return toAlfaLessonDate(raw);
 }
 
+/** Состав урока: cid в списке / пусто (группа) / чужой непустой. */
+export function lessonSeatForCustomer(item: Record<string, unknown>, customerId: number): "own" | "empty" | "foreign" {
+  const cid = Number(customerId) || 0;
+  const ids = lessonCustomerIds(item);
+  if (cid && ids.includes(cid)) return "own";
+  if (!ids.length) return "empty";
+  return "foreign";
+}
+
 export function recheckCensusWindow(sync: Parameters<typeof wasLessonGreen>[0], days?: unknown) {
   if (!wasLessonGreen(sync)) return { from: "", to: "" };
   const n = clampRecheckDays(days);
@@ -537,6 +546,7 @@ export function resetStudentLessonDisk(customerId: number) {
     lessonsAlfaAt: "",
     lessonFill: undefined,
     lessonsAt: new Date().toISOString(),
+    lessonsWindowDays: 0,
   });
   return { ok: true as const, disk, alfa: 0 };
 }
@@ -579,7 +589,7 @@ export function applyCustomerLessonCensus(customerId: number, ids: number[], clo
   }
 }
 
-export async function probeCustomerLessons(branch: number, customerId: number, opts?: { token?: string; dateFrom?: string }) {
+export async function probeCustomerLessons(branch: number, customerId: number, opts?: { token?: string; dateFrom?: string; dateTo?: string }) {
   const census = await censusCustomerLessonIds(branch, customerId, opts);
   if (!census.ok) return { total: 0, ok: false as const, ids: census.ids };
   return { total: census.ids.length, ok: true as const, ids: census.ids };
@@ -654,7 +664,7 @@ export function skipHoleInbound(id: number, force?: boolean) {
   return lessonsCountShort(disk, Number(s.lessonsAlfa) || 0, Boolean(s.lessonsAlfaAt));
 }
 
-export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean; dateFrom?: string; prune?: boolean; resetSeen?: boolean; monthly?: boolean }) {
+export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean; dateFrom?: string; dateTo?: string; prune?: boolean; resetSeen?: boolean; monthly?: boolean }) {
   const id = Number(customerId) || 0;
   if (id <= 0) return { ok: true as const, count: 0, done: true };
   if (skipHoleInbound(id, opts?.force)) return { ok: true as const, count: 0, skipped: "hole" as const, done: true };
@@ -688,7 +698,8 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
     const t = await token();
     const dateFrom = ymd(opts?.dateFrom) || "2015-01-01";
     const deepHist = /^2015/.test(dateFrom);
-    const dateTo = ruShift(90);
+    const dateTo = ymd(opts?.dateTo) || ruShift(90);
+    const floor = deepHist ? "" : dateFrom;
     const slots = listAdminSlots();
     const homeLite = Boolean(opts?.homeOnly);
     const prune = Boolean(opts?.prune);
@@ -745,6 +756,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
         received += live.items.length;
         const lastShort = !live.items.length || (live.total > 0 ? received >= live.total : live.items.length < 100);
         cur = lastShort ? lessonFillAdvance({ ...cur, page }, true, branches) : { bid, statusIdx: cur.statusIdx, page: page + 1, from: cur.from, to: cur.to };
+        if (floor && cur.from && String(cur.to || cur.from) < floor) cur = { ...cur, done: true };
         if (ran >= maxRun || cur.done || lastShort) break;
       }
       if (aborted) break;
@@ -764,6 +776,7 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
           if (lid > 0) droppedNoDate.push(lid);
           continue;
         }
+        if (lessonSeatForCustomer(rec, id) === "foreign") continue;
         const packed = packLight(
           { ...item, date: day, customer_ids: uniquePositiveIds([...ids, id]) },
           {
@@ -860,11 +873,6 @@ export async function inboundCustomerLessons(branch: number, customerId: number,
       lessonsDisk: diskNow,
       ...gap,
     });
-    if (wantFull && !fillDone && opts?.continueLater === true && !monthly) {
-      setTimeout(() => {
-        void inboundCustomerLessons(branch, id, { full: true, force: opts?.force, prune, dateFrom, homeOnly: opts?.homeOnly }).catch(() => null);
-      }, 700);
-    }
     if (droppedNoDate.length) {
       console.warn(`inbound lessons cid=${id} dropped no-date: ${droppedNoDate.slice(0, 40).join(",")}`);
     }
@@ -906,61 +914,74 @@ export async function inboundMissingCustomerLessons(
   const prevMap = new Map(prevCal.map((l) => [String(l.lessonId || `${l.date}|${l.from}`), l] as const));
   const pulled: GroupCalLesson[] = [];
   const dropped: number[] = [];
+  const failed: number[] = [];
   const bodiesFor = (lid: number) =>
     LESSON_STATUSES.map((status) => ({ page: 0, pageSize: 5, id: lid, status })) as Record<string, unknown>[];
   console.warn(`inbound missing cid=${id} want ${want.length}`);
   for (let i = 0; i < want.length; i += 1) {
     const lid = want[i];
     if (i) await pauseMs(200);
-    let item: Parameters<typeof packLight>[0] | undefined;
+    let packedRow: GroupCalLesson | undefined;
+    let liveFail = false;
+    let foreign = false;
     outer: for (const bid of branches) {
       for (const body of bodiesFor(lid)) {
         const live = await pullLessonPage(bid, body, t, 2);
-        if (!live.ok) continue;
-        const hit = live.items.find((x) => Number(x.id) === lid);
-        if (hit) {
-          item = hit;
-          break outer;
+        if (!live.ok) {
+          liveFail = true;
+          continue;
         }
+        const hit = live.items.find((x) => Number(x.id) === lid);
+        if (!hit) continue;
+        const rec = hit as Record<string, unknown>;
+        const seat = lessonSeatForCustomer(rec, id);
+        if (seat === "foreign") {
+          foreign = true;
+          continue;
+        }
+        const day = ymd(hit.date) || ymd((hit as { lesson_date?: string }).lesson_date);
+        if (!day) {
+          console.warn(`inbound missing cid=${id} no-date lessonId=${lid} status=${String(body.status || "")}`);
+          continue;
+        }
+        const gid = Number((hit.group_ids || [])[0] || 0);
+        const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
+        const ctx = {
+          groupName: slot?.groupName || String(hit.lesson_type_name || "занятие"),
+          from: hm(hit.time_from) || "",
+          to: hm(hit.time_to) || "",
+          teacher: slot?.teacher || "",
+          subject: slot?.subject || "",
+        };
+        const ids = lessonCustomerIds(rec);
+        let packed = packLight(
+          { ...hit, date: day, customer_ids: uniquePositiveIds([...ids, id]) },
+          ctx,
+          id,
+        );
+        if (!packed) continue;
+        packed.date = ymd(packed.date) || day;
+        if (!packed.customerIds?.length) packed.customerIds = [id];
+        const prev = prevMap.get(String(packed.lessonId || `${packed.date}|${packed.from}`));
+        if (prev) {
+          if (!(Number(packed.amount) > 0) && Number(prev.amount) > 0) packed.amount = prev.amount;
+          if (!(Number(packed.cttId) > 0) && Number(prev.cttId) > 0) packed.cttId = prev.cttId;
+          const merged = mergeLessonPupils(prev.pupils, packed.pupils);
+          if (merged?.length) packed.pupils = merged;
+        }
+        packedRow = withPupilNames(packed);
+        break outer;
       }
     }
-    if (!item) {
-      dropped.push(lid);
+    if (packedRow) {
+      pulled.push(packedRow);
       continue;
     }
-    const gid = Number((item.group_ids || [])[0] || 0);
-    const slot = gid ? slots.find((s) => s.groupId === gid && s.branchId === branch) || slots.find((s) => s.groupId === gid) : undefined;
-    const ctx = {
-      groupName: slot?.groupName || String(item.lesson_type_name || "занятие"),
-      from: hm(item.time_from) || "",
-      to: hm(item.time_to) || "",
-      teacher: slot?.teacher || "",
-      subject: slot?.subject || "",
-    };
-    const day = ymd(item.date) || ymd((item as { lesson_date?: string }).lesson_date);
-    if (!day) {
-      dropped.push(lid);
+    if (liveFail && !foreign) {
+      failed.push(lid);
       continue;
     }
-    let packed = packLight(
-      { ...item, date: day, customer_ids: uniquePositiveIds([...(lessonCustomerIds(item as Record<string, unknown>)), id]) },
-      ctx,
-      id,
-    );
-    if (!packed) {
-      dropped.push(lid);
-      continue;
-    }
-    packed.date = ymd(packed.date) || day;
-    if (!packed.customerIds?.length) packed.customerIds = [id];
-    const prev = prevMap.get(String(packed.lessonId || `${packed.date}|${packed.from}`));
-    if (prev) {
-      if (!(Number(packed.amount) > 0) && Number(prev.amount) > 0) packed.amount = prev.amount;
-      if (!(Number(packed.cttId) > 0) && Number(prev.cttId) > 0) packed.cttId = prev.cttId;
-      const merged = mergeLessonPupils(prev.pupils, packed.pupils);
-      if (merged?.length) packed.pupils = merged;
-    }
-    pulled.push(withPupilNames(packed));
+    dropped.push(lid);
   }
   if (pulled.length) {
     const hold = pendingExportIds(["lesson.update", "lesson.create"]);
@@ -972,13 +993,21 @@ export async function inboundMissingCustomerLessons(
       countAlfaLessonUniq(next),
       pulled.map((l) => Number(l.lessonId) || 0).filter((n) => n > 0 && !before.has(n)),
     );
-    stampCustomerSync(id, {
-      lessonsFull: false,
-    });
   }
+  const seen0 = uniquePositiveIds(customerSyncOf(id).lessonsSeenIds || []);
+  const dropSet = new Set(dropped);
+  const seenNext = seen0.filter((n) => !dropSet.has(n));
+  const have = uniquePositiveIds((loadCustomerCalendar(id) || []).map((l) => Number(l.lessonId) || 0));
+  const gap = stampLessonSetGap({ ...customerSyncOf(id), lessonsSeenIds: seenNext }, have, studentProtectLessonIds(id));
+  stampCustomerSync(id, {
+    lessonsFull: false,
+    lessonsSeenIds: seenNext,
+    ...gap,
+  });
   if (dropped.length) console.warn(`inbound missing cid=${id} dropped: ${dropped.slice(0, 40).join(",")}`);
+  if (failed.length) console.warn(`inbound missing cid=${id} failed: ${failed.slice(0, 40).join(",")}`);
   if (pulled.length) console.warn(`inbound missing cid=${id} seated ${pulled.length} of ${want.length}`);
-  return { ok: true as const, count: pulled.length, dropped };
+  return { ok: true as const, count: pulled.length, dropped, failed };
   } finally {
     if (!held) unlockStudentAlfa(id);
   }

@@ -367,11 +367,16 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /missing\.length/);
     assert.match(pull, /lessonsSeenIds/);
     const missAt = inbound.indexOf("export async function inboundMissingCustomerLessons");
-    const miss = inbound.slice(missAt, missAt + 4200);
+    const miss = inbound.slice(missAt, missAt + 9000);
     assert.match(miss, /id: lid, status/);
     assert.match(miss, /LESSON_STATUSES/);
     assert.doesNotMatch(miss, /lesson_id: lid/);
     assert.doesNotMatch(miss, /2015-01-01/);
+    assert.match(miss, /no-date lessonId/);
+    assert.match(miss, /liveFail/);
+    assert.match(miss, /seat === "foreign"/);
+    assert.match(miss, /if \(liveFail && !foreign\)/);
+    assert.doesNotMatch(inbound, /setTimeout\(\(\) => \{\s*void inboundCustomerLessons/);
     function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean) {
       const k = Number(keep) || 0;
       const a = Number(alfa) || 0;
@@ -410,7 +415,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(rec, /applyCustomerLessonCensus\(cid, census.ids, true, windowFrom, windowTo\)/);
     assert.match(one, /recheckCensusWindow/);
     assert.match(one, /mark\(disk, alfaGate, first\.ok\)/);
-    assert.match(one, /censusCustomerLessonIds\(branchId, cid, \{ dateFrom: from \}\)/);
+    assert.match(one, /studentCensusRange/);
+    assert.match(one, /dateFrom: range.from, dateTo: range.to/);
+    assert.doesNotMatch(one, /censusCustomerLessonIds\(branchId, cid, \{ dateFrom: from \}\)/);
     assert.doesNotMatch(one, /mark\(disk, alfaGate, true\)/);
     assert.match(inbound, /skipped: "hole"/);
     assert.match(inbound, /skipHoleInbound/);
@@ -427,5 +434,29 @@ describe("ручной журнал с Alfa", () => {
     assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true, !keepBefore\)/);
     assert.match(inbound, /heldAlfa.write \? \{ lessonsAlfa: heldAlfa.alfa, lessonsAlfaAt/);
     assert.match(inbound, /holeApproved \|\| \(keepBefore \? disk !== keepAlfa : disk !== alfa\)/);
+  });
+
+  it("3g: окно не 2015 если счёт есть; missing сажает или снимает seen", () => {
+    const pull = readFileSync(new URL("./crm-journal-pull.ts", import.meta.url), "utf8");
+    const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
+    const oneAt = pull.indexOf("async function pullOneStudent");
+    const oneEnd = pull.indexOf("export async function journalPull", oneAt);
+    const one = pull.slice(oneAt, oneEnd > oneAt ? oneEnd : oneAt + 14000);
+    assert.match(one, /studentCensusRange\(customerSyncOf\(cid\)\)/);
+    assert.match(one, /dateFrom: range.from, dateTo: range.to/);
+    assert.match(one, /prevSeen = range.full \? \[\]/);
+    assert.match(one, /lessonsWindowDays: range.days/);
+    assert.match(one, /nextLessonWindowDays\(range.days\)/);
+    assert.match(one, /lessonsWindowDays: 0/);
+    assert.doesNotMatch(one, /probeCustomerLessons\(branchId, cid, \{ dateFrom: from \}\)/);
+    assert.match(inbound, /export function lessonSeatForCustomer/);
+    assert.match(inbound, /lessonSeatForCustomer\(rec, id\) === "foreign"/);
+    const missAt = inbound.indexOf("export async function inboundMissingCustomerLessons");
+    const miss = inbound.slice(missAt, missAt + 9000);
+    assert.match(miss, /break outer/);
+    assert.match(miss, /packedRow/);
+    assert.doesNotMatch(miss, /date_from/);
+    assert.doesNotMatch(miss, /customer_id: id/);
+    assert.match(miss, /lessonsSeenIds: seenNext/);
   });
 });

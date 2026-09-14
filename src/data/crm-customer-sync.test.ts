@@ -10,6 +10,9 @@ import {
   lessonFillStartMonth,
   prevMonthChunk,
   monthChunkNow,
+  studentCensusRange,
+  nextLessonWindowDays,
+  lessonWindowDaysOf,
   LESSON_FILL_FLOOR,
   CUSTOMER_SYNC_TTL_MS,
   LESSON_INBOUND_RUN,
@@ -97,6 +100,23 @@ describe("штамп входа ученика", () => {
     assert.equal(lessonsJournalReady({ lessonsAlfaAt: "x", lessonsAlfa: 2, lessonsDisk: 3, lessonsSeenIds: [1, 2], lessonsHoleN: 0, lessonsExtraN: 0 }), true);
     assert.deepEqual(stampLessonSetGap({ lessonsSeenIds: [1, 2] }, [1, 3], []), { lessonsHoleN: 1, lessonsExtraN: 1 });
     assert.deepEqual(stampLessonSetGap({ lessonsSeenIds: [1, 2] }, [1, 2, 9], [9]), { lessonsHoleN: 0, lessonsExtraN: 0 });
+    const now = new Date(2026, 8, 14);
+    const full = studentCensusRange({}, now);
+    assert.equal(full.full, true);
+    assert.equal(full.from, LESSON_FILL_FLOOR);
+    assert.equal(full.to, "2026-12-13");
+    const win = studentCensusRange({ lessonsAlfaAt: "x", lessonsAlfa: 142 }, now);
+    assert.equal(win.full, false);
+    assert.equal(win.days, 30);
+    assert.equal(win.from, "2026-08-15");
+    assert.equal(win.to, "2026-10-14");
+    assert.equal(lessonWindowDaysOf({ lessonsWindowDays: 90 }), 90);
+    assert.equal(nextLessonWindowDays(30), 90);
+    assert.equal(nextLessonWindowDays(90), 180);
+    assert.equal(nextLessonWindowDays(180), 180);
+    const src = readFileSync(new URL("./crm-customer-sync.ts", import.meta.url), "utf8");
+    assert.match(src, /lessonsWindowDays\?: number/);
+    assert.match(src, /"lessonsWindowDays" in patch && !\(Number\(patch.lessonsWindowDays\) > 0\)/);
   });
 
   it("штамп дырки: ключ ISO, пустая строка снимает, проба не пишет", () => {
