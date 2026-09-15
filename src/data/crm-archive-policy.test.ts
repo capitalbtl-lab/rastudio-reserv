@@ -254,4 +254,14 @@ describe("рабочий архив", () => {
     assert.equal(report.leadsSkip, 1);
     assert.equal(report.clients, 1);
   });
+
+  it("лид в группе без оплат — не клиент; кто уже в живых — куча 1", () => {
+    const groupedLead = p({ cid: 50, fio: "Лид В Группе", groupLinks: [{ id: 3, branchId: 1 }], funnel: "1" });
+    const paidLead = p({ cid: 51, fio: "Был Клиентом", groupLinks: [{ id: 3, branchId: 1 }], funnel: "1", paidCount: 2 });
+    assert.equal(archiveWasClient(groupedLead), false);
+    assert.equal(archiveWasClient(paidLead), true);
+    const liveMate = p({ cid: 60, fio: "В Живой", groupLinks: [{ id: 8, branchId: 1 }] });
+    const { policy } = recountArchivePolicy([liveMate], new Set(), empty, empty.filters, new Set([60]));
+    assert.equal(policy.working.includes(60), false);
+  });
 });

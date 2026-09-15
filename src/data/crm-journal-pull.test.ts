@@ -212,7 +212,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /archPeople/);
     assert.doesNotMatch(ui, /diskArch/);
     assert.match(ui, /asAuditRow\(r, by.get\(r.cid\)\)/);
-    assert.match(ui, /role === "all" && who === "архив"/);
+    assert.match(ui, /role === "all" && who === "архив" && hasClients/);
+    assert.match(pull, /rankedStudentIds\("1"\)\.map\(\(x\) => x\.cid\)/);
     assert.match(ui, /role === "архив" \? true : rowMatched\(r\)/);
     assert.doesNotMatch(pull, /function auditArchivePeople/);
     assert.match(pull, /parseArchiveUiFilters/);

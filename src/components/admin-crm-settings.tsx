@@ -1957,9 +1957,10 @@ function AuditFillList({
     if (!q) return true;
     return r.name.toLowerCase().includes(q) || String(r.cid).includes(q) || (r.groups || []).some((g) => g.toLowerCase().includes(q));
   });
+  const hasClients = rows.some((r) => auditRole(r) === "клиент");
   const inWork = (r: AuditUiRow) => {
     const who = auditRole(r);
-    if (role === "all" && who === "архив") return false;
+    if (role === "all" && who === "архив" && hasClients) return false;
     return role === "all" || who === role;
   };
   const reasonN = (id: string) => named.filter((r) => inWork(r) && auditReasonHit(r, id)).length;
@@ -4642,7 +4643,7 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.loadOneMoney,
                         )}
-                        <YearsSelect value={peopleStudy === "2" ? (archAttendYears === 2 ? "2" : "1") : moneyFromId} disabled={busy} onChange={(id) => (peopleStudy === "2" ? setArchAttendYears(id === "2" ? 2 : 1) : setMoneyFromId(id))} archiveOnly={peopleStudy === "2"} hint={HINT.yearsMoney} />
+                        <YearsSelect value={peopleStudy === "2" ? (archAttendYears === 2 ? "2" : "1") : moneyFromId} disabled={busy || peopleStudy === "2"} onChange={(id) => (peopleStudy === "2" ? setArchAttendYears(id === "2" ? 2 : 1) : setMoneyFromId(id))} archiveOnly={peopleStudy === "2"} hint={HINT.yearsMoney} />
                         </BtnCluster>
                         <BtnCluster tone="sky">
                         {withHint(
@@ -4678,7 +4679,7 @@ export function AdminCrmSettings() {
                         kind="balance"
                         busy={offline || (fillLoading?.kind === "balance" && Boolean(fillLoading.customerId))}
                         loadingCid={fillLoading?.kind === "balance" ? fillLoading.customerId : undefined}
-                        years={<YearsSelect value={peopleStudy === "2" ? (archAttendYears === 2 ? "2" : "1") : moneyFromId} disabled={busy} onChange={(id) => (peopleStudy === "2" ? setArchAttendYears(id === "2" ? 2 : 1) : setMoneyFromId(id))} archiveOnly={peopleStudy === "2"} hint={HINT.yearsMoney} small />}
+                        years={<YearsSelect value={peopleStudy === "2" ? (archAttendYears === 2 ? "2" : "1") : moneyFromId} disabled={busy || peopleStudy === "2"} onChange={(id) => (peopleStudy === "2" ? setArchAttendYears(id === "2" ? 2 : 1) : setMoneyFromId(id))} archiveOnly={peopleStudy === "2"} hint={HINT.yearsMoney} small />}
                         windowSel={<RecheckDaysSelect value={moneyRecheckDays} disabled={busy} onChange={setMoneyRecheckDays} small />}
                         onLoad={(row) => void loadPerson(row, "balance", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "balance", peopleStudy, true)}

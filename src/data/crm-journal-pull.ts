@@ -1743,7 +1743,8 @@ export async function journalPull(opts: {
       return { ...p, lastLessonAt: last || p.lastLessonAt, lessons: cal.length || p.lessons };
     });
     const extra = extraGroupKeys(loadJournalArchiveGroups().map((g) => ({ groupId: g.groupId, branchId: g.branchId })));
-    const { policy, report } = recountArchivePolicy(items, extra, prev, filters);
+    const liveCids = new Set(rankedStudentIds("1").map((x) => x.cid));
+    const { policy, report } = recountArchivePolicy(items, extra, prev, filters, liveCids);
     saveArchivePolicy(policy);
     store.lastArchivePolicy = report;
     store.note = formatArchiveCountNote(report);

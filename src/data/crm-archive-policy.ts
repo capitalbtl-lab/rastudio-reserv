@@ -39,6 +39,7 @@ export type ArchivePerson = {
   course?: string;
   lessons?: number;
   lastLessonAt?: number;
+  funnel?: string;
 };
 
 export type ArchiveCountReport = {
@@ -269,6 +270,7 @@ export function archiveWasClient(p: ArchivePerson) {
   if (String(p.paidTill || "").trim()) return true;
   if ((Number(p.lessons) || 0) > 0) return true;
   if (String(p.course || "").trim()) return true;
+  if (String(p.funnel || "") === "1") return false;
   if ((p.groupLinks || []).length > 0) return true;
   return false;
 }
@@ -303,9 +305,10 @@ export function parseArchiveUiFilters(raw: string, prev: ArchivePolicyFilters = 
   }
 }
 
-export function archiveEligible(p: ArchivePerson, keys: Set<string>, filters: ArchivePolicyFilters = DEFAULT_ARCHIVE_FILTERS) {
+export function archiveEligible(p: ArchivePerson, keys: Set<string>, filters: ArchivePolicyFilters = DEFAULT_ARCHIVE_FILTERS, liveCids?: Set<number>) {
   if (p.study !== 2) return false;
   if (archiveRemoved(p)) return false;
+  if (liveCids?.has(p.cid)) return false;
   if (!archiveWasClient(p)) return false;
   if (filters.fio && !archiveFioOk(p.fio)) return false;
   const years = archiveAgeYears(p.dob, p.age);
@@ -318,6 +321,7 @@ export function archiveEligible(p: ArchivePerson, keys: Set<string>, filters: Ar
   }
   if (filters.hadGroups && !(p.groupLinks || []).length) return false;
   if (!archiveAttendOk(p, filters.attendYears || 0)) return false;
+  void keys;
   return true;
 }
 
@@ -326,6 +330,7 @@ export function recountArchivePolicy(
   extraKeys: Set<string>,
   prev: ArchivePolicy,
   filters: ArchivePolicyFilters = prev.filters || DEFAULT_ARCHIVE_FILTERS,
+  liveCids?: Set<number>,
 ): { policy: ArchivePolicy; report: ArchiveCountReport } {
   const keys = new Set(extraKeys);
   for (const k of liveGroupKeys(people)) keys.add(k);
@@ -343,7 +348,7 @@ export function recountArchivePolicy(
   const next = new Set<number>();
   for (const cid of keepManual) {
     const row = byCid.get(cid);
-    if (!row || row.study !== 2 || archiveRemoved(row) || !archiveWasClient(row)) {
+    if (!row || row.study !== 2 || archiveRemoved(row) || !archiveWasClient(row) || liveCids?.has(cid)) {
       keepManual.delete(cid);
       continue;
     }
@@ -364,7 +369,7 @@ export function recountArchivePolicy(
     if (years == null) noDob += 1;
     if (years != null && years >= 18) adult += 1;
     if ((p.groupLinks || []).length) hadGroupsN += 1;
-    if (archiveEligible(p, keys, filters)) {
+    if (archiveEligible(p, keys, filters, liveCids)) {
       next.add(p.cid);
       if (!reasons[String(p.cid)]) reasons[String(p.cid)] = "catalog";
     }
@@ -513,6 +518,7 @@ export function archivePersonFrom(d: {
     paidCount: Number(ex.paid_count || 0) || 0,
     paidTill: String(ex.paid_till || ""),
     course: String((d as { coursePast?: string; course?: string }).coursePast || (d as { course?: string }).course || ""),
+    funnel: String(ex.crm_funnel || ""),
   };
 }
 
