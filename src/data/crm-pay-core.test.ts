@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { payEffect, balanceOf, displayedBalance, snapshotBalance, accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, mergePayInbound, collapsePayRows, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, payCustomerNameOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, payPollLookbackDates, PAY_POLL_MAX_PER_HOUR, PAY_INBOUND_EXTRA_TYPES, matchAlfaPayId, payNum, markRefundOfGoods, remainderClose, rowDelta, type PayRow } from "./crm-pay-core.ts";
+import { payEffect, balanceOf, displayedBalance, snapshotBalance, accountSnapOf, liveCttOf, paySumForCtt, payCountForCtt, mergePayInbound, pruneWindowCorrections, collapsePayRows, payAfterStamp, nextPayStamp, payPollAllowed, payPollHitsInWindow, payPollStampOrEmpty, payPollFirstFill, payCustomerIdOf, payCustomerNameOf, alfaPayDate, alfaPayIndexDate, kindFromAlfaPay, ruDateIso, OPENING_NOTE, payAccountLabel, cashPageSlice, cashTakeOf, CASH_PAGE_SIZES, payFillStart, payFillAdvance, payFillOf, payFillNote, payPollLookbackDates, PAY_POLL_MAX_PER_HOUR, PAY_INBOUND_EXTRA_TYPES, matchAlfaPayId, payNum, markRefundOfGoods, remainderClose, rowDelta, type PayRow } from "./crm-pay-core.ts";
 
 function row(p: Partial<PayRow> & Pick<PayRow, "id" | "kind" | "income" | "expenditure">): PayRow {
   return {
@@ -128,6 +128,35 @@ describe("журнал денег", () => {
     assert.equal(merged.filter((x) => x.id === 88).length, 1);
     assert.equal(merged.find((x) => x.id === 88)?.customerName, "Чуднова");
     assert.equal(collapsePayRows([row({ id: 9, kind: "income", income: 1, expenditure: 0 }), row({ id: 9, kind: "income", income: 1, expenditure: 0 })]).length, 1);
+  });
+
+  it("синяя касса: срез только корректировок в окне", () => {
+    const win = { from: "2026-08-15", to: "2026-09-16" };
+    const rows = [
+      row({ id: 10, kind: "income", income: 100, expenditure: 0, documentDate: "01.09.2026" }),
+      row({ id: 11, kind: "refund", income: 0, expenditure: 50, documentDate: "02.09.2026" }),
+      row({ id: 12, kind: "product", income: 200, expenditure: 0, documentDate: "03.09.2026" }),
+      row({ id: 20, kind: "correct", income: 30, expenditure: 0, documentDate: "04.09.2026" }),
+      row({ id: 21, kind: "correct", income: 40, expenditure: 0, documentDate: "05.09.2026" }),
+      row({ id: 22, kind: "correct", income: 50, expenditure: 0, documentDate: "01.01.2024" }),
+      row({ id: -9, kind: "correct", income: 1, expenditure: 0, documentDate: "06.09.2026" }),
+      row({ id: 23, kind: "correct", income: 8, expenditure: 0, documentDate: "07.09.2026" }),
+    ];
+    const next = pruneWindowCorrections(rows, [21], win, [23]);
+    assert.equal(next.find((x) => x.id === 10)?.deleted, undefined);
+    assert.equal(next.find((x) => x.id === 11)?.deleted, undefined);
+    assert.equal(next.find((x) => x.id === 12)?.deleted, undefined);
+    assert.equal(next.find((x) => x.id === 20)?.deleted, true);
+    assert.equal(next.find((x) => x.id === 21)?.deleted, undefined);
+    assert.equal(next.find((x) => x.id === 22)?.deleted, undefined);
+    assert.equal(next.find((x) => x.id === -9)?.deleted, undefined);
+    assert.equal(next.find((x) => x.id === 23)?.deleted, undefined);
+    const merged = mergePayInbound(
+      [row({ id: 99, kind: "income", income: 10, expenditure: 0, documentDate: "08.09.2026" })],
+      [row({ id: 10, kind: "income", income: 100, expenditure: 0, documentDate: "01.09.2024" })],
+    );
+    assert.equal(merged.some((x) => x.id === 10), true);
+    assert.equal(merged.some((x) => x.id === 99), true);
   });
 
   it("deleted не двигает остаток", () => {

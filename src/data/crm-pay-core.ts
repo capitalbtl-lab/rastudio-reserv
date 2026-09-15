@@ -361,6 +361,28 @@ export function mergePayInbound(pulled: PayRow[], prev: PayRow[] | undefined, ho
   );
 }
 
+/** Синяя касса: срез только корректировок в окне. Платежи не трогать. */
+export function pruneWindowCorrections(
+  rows: PayRow[],
+  pulledIds: Iterable<number>,
+  window: { from: string; to: string },
+  holdIds: Iterable<number> = [],
+): PayRow[] {
+  const from = ruDateIso(window.from).slice(0, 10);
+  const to = ruDateIso(window.to).slice(0, 10);
+  if (!from || !to) return rows;
+  const seen = new Set([...pulledIds].map(Number).filter((n) => n > 0));
+  const hold = new Set([...holdIds].map(Number).filter((n) => n));
+  return rows.map((x) => {
+    const id = Number(x.id) || 0;
+    if (x.kind !== "correct" || x.deleted || id <= 0) return x;
+    if (hold.has(id) || seen.has(id)) return x;
+    const d = ruDateIso(String(x.documentDate || "")).slice(0, 10);
+    if (!d || d < from || d > to) return x;
+    return { ...x, deleted: true };
+  });
+}
+
 export function ruDateIso(raw: string) {
   const s = String(raw || "").trim();
   const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);

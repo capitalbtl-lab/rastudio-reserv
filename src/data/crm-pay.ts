@@ -5,6 +5,7 @@ import {
   balanceOf,
   displayedBalance,
   mergePayInbound,
+  pruneWindowCorrections,
   collapsePayRows,
   nextPayStamp,
   payAfterStamp,
@@ -784,7 +785,12 @@ async function inboundPayWindow(
       return packPay(it, customerId, branchId);
     })
     .filter((x): x is PayRow => Boolean(x) && Number(x.customerId) === customerId);
-  const merged = markRefundOfGoods(mergePayInbound(pulled, paysOf(customerId), holdPayIds()));
+  const hold = holdPayIds();
+  const merged0 = markRefundOfGoods(mergePayInbound(pulled, paysOf(customerId), hold));
+  const pulledIds = pulled.map((x) => Number(x.id) || 0);
+  const merged = pruneWindowCorrections(merged0, pulledIds, { from: dateFrom, to: dateTo }, hold);
+  const gone = merged.filter((x, i) => x.deleted && !merged0[i]?.deleted).map((x) => x.id);
+  if (gone.length) logAdmin(`Касса окно: cid=${customerId} сняли корректировки ${gone.join(",")}`, "sync");
   replaceCustomerPays(customerId, merged, { keepAll: true });
   const liveN = merged.filter((x) => !x.deleted).length;
   const next = load();

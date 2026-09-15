@@ -188,6 +188,7 @@ describe("касса список", () => {
     assert.match(inbound, /scannedAlready && !payFillPending\(customerId\)/);
     assert.match(inbound, /inboundPayWindow/);
     assert.match(pay, /async function inboundPayWindow/);
+    assert.match(pay, /pruneWindowCorrections/);
     assert.match(pay, /date_from: from/);
     assert.match(pay, /done: true, empty: liveN === 0/);
     assert.match(inbound, /received >= total/);
