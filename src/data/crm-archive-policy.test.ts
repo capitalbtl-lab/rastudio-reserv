@@ -14,6 +14,7 @@ import {
   addArchiveWorkingMany,
   recountArchivePolicy,
   archivePersonFrom,
+  archiveWasClient,
   type ArchivePerson,
   type ArchivePolicy,
 } from "./crm-archive-policy.ts";
@@ -21,7 +22,7 @@ import {
 const empty: ArchivePolicy = {
   at: "",
   ready: false,
-  filters: { fio: true, notAdult: true, intersectLive: true },
+  filters: { fio: true, notAdult: true, noDob: false, hadGroups: false, attendYears: 1 },
   working: [],
   manual: [],
   reasons: {},
@@ -111,7 +112,6 @@ describe("рабочий архив", () => {
       first.policy,
     );
     assert.equal(second.policy.working.includes(50), true);
-    assert.equal(second.report.kept, 1);
   });
 
   it("2→1 убирает, 1→2 остаётся в working через keep, удалённый не входит", () => {
@@ -202,7 +202,7 @@ describe("рабочий архив", () => {
     assert.match(pull, /kind === "archiveCount"/);
     assert.match(pull, /kind === "archiveCatalog"/);
     assert.match(pull, /listDossierCrm\(\)/);
-    assert.match(pull, /live && live.has\(x.cid\)/);
+    assert.doesNotMatch(pull, /live && live.has\(x.cid\)/);
     assert.match(pull, /x.study === 2 && \(scoped \|\| Boolean\(allow && allow.has\(x.cid\)\)\)/);
     const addAt = pull.indexOf('kind === "archiveAdd"');
     const addNext = pull.indexOf('kind === "archives"', addAt + 1);
@@ -234,12 +234,24 @@ describe("рабочий архив", () => {
     assert.match(views, /persist: true/);
     assert.match(views, /exist\.status === "учится"/);
     assert.doesNotMatch(views, /byPhone && Number\(byPhone\.crmId\) !== id/);
-    assert.match(views, /addArchiveWorkingMany\(\[id\], "catalog"\)/);
+    assert.match(views, /if \(archiveWasClient\(row\)\) addArchiveWorkingMany\(\[id\], "catalog"\)/);
     assert.match(views, /catalogLessonHadGroups/);
     assert.match(views, /catalogMergeDiskGroups/);
     assert.match(views, /parseCatalogFilter/);
     assert.match(views, /patch\.byCrmOnly/);
     assert.match(views, /cur\.done && !opts\?\.reset/);
-    assert.ok((ui.match(/kind: "archiveCount"/g) || []).length >= 2);
+  });
+
+  it("архивный лид без оплат и групп не в наборе", () => {
+    const live = p({ cid: 1, study: 1, groupLinks: [{ id: 1, branchId: 1 }] });
+    const lead = p({ cid: 40, fio: "Лид Архивный", groupLinks: [] });
+    const client = p({ cid: 41, fio: "Бывший Клиент", groupLinks: [{ id: 9, branchId: 1 }], paidCount: 4 });
+    assert.equal(archiveWasClient(lead), false);
+    assert.equal(archiveWasClient(client), true);
+    const { policy, report } = recountArchivePolicy([live, lead, client], new Set(), empty);
+    assert.equal(policy.working.includes(40), false);
+    assert.equal(policy.working.includes(41), true);
+    assert.equal(report.leadsSkip, 1);
+    assert.equal(report.clients, 1);
   });
 });

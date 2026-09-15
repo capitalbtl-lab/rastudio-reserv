@@ -5,7 +5,15 @@ import { dirname, join } from "node:path";
 import { isPhoneLike } from "./client-display.ts";
 import { pupilNameOk } from "./crm-slots-core.ts";
 
-export type ArchivePolicyFilters = { fio: boolean; notAdult: boolean; intersectLive: boolean };
+export type ArchivePolicyFilters = {
+  fio: boolean;
+  notAdult: boolean;
+  noDob: boolean;
+  hadGroups: boolean;
+  attendYears: 0 | 1 | 2;
+  ageFrom?: number;
+  ageTo?: number;
+};
 export type ArchiveReason = "intersect" | "manual" | "left" | "catalog";
 
 export type ArchivePolicy = {
@@ -26,22 +34,35 @@ export type ArchivePerson = {
   dob?: string;
   age?: number;
   groupLinks?: { id: number; branchId?: number }[];
+  paidCount?: number;
+  paidTill?: string;
+  course?: string;
+  lessons?: number;
+  lastLessonAt?: number;
 };
 
 export type ArchiveCountReport = {
   at: string;
   disk: number;
+  clients: number;
+  leadsSkip: number;
   fioOk: number;
   noDob: number;
   adult: number;
-  intersect: number;
+  hadGroups: number;
   working: number;
   hidden: number;
   kept: number;
   noPolicy?: boolean;
 };
 
-export const DEFAULT_ARCHIVE_FILTERS: ArchivePolicyFilters = { fio: true, notAdult: true, intersectLive: true };
+export const DEFAULT_ARCHIVE_FILTERS: ArchivePolicyFilters = {
+  fio: true,
+  notAdult: true,
+  noDob: false,
+  hadGroups: false,
+  attendYears: 1,
+};
 
 let policyMem: { mtime: number; data: ArchivePolicy } | null = null;
 
@@ -78,7 +99,11 @@ export function loadArchivePolicy(): ArchivePolicy {
       filters: {
         fio: f.fio !== false,
         notAdult: f.notAdult !== false,
-        intersectLive: f.intersectLive !== false,
+        noDob: Boolean(f.noDob),
+        hadGroups: Boolean(f.hadGroups ?? f.intersectLive),
+        attendYears: f.attendYears === 2 ? 2 : f.attendYears === 1 ? 1 : 0,
+        ageFrom: Number.isFinite(Number(f.ageFrom)) ? Number(f.ageFrom) : undefined,
+        ageTo: Number.isFinite(Number(f.ageTo)) ? Number(f.ageTo) : undefined,
       },
       working: [...new Set(working)],
       manual: [...new Set(manual)],
@@ -99,7 +124,11 @@ export function saveArchivePolicy(next: ArchivePolicy): ArchivePolicy {
     filters: {
       fio: next.filters?.fio !== false,
       notAdult: next.filters?.notAdult !== false,
-      intersectLive: next.filters?.intersectLive !== false,
+      noDob: Boolean(next.filters?.noDob),
+      hadGroups: Boolean(next.filters?.hadGroups),
+      attendYears: next.filters?.attendYears === 2 ? 2 : next.filters?.attendYears === 1 ? 1 : 0,
+      ageFrom: Number.isFinite(Number(next.filters?.ageFrom)) ? Number(next.filters?.ageFrom) : undefined,
+      ageTo: Number.isFinite(Number(next.filters?.ageTo)) ? Number(next.filters?.ageTo) : undefined,
     },
     working: [...new Set((next.working || []).map(Number).filter((n) => n > 0))].sort((a, b) => a - b),
     manual: [...new Set((next.manual || []).map(Number).filter((n) => n > 0))].sort((a, b) => a - b),
@@ -235,13 +264,60 @@ export function archiveRemoved(p: ArchivePerson) {
   return r === "1";
 }
 
+export function archiveWasClient(p: ArchivePerson) {
+  if ((Number(p.paidCount) || 0) > 0) return true;
+  if (String(p.paidTill || "").trim()) return true;
+  if ((Number(p.lessons) || 0) > 0) return true;
+  if (String(p.course || "").trim()) return true;
+  if ((p.groupLinks || []).length > 0) return true;
+  return false;
+}
+
+export function archiveAttendOk(p: ArchivePerson, years: 0 | 1 | 2) {
+  if (!years) return true;
+  const at = Number(p.lastLessonAt) || 0;
+  if (!at) return true;
+  return Date.now() - at <= years * 365.25 * 86400000;
+}
+
+export function parseArchiveUiFilters(raw: string, prev: ArchivePolicyFilters = DEFAULT_ARCHIVE_FILTERS): ArchivePolicyFilters {
+  const base: ArchivePolicyFilters = { ...prev, ageFrom: prev.ageFrom, ageTo: prev.ageTo };
+  const s = String(raw || "").trim();
+  if (!s) return base;
+  try {
+    const o = JSON.parse(s) as Record<string, unknown>;
+    const ageFrom = Number(o.ageFrom);
+    const ageTo = Number(o.ageTo);
+    const years = Number(o.attendYears);
+    return {
+      fio: Boolean(o.fio),
+      notAdult: Boolean(o.notAdult),
+      noDob: Boolean(o.noDob),
+      hadGroups: Boolean(o.groups ?? o.hadGroups),
+      attendYears: years === 2 ? 2 : years === 1 ? 1 : 0,
+      ageFrom: Number.isFinite(ageFrom) && ageFrom >= 0 ? Math.floor(ageFrom) : undefined,
+      ageTo: Number.isFinite(ageTo) && ageTo >= 0 ? Math.floor(ageTo) : undefined,
+    };
+  } catch {
+    return base;
+  }
+}
+
 export function archiveEligible(p: ArchivePerson, keys: Set<string>, filters: ArchivePolicyFilters = DEFAULT_ARCHIVE_FILTERS) {
   if (p.study !== 2) return false;
   if (archiveRemoved(p)) return false;
+  if (!archiveWasClient(p)) return false;
   if (filters.fio && !archiveFioOk(p.fio)) return false;
   const years = archiveAgeYears(p.dob, p.age);
-  if (filters.notAdult && years != null && years >= 18) return false;
-  if (filters.intersectLive && !archiveIntersects(p, keys)) return false;
+  if (years == null) {
+    if ((filters.ageFrom != null || filters.ageTo != null) && !filters.noDob) return false;
+  } else {
+    if (filters.notAdult && years >= 18) return false;
+    if (filters.ageFrom != null && years < filters.ageFrom) return false;
+    if (filters.ageTo != null && years > filters.ageTo) return false;
+  }
+  if (filters.hadGroups && !(p.groupLinks || []).length) return false;
+  if (!archiveAttendOk(p, filters.attendYears || 0)) return false;
   return true;
 }
 
@@ -255,41 +331,42 @@ export function recountArchivePolicy(
   for (const k of liveGroupKeys(people)) keys.add(k);
   const byCid = new Map<number, ArchivePerson>();
   for (const p of people) if (p.cid) byCid.set(p.cid, p);
-  const keep = new Set<number>([...prev.working, ...prev.manual]);
-  const manual = new Set<number>(prev.manual);
-  const reasons: Record<string, ArchiveReason> = { ...prev.reasons };
+  const keepManual = new Set<number>(prev.manual);
+  const reasons: Record<string, ArchiveReason> = {};
   let disk = 0;
+  let clients = 0;
+  let leadsSkip = 0;
   let fioOk = 0;
   let noDob = 0;
   let adult = 0;
-  let intersect = 0;
+  let hadGroupsN = 0;
   const next = new Set<number>();
-  for (const cid of keep) {
+  for (const cid of keepManual) {
     const row = byCid.get(cid);
-    if (!row) {
-      manual.delete(cid);
-      delete reasons[String(cid)];
-      continue;
-    }
-    if (row.study === 1 || row.study === 0 || archiveRemoved(row) || row.status === "лид" || row.status === "учится") {
-      manual.delete(cid);
-      delete reasons[String(cid)];
+    if (!row || row.study !== 2 || archiveRemoved(row) || !archiveWasClient(row)) {
+      keepManual.delete(cid);
       continue;
     }
     next.add(cid);
+    reasons[String(cid)] = prev.reasons[String(cid)] || "manual";
   }
   const kept = next.size;
   for (const p of people) {
     if (p.study !== 2 || archiveRemoved(p)) continue;
     disk += 1;
+    if (!archiveWasClient(p)) {
+      leadsSkip += 1;
+      continue;
+    }
+    clients += 1;
     if (archiveFioOk(p.fio)) fioOk += 1;
     const years = archiveAgeYears(p.dob, p.age);
     if (years == null) noDob += 1;
     if (years != null && years >= 18) adult += 1;
-    if (archiveIntersects(p, keys)) intersect += 1;
+    if ((p.groupLinks || []).length) hadGroupsN += 1;
     if (archiveEligible(p, keys, filters)) {
       next.add(p.cid);
-      if (!reasons[String(p.cid)]) reasons[String(p.cid)] = "intersect";
+      if (!reasons[String(p.cid)]) reasons[String(p.cid)] = "catalog";
     }
   }
   for (const k of Object.keys(reasons)) {
@@ -301,7 +378,7 @@ export function recountArchivePolicy(
     ready: true,
     filters,
     working,
-    manual: [...manual].sort((a, b) => a - b),
+    manual: [...keepManual].sort((a, b) => a - b),
     reasons,
   };
   return {
@@ -309,10 +386,12 @@ export function recountArchivePolicy(
     report: {
       at: policy.at,
       disk,
+      clients,
+      leadsSkip,
       fioOk,
       noDob,
       adult,
-      intersect,
+      hadGroups: hadGroupsN,
       working: working.length,
       hidden: Math.max(0, disk - working.length),
       kept,
@@ -431,6 +510,9 @@ export function archivePersonFrom(d: {
     dob: String(d.child?.dob || ""),
     age: d.age,
     groupLinks: study === 1 || study === 2 ? linksFromExtras(ex, d.groupLinks) : d.groupLinks,
+    paidCount: Number(ex.paid_count || 0) || 0,
+    paidTill: String(ex.paid_till || ""),
+    course: String((d as { coursePast?: string; course?: string }).coursePast || (d as { course?: string }).course || ""),
   };
 }
 
@@ -475,5 +557,5 @@ function linksFromExtras(ex: Record<string, string>, fallback?: { id: number; br
 
 export function formatArchiveCountNote(r: ArchiveCountReport) {
   if (r.noPolicy) return `На диске архивных ${r.disk}. Рабочий набор не считали.`;
-  return `На диске архивных ${r.disk} · с ФИО ${r.fioOk} · без даты рождения ${r.noDob} · 18+ ${r.adult} · пересечение с группами текущих ${r.intersect} · в рабочем наборе ${r.working} · скрыто ${r.hidden}. Alfa не трогали.`;
+  return `На диске архивных ${r.disk} · были клиентами ${r.clients} · лиды в архиве ${r.leadsSkip} · с ФИО ${r.fioOk} · без даты рождения ${r.noDob} · 18+ ${r.adult} · были группы ${r.hadGroups} · в рабочем наборе ${r.working} · скрыто ${r.hidden}. Alfa не трогали.`;
 }

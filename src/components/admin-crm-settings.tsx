@@ -242,8 +242,8 @@ const HINT = {
   auditAll: "Красная кнопка проходит всех текущих по одному. Между людьми пауза пять секунд, в Alfa один запрос в полёте. Сравнивает число на карточке «Клиенты» с общим остатком шапки Alfa. Если не сошлось — догружает явки или оплаты только этого номера. Цифру из Alfa в кассу не записывает. Стоп прерывает после текущего.",
   auditRecheck: "Ещё раз сверяет только этого ученика с общим остатком шапки Alfa. Читает карточку, при расхождении добирает его журнал или кассу. Чужих не трогает, зелёные шаги 1 и 3 у остальных не сбрасывает. В Alfa ничего не сохраняет. Нужна, если человек слева с причиной или вы только что правили его кассу. После совпадения карточка уйдёт вправо, даже если есть непроведённые уроки с ценой. Если снова formula — это показ в «Клиентах», не его личная дыра.",
   scopeLive: "Показывает тех, кто сейчас ходит: люди в живых группах админки после состава шага 1. Не все is_study=1 из Alfa. Красная очередь и сверка идут только по этому списку, архивных не трогают. Цифра на кнопке — сколько таких людей в выборке. Переключение само ничего не качает и в Alfa не пишет. Если нужен бывший ученик, соседняя кнопка «Архивные клиенты». Можно спокойно прыгать туда-сюда, списки уже на диске. Для кассы и календаря это один и тот же переключатель.",
-  scopeArch: "Показывает рабочий архив — бывшие ученики после «Посчитать отбор». Красная очередь только по этому набору, голые телефоны сюда не попадают. Если слева пусто — нажмите «Посчитать отбор»: правило с диска, Alfa не трогает. Скрытые ищутся в Клиентах по телефону. Жёлтые карточки чаще — берите «с начала · 2015».",
-  archCount: "Считает рабочий архив только с диска, в Alfa не ходит и ничего там не пишет. Берёт группы текущих учеников и ищет в архиве тех, кто в тех же группах числился, с нормальным ФИО, не 18+ (если есть дата рождения). Голые телефоны и ошибочные звонки остаются скрытыми на диске, но не в списке. Уже попавшие в набор повторным нажатием не выкидываются. После отчёта красная «по одному» идёт только по рабочим. Если на диске архивных карточек нет — сначала «Загрузить архив клиентов из Alfa».",
+  scopeArch: "Рабочий архив шага 2: бывшие клиенты (когда-то is_study=1), не архивные лиды. Набор один на шаги 2, 4 и 5. Фильтры только здесь. Красная загрузка — за год или два, не с 2015 всем диском.",
+  archCount: "Считает рабочий набор только с диска. В набор — бывшие клиенты. Архивный лид, который клиентом не был, не входит. Фильтры: ФИО, возраст, были группы, ходили за год или два. Шаги 4 и 5 этот набор наследуют. Alfa не трогает.",
   archCatalog: "Название кнопки не меняется. Закон раздела: одна карточка, пауза 5 секунд. Календарь и касса этой кнопкой не грузятся. Фильтры на виду. Телефон и «тест» не пишем. Кто записался — сразу слева. При сбое Alfa ждёт 5 с и повторяет. Стоп после текущей. В Alfa не пишет.",
   scopeLiveGroups: "Показывает живые группы, которые идут по расписанию сейчас. Красная «по одному» и счётчики считают только их. Архивные группы на этом виде скрыты, их явки сами не качаются. Переключение в Alfa ничего не пишет. Если нужна старая группа для баланса, нажмите «Архивные группы». Школа выше по-прежнему фильтрует этот список. Это вид, а не загрузка.",
   scopeArchGroups: "Показывает архивные группы, которых уже нет в живом расписании. Их явки нужны, чтобы на карточке ученика сошёлся старый баланс. Список появляется после кнопок «Архив групп учеников» или «Загрузить архивные группы». Красная очередь на этом виде идёт по архиву. В Alfa группу не восстанавливает. Если список пустой — сначала подтяните архив, потом грузите кварталы как у живых.",
@@ -382,11 +382,12 @@ const PEOPLE_FROM_OPTS = [
   { id: "2015", label: "с начала · 2015" },
   { id: "7", label: "7 лет" },
   { id: "3", label: "3 года" },
+  { id: "2", label: "2 года" },
   { id: "1", label: "1 год" },
 ] as const;
 function peopleDateFrom(id: string) {
   if (id === "2015") return "2015-01-01";
-  const years = id === "1" ? 1 : id === "3" ? 3 : 7;
+  const years = id === "1" ? 1 : id === "2" ? 2 : id === "3" ? 3 : 7;
   const d = new Date();
   d.setFullYear(d.getFullYear() - years);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -399,6 +400,7 @@ function YearsSelect({
   hint = HINT.years,
   small,
   tag = "годы",
+  archiveOnly,
 }: {
   value: (typeof PEOPLE_FROM_OPTS)[number]["id"];
   disabled?: boolean;
@@ -406,7 +408,9 @@ function YearsSelect({
   hint?: string;
   small?: boolean;
   tag?: string;
+  archiveOnly?: boolean;
 }) {
+  const opts = archiveOnly ? PEOPLE_FROM_OPTS.filter((o) => o.id === "1" || o.id === "2") : PEOPLE_FROM_OPTS;
   return withHint(
     <label className={cn("inline-flex items-center gap-2 rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10", small ? "h-8" : "h-10")}>
       {tag ? <span className="text-muted">{tag}</span> : null}
@@ -416,7 +420,7 @@ function YearsSelect({
         disabled={disabled}
         onChange={(e) => onChange(e.target.value as (typeof PEOPLE_FROM_OPTS)[number]["id"])}
       >
-        {PEOPLE_FROM_OPTS.map((o) => (
+        {opts.map((o) => (
           <option key={o.id} value={o.id}>
             {o.label}
           </option>
@@ -2428,10 +2432,12 @@ export function AdminCrmSettings() {
     lastArchivePolicy?: {
       at?: string;
       disk: number;
+      clients?: number;
+      leadsSkip?: number;
       fioOk: number;
       noDob: number;
       adult: number;
-      intersect: number;
+      hadGroups?: number;
       working: number;
       hidden: number;
       kept?: number;
@@ -2496,6 +2502,7 @@ export function AdminCrmSettings() {
   const [archNoDob, setArchNoDob] = useState(false);
   const [archNeedFio, setArchNeedFio] = useState(false);
   const [archNeedGroups, setArchNeedGroups] = useState(false);
+  const [archAttendYears, setArchAttendYears] = useState<0 | 1 | 2>(1);
   const [crmTab, setCrmTab] = useState<CrmSetTab>("history");
   const [syncPolicy, setSyncPolicy] = useState<CrmSyncPolicy>(POLICY_FACTORY);
   const [histTab, setHistTab] = useState<HistTab>("roster");
@@ -3298,7 +3305,7 @@ export function AdminCrmSettings() {
         peopleKind: kind,
         study,
         recheck: true,
-        dateFrom: peopleDateFrom(kind === "balance" ? moneyFromId : peopleFromId),
+        dateFrom: peopleLoadFrom(kind),
         recheckDays: kind === "balance" ? moneyRecheckDays : peopleRecheckDays,
         jobItems: [],
       });
@@ -3349,7 +3356,7 @@ export function AdminCrmSettings() {
       jobMode: "people-slow",
       peopleKind: "students",
       study,
-      dateFrom: peopleDateFrom(peopleFromId),
+      dateFrom: peopleLoadFrom("students"),
       jobItems: queue.map((r) => ({ cid: r.cid, branchId: r.branchId, name: r.name })),
     });
     const job = (res as { job?: { running?: boolean; msg?: string; total?: number } } | null)?.job;
@@ -3381,7 +3388,13 @@ export function AdminCrmSettings() {
       noDob: archNoDob,
       fio: archNeedFio,
       groups: archNeedGroups,
+      attendYears: archAttendYears,
     });
+  }
+
+  function peopleLoadFrom(kind: "students" | "balance") {
+    if (peopleStudy === "2") return peopleDateFrom(archAttendYears === 2 ? "2" : "1");
+    return peopleDateFrom(kind === "balance" ? moneyFromId : peopleFromId);
   }
 
   function catalogOptsBar() {
@@ -3392,6 +3405,7 @@ export function AdminCrmSettings() {
       archNoDob ? "без д/р" : "",
       archNeedFio ? "ФИО" : "",
       archNeedGroups ? "группы" : "",
+      archAttendYears === 2 ? "2 года" : archAttendYears === 1 ? "год" : "",
     ].filter(Boolean);
     return (
       <div className="w-full rounded-2xl bg-surface-2 px-3.5 py-3 ring-1 ring-black/10">
@@ -3429,6 +3443,12 @@ export function AdminCrmSettings() {
           <button type="button" className={chip(archNeedGroups)} onClick={() => setArchNeedGroups((v) => !v)}>
             были группы
           </button>
+          <button type="button" className={chip(archAttendYears === 1)} onClick={() => setArchAttendYears((v) => (v === 1 ? 0 : 1))}>
+            за год
+          </button>
+          <button type="button" className={chip(archAttendYears === 2)} onClick={() => setArchAttendYears((v) => (v === 2 ? 0 : 2))}>
+            за 2 года
+          </button>
         </div>
         <p className="mt-2 text-[0.72rem] leading-snug text-muted">Телефон и «тест» не пишем. Кто записался — сразу слева.</p>
       </div>
@@ -3458,7 +3478,7 @@ export function AdminCrmSettings() {
   async function pullAudit(opts?: { customerId?: number; branchId?: number; name?: string }) {
     await startHistJob({
       jobMode: "audit",
-      study: "1",
+      study: peopleStudy,
       customerId: opts?.customerId,
       branchId: opts?.branchId,
       name: opts?.name,
@@ -4444,7 +4464,7 @@ export function AdminCrmSettings() {
                         type="button"
                         className={cn(BTN_LOAD, "min-w-[9.5rem] shrink-0", fillLoading?.kind === "archiveCount" && "ra-progress-run")}
                         disabled={busy}
-                        onClick={() => void startHistJob({ jobMode: "count" })}
+                        onClick={() => void startHistJob({ jobMode: "count", school: catalogFilterJson() })}
                       >
                         {fillLoading?.kind === "archiveCount" ? "Считаю отбор…" : "Посчитать отбор"}
                       </button>,
@@ -4478,7 +4498,7 @@ export function AdminCrmSettings() {
                     </div>
                     {journal?.lastArchivePolicy ? (
                       <p className="w-full text-[0.78rem] text-muted">
-                        На диске {journal.lastArchivePolicy.disk} · ФИО {journal.lastArchivePolicy.fioOk} · без dob {journal.lastArchivePolicy.noDob} · 18+ {journal.lastArchivePolicy.adult} · пересечение {journal.lastArchivePolicy.intersect} · в наборе {journal.lastArchivePolicy.working} · скрыто {journal.lastArchivePolicy.hidden}
+                        На диске {journal.lastArchivePolicy.disk} · были клиентами {journal.lastArchivePolicy.clients ?? "—"} · лиды в архиве {journal.lastArchivePolicy.leadsSkip ?? "—"} · ФИО {journal.lastArchivePolicy.fioOk} · без dob {journal.lastArchivePolicy.noDob} · 18+ {journal.lastArchivePolicy.adult} · были группы {journal.lastArchivePolicy.hadGroups ?? "—"} · в наборе {journal.lastArchivePolicy.working} · скрыто {journal.lastArchivePolicy.hidden}
                       </p>
                     ) : (
                       <p className="w-full text-[0.78rem] text-muted">Пока не считали: слева пусто, даже если на диске тысячи архивных карточек.</p>
@@ -4507,7 +4527,7 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.loadOnePeople,
                         )}
-                        <YearsSelect value={peopleFromId} disabled={busy} onChange={setPeopleFromId} tag="" />
+                        <YearsSelect value={peopleStudy === "2" ? (archAttendYears === 2 ? "2" : "1") : peopleFromId} disabled={busy} onChange={(id) => (peopleStudy === "2" ? setArchAttendYears(id === "2" ? 2 : 1) : setPeopleFromId(id))} archiveOnly={peopleStudy === "2"} tag="" />
                         </BtnCluster>
                         <BtnCluster tone="sky">
                         {withHint(
@@ -4560,7 +4580,7 @@ export function AdminCrmSettings() {
                         kind="students"
                         busy={fillLoading?.kind === "students" && Boolean(fillLoading.customerId)}
                         loadingCid={fillLoading?.kind === "students" ? fillLoading.customerId : undefined}
-                        years={<YearsSelect value={peopleFromId} disabled={busy} onChange={setPeopleFromId} small tag="" />}
+                        years={<YearsSelect value={peopleStudy === "2" ? (archAttendYears === 2 ? "2" : "1") : peopleFromId} disabled={busy} onChange={(id) => (peopleStudy === "2" ? setArchAttendYears(id === "2" ? 2 : 1) : setPeopleFromId(id))} archiveOnly={peopleStudy === "2"} small tag="" />}
                         windowSel={<RecheckDaysSelect value={peopleRecheckDays} disabled={busy} onChange={setPeopleRecheckDays} small />}
                         onLoad={(row) => void loadPerson(row, "students", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "students", peopleStudy, true)}
@@ -4595,54 +4615,10 @@ export function AdminCrmSettings() {
                   />
                 </div>
                 {peopleStudy === "2" ? (
-                  <>
-                    <div className="mt-6">{catalogOptsBar()}</div>
-                    <div className="mt-6 flex min-w-0 w-full flex-nowrap items-center gap-2">
-                    {withHint(
-                      <button
-                        type="button"
-                        className={cn(BTN_LOAD, "min-w-[9.5rem] shrink-0", fillLoading?.kind === "archiveCount" && "ra-progress-run")}
-                        disabled={busy}
-                        onClick={() => void startHistJob({ jobMode: "count" })}
-                      >
-                        {fillLoading?.kind === "archiveCount" ? "Считаю отбор…" : "Посчитать отбор"}
-                      </button>,
-                      HINT.archCount,
-                    )}
-                    {withHint(
-                      <button
-                        type="button"
-                        className={cn(BTN_LOAD, "min-w-[17.5rem] shrink-0", fillLoading?.kind === "archiveCatalog" && "ra-progress-run")}
-                        disabled={busy || offline}
-                        onClick={() => void pullArchiveCatalog()}
-                      >
-                        Загрузить архив клиентов из Alfa
-                      </button>,
-                      HINT.archCatalog,
-                    )}
-                    {withHint(
-                      <button
-                        type="button"
-                        className={cn(BTN_GHOST, "shrink-0")}
-                        disabled={fillLoading?.kind !== "archiveCatalog"}
-                        onClick={() => {
-                          requestStop();
-                        }}
-                      >
-                        Стоп
-                      </button>,
-                      HINT.stop,
-                    )}
-                    <ServerJobStrip job={journal?.job as ServerJob | undefined} note={journal?.note ? catalogProgressNote(journal.note) : ""} tab={histTab} />
-                    </div>
-                    {journal?.lastArchivePolicy ? (
-                      <p className="w-full text-[0.78rem] text-muted">
-                        На диске {journal.lastArchivePolicy.disk} · ФИО {journal.lastArchivePolicy.fioOk} · без dob {journal.lastArchivePolicy.noDob} · 18+ {journal.lastArchivePolicy.adult} · пересечение {journal.lastArchivePolicy.intersect} · в наборе {journal.lastArchivePolicy.working} · скрыто {journal.lastArchivePolicy.hidden}
-                      </p>
-                    ) : (
-                      <p className="w-full text-[0.78rem] text-muted">Пока не считали: слева пусто, даже если на диске тысячи архивных карточек.</p>
-                    )}
-                  </>
+                  <p className="mt-3 text-[0.78rem] text-muted">
+                    Набор шага 2 · {journal?.lastArchivePolicy?.working ?? archN} человек. Фильтры здесь не меняются. Сначала календарь, потом касса за тот же год/два.
+                    {!journal?.lastArchivePolicy ? " Отбор ещё не считали — шаг 2, «Посчитать отбор»." : ""}
+                  </p>
                 ) : null}
                 {(() => {
                   const side = peopleStudy === "2" ? p?.archive : p?.live;
@@ -4666,7 +4642,7 @@ export function AdminCrmSettings() {
                         </button>,
                         HINT.loadOneMoney,
                         )}
-                        <YearsSelect value={moneyFromId} disabled={busy} onChange={setMoneyFromId} hint={HINT.yearsMoney} />
+                        <YearsSelect value={peopleStudy === "2" ? (archAttendYears === 2 ? "2" : "1") : moneyFromId} disabled={busy} onChange={(id) => (peopleStudy === "2" ? setArchAttendYears(id === "2" ? 2 : 1) : setMoneyFromId(id))} archiveOnly={peopleStudy === "2"} hint={HINT.yearsMoney} />
                         </BtnCluster>
                         <BtnCluster tone="sky">
                         {withHint(
@@ -4702,7 +4678,7 @@ export function AdminCrmSettings() {
                         kind="balance"
                         busy={offline || (fillLoading?.kind === "balance" && Boolean(fillLoading.customerId))}
                         loadingCid={fillLoading?.kind === "balance" ? fillLoading.customerId : undefined}
-                        years={<YearsSelect value={moneyFromId} disabled={busy} onChange={setMoneyFromId} hint={HINT.yearsMoney} small />}
+                        years={<YearsSelect value={peopleStudy === "2" ? (archAttendYears === 2 ? "2" : "1") : moneyFromId} disabled={busy} onChange={(id) => (peopleStudy === "2" ? setArchAttendYears(id === "2" ? 2 : 1) : setMoneyFromId(id))} archiveOnly={peopleStudy === "2"} hint={HINT.yearsMoney} small />}
                         windowSel={<RecheckDaysSelect value={moneyRecheckDays} disabled={busy} onChange={setMoneyRecheckDays} small />}
                         onLoad={(row) => void loadPerson(row, "balance", peopleStudy)}
                         onRecheck={(row) => void loadPerson(row, "balance", peopleStudy, true)}
@@ -4723,27 +4699,25 @@ export function AdminCrmSettings() {
                   Сверка остатка с Alfa
                   <LoadGuideBtn tab="audit" onOpen={setLoadGuide} />
                 </p>
-                <p className="mt-1 text-sm text-muted">Все текущие. Alfa = общий остаток шапки, не rest абонемента. Совпало — справа, даже с непроведёнными. Цифру Alfa в файл не ставим.</p>
+                <p className="mt-1 text-sm text-muted">
+                  Текущие и рабочий архив шага 2 — разные таблетки. Alfa = общий остаток шапки, не rest абонемента. Совпало — справа, даже с непроведёнными. Цифру Alfa в файл не ставим.
+                </p>
                 {(() => {
                   const live = p?.live;
                   const archPeople = p?.archive?.people || [];
-                  const diskArch = (p as { auditArchive?: typeof archPeople })?.auditArchive || [];
                   const hits = journal?.lastAudit?.rows || [];
                   const by = new Map(hits.map((h) => [h.cid, h]));
                   const livePeople = live?.people || [];
                   const seenCid = new Set<number>();
                   const rows: AuditUiRow[] = [];
-                  for (const r of livePeople) {
-                    seenCid.add(r.cid);
-                    rows.push(asAuditRow(r, by.get(r.cid)));
-                  }
-                  for (const r of [...archPeople, ...diskArch]) {
+                  const source = peopleStudy === "2" ? archPeople : livePeople;
+                  for (const r of source) {
                     if (seenCid.has(r.cid)) continue;
                     seenCid.add(r.cid);
                     rows.push(asAuditRow(r, by.get(r.cid)));
                   }
                   const run = fillLoading?.kind === "audit";
-                  const clientRows = rows.filter((r) => auditRole(r) === "клиент");
+                  const clientRows = rows.filter((r) => peopleStudy === "2" || auditRole(r) === "клиент");
                   const scanned = clientRows.filter((r) => r.seen).length;
                   const okN = clientRows.filter((r) => rowMatched(r)).length;
                   const holeN = clientRows.filter((r) => {
@@ -4751,21 +4725,41 @@ export function AdminCrmSettings() {
                     return id === "cash-hi" || id === "cash-lo" || id === "goods";
                   }).length;
                   const showN = clientRows.filter((r) => auditSeg(r).id === "show").length;
-                  const total = livePeople.length;
+                  const total = peopleStudy === "2" ? archPeople.length : livePeople.length;
+                  const archSide = p?.archive;
+                  const archNeedCal = Math.max(0, (archSide?.total || 0) - (archSide?.journalDone || 0));
+                  const archNeedPay = Math.max(0, (archSide?.total || 0) - (archSide?.cardDone || 0));
+                  const archBlocked = peopleStudy === "2" && (!archN || archNeedCal > 0 || archNeedPay > 0);
                   return (
                     <>
+                      <div className="mt-3">
+                        <ScopePills
+                          value={peopleStudy === "2" ? "archive" : "live"}
+                          onChange={(v) => setPeopleStudy(v === "archive" ? "2" : "1")}
+                          live={`Сейчас ходят · ${liveN}`}
+                          arch={`Архивные клиенты · ${archN}`}
+                          hintLive={HINT.scopeLive}
+                          hintArch={HINT.scopeArch}
+                        />
+                      </div>
+                      {peopleStudy === "2" ? (
+                        <p className="mt-2 text-[0.78rem] text-muted">
+                          Тот же набор шага 2 · {archN}. Архивных лидов нет. Сверка после календаря и кассы.
+                          {archBlocked ? " Сначала шаги 2 и 4 по этому набору." : ""}
+                        </p>
+                      ) : null}
                       <p className="mt-3 text-sm">
-                        текущих {total} · сверено {scanned} · совпало {okN} · дыра {holeN} · ошибка показа {showN}
+                        {peopleStudy === "2" ? "архив" : "текущих"} {total} · сверено {scanned} · совпало {okN} · дыра {holeN} · ошибка показа {showN}
                       </p>
                       <div className="mt-3 flex min-w-0 w-full flex-nowrap items-center gap-2">
                         {withHint(
                           <button
                             type="button"
                             className={cn(BTN_RED, "min-w-[14rem] shrink-0", run && "ra-progress-run")}
-                            disabled={busy || offline}
+                            disabled={busy || offline || archBlocked}
                             onClick={() => void pullAudit()}
                           >
-                            Сверить всех текущих
+                            {peopleStudy === "2" ? "Сверить рабочий архив" : "Сверить всех текущих"}
                           </button>,
                           HINT.auditAll,
                         )}

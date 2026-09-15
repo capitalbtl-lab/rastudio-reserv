@@ -15,7 +15,7 @@ import { payCustomerFilled, payFillPending, payFillScanned, payFillEmpty, paysOf
 import { balanceOf } from "./crm-pay-core";
 import { writeoffSumOf } from "./crm-ledger-core";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
-import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
+import { archiveFioOk, archiveWorkingSet, extraGroupKeys, formatArchiveCountNote, loadArchivePolicy, parseArchiveUiFilters, recountArchivePolicy, saveArchivePolicy, addArchiveWorking, type ArchiveCountReport } from "./crm-archive-policy";
 import { journalJobSnapshot, parseJobItems } from "./crm-journal-job-core";
 import { loadRosterPolicy } from "./crm-roster";
 import { countAlfaLessonUniq, countAlfaLessonRows, keepAlfaProbe, uniquePositiveIds, clampRecheckDays, iceWindowOrNow, windowNewLessonIds, windowGoneLessonIds, windowAlfaLive, windowAlfaKeep, recheckWindowFull, journalIdsReady } from "./crm-inbound-core";
@@ -478,7 +478,6 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
     pool = listDossierCrm();
   }
   const allow = !scoped ? archiveWorkingSet() : null;
-  const live = !scoped && study === "2" ? liveAttendeeCids() : null;
   const pol = study === "1" ? loadRosterPolicy() : null;
   const filtered = pool.filter((x) => {
     if (!x.cid) return false;
@@ -491,7 +490,6 @@ function rankedStudentIds(study: JournalPullStudy, group?: { groupId: number; br
       return true;
     }
     if (study === "2") {
-      if (live && live.has(x.cid)) return false;
       return x.study === 2 && (scoped || Boolean(allow && allow.has(x.cid)));
     }
     if (x.study === 1) return true;
@@ -858,47 +856,11 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
     },
     live: studentSide("1"),
     archive: studentSide("2"),
-    auditArchive: auditArchivePeople(),
     ungrouped,
   };
 }
 
 /** Архив как в Alfa: is_study=2. Не рабочий отбор шага 2. Для чипа шага 5. */
-function auditArchivePeople() {
-  const live = liveAttendeeCids();
-  const out: {
-    cid: number;
-    branchId: number;
-    name: string;
-    groups: string[];
-    alfaRole: "архив";
-    status: string;
-    study: number;
-    funnel: string;
-    leadStatus: number;
-  }[] = [];
-  for (const x of listDossierCrm()) {
-    if (!x.cid) continue;
-    if (x.status === "удалён" || x.removed === "1") continue;
-    if (x.study !== 2 && x.status !== "архив") continue;
-    if (live.has(x.cid)) continue;
-    const d = findDossier({ crmId: x.cid });
-    out.push({
-      cid: x.cid,
-      branchId: x.branchId,
-      name: fioOf(x.cid),
-      groups: groupsOfStudent(x.cid).slice(0, 3),
-      alfaRole: "архив",
-      status: "архив",
-      study: 2,
-      funnel: String(d?.extras?.crm_funnel || ""),
-      leadStatus: Number(d?.extras?.lead_status_id) || 0,
-    });
-    if (out.length >= 2500) break;
-  }
-  return out;
-}
-
 function cashCardOf(cid: number) {
   const live = paysOf(cid).filter((x) => !x.deleted);
   const cashPaySum = balanceOf(live);
@@ -1769,15 +1731,25 @@ export async function journalPull(opts: {
 
   if (kind === "archiveCount") {
     const { archivePeopleFromDisk } = await import("./dossiers");
-    const items = archivePeopleFromDisk();
+    const prev = loadArchivePolicy();
+    const filters = parseArchiveUiFilters(String(opts.school || ""), prev.filters);
+    const items = archivePeopleFromDisk().map((p) => {
+      const cal = loadCustomerCalendar(Number(p.cid)) || [];
+      let last = 0;
+      for (const l of cal) {
+        const d = parseLessonDate(l.date);
+        if (d) last = Math.max(last, d.getTime());
+      }
+      return { ...p, lastLessonAt: last || p.lastLessonAt, lessons: cal.length || p.lessons };
+    });
     const extra = extraGroupKeys(loadJournalArchiveGroups().map((g) => ({ groupId: g.groupId, branchId: g.branchId })));
-    const { policy, report } = recountArchivePolicy(items, extra, loadArchivePolicy());
+    const { policy, report } = recountArchivePolicy(items, extra, prev, filters);
     saveArchivePolicy(policy);
     store.lastArchivePolicy = report;
     store.note = formatArchiveCountNote(report);
     store.at = report.at;
     saveStore(store);
-    return { ok: true as const, extra: store.note, count: report.working, scanned: report.disk, more: false, lastArchivePolicy: report, ...litePullState() };
+    return { ok: true as const, extra: store.note, count: report.working, scanned: report.disk, more: false, lastArchivePolicy: report, ...journalPullState() };
   }
 
   if (kind === "archiveCatalog") {
@@ -1825,7 +1797,9 @@ export async function journalPull(opts: {
   }
 
   if (kind === "audit") {
-    const people = rankedStudentIds("1").filter((p) => {
+    const study = opts.study === "2" ? "2" : "1";
+    const people = rankedStudentIds(study).filter((p) => {
+      if (study === "2") return p.study === 2;
       const d = findDossier({ crmId: p.cid });
       return (
         dossierAuditRole({
@@ -1838,16 +1812,18 @@ export async function journalPull(opts: {
       );
     });
     const wanted = Number(opts.customerId) || 0;
-    const fromList = wanted ? rankedStudentIds("1").find((p) => p.cid === wanted) : null;
+    const fromList = wanted ? rankedStudentIds(study).find((p) => p.cid === wanted) : null;
     const fallback = wanted
-      ? { cid: wanted, branchId: Number(opts.branchId) || 1, study: 1 as const }
+      ? { cid: wanted, branchId: Number(opts.branchId) || 1, study: study === "2" ? 2 : 1 }
       : null;
     const idx = Number(store.lastAudit?.idx) || 0;
     const one = fromList || fallback || pickSlice(people, idx, 1).slice[0];
     if (!one) {
-      store.note = rankedStudentIds("1").length
-        ? "Лиды и архив не сверяем: шапки клиента в Alfa нет."
-        : "Нет текущих учеников на диске.";
+      store.note = study === "2"
+        ? "Нет рабочего архива. Шаг 2 — «Посчитать отбор». Архивных лидов не сверяем."
+        : rankedStudentIds("1").length
+          ? "Лиды и архив не сверяем: шапки клиента в Alfa нет."
+          : "Нет текущих учеников на диске.";
       store.at = new Date().toISOString();
       saveStore(store);
       return { ok: false as const, error: store.note, more: false, ...snap() };
