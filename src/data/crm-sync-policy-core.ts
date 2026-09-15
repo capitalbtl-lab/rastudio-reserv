@@ -98,7 +98,10 @@ export function mskWall(now = new Date()): MskWall {
     d: Number(parts.day),
     h: Number(parts.hour),
     min: Number(parts.minute),
-    dow: DOW[parts.weekday] || 1,
+    dow: DOW[parts.weekday] || ((): number => {
+      const d = new Date(now.getTime() + MSK_OFFSET_H * 3600_000).getUTCDay();
+      return d === 0 ? 7 : d;
+    })(),
   };
 }
 
@@ -317,6 +320,19 @@ export function whenHits(when: HistoryWhen, now: Date): boolean {
   return false;
 }
 
+function intervalAfterFire(rule: HistorySchedule, now: Date): Date | null {
+  if (rule.when.kind !== "interval" || !rule.lastFiredAt) return null;
+  const t = Date.parse(rule.lastFiredAt);
+  if (!Number.isFinite(t)) return null;
+  let nxt = addInterval(new Date(t), rule.when.every, rule.when.unit, rule.at);
+  let guard = 0;
+  while (now.getTime() - nxt.getTime() > PLAN_DUE_MS && guard < 48) {
+    nxt = addInterval(nxt, rule.when.every, rule.when.unit, rule.at);
+    guard += 1;
+  }
+  return nxt;
+}
+
 function lastOccurrence(rule: HistorySchedule, now: Date): Date | null {
   const { h, m } = parsePlanAt(rule.at);
   const w = mskWall(now);
@@ -357,14 +373,8 @@ function lastOccurrence(rule: HistorySchedule, now: Date): Date | null {
     return slot.getTime() <= now.getTime() ? slot : null;
   }
   if (rule.when.kind === "interval") {
-    if (rule.lastFiredAt) {
-      const t = Date.parse(rule.lastFiredAt);
-      if (Number.isFinite(t)) {
-        const nxt = addInterval(new Date(t), rule.when.every, rule.when.unit, rule.at);
-        if (nxt.getTime() <= now.getTime()) return nxt;
-        return null;
-      }
-    }
+    const nxt = intervalAfterFire(rule, now);
+    if (nxt) return nxt.getTime() <= now.getTime() ? nxt : null;
     const today = fromMsk(w.y, w.mo, w.d, h, m);
     if (now.getTime() >= today.getTime()) return today;
     const yest = shiftDays(w.y, w.mo, w.d, -1);
@@ -393,6 +403,11 @@ export function markPlanDue(policy: CrmSyncPolicy, now = new Date()): CrmSyncPol
       }
       if (!r.lastFiredAt) {
         if (!whenHits(r.when, now) || !slotReached(now, r.at)) return r;
+        return { ...r, dueAt: now.toISOString(), lastSkip: "" };
+      }
+      if (r.when.kind === "daily") {
+        if (!slotReached(now, r.at)) return r;
+        if (ymdOf(new Date(r.lastFiredAt)) === ymdOf(now)) return r;
         return { ...r, dueAt: now.toISOString(), lastSkip: "" };
       }
       const occ = lastOccurrence(r, now);
@@ -495,16 +510,11 @@ export function nextSlotAt(rule: HistorySchedule, now = new Date()): Date | null
     return fromMsk(y, mo, da, h, m);
   }
   if (rule.when.kind === "interval") {
-    if (rule.lastFiredAt) {
-      const t = Date.parse(rule.lastFiredAt);
-      if (Number.isFinite(t)) {
-        const nxt = addInterval(new Date(t), rule.when.every, rule.when.unit, rule.at);
-        if (nxt.getTime() > now.getTime()) return nxt;
-      }
-    }
+    const nxt = intervalAfterFire(rule, now);
+    if (nxt) return nxt;
     if (laterToday) return atToday;
-    const nxt = shiftDays(w.y, w.mo, w.d, 1);
-    return fromMsk(nxt.y, nxt.mo, nxt.d, h, m);
+    const day = shiftDays(w.y, w.mo, w.d, 1);
+    return fromMsk(day.y, day.mo, day.d, h, m);
   }
   return null;
 }

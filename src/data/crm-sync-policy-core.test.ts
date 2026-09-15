@@ -10,6 +10,7 @@ import {
   markPlanDue,
   mergePolicyKeepRun,
   mskWall,
+  nextSlotAt,
   pickDueRule,
   planFireDecision,
   planRuleToJob,
@@ -162,6 +163,26 @@ describe("пульт Истории", () => {
     assert.equal(again.plan[0].dueAt, "");
   });
 
+  it("каждый день: догон вчера не даёт второй прогон до 04:00", () => {
+    const ran = policyOf({
+      planEnabled: true,
+      plan: [
+        {
+          id: "n",
+          on: true,
+          mode: "people-recheck",
+          when: { kind: "daily" },
+          at: "04:00",
+          lastFiredAt: msk(2026, 8, 13, 4, 5).toISOString(),
+        },
+      ],
+    });
+    assert.equal(markPlanDue(ran, msk(2026, 8, 15, 3, 30)).plan[0].dueAt, "");
+    assert.ok(markPlanDue(ran, msk(2026, 8, 15, 4, 5)).plan[0].dueAt);
+    const today = stampPlanFired(ran, "n", "j2", msk(2026, 8, 15, 3, 10));
+    assert.equal(markPlanDue(today, msk(2026, 8, 15, 4, 5)).plan[0].dueAt, "");
+  });
+
   it("пн 18:00: новая карточка во вт не стартует, уже бегавшая — догоняет <36 ч", () => {
     const fresh = policyOf({
       planEnabled: true,
@@ -200,5 +221,22 @@ describe("пульт Истории", () => {
     );
     assert.equal(markPlanDue(fired, msk(2026, 8, 14, 4, 5)).plan[0].dueAt, "");
     assert.ok(markPlanDue(fired, msk(2026, 8, 15, 4, 5)).plan[0].dueAt);
+  });
+
+  it("полгода: пропуск старше 36 ч не хоронит карточку навсегда", () => {
+    const fired = stampPlanFired(
+      policyOf({
+        planEnabled: true,
+        plan: [{ id: "full", on: true, mode: "people-recheck", when: { kind: "interval", every: 6, unit: "month" }, at: "04:00", recheckDays: 4000 }],
+      }),
+      "full",
+      "j1",
+      msk(2026, 2, 15, 4, 2),
+    );
+    const late = markPlanDue(fired, msk(2026, 8, 17, 10, 0));
+    assert.equal(late.plan[0].dueAt, "");
+    const nxt = nextSlotAt(fired.plan[0], msk(2026, 8, 17, 10, 0));
+    assert.equal(ymdOf(nxt!), "2027-03-15");
+    assert.ok(markPlanDue(fired, msk(2027, 2, 15, 4, 5)).plan[0].dueAt);
   });
 });

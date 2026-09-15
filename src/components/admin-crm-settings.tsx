@@ -15,7 +15,7 @@ import { keepAlfa, peopleLessonsLine, peopleStudentAction, peopleStudentBadge, p
 import { STEP_LOAD, type HistLoadTab } from "@/data/crm-history-load-guide";
 import { RECHECK_DAY_OPTS, clampRecheckDays, type RecheckDays } from "@/data/crm-inbound-core";
 import { POLICY_FACTORY, type CrmSyncPolicy } from "@/data/crm-sync-policy-core";
-import { HistoryPlanPanel } from "@/components/admin-history-plan";
+import { HistoryPlanModal } from "@/components/admin-history-plan";
 
 function scrollRoot(from: HTMLElement | null): HTMLElement | Window {
   let n = from?.parentElement || null;
@@ -322,7 +322,7 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
 const CRM_SET_TABS = [
   { id: "people", label: "Люди и роли" },
   { id: "alfa", label: "Фон с AlfaCRM" },
-  { id: "history", label: "Пульт синхронизации данных" },
+  { id: "history", label: "История из Alfa" },
   { id: "queue", label: "Очередь" },
   { id: "funnel", label: "Воронка" },
   { id: "cache", label: "Кэш сайта" },
@@ -2152,6 +2152,7 @@ export function AdminCrmSettings() {
   const [syncPolicy, setSyncPolicy] = useState<CrmSyncPolicy>(POLICY_FACTORY);
   const [histTab, setHistTab] = useState<HistTab>("roster");
   const [loadGuide, setLoadGuide] = useState<HistTab | null>(null);
+  const [planOpen, setPlanOpen] = useState(false);
   const crmTabsRef = useRef<HTMLDivElement>(null);
   const histTabsRef = useRef<HTMLDivElement>(null);
   const tabLockY = useRef<number | null>(null);
@@ -3526,8 +3527,8 @@ export function AdminCrmSettings() {
 
       {crmTab === "history" ? (
       <Card
-        title="Пульт синхронизации данных"
-        hint="История из Alfa: кнопки пишут очередь на диск, грузит отдельный процесс. Расписания сверху — сервер жмёт те же кнопки сам. Без карточки и без тумблера — молчит. Вкладку и страницу можно закрыть — F5 ничего не сбрасывает. ○ сверить · ~ оборвалось · ✓ сверено с Alfa."
+        title="История из Alfa"
+        hint="Кнопки пишут очередь на диск, грузит отдельный процесс. Вкладку и страницу можно закрыть — F5 ничего не сбрасывает. ○ сверить · ~ оборвалось · ✓ сверено с Alfa."
       >
         {(() => {
           const offline = alfaMode === "offline";
@@ -3540,7 +3541,6 @@ export function AdminCrmSettings() {
           const schoolNeedLife = schoolRows.filter((r) => r.source !== "alfa").length;
           return (
             <div className="space-y-3">
-              <HistoryPlanPanel policy={syncPolicy} job={journal?.job} busy={busy} onSave={(next) => void saveSyncPolicy(next)} />
               {journal?.note && peopleStudy !== "2" && histTab !== "audit" ? <p className="rounded-xl bg-black/5 px-3 py-2 text-sm">{journal.note}</p> : null}
               {!journal ? (
                 <div className="flex flex-wrap items-center gap-2">
@@ -3560,6 +3560,16 @@ export function AdminCrmSettings() {
                 </div>
               ) : null}
               <div ref={histTabsRef} className="flex flex-wrap items-center gap-1">
+                <button
+                  type="button"
+                  className={cn(
+                    "h-8 rounded-full px-3 text-[0.78rem] font-semibold",
+                    syncPolicy.planEnabled ? "bg-emerald-700 text-white" : "bg-white ring-1 ring-black/10",
+                  )}
+                  onClick={() => setPlanOpen(true)}
+                >
+                  Пульт синхронизации{syncPolicy.planEnabled ? " · вкл" : ""}
+                </button>
                 {HIST_TABS.map((t) => (
                   <span key={t.id} className="inline-flex items-center gap-0.5">
                     <button
@@ -3574,6 +3584,14 @@ export function AdminCrmSettings() {
                 ))}
               </div>
               {loadGuide ? <LoadGuideModal tab={loadGuide} onClose={() => setLoadGuide(null)} /> : null}
+              <HistoryPlanModal
+                open={planOpen}
+                onClose={() => setPlanOpen(false)}
+                policy={syncPolicy}
+                job={journal?.job}
+                busy={busy}
+                onSave={(next) => void saveSyncPolicy(next)}
+              />
               <ServerJobStrip job={journal?.job as ServerJob | undefined} />
 
               {histTab === "roster" ? (

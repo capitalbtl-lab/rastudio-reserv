@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import {
   HISTORY_PLAN_MODES,
@@ -366,7 +366,7 @@ export function HistoryPlanPanel({
       </div>
 
       {!policy.plan.length && !adding ? (
-        <p className="text-sm text-muted">Расписаний нет. Автомат молчит. Кнопки шагов ниже как были.</p>
+        <p className="text-sm text-muted">Расписаний нет. Автомат молчит. Кнопки шагов как были.</p>
       ) : null}
 
       {policy.plan.map((r) => (
@@ -445,6 +445,61 @@ export function HistoryPlanPanel({
           + Добавить расписание
         </button>
       )}
+    </div>
+  );
+}
+
+export function HistoryPlanModal({
+  open,
+  onClose,
+  policy,
+  job,
+  busy,
+  onSave,
+}: {
+  open: boolean;
+  onClose: () => void;
+  policy: CrmSyncPolicy;
+  job?: JobSnap | null;
+  busy?: boolean;
+  onSave: (next: CrmSyncPolicy) => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/45 p-3 sm:items-center" onClick={onClose} role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="history-plan-title"
+        className="max-h-[min(92vh,56rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-black/10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <p id="history-plan-title" className="font-display text-[1.2rem] leading-tight">
+              Пульт синхронизации
+            </p>
+            <p className="mt-1 text-[0.82rem] text-muted">Сервер жмёт те же кнопки шагов сам. Без карточки и без тумблера — молчит.</p>
+          </div>
+          <button
+            type="button"
+            className="inline-flex h-8 shrink-0 items-center justify-center rounded-full bg-white px-3 text-[0.78rem] font-semibold ring-1 ring-black/10 hover:bg-black/5"
+            onClick={onClose}
+            aria-label="Закрыть"
+          >
+            Закрыть
+          </button>
+        </div>
+        <HistoryPlanPanel policy={policy} job={job} busy={busy} onSave={onSave} />
+      </div>
     </div>
   );
 }
