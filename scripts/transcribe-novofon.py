@@ -8,7 +8,6 @@ from urllib.parse import urlencode
 ROOT = Path("/var/www/rastudio")
 STORE = ROOT / "storage" / "call-knowledge.json"
 STATUS = ROOT / "storage" / "transcribe-status.json"
-KEYS_PATH = ROOT / "storage" / "novofon.json"
 API_KEYS = ROOT / "storage" / "api-keys.json"
 HOSTS = ["https://api.novofon.com", "https://api.zadarma.com"]
 SCAN_EVERY = 6 * 3600
@@ -250,29 +249,35 @@ def crm_for_call(call, phones, e=None):
     return None
 
 
-def env():
+def api_fields():
     out = {}
-    p = ROOT / ".env"
-    if p.exists():
-        for line in p.read_text().splitlines():
-            if "=" in line and not line.strip().startswith("#"):
-                k, v = line.split("=", 1)
-                out[k.strip()] = v.strip()
+    if not API_KEYS.exists():
+        return out
+    try:
+        raw = json.loads(API_KEYS.read_text())
+    except Exception:
+        return out
+    for c in raw.get("conns") or []:
+        if c.get("enabled") is False:
+            continue
+        for f in c.get("fields") or []:
+            k = str(f.get("key") or "")
+            v = str(f.get("value") or "").strip()
+            if k and v:
+                out[k] = v
     return out
 
 
+def env():
+    return api_fields()
+
+
 def keys():
-    if API_KEYS.exists():
-        try:
-            raw = json.loads(API_KEYS.read_text())
-            fields = {f["key"]: f.get("value") or "" for c in raw.get("conns") or [] if c.get("id") == "novofon" for f in c.get("fields") or []}
-            user, secret = fields.get("NOVOFON_USER_KEY") or "", fields.get("NOVOFON_SECRET") or ""
-            if user and secret:
-                return user, secret
-        except Exception:
-            pass
-    raw = json.loads(KEYS_PATH.read_text())
-    return raw["userKey"], raw["secret"]
+    f = api_fields()
+    user, secret = f.get("NOVOFON_USER_KEY") or "", f.get("NOVOFON_SECRET") or ""
+    if not user or not secret:
+        raise RuntimeError("нет NOVOFON_USER_KEY / SECRET в API и интеграции")
+    return user, secret
 
 
 def rest(path, params):

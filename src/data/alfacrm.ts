@@ -7,8 +7,8 @@ import { lessonAllowsGroup, lessonOmitsRoom } from "./lesson-type-rules";
 import { wantAlfaPipe } from "./crm-alfa-link";
 
 const HOST = () => (serverEnv("ALFACRM_HOST") || "https://studiyarazvivaysya.s20.online").replace(/\/$/, "");
-const EMAIL = () => serverEnv("ALFACRM_EMAIL") || process.env.ALFACRM_EMAIL || "";
-const API_KEY = () => serverEnv("ALFACRM_API_KEY") || process.env.ALFACRM_API_KEY || "";
+const EMAIL = () => serverEnv("ALFACRM_EMAIL") || "";
+const API_KEY = () => serverEnv("ALFACRM_API_KEY") || "";
 
 const SOURCE_SITE = 2;
 const STATUS_NEW = 1;

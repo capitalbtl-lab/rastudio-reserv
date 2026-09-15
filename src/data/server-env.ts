@@ -7,6 +7,31 @@ export type ApiConnSnap = {
   fields?: { key?: string; value?: string }[];
 };
 
+/** Поля кабинета «API и интеграции». Только диск api-keys.json, не .env. */
+export const ADMIN_API_KEYS = [
+  "YANDEX_API_KEY",
+  "YANDEX_FOLDER_ID",
+  "DEEPSEEK_API_KEY",
+  "NOVOFON_USER_KEY",
+  "NOVOFON_SECRET",
+  "NOVOFON_NOTIFY_SECRET",
+  "VK_GROUP_TOKEN",
+  "VK_SECRET",
+  "VK_CONFIRMATION",
+  "VK_GROUP_ID",
+  "MAX_BOT_TOKEN",
+  "MAX_SECRET",
+  "ALFACRM_HOST",
+  "ALFACRM_EMAIL",
+  "ALFACRM_API_KEY",
+  "ALFACRM_APP_KEY",
+  "ALFACRM_WEB_PASSWORD",
+] as const;
+
+export function isAdminApiKey(key: string) {
+  return (ADMIN_API_KEYS as readonly string[]).includes(key);
+}
+
 /** Кабинет API: поле с ключом. Выключенный контур — пусто, не .env. */
 export function valueFromApiConns(conns: ApiConnSnap[] | undefined, key: string): { owned: boolean; disabled: boolean; value: string } {
   let owned = false;
@@ -53,11 +78,13 @@ function fromEnvFile(key: string) {
   return "";
 }
 
-/** Правда — кабинет API. .env и process.env только если в админке нет значения. */
+/** Кабинет API — единственный источник каналов. PORT и воркеры — process.env. */
 export function serverEnv(key: string) {
   const admin = fromAdmin(key);
-  if (admin.owned && admin.disabled) return "";
-  if (admin.value) return admin.value;
+  if (isAdminApiKey(key) || admin.owned) {
+    if (admin.disabled) return "";
+    return admin.value;
+  }
   const dyn = String((globalThis as { process?: { env?: Record<string, string> } }).process?.env?.[key] || "").trim();
   if (dyn) return dyn;
   return fromEnvFile(key);

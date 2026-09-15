@@ -1,6 +1,4 @@
 import { createHmac, createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { serverEnv } from "./server-env";
 
 /** Novofon — белая метка Zadarma, но ключи Novofon ходят на api.novofon.com. Задарма — запасной хост. */
@@ -20,10 +18,6 @@ export type NovofonCall = {
   file?: string;
 };
 
-function keysPath() {
-  return join(process.cwd(), "storage", "novofon.json");
-}
-
 function apiKeysSecret(): NovofonKeys | null {
   const envKey = serverEnv("NOVOFON_USER_KEY");
   const envSecret = serverEnv("NOVOFON_SECRET");
@@ -32,21 +26,11 @@ function apiKeysSecret(): NovofonKeys | null {
 }
 
 export function loadNovofonKeys(): NovofonKeys | null {
-  const fromApi = apiKeysSecret();
-  if (fromApi) return fromApi;
-  try {
-    if (!existsSync(keysPath())) return null;
-    const raw = JSON.parse(readFileSync(keysPath(), "utf8")) as Partial<NovofonKeys>;
-    if (raw.secret) return { userKey: String(raw.userKey || ""), secret: String(raw.secret) };
-  } catch {
-    /* none */
-  }
-  return null;
+  return apiKeysSecret();
 }
 
-export function saveNovofonKeys(keys: NovofonKeys) {
-  mkdirSync(dirname(keysPath()), { recursive: true });
-  writeFileSync(keysPath(), JSON.stringify({ userKey: keys.userKey.trim(), secret: keys.secret.trim() }, null, 2));
+export function saveNovofonKeys(_keys: NovofonKeys) {
+  /* ключи только storage/api-keys.json */
 }
 
 function queryString(params: Record<string, string>) {
