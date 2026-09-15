@@ -148,11 +148,12 @@ export function stampLessonSetGap(sync: CustomerSyncStamp, have: Iterable<number
   return { lessonsHoleN: gap.hole.length, lessonsExtraN: gap.extra.length };
 }
 
-/** Слева: дырка по id, иначе запас по счётчику (нет seen). */
+/** Слева: дырка по id. Длина Alfa не священна — набор lessonId. Нет переписи — запас по счётчику. */
 export function lessonsStampShort(sync: CustomerSyncStamp) {
   const probed = Boolean(sync.lessonsAlfaAt);
   if (!probed) return false;
   if (Number(sync.lessonsHoleN) > 0) return true;
+  if (sync.lessonsHoleN != null || (sync.lessonsSeenIds || []).length > 0) return false;
   const alfaN = Number(sync.lessonsAlfa) || 0;
   const diskN = Number(sync.lessonsDisk) || 0;
   return lessonsCountShort(diskN, alfaN, true);

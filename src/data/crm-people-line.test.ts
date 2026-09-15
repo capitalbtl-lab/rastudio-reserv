@@ -55,6 +55,15 @@ describe("карточка шага 2: диск / Alfa · осталось · п
     assert.equal(run.hint, "");
   });
 
+  it("осталось — дырка id, не Alfa − диск", () => {
+    const r = peopleLessonsLine({ disk: 141, alfa: 142, hole: 0, plus: 0, at: "2026-09-12T01:02:00.000Z" });
+    assert.equal(r.line, "141 / 142 · осталось 0 · пачка 7 · +0 · 04:02");
+    assert.equal(r.hint, "ничего нового");
+    const h = peopleLessonsLine({ disk: 141, alfa: 142, hole: 1, plus: 0, at: "2026-09-12T01:02:00.000Z" });
+    assert.equal(h.line, "141 / 142 · осталось 1 · пачка 7 · +0 · 04:02");
+    assert.equal(h.hint, "пачка прошла · не сели · не жать ещё раз");
+  });
+
   it("осталось 0 — ничего нового, «ещё N пачек» нет", () => {
     const r = peopleLessonsLine({ disk: 286, alfa: 286, plus: 8, at: "2026-09-12T01:20:00.000Z" });
     assert.equal(r.line, "286 / 286 · осталось 0 · пачка 7 · +8 · 04:20");
@@ -75,6 +84,7 @@ describe("карточка шага 2: диск / Alfa · осталось · п
   it("экран: строка на карточке, keep Alfa, очередь n/total, пауза без «не отвечает»", () => {
     const ui = readFileSync(new URL("../components/admin-crm-settings.tsx", import.meta.url), "utf8");
     assert.match(ui, /peopleLessonsLine/);
+    assert.match(ui, /hole: row.holeN/);
     assert.match(ui, /keepAlfa/);
     assert.match(ui, /PEOPLE_PACK/);
     assert.match(ui, /packMemo/);

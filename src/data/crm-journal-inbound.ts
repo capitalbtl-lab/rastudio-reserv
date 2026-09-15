@@ -39,7 +39,7 @@ import {
   waitLockStudentAlfa,
   unlockStudentAlfa,
   ownsStudentAlfa,
-  lessonsCountShort,
+  lessonsStampShort,
   wasLessonGreen,
   stampLessonSetGap,
 } from "./crm-customer-sync";
@@ -660,8 +660,7 @@ export function skipHoleInbound(id: number, force?: boolean) {
   if (force) return false;
   const s = customerSyncOf(id);
   if (!s.journalHoleApprovedAt) return false;
-  const disk = countAlfaLessonUniq(loadCustomerCalendar(id)) || Number(s.lessonsDisk) || 0;
-  return lessonsCountShort(disk, Number(s.lessonsAlfa) || 0, Boolean(s.lessonsAlfaAt));
+  return lessonsStampShort(s);
 }
 
 export async function inboundCustomerLessons(branch: number, customerId: number, opts?: { full?: boolean; continueLater?: boolean; take?: number; deep?: number; force?: boolean; homeOnly?: boolean; dateFrom?: string; dateTo?: string; prune?: boolean; resetSeen?: boolean; monthly?: boolean; resetAt?: string }) {

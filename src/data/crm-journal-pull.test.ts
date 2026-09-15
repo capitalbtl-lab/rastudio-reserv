@@ -74,7 +74,7 @@ describe("ручной журнал с Alfa", () => {
     assert.doesNotMatch(inbound, /lessonId \|\| 0\}\|\$\{packed.date\}/);
     assert.match(pull, /pagesComplete/);
     assert.match(pull, /journalIdsReady/);
-    assert.match(pull, /if \(slow && lessonsCountShort/);
+    assert.match(pull, /if \(slow && shortByIds/);
     assert.match(pull, /setsClosed/);
     assert.match(pull, /recheckCensusWindow\(sync0, recheckDays\)/);
     assert.match(pull, /!\/\^w\\d\+\$\/\.test\(key\)/);
@@ -340,7 +340,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(core, /if \(k > 0 && a < k\) return \{ write: false, alfa: k, probed: true \}/);
     assert.match(pull, /keepAlfaProbe\(keep, alfaRaw, probed.ok, Boolean\(probed.ok\)\)/);
     assert.match(pull, /lessonsSeenIds: ids/);
-    assert.match(pull, /first\.ok && !weak && disk >= alfaGate && !extra0/);
+    assert.match(pull, /setsClosed \|\| \(!seenReady && disk >= alfaGate && !extra0\)/);
     assert.doesNotMatch(pull, /lessonsAlfaAt: ""/);
     assert.match(pull, /closed \? \{ lessonsFull: true, lessonsAttend: true \} : \{ lessonsFull: false \}/);
     assert.match(inbound, /heldAlfa.write \? \{ lessonsAlfa: heldAlfa.alfa/);

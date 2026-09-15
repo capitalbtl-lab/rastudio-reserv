@@ -465,6 +465,7 @@ type StudentHit = {
   ok: boolean;
   alfa?: number;
   short?: boolean;
+  holeN?: number;
   dups?: boolean;
   holeApproved?: boolean;
 };
@@ -477,6 +478,7 @@ type PeopleRow = {
   lessons: number;
   alfa?: number;
   short?: boolean;
+  holeN?: number;
   dups?: boolean;
   holeApproved?: boolean;
   journal?: boolean;
@@ -1417,7 +1419,7 @@ function PeopleFillList({
     const plus = packSt?.active ? Math.max(0, (Number(row.lessons) || 0) - packSt.before) : packSt && packSt.plus != null ? packSt.plus : undefined;
     const nums =
       kind === "students" && alfaShown != null
-        ? peopleLessonsLine({ disk: Number(row.lessons) || 0, alfa: alfaShown, pack: PEOPLE_PACK, plus, at: row.at, running: active })
+        ? peopleLessonsLine({ disk: Number(row.lessons) || 0, alfa: alfaShown, hole: row.holeN, pack: PEOPLE_PACK, plus, at: row.at, running: active })
         : null;
     const numsHint = peopleStudentHint({ short, dups, holeApproved: approved, lineHint: nums?.hint || "" });
     const act = kind === "balance" ? (full ? "recheck" : "load") : peopleStudentAction({ short, dups, journal: Boolean(row.journal), holeApproved: approved });

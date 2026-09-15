@@ -68,6 +68,7 @@ type StudentHit = {
   ok: boolean;
   alfa?: number;
   short?: boolean;
+  holeN?: number;
   dups?: boolean;
   seated?: number;
   holeApproved?: boolean;
@@ -756,6 +757,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
       lessons: number;
       alfa?: number;
       short?: boolean;
+      holeN?: number;
       holeApproved?: boolean;
       dups?: boolean;
       journal: boolean;
@@ -796,6 +798,7 @@ export function journalPullProgress(opts?: { skipPeople?: boolean }) {
         alfa: probed ? alfaN : undefined,
         short,
         holeApproved: Boolean(sync.journalHoleApprovedAt),
+        holeN: sync.lessonsHoleN,
         dups,
         journal,
         pays,
@@ -1223,14 +1226,21 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const alfaGate = censusOk ? alfa0 : Math.max(alfa0, alfaKeep);
     const weak = Boolean(first.ok && !censusOk && alfaKeep > 0 && alfa0 < alfaKeep);
     const extra0 = lessonsCountExtra(disk, alfaGate, first.ok || alfaKeep > 0);
+    const shortByIds = (diskN: number, alfaN: number, probedOk: boolean) => {
+      const cur = customerSyncOf(cid);
+      const have = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
+      const gap = stampLessonSetGap({ ...cur, lessonsAlfa: alfaN, ...(probedOk ? { lessonsAlfaAt: cur.lessonsAlfaAt || "x" } : {}) }, have, studentProtectLessonIds(cid));
+      return lessonsStampShort({ ...cur, lessonsDisk: diskN, lessonsAlfa: alfaN, lessonsAlfaAt: probedOk ? cur.lessonsAlfaAt || "x" : cur.lessonsAlfaAt, ...gap });
+    };
     const haveNow = uniquePositiveIds((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0));
     const gap0 = stampLessonSetGap(
       { ...customerSyncOf(cid), ...(first.ok ? { lessonsAlfa: alfaGate, lessonsAlfaAt: customerSyncOf(cid).lessonsAlfaAt || "x" } : {}) },
       haveNow,
       studentProtectLessonIds(cid),
     );
-    const setsClosed = !(Number(gap0.lessonsHoleN) || 0) && !(Number(gap0.lessonsExtraN) || 0);
-    if (first.ok && !weak && disk >= alfaGate && !extra0 && setsClosed) {
+    const seenReady = (customerSyncOf(cid).lessonsSeenIds || []).length > 0;
+    const setsClosed = seenReady && !(Number(gap0.lessonsHoleN) || 0) && !(Number(gap0.lessonsExtraN) || 0);
+    if (first.ok && !weak && (setsClosed || (!seenReady && disk >= alfaGate && !extra0))) {
       const hit = mark(disk, alfa0, true, censusOk);
       if (hit.closed) stampCustomerSync(cid, { lessonsWindowDays: 0 });
       if (!balance)
@@ -1252,7 +1262,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     } else {
       const have0 = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
       let missing = (customerSyncOf(cid).lessonsSeenIds || []).filter((n) => !have0.has(n));
-      if (lessonsCountShort(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0) && !missing.length && !first.ok) {
+      if (shortByIds(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0) && !missing.length && !first.ok) {
         const census = await censusCustomerLessonIds(branchId, cid, { dateFrom: range.from, dateTo: range.to }).catch(() => ({ ids: [] as number[], ok: false as const }));
         if (census.ok) {
           const prev = uniquePositiveIds(customerSyncOf(cid).lessonsSeenIds || []);
@@ -1268,7 +1278,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         droppedN += Array.isArray(gap.dropped) ? gap.dropped.length : 0;
         disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
       }
-      if (slow && lessonsCountShort(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0)) {
+      if (slow && shortByIds(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0)) {
       const deadline = Date.now() + 10 * 60 * 1000;
       for (let i = 0; Date.now() < deadline; i += 1) {
         const res = await inboundCustomerLessons(branchId, cid, {
@@ -1291,11 +1301,11 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
           return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: alfa0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
         }
         disk = countAlfaLessonUniq(loadCustomerCalendar(cid));
-        if (!lessonsCountShort(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0)) break;
+        if (!shortByIds(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0)) break;
         if (slow && i > 0 && !(Number(res.count) || 0) && Boolean((res as { done?: boolean }).done)) break;
       }
       }
-      if (lessonsCountShort(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0)) {
+      if (shortByIds(disk, alfaGate, Boolean(first.ok) || alfaKeep > 0)) {
         const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
         if (first.ok) {
           missing = (customerSyncOf(cid).lessonsSeenIds || first.ids || []).filter((n) => !have.has(n));
@@ -1376,8 +1386,9 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
         stampCustomerSync(cid, { lessonsSeenIds: uniquePositiveIds([...seen0.filter((id) => !gone.includes(id)), ...новые]) });
       } else if (!windowFrom) {
       const alfaN = applied.alfa;
-      const short = lessonsCountShort(disk, alfaN, true);
       const have = new Set((loadCustomerCalendar(cid) || []).map((l) => Number(l.lessonId) || 0).filter((n) => n > 0));
+      const gapN = stampLessonSetGap(customerSyncOf(cid), uniquePositiveIds([...have]), studentProtectLessonIds(cid));
+      const short = lessonsStampShort({ ...customerSyncOf(cid), lessonsDisk: disk, lessonsAlfa: alfaN, lessonsAlfaAt: "x", ...gapN });
       if (short && !holeApproved) {
         const missing = census.ids.filter((n) => !have.has(n));
         if (missing.length) {
@@ -2250,12 +2261,12 @@ export async function journalPull(opts: {
       const alfaRaw = probed.ok ? probed.total : 0;
       const held = keepAlfaProbe(keep, alfaRaw, probed.ok, Boolean(probed.ok));
       const holeApproved = Boolean(customerSyncOf(one.cid).journalHoleApprovedAt);
-      const short = lessonsCountShort(disk, held.alfa, held.probed);
-      const dups = lessonsCountExtra(disk, held.alfa, held.probed);
-      const closed = Boolean(probed.ok && held.write && !short && !dups && !holeApproved);
       const ids = probed.ok ? uniquePositiveIds("ids" in probed ? probed.ids || [] : []) : [];
       const have = uniquePositiveIds(loadCustomerCalendar(one.cid).map((x) => Number(x.lessonId) || 0));
       const gap = probed.ok ? stampLessonSetGap({ lessonsSeenIds: ids }, have, studentProtectLessonIds(one.cid)) : {};
+      const short = lessonsStampShort({ lessonsAlfaAt: probed.ok ? "x" : "", lessonsAlfa: held.alfa, lessonsDisk: disk, lessonsSeenIds: ids, ...gap });
+      const dups = lessonsStampExtra({ lessonsAlfaAt: probed.ok ? "x" : "", lessonsAlfa: held.alfa, lessonsDisk: disk, lessonsSeenIds: ids, ...gap });
+      const closed = Boolean(probed.ok && held.write && !short && !dups && !holeApproved);
       stampCustomerSync(one.cid, {
         lessonsDisk: disk,
         ...(held.write ? { lessonsAlfa: held.alfa, lessonsAlfaAt: new Date().toISOString() } : {}),

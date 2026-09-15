@@ -34,6 +34,7 @@ function ruPacks(n: number) {
 export function peopleLessonsLine(opts: {
   disk: number;
   alfa?: number;
+  hole?: number;
   pack?: number;
   plus?: number;
   at?: string;
@@ -42,7 +43,8 @@ export function peopleLessonsLine(opts: {
   const disk = Math.max(0, Number(opts.disk) || 0);
   const alfaKnown = opts.alfa != null && Number.isFinite(Number(opts.alfa));
   const alfa = alfaKnown ? Math.max(0, Number(opts.alfa) || 0) : 0;
-  const left = alfaKnown ? Math.max(0, alfa - disk) : 0;
+  const holeKnown = opts.hole != null && Number.isFinite(Number(opts.hole));
+  const left = holeKnown ? Math.max(0, Number(opts.hole) || 0) : alfaKnown ? Math.max(0, alfa - disk) : 0;
   const pack = Number(opts.pack) > 0 ? Number(opts.pack) : PEOPLE_PACK;
   const hasPlus = opts.plus != null && Number.isFinite(Number(opts.plus));
   const k = hasPlus ? Math.max(0, Math.floor(Number(opts.plus))) : 0;
