@@ -1292,19 +1292,12 @@ const AUDIT_ROLE_HEAD: Record<"клиент" | "лид" | "архив" | "нет
   нет: { label: "Нет ответа Alfa", rec: "Alfa не подтвердила роль. Это не клиент, пока не ответит. Смотрите карточку в Альфе — часто лид или архив." },
 };
 
-function auditRole(r: AuditSegIn): "лид" | "клиент" | "архив" | "нет" {
+function auditRole(r: AuditSegIn): "лид" | "клиент" | "архив" {
   const codes = r.codes || [];
   const extra = String(r.extra || "");
-  if (codes.includes("лид") || /Лид в Альфе/.test(extra)) return "лид";
-  if (codes.includes("архив") || /Архив в Альфе/.test(extra)) return "архив";
-  if (r.alfaRole === "лид") return "лид";
-  if (r.alfaRole === "архив") return "архив";
-  const fail = !r.seen || auditFail(codes);
-  if (fail) {
-    if (Number(r.study) === 0 || String(r.funnel || "") === "1") return "лид";
-    if (r.status === "архив" || Number(r.study) === 2) return "архив";
-    return "нет";
-  }
+  if (codes.includes("архив") || /Архив в Альфе/.test(extra) || r.alfaRole === "архив" || r.status === "архив" || Number(r.study) === 2) return "архив";
+  if (codes.includes("лид") || /Лид в Альфе/.test(extra) || r.alfaRole === "лид" || Number(r.study) === 0 || String(r.funnel || "") === "1") return "лид";
+  if (r.seen && auditFail(codes)) return "лид";
   return "клиент";
 }
 
@@ -1947,7 +1940,7 @@ function AuditFillList({
     const ib = AUDIT_SEG_ORDER.indexOf(auditSeg(b).id);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || byName(a, b);
   };
-  const roleRank = (r: AuditUiRow) => ["нет", "лид", "архив", "клиент"].indexOf(auditRole(r));
+  const roleRank = (r: AuditUiRow) => ["лид", "архив", "клиент"].indexOf(auditRole(r));
   const byLeft = (a: AuditUiRow, b: AuditUiRow) => {
     if (role === "all") {
       const d = roleRank(a) - roleRank(b);
@@ -4705,7 +4698,10 @@ export function AdminCrmSettings() {
                   const live = p?.live;
                   const hits = journal?.lastAudit?.rows || [];
                   const by = new Map(hits.map((h) => [h.cid, h]));
-                  const rows: AuditUiRow[] = (live?.people || []).map((r) => {
+                  const livePeople = live?.people || [];
+                  const seenCid = new Set<number>();
+                  const rows: AuditUiRow[] = livePeople.map((r) => {
+                    seenCid.add(r.cid);
                     const h = by.get(r.cid);
                     return {
                       cid: r.cid,
@@ -4726,6 +4722,28 @@ export function AdminCrmSettings() {
                       leadStatus: r.leadStatus,
                     };
                   });
+                  for (const h of hits) {
+                    if (seenCid.has(h.cid)) continue;
+                    const lead = (h.codes || []).includes("лид");
+                    const arch = (h.codes || []).includes("архив");
+                    rows.push({
+                      cid: h.cid,
+                      branchId: h.branchId,
+                      name: h.name,
+                      groups: [],
+                      clients: h.clients,
+                      alfaMoney: h.alfa,
+                      cash: h.cash,
+                      codes: h.codes,
+                      extra: h.extra,
+                      at: h.at,
+                      seen: true,
+                      alfaRole: lead ? "лид" : arch ? "архив" : undefined,
+                      status: arch ? "архив" : "",
+                      study: lead ? 0 : arch ? 2 : undefined,
+                      funnel: lead ? "1" : "",
+                    });
+                  }
                   const run = fillLoading?.kind === "audit";
                   const scanned = journal?.lastAudit?.scanned || 0;
                   const okN = journal?.lastAudit?.ok || 0;

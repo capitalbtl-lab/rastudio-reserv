@@ -203,7 +203,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(ui, /Все роли/);
     assert.match(ui, /function auditRole/);
     assert.match(ui, /codes.includes\("лид"\) \|\| \/Лид в Альфе\/.test\(extra\)/);
-    assert.match(ui, /return "нет"/);
+    assert.match(ui, /if \(r.seen && auditFail\(codes\)\) return "лид"/);
+    assert.doesNotMatch(ui, /return "нет"/);
+    assert.match(ui, /for \(const h of hits\)/);
     assert.match(ui, /В роли/);
     assert.match(pull, /leadStatus/);
     assert.match(pull, /dossierAuditRole/);
