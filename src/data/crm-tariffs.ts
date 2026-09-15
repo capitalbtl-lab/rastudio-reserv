@@ -909,8 +909,17 @@ export async function pushTariffToCrm(tariff: CrmTariff, cookieIn?: string) {
   let cookie = cookieIn || "";
   if (!cookie) {
     const login = await crmLogin();
-    if (!login.cookie) return { ok: false as const, id: t.id, error: login.error || "Нет входа в кабинет CRM. Предметы и типы уроков без входа не записываются." };
-    cookie = login.cookie;
+    cookie = login.cookie || "";
+    if (!cookie) {
+      try {
+        await pushTariffViaApi(t);
+        saveTariffEdits([t]);
+        return { ok: true as const, id: t.id, title: t.name, cookie: "" };
+      } catch (e) {
+        const raw = e instanceof Error ? e.message : "API не записала абонемент.";
+        return { ok: false as const, id: t.id, error: raw.replace(/^alfacrm\s+\d+\s+\S+\s+/, "").slice(0, 280) };
+      }
+    }
   }
   const write = async () => {
     const page = await openTariffForm(t.id, cookie);
@@ -1040,8 +1049,7 @@ export async function pushTariffsToCrm(list: CrmTariff[]) {
   })).values()];
   if (!unique.length) return { ok: false as const, error: "Нет абонементов для выгрузки.", pushed: 0, failed: 0, results: [] as { id: number; ok: boolean; error?: string }[] };
   const login = await crmLogin();
-  if (!login.cookie) return { ok: false as const, error: login.error || "Нет входа в кабинет CRM.", pushed: 0, failed: unique.length, results: [] };
-  let cookie = login.cookie;
+  let cookie = login.cookie || "";
   const results: { id: number; ok: boolean; error?: string }[] = [];
   const created: CrmTariff[] = [];
   const remaps: { from: number; to: number }[] = [];
@@ -1139,16 +1147,15 @@ export async function createTariffInCrm(tariff: CrmTariff) {
       }
     }
     const full = { ...t, id };
-    await new Promise((r) => setTimeout(r, 400));
-    const pushed = await pushTariffToCrm(full);
     saveTariffEdits([full], [t.id].filter((n) => n < 0));
+    try {
+      await pushTariffViaApi(full);
+    } catch {
+      /* create already wrote name/price */
+    }
+    const pushed = await pushTariffToCrm(full);
     if (!pushed.ok) {
-      return {
-        ok: false as const,
-        id,
-        tariff: full,
-        error: `Создан №${id}, но предмет и типы уроков не записались: ${pushed.error}`,
-      };
+      return { ok: true as const, id, tariff: full, error: `Создан №${id}. Кабинет: ${pushed.error}` };
     }
     return { ok: true as const, id, tariff: full };
   } catch (e) {
@@ -1195,6 +1202,14 @@ function tariffApiBody(t: CrmTariff) {
   const e = toIsoDate(t.eDate);
   if (e) body.e_date = e;
   return body;
+}
+
+/** v2api tariff/update. Филиалы и предметы в теле API, без кабинета. */
+async function pushTariffViaApi(t: CrmTariff) {
+  const { token, request } = await import("./alfacrm");
+  const tok = await token();
+  const company = t.branchIds.includes(2) ? 2 : t.branchIds[0] || 2;
+  await request(`/v2api/${company}/tariff/update?id=${t.id}`, { id: t.id, ...tariffApiBody(t) }, tok);
 }
 
 export async function archiveTariffsInCrm(ids: number[]) {
