@@ -1424,6 +1424,7 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
     const { inboundCustomerPays, paysOf, payCustomerFilled } = await import("./crm-pay");
     const forcePay = Boolean(recheck) && !payFillPending(cid);
     const payFrom = recheck ? recheckWindowYmd(recheckDays).from : from;
+    if (recheck) stampCustomerSync(cid, { paysRecheckAt: "" });
     try {
       await inboundCustomerPays(request, t, branchId, cid, { force: forcePay, dateFrom: payFrom });
     } catch (e) {

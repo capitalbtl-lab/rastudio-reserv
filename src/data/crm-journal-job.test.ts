@@ -152,6 +152,7 @@ describe("фон истории из Alfa", () => {
     assert.equal(shouldRetryOpenRecheck(false, "students", { ok: true, student: { rechecked: false } }), false);
     assert.equal(shouldRetryOpenRecheck(true, "balance", { ok: true, student: { rechecked: true, paysRechecked: false } }), true);
     assert.equal(shouldRetryOpenRecheck(true, "balance", { ok: true, student: { paysRechecked: true } }), false);
+    assert.equal(shouldRetryOpenRecheck(true, "balance", { ok: true, student: { paysRechecked: true, paysMore: true } }), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Е", journal: false, pays: true, dups: true }, "balance"), true);
     assert.equal(peopleJobFinished({ cid: 5, branchId: 2, name: "Е", journal: false, pays: false, paysScanned: true, dups: true }, "balance"), true);
     assert.equal(shouldRetryOpenRecheck(true, "group", { ok: true, student: { rechecked: false } }), false);
@@ -328,6 +329,8 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /RA_HISTORY_WORKER === "1"/);
     assert.match(job, /export async function runHistoryWorker/);
     assert.match(job, /kickHistoryTick/);
+    assert.match(job, /const moreCash = pullKind === "balance" && Boolean\(res.student\?\.paysMore\)/);
+    assert.doesNotMatch(job, /moreCash = pullKind === "balance" && !live.recheck/);
     assert.match(job, /if \(!isHistoryWorker\(\)\) return/);
     assert.match(job, /resumeJournalJobFromDisk/);
     assert.match(job, /resumeStalledRecheck/);

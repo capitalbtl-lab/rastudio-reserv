@@ -790,7 +790,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
   const live = loadJournalJob();
   if (live.id !== id) return { done: true, gap: 0 };
   if (live.stop) return { done: true, gap: 0, msg: `Остановили · прошло ${live.n} из ${live.total}.` };
-  const moreCash = pullKind === "balance" && !live.recheck && Boolean(res.student?.paysMore);
+  const moreCash = pullKind === "balance" && Boolean(res.student?.paysMore);
   if (moreCash) {
     const rot = rotateUnfinished(live.items, live.idx);
     const next = rot.items[rot.idx];

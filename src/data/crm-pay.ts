@@ -783,6 +783,7 @@ export async function inboundCustomerPays(
         if (lastShort) {
           if (!overBudget()) {
             for (const typeId of [5, 6, 9]) {
+              if (ran >= maxRun || overBudget()) break;
               try {
                 const extra = await request(
                   `/v2api/${bid}/pay/index`,
@@ -791,6 +792,7 @@ export async function inboundCustomerPays(
                 );
                 const packT = crmUnwrapIndex(extra);
                 raw.push(...packT.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
+                ran += 1;
               } catch {
                 /* типы филиала — не валим весь прогон */
               }

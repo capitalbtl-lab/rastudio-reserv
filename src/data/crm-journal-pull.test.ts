@@ -260,6 +260,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /d\?\.child\?\.fio \|\| d\?\.parent\?\.fio/);
     assert.doesNotMatch(ui, /function cashLoadedText/);
     assert.match(pull, /const scanDone = !payFail && !payFillPending\(cid\)/);
+    assert.match(pull, /if \(recheck\) stampCustomerSync\(cid, \{ paysRecheckAt: "" \}\)/);
     assert.match(pull, /paysRecheckAt: payAt/);
     assert.doesNotMatch(pull, /mark\(diskNow/);
     assert.match(pull, /if \(!balance\) \{/);
