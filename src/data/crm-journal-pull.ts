@@ -884,7 +884,10 @@ export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: 
     const dups = lessonsStampExtra(sync);
     const journal = lessonsJournalReady(sync);
     const pays = payCustomerFilled(p.cid);
-    const alfaRole = alfaStudyRole({ is_study: p.study, status: p.status, removed: p.removed });
+    const d = findDossier({ crmId: p.cid });
+    const funnel = String(d?.extras?.crm_funnel || "");
+    const leadStatus = Number(d?.extras?.lead_status_id) || 0;
+    const alfaRole = alfaStudyRole({ is_study: p.study, status: p.status, removed: p.removed, crm_funnel: funnel, lead_status_id: leadStatus });
     return {
       cid: p.cid,
       branchId: p.branchId,
@@ -898,6 +901,10 @@ export function journalPeopleSide(study: JournalPullStudy, opts?: { skipLeads?: 
       journal,
       pays,
       alfaRole,
+      status: p.status,
+      study: p.study,
+      funnel,
+      leadStatus,
       paysScanned: payFillScanned(p.cid),
       paysEmpty: payFillEmpty(p.cid),
       cashRows: paysOf(p.cid).filter((x) => !x.deleted).length,

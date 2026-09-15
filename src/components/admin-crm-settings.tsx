@@ -1168,6 +1168,10 @@ type AuditSegIn = {
   cash?: number;
   alfaRole?: string;
   extra?: string;
+  status?: string;
+  study?: number;
+  funnel?: string;
+  leadStatus?: number;
 };
 
 function rowMatched(r: AuditSegIn) {
@@ -1281,19 +1285,26 @@ const AUDIT_ROLES: { id: "all" | "клиент" | "лид" | "архив"; label
   { id: "архив", label: "Архив" },
 ];
 
-const AUDIT_ROLE_HEAD: Record<"клиент" | "лид" | "архив", { label: string; rec: string }> = {
+const AUDIT_ROLE_HEAD: Record<"клиент" | "лид" | "архив" | "нет", { label: string; rec: string }> = {
   клиент: { label: "Клиенты", rec: "Ученики в Альфе. Сверяем шапку и кассу." },
-  лид: { label: "Лиды", rec: "Шапки клиента нет. Кассу не чинить." },
-  архив: { label: "Архив", rec: "Как текущих не сверяем." },
+  лид: { label: "Лиды", rec: "В Альфе лид, не клиент. Шапки нет — кассу не чинить." },
+  архив: { label: "Архив", rec: "В Альфе архив. Как текущего не сверять." },
+  нет: { label: "Нет ответа Alfa", rec: "Alfa не подтвердила роль. Это не клиент, пока не ответит. Смотрите карточку в Альфе — часто лид или архив." },
 };
 
-function auditRole(r: AuditSegIn): "лид" | "клиент" | "архив" {
+function auditRole(r: AuditSegIn): "лид" | "клиент" | "архив" | "нет" {
   const codes = r.codes || [];
   const extra = String(r.extra || "");
   if (codes.includes("лид") || /Лид в Альфе/.test(extra)) return "лид";
   if (codes.includes("архив") || /Архив в Альфе/.test(extra)) return "архив";
   if (r.alfaRole === "лид") return "лид";
   if (r.alfaRole === "архив") return "архив";
+  const fail = !r.seen || auditFail(codes);
+  if (fail) {
+    if (r.status === "лид" || Number(r.study) === 0 || String(r.funnel || "") === "1" || Number(r.leadStatus) > 0) return "лид";
+    if (r.status === "архив" || Number(r.study) === 2) return "архив";
+    return "нет";
+  }
   return "клиент";
 }
 
@@ -1888,6 +1899,10 @@ type AuditUiRow = {
   at?: string;
   seen?: boolean;
   alfaRole?: "лид" | "клиент" | "архив";
+  status?: string;
+  study?: number;
+  funnel?: string;
+  leadStatus?: number;
 };
 
 function alfaRoleLabel(role?: string) {
@@ -1932,7 +1947,7 @@ function AuditFillList({
     const ib = AUDIT_SEG_ORDER.indexOf(auditSeg(b).id);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || byName(a, b);
   };
-  const roleRank = (r: AuditUiRow) => ["клиент", "лид", "архив"].indexOf(auditRole(r));
+  const roleRank = (r: AuditUiRow) => ["нет", "лид", "архив", "клиент"].indexOf(auditRole(r));
   const byLeft = (a: AuditUiRow, b: AuditUiRow) => {
     if (role === "all") {
       const d = roleRank(a) - roleRank(b);
@@ -4705,6 +4720,10 @@ export function AdminCrmSettings() {
                       at: h?.at,
                       seen: Boolean(h),
                       alfaRole: (h?.codes || []).includes("лид") ? "лид" : (h?.codes || []).includes("архив") ? "архив" : r.alfaRole,
+                      status: r.status,
+                      study: r.study,
+                      funnel: r.funnel,
+                      leadStatus: r.leadStatus,
                     };
                   });
                   const run = fillLoading?.kind === "audit";
