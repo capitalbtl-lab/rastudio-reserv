@@ -1,0 +1,42 @@
+{
+  "id": "romashka-16",
+  "name": "Ромашка-16",
+  "rev": 16,
+  "at": "2026-09-15T16:01:00Z",
+  "git": "82aa759302c5bfe58bb4100af9b385b264514e73",
+  "parent": {
+    "id": "romashka-15",
+    "tag": "romashka-15",
+    "git": "9246f7d36c77b940151aa6b901b4a02498d6fa47"
+  },
+  "branch": "restore/romashka-16",
+  "tag": "romashka-16",
+  "note": "Полный снимок дерева системы: код, public включая media, scripts, docs, storage точек. Живой диск кабинета VPS в клоне отсутствовал.",
+  "src": {
+    "archive": "storage/backups/ромашка-16-src.tar.gz",
+    "files": 428,
+    "bytes": 1617866,
+    "sha256": "6fae6d5808cedcc45ee372398751b7a8c7d50772a7616f37108de4619241e87f"
+  },
+  "full": {
+    "archive": "storage/backups/ромашка-16-full.tar.gz",
+    "files": 1431,
+    "bytes": 734707948,
+    "sha256": "14ff34ce78b6587ff4332d33eef97e2e9c99654440e5f3824f3f03fa5a695542"
+  },
+  "excludes": [
+    "node_modules",
+    ".output",
+    ".git",
+    ".vinxi",
+    ".nitro",
+    "storage/backups/ромашка-16-full.tar.gz",
+    "storage/backups/ромашка-16-src.tar.gz"
+  ],
+  "restore": {
+    "git": "git checkout romashka-16",
+    "branch": "git checkout restore/romashka-16",
+    "src": "tar -xzf storage/backups/ромашка-16-src.tar.gz",
+    "full": "tar -xzf storage/backups/ромашка-16-full.tar.gz"
+  }
+}
