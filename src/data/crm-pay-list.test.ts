@@ -182,7 +182,7 @@ describe("касса список", () => {
     assert.doesNotMatch(doneBlock, /markPayJournalIncomplete/);
     assert.match(inbound, /payCustomerIdOf\(it, 0\) === customerId/);
     assert.match(inbound, /ran \+= 1/);
-    assert.match(inbound, /date_from/);
+    assert.doesNotMatch(inbound, /date_from/);
     assert.match(inbound, /received >= total/);
     assert.doesNotMatch(inbound, /if \(!failed && !done\) \{/);
     assert.match(inbound, /save\(store, \{ keepAll: true \}\)/);

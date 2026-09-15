@@ -307,7 +307,6 @@ export function markPayJournalIncomplete(customerId: number) {
   const set = new Set(store.complete || []);
   set.delete(id);
   store.complete = [...set];
-  if (store.payFill) delete store.payFill[String(id)];
   save(store);
 }
 
@@ -747,8 +746,6 @@ export async function inboundCustomerPays(
   const started = Date.now();
   const overBudget = () => Date.now() - started > PAY_INBOUND_BUDGET_MS;
   const pageSize = PAY_CUSTOMER_PAGE;
-  const date_from = alfaPayIndexDate(opts?.dateFrom || "2015-01-01");
-  const date_to = alfaPayIndexDate();
   const extraResume = Boolean(!opts?.force && Number(cur?.extra) && !cur?.done);
   if (!extraResume) {
   outer: for (let b = bidIdx; b < branches.length; b += 1) {
@@ -770,8 +767,6 @@ export async function inboundCustomerPays(
           page: p,
           pageSize,
           customer_id: customerId,
-          date_from,
-          date_to,
         }, token);
         const pack = crmUnwrapIndex(json);
         console.warn(`pay inbound cid=${customerId} branch=${bid} page=${p} n=${pack.items.length} total=${pack.total ?? "?"}`);
@@ -820,7 +815,7 @@ export async function inboundCustomerPays(
           console.warn(`pay inbound cid=${customerId} branch=${extraBid} type=${typeId}`);
           const extra = await request(
             `/v2api/${extraBid}/pay/index`,
-            { page: 0, pageSize, customer_id: customerId, pay_type_id: typeId, date_from, date_to },
+            { page: 0, pageSize, customer_id: customerId, pay_type_id: typeId },
             token,
           );
           const packT = crmUnwrapIndex(extra);
