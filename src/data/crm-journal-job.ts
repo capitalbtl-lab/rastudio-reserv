@@ -984,7 +984,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
           ? `«${item.name}»: не хватает, ещё этот.`
           : String(res.extra || res.error || `«${item.name}»: касса не дочитана.`),
     });
-    return { done: false, gap: live.recheck ? jobRetryGapMs(err, jobPeriodDays(live)) : jobGapOf(live) };
+    return { done: false, gap: jobRetryGapMs(err, live.recheck ? jobPeriodDays(live) : 0) };
   }
   if (!res.ok) {
     const waits = (live.waits || 0) + 1;

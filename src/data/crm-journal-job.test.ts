@@ -88,7 +88,10 @@ describe("фон истории из Alfa", () => {
     assert.equal(mergeJobPatch(iced, { n: 1 }).dateTo, "2026-10-16");
     assert.equal(mergeJobPatch(iced, { dateTo: "" }).dateTo, "");
     assert.equal(jobRetryGapMs("429 Too Many Requests"), 120_000);
+    assert.equal(jobRetryGapMs("429 Too Many Requests", 0), 120_000);
     assert.equal(jobRetryGapMs("ок"), 5000);
+    assert.equal(jobRetryGapMs("нет ответа", 14), 1000);
+    assert.match(readFileSync(new URL("./crm-journal-job.ts", import.meta.url), "utf8"), /gap: jobRetryGapMs\(err, live\.recheck \? jobPeriodDays\(live\) : 0\)/);
   });
   it("очередь учеников: слева неготовые, справа перепроверка", () => {
     const people = [

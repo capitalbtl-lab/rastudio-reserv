@@ -1,3 +1,8 @@
+/** Закон API: любой вопрос про v2api — сначала дока Alfa, потом этот файл.
+ *  https://alfacrm.pro/knowledge/integration/api
+ *  https://alfacrm.pro/usefull/integrations/integration/api
+ *  https://alfacrm.pro/usefull/knowledge/rekomendacii-po-rabote-s-sistemoj/v2api-prakticheskaya-skhema-integracii
+ */
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { serverEnv } from "./server-env";
