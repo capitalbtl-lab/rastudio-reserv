@@ -7,7 +7,9 @@ import {
   PLAN_FROM_OPTS,
   PLAN_RECHECK_OPTS,
   emptyDraft,
+  mskWall,
   nextSlotAt,
+  pad2,
   planModeMeta,
   whenLabel,
   type CrmSyncPolicy,
@@ -57,11 +59,11 @@ function Chip({ on, children, onClick, disabled }: { on?: boolean; children: Rea
 }
 
 function fmtSlot(rule: HistorySchedule) {
+  if (rule.dueAt) return "в очереди";
   const d = nextSlotAt(rule);
   if (!d) return "слота нет";
-  const dd = `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`;
-  const tm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  return `${dd} ${tm} МСК`;
+  const w = mskWall(d);
+  return `${pad2(w.d)}.${pad2(w.mo)} ${pad2(w.h)}:${pad2(w.min)} МСК`;
 }
 
 function isRecheck(mode: string) {
@@ -84,6 +86,8 @@ function DraftForm({
   const [days, setDays] = useState<number[]>([1]);
   const [every, setEvery] = useState(6);
   const [unit, setUnit] = useState<PlanUnit>("month");
+  const [nth, setNth] = useState(1);
+  const [nthDay, setNthDay] = useState(1);
   const [date, setDate] = useState("");
   const [at, setAt] = useState("04:00");
   const [recheckDays, setRecheckDays] = useState(7);
@@ -93,9 +97,15 @@ function DraftForm({
   function when(): HistoryWhen {
     if (kind === "weekly") return { kind: "weekly", days };
     if (kind === "interval") return { kind: "interval", every, unit };
+    if (kind === "nthWeekday") return { kind: "nthWeekday", n: nth, day: nthDay };
     if (kind === "ymd") return { kind: "ymd", date };
     return { kind: "daily" };
   }
+
+  const canSave =
+    Boolean(at) &&
+    (kind !== "weekly" || days.length > 0) &&
+    (kind !== "ymd" || Boolean(date));
 
   return (
     <div className="mt-3 rounded-2xl bg-surface-2 p-4 ring-1 ring-black/8">
@@ -133,6 +143,9 @@ function DraftForm({
         </Chip>
         <Chip on={kind === "interval"} onClick={() => setKind("interval")}>
           Каждые N
+        </Chip>
+        <Chip on={kind === "nthWeekday"} onClick={() => setKind("nthWeekday")}>
+          N-й день месяца
         </Chip>
         <Chip on={kind === "ymd"} onClick={() => setKind("ymd")}>
           Дата
@@ -172,6 +185,34 @@ function DraftForm({
             <option value="month">месяцев</option>
           </select>
           <span className="text-[0.75rem] text-muted">полгода — 6 месяцев</span>
+        </div>
+      ) : null}
+      {kind === "nthWeekday" ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <select
+            className="h-9 rounded-full bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
+            value={nth}
+            onChange={(e) => setNth(Number(e.target.value))}
+          >
+            <option value={1}>1-й</option>
+            <option value={2}>2-й</option>
+            <option value={3}>3-й</option>
+            <option value={4}>4-й</option>
+            <option value={5}>5-й</option>
+            <option value={-1}>последний</option>
+          </select>
+          <select
+            className="h-9 rounded-full bg-white px-3 text-sm font-semibold ring-1 ring-black/8"
+            value={nthDay}
+            onChange={(e) => setNthDay(Number(e.target.value))}
+          >
+            {DAYS.map((d) => (
+              <option key={d.n} value={d.n}>
+                {d.t}
+              </option>
+            ))}
+          </select>
+          <span className="text-[0.75rem] text-muted">месяца</span>
         </div>
       ) : null}
       {kind === "ymd" ? (
@@ -230,7 +271,7 @@ function DraftForm({
         </button>
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || !canSave}
           className="h-9 rounded-full bg-black px-4 text-sm font-semibold text-white disabled:opacity-50"
           onClick={() =>
             onSave({
@@ -366,6 +407,10 @@ export function HistoryPlanPanel({
             {isRecheck(r.mode) ? (
               <span className="h-7 rounded-full bg-sky-50 px-2.5 text-[0.72rem] font-semibold leading-7">
                 {PLAN_RECHECK_OPTS.find((o) => o.days === r.recheckDays)?.label || `± ${r.recheckDays}`}
+              </span>
+            ) : r.mode === "people" || r.mode === "people-slow" || r.mode === "balance" ? (
+              <span className="h-7 rounded-full bg-sky-50 px-2.5 text-[0.72rem] font-semibold leading-7">
+                {PLAN_FROM_OPTS.find((o) => o.id === r.dateFromId)?.label || r.dateFromId}
               </span>
             ) : null}
             <span className="h-7 rounded-full bg-surface-2 px-2.5 text-[0.72rem] font-semibold leading-7">{r.study === "2" ? "Архив" : "Сейчас ходят"}</span>

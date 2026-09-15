@@ -68,15 +68,56 @@ export const POLICY_FACTORY: CrmSyncPolicy = { planEnabled: false, plan: [] };
 
 export const PLAN_DUE_MS = 36 * 60 * 60 * 1000;
 export const PLAN_SLOT_MIN = 15;
+export const PLAN_TZ = "Europe/Moscow";
+const MSK_OFFSET_H = 3;
 
 const MODE_IDS = new Set<string>(HISTORY_PLAN_MODES.map((m) => m.id));
+const DOW: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
 
 export function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
+export type MskWall = { y: number; mo: number; d: number; h: number; min: number; dow: number };
+
+export function mskWall(now = new Date()): MskWall {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: PLAN_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    weekday: "short",
+    hourCycle: "h23",
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(now).map((p) => [p.type, p.value]));
+  return {
+    y: Number(parts.year),
+    mo: Number(parts.month),
+    d: Number(parts.day),
+    h: Number(parts.hour),
+    min: Number(parts.minute),
+    dow: DOW[parts.weekday] || 1,
+  };
+}
+
+/** Стена МСК → UTC. С 2014 МСК = UTC+3, без летнего. */
+export function fromMsk(y: number, mo: number, d: number, h: number, min: number): Date {
+  return new Date(Date.UTC(y, mo - 1, d, h - MSK_OFFSET_H, min, 0, 0));
+}
+
+function monthLen(y: number, mo: number) {
+  return new Date(Date.UTC(y, mo, 0)).getUTCDate();
+}
+
+function shiftDays(y: number, mo: number, d: number, days: number): MskWall {
+  return mskWall(new Date(Date.UTC(y, mo - 1, d + days, 12, 0, 0)));
+}
+
 export function ymdOf(d: Date) {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const w = mskWall(d);
+  return `${w.y}-${pad2(w.mo)}-${pad2(w.d)}`;
 }
 
 export function clampPlanAt(raw: unknown): string {
@@ -95,8 +136,7 @@ export function parsePlanAt(at: string): { h: number; m: number } {
 }
 
 export function weekdayMon1(d: Date) {
-  const n = d.getDay();
-  return n === 0 ? 7 : n;
+  return mskWall(d).dow;
 }
 
 export function planModeOf(raw: unknown): HistoryPlanMode {
@@ -195,14 +235,16 @@ export function canSavePolicy(p: CrmSyncPolicy): { ok: true } | { ok: false; err
 export function planDateFrom(id: string, now = new Date()): string {
   if (id === "2015") return "2015-01-01";
   const years = id === "1" ? 1 : id === "3" ? 3 : 7;
-  const d = new Date(now.getFullYear() - years, now.getMonth(), now.getDate());
-  return ymdOf(d);
+  const w = mskWall(now);
+  const y = w.y - years;
+  const d = Math.min(w.d, monthLen(y, w.mo));
+  return `${y}-${pad2(w.mo)}-${pad2(d)}`;
 }
 
 export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
   const meta = planModeMeta(rule.mode);
   const balance = rule.mode === "balance";
-  const needFrom = rule.mode === "people" || rule.mode === "balance";
+  const needFrom = rule.mode === "people" || rule.mode === "people-slow" || rule.mode === "balance";
   return {
     mode: (balance ? "people" : rule.mode) as HistoryPlanMode | "people",
     kind: balance ? "balance" : "students",
@@ -216,31 +258,54 @@ export function planRuleToJob(rule: HistorySchedule, now = new Date()) {
 
 export function slotOpen(now: Date, at: string) {
   const { h, m } = parsePlanAt(at);
-  if (now.getHours() !== h) return false;
-  const min = now.getMinutes();
-  return min >= m && min < m + PLAN_SLOT_MIN;
+  const w = mskWall(now);
+  if (w.h !== h) return false;
+  return w.min >= m && w.min < m + PLAN_SLOT_MIN;
 }
 
-function intervalMs(every: number, unit: PlanUnit) {
-  if (unit === "day") return every * 86400000;
-  if (unit === "week") return every * 7 * 86400000;
-  return every * 30 * 86400000;
+/** После времени слота по МСК в этот календарный день. */
+export function slotReached(now: Date, at: string) {
+  const { h, m } = parsePlanAt(at);
+  const w = mskWall(now);
+  return w.h * 60 + w.min >= h * 60 + m;
+}
+
+function addInterval(from: Date, every: number, unit: PlanUnit, at: string): Date {
+  const { h, m } = parsePlanAt(at);
+  const w = mskWall(from);
+  if (unit === "day") {
+    const day = shiftDays(w.y, w.mo, w.d, every);
+    return fromMsk(day.y, day.mo, day.d, h, m);
+  }
+  if (unit === "week") {
+    const day = shiftDays(w.y, w.mo, w.d, every * 7);
+    return fromMsk(day.y, day.mo, day.d, h, m);
+  }
+  let mo = w.mo + every;
+  let y = w.y;
+  while (mo > 12) {
+    mo -= 12;
+    y += 1;
+  }
+  const d = Math.min(w.d, monthLen(y, mo));
+  return fromMsk(y, mo, d, h, m);
 }
 
 function nthWeekdayDate(now: Date, n: number, day: number): string {
-  const y = now.getFullYear();
-  const mo = now.getMonth();
+  const w = mskWall(now);
+  const y = w.y;
+  const mo = w.mo;
   if (n === -1) {
-    const last = new Date(y, mo + 1, 0);
-    const back = (weekdayMon1(last) - day + 7) % 7;
-    last.setDate(last.getDate() - back);
-    return ymdOf(last);
+    const lastN = monthLen(y, mo);
+    const last = fromMsk(y, mo, lastN, 12, 0);
+    const back = (mskWall(last).dow - day + 7) % 7;
+    return `${y}-${pad2(mo)}-${pad2(lastN - back)}`;
   }
-  const first = new Date(y, mo, 1);
-  const add = (day - weekdayMon1(first) + 7) % 7;
-  const d = new Date(y, mo, 1 + add + (n - 1) * 7);
-  if (d.getMonth() !== mo) return "";
-  return ymdOf(d);
+  const first = fromMsk(y, mo, 1, 12, 0);
+  const add = (day - mskWall(first).dow + 7) % 7;
+  const d = 1 + add + (n - 1) * 7;
+  if (d > monthLen(y, mo)) return "";
+  return `${y}-${pad2(mo)}-${pad2(d)}`;
 }
 
 export function whenHits(when: HistoryWhen, now: Date): boolean {
@@ -252,14 +317,60 @@ export function whenHits(when: HistoryWhen, now: Date): boolean {
   return false;
 }
 
-function firedThisOccurrence(rule: HistorySchedule, now: Date): boolean {
-  if (!rule.lastFiredAt) return false;
-  const t = Date.parse(rule.lastFiredAt);
-  if (!Number.isFinite(t)) return false;
-  if (rule.when.kind === "interval") {
-    return now.getTime() - t < intervalMs(rule.when.every, rule.when.unit);
+function lastOccurrence(rule: HistorySchedule, now: Date): Date | null {
+  const { h, m } = parsePlanAt(rule.at);
+  const w = mskWall(now);
+  if (rule.when.kind === "daily") {
+    const today = fromMsk(w.y, w.mo, w.d, h, m);
+    if (now.getTime() >= today.getTime()) return today;
+    const yest = shiftDays(w.y, w.mo, w.d, -1);
+    return fromMsk(yest.y, yest.mo, yest.d, h, m);
   }
-  return ymdOf(new Date(t)) === ymdOf(now);
+  if (rule.when.kind === "weekly") {
+    if (!rule.when.days.length) return null;
+    for (let i = 0; i <= 8; i += 1) {
+      const day = shiftDays(w.y, w.mo, w.d, -i);
+      const slot = fromMsk(day.y, day.mo, day.d, h, m);
+      if (slot.getTime() > now.getTime()) continue;
+      if (rule.when.days.includes(day.dow)) return slot;
+    }
+    return null;
+  }
+  if (rule.when.kind === "ymd") {
+    if (!rule.when.date) return null;
+    const [y, mo, da] = rule.when.date.split("-").map(Number);
+    const slot = fromMsk(y, mo, da, h, m);
+    return slot.getTime() <= now.getTime() ? slot : null;
+  }
+  if (rule.when.kind === "nthWeekday") {
+    const ymd = nthWeekdayDate(now, rule.when.n, rule.when.day);
+    if (ymd) {
+      const [y, mo, da] = ymd.split("-").map(Number);
+      const slot = fromMsk(y, mo, da, h, m);
+      if (slot.getTime() <= now.getTime()) return slot;
+    }
+    const prev = shiftDays(w.y, w.mo, 1, -15);
+    const nymd = nthWeekdayDate(fromMsk(prev.y, prev.mo, 15, 12, 0), rule.when.n, rule.when.day);
+    if (!nymd) return null;
+    const [y, mo, da] = nymd.split("-").map(Number);
+    const slot = fromMsk(y, mo, da, h, m);
+    return slot.getTime() <= now.getTime() ? slot : null;
+  }
+  if (rule.when.kind === "interval") {
+    if (rule.lastFiredAt) {
+      const t = Date.parse(rule.lastFiredAt);
+      if (Number.isFinite(t)) {
+        const nxt = addInterval(new Date(t), rule.when.every, rule.when.unit, rule.at);
+        if (nxt.getTime() <= now.getTime()) return nxt;
+        return null;
+      }
+    }
+    const today = fromMsk(w.y, w.mo, w.d, h, m);
+    if (now.getTime() >= today.getTime()) return today;
+    const yest = shiftDays(w.y, w.mo, w.d, -1);
+    return fromMsk(yest.y, yest.mo, yest.d, h, m);
+  }
+  return null;
 }
 
 export function markPlanDue(policy: CrmSyncPolicy, now = new Date()): CrmSyncPolicy {
@@ -280,8 +391,15 @@ export function markPlanDue(policy: CrmSyncPolicy, now = new Date()): CrmSyncPol
         }
         return r;
       }
-      if (!whenHits(r.when, now) || !slotOpen(now, r.at)) return r;
-      if (firedThisOccurrence(r, now)) return r;
+      if (!r.lastFiredAt) {
+        if (!whenHits(r.when, now) || !slotReached(now, r.at)) return r;
+        return { ...r, dueAt: now.toISOString(), lastSkip: "" };
+      }
+      const occ = lastOccurrence(r, now);
+      if (!occ) return r;
+      if (now.getTime() - occ.getTime() > PLAN_DUE_MS) return r;
+      const fired = Date.parse(r.lastFiredAt);
+      if (Number.isFinite(fired) && fired >= occ.getTime() - 1000) return r;
       return { ...r, dueAt: now.toISOString(), lastSkip: "" };
     }),
   };
@@ -308,49 +426,85 @@ export function stampPlanSkip(policy: CrmSyncPolicy, reason: string): CrmSyncPol
   };
 }
 
+/** Экран не затирает due/lastFiredAt, которые поставил воркер. */
+export function mergePolicyKeepRun(disk: CrmSyncPolicy, incoming: CrmSyncPolicy): CrmSyncPolicy {
+  const byId = new Map(disk.plan.map((r) => [r.id, r]));
+  return {
+    planEnabled: incoming.planEnabled,
+    plan: incoming.plan.map((s) => {
+      const prev = byId.get(s.id);
+      if (!prev) return s;
+      return {
+        ...s,
+        dueAt: prev.dueAt,
+        lastFiredAt: prev.lastFiredAt,
+        lastJobId: prev.lastJobId,
+        lastSkip: prev.lastSkip,
+      };
+    }),
+  };
+}
+
+/** Старт автомата: новая работа — fired; чужой джоб — hands; пустой прогон — empty (тоже штамп, не крутить каждую секунду). */
+export function planFireDecision(
+  before: { id?: string; running?: boolean; stop?: boolean },
+  started: { id?: string; running?: boolean },
+): "fired" | "hands" | "empty" {
+  const beforeId = String(before.id || "");
+  const startedId = String(started.id || "");
+  if (started.running && startedId && startedId !== beforeId) return "fired";
+  if (started.running) return "hands";
+  if (startedId && startedId !== beforeId) return "empty";
+  return "hands";
+}
+
 export function nextSlotAt(rule: HistorySchedule, now = new Date()): Date | null {
   const { h, m } = parsePlanAt(rule.at);
-  const atToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+  const w = mskWall(now);
+  const atToday = fromMsk(w.y, w.mo, w.d, h, m);
   const laterToday = atToday.getTime() > now.getTime();
   if (rule.when.kind === "daily") {
-    return laterToday ? atToday : new Date(atToday.getTime() + 86400000);
+    if (laterToday) return atToday;
+    const nxt = shiftDays(w.y, w.mo, w.d, 1);
+    return fromMsk(nxt.y, nxt.mo, nxt.d, h, m);
   }
   if (rule.when.kind === "weekly") {
     if (!rule.when.days.length) return null;
     for (let i = laterToday ? 0 : 1; i <= 7; i += 1) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i, h, m, 0, 0);
-      if (rule.when.days.includes(weekdayMon1(d))) return d;
+      const day = shiftDays(w.y, w.mo, w.d, i);
+      if (rule.when.days.includes(day.dow)) return fromMsk(day.y, day.mo, day.d, h, m);
     }
   }
   if (rule.when.kind === "ymd") {
     if (!rule.when.date) return null;
     const [y, mo, da] = rule.when.date.split("-").map(Number);
-    const d = new Date(y, mo - 1, da, h, m, 0, 0);
+    const d = fromMsk(y, mo, da, h, m);
     return d.getTime() >= now.getTime() ? d : null;
   }
   if (rule.when.kind === "nthWeekday") {
     const ymd = nthWeekdayDate(now, rule.when.n, rule.when.day);
     if (ymd) {
       const [y, mo, da] = ymd.split("-").map(Number);
-      const d = new Date(y, mo - 1, da, h, m, 0, 0);
+      const d = fromMsk(y, mo, da, h, m);
       if (d.getTime() >= now.getTime()) return d;
     }
-    const nextMo = new Date(now.getFullYear(), now.getMonth() + 1, 1, h, m, 0, 0);
-    const nymd = nthWeekdayDate(nextMo, rule.when.n, rule.when.day);
+    const nextMo = w.mo === 12 ? { y: w.y + 1, mo: 1 } : { y: w.y, mo: w.mo + 1 };
+    const nymd = nthWeekdayDate(fromMsk(nextMo.y, nextMo.mo, 15, 12, 0), rule.when.n, rule.when.day);
     if (!nymd) return null;
     const [y, mo, da] = nymd.split("-").map(Number);
-    return new Date(y, mo - 1, da, h, m, 0, 0);
+    return fromMsk(y, mo, da, h, m);
   }
   if (rule.when.kind === "interval") {
     if (rule.lastFiredAt) {
       const t = Date.parse(rule.lastFiredAt);
       if (Number.isFinite(t)) {
-        const nxt = new Date(t + intervalMs(rule.when.every, rule.when.unit));
-        nxt.setHours(h, m, 0, 0);
+        const nxt = addInterval(new Date(t), rule.when.every, rule.when.unit, rule.at);
         if (nxt.getTime() > now.getTime()) return nxt;
       }
     }
-    return laterToday ? atToday : new Date(atToday.getTime() + 86400000);
+    if (laterToday) return atToday;
+    const nxt = shiftDays(w.y, w.mo, w.d, 1);
+    return fromMsk(nxt.y, nxt.mo, nxt.d, h, m);
   }
   return null;
 }

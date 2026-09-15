@@ -5,7 +5,7 @@ import { historyLoadOne, historyPullKind } from "./crm-history-load.ts";
 import { journalChunks, clampGrain, type Grain } from "./crm-journal-periods.ts";
 import { clampRecheckDays, iceWindowOrNow, recheckWindowYmd } from "./crm-inbound-core.ts";
 import { loadSyncPolicy, saveSyncPolicy } from "./crm-sync-policy.ts";
-import { markPlanDue, pickDueRule, planRuleToJob, stampPlanFired, stampPlanSkip } from "./crm-sync-policy-core.ts";
+import { markPlanDue, pickDueRule, planFireDecision, planRuleToJob, stampPlanFired, stampPlanSkip } from "./crm-sync-policy-core.ts";
 import {
   emptyJournalJob,
   jobGapOf,
@@ -542,6 +542,7 @@ export function tickHistoryPlan(now = new Date()) {
   const rule = pickDueRule(pol);
   if (!rule) return;
   const opts = planRuleToJob(rule, now);
+  const before = job;
   const started = startJournalJob({
     mode: opts.mode as JournalJobMode,
     kind: opts.kind,
@@ -551,7 +552,16 @@ export function tickHistoryPlan(now = new Date()) {
     dateFrom: opts.dateFrom,
     archived: opts.archived,
   });
-  saveSyncPolicy(stampPlanFired(loadSyncPolicy(), rule.id, started.id || "", now));
+  const dec = planFireDecision(before, started);
+  const live = loadSyncPolicy();
+  if (dec === "hands") {
+    const skipped = stampPlanSkip(live, "hands");
+    if (JSON.stringify(skipped.plan.map((r) => r.lastSkip)) !== JSON.stringify(live.plan.map((r) => r.lastSkip))) {
+      saveSyncPolicy(skipped);
+    }
+    return;
+  }
+  saveSyncPolicy(stampPlanFired(live, rule.id, started.id || "", now));
 }
 
 export function startJournalJobWatch() {

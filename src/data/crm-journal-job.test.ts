@@ -379,6 +379,7 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /kickHistoryTick/);
     assert.match(job, /tickHistoryPlan/);
     assert.match(job, /markPlanDue/);
+    assert.match(job, /planFireDecision/);
     assert.match(job, /const moreCash = pullKind === "balance" && Boolean\(res.student\?\.paysMore\)/);
     assert.doesNotMatch(job, /moreCash = pullKind === "balance" && !live.recheck/);
     assert.match(job, /if \(moreCash\) \{[\s\S]*?return \{ done: false, gap: live.recheck \? jobGapOf\(live\) : 0 \}/);
@@ -396,6 +397,7 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /NODE_ENV === "test"/);
     assert.doesNotMatch(api, /startJournalJobWatch/);
     assert.doesNotMatch(api, /resumeJournalJob/);
+    assert.match(api, /keepRun: true/);
     assert.doesNotMatch(pack, /startJournalJobWatch/);
     assert.doesNotMatch(pack, /resumeJournalJob/);
     assert.match(pull, /resumeJournalJob\(\)/);

@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import {
   POLICY_FACTORY,
   canSavePolicy,
+  mergePolicyKeepRun,
   policyOf,
   type CrmSyncPolicy,
 } from "./crm-sync-policy-core.ts";
@@ -15,7 +16,9 @@ export {
   POLICY_FACTORY,
   canSavePolicy,
   emptyDraft,
+  mergePolicyKeepRun,
   nextSlotAt,
+  planFireDecision,
   planModeMeta,
   planRuleToJob,
   policyOf,
@@ -36,12 +39,16 @@ export function loadSyncPolicy(): CrmSyncPolicy {
   }
 }
 
-export function saveSyncPolicy(patch: Partial<CrmSyncPolicy> | CrmSyncPolicy): { ok: true; policy: CrmSyncPolicy } | { ok: false; error: string; policy: CrmSyncPolicy } {
+export function saveSyncPolicy(
+  patch: Partial<CrmSyncPolicy> | CrmSyncPolicy,
+  opts?: { keepRun?: boolean },
+): { ok: true; policy: CrmSyncPolicy } | { ok: false; error: string; policy: CrmSyncPolicy } {
   const cur = loadSyncPolicy();
-  const next = policyOf({
+  let next = policyOf({
     planEnabled: patch.planEnabled ?? cur.planEnabled,
     plan: Array.isArray(patch.plan) ? patch.plan : cur.plan,
   });
+  if (opts?.keepRun) next = mergePolicyKeepRun(cur, next);
   const gate = canSavePolicy(next);
   if (!gate.ok) return { ok: false, error: gate.error, policy: cur };
   const file = fileOf();

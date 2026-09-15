@@ -3047,7 +3047,7 @@ export const adminSchedule = createServerFn({ method: "POST" })
       const { saveSyncPolicy } = await import("./crm-sync-policy");
       const { logAdmin } = await import("./admin-settings");
       const raw = (data as { policy?: unknown }).policy;
-      const res = saveSyncPolicy(raw && typeof raw === "object" ? (raw as Parameters<typeof saveSyncPolicy>[0]) : {});
+      const res = saveSyncPolicy(raw && typeof raw === "object" ? (raw as Parameters<typeof saveSyncPolicy>[0]) : {}, { keepRun: true });
       if (res.ok) logAdmin(res.policy.planEnabled ? `Пульт синхронизации: автомат, расписаний ${res.policy.plan.length}` : "Пульт синхронизации: автомат выкл");
       return res;
     }

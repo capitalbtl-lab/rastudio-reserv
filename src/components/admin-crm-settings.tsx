@@ -2279,6 +2279,7 @@ export function AdminCrmSettings() {
     if (crmTab !== "history") return;
     let on = true;
     let wasRun = Boolean(journal?.job?.running) && !journal?.job?.stop;
+    let beats = 0;
     const tick = async () => {
       if (!on) return;
       try {
@@ -2298,6 +2299,8 @@ export function AdminCrmSettings() {
         const live = Boolean(res.job?.running) && !res.job?.stop;
         if (wasRun && !live) void loadJournal();
         wasRun = live;
+        beats += 1;
+        if (beats % 4 === 0) void loadSyncPolicy();
       } catch {
         /* фон на сервере, экран догонит следующим тактом */
       }
