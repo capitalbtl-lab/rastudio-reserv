@@ -20,8 +20,8 @@ export const PAY_INBOUND_PAGE = 50;
 export const PAY_CUSTOMER_PAGE = 500;
 export const PAY_INBOUND_RUN = 8;
 export const PAY_INBOUND_BUDGET_MS = 35000;
-/** Типы, которые Alfa не отдаёт в pay/index без pay_type_id. 2 — товар (лето). */
-export const PAY_INBOUND_EXTRA_TYPES = [2, 3, 5, 6, 9] as const;
+/** Типы, которые Alfa не отдаёт в pay/index без pay_type_id. Товар (2 и 9) не берём. */
+export const PAY_INBOUND_EXTRA_TYPES = [3, 5, 6] as const;
 export const PAY_STORE_CAP = 40000;
 export const PAY_FILL_BRANCHES = [1, 2, 3, 4] as const;
 
@@ -132,6 +132,23 @@ export function isGoodsArticle(item: Record<string, unknown>) {
   if (Number(item.commodity_id || item.commodityId)) return true;
   const name = String(item.pay_item || item.pay_item_name || item.item_name || item.article || item.category || "").toLowerCase();
   return /физическ/.test(name) && /товар/.test(name);
+}
+
+/** Товар и возврат товара — не на диск и не в остаток. Ломает шапку уроков. */
+export function isGoodsPayRow(row: Pick<PayRow, "kind" | "payTypeId" | "refundOfGoods">) {
+  if (row.kind === "product") return true;
+  if (row.kind === "refund" && row.refundOfGoods) return true;
+  const t = Number(row.payTypeId) || 0;
+  return t === 2 || t === 9;
+}
+
+export function skipAlfaGoodsPay(item: Record<string, unknown>) {
+  const typeId = alfaPayTypeIdOf(item);
+  if (typeId === 2 || typeId === 9) return true;
+  const kind = kindFromAlfaPay(item);
+  if (kind === "product") return true;
+  if (kind === "refund" && isGoodsArticle(item)) return true;
+  return isGoodsArticle(item);
 }
 
 export function kindFromAlfaPay(item: Record<string, unknown>): PayKind {
@@ -335,7 +352,7 @@ export function collapsePayRows(rows: PayRow[]): PayRow[] {
     }
     rest.push(r);
   }
-  return [...byId.values(), ...rest];
+  return [...byId.values(), ...rest].filter((r) => !isGoodsPayRow(r));
 }
 
 /** Очередь create/delete старше входа. Удалённые с диска Alfa не воскрешает. */

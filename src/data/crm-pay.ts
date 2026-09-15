@@ -33,6 +33,8 @@ import {
   remainderClose,
   alfaPayTypeIdOf,
   isGoodsArticle,
+  skipAlfaGoodsPay,
+  isGoodsPayRow,
   OPENING_NOTE,
   isOpeningRow,
   PAY_POLL_MAX_PER_HOUR,
@@ -194,7 +196,7 @@ export function paysOf(customerId: number) {
   const id = Number(customerId) || 0;
   if (!id) return [] as PayRow[];
   load();
-  return byCustomer?.get(id) || [];
+  return byCustomer?.get(id)?.filter((x) => !isGoodsPayRow(x)) || [];
 }
 
 export function cardPays(customerId: number) {
@@ -634,6 +636,7 @@ export function packPay(item: Record<string, unknown>, customerId: number, branc
   const cid = payCustomerIdOf(item, customerId);
   const kind = kindFromAlfaPay(item);
   const typeId = alfaPayTypeIdOf(item);
+  if (skipAlfaGoodsPay(item) || kind === "product" || typeId === 2 || typeId === 9) return null;
   return {
     id: id || 0,
     customerId: cid,
@@ -1107,11 +1110,9 @@ export async function pollPaysFromAlfa(opts?: { via?: "auto" | "button" }) {
     try {
       const raw = [
         ...(await pullPages(branchId, {}, windowPages)),
-        ...(await pullPages(branchId, { pay_type_id: 2 }, 2)),
         ...(await pullPages(branchId, { pay_type_id: 3 }, 2)),
         ...(await pullPages(branchId, { pay_type_id: 5 }, 2)),
         ...(await pullPages(branchId, { pay_type_id: 6 }, 2)),
-        ...(await pullPages(branchId, { pay_type_id: 9 }, 2)),
       ];
       const seen = new Set<number>();
       const unique: Record<string, unknown>[] = [];
