@@ -63,7 +63,7 @@ export const DISK_RULES: DiskRule[] = [
     stage: 8,
     title: "Деньги",
     field: "pays[].id + customerId",
-    truth: "Журнал платежей на диске. Ключи: pays[].id, customerId, cttId, tariffId. Шапка «Клиенты»: extras.balance (шапка Alfa), если живой ctt и нет pending pay. Админка только что писала (pay.create/update/delete в очереди или свой id) — лента, не старая шапка. Нет живого ctt — лента, если журнал полный; фрагмент кассы не перебивает extras.balance. Нет строк — снимок extras.balance. Alfa касса — очередь pay.create/pay.delete, автоопрос каждые 15 мин за 3 дня и «Обновить» карточки.",
+    truth: "Журнал платежей на диске. Ключи: pays[].id, customerId, cttId, tariffId. Шапка «Клиенты»: extras.balance = customer.balance с Alfa. Пишет шаг 5 (загрузчик сверки) и «Обновить» карточки. Касса extras.balance не трогает. Rest абонемента — строка, не шапка. Pending pay.create/update/delete — лента, старую шапку не затираем. Нет живого ctt — лента, если журнал полный. Alfa касса — очередь pay.create/pay.delete, автоопрос каждые 15 мин за 3 дня и «Обновить» карточки.",
     not: "live customer.balance на F5, paid_till, живой абонемент как касса, poll каждую минуту, обход всех customerId",
   },
   {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { classifyAudit, auditOnRight, moneyClose, alfaHeaderOf } from "./crm-balance-audit-core.ts";
+import { classifyAudit, auditOnRight, moneyClose, alfaHeaderOf, alfaBalancePresent, shouldStampAlfaHeader } from "./crm-balance-audit-core.ts";
 
 describe("шаг 4 сверка остатка", () => {
   it("совпало ±1 — ok справа", () => {
@@ -45,6 +45,14 @@ describe("шаг 4 сверка остатка", () => {
     assert.equal(alfaHeaderOf({ balance: -2125 }, 0, 2), -2125);
     assert.equal(alfaHeaderOf({ balance: 0 }, 8000, 1), 0);
     assert.equal(alfaHeaderOf({ balance: "-987.5" }, 0, 1), -987.5);
+    assert.equal(alfaBalancePresent({ balance: 1975 }), true);
+    assert.equal(alfaBalancePresent({ balance: 0 }), true);
+    assert.equal(alfaBalancePresent({ balance: "" }), false);
+    assert.equal(alfaBalancePresent({}), false);
+    assert.equal(shouldStampAlfaHeader({ alfaOk: true, headerOk: true, pendingPay: false }), true);
+    assert.equal(shouldStampAlfaHeader({ alfaOk: true, headerOk: true, pendingPay: true }), false);
+    assert.equal(shouldStampAlfaHeader({ alfaOk: false, headerOk: true, pendingPay: false }), false);
+    assert.equal(shouldStampAlfaHeader({ alfaOk: true, headerOk: false, pendingPay: false }), false);
     assert.equal(alfaHeaderOf({}, -987, 1), -987);
   });
 
@@ -234,12 +242,17 @@ describe("шаг 4 сверка остатка", () => {
     assert.ok(codes.includes("src"));
   });
 
-  it("модуль не пишет в Alfa и не подгоняет extras.balance", () => {
+  it("модуль не пишет в Alfa и не подгоняет extras.balance кассой", () => {
     const src = readFileSync(new URL("./crm-balance-audit.ts", import.meta.url), "utf8");
     assert.doesNotMatch(src, /enqueueExport/);
     assert.doesNotMatch(src, /customer\.update/);
-    assert.doesNotMatch(src, /extras:\s*\{[^}]*balance:\s*String\(shown/);
     assert.doesNotMatch(src, /applyCrmCustomer/);
+    assert.doesNotMatch(src, /balance: String\(first\.cash\)/);
+    assert.doesNotMatch(src, /balance: String\(after\.cash\)/);
+    assert.match(src, /stampDossierAlfaBalance/);
+    assert.match(src, /shouldStampAlfaHeader/);
+    assert.match(src, /shown\.alfa/);
+    assert.match(src, /pay\.create/);
     assert.match(src, /skipHoleInbound/);
     assert.match(src, /inboundCustomerLessons/);
     assert.match(src, /full: true/);

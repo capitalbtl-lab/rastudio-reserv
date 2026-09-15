@@ -1,12 +1,12 @@
-/** Шаг 4: сверка остатка с Alfa. Только чтение CRM. extras.balance не подгоняем. */
+/** Шаг 5: сверка остатка. extras.balance — шапка Alfa (этот загрузчик), не формула кассы. */
 
 import { writeoffSumOf, uniqueBranches } from "./crm-ledger-core";
 import { balanceOf, liveCttOf } from "./crm-pay-core";
 import { tariffRowLive } from "./crm-tariff-row";
-import { classifyAudit, moneyClose, auditOnRight, alfaHeaderOf, type AuditCode } from "./crm-balance-audit-core";
+import { classifyAudit, moneyClose, auditOnRight, alfaHeaderOf, alfaBalancePresent, shouldStampAlfaHeader, type AuditCode } from "./crm-balance-audit-core";
 
 export type { AuditCode } from "./crm-balance-audit-core";
-export { classifyAudit, moneyClose, auditOnRight, alfaHeaderOf } from "./crm-balance-audit-core";
+export { classifyAudit, moneyClose, auditOnRight, alfaHeaderOf, alfaBalancePresent, shouldStampAlfaHeader } from "./crm-balance-audit-core";
 
 export type AuditHit = {
   cid: number;
@@ -104,7 +104,7 @@ async function alfaShow(branch: number, cid: number) {
       continue;
     }
   }
-  if (!found) return { ok: false as const, alfa: 0, cttRest: 0, liveCtt: false, branch: used, switched, token: t, request };
+  if (!found) return { ok: false as const, alfa: 0, cttRest: 0, liveCtt: false, headerOk: false, branch: used, switched, token: t, request };
   let rest = 0;
   let live = 0;
   try {
@@ -120,6 +120,7 @@ async function alfaShow(branch: number, cid: number) {
   return {
     ok: true as const,
     alfa: alfaHeaderOf(found, rest, live),
+    headerOk: alfaBalancePresent(found),
     cttRest: rest,
     liveCtt: live > 0,
     branch: used,
@@ -169,6 +170,14 @@ export async function auditOne(cid: number, branchId: number) {
     };
   }
   const shown = await alfaShow(branch, id);
+  if (shouldStampAlfaHeader({
+    alfaOk: shown.ok,
+    headerOk: Boolean(shown.ok && shown.headerOk),
+    pendingPay: (await import("./crm-export-queue")).pendingExportIds(["pay.create", "pay.update", "pay.delete"]).has(id),
+  })) {
+    const { stampDossierAlfaBalance } = await import("./dossiers");
+    stampDossierAlfaBalance(id, shown.alfa, shown.branch);
+  }
   let repaired = false;
   let lessonsAlfa = Number((await import("./crm-customer-sync")).customerSyncOf(id).lessonsAlfa) || first.lessonsDisk;
   const empty = (Number(first.clients) || 0) === 0 && !first.paysComplete && first.lessonsDisk === 0 && !first.liveCtt && !shown.liveCtt;

@@ -841,6 +841,22 @@ export function stampDossierCtt(
   return live.length;
 }
 
+/** Шапка «Клиенты»: только customer.balance с Alfa. Касса и rest абонемента сюда не пишут. */
+export function stampDossierAlfaBalance(customerId: number, balance: number, branchId?: number) {
+  const id = Number(customerId) || 0;
+  if (!id || !Number.isFinite(Number(balance))) return false;
+  if (!findDossier({ crmId: id })) return false;
+  upsertDossier({
+    crmId: id,
+    branchId,
+    extras: { balance: String(balance) },
+    source: "alfacrm",
+    crmWins: true,
+    quiet: true,
+  });
+  return true;
+}
+
 export function stampDossierRegular(
   customerId: number,
   rows: {

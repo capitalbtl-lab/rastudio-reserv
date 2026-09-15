@@ -29,7 +29,19 @@ export function auditOnRight(codes: AuditCode[]) {
   return !codes.some((c) => c !== "ok" && c !== "dup" && c !== "branch" && c !== "status" && c !== "corr-goods" && c !== "wo0");
 }
 
-/** Шапка карточки Alfa = customer.balance. Rest абонемента — не эталон. */
+/** Живая шапка customer.balance, не rest абонемента. */
+export function alfaBalancePresent(customer: Record<string, unknown> | null | undefined) {
+  if (!customer) return false;
+  const raw = customer.balance;
+  if (raw == null || raw === "") return false;
+  return Number.isFinite(Number(raw));
+}
+
+/** Шаг 5 пишет extras.balance только с шапки Alfa. Не касса, не rest, не pending pay. */
+export function shouldStampAlfaHeader(p: { alfaOk: boolean; headerOk: boolean; pendingPay: boolean }) {
+  return Boolean(p.alfaOk && p.headerOk && !p.pendingPay);
+}
+
 export function alfaHeaderOf(customer: Record<string, unknown> | null | undefined, cttRest = 0, liveCount = 0) {
   if (!customer) return 0;
   const raw = customer.balance;
