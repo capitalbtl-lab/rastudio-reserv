@@ -180,7 +180,10 @@ describe("касса список", () => {
     assert.match(doneBlock, /done: true/);
     assert.doesNotMatch(doneBlock, /remainderClose\(cash, cash/);
     assert.doesNotMatch(doneBlock, /markPayJournalIncomplete/);
-    assert.match(inbound, /payCustomerIdOf\(it, 0\) === customerId/);
+    assert.match(inbound, /if \(cur && !cur.done\)/);
+    assert.doesNotMatch(inbound, /cur && !opts\?\.force && !cur.done/);
+    assert.match(inbound, /extraResume = Boolean\(Number\(cur\?\.extra\) && !cur\?\.done\)/);
+    assert.doesNotMatch(inbound, /!opts\?\.force && Number\(cur\?\.extra\)/);
     assert.match(inbound, /ran \+= 1/);
     assert.doesNotMatch(inbound, /date_from/);
     assert.match(inbound, /received >= total/);

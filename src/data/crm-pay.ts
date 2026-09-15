@@ -731,7 +731,7 @@ export async function inboundCustomerPays(
   if (!opts?.force && payFillScanned(customerId) && !have) {
     delete store.payFill[String(customerId)];
   }
-  if (cur && !opts?.force && !cur.done) {
+  if (cur && !cur.done) {
     const i = branches.indexOf(cur.bid);
     bidIdx = i >= 0 ? i : 0;
     page = Number(cur.page) || 0;
@@ -746,7 +746,7 @@ export async function inboundCustomerPays(
   const started = Date.now();
   const overBudget = () => Date.now() - started > PAY_INBOUND_BUDGET_MS;
   const pageSize = PAY_CUSTOMER_PAGE;
-  const extraResume = Boolean(!opts?.force && Number(cur?.extra) && !cur?.done);
+  const extraResume = Boolean(Number(cur?.extra) && !cur?.done);
   if (!extraResume) {
   outer: for (let b = bidIdx; b < branches.length; b += 1) {
     const bid = branches[b];

@@ -249,7 +249,8 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /Alfa не ответила, нажмите снова/);
     assert.match(ui, /paysMore: Boolean\(hit\.paysMore\)/);
     assert.doesNotMatch(ui, /pays: Boolean\(hit\.pays\)/);
-    assert.match(pull, /import \{ payCustomerFilled, payFillPending, payFillScanned, payFillEmpty, clearPayFill, paysOf \} from "\.\/crm-pay"/);
+    assert.match(pull, /import \{ payCustomerFilled, payFillPending, payFillScanned, payFillEmpty, paysOf \} from "\.\/crm-pay"/);
+    assert.doesNotMatch(pull, /clearPayFill\(wanted\)/);
     assert.match(pull, /paysMore: Boolean\(balance && \(Boolean\(payFail\) \|\| payFillPending\(cid\)\)\)/);
     assert.match(pull, /paysScanned: payFillScanned\(p.cid\)|paysScanned/);
     assert.match(pull, /forcePay = Boolean\(recheck\) && !pendingPay/);

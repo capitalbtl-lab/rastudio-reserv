@@ -11,7 +11,7 @@ import { loadScheduleMap } from "./schedule-map";
 import { listDossierCrm, findDossier, dossiersInGroup, overlayAdminGroups } from "./dossiers";
 import { loadGroupCard, saveGroupCard, loadCustomerCalendar, fanOutLessonWriteoffs, hydrateGroupCardsFromMonolith } from "./group-cards";
 import { customerSyncOf, stampCustomerSync, studentAlfaOwner, lessonsJournalReady, lessonsCountShort, lessonsCountExtra, lessonsStampShort, lessonsStampExtra, stampLessonSetGap, waitLockStudentAlfa, unlockStudentAlfa, studentCensusRange, nextLessonWindowDays } from "./crm-customer-sync";
-import { payCustomerFilled, payFillPending, payFillScanned, payFillEmpty, clearPayFill, paysOf } from "./crm-pay";
+import { payCustomerFilled, payFillPending, payFillScanned, payFillEmpty, paysOf } from "./crm-pay";
 import { balanceOf } from "./crm-pay-core";
 import { writeoffSumOf } from "./crm-ledger-core";
 import { journalPeriods, journalChunks, spanOf, inPeriod, groupAge, chunkOverlapsLife, lifeLabel, parseLessonDate, chunkDone, pulledPeriodKeys, clampGrain, earlierRu, laterRu, type Grain } from "./crm-journal-periods";
@@ -2292,7 +2292,6 @@ export async function journalPull(opts: {
       };
     }
     const balance = kind === "balance";
-    if (balance && wanted && !payCustomerFilled(wanted)) clearPayFill(wanted);
     const row = await pullOneStudent(one.cid, one.branchId, balance, Boolean(opts.recheck), String(opts.dateFrom || "").trim(), Boolean(opts.slowFill), clampRecheckDays(opts.recheckDays));
     if (row.blocked) {
       return {
