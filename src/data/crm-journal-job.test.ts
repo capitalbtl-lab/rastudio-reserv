@@ -331,6 +331,7 @@ describe("фон истории из Alfa", () => {
     assert.match(job, /kickHistoryTick/);
     assert.match(job, /const moreCash = pullKind === "balance" && Boolean\(res.student\?\.paysMore\)/);
     assert.doesNotMatch(job, /moreCash = pullKind === "balance" && !live.recheck/);
+    assert.match(job, /if \(moreCash\) \{[\s\S]*?return \{ done: false, gap: 0 \}/);
     assert.match(job, /if \(!isHistoryWorker\(\)\) return/);
     assert.match(job, /resumeJournalJobFromDisk/);
     assert.match(job, /resumeStalledRecheck/);

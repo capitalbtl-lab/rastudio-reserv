@@ -763,6 +763,7 @@ export async function inboundCustomerPays(
         break outer;
       }
       try {
+        console.warn(`pay inbound cid=${customerId} branch=${bid} page=${p}`);
         const json = await request(`/v2api/${bid}/pay/index`, {
           page: p,
           pageSize,
@@ -780,26 +781,7 @@ export async function inboundCustomerPays(
         if (!mine && pack.items.length) lastShort = true;
         fillBid = bid;
         fillPage = p;
-        if (lastShort) {
-          if (!overBudget()) {
-            for (const typeId of [5, 6, 9]) {
-              if (ran >= maxRun || overBudget()) break;
-              try {
-                const extra = await request(
-                  `/v2api/${bid}/pay/index`,
-                  { page: 0, pageSize, customer_id: customerId, pay_type_id: typeId, date_from, date_to },
-                  token,
-                );
-                const packT = crmUnwrapIndex(extra);
-                raw.push(...packT.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || bid) || bid })));
-                ran += 1;
-              } catch {
-                /* типы филиала — не валим весь прогон */
-              }
-            }
-          }
-          break;
-        }
+        if (lastShort) break;
         p += 1;
       } catch {
         failed = true;
@@ -810,6 +792,25 @@ export async function inboundCustomerPays(
       }
     }
     if (!failed && b === branches.length - 1 && lastShort) done = true;
+  }
+  if (!failed && !overBudget()) {
+    for (const extraBid of branches) {
+      for (const typeId of [5, 6, 9]) {
+        if (ran >= maxRun || overBudget()) break;
+        try {
+          const extra = await request(
+            `/v2api/${extraBid}/pay/index`,
+            { page: 0, pageSize, customer_id: customerId, pay_type_id: typeId, date_from, date_to },
+            token,
+          );
+          const packT = crmUnwrapIndex(extra);
+          raw.push(...packT.items.map((it) => ({ ...it, branch_id: Number(it.branch_id || extraBid) || extraBid })));
+          ran += 1;
+        } catch {
+          /* типы филиала — не валим весь прогон */
+        }
+      }
+    }
   }
   const known: number[] = [];
   try {

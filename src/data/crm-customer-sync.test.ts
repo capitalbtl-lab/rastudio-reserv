@@ -276,7 +276,7 @@ describe("карточка не ждёт Alfa", () => {
     assert.match(sync, /clearLessonsAttendStamps/);
     const pay = readFileSync(new URL("./crm-pay.ts", import.meta.url), "utf8");
     const payAt = pay.indexOf("export async function inboundCustomerPays");
-    const chunk = pay.slice(payAt, payAt + 9000);
+    const chunk = pay.slice(payAt, payAt + 14000);
     assert.match(chunk, /uniqueBranches\(branchId\)/);
     assert.match(chunk, /PAY_INBOUND_RUN/);
     assert.match(chunk, /pay_type_id: typeId/);

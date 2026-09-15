@@ -808,7 +808,7 @@ async function runStep(job: JournalJob): Promise<{ done: boolean; gap: number; m
         ? String(res.extra || res.error || `«${item.name}»: касса не дочитана.`)
         : `«${item.name}»: пачка кассы, дальше ${next?.name || ""}.`,
     });
-    return { done: false, gap: jobGapOf(live) };
+    return { done: false, gap: 0 };
   }
   const cashRetry = shouldRetryCash(pullKind, live.recheck, res);
   const openRetry = shouldRetryOpenRecheck(live.recheck, pullKind, res);

@@ -1414,15 +1414,16 @@ async function pullOneStudent(cid: number, branchId: number, balance: boolean, r
   let paysOk = false;
   let payFail = "";
   if (balance) {
-    const held = recheck ? await waitLockStudentAlfa(cid, 20000) : true;
+    const { inboundCustomerPays, paysOf, payCustomerFilled, payFillPending } = await import("./crm-pay");
+    const pendingPay = payFillPending(cid);
+    const held = recheck && !pendingPay ? await waitLockStudentAlfa(cid, 20000) : true;
     if (!held) {
       return { cid, lessons, done: false, pays: 0, tariffs: 0, alfa: 0, short: true, dups: false, blocked: true, paysOk: false, paysMore: false, rechecked: false, paysRechecked: false };
     }
     try {
     const { token, request } = await import("./alfacrm");
     const t = await token();
-    const { inboundCustomerPays, paysOf, payCustomerFilled } = await import("./crm-pay");
-    const forcePay = Boolean(recheck) && !payFillPending(cid);
+    const forcePay = Boolean(recheck) && !pendingPay;
     const payFrom = recheck ? recheckWindowYmd(recheckDays).from : from;
     if (recheck) stampCustomerSync(cid, { paysRecheckAt: "" });
     try {

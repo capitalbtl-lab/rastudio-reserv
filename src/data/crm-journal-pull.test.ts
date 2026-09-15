@@ -252,7 +252,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /import \{ payCustomerFilled, payFillPending, payFillScanned, payFillEmpty, clearPayFill, paysOf \} from "\.\/crm-pay"/);
     assert.match(pull, /paysMore: Boolean\(balance && \(Boolean\(payFail\) \|\| payFillPending\(cid\)\)\)/);
     assert.match(pull, /paysScanned: payFillScanned\(p.cid\)|paysScanned/);
-    assert.match(pull, /forcePay = Boolean\(recheck\) && !payFillPending\(cid\)/);
+    assert.match(pull, /forcePay = Boolean\(recheck\) && !pendingPay/);
     assert.match(pull, /force: forcePay/);
     assert.doesNotMatch(pull, /force: Boolean\(recheck\)/);
     assert.doesNotMatch(pull, /if \(recheck\) markPayJournalIncomplete/);
@@ -264,7 +264,7 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /paysRecheckAt: payAt/);
     assert.doesNotMatch(pull, /mark\(diskNow/);
     assert.match(pull, /if \(!balance\) \{/);
-    assert.match(pull, /const held = recheck \? await waitLockStudentAlfa\(cid, 20000\) : true/);
+    assert.match(pull, /const held = recheck && !pendingPay \? await waitLockStudentAlfa\(cid, 20000\) : true/);
     assert.match(pull, /if \(recheck\) unlockStudentAlfa\(cid\)/);
     const cashAt = pull.indexOf("if (balance) {");
     const cashFn = pull.slice(cashAt, cashAt + 1800);
