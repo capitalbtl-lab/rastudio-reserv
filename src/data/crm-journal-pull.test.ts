@@ -336,6 +336,7 @@ describe("ручной журнал с Alfa", () => {
     const core = readFileSync(new URL("./crm-inbound-core.ts", import.meta.url), "utf8");
     const inbound = readFileSync(new URL("./crm-journal-inbound.ts", import.meta.url), "utf8");
     assert.match(core, /export function keepAlfaProbe/);
+    assert.match(core, /export function censusSeatLessonId/);
     assert.match(core, /if \(!probedOk\) return \{ write: false, alfa: k, probed: k > 0 \}/);
     assert.match(core, /if \(k > 0 && a < k\) return \{ write: false, alfa: k, probed: true \}/);
     assert.match(pull, /keepAlfaProbe\(keep, alfaRaw, probed.ok, Boolean\(probed.ok\)\)/);
@@ -343,7 +344,9 @@ describe("ручной журнал с Alfa", () => {
     assert.match(pull, /setsClosed \|\| \(!seenReady && disk >= alfaGate && !extra0\)/);
     assert.doesNotMatch(pull, /lessonsAlfaAt: ""/);
     assert.match(pull, /closed \? \{ lessonsFull: true, lessonsAttend: true \} : \{ lessonsFull: false \}/);
-    assert.match(inbound, /heldAlfa.write \? \{ lessonsAlfa: heldAlfa.alfa/);
+    assert.match(inbound, /censusSeatLessonId\(item\)/);
+    assert.match(inbound, /census cid=\$\{id\} dropped no-date/);
+    assert.doesNotMatch(inbound, /const lid = Number\(\(item as \{ id\?: number \}\)\.id\) \|\| 0;\s*if \(lid > 0\) ids\.add\(lid\)/);
     assert.match(inbound, /const alfa = keepBefore \? keepAlfa \|\| uniq\.length : heldAlfa.alfa/);
     assert.match(inbound, /keepAlfaProbe\(keepAlfa, uniq.length, true, !keepBefore\)/);
     assert.doesNotMatch(inbound, /lessonsAlfa: uniq\.length/);

@@ -1,4 +1,5 @@
 import { isAdminGroup, isCampStatus, isArchivedGroup, publishOf, readPriority, sessionCourseId, slotActiveToday, slotDateIso, todayIsoMsk, type StatusPublish } from "./group-status.ts";
+import { toAlfaLessonDate } from "./crm-journal-periods.ts";
 
 export function inboundTake(opts: { pending?: boolean }) {
   return opts.pending ? ("skip" as const) : ("alfa" as const);
@@ -12,6 +13,15 @@ export function keepAlfaProbe(keep: number, alfa: number, probedOk: boolean, cen
   if (census) return { write: true, alfa: a, probed: true };
   if (k > 0 && a < k) return { write: false, alfa: k, probed: true };
   return { write: true, alfa: a, probed: true };
+}
+
+/** Перепись ученика: в набор только id, который качка посадит (есть дата). Состав не фильтр. */
+export function censusSeatLessonId(item: { id?: number; date?: string; lesson_date?: string } | null | undefined): number {
+  const lid = Number(item?.id) || 0;
+  if (!(lid > 0)) return 0;
+  const day = toAlfaLessonDate(item?.date) || toAlfaLessonDate(item?.lesson_date);
+  if (!day) return 0;
+  return lid;
 }
 
 /** Посадка строк на диск не меняет счёт Alfa. Alfa пишет только полная перепись. */

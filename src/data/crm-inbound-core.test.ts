@@ -29,6 +29,7 @@ import {
   groupWindowGone,
   idsChecksum,
   journalIdsReady,
+  censusSeatLessonId,
 } from "./crm-inbound-core.ts";
 import { slotActiveToday, slotOnPublicSchedule, mergeStatusPublish } from "./group-status.ts";
 
@@ -195,6 +196,12 @@ describe("вход из Alfa", () => {
     assert.equal(bumpAlfaFromLanded(541, 5), 541);
     assert.equal(bumpAlfaFromLanded(312, Math.max(0, 314 - 312)), 312);
     assert.equal(bumpAlfaFromLanded(259, Math.max(0, 233 - 259)), 259);
+    assert.equal(censusSeatLessonId({ id: 99901 }), 0);
+    assert.equal(censusSeatLessonId({ id: 1, date: "2026-09-01" }), 1);
+    assert.equal(censusSeatLessonId({ id: 2, lesson_date: "01.09.2026" }), 2);
+    assert.equal(censusSeatLessonId({ id: 3, date: "", lesson_date: "" }), 0);
+    assert.equal(censusSeatLessonId({ id: 4, date: "2026-01-01", lesson_date: "" }), 4);
+    assert.equal(censusSeatLessonId({ id: 0, date: "2026-01-01" }), 0);
   });
 });
 

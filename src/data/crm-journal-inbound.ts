@@ -3,7 +3,7 @@ import { rememberLessons } from "./crm-lessons";
 import { pendingExportIds } from "./crm-export-queue";
 import { alfaLinkedNow } from "./crm-alfa-link";
 import { stampJournalCursor, stampLessonsCursor } from "./crm-cache-policy";
-import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe, clampRecheckDays, recheckWindowYmd, lessonsSetGap, groupWindowGone, idsChecksum, journalIdsReady } from "./crm-inbound-core";
+import { journalFingerprint, mergeSeenLessonIds, pruneCalendarToAlfaIds, countAlfaLessonUniq, countAlfaLessonRows, canPruneCalendarFill, uniquePositiveIds, canCloseLessonCensus, inboundFillClosed, keepAlfaProbe, clampRecheckDays, recheckWindowYmd, lessonsSetGap, groupWindowGone, idsChecksum, journalIdsReady, censusSeatLessonId } from "./crm-inbound-core";
 import type { GroupCalLesson, CrmSlot } from "./crm-slots-core";
 import { pupilNameOk, mergeLessonPupils, lessonNeedsDetails, lessonNeedsHomework } from "./crm-slots-core";
 import { findDossier } from "./dossiers";
@@ -469,6 +469,7 @@ export async function censusCustomerLessonIds(branch: number, customerId: number
   const dateTo = ymd(opts?.dateTo) || ymd(ruShift(90));
   const branches = uniqueBranches(branch);
   const ids = new Set<number>();
+  const noDate: number[] = [];
   let pages = 0;
   let aborted = false;
   const pageSize = 500;
@@ -485,8 +486,12 @@ export async function censusCustomerLessonIds(branch: number, customerId: number
         pages += 1;
         if (!live.ok) return { ids: uniquePositiveIds(ids), ok: false as const, pages };
         for (const item of live.items) {
-          const lid = Number((item as { id?: number }).id) || 0;
-          if (lid > 0) ids.add(lid);
+          const lid = censusSeatLessonId(item);
+          if (lid) ids.add(lid);
+          else {
+            const raw = Number((item as { id?: number }).id) || 0;
+            if (raw > 0) noDate.push(raw);
+          }
         }
         received += live.items.length;
         if (!live.items.length) break;
@@ -499,6 +504,7 @@ export async function censusCustomerLessonIds(branch: number, customerId: number
       }
     }
   }
+  if (noDate.length) console.warn(`census cid=${id} dropped no-date: ${uniquePositiveIds(noDate).slice(0, 40).join(",")}`);
   return { ids: uniquePositiveIds(ids), ok: canCloseLessonCensus({ live: true, aborted }), pages };
 }
 
